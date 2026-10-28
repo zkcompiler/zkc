@@ -153,6 +153,11 @@ BodyChecker::restrictRoles(ValueId value, ArrayRef<unsigned> roles, Span span) {
   }
   if (ArrayRef<unsigned>(before.components) == roles)
     return value;
+  if (isOracleHandle(before.type)) {
+    fail("source.oracle-role",
+         "oracle aliases retain the complete holder/receiver family", span);
+    return {};
+  }
   if (!checker.types.executableType(before.type, span))
     return {};
   if (!checker.types.requireUsage(
@@ -170,6 +175,10 @@ bool BodyChecker::assign(BindingId id, ValueId value, Span span) {
   if (body.values[value.index].type != state.type)
     return fail("source.type", "assignment cannot change the binding type",
                 span);
+  if (state.value && body.values[state.value->index].oracleHolder !=
+                         body.values[value.index].oracleHolder)
+    return fail("source.oracle-role",
+                "assignment cannot change an oracle holder", span);
   if (protocol()) {
     auto narrowed = restrictRoles(value, state.roles, span);
     if (!narrowed)

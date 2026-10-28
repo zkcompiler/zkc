@@ -232,7 +232,8 @@ class SpecializationCheck {
       if (!typeEqual(expected.type, value.type, subst, expected.span) ||
           !same(expected.span, value.span) ||
           (actual.mode == Body::Mode::Protocol &&
-           expected.components != value.components) ||
+           (expected.components != value.components ||
+            expected.oracleHolder != value.oracleHolder)) ||
           (actual.mode == Body::Mode::Local && !value.components.empty()))
         return refuse(expected.span);
     }
@@ -615,7 +616,31 @@ class SpecializationCheck {
               return map(action.payload).index == value.payload.index &&
                      action.sender == value.sender &&
                      action.receiver == value.receiver;
-            else if constexpr (std::is_same_v<T, Require>)
+            else if constexpr (std::is_same_v<T, OracleContents>)
+              return map(action.input).index == value.input.index &&
+                     action.owner == value.owner;
+            else if constexpr (std::is_same_v<T, OracleRows> ||
+                               std::is_same_v<T, OracleForgetRows>)
+              return map(action.input).index == value.input.index;
+            else if constexpr (std::is_same_v<T, OracleQuery>)
+              return map(action.handle).index == value.handle.index &&
+                     map(action.position).index == value.position.index &&
+                     action.owner == value.owner;
+            else if constexpr (std::is_same_v<T, OracleSend>) {
+              if (map(action.data).index != value.data.index ||
+                  map(action.rows).index != value.rows.index ||
+                  action.holder != value.holder ||
+                  action.receivers != value.receivers ||
+                  bool(action.maximum) != bool(value.maximum))
+                return false;
+              if (!action.maximum)
+                return true;
+              Type term(Type::Kind::Natural);
+              term.dimension = *action.maximum;
+              term.symbolic = !term.dimension.isClosed();
+              auto maximum = type(term, subst, op.span);
+              return maximum && maximum->dimension == *value.maximum;
+            } else if constexpr (std::is_same_v<T, Require>)
               return map(action.condition).index == value.condition.index &&
                      action.owner == value.owner;
             else if constexpr (std::is_same_v<T, ServiceQuery>) {

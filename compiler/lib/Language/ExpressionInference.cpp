@@ -998,6 +998,73 @@ class ExpressionInference {
       // Loop bodies have their own statement scopes and no value result.
       constrain(result.type, Type(T::Unit), expr.span);
       break;
+    case K::OracleSend: {
+      auto kind = checker.type(decl, expr.arguments.front());
+      if (!kind)
+        break;
+      if (kind->kind != T::OracleKind) {
+        fail("source.oracle-kind", "oracle delivery requires an oracle kind",
+             expr.span);
+        break;
+      }
+      auto data = checker.types.associated(*kind, "Data", expr.span);
+      if (!data)
+        break;
+      constrain(child(0), *data, expr.span);
+      if (expr.children.size() == 2)
+        constrain(child(1), Type(T::Index), expr.span);
+      Type handle(T::Oracle);
+      handle.arguments = {*kind};
+      constrain(result.type, handle, expr.span);
+      break;
+    }
+    case K::OracleQuery:
+    case K::OracleContents:
+    case K::OracleRows:
+    case K::OracleForgetRows: {
+      auto input = child(0);
+      auto position =
+          expr.kind == K::OracleQuery ? std::optional(child(1)) : std::nullopt;
+      auto output = result.type;
+      auto action = expr.kind;
+      auto span = expr.span;
+      types.defer([this, input, position, output, action, span] {
+        auto handle = types.get(input, span);
+        if (!handle)
+          return false;
+        if (handle->kind != T::Oracle || handle->arguments.size() != 1) {
+          fail("source.oracle-action",
+               "oracle operation requires a logical handle", span);
+          return true;
+        }
+        auto kind = handle->arguments.front();
+        if (position) {
+          auto query = checker.types.associated(kind, "Query", span);
+          if (query)
+            constrain(*position, *query, span);
+        }
+        if (action == K::OracleRows)
+          constrain(output, Type(T::Index), span);
+        else if (action == K::OracleForgetRows) {
+          if (kind.arguments.size() != 2) {
+            fail("source.oracle-shape",
+                 "forget_rows requires an exact sized kind", span);
+            return true;
+          }
+          kind.arguments.pop_back();
+          Type result(T::Oracle);
+          result.arguments = {kind};
+          constrain(output, result, span);
+        } else {
+          auto value = checker.types.associated(
+              kind, position ? "Answer" : "Data", span);
+          if (value)
+            constrain(output, *value, span);
+        }
+        return true;
+      });
+      break;
+    }
     case K::MethodCall: {
       auto field = service(expr.children.front());
       if (field)

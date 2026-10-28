@@ -128,6 +128,16 @@ StringRef syntaxKind(Expression::Kind value) {
     return "map";
   case Expression::Kind::DomainProduct:
     return "domain_product";
+  case Expression::Kind::OracleSend:
+    return "oracle_send";
+  case Expression::Kind::OracleQuery:
+    return "oracle_query";
+  case Expression::Kind::OracleContents:
+    return "oracle_contents";
+  case Expression::Kind::OracleRows:
+    return "oracle_rows";
+  case Expression::Kind::OracleForgetRows:
+    return "oracle_forget_rows";
   case Expression::Kind::MethodCall:
     return "method_call";
   case Expression::Kind::FinishIf:

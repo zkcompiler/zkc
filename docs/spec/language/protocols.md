@@ -77,6 +77,48 @@ retains its installed backend-failure contract. `stop` uses a native reason:
 `reject`, `abort`, `exhausted`, `incomplete` or `refused`. Target execution limits
 remain independent of source effects and typing.
 
+## Logical oracle actions
+
+Oracle access is a delivery mode with an explicit kind and holder/receiver
+family. With the aliases in [logical oracle types](definitions.md#logical-oracle-types):
+
+```text
+#[site(word)] let h = send P -> V(values) as oracle<FixedTable<F, 16>>;
+#[site(opening)] let answer @V = query h at position;
+let valuesAgain @P = oracle.data(h);
+let height @(P, V) = oracle.rows(h);
+let unsized = oracle.forget_rows(h);
+```
+
+A send evaluates its data at the holder. A sized kind supplies its exact static
+row count. An unsized delivery writes both runtime shape and static maximum:
+`send P -> (V, W)(values) as oracle<Table<F>>(rows = count) max M`.
+The count must be available at the holder and every receiver. Common preparation
+also checks that shape comes from the admitted initial shape environment, rather
+than an answer or challenge. A second shape on a sized kind refuses. The maximum
+is a natural static term, substituted and rechecked at specialization.
+
+`query h at position` is an ordered receiver event. Its owner is constrained by
+`@Role`, the position and the receiver family; an ambiguous owner refuses.
+Repeated positions and unused answers retain separate events and site identities.
+The kind determines the exact Query and Answer types; associated-type inference
+is forward only. Packed product answers use the ordinary total-data carrier and
+are unpacked into the source fields after the event.
+
+`oracle.data(h)` is executable only at the holder. It grants no receiver access
+and is distinct from a relation anchor selector. `oracle.rows(h)` reads immutable
+shape at the handle's participants. `oracle.forget_rows(h)` removes an exact
+row-count refinement while preserving the anchor and role family. These qualified
+operations are language forms; `oracle::name` remains an ordinary library path.
+
+Aliases, protocol arguments/results and loop captures/carries retain the holder
+separately from sorted participant availability. A call or return cannot change
+the holder through role substitution. Assignment cannot change the role family;
+partial role restriction of a logical handle refuses. Oracle handles never pass
+through the ordinary message codec or ordinary data aggregates. Source actions
+elaborate to the [common oracle vocabulary](../ir/protocols.md#logical-oracle-kinds-and-handles);
+semantic realization must eliminate that vocabulary before executable lowering.
+
 ## Participant meaning
 
 A protocol may supply [scoped computations](definitions.md#scoped-computations)

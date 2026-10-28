@@ -123,6 +123,8 @@ struct Value {
   /// Protocol: roster indices. Math: input dependencies. Both are sorted sets.
   std::vector<unsigned> components;
   Span span;
+  /// Oracle role family: data owner, independent of sorted availability.
+  std::optional<unsigned> oracleHolder = {};
 };
 struct MathValue {
   MathematicalIdentity identity;
@@ -328,6 +330,26 @@ struct Exchange {
   unsigned sender, receiver;
   ValueId payload;
 };
+struct OracleSend {
+  ValueId data, rows;
+  unsigned holder;
+  std::vector<unsigned> receivers;
+  std::optional<Natural> maximum;
+};
+struct OracleQuery {
+  ValueId handle, position;
+  unsigned owner;
+};
+struct OracleContents {
+  ValueId input;
+  unsigned owner;
+};
+struct OracleRows {
+  ValueId input;
+};
+struct OracleForgetRows {
+  ValueId input;
+};
 struct Restriction {
   ValueId input;
   std::vector<unsigned> roles;
@@ -443,7 +465,8 @@ struct Operation {
                Construct, Projection, LocalPrimitive, Consume, LocalControl,
                ProtocolApplication, ServiceQuery, Require, ProtocolRepeat,
                ProtocolCompletion, ScopedInvoke, FiniteApplication,
-               FiniteComputation, HostInvocation>
+               FiniteComputation, HostInvocation, OracleSend, OracleQuery,
+               OracleContents, OracleRows, OracleForgetRows>
       action;
   /// Each result has its own type and participant availability.
   std::vector<ValueId> results;

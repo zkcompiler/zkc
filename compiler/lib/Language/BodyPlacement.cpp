@@ -73,6 +73,9 @@ bool BodyChecker::settle(Placement &plan) {
           return false;
       }
   }
+  for (auto [index, variable] : plan.oracleQueries)
+    std::get<OracleQuery>(body.operations[index].action).owner =
+        plan.selected(variable);
   for (auto index : plan.applications) {
     const auto &operation = body.operations[index];
     const auto &application = std::get<ProtocolApplication>(operation.action);

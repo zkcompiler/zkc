@@ -436,9 +436,36 @@ class Comparator {
     }
     return result;
   }
+  std::optional<Values> unpackMathematical(mlir::Block &block,
+                                           mlir::Block::iterator &cursor,
+                                           mlir::Value value,
+                                           ArrayRef<LayoutLeaf> outputs,
+                                           Span span) {
+    Values result;
+    for (unsigned i = 0; i < outputs.size(); ++i) {
+      auto *project = next(block, cursor, span, "data.get", value, 1);
+      if (!project || !attributes(*project, {"index"}) ||
+          !types(project->getResultTypes(), {outputs[i]})) {
+        fail("total payload projection differs");
+        return {};
+      }
+      auto index = project->getAttrOfType<mlir::IntegerAttr>("index");
+      if (!index || !index.getType().isSignlessInteger(64) ||
+          index.getInt() != i) {
+        fail("total payload projection index differs");
+        return {};
+      }
+      result.push_back(project->getResult(0));
+    }
+    return result;
+  }
   std::optional<Values> unpack(mlir::Value value, ArrayRef<LayoutLeaf> outputs,
                                StringRef alternative, Span span,
                                StringRef site) {
+    if (!scoped) {
+      fail("ordered payload unpacking requires scoped execution");
+      return {};
+    }
     Values result;
     auto check = [&](mlir::func::CallOp call, unsigned) {
       auto function = region(call, span);
@@ -1088,19 +1115,11 @@ class Comparator {
             !types(actual->getResultTypes(), {packed->carrier.spelling()}))
           return fail("total sequence result carrier differs");
         if (packed && packed->product) {
-          auto carrier = result.front();
-          result.clear();
-          for (unsigned i = 0; i < leaves.size(); ++i) {
-            auto *project =
-                next(block, cursor, op.span, "data.get", carrier, 1);
-            if (!project || !attributes(*project, {"index"}) ||
-                !types(project->getResultTypes(), {leaves[i]}))
-              return fail("total sequence projection differs");
-            auto index = project->getAttrOfType<mlir::IntegerAttr>("index");
-            if (!index || !index.getType().isInteger(64) || index.getInt() != i)
-              return fail("total sequence projection index differs");
-            result.push_back(project->getResult(0));
-          }
+          auto flat = unpackMathematical(block, cursor, result.front(), leaves,
+                                         op.span);
+          if (!flat)
+            return false;
+          result = std::move(*flat);
         }
       } else if (auto *local = std::get_if<LocalPrimitive>(&op.action)) {
         auto operands = flatten(local->operands);
@@ -1340,6 +1359,71 @@ class Comparator {
             llvm::append_range(result, output);
           offset += count;
         }
+      } else if (auto *send = std::get_if<OracleSend>(&op.action)) {
+        auto *actual = next(block, cursor, op.span, "protocol.oracle_send",
+                            flatten({send->data, send->rows}), 1);
+        if (!actual)
+          return false;
+        if (!(send->maximum
+                  ? attributes(*actual,
+                               {"sender", "receivers", "site", "maximum_rows"})
+                  : attributes(*actual, {"sender", "receivers", "site"})) ||
+            !string(*actual, "sender", nativeRoleName(send->holder)) ||
+            !roleSet(actual->getAttr("receivers"), send->receivers) ||
+            !string(*actual, "site", site))
+          return fail("oracle send roles or occurrence differ");
+        if (send->maximum) {
+          auto bound = actual->getAttrOfType<mlir::IntegerAttr>("maximum_rows");
+          if (!bound || !bound.getType().isUnsignedInteger(64) ||
+              bound.getValue().getZExtValue() != send->maximum->closedValue())
+            return fail("oracle send maximum differs");
+        }
+        result = Values(actual->getResults());
+      } else if (auto *query = std::get_if<OracleQuery>(&op.action)) {
+        auto packed =
+            take(layouts.packed(source.values[op.results.front().index].type));
+        if (!packed)
+          return false;
+        auto *actual = next(block, cursor, op.span, "protocol.oracle_query",
+                            flatten({query->handle, query->position}), 1);
+        if (!actual)
+          return false;
+        if (!attributes(*actual, {"owner", "site"}) ||
+            !string(*actual, "owner", nativeRoleName(query->owner)) ||
+            !string(*actual, "site", site))
+          return fail("oracle query owner or occurrence differs");
+        auto answer =
+            protocol::decodeBoundType(actual->getContext(), packed->carrier);
+        if (!answer || actual->getResult(0).getType() != answer)
+          return fail("oracle answer carrier differs");
+        result = Values(actual->getResults());
+        if (packed->product) {
+          auto flat = unpackMathematical(block, cursor, result.front(), leaves,
+                                         op.span);
+          if (!flat)
+            return false;
+          result = std::move(*flat);
+        }
+      } else if (auto *contents = std::get_if<OracleContents>(&op.action)) {
+        auto *actual = next(block, cursor, op.span, "protocol.oracle_contents",
+                            values[contents->input.index], 1);
+        if (!actual || !attributes(*actual, {"owner"}) ||
+            !string(*actual, "owner", nativeRoleName(contents->owner)))
+          return fail("oracle data owner differs");
+        result = Values(actual->getResults());
+      } else if (auto *rows = std::get_if<OracleRows>(&op.action)) {
+        auto *actual = next(block, cursor, op.span, "protocol.oracle_rows",
+                            values[rows->input.index], 1);
+        if (!actual || !attributes(*actual, {}))
+          return fail("oracle row view differs");
+        result = Values(actual->getResults());
+      } else if (auto *forget = std::get_if<OracleForgetRows>(&op.action)) {
+        auto *actual =
+            next(block, cursor, op.span, "protocol.oracle_forget_rows",
+                 values[forget->input.index], 1);
+        if (!actual || !attributes(*actual, {}))
+          return fail("oracle shape refinement differs");
+        result = Values(actual->getResults());
       } else if (auto *exchange = std::get_if<Exchange>(&op.action)) {
         auto &input = values[exchange->payload.index];
         if (leaves.empty() || input.size() != leaves.size())

@@ -1166,6 +1166,62 @@ class Emitter {
             llvm::append_range(result, output);
           offset += count;
         }
+      } else if (auto *send = std::get_if<OracleSend>(&op.action)) {
+        auto input = flatten({send->data, send->rows});
+        SmallVector<mlir::NamedAttribute> attrs{
+            text("sender", nativeRoleName(send->holder)),
+            attr("receivers", roles(send->receivers)), text("site", site)};
+        if (send->maximum)
+          attrs.push_back(
+              attr("maximum_rows",
+                   builder.getIntegerAttr(
+                       mlir::IntegerType::get(&context, 64,
+                                              mlir::IntegerType::Unsigned),
+                       APInt(64, send->maximum->closedValue()))));
+        auto *actual = make("protocol.oracle_send", resultTypes, input, attrs);
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *query = std::get_if<OracleQuery>(&op.action)) {
+        auto packed =
+            take(layouts.packed(source.values[op.results.front().index].type));
+        if (!packed)
+          return false;
+        auto answer = protocol::decodeBoundType(&context, packed->carrier);
+        if (!answer) {
+          failure =
+              error("source.layout", "oracle answer has no total carrier");
+          return false;
+        }
+        auto *actual = make(
+            "protocol.oracle_query", answer,
+            flatten({query->handle, query->position}),
+            {text("owner", nativeRoleName(query->owner)), text("site", site)});
+        if (!actual)
+          return false;
+        auto flat = unpack(*packed, actual->getResult(0), site + "_unpack");
+        if (!flat)
+          return false;
+        result = std::move(*flat);
+      } else if (auto *contents = std::get_if<OracleContents>(&op.action)) {
+        auto *actual = make("protocol.oracle_contents", resultTypes,
+                            values[contents->input.index],
+                            {text("owner", nativeRoleName(contents->owner))});
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *rows = std::get_if<OracleRows>(&op.action)) {
+        auto *actual = make("protocol.oracle_rows", resultTypes,
+                            values[rows->input.index], {});
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *forget = std::get_if<OracleForgetRows>(&op.action)) {
+        auto *actual = make("protocol.oracle_forget_rows", resultTypes,
+                            values[forget->input.index], {});
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
       } else if (auto *exchange = std::get_if<Exchange>(&op.action)) {
         if (resultTypes.empty()) {
           failure = error("source.wire",

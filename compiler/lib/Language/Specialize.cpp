@@ -577,6 +577,22 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                              op.span))
             return false;
         }
+        if (auto *send = std::get_if<OracleSend>(&op.action)) {
+          if (send->maximum) {
+            Type bound(Type::Kind::Natural);
+            bound.dimension = *send->maximum;
+            bound.symbolic = !bound.dimension.isClosed();
+            if (!closeType(bound, bindings, op.span))
+              return false;
+            send->maximum = bound.dimension;
+          }
+          const auto &kind =
+              body.values[op.results.front().index].type.arguments.front();
+          if ((kind.arguments.size() == 2) == send->maximum.has_value())
+            return types.fail("source.oracle-shape",
+                              "closed oracle send bound differs from kind",
+                              op.span);
+        }
         if (auto *application = std::get_if<ProtocolApplication>(&op.action)) {
           for (auto &argument : application->arguments)
             if (!closeType(argument, bindings, op.span))

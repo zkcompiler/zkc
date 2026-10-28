@@ -131,6 +131,7 @@ add_zkc_component(Language
   lib/Language/Placement.cpp
   lib/Language/BodyPlacement.cpp
   lib/Language/Expressions.cpp
+  lib/Language/Oracles.cpp
   lib/Language/TypeInference.cpp
   lib/Language/CallableConstraints.cpp
   lib/Language/OperatorInference.cpp
