@@ -33,6 +33,7 @@ import Zkc.Construction.DomainView
 import Zkc.Construction.DomainViewLaws
 import Zkc.Construction.Encoding
 import Zkc.Construction.FiatShamir
+import Zkc.Construction.LayoutPermutation
 import Zkc.Construction.OccurrenceReindex
 import Zkc.Construction.OccurrenceResolution
 import Zkc.Construction.OriginProjection
@@ -51,6 +52,7 @@ import Zkc.Construction.OriginalInputs
 import Zkc.Construction.OriginalInvariant
 import Zkc.Construction.OriginalLaws
 import Zkc.Construction.OriginalLoop
+import Zkc.Construction.OriginalParticipant
 import Zkc.Construction.OriginalProjection
 import Zkc.Construction.OriginalRouting
 import Zkc.Construction.OriginalSimulation
@@ -1043,4 +1045,6 @@ import ZkcTools.StructuredSource.Root
 import ZkcTools.StructuredSource.TemplateInstallation
 import ZkcTools.StructuredSource.WireTypes
 import ZkcTools.ConstructionBindings.Analysis
+import ZkcTools.ConstructionBindings.Common
+import ZkcTools.ConstructionBindings.Frames
 import ZkcTools.ConstructionBindings.Source
