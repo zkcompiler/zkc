@@ -53,5 +53,4 @@ def permuteInputs (artifact : Participant) (order : List Nat) : Except String Pa
     instructions := reindexInstructions rename 1024 artifact.instructions
     returned := artifact.returned.map rename }
 
-
 end Zkc.Construction.LayoutPermutation

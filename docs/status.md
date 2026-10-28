@@ -491,14 +491,14 @@ list; input and virtual bounds name every dynamic dimension. Shape maps and
 reads have the same strict independent wire contract. Invalid queries are
 specified to stop at the occurrence against the actual shape; dynamic enforcement
 remains part of the pending realization. Checked preparation remaps oracle roles
-through applications and preserves sends/queries under upstream CSE. Projection refuses unresolved
-oracle events before publishing participants. Holder-only contents and bounded,
+through applications and preserves sends/queries under upstream CSE. Projection
+refuses unresolved oracle events before publishing participants. Holder-only contents and bounded,
 append-only sequences preserve role restrictions, dynamic anchors and ordered
 bounds failures through checked preparation. Virtual query declarations check
 answer-independent position maps, closed total helpers, actual polynomial bounds,
 explicit admissibility references and fresh occurrence anchors. Their generated
-condition templates and ordered query footprints have native export/check commands and an independent Lean derivation over the original
-snapshot. These proposals retain exact occurrences and actual operands; they do
+condition templates and ordered query footprints have native export/check
+commands and an independent Lean derivation over the original snapshot. These proposals retain exact occurrences and actual operands; they do
 not discharge their predicates. Semantic realization remains pending.
 Common oracle ports pair actual holder data and receiver handles through inputs,
 returns and applications, with explicit shapes and independent preparation checks.

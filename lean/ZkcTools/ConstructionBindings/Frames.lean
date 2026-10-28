@@ -1,7 +1,6 @@
 module
 
 public import ZkcTools.ConstructionBindings.Common
-public import Mathlib.Data.List.Perm.Basic
 
 @[expose] public section
 
@@ -75,6 +74,5 @@ def callOperands (descriptor : Repeat) (helper : String) : Except String (List N
   let instruction ← unique "frame-helper" (descriptor.body.filter fun step =>
     step.operation == .call helper)
   return instruction.operands
-
 
 end ZkcTools.ConstructionBindings.Frames
