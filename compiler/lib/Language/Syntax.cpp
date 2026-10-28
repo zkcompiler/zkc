@@ -552,6 +552,34 @@ private:
                ? accept(work.charge(1, current().span))
                : fail("source.limit", "parse depth limit exceeded");
   }
+  bool oracleQueryPrefix() {
+    if (!at("query") || cursor + 1 >= tokens.size() ||
+        (tokens[cursor + 1].kind != TokenKind::Word && look(1) != "("))
+      return false;
+    // `query` remains an identifier, including in construction clauses and
+    // loop binders. Only the complete prefix `query <handle> at` selects an
+    // oracle action. Parenthesized handles and calls may contain nested `at`
+    // identifiers; those do not select the outer expression.
+    unsigned nesting = 0;
+    for (unsigned offset = 1; cursor + offset < tokens.size(); ++offset) {
+      if (!accept(work.charge(1, tokens[cursor + offset].span)))
+        return false;
+      auto token = look(offset);
+      if (token == "(" || token == "[" || token == "{")
+        ++nesting;
+      else if (token == ")" || token == "]" || token == "}") {
+        if (!nesting)
+          return false;
+        --nesting;
+      } else if (!nesting) {
+        if (token == "at")
+          return true;
+        if (token == ";" || token == "," || token.empty())
+          return false;
+      }
+    }
+    return false;
+  }
   bool name(std::string &output) {
     if (current().kind != TokenKind::Word || isReserved(text()))
       return fail("source.name", "expected non-reserved identifier");
@@ -2234,7 +2262,8 @@ private:
              "expected matching notation closer " + delimited->closing);
         return {};
       }
-    } else if (take("query")) {
+    } else if (oracleQueryPrefix()) {
+      advance();
       if (minimum) {
         fail("source.syntax", "query operand requires parentheses here");
         return {};

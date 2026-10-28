@@ -75,6 +75,32 @@ int main() {
                 occurrenceCount(source.bytes(), "protocol.oracle_query") == 2,
             "an oracle event disappeared");
   });
+  cases.run("query is contextual beside calls and parenthesized handles", [] {
+    auto source = original(R"(
+      math fn query(at:index)->index{return at;}
+      protocol Run roles(P,V)(h:O@P->V)->(out:F@V){
+        let at:index=0;let position=query(at);
+        let out@V=query (h) at position;
+        return(out=out);
+      }
+    )");
+    require(occurrenceCount(source.bytes(), "protocol.oracle_query") == 1,
+            "contextual query confused a function call with an action");
+  });
+  cases.run("query remains a loop binder and an ordinary expression", [] {
+    auto source = original(R"(
+      protocol Run roles(P,V)(h:O@P->V,n:index@(P,V))->(ok:bool@V){
+        let at:index=0;
+        for query in 0..n roles(P,V) max 4 {
+          let out@V=query h at query;
+          let same=query==at;
+        }
+        let ok@V=true;return(ok=ok);
+      }
+    )");
+    require(occurrenceCount(source.bytes(), "protocol.oracle_query") == 1,
+            "contextual query confused a loop variable with an action");
+  });
   cases.run("holder data and row views preserve a port anchor", [] {
     auto source = original(R"(
     protocol Run roles(P,V)(h:O@P->V)->(xs:Vec@P,n:index@(P,V),h2:Dynamic@P->V max 16){
