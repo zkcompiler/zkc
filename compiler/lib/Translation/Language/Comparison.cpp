@@ -105,13 +105,17 @@ class Comparator {
     auto row = mlir::dyn_cast<mlir::ArrayAttr>(attr);
     if (!charge(1) || !row || row.size() != 3)
       return fail("contract selector shape differs");
-    auto direction = mlir::dyn_cast<mlir::StringAttr>(row[0]);
-    auto index = mlir::dyn_cast<mlir::IntegerAttr>(row[1]);
-    auto role = mlir::dyn_cast<mlir::StringAttr>(row[2]);
+    auto direction =
+        mlir::dyn_cast<mlir::StringAttr>(row[expected.anchor ? 1 : 0]);
+    auto index =
+        mlir::dyn_cast<mlir::IntegerAttr>(row[expected.anchor ? 2 : 1]);
+    auto role = mlir::dyn_cast<mlir::StringAttr>(row[expected.anchor ? 0 : 2]);
     return (direction &&
             direction.getValue() == (expected.output ? "output" : "input") &&
-            index && index.getInt() == port && role &&
-            role.getValue() == nativeRoleName(expected.role)) ||
+            index && index.getType().isSignlessInteger(64) &&
+            index.getInt() == port && role &&
+            role.getValue() ==
+                (expected.anchor ? "anchor" : nativeRoleName(expected.role))) ||
            fail("contract selector differs from source layout");
   }
   bool contractApplication(const Declaration &owner, mlir::Attribute attr,
@@ -936,7 +940,8 @@ class Comparator {
           if (slice->offset + i >= block.getNumArguments())
             return fail("statement operand is outside the entry signature");
           operands.push_back(block.getArgument(slice->offset + i));
-          selectors.push_back(nativeRoleName(operand.role));
+          selectors.push_back(operand.anchor ? "anchor"
+                                             : nativeRoleName(operand.role));
         }
       }
       auto acceptance = take(layouts.select(decl, proof->acceptance));

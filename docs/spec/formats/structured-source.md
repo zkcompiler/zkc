@@ -234,6 +234,7 @@ matching the structured profile's signature bound.
 clause      := [kind, name, subject, residual, decision]
 application := [relation-symbol, [selectors...]]
 selector    := [direction, native-port-index, role]
+             | ["anchor", direction, native-oracle-port-index]
 ```
 
 Kind is `target`, `input`, `output` or `continuation`; names are nonempty,
@@ -248,6 +249,14 @@ residual application selecting at least one output; all other residuals are
 null. A decision is null or exactly one available Boolean output selector.
 Targets require decisions, input clauses forbid them, and output/continuation
 clauses may carry them. Unknown tags, extra fields and malformed nulls refuse.
+
+An anchor selector refers to an actual oracle input or output handle and has
+its kind's associated Data type. It has no participant role: the relation reads
+the logical anchor store, not a role-local runtime value. It cannot name ordinary
+data or a bounded handle sequence, and cannot serve as a decision. The common
+oracle port checks still require the actual paired data/handle interface. The
+current ordinary statement projection and component-seam derivation refuse
+anchor selectors; neither may reinterpret one as a data port.
 
 Contracts are declaration metadata, not instructions or predicate evaluations.
 An entry statement may name its exact selected target. That name resolves only

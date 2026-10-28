@@ -82,7 +82,7 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     recordSite site false
     let some declaration := snapshot.relations.find? (·.name == relation) |
       throw "structured-unknown-relation"
-    if arguments != declaration.inputs || !results.isEmpty || arguments.any Ty.isService then
+    if arguments != declaration.inputs || !results.isEmpty || arguments.any Ty.isHandle then
       throw "structured-statement-signature"
     if selectors.length != operands.length || function.outputs[acceptance]? != some .boolean then
       throw "structured-statement-acceptance"
@@ -92,7 +92,7 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
       if !(inputScopes[input]?.getD []).contains selected then throw "structured-statement-selector"
     let selectedInputs ← (operands.zip selectors).mapM fun (operand, selector) => do
       let some (some input) := origins[operand]? | throw "structured-statement-input"
-      pure (ContractSelector.mk .input input selector)
+      pure (ContractSelector.mk .input input selector false)
     let targets := (snapshot.contracts.filter (·.owner == function.name)).flatMap
       (fun contract => contract.clauses.filter (·.kind == .target))
     let projectionMatches := fun clause : ContractClause =>

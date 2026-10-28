@@ -84,6 +84,8 @@ struct Layout {
   bool constructible = false;
   /// Includes formal element meaning even when an array has zero leaves.
   bool formal = false;
+  /// Kind-associated data schema, never a serialized handle leaf.
+  std::shared_ptr<const Layout> oracleData;
 };
 /// Full logical schemas, including nominal identity and member names, are
 /// significant across captures. Cache only within an immutable layout phase.

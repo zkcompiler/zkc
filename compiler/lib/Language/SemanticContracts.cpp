@@ -67,6 +67,17 @@ std::optional<Type>
 Semantics::selectedType(const Declaration &decl,
                         const SpecificationSelector &value) {
   const auto &ports = value.output ? decl.outputs : decl.inputs;
+  if (value.anchor) {
+    if (value.port >= ports.size() ||
+        ports[value.port].type.kind != Type::Kind::Oracle ||
+        !value.path.empty() || value.role != 0) {
+      fail("source.specification", "invalid oracle anchor selector",
+           value.span);
+      return {};
+    }
+    return associated(ports[value.port].type.arguments.front(), "Data",
+                      value.span);
+  }
   if (value.port >= ports.size() || value.role >= decl.roles.size() ||
       !llvm::is_contained(ports[value.port].roles, value.role)) {
     fail("source.specification",
@@ -183,8 +194,10 @@ bool Semantics::checkProofEntry(const Declaration &entry,
         return fail("source.entry",
                     "native statement export requires entry inputs",
                     operand.span);
-      bool visible =
-          is_contained(protocol.inputs[operand.port].roles, value.verifier);
+      const auto &port = protocol.inputs[operand.port];
+      bool visible = operand.anchor
+                         ? port.oracle && port.oracle->holder == value.verifier
+                         : is_contained(port.roles, value.verifier);
       if ((purpose == RelationPurpose::Witness) == visible)
         return fail("source.entry",
                     "target purpose disagrees with verifier input availability",

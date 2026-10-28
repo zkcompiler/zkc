@@ -387,6 +387,11 @@ class Emitter {
   }
   mlir::ArrayAttr contractSelector(const SpecificationSelector &selector,
                                    unsigned port) {
+    if (selector.anchor)
+      return builder.getArrayAttr(
+          {builder.getStringAttr("anchor"),
+           builder.getStringAttr(selector.output ? "output" : "input"),
+           builder.getI64IntegerAttr(port)});
     return builder.getArrayAttr(
         {builder.getStringAttr(selector.output ? "output" : "input"),
          builder.getI64IntegerAttr(port),
@@ -638,7 +643,8 @@ class Emitter {
           return false;
         for (unsigned i = 0; i < slice->layout->leaves.size(); ++i) {
           operands.push_back(block.getArgument(slice->offset + i));
-          selectors.push_back(nativeRoleName(operand.role));
+          selectors.push_back(operand.anchor ? "anchor"
+                                             : nativeRoleName(operand.role));
         }
       }
       auto acceptance = take(layouts.select(decl, proof->acceptance));

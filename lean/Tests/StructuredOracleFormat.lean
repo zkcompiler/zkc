@@ -1,4 +1,6 @@
 import ZkcTools.StructuredSource.WireTypes
+import Zkc.Source.Structured.ContractElaboration
+import Zkc.Source.Structured.ComponentExport
 import Zkc.Source.Structured.Admission
 import Zkc.Construction.Scalar
 import Zkc.Construction.DomainTranscript
@@ -37,6 +39,22 @@ private def run : IO Unit := do
     (!(blsCatalogue.checkType blsCatalogue (.oracle kind)).isOk)
   test "nested handle has no ordinary admission"
     (!(blsCatalogue.checkType blsCatalogue (.sequence (.oracle kind))).isOk)
+  for direction in [ContractDirection.input, .output] do
+    let name := if direction == .input then "input" else "output"
+    let selected : ContractSelector := ⟨direction, 0, "", true⟩
+    test "anchor wire selector" (Format.contractSelector (.arr #[.str "anchor", .str name, toJson (0 : Nat)]) == .ok selected)
+    test "anchor does not resolve as ordinary data" (!(selected.resolve
+      ⟨"root", ["V"], [.vector "koala-bear"], [.vector "koala-bear"], [[0]], [[0]]⟩).isOk)
+  for role in ["", "V"] do
+    let signature : ProtocolSignature :=
+      ⟨"root", ["V"], [.vector "koala-bear"], [], [[0]], []⟩
+    test "typed selector cannot reinterpret anchor as participant data"
+      ((ContractElaboration.selector? signature (.vector "koala-bear")
+        ⟨.input, 0, role, true⟩).isNone)
+  test "anchor extra role refused" (!(Format.contractSelector
+    (.arr #[.str "anchor", .str "input", toJson (0 : Nat), .str "V"])).isOk)
+  test "anchor noncanonical index refused" (!(Format.contractSelector
+    (.arr #[.str "anchor", .str "input", .str "0"])).isOk)
   let descriptor := Json.arr #[.str "oracle_query", .null, wireOracleKind kind]
   test "query declaration owner omitted" (Format.descriptor descriptor == .ok (.oracle (.query none kind)))
   test "query role exact" (Format.descriptor (.arr #[.str "oracle_query", .str "V", wireOracleKind kind]) ==

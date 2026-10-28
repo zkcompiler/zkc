@@ -277,14 +277,18 @@ def purpose : Json → Except String String
   | .str "witness" => .ok "witness"
   | _ => .error "structured-relation-purpose"
 
+def contractDirection (json : Json) : Except String ContractDirection :=
+  match json with
+  | .str "input" => .ok .input
+  | .str "output" => .ok .output
+  | _ => .error "structured-contract-direction"
+
 def contractSelector (json : Json) : Except String ContractSelector := do
   match ← array json with
+  | [.str "anchor", direction, port] =>
+    return ⟨← contractDirection direction, ← natural port, "", true⟩
   | [direction, port, role] =>
-    let direction ← match direction with
-      | .str "input" => pure ContractDirection.input
-      | .str "output" => pure ContractDirection.output
-      | _ => throw "structured-contract-direction"
-    return ⟨direction, ← natural port, ← string role⟩
+    return ⟨← contractDirection direction, ← natural port, ← string role, false⟩
   | _ => throw "structured-contract-selector"
 
 def relationApplication (json : Json) : Except String RelationApplication := do

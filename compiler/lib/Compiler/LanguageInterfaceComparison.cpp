@@ -19,8 +19,8 @@ bool sameSpan(Span a, Span b) {
 }
 bool sameSelector(const SpecificationSelector &a,
                   const SpecificationSelector &b) {
-  return a.output == b.output && a.port == b.port && a.role == b.role &&
-         a.path == b.path && sameSpan(a.span, b.span);
+  return a.anchor == b.anchor && a.output == b.output && a.port == b.port &&
+         a.role == b.role && a.path == b.path && sameSpan(a.span, b.span);
 }
 StringRef clauseKind(SpecificationClause::Kind kind) {
   using K = SpecificationClause::Kind;
@@ -108,7 +108,9 @@ class Comparison {
         return fail("logical oracle schema differs");
       const auto &kind = source.leaves[0].oracle()->kind;
       if (!text(kind.identity, actual.oracle->kind) ||
-          kind.arguments != actual.oracle->arguments)
+          kind.arguments != actual.oracle->arguments || !source.oracleData ||
+          !actual.oracleData ||
+          !schema(*source.oracleData, *actual.oracleData, depth + 1))
         return fail("logical oracle kind differs");
     } else {
       for (unsigned i = 0; i < source.leaves.size(); ++i)
@@ -178,8 +180,9 @@ class Comparison {
                 const InterfaceSelector &actual) {
     if (!charge(source.path.size() + actual.path.size() + 1))
       return false;
-    if (source.output != actual.output || source.port != actual.port ||
-        source.role != actual.role || source.path != actual.path)
+    if (source.anchor != actual.anchor || source.output != actual.output ||
+        source.port != actual.port || source.role != actual.role ||
+        source.path != actual.path)
       return fail(
           "source selector direction, port, path or participant differs");
     const auto &ports = source.output ? protocol.outputs : protocol.inputs;
@@ -198,6 +201,10 @@ class Comparison {
         return fail("checked selector has no layout field");
       offset += value->fields[index].offset;
       value = value->fields[index].layout;
+    }
+    if (source.anchor) {
+      ++offset;
+      return value->oracleData && slice(actual.native, offset, 1);
     }
     return slice(actual.native, offset, value->leaves.size());
   }

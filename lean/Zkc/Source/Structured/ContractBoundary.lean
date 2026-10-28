@@ -33,7 +33,7 @@ structure BoundarySelector (signature : ProtocolSignature) (type : Ty) where
 
 def BoundarySelector.erase {signature : ProtocolSignature} {type : Ty}
     (selector : BoundarySelector signature type) : ContractSelector :=
-  ⟨selector.port.direction, selector.port.index, signature.roles.get selector.role⟩
+  ⟨selector.port.direction, selector.port.index, signature.roles.get selector.role, false⟩
 
 structure BoundaryValuation (Value : Ty → Type) (inputs outputs : List Ty) where
   inputs : Nat → Values (Component Value) inputs

@@ -125,10 +125,30 @@ LogicalResult verifyOracleEntryPorts(protocol_ir::MathematicalOp program,
       continue;
     if (failed(charge(program, remaining)))
       return failure();
-    auto input =
-        argument.hasOneUse()
-            ? dyn_cast<protocol_ir::OracleInputOp>(*argument.getUsers().begin())
-            : protocol_ir::OracleInputOp();
+    protocol_ir::OracleInputOp input;
+    for (OpOperand &use : argument.getUses()) {
+      if (failed(charge(use.getOwner(), remaining)))
+        return failure();
+      if (auto statement = dyn_cast<protocol_ir::StatementOp>(use.getOwner())) {
+        // Contract verification checks the exact target projection next. This
+        // use is logical metadata; it grants no raw executable handle access.
+        unsigned index = use.getOperandNumber();
+        if (failed(statement->getName().verifyInvariants(statement)) ||
+            statement->getBlock() != &body || !statement.getTargetAttr() ||
+            index >= statement.getSelectors().size() ||
+            statement.getSelectors()[index] !=
+                StringAttr::get(program.getContext(), "anchor"))
+          return refuse(
+              statement,
+              "raw anchor metadata requires a selected logical target");
+        continue;
+      }
+      auto binding = dyn_cast<protocol_ir::OracleInputOp>(use.getOwner());
+      if (!binding || input)
+        return refuse(program,
+                      "a raw oracle entry must have one input binding");
+      input = binding;
+    }
     if (!input || failed(input->getName().verifyInvariants(input)) ||
         input->getBlock() != &body || input.getAnchor() != argument)
       return refuse(program, "a raw oracle entry must have one input binding");

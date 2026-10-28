@@ -45,7 +45,7 @@ structure RetainedTarget {snapshot : Structured.Snapshot} (imported : Structured
   target : (owner.clause clauseIndex).kind = .target
   noResidual : (owner.clause clauseIndex).residual = none
   decision : (owner.clause clauseIndex).decision =
-    some ⟨.output, policy.acceptance, policy.validator⟩
+    some ⟨.output, policy.acceptance, policy.validator, false⟩
   application : ApplicationBinding owner (owner.clause clauseIndex).subject
   booleanOutput : application.relation.declaration.outputs = [.boolean]
   publicTypes : publics = policy.publicInputs.filterMap (imported.program.payload.entry.inputs[·]?)

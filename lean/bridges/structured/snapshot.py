@@ -183,10 +183,15 @@ def relation(value):
 
 
 def contract_selector(value):
+    if isinstance(value, list) and len(value) == 3 and value[0] == "anchor":
+        _, direction, port = value
+        if direction not in ("input", "output"):
+            raise ValueError("invalid anchor selector direction")
+        return f'⟨.{direction}, {nat(port)}, "", true⟩'
     direction, port, role = record(value, 3)
     if direction not in ("input", "output"):
         raise ValueError("invalid contract selector direction")
-    return f"⟨.{direction}, {nat(port)}, {text(role)}⟩"
+    return f"⟨.{direction}, {nat(port)}, {text(role)}, false⟩"
 
 
 def relation_application(value):

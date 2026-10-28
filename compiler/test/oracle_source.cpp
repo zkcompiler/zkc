@@ -54,7 +54,7 @@ module { "protocol.module"() ({
  }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir";
 }
-std::string replace(std::string text, StringRef before, StringRef after) {
+std::string replaceText(std::string text, StringRef before, StringRef after) {
   auto position = text.find(before.str());
   require(position != std::string::npos, "missing mutation target");
   text.replace(position, before.size(), after.str());
@@ -94,6 +94,33 @@ int main(int argc, char **argv) {
     return 0;
   }
   Cases cases;
+  cases.run(
+      "anchor contracts retain data associations without role reads", [&] {
+        auto text =
+            replaceText(source(), "sym_name=\"main\",", R"mlir(sym_name="main",
+      contracts=[
+        ["input","initial",[@admissible,[["anchor","input",1:i64],["input",2:i64,"P"]]],unit,unit],
+        ["output","result",[@admissible,[["anchor","output",1:i64],["input",2:i64,"P"]]],unit,unit]],)mlir");
+        auto snapshot = take(json::parse(take(capture(text)).bytes));
+        require(at(snapshot, {8, 0, 1, 0, 2, 1, 0}) ==
+                        J(A{"anchor", "input", 1}) &&
+                    at(snapshot, {8, 0, 1, 1, 2, 1, 0}) ==
+                        J(A{"anchor", "output", 1}),
+                "anchor selector became a role-local data selector");
+        refuses(zkc::language::deriveComponentContracts(snapshot),
+                "component-seam-oracle");
+        for (StringRef replacement :
+             {"[\"anchor\",\"input\",0:i64]", "[\"anchor\",\"input\",4:i64]",
+              "[\"anchor\",\"input\",-1:i64]", "[\"anchor\",\"input\",1:i32]",
+              "[\"anchor\",\"other\",1:i64]",
+              "[\"anchor\",\"input\",1:i64,\"V\"]"})
+          refuses(capture(replaceText(text, "[\"anchor\",\"input\",1:i64]",
+                                      replacement)),
+                  "structured-source-original");
+        refuses(capture(replaceText(text, "signature=(!D,ui64)->i1",
+                                    "signature=(!F,ui64)->i1")),
+                "structured-source-original");
+      });
   cases.run(
       "original oracle bodies preserve identities roles and repeated queries",
       [&] {
@@ -195,20 +222,21 @@ int main(int argc, char **argv) {
       "all retained oracle attributes and actual declarations are checked",
       [&] {
         for (auto text :
-             {replace(source(), "admissibility=@admissible",
-                      "admissibility=@missing"),
-              replace(source(), "callee=@select", "callee=@identity"),
-              replace(source(), "{owner=\"V\",site=\"read\"}",
-                      "{owner=\"P\",site=\"read\",unchecked=1:ui64}"),
-              replace(source(), "{site=\"second\"}", "{site=\"first\"}")}) {
+             {replaceText(source(), "admissibility=@admissible",
+                          "admissibility=@missing"),
+              replaceText(source(), "callee=@select", "callee=@identity"),
+              replaceText(source(), "{owner=\"V\",site=\"read\"}",
+                          "{owner=\"P\",site=\"read\",unchecked=1:ui64}"),
+              replaceText(source(), "{site=\"second\"}", "{site=\"first\"}")}) {
           auto result = capture(text);
           require(!result, "malformed oracle export accepted");
           consumeError(result.takeError());
         }
       });
   cases.run("unsigned kind and capacity fields preserve their full width", [&] {
-    auto text = replace(source(), "16 : ui64", "18446744073709551615 : ui64");
-    text = replace(text, "#U, 4>", "#U, 18446744073709551615>");
+    auto text =
+        replaceText(source(), "16 : ui64", "18446744073709551615 : ui64");
+    text = replaceText(text, "#U, 4>", "#U, 18446744073709551615>");
     auto snapshot = take(json::parse(take(capture(text)).bytes));
     require(at(snapshot, {7, 1, 3, 1, 1, 1}) == J("18446744073709551615"),
             "kind natural narrowed");
@@ -217,22 +245,23 @@ int main(int argc, char **argv) {
   });
   cases.run(
       "unsized shapes and associated collection sorts stay explicit", [&] {
-        auto text = replace(source(), ", 16 : ui64", "");
-        text = replace(text, "admissibility=@admissible}",
-                       "admissibility=@admissible,shape_argument=1:ui64,"
-                       "maximum_rows=64:ui64}");
-        text = replace(
+        auto text = replaceText(source(), ", 16 : ui64", "");
+        text = replaceText(text, "admissibility=@admissible}",
+                           "admissibility=@admissible,shape_argument=1:ui64,"
+                           "maximum_rows=64:ui64}");
+        text = replaceText(
             text, "{holder=\"P\",receivers=[\"V\"]} : (!D,!H)",
             "{holder=\"P\",receivers=[\"V\"],maximum_rows=64:ui64} : (!D,!H)");
-        text = replace(text, "site=\"sent\"}",
-                       "site=\"sent\",maximum_rows=64:ui64}");
+        text = replaceText(text, "site=\"sent\"}",
+                           "site=\"sent\",maximum_rows=64:ui64}");
         // Forgetting rows requires an actual sized refinement, so use the same
         // unsized handle directly in this case.
-        text = replace(text,
-                       "    %unsized = \"protocol.oracle_forget_rows\"(%sent) "
-                       ": (!H)->!U\n",
-                       "");
-        text = replace(text, "(%empty,%unsized)", "(%empty,%sent)");
+        text =
+            replaceText(text,
+                        "    %unsized = \"protocol.oracle_forget_rows\"(%sent) "
+                        ": (!H)->!U\n",
+                        "");
+        text = replaceText(text, "(%empty,%unsized)", "(%empty,%sent)");
         auto snapshot = take(json::parse(take(capture(text)).bytes));
         require(at(snapshot, {7, 1, 5}) == J("1") &&
                     at(snapshot, {7, 1, 6}) == J("64"),
@@ -248,7 +277,8 @@ int main(int argc, char **argv) {
           size_t position;
           while ((position = typed.find(field)) != std::string::npos)
             typed.replace(position, field.size(), target);
-          typed = replace(typed, "!algebra.field_vector<\"koala-bear\">",
+          typed =
+              replaceText(typed, "!algebra.field_vector<\"koala-bear\">",
                           index ? "!algebra.indices"
                                 : "!algebra.group_vector<\"bls12-381.g1\">");
           auto result = take(json::parse(take(capture(typed)).bytes));

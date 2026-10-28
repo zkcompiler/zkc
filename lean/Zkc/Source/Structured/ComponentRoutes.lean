@@ -583,6 +583,11 @@ def block (snapshot : Snapshot) (owner : Function) : Nat → Block → List Ty �
       return returned
 
 def derive (snapshot : Snapshot) : Except String Result := do
+  for owner in snapshot.contracts do
+    for clause in owner.clauses do
+      for application in clause.subject :: clause.residual.toList do
+        if application.selectors.any (·.anchor) then throw "component-seam-oracle"
+
   if !(snapshot.sourceDeclarations.records.any (·.resource == "linear")) then return {}
   let owners := snapshot.protocolFunctions
   let (_, result) ← (do

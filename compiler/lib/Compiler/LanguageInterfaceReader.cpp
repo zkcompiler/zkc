@@ -226,7 +226,7 @@ class Reader {
         a.kind != b.kind || a.type != b.type || a.custody != b.custody ||
         a.constructible != b.constructible ||
         !(a.permissions == b.permissions) || a.leaves != b.leaves ||
-        a.oracle != b.oracle ||
+        a.oracle != b.oracle || a.oracleData != b.oracleData ||
         a.alternatives.size() != b.alternatives.size() ||
         !sameFields(a.fields, b.fields))
       return false;
@@ -414,13 +414,14 @@ class Reader {
       return {};
     auto *raw = value.getAsObject();
     bool oracle = raw && raw->getString("kind") == "oracle";
-    auto *obj = oracle
-                    ? object(value, {"kind", "identity", "type", "custody",
-                                     "constructible", "permissions", "fields",
-                                     "alternatives", "leaves", "oracle"})
-                    : object(value, {"kind", "identity", "type", "custody",
-                                     "constructible", "permissions", "fields",
-                                     "alternatives", "leaves"});
+    auto *obj =
+        oracle
+            ? object(value, {"kind", "identity", "type", "custody",
+                             "constructible", "permissions", "fields",
+                             "alternatives", "leaves", "oracle", "data_schema"})
+            : object(value,
+                     {"kind", "identity", "type", "custody", "constructible",
+                      "permissions", "fields", "alternatives", "leaves"});
     if (!obj)
       return {};
     auto type = text(*obj, "type"), kindName = text(*obj, "kind"),
@@ -473,6 +474,17 @@ class Reader {
     if (oracle) {
       result->oracle = oracleDescriptor(*obj->get("oracle"));
       if (!result->oracle)
+        return {};
+      auto kind = protocol::oracleKindSignature(result->oracle->kind,
+                                                result->oracle->arguments);
+      if (!kind) {
+        consumeError(kind.takeError());
+        fail("invalid oracle data association");
+        return {};
+      }
+      result->oracleData =
+          schema(*obj->get("data_schema"), depth + 1, {kind->data.spelling()});
+      if (!result->oracleData)
         return {};
     }
     unsigned index = 0;
@@ -1013,20 +1025,34 @@ class Reader {
     auto *obj = object(value, {"direction", "port", "path", "role"});
     if (!obj)
       return {};
-    auto direction = text(*obj, "direction"),
-         role = text(*obj, "role", limits.identifierBytes);
+    auto direction = text(*obj, "direction");
     auto port = natural(*obj, "port");
     auto *path = array(*obj, "path");
-    if (!direction || !role || !port || !path)
+    if (!direction || !port || !path)
       return {};
     if (*direction != "input" && *direction != "output") {
       fail("invalid selector direction");
       return {};
     }
-    auto found = roleIndices.find(*role);
     const auto &ports =
         *direction == "input" ? current->inputs : current->outputs;
-    if (*port >= ports.size() || found == roleIndices.end() ||
+    if (obj->get("role")->getAsNull()) {
+      if (*port >= ports.size() || !ports[*port].oracle || !path->empty() ||
+          !ports[*port].schema->oracleData || ports[*port].native.size() != 2) {
+        fail("anchor selector requires one whole oracle port");
+        return {};
+      }
+      if (selected)
+        *selected = ports[*port].schema->oracleData;
+      return InterfaceSelector{*direction == "output",   *port, 0, {},
+                               {ports[*port].native[1]}, true};
+    }
+    auto role = text(*obj, "role", limits.identifierBytes);
+    if (!role)
+      return {};
+    auto found = roleIndices.find(*role);
+    if (*port >= ports.size() || ports[*port].oracle ||
+        found == roleIndices.end() ||
         !is_contained(ports[*port].roles, found->second)) {
       fail("selector does not name an actual participant component");
       return {};
@@ -1267,6 +1293,11 @@ class Reader {
     mlir::Builder builder(function.getContext());
     auto nativeSelector = [&](const InterfaceSelector &selector,
                               unsigned index) {
+      if (selector.anchor)
+        return builder.getArrayAttr(
+            {builder.getStringAttr("anchor"),
+             builder.getStringAttr(selector.output ? "output" : "input"),
+             builder.getI64IntegerAttr(index)});
       return builder.getArrayAttr(
           {builder.getStringAttr(selector.output ? "output" : "input"),
            builder.getI64IntegerAttr(index),
@@ -1588,8 +1619,11 @@ class Reader {
           return false;
         if (operand.output)
           return fail("exported target requires Entry input operands");
+        const auto &port = current->inputs[operand.port];
         bool visible =
-            is_contained(current->inputs[operand.port].roles, proof.verifier);
+            operand.anchor
+                ? port.oracle && port.oracle->holder == proof.verifier
+                : is_contained(port.roles, proof.verifier);
         if ((input.purpose == RelationPurpose::Witness) == visible)
           return fail(
               "target purpose differs from verifier input availability");
@@ -1610,9 +1644,14 @@ class Reader {
         auto statement = mlir::dyn_cast<protocol_ir::StatementOp>(op);
         if (!statement)
           continue;
-        if (&op != &function.getBody().front().front() || !proof ||
-            !proof->target || function.getSymName() != selected.symbol ||
-            ++count != 1)
+        bool entryPrefix =
+            llvm::all_of(llvm::make_range(function.getBody().front().begin(),
+                                          op.getIterator()),
+                         [](mlir::Operation &prefix) {
+                           return mlir::isa<protocol_ir::OracleInputOp>(prefix);
+                         });
+        if (!entryPrefix || !proof || !proof->target ||
+            function.getSymName() != selected.symbol || ++count != 1)
           return fail("unexpected native Entry statement");
         const auto &clause = selected.clauses[*proof->target];
         const auto &relation = view.relations[clause.subject.relation];
@@ -1633,7 +1672,9 @@ class Reader {
                     function.getBody().front().getArgument(index) ||
                 statement.getSelectors()[i] !=
                     mlir::StringAttr::get(function.getContext(),
-                                          nativeRoleName(operand.role)))
+                                          operand.anchor
+                                              ? "anchor"
+                                              : nativeRoleName(operand.role)))
               return fail("native statement operands or participants differ");
             ++i;
           }

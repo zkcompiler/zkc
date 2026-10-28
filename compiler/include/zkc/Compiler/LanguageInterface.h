@@ -41,6 +41,7 @@ struct InterfaceSchema {
   /// Present only for a logical handle. Such a schema has no native data
   /// leaves.
   std::optional<InterfaceOracle> oracle;
+  std::shared_ptr<const InterfaceSchema> oracleData;
 };
 struct InterfacePort {
   std::string name;
@@ -56,6 +57,7 @@ struct InterfaceSelector {
   bool output = false;
   unsigned port = 0, role = 0;
   std::vector<unsigned> path, native;
+  bool anchor = false;
 };
 struct InterfaceApplication {
   unsigned relation = 0;

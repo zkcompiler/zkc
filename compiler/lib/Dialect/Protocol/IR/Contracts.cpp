@@ -13,6 +13,7 @@ struct Selector {
   unsigned port;
   StringAttr role;
   Type type;
+  bool anchor = false;
 };
 class Contracts {
   MathematicalOp owner;
@@ -27,12 +28,14 @@ class Contracts {
     if (!remaining || !row || row.size() != 3)
       return {};
     --remaining;
-    auto direction = dyn_cast<StringAttr>(row[0]);
-    auto index = dyn_cast<IntegerAttr>(row[1]);
-    auto role = dyn_cast<StringAttr>(row[2]);
+    bool anchor = row[0] == StringAttr::get(owner.getContext(), "anchor");
+    auto direction = dyn_cast<StringAttr>(row[anchor ? 1 : 0]);
+    auto index = dyn_cast<IntegerAttr>(row[anchor ? 2 : 1]);
+    auto role = anchor ? StringAttr() : dyn_cast<StringAttr>(row[2]);
     if (!direction || (direction != "input" && direction != "output") ||
         !index || !index.getType().isSignlessInteger(64) ||
-        index.getInt() < 0 || !role || !is_contained(owner.getRoles(), role))
+        index.getInt() < 0 ||
+        (!anchor && (!role || !is_contained(owner.getRoles(), role))))
       return {};
     bool output = direction == "output";
     auto types = output ? owner.getFunctionType().getResults()
@@ -41,11 +44,21 @@ class Contracts {
     uint64_t port = index.getInt();
     if (port >= types.size() || port >= scopes.size())
       return {};
+    if (anchor) {
+      auto handle = dyn_cast<OracleHandleType>(types[port]);
+      if (!handle)
+        return {};
+      // The common oracle-port checker validates the actual holder/anchor
+      // pair. A contract names its logical data without granting role access.
+      return Selector{
+          output, unsigned(port), {}, handle.getKind().getDataType(), true};
+    }
     auto roles = dyn_cast<ArrayAttr>(scopes[port]);
     if (!roles || !is_contained(roles, role))
       return {};
     return Selector{output, unsigned(port), role, types[port]};
   }
+
   LogicalResult application(Attribute attr, bool &hasOutput) {
     auto row = dyn_cast<ArrayAttr>(attr);
     if (!remaining || !row || row.size() != 2)
@@ -82,7 +95,8 @@ class Contracts {
     if (statement.getRelationAttr() != subject[0])
       return false;
     auto decision = selector(clause[4]);
-    if (!decision || statement.getAcceptance() != decision->port)
+    if (!decision || decision->anchor ||
+        statement.getAcceptance() != decision->port)
       return false;
     auto operands = cast<ArrayAttr>(subject[1]);
     if (operands.size() != statement.getNumOperands() ||
@@ -91,7 +105,10 @@ class Contracts {
     for (auto [operand, value, role] :
          zip(operands, statement.getInputs(), statement.getSelectors())) {
       auto selected = selector(operand);
-      if (!selected || selected->output || selected->role != role ||
+      if (!selected || selected->output ||
+          (selected->anchor
+               ? role != StringAttr::get(owner.getContext(), "anchor")
+               : selected->role != role) ||
           selected->port >= owner.getBody().front().getNumArguments() ||
           value != owner.getBody().front().getArgument(selected->port))
         return false;
@@ -138,8 +155,8 @@ public:
         return refuse("only a continuation may have a residual");
       if (!isa<UnitAttr>(row[4])) {
         auto decision = selector(row[4]);
-        if (kind == "input" || !decision || !decision->output ||
-            !decision->type.isSignlessInteger(1))
+        if (kind == "input" || !decision || decision->anchor ||
+            !decision->output || !decision->type.isSignlessInteger(1))
           return refuse("decision requires one available Boolean output");
       } else if (kind == "target")
         return refuse("target requires a decision");

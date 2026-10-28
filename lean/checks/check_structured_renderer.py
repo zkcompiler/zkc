@@ -209,7 +209,7 @@ example : (RenderedContracts.snapshot.contracts[0]?.bind fun contract =>
          (selector.direction, selector.port, selector.role.toList.map Char.toNat),
        clause.decision)) =
     some (.continuation, {contract_points}, [(.input, 0, {points})],
-      some ⟨.output, 0, "V"⟩) := by rfl
+      some ⟨.output, 0, "V", false⟩) := by rfl
 '''
     modules.append(source)
     # Closed source declarations and static-only relation arguments survive the
@@ -237,7 +237,20 @@ example : (RenderedDeclarations.snapshot.sourceDeclarations.protocols.map fun pr
     [("main", [({contract_points}, .boolean, ["V"], 1, 1)], [])] := by rfl
 '''
     modules.append(source)
+    anchor_data = copy.deepcopy(contract_data)
+    anchor_data[8][0][1][0][2][1] = [["anchor", "input", 0]]
+    source = renderer.render(anchor_data, "RenderedAnchor").replace("module\n\n", "", 1)
+    source += """
+open Zkc.Source.Structured in
+example : (RenderedAnchor.snapshot.contracts[0]?.bind fun owner =>
+  owner.clauses[0]?.map fun clause => clause.subject.selectors) =
+    some [⟨.input, 0, "", true⟩] := by rfl
+"""
+    modules.append(source)
     malformed_contracts = [
+        (renderer.contract_selector, ["anchor", "input", 0, "V"]),
+        (renderer.contract_selector, ["anchor", "other", 0]),
+        (renderer.contract_selector, ["anchor", "input", True]),
         (renderer.contract_selector, ["unknown", 0, "P"]),
         (renderer.contract_selector, ["input", True, "P"]),
         (renderer.contract_selector, ["input", 0, "P", "extra"]),

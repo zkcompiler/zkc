@@ -951,8 +951,8 @@ class SpecializationCheck {
         return refuse(actual.span);
       auto selector = [](const SpecificationSelector &a,
                          const SpecificationSelector &b) {
-        return a.output == b.output && a.port == b.port && a.role == b.role &&
-               a.path == b.path;
+        return a.anchor == b.anchor && a.output == b.output &&
+               a.port == b.port && a.role == b.role && a.path == b.path;
       };
       auto subject = [&](const RelationApplication &a,
                          const RelationApplication &b) {

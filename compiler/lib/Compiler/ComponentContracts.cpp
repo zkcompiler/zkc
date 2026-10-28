@@ -659,6 +659,23 @@ struct Deriver {
     return live.empty() || refuse("component-seam-coverage");
   }
   bool run() {
+    // Anchor contracts require the oracle-store interpretation. Refuse them
+    // before any data-only slot traversal; a data ABI cannot resolve an anchor.
+    for (const auto &[name, clauses] : contracts)
+      for (const auto &value : *clauses) {
+        const auto &clause = array(value);
+        for (unsigned side : {2u, 3u}) {
+          if (clause[side].getAsNull())
+            continue;
+          for (const auto &value : array(array(clause[side])[1])) {
+            if (!charge())
+              return false;
+            if (array(value)[0] == J("anchor"))
+              return refuse("component-seam-oracle");
+          }
+        }
+      }
+
     if (linear.empty())
       return true;
     std::map<std::string, J> meanings;

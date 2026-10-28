@@ -29,8 +29,8 @@ example (arg : SeamRoute) : ComponentRoutes.acceptance
     65 (.pure (.localCall "identity" "V") [2] 0 "V" [arg]) =
     .terminal (.localCall "identity" "V") [2] 0 "V" [arg] := by kernel_rfl
 
-example : ((InstantiationSource.math "repack" 1 [.parameter ⟨.input, 0, "V"⟩,
-    .math "constant" 0 []]) == .math "repack" 1 [.parameter ⟨.input, 0, "V"⟩,
+example : ((InstantiationSource.math "repack" 1 [.parameter ⟨.input, 0, "V", false⟩,
+    .math "constant" 0 []]) == .math "repack" 1 [.parameter ⟨.input, 0, "V", false⟩,
     .math "constant" 0 []]) = true := by kernel_rfl
 
 private def changeProtocols (snapshot : Snapshot) (change : Function → Function) : Snapshot :=

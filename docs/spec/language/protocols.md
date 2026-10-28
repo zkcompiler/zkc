@@ -488,6 +488,17 @@ Shared roles may hold different values. Selectors preserve the chosen component,
 field privacy and static bounds. They cannot select internal SSA values, index
 inside a native container, or project an unchecked variant payload.
 
+For an `Oracle<K>` port, the whole-port selector instead denotes the logical
+Data associated with its anchor. It binds a `K::Data` relation formal, without
+an executable read or a participant selector. Both `in.word` and `out.word`
+are supported; an explicit role or product path refuses. The generated common
+selector names the actual anchor leaf, not the paired holder-data leaf.
+An inline relation infers the same associated type. A selected proof target
+retains this logical binding; verifier ownership of an anchor does not make its
+data public. Purpose checks use the data holder, while `public` still lists
+all verifier inputs, including logical oracle inputs. Realization must produce
+the final executable statement and witness layouts.
+
 An inline relation uses explicitly bound formals:
 
 ```text

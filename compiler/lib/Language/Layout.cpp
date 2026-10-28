@@ -196,8 +196,16 @@ Layouts::kernelArguments(StringRef contract, ArrayRef<Type> arguments) {
 Error Layouts::charge(uint64_t n) { return state->work.charge(n); }
 Expected<LayoutSlice> Layouts::select(const Declaration &decl,
                                       const SpecificationSelector &selector) {
-  return select(selector.output ? decl.outputs : decl.inputs, selector.port,
-                selector.path);
+  auto slice = select(selector.output ? decl.outputs : decl.inputs,
+                      selector.port, selector.path);
+  if (!slice || !selector.anchor)
+    return slice;
+  if (!selector.path.empty() || !slice->layout->oracleData ||
+      slice->layout->oracleData->leaves.size() != 1)
+    return error("source.layout", "invalid logical anchor data layout");
+  ++slice->offset;
+  slice->layout = slice->layout->oracleData;
+  return slice;
 }
 Expected<LayoutSlice> Layouts::selectInput(const Declaration &decl,
                                            const InputSelector &selector) {
@@ -386,6 +394,15 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
         return error("source.generic",
                      "oracle sequence maximum remains symbolic");
       maximum = type.arguments[1].dimension.closedValue();
+    }
+    if (type.kind == K::Oracle) {
+      auto data = oracleMember(type.arguments.front(), "Data");
+      if (!data)
+        return data.takeError();
+      auto layout = build(*data, depth + 1);
+      if (!layout)
+        return layout.takeError();
+      result->oracleData = *layout;
     }
     result->leaves = {OracleLayout{std::move(*kind), maximum}};
   } else if (type.kind == K::Formal) {

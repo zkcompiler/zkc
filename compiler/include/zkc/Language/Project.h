@@ -596,6 +596,8 @@ struct SpecificationSelector {
   unsigned port = 0, role = 0;
   std::vector<unsigned> path;
   Span span;
+  /// Select logical data through an oracle anchor, without a role-local read.
+  bool anchor = false;
 };
 struct RelationApplication {
   DeclarationId relation;

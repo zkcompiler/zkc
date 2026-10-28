@@ -499,7 +499,11 @@ returns and applications, with explicit shapes and independent preparation check
 The native [structured exporter](spec/formats/structured-source.md#logical-oracle-vocabulary)
 and independent wire vocabulary retain kinds, paired ports, virtual bodies,
 query order, shapes and sequence bounds. Formal semantic admission still refuses
-the oracle profile; decoding does not extend participant soundness. Source
+the oracle profile; decoding does not extend participant soundness. Native
+anchor contract selectors retain the associated logical data without a
+participant read, including selected logical proof statements. Source whole-port
+selectors infer this association and retain the complete Data schema; executable
+statement projection and formal semantic consumers still refuse the profile. Source
 kind/handle aliases, static kind parameters, forward associated types and closed
 logical layouts are checked, including specialization and ordinary-data boundary
 refusals. Source oracle ports retain their explicit holder, receivers and static

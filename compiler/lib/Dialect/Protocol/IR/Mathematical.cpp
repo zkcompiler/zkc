@@ -432,6 +432,14 @@ public:
         for (auto [input, selector] :
              zip(statement.getInputs(), statement.getSelectors())) {
           auto arg = dyn_cast<BlockArgument>(input);
+          if (isa<protocol_ir::OracleHandleType>(input.getType())) {
+            if (!arg || arg.getOwner() != &program.getBody().front() ||
+                !statement.getTargetAttr() ||
+                selector != StringAttr::get(op->getContext(), "anchor"))
+              return refuse(op, "logical statement anchor requires an owned "
+                                "target and entry handle");
+            continue;
+          }
           int r = role(selector);
           if (!arg || arg.getOwner() != &program.getBody().front() || r < 0 ||
               !env.values.lookup(input).test(r))
@@ -789,8 +797,15 @@ LogicalResult
 zkc::protocol_ir::StatementOp::verifySymbolUses(SymbolTableCollection &tables) {
   auto relation = tables.lookupNearestSymbolFrom<zkc::relation::DeclareOp>(
       *this, getRelationAttr());
+  SmallVector<Type> logical;
+  for (Type type : getOperandTypes()) {
+    if (auto anchor = dyn_cast<protocol_ir::OracleHandleType>(type))
+      logical.push_back(anchor.getKind().getDataType());
+    else
+      logical.push_back(type);
+  }
   if (!relation || failed(relation->getName().verifyInvariants(relation)) ||
-      !llvm::equal(relation.getSignature().getInputs(), getOperandTypes()))
+      !llvm::equal(relation.getSignature().getInputs(), logical))
     return diagnostics::emit(emitOpError(), "mathematical-statement",
                              "expected an external relation declaration with "
                              "matching inputs and one bool result");

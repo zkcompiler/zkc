@@ -149,6 +149,9 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
         const auto &kind = layout.leaves.front().oracle()->kind;
         out.attribute("oracle",
                       encodeInterfaceOracle({kind.identity, kind.arguments}));
+        out.attributeBegin("data_schema");
+        schema(*layout.oracleData, port);
+        out.attributeEnd();
       }
       out.attributeArray("leaves", [&] {
         for (auto &leaf : layout.leaves) {
@@ -205,14 +208,17 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
   };
   auto selector = [&](const Declaration &protocol,
                       const SpecificationSelector &value) {
-    if (!charge(value.path.size() + protocol.roles[value.role].size() + 1)) {
+    if (!charge(value.path.size() +
+                (value.anchor ? 0 : protocol.roles[value.role].size()) + 1)) {
       out.value(nullptr);
       return;
     }
     out.object([&] {
       out.attribute("direction", value.output ? "output" : "input");
       out.attribute("port", value.port);
-      out.attribute("role", protocol.roles[value.role]);
+      out.attribute("role", value.anchor
+                                ? json::Value(nullptr)
+                                : json::Value(protocol.roles[value.role]));
       out.attributeArray("path", [&] {
         for (auto index : value.path)
           out.value(index);

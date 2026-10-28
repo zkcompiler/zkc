@@ -25,9 +25,9 @@ private def relation : Relation :=
 private def opaqueDeclaration : Relation :=
   { relation with name := "Opaque", kind := "opaque", formula := none }
 private def subject : RelationApplication :=
-  ⟨"Equal", [⟨.input, 0, "V"⟩, ⟨.input, 1, "P"⟩]⟩
+  ⟨"Equal", [⟨.input, 0, "V", false⟩, ⟨.input, 1, "P", false⟩]⟩
 private def clause : ContractClause :=
-  ⟨.target, "claim", subject, none, some ⟨.output, 0, "V"⟩⟩
+  ⟨.target, "claim", subject, none, some ⟨.output, 0, "V", false⟩⟩
 private def secondClause : ContractClause := { clause with name := "second" }
 private def snapshot (changed reordered : Bool) : Snapshot :=
   ⟨digest, "main", [], if reordered then [opaqueDeclaration, relation] else [relation, opaqueDeclaration], [],
@@ -145,29 +145,29 @@ example : checkFormulaLinks { snapshot false false with
 
 -- A different valid participant copy binds to that copy, never to the old one.
 noncomputable def otherCopy : ApplicationBinding owner
-    ⟨"Equal", [⟨.input, 0, "P"⟩, ⟨.input, 1, "P"⟩]⟩ := by bind_contract
+    ⟨"Equal", [⟨.input, 0, "P", false⟩, ⟨.input, 1, "P", false⟩]⟩ := by bind_contract
 theorem changed_role_observed : eraseSelectors otherCopy.selectors ≠ eraseSelectors application.selectors := by
   decide +kernel
 example : True := by
   fail_if_success
     have wrongCopy : ApplicationBinding owner
-        ⟨"Equal", [⟨.input, 0, "P"⟩, ⟨.input, 1, "P"⟩]⟩ := application
+        ⟨"Equal", [⟨.input, 0, "P", false⟩, ⟨.input, 1, "P", false⟩]⟩ := application
   trivial
 
 private def signature : ProtocolSignature :=
   ⟨"main", ["P", "V"], [.boolean, .index], [.boolean], [[0, 1], [0]], [[1]]⟩
 
 -- Complete type, direction, port, role and scope are required by decoding.
-example : (selector? signature .boolean ⟨.input, 0, "V"⟩).isSome = true := rfl
-example : (selector? signature .boolean ⟨.input, 1, "P"⟩).isSome = false := rfl
-example : (selector? signature .index ⟨.input, 1, "V"⟩).isSome = false := rfl
-example : (selector? signature .boolean ⟨.input, 9, "V"⟩).isSome = false := rfl
-example : (selector? signature .boolean ⟨.input, 0, "X"⟩).isSome = false := rfl
-example : (selector? signature .boolean ⟨.output, 0, "P"⟩).isSome = false := rfl
+example : (selector? signature .boolean ⟨.input, 0, "V", false⟩).isSome = true := rfl
+example : (selector? signature .boolean ⟨.input, 1, "P", false⟩).isSome = false := rfl
+example : (selector? signature .index ⟨.input, 1, "V", false⟩).isSome = false := rfl
+example : (selector? signature .boolean ⟨.input, 9, "V", false⟩).isSome = false := rfl
+example : (selector? signature .boolean ⟨.input, 0, "X", false⟩).isSome = false := rfl
+example : (selector? signature .boolean ⟨.output, 0, "P", false⟩).isSome = false := rfl
 example : (selector? { signature with roles := ["V", "V"] }
-    .boolean ⟨.input, 0, "V"⟩).isSome = false := rfl
+    .boolean ⟨.input, 0, "V", false⟩).isSome = false := rfl
 example : (selectors? signature [.boolean] []).isSome = false := rfl
-example : (selectors? signature [] [⟨.input, 0, "V"⟩]).isSome = false := rfl
+example : (selectors? signature [] [⟨.input, 0, "V", false⟩]).isSome = false := rfl
 
 -- Invalid requests cannot elaborate to bindings, even at a valid admitted owner.
 example : True := by
@@ -178,11 +178,11 @@ example : True := by
   fail_if_success
     have missingClause := owner.namedClause "Missing"
   fail_if_success
-    have wrongRole : ApplicationBinding owner ⟨"Equal", [⟨.input, 0, "X"⟩, ⟨.input, 1, "P"⟩]⟩ := by bind_contract
+    have wrongRole : ApplicationBinding owner ⟨"Equal", [⟨.input, 0, "X", false⟩, ⟨.input, 1, "P", false⟩]⟩ := by bind_contract
   fail_if_success
     have missingArgument : ApplicationBinding owner ⟨"Equal", []⟩ := by bind_contract
   fail_if_success
-    have unavailableOutput : ApplicationBinding owner ⟨"Equal", [⟨.output, 0, "P"⟩, ⟨.input, 1, "P"⟩]⟩ := by bind_contract
+    have unavailableOutput : ApplicationBinding owner ⟨"Equal", [⟨.output, 0, "P", false⟩, ⟨.input, 1, "P", false⟩]⟩ := by bind_contract
   trivial
 
 noncomputable def opaqueRelation : RelationBinding (snapshot false false) ⟨"Opaque", []⟩ := by bind_contract

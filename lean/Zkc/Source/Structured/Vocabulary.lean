@@ -305,6 +305,9 @@ structure ContractSelector where
   direction : ContractDirection
   port : Nat
   role : String
+  /-- Raw wire distinction. Anchor selectors have no participant copy; their
+  role field is empty. Semantic admission currently refuses this profile. -/
+  anchor : Bool := false
   deriving DecidableEq, Repr
 
 structure RelationApplication where

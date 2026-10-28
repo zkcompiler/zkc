@@ -197,6 +197,20 @@ Checker::selector(const Declaration &decl, const SyntaxSelector &source) {
                "selector must name a declared logical port", source.span);
     return {};
   }
+  if (found->type.kind == Type::Kind::Oracle) {
+    if (source.role || !source.path.empty()) {
+      types.fail("source.specification",
+                 "oracle anchor selectors have no participant or product path",
+                 source.span);
+      return {};
+    }
+    SpecificationSelector result{
+        source.output, unsigned(found - ports.begin()), 0, {}, source.span,
+        true};
+    if (!types.selectedType(decl, result))
+      return {};
+    return result;
+  }
   unsigned role;
   if (source.role) {
     auto selected = roles(decl, {*source.role}, source.span);

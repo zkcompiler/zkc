@@ -8,6 +8,19 @@ reaches toward native compilation and execution.
 
 ## Logical oracle wire extension
 
+A native selected logical statement can bind oracle entry handles using the
+`anchor` selector marker and its exact owned target. The raw statement descriptor
+retains that marker. Current ordinary statement admission does not interpret it
+as a role or admit a handle; realization must first produce ordinary data bindings.
+
+The exact contract selector `["anchor", direction, port]` retains a logical anchor alternative with no role. Its raw
+`ContractSelector` has `anchor = true` and an empty role field. Ordinary contract
+resolution, typed boundary elaboration and component-instantiation admission
+refuse this profile. A wire parse does not authorize reading the participant
+value tuple as anchor data; the oracle-store interpretation is a separate
+semantic obligation.
+
+
 The strict reader recognizes the logical oracle types, twelve descriptors and
 virtual declaration rows specified by the
 [native wire contract](../../../docs/spec/formats/structured-source.md#logical-oracle-vocabulary).

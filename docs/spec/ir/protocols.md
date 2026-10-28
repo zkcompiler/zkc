@@ -199,6 +199,23 @@ as a message nor perform an oracle query. Realization must preserve their order,
 checks and dynamic anchor choice before projection. A static set of possible
 origins justifies holder access; it never replaces runtime selection.
 
+### Anchor contract selectors
+
+A retained relation application may bind `["anchor", direction, native-port]`
+to a data-typed formal. The selected boundary port must be an oracle handle;
+its kind supplies the exact Data type. The actual input/output pair remains
+subject to common oracle interface checks. The selector denotes the anchor's
+logical data, with no role-local component and no executable extraction.
+Ordinary data, handle sequences, unknown directions and out-of-range ports
+refuse; an anchor cannot be a Boolean decision. A selected `protocol.statement`
+may retain the logical relation with actual entry anchor operands. Such operands
+use the string selector `anchor` and require an exact owned `target` clause.
+The relation signature is checked against their kind-associated Data types;
+ordinary operands keep their role selectors. The operand type distinguishes
+an anchor marker from a participant name. A standalone unowned statement cannot
+introduce this logical interpretation. Checked realization must replace the
+logical binding before ordinary statement projection or executable export.
+
 ### Virtual query declarations
 
 `protocol.oracle` is a closed symbol with a single query region. Its function
@@ -539,7 +556,8 @@ identity/ABI projection. No certificate for the
 original contracts is transported through these transforms by this metadata.
 
 `protocol.statement` references a non-callable `relation.declare` symbol and
-binds ordered entry operands with explicit role selectors. The declaration has
+binds ordered entry operands with explicit role selectors or the checked
+logical anchor selectors defined above. The declaration has
 an external identity `(kind, key, revision, static_arguments)`, ordered logical
 input types, one Boolean result, and an explicit purpose for every input: `parameter`,
 `statement`, or `witness`. Purpose comes from an author or adapter schema; role
@@ -576,9 +594,10 @@ copyable sequences and nominal variants over this vocabulary. A record is a
 single-alternative variant. All alternatives must satisfy the data rule, including
 inactive alternatives. Keys, service references, affine resources, mutable
 storage, physical wrappers and owner-local `fixed_vector` values are excluded.
-Copyability alone does not confer relation-data permission. Polynomial/oracle
-objects and cryptographic commitment/proof objects require their own relation
-interface extension.
+Copyability alone does not confer relation-data permission. An oracle handle
+is never a relation formal: its anchor selector binds the associated Data type.
+Polynomial objects and cryptographic commitment/proof objects require their own
+relation interface extension.
 
 The complete canonical logical type is part of declaration consistency:
 element domain, rank, static extent, sequence element and nominal alternative
