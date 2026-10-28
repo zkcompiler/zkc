@@ -294,6 +294,8 @@ add_zkc_component(Transforms
   lib/Transforms/OracleAnchorStorage.cpp
   lib/Transforms/OracleAnchorEmission.cpp
   lib/Transforms/OracleAnchorVerification.cpp
+  lib/Transforms/OracleTableRead.cpp
+  lib/Transforms/OracleTableReadVerification.cpp
   lib/Transforms/CollectionRealization.cpp
   lib/Transforms/ComputationEquations.cpp
   lib/Transforms/ComputationSelection.cpp

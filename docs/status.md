@@ -506,9 +506,11 @@ before a later draw; it does not authorize batching or prove simulation. Private
 anchor-storage planning retains fresh constructor/instance references, actual
 repeat coordinates and role-specific payloads as ordinary sequences and records.
 An independent reader checks generated append allocations, including actual SSA
-inputs and outcome propagation. These helpers enter the existing physical
-pipeline; query expansion, source adapters and complete semantic realization
-remain pending.
+inputs and outcome propagation. The independently checked table-read primitive
+stops before an out-of-domain read for field, group, index and sequence-backed
+rows. Its generated clients enter the physical pipeline; native controls check
+actual row counts and observable prefixes when a later query fails. Anchor-bound
+query expansion, source adapters and complete semantic realization remain pending.
 Common oracle ports pair actual holder data and receiver handles through inputs,
 returns and applications, with explicit shapes and independent preparation checks.
 The native [structured exporter](spec/formats/structured-source.md#logical-oracle-vocabulary)

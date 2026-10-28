@@ -210,6 +210,7 @@ def main():
         ROOT / "lib/Transforms/CollectionRealization.h",
         ROOT / "lib/Transforms/RealizationEmission.h",
         ROOT / "lib/Transforms/OracleAnchorStorage.h",
+        ROOT / "lib/Transforms/OracleTableRead.h",
         ROOT / "lib/Transforms/MathematicalRecipes.h",
         ROOT / "lib/Transforms/LaneRealization.h",
         ROOT / "lib/Transforms/NumericalSelection.h",
@@ -405,7 +406,7 @@ def main():
             "CollectionRealization", "RealizationEmission",
             "ScopedFinite", "ScopedPreparation")),
     }
-    for reader in ("OracleAnchorVerification", "../Analysis/StructuredComputation", "FiniteVerification", "MathLoweringVerification",
+    for reader in ("OracleTableReadVerification", "OracleAnchorVerification", "../Analysis/StructuredComputation", "FiniteVerification", "MathLoweringVerification",
                    "MathematicalComparison",
                    "HelperNormalizationVerification",
                    "ScopedAlgorithmVerification", "PolynomialRecipeVerification",

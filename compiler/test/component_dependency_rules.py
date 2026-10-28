@@ -347,7 +347,7 @@ rejects("prepared protocol bridge grants no other private transform header",
         lambda text: '#include "../Transforms/MathematicalSupport.h"\n' + text,
         "private component dependency")
 
-for source in ("OracleAnchorVerification", "FiniteVerification", "MathLoweringVerification",
+for source in ("OracleTableReadVerification", "OracleAnchorVerification", "FiniteVerification", "MathLoweringVerification",
                "MathematicalComparison", "HelperNormalizationVerification",
                "ScopedAlgorithmVerification", "PolynomialRecipeVerification",
                "Computation/ScopedVerification"):

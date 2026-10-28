@@ -121,6 +121,13 @@ establish that association. Type, work and capacity limits are compiler resource
 refusals, separate from the logical query-domain stop. No native oracle carrier
 or runtime interpreter is introduced by this representation.
 
+The generated table-read primitive compares the requested position with the
+supplied actual row count, requires that comparison, and only then reads the
+collection. Its independent reader checks the precise comparison operands,
+ordered stop and collection binding for every supported row carrier. A longer
+backing collection cannot make an out-of-domain query succeed. Binding the data
+and actual shape to the source anchor remains the complete realization's duty.
+
 ## Ordered oracle events
 
 `protocol.oracle_send(data, shape...)` produces an `oracle<K>` handle at its
