@@ -210,6 +210,8 @@ def main():
         ROOT / "lib/Transforms/CollectionInterpretation.h",
         ROOT / "lib/Transforms/CollectionRealization.h",
         ROOT / "lib/Transforms/RealizationEmission.h",
+        ROOT / "lib/Transforms/OracleCommonRealization.h",
+        ROOT / "lib/Transforms/OracleCommonPlan.h",
         ROOT / "lib/Transforms/OracleQueryCapacity.h",
         ROOT / "lib/Transforms/OracleQueryController.h",
         ROOT / "lib/Transforms/OracleAnchorStorage.h",
@@ -410,7 +412,7 @@ def main():
             "CollectionRealization", "RealizationEmission",
             "ScopedFinite", "ScopedPreparation", "MathematicalSupport")),
     }
-    for reader in ("OracleQueryControllerVerification", "OracleVirtualFunctionVerification", "OracleTableReadVerification", "OracleAnchorVerification", "../Analysis/StructuredComputation", "FiniteVerification", "MathLoweringVerification",
+    for reader in ("OracleCommonVerification", "OracleQueryControllerVerification", "OracleVirtualFunctionVerification", "OracleTableReadVerification", "OracleAnchorVerification", "../Analysis/StructuredComputation", "FiniteVerification", "MathLoweringVerification",
                    "MathematicalComparison",
                    "HelperNormalizationVerification",
                    "ScopedAlgorithmVerification", "PolynomialRecipeVerification",

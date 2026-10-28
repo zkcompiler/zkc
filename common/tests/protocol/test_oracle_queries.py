@@ -35,3 +35,12 @@ def test_oracle_query_continuations(toolchain, directory, journal):
     journal.run([
         toolchain.driver("oracle_query_controller"), artifacts,
     ], keep="native.txt")
+
+
+def test_oracle_common_realization(toolchain, directory, journal):
+    artifacts = directory / "common"
+    journal.run([
+        toolchain.tool("compiler", "test/zkc-oracle_common_realization-test"),
+        artifacts, "compile",
+    ], keep="compiler.txt", timeout=600)
+    journal.run([toolchain.driver("oracle_common"), artifacts], keep="native.txt")

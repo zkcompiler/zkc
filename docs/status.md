@@ -524,12 +524,18 @@ Its independent actual-body reader covers the complete transition closure.
 Exact request counts are derived from actual child anchors at construction and
 stored in the same immutable record. Independent count-body checks preserve
 query multiplicity without evaluating domains or answers. Local evaluation requires custody of every base table; a Merkle receiver has no
-local evaluator. Binding suspension to common requests, source adapters and the
-complete realization record remains pending. The independently checked table-read primitive
+local evaluator. A private ideal common-stage candidate now connects those
+primitives to actual root bindings, deliveries, virtual constructions, bounded
+handle sequences and queries. It threads each role's immutable stores through
+common repeats and checks complete generated SSA, local bodies and declaration
+custody against a source-derived recipe. Root input components remain distinct;
+realization does not assert their equality. Its current integration profile has
+one prepared entry and ordinary results. Holder views, returned logical ports,
+retained anchor clauses, Merkle request suspension and the complete realization
+record still need integration before this becomes the production stage. The independently checked table-read primitive
 stops before an out-of-domain read for field, group, index and sequence-backed
 rows. Its generated clients enter the physical pipeline; native controls check
-actual row counts and observable prefixes when a later query fails. Anchor-bound
-query expansion, source adapters and complete semantic realization remain pending.
+actual row counts and observable prefixes when a later query fails. Complete source adapters and semantic realization remain pending.
 Common oracle ports pair actual holder data and receiver handles through inputs,
 returns and applications, with explicit shapes and independent preparation checks.
 The native [structured exporter](spec/formats/structured-source.md#logical-oracle-vocabulary)
