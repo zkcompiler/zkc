@@ -52,6 +52,7 @@ let
       ++ processSupport
       ++ [
         "compiler/test"
+        "lean/bridges/common/fixtures/schnorr-forms.zkc"
         "compiler/CMakePresets.json"
         "compiler/examples/domain"
         "compiler/adapters/plonky3/fixtures/recurrence"
