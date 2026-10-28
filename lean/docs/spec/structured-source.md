@@ -879,6 +879,25 @@ index/vector/product/sequence messages refuses explicitly. Concrete contract use
 that its actual process lies in the supported fragment; the adapter supplies no
 relation binding or security assumption.
 
+## Mathematical reference installation
+
+A reference library supplies formulas and dependency laws separately from the
+source connection. `BodyIn` associates a complete nominal helper signature and
+its exact typed body with an admitted source definition. The optional
+`infer_reference_installation` proposer fills finite library-binding data and
+constructs ordinary body-association proofs. It does not supply a mathematical
+law or change a requested relation. A source-selected relation can anchor the
+association record so two matching helper chains cannot be confused. Shared
+library theorems then consume that record for the actual helper table.
+
+Search may refuse. An incomplete association record, an unbound data field or a
+rigid body mismatch does not create an assumption. Records that require a
+premise instead of a body association are outside this proposer. A completed
+association that leaves data undetermined is refused without enumerating other
+witnesses for that partial interface. This is an authoring diagnostic, not a
+completeness claim about inference. The kernel checks successful installations;
+receipt meaning, stage links and security proofs retain their separate owners.
+
 ## Participant normal forms
 
 `Structured.NormalForm.normalize` computes one role's form of a typed protocol

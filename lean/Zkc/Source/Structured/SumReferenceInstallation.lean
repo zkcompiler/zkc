@@ -16,6 +16,21 @@ structure Bodies (model : DomainModel) (definitions : List CheckedDefinition)
   step : BodyIn definitions (foldSpec field b).stepHelper (step model field b).body
   total : BodyIn definitions (totalHelper field b) (total model field b).body
 
+/-- The source target fixes which sum chain is installed. A second, unrelated
+sum implementation in the same library cannot satisfy this anchor. -/
+structure ScalarBodies (model : DomainModel) (definitions : List CheckedDefinition)
+    (field name : String) (b : Bindings) : Prop extends Bodies model definitions field b where
+  relation : BodyIn definitions ⟨name, .math, [.vector field, .field field], [.boolean]⟩
+    (scalarRelation model field b).body
+
+/-- A pair relation selects its actual common sum dependency, without choosing
+helper names or a finite-domain identifier by hand. -/
+structure PairBodies (model : DomainModel) (definitions : List CheckedDefinition)
+    (field name : String) (b : Bindings) : Prop extends Bodies model definitions field b where
+  relation : BodyIn definitions
+    ⟨name, .math, [.vector field, .vector field, .field field, .field field], [.boolean]⟩
+    (pairRelation model field b).body
+
 variable (model : DomainModel) {definitions : List CheckedDefinition} {field : String} {b : Bindings}
   (linked : DeclarationsLinked [] definitions) (bodies : Bodies model definitions field b)
 include linked bodies

@@ -2,6 +2,7 @@ module
 
 public import Zkc.Source.Structured.BodyBindings
 public meta import Lean.Elab.Tactic
+public meta import Lean.Meta.CollectMVars
 
 public meta section
 
@@ -41,15 +42,47 @@ private def witness (goal : MVarId) : Nat → MetaM (List MVarId)
       remaining := remaining ++ (← witness field fuel)
     return remaining
 
+/-- Flatten association records before searching. This exposes the complete
+constraint set, including associations inherited from other library records. -/
+private partial def associations (goal : MVarId) : TacticM (List MVarId) := goal.withContext do
+  let target := (← instantiateMVars (← goal.getType)).headBeta
+  if target.isAppOfArity ``BodyIn 3 then return [goal]
+  if let .forallE _ domain _ _ := target then
+    if ← isProp domain then throwError "reference-binding-premise-not-association"
+    let (_, body) ← goal.intro1
+    return ← associations body
+  unless ← isProp target do throwError "reference-binding-expected-association-record"
+  let some name := target.getAppFn.constName?
+    | throwError "reference-binding-expected-association-record"
+  let some info := getStructureInfo? (← getEnv) name
+    | throwError "reference-binding-expected-association-record"
+  if info.fieldNames.isEmpty then throwError "reference-binding-empty-association-record"
+  let fields ← goal.constructor
+  if fields.isEmpty then throwError "reference-binding-empty-association-record"
+  return (← fields.mapM associations).flatten
+
+/-- A source-selected helper is more informative than an unconstrained
+library name. Process such anchors first, retaining stable order on ties. -/
+private def prioritized (goals : List MVarId) : TacticM (List MVarId) := do
+  let scored ← goals.mapM fun goal => goal.withContext do
+    let target ← instantiateMVars (← goal.getType)
+    let signature ← withTransparency .all <| reduce target.getAppArgs[1]!
+    return ((← getMVars signature).size, goal)
+  return (scored.mergeSort (fun left right => left.1 ≤ right.1)).map Prod.snd
+
 /-- Complete-record search uses finite admitted declaration lists. Every
 successful candidate is certified by BodyIn.of_mem and constructor membership.
-No proposed equality or recursive assumption is added to the context. -/
+No proposed equality or recursive assumption is added to the context. If an
+otherwise complete association leaves data unconstrained, refuse immediately:
+choosing arbitrary unused data is not part of this proposer. -/
 private partial def solve (goals : List MVarId) (data : List MVarId)
     (deferred : Nat := 0) : TacticM Bool := do
+  let goals ← if deferred == 0 then prioritized goals else pure goals
   match goals with
   | [] =>
       for goal in data do
-        if (← instantiateMVars (mkMVar goal)).hasMVar then return false
+        if (← instantiateMVars (mkMVar goal)).hasMVar then
+          throwError "reference-binding-unconstrained-field: {(← goal.getDecl).userName}"
       return true
   | goal :: rest => goal.withContext do
       let target := (← instantiateMVars (← goal.getType)).headBeta
@@ -85,23 +118,15 @@ private partial def solve (goals : List MVarId) (data : List MVarId)
           checkpoint.restore
           visit args[2]! (definition :: previousDefinitions)
         if ← visit arguments[0]! [] then return true
+        let expected ← withTransparency .all <| reduce arguments[2]!
+        let signature ← withTransparency .all <| reduce arguments[1]!
+        if !expected.hasExprMVar && !signature.hasExprMVar then return false
         -- A dependent body can remain blocked until another association fixes
         -- its data. Retry each pending constraint at most once without progress.
         if deferred + 1 < goals.length then
           return ← solve (rest ++ [goal]) data (deferred + 1)
         return false
-      if let .forallE _ domain _ _ := target then
-        if ← isProp domain then return false
-        let (_, body) ← goal.intro1
-        return ← solve (body :: rest) data
-      unless ← isProp target do
-        throwError "reference-binding-expected-association-record"
-      let some name := target.getAppFn.constName? | return false
-      let some info := getStructureInfo? (← getEnv) name | return false
-      if info.fieldNames.isEmpty then return false
-      let fields ← goal.constructor
-      if fields.isEmpty then return false
-      solve (fields ++ rest) data
+      throwError "reference-binding-expected-exact-association"
 
 /-- Construct a subtype whose witness is finite library data and whose property
 is a nonempty record of exact body associations. Failure proves nothing. -/
@@ -115,7 +140,8 @@ elab "infer_reference_installation" : tactic => withMainContext do
     let [data, associations] ← goal.constructor { newGoals := .all }
       | throwError "reference-binding-subtype-shape"
     let fields ← witness data 16
-    unless ← solve [associations] fields do
+    let constraints ← InferReferenceInstallation.associations associations
+    unless ← solve constraints fields do
       throwError "reference-binding-no-complete-match"
     setGoals pending
 

@@ -2,6 +2,7 @@ module
 
 public import ZkcTools.StructuredSource.InferReferenceInstallation
 public import Zkc.Source.Structured.SumReferenceInstallation
+public import ZkcExamples.Structured.SumcheckSourceSelections
 public import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs
 public import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
 
@@ -83,6 +84,46 @@ example : True := by
     have vacuous : {bindings : Sum.Bindings // True} := by
       infer_reference_installation
   trivial
+
+/-- The selected pair relation fixes the outer chain even if the physical
+library order is reversed. The other sum chain is a real ambiguity in TwoSums. -/
+def anchoredReordered : {bindings : Sum.Bindings // ∀ model,
+    Sum.PairBodies model TwoSumsInputs.program.payload.definitions.reverse "bls12-381.fr"
+      TwoSumsInputs.helper4Helper.name bindings} := by
+  infer_reference_installation
+
+example : anchoredReordered.val =
+    ZkcExamples.Structured.SumcheckSourceSelections.outerSumBindings := by kernel_rfl
+
+example : ZkcExamples.Structured.SumcheckSourceSelections.sumBindings ≠
+    ZkcExamples.Structured.SumcheckSourceSelections.outerSumBindings := by
+  intro same
+  have distinct : ZkcExamples.Structured.SumcheckSourceSelections.sumBindings.domain ≠
+      ZkcExamples.Structured.SumcheckSourceSelections.outerSumBindings.domain := by decide +kernel
+  exact distinct (congrArg Sum.Bindings.domain same)
+
+example : True := by
+  fail_if_success
+    have wrongTarget : {bindings : Sum.Bindings // ∀ model,
+        Sum.PairBodies model TwoSumsInputs.program.payload.definitions "bls12-381.fr"
+          TwoSumsInputs.helper25Helper.name bindings} := by
+      infer_reference_installation
+  trivial
+
+set_option maxHeartbeats 500000 in
+/-- A partial library record does not determine its admission helpers. Refuse
+as soon as the association is complete, rather than retrying every binding. -/
+example : True := by
+  fail_if_success
+    have incomplete : {bindings : MultilinearBodies.Bindings //
+        Multilinear.Bodies SmallSumcheckInputs.program.payload.definitions "bls12-381.fr" bindings} := by
+      infer_reference_installation
+  trivial
+
+#print axioms ZkcExamples.Structured.SumcheckSourceSelections.scalarInstallation
+#print axioms ZkcExamples.Structured.SumcheckSourceSelections.pairInstallation
+#print axioms ZkcExamples.Structured.SumcheckSourceSelections.multilinearInstallation
+#print axioms anchoredReordered
 
 #print axioms small
 #print axioms two

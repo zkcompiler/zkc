@@ -6,6 +6,7 @@ public import ZkcExamples.Structured.SumcheckReferenceInstallation
 public import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs
 public import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
 public meta import ZkcTools.StructuredSource.ReferenceInstallation
+public meta import ZkcTools.StructuredSource.InferReferenceInstallation
 
 @[expose] public section
 
@@ -13,6 +14,8 @@ public meta import ZkcTools.StructuredSource.ReferenceInstallation
 signatures and bodies; the mathematical formulas come from the shared laws.
 No source/root receipt or constructed-artifact equation is asserted here. -/
 set_option autoImplicit false
+set_option maxRecDepth 10000
+set_option maxHeartbeats 8000000
 namespace ZkcExamples.Structured.SumcheckSourceSelections
 open Zkc.Source Zkc.Source.Structured ReferenceLibrary
 open Generated.Bindings
@@ -25,21 +28,34 @@ noncomputable def source : Selection → Program
 
 def maximum : Selection → Nat | .small => 2 | .twoSums => 4
 
-def sumBindings : Sum.Bindings where
-  add := SmallSumcheckInputs.helper1Helper.name
-  step := SmallSumcheckInputs.helper2Helper.name
-  total := SmallSumcheckInputs.helper3Helper.name
-  domain := "finite_zkl_487d3a841d53a741e8ad1c8bce36b7f95af6b76cba6787c9779c9253587ea90e_s1_domain"
-
-def outerSumBindings : Sum.Bindings where
-  add := TwoSumsInputs.helper1Helper.name
-  step := TwoSumsInputs.helper2Helper.name
-  total := TwoSumsInputs.helper3Helper.name
-  domain := "finite_zkl_9d89739f0825e451fe8a58993c7a5d6dc7767d148c154dbd13182e883a66e305_s1_domain"
-
 abbrev field := SumcheckReferenceInstallation.field
-abbrev bindings := MultilinearSourceBindings.sumcheck
-abbrev checker := "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc"
+
+/-- The admitted scalar target anchors dependency discovery. The witness and
+its exact body associations are checked together. -/
+noncomputable def scalarInstallation : {bindings : Sum.Bindings // ∀ model,
+    Sum.ScalarBodies model SmallSumcheckInputs.program.payload.definitions field
+      SmallSumcheckInputs.helper4Helper.name bindings} := by
+  infer_reference_installation
+
+/-- TwoSums contains two sum chains. The pair target chooses the outer chain;
+list order and the first matching sum helper are not its semantic identity. -/
+noncomputable def pairInstallation : {bindings : Sum.Bindings // ∀ model,
+    Sum.PairBodies model TwoSumsInputs.program.payload.definitions field
+      TwoSumsInputs.helper4Helper.name bindings} := by
+  infer_reference_installation
+
+noncomputable def sumBindings : Sum.Bindings := scalarInstallation.val
+noncomputable def outerSumBindings : Sum.Bindings := pairInstallation.val
+
+/-- Infer the entire multilinear dependency chain from its checked typed
+bodies. The library supplies the formulas; the source supplies their identities. -/
+noncomputable def multilinearInstallation : {bindings : MultilinearBodies.Bindings //
+    Multilinear.Admission.Bodies SmallSumcheckInputs.program.payload.definitions field bindings
+      SmallSumcheckInputs.helper33Helper.name} := by
+  infer_reference_installation
+
+noncomputable abbrev bindings := multilinearInstallation.val
+abbrev checker := SmallSumcheckInputs.helper33Helper.name
 
 /-- Exact body checks are shared proofs, with each instance's checking charged. -/
 theorem roundBodies (selection : Selection) :
@@ -55,11 +71,13 @@ theorem admissionBodies (selection : Selection) :
 
 theorem sumBodies (model : DomainModel) (selection : Selection) :
     Sum.Bodies model (source selection).payload.definitions field sumBindings := by
-  cases selection <;> select_reference_bodies
+  cases selection with
+  | small => exact (scalarInstallation.property model).toBodies
+  | twoSums => select_reference_bodies
 
 theorem outerSumBodies (model : DomainModel) :
-    Sum.Bodies model (source .twoSums).payload.definitions field outerSumBindings := by
-  select_reference_bodies
+    Sum.Bodies model (source .twoSums).payload.definitions field outerSumBindings :=
+  (pairInstallation.property model).toBodies
 
 structure Wrappers (model : DomainModel) (definitions : List CheckedDefinition) : Prop where
   initial : BodyIn definitions
@@ -91,13 +109,13 @@ theorem shapeBody (model : DomainModel) (selection : Selection) :
 
 theorem scalarBody (model : DomainModel) :
     BodyIn (source .small).payload.definitions SmallSumcheckInputs.helper4Helper
-      (Sum.scalarRelation model field sumBindings).body := by
-  bind_structured_bodies
+      (Sum.scalarRelation model field sumBindings).body :=
+  (scalarInstallation.property model).relation
 
 theorem pairBody (model : DomainModel) :
     BodyIn (source .twoSums).payload.definitions TwoSumsInputs.helper4Helper
-      (Sum.pairRelation model field outerSumBindings).body := by
-  bind_structured_bodies
+      (Sum.pairRelation model field outerSumBindings).body :=
+  (pairInstallation.property model).relation
 
 theorem bothBody (model : DomainModel) :
     BodyIn (source .twoSums).payload.definitions TwoSumsInputs.helper25Helper (Sum.both model).body := by
