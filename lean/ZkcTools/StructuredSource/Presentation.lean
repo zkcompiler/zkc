@@ -211,6 +211,7 @@ end
 
 def inputText {ty : Ty} : Input ty → String
   | .absent => ".absent" | .present => ".present" | .optional => ".optional"
+  | .capability service handle => app ".capability" [quoted service, toString handle]
   | .index n => app ".index" [toString n] | .field d n => app ".field" [quoted d, toString n]
   | .bool b => app ".bool" [boolText b]
 def patternText : {Γ : List Ty} → InputPattern Γ → String
@@ -240,6 +241,7 @@ mutual
   def termLiteral {Δ : Scope} {ty : Ty} : Term laws Δ ty → String
     | .var b => app ".var" [positionText b.index]
     | .result b p => app ".result" [positionText b.index, positionText p.index]
+    | .capability service handle => app ".capability" [quoted service, toString handle]
     | .index n => app ".index" [toString n] | .bool b => app ".bool" [boolText b]
     | .field d n => app ".field" [quoted d, toString n] | .groupZero d => app ".groupZero" [quoted d]
     | .calc op _ args p => app ".calc" [opText op, "rfl", termsLiteral args, positionText p.index]
@@ -354,6 +356,7 @@ mutual
       Term laws Δ ty → String
     | .var b => names[b.index]!
     | .result b p => paren names[b.index]! ++ ".get " ++ positionText p.index
+    | .capability _ handle => toString handle
     | .index n => toString n | .bool b => boolText b
     | .field d n => app "fieldLiteral" [naming.carriers.model ++ ".toFieldModel", quoted d, toString n]
     | .groupZero d => "(0 : " ++ naming.carriers.valueType (.group d) ++ ")"
