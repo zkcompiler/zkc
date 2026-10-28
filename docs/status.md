@@ -502,7 +502,11 @@ query order, shapes and sequence bounds. Formal semantic admission still refuses
 the oracle profile; decoding does not extend participant soundness. Source
 kind/handle aliases, static kind parameters, forward associated types and closed
 logical layouts are checked, including specialization and ordinary-data boundary
-refusals. Source action/port emission, generated obligation/footprint proposals and checked semantic
+refusals. Source oracle ports retain their explicit holder, receivers and static
+maximum through paired input, call and return elaboration. The independent
+source interface reader checks logical kind descriptors and actual input pairs;
+source correspondence checks the complete role substitution and result mapping.
+Source actions, generated obligation/footprint proposals and checked semantic
 realization remain in progress; these formation checks do not enable execution.
 
 Checked notation inspection is available through

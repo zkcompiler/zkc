@@ -21,6 +21,7 @@
 #include "zkc/Support/FramedHash.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Entry.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSwitch.h"
@@ -225,6 +226,7 @@ class Reader {
         a.kind != b.kind || a.type != b.type || a.custody != b.custody ||
         a.constructible != b.constructible ||
         !(a.permissions == b.permissions) || a.leaves != b.leaves ||
+        a.oracle != b.oracle ||
         a.alternatives.size() != b.alternatives.size() ||
         !sameFields(a.fields, b.fields))
       return false;
@@ -268,7 +270,7 @@ class Reader {
                           leaves.slice(offset, childLeaves->size()));
       if (!child)
         return false;
-      if (offset > leaves.size() ||
+      if (child->oracle || offset > leaves.size() ||
           child->leaves.size() > leaves.size() - offset ||
           !llvm::equal(child->leaves,
                        leaves.slice(offset, child->leaves.size())) ||
@@ -283,6 +285,12 @@ class Reader {
     using K = Type::Kind;
     bool nominal = value.kind == K::Record || value.kind == K::Variant ||
                    value.kind == K::Associated;
+    if (value.kind == K::Oracle)
+      return (value.oracle && value.leaves.empty() && value.fields.empty() &&
+              value.alternatives.empty() && !value.custody &&
+              !value.constructible &&
+              value.permissions == Permissions{true, true}) ||
+             fail("oracle schemas describe logical handles only");
     if (value.custody && !nominal)
       return fail("custody requires a nominal type");
     if (value.kind == K::Variant)
@@ -339,6 +347,62 @@ class Reader {
                    leafKind == "opening_state" || leafKind == "opening_states");
     return matched || fail("logical kind differs from native leaf kind");
   }
+  std::optional<uint64_t> unsignedText(const json::Value &value) {
+    auto text = value.getAsString();
+    uint64_t result;
+    if (!text || text->empty() || text->size() > 20 ||
+        (text->size() > 1 && text->front() == '0') ||
+        llvm::any_of(*text, [](char c) { return c < '0' || c > '9'; }) ||
+        text->getAsInteger(10, result)) {
+      fail("expected a canonical unsigned 64-bit decimal string");
+      return {};
+    }
+    return result;
+  }
+  std::optional<InterfaceOracle> oracleDescriptor(const json::Value &value) {
+    auto *obj = object(value, {"kind", "arguments"});
+    if (!obj)
+      return {};
+    auto kind = text(*obj, "kind");
+    auto *arguments = array(*obj, "arguments");
+    if (!kind || !arguments || arguments->size() > 2)
+      return fail("invalid closed oracle descriptor"), std::nullopt;
+    InterfaceOracle result{kind->str(), {}};
+    for (const auto &argument : *arguments) {
+      auto *pair = argument.getAsArray();
+      if (!pair || pair->size() != 2)
+        return fail("invalid oracle kind argument"), std::nullopt;
+      if ((*pair)[0].getAsString() == "nat") {
+        auto natural = unsignedText((*pair)[1]);
+        if (!natural)
+          return {};
+        result.arguments.push_back(
+            protocol::TypeArgument::naturalArgument(*natural));
+      } else if ((*pair)[0].getAsString() == "type") {
+        auto text = (*pair)[1].getAsString();
+        if (!text || !charge(text->size() + 1))
+          return fail("invalid oracle row type"), std::nullopt;
+        auto type = protocol::parseBoundType(*text, false, 0, &typeBudget);
+        if (!type) {
+          consumeError(type.takeError());
+          if (!typeBudget.remaining)
+            failure = error("source.limit", "oracle row type budget exceeded");
+          return fail("invalid oracle row type"), std::nullopt;
+        }
+        if (type->spelling() != *text)
+          return fail("noncanonical oracle row type"), std::nullopt;
+        result.arguments.push_back(protocol::TypeArgument::typeArgument(*type));
+      } else
+        return fail("unknown oracle argument sort"), std::nullopt;
+    }
+    auto signature =
+        protocol::oracleKindSignature(result.kind, result.arguments);
+    if (!signature) {
+      consumeError(signature.takeError());
+      return fail("unadmitted oracle kind"), std::nullopt;
+    }
+    return result;
+  }
   std::shared_ptr<const InterfaceSchema>
   schema(const json::Value &value, unsigned depth,
          ArrayRef<std::string> expected) {
@@ -348,9 +412,15 @@ class Reader {
     }
     if (!charge(1))
       return {};
-    auto *obj =
-        object(value, {"kind", "identity", "type", "custody", "constructible",
-                       "permissions", "fields", "alternatives", "leaves"});
+    auto *raw = value.getAsObject();
+    bool oracle = raw && raw->getString("kind") == "oracle";
+    auto *obj = oracle
+                    ? object(value, {"kind", "identity", "type", "custody",
+                                     "constructible", "permissions", "fields",
+                                     "alternatives", "leaves", "oracle"})
+                    : object(value, {"kind", "identity", "type", "custody",
+                                     "constructible", "permissions", "fields",
+                                     "alternatives", "leaves"});
     if (!obj)
       return {};
     auto type = text(*obj, "type"), kindName = text(*obj, "kind"),
@@ -374,6 +444,7 @@ class Reader {
                     .Case("variant", K::Variant)
                     .Case("associated", K::Associated)
                     .Case("builtin", K::Builtin)
+                    .Case("oracle", K::Oracle)
                     .Default(std::nullopt);
     if (!kind || !hash(*identity)) {
       fail("invalid logical kind or exact type identity");
@@ -399,6 +470,11 @@ class Reader {
       return {};
     }
     result->permissions = *caps;
+    if (oracle) {
+      result->oracle = oracleDescriptor(*obj->get("oracle"));
+      if (!result->oracle)
+        return {};
+    }
     unsigned index = 0;
     for (const auto &leaf : *ls) {
       auto spelling = leaf.getAsString();
@@ -506,8 +582,14 @@ class Reader {
     for (const auto &item : array) {
       if (!charge(1))
         return false;
+      auto *raw = item.getAsObject();
+      bool oracle = raw && raw->getObject("schema") &&
+                    raw->getObject("schema")->getString("kind") == "oracle";
       auto *obj =
-          object(item, {"name", "type", "roles", "index", "native", "schema"});
+          oracle ? object(item, {"name", "type", "roles", "index", "native",
+                                 "schema", "holder", "maximum_rows"})
+                 : object(item, {"name", "type", "roles", "index", "native",
+                                 "schema"});
       if (!obj)
         return false;
       auto name = text(*obj, "name", limits.identifierBytes);
@@ -526,6 +608,8 @@ class Reader {
         auto at = (*ns)[i].getAsInteger();
         if (!at || *at != flat + i)
           return fail("native port index is not contiguous");
+        if (oracle)
+          continue;
         auto type = protocol::encodeBoundType(types[flat + i], false);
         if (!type) {
           consumeError(type.takeError());
@@ -536,7 +620,7 @@ class Reader {
       auto logical = schema(*obj->get("schema"), 1, expected);
       if (!logical)
         return false;
-      if (owners->size() > 1 &&
+      if (!oracle && owners->size() > 1 &&
           (!logical->permissions.copy ||
            llvm::any_of(logical->leaves, [&](const auto &leaf) {
              return !nativeLeaves.at(leaf).participants;
@@ -544,14 +628,58 @@ class Reader {
         return fail("logical port cannot have multiple participant components");
       if (!isSourceIdentifier(*name) || !names.insert(name->str()).second ||
           *index != result.size() || *type != logical->type ||
-          ns->size() != logical->leaves.size())
+          ns->size() != (oracle ? 2 : logical->leaves.size()))
         return fail("logical port name, index, type or native arity differs");
       InterfacePort port{
           name->str(), std::move(*owners), {}, std::move(logical)};
-      for (unsigned i = 0; i < ns->size(); ++i) {
-        if (!matchesRoles(nativeRoles[flat], port.roles))
+      if (oracle) {
+        auto holder = text(*obj, "holder", limits.identifierBytes);
+        auto found =
+            holder ? roleIndices.find(holder->str()) : roleIndices.end();
+        if (found == roleIndices.end() ||
+            !is_contained(port.roles, found->second) || port.roles.size() < 2)
+          return fail("oracle holder is not in its role family");
+        port.oracle = InterfaceOraclePort{found->second, {}};
+        if (!(*obj->get("maximum_rows") == json::Value(nullptr))) {
+          port.oracle->maximumRows = unsignedText(*obj->get("maximum_rows"));
+          if (!port.oracle->maximumRows)
+            return false;
+        }
+        const auto &kind = *port.schema->oracle;
+        auto signature =
+            protocol::oracleKindSignature(kind.kind, kind.arguments);
+        if (!signature) {
+          consumeError(signature.takeError());
+          return fail("oracle signature unavailable");
+        }
+        auto handle =
+            mlir::dyn_cast<protocol_ir::OracleHandleType>(types[flat + 1]);
+        auto data = protocol::encodeBoundType(types[flat], false);
+        if (!data) {
+          consumeError(data.takeError());
+          return fail("oracle holder component is not data");
+        }
+        if (!handle || handle.getKind().getIdentity() != kind.kind ||
+            !(*data == signature->data) ||
+            handle.getKind().getDataType() != types[flat] ||
+            handle.getKind().getStaticRows() != signature->rows ||
+            signature->rows.has_value() == port.oracle->maximumRows.has_value())
+          return fail("oracle port kind, components or maximum differs");
+        std::vector<unsigned> receivers;
+        for (auto role : port.roles)
+          if (role != port.oracle->holder)
+            receivers.push_back(role);
+        if (!matchesRoles(nativeRoles[flat], {port.oracle->holder}) ||
+            !matchesRoles(nativeRoles[flat + 1], receivers))
           return false;
-        port.native.push_back(flat++);
+        port.native = {flat, flat + 1};
+        flat += 2;
+      } else {
+        for (unsigned i = 0; i < ns->size(); ++i) {
+          if (!matchesRoles(nativeRoles[flat], port.roles))
+            return false;
+          port.native.push_back(flat++);
+        }
       }
       result.push_back(std::move(port));
     }
@@ -849,6 +977,10 @@ class Reader {
   project(const InterfacePort &port, const json::Array &path,
           std::vector<unsigned> &indices, std::vector<unsigned> &native) {
     auto schema = port.schema;
+    if (schema->oracle) {
+      fail("oracle relation selection requires an anchor selector");
+      return {};
+    }
     unsigned offset = 0;
     for (const auto &item : path) {
       if (!charge(1))
@@ -1067,6 +1199,28 @@ class Reader {
         !ports(*outs, type.getResults(), function.getOutputRoles(),
                current->outputs, output))
       return false;
+    if (llvm::any_of(current->inputs,
+                     [](const auto &port) { return bool(port.oracle); })) {
+      llvm::DenseMap<mlir::Value, protocol_ir::OracleInputOp> bindings;
+      for (auto &operation : function.getBody().front()) {
+        if (!charge(1))
+          return false;
+        if (auto binding =
+                mlir::dyn_cast<protocol_ir::OracleInputOp>(operation))
+          bindings.try_emplace(binding.getAnchor(), binding);
+      }
+      for (const auto &port : current->inputs) {
+        if (!port.oracle)
+          continue;
+        auto found = bindings.find(
+            function.getBody().front().getArgument(port.native[1]));
+        if (found == bindings.end() ||
+            found->second.getData() !=
+                function.getBody().front().getArgument(port.native[0]) ||
+            found->second.getMaximumRows() != port.oracle->maximumRows)
+          return fail("oracle interface maximum or input binding differs");
+      }
+    }
     std::set<std::string> names;
     for (const auto &port : current->inputs)
       names.insert(port.name);
@@ -1172,6 +1326,8 @@ class Reader {
     std::set<unsigned> verifierKeys, covered;
     for (unsigned p = 0; p < protocol.inputs.size(); ++p) {
       const auto &input = protocol.inputs[p];
+      if (input.oracle)
+        continue;
       for (unsigned i = 0; i < input.native.size(); ++i) {
         if (!charge(1))
           return false;
@@ -1493,6 +1649,10 @@ class Reader {
     std::vector<std::string> leaves;
     auto *obj = value.getAsObject();
     auto *ls = obj ? obj->getArray("leaves") : nullptr;
+    if (obj && obj->get("oracle")) {
+      fail("logical oracle handles require realization before Host use");
+      return {};
+    }
     if (!ls) {
       fail("missing Host schema leaves");
       return {};

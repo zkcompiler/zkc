@@ -54,7 +54,7 @@ bool BodyChecker::settle(Placement &plan) {
   for (const auto &[id, formula] : plan.values) {
     auto &value = body.values[id];
     value.components = plan.resolve(formula);
-    if (value.components.size() > 1) {
+    if (value.components.size() > 1 && !isOracleHandle(value.type)) {
       if (!checker.types.admit(value.type, Boundary::Participants, value.span,
                                &decl))
         return false;

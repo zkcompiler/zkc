@@ -378,6 +378,30 @@ uses the same checked kind signature as Protocol IR, including packed nominal
 rows. Oracle layouts have a distinct logical leaf, with no ordinary payload or
 relation-data schema identity. An anchor selector is required to relate their data.
 
+A protocol port writes its holder separately from its receivers:
+
+```text
+protocol Relay<K: OracleKind> roles(P, V)
+  (word: Oracle<K> @P -> V) -> (out: Oracle<K> @P -> V) {
+  return(out = word);
+}
+```
+
+The checked availability is their union; sorting that union cannot change the
+holder. There is exactly one holder, and at least one distinct receiver. Multiple
+receivers use `@P -> (V, W)`. An unsized port requires a static natural maximum,
+for example `word: Oracle<Table<F>> @P -> V max M`; a sized kind forbids that
+redundant maximum. These conditions are checked again after generic closure.
+Bounded handle sequences remain internal values, including loop carries, rather
+than root oracle ports.
+
+The common signature expands each logical port to holder data followed by its
+receiver anchor. Inputs retain an `oracle_input` binding even when unused. Calls
+and returns use `oracle_components`; calls rejoin returned pairs with the exact
+mapped roles and bound. The independent source comparison checks these rows and
+operands. A handle is not supplied through an ordinary Host data schema; the
+selected realization determines that later interface.
+
 ### Asset domains and projections
 
 ```text

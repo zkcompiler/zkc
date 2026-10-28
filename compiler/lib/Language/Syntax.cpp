@@ -1415,6 +1415,20 @@ private:
                       "protocol ports cannot be static arguments");
         if (roles && (!expect("@") || !roleList(p.roles)))
           return false;
+        if (roles && take("->")) {
+          if (p.roles.size() != 1)
+            return fail("source.oracle-port", "oracle ports have one holder");
+          p.oracleHolder = p.roles.front();
+          p.roles.clear();
+          if (!roleList(p.roles))
+            return false;
+          if (take("max")) {
+            SyntaxType maximum;
+            if (!type(maximum))
+              return false;
+            p.oracleMaximum = std::move(maximum);
+          }
+        }
         p.span.end = previousEnd;
         ports.push_back(std::move(p));
       } while (take(",") && !at(")"));

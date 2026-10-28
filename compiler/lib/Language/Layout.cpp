@@ -218,7 +218,7 @@ Expected<LayoutSlice> Layouts::select(ArrayRef<Port> ports, unsigned port,
     if (i == port)
       selected = *layout;
     else
-      offset += (*layout)->leaves.size();
+      offset += ports[i].oracle ? 2 : (*layout)->leaves.size();
   }
   for (auto field : path) {
     if (auto error = charge(1))

@@ -58,7 +58,8 @@ std::optional<ServiceId> BodyChecker::service(const Expression &expr) {
 std::optional<ValueId> BodyChecker::input(const Type &type,
                                           std::vector<unsigned> components,
                                           Span span) {
-  if ((!math() && !checker.types.executableType(type, span)) ||
+  if ((!math() && !(protocol() ? checker.types.protocolValue(type, span)
+                               : checker.types.executableType(type, span))) ||
       !checker.types.chargeType(type, span))
     return {};
   ValueId value{uint32_t(body.values.size())};
@@ -101,12 +102,15 @@ BodyChecker::emitResults(decltype(Operation::action) action,
           checker.work.limits.operations, "operation count", span)))
     return {};
   for (const auto &value : results) {
-    if (!math() && !checker.types.executableType(value.type, span))
+    if (!math() &&
+        !(protocol() ? checker.types.protocolValue(value.type, span)
+                     : checker.types.executableType(value.type, span)))
       return {};
     if (!checker.types.chargeType(value.type, span) ||
         !checker.types.charge(value.components.size() + 1, span))
       return {};
-    if (protocol() && !placement && value.components.size() > 1) {
+    if (protocol() && !placement && value.components.size() > 1 &&
+        !isOracleHandle(value.type)) {
       if (!checker.types.admit(value.type, Boundary::Participants, span, &decl))
         return {};
     }
@@ -550,7 +554,7 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
         !types.mathematicalData(p.type, p.span, &decl))
       return false;
     if (result.mode == Body::Mode::Protocol) {
-      if (p.roles.size() > 1 &&
+      if (p.roles.size() > 1 && !isOracleHandle(p.type) &&
           !types.admit(p.type, Boundary::Participants, p.span, &decl))
         return false;
     }
@@ -585,6 +589,7 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
         !types.mathematicalData(p.type, p.span, &decl))
       return false;
     if (result.mode == Body::Mode::Protocol && p.roles.size() > 1 &&
+        !isOracleHandle(p.type) &&
         !types.admit(p.type, Boundary::Participants, p.span, &decl))
       return false;
   }

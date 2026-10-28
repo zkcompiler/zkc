@@ -97,11 +97,18 @@ struct Token {
   TokenKind kind;
   Span span;
 };
+/// A logical oracle port has data at its holder and an anchor at its receivers.
+/// The optional bound is a static natural for an unsized kind.
+struct OraclePort {
+  unsigned holder;
+  std::optional<Type> maximumRows;
+};
 struct Port {
   std::string name;
   Type type;
   std::vector<unsigned> roles;
   Span span;
+  std::optional<OraclePort> oracle = {};
 };
 /// A managed port is a borrowed service root, never an ordinary data type.
 struct ServicePort {

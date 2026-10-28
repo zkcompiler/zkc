@@ -277,7 +277,9 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         if (!types.permissions(value.type, value.span))
           return false;
         if (mode != Body::Mode::Math &&
-            !types.executableType(value.type, value.span))
+            !(mode == Body::Mode::Protocol
+                  ? types.protocolValue(value.type, value.span)
+                  : types.executableType(value.type, value.span)))
           return false;
         if (mode == Body::Mode::Local)
           value.components.clear();
@@ -1184,11 +1186,18 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       declarations.push_back(result);
       auto bindings = callableSubstitution(result, args);
       for (auto *ports : {&result.inputs, &result.outputs})
-        for (auto &port : *ports)
+        for (auto &port : *ports) {
           if (!closeType(port.type, bindings, port.span) ||
               (result.kind == Declaration::Kind::EntryFunction &&
                !types.hostData(port.type, port.span)))
             return {};
+          if (port.oracle && port.oracle->maximumRows &&
+              !closeType(*port.oracle->maximumRows, bindings, port.span))
+            return {};
+          if (result.kind == Declaration::Kind::Protocol &&
+              !types.oraclePort(port))
+            return {};
+        }
       if (result.primitive)
         for (auto &argument : result.primitive->arguments)
           if (!closeType(argument, bindings, result.span))
@@ -1475,7 +1484,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       if (key && initialized) {
         if (!types.executableType(port.type, port.span))
           return false;
-      } else if (!types.ingress(port.type, port.span))
+      } else if (port.oracle ? !types.oraclePort(port)
+                             : !types.ingress(port.type, port.span))
         return false;
     }
     // Compare canonical typed terms, including parameters absent from runtime

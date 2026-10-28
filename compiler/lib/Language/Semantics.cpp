@@ -70,6 +70,36 @@ Error Semantics::takeError() {
   return result;
 }
 bool valueType(const Type &type) { return !isStaticOnly(type); }
+bool Semantics::protocolValue(const Type &type, Span span) {
+  return isOracleHandle(type) || executableType(type, span);
+}
+bool Semantics::oraclePort(const Port &port) {
+  if (port.type.kind == Type::Kind::OracleSequence)
+    return fail("source.oracle-port",
+                "bounded oracle sequences are internal protocol values",
+                port.span);
+  if ((port.type.kind == Type::Kind::Oracle) != port.oracle.has_value())
+    return fail("source.oracle-port",
+                "oracle ports require an explicit holder and receiver arrow",
+                port.span);
+  if (!port.oracle)
+    return true;
+  if (port.type.arguments.size() != 1 || port.roles.size() < 2 ||
+      !llvm::is_contained(port.roles, port.oracle->holder))
+    return fail("source.oracle-port", "invalid oracle port role family",
+                port.span);
+  if (port.oracle->maximumRows &&
+      port.oracle->maximumRows->kind != Type::Kind::Natural)
+    return fail("source.oracle-shape",
+                "oracle maximum must be a static natural", port.span);
+  const auto &kind = port.type.arguments.front();
+  if (!kind.arguments.empty() &&
+      ((kind.arguments.size() == 2) == port.oracle->maximumRows.has_value()))
+    return fail("source.oracle-shape",
+                "only an unsized oracle port requires an explicit maximum",
+                port.span);
+  return true;
+}
 bool Semantics::chargeConstruction(const ConstructionDefinition &value,
                                    Span span) {
   if (!charge(value.suite.size() + value.rules.size() +

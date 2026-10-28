@@ -1,8 +1,23 @@
 #ifndef ZKC_COMPILER_LANGUAGEINTERFACE_H
 #define ZKC_COMPILER_LANGUAGEINTERFACE_H
+#include "zkc/Contracts/OracleKinds.h"
 #include "zkc/Language/Project.h"
 #include "llvm/Support/JSON.h"
 namespace zkc::language {
+struct InterfaceOracle {
+  std::string kind;
+  std::vector<protocol::TypeArgument> arguments;
+  bool operator==(const InterfaceOracle &other) const {
+    return kind == other.kind && arguments == other.arguments;
+  }
+  bool operator!=(const InterfaceOracle &other) const {
+    return !(*this == other);
+  }
+};
+struct InterfaceOraclePort {
+  unsigned holder;
+  std::optional<uint64_t> maximumRows;
+};
 struct InterfaceSchema;
 struct InterfaceField {
   std::string name;
@@ -23,11 +38,15 @@ struct InterfaceSchema {
   std::vector<std::string> leaves;
   std::vector<InterfaceField> fields;
   std::vector<InterfaceAlternative> alternatives;
+  /// Present only for a logical handle. Such a schema has no native data
+  /// leaves.
+  std::optional<InterfaceOracle> oracle;
 };
 struct InterfacePort {
   std::string name;
   std::vector<unsigned> roles, native;
   std::shared_ptr<const InterfaceSchema> schema;
+  std::optional<InterfaceOraclePort> oracle = {};
 };
 struct InterfaceService {
   std::string name, contract;

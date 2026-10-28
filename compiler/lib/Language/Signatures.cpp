@@ -418,7 +418,9 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
           return types.fail("source.type", "port cannot contain a static term",
                             src.span);
         if (decl.kind != Declaration::Kind::Math &&
-            !types.executableType(*t, src.span))
+            !(decl.kind == Declaration::Kind::Protocol
+                  ? types.protocolValue(*t, src.span)
+                  : types.executableType(*t, src.span)))
           return false;
         if (decl.kind == Declaration::Kind::DomainFunction &&
             !types.requireUsage(*t, Usage::Copy, src.span, &decl,
@@ -431,6 +433,25 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
           if (!set)
             return false;
           p.roles = std::move(*set);
+          if (src.oracleHolder) {
+            auto holder = roles(decl, {*src.oracleHolder}, src.span);
+            if (!holder)
+              return false;
+            if (llvm::is_contained(p.roles, holder->front()))
+              return types.fail("source.oracle-port",
+                                "oracle holder cannot also be a receiver",
+                                src.span);
+            p.oracle = OraclePort{holder->front(), {}};
+            p.roles.push_back(holder->front());
+            llvm::sort(p.roles);
+            if (src.oracleMaximum) {
+              p.oracle->maximumRows = type(decl, *src.oracleMaximum, depth + 1);
+              if (!p.oracle->maximumRows)
+                return false;
+            }
+          }
+          if (!types.oraclePort(p))
+            return false;
         }
         (input ? decl.inputs : decl.outputs).push_back(std::move(p));
       }

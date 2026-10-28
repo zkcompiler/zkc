@@ -749,6 +749,67 @@ class Comparator {
                           LocalPrimitive{"resource_unit.consume", {}, {}},
                           value, {}, span, site));
   }
+  std::vector<unsigned> oracleReceivers(const Port &port,
+                                        ArrayRef<unsigned> mapping = {}) {
+    std::vector<unsigned> result;
+    for (auto role : port.roles)
+      if (role != port.oracle->holder)
+        result.push_back(mapping.empty() ? role : mapping[role]);
+    llvm::sort(result);
+    return result;
+  }
+  bool oraclePortAttributes(mlir::Operation &operation, const Port &port,
+                            ArrayRef<unsigned> mapping, bool binding) {
+    unsigned holder = port.oracle->holder;
+    if (!mapping.empty())
+      holder = mapping[holder];
+    bool bounded = binding && port.oracle->maximumRows.has_value();
+    if (!(bounded
+              ? attributes(operation, {"holder", "receivers", "maximum_rows"})
+              : attributes(operation, {"holder", "receivers"})) ||
+        !string(operation, "holder", nativeRoleName(holder)) ||
+        !roleSet(operation.getAttr("receivers"),
+                 oracleReceivers(port, mapping)))
+      return fail("oracle port role family differs");
+    if (bounded) {
+      auto maximum = operation.getAttrOfType<mlir::IntegerAttr>("maximum_rows");
+      if (!maximum || !maximum.getType().isUnsignedInteger(64) ||
+          maximum.getValue().getZExtValue() !=
+              port.oracle->maximumRows->dimension.closedValue())
+        return fail("oracle port maximum differs");
+    }
+    return true;
+  }
+  mlir::Operation *oracleComponents(mlir::Block &block,
+                                    mlir::Block::iterator &cursor, Span span,
+                                    mlir::Value value, const Port &port,
+                                    ArrayRef<unsigned> mapping = {}) {
+    auto *operation =
+        next(block, cursor, span, "protocol.oracle_components", value, 2);
+    auto handle =
+        mlir::dyn_cast<protocol_ir::OracleHandleType>(value.getType());
+    if (!operation || !handle ||
+        !oraclePortAttributes(*operation, port, mapping, false) ||
+        operation->getResult(0).getType() != handle.getKind().getDataType() ||
+        operation->getResult(1).getType() != handle)
+      return fail("oracle component view differs"), nullptr;
+    return operation;
+  }
+  mlir::Operation *bindOracle(mlir::Block &block, mlir::Block::iterator &cursor,
+                              Span span, mlir::ValueRange pair,
+                              const Port &port,
+                              ArrayRef<unsigned> mapping = {}) {
+    auto *operation =
+        next(block, cursor, span, "protocol.oracle_input", pair, 1);
+    auto handle =
+        mlir::dyn_cast<protocol_ir::OracleHandleType>(pair[1].getType());
+    if (!operation || !handle ||
+        pair[0].getType() != handle.getKind().getDataType() ||
+        operation->getResult(0).getType() != handle ||
+        !oraclePortAttributes(*operation, port, mapping, true))
+      return fail("oracle input binding differs"), nullptr;
+    return operation;
+  }
   bool body(const Declaration &decl, const Body &source, mlir::Block &block,
             const mathematical::Availability *availability, bool region = false,
             unsigned forwarded = 0) {
@@ -788,6 +849,19 @@ class Comparator {
       return true;
     };
     for (unsigned i = 0; i < source.inputs; ++i) {
+      if (!region && source.mode == Body::Mode::Protocol &&
+          decl.inputs[i].oracle) {
+        if (argument > block.getNumArguments() ||
+            block.getNumArguments() - argument < 2)
+          return fail("oracle input pair is incomplete");
+        auto *joined =
+            bindOracle(block, cursor, decl.inputs[i].span,
+                       block.getArguments().slice(argument, 2), decl.inputs[i]);
+        if (!joined || !bind(i, Values(joined->getResults())))
+          return false;
+        argument += 2;
+        continue;
+      }
       auto layout = take(layouts.get(source.values[i].type));
       if (!layout)
         return false;
@@ -1219,11 +1293,26 @@ class Comparator {
       } else if (auto *application =
                      std::get_if<ProtocolApplication>(&op.action)) {
         const auto &target = project.declarations()[application->callee.index];
-        auto operands = flatten(application->operands);
+        Values operands;
+        for (unsigned i = 0; i < application->operands.size(); ++i) {
+          const auto &input = values[application->operands[i].index];
+          if (target.inputs[i].oracle) {
+            auto *parts =
+                oracleComponents(block, cursor, op.span, input.front(),
+                                 target.inputs[i], application->roles);
+            if (!parts)
+              return false;
+            llvm::append_range(operands, parts->getResults());
+          } else
+            llvm::append_range(operands, input);
+        }
         for (auto service : application->services)
           operands.push_back(services[service.index]);
-        auto *actual = next(block, cursor, op.span, "protocol.apply", operands,
-                            leaves.size());
+        unsigned count = leaves.size();
+        for (const auto &port : target.outputs)
+          count += port.oracle.has_value();
+        auto *actual =
+            next(block, cursor, op.span, "protocol.apply", operands, count);
         if (!actual)
           return false;
         auto callee = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("callee");
@@ -1236,7 +1325,21 @@ class Comparator {
             !strings(actual->getAttr("roles"), mapped))
           return fail(
               "protocol application target, role substitution or site differs");
-        result = Values(actual->getResults());
+        unsigned offset = 0;
+        for (unsigned i = 0; i < target.outputs.size(); ++i) {
+          const auto &port = target.outputs[i];
+          unsigned count = port.oracle ? 2 : resultLayouts[i]->leaves.size();
+          auto output = actual->getResults().slice(offset, count);
+          if (port.oracle) {
+            auto *joined = bindOracle(block, cursor, op.span, output, port,
+                                      application->roles);
+            if (!joined)
+              return false;
+            result.push_back(joined->getResult(0));
+          } else
+            llvm::append_range(result, output);
+          offset += count;
+        }
       } else if (auto *exchange = std::get_if<Exchange>(&op.action)) {
         auto &input = values[exchange->payload.index];
         if (leaves.empty() || input.size() != leaves.size())
@@ -1399,12 +1502,25 @@ class Comparator {
     }
     if (source.stopped)
       return fail("stopped body requires scoped execution");
+    Values returned;
+    for (unsigned i = 0; i < source.results.size(); ++i) {
+      const auto &value = values[source.results[i].index];
+      if (!region && source.mode == Body::Mode::Protocol &&
+          decl.outputs[i].oracle) {
+        auto *parts = oracleComponents(block, cursor, decl.outputs[i].span,
+                                       value.front(), decl.outputs[i]);
+        if (!parts)
+          return false;
+        llvm::append_range(returned, parts->getResults());
+      } else
+        llvm::append_range(returned, value);
+    }
     auto *ret =
         next(block, cursor, decl.span,
              region && source.mode == Body::Mode::Protocol ? "protocol.yield"
              : source.mode == Body::Mode::Protocol         ? "protocol.return"
                                                            : "func.return",
-             flatten(source.results), 0);
+             returned, 0);
     return (ret && attributes(*ret, {}) && cursor == block.end()) ||
            fail("extra return attributes or operations after source body");
   }
@@ -1712,10 +1828,23 @@ public:
           auto layout = take(layouts.get(port.type));
           if (!layout)
             return takeFailure();
+          if (port.oracle) {
+            const auto *oracle = (**layout).leaves.front().oracle();
+            if (!oracle || oracle->maximum)
+              return error("source.correspondence",
+                           "oracle port layout differs");
+            leaves.emplace_back(oracle->kind.signature.data.spelling());
+            if (!roles || flat >= roles.size() ||
+                !roleSet(roles[flat++], {port.oracle->holder}))
+              return error("source.correspondence",
+                           "oracle holder role differs");
+          }
           llvm::append_range(leaves, (**layout).leaves);
           for (unsigned i = 0; i < (**layout).leaves.size(); ++i)
-            if (protocol && (!roles || flat >= roles.size() ||
-                             !roleSet(roles[flat++], port.roles)))
+            if (protocol &&
+                (!roles || flat >= roles.size() ||
+                 !roleSet(roles[flat++],
+                          port.oracle ? oracleReceivers(port) : port.roles)))
               return error("source.correspondence",
                            "flattened port roles differ");
         }

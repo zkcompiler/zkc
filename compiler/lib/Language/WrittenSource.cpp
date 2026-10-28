@@ -363,6 +363,11 @@ private:
     json::Object result{{"name", value.name},
                         {"roles", strings(value.roles)},
                         {"domain", optionalType(value.domain, "domain")}};
+    if (value.oracleHolder) {
+      result["oracle_holder"] = *value.oracleHolder;
+      result["oracle_maximum"] =
+          optionalType(value.oracleMaximum, "oracle_maximum");
+    }
     if (field)
       result["public"] = value.isPublic;
     if (value.purpose)

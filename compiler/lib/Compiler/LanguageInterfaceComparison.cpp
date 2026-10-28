@@ -97,13 +97,25 @@ class Comparison {
         source.type.kind != actual.kind || source.custody != actual.custody ||
         source.constructible != actual.constructible ||
         !(source.permissions == actual.permissions) ||
-        source.leaves.size() != actual.leaves.size() ||
+        (source.type.kind == Type::Kind::Oracle
+             ? !actual.oracle || !actual.leaves.empty()
+             : actual.oracle.has_value() ||
+                   source.leaves.size() != actual.leaves.size()) ||
         source.alternatives.size() != actual.alternatives.size())
       return fail("logical source schema differs");
-    for (unsigned i = 0; i < source.leaves.size(); ++i)
-      if (!source.leaves[i].data() ||
-          !text(*source.leaves[i].data(), actual.leaves[i]))
-        return fail("logical source leaf differs");
+    if (actual.oracle) {
+      if (source.leaves.size() != 1 || !source.leaves[0].oracle())
+        return fail("logical oracle schema differs");
+      const auto &kind = source.leaves[0].oracle()->kind;
+      if (!text(kind.identity, actual.oracle->kind) ||
+          kind.arguments != actual.oracle->arguments)
+        return fail("logical oracle kind differs");
+    } else {
+      for (unsigned i = 0; i < source.leaves.size(); ++i)
+        if (!source.leaves[i].data() ||
+            !text(*source.leaves[i].data(), actual.leaves[i]))
+          return fail("logical source leaf differs");
+    }
     if (!fields(source.fields, actual.fields, depth))
       return false;
     for (unsigned i = 0; i < source.alternatives.size(); ++i)
@@ -144,8 +156,20 @@ class Comparison {
       if (!text(source[i].name, actual[i].name) ||
           source[i].roles != actual[i].roles || !actual[i].schema ||
           !schema(*expected, *actual[i].schema) ||
-          !slice(actual[i].native, flat, expected->leaves.size()))
+          !slice(actual[i].native, flat,
+                 source[i].oracle ? 2 : expected->leaves.size()))
         return fail("logical source port differs");
+      if (source[i].oracle.has_value() != actual[i].oracle.has_value())
+        return fail("oracle role family is missing or invented");
+      if (source[i].oracle) {
+        const auto &before = *source[i].oracle;
+        const auto &after = *actual[i].oracle;
+        std::optional<uint64_t> maximum;
+        if (before.maximumRows)
+          maximum = before.maximumRows->dimension.closedValue();
+        if (before.holder != after.holder || maximum != after.maximumRows)
+          return fail("oracle holder or maximum differs");
+      }
     }
     return true;
   }
@@ -164,7 +188,7 @@ class Comparison {
       auto value = layout(ports[i].type);
       if (!value)
         return false;
-      offset += value->leaves.size();
+      offset += ports[i].oracle ? 2 : value->leaves.size();
     }
     auto value = layout(ports[source.port].type);
     if (!value)
