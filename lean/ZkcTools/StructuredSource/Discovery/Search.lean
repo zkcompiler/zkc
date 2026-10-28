@@ -78,7 +78,8 @@ structure Outcome where
 def commonObligations : List String :=
   ["ReferenceLaws", "exact-helper-body-laws", "all-replies-whole-process-verifier-equation",
    "fixed-root-target-anchoring", "actual-producer-completeness-compiled_ideal",
-   "honest-delivery", "closed-shape-under-future-restrictions", "private-residual-preservation"]
+   "honest-delivery", "closed-shape-under-future-restrictions", "private-residual-preservation",
+   "reference-dependency-summary", "challenge-prefix-fixation", "conditional-challenge-distribution"]
 
 /-- Search a repeat's actual callback occurrence. Distinct loop occurrences are
 kept separate. Multiple unexplained layouts within one loop are not guessed. -/

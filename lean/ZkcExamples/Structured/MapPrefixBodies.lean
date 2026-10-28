@@ -1,5 +1,7 @@
 module
 
+public import ZkcExamples.Structured.MultilinearSourceBindings
+
 public import ZkcExamples.Structured.MultilinearPrefixBodies
 
 @[expose] public section
@@ -70,16 +72,12 @@ abbrev rowsBody := MapFirstBodies.rowsBody
 abbrev prefixHelper : Helper := ⟨"zkl_96cd7ea616c46001ac0fa39e06ab5b8042d6d50ce126ce52a57cd4f1fd0ed9be", .local, [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩
 
 def prefixBody : Region dialect [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr"] [.vector "bls12-381.fr", .index, .index] :=
-  .letOp (.mark "s0") .nil .nil <|
-  .letOp (.invoke ⟨"zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2", .local, [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
-  .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
+  MultilinearBodies.prefixBody "bls12-381.fr" (MultilinearSourceBindings.common)
 
 abbrev stepHelper : Helper := ⟨"zkl_195a79478f48dffc2a6917273d8317df0fabae786920a46fa2ac6b2737144299", .local, [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩
 
 def stepBody : Region dialect [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr"] [.vector "bls12-381.fr", .index, .index] :=
-  .letOp (.mark "s2") .nil .nil <|
-  .letOp (.invoke ⟨"zkl_3ae183e4974ba027dee61c318edb42bcf3a64a69d220d82168474d3a3169ff4d", .local, [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
-  .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
+  MultilinearBodies.stepBody "bls12-381.fr" (MultilinearSourceBindings.common)
 
 abbrev firstHelper := MapFirstBodies.firstHelper
 abbrev firstBody := MapFirstBodies.firstBody
@@ -97,9 +95,7 @@ abbrev foldWrapperBody := MultilinearPrefixBodies.foldWrapperBody bindings.fold
 abbrev foldStepHelper : Helper := ⟨"finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_body", .local, [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .vector "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩
 
 def foldStepBody : Region dialect [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .vector "bls12-381.fr"] [.vector "bls12-381.fr", .index, .index] :=
-  .letOp (.mark "body") .nil .nil <|
-  .letOp (.invoke ⟨"zkl_195a79478f48dffc2a6917273d8317df0fabae786920a46fa2ac6b2737144299", .local, [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
-  .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
+  MultilinearBodies.foldStepBody "bls12-381.fr" (MultilinearSourceBindings.common)
 
 abbrev foldHelper := MultilinearPrefixBodies.foldHelper bindings.fold
 

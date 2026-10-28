@@ -16,6 +16,7 @@ open PrimitiveShapeViews (shapeBody shapeHelper)
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
+set_option backward.isDefEq.respectTransparency false in
 /-- Under explicit representation bounds, the complete checked helper returns
 exactly the authored guard/modulus/quotient predicate. -/
 theorem shape_body (table : Meanings F G) (less : LessLaw table) (rows : RowsLaw table)
@@ -24,33 +25,18 @@ theorem shape_body (table : Meanings F G) (less : LessLaw table) (rows : RowsLaw
     (columnsBound : columns < indexLimit) :
     shapeBody.denote (meaning F G table) (inputs xs dimension columns).get =
       .done (boolResult (decide (HasShape xs dimension columns))) := by
-  dsimp only [inputs, vector]
-  rw [PrimitiveExpansions.shape_body]
-  have first := less 0 columns (by decide +kernel) columnsBound
-  have second := less dimension 64 dimensionBound (by decide +kernel)
-  by_cases positive : 0 < columns
-  · have nonzero : columns ≠ 0 := by omega
-    have modBound : xs.length % columns < indexLimit :=
-      Nat.lt_trans (Nat.mod_lt _ positive) columnsBound
-    have divBound : xs.length / columns < indexLimit :=
-      Nat.lt_of_le_of_lt (Nat.div_le_self _ _) lengthBound
-    by_cases dimensionSmall : dimension < 64
-    · have rowResult := rows dimension dimensionSmall
-      simp only [indexResult] at rowResult
-      have rowBound := power_bound dimension dimensionSmall
-      by_cases divisible : xs.length % columns = 0 <;>
-        simp [meaning, Evaluation.meaning, Values.get, SiteObservations.closed, SiteObservations.silent,
-          PIR.Process.bind, Primitive.evaluate, primitiveOutcome, checkedIndices,
-          first, second, rowResult, boolResult, HasShape, positive, nonzero,
-          dimensionSmall, divisible, lengthBound, columnsBound, modBound, divBound, rowBound,
-          show 0 < indexLimit by decide +kernel,
-          show 64 < indexLimit by decide +kernel]
-    · simp [meaning, Evaluation.meaning, Values.get, SiteObservations.closed, SiteObservations.silent,
-        PIR.Process.bind, Primitive.evaluate, primitiveOutcome, first, second, boolResult,
-        HasShape, positive, dimensionSmall, show 0 < indexLimit by decide +kernel, show 64 < indexLimit by decide +kernel]
-  · simp [meaning, Evaluation.meaning, Values.get, SiteObservations.closed, SiteObservations.silent,
-      PIR.Process.bind, Primitive.evaluate, primitiveOutcome, first, boolResult,
-      HasShape, positive, show 0 < indexLimit by decide +kernel]
+  rw [Evaluation.denote_meaning_eq_meaningOn]
+  have result := ReferenceLibrary.Multilinear.Admission.shape_body (ringModel F G)
+    "bls12-381.fr" MultilinearSourceBindings.common table xs dimension columns
+    lengthBound dimensionBound columnsBound
+    (less 0 columns (by decide +kernel) columnsBound)
+    (less dimension 64 dimensionBound (by decide +kernel))
+    (fun small => rows dimension small)
+  simpa only [ReferenceLibrary.Multilinear.Admission.boolResult,
+    ReferenceLibrary.Multilinear.Admission.HasShape, HasShape, boolResult,
+    ReferenceLibrary.Multilinear.tableValues, inputs, PrimitiveShapeViews.shapeBody,
+    MultilinearBodies.shapeBody, MultilinearSourceBindings.common] using result
+
 
 
 /-- A zero column guard returns false without observing the vector or dimension. -/
