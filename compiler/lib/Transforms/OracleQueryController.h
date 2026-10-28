@@ -34,6 +34,13 @@ struct OracleQueryController {
   std::vector<mlir::Type> answers, state, stores;
   std::vector<OracleQueryControllerConstructor> constructors;
   std::vector<OracleQueryContinuation> continuations;
+  // Per-kind lookup of the stored structural leaf count. These helpers read
+  // references and metadata only, never positions, domains or table contents.
+  std::vector<mlir::func::FuncOp> leafCounts;
+  // Per-constructor recurrence: all declared child references, then stores,
+  // return one for a base or the ordered sum of virtual query child counts.
+  // The complete stage binds this value to the same anchor allocation.
+  std::vector<mlir::func::FuncOp> constructionCounts;
   mlir::func::FuncOp initialize, advance, finish;
   // Each resume consumes state, its five request/continuation coordinates,
   // and the answer of this kind. Actual-body checking must also bind the call

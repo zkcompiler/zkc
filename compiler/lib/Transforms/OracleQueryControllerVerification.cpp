@@ -148,7 +148,9 @@ Error layout(ModuleOp candidate, ModuleOp prepared,
   if (!constructorCount || constructorCount != actual.constructors.size() ||
       frameCount != actual.continuations.size() || actual.kinds != kinds ||
       actual.answers != answers || actual.stores != stores ||
-      actual.resume.size() != kinds.size())
+      actual.resume.size() != kinds.size() ||
+      actual.leafCounts.size() != kinds.size() ||
+      actual.constructionCounts.size() != constructorCount)
     return refuse();
   std::vector<Type> state(7, index);
   append_range(state, answers);
@@ -545,41 +547,120 @@ struct Reader {
          });
   }
   void dispatch(func::FuncOp function, unsigned selector,
+                ArrayRef<unsigned> cases, TypeRange formals, TypeRange outputs,
+                llvm::function_ref<void(unsigned, func::FuncOp)> leaf) {
+    body(function, formals, outputs, false, [&](Cursor &c, ValueRange inputs) {
+      if (cases.size() == 1) {
+        c.equalTo(inputs[selector], cases.front(), "selected");
+        func::FuncOp selected;
+        auto values = c.local(inputs, outputs, "case", selected);
+        if (valid)
+          leaf(cases.front(), selected);
+        c.finish(values);
+        return;
+      }
+      auto middle = cases.size() / 2;
+      auto pivot = c.number(cases[middle], "pivot");
+      auto left = c.compare("index.less", inputs[selector], pivot, "partition");
+      auto values = c.conditional(
+          left, inputs, outputs, "dispatch",
+          [&](unsigned branch, func::FuncOp region) {
+            body(region, formals, outputs, true,
+                 [&](Cursor &c, ValueRange captured) {
+                   func::FuncOp selected;
+                   auto result = c.local(
+                       captured, outputs,
+                       "selected_branch_" + std::to_string(branch), selected);
+                   auto subset = branch == 0 ? cases.take_front(middle)
+                                             : cases.drop_front(middle);
+                   dispatch(selected, selector, subset, formals, outputs, leaf);
+                   c.finish(result, true);
+                 });
+          });
+      c.finish(values);
+    });
+  }
+  void dispatch(func::FuncOp function, unsigned selector,
                 ArrayRef<unsigned> cases,
                 llvm::function_ref<void(unsigned, func::FuncOp)> leaf) {
-    body(function, allTypes(), model.state, false,
-         [&](Cursor &c, ValueRange inputs) {
-           if (cases.size() == 1) {
-             c.equalTo(inputs[selector], cases.front(), "selected");
-             func::FuncOp selected;
-             auto values = c.local(inputs, model.state, "case", selected);
-             if (valid)
-               leaf(cases.front(), selected);
-             c.finish(values);
-             return;
-           }
-           auto middle = cases.size() / 2;
-           auto pivot = c.number(cases[middle], "pivot");
-           auto left =
-               c.compare("index.less", inputs[selector], pivot, "partition");
-           auto values = c.conditional(
-               left, inputs, model.state, "dispatch",
-               [&](unsigned branch, func::FuncOp region) {
-                 body(region, allTypes(), model.state, true,
-                      [&](Cursor &c, ValueRange captured) {
-                        func::FuncOp selected;
-                        auto result =
-                            c.local(captured, model.state,
-                                    "selected_branch_" + std::to_string(branch),
-                                    selected);
-                        auto subset = branch == 0 ? cases.take_front(middle)
-                                                  : cases.drop_front(middle);
-                        dispatch(selected, selector, subset, leaf);
-                        c.finish(result, true);
-                      });
-               });
-           c.finish(values);
-         });
+    dispatch(function, selector, cases, allTypes(), model.state, leaf);
+  }
+  void counts() {
+    Types dispatchTypes{index, index};
+    append_range(dispatchTypes, model.stores);
+    for (unsigned kind = 0; kind < model.kinds.size(); ++kind) {
+      SmallVector<unsigned> cases;
+      for (const auto &item : model.constructors)
+        if (item.kind == kind)
+          cases.push_back(item.source);
+      auto reference = cantFail(oracleReferenceType(model.kinds[kind]));
+      Types inputs{reference};
+      append_range(inputs, model.stores);
+      body(model.leafCounts[kind], inputs, index, false,
+           [&](Cursor &c, ValueRange inputs) {
+             auto identity =
+                 c.unpack(inputs[0], TypeRange{index, index}, "reference");
+             if (cases.empty()) {
+               auto zero = c.number(0, "none");
+               c.require(c.compare("index.less", zero, zero, "no_constructor"),
+                         "unavailable_kind");
+               c.finish(zero);
+               return;
+             }
+             append_range(identity, inputs.drop_front());
+             func::FuncOp select;
+             auto value = c.local(identity, index, "select_count", select);
+             dispatch(
+                 select, 0, cases, dispatchTypes, index,
+                 [&](unsigned source, func::FuncOp leaf) {
+                   auto found =
+                       find_if(model.constructors, [&](const auto &item) {
+                         return item.source == source;
+                       });
+                   unsigned constructor = found - model.constructors.begin();
+                   body(leaf, dispatchTypes, index, false,
+                        [&](Cursor &c, ValueRange arguments) {
+                          auto record =
+                              load(c, constructor, arguments[0], arguments[1],
+                                   arguments[2 + constructor]);
+                          c.finish(record[field(constructor, "query.leaves")]);
+                        });
+                 });
+             c.finish(value);
+           });
+    }
+    for (auto [ordinal, item] : enumerate(model.constructors)) {
+      const auto &anchor = storage.constructors[item.source];
+      Types sourceTypes;
+      for (const auto &field : anchor.roles[item.role].fields)
+        if (StringRef(field.name).starts_with("source."))
+          sourceTypes.push_back(field.type);
+      Types inputs(sourceTypes);
+      append_range(inputs, model.stores);
+      if (!expect(inputs.size() <= 512))
+        return;
+      const auto &queries = item.functions.queries;
+      body(model.constructionCounts[ordinal], inputs, index, false,
+           [&](Cursor &c, ValueRange inputs) {
+             Value total = c.number(
+                 anchor.constructor == OracleAnchorConstructor::Kind::Virtual
+                     ? 0
+                     : 1,
+                 "initial_count");
+             for (auto [i, query] : enumerate(queries)) {
+               Values arguments{inputs[query.source]};
+               append_range(arguments, inputs.drop_front(sourceTypes.size()));
+               auto count =
+                   c.call(model.leafCounts[kindNumber(query.kind)], arguments,
+                          "child_count_" + std::to_string(i))
+                       .front();
+               total = c.apply("index.add", index, {total, count},
+                               "sum_count_" + std::to_string(i))
+                           .front();
+             }
+             c.finish(total);
+           });
+    }
   }
   void step(func::FuncOp function) {
     body(function, allTypes(), model.state, false,
@@ -880,6 +961,7 @@ Error checkOracleQueryController(ModuleOp candidate, ModuleOp prepared,
   if (!closure)
     return closure.takeError();
   Reader reader(storage, actual, target, *closure);
+  reader.counts();
   reader.initialize();
   reader.resume();
   reader.advance();

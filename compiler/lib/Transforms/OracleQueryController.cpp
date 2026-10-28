@@ -165,9 +165,9 @@ struct Emitter {
       result.state.push_back(frame.sequence);
     // Bound emitted signatures/control before expanding the specialized tree.
     uint64_t ports = result.state.size() + result.stores.size();
-    uint64_t bodies = 12 + result.constructors.size() * 12 +
-                      result.continuations.size() * 16 +
-                      result.kinds.size() * 4;
+    uint64_t bodies = 12 + result.constructors.size() * 24 +
+                      result.continuations.size() * 24 +
+                      result.kinds.size() * 8;
     if (ports > 512 || bodies > work.operations || ports * bodies > work.slots)
       return error("oracle-controller-limit");
     work.operations -= bodies;
@@ -452,10 +452,10 @@ struct Emitter {
         });
   }
   func::FuncOp dispatch(StringRef label, unsigned selector,
-                        ArrayRef<std::pair<unsigned, func::FuncOp>> cases) {
+                        ArrayRef<std::pair<unsigned, func::FuncOp>> cases,
+                        TypeRange formals, TypeRange outputs) {
     return function(
-        label, allTypes(), result.state, false,
-        [&](Control &c, ValueRange inputs) {
+        label, formals, outputs, false, [&](Control &c, ValueRange inputs) {
           if (cases.size() == 1) {
             equal(c, inputs[selector], cases.front().first, "selected");
             c.returned(call(c, cases.front().second, inputs, "case"));
@@ -466,12 +466,13 @@ struct Emitter {
           auto left =
               compare(c, "index.less", inputs[selector], pivot, "partition");
           auto values = c.conditional(
-              left, inputs, result.state, "dispatch", [&](unsigned branch) {
+              left, inputs, outputs, "dispatch", [&](unsigned branch) {
                 auto subset = branch == 0 ? cases.take_front(middle)
                                           : cases.drop_front(middle);
-                auto selected = dispatch(label, selector, subset);
+                auto selected =
+                    dispatch(label, selector, subset, formals, outputs);
                 return function(
-                    "dispatch_region", allTypes(), result.state, true,
+                    "dispatch_region", formals, outputs, true,
                     [&](Control &body, ValueRange captures) {
                       body.complete(
                           call(body, selected, captures,
@@ -480,6 +481,84 @@ struct Emitter {
               });
           c.returned(values);
         });
+  }
+  func::FuncOp dispatch(StringRef label, unsigned selector,
+                        ArrayRef<std::pair<unsigned, func::FuncOp>> cases) {
+    return dispatch(label, selector, cases, allTypes(), result.state);
+  }
+  Error emitCounts() {
+    Types dispatchTypes{index, index};
+    append_range(dispatchTypes, result.stores);
+    for (unsigned kind = 0; kind < result.kinds.size(); ++kind) {
+      SmallVector<std::pair<unsigned, func::FuncOp>> cases;
+      for (auto [ordinal, item] : enumerate(result.constructors)) {
+        if (item.kind != kind)
+          continue;
+        auto constructor = unsigned(ordinal);
+        auto leaf =
+            function("stored_count", dispatchTypes, index, false,
+                     [&](Control &c, ValueRange inputs) {
+                       auto record = load(c, constructor, inputs[0], inputs[1],
+                                          inputs[2 + constructor]);
+                       c.returned(record[field(constructor, "query.leaves")]);
+                     });
+        cases.push_back({item.source, leaf});
+      }
+      func::FuncOp select;
+      if (!cases.empty())
+        select = dispatch("count_dispatch", 0, cases, dispatchTypes, index);
+      auto reference = cantFail(oracleReferenceType(result.kinds[kind]));
+      Types inputs{reference};
+      append_range(inputs, result.stores);
+      auto count = function(
+          "leaf_count", inputs, index, false,
+          [&](Control &c, ValueRange inputs) {
+            auto identity =
+                unpack(c, inputs[0], TypeRange{index, index}, "reference");
+            if (!select) {
+              auto zero = number(c, 0, "none");
+              require(c, compare(c, "index.less", zero, zero, "no_constructor"),
+                      "unavailable_kind");
+              c.returned(zero);
+              return;
+            }
+            append_range(identity, inputs.drop_front());
+            c.returned(call(c, select, identity, "select_count"));
+          });
+      result.leafCounts.push_back(count);
+    }
+    for (const auto &item : result.constructors) {
+      const auto &anchor = storage.constructors[item.source];
+      Types sources;
+      for (const auto &field : anchor.roles[item.role].fields)
+        if (StringRef(field.name).starts_with("source."))
+          sources.push_back(field.type);
+      Types inputs(sources);
+      append_range(inputs, result.stores);
+      if (inputs.size() > 512)
+        return error("oracle-controller-limit");
+      auto count = function(
+          "construction_count", inputs, index, false,
+          [&](Control &c, ValueRange inputs) {
+            auto base =
+                anchor.constructor != OracleAnchorConstructor::Kind::Virtual;
+            Value total = number(c, base ? 1 : 0, "initial_count");
+            for (auto [ordinal, query] : enumerate(item.functions.queries)) {
+              Values arguments{inputs[query.source]};
+              append_range(arguments, inputs.drop_front(sources.size()));
+              auto child =
+                  call(c, result.leafCounts[kindNumber(query.kind)], arguments,
+                       "child_count_" + std::to_string(ordinal))
+                      .front();
+              total = apply(c, "index.add", index, {total, child},
+                            "sum_count_" + std::to_string(ordinal))
+                          .front();
+            }
+            c.returned(total);
+          });
+      result.constructionCounts.push_back(count);
+    }
+    return Error::success();
   }
   void emitInitialize(pir::OracleKindAttr root) {
     auto reference = cantFail(oracleReferenceType(root));
@@ -748,6 +827,8 @@ emitOracleQueryController(ModuleOp candidate, ModuleOp prepared,
     return error("oracle-controller-capacity");
   Emitter emit(candidate, prepared, storage, role, capacity);
   if (auto e = emit.plan(root, work))
+    return std::move(e);
+  if (auto e = emit.emitCounts())
     return std::move(e);
   emit.emitInitialize(root);
   emit.emitResume();

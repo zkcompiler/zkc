@@ -116,8 +116,8 @@ Equal payloads never merge constructions. Splitting a port into components or
 rebinding those components preserves its reference instead of allocating again.
 Static shape erasure preserves the reference type and the stored actual shape.
 
-Each record retains its enclosing repeat indices, named dimensions and role
-payload, in that order. An instance ordinal alone does not determine nested
+Each record retains its enclosing repeat indices, named dimensions, structural
+leaf count and role payload, in that order. An instance ordinal alone does not determine nested
 iteration coordinates when trip counts vary. Virtual payloads retain actual
 child references and ordinary parameters. Ideal table delivery gives receivers
 the table; a Merkle receiver stores the root, while data and opening state stay
@@ -188,6 +188,16 @@ coordinates. `finish` requires completion of the root answer. A continuation
 retains the parent's position, instance and already obtained child answers;
 unused and duplicate child queries are still executed. Empty answer slots avoid
 inventing a default inhabitant of an arbitrary answer type.
+
+The exact leaf count is derived at construction from actual child references:
+one for a base table, zero for an empty virtual declaration, and the sum of every
+ordered child-query count otherwise. The same immutable record stores it. Count
+helpers perform reference lookup and checked index addition without evaluating
+positions, domains, answers or authentication. Their independent body check
+compares the recurrence with the declaration's complete ordered query inventory.
+Binding this derived value to the same source allocation remains the complete
+stage's responsibility. A role's count is its own family component; availability
+does not assert agreement between roles.
 
 The checked structural capacity bounds advancement by `2 * nodes + 1` transitions
 and local evaluation by `leaves + 1` advancement rounds. Each round must suspend

@@ -21,7 +21,7 @@ using namespace zkc::test;
 namespace pir = zkc::protocol_ir;
 namespace {
 std::string source(bool noQueries = false, bool heterogeneous = false,
-                   bool trailingZero = false) {
+                   bool trailingZero = false, bool duplicate = false) {
   std::string text = R"mlir(
 #K = #protocol.oracle_kind<"table", [ui64, 4 : ui64]>
 !H = !protocol.oracle<#K>
@@ -65,6 +65,12 @@ module { "protocol.module"() ({
      input_roles=[["P"],["P"],["P","V"],["V"]],output_roles=[["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir";
+  if (duplicate) {
+    auto offset = text.find("oracle_query\"(%b,%mapped)");
+    require(offset != std::string::npos, "duplicate query fragment missing");
+    text.replace(offset, std::string("oracle_query\"(%b,%mapped)").size(),
+                 "oracle_query\"(%a,%mapped)");
+  }
   if (heterogeneous) {
     auto replace = [&](StringRef from, StringRef to) {
       auto i = text.find(from.str());
@@ -177,14 +183,14 @@ std::string client(ModuleOp candidate, const OracleAnchorStorage &plan,
   auto owner = builder.getStrArrayAttr({"V"});
   OperationState main(loc, "protocol.func");
   main.addAttribute("sym_name", builder.getStringAttr("main"));
-  main.addAttribute("function_type",
-                    TypeAttr::get(builder.getFunctionType(inputs, index)));
+  main.addAttribute("function_type", TypeAttr::get(builder.getFunctionType(
+                                         inputs, {index, index})));
   main.addAttribute("roles", prefixCheck
                                  ? builder.getStrArrayAttr({"V", "Observer"})
                                  : owner);
   main.addAttribute("input_roles", builder.getArrayAttr(SmallVector<Attribute>(
                                        inputs.size(), owner)));
-  main.addAttribute("output_roles", builder.getArrayAttr({owner}));
+  main.addAttribute("output_roles", builder.getArrayAttr({owner, owner}));
   auto *body = new Block;
   body->addArguments(inputs, SmallVector<Location>(inputs.size(), loc));
   main.addRegion()->push_back(body);
@@ -205,15 +211,21 @@ std::string client(ModuleOp candidate, const OracleAnchorStorage &plan,
         isa<data::SequenceType>(input.getType())
             ? Value(data::SequenceLengthOp::create(builder, loc, index, input))
             : Value(data::DimOp::create(builder, loc, index, input, 0));
+    auto count = call(controller.constructionCounts[i], stores,
+                      "base_count_" + std::to_string(i));
     auto allocated =
-        call(allocators[i], {stores[i], rows, body->getArgument(i)},
+        call(allocators[i],
+             {stores[i], rows, count.getOutputs()[0], body->getArgument(i)},
              "base_" + std::to_string(i));
     references.push_back(allocated.getOutputs()[0]);
     stores[i] = allocated.getOutputs()[1];
   }
   unsigned virtualConstructor = 2;
   if (prefixCheck) {
-    auto zero = call(allocators[2], {stores[2], body->getArgument(2)}, "zero");
+    auto count = call(controller.constructionCounts[2], stores, "zero_count");
+    auto zero =
+        call(allocators[2],
+             {stores[2], body->getArgument(2), count.getOutputs()[0]}, "zero");
     references[1] = zero.getOutputs()[0];
     stores[2] = zero.getOutputs()[1];
     virtualConstructor = 3;
@@ -225,9 +237,14 @@ std::string client(ModuleOp candidate, const OracleAnchorStorage &plan,
     Value rows = prefixCheck
                      ? Value(data::IndexOp::create(builder, loc, index, "4"))
                      : body->getArgument(2);
+    SmallVector<Value> counted{previous, references[1]};
+    append_range(counted, stores);
+    auto count = call(controller.constructionCounts[virtualConstructor],
+                      counted, "virtual_count_" + std::to_string(i));
     auto allocated = call(allocators[virtualConstructor],
                           {stores[virtualConstructor], iteration, rows,
-                           previous, references[1], body->getArgument(3)},
+                           count.getOutputs()[0], previous, references[1],
+                           body->getArgument(3)},
                           "virtual_" + std::to_string(i));
     previous = allocated.getOutputs()[0];
     stores[virtualConstructor] = allocated.getOutputs()[1];
@@ -235,6 +252,9 @@ std::string client(ModuleOp candidate, const OracleAnchorStorage &plan,
   auto root = data::MakeOp::create(
       builder, loc, previous.getType(),
       ValueRange{body->getArgument(4), body->getArgument(5)}, "Record");
+  SmallVector<Value> counted{root};
+  append_range(counted, stores);
+  auto count = call(controller.leafCounts[0], counted, "root_count");
   SmallVector<Value> arguments{root, body->getArgument(6)};
   SmallVector<Value> output;
   if (resumeCheck || prefixCheck) {
@@ -263,6 +283,7 @@ std::string client(ModuleOp candidate, const OracleAnchorStorage &plan,
     auto result = call(controller.evaluate, arguments, "evaluate");
     output.assign(result.getOutputs().begin(), result.getOutputs().end());
   }
+  output.push_back(count.getOutputs()[0]);
   pir::MathematicalReturnOp::create(builder, loc, output);
   std::string diagnostics;
   ScopedDiagnosticHandler capture(candidate.getContext(),
@@ -281,9 +302,9 @@ std::string client(ModuleOp candidate, const OracleAnchorStorage &plan,
 int main(int argc, char **argv) {
   if (argc > 3 || (argc == 3 && StringRef(argv[2]) != "checks" &&
                    (StringRef(argv[2]).size() != 1 || argv[2][0] < '0' ||
-                    argv[2][0] > '4'))) {
+                    argv[2][0] > '5'))) {
     errs() << "usage: oracle-query-controller-test [output-directory "
-              "[0..4|checks]]\n";
+              "[0..5|checks]]\n";
     return 1;
   }
   DialectRegistry registry;
@@ -298,11 +319,11 @@ int main(int argc, char **argv) {
     return success();
   });
   Cases cases;
-  for (unsigned variant = 0; variant < 5; ++variant)
+  for (unsigned variant = 0; variant < 6; ++variant)
     if (argc != 3 || std::to_string(variant) == argv[2])
       cases.run("generated continuation controller " + Twine(variant), [&] {
-        auto original =
-            parse(context, source(variant == 1, variant == 2, variant == 4));
+        auto original = parse(context, source(variant == 1, variant == 2,
+                                              variant == 4, variant == 5));
         auto prepared = mathematical::prepareProtocol(*original, false);
         require(bool(prepared), "preparation: " + diagnostics);
         auto before = print(*prepared);
@@ -389,19 +410,39 @@ module { "protocol.module"() ({
         });
     }
   });
-  const char *mutations[] = {"root tag and instance", "domain operands",
-                             "domain relation",       "transition bound",
-                             "request bound",         "resume coordinate",
-                             "saved continuation",    "child continuation",
-                             "frame instance",        "child position",
-                             "dispatch partition",    "advance termination",
-                             "answer kind",           "return phase",
-                             "completion phase",      "answer slot",
-                             "resume answer",         "finish phase",
-                             "constructor inventory", "continuation inventory",
-                             "ordered queries",       "capacity record",
-                             "state layout",          "missing resume",
-                             "missing evaluator",     "role record"};
+  const char *mutations[] = {"root tag and instance",
+                             "domain operands",
+                             "domain relation",
+                             "transition bound",
+                             "request bound",
+                             "resume coordinate",
+                             "saved continuation",
+                             "child continuation",
+                             "frame instance",
+                             "child position",
+                             "dispatch partition",
+                             "advance termination",
+                             "answer kind",
+                             "return phase",
+                             "completion phase",
+                             "answer slot",
+                             "resume answer",
+                             "finish phase",
+                             "constructor inventory",
+                             "continuation inventory",
+                             "ordered queries",
+                             "capacity record",
+                             "state layout",
+                             "missing resume",
+                             "missing evaluator",
+                             "role record",
+                             "stored count",
+                             "base count",
+                             "virtual count seed",
+                             "duplicate count operand",
+                             "child count identity",
+                             "missing count reader",
+                             "missing count recurrence"};
   for (unsigned mutation = 0; mutation < std::size(mutations); ++mutation)
     cases.run(
         "independent controller refusal: " + Twine(mutations[mutation]), [&] {
@@ -546,6 +587,53 @@ module { "protocol.module"() ({
             break;
           case 25:
             controller.role = "P";
+            break;
+          case 26: {
+            bool changed = false;
+            candidate->walk([&](func::FuncOp function) {
+              if (!changed && function.getSymName().starts_with(
+                                  "_oracle_query_stored_count_")) {
+                function.walk([&](exec::ReturnOp op) {
+                  op.getValuesMutable()[0].set(function.getArgument(1));
+                });
+                changed = true;
+              }
+            });
+            require(changed, "count leaf missing");
+            break;
+          }
+          case 27:
+          case 28: {
+            auto function =
+                controller.constructionCounts[mutation == 27 ? 0 : 2];
+            function.walk([&](exec::ApplyOp op) {
+              if (op.getSite() == "initial_count")
+                op->setAttr(
+                    "parameters",
+                    ArrayAttr::get(&context,
+                                   {StringAttr::get(
+                                       &context, mutation == 27 ? "0" : "1")}));
+            });
+            break;
+          }
+          case 29: {
+            auto op = cast<exec::ApplyOp>(operation("sum_count_1"));
+            op.getInputsMutable()[1].set(op.getInputs()[0]);
+            break;
+          }
+          case 30:
+            controller.constructionCounts[2].walk([&](func::CallOp op) {
+              auto site = op->getAttrOfType<StringAttr>("runtime.site");
+              if (site && site.getValue() == "child_count_1")
+                op.setOperand(1,
+                              controller.constructionCounts[2].getArgument(1));
+            });
+            break;
+          case 31:
+            controller.leafCounts[0] = {};
+            break;
+          case 32:
+            controller.constructionCounts[0] = {};
             break;
           }
           require(succeeded(verify(*candidate)),

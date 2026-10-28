@@ -43,8 +43,9 @@ using OracleStorageSelection = llvm::function_ref<llvm::Expected<std::string>(
 // (constructor ordinal, instance ordinal), so equal data does not merge anchors
 // and recurrent virtuals need no recursive native type. This is a checked
 // storage layout, not a generated body or a realization correspondence token.
-// Records retain enclosing repeat indices before named dimensions and payload;
-// those indices must come from the actual occurrence, not its instance ordinal.
+// Records retain repeat indices, named dimensions, derived leaf count and
+// payload; those indices must come from the actual occurrence, not its instance
+// ordinal.
 llvm::Expected<OracleAnchorStorage>
 planOracleAnchorStorage(mlir::ModuleOp prepared, llvm::StringRef entry,
                         OracleStorageSelection select);

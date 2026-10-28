@@ -47,6 +47,7 @@ struct Planner {
       storage.fields.push_back({"iteration." + std::to_string(i - 1), index});
     for (const auto &shape : constructor.kind.getShapeDimensions())
       storage.fields.push_back({"shape." + shape.name, index});
+    storage.fields.push_back({"query.leaves", index});
     append_range(storage.fields, payload);
     if (storage.fields.size() > remaining)
       return error("oracle-storage-limit");

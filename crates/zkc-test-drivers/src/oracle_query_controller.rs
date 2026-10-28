@@ -64,7 +64,11 @@ impl Reference {
                     (2, instance - 1)
                 };
                 let first = self.query(child, index, position, false)?;
-                self.query(1, 0, mapped, false)?;
+                if variant == 5 {
+                    self.query(child, index, mapped, false)?;
+                } else {
+                    self.query(1, 0, mapped, false)?;
+                }
                 Some(first)
             }
             _ => None,
@@ -76,7 +80,7 @@ fn main() {
         .nth(1)
         .expect("controller fixture directory");
     let mut cases = 0;
-    for variant in 0..3 {
+    for variant in [0, 1, 2, 5] {
         let bytes =
             std::fs::read(Path::new(&directory).join(format!("controller-{variant}.bundle")))
                 .unwrap();
@@ -156,7 +160,20 @@ fn main() {
                                         "{label}: {:?}",
                                         report.outcome
                                     );
-                                    assert_eq!(report.roles[0].outputs.len(), 1);
+                                    assert_eq!(report.roles[0].outputs.len(), 2);
+                                    let count = if constructor < 2 {
+                                        1
+                                    } else if variant == 1 {
+                                        0
+                                    } else if variant == 5 {
+                                        1 << (instance + 1)
+                                    } else {
+                                        instance + 2
+                                    };
+                                    assert!(
+                                        matches!(&report.roles[0].outputs[1], Value::Index(x) if *x == count),
+                                        "structural count: {label}"
+                                    );
                                     assert!(
                                         matches!(&report.roles[0].outputs[0], Value::Index(x) if *x == answer),
                                         "{label}"
@@ -230,6 +247,7 @@ fn main() {
                 report.outcome
             );
             assert!(matches!(&report.roles[0].outputs[0], Value::Index(37)));
+            assert!(matches!(&report.roles[0].outputs[1], Value::Index(1)));
         } else {
             assert!(
                 matches!(report.outcome, Outcome::ParticipantStopped { .. }),
@@ -323,6 +341,7 @@ fn main() {
                         if complete {
                             let verifier =
                                 report.roles.iter().find(|role| role.role == "V").unwrap();
+                            assert!(matches!(&verifier.outputs[1], Value::Index(1)), "{label}");
                             assert!(
                                 matches!(&verifier.outputs[0], Value::Index(x) if *x == 10 + position),
                                 "{label}"

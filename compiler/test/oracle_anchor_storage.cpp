@@ -116,8 +116,8 @@ int main(int argc, char **argv) {
                 "virtual became a commitment");
         require(fields(created.roles[0]) ==
                     std::vector<std::string>({"iteration.0", "shape.rows",
-                                              "source.0", "source.1",
-                                              "parameter.2"}),
+                                              "query.leaves", "source.0",
+                                              "source.1", "parameter.2"}),
                 "virtual environment lost its actual sources or parameter "
                 "positions");
       });
@@ -134,21 +134,23 @@ int main(int argc, char **argv) {
       auto &created = plan.constructors[i];
       require(created.roles[0].role == "P" && created.roles[1].role == "V",
               "role family changed");
+      require(fields(created.roles[0]) ==
+                  std::vector<std::string>(
+                      {"shape.rows", "query.leaves", "data", "opening_state"}),
+              "holder lost data or private opening state");
       require(
-          fields(created.roles[0]) ==
-              std::vector<std::string>({"shape.rows", "data", "opening_state"}),
-          "holder lost data or private opening state");
-      require(fields(created.roles[1]) ==
-                  std::vector<std::string>({"shape.rows", "root"}),
-              "receiver acquired holder-only data");
+          fields(created.roles[1]) ==
+              std::vector<std::string>({"shape.rows", "query.leaves", "root"}),
+          "receiver acquired holder-only data");
       auto holder = take(encodeBoundType(created.roles[0].sequence, false));
       auto receiver = take(encodeBoundType(created.roles[1].sequence, false));
       require(!nativeTypePolicy(holder)->wire &&
                   nativeTypePolicy(receiver)->wire,
               "private opening store acquired a public wire codec");
-      require(fields(ideal.constructors[i].roles[1]) ==
-                  std::vector<std::string>({"shape.rows", "data"}),
-              "ideal delivery lost its clear table");
+      require(
+          fields(ideal.constructors[i].roles[1]) ==
+              std::vector<std::string>({"shape.rows", "query.leaves", "data"}),
+          "ideal delivery lost its clear table");
     }
     require(plan.constructors[2].roles[0].record ==
                 ideal.constructors[2].roles[0].record,
@@ -267,7 +269,7 @@ int main(int argc, char **argv) {
                          [&](func::FuncOp function) {
                            auto op = variant(function, "record");
                            auto values = SmallVector<Value>(op.getPayload());
-                           std::swap(values[2], values[3]);
+                           std::swap(values[3], values[4]);
                            op.getPayloadMutable().assign(values);
                          });
   mutations.emplace_back("reuse stale store after append",
@@ -375,11 +377,12 @@ int main(int argc, char **argv) {
     auto empty =
         data::SequenceEmptyOp::create(builder, location, storage.sequence);
     auto rows = data::IndexOp::create(builder, location, index, "16");
+    auto count = data::IndexOp::create(builder, location, index, "1");
     auto signature = scopedDataSignature(allocator);
     auto call = protocol_ir::LocalCallOp::create(
         builder, location, signature.getResults(),
-        ValueRange{empty, rows, body->getArgument(0)}, allocator.getSymName(),
-        "allocate", "P");
+        ValueRange{empty, rows, count, body->getArgument(0)},
+        allocator.getSymName(), "allocate", "P");
     auto tag =
         data::GetOp::create(builder, location, index, call.getOutputs()[0], 0);
     auto instance =
@@ -445,7 +448,7 @@ int main(int argc, char **argv) {
         auto unpacked = body[4].regions[0];
         auto &unpack = closure.bodies.at(unpacked.getSymName().str());
         auto complete = cast<exec::CompleteOp>(unpack[0].operation);
-        unsigned i = mutation == 3 ? 0 : 2;
+        unsigned i = mutation == 3 ? 0 : 3;
         auto left = complete.getValues()[i],
              right = complete.getValues()[i + 1];
         require(left.getType() == right.getType(),
@@ -530,10 +533,11 @@ module { "protocol.module"() ({
     for (unsigned i = 0; i < 2; ++i) {
       auto rows =
           data::DimOp::create(builder, loc, index, body->getArgument(i), 0);
+      auto count = data::IndexOp::create(builder, loc, index, "1");
       auto allocated = protocol_ir::LocalCallOp::create(
           builder, loc, scopedDataSignature(allocator).getResults(),
-          ValueRange{store, rows, body->getArgument(i)}, allocator.getSymName(),
-          "allocate_" + std::to_string(i), "P");
+          ValueRange{store, rows, count, body->getArgument(i)},
+          allocator.getSymName(), "allocate_" + std::to_string(i), "P");
       references.push_back(allocated.getOutputs()[0]);
       store = allocated.getOutputs()[1];
     }
@@ -547,7 +551,7 @@ module { "protocol.module"() ({
     auto second = data::GetOp::create(builder, loc, index, references[1], 1);
     protocol_ir::MathematicalReturnOp::create(builder, loc,
                                               ValueRange{loaded.getOutputs()[0],
-                                                         loaded.getOutputs()[1],
+                                                         loaded.getOutputs()[2],
                                                          first, second});
     require(succeeded(verify(*candidate)),
             "lookup client malformed: " + diagnostics);
