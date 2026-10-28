@@ -12,18 +12,25 @@ public:
   bool run() {
     if (syntax.resolved)
       return true;
-    if (!elaborateExpressions(checker, syntax))
+    if (!elaborateExpressions(checker, syntax) ||
+        !checker.types.charge(syntax.inputOrder.size(), syntax.span))
       return false;
+    for (auto [i, slot] : llvm::enumerate(syntax.inputOrder))
+      inputOrigins.emplace(std::make_pair(slot.kind, slot.index), unsigned(i));
     for (auto &port : decl.inputs) {
       auto id = bind(port.name, port.span, false, false, true);
       if (!id)
         return false;
+      inputOrigin(*id, Declaration::InputSlot::Kind::Data,
+                  syntax.inputBindings.size());
       syntax.inputBindings.push_back(*id);
     }
     for (auto &port : decl.services) {
       auto id = bind(port.name, port.span, false, true, true);
       if (!id)
         return false;
+      inputOrigin(*id, Declaration::InputSlot::Kind::Service,
+                  syntax.serviceBindings.size());
       syntax.serviceBindings.push_back(*id);
     }
     for (auto &port : decl.scopedInputs) {
@@ -31,6 +38,8 @@ public:
       if (!id)
         return false;
       syntax.bindings[id->index].scoped = true;
+      inputOrigin(*id, Declaration::InputSlot::Kind::Scoped,
+                  syntax.scopedBindings.size());
       syntax.scopedBindings.push_back(*id);
     }
     for (auto &port : decl.domainInputs) {
@@ -38,11 +47,17 @@ public:
       if (!id)
         return false;
       syntax.bindings[id->index].domain = true;
+      inputOrigin(*id, Declaration::InputSlot::Kind::Domain,
+                  syntax.domainBindings.size());
       syntax.domainBindings.push_back(*id);
     }
     if (!syntax.primitive && !syntax.domainConstructor &&
         !syntax.finiteDefinition && !body(0, 1))
       return false;
+    if (!checker.types.charge(1, syntax.span))
+      return false;
+    checker.output.lexicalResolutions.push_back(
+        {syntax.span, std::move(references)});
     syntax.resolved = true;
     return true;
   }
@@ -55,6 +70,30 @@ private:
   std::vector<std::pair<std::string, std::optional<BindingId>>> undo;
   unsigned scope = 0;
   std::optional<uint32_t> currentBody;
+  std::vector<LexicalReference> references;
+  std::map<std::pair<Declaration::InputSlot::Kind, unsigned>, unsigned>
+      inputOrigins;
+  void inputOrigin(BindingId binding, Declaration::InputSlot::Kind kind,
+                   unsigned index) {
+    if (syntax.inputOrder.empty() &&
+        kind == Declaration::InputSlot::Kind::Data) {
+      syntax.bindings[binding.index].written =
+          LexicalNode{LexicalNode::Kind::Input, index};
+      return;
+    }
+    if (auto found = inputOrigins.find({kind, index});
+        found != inputOrigins.end())
+      syntax.bindings[binding.index].written =
+          LexicalNode{LexicalNode::Kind::Input, found->second};
+  }
+  bool use(LexicalReference::Access access, LexicalNode node, BindingId binding,
+           Span span) {
+    if (!checker.types.charge(1, span))
+      return false;
+    references.push_back(
+        {access, node, syntax.bindings[binding.index].written});
+    return true;
+  }
   bool fail(StringRef code, const Twine &message, Span span) {
     return checker.types.fail(code, message, span);
   }
@@ -108,6 +147,9 @@ private:
         return fail("source.binding", "duplicate name in binding pattern",
                     p.span);
       p.binding = bind(p.name, p.span, mut, service);
+      if (p.binding && p.writtenToken)
+        syntax.bindings[p.binding->index].written =
+            LexicalNode{LexicalNode::Kind::Pattern, *p.writtenToken};
       return p.binding.has_value();
     }
     if (service)
@@ -183,12 +225,18 @@ private:
       return false;
     if (expr.kind == Expression::Kind::Name) {
       expr.binding = lookup(expr.text, expr.span);
-      return expr.binding.has_value();
+      return expr.binding &&
+             use(LexicalReference::Access::Read,
+                 {LexicalNode::Kind::Expression, id}, *expr.binding, expr.span);
     }
     if (expr.kind == Expression::Kind::Call) {
       auto found = names.find(expr.text);
-      if (found != names.end())
+      if (found != names.end()) {
         expr.binding = found->second;
+        if (!use(LexicalReference::Access::Call,
+                 {LexicalNode::Kind::Expression, id}, *expr.binding, expr.span))
+          return false;
+      }
     }
     for (unsigned i = 0; i < expr.children.size(); ++i)
       if (!((expr.kind == Expression::Kind::And ||
@@ -279,6 +327,11 @@ private:
       } else if (s.kind == Statement::Kind::Assign) {
         s.pattern.binding = lookup(s.pattern.name, s.pattern.span);
         if (!s.pattern.binding)
+          return false;
+        if (s.pattern.writtenToken &&
+            !use(LexicalReference::Access::Assign,
+                 {LexicalNode::Kind::Pattern, *s.pattern.writtenToken},
+                 *s.pattern.binding, s.pattern.span))
           return false;
         if (!syntax.bindings[s.pattern.binding->index].mutableBinding)
           return fail("source.assignment",

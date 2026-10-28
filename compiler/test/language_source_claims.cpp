@@ -1135,8 +1135,10 @@ int main() {
     mlir::DialectRegistry registry;
     zkc::registerDialects(registry);
     mlir::MLIRContext context(registry);
-    auto baseline = take(json::parse(take(zkc::protocol::exportStructuredSource(
-        original.bytes(), symbol, context))));
+    auto baseline =
+        take(json::parse(take(zkc::protocol::exportStructuredSource(
+                                  original.bytes(), symbol, context))
+                             .bytes));
     auto derived = take(deriveComponentContracts(baseline));
     require(!derived.getArray("seams")->empty(), "missing library residual");
     cantFail(checkComponentContracts(baseline, *claims.getAsObject()));
@@ -1306,8 +1308,10 @@ int main() {
     mlir::DialectRegistry registry;
     zkc::registerDialects(registry);
     mlir::MLIRContext context(registry);
-    auto baseline = take(json::parse(take(zkc::protocol::exportStructuredSource(
-        original.bytes(), symbol, context))));
+    auto baseline =
+        take(json::parse(take(zkc::protocol::exportStructuredSource(
+                                  original.bytes(), symbol, context))
+                             .bytes));
     using A = json::Array;
     using J = json::Value;
     for (unsigned maximum : {0, 2}) {
@@ -1411,8 +1415,10 @@ int main() {
     mlir::DialectRegistry registry;
     zkc::registerDialects(registry);
     mlir::MLIRContext context(registry);
-    auto baseline = take(json::parse(take(zkc::protocol::exportStructuredSource(
-        original.bytes(), symbol, context))));
+    auto baseline =
+        take(json::parse(take(zkc::protocol::exportStructuredSource(
+                                  original.bytes(), symbol, context))
+                             .bytes));
     using A = json::Array;
     using J = json::Value;
     auto mutate = [&](A body) {

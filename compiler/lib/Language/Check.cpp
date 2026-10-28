@@ -1,5 +1,6 @@
 #include "Checker.h"
 #include "ScopedWitness.h"
+#include "WrittenSource.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include <algorithm>
@@ -32,6 +33,9 @@ Checker::Checker(CheckedStorage &output, Work &work,
 Error Checker::run() {
   if (auto error = checkCapabilityInstallation())
     return error;
+  auto written = retainWrittenHeaders(syntax, work);
+  if (!written)
+    return written.takeError();
   if (!collect() || !imports() || !prepareNotationSyntax())
     return types.takeError();
   std::vector<std::vector<BodyParseScope>> bodyScopes(output.sources->size());
@@ -44,6 +48,9 @@ Error Checker::run() {
     if (auto error = parseBodies((*output.sources)[i], SourceId{i},
                                  output.tokens[i], bodyScopes[i], work))
       return error;
+  if (auto error = retainWrittenBodies(**written, sources, work))
+    return error;
+  output.writtenSources = std::move(*written);
   for (auto &decl : output.declarations)
     if (!decl.abstract && !sources[decl.id.index]->explicitRequirements &&
         (decl.kind == Declaration::Kind::Math ||

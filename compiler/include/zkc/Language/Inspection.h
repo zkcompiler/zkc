@@ -43,6 +43,25 @@ llvm::Expected<std::string> inspectSourceClaims(const ClosedEntry &,
 /// noncanonical numbers and changed attachments, requests or Entry are refused.
 llvm::Error checkSourceClaims(const ClosedEntry &, llvm::StringRef,
                               const Limits & = {});
+/// Written syntax with structural node addresses, before inference or lowering.
+/// Includes captured and installation modules and binds both identities. This
+/// is an input to source correspondence, not a certificate or an admitted IR.
+/// Traversal uses the requested work/depth limits; serialization is bounded by
+/// limits.apiInspectionBytes and returns no partial document on refusal.
+llvm::Expected<std::string> inspectWrittenSource(const CheckedProject &,
+                                                 const Limits & = {});
+/// Retained local and declaration lookup proposals, including private and
+/// installation declarations. Local edges use exact written AST coordinates;
+/// declaration lookup has explicit exact-span candidates, never a guessed node.
+/// Generated local uses without written counterparts are reported separately.
+/// These facts require independent checking; they do not certify elaboration.
+llvm::Expected<std::string> inspectSourceBindings(const CheckedProject &,
+                                                  const Limits & = {});
+/// Closed static substitutions, scoped-source origins, domain constructor
+/// graphs and capture alias layouts. Symbols select actual closed definitions;
+/// they are never decoded as source identity. This is a checking proposal.
+llvm::Expected<std::string> inspectSourceInstances(const ClosedEntry &,
+                                                   const Limits & = {});
 struct NotationInspectionOptions {
   /// Include private declarations and lexical notation overrides/occurrences.
   bool includePrivate = false;

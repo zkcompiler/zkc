@@ -6,6 +6,7 @@
 #include "zkc/Compiler/LanguagePackage.h"
 #include "zkc/Compiler/Observation.h"
 #include "zkc/Compiler/SourceClaims.h"
+#include "zkc/Compiler/SourceCorrespondence.h"
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Support/BoundedStream.h"
@@ -30,6 +31,8 @@ int runLanguageCompiler(int argc, char **argv) {
   bool declarations = false;
   bool api = false;
   bool sourceClaims = false;
+  bool sourceAst = false;
+  bool sourceCorrespondence = false;
   bool notations = false;
   NotationInspectionOptions notationOptions;
   EntryOptions options;
@@ -234,6 +237,18 @@ int runLanguageCompiler(int argc, char **argv) {
       assetTotal += bytes->size();
       assets.push_back(
           {name.str(), format.str(), std::move(*bytes), path.str()});
+    } else if (arg == "--source-ast") {
+      if (sourceAst || command != "language-check")
+        return refuse(
+            error("source.options",
+                  "--source-ast is a check option and may appear once"));
+      sourceAst = true;
+    } else if (arg == "--source-correspondence") {
+      if (sourceCorrespondence || command != "language-check")
+        return refuse(error(
+            "source.options",
+            "--source-correspondence is a check option and may appear once"));
+      sourceCorrespondence = true;
     } else if (arg == "--source-claims") {
       if (sourceClaims || command != "language-check")
         return refuse(
@@ -300,6 +315,10 @@ int runLanguageCompiler(int argc, char **argv) {
     return refuse(
         error("source.options",
               "--subject is exclusive with --entry and --entry-kind"));
+  if (sourceCorrespondence && entry.empty() && subject.empty())
+    return refuse(error(
+        "source.options",
+        "--source-correspondence requires --subject=NAME or --entry=NAME"));
   if (sourceClaims && entry.empty() && subject.empty())
     return refuse(
         error("source.options",
@@ -339,6 +358,12 @@ int runLanguageCompiler(int argc, char **argv) {
     if (!claims)
       return refuse(claims.takeError());
     checked["source_claim_inventory"] = cantFail(json::parse(*claims));
+  }
+  if (sourceAst) {
+    auto report = inspectWrittenSource(*project, limits);
+    if (!report)
+      return refuse(report.takeError());
+    checked["source_ast"] = cantFail(json::parse(*report));
   }
   if (declarations) {
     auto report = inspectDeclarations(*project, limits);
@@ -408,6 +433,12 @@ int runLanguageCompiler(int argc, char **argv) {
       });
     }
     checked["original"] = original->identity();
+    if (sourceCorrespondence) {
+      auto report = exportSourceCorrespondence(*original, limits);
+      if (!report)
+        return refuse(report.takeError());
+      checked["source_correspondence"] = cantFail(json::parse(*report));
+    }
     if (sourceClaims) {
       auto report = exportSourceClaims(*original, limits);
       if (!report)

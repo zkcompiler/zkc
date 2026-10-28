@@ -88,6 +88,7 @@ struct SyntaxScopedSignature {
   std::vector<SyntaxType> inputs;
   SyntaxType result;
   Effects allowance;
+  bool explicitAllowance = false;
   std::vector<std::string> inputLabels;
   std::vector<SyntaxItemOrigin> itemOrigins;
 };
@@ -106,6 +107,7 @@ struct SyntaxParameter {
   std::string name;
   SyntaxType constraint;
   Permissions permissions;
+  std::vector<std::string> writtenPermissions;
   Span span;
 };
 struct SyntaxInputSelector {
@@ -133,7 +135,11 @@ struct Pattern {
   std::optional<SyntaxType> type;
   std::vector<Pattern> children;
   std::vector<std::string> labels;
+  std::vector<bool> shorthand;
   std::optional<BindingId> binding;
+  /// Original binder token in its source module, retained across parser sugar.
+  /// It is private provenance, never an exported identity.
+  std::optional<uint32_t> writtenToken;
   Span span;
 };
 struct Expression {
@@ -182,8 +188,12 @@ struct Expression {
   /// Lexical body identity, assigned before type inference.
   std::optional<uint32_t> scope;
   std::shared_ptr<const NotationDescriptor> notation;
+  /// Written finite binders, before parser expansion into product/lambda nodes.
+  std::vector<std::pair<Pattern, uint32_t>> reductionBinders;
+  std::optional<uint32_t> reductionPredicate, reductionBody;
   unsigned height = 1;
   bool grouped = false;
+  bool shorthand = false;
   bool filteredReduction = false;
 };
 struct Statement {
@@ -270,6 +280,7 @@ struct Binding {
   bool scoped = false;
   unsigned scope = 0;
   bool domain = false;
+  std::optional<LexicalNode> written = {};
 };
 /// Token intervals refer to the module's non-trivia token sequence. Fixed
 /// declaration headers are collected before imports; expression bodies are
@@ -308,6 +319,7 @@ struct Import {
   std::vector<std::string> names;
   Span span;
   std::optional<std::string> alias;
+  bool explicitAlias = false;
   std::vector<std::string> operators, notations, reductions;
   bool isPublic = false, indexing = false;
 };
@@ -326,6 +338,7 @@ struct SyntaxDeclaration {
   std::optional<std::string> domainConstructor, finiteDefinition;
   std::optional<SyntaxType> domainResult;
   bool isPublic = false;
+  bool explicitPublic = false;
   bool completes = false;
   Span span;
   std::vector<std::string> roles;
@@ -345,6 +358,7 @@ struct SyntaxDeclaration {
   std::vector<SyntaxRequirement> requirements;
   bool explicitRequirements = false;
   std::optional<Permissions> permissions;
+  std::vector<std::string> writtenPermissions;
   std::optional<Resource> resource;
   bool sealed = false;
   std::optional<Effects> effects;

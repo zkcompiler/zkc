@@ -29,6 +29,13 @@ function(zkc_source_project target manifest)
   target_compile_definitions(${target} PRIVATE ZKC_SOURCE_PROJECT="${output}")
 endfunction()
 
+add_zkc_test(source_correspondence Compiler source-correspondence)
+target_compile_definitions(zkc-source_correspondence-test PRIVATE
+  ZKC_CORRESPONDENCE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/source-claims")
+add_zkc_test(structured_associations Compiler structured-associations)
+target_compile_definitions(zkc-structured_associations-test PRIVATE
+  ZKC_ASSOCIATION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+
 add_zkc_test(computation_unit IR computation-unit)
 mlir_target_link_libraries(zkc-computation_unit-test PRIVATE MLIRParser)
 
@@ -271,6 +278,13 @@ add_zkc_test(library_operators Compiler library-operators)
 add_zkc_test(language_notation Language language-notation)
 add_zkc_test(language_notation_inspection Language language-notation-inspection)
 add_zkc_test(language_api_inspection Language language-api-inspection)
+add_zkc_test(language_written_source Language language-written-source)
+add_zkc_test(source_instances Language source-instances)
+zkc_source_project(zkc-source_instances-test
+  "${PROJECT_SOURCE_DIR}/../examples/projects/fri/zkc.toml")
+add_zkc_test(source_bindings Language source-bindings)
+zkc_source_project(zkc-source_bindings-test
+  "${PROJECT_SOURCE_DIR}/../examples/projects/fri/zkc.toml")
 add_zkc_test(notation_semantics Language notation-semantics)
 add_zkc_test(language_arguments Compiler language-arguments)
 add_zkc_test(language_logic Compiler language-logic)

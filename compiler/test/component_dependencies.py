@@ -28,7 +28,7 @@ HEADER_ROOTS = {
     "ZkcTransforms": ["Transforms", "Target"],
     "ZkcCompiler": [f"Compiler/{name}.h" for name in (
         "Compilation", "Diagnostics", "Observation", "Host", "Language", "LanguageInterface", "AssetSharing", "CommonSource", "StructuredSource",
-        "LanguagePackage", "LanguageInspection", "SourceClaims", "NativeProof", "Run",
+        "LanguagePackage", "LanguageInspection", "SourceClaims", "SourceCorrespondence", "NativeProof", "Run",
         "PolynomialReduction", "PublicCoin", "Passes", "Pipelines")],
     "ZkcDriver": ["Driver"],
     "ZkcIR": ["Dialect", "Interfaces", "Analysis"],
@@ -170,7 +170,7 @@ def main():
     }.items():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
     private_headers = {
-        "ZkcLanguage": {ROOT / f"lib/Language/{name}.h" for name in ("Internal", "State", "Semantics", "Checker", "BodyCheck", "Placement", "TypeInference", "Arguments", "CallableConstraints", "OperatorInference", "BindingWitness", "NotationRecords", "BodySummary", "BodyMapping", "FreePlaces", "ScopedWitness", "SignatureWitness", "Effects", "FiniteDomains", "FiniteContracts", "FiniteFormation", "MathematicalFacts", "DataRequirements", "DomainClosure", "DomainWitness", "ValueOrigins", "HelperResults", "ClosureInputs", "UsagePlan")},
+        "ZkcLanguage": {ROOT / f"lib/Language/{name}.h" for name in ("Internal", "State", "Semantics", "Checker", "BodyCheck", "Placement", "TypeInference", "Arguments", "CallableConstraints", "OperatorInference", "BindingWitness", "NotationRecords", "BodySummary", "BodyMapping", "FreePlaces", "ScopedWitness", "SignatureWitness", "Effects", "FiniteDomains", "FiniteContracts", "FiniteFormation", "MathematicalFacts", "DataRequirements", "DomainClosure", "DomainWitness", "ValueOrigins", "HelperResults", "ClosureInputs", "UsagePlan", "LexicalRecords", "WrittenSource", "WrittenSourceIndex")},
         "ZkcSupport": {ROOT / "lib/Support/Input.h"},
         "ZkcContracts": {ROOT / "lib/Contracts/RequirementChecks.h"},
         "ZkcRelation": {ROOT / "lib/Relation/Field.h", ROOT / "lib/Relation/BundleInternal.h"},
@@ -223,6 +223,7 @@ def main():
     private_headers["ZkcCompiler"] = {
         ROOT / "lib/Compiler/CompilationState.h",
         ROOT / "lib/Compiler/ComponentContracts.h",
+        ROOT / "lib/Compiler/SourceArtifacts.h",
         ROOT / "lib/Compiler/Run.h", ROOT / "lib/Compiler/ArtifactJson.h",
         ROOT / "lib/Compiler/LanguageInterface.h",
         ROOT / "lib/Compiler/LanguagePackageReader.h",
