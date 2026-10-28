@@ -5,6 +5,7 @@ public import ZkcTools.ConstructionBindings.LibraryPlan
 public meta import ZkcTools.ConstructionBindings.LibraryPlan
 public meta import Lean.Elab.Tactic
 public meta import Lean.Meta.Closure
+public meta import Lean.Compiler.NoncomputableAttr
 
 public meta section
 
@@ -30,7 +31,13 @@ private def template (payload keys : Expr) (selection : LibraryPlan.Selection) :
   Term.synthesizeSyntheticMVarsNoPostponing
   let proposed ← instantiateMVars proposed
   if proposed.hasMVar then throwError "connection-library-template-unresolved"
-  mkAuxDefinitionFor (← mkAuxDeclName `connectionCallee) proposed (compile := false)
+  let name ← mkAuxDeclName `connectionCallee
+  let reference ← mkAuxDefinitionFor name proposed (compile := false)
+  -- A template is checked proof data. Mark the auxiliary declaration as well
+  -- as its public consumer, so downstream code generation cannot try to
+  -- compile an intentionally uncompiled dependent record.
+  modifyEnv (addNoncomputable · name)
+  return reference
 
 private def listNodes (value : Expr) : MetaM (Array Expr) := do
   let mut cursor := value
