@@ -12,6 +12,43 @@ paths are excluded. All captured and installation declarations are present,
 including private ones. This artifact has different consumers from the public
 API inspection graph, whose representation-privacy policy still applies there.
 
+## Shared contract and producer boundary
+
+The frontend owns this source contract: its node vocabulary, written fields,
+source identities and diagnostic spans. Compiler and formal consumers refer to
+these records, not to a particular parser's classes, enum ordinals or allocation
+order. The current parser implements the producer through `inspectWrittenSource`;
+replacing that parser does not require a second source format or a compatibility
+reader. New language forms extend the owned contract and its consumers together.
+Grammar-neutral does not mean erasing written syntax: omission, binding structure,
+ordering and notation remain explicit even when several concrete spellings map
+to the same node.
+
+The identity domains are distinct:
+
+| Reference | Scope and meaning |
+| --- | --- |
+| `{owner,path}` | A written node within the exact `capture` and `installation`; neither a standalone global identity nor an executable event address |
+| `{module,begin,end}` | A UTF-8 range in the source record bound by that capture; several nodes may share it |
+| A closed declaration symbol | A checked instance, with its template and substitution supplied by the instance export; its printed name is not a derivation |
+| A structured `row` | An array position within the exact admitted `snapshot`, bound by `admission`; neither an AST path nor a persistent event label |
+| An authored site or claim label | Source content retained in its node; resolution to an admitted occurrence or request is a separate checked elaboration step |
+
+An AST path can survive a binder rename while the capture identity changes.
+It cannot carry a claim, realization selection or proof receipt into a different
+capture. Inserting a statement may change paths without renaming an authored
+event label. A consumer must not use an exact-span match, a positional path or
+a generated symbol as evidence that those two occurrences agree.
+
+Binding observations, candidate lists and source-to-row associations below are
+search proposals. The selected callee, owner, role, typed specification term or
+law in the admitted program remains meaning-determining contract content.
+Discarding an association can leave a correspondence obligation open; it cannot
+remove that content from the admitted subject or establish the missing link.
+A new parser can produce the same contract without importing this implementation's
+private syntax records. An independent checker still checks its supported
+fragment against the retained admitted program.
+
 ## Retention boundary
 
 Headers are copied before declaration collection, import resolution, generated
