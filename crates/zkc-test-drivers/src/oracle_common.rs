@@ -68,6 +68,63 @@ fn verify(report: &Report<CpuBackend>, expected: Option<u64>, label: &str) {
         assert_eq!(native.active_frames(), 0, "{label}");
     }
 }
+fn index(value: &Value) -> u64 {
+    let Value::Index(value) = value else {
+        panic!("expected index")
+    };
+    *value
+}
+fn record(value: &Value) -> &[Value] {
+    let Value::Variant(value) = value else {
+        panic!("expected record")
+    };
+    assert_eq!(value.alternative(), 0);
+    value.payload()
+}
+fn reference(value: &Value) -> (usize, usize) {
+    let fields = record(value);
+    assert_eq!(fields.len(), 2);
+    (index(&fields[0]) as usize, index(&fields[1]) as usize)
+}
+fn store(value: &Value) -> &zkc_cpu::Sequence {
+    let Value::Sequence(value) = value else {
+        panic!("expected store")
+    };
+    value
+}
+// Independent decoding of this source fixture's returned graph. It does not
+// use generated controller code or a producer-supplied interpretation map.
+fn returned_row(stores: &[Value], anchor: &Value, position: u64, remaining: usize) -> u64 {
+    assert!(remaining > 0, "cyclic or overlong returned graph");
+    let (constructor, instance) = reference(anchor);
+    let fields = record(
+        store(&stores[constructor])
+            .get(instance)
+            .expect("unbound returned anchor"),
+    );
+    if constructor < 2 {
+        assert_eq!(fields.len(), 3);
+        assert_eq!(index(&fields[0]), 4);
+        assert_eq!(index(&fields[1]), 1);
+        let Value::Indices(data) = &fields[2] else {
+            panic!("base data")
+        };
+        data[position as usize]
+    } else {
+        assert_eq!(constructor, 2);
+        assert_eq!(fields.len(), 4);
+        assert_eq!(index(&fields[0]), instance as u64);
+        assert_eq!(index(&fields[1]), 4);
+        assert_eq!(index(&fields[2]), 1);
+        let expected = if instance == 0 {
+            (0, 0)
+        } else {
+            (2, instance - 1)
+        };
+        assert_eq!(reference(&fields[3]), expected);
+        returned_row(stores, &fields[3], position, remaining - 1)
+    }
+}
 fn main() {
     let directory = std::env::args().nth(1).expect("common fixture directory");
     let bytes = std::fs::read(Path::new(&directory).join("common-recurrence.bundle")).unwrap();
@@ -377,6 +434,119 @@ fn main() {
                     deliveries.0.len(),
                     usize::from(entry != "ordinary" && length == 4)
                 );
+                cases += 1;
+            }
+        }
+    }
+    for (entry, suffix) in [("main", ""), ("wrapper", "-wrapper")] {
+        let bytes =
+            std::fs::read(Path::new(&directory).join(format!("common-return{suffix}.bundle")))
+                .unwrap();
+        let bundle = Bundle::admit(
+            &bytes,
+            &backend("P", entry),
+            zkc_cpu::cpu_contracts(),
+            BundleLimits::default(),
+        )
+        .unwrap();
+        let parameters = if entry == "main" {
+            (0..=3).map(|trips| (trips, 4, 4)).collect::<Vec<_>>()
+        } else {
+            vec![(0, 4, 4), (0, 3, 4), (0, 4, 3)]
+        };
+        for (trips, holder_length, receiver_length) in parameters {
+            for position in [0, 3, 4] {
+                let role_input = |role: &str, values| RoleInput {
+                    role: role.to_owned(),
+                    backend: backend(role, entry),
+                    values,
+                };
+                let inputs = if entry == "main" {
+                    vec![
+                        role_input("P", vec![table(10, 4), Value::Index(trips)]),
+                        role_input("V", vec![Value::Index(trips), Value::Index(position)]),
+                    ]
+                } else {
+                    vec![
+                        role_input("P", vec![table(10, holder_length)]),
+                        role_input(
+                            "V",
+                            vec![table(40, receiver_length), Value::Index(position)],
+                        ),
+                    ]
+                };
+                let mut deliveries = Deliveries::default();
+                let report = run(
+                    &bundle,
+                    "oracle_common",
+                    inputs,
+                    RunLimits::default(),
+                    &mut deliveries,
+                )
+                .unwrap();
+                let label =
+                    format!("returns/{entry}/{trips}/{holder_length}/{receiver_length}/{position}");
+                if position < 4 && holder_length == 4 && receiver_length == 4 {
+                    assert!(
+                        matches!(report.outcome, Outcome::Completed),
+                        "{label}: {:?}",
+                        report.outcome
+                    );
+                    let holder = &report.roles.iter().find(|r| r.role == "P").unwrap().outputs;
+                    let receiver = &report.roles.iter().find(|r| r.role == "V").unwrap().outputs;
+                    assert_eq!(holder.len(), if entry == "main" { 3 } else { 1 }, "{label}");
+                    for data in holder {
+                        assert!(
+                            matches!(data, Value::Indices(xs) if xs.as_ref() == [10, 11, 12, 13]),
+                            "{label}"
+                        );
+                    }
+                    if entry == "main" {
+                        assert_eq!(receiver.len(), 7, "{label}");
+                        let expected = if trips == 0 {
+                            (0, 0)
+                        } else {
+                            (2, trips as usize - 1)
+                        };
+                        assert_eq!(reference(&receiver[0]), expected, "{label}");
+                        assert_eq!(reference(&receiver[1]), expected, "{label}");
+                        assert_eq!(reference(&receiver[2]), (1, 0), "{label}");
+                        assert_eq!(index(&receiver[3]), 10 + position, "{label}");
+                        assert_eq!(store(&receiver[4]).len(), 1, "{label}");
+                        assert_eq!(store(&receiver[5]).len(), 1, "{label}");
+                        assert_eq!(store(&receiver[6]).len(), trips as usize, "{label}");
+                        for anchor in &receiver[..3] {
+                            for row in 0..4 {
+                                assert_eq!(
+                                    returned_row(&receiver[4..], anchor, row, 8),
+                                    10 + row,
+                                    "{label}"
+                                );
+                            }
+                        }
+                    } else {
+                        assert_eq!(receiver.len(), 3, "{label}");
+                        assert_eq!(reference(&receiver[0]), (0, 0), "{label}");
+                        assert_eq!(index(&receiver[1]), 40 + position, "{label}");
+                        for row in 0..4 {
+                            assert_eq!(
+                                returned_row(&receiver[2..], &receiver[0], row, 8),
+                                40 + row,
+                                "{label}"
+                            );
+                        }
+                    }
+                } else {
+                    verify(&report, None, &label);
+                }
+                assert_eq!(
+                    deliveries.0.len(),
+                    if entry == "main" { 2 } else { 0 },
+                    "{label}"
+                );
+                for (_, native) in &report.backends {
+                    assert_eq!(native.active_frames(), 0, "{label}");
+                }
                 cases += 1;
             }
         }

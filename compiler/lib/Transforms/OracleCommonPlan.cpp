@@ -857,7 +857,8 @@ struct PlanBuilder {
       if (op.getNumRegions() || isa<pir::ApplyOp>(op))
         return refuse();
       if (any_of(op.getOperandTypes(), logical) &&
-          !isa<pir::RestrictRolesOp, pir::ProtocolYieldOp>(op))
+          !isa<pir::RestrictRolesOp, pir::ProtocolYieldOp,
+               pir::MathematicalReturnOp>(op))
         return error("oracle-common-interface");
       auto arguments = inputs(op.getOperands());
       if (!arguments)
@@ -865,6 +866,9 @@ struct PlanBuilder {
       if (isa<pir::ProtocolYieldOp>(op))
         for (const auto &key : yieldedStores)
           arguments->push_back(store.at(key));
+      if (isa<pir::MathematicalReturnOp>(op))
+        for (const auto &support : result.resultStores)
+          arguments->push_back(store.at({support.constructor, support.role}));
       Types outputs;
       for (auto type : op.getResultTypes()) {
         auto actual = converted(type);
@@ -896,12 +900,59 @@ struct PlanBuilder {
       result.body.types.push_back(type);
       inputs.push_back(type);
     }
-    if (any_of(program.getFunctionType().getResults(), logical))
-      return error("oracle-common-interface");
+    Types outputs;
+    for (Type type : program.getFunctionType().getResults()) {
+      // A logical sequence is not an admitted paired result port.
+      if (isa<pir::OracleSequenceType>(type))
+        return error("oracle-common-interface");
+      auto output = converted(type);
+      if (!output)
+        return output.takeError();
+      outputs.push_back(*output);
+    }
+    SmallVector<Attribute> outputRoles(program.getOutputRoles().begin(),
+                                       program.getOutputRoles().end());
+    // Retain one complete immutable constructor environment per receiver role
+    // with an escaping reference. This is a closed-unit result representation,
+    // not permission to import arbitrary graphs at separately compiled roots.
+    for (Attribute role : program.getRoles()) {
+      bool needed = false;
+      for (auto [type, roles] : zip(program.getFunctionType().getResults(),
+                                    program.getOutputRoles()))
+        needed |= isa<pir::OracleHandleType>(type) &&
+                  is_contained(cast<ArrayAttr>(roles), role);
+      if (!needed)
+        continue;
+      for (auto [constructor, item] :
+           enumerate(requirements.storage.constructors))
+        for (auto [index, storage] : enumerate(item.roles))
+          if (storage.role == cast<StringAttr>(role).getValue()) {
+            result.resultStores.push_back({unsigned(constructor),
+                                           unsigned(index),
+                                           unsigned(outputs.size())});
+            outputs.push_back(storage.sequence);
+            outputRoles.push_back(builder.getArrayAttr({role}));
+          }
+    }
+    for (auto [index, type] : enumerate(program.getFunctionType().getResults()))
+      if (isa<pir::OracleHandleType>(type))
+        for (Attribute role :
+             cast<ArrayAttr>(program.getOutputRoles()[index])) {
+          OracleResultReference reference{
+              unsigned(index), cast<StringAttr>(role).getValue().str(), {}};
+          for (const auto &support : result.resultStores)
+            if (requirements.storage.constructors[support.constructor]
+                    .roles[support.role]
+                    .role == reference.role)
+              reference.storePorts.push_back(support.port);
+          if (reference.storePorts.empty())
+            return error("oracle-common-interface");
+          result.resultReferences.push_back(std::move(reference));
+        }
     NamedAttrList attributes(program->getAttrs());
     attributes.set("function_type",
-                   TypeAttr::get(builder.getFunctionType(
-                       inputs, program.getFunctionType().getResults())));
+                   TypeAttr::get(builder.getFunctionType(inputs, outputs)));
+    attributes.set("output_roles", builder.getArrayAttr(outputRoles));
     result.attributes = attributes.getDictionary(builder.getContext());
     for (auto [constructor, item] :
          enumerate(requirements.storage.constructors))

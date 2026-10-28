@@ -43,7 +43,7 @@ def test_oracle_common_realization(toolchain, directory, journal):
     # growing client inventory must not share one module's time allowance.
     for fixture in (
         "common-recurrence", "common-holders", "common-input", "common-shape",
-        "common-contents", "common-views", "common-entries",
+        "common-contents", "common-views", "common-entries", "common-return",
     ):
         journal.run([
             toolchain.tool("compiler", "test/zkc-oracle_common_realization-test"),

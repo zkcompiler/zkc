@@ -260,6 +260,9 @@ Error checkIdealOracleRealization(ModuleOp prepared,
                               realized.controllers, realized.allocators);
     if (!plan)
       return plan.takeError();
+    if (realized.resultStores != plan->resultStores ||
+        realized.resultReferences != plan->resultReferences)
+      return refuse();
     auto program = dyn_cast_or_null<pir::MathematicalOp>(
         SymbolTable::lookupSymbolIn(candidate, entry));
     if (!program || program->getAttrDictionary() != plan->attributes ||

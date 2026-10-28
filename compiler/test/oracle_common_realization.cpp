@@ -50,11 +50,13 @@ int main(int argc, char **argv) {
   Cases cases;
   bool compile = argc > 1 && (argc < 3 || StringRef(argv[2]) != "checks");
   bool mutations = argc < 3 || StringRef(argv[2]) != "compile";
+  bool selectedFixture = false;
   for (StringRef fixture :
        {"common-recurrence", "common-holders", "common-input", "common-shape",
-        "common-contents", "common-views", "common-entries"}) {
+        "common-contents", "common-views", "common-entries", "common-return"}) {
     if (argc > 3 && fixture != argv[3])
       continue;
+    selectedFixture = true;
     std::ifstream in(std::filesystem::path(ZKC_ORACLE_FIXTURES) /
                      (fixture.str() + ".mlir"));
     std::string text((std::istreambuf_iterator<char>(in)), {});
@@ -71,9 +73,16 @@ int main(int argc, char **argv) {
                 (emitted ? std::string() : toString(emitted.takeError())) +
                 "\n" + diagnostics);
     auto candidate = std::move(*emitted);
-    require(candidate.entries.size() == (fixture == "common-entries" ? 2 : 1),
+    unsigned expectedEntries = fixture == "common-return"    ? 3
+                               : fixture == "common-entries" ? 2
+                                                             : 1;
+    require(candidate.entries.size() == expectedEntries,
             "wrong oracle entry inventory");
-    auto &entry = candidate.entries.front();
+    auto mainEntry = find_if(candidate.entries, [](const auto &item) {
+      return item.entry == "main";
+    });
+    require(mainEntry != candidate.entries.end(), "missing main entry");
+    auto &entry = *mainEntry;
     cases.run(fixture + " actual common body", [&] {
       checked(checkIdealOracleRealization(*prepared, candidate));
       require(print(*prepared) == frozen,
@@ -94,6 +103,78 @@ int main(int argc, char **argv) {
         cast<pir::ProtocolModuleOp>(candidate.module->getBody()->front());
     auto program =
         cast<pir::MathematicalOp>(SymbolTable::lookupSymbolIn(unit, "main"));
+    if (mutations && fixture == "common-return") {
+      cases.run("returned aliases share role-specific support stores", [&] {
+        require(entry.resultStores == std::vector<OracleResultStore>(
+                                          {{0, 1, 7}, {1, 1, 8}, {2, 1, 9}}),
+                "result store layout differs from source custody");
+        require(entry.resultReferences ==
+                    std::vector<OracleResultReference>({{1, "V", {7, 8, 9}},
+                                                        {3, "V", {7, 8, 9}},
+                                                        {5, "V", {7, 8, 9}}}),
+                "result reference layout lost aliases or source positions");
+      });
+      cases.run("changed logical result position refuses", [&] {
+        auto original = entry.resultReferences[0].result;
+        auto restore = llvm::scope_exit(
+            [&] { entry.resultReferences[0].result = original; });
+        entry.resultReferences[0].result = 3;
+        refused(checkIdealOracleRealization(*prepared, candidate),
+                "oracle-common-body");
+      });
+      cases.run("changed support role refuses", [&] {
+        auto original = entry.resultStores[0].role;
+        auto restore =
+            llvm::scope_exit([&] { entry.resultStores[0].role = original; });
+        entry.resultStores[0].role = 0;
+        refused(checkIdealOracleRealization(*prepared, candidate),
+                "oracle-common-body");
+      });
+      cases.run("changed native store position refuses", [&] {
+        auto original = entry.resultStores[0].port;
+        auto restore =
+            llvm::scope_exit([&] { entry.resultStores[0].port = original; });
+        entry.resultStores[0].port = 8;
+        refused(checkIdealOracleRealization(*prepared, candidate),
+                "oracle-common-body");
+      });
+      cases.run("missing support association refuses", [&] {
+        auto &ports = entry.resultReferences[0].storePorts;
+        auto original = ports.back();
+        ports.pop_back();
+        auto restore = llvm::scope_exit([&] { ports.push_back(original); });
+        refused(checkIdealOracleRealization(*prepared, candidate),
+                "oracle-common-body");
+      });
+      cases.run("same-typed returned reference substitution refuses", [&] {
+        auto *returned = program.getBody().front().getTerminator();
+        auto original = returned->getOperand(1);
+        auto restore =
+            llvm::scope_exit([&] { returned->setOperand(1, original); });
+        returned->setOperand(1, returned->getOperand(5));
+        require(succeeded(verify(*candidate.module)),
+                "returned reference mutation is malformed");
+        refused(checkIdealOracleRealization(*prepared, candidate),
+                "oracle-common-body");
+      });
+      cases.run("stale returned store refuses", [&] {
+        auto *returned = program.getBody().front().getTerminator();
+        auto original = returned->getOperand(9);
+        Value empty;
+        for (auto &op : program.getBody().front())
+          if (op.getName().getStringRef() == "data.sequence_empty" &&
+              op.getResult(0).getType() == original.getType())
+            empty = op.getResult(0);
+        require(bool(empty), "missing initial virtual store");
+        auto restore =
+            llvm::scope_exit([&] { returned->setOperand(9, original); });
+        returned->setOperand(9, empty);
+        require(succeeded(verify(*candidate.module)),
+                "returned store mutation is malformed");
+        refused(checkIdealOracleRealization(*prepared, candidate),
+                "oracle-common-body");
+      });
+    }
     if (mutations && fixture == "common-entries") {
       cases.run("shared virtual entries have distinct generated locals", [&] {
         require(candidate.entries[0].entry == "main" &&
@@ -393,6 +474,8 @@ int main(int argc, char **argv) {
       SmallVector<StringRef> selected{"main"};
       if (fixture == "common-entries")
         append_range(selected, ArrayRef<StringRef>{"companion", "ordinary"});
+      if (fixture == "common-return")
+        selected.push_back("wrapper");
       for (StringRef selectedEntry : selected)
         cases.run(fixture + " physical entry " + selectedEntry, [&] {
           auto realized = print(*candidate.module);
@@ -423,6 +506,10 @@ int main(int argc, char **argv) {
           }
         });
     }
+  }
+  if (!selectedFixture) {
+    errs() << "unknown common oracle fixture\n";
+    return 1;
   }
   return cases.result();
 }

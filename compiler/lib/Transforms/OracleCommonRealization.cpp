@@ -122,6 +122,8 @@ emitIdealOracleRealization(ModuleOp prepared) {
       return plan.takeError();
     for (const auto &recipe : plan->locals)
       item.locals.push_back(local(unit, recipe));
+    item.resultStores = plan->resultStores;
+    item.resultReferences = plan->resultReferences;
     plans.push_back(std::move(*plan));
     result.entries.push_back(std::move(item));
   }

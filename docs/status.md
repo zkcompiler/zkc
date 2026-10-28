@@ -530,7 +530,7 @@ handle sequences and queries. It threads each role's immutable stores through
 common repeats and checks complete generated SSA, local bodies and declaration
 custody against a source-derived recipe. Root input components remain distinct;
 realization does not assert their equality. Its current integration profile covers
-every prepared entry with ordinary results. Each oracle entry owns independent
+every prepared entry, including paired oracle results. Each oracle entry owns independent
 stores and checked helpers; ordinary siblings retain their exact bodies. Shared
 virtual declarations leave only after all entries are converted, and the reader
 checks the complete entry and generated-declaration inventories. Named shape views read the actual record.
@@ -540,8 +540,11 @@ values; virtual contents materialize at demand through the same ordered query
 controller, under the retained admissibility obligation. Component views preserve the
 actual reference through checked rebindings without fresh allocation or eager
 materialization. Independent readers share one immutable formation/execution view
-within each check; mutations always require a fresh check. Returned logical ports,
-retained anchor clauses, Merkle request suspension and the
+within each check; mutations always require a fresh check. Returned oracle results
+keep their original reference positions and append mapped immutable stores only at
+their receiving roles. Aliases share support stores; nested calls and recurrence
+retain actual anchors and final store snapshots. These private interface maps do
+not enable cross-entry graph import. Retained anchor clauses, Merkle request suspension and the
 complete realization record still need integration before this becomes the
 production stage. The independently checked table-read primitive
 stops before an out-of-domain read for field, group, index and sequence-backed

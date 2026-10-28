@@ -223,6 +223,17 @@ Ordinary declarations retain their exact bodies. The complete reader checks both
 every converted entry and the union of generated helper dependencies, including
 source-relative identities and authored/generated symbol collisions.
 
+An escaping internal reference requires its immutable environment. The closed-unit
+result representation preserves each original result position and role family,
+replaces a receiver handle by its actual reference, and appends supporting store
+leaves once per receiving role in declared-role/constructor order. An explicit
+interface map associates each source result and role with its reference and store
+positions. These are representation leaves, not additional authored results.
+The reader derives the map from the original and checks final return operands,
+including loop-updated stores. Repeated aliases share the same environment;
+equal data does not merge distinct anchors. This representation grants neither
+logical-handle serialization nor import of arbitrary graphs at another root.
+
 ## Ordered oracle events
 
 `protocol.oracle_send(data, shape...)` produces an `oracle<K>` handle at its

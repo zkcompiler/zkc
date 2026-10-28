@@ -44,6 +44,8 @@ struct OracleCommonPlan {
   OracleCommonBlock body;
   std::vector<OracleLocalRecipe> locals;
   std::vector<OracleCommonOccurrence> occurrences;
+  std::vector<OracleResultStore> resultStores;
+  std::vector<OracleResultReference> resultReferences;
 };
 struct OracleControllerRequirement {
   std::string role;
