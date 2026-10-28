@@ -275,6 +275,7 @@ import ZkcSecurity.FiatShamir.DomainCoherence
 import ZkcSecurity.FiatShamir.DomainComposition
 import ZkcSecurity.FiatShamir.DomainReading
 import ZkcSecurity.FiatShamir.DomainReduction
+import ZkcSecurity.FiatShamir.DomainSourceReading
 import ZkcSecurity.FiatShamir.DomainUniform
 import ZkcSecurity.FiatShamir.DomainViewReading
 import ZkcSecurity.FiatShamir.Grinding
@@ -293,6 +294,7 @@ import ZkcSecurity.FiatShamir.Laws
 import ZkcSecurity.FiatShamir.Lifting
 import ZkcSecurity.FiatShamir.LosslessPresentation
 import ZkcSecurity.FiatShamir.LosslessPresentationClaims
+import ZkcSecurity.FiatShamir.NominalDomain
 import ZkcSecurity.FiatShamir.NominalField
 import ZkcSecurity.FiatShamir.Obligations
 import ZkcSecurity.FiatShamir.OccurrenceReading
@@ -309,6 +311,7 @@ import ZkcSecurity.FiatShamir.SampledReadbackCompleteness
 import ZkcSecurity.FiatShamir.Sampling
 import ZkcSecurity.FiatShamir.SamplingControl
 import ZkcSecurity.FiatShamir.Soundness
+import ZkcSecurity.FiatShamir.SourceReading
 import ZkcSecurity.FiatShamir.TranscriptOracle
 import ZkcSecurity.FiatShamir.Typed
 import ZkcSecurity.Generation.ConstructionBindings
@@ -316,6 +319,8 @@ import ZkcSecurity.Generation.ConstructionBindingsCatalogue
 import ZkcSecurity.Generation.ConstructionBindingsMethods
 import ZkcSecurity.Generation.ConstructionBindingsRoots
 import ZkcSecurity.Generation.ConstructionBindingsTemplates
+import ZkcSecurity.Generation.GkrConnectionTemplates
+import ZkcSecurity.Generation.GkrConnections
 import ZkcSecurity.Generation.OriginalEndpoint
 import ZkcSecurity.Generation.OriginalRootCatalogue
 import ZkcSecurity.Generation.OriginalSecurityBindings
@@ -380,6 +385,7 @@ import ZkcSecurity.Realizations.Gkr.CanonicalVerifierOutput
 import ZkcSecurity.Realizations.Gkr.CanonicalVerifierRounds
 import ZkcSecurity.Realizations.Gkr.Circuit
 import ZkcSecurity.Realizations.Gkr.Combination
+import ZkcSecurity.Realizations.Gkr.ConnectionTactics
 import ZkcSecurity.Realizations.Gkr.Encoding
 import ZkcSecurity.Realizations.Gkr.Generated.ABI
 import ZkcSecurity.Realizations.Gkr.Generated.Completeness
@@ -424,6 +430,7 @@ import ZkcSecurity.Realizations.Gkr.HonestProducerRounds
 import ZkcSecurity.Realizations.Gkr.HonestProducerSource
 import ZkcSecurity.Realizations.Gkr.HonestRound
 import ZkcSecurity.Realizations.Gkr.Layer
+import ZkcSecurity.Realizations.Gkr.LayoutVariant
 import ZkcSecurity.Realizations.Gkr.OccurrenceLayerRouting
 import ZkcSecurity.Realizations.Gkr.OccurrenceRootRouting
 import ZkcSecurity.Realizations.Gkr.OccurrenceRouting
@@ -442,7 +449,20 @@ import ZkcSecurity.Realizations.Gkr.OriginalRounds
 import ZkcSecurity.Realizations.Gkr.OriginalValidatorBody
 import ZkcSecurity.Realizations.Gkr.OriginalValidatorLayer
 import ZkcSecurity.Realizations.Gkr.OriginalValidatorRoot
+import ZkcSecurity.Realizations.Gkr.OutputTemplate
 import ZkcSecurity.Realizations.Gkr.ProducerHelpers
+import ZkcSecurity.Realizations.Gkr.Rebound.Generated.Producer
+import ZkcSecurity.Realizations.Gkr.Rebound.Generated.Validator
+import ZkcSecurity.Realizations.Gkr.Rebound.OriginalCertificateFrames
+import ZkcSecurity.Realizations.Gkr.Rebound.OriginalCoefficient
+import ZkcSecurity.Realizations.Gkr.Rebound.OriginalOutput
+import ZkcSecurity.Realizations.Gkr.Rebound.OriginalProducerBody
+import ZkcSecurity.Realizations.Gkr.Rebound.OriginalProducerLayer
+import ZkcSecurity.Realizations.Gkr.Rebound.OriginalProducerRoot
+import ZkcSecurity.Realizations.Gkr.Rebound.OriginalRounds
+import ZkcSecurity.Realizations.Gkr.Rebound.OriginalValidatorBody
+import ZkcSecurity.Realizations.Gkr.Rebound.OriginalValidatorLayer
+import ZkcSecurity.Realizations.Gkr.Rebound.OriginalValidatorRoot
 import ZkcSecurity.Realizations.Gkr.Relations
 import ZkcSecurity.Realizations.Gkr.Root
 import ZkcSecurity.Realizations.Gkr.RootContract
@@ -587,6 +607,7 @@ import TestsSecurity.GkrRoundsReference
 import TestsSecurity.GkrRoundsResidual
 import TestsSecurity.GkrSourceAdmission
 import TestsSecurity.GkrSourceRoot
+import TestsSecurity.GkrStructuralGeneration
 import TestsSecurity.HashChainJointFrame
 import TestsSecurity.HeterogeneousRequests
 import TestsSecurity.HonestCanonical
@@ -664,6 +685,7 @@ import TestsSecurity.SourceAdmission.Roots
 import TestsSecurity.SourceAdmission.ShapeFixture
 import TestsSecurity.SourceBoundOraclePermutation
 import TestsSecurity.SourceChargeSites
+import TestsSecurity.SourceReading
 import TestsSecurity.StageComposition
 import TestsSecurity.StatementBindings
 import TestsSecurity.StructuredObligations
