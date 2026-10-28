@@ -94,6 +94,33 @@ int main() {
     require(failed(verify(*module)), "invalid virtual oracle admitted");
   };
   cases.run(
+      "virtual anchors may retain earlier iterations without cyclic values",
+      [&] {
+        auto text = replace(
+            source(),
+            "%virtual = \"protocol.oracle_virtual\"(%first,%second,%parameter) "
+            "{callee=@select,holder=\"P\",receivers=[\"V\"]} : "
+            "(!H,!H,ui64)->!H",
+            R"mlir(
+    %trips = "data.index"() {value="3"} : ()->ui64
+    %virtual = "protocol.repeat"(%trips,%first,%second,%parameter) ({
+      ^bb0(%iteration:ui64,%previous:!H,%other:!H,%argument:ui64):
+       %next = "protocol.oracle_virtual"(%previous,%other,%argument) {callee=@select,holder="P",receivers=["V"]} : (!H,!H,ui64)->!H
+       "protocol.yield"(%next) : (!H)->()
+    }) {site="chain",carried=1:i64,maximum=3:i64,roles=["P","V"],carried_roles=[["P","V"]]} : (ui64,!H,!H,ui64)->!H
+)mlir");
+        accepted(text);
+        auto module = parse(text, context);
+        auto prepared = zkc::mathematical::prepareProtocol(*module, false);
+        require(bool(prepared),
+                "virtual recurrence was lost during preparation");
+        unsigned definitions = 0, constructions = 0;
+        prepared->walk([&](OracleDefinitionOp) { ++definitions; });
+        prepared->walk([&](OracleVirtualOp) { ++constructions; });
+        require(definitions == 1 && constructions == 1,
+                "preparation unrolled dynamic anchors into static guesses");
+      });
+  cases.run(
       "virtual sources parameters holder and predicate stay explicit", [&] {
         accepted(source());
         accepted(indices());

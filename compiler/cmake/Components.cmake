@@ -322,6 +322,7 @@ add_zkc_component(Transforms
 add_zkc_component(Compiler
   lib/Compiler/OracleLayout.cpp
   lib/Compiler/OracleSchedule.cpp
+  lib/Compiler/OracleObservations.cpp
   lib/Compiler/OracleObligations.cpp
   lib/Compiler/Host.cpp
   lib/Compiler/AssetSharing.cpp

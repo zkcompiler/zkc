@@ -265,6 +265,24 @@ helper/domain closure and actual admissibility declaration. A matching symbol
 name does not justify a substituted body or predicate. Queries on a dynamically selected virtual handle
 must later expand using that runtime anchor, not a static possible-origin list.
 
+### Oracle observation scheduling
+
+The compiler's scheduling analysis reads one selected observer of an admitted,
+prepared protocol. Applications must already be expanded, including their role
+substitution. It reports whether some considered execution prefix contains an
+oracle query followed by a challenge draw. The summary composes normally
+continuing paths separately from stopped paths. A guard or early completion at
+another participant never ends the selected observer's flow.
+
+Known loop counts use exact repetition; unknown counts include every count up
+to the checked maximum and a possible bound failure. Constant invariant captures
+can be followed through repeats. Induction and carried arguments remain unknown,
+even when their initial values are constants. Fallible local work may stop or
+continue. These choices overapproximate the selected observer's paths and can
+refuse an otherwise valid final-draw policy. Work and nesting have explicit
+analysis limits. The analysis neither changes the protocol nor authorizes
+batching, authentication, query-domain assumptions or a realization simulation.
+
 ## Total mathematics and helpers
 
 The [structured extension](mathematics.md) adds field constants and

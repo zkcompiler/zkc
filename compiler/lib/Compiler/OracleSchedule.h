@@ -1,8 +1,13 @@
 #ifndef ZKC_COMPILER_ORACLESCHEDULE_H
 #define ZKC_COMPILER_ORACLESCHEDULE_H
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Error.h"
 #include <array>
 #include <cstdint>
 
+namespace mlir {
+class ModuleOp;
+}
 namespace zkc::protocol {
 /// Abstract observation language for selecting the oracle opening policy.
 /// Tracks whether a challenge draw can follow a query along one reached path,
@@ -36,5 +41,13 @@ private:
   OracleObservationSummary(Relation normal, Relation stopped)
       : normal(normal), stopped(stopped) {}
 };
+/// Summarize one observer of an admitted, prepared protocol. Applications must
+/// already be expanded. Constants are read from actual SSA; uncertain counts
+/// use their checked maximum. Fallible local work may stop or continue, while
+/// another participant's completion does not terminate this observer. This is
+/// a conservative scheduling check, not authentication or a simulation proof.
+llvm::Expected<OracleObservationSummary>
+analyzeOracleObservations(mlir::ModuleOp prepared, llvm::StringRef entry,
+                          llvm::StringRef observer);
 } // namespace zkc::protocol
 #endif

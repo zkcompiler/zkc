@@ -499,7 +499,11 @@ answer-independent position maps, closed total helpers, actual polynomial bounds
 explicit admissibility references and fresh occurrence anchors. Their generated
 condition templates and ordered query footprints have native export/check
 commands and an independent Lean derivation over the original snapshot. These proposals retain exact occurrences and actual operands; they do
-not discharge their predicates. Semantic realization remains pending.
+not discharge their predicates. A conservative scheduling analysis reads actual
+prepared bodies and role substitution, separates participant-local stops, and
+summarizes counted repetitions without unrolling. It identifies a possible query
+before a later draw; it does not authorize batching or prove simulation. Semantic
+realization remains pending.
 Common oracle ports pair actual holder data and receiver handles through inputs,
 returns and applications, with explicit shapes and independent preparation checks.
 The native [structured exporter](spec/formats/structured-source.md#logical-oracle-vocabulary)
