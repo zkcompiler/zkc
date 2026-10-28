@@ -1,4 +1,5 @@
 import ZkcTools.StructuredSource.WireTypes
+import Zkc.Source.Structured.OracleObligations
 
 /-! Cross-reader control over actual native output. This checks exact decoding,
 not source correspondence, semantic admission or oracle realization. -/
@@ -6,7 +7,7 @@ set_option autoImplicit false
 open Lean Zkc.Source.Structured ZkcTools.StructuredSource
 
 def main (args : List String) : IO Unit := do
-  let [path] := args | throw (IO.userError "expected native oracle snapshot")
+  let [path, obligations] := args | throw (IO.userError "expected native snapshot and oracle obligations")
   let json ← IO.ofExcept (Zkc.Source.Structured.Format.parse (← IO.FS.readFile path))
   let snapshot : Zkc.Source.Structured.Snapshot ← IO.ofExcept (Zkc.Source.Structured.Format.snapshot json)
   let kind : OracleKind := .table (.field "koala-bear") (some 16)
@@ -31,4 +32,8 @@ def main (args : List String) : IO Unit := do
   let descriptors := operations.filterMap fun (.instruction descriptor _ _ _ _) =>
     match descriptor with | .oracle value => some value | _ => none
   unless descriptors.length == 12 do throw (IO.userError "oracle vocabulary lost")
-  IO.println "native oracle snapshot: exact independent decoding passed"
+  let proposal ← IO.ofExcept (Format.parse (← IO.FS.readFile obligations))
+  let report ← IO.ofExcept (OracleObligations.check snapshot proposal)
+  unless report.conditions.length == 6 && report.footprints.length == 1 do
+    throw (IO.userError "native oracle obligation coverage changed")
+  IO.println "native oracle snapshot and obligations: independent derivation passed"

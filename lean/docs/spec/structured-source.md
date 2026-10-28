@@ -46,6 +46,16 @@ products and sequences; service identity remains a separate predicate. Independe
 and realization simulation remain separate work; decoding is not evidence for
 any of those claims.
 
+`OracleObligations` independently derives the generated condition templates and
+virtual footprints in the [native proposal format](../../../docs/spec/formats/structured-source.md#oracle-obligation-proposals).
+It checks the complete source/entry association and every exact row, preserves
+repeated queries and retains nested region coordinates. A query source must refer
+to the declared handle prefix under the row's actual SSA environment. Position
+indices remain references into the original body; a proposal supplies no new
+position evaluator or helper semantics. This is an independent consistency check,
+not admission of logical oracle execution or a proof that any generated condition
+holds. The existing semantic profile continues to refuse oracle execution.
+
 ## Checked subject
 
 `Structured.Snapshot` retains source identity, selected entry, all domains,

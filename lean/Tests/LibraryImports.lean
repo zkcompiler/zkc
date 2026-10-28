@@ -346,6 +346,7 @@ import Zkc.Source.Structured.OpenAdmission
 import Zkc.Source.Structured.OpenLaws
 import Zkc.Source.Structured.OpenMeaning
 import Zkc.Source.Structured.Operations
+import Zkc.Source.Structured.OracleObligations
 import Zkc.Source.Structured.Origin
 import Zkc.Source.Structured.OutputSelection
 import Zkc.Source.Structured.Participant
@@ -532,6 +533,7 @@ import Tests.StructuredNormalizerSources
 import Tests.StructuredOpenAdmission
 import Tests.StructuredOpenEvaluation
 import Tests.StructuredOracleFormat
+import Tests.StructuredOracleObligations
 import Tests.StructuredOrigin
 import Tests.StructuredOriginDepth
 import Tests.StructuredOriginFixture

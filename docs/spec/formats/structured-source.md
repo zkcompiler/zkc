@@ -596,6 +596,55 @@ realization record are the independent checker's inputs. Recognizing the source
 or output grammar proves neither realization correspondence nor commitment
 security.
 
+## Oracle obligation proposals
+
+`zkc-compile protocol-oracle-obligations ORIGINAL.mlir --symbol=NAME` derives
+condition templates and ordered virtual footprints from the verified original.
+`protocol-check-oracle-obligations ORIGINAL.mlir REPORT.json --symbol=NAME`
+checks the complete report against a fresh derivation. The independent Lean
+`OracleObligations.check` recomputes it from the decoded structured snapshot.
+The exact array grammar is:
+
+```text
+["zkc.oracle-obligations/0", source-digest, entry, conditions, footprints]
+[purpose, instruction-row-path]                     # condition
+[definition-index, source-count, queries]             # virtual footprint
+[instruction-row-path, source-parameter, position]    # footprint query
+```
+
+A purpose is `input_pair`, `send_shape`, `virtual_admissibility` or
+`query_domain`. The first relates the actual holder data and receiver anchor;
+the second checks actual data against immutable dimensions and bounds; the third
+instantiates the actual virtual declaration's admissibility predicate. The last
+requires a domain check at the reached query, with a stopped outcome on failure.
+It is never a premise permitting the compiler to assume an invalid input away.
+
+Paths are JSON array indices into the unchanged snapshot, including its block's
+instruction slot. Conditions follow stored definition/instruction order and
+include nested regions and dormant declarations. They are templates activated
+at actual call/loop occurrences, not an eager list of runtime events. A virtual
+query's conditions are activated when that virtual anchor is queried; constructing
+it neither commits its data nor executes its query body.
+
+Each virtual footprint retains all source queries in order, including repeated
+and unused answers. Source parameters refer to the declaration's handle prefix;
+positions are the actual SSA operand indices at those exact query rows, using
+prepend-results binding. The original query body and its retained helper closure
+supply the full computations. A summary never replaces those bodies.
+
+Reports have no additional subject identity. The digest and selected entry must
+match the existing original association. Missing, duplicated, reordered, extra
+or changed records refuse. Generation has a cumulative 100,000-unit work budget,
+64 region levels and a 1 MiB output ceiling. Readers retain bounded array/natural
+syntax and exact tags/arities. Native checking also admits alternate JSON
+whitespace without admitting alternate records.
+
+These are generated proposals, separate from authored clauses and selectors.
+Checking them establishes correspondence to the retained rows. It does not
+prove honest input, virtual admissibility, logical oracle admission, realization
+simulation or commitment security. In particular, wire recognition still does
+not enable the ordinary participant theorems for an oracle subject.
+
 ## Retained protocol application
 
 The exact native attributes of `protocol.apply` are `callee`, `roles` and `site`.

@@ -1,5 +1,6 @@
 #include "../lib/Compiler/ComponentContracts.h"
 #include "support/NativeCases.h"
+#include "zkc/Compiler/OracleObligations.h"
 #include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Dialect/Registry.h"
 #include "llvm/Support/JSON.h"
@@ -85,15 +86,105 @@ int main(int argc, char **argv) {
   auto capture = [&](StringRef text) {
     return exportStructuredSource(text, "main", context);
   };
-  if (argc == 2) {
+  if (argc >= 2 && argc <= 4) {
     auto exported = take(capture(source()));
     std::ofstream out(argv[1]);
     out << exported.bytes;
     out.close();
     require(bool(out), "failed to write independent-reader fixture");
+    if (argc >= 3) {
+      std::ofstream report(argv[2]);
+      report << take(exportOracleObligations(source(), "main", context));
+      report.close();
+      require(bool(report), "failed to write oracle obligation fixture");
+    }
+    if (argc == 4) {
+      std::ofstream original(argv[3]);
+      original << source();
+      original.close();
+      require(bool(original), "failed to write oracle original fixture");
+    }
     return 0;
   }
   Cases cases;
+  cases.run(
+      "generated oracle obligations address the exact original rows", [&] {
+        auto snapshot = take(json::parse(take(capture(source())).bytes));
+        auto bytes = take(exportOracleObligations(source(), "main", context));
+        auto report = take(json::parse(bytes));
+        A conditions{A{"query_domain", A{7, 1, 7, 1, 0}},
+                     A{"query_domain", A{7, 1, 7, 1, 1}},
+                     A{"input_pair", A{7, 2, 9, 1, 0}},
+                     A{"send_shape", A{7, 2, 9, 1, 1}},
+                     A{"virtual_admissibility", A{7, 2, 9, 1, 2}},
+                     A{"query_domain", A{7, 2, 9, 1, 4}}};
+        A footprints{
+            A{1, 1, A{A{A{7, 1, 7, 1, 0}, 0, 2}, A{A{7, 1, 7, 1, 1}, 0, 3}}}};
+        require(report ==
+                    J(A{"zkc.oracle-obligations/0", at(snapshot, {2}), "main",
+                        std::move(conditions), std::move(footprints)}),
+                "oracle proposal changed actual rows or positions");
+        if (auto e = checkOracleObligations(source(), "main", bytes, context))
+          require(false, toString(std::move(e)));
+        for (unsigned mutation = 0; mutation < 7; ++mutation) {
+          auto changed = report;
+          auto &root = *changed.getAsArray();
+          auto &rows = *root[3].getAsArray();
+          if (mutation == 0)
+            root[1] = "wrong-source";
+          if (mutation == 1)
+            root[2] = "wrong-entry";
+          if (mutation == 2)
+            rows.erase(rows.begin());
+          if (mutation == 3)
+            rows.push_back(rows.front());
+          if (mutation == 4)
+            std::swap(rows[0], rows[1]);
+          if (mutation == 5)
+            root[4] = A{A{1, 1, A{A{A{7, 1, 7, 1, 0}, 0, 2}}}};
+          if (mutation == 6)
+            root.push_back(nullptr);
+          std::string text;
+          raw_string_ostream stream(text);
+          stream << changed;
+          auto e = checkOracleObligations(source(), "main", text, context);
+          require(bool(e), "modified obligation proposal admitted");
+          require(namesIdentifier(toString(std::move(e)),
+                                  "oracle-obligations-mismatch"),
+                  "unexpected obligation proposal refusal");
+        }
+      });
+  cases.run("oracle proposals refuse malformed and oversized input", [&] {
+    auto reject = [&](StringRef proposal, StringRef code) {
+      auto error = checkOracleObligations(source(), "main", proposal, context);
+      require(bool(error), "malformed oracle proposal admitted");
+      require(namesIdentifier(toString(std::move(error)), code),
+              "unexpected malformed proposal refusal");
+    };
+    for (StringRef proposal : {"[", "[-1]", "[1.0]", "[1e0]"})
+      reject(proposal, "oracle-obligations-shape");
+    for (const auto &proposal : {std::string(1024 * 1024 + 1, ' '),
+                                 std::string(17, '[') + std::string(17, ']')})
+      reject(proposal, "oracle-obligations-limit");
+  });
+  cases.run("query templates retain their nested iteration address", [&] {
+    auto text =
+        replaceText(source(),
+                    "%answer = \"protocol.oracle_query\"(%virtual,%position) "
+                    "{owner=\"V\",site=\"read\"} : (!H,ui64)->!F",
+                    R"mlir(
+    "protocol.repeat"(%rows,%virtual,%position) ({
+      ^bb0(%i:ui64,%word:!H,%at:ui64):
+       %answer = "protocol.oracle_query"(%word,%at) {owner="V",site="read"} : (!H,ui64)->!F
+       "protocol.yield"() : ()->()
+    }) {site="iteration",carried=0:i64,maximum=16:i64,roles=["P","V"],carried_roles=[]} : (ui64,!H,ui64)->()
+    )mlir");
+    auto report =
+        take(json::parse(take(exportOracleObligations(text, "main", context))));
+    require(at(report, {3, 5}) ==
+                J(A{"query_domain", A{7, 2, 9, 1, 4, 3, 0, 2, 1, 0}}),
+            "query was flattened out of its iteration");
+  });
   cases.run(
       "anchor contracts retain data associations without role reads", [&] {
         auto text =

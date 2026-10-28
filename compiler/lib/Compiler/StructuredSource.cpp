@@ -166,13 +166,16 @@ Expected<json::Value> encodeOracleKind(protocol_ir::OracleKindAttr kind,
   return json::Array{kind.getIdentity(), std::move(arguments)};
 }
 
-json::Array oracleShapeValues(DictionaryAttr values) {
+json::Array oracleShapeValues(protocol_ir::OracleKindAttr kind,
+                              DictionaryAttr values) {
   json::Array result;
-  for (auto entry : values)
-    result.push_back(json::Array{
-        entry.getName().getValue(),
-        std::to_string(
-            cast<IntegerAttr>(entry.getValue()).getValue().getZExtValue())});
+  for (const auto &dimension : kind.getShapeDimensions())
+    if (!dimension.extent)
+      result.push_back(
+          json::Array{dimension.name,
+                      std::to_string(values.getAs<IntegerAttr>(dimension.name)
+                                         .getValue()
+                                         .getZExtValue())});
   return result;
 }
 
@@ -887,6 +890,7 @@ class Exporter {
         descriptor.push_back(names(op.getAttrOfType<ArrayAttr>("shape_names")));
       if (send || input)
         descriptor.push_back(oracleShapeValues(
+            handle.getKind(),
             op.getAttrOfType<DictionaryAttr>("shape_bounds")));
       return descriptor;
     }
@@ -1447,8 +1451,8 @@ class Exporter {
                        std::move(*inputs),
                        std::move(*encodedKind),
                        op.getAdmissibility(),
-                       oracleShapeValues(op.getShapeArguments()),
-                       oracleShapeValues(op.getShapeBounds()),
+                       oracleShapeValues(op.getKind(), op.getShapeArguments()),
+                       oracleShapeValues(op.getKind(), op.getShapeBounds()),
                        std::move(*body)};
   }
 

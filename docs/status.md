@@ -490,14 +490,16 @@ recurrence edges and static refinement erasure. Sends carry the exact dimension
 list; input and virtual bounds name every dynamic dimension. Shape maps and
 reads have the same strict independent wire contract. Invalid queries are
 specified to stop at the occurrence against the actual shape; dynamic enforcement
-remains part of the pending realization. Checked preparation remaps oracle roles through applications
-and preserves sends/queries under upstream CSE. Projection refuses unresolved
+remains part of the pending realization. Checked preparation remaps oracle roles
+through applications and preserves sends/queries under upstream CSE. Projection refuses unresolved
 oracle events before publishing participants. Holder-only contents and bounded,
 append-only sequences preserve role restrictions, dynamic anchors and ordered
 bounds failures through checked preparation. Virtual query declarations check
 answer-independent position maps, closed total helpers, actual polynomial bounds,
-explicit admissibility references and fresh occurrence anchors. Their obligation
-and footprint exports and realization are still pending.
+explicit admissibility references and fresh occurrence anchors. Their generated
+condition templates and ordered query footprints have native export/check commands and an independent Lean derivation over the original
+snapshot. These proposals retain exact occurrences and actual operands; they do
+not discharge their predicates. Semantic realization remains pending.
 Common oracle ports pair actual holder data and receiver handles through inputs,
 returns and applications, with explicit shapes and independent preparation checks.
 The native [structured exporter](spec/formats/structured-source.md#logical-oracle-vocabulary)
@@ -517,9 +519,9 @@ source correspondence checks the complete role substitution and result mapping.
 Source send/query/data/rows/refinement actions preserve the explicit holder,
 ordered query events and packed answer layouts through independent comparison.
 Bounded source sequences retain explicit families, persistent loop state and
-dynamic selected anchors. Virtual source declarations, generated
-obligation/footprint proposals and checked semantic realization remain in
-progress; formation does not enable execution.
+dynamic selected anchors. Virtual source spelling remains with the frontend
+redesign. The proposals' semantic interpretation and checked realization remain
+in progress. Formation does not enable execution.
 
 Checked notation inspection is available through
 `inspectNotations` with `NotationInspectionOptions.includePrivate` and
