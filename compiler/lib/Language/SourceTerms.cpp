@@ -49,6 +49,9 @@ Expected<json::Value> encode(const Type &type, unsigned &remaining,
   }
   if (type.kind == K::Tuple)
     return json::Array{"tuple", std::move(arguments)};
+  if (!oracleConstructor(type).empty())
+    return json::Array{"builtin", oracleConstructor(type),
+                       std::move(arguments)};
   if (type.kind == K::Builtin || type.kind == K::Formal)
     return json::Array{type.kind == K::Builtin ? "builtin" : "formal",
                        type.domain, std::move(arguments)};

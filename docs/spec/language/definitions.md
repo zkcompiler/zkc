@@ -336,11 +336,47 @@ has one to 32 distinct alternatives. Formal mathematical types have a separate
 Domain declarations require an installed identity of the declared catalog sort:
 `field`, `group`, `commitment`, `transcript`, or `codec`. Static parameters use
 `Type`, `Field`, `Group`, `Commitment`, `Transcript`, `Codec`, `Ring`, `Bundle`,
-`nat`, or a selected interface. Sort names take precedence in static parameter
+`nat`, `OracleKind`, or a selected interface. Sort names take precedence in static parameter
 bounds; elsewhere names retain ordinary module resolution. Field and group
 domains also denote their runtime value types. Commitment, transcript and codec
 domains are static only: they cannot be runtime ports, tuple/array elements or
 arguments to a `Type` parameter.
+
+### Logical oracle types
+
+`OracleKind` is a static sort independent of the installed native domain
+catalogue. Library aliases use the existing constructor syntax:
+
+```text
+type Table<T: Type + Copy + Drop> = builtin("oracle.table", T);
+type FixedTable<T: Type + Copy + Drop, N: nat> = builtin("oracle.table", T, N);
+type Oracle<K: OracleKind> = builtin("oracle", K);
+type Oracles<K: OracleKind, M: nat> = builtin("oracle_sequence", K, M);
+```
+
+The closed table kind retains the row type and optional unsigned 64-bit row
+count. Absence of a row count is distinct from a zero-row table. Rows require
+ordinary total data with sharing authority; specialization rechecks generic
+arguments. A kind alias is static, while `Oracle` and `Oracles` are logical
+role-family values. Their identities retain every typed argument and sequence
+maximum. A logical handle's `Copy` and `Drop` permissions allow immutable
+aliasing only. They grant no native representation, message codec or host ingress.
+
+Ordinary Math/local helpers, native-data generic arguments, records, variants,
+tuples, arrays (including empty arrays) and ordinary sequences cannot contain
+logical handles. The dedicated bounded oracle sequence is the only aggregate
+handle container. Protocol ports and actions require dedicated elaboration into
+[oracle operations](../ir/protocols.md#logical-oracle-kinds-and-handles), followed by semantic realization before
+executable lowering. Type formation alone is not an executable oracle route.
+
+`K::Data`, `K::Query` and `K::Answer` are forward associations. A table's query
+is `index`; its answer is its row type. Data uses a field vector, group vector,
+index vector or ordinary sequence according to the row layout. A symbolic kind
+or unknown row head retains a projection until specialization; inference never
+tries to recover a kind from its data or answer type. Closed layout formation
+uses the same checked kind signature as Protocol IR, including packed nominal
+rows. Oracle layouts have a distinct logical leaf, with no ordinary payload or
+relation-data schema identity. An anchor selector is required to relate their data.
 
 ### Asset domains and projections
 

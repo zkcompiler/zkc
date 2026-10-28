@@ -56,6 +56,7 @@ public:
   std::optional<Type> substitute(const Type &, const Substitution &, Span,
                                  unsigned = 1);
   std::optional<Type> associated(const Type &, llvm::StringRef, Span);
+  bool oracleKind(const Type &, Span, const Declaration * = nullptr);
   /// A derived natural of an asset term. A closed term yields the fact of its
   /// captured asset; a symbolic term yields a projection factor that closure
   /// substitutes and inference never binds.

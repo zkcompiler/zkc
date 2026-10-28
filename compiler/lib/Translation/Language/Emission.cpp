@@ -122,6 +122,38 @@ class Emitter {
         result.push_back(type);
         continue;
       }
+      if (const auto *oracle = leaf.oracle()) {
+        SmallVector<mlir::Attribute> arguments;
+        for (const auto &argument : oracle->kind.arguments) {
+          if (argument.kind == protocol::TypeArgument::Kind::Nat)
+            arguments.push_back(builder.getIntegerAttr(
+                mlir::IntegerType::get(&context, 64,
+                                       mlir::IntegerType::Unsigned),
+                APInt(64, argument.natural)));
+          else if (argument.kind == protocol::TypeArgument::Kind::Type &&
+                   argument.type) {
+            auto type = protocol::decodeBoundType(&context, *argument.type);
+            if (!type) {
+              failure =
+                  error("source.layout", "oracle row type is unavailable");
+              return {};
+            }
+            arguments.push_back(mlir::TypeAttr::get(type));
+          } else {
+            failure =
+                error("source.oracle-kind", "invalid logical kind argument");
+            return {};
+          }
+        }
+        auto kind = protocol_ir::OracleKindAttr::get(
+            &context, oracle->kind.identity, builder.getArrayAttr(arguments));
+        if (oracle->maximum)
+          result.push_back(protocol_ir::OracleSequenceType::get(
+              &context, kind, *oracle->maximum));
+        else
+          result.push_back(protocol_ir::OracleHandleType::get(&context, kind));
+        continue;
+      }
       auto bound = take(protocol::parseBoundType(*leaf.data(), false));
       if (!bound)
         return {};

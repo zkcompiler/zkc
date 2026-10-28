@@ -242,6 +242,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         p.permissions.copy = p.permissions.drop = true;
     } else if (name == "nat")
       p.sort = Parameter::Sort::Natural;
+    else if (name == "OracleKind")
+      p.sort = Parameter::Sort::OracleKind;
     else {
       std::optional<DeclarationId> provider;
       auto target = resolve(decl, name, src.span, true, nullptr, &provider);
@@ -311,7 +313,9 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     } else {
       bool domain = decl.kind == Declaration::Kind::Associated &&
                     isDomainSort(decl.associatedSort);
-      if (!domain && !valueType(*def))
+      bool oracleKind = decl.kind == Declaration::Kind::Alias &&
+                        def->kind == Type::Kind::OracleKind;
+      if (!domain && !oracleKind && !valueType(*def))
         return types.fail("source.type",
                           "alias or representation must denote a value type",
                           decl.span);
@@ -341,6 +345,11 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         return false;
       if (!valueType(*t))
         return types.fail("source.type", "field cannot contain a static term",
+                          src.span);
+      if (isOracleHandle(*t))
+        return types.fail("source.oracle-aggregate",
+                          "logical oracle handles require protocol ports or "
+                          "their bounded sequence",
                           src.span);
       to.push_back({src.name, *t, src.isPublic, src.span});
     }

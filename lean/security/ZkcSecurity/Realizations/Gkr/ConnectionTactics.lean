@@ -71,7 +71,7 @@ macro "derive_gkr_layer " compiled:ident
               List.contains_cons, List.contains_nil,
               Operands.eval, Regions.denote, SiteObservations.silent, ProtocolOp.results, Op.results,
               $carriedLaw, $roundCarried, GkrOriginalCoefficient.carried,
-              Original.encodeHelperResult, Domain.encodeValues, Ty.isService,
+              Original.encodeHelperResult, Domain.encodeValues, Ty.isHandle,
               Original.foldActionCall, Original.foldActionDone, Original.foldActionHalt,
               Original.operations, Original.fieldReply, Request.draw, Domain.Raw,
               PIR.Process.interpret_bind, Original.fold_bind, Original.fold_done, Original.interpretIf, Original.foldIf,
@@ -91,9 +91,9 @@ macro "derive_gkr_layer " compiled:ident
                      try casesm* _ ∧ _
                      try subst_vars
                      simp [ArtifactBinding.Captures, List.append_assoc])
-          | solve | simp [$carriedLawS, $roundCarriedS, GkrOriginalCoefficient.carried, Original.encodeHelperResult, Domain.encodeValues, Domain.Value.encode, Domain.Payload.ofValue, Ty.isService, List.length_append, size]
+          | solve | simp [$carriedLawS, $roundCarriedS, GkrOriginalCoefficient.carried, Original.encodeHelperResult, Domain.encodeValues, Domain.Value.encode, Domain.Payload.ofValue, Ty.isHandle, List.length_append, size]
           | solve | (simp (disch := omega) only [Domain.read, List.mapM_cons, List.mapM_nil, Original.encodeHelperResult, Domain.encodeValues, Domain.Value.encode, Domain.Payload.ofValue,
-              Ty.isService, $carriedLawS, $roundCarriedS, $initialLawS, $offsetLawS, $countLawS, GkrOriginalCoefficient.carried, List.getElem?_append_left, List.getElem?_append_right,
+              Ty.isHandle, $carriedLawS, $roundCarriedS, $initialLawS, $offsetLawS, $countLawS, GkrOriginalCoefficient.carried, List.getElem?_append_left, List.getElem?_append_right,
               $readLawsS,*,
               List.append_assoc, List.cons_append, List.nil_append, List.length_append,
               List.length_cons, List.length_nil, List.getElem?_cons_zero, List.getElem?_cons_succ,
@@ -183,7 +183,7 @@ macro "derive_gkr_body " compiled:ident
                 TypedABI.get_cons_here, TypedABI.get_cons_there, Environment.prepend, Environment.push,
                 Operands.eval, Regions.denote, SiteObservations.silent, ProtocolOp.results, Op.results,
                 $inputDefinition, $sourceInputs, Original.encodeHelperResult,
-                Domain.encodeValues, Ty.isService, maskValues, ProtocolContext.mapScopes,
+                Domain.encodeValues, Ty.isHandle, maskValues, ProtocolContext.mapScopes,
                 Original.foldActionCall, Original.foldActionDone, Original.foldActionHalt,
                 Original.operations, PIR.Process.interpret_bind, Original.fold_bind,
                 Original.fold_done, Original.interpretIf, Original.foldIf, PIR.Process.bind_ite, List.append_assoc,
@@ -202,7 +202,7 @@ macro "derive_gkr_body " compiled:ident
                      try subst_vars
                      simp [ArtifactBinding.Captures, $inputDefinitionS, List.append_assoc])
           | solve | (simp [$inputDefinitionS, Original.encodeHelperResult, Domain.encodeValues,
-              Domain.Value.encode, Domain.Payload.ofValue, Ty.isService, GkrOriginalOutput.carried,
+              Domain.Value.encode, Domain.Payload.ofValue, Ty.isHandle, GkrOriginalOutput.carried,
                $carriedLawS, Domain.read, List.mapM_cons, List.mapM_nil,
               Bind.bind, Option.bind, Option.pure_def, List.append_assoc] <;> rfl)
           | ($finish)))

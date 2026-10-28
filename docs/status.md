@@ -496,7 +496,13 @@ explicit admissibility references and fresh occurrence anchors. Their obligation
 and footprint exports and realization are still pending.
 Common oracle ports pair actual holder data and receiver handles through inputs,
 returns and applications, with explicit shapes and independent preparation checks.
-Frontend emission, extended structured readers and checked semantic
+The native [structured exporter](spec/formats/structured-source.md#logical-oracle-vocabulary)
+and independent wire vocabulary retain kinds, paired ports, virtual bodies,
+query order, shapes and sequence bounds. Formal semantic admission still refuses
+the oracle profile; decoding does not extend participant soundness. Source
+kind/handle aliases, static kind parameters, forward associated types and closed
+logical layouts are checked, including specialization and ordinary-data boundary
+refusals. Source action/port emission, generated obligation/footprint proposals and checked semantic
 realization remain in progress; these formation checks do not enable execution.
 
 Checked notation inspection is available through

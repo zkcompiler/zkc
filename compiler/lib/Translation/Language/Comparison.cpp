@@ -13,6 +13,8 @@
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/Construction.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolAttrs.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolTypes.h"
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
@@ -238,6 +240,44 @@ class Comparator {
         if (!type || type.getDomain() != polynomial->field ||
             type.getArity() != polynomial->arity)
           return fail("formal polynomial layout differs");
+        continue;
+      }
+      if (const auto *oracle = expected[i].oracle()) {
+        protocol_ir::OracleKindAttr kind;
+        if (oracle->maximum) {
+          auto sequence =
+              mlir::dyn_cast<protocol_ir::OracleSequenceType>(actual[i]);
+          if (!sequence || sequence.getMaximum() != *oracle->maximum)
+            return fail("oracle sequence maximum differs");
+          kind = sequence.getKind();
+        } else {
+          auto handle =
+              mlir::dyn_cast<protocol_ir::OracleHandleType>(actual[i]);
+          if (!handle)
+            return fail("oracle handle layout differs");
+          kind = handle.getKind();
+        }
+        if (kind.getIdentity() != oracle->kind.identity ||
+            kind.getArguments().size() != oracle->kind.arguments.size())
+          return fail("oracle kind layout differs");
+        for (unsigned j = 0; j < oracle->kind.arguments.size(); ++j) {
+          const auto &argument = oracle->kind.arguments[j];
+          if (argument.kind == protocol::TypeArgument::Kind::Nat) {
+            auto number =
+                mlir::dyn_cast<mlir::IntegerAttr>(kind.getArguments()[j]);
+            if (!number || !number.getType().isUnsignedInteger(64) ||
+                number.getValue().getZExtValue() != argument.natural)
+              return fail("oracle static cardinality differs");
+          } else {
+            auto row = mlir::dyn_cast<mlir::TypeAttr>(kind.getArguments()[j]);
+            if (!row || !argument.type)
+              return fail("oracle row layout differs");
+            auto logical =
+                take(protocol::encodeBoundType(row.getValue(), false));
+            if (!logical || !(*logical == *argument.type))
+              return fail("oracle row layout differs");
+          }
+        }
         continue;
       }
       auto type = take(protocol::encodeBoundType(actual[i], false));

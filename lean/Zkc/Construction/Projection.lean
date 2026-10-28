@@ -47,7 +47,7 @@ namespace Zkc.Construction
 open Zkc.Source Zkc.Source.Structured
 
 /-- Typed transport eligibility is exactly recursive service exclusion. -/
-def transportData (ty : Ty) : Bool := !ty.isService
+def transportData (ty : Ty) : Bool := !ty.isHandle
 
 /-- What the projected role holds for one original component: nothing (the
 component is absent at the role), the value at an exported reference, a present
@@ -325,7 +325,7 @@ def walkOperation (ctx : ProtocolContext) (n : Nat) (op : ProtocolOp) (arguments
   | .exchange ty sender receiver site =>
       let qualified := qualifyProtocolSite ctx.applicationPrefix site
       if ctx.roles sender = ctx.roles receiver then .error "projection-exchange-roles"
-      else if ty.isService = true then .error "projection-message-type"
+      else if ty.isHandle = true then .error "projection-message-type"
       else if ctx.roles sender = self then
         match arguments with
         | [.held reference] =>

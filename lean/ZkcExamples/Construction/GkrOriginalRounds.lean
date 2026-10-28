@@ -112,7 +112,7 @@ theorem validator_send (side : Side) (handle layer index : Nat)
           history ++ [.message (delivery side layer index) (.field scalarDomain value)]⟩)) := by
   simp only [Original.send, show (routing handle .validator).mode = .validator from rfl,
     show (routing handle .validator).context.validator = 1 from rfl, routes.delivered,
-    Domain.Payload.ofValue, Ty.isService, ↓reduceDIte, Original.record]
+    Domain.Payload.ofValue, Ty.isHandle, ↓reduceDIte, Original.record]
 
 def validatorCarried (point : List F) (claim : F) (history : Domain.History (uniformCarriers F G)) :
     Domain.Environment (uniformCarriers F G) :=
@@ -228,7 +228,7 @@ theorem producer_send (side : Side) (handle layer index : Nat)
             history ++ [.message (message side packet layer index) (.field scalarDomain value)]⟩))) := by
   simp only [Original.send, show (routing handle .producer).mode = .producer from rfl,
     show (routing handle .producer).context.producer = 0 from rfl, routes.message,
-    Domain.Payload.ofValue, Ty.isService, ↓reduceDIte, Original.record]
+    Domain.Payload.ofValue, Ty.isHandle, ↓reduceDIte, Original.record]
   rfl
 
 theorem producer_receive (side : Side) (handle layer index : Nat)
@@ -335,7 +335,7 @@ def producerCallback (side : Side) (handle offset layerRef layer index : Nat)
            (producer_send (F := F) (G := G) side handle layer index routes 2),
            (producer_receive (F := F) (G := G) side handle layer index routes)] unfolding
           [site0, site1, site2, List.append_assoc, producerCarried, Original.encodeHelperResult, Domain.encodeValues,
-           Domain.Value.encode, Domain.Payload.ofValue, Ty.isService, Option.map_some, Option.map_none,
+           Domain.Value.encode, Domain.Payload.ofValue, Ty.isHandle, Option.map_some, Option.map_none,
            Original.foldActionCall, Original.foldActionDone, Original.foldActionHalt,
            Original.fold_bind, PIR.Process.interpret_bind, Original.operations, profile, role1,
            Original.fieldReply, Domain.Raw, Request.draw, Values.get]))
@@ -348,7 +348,7 @@ def producerCallback (side : Side) (handle offset layerRef layer index : Nat)
            List.getElem?_append_right, size, Nat.add_sub_cancel_left, Environment.prepend,
            Values.get, Bind.bind, Option.bind]; rfl)
       | solve | simp (disch := omega) [Domain.read, Domain.encodeValues, Domain.Value.encode,
-          Domain.Payload.ofValue, Ty.isService, List.getElem?_append_left, List.getElem?_append_right,
+          Domain.Payload.ofValue, Ty.isHandle, List.getElem?_append_left, List.getElem?_append_right,
           List.cons_append, List.nil_append, List.getElem?_cons_zero, List.getElem?_cons_succ,
           Option.bind_some, Option.pure_def, size, Nat.add_sub_cancel_left]; rfl)
 

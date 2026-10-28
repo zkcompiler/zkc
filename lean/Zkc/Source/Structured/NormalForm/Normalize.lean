@@ -324,6 +324,7 @@ def literalTerm {Δ : Scope} : (ty : Ty) → Nat → Option (Term laws Δ ty)
   | .vector _, _ => none
   | .group _, _ => none
   | .service _, _ => none
+  | .indices, _ | .groups _, _ | .oracle _, _ | .oracleSequence .., _
   | .sequence _, _ | .product .., _ => none
 
 /-- A returning law's results as components: from its result function, from the

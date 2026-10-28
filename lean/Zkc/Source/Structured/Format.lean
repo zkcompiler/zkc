@@ -45,21 +45,42 @@ def group (json : Json) : Except String String := string json
 
 def service (json : Json) : Except String String := string json
 
-def typeAt : Nat → Json → Except String Ty
+mutual
+ def typeAt : Nat → Json → Except String Ty
   | 0, _ => .error "structured-type-depth"
   | depth + 1, json => do
     match ← array json with
     | [.str "bool"] => return .boolean
     | [.str "index"] => return .index
+    | [.str "indices"] => return .indices
     | [.str "field", name] => return .field (← field name)
     | [.str "vector", name] => return .vector (← field name)
     | [.str "group", name] => return .group (← group name)
+    | [.str "groups", name] => return .groups (← group name)
+    | [.str "oracle", kind] => return .oracle (← oracleKindAt depth kind)
+    | [.str "oracle_sequence", kind, maximum] =>
+      return .oracleSequence (← oracleKindAt depth kind) (← indexDecimal (← string maximum))
     | [.str "service", name] => return .service (← service name)
     | [.str "sequence", element] => return .sequence (← typeAt depth element)
     | [.str "product", identity, constructor, fields] =>
       let fields ← (← array fields).mapM (typeAt depth)
       return .product (← string identity) (← string constructor) (ProductFields.ofList fields)
     | _ => throw "structured-type-unsupported"
+
+ def oracleKindAt : Nat → Json → Except String OracleKind
+  | 0, _ => .error "structured-type-depth"
+  | depth + 1, json => do
+    match ← array json with
+    | [.str "table", arguments] =>
+      match ← array arguments 2 with
+      | [.arr #[.str "type", row]] => return .table (← typeAt depth row) none
+      | [.arr #[.str "type", row], .arr #[.str "nat", rows]] =>
+        return .table (← typeAt depth row) (some (← indexDecimal (← string rows)))
+      | _ => throw "structured-oracle-kind"
+    | _ => throw "structured-oracle-kind"
+end
+
+def oracleKind (json : Json) : Except String OracleKind := oracleKindAt 64 json
 
 def type (json : Json) : Except String Ty := typeAt 64 json
 
@@ -89,8 +110,40 @@ def interface (json : Json) : Except String (Option ProtocolInterface) := do
       return some ⟨← strings roles 16, ← scopes inputs, ← scopes outputs⟩
   | _ => throw "structured-interface"
 
+def optional {α : Type} (decode : Json → Except String α) : Json → Except String (Option α)
+  | .null => pure none
+  | value => some <$> decode value
+
+def oracleNatural (json : Json) : Except String Nat := do indexDecimal (← string json)
+
 def descriptor (json : Json) : Except String Descriptor := do
   match ← array json with
+  | [.str "oracle_input", holder, receivers, kind, maximum] =>
+      return .oracle (.input (← string holder) (← strings receivers 16)
+        (← oracleKind kind) (← optional oracleNatural maximum))
+  | [.str "oracle_send", holder, receivers, kind, maximum] =>
+      return .oracle (.send (← string holder) (← strings receivers 16)
+        (← oracleKind kind) (← optional oracleNatural maximum))
+  | [.str "oracle_query", owner, kind] =>
+      return .oracle (.query (← optional (fun value => string value) owner) (← oracleKind kind))
+  | [.str "oracle_contents", owner, kind] =>
+      return .oracle (.contents (← string owner) (← oracleKind kind))
+  | [.str "oracle_components", holder, receivers, kind] =>
+      return .oracle (.components (← string holder) (← strings receivers 16) (← oracleKind kind))
+  | [.str "oracle_rows", kind] => return .oracle (.rows (← oracleKind kind))
+  | [.str "oracle_forget_rows", source, target] =>
+      return .oracle (.forgetRows (← oracleKind source) (← oracleKind target))
+  | [.str "oracle_virtual", declaration, holder, receivers, kind] =>
+      return .oracle (.virtual (← string declaration) (← string holder)
+        (← strings receivers 16) (← oracleKind kind))
+  | [.str "oracle_sequence_empty", kind, maximum] =>
+      return .oracle (.sequenceEmpty (← oracleKind kind) (← oracleNatural maximum))
+  | [.str "oracle_sequence_append", kind, maximum, roles] =>
+      return .oracle (.sequenceAppend (← oracleKind kind) (← oracleNatural maximum) (← strings roles 16))
+  | [.str "oracle_sequence_at", kind, maximum, roles] =>
+      return .oracle (.sequenceAt (← oracleKind kind) (← oracleNatural maximum) (← strings roles 16))
+  | [.str "oracle_sequence_length", kind, maximum] =>
+      return .oracle (.sequenceLength (← oracleKind kind) (← oracleNatural maximum))
   | [.str "exec", operation, binding, parameters] =>
       return .exec (← string operation) (← string binding) (← strings parameters)
   | [.str "index.constant", n] =>
@@ -213,6 +266,7 @@ def origin (mode : Kind) (json : Json) : Except String (Option FunctionOrigin) :
   match mode with
   | .protocol => return some (.protocol (← OriginFormat.protocol json))
   | .local => return some (← OriginFormat.localOrigin json)
+  | .oracle => throw "structured-origin-kind"
   | .math =>
     unless (← array json).isEmpty do throw "structured-origin-kind"
     return none
@@ -222,10 +276,6 @@ def purpose : Json → Except String String
   | .str "statement" => .ok "statement"
   | .str "witness" => .ok "witness"
   | _ => .error "structured-relation-purpose"
-
-def optional {α : Type} (decode : Json → Except String α) : Json → Except String (Option α)
-  | .null => pure none
-  | value => some <$> decode value
 
 def contractSelector (json : Json) : Except String ContractSelector := do
   match ← array json with
@@ -282,6 +332,10 @@ def binding (json : Json) : Except String Binding := do
 
 def definition (json : Json) : Except String Definition := do
   match ← array json with
+  | [.str "oracle", name, inputs, kind, admissibility, shape, maximum, body] =>
+      return .oracle ⟨← string name, ← types inputs, ← oracleKind kind,
+        ← string admissibility, ← optional oracleNatural shape, ← optional oracleNatural maximum,
+        ← block Limits.nesting body⟩
   | [.str "function", name, mode, visible, inputs, outputs, ports, premises, source, body] =>
     let mode ← kind mode
     return .function ⟨← string name, mode, ← visibility visible,

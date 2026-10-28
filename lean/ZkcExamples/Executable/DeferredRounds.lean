@@ -75,17 +75,17 @@ theorem readable_returns (program : Structured.Program) (x : F) (key : Origin �
         DeferredRounds.participant.returned
         (nominalData x ++ [Domain.Value.transcript DeferredRounds.context.suite []])) := by
   have multiply (field : String) (left right : F)
-      (one two : (Structured.Ty.field field).isService = false) :
+      (one two : (Structured.Ty.field field).isHandle = false) :
       Domain.calculate (Structured.ringModel F G) (.fieldMultiply field)
         [.data ⟨.field field, one, left⟩, .data ⟨.field field, two, right⟩] =
         .returned [.data (.field field (left * right))] := Domain.Calculations.fieldMultiply field left right
   have add (field : String) (left right : F)
-      (one two : (Structured.Ty.field field).isService = false) :
+      (one two : (Structured.Ty.field field).isHandle = false) :
       Domain.calculate (Structured.ringModel F G) (.fieldAdd field)
         [.data ⟨.field field, one, left⟩, .data ⟨.field field, two, right⟩] =
         .returned [.data (.field field (left + right))] := Domain.Calculations.fieldAdd field left right
   have equal (field : String) (left right : F)
-      (one two : (Structured.Ty.field field).isService = false) :
+      (one two : (Structured.Ty.field field).isHandle = false) :
       Domain.calculate (Structured.ringModel F G) (.fieldEqual field)
         [.data ⟨.field field, one, left⟩, .data ⟨.field field, two, right⟩] =
         .returned [.data (.boolean (decide (left = right)))] := Domain.Calculations.fieldEqual field left right
@@ -97,7 +97,7 @@ theorem readable_returns (program : Structured.Program) (x : F) (key : Origin �
     Domain.atCoordinates, Context.message, Context.query, Context.role, Context.suite, Context.contract,
     Context.request, Context.replacement?, Context.service, DomainAdapter.readbackValues,
     DomainAdapter.readbackValue, DomainAdapter.readbackData, DomainAdapter.readbackHistory,
-    DomainAdapter.readbackEvent, DomainAdapter.readbackPayload, Structured.Ty.isService,
+    DomainAdapter.readbackEvent, DomainAdapter.readbackPayload, Structured.Ty.isHandle,
     Bool.not_false, Bool.not_true, List.isEmpty_nil, List.take_nil, List.append_assoc,
     Template.applicationPrefix, Structured.qualifyProtocolSite, Origin.message, Origin.query, Request.draw,
     decimal, decimalDigit, Domain.Payload.field, Domain.Payload.boolean, eq_mpr_eq_cast, cast_eq,

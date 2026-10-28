@@ -43,7 +43,15 @@ struct Type {
     /// A capture-local immutable asset (a ring arena or a relation bundle).
     /// The domain is the canonical asset identity when closed and the
     /// parameter atom when symbolic; the sort is Ring or Bundle.
-    Asset
+    Asset,
+    /// A static logical oracle kind, independent of installed native domains.
+    OracleKind,
+    /// Role-family values eliminated by semantic realization before execution.
+    Oracle,
+    OracleSequence,
+    /// A forward association of a symbolic logical kind; never an injective
+    /// constructor.
+    OracleProjection
   };
   Kind kind = Kind::Boolean;
   std::string domain;
@@ -78,6 +86,11 @@ Type assetType(llvm::StringRef sort, llvm::StringRef identity);
 /// The asset sort of an asset term; empty for every other kind.
 llvm::StringRef assetSort(const Type &);
 bool isStaticOnly(const Type &);
+/// Direct logical handle values; aggregate formation has its own recursive
+/// check.
+bool isOracleHandle(const Type &);
+/// Library constructor spelling, distinct from native-data eligibility.
+llvm::StringRef oracleConstructor(const Type &);
 llvm::StringRef typeKindName(Type::Kind);
 std::string spelling(const Type &);
 /// Injective internal key; source-facing spelling is deliberately separate.

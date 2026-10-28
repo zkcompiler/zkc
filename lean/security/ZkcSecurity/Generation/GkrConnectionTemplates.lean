@@ -757,7 +757,7 @@ def validatorBody (handle : Nat) (initial outputs add mul : List F) (layers sele
       change ValidatorFrameReturns _ (.cons (some value) .nil, ⟨[], finalHistory⟩) _
       refine validatorFrameReturns point claim finalHistory value ?_ ?_ ?_
       all_goals simp [validatorInputs, ArtifactBinding.Captures, Original.encodeHelperResult,
-        Domain.encodeValues, Domain.Value.encode, Domain.Payload.ofValue, Ty.isService,
+        Domain.encodeValues, Domain.Value.encode, Domain.Payload.ofValue, Ty.isHandle,
         GkrOriginalOutput.carried, OriginalLayer.validatorCarried, List.append_assoc])
 "###
 
@@ -816,7 +816,7 @@ def producerBody (handle : Nat) (initial add mul : List F) (layers selector widt
       refine ⟨empty, outputPoint, outputHistory, point, finalHistory, ?_, ?_⟩
       · simp
       · simp only [producerInputs, Original.encodeHelperResult, Domain.encodeValues,
-          Domain.Value.encode, Domain.Payload.ofValue, Ty.isService, GkrOriginalOutput.carried,
+          Domain.Value.encode, Domain.Payload.ofValue, Ty.isHandle, GkrOriginalOutput.carried,
           OriginalLayer.producerCarried, List.append_assoc, List.cons_append, List.nil_append]
         rfl)
 "###

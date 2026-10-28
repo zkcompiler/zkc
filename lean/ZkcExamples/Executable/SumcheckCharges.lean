@@ -101,7 +101,7 @@ theorem round_fits (a b c d e f g h : Domain.Value (Structured.uniformCarriers F
     unfolding [roundPrefix, List.take, Code.instructions, roundCode, roundBody, names, Names.of, operationAt, loopBody,
       ZkcExamples.Construction.SumcheckProof.participant, ZkcExamples.Construction.SumcheckProofParticipant.participant,
       ZkcExamples.Construction.SumcheckDomainConnection.roundInputs, Domain.evaluate, Domain.step, PIR.Yields,
-      Structured.Ty.isService, Bool.not_false, Bool.not_true]
+      Structured.Ty.isHandle, Bool.not_false, Bool.not_true]
 
   intros ignored low ignored1 ignored2 ignored3 ignored4 ignored5 ignored6 ignored7 ignored8 ignored9 high
     ignored10 ignored11 ignored12 ignored13 ignored14 ignored15 ignored16 ignored17 ignored18 ignored19 ignored20 ignored21 ignored22
@@ -110,7 +110,7 @@ theorem round_fits (a b c d e f g h : Domain.Value (Structured.uniformCarriers F
   all_goals normalize_artifact_operations [lowResolved, highResolved, drawResolved, deliveryResolved,
       requests.1, requests.2.1, requests.2.2, drawRequest,
       ZkcExamples.Construction.SumcheckDomainConnection.context_suite]
-    unfolding [Domain.evaluate, Domain.step, PIR.Yields, Structured.Ty.isService, Bool.not_false, Bool.not_true]
+    unfolding [Domain.evaluate, Domain.step, PIR.Yields, Structured.Ty.isHandle, Bool.not_false, Bool.not_true]
 
   intro ignored24 ignored25 ignored26 ignored27 ignored28 ignored29 answer
   change F at answer

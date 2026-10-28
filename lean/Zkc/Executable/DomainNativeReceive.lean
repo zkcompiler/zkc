@@ -19,7 +19,7 @@ variable {F G : Type}
 
  theorem scalarType_data (ty : Structured.Ty) (eligible : (scalarType ty).isSome = true) :
     Domain.dataType ty = true := by
-  cases ty <;> simp_all [scalarType, Domain.dataType, Structured.Ty.isService]
+  cases ty <;> simp_all [scalarType, Domain.dataType, Structured.Ty.isHandle]
 
 variable [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 variable {m : Type → Type} [Monad m]
@@ -34,7 +34,7 @@ theorem receive_payload {R : Type} (program : Structured.Program) (context : Con
       (payload :: proof) next = next (env ++ [.data (DomainAdapter.embedPayload payload)]) proof := by
   cases payload <;> simp [Domain.step, Domain.dataType, payloadType, DomainAdapter.runK,
     Value.decode, Domain.Value.encode, Domain.Payload.ofValue, Domain.sortsMatch,
-    Domain.Value.sort, DomainAdapter.embedPayload, Structured.Ty.isService]
+    Domain.Value.sort, DomainAdapter.embedPayload, Structured.Ty.isHandle]
 
 theorem receive_wrong_payload {R : Type} (program : Structured.Program) (context : Context)
     (key : Origin → Origin) (initial : History F G) (challenge : History F G → m F)

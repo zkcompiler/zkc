@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.RegionDecoding
+public import Zkc.Source.Structured.Addresses
 public import Zkc.Source.Structured.Catalogue
 public import Zkc.Source.Structured.Origin
 
@@ -27,14 +27,33 @@ not a digest. Its constructor and flattened component order remain explicit. -/
 mutual
   inductive Ty where
     | boolean | index | field (domain : String) | vector (domain : String)
-    | group (domain : String) | service (contract : String)
+    | group (domain : String) | groups (domain : String) | indices
+    | service (contract : String)
+    | oracle (kind : OracleKind)
+    | oracleSequence (kind : OracleKind) (maximum : Nat)
     | sequence (element : Ty)
     | product (identity constructor : String) (fields : ProductFields)
+    deriving DecidableEq, Repr, Inhabited
+  inductive OracleKind where
+    | table (row : Ty) (rows : Option Nat)
     deriving DecidableEq, Repr, Inhabited
   inductive ProductFields where
     | nil | cons (type : Ty) (rest : ProductFields)
     deriving DecidableEq, Repr, Inhabited
 end
+
+/-- Associated types are determined by the admitted library kind, never by a
+redundant producer-provided signature. Row and shape admission are separate. -/
+def OracleKind.data : OracleKind → Ty
+  | .table (.field domain) _ => .vector domain
+  | .table (.group domain) _ => .groups domain
+  | .table .index _ => .indices
+  | .table row _ => .sequence row
+
+def OracleKind.query (_ : OracleKind) : Ty := .index
+
+def OracleKind.answer : OracleKind → Ty
+  | .table row _ => row
 
 def ProductFields.toList : ProductFields → List Ty
   | .nil => []
@@ -51,7 +70,7 @@ def ProductFields.ofList : List Ty → ProductFields
   | cons type rest ih => simp [ofList, toList, ih]
 
 inductive Kind where
-  | protocol | math | local
+  | protocol | math | local | oracle
   deriving DecidableEq, Repr
 
 inductive Visibility where
@@ -87,7 +106,25 @@ structure Binding where
   implementation : String
   deriving DecidableEq, Repr
 
+/-- Logical operations preserve anchors and query occurrences. This wire
+vocabulary does not grant ordinary Math, message or executable-codec admission. -/
+inductive OracleDescriptor where
+  | input (holder : String) (receivers : List String) (kind : OracleKind) (maximum : Option Nat)
+  | send (holder : String) (receivers : List String) (kind : OracleKind) (maximum : Option Nat)
+  | query (owner : Option String) (kind : OracleKind)
+  | contents (owner : String) (kind : OracleKind)
+  | components (holder : String) (receivers : List String) (kind : OracleKind)
+  | rows (kind : OracleKind)
+  | forgetRows (source target : OracleKind)
+  | virtual (declaration holder : String) (receivers : List String) (kind : OracleKind)
+  | sequenceEmpty (kind : OracleKind) (maximum : Nat)
+  | sequenceAppend (kind : OracleKind) (maximum : Nat) (roles : List String)
+  | sequenceAt (kind : OracleKind) (maximum : Nat) (roles : List String)
+  | sequenceLength (kind : OracleKind) (maximum : Nat)
+  deriving DecidableEq, Repr
+
 inductive Descriptor where
+  | oracle (value : OracleDescriptor)
   | exec (operation binding : String) (parameters : List String)
   | indexConstant (decimal : String)
   | indexEqual
@@ -224,7 +261,20 @@ structure MapDeclaration where
   rowwise : List Bool
   deriving Repr
 
+/-- Sources precede ordinary parameters; the queried position is last. The
+actual query body determines the footprint, including repeated unused queries. -/
+structure OracleDeclaration where
+  name : String
+  inputs : List Ty
+  kind : OracleKind
+  admissibility : String
+  shapeArgument : Option Nat
+  maximumRows : Option Nat
+  body : Block
+  deriving Repr
+
 inductive Definition where
+  | oracle (value : OracleDeclaration)
   | function (value : Function)
   | finite (value : FiniteDeclaration)
   | collect (value : CollectDeclaration)
@@ -321,32 +371,38 @@ structure Snapshot where
   deriving Repr
 
 def Definition.name : Definition → String
+  | .oracle f => f.name
   | .function f => f.name
   | .finite f => f.name
   | .collect f => f.name
   | .realization f => f.name
   | .map f => f.name
 def Definition.inputs : Definition → List Ty
+  | .oracle f => f.inputs
   | .function f => f.inputs
   | .finite f => f.inputs
   | .collect f => f.inputs
   | .realization f => f.inputs
   | .map f => f.inputs
 def Definition.outputs : Definition → List Ty
+  | .oracle f => [f.kind.answer]
   | .function f => f.outputs
   | .finite f => f.outputs
   | .collect f => f.outputs
   | .realization f => f.outputs
   | .map f => f.outputs
 def Definition.kind : Definition → Kind
+  | .oracle _ => .oracle
   | .function f => f.kind
   | .finite _ | .collect _ | .realization _ | .map _ => .local
 def Definition.visibility : Definition → Visibility
+  | .oracle _ => .publicDef
   | .function f => f.visibility
   | .finite f => f.visibility
   | .collect f => f.visibility
   | .realization _ | .map _ => .publicDef
 def Definition.preconditions : Definition → List Bound
+  | .oracle _ => []
   | .function f => f.preconditions
   | .finite _ | .collect _ | .realization _ | .map _ => []
 

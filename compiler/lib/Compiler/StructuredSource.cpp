@@ -140,6 +140,38 @@ json::Value contractValue(Attribute attr) {
 // catalogue carries the rows of every identity used, so Lean resolves each
 // sort against rows rather than against fixed spellings.
 Expected<json::Value> encodeSort(Type type, UsedIdentities &used,
+                                 unsigned depth);
+
+// Keep the library identity and typed static arguments. Associated types are
+// derived by each reader, rather than trusted from redundant exported fields.
+Expected<json::Value> encodeOracleKind(protocol_ir::OracleKindAttr kind,
+                                       UsedIdentities &used, unsigned depth) {
+  if (depth >= depthLimit)
+    return error("structured-source-limit");
+  json::Array arguments;
+  for (Attribute argument : kind.getArguments()) {
+    if (auto type = dyn_cast<TypeAttr>(argument)) {
+      auto encoded = encodeSort(type.getValue(), used, depth + 1);
+      if (!encoded)
+        return encoded.takeError();
+      arguments.push_back(json::Array{"type", std::move(*encoded)});
+    } else if (auto natural = dyn_cast<IntegerAttr>(argument);
+               natural && natural.getType().isUnsignedInteger(64)) {
+      arguments.push_back(json::Array{
+          "nat", std::to_string(natural.getValue().getZExtValue())});
+    } else {
+      return error("structured-source-oracle-kind");
+    }
+  }
+  return json::Array{kind.getIdentity(), std::move(arguments)};
+}
+
+json::Value oracleNatural(IntegerAttr value) {
+  return value ? json::Value(std::to_string(value.getValue().getZExtValue()))
+               : json::Value(nullptr);
+}
+
+Expected<json::Value> encodeSort(Type type, UsedIdentities &used,
                                  unsigned depth = 0) {
   if (depth >= depthLimit)
     return error("structured-source-type-depth");
@@ -162,6 +194,23 @@ Expected<json::Value> encodeSort(Type type, UsedIdentities &used,
     return nominal("vector", "Field", vector.getDomain());
   if (auto group = dyn_cast<algebra::GroupType>(type))
     return nominal("group", "Group", group.getDomain());
+  if (auto groups = dyn_cast<algebra::GroupVectorType>(type))
+    return nominal("groups", "Group", groups.getDomain());
+  if (isa<algebra::IndicesType>(type))
+    return json::Array{"indices"};
+  if (auto handle = dyn_cast<protocol_ir::OracleHandleType>(type)) {
+    auto encoded = encodeOracleKind(handle.getKind(), used, depth + 1);
+    if (!encoded)
+      return encoded.takeError();
+    return json::Array{"oracle", std::move(*encoded)};
+  }
+  if (auto sequence = dyn_cast<protocol_ir::OracleSequenceType>(type)) {
+    auto encoded = encodeOracleKind(sequence.getKind(), used, depth + 1);
+    if (!encoded)
+      return encoded.takeError();
+    return json::Array{"oracle_sequence", std::move(*encoded),
+                       std::to_string(sequence.getMaximum())};
+  }
   if (auto sequence = dyn_cast<data::SequenceType>(type)) {
     auto element = encodeSort(sequence.getElementType(), used, depth + 1);
     if (!element)
@@ -354,6 +403,8 @@ StringRef kind(Operation &op) {
     return isScopedExecutionFunction(function) ? "local" : "math";
   if (isa<data::DomainOp>(op))
     return "domain";
+  if (isa<protocol_ir::OracleDefinitionOp>(op))
+    return "oracle";
   return "";
 }
 
@@ -716,7 +767,7 @@ class Exporter {
     if (isa<data::IndexOp, data::EqualOp, data::LessOp, data::PowerOfTwoOp>(
             op)) {
       bool constant = isa<data::IndexOp>(op);
-      if (owner != "protocol" && owner != "math")
+      if (owner != "protocol" && owner != "math" && owner != "oracle")
         return error("structured-source-operation");
       if (auto e = attributes(op, constant ? ArrayRef<StringRef>{"value"}
                                            : ArrayRef<StringRef>{}))
@@ -729,7 +780,7 @@ class Exporter {
                                                  : "index.power_of_two"};
     }
     if (auto restrict = dyn_cast<algebra::MultilinearRestrictPrefixOp>(op)) {
-      if (owner != "protocol" && owner != "math")
+      if (owner != "protocol" && owner != "math" && owner != "oracle")
         return error("structured-source-operation");
       if (auto e = attributes(op, {}))
         return std::move(e);
@@ -738,7 +789,8 @@ class Exporter {
       return json::Array{"multilinear.restrict_prefix", domain};
     }
     if (auto dim = dyn_cast<data::DimOp>(op)) {
-      if ((owner != "protocol" && owner != "math") || dim.getAxis() != 0 ||
+      if ((owner != "protocol" && owner != "math" && owner != "oracle") ||
+          dim.getAxis() != 0 ||
           !isa<algebra::FieldVectorType>(dim.getInput().getType()))
         return error("structured-source-operation");
       if (auto e = attributes(op, {"axis"}))
@@ -786,6 +838,113 @@ class Exporter {
         result.push_back(
             cast<algebra::FieldType>(op.getOperand(1).getType()).getDomain());
       return result;
+    }
+    if (isa<protocol_ir::OracleSendOp, protocol_ir::OracleInputOp,
+            protocol_ir::OracleComponentsOp, protocol_ir::OracleVirtualOp>(
+            op)) {
+      bool send = isa<protocol_ir::OracleSendOp>(op);
+      bool input = isa<protocol_ir::OracleInputOp>(op);
+      bool components = isa<protocol_ir::OracleComponentsOp>(op);
+      bool virtualHandle = isa<protocol_ir::OracleVirtualOp>(op);
+      if (owner != "protocol")
+        return error("structured-source-operation");
+      SmallVector<StringRef> allowed{send ? "sender" : "holder", "receivers"};
+      if (send)
+        allowed.push_back("site");
+      if (send || input)
+        allowed.push_back("maximum_rows");
+      if (virtualHandle)
+        allowed.push_back("callee");
+      if (auto e = attributes(op, allowed))
+        return std::move(e);
+      auto handle = cast<protocol_ir::OracleHandleType>(
+          components ? op.getOperand(0).getType() : op.getResult(0).getType());
+      auto encoded = encodeOracleKind(handle.getKind(), used, 0);
+      if (!encoded)
+        return encoded.takeError();
+      json::Array descriptor{send         ? "oracle_send"
+                             : input      ? "oracle_input"
+                             : components ? "oracle_components"
+                                          : "oracle_virtual"};
+      if (virtualHandle) {
+        auto callee = reference(op, "callee", {"oracle"});
+        if (!callee)
+          return callee.takeError();
+        descriptor.push_back(*callee);
+      }
+      descriptor.push_back(
+          op.getAttrOfType<StringAttr>(send ? "sender" : "holder").getValue());
+      descriptor.push_back(names(op.getAttrOfType<ArrayAttr>("receivers")));
+      descriptor.push_back(std::move(*encoded));
+      if (send || input)
+        descriptor.push_back(
+            oracleNatural(op.getAttrOfType<IntegerAttr>("maximum_rows")));
+      return descriptor;
+    }
+    if (isa<protocol_ir::OracleQueryOp, protocol_ir::OracleContentsOp,
+            protocol_ir::OracleRowsOp, protocol_ir::OracleForgetRowsOp>(op)) {
+      bool query = isa<protocol_ir::OracleQueryOp>(op);
+      bool contents = isa<protocol_ir::OracleContentsOp>(op);
+      bool forget = isa<protocol_ir::OracleForgetRowsOp>(op);
+      if (owner != "protocol" && !(owner == "oracle" && query))
+        return error("structured-source-operation");
+      if (auto e = attributes(op, query ? ArrayRef<StringRef>{"owner", "site"}
+                                  : contents ? ArrayRef<StringRef>{"owner"}
+                                             : ArrayRef<StringRef>{}))
+        return std::move(e);
+      auto handle =
+          cast<protocol_ir::OracleHandleType>(op.getOperand(0).getType());
+      auto encoded = encodeOracleKind(handle.getKind(), used, 0);
+      if (!encoded)
+        return encoded.takeError();
+      json::Array descriptor{query      ? "oracle_query"
+                             : contents ? "oracle_contents"
+                             : forget   ? "oracle_forget_rows"
+                                        : "oracle_rows"};
+      if (query || contents) {
+        auto role = op.getAttrOfType<StringAttr>("owner");
+        descriptor.push_back(role ? json::Value(role.getValue())
+                                  : json::Value(nullptr));
+      }
+      descriptor.push_back(std::move(*encoded));
+      if (forget) {
+        auto target = encodeOracleKind(
+            cast<protocol_ir::OracleHandleType>(op.getResult(0).getType())
+                .getKind(),
+            used, 0);
+        if (!target)
+          return target.takeError();
+        descriptor.push_back(std::move(*target));
+      }
+      return descriptor;
+    }
+    if (isa<protocol_ir::OracleSequenceEmptyOp,
+            protocol_ir::OracleSequenceAppendOp,
+            protocol_ir::OracleSequenceAtOp,
+            protocol_ir::OracleSequenceLengthOp>(op)) {
+      bool empty = isa<protocol_ir::OracleSequenceEmptyOp>(op);
+      bool append = isa<protocol_ir::OracleSequenceAppendOp>(op);
+      bool at = isa<protocol_ir::OracleSequenceAtOp>(op);
+      if (owner != "protocol")
+        return error("structured-source-operation");
+      if (auto e =
+              attributes(op, append || at ? ArrayRef<StringRef>{"roles", "site"}
+                                          : ArrayRef<StringRef>{}))
+        return std::move(e);
+      auto sequence = cast<protocol_ir::OracleSequenceType>(
+          empty ? op.getResult(0).getType() : op.getOperand(0).getType());
+      auto encoded = encodeOracleKind(sequence.getKind(), used, 0);
+      if (!encoded)
+        return encoded.takeError();
+      json::Array descriptor{empty    ? "oracle_sequence_empty"
+                             : append ? "oracle_sequence_append"
+                             : at     ? "oracle_sequence_at"
+                                      : "oracle_sequence_length",
+                             std::move(*encoded),
+                             std::to_string(sequence.getMaximum())};
+      if (append || at)
+        descriptor.push_back(names(op.getAttrOfType<ArrayAttr>("roles")));
+      return descriptor;
     }
     if (auto restrict = dyn_cast<protocol_ir::RestrictRolesOp>(op)) {
       if (auto e = attributes(op, {"roles"}))
@@ -893,7 +1052,7 @@ class Exporter {
               op, math ? ArrayRef<StringRef>{"callee"}
                        : ArrayRef<StringRef>{"callee", "site", "role"}))
         return std::move(e);
-      if (math && owner != "math" && owner != "protocol")
+      if (math && owner != "math" && owner != "protocol" && owner != "oracle")
         return error("structured-source-reference");
       auto callee = reference(op, "callee",
                               math ? ArrayRef<StringRef>{"math"}
@@ -967,12 +1126,13 @@ class Exporter {
       if (!args)
         return args.takeError();
       if (&op == &body.back()) {
-        bool valid =
-            terminator == "return"
-                ? (owner == "math" ? isa<func::ReturnOp>(op)
-                                   : isa<protocol_ir::MathematicalReturnOp>(op))
-                : owner == "protocol" && terminator == "yield" &&
-                      isa<protocol_ir::ProtocolYieldOp>(op);
+        bool valid = terminator == "return"
+                         ? (owner == "math" ? isa<func::ReturnOp>(op)
+                            : owner == "oracle"
+                                ? isa<protocol_ir::OracleYieldOp>(op)
+                                : isa<protocol_ir::MathematicalReturnOp>(op))
+                         : owner == "protocol" && terminator == "yield" &&
+                               isa<protocol_ir::ProtocolYieldOp>(op);
         if (!valid || op.getOperandTypes() != outputs)
           return error("structured-source-region");
         if (auto e = attributes(op, {}))
@@ -1247,6 +1407,36 @@ class Exporter {
                          std::move((*refs)[2])};
     }
     return error("structured-source-operation", op.getName().getStringRef());
+  }
+
+  Expected<json::Value> oracle(protocol_ir::OracleDefinitionOp op,
+                               ArrayRef<unsigned> path) {
+    if (auto e = attributes(*op, {"sym_name", "function_type", "kind",
+                                  "admissibility", "shape_argument",
+                                  "maximum_rows"}))
+      return std::move(e);
+    auto inputs = sorts(op.getFunctionType().getInputs());
+    if (!inputs)
+      return inputs.takeError();
+    auto encodedKind = encodeOracleKind(op.getKind(), used, 0);
+    if (!encodedKind)
+      return encodedKind.takeError();
+    // Common admission checks the actual relation signature and every query,
+    // including dormant declarations. Retain their source rather than their
+    // expanded execution, with definition-local query labels and SSA positions.
+    roles = {};
+    auto body = block(op.getBody(), child(path, {7}),
+                      op.getFunctionType().getResults(), "oracle", "return");
+    if (!body)
+      return body.takeError();
+    return json::Array{"oracle",
+                       op.getSymName(),
+                       std::move(*inputs),
+                       std::move(*encodedKind),
+                       op.getAdmissibility(),
+                       oracleNatural(op.getShapeArgumentAttr()),
+                       oracleNatural(op.getMaximumRowsAttr()),
+                       std::move(*body)};
   }
 
   Expected<json::Value> function(Operation &op, ArrayRef<unsigned> path) {
@@ -1553,7 +1743,9 @@ public:
         RowPath path{7, unsigned(definitions.size())};
         if (auto e = associate(path, op))
           return std::move(e);
-        auto encoded = function(op, path);
+        auto declaration = dyn_cast<protocol_ir::OracleDefinitionOp>(op);
+        auto encoded =
+            declaration ? oracle(declaration, path) : function(op, path);
         if (!encoded)
           return encoded.takeError();
         definitions.push_back(std::move(*encoded));

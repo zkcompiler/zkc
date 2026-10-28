@@ -27,14 +27,15 @@ void Semantics::indexParameter(const Parameter &parameter, DeclarationId id,
 }
 Type parameterType(const Parameter &p) {
   using K = Type::Kind;
-  Type value = p.sort == Parameter::Sort::Domain
-                   ? domainType(p.domainSort, p.atom)
-               : p.sort == Parameter::Sort::Asset
-                   ? assetType(p.domainSort, p.atom)
-                   : Type(p.sort == Parameter::Sort::Natural  ? K::Natural
-                          : p.sort == Parameter::Sort::Module ? K::Module
-                                                              : K::Parameter,
-                          p.atom);
+  Type value =
+      p.sort == Parameter::Sort::Domain ? domainType(p.domainSort, p.atom)
+      : p.sort == Parameter::Sort::Asset
+          ? assetType(p.domainSort, p.atom)
+          : Type(p.sort == Parameter::Sort::Natural      ? K::Natural
+                 : p.sort == Parameter::Sort::Module     ? K::Module
+                 : p.sort == Parameter::Sort::OracleKind ? K::OracleKind
+                                                         : K::Parameter,
+                 p.atom);
   value.symbolic = true;
   value.assumptions = p.permissions;
   if (p.sort == Parameter::Sort::Natural)
@@ -239,6 +240,12 @@ std::optional<Type> Semantics::substitute(const Type &input,
         result.domain.clear();
     }
   }
+  if (result.kind == Type::Kind::OracleKind && !symbolic(result) &&
+      !oracleKind(result, span))
+    return {};
+  if (result.kind == Type::Kind::OracleProjection &&
+      result.arguments.size() == 1)
+    return associated(result.arguments.front(), result.domain, span);
   if ((result.kind == Type::Kind::Associated || !domainSort(result).empty()) &&
       !result.arguments.empty()) {
     StringRef name = result.domain;
@@ -246,6 +253,17 @@ std::optional<Type> Semantics::substitute(const Type &input,
     return associated(result.arguments.front(), name.drop_front(pos + 2), span);
   }
   return result;
+}
+bool Semantics::oracleKind(const Type &kind, Span span,
+                           const Declaration *scope) {
+  auto formed = builtinType(oracleConstructor(kind), kind.arguments);
+  if (!formed) {
+    accept(formed.takeError(), span);
+    return false;
+  }
+  const auto &row = kind.arguments.front();
+  return executableType(row, span) && mathematicalData(row, span, scope) &&
+         admit(row, Boundary::Participants, span, scope);
 }
 std::optional<Type> Semantics::associated(const Type &base, StringRef member,
                                           Span span) {
@@ -274,6 +292,14 @@ std::optional<Type> Semantics::associated(const Type &base, StringRef member,
       member = tail;
     }
     return current;
+  }
+  if (base.kind == Type::Kind::OracleKind) {
+    auto result = oracleMember(base, member);
+    if (!result) {
+      accept(result.takeError(), span);
+      return {};
+    }
+    return std::move(*result);
   }
   if (base.kind == Type::Kind::Asset)
     return assetProjection(base, member, span);
@@ -413,6 +439,9 @@ bool Semantics::checkKnownArgumentSorts(const Declaration &target,
       break;
     case Parameter::Sort::Natural:
       kind = a.kind == Type::Kind::Natural;
+      break;
+    case Parameter::Sort::OracleKind:
+      kind = a.kind == Type::Kind::OracleKind;
       break;
     case Parameter::Sort::Type:
       kind = valueType(a);

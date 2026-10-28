@@ -693,7 +693,7 @@ private:
       advance();
     } else {
       if (at("bool") || at("index") || at("nat") || at("Type") || at("Field") ||
-          at("Group")) {
+          at("Group") || at("OracleKind")) {
         out.name = text().str();
         advance();
       } else if (!path(out.name, true, true))

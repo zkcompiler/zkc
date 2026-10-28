@@ -46,7 +46,7 @@ theorem producer_send (handle layer : Nat) (history : Domain.History (uniformCar
           .done ((), ⟨frames layer, history ++ [.message (constant layer) (.field scalarDomain value)]⟩)) := by
   simp only [Original.send, show (routing handle .producer).mode = .producer from rfl,
     show (routing handle .producer).context.producer = 0 from rfl, constant_message,
-    Domain.Payload.ofValue, Ty.isService, ↓reduceDIte, Original.record]
+    Domain.Payload.ofValue, Ty.isHandle, ↓reduceDIte, Original.record]
   rfl
 
 theorem validator_query (handle layer : Nat) (history : Domain.History (uniformCarriers F G)) :
@@ -63,7 +63,7 @@ theorem validator_send (handle layer : Nat) (history : Domain.History (uniformCa
         .done ((), ⟨frames layer, history ++ [.message (delivery layer) (.field scalarDomain value)]⟩)) := by
   simp only [Original.send, show (routing handle .validator).mode = .validator from rfl,
     show (routing handle .validator).context.validator = 1 from rfl, line_message,
-    Domain.Payload.ofValue, Ty.isService, ↓reduceDIte, Original.record]
+    Domain.Payload.ofValue, Ty.isHandle, ↓reduceDIte, Original.record]
 
 theorem producer_receive (handle layer : Nat) (history : Domain.History (uniformCarriers F G)) :
     Original.receive (routing handle .producer) ⟨frames layer, history⟩ (.field scalarDomain) deliverySite 1 =

@@ -72,12 +72,18 @@ def stopText : PIR.Stop → String
 def boolText (value : Bool) : String := if value then "true" else "false"
 mutual
   def tyText : Ty → String
-    | .boolean => ".boolean" | .index => ".index"
+    | .boolean => ".boolean" | .index => ".index" | .indices => ".indices"
     | .field d => app ".field" [quoted d] | .vector d => app ".vector" [quoted d]
     | .group d => app ".group" [quoted d] | .service d => app ".service" [quoted d]
+    | .groups d => app ".groups" [quoted d]
+    | .oracle kind => app ".oracle" [oracleKindText kind]
+    | .oracleSequence kind maximum => app ".oracleSequence" [oracleKindText kind, toString maximum]
     | .sequence element => app ".sequence" [tyText element]
     | .product identity constructor fields =>
       app ".product" [quoted identity, quoted constructor, fieldsText fields]
+  def oracleKindText : OracleKind → String
+    | .table row rows => app ".table" [tyText row,
+        match rows with | none => "none" | some n => app "some" [toString n]]
   def fieldsText : ProductFields → String
     | .nil => ".nil"
     | .cons type rest => app ".cons" [tyText type, fieldsText rest]
@@ -308,6 +314,7 @@ def Carriers.valueType (carriers : Carriers) (ty : Ty) : String :=
   | .domain model, .field d => paren model ++ ".Field " ++ quoted d
   | .domain model, .vector d => app "List" [paren (paren model ++ ".Field " ++ quoted d)]
   | .domain model, .group d => paren model ++ ".Group " ++ quoted d
+  | _, .indices | _, .groups _ | _, .oracle _ | _, .oracleSequence ..
   | _, .sequence _ | _, .product .. => app carriers.value [tyText ty]
 
 def emptyLabels : (Δ : Scope) → Values (fun _ => Option String) Δ

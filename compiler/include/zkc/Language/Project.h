@@ -468,7 +468,7 @@ struct Body {
   std::vector<std::vector<unsigned>> formationRequirements;
 };
 struct Parameter {
-  enum class Sort { Type, Natural, Module, Domain, Asset } sort;
+  enum class Sort { Type, Natural, Module, Domain, Asset, OracleKind } sort;
   std::string name, atom;
   /// Catalog sort of a Domain parameter or asset sort of an Asset parameter.
   std::string domainSort;

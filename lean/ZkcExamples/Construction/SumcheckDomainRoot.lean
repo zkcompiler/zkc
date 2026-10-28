@@ -56,7 +56,7 @@ theorem root_projection (values : List F) (claim : F) (rounds : Nat)
   simp only [view, body, bodyStep0, bodyStep1, bodyStep2, bodyStep3, bodyStep4]
   normalize_artifact_operations [pending_helper (F := F) (G := G), openClaim_helper (F := F) (G := G), atPrefix_helper (F := F) (G := G), context_suite]
     unfolding [inputSorts, outputSorts, returned, frame, PIR.Process.interpret,
-      Original.forgetCheckpoints, Structured.Ty.isService, Bool.not_false, Bool.not_true]
+      Original.forgetCheckpoints, Structured.Ty.isHandle, Bool.not_false, Bool.not_true]
   by_cases bounded : rounds ≤ 2
   all_goals normalize_artifact_operations [bounded, context_suite]
     unfolding [Domain.View.loop, rootProcess, PIR.Process.interpret, Original.forgetCheckpoints]

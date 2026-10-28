@@ -62,6 +62,10 @@ There is no cross-category declaration-order field.
 | `["field", domain]` | nominal scalar field |
 | `["vector", domain]` | immutable vector over that field |
 | `["group", domain]` | nominal group |
+| `["groups", domain]` | immutable vector over that group |
+| `["indices"]` | immutable ordered unsigned indices |
+| `["oracle", kind]` | logical occurrence anchor, with associated Data/Query/Answer |
+| `["oracle_sequence", kind, maximum]` | bounded ordered logical handles; `maximum` is a uint64 decimal string |
 | `["service", contract]` | owner-local reusable service reference |
 | `["sequence", element-type]` | ordered immutable `data.sequence` |
 | `["product", identity, constructor, component-types]` | one-constructor packed product, with ordered components |
@@ -483,6 +487,96 @@ Native verification also checks availability of unused intermediate expressions.
 Local calls require all inputs at their owner, execute there even with zero
 results, and do not execute at other participants. Restriction and declared
 output scopes never erase preceding effects or stops.
+
+## Logical oracle vocabulary
+
+These rows describe the original oracle-level subject, before semantic
+realization. The native exporter checks the common protocol formation rules,
+including dormant declarations. The independent Lean wire reader recognizes
+these rows. Lean semantic admission currently refuses logical oracle execution; decoding does not extend its existing participant theorems.
+Component seam derivation also refuses logical oracle instructions when linear
+component analysis is active. An empty proposal set asserts no oracle seam.
+Frontend syntax, generated obligations and deterministic realization remain
+separate implementation work; see [status](../../status.md).
+
+Kinds retain the library identity and typed arguments:
+
+```text
+kind := ["table", [["type", row-type]]]
+      | ["table", [["type", row-type], ["nat", rows]]]
+```
+
+`rows` and sequence capacities are canonical decimal strings in `0..2^64-1`,
+including zero. They are logical cardinalities, independent of execution work
+limits. Associated types are derived: Query is `index`, Answer is `row-type`,
+and Data is `vector` for field rows, `groups` for group rows, `indices` for
+index rows, or `sequence(row-type)` otherwise. The kind does not select a
+commitment scheme, leaf layout, native handle or codec. Nested services or
+logical handles cannot become ordinary row data.
+
+Every instruction uses the existing five fields:
+`[descriptor, operand-indices, result-types, regions, site]`. All oracle
+instructions have an empty `regions` array. Operand indices use the existing
+prepend-results convention. The kind in a descriptor must agree with the
+actual operand/result types; retaining it does not authorize a different kind.
+
+| Descriptor | Ordered operands | Results | Site |
+| --- | --- | --- | --- |
+| `["oracle_input", holder, receivers, kind, maximum-or-null]` | holder data, receiver anchor | role-family handle | empty |
+| `["oracle_send", holder, receivers, kind, maximum-or-null]` | data, rows | handle | send occurrence |
+| `["oracle_query", owner-or-null, kind]` | handle, position | answer | query occurrence or declaration-local label |
+| `["oracle_contents", holder, kind]` | handle | data | empty |
+| `["oracle_components", holder, receivers, kind]` | handle | holder data, receiver anchor | empty |
+| `["oracle_rows", kind]` | handle | index | empty |
+| `["oracle_forget_rows", sized-kind, unsized-kind]` | sized handle | unsized view of the same anchor | empty |
+| `["oracle_virtual", declaration, holder, receivers, kind]` | source handles, ordinary parameters | fresh virtual handle | empty |
+| `["oracle_sequence_empty", kind, maximum]` | none | sequence | empty |
+| `["oracle_sequence_append", kind, maximum, roles]` | sequence, handle | sequence | bounds-check occurrence |
+| `["oracle_sequence_at", kind, maximum, roles]` | sequence, position | selected handle | bounds-check occurrence |
+| `["oracle_sequence_length", kind, maximum]` | sequence | index | empty |
+
+An owner is absent only for a query inside a virtual declaration. Send and
+query sites remain ordered events, including repeated or unused queries.
+Sequence append/selection retain their stopping checks. A virtual construction
+has an occurrence identity from its structural row and actual invocation/loop
+coordinates, without inventing a query event or using a diagnostic location as
+identity. Shape and capacity are distinct: an unsized anchor has an immutable
+row count; a sequence has a maximum number of handles.
+
+Virtual declarations occupy the existing `definitions` table:
+
+```text
+["oracle", name, input-types, kind, admissibility-relation,
+ shape-argument-or-null, maximum-rows-or-null, block]
+```
+
+Source handles form the input prefix, ordinary parameters follow, and the
+queried position is last. The block returns one value of the kind's Answer
+type. Its query labels are local to that declaration, and its actual source
+operands and mathematical helper bodies determine the ordered footprint.
+Shape argument and maximum are decimal strings and occur together only for an
+unsized kind. The shape argument selects an ordinary parameter, not the queried
+position. The native checker verifies the actual admissibility relation over
+source Data values and ordinary parameters, without proving it. A same-named
+replacement declaration is not correspondence evidence.
+
+An input binding exposes exactly two interface leaves, data at the holder and
+an anchor at receivers. Shape belongs to that anchor; there is no third shape
+leaf or duplicate source port. The generated honest-input relation must connect
+those two leaves without appending or renumbering authored contract clauses.
+A call rebinds its actual anchor; it does not allocate another root input.
+`oracle_contents` is executable only at an admitted holder. A future
+relation-side anchor selector has separate permissions and supplies no
+verifier-side data extraction operation.
+
+The original snapshot and its row associations remain intact when a later
+construction selects a realization. That realization must produce ordinary
+protocol operations before participant projection; unresolved logical oracle
+operations cannot be serialized as physical handles in the
+[program byte language](program-bytes.md). The original and the deterministic
+realization record are the independent checker's inputs. Recognizing the source
+or output grammar proves neither realization correspondence nor commitment
+security.
 
 ## Retained protocol application
 

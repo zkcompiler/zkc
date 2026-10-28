@@ -45,6 +45,14 @@ mutual
       let [.str "group", .str actual, value] ← Format.array json | throw "structured-input-type"
       if actual != domain then throw "structured-input-domain"
       scalar value
+    | .groups domain, json => do
+      let [.str "groups", .str actual, values] ← Format.array json | throw "structured-input-type"
+      if actual != domain then throw "structured-input-domain"
+      (← Format.array values 4096).mapM scalar
+    | .indices, json => do
+      let [.str "indices", values] ← Format.array json | throw "structured-input-type"
+      (← Format.array values 4096).mapM fun value => Structured.Format.natural value (indexLimit - 1)
+    | .oracle _, _ | .oracleSequence .., _ => throw "structured-oracle-profile"
     | .service _, _ => throw "structured-open-profile"
     | .sequence element, json => do
       let [.str "sequence", elementType, values] ← Format.array json | throw "structured-input-type"
@@ -79,6 +87,10 @@ mutual
         .ok (.arr #[.str "vector", .str domain,
           .arr ((show List Scalar from values).map scalarJson).toArray])
     | .group domain, value => .ok (.arr #[.str "group", .str domain, scalarJson value])
+    | .groups domain, values => .ok (.arr #[.str "groups", .str domain,
+        .arr ((show List Scalar from values).map scalarJson).toArray])
+    | .indices, values => .ok (.arr #[.str "indices", .arr (values.map toJson).toArray])
+    | .oracle _, _ | .oracleSequence .., _ => .error "structured-oracle-profile"
     | .service _, _ => .error "structured-open-profile"
     | .sequence element, values => do
         return .arr #[.str "sequence", wireType element, .arr (← values.mapM (output element)).toArray]

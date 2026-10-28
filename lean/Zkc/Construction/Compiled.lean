@@ -50,7 +50,7 @@ def select {original : Snapshot} (imported : Imported original) (participant : P
 def Selection.check {original : Structured.Snapshot} (imported : Structured.Imported original)
     (selection : Selection imported.program.payload.entry.outputs) (participant : Participant) : Bool :=
   let entry := imported.program.payload.entry
-  selection.publics.all (fun ty => !ty.isService) &&
+  selection.publics.all (fun ty => !ty.isHandle) &&
     (decide (selection.position < (selection.context.dataPorts participant.returned).length) &&
     selection.publics.length == participant.policy.publicInputs.length &&
     Structured.inScope selection.context.validator entry.outputScopes selection.output &&

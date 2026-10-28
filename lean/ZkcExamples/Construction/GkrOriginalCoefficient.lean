@@ -182,7 +182,7 @@ def producerCallback (handle offset layerRef lineRef layer index : Nat)
               [List.append_assoc, List.getElem?_append_left, List.getElem?_append_right, size, layerInside, layerRead,
                Nat.add_sub_cancel_left, Nat.sub_self, List.getElem?_cons_zero, List.getElem?_cons_succ])
           | (fail_if_no_progress normalize_artifact_operations [compiled_origin] unfolding
-              [Original.send, routes.message, fieldResult, Values.get, Ty.isService,
+              [Original.send, routes.message, fieldResult, Values.get, Ty.isHandle,
                show (routing handle .producer).context = context from rfl,
                GkrSourceProtocol.context, Context.fiatShamir,
                show (routing handle .producer).mode = .producer from rfl,

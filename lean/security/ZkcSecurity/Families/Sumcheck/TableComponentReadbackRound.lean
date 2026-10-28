@@ -144,7 +144,7 @@ theorem readback (plan : Plan) (program : Structured.Program)
         Domain.View.guard, Domain.View.indicesEmpty, Domain.View.indicesAppend,
         Domain.View.observe, Domain.View.challenge, Domain.View.calculation, Domain.View.empty,
         Domain.View.append, Domain.read, Domain.Value.encode, Domain.Payload.ofValue,
-        Domain.sortsMatch, Domain.Value.sort, Domain.dataType, Ty.isService, Bool.not_false, eq_self, List.append_assoc,
+        Domain.sortsMatch, Domain.Value.sort, Domain.dataType, Ty.isHandle, Bool.not_false, eq_self, List.append_assoc,
         lowFound, highFound, queryFound, deliveryFound, lowMessage, highMessage, deliveryMessage, request,
         boundary, PIR.Process.bind, List.mapM_cons, List.mapM_nil, List.getElem?_cons_zero, List.getElem?_cons_succ,
         List.cons_append, List.nil_append, Bind.bind, Option.bind, Option.pure_def, Option.map_some,

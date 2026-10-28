@@ -6,6 +6,29 @@ admission and logical meaning; [formal support](../support.md) records the
 theorems proved about particular imported subjects and how far each claim
 reaches toward native compilation and execution.
 
+## Logical oracle wire extension
+
+The strict reader recognizes the logical oracle types, twelve descriptors and
+virtual declaration rows specified by the
+[native wire contract](../../../docs/spec/formats/structured-source.md#logical-oracle-vocabulary).
+It retains actual operands, roles, ordered query occurrences, labels, the
+admissibility relation and the entire virtual body. Table kinds derive their
+Data, Query and Answer types; shape and capacity fields are canonical unsigned
+64-bit decimal strings. Wire recognition alone does not establish that a row
+kind, role assignment, footprint or program is admissible.
+
+`OracleAnchor` records a construction or input occurrence under an
+`InvocationCoordinate`; calls and loop iterations retain their structural
+frames. Equal contents do not identify anchors. These are logical labels,
+without a native provider handle or an assertion that the occurrence was
+reached. The current semantic profile explicitly refuses oracle types,
+operations and declarations. Neither ordinary Math execution nor the Common
+projection admits them. Transcript payloads, executable codecs and ordinary
+message projection exclude logical handles recursively, including inside
+products and sequences; service identity remains a separate predicate. Independent semantic admission, projection soundness
+and realization simulation remain separate work; decoding is not evidence for
+any of those claims.
+
 ## Checked subject
 
 `Structured.Snapshot` retains source identity, selected entry, all domains,

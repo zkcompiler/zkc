@@ -78,7 +78,7 @@ def producerBody (handle : Nat) (initial add mul : List F) (layers selector widt
       refine ⟨empty, outputPoint, outputHistory, point, finalHistory, ?_, ?_⟩
       · simp
       · simp only [producerInputs, Original.encodeHelperResult, Domain.encodeValues,
-          Domain.Value.encode, Domain.Payload.ofValue, Ty.isService, GkrOriginalOutput.carried,
+          Domain.Value.encode, Domain.Payload.ofValue, Ty.isHandle, GkrOriginalOutput.carried,
           OriginalLayer.producerCarried, List.append_assoc, List.cons_append, List.nil_append]
         rfl)
 

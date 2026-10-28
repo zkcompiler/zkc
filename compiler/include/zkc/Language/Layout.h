@@ -1,6 +1,7 @@
 #ifndef ZKC_LANGUAGE_LAYOUT_H
 #define ZKC_LANGUAGE_LAYOUT_H
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/OracleKinds.h"
 #include "zkc/Language/Project.h"
 #include <map>
 #include <variant>
@@ -16,8 +17,18 @@ struct QuotientLayout {
   uint64_t modulus;
   uint64_t degree;
 };
+struct OracleKindLayout {
+  std::string identity;
+  std::vector<protocol::TypeArgument> arguments;
+  protocol::OracleKindSignature signature;
+};
+struct OracleLayout {
+  OracleKindLayout kind;
+  /// Present only for a bounded sequence, including the zero maximum.
+  std::optional<uint64_t> maximum;
+};
 /// One mathematical SSA leaf: executable native data or a formal algebraic
-/// value. The variant makes it impossible to pass a formal type as a BoundType
+/// value or logical handle. The variant prevents passing either as a BoundType
 /// string.
 class LayoutLeaf {
 public:
@@ -25,6 +36,10 @@ public:
   LayoutLeaf(const char *data) : value(std::string(data)) {}
   LayoutLeaf(PolynomialLayout polynomial) : value(std::move(polynomial)) {}
   LayoutLeaf(QuotientLayout quotient) : value(quotient) {}
+  LayoutLeaf(OracleLayout oracle) : value(std::move(oracle)) {}
+  const OracleLayout *oracle() const {
+    return std::get_if<OracleLayout>(&value);
+  }
   const std::string *data() const { return std::get_if<std::string>(&value); }
   const PolynomialLayout *polynomial() const {
     return std::get_if<PolynomialLayout>(&value);
@@ -33,13 +48,16 @@ public:
     return std::get_if<QuotientLayout>(&value);
   }
   uint64_t cost() const {
+    if (const auto *logical = oracle())
+      return logical->kind.signature.answer.spelling().size() + 8;
     return data()         ? data()->size() + 1
            : polynomial() ? polynomial()->field.size() + 2
                           : 3;
   }
 
 private:
-  std::variant<std::string, PolynomialLayout, QuotientLayout> value;
+  std::variant<std::string, PolynomialLayout, QuotientLayout, OracleLayout>
+      value;
 };
 struct Layout;
 struct LayoutField {
@@ -51,7 +69,7 @@ struct LayoutAlternative {
   std::string name;
   std::vector<LayoutField> fields;
 };
-/// A logical source value has one deterministic, bounded native layout.
+/// A logical source value has one deterministic, bounded SSA layout.
 /// Products flatten in declaration order; variants retain their closed tag.
 /// Custody, when present, is the first leaf and is never a user data field.
 struct Layout {
@@ -101,6 +119,9 @@ public:
   Layouts &operator=(const Layouts &) = delete;
   llvm::Expected<std::shared_ptr<const Layout>> get(const Type &);
   llvm::Expected<PackedLayout> packed(const Type &);
+  /// Resolve a closed kind through the shared Contracts owner and the exact row
+  /// layout.
+  llvm::Expected<OracleKindLayout> oracleKind(const Type &);
   llvm::Expected<std::vector<std::string>>
       kernelArguments(llvm::StringRef, llvm::ArrayRef<Type>);
   /// Select a checked logical product component in the flattened signature.

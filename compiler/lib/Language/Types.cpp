@@ -32,7 +32,24 @@ StringRef assetSort(const Type &type) {
 }
 bool isStaticOnly(const Type &type) {
   return type.kind == Type::Kind::Natural || type.kind == Type::Kind::Module ||
-         type.kind == Type::Kind::Domain || type.kind == Type::Kind::Asset;
+         type.kind == Type::Kind::Domain || type.kind == Type::Kind::Asset ||
+         type.kind == Type::Kind::OracleKind;
+}
+bool isOracleHandle(const Type &type) {
+  return type.kind == Type::Kind::Oracle ||
+         type.kind == Type::Kind::OracleSequence;
+}
+StringRef oracleConstructor(const Type &type) {
+  switch (type.kind) {
+  case Type::Kind::OracleKind:
+    return type.domain == "table" ? "oracle.table" : "";
+  case Type::Kind::Oracle:
+    return "oracle";
+  case Type::Kind::OracleSequence:
+    return "oracle_sequence";
+  default:
+    return {};
+  }
 }
 StringRef typeKindName(Type::Kind kind) {
   switch (kind) {
@@ -70,6 +87,14 @@ StringRef typeKindName(Type::Kind kind) {
     return "domain";
   case Type::Kind::Asset:
     return "asset";
+  case Type::Kind::OracleKind:
+    return "oracle_kind";
+  case Type::Kind::Oracle:
+    return "oracle";
+  case Type::Kind::OracleSequence:
+    return "oracle_sequence";
+  case Type::Kind::OracleProjection:
+    return "oracle_projection";
   }
   llvm_unreachable("unknown source type kind");
 }
@@ -90,14 +115,19 @@ std::string spelling(const Type &type) {
   }
   if ((type.kind == K::Domain || type.kind == K::Asset) && !type.symbolic)
     return StringRef(type.sort).lower() + "<" + type.domain + ">";
-  if (type.kind == K::Builtin || type.kind == K::Formal) {
+  if (type.kind == K::Builtin || type.kind == K::Formal ||
+      (!type.symbolic && !oracleConstructor(type).empty())) {
     std::string result =
         std::string(type.kind == K::Formal ? "formal(\"" : "builtin(\"") +
-        type.domain + "\"";
+        (oracleConstructor(type).empty() ? type.domain
+                                         : oracleConstructor(type).str()) +
+        "\"";
     for (const auto &argument : type.arguments)
       result += ", " + spelling(argument);
     return result + ")";
   }
+  if (type.kind == K::OracleProjection && type.arguments.size() == 1)
+    return spelling(type.arguments.front()) + "::" + type.domain;
   if (type.kind == K::Array)
     return "[" + spelling(type.arguments.front()) + "; " +
            type.dimension.spelling() + "]";

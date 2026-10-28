@@ -179,7 +179,9 @@ mutual
   def value {F G : Type} : (type : Ty) → assignment F G type → Value
     | .boolean, b => .boolean (some b)
     | .index, n => .index (exact n)
-    | .vector _, xs => .vector (exact xs.length)
+    | .vector _, xs | .groups _, xs => .vector (exact xs.length)
+    | .indices, xs => .sequence (xs.map fun n => .index (exact n))
+    | .oracleSequence .., xs => .sequence (xs.map fun _ => .atom)
     | .sequence element, xs => .sequence (xs.map (value element))
     | .product _ _ fields, x => .product (productValue fields x)
     | _, _ => .atom
@@ -304,11 +306,16 @@ abbrev Helpers := Std.HashMap String CheckedDefinition
 
 mutual
   def typeWork : Ty → Nat
-    | .field name | .vector name | .group name | .service name => 1 + name.utf8ByteSize
+    | .field name | .vector name | .group name | .groups name | .service name => 1 + name.utf8ByteSize
+    | .oracle kind => 1 + oracleKindWork kind
+    | .oracleSequence kind _ => 2 + oracleKindWork kind
     | .sequence element => 1 + typeWork element
     | .product identity constructor fields =>
       1 + identity.utf8ByteSize + constructor.utf8ByteSize + fieldsWork fields
     | _ => 1
+
+  def oracleKindWork : OracleKind → Nat
+    | .table row _ => 2 + typeWork row
 
   def fieldsWork : ProductFields → Nat
     | .nil => 1

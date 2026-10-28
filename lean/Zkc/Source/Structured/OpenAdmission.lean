@@ -741,7 +741,7 @@ theorem lowerProtocol_statementFree {snapshot : Snapshot} {domains : List Domain
 
 /-- Closed value profile. Group values retain the same explicit F/G assignment;
 service capabilities remain at the open boundary. -/
-def Ty.closedValue (type : Ty) : Bool := !type.isService
+def Ty.closedValue (type : Ty) : Bool := !type.isHandle
 
 def Op.closedValues (op : Op) : Bool := (op.arguments ++ op.results).all Ty.closedValue
 

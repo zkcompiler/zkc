@@ -553,6 +553,7 @@ theorem literalTerm_eval (results : LawResults model laws) {Δ : Scope} (binders
   | .vector _, _ => rfl
   | .group _, _ => rfl
   | .service _, _ => rfl
+  | .indices, _ | .groups _, _ | .oracle _, _ | .oracleSequence .., _
   | .sequence _, _ | .product .., _ => rfl
 
 theorem lawComps_eval (results : LawResults model laws) {Δ : Scope} (binders : Binders model Δ)

@@ -35,12 +35,16 @@ def project {F G : Type} : PIR.OperationInterpretation
   | .send (ty := .service contract) site receiver value =>
     .call (.send (ty := .service contract) site receiver value) .done
   | .send (ty := .index) .. | .send (ty := .vector _) ..
+  | .send (ty := .indices) .. | .send (ty := .groups _) ..
+  | .send (ty := .oracle _) .. | .send (ty := .oracleSequence ..) ..
   | .send (ty := .sequence _) .. | .send (ty := .product ..) .. => .halt .refused
   | .receive .boolean site sender => .call (.receive .boolean site sender) .done
   | .receive (.field domain) site sender => .call (.receive (.field domain) site sender) .done
   | .receive (.group domain) site sender => .call (.receive (.group domain) site sender) .done
   | .receive (.service contract) site sender => .call (.receive (.service contract) site sender) .done
   | .receive .index .. | .receive (.vector _) ..
+  | .receive .indices .. | .receive (.groups _) ..
+  | .receive (.oracle _) .. | .receive (.oracleSequence ..) ..
   | .receive (.sequence _) .. | .receive (.product ..) .. => .halt .refused
   | .query site field (.cons handle .nil) => .call (.query site field (.cons handle .nil)) .done
 

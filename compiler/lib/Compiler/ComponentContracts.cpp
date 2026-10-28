@@ -451,6 +451,11 @@ struct Deriver {
             results[i].emplace(string(role), std::move(flow));
           }
       } else {
+        // Logical oracle routes need anchor-aware seams. Do not classify a new
+        // oracle instruction as a pure value merely because its descriptor is
+        // outside the old effect cases. Export and seam admission are separate.
+        if (tag.starts_with("oracle_"))
+          return refuse("component-seam-oracle");
         if (!array(instruction[3]).empty())
           return refuse("component-seam-control");
         if (tag == "statement")
@@ -900,6 +905,8 @@ struct Deriver {
       if (!regions.empty() && tag != "if" && tag != "for" &&
           tag != "for_condition")
         return refuse("component-seam-control");
+      if (tag.starts_with("oracle_"))
+        return refuse("component-seam-oracle");
       if (tag == "draw")
         return refuse("component-seam-sampling");
       if (tag == "exchange")
