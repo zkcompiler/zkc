@@ -12,7 +12,9 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test ! -e ${sources.compiler}/common/tests
   test ! -e ${sources.compiler}/lean
   test -f ${sources.compilerTests}/common/tests/fixtures/clean/air-control.json
+  test -f ${sources.compilerTests}/common/tests/fixtures/program/bytes.json
   test -f ${sources.compilerTests}/compiler/test/CMakeLists.txt
+  test -f ${sources.compilerTests}/lean/bridges/common/fixtures/schnorr-forms.zkc
   test -f ${sources.compilerTests}/compiler/test/support/source_project.py
   test -f ${sources.compilerTests}/common/tests/support/project.py
   test -f ${sources.compilerTests}/libraries/protocols/polynomial/sumcheck/zkc.toml
@@ -32,6 +34,7 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test ! -e ${sources.rust}/scripts
   test ! -e ${sources.rust}/compiler
   test ! -e ${sources.rust}/common/tests
+  test -f ${sources.rustTests}/common/tests/fixtures/program/bytes.json
   test -f ${sources.rustTests}/compiler/test/fixtures/relation/polynomial-chunks.json
   # Scope discovery must not require protocol-only project support.
   test ! -e ${sources.rustTests}/common/tests/support
