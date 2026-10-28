@@ -1,6 +1,10 @@
-import ZkcTools.ConstructionBindings.LibraryBuilder
-import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs
-import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
+module
+
+public import ZkcTools.ConstructionBindings.LibraryBuilder
+public import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs
+public import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
+
+@[expose] public section
 
 /-! Actual admitted callee libraries, assembled without instance indices,
 role patterns, per-call maps or authored normalization proofs. Full target
@@ -25,8 +29,8 @@ elab "build_test_library" payload:term:max &"roles" roles:term : tactic => withM
     libraryGoal.assign library
     replaceMainGoal []
 
-private abbrev small := ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.program.payload
-private abbrev two := ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.program.payload
+abbrev small := ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.program.payload
+abbrev two := ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.program.payload
 
 def smallLibrary : Σ keys, Library small keys := by build_test_library small roles [0,1]
 def twoLibrary : Σ keys, Library two keys := by build_test_library two roles [0,1]
