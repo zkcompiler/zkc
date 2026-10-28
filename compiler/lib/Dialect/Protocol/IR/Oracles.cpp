@@ -60,4 +60,19 @@ LogicalResult OracleSequenceAtOp::verify() {
     return emitOpError("selection must preserve the actual handle kind");
   return success();
 }
+LogicalResult OracleInputOp::verify() {
+  auto kind = getHandle().getType().getKind();
+  if (getAnchor().getType() != getHandle().getType() ||
+      getData().getType() != kind.getDataType())
+    return emitOpError("input components must preserve the kind and data type");
+  if (kind.getStaticRows() ? bool(getMaximumRowsAttr()) : !getMaximumRowsAttr())
+    return emitOpError("only an unsized input requires maximum_rows");
+  return success();
+}
+LogicalResult OracleComponentsOp::verify() {
+  if (getAnchor().getType() != getHandle().getType() ||
+      getData().getType() != getHandle().getType().getKind().getDataType())
+    return emitOpError("components must preserve the kind and data type");
+  return success();
+}
 } // namespace zkc::protocol_ir

@@ -87,3 +87,7 @@ ZKC_MATH_OPERATION(protocol_ir::OracleSequenceAppendOp, Action, Context::Protoco
 ZKC_MATH_OPERATION(protocol_ir::OracleSequenceAtOp, Action, Context::Protocol, "roles", "site")
 ZKC_MATH_OPERATION(protocol_ir::OracleSequenceLengthOp, Control, Context::Protocol)
 ZKC_MATH_OPERATION(protocol_ir::OracleVirtualOp, Action, Context::Protocol, "callee", "holder", "receivers")
+
+ZKC_MATH_OPERATION(protocol_ir::OracleInputOp, Action, Context::Protocol, "holder", "receivers", "maximum_rows")
+ZKC_MATH_OPERATION(protocol_ir::OracleComponentsOp, Control, Context::Protocol, "holder", "receivers")
+ZKC_MATH_OPERATION(protocol_ir::OracleRowsOp, Control, Context::Protocol)

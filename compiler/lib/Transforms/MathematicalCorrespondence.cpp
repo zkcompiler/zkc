@@ -130,7 +130,9 @@ class Correspondence {
         Environment arguments = terms.environment();
         auto restrict = [&](Term value, Type type, ArrayAttr owners) {
           auto policy = policies.get(type);
-          return policy && policy->shared &&
+          return ((policy && policy->shared) ||
+                  isa<protocol_ir::OracleHandleType,
+                      protocol_ir::OracleSequenceType>(type)) &&
                          !isa<protocol_ir::ServiceReferenceType>(type)
                      ? terms.restrictRoles(value, type, nested.set(owners))
                      : value;

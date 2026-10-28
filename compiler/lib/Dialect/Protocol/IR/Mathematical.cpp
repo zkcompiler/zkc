@@ -66,68 +66,7 @@ class Analysis {
     return types.get(type);
   }
   LogicalResult initialOracleShape(Value root, Operation *use) {
-    SmallVector<Value> pending{root};
-    llvm::DenseSet<Value> seen;
-    auto exhausted = [&] {
-      return diagnostics::emit(use->emitOpError(),
-                               "mathematical-analysis-limit",
-                               "oracle shape dependency budget exhausted");
-    };
-    auto enqueue = [&](Value value) {
-      if (!remaining)
-        return false;
-      --remaining;
-      pending.push_back(value);
-      return true;
-    };
-    // Follow every recurrence edge as well as its initial value and trip
-    // control. Charge edges before queueing, including repeated dependencies.
-    while (!pending.empty()) {
-      Value value = pending.pop_back_val();
-      if (!seen.insert(value).second)
-        continue;
-      if (!remaining)
-        return exhausted();
-      --remaining;
-      if (auto argument = dyn_cast<BlockArgument>(value)) {
-        if (argument.getOwner() == &program.getBody().front())
-          continue;
-        auto repeat =
-            dyn_cast<protocol_ir::RepeatOp>(argument.getOwner()->getParentOp());
-        if (!repeat || failed(repeat->getName().verifyInvariants(repeat)) ||
-            failed(repeat.verifyRegions()))
-          return refuse(use, "oracle shape requires initially bound data");
-        auto index = argument.getArgNumber();
-        if (!enqueue(repeat.getOperand(index)))
-          return exhausted();
-        if (index && index <= uint64_t(repeat.getCarried()))
-          if (!enqueue(repeat.getInputs().front()) ||
-              !enqueue(repeat.getBody().front().back().getOperand(index - 1)))
-            return exhausted();
-        continue;
-      }
-      auto *producer = value.getDefiningOp();
-      if (!producer || failed(producer->getName().verifyInvariants(producer)))
-        return refuse(use, "malformed oracle shape dependency");
-      if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(producer)) {
-        if (failed(repeat.verifyRegions()))
-          return failure();
-        auto index = cast<OpResult>(value).getResultNumber();
-        if (!enqueue(repeat.getInputs().front()) ||
-            !enqueue(repeat.getOperand(index + 1)) ||
-            !enqueue(repeat.getBody().front().back().getOperand(index)))
-          return exhausted();
-      } else if (producer &&
-                 (isTotal(producer) ||
-                  isa<func::CallOp, protocol_ir::RestrictRolesOp>(producer))) {
-        for (Value operand : producer->getOperands())
-          if (!enqueue(operand))
-            return exhausted();
-      } else
-        return refuse(use, "oracle shape cannot depend on messages, sampling, "
-                           "queries or execution");
-    }
-    return success();
+    return verifyInitialOracleShape(root, program, use, symbols, remaining);
   }
   LogicalResult helper(func::CallOp call, Availability &env) {
     const TotalSummary *summary;
@@ -289,6 +228,11 @@ public:
           else if (auto virtualOracle =
                        dyn_cast<protocol_ir::OracleVirtualOp>(action))
             actionRoles = virtualOracle.getReceivers();
+          else if (auto input = dyn_cast<protocol_ir::OracleInputOp>(action))
+            actionRoles = input.getReceivers();
+          else if (auto components =
+                       dyn_cast<protocol_ir::OracleComponentsOp>(action))
+            actionRoles = components.getReceivers();
           else if (auto send = dyn_cast<protocol_ir::OracleSendOp>(action))
             actionRoles = send.getReceivers();
           else if (auto start =
@@ -341,7 +285,9 @@ public:
         continue;
       }
       if (auto application = dyn_cast<zkc::protocol_ir::ApplyOp>(op)) {
-        if (failed(application.verifySymbolUses(symbols)))
+        if (failed(application.verifySymbolUses(symbols)) ||
+            failed(
+                verifyOracleApplicationPorts(application, symbols, remaining)))
           return failure();
         if (!name(application.getSite()) ||
             !sites.insert(application.getSite()).second)
@@ -391,6 +337,39 @@ public:
         env.values[restrict.getOutput()] = std::move(selected);
       } else if (auto forget = dyn_cast<protocol_ir::OracleForgetRowsOp>(op)) {
         env.values[forget.getOutput()] = env.values.lookup(forget.getInput());
+      } else if (auto input = dyn_cast<protocol_ir::OracleInputOp>(op)) {
+        int holder = role(input.getHolderAttr());
+        BitVector available;
+        if (holder < 0 || failed(roles(op, input.getReceivers(), available)) ||
+            available.test(holder) ||
+            !subset(available, env.values.lookup(input.getAnchor())) ||
+            !env.values.lookup(input.getData()).test(holder))
+          return refuse(
+              op, "oracle input requires its holder and receiver components");
+        available.set(holder);
+        if (failed(verifyOracleInputPair(input, symbols, remaining)))
+          return failure();
+        env.values[input.getHandle()] = std::move(available);
+      } else if (auto components =
+                     dyn_cast<protocol_ir::OracleComponentsOp>(op)) {
+        int holder = role(components.getHolderAttr());
+        BitVector receivers;
+        if (holder < 0 ||
+            failed(roles(op, components.getReceivers(), receivers)) ||
+            receivers.test(holder) ||
+            !subset(receivers, env.values.lookup(components.getHandle())) ||
+            !env.values.lookup(components.getHandle()).test(holder) ||
+            failed(verifyOracleHolder(components.getHandle(),
+                                      components.getHolder(), op, remaining)))
+          return refuse(
+              op,
+              "oracle component view requires its actual holder and receivers");
+        BitVector data(count);
+        data.set(holder);
+        env.values[components.getData()] = std::move(data);
+        env.values[components.getAnchor()] = std::move(receivers);
+      } else if (auto rows = dyn_cast<protocol_ir::OracleRowsOp>(op)) {
+        env.values[rows.getRows()] = env.values.lookup(rows.getHandle());
       } else if (auto virtualOracle =
                      dyn_cast<protocol_ir::OracleVirtualOp>(op)) {
         auto declaration =
@@ -647,7 +626,8 @@ public:
       auto reference =
           dyn_cast<zkc::protocol_ir::ServiceReferenceType>(arg.getType());
       auto policy = types.get(arg.getType());
-      if (!policy && !reference)
+      bool oracle = isa<protocol_ir::OracleHandleType>(arg.getType());
+      if (!policy && !reference && !oracle)
         return refuse(program, "unsupported mathematical input type");
       if (policy && !policy->protocolPort)
         return diagnostics::emit(program.emitOpError(), "variant-boundary");
@@ -656,11 +636,14 @@ public:
         return refuse(program, "unsupported service contract");
       if (failed(roles(program, dyn_cast<ArrayAttr>(attr), env.values[arg])))
         return failure();
-      if ((reference || !policy->shared) && env.values[arg].count() != 1)
+      if ((reference || (policy && !policy->shared)) &&
+          env.values[arg].count() != 1)
         return refuse(program, "owner-local inputs require exactly one owner");
     }
-    if (failed(protocol_ir::verifyContracts(program, symbols)) ||
-        failed(body(block, env)))
+    if (failed(verifyOracleEntryPorts(program, remaining)) ||
+        failed(protocol_ir::verifyContracts(program, symbols)) ||
+        failed(body(block, env)) ||
+        failed(verifyOracleResultPorts(program, symbols, remaining)))
       return failure();
     for (auto [value, attr] :
          zip(block.back().getOperands(), program.getOutputRoles())) {
@@ -670,7 +653,9 @@ public:
       auto policy = types.get(value.getType());
       if (policy && !policy->protocolPort)
         return diagnostics::emit(program.emitOpError(), "variant-boundary");
-      if (!policy || (!policy->shared && exposed.count() != 1))
+      bool oracle = isa<protocol_ir::OracleHandleType>(value.getType());
+      if ((!policy && !oracle) ||
+          (policy && !policy->shared && exposed.count() != 1))
         return refuse(program, "owner-local results require exactly one owner");
       if (!subset(exposed, env.values.lookup(value)))
         return refuse(program, "result exposes an unavailable component");

@@ -55,6 +55,13 @@ LogicalResult verifyOracleHolder(Value root, llvm::StringRef role,
     if (auto send = dyn_cast<protocol_ir::OracleSendOp>(producer)) {
       if (send.getSender() != role)
         return refuse();
+    } else if (auto input = dyn_cast<protocol_ir::OracleInputOp>(producer)) {
+      if (input.getHolder() != role)
+        return refuse();
+    } else if (auto components =
+                   dyn_cast<protocol_ir::OracleComponentsOp>(producer)) {
+      if (!enqueue(components.getHandle()))
+        return exhausted();
     } else if (auto constructed =
                    dyn_cast<protocol_ir::OracleVirtualOp>(producer)) {
       if (constructed.getHolder() != role)

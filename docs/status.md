@@ -494,7 +494,9 @@ bounds failures through checked preparation. Virtual query declarations check
 answer-independent position maps, closed total helpers, actual polynomial bounds,
 explicit admissibility references and fresh occurrence anchors. Their obligation
 and footprint exports and realization are still pending.
-Oracle ports, frontend emission, extended structured readers and checked semantic
+Common oracle ports pair actual holder data and receiver handles through inputs,
+returns and applications, with explicit shapes and independent preparation checks.
+Frontend emission, extended structured readers and checked semantic
 realization remain in progress; these formation checks do not enable execution.
 
 Checked notation inspection is available through

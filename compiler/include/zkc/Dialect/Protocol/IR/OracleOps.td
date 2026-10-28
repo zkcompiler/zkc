@@ -110,4 +110,29 @@ def OracleVirtualOp : Op<ProtocolDialect, "oracle_virtual",
                        StrAttr:$holder, StrArrayAttr:$receivers);
   let results = (outs OracleHandle:$handle);
 }
+// One logical port has data at the holder and an anchor at its receivers.
+// Entry initialization and shape checks are retained even for an unused port.
+// At application boundaries this binds the same anchor, never a fresh send.
+def OracleInputOp : Op<ProtocolDialect, "oracle_input",
+    [MemoryEffects<[MemRead, MemWrite]>,
+     ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp"]>]> {
+  let arguments = (ins AnyType:$data, OracleHandle:$anchor,
+    StrAttr:$holder, StrArrayAttr:$receivers, OptionalAttr<UI64Attr>:$maximum_rows);
+  let results = (outs OracleHandle:$handle);
+  let hasVerifier = 1;
+}
+
+// A pure component view, with exact holder/receiver roles and no new anchor.
+def OracleComponentsOp : Op<ProtocolDialect, "oracle_components",
+    [Pure, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp"]>]> {
+  let arguments = (ins OracleHandle:$handle, StrAttr:$holder, StrArrayAttr:$receivers);
+  let results = (outs AnyType:$data, OracleHandle:$anchor);
+  let hasVerifier = 1;
+}
+
+def OracleRowsOp : Op<ProtocolDialect, "oracle_rows",
+    [Pure, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp"]>]> {
+  let arguments = (ins OracleHandle:$handle);
+  let results = (outs UI64:$rows);
+}
 #endif

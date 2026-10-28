@@ -64,7 +64,9 @@ LogicalResult expandApplications(protocol_ir::ProtocolModuleOp module,
         if (isa<protocol_ir::ServiceReferenceType>(value.getType()))
           return value;
         auto policy = policies.get(value.getType());
-        if (!policy || !policy->shared)
+        if ((!policy || !policy->shared) &&
+            !isa<protocol_ir::OracleHandleType,
+                 protocol_ir::OracleSequenceType>(value.getType()))
           return value;
         return protocol_ir::RestrictRolesOp::create(
                    builder, call.getLoc(), value.getType(), value, owners)
@@ -121,6 +123,13 @@ LogicalResult expandApplications(protocol_ir::ProtocolModuleOp module,
                          dyn_cast<protocol_ir::OracleVirtualOp>(copy)) {
             constructed.setHolderAttr(role(constructed.getHolderAttr()));
             constructed.setReceiversAttr(mapped(constructed.getReceivers()));
+          } else if (auto input = dyn_cast<protocol_ir::OracleInputOp>(copy)) {
+            input.setHolderAttr(role(input.getHolderAttr()));
+            input.setReceiversAttr(mapped(input.getReceivers()));
+          } else if (auto components =
+                         dyn_cast<protocol_ir::OracleComponentsOp>(copy)) {
+            components.setHolderAttr(role(components.getHolderAttr()));
+            components.setReceiversAttr(mapped(components.getReceivers()));
           } else if (auto send = dyn_cast<protocol_ir::OracleSendOp>(copy)) {
             send.setSenderAttr(role(send.getSenderAttr()));
             send.setReceiversAttr(mapped(send.getReceivers()));

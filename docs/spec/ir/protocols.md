@@ -123,14 +123,52 @@ add a size or change kind. This operation is pure: merging the same conversion
 of the same handle does not merge anchors or query events.
 
 Logical handles remain unavailable to ordinary mathematical helpers, native
-message codecs and executable endpoint policies. Oracle input/output ports
-need their explicit data/anchor interface and generated honest-input relation;
-ordinary port admission does not grant those permissions. Preparation remaps
-sender/receiver/query roles and compares the actual expanded bodies independently;
+message codecs and executable endpoint policies. Oracle input/output ports use
+the explicit data/anchor interface below; ordinary port admission does not grant
+those permissions. Preparation remaps sender/receiver/query roles and compares the actual expanded bodies independently;
 its simplification preserves the ordered events. Projection explicitly refuses
 unrealized oracle operations before publishing a participant candidate. Structured
 export and realization must recognize this vocabulary before it can proceed.
 Registration and common formation do not supply an executable implementation.
+
+### Oracle interface components
+
+One source oracle port has two common interface leaves: ordinary data at its
+holder and a logical handle at its receivers. `oracle_input(data, anchor)`
+with `holder`, `receivers` and, only for unsized kinds, `maximum_rows`, binds them
+into the role family used by the body. A raw handle entry argument has exactly
+one such binding, paired with a distinct holder data argument. Both leaves have
+exactly the declared roles. Root bindings precede protocol effects; pure initial
+shape computations may precede them. The anchor carries its expected shape,
+which a receiver can observe without reading the holder's data. A binding checks
+its kind or maximum against that shape and the holder data; the honest-input
+condition relates their dimensions. It retains these checks even if unused.
+There is no separately authored row-count port for the same oracle.
+
+`oracle_components(handle) {holder, receivers}` is a pure view returning the
+data and receiver handle for an application or return tuple. Every selected role
+must have its component and the declared holder must hold every possible anchor.
+An application supplies the paired results of the same component view, possibly
+through role restrictions or a paired earlier application result. Equal data or
+equal handle types do not authorize mixing anchors. A returned handle likewise
+requires its matching data leaf with exact roles in the same result tuple.
+
+Application expansion preserves the caller's anchor. Splitting, returning and
+rebinding a component pair creates no new anchor. Only a root input binding
+introduces the entry anchor. Its data/handle relation is a generated honest-input
+condition, with no authored clause index. These operations preserve the operands
+needed for that condition; the structured export and independent semantics must
+carry it before a compiled oracle claim is available. In a proof realization the
+receiver leaf is the selected public commitment and the holder leaf the witness.
+Native formation alone does not prove that the commitment opens to that witness.
+
+`oracle_rows` reads the immutable logical shape at each available component.
+For a sized kind its result is the type's count. For an unsized kind, using it as
+an initially bound shape follows actual input/send/virtual dimensions, sequence
+indices and loop backedges, substituting actual protocol-call operands. Root
+input dimensions are initially bound; a callee's formal input does not make a
+caller's later selection initial. In particular, selecting a differently sized handle
+using a later answer does not turn its row count into initial configuration.
 
 ### Holder contents and bounded handle sequences
 

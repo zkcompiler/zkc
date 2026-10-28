@@ -17,5 +17,26 @@ verifyOracleDefinitions(protocol_ir::ProtocolModuleOp module,
 mlir::LogicalResult verifyOracleHolder(mlir::Value handle, llvm::StringRef role,
                                        mlir::Operation *use,
                                        unsigned &remaining);
+// Raw handle ports are paired with their holder data by actual SSA operands.
+mlir::LogicalResult verifyOracleEntryPorts(protocol_ir::MathematicalOp program,
+                                           unsigned &remaining);
+mlir::LogicalResult
+verifyOracleResultPorts(protocol_ir::MathematicalOp program,
+                        mlir::SymbolTableCollection &symbols,
+                        unsigned &remaining);
+mlir::LogicalResult
+verifyOracleApplicationPorts(protocol_ir::ApplyOp application,
+                             mlir::SymbolTableCollection &symbols,
+                             unsigned &remaining);
+mlir::LogicalResult verifyOracleInputPair(protocol_ir::OracleInputOp input,
+                                          mlir::SymbolTableCollection &symbols,
+                                          unsigned &remaining);
+// Check initially bound dimensions through actual applications, handle
+// selection and loop backedges. One shared allowance bounds all substitutions.
+mlir::LogicalResult
+verifyInitialOracleShape(mlir::Value value, protocol_ir::MathematicalOp program,
+                         mlir::Operation *use,
+                         mlir::SymbolTableCollection &symbols,
+                         unsigned &remaining);
 } // namespace zkc::mathematical
 #endif

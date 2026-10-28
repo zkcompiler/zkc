@@ -386,13 +386,23 @@ ValueCorrespondence::Term ValueCorrespondence::value(Environment env,
       result = inputs[0];
     } else {
       auto attributes = op->getAttrDictionary();
-      if (auto contents = dyn_cast<protocol_ir::OracleContentsOp>(op)) {
-        auto mapped = p.scopes[scope].roles.lookup(contents.getOwner());
-        if (mapped) {
-          NamedAttrList renamed(attributes);
-          renamed.set("owner", mapped);
-          attributes = renamed.getDictionary(op->getContext());
+      if (isa<protocol_ir::OracleContentsOp, protocol_ir::OracleComponentsOp>(
+              op)) {
+        NamedAttrList renamed(attributes);
+        for (StringRef key : {"owner", "holder"})
+          if (auto role = op->getAttrOfType<StringAttr>(key))
+            if (auto mapped = p.scopes[scope].roles.lookup(role.getValue()))
+              renamed.set(key, mapped);
+        if (auto receivers = op->getAttrOfType<ArrayAttr>("receivers")) {
+          SmallVector<Attribute> mapped;
+          for (auto receiver : receivers) {
+            auto role = p.scopes[scope].roles.lookup(
+                cast<StringAttr>(receiver).getValue());
+            mapped.push_back(role ? role : receiver);
+          }
+          renamed.set("receivers", ArrayAttr::get(op->getContext(), mapped));
         }
+        attributes = renamed.getDictionary(op->getContext());
       }
       if (finite::isComputation(op)) {
         auto closure = finite::closureKey(op);

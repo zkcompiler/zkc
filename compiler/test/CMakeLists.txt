@@ -29,6 +29,8 @@ function(zkc_source_project target manifest)
   target_compile_definitions(${target} PRIVATE ZKC_SOURCE_PROJECT="${output}")
 endfunction()
 
+add_zkc_test(oracle_ports Transforms oracle-ports)
+mlir_target_link_libraries(zkc-oracle_ports-test PRIVATE MLIRParser)
 add_zkc_test(oracle_virtual Transforms oracle-virtual)
 mlir_target_link_libraries(zkc-oracle_virtual-test PRIVATE MLIRParser)
 add_zkc_test(oracle_protocol Transforms oracle-protocol)
