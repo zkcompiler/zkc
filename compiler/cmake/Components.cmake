@@ -292,6 +292,8 @@ add_zkc_component(Transforms
   lib/Transforms/FiniteVerification.cpp
   lib/Transforms/RealizationEmission.cpp
   lib/Transforms/OracleQueryCapacity.cpp
+  lib/Transforms/OracleQueryController.cpp
+  lib/Transforms/OracleQueryControllerVerification.cpp
   lib/Transforms/OracleAnchorStorage.cpp
   lib/Transforms/OracleAnchorEmission.cpp
   lib/Transforms/OracleAnchorVerification.cpp

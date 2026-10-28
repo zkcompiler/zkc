@@ -266,6 +266,12 @@ test = false
 bench = false
 
 [[bin]]
+name = "oracle_query_controller"
+path = "src/oracle_query_controller.rs"
+test = false
+bench = false
+
+[[bin]]
 name = "oracle_virtual_functions"
 path = "src/oracle_virtual_functions.rs"
 test = false

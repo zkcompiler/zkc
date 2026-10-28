@@ -172,6 +172,39 @@ An unrepresentable bound or exhausted analysis work refuses compilation rather
 than adding a logical premise or truncating a query. These bounds do not select
 an actual anchor, check an emitted controller or establish a simulation.
 
+### Ordinary query continuations
+
+The private table controller specializes the prepared entry's finite constructor
+vocabulary. Its state contains the current constructor, instance and position,
+the continuation tag and instance, the answer kind and a phase, followed by typed
+answer slots and append-only continuation arenas. Immutable anchor stores are
+captures. No logical handle or oracle provider enters native execution.
+
+`initialize` starts a query. `advance` follows actual references in declaration
+query order, checking the current anchor's actual domain before evaluating a
+child position or suspending at a base-table request. `resume` accepts an answer
+only in the request phase, for its exact kind and five request/continuation
+coordinates. `finish` requires completion of the root answer. A continuation
+retains the parent's position, instance and already obtained child answers;
+unused and duplicate child queries are still executed. Empty answer slots avoid
+inventing a default inhabitant of an arbitrary answer type.
+
+The checked structural capacity bounds advancement by `2 * nodes + 1` transitions
+and local evaluation by `leaves + 1` advancement rounds. Each round must suspend
+or complete; exhausting the bound cannot publish a partial answer. The final
+round executes any trailing zero-query virtual children, including their domain
+checks. Local evaluation exists only when the role retains every base table;
+a Merkle receiver instead needs the surrounding common opening exchange.
+
+The independent primitive reader checks actual scoped control, SSA operands,
+layouts, pure maps, domain guards, ordered frames and all helper bodies. It
+neither invokes the emitter nor accepts a symbol name as body evidence. The
+surrounding realization must derive the storage and capacity from the frozen
+source, bind each call to its actual source operands, and connect each resumed
+answer to the reached exchange and authentication. Resume coordinates are
+ordinary data, not an authentication capability. These primitive checks do not
+establish complete realization correspondence or the Lean simulation.
+
 ## Ordered oracle events
 
 `protocol.oracle_send(data, shape...)` produces an `oracle<K>` handle at its

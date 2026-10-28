@@ -518,7 +518,12 @@ independent reader checks actual helper bodies and every ordered child query,
 including unused answers. Structural query capacity follows prepared SSA,
 loop carries and handle sequences, preserving duplicate queries and zero-trip
 alternatives. Overflow and analysis work limits refuse compilation. The
-continuation control is still pending. The independently checked table-read primitive
+private table continuation controller now emits ordinary scoped control over
+actual anchors, with explicit suspension, typed answers and bounded advancement.
+Its independent actual-body reader covers the complete transition closure.
+Local evaluation requires custody of every base table; a Merkle receiver has no
+local evaluator. Binding suspension to common requests, source adapters and the
+complete realization record remains pending. The independently checked table-read primitive
 stops before an out-of-domain read for field, group, index and sequence-backed
 rows. Its generated clients enter the physical pipeline; native controls check
 actual row counts and observable prefixes when a later query fails. Anchor-bound
