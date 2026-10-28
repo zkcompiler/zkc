@@ -347,13 +347,13 @@ rejects("prepared protocol bridge grants no other private transform header",
         lambda text: '#include "../Transforms/MathematicalSupport.h"\n' + text,
         "private component dependency")
 
-for source in ("OracleTableReadVerification", "OracleAnchorVerification", "FiniteVerification", "MathLoweringVerification",
+for source in ("OracleVirtualFunctionVerification", "OracleTableReadVerification", "OracleAnchorVerification", "FiniteVerification", "MathLoweringVerification",
                "MathematicalComparison", "HelperNormalizationVerification",
                "ScopedAlgorithmVerification", "PolynomialRecipeVerification",
                "Computation/ScopedVerification"):
     for header in ("ComputationEquations.h", "ComputationSelection.h",
                    "RealizationEmission.h", "zkc/Analysis/Computation.h",
-                   "ScopedFinite.h", "ScopedPreparation.h"):
+                   "ScopedFinite.h", "ScopedPreparation.h", "MathematicalSupport.h"):
         include = "../" + header if "/" in source and not header.startswith("zkc/") else header
         rejects(f"independent reader excludes producer machinery: {source} -> {header}",
                 root / f"lib/Transforms/{source}.cpp",

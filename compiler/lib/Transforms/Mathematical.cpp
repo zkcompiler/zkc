@@ -1,5 +1,6 @@
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "MathematicalPassOptions.h"
+#include "MathematicalPreservation.h"
 #include "MathematicalSupport.h"
 #include "MathematicalValues.h"
 #include "PreparedProtocol.h"

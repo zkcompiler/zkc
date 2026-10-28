@@ -510,8 +510,12 @@ summarizes counted repetitions without unrolling. It identifies a possible query
 before a later draw; it does not authorize batching or prove simulation. Private
 anchor-storage planning retains fresh constructor/instance references, actual
 repeat coordinates and role-specific payloads as ordinary sequences and records.
-An independent reader checks generated append allocations, including actual SSA
-inputs and outcome propagation. The independently checked table-read primitive
+Independent readers check generated append allocations and reference-tagged
+lookups, including actual SSA inputs and outcome propagation. Native controls
+exercise fresh instances, equal payloads, empty tables and invalid references.
+Pure virtual-query lowering emits total position and answer functions; its
+independent reader checks actual helper bodies and every ordered child query,
+including unused answers. The continuation control is still pending. The independently checked table-read primitive
 stops before an out-of-domain read for field, group, index and sequence-backed
 rows. Its generated clients enter the physical pipeline; native controls check
 actual row counts and observable prefixes when a later query fails. Anchor-bound

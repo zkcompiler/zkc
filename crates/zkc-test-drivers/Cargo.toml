@@ -264,3 +264,9 @@ name = "oracle_anchors"
 path = "src/oracle_anchors.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "oracle_virtual_functions"
+path = "src/oracle_virtual_functions.rs"
+test = false
+bench = false

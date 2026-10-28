@@ -189,6 +189,7 @@ def main():
         ROOT / "lib/Target/AggregateLayouts.h", ROOT / "lib/Target/ExecutionPorts.h",
         ROOT / "lib/Conversion/Storage.h", ROOT / "lib/Target/StorageSchedule.h",
         ROOT / "lib/Transforms/MathematicalSupport.h",
+        ROOT / "lib/Transforms/MathematicalPreservation.h",
         ROOT / "lib/Transforms/ScopedCandidate.h",
         ROOT / "lib/Transforms/ScopedCallback.h",
         ROOT / "lib/Transforms/ScopedSubstitution.h",
@@ -211,6 +212,7 @@ def main():
         ROOT / "lib/Transforms/RealizationEmission.h",
         ROOT / "lib/Transforms/OracleAnchorStorage.h",
         ROOT / "lib/Transforms/OracleTableRead.h",
+        ROOT / "lib/Transforms/OracleVirtualFunctions.h",
         ROOT / "lib/Transforms/MathematicalRecipes.h",
         ROOT / "lib/Transforms/LaneRealization.h",
         ROOT / "lib/Transforms/NumericalSelection.h",
@@ -404,9 +406,9 @@ def main():
         *(ROOT / f"lib/Transforms/{name}.h" for name in (
             "ComputationEquations", "ComputationSelection", "MathematicalRecipes",
             "CollectionRealization", "RealizationEmission",
-            "ScopedFinite", "ScopedPreparation")),
+            "ScopedFinite", "ScopedPreparation", "MathematicalSupport")),
     }
-    for reader in ("OracleTableReadVerification", "OracleAnchorVerification", "../Analysis/StructuredComputation", "FiniteVerification", "MathLoweringVerification",
+    for reader in ("OracleVirtualFunctionVerification", "OracleTableReadVerification", "OracleAnchorVerification", "../Analysis/StructuredComputation", "FiniteVerification", "MathLoweringVerification",
                    "MathematicalComparison",
                    "HelperNormalizationVerification",
                    "ScopedAlgorithmVerification", "PolynomialRecipeVerification",

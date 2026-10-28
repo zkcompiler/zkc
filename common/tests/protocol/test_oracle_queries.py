@@ -15,3 +15,13 @@ def test_oracle_anchor_identity_and_lookup(toolchain, directory, journal):
         toolchain.tool("compiler", "test/zkc-oracle_anchor_storage-test"), artifacts,
     ], keep="compiler.txt")
     journal.run([toolchain.driver("oracle_anchors"), artifacts], keep="native.txt")
+
+
+def test_oracle_virtual_position_and_answer_functions(toolchain, directory, journal):
+    artifacts = directory / "virtual-functions"
+    journal.run([
+        toolchain.tool("compiler", "test/zkc-oracle_virtual_functions-test"), artifacts,
+    ], keep="compiler.txt")
+    journal.run([
+        toolchain.driver("oracle_virtual_functions"), artifacts,
+    ], keep="native.txt")

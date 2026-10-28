@@ -147,6 +147,20 @@ ordered stop and collection binding for every supported row carrier. A longer
 backing collection cannot make an out-of-domain query succeed. Binding the data
 and actual shape to the source anchor remains the complete realization's duty.
 
+Pure virtual-query lowering separates each declaration into ordinary total
+position functions and one answer function. Position functions take the ordinary
+parameters and outer position; the answer function additionally takes every
+child answer in declaration order. The retained query inventory identifies the
+source formal, kind and occurrence site, including duplicate queries and unused
+answers. Helper dependencies follow actual return values, so an ignored helper
+argument does not create a false dependency on an earlier answer. An independent
+reader compares the actual helper closures with the frozen declaration and
+checks the complete ordered inventory. These functions neither query nor check
+query domains: the surrounding realization must validate the outer domain and
+then execute each reached child query in order before calling the answer
+function. This pure substitution check does not establish that control lowering
+or the association with actual anchors.
+
 ## Ordered oracle events
 
 `protocol.oracle_send(data, shape...)` produces an `oracle<K>` handle at its
