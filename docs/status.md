@@ -508,9 +508,10 @@ source interface reader checks logical kind descriptors and actual input pairs;
 source correspondence checks the complete role substitution and result mapping.
 Source send/query/data/rows/refinement actions preserve the explicit holder,
 ordered query events and packed answer layouts through independent comparison.
-Virtual/sequence source actions, generated obligation/footprint proposals and
-checked semantic realization remain in progress; formation does not enable
-execution.
+Bounded source sequences retain explicit families, persistent loop state and
+dynamic selected anchors. Virtual source declarations, generated
+obligation/footprint proposals and checked semantic realization remain in
+progress; formation does not enable execution.
 
 Checked notation inspection is available through
 `inspectNotations` with `NotationInspectionOptions.includePrivate` and

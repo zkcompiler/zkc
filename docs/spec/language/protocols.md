@@ -119,6 +119,31 @@ through the ordinary message codec or ordinary data aggregates. Source actions
 elaborate to the [common oracle vocabulary](../ir/protocols.md#logical-oracle-kinds-and-handles);
 semantic realization must eliminate that vocabulary before executable lowering.
 
+### Bounded oracle sequences
+
+```text
+let mut layers = oracle.empty<Table<F>, 4> roles(P, V)();
+layers = oracle.append(layers, oracle.forget_rows(word));
+let selected = oracle.at(layers, round);
+let count @(P, V) = oracle.length(layers);
+```
+
+An empty sequence declares its kind, static capacity and role family, with the
+holder first and one or more distinct receivers afterward. This fixes placement
+before any append, including for zero-trip loops. The empty common value has no
+anchor. Its broader availability does not grant an element or bypass a bounds
+check. Append requires the same kind and exact holder/receiver family. It returns
+an immutable successor and retains a capacity check at every family participant.
+Selection requires its position at every family participant, retains the stopping
+bounds check, and returns the actual selected handle and anchor. It does not pick
+one static source origin. Length is an immutable view at the declared family.
+
+Different fixed row counts can enter one unsized sequence after explicit
+`oracle.forget_rows`. Loop state keeps the same kind, capacity and family while
+its elements and selected anchors change. Append and selection retain ordered
+sites, including unused results. Sequence values are internal protocol values;
+independent root/call ports do not admit anchor-free sequence ingress.
+
 ## Participant meaning
 
 A protocol may supply [scoped computations](definitions.md#scoped-computations)

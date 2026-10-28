@@ -2254,22 +2254,48 @@ private:
       advance();
       if (!expect("."))
         return {};
+      unsigned operands = 1;
       if (take("data"))
         value.kind = Expression::Kind::OracleContents;
       else if (take("rows"))
         value.kind = Expression::Kind::OracleRows;
       else if (take("forget_rows"))
         value.kind = Expression::Kind::OracleForgetRows;
-      else {
+      else if (take("length"))
+        value.kind = Expression::Kind::OracleSequenceLength;
+      else if (take("append")) {
+        value.kind = Expression::Kind::OracleSequenceAppend;
+        operands = 2;
+      } else if (take("at")) {
+        value.kind = Expression::Kind::OracleSequenceAt;
+        operands = 2;
+      } else if (take("empty")) {
+        value.kind = Expression::Kind::OracleSequenceEmpty;
+        operands = 0;
+        SyntaxType kind, maximum;
+        if (!expect("<") || !type(kind) || !expect(",") || !type(maximum) ||
+            !expect(">") || !expect("roles"))
+          return {};
+        value.arguments = {std::move(kind), std::move(maximum)};
+        value.roles.emplace();
+        if (!names(*value.roles))
+          return {};
+      } else {
         fail("source.oracle-action", "unknown oracle operation");
         return {};
       }
       if (!expect("("))
         return {};
-      auto handle = expression(decl, depth + 1);
-      if (!handle || !expect(")"))
+      for (unsigned i = 0; i < operands; ++i) {
+        if (i && !expect(","))
+          return {};
+        auto input = expression(decl, depth + 1);
+        if (!input)
+          return {};
+        value.children.push_back(*input);
+      }
+      if (!expect(")"))
         return {};
-      value.children = {*handle};
     } else if (at("kernel") || at("intrinsic")) {
       value.kind = take("intrinsic") ? Expression::Kind::Intrinsic
                                      : Expression::Kind::Kernel;

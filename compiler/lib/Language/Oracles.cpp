@@ -10,6 +10,10 @@ std::optional<ValueId> BodyChecker::oracle(const Expression &expr,
     fail("source.mode", "oracle actions require protocol mode", expr.span);
     return {};
   }
+  if (expr.kind == K::OracleSequenceEmpty ||
+      expr.kind == K::OracleSequenceAppend ||
+      expr.kind == K::OracleSequenceAt || expr.kind == K::OracleSequenceLength)
+    return oracleSequence(expr, depth);
   auto resultType = inferredType(uint32_t(&expr - syntax.expressions.data()));
   if (!resultType)
     return {};
@@ -107,5 +111,64 @@ std::optional<ValueId> BodyChecker::oracle(const Expression &expr,
     placement->oracleQueries.emplace_back(body.operations.size() - 1,
                                           selected->owners.front());
   return answer;
+}
+std::optional<ValueId> BodyChecker::oracleSequence(const Expression &expr,
+                                                   unsigned depth) {
+  using K = Expression::Kind;
+  using T = Type::Kind;
+  auto resultType = inferredType(uint32_t(&expr - syntax.expressions.data()));
+  if (!resultType)
+    return {};
+  if (expr.kind == K::OracleSequenceEmpty) {
+    if (!expr.roles || expr.roles->size() < 2) {
+      fail("source.oracle-role",
+           "empty sequence requires holder then nonempty receivers", expr.span);
+      return {};
+    }
+    auto family = checker.roles(decl, *expr.roles, expr.span);
+    auto holder = checker.roles(decl, {expr.roles->front()}, expr.span);
+    if (!family || !holder || !active(*family, expr.span))
+      return {};
+    return emit(OracleSequenceEmpty{holder->front(), *family}, *resultType,
+                *family, expr.span);
+  }
+  auto sequence = expression(expr.children.front(), {}, depth + 1);
+  if (!sequence)
+    return {};
+  const auto value = body.values[sequence->index];
+  if (value.type.kind != T::OracleSequence || !value.oracleHolder) {
+    fail("source.oracle-role",
+         "oracle sequence requires a retained holder family", expr.span);
+    return {};
+  }
+  auto family = components(*sequence).roles;
+  if (!use(*sequence, expr.span))
+    return {};
+  if (expr.kind == K::OracleSequenceLength)
+    return emit(OracleSequenceLength{*sequence}, *resultType, family,
+                expr.span);
+  if (expr.kind == K::OracleSequenceAppend) {
+    Type handle(T::Oracle);
+    handle.arguments = {value.type.arguments.front()};
+    auto element = expression(expr.children[1], handle, depth + 1);
+    if (!element)
+      return {};
+    if (body.values[element->index].oracleHolder != value.oracleHolder ||
+        components(*element).roles != family) {
+      fail("source.oracle-role",
+           "sequence append must preserve its complete role family", expr.span);
+      return {};
+    }
+    if (!use(*element, expr.span))
+      return {};
+    return emit(OracleSequenceAppend{*sequence, *element, family}, *resultType,
+                family, expr.span);
+  }
+  auto position = expression(expr.children[1], Type(T::Index), depth + 1);
+  if (!position || !demand(*position, family, expr.span) ||
+      !use(*position, expr.span))
+    return {};
+  return emit(OracleSequenceAt{*sequence, *position, family}, *resultType,
+              family, expr.span);
 }
 } // namespace zkc::language::detail

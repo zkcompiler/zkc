@@ -111,6 +111,7 @@ private:
   kernelSignature(const Expression &, std::vector<Type> &,
                   std::vector<std::string> &, std::vector<AssetReference> &);
   std::optional<ValueId> oracle(const Expression &, unsigned);
+  std::optional<ValueId> oracleSequence(const Expression &, unsigned);
   std::optional<ValueId> intrinsic(const Expression &, unsigned);
   std::optional<Semantics::CallSignature>
   intrinsicSignature(const Expression &, std::vector<Type> &);

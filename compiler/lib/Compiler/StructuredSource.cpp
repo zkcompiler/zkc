@@ -1025,14 +1025,14 @@ class Exporter {
     if (auto make = dyn_cast<data::MakeOp>(op)) {
       if (auto e = attributes(op, {"alternative"}))
         return std::move(e);
-      if (owner != "math")
+      if (owner != "math" && owner != "protocol" && owner != "oracle")
         return error("structured-source-operation");
       return json::Array{"product.make", make.getAlternative()};
     }
     if (auto get = dyn_cast<data::GetOp>(op)) {
       if (auto e = attributes(op, {"index"}))
         return std::move(e);
-      if (owner != "math")
+      if (owner != "math" && owner != "protocol" && owner != "oracle")
         return error("structured-source-operation");
       return json::Array{"product.get", get.getIndex()};
     }

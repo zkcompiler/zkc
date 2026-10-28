@@ -210,7 +210,10 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
                                    std::is_same_v<Action, Require> ||
                                    std::is_same_v<Action, BulkApplication> ||
                                    std::is_same_v<Action, OracleSend> ||
-                                   std::is_same_v<Action, OracleQuery>) {
+                                   std::is_same_v<Action, OracleQuery> ||
+                                   std::is_same_v<Action,
+                                                  OracleSequenceAppend> ||
+                                   std::is_same_v<Action, OracleSequenceAt>) {
                 result.fixed.mayStop = true;
                 return true;
               } else {
@@ -225,7 +228,9 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
                                   std::is_same_v<Action, ProtocolCompletion> ||
                                   std::is_same_v<Action, OracleContents> ||
                                   std::is_same_v<Action, OracleRows> ||
-                                  std::is_same_v<Action, OracleForgetRows>,
+                                  std::is_same_v<Action, OracleForgetRows> ||
+                                  std::is_same_v<Action, OracleSequenceEmpty> ||
+                                  std::is_same_v<Action, OracleSequenceLength>,
                               "operation needs an effect inference rule");
                 return true;
               }

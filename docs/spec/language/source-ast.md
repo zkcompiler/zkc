@@ -76,6 +76,12 @@ their single handle operand. An oracle port additionally retains its written
 paired interface leaves and generated shape constants belong to elaboration,
 not to this AST.
 
+Sequence expressions have the exact kinds `expr.oracle_sequence_empty`,
+`expr.oracle_sequence_append`, `expr.oracle_sequence_at` and
+`expr.oracle_sequence_length`. Empty retains the written kind/capacity arguments
+and holder-first `roles`; other sequence forms retain ordered operands. No
+selected anchor or inferred length is invented in the written tree.
+
 ## Node families
 
 Kinds have separate namespaces so equal words cannot confuse types, patterns,

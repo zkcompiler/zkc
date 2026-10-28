@@ -381,7 +381,8 @@ def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
     .fieldEmbed .. | .fieldEqual .. | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual |
     .booleanNotEqual | .select .. | .call .. | .fold .. |
     .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => kind == .math || kind == .protocol
-  | .boundedAt .. | .makeProduct .. | .getProduct .. => kind == .math
+  | .makeProduct .. | .getProduct .. => kind == .math || kind == .protocol
+  | .boundedAt .. => kind == .math
   | .protocolApply .. | .protocolRepeat .. | .localCall .. | .guard .. | .restrict .. | .exchange .. | .draw .. | .statement .. =>
     kind == .protocol
   | .apply .. | .branch | .loop | .loopCondition => kind == .local

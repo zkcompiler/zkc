@@ -91,6 +91,12 @@ std::optional<ValueId> BodyChecker::emit(decltype(Operation::action) action,
     holder = body.values[forget->input.index].oracleHolder;
   if (auto *send = std::get_if<OracleSend>(&action))
     holder = send->holder;
+  if (auto *empty = std::get_if<OracleSequenceEmpty>(&action))
+    holder = empty->holder;
+  if (auto *append = std::get_if<OracleSequenceAppend>(&action))
+    holder = body.values[append->prefix.index].oracleHolder;
+  if (auto *at = std::get_if<OracleSequenceAt>(&action))
+    holder = body.values[at->input.index].oracleHolder;
   auto ids = emitResults(
       std::move(action),
       {{type,
@@ -206,6 +212,8 @@ bool BodyChecker::labelSite(const Statement &source, size_t firstOperation) {
         std::holds_alternative<Exchange>(operation.action) ||
         std::holds_alternative<OracleSend>(operation.action) ||
         std::holds_alternative<OracleQuery>(operation.action) ||
+        std::holds_alternative<OracleSequenceAppend>(operation.action) ||
+        std::holds_alternative<OracleSequenceAt>(operation.action) ||
         std::holds_alternative<ServiceQuery>(operation.action) ||
         std::holds_alternative<ProtocolApplication>(operation.action);
     if (!eligible)
@@ -220,7 +228,7 @@ bool BodyChecker::labelSite(const Statement &source, size_t firstOperation) {
       (!source.exchange && (selected->span.begin != expression.span.begin ||
                             selected->span.end != expression.span.end)))
     return fail("source.site",
-                "label must select an outer message, query or protocol call",
+                "label must select an outer protocol action or call",
                 source.span);
   selected->site = source.site;
   return true;

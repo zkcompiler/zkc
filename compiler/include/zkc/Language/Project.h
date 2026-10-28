@@ -350,6 +350,21 @@ struct OracleRows {
 struct OracleForgetRows {
   ValueId input;
 };
+struct OracleSequenceEmpty {
+  unsigned holder;
+  std::vector<unsigned> roles;
+};
+struct OracleSequenceAppend {
+  ValueId prefix, element;
+  std::vector<unsigned> roles;
+};
+struct OracleSequenceAt {
+  ValueId input, position;
+  std::vector<unsigned> roles;
+};
+struct OracleSequenceLength {
+  ValueId input;
+};
 struct Restriction {
   ValueId input;
   std::vector<unsigned> roles;
@@ -466,7 +481,9 @@ struct Operation {
                ProtocolApplication, ServiceQuery, Require, ProtocolRepeat,
                ProtocolCompletion, ScopedInvoke, FiniteApplication,
                FiniteComputation, HostInvocation, OracleSend, OracleQuery,
-               OracleContents, OracleRows, OracleForgetRows>
+               OracleContents, OracleRows, OracleForgetRows,
+               OracleSequenceEmpty, OracleSequenceAppend, OracleSequenceAt,
+               OracleSequenceLength>
       action;
   /// Each result has its own type and participant availability.
   std::vector<ValueId> results;

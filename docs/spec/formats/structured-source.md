@@ -465,7 +465,7 @@ Ownership is checked independently of operand types:
 
 | Body kind | Admitted instructions |
 |---|---|
-| Protocol | Pure index constant/equality and field/group/Boolean operations, select, Math call, Algebra fold, Local call, protocol application and repetition, guard, restrict, exchange, draw, entry statement |
+| Protocol | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, Math call, Algebra fold, Local call, protocol application and repetition, guard, restrict, exchange, draw, entry statement |
 | Math | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, bounded read, Math call, Algebra fold |
 | Local | Boolean constant, checked primitive execution, Local apply, conditional and counted control |
 

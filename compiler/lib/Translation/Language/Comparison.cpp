@@ -1359,6 +1359,37 @@ class Comparator {
             llvm::append_range(result, output);
           offset += count;
         }
+      } else if (std::holds_alternative<OracleSequenceEmpty>(op.action)) {
+        auto *actual = next(block, cursor, op.span,
+                            "protocol.oracle_sequence_empty", {}, 1);
+        if (!actual || !attributes(*actual, {}))
+          return fail("empty oracle sequence differs");
+        result = Values(actual->getResults());
+      } else if (auto *append = std::get_if<OracleSequenceAppend>(&op.action)) {
+        auto *actual =
+            next(block, cursor, op.span, "protocol.oracle_sequence_append",
+                 flatten({append->prefix, append->element}), 1);
+        if (!actual || !attributes(*actual, {"roles", "site"}) ||
+            !roleSet(actual->getAttr("roles"), append->roles) ||
+            !string(*actual, "site", site))
+          return fail("oracle sequence append family or occurrence differs");
+        result = Values(actual->getResults());
+      } else if (auto *at = std::get_if<OracleSequenceAt>(&op.action)) {
+        auto *actual =
+            next(block, cursor, op.span, "protocol.oracle_sequence_at",
+                 flatten({at->input, at->position}), 1);
+        if (!actual || !attributes(*actual, {"roles", "site"}) ||
+            !roleSet(actual->getAttr("roles"), at->roles) ||
+            !string(*actual, "site", site))
+          return fail("oracle sequence selection family or occurrence differs");
+        result = Values(actual->getResults());
+      } else if (auto *length = std::get_if<OracleSequenceLength>(&op.action)) {
+        auto *actual =
+            next(block, cursor, op.span, "protocol.oracle_sequence_length",
+                 values[length->input.index], 1);
+        if (!actual || !attributes(*actual, {}))
+          return fail("oracle sequence length differs");
+        result = Values(actual->getResults());
       } else if (auto *send = std::get_if<OracleSend>(&op.action)) {
         auto *actual = next(block, cursor, op.span, "protocol.oracle_send",
                             flatten({send->data, send->rows}), 1);
@@ -1554,7 +1585,9 @@ class Comparator {
       // Logical products and abstract helper dependencies may conservatively
       // narrow their leaves. Exact operation/operand matching already fixes
       // derived native availability; it must contain the source guarantee.
-      bool derived = std::holds_alternative<MathValue>(op.action) ||
+      bool derived = std::holds_alternative<OracleSequenceEmpty>(op.action) ||
+                     std::holds_alternative<OracleSequenceLength>(op.action) ||
+                     std::holds_alternative<MathValue>(op.action) ||
                      std::holds_alternative<Construct>(op.action) ||
                      std::holds_alternative<Projection>(op.action) ||
                      std::holds_alternative<ProtocolCompletion>(op.action);

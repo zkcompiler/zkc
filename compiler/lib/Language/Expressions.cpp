@@ -54,7 +54,9 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
   }
   if (expr.kind == K::OracleSend || expr.kind == K::OracleQuery ||
       expr.kind == K::OracleContents || expr.kind == K::OracleRows ||
-      expr.kind == K::OracleForgetRows)
+      expr.kind == K::OracleForgetRows || expr.kind == K::OracleSequenceEmpty ||
+      expr.kind == K::OracleSequenceAppend ||
+      expr.kind == K::OracleSequenceAt || expr.kind == K::OracleSequenceLength)
     result = oracle(expr, depth);
   else if (expr.kind == K::And || expr.kind == K::Or) {
     result = boolean(expr, depth);

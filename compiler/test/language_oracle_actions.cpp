@@ -3,9 +3,11 @@
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Inspection.h"
+#include "zkc/Transforms/Mathematical.h"
 using namespace llvm;
 using namespace zkc;
 using namespace zkc::language;
@@ -32,8 +34,21 @@ Expected<CheckedProject> check(StringRef code) {
 }
 CheckedOriginal original(StringRef code) {
   auto project = take(check(code));
-  return take(
-      prepareOriginal(take(zkc::test::closeNativeRun(project, "m::Run"))));
+  auto source =
+      take(prepareOriginal(take(zkc::test::closeNativeRun(project, "m::Run"))));
+  mlir::DialectRegistry registry;
+  registerDialects(registry);
+  mlir::MLIRContext context(registry);
+  context.loadAllAvailableDialects();
+  auto module =
+      mlir::parseSourceString<mlir::ModuleOp>(source.bytes(), &context);
+  require(bool(module), "source failed to parse");
+  auto prepared = mathematical::prepareProtocol(*module);
+  require(bool(prepared), "checked oracle preparation failed");
+  auto snapshot = take(protocol::exportStructuredSource(
+      source.bytes(), source.entry().protocol().symbol, context));
+  require(!snapshot.bytes.empty(), "oracle structured export is empty");
+  return source;
 }
 const char *repeated = R"(
 protocol Run roles(P,V)(xs:Vec@P)->(out:F@V) {

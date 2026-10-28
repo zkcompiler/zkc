@@ -365,6 +365,9 @@ families use the same explicit `F,G` assignment and evaluator.
 `SiteObservations` abstracts only internal marks; arithmetic is pure and shared.
 There is no separate scalar arithmetic or unsupported-sort fallback.
 Selection is interpreted for every admitted type, including products and sequences.
+Nominal product construction and total projection are admitted in Math and
+Protocol calculations. Protocol availability is still checked on the actual
+operands; packing does not grant another role access to a component.
 The Common scalar effect adapter refuses aggregate messages. The nominal
 construction runtime transports data as one exact `Ty` paired with its existing
 `Carriers.Value` and a proof that it contains no service capability. Products and

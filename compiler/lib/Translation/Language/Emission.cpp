@@ -1166,6 +1166,34 @@ class Emitter {
             llvm::append_range(result, output);
           offset += count;
         }
+      } else if (std::holds_alternative<OracleSequenceEmpty>(op.action)) {
+        auto *actual =
+            make("protocol.oracle_sequence_empty", resultTypes, {}, {});
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *append = std::get_if<OracleSequenceAppend>(&op.action)) {
+        auto *actual =
+            make("protocol.oracle_sequence_append", resultTypes,
+                 flatten({append->prefix, append->element}),
+                 {attr("roles", roles(append->roles)), text("site", site)});
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *at = std::get_if<OracleSequenceAt>(&op.action)) {
+        auto *actual =
+            make("protocol.oracle_sequence_at", resultTypes,
+                 flatten({at->input, at->position}),
+                 {attr("roles", roles(at->roles)), text("site", site)});
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *length = std::get_if<OracleSequenceLength>(&op.action)) {
+        auto *actual = make("protocol.oracle_sequence_length", resultTypes,
+                            values[length->input.index], {});
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
       } else if (auto *send = std::get_if<OracleSend>(&op.action)) {
         auto input = flatten({send->data, send->rows});
         SmallVector<mlir::NamedAttribute> attrs{
