@@ -1,6 +1,9 @@
 module
 
 public import Zkc.Source.Structured.MultilinearReferenceInstallation
+public import Zkc.Source.Structured.SumReferenceInstallation
+public import Zkc.Source.Structured.ProjectionReferenceInstallation
+public import ZkcExamples.Structured.SumcheckPreludeNormalForms
 public import Zkc.Source.Structured.NormalForm.Reference
 public import Zkc.Source.Structured.NormalForm.Observation
 public import ZkcExamples.Structured.SumcheckRoundNormalForms
@@ -246,3 +249,133 @@ theorem body_reference (definitions : List CheckedDefinition)
 end Prover
 
 end ZkcExamples.Structured.SumcheckReferenceInstallation
+
+
+/-! Complete nominal reduction installation, sharing the retained source syntax. -/
+namespace ZkcExamples.Structured.SumcheckReductionReference
+open Zkc.Source Zkc.Source.Structured NormalForm ReferenceLibrary
+open SumcheckReferenceInstallation
+abbrev signature := SumcheckPreludeNormalForms.verifierReduceSignature
+abbrev pattern := SumcheckPreludeNormalForms.verifierReducePattern
+noncomputable abbrev form := SumcheckPreludeNormalForms.verifierReduceForm
+
+variable (model : DomainModel)
+
+def results : LawResults model signature.laws where
+  result entry := match entry with
+    | ⟨0, _⟩ => fun _ => .cons 0 .nil
+    | ⟨1, _⟩ => fun _ => .cons 0 .nil
+    | ⟨2, _⟩ => fun args => args
+    | ⟨3, _⟩ => fun args => args
+    | ⟨_ + 4, outside⟩ => absurd outside (by simp [signature, SumcheckPreludeNormalForms.verifierReduceSignature])
+
+def inputs (point : Option (List (model.Field field))) (claim : Option (model.Field field))
+    (count service : Option Nat) : Binders model pattern.scope :=
+  .cons point (.cons claim (.cons count (.cons service .nil)))
+
+structure Bodies (definitions : List CheckedDefinition) : Prop where
+  width : BodyIn definitions MapFirstBodies.widthHelper
+    (.ret (.cons (.there (.there .here)) .nil))
+  dimension : BodyIn definitions MapFirstBodies.variablesHelper (.ret (.cons (.there .here) .nil))
+  openClaim : BodyIn definitions SumcheckPendingBodies.openClaimHelper (Sum.identity model field).body
+  atPrefix : BodyIn definitions SumcheckPendingBodies.atPrefixHelper (Sum.identity model field).body
+
+
+theorem laws (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
+    (bodies : Bodies model definitions) (point : Option (List (model.Field field)))
+    (claim : Option (model.Field field)) (count service : Option Nat) :
+    LawsHold (tables model definitions) (results model)
+      (pattern.environment model (inputs model point claim count service)) := by
+  intro entry
+  match entry with
+  | ⟨0, _⟩ =>
+    intro args values found
+    match args with
+    | .cons a (.cons b (.cons c .nil)) =>
+      obtain rfl : values = (.cons c .nil : Values (Component model.Value) [.index]) :=
+        Option.some.inj (found.symm.trans (by kernel_rfl))
+      exact projection_components model definitions linked _ _ bodies.width _
+  | ⟨1, _⟩ =>
+    intro args values found
+    match args with
+    | .cons a (.cons b (.cons c .nil)) =>
+      obtain rfl : values = (.cons b .nil : Values (Component model.Value) [.index]) :=
+        Option.some.inj (found.symm.trans (by kernel_rfl))
+      exact projection_components model definitions linked _ _ bodies.dimension _
+  | ⟨2, _⟩ =>
+    intro args pinned values found
+    match args with
+    | .cons a (.cons b .nil) =>
+      obtain rfl : values = (.cons a (.cons b .nil) : Values model.Value [.vector field, .field field]) :=
+        Option.some.inj (found.symm.trans (by kernel_rfl))
+      change invoke (tables model definitions).closed SumcheckPendingBodies.openClaimHelper _ = _
+      exact (Sum.identity model field).invokeOn (model := model)
+        (helper := SumcheckPendingBodies.openClaimHelper) definitions linked bodies.openClaim _ trivial
+  | ⟨3, _⟩ =>
+    intro args pinned values found
+    match args with
+    | .cons a (.cons b .nil) =>
+      obtain rfl : values = (.cons a (.cons b .nil) : Values model.Value [.vector field, .field field]) :=
+        Option.some.inj (found.symm.trans (by kernel_rfl))
+      change invoke (tables model definitions).closed SumcheckPendingBodies.atPrefixHelper _ = _
+      exact (Sum.identity model field).invokeOn (model := model)
+        (helper := SumcheckPendingBodies.atPrefixHelper) definitions linked bodies.atPrefix _ trivial
+  | ⟨_ + 4, outside⟩ => exact absurd outside (by simp [signature, SumcheckPreludeNormalForms.verifierReduceSignature])
+
+/-- All six returned source slots are retained in their actual order. -/
+def terminal (returned : Values (Component model.Value) SumcheckVerifierBodies.repeatState) :
+    PIR.Process (Occurrence.signature model.toCarriers)
+      (Values (Component model.Value) SumcheckVerifierBodies.reduceOutputs) :=
+  match returned.get (.there (.there (.there (.there .here)))) with
+  | none => .halt .incomplete
+  | some point => match returned.get (.there (.there (.there (.there (.there .here))))) with
+    | none => .halt .incomplete
+    | some scalar => .done (.cons (returned.get (.there (.there (.there .here))))
+        (.cons (returned.get .here) (.cons (returned.get (.there .here))
+        (.cons (returned.get (.there (.there .here))) (.cons (some point) (.cons (some scalar) .nil))))))
+
+def reference (definitions : List CheckedDefinition)
+    (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
+    (maximum : Nat) (ctx : ProtocolContext) (point : Option (List (model.Field field)))
+    (claim : Option (model.Field field)) (count service : Option Nat) :=
+  match point, claim with
+  | some point, some claim =>
+    (denoteRepeatOn (SumcheckVerifierBodies.repeatSpec maximum) ctx (ctx.roles 1) count
+      (state model (some point) (some claim)) (.cons service .nil)
+      (fun args => SumcheckVerifierBodies.roundBody.denote
+        (participantMeaningWithOn model (.silent _) Occurrence.actions (tables model definitions)
+          (ctx.roles 1) protocols ctx Occurrence.iterations) args.get)
+      Occurrence.iterations SumcheckVerifierBodies.repeatSite).bind (terminal model)
+  | _, _ => .halt .incomplete
+
+theorem presentation (definitions : List CheckedDefinition)
+    (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
+    (maximum : Nat) (ctx : ProtocolContext) (point : Option (List (model.Field field)))
+    (claim : Option (model.Field field)) (count service : Option Nat) :
+    (form maximum).denoteOn model Occurrence.actions (tables model definitions) (results model) ctx
+      (runsAtOn model Occurrence.actions Occurrence.iterations (tables model definitions) protocols ctx 1)
+      (noCallees model _) (inputs model point claim count service) =
+      reference model definitions protocols maximum ctx point claim count service := by
+  cases point <;> cases claim <;> kernel_rfl
+
+/-- The premise is an exact, local nominal library installation. No whole-body
+semantic equation, evaluator or source/compiled connection is assumed. -/
+theorem body_reference (definitions : List CheckedDefinition)
+    (linked : DeclarationsLinked [] definitions) (bodies : Bodies model definitions)
+    (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
+    (maximum : Nat) (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
+    (point : Option (List (model.Field field))) (claim : Option (model.Field field))
+    (count service : Option Nat) :
+    (SumcheckVerifierBodies.reduceBody maximum).denote
+      (participantMeaningWithOn model (.silent _) Occurrence.actions (tables model definitions)
+        (ctx.roles 1) protocols ctx Occurrence.iterations)
+      (pattern.environment model (inputs model point claim count service)).get =
+      reference model definitions protocols maximum ctx point claim count service :=
+  (normalize_occurrence_sound signature (SumcheckVerifierBodies.reduceBody maximum) 1 2 pattern
+    (form maximum) (SumcheckPreludeNormalForms.verifierReduce_normalized maximum)
+    (SumcheckPreludeNormalForms.verifierReduce_lawsMatch maximum) distinct (results model)
+    (noCallees model _) (inputs model point claim count service)
+    (laws model definitions linked bodies point claim count service) (noCallees_hold _ _)).trans
+      (presentation model definitions protocols maximum ctx point claim count service)
+
+end ZkcExamples.Structured.SumcheckReductionReference
