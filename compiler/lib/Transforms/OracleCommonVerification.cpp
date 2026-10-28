@@ -96,7 +96,7 @@ bool local(const OracleLocalRecipe &recipe, func::FuncOp actual,
 // the realized entry. Original declarations retain their exact body. A spare
 // implementation cannot hide behind an unused symbol in a checked candidate.
 bool inventory(pir::ProtocolModuleOp source, pir::ProtocolModuleOp candidate,
-               StringRef entry, ArrayRef<Operation *> roots) {
+               ArrayRef<std::string> entries, ArrayRef<Operation *> roots) {
   llvm::StringSet<> original, allowed;
   for (auto &op : source.getBody().front()) {
     auto name = SymbolTable::getSymbolName(&op);
@@ -109,14 +109,15 @@ bool inventory(pir::ProtocolModuleOp source, pir::ProtocolModuleOp candidate,
       continue;
     }
     auto *actual = SymbolTable::lookupSymbolIn(candidate, name);
-    if (!actual || (name.getValue() != entry &&
+    if (!actual || (!is_contained(entries, name.getValue()) &&
                     !OperationEquivalence::isEquivalentTo(
                         &op, actual, OperationEquivalence::IgnoreLocations)))
       return false;
     allowed.insert(name.getValue());
   }
   SmallVector<Operation *> pending(roots.begin(), roots.end());
-  pending.push_back(SymbolTable::lookupSymbolIn(candidate, entry));
+  for (const auto &entry : entries)
+    pending.push_back(SymbolTable::lookupSymbolIn(candidate, entry));
   llvm::DenseSet<Operation *> seen;
   while (!pending.empty()) {
     auto *op = pending.pop_back_val();
@@ -175,16 +176,17 @@ bool inventory(pir::ProtocolModuleOp source, pir::ProtocolModuleOp candidate,
   return true;
 }
 } // namespace
-Error checkIdealOracleRealization(ModuleOp prepared, StringRef entry,
+Error checkIdealOracleRealization(ModuleOp prepared,
                                   const OracleCommonRealization &actual) {
-  auto requirements = idealOracleRequirements(prepared, entry);
-  if (!requirements)
-    return requirements.takeError();
+  auto entries = idealOracleEntries(prepared);
+  if (!entries)
+    return entries.takeError();
   ModuleOp actualModule = actual.module.get();
   if (!actualModule || actualModule == prepared ||
       actualModule.getContext() != prepared.getContext() ||
       actualModule->getAttrDictionary() != prepared->getAttrDictionary() ||
-      !hasSingleElement(actualModule.getBody()->getOperations()))
+      !hasSingleElement(actualModule.getBody()->getOperations()) ||
+      actual.entries.size() != entries->size())
     return refuse();
   auto sourceContext = OracleVerificationContext::read(prepared);
   if (!sourceContext)
@@ -195,77 +197,84 @@ Error checkIdealOracleRealization(ModuleOp prepared, StringRef entry,
     return refuse();
   }
   auto source = sourceContext->getUnit();
-  auto candidate =
-      dyn_cast<pir::ProtocolModuleOp>(actualModule.getBody()->front());
-  if (!candidate ||
-      source->getAttrDictionary() != candidate->getAttrDictionary() ||
-      actual.controllers.size() != requirements->controllers.size() ||
-      actual.allocators.size() != requirements->storage.constructors.size())
+  auto candidate = targetContext->getUnit();
+  if (source->getAttrDictionary() != candidate->getAttrDictionary())
     return refuse();
   SmallVector<Operation *> roots;
   auto root = [&](func::FuncOp function) {
     if (function)
       roots.push_back(function);
   };
-  for (auto [expected, item] :
-       zip(requirements->controllers, actual.controllers)) {
-    if (expected.role != item.role || expected.kind != item.kind ||
-        expected.access != item.access)
+  for (auto [entry, realized] : zip(*entries, actual.entries)) {
+    if (entry != realized.entry)
       return refuse();
-    if (auto e = checkOracleQueryController(
-            *targetContext, *sourceContext, requirements->storage, item.role,
-            item.kind, requirements->capacity, item.body, item.access))
-      return e;
-    const auto &body = item.body;
-    root(body.initialize);
-    root(body.advance);
-    root(body.finish);
-    root(body.evaluate);
-    root(body.contents);
-    for (auto helper : body.resume)
-      root(helper);
-    for (auto helper : body.rowCounts)
-      root(helper);
-    for (auto helper : body.leafCounts)
-      root(helper);
-    for (auto helper : body.constructionCounts)
-      root(helper);
-    for (const auto &constructor : body.constructors) {
-      root(constructor.lookup);
-      root(constructor.functions.answer);
-      for (const auto &query : constructor.functions.queries)
-        root(query.position);
-    }
-  }
-  for (auto [ordinal, constructor] :
-       enumerate(requirements->storage.constructors)) {
-    if (actual.allocators[ordinal].size() != constructor.roles.size())
+    auto requirements = idealOracleRequirements(prepared, entry);
+    if (!requirements)
+      return requirements.takeError();
+    if (realized.controllers.size() != requirements->controllers.size() ||
+        realized.allocators.size() != requirements->storage.constructors.size())
       return refuse();
-    for (auto [role, helper] : enumerate(actual.allocators[ordinal])) {
-      if (auto e = checkOracleAnchorAllocator(
-              *targetContext, helper, requirements->storage, ordinal, role))
+    for (auto [expected, item] :
+         zip(requirements->controllers, realized.controllers)) {
+      if (expected.role != item.role || expected.kind != item.kind ||
+          expected.access != item.access)
+        return refuse();
+      if (auto e = checkOracleQueryController(
+              *targetContext, *sourceContext, requirements->storage, item.role,
+              item.kind, requirements->capacity, item.body, item.access))
         return e;
+      const auto &body = item.body;
+      root(body.initialize);
+      root(body.advance);
+      root(body.finish);
+      root(body.evaluate);
+      root(body.contents);
+      for (auto helper : body.resume)
+        root(helper);
+      for (auto helper : body.rowCounts)
+        root(helper);
+      for (auto helper : body.leafCounts)
+        root(helper);
+      for (auto helper : body.constructionCounts)
+        root(helper);
+      for (const auto &constructor : body.constructors) {
+        root(constructor.lookup);
+        root(constructor.functions.answer);
+        for (const auto &query : constructor.functions.queries)
+          root(query.position);
+      }
+    }
+    for (auto [ordinal, constructor] :
+         enumerate(requirements->storage.constructors)) {
+      if (realized.allocators[ordinal].size() != constructor.roles.size())
+        return refuse();
+      for (auto [role, helper] : enumerate(realized.allocators[ordinal])) {
+        if (auto e = checkOracleAnchorAllocator(
+                *targetContext, helper, requirements->storage, ordinal, role))
+          return e;
+        root(helper);
+      }
+    }
+    auto plan =
+        planIdealOracleCommon(prepared, entry, *requirements,
+                              realized.controllers, realized.allocators);
+    if (!plan)
+      return plan.takeError();
+    auto program = dyn_cast_or_null<pir::MathematicalOp>(
+        SymbolTable::lookupSymbolIn(candidate, entry));
+    if (!program || program->getAttrDictionary() != plan->attributes ||
+        !hasSingleElement(program.getBody()) ||
+        !block(plan->body, program.getBody().front()) ||
+        realized.locals.size() != plan->locals.size())
+      return refuse();
+    const auto &closure = targetContext->getClosure();
+    for (auto [recipe, helper] : zip(plan->locals, realized.locals)) {
+      if (!local(recipe, helper, closure))
+        return refuse();
       root(helper);
     }
   }
-  auto plan = planIdealOracleCommon(prepared, entry, *requirements,
-                                    actual.controllers, actual.allocators);
-  if (!plan)
-    return plan.takeError();
-  auto program = dyn_cast_or_null<pir::MathematicalOp>(
-      SymbolTable::lookupSymbolIn(candidate, entry));
-  if (!program || program->getAttrDictionary() != plan->attributes ||
-      !hasSingleElement(program.getBody()) ||
-      !block(plan->body, program.getBody().front()) ||
-      actual.locals.size() != plan->locals.size())
-    return refuse();
-  const auto &closure = targetContext->getClosure();
-  for (auto [recipe, helper] : zip(plan->locals, actual.locals)) {
-    if (!local(recipe, helper, closure))
-      return refuse();
-    root(helper);
-  }
-  if (!inventory(source, candidate, entry, roots))
+  if (!inventory(source, candidate, *entries, roots))
     return refuse();
   return Error::success();
 }

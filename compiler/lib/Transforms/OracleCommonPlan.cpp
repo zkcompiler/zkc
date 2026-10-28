@@ -229,9 +229,16 @@ struct PlanBuilder {
   }
   OracleLocalRecipe local(TypeRange inputs, TypeRange outputs) {
     OracleLocalRecipe recipe;
-    std::string prefix = "_oracle_common_local_";
-    unsigned suffix = result.locals.size();
     auto unit = cast<pir::ProtocolModuleOp>(source.getBody()->front());
+    unsigned ordinal = 0;
+    for (auto other : unit.getBody().front().getOps<pir::MathematicalOp>()) {
+      if (other == program)
+        break;
+      ++ordinal;
+    }
+    std::string prefix =
+        "_oracle_common_local_" + std::to_string(ordinal) + "_";
+    unsigned suffix = result.locals.size();
     do {
       recipe.name = prefix + std::to_string(suffix++);
     } while (SymbolTable::lookupSymbolIn(unit, recipe.name) ||
@@ -911,6 +918,27 @@ struct PlanBuilder {
   }
 };
 } // namespace
+Expected<std::vector<std::string>> idealOracleEntries(ModuleOp source) {
+  if (!source || !hasSingleElement(source.getBody()->getOperations()) ||
+      failed(verify(source)))
+    return refuse();
+  auto unit = dyn_cast<pir::ProtocolModuleOp>(source.getBody()->front());
+  if (!unit || unit.getProfile() != pir::Profile::Protocol)
+    return refuse();
+  std::vector<std::string> entries;
+  for (auto program : unit.getBody().front().getOps<pir::MathematicalOp>()) {
+    bool needed = any_of(program.getFunctionType().getInputs(), logical) ||
+                  any_of(program.getFunctionType().getResults(), logical);
+    program.walk([&](Operation *op) {
+      needed |= op->getName().getStringRef().starts_with("protocol.oracle_") ||
+                any_of(op->getOperandTypes(), logical) ||
+                any_of(op->getResultTypes(), logical);
+    });
+    if (needed)
+      entries.push_back(program.getSymName().str());
+  }
+  return entries;
+}
 Expected<OracleCommonRequirements> idealOracleRequirements(ModuleOp source,
                                                            StringRef entry) {
   auto storage = planOracleAnchorStorage(
@@ -921,9 +949,7 @@ Expected<OracleCommonRequirements> idealOracleRequirements(ModuleOp source,
   auto unit = cast<pir::ProtocolModuleOp>(source.getBody()->front());
   auto program = dyn_cast_or_null<pir::MathematicalOp>(
       SymbolTable::lookupSymbolIn(unit, entry));
-  if (!program ||
-      !hasSingleElement(unit.getBody().front().getOps<pir::MathematicalOp>()) ||
-      storage->constructors.empty())
+  if (!program || storage->constructors.empty())
     return refuse();
   auto capacity = analyzeOracleQueryCapacity(source, entry);
   if (!capacity)

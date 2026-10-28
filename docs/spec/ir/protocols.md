@@ -215,6 +215,14 @@ answer to the reached exchange and authentication. Resume coordinates are
 ordinary data, not an authentication capability. These primitive checks do not
 establish complete realization correspondence or the Lean simulation.
 
+Whole common realization accounts for every retained protocol entry. Selecting
+one native bundle does not authorize omitting a sibling entry from the checked
+module. Each oracle entry has its own constructor inventory and stores; shared
+virtual definitions remain available until all referring entries are converted.
+Ordinary declarations retain their exact bodies. The complete reader checks both
+every converted entry and the union of generated helper dependencies, including
+source-relative identities and authored/generated symbol collisions.
+
 ## Ordered oracle events
 
 `protocol.oracle_send(data, shape...)` produces an `oracle<K>` handle at its

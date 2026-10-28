@@ -55,6 +55,8 @@ struct OracleCommonRequirements {
   OracleQuerySize capacity;
   std::vector<OracleControllerRequirement> controllers;
 };
+// Original declaration order determines the complete oracle-entry inventory.
+llvm::Expected<std::vector<std::string>> idealOracleEntries(mlir::ModuleOp);
 llvm::Expected<OracleCommonRequirements>
 idealOracleRequirements(mlir::ModuleOp prepared, llvm::StringRef entry);
 llvm::Expected<OracleCommonPlan> planIdealOracleCommon(

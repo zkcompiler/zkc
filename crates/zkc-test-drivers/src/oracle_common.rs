@@ -4,10 +4,10 @@ use std::path::Path;
 use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, Value};
 use zkc_runtime::host::joint::*;
 
-fn backend(role: &str) -> CpuBackend {
+fn backend(role: &str, entry: &str) -> CpuBackend {
     CpuBackend::new(
         Policy::default(),
-        EntryPolicy::new(Domain::new(role, "oracle_common", "main", None), None),
+        EntryPolicy::new(Domain::new(role, "oracle_common", entry, None), None),
         Default::default(),
     )
     .unwrap()
@@ -15,7 +15,7 @@ fn backend(role: &str) -> CpuBackend {
 fn input(role: &str, values: Vec<Value>) -> RoleInput<CpuBackend> {
     RoleInput {
         role: role.to_owned(),
-        backend: backend(role),
+        backend: backend(role, "main"),
         values,
     }
 }
@@ -73,7 +73,7 @@ fn main() {
     let bytes = std::fs::read(Path::new(&directory).join("common-recurrence.bundle")).unwrap();
     let bundle = Bundle::admit(
         &bytes,
-        &backend("P"),
+        &backend("P", "main"),
         zkc_cpu::cpu_contracts(),
         BundleLimits::default(),
     )
@@ -134,7 +134,7 @@ fn main() {
     let bytes = std::fs::read(Path::new(&directory).join("common-holders.bundle")).unwrap();
     let bundle = Bundle::admit(
         &bytes,
-        &backend("Alice"),
+        &backend("Alice", "main"),
         zkc_cpu::cpu_contracts(),
         BundleLimits::default(),
     )
@@ -167,7 +167,7 @@ fn main() {
     let bytes = std::fs::read(Path::new(&directory).join("common-input.bundle")).unwrap();
     let bundle = Bundle::admit(
         &bytes,
-        &backend("P"),
+        &backend("P", "main"),
         zkc_cpu::cpu_contracts(),
         BundleLimits::default(),
     )
@@ -198,7 +198,7 @@ fn main() {
     let bytes = std::fs::read(Path::new(&directory).join("common-shape.bundle")).unwrap();
     let bundle = Bundle::admit(
         &bytes,
-        &backend("P"),
+        &backend("P", "main"),
         zkc_cpu::cpu_contracts(),
         BundleLimits::default(),
     )
@@ -236,7 +236,7 @@ fn main() {
         let bytes = std::fs::read(Path::new(&directory).join(format!("{fixture}.bundle"))).unwrap();
         let bundle = Bundle::admit(
             &bytes,
-            &backend("P"),
+            &backend("P", "main"),
             zkc_cpu::cpu_contracts(),
             BundleLimits::default(),
         )
@@ -318,6 +318,66 @@ fn main() {
                         cases += 1;
                     }
                 }
+            }
+        }
+    }
+    for (entry, suffix, base) in [
+        ("main", "", 10),
+        ("companion", "-companion", 40),
+        ("ordinary", "-ordinary", 70),
+    ] {
+        let bytes =
+            std::fs::read(Path::new(&directory).join(format!("common-entries{suffix}.bundle")))
+                .unwrap();
+        let bundle = Bundle::admit(
+            &bytes,
+            &backend("P", entry),
+            zkc_cpu::cpu_contracts(),
+            BundleLimits::default(),
+        )
+        .unwrap();
+        for length in [0, 3, 4] {
+            for position in [0, 3, 4] {
+                let mut deliveries = Deliveries::default();
+                let role_input = |role: &str, values| RoleInput {
+                    role: role.to_owned(),
+                    backend: backend(role, entry),
+                    values,
+                };
+                let inputs = if entry == "ordinary" {
+                    vec![
+                        role_input("P", vec![]),
+                        role_input("V", vec![Value::Index(base), Value::Index(position)]),
+                    ]
+                } else {
+                    vec![
+                        role_input("P", vec![table(base, length)]),
+                        role_input("V", vec![Value::Index(position)]),
+                    ]
+                };
+                let report = run(
+                    &bundle,
+                    "oracle_common",
+                    inputs,
+                    RunLimits::default(),
+                    &mut deliveries,
+                )
+                .unwrap();
+                let expected = if entry == "ordinary" {
+                    Some(base)
+                } else {
+                    (length == 4 && position < 4).then_some(base + position)
+                };
+                verify(
+                    &report,
+                    expected,
+                    &format!("entries/{entry}/{length}/{position}"),
+                );
+                assert_eq!(
+                    deliveries.0.len(),
+                    usize::from(entry != "ordinary" && length == 4)
+                );
+                cases += 1;
             }
         }
     }

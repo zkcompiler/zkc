@@ -77,52 +77,64 @@ void body(OpBuilder &builder, Location loc, const OracleCommonBlock &plan,
   }
 }
 } // namespace
-Expected<OracleCommonRealization> emitIdealOracleRealization(ModuleOp prepared,
-                                                             StringRef entry) {
-  auto requirements = idealOracleRequirements(prepared, entry);
-  if (!requirements)
-    return requirements.takeError();
+Expected<OracleCommonRealization>
+emitIdealOracleRealization(ModuleOp prepared) {
+  auto entries = idealOracleEntries(prepared);
+  if (!entries)
+    return entries.takeError();
   OracleCommonRealization result;
   result.module = OwningOpRef<ModuleOp>(cast<ModuleOp>(prepared->clone()));
   auto unit = cast<pir::ProtocolModuleOp>(result.module->getBody()->front());
-  auto original =
-      cast<pir::MathematicalOp>(SymbolTable::lookupSymbolIn(unit, entry));
-  // Keep the admitted source function while building helpers: helper readers
-  // require a formed protocol unit. Replace it only once the common plan
-  // exists.
+  std::vector<OracleCommonPlan> plans;
   OracleVirtualFunctionWork work;
-  for (const auto &[role, kind, access] : requirements->controllers) {
-    auto controller = emitOracleQueryController(
-        *result.module, prepared, requirements->storage, role, kind,
-        requirements->capacity, work, access);
-    if (!controller)
-      return controller.takeError();
-    result.controllers.push_back({role, kind, access, std::move(*controller)});
-  }
-  for (auto [ordinal, constructor] :
-       enumerate(requirements->storage.constructors)) {
-    std::vector<func::FuncOp> allocators;
-    for (unsigned role = 0; role < constructor.roles.size(); ++role) {
-      auto allocator = emitOracleAnchorAllocator(
-          *result.module, requirements->storage, ordinal, role);
-      if (!allocator)
-        return allocator.takeError();
-      allocators.push_back(*allocator);
+  // Build every helper while the complete admitted source inventory remains
+  // intact. A sibling's original signature or shared virtual declaration must
+  // not disappear while another entry's primitive is being constructed.
+  for (const auto &entry : *entries) {
+    auto requirements = idealOracleRequirements(prepared, entry);
+    if (!requirements)
+      return requirements.takeError();
+    OracleCommonEntryRealization item;
+    item.entry = entry;
+    for (const auto &[role, kind, access] : requirements->controllers) {
+      auto controller = emitOracleQueryController(
+          *result.module, prepared, requirements->storage, role, kind,
+          requirements->capacity, work, access);
+      if (!controller)
+        return controller.takeError();
+      item.controllers.push_back({role, kind, access, std::move(*controller)});
     }
-    result.allocators.push_back(std::move(allocators));
+    for (auto [ordinal, constructor] :
+         enumerate(requirements->storage.constructors)) {
+      std::vector<func::FuncOp> allocators;
+      for (unsigned role = 0; role < constructor.roles.size(); ++role) {
+        auto allocator = emitOracleAnchorAllocator(
+            *result.module, requirements->storage, ordinal, role);
+        if (!allocator)
+          return allocator.takeError();
+        allocators.push_back(*allocator);
+      }
+      item.allocators.push_back(std::move(allocators));
+    }
+    auto plan = planIdealOracleCommon(prepared, entry, *requirements,
+                                      item.controllers, item.allocators);
+    if (!plan)
+      return plan.takeError();
+    for (const auto &recipe : plan->locals)
+      item.locals.push_back(local(unit, recipe));
+    plans.push_back(std::move(*plan));
+    result.entries.push_back(std::move(item));
   }
-  auto plan = planIdealOracleCommon(prepared, entry, *requirements,
-                                    result.controllers, result.allocators);
-  if (!plan)
-    return plan.takeError();
-  for (const auto &recipe : plan->locals)
-    result.locals.push_back(local(unit, recipe));
-  original->setAttrs(plan->attributes);
-  original.getBody().getBlocks().clear();
-  auto *block = new Block;
-  original.getBody().push_back(block);
-  OpBuilder builder(prepared.getContext());
-  body(builder, original.getLoc(), plan->body, *block);
+  for (auto [entry, plan] : zip(*entries, plans)) {
+    auto original =
+        cast<pir::MathematicalOp>(SymbolTable::lookupSymbolIn(unit, entry));
+    original->setAttrs(plan.attributes);
+    original.getBody().getBlocks().clear();
+    auto *block = new Block;
+    original.getBody().push_back(block);
+    OpBuilder builder(prepared.getContext());
+    body(builder, original.getLoc(), plan.body, *block);
+  }
   for (auto declaration : llvm::make_early_inc_range(
            unit.getBody().front().getOps<pir::OracleDefinitionOp>()))
     declaration.erase();
