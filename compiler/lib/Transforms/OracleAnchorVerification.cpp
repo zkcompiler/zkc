@@ -1,0 +1,103 @@
+#include "OracleAnchorStorage.h"
+#include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Support/Refusal.h"
+using namespace mlir;
+using namespace llvm;
+namespace zkc::protocol {
+Error checkOracleAnchorAllocator(ModuleOp candidate, func::FuncOp actual,
+                                 const OracleAnchorStorage &plan,
+                                 unsigned constructor, unsigned role) {
+  auto refuse = [] { return error("oracle-storage-allocation-body"); };
+  if (!candidate || !actual || failed(verify(candidate)) ||
+      !hasSingleElement(candidate.getBody()->getOperations()) ||
+      constructor >= plan.constructors.size() ||
+      role >= plan.constructors[constructor].roles.size())
+    return refuse();
+  auto unit =
+      dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
+  if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol ||
+      actual->getParentOp() != unit)
+    return refuse();
+  const auto &layout = plan.constructors[constructor];
+  const auto &storage = layout.roles[role];
+  auto reference = oracleReferenceType(layout.kind);
+  if (!reference)
+    return reference.takeError();
+  auto record = encodeBoundType(storage.record, false);
+  if (!record)
+    return record.takeError();
+  SmallVector<Type> arguments{runtime::ScopeType::get(candidate.getContext()),
+                              storage.sequence};
+  for (const auto &field : storage.fields)
+    arguments.push_back(field.type);
+  auto outcome = exec::OutcomeType::get(candidate.getContext(),
+                                        {*reference, storage.sequence});
+  if (!equal(actual.getArgumentTypes(), arguments) ||
+      !equal(actual.getResultTypes(), TypeRange(outcome)))
+    return refuse();
+  auto closure = readSourceExecutionClosure(unit);
+  if (!closure)
+    return closure.takeError();
+  auto found = closure->bodies.find(actual.getSymName().str());
+  if (found == closure->bodies.end() || found->second.size() != 6)
+    return refuse();
+  const auto &steps = found->second;
+  auto site = [](const SourceExecutionStep &step, StringRef name) {
+    auto site = step.operation->getAttrOfType<StringAttr>("site");
+    return site && site.getValue() == name && step.regions.empty();
+  };
+  auto call = [&](unsigned n, StringRef contract, ArrayRef<std::string> statics,
+                  ValueRange inputs, Type output, StringRef name,
+                  ArrayRef<std::string> parameters = {}) {
+    const auto &step = steps[n];
+    auto op = dyn_cast<exec::ApplyOp>(step.operation);
+    if (!op || !site(step, name) || !equal(inputs, step.inputs) ||
+        step.outputs.size() != 1 || step.outputs[0].getType() != output)
+      return false;
+    auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+        op, op.getBindingAttr());
+    if (!binding || binding.getContract() != contract ||
+        !binding.getImplementation().empty() ||
+        binding.getArguments().size() != statics.size() ||
+        op.getParameters().size() != parameters.size())
+      return false;
+    for (auto [value, expected] : zip(binding.getArguments(), statics))
+      if (dyn_cast<StringAttr>(value).getValue() != expected)
+        return false;
+    for (auto [value, expected] : zip(op.getParameters(), parameters))
+      if (cast<StringAttr>(value).getValue() != expected)
+        return false;
+    return true;
+  };
+  auto pack = [&](unsigned n, Type type, ValueRange inputs, StringRef name) {
+    const auto &step = steps[n];
+    auto op = dyn_cast<exec::VariantOp>(step.operation);
+    return op && op.getAlternative() == "Record" && site(step, name) &&
+           equal(inputs, step.inputs) && step.outputs.size() == 1 &&
+           step.outputs[0].getType() == type;
+  };
+  auto index =
+      IntegerType::get(candidate.getContext(), 64, IntegerType::Unsigned);
+  if (!call(0, "index.constant", {}, {}, index, "constructor",
+            {std::to_string(constructor)}) ||
+      !call(1, "sequence.length", {record->spelling()}, actual.getArgument(1),
+            index, "length") ||
+      !pack(2, storage.record, actual.getArguments().drop_front(2), "record"))
+    return refuse();
+  if (!call(3, "sequence.append", {record->spelling()},
+            {actual.getArgument(1), steps[2].outputs[0]}, storage.sequence,
+            "append") ||
+      !pack(4, *reference, {steps[0].outputs[0], steps[1].outputs[0]},
+            "reference") ||
+      !isa<exec::ReturnOp>(steps[5].operation) || !steps[5].regions.empty() ||
+      !equal(steps[5].inputs,
+             SmallVector<Value>{steps[4].outputs[0], steps[3].outputs[0]}))
+    return refuse();
+  return Error::success();
+}
+} // namespace zkc::protocol

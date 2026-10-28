@@ -502,8 +502,13 @@ commands and an independent Lean derivation over the original snapshot. These pr
 not discharge their predicates. A conservative scheduling analysis reads actual
 prepared bodies and role substitution, separates participant-local stops, and
 summarizes counted repetitions without unrolling. It identifies a possible query
-before a later draw; it does not authorize batching or prove simulation. Semantic
-realization remains pending.
+before a later draw; it does not authorize batching or prove simulation. Private
+anchor-storage planning retains fresh constructor/instance references, actual
+repeat coordinates and role-specific payloads as ordinary sequences and records.
+An independent reader checks generated append allocations, including actual SSA
+inputs and outcome propagation. These helpers enter the existing physical
+pipeline; query expansion, source adapters and complete semantic realization
+remain pending.
 Common oracle ports pair actual holder data and receiver handles through inputs,
 returns and applications, with explicit shapes and independent preparation checks.
 The native [structured exporter](spec/formats/structured-source.md#logical-oracle-vocabulary)

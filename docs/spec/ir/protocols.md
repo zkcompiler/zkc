@@ -96,6 +96,31 @@ an ordinary native binding or message codec, and `data.sequence` cannot wrap
 one to obtain such permissions. Oracle operations and realization are separate
 admission boundaries; registration of these types grants no executable effect.
 
+### Internal anchor storage
+
+Realization may represent logical anchors with ordinary, immutable data. In the
+current private lowering, a reference carries a constructor ordinal and an
+instance ordinal. Each constructor and role has a separate append-only store.
+Equal payloads never merge constructions. Splitting a port into components or
+rebinding those components preserves its reference instead of allocating again.
+Static shape erasure preserves the reference type and the stored actual shape.
+
+Each record retains its enclosing repeat indices, named dimensions and role
+payload, in that order. An instance ordinal alone does not determine nested
+iteration coordinates when trip counts vary. Virtual payloads retain actual
+child references and ordinary parameters. Ideal table delivery gives receivers
+the table; a Merkle receiver stores the root, while data and opening state stay
+with the holder. Virtual anchors never select a commitment scheme.
+
+The allocation primitive reads the old store length, packs the supplied record,
+appends it, and returns the constructor/old-length reference with the new store.
+Its independent check reads actual resolved bindings, ordered outcomes and SSA
+operands. It does not establish that supplied coordinates, dimensions or payloads
+come from the source occurrence; the complete source-to-realization check must
+establish that association. Type, work and capacity limits are compiler resource
+refusals, separate from the logical query-domain stop. No native oracle carrier
+or runtime interpreter is introduced by this representation.
+
 ## Ordered oracle events
 
 `protocol.oracle_send(data, shape...)` produces an `oracle<K>` handle at its
