@@ -335,7 +335,7 @@ public:
         if (!subset(selected, env.values.lookup(restrict.getInput())))
           return refuse(op, "restriction requests an unavailable component");
         env.values[restrict.getOutput()] = std::move(selected);
-      } else if (auto forget = dyn_cast<protocol_ir::OracleForgetRowsOp>(op)) {
+      } else if (auto forget = dyn_cast<protocol_ir::OracleForgetShapeOp>(op)) {
         env.values[forget.getOutput()] = env.values.lookup(forget.getInput());
       } else if (auto input = dyn_cast<protocol_ir::OracleInputOp>(op)) {
         int holder = role(input.getHolderAttr());
@@ -368,8 +368,8 @@ public:
         data.set(holder);
         env.values[components.getData()] = std::move(data);
         env.values[components.getAnchor()] = std::move(receivers);
-      } else if (auto rows = dyn_cast<protocol_ir::OracleRowsOp>(op)) {
-        env.values[rows.getRows()] = env.values.lookup(rows.getHandle());
+      } else if (auto rows = dyn_cast<protocol_ir::OracleShapeOp>(op)) {
+        env.values[rows.getExtent()] = env.values.lookup(rows.getHandle());
       } else if (auto virtualOracle =
                      dyn_cast<protocol_ir::OracleVirtualOp>(op)) {
         auto declaration =
@@ -393,9 +393,12 @@ public:
                                         remaining)))
             return failure();
         }
-        if (auto shape = declaration.getShapeArgument())
-          if (failed(initialOracleShape(virtualOracle.getInputs()[*shape], op)))
+        for (auto dimension : declaration.getShapeArguments()) {
+          auto index =
+              cast<IntegerAttr>(dimension.getValue()).getValue().getZExtValue();
+          if (failed(initialOracleShape(virtualOracle.getInputs()[index], op)))
             return failure();
+        }
         env.values[virtualOracle.getHandle()] = std::move(available);
       } else if (auto contents = dyn_cast<protocol_ir::OracleContentsOp>(op)) {
         int owner = role(contents.getOwnerAttr());
@@ -478,11 +481,13 @@ public:
                 op,
                 "oracle send requires its holder data and distinct receivers");
           available.set(sender);
-          if (!subset(available, env.values.lookup(send.getRows())))
-            return refuse(op, "oracle shape must be available at the holder "
-                              "and every receiver");
-          if (failed(initialOracleShape(send.getRows(), op)))
-            return failure();
+          for (Value dimension : send.getShape()) {
+            if (!subset(available, env.values.lookup(dimension)))
+              return refuse(op, "oracle shape must be available at the holder "
+                                "and every receiver");
+            if (failed(initialOracleShape(dimension, op)))
+              return failure();
+          }
           env.values[send.getHandle()] = std::move(available);
         } else if (auto query = dyn_cast<protocol_ir::OracleQueryOp>(op)) {
           int owner = role(query.getOwnerAttr());

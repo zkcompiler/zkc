@@ -4,6 +4,7 @@
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/OpImplementation.h"
+#include "zkc/Contracts/OracleKinds.h"
 #include "zkc/Dialect/Protocol/IR/protocolEnums.h.inc"
 #include <optional>
 #define GET_ATTRDEF_CLASSES

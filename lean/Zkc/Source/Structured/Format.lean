@@ -116,23 +116,46 @@ def optional {α : Type} (decode : Json → Except String α) : Json → Except 
 
 def oracleNatural (json : Json) : Except String Nat := do indexDecimal (← string json)
 
+/-- Wire dimensions have exact names and uint64 natural values. Even before
+semantic admission, duplicate or unknown dimensions cannot change the schema. -/
+def oracleShapeValues (kind : OracleKind) (json : Json) : Except String (List (String × Nat)) := do
+  let values ← (← array json 16).mapM fun value => do
+    match ← array value 2 with
+    | [name, value] => return (← string name, ← oracleNatural value)
+    | _ => throw "structured-oracle-shape"
+  let expected := kind.shape.filterMap fun (name, extent) =>
+    if extent.isNone then some name else none
+  unless values.map Prod.fst == expected do throw "structured-oracle-shape"
+  return values
+
+def oracleDimensions (kind : OracleKind) (json : Json) : Except String (List String) := do
+  let names ← strings json 16
+  unless names == kind.shape.map Prod.fst do throw "structured-oracle-shape"
+  return names
+
 def descriptor (json : Json) : Except String Descriptor := do
   match ← array json with
-  | [.str "oracle_input", holder, receivers, kind, maximum] =>
+  | [.str "oracle_input", holder, receivers, kind, bounds] =>
+      let kind ← oracleKind kind
       return .oracle (.input (← string holder) (← strings receivers 16)
-        (← oracleKind kind) (← optional oracleNatural maximum))
-  | [.str "oracle_send", holder, receivers, kind, maximum] =>
+        kind (← oracleShapeValues kind bounds))
+  | [.str "oracle_send", holder, receivers, kind, dimensions, bounds] =>
+      let kind ← oracleKind kind
       return .oracle (.send (← string holder) (← strings receivers 16)
-        (← oracleKind kind) (← optional oracleNatural maximum))
+        kind (← oracleDimensions kind dimensions) (← oracleShapeValues kind bounds))
   | [.str "oracle_query", owner, kind] =>
       return .oracle (.query (← optional (fun value => string value) owner) (← oracleKind kind))
   | [.str "oracle_contents", owner, kind] =>
       return .oracle (.contents (← string owner) (← oracleKind kind))
   | [.str "oracle_components", holder, receivers, kind] =>
       return .oracle (.components (← string holder) (← strings receivers 16) (← oracleKind kind))
-  | [.str "oracle_rows", kind] => return .oracle (.rows (← oracleKind kind))
-  | [.str "oracle_forget_rows", source, target] =>
-      return .oracle (.forgetRows (← oracleKind source) (← oracleKind target))
+  | [.str "oracle_shape", kind, dimension] =>
+      let kind ← oracleKind kind
+      let dimension ← string dimension
+      unless (kind.shape.map Prod.fst).contains dimension do throw "structured-oracle-shape"
+      return .oracle (.shape kind dimension)
+  | [.str "oracle_forget_shape", source, target] =>
+      return .oracle (.forgetShape (← oracleKind source) (← oracleKind target))
   | [.str "oracle_virtual", declaration, holder, receivers, kind] =>
       return .oracle (.virtual (← string declaration) (← string holder)
         (← strings receivers 16) (← oracleKind kind))
@@ -337,8 +360,9 @@ def binding (json : Json) : Except String Binding := do
 def definition (json : Json) : Except String Definition := do
   match ← array json with
   | [.str "oracle", name, inputs, kind, admissibility, shape, maximum, body] =>
-      return .oracle ⟨← string name, ← types inputs, ← oracleKind kind,
-        ← string admissibility, ← optional oracleNatural shape, ← optional oracleNatural maximum,
+      let kind ← oracleKind kind
+      return .oracle ⟨← string name, ← types inputs, kind,
+        ← string admissibility, ← oracleShapeValues kind shape, ← oracleShapeValues kind maximum,
         ← block Limits.nesting body⟩
   | [.str "function", name, mode, visible, inputs, outputs, ports, premises, source, body] =>
     let mode ← kind mode

@@ -17,7 +17,11 @@ def OracleKind : AttrDef<ProtocolDialect, "OracleKind"> {
     ::mlir::Type getDataType() const;
     ::mlir::Type getQueryType() const;
     ::mlir::Type getAnswerType() const;
-    ::std::optional<uint64_t> getStaticRows() const;
+    ::std::vector<::zkc::protocol::OracleShapeDimension> getShapeDimensions() const;
+    ::std::optional<uint64_t> getStaticShape(::llvm::StringRef name) const;
+    ::mlir::LogicalResult verifyShapeBounds(
+        ::llvm::function_ref<::mlir::InFlightDiagnostic()> emit,
+        ::mlir::DictionaryAttr bounds) const;
   }];
 }
 

@@ -50,6 +50,11 @@ def OracleKind.data : OracleKind → Ty
   | .table .index _ => .indices
   | .table row _ => .sequence row
 
+/-- Named immutable dimensions. Bounds for dynamic dimensions belong to an
+occurrence, not to its static kind or an extra authored interface component. -/
+def OracleKind.shape : OracleKind → List (String × Option Nat)
+  | .table _ rows => [("rows", rows)]
+
 def OracleKind.query (_ : OracleKind) : Ty := .index
 
 def OracleKind.answer : OracleKind → Ty
@@ -109,13 +114,14 @@ structure Binding where
 /-- Logical operations preserve anchors and query occurrences. This wire
 vocabulary does not grant ordinary Math, message or executable-codec admission. -/
 inductive OracleDescriptor where
-  | input (holder : String) (receivers : List String) (kind : OracleKind) (maximum : Option Nat)
-  | send (holder : String) (receivers : List String) (kind : OracleKind) (maximum : Option Nat)
+  | input (holder : String) (receivers : List String) (kind : OracleKind) (bounds : List (String × Nat))
+  | send (holder : String) (receivers : List String) (kind : OracleKind)
+      (dimensions : List String) (bounds : List (String × Nat))
   | query (owner : Option String) (kind : OracleKind)
   | contents (owner : String) (kind : OracleKind)
   | components (holder : String) (receivers : List String) (kind : OracleKind)
-  | rows (kind : OracleKind)
-  | forgetRows (source target : OracleKind)
+  | shape (kind : OracleKind) (dimension : String)
+  | forgetShape (source target : OracleKind)
   | virtual (declaration holder : String) (receivers : List String) (kind : OracleKind)
   | sequenceEmpty (kind : OracleKind) (maximum : Nat)
   | sequenceAppend (kind : OracleKind) (maximum : Nat) (roles : List String)
@@ -268,8 +274,8 @@ structure OracleDeclaration where
   inputs : List Ty
   kind : OracleKind
   admissibility : String
-  shapeArgument : Option Nat
-  maximumRows : Option Nat
+  shapeArguments : List (String × Nat)
+  shapeBounds : List (String × Nat)
   body : Block
   deriving Repr
 

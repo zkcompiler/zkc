@@ -2,13 +2,15 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DenseSet.h"
 using namespace mlir;
 namespace zkc::mathematical {
 namespace {
 // An application environment substitutes formal values lazily. No expanded IR
 // is allocated and the seen key includes the actual application environment.
 class InitialShape {
-  enum class Meaning : uint8_t { Value = 1, Handle = 2 };
+  using Meaning = llvm::StringRef; // Empty selects a value; otherwise a named
+                                   // handle dimension.
   struct Scope {
     protocol_ir::MathematicalOp program;
     protocol_ir::ApplyOp call;
@@ -25,7 +27,8 @@ class InitialShape {
   SmallVector<Scope> scopes;
   SmallVector<Work> pending;
   llvm::DenseMap<std::pair<Operation *, unsigned>, unsigned> applications;
-  llvm::DenseMap<std::pair<Value, unsigned>, uint8_t> seen;
+  llvm::DenseMap<std::pair<Value, unsigned>, llvm::SmallDenseSet<Meaning, 4>>
+      seen;
   LogicalResult refuse(llvm::StringRef reason) {
     return diagnostics::emit(use->emitOpError(), "mathematical-formation",
                              reason);
@@ -74,7 +77,7 @@ class InitialShape {
         failed(add(repeat.getOperand(index), item.scope, item.meaning)))
       return failure();
     if (index && (index <= uint64_t(repeat.getCarried()) || !argument))
-      if (failed(add(repeat.getInputs().front(), item.scope, Meaning::Value)) ||
+      if (failed(add(repeat.getInputs().front(), item.scope, Meaning{})) ||
           failed(add(repeat.getBody().front().back().getOperand(index - 1),
                      item.scope, item.meaning)))
         return failure();
@@ -82,13 +85,11 @@ class InitialShape {
   }
   LogicalResult visit(Work item) {
     auto [value, scope, meaning] = item;
-    auto &visited = seen[{value, scope}];
-    if (visited & uint8_t(meaning))
+    if (!seen[{value, scope}].insert(meaning).second)
       return success();
-    visited |= uint8_t(meaning);
-    if (meaning == Meaning::Handle)
+    if (!meaning.empty())
       if (auto type = dyn_cast<protocol_ir::OracleHandleType>(value.getType());
-          type && type.getKind().getStaticRows())
+          type && type.getKind().getStaticShape(meaning))
         return success();
     if (auto argument = dyn_cast<BlockArgument>(value)) {
       auto environment = scopes[scope];
@@ -96,7 +97,7 @@ class InitialShape {
         if (environment.call)
           return add(environment.call.getOperand(argument.getArgNumber()),
                      environment.parent, meaning);
-        return meaning == Meaning::Value
+        return meaning.empty()
                    ? success()
                    : refuse("oracle shape requires a bound entry anchor");
       }
@@ -120,31 +121,35 @@ class InitialShape {
                      cast<OpResult>(value).getResultNumber()),
                  *nested, meaning);
     }
-    if (meaning == Meaning::Value) {
-      if (auto rows = dyn_cast<protocol_ir::OracleRowsOp>(op))
-        return add(rows.getHandle(), scope, Meaning::Handle);
+    if (meaning.empty()) {
+      if (auto rows = dyn_cast<protocol_ir::OracleShapeOp>(op))
+        return add(rows.getHandle(), scope, rows.getDimension());
       if (isTotal(op) || isa<func::CallOp, protocol_ir::RestrictRolesOp>(op)) {
         for (Value input : op->getOperands())
-          if (failed(add(input, scope, Meaning::Value)))
+          if (failed(add(input, scope, Meaning{})))
             return failure();
         return success();
       }
       return refuse("oracle shape cannot depend on messages, sampling, queries "
                     "or execution");
     }
-    if (auto send = dyn_cast<protocol_ir::OracleSendOp>(op))
-      return add(send.getRows(), scope, Meaning::Value);
+    if (auto send = dyn_cast<protocol_ir::OracleSendOp>(op)) {
+      auto dimension = send.getShapeOperand(meaning);
+      return dimension
+                 ? add(dimension, scope, Meaning{})
+                 : refuse("oracle send lacks the selected shape dimension");
+    }
     if (auto input = dyn_cast<protocol_ir::OracleInputOp>(op)) {
       auto raw = dyn_cast<BlockArgument>(input.getAnchor());
       if (!scope && raw &&
           raw.getOwner() == &scopes[0].program.getBody().front()) {
         // Both root components are initial input. In a call, follow the actual
         // passed anchor instead: its dimensions need not be initial data.
-        if (failed(add(input.getData(), scope, Meaning::Value)))
+        if (failed(add(input.getData(), scope, Meaning{})))
           return failure();
-        return add(input.getAnchor(), scope, Meaning::Value);
+        return add(input.getAnchor(), scope, Meaning{});
       }
-      return add(input.getAnchor(), scope, Meaning::Handle);
+      return add(input.getAnchor(), scope, meaning);
     }
     if (auto constructed = dyn_cast<protocol_ir::OracleVirtualOp>(op)) {
       auto declaration =
@@ -153,24 +158,27 @@ class InitialShape {
       if (!declaration ||
           failed(declaration->getName().verifyInvariants(declaration)) ||
           failed(declaration.verifyRegions()) ||
-          failed(constructed.verifySymbolUses(symbols)) ||
-          !declaration.getShapeArgument())
+          failed(constructed.verifySymbolUses(symbols)))
         return refuse("oracle shape requires its actual virtual declaration");
-      return add(constructed.getInputs()[*declaration.getShapeArgument()],
-                 scope, Meaning::Value);
+      auto argument =
+          declaration.getShapeArguments().getAs<IntegerAttr>(meaning);
+      if (!argument)
+        return refuse("virtual oracle lacks the selected dynamic dimension");
+      return add(constructed.getInputs()[argument.getValue().getZExtValue()],
+                 scope, Meaning{});
     }
-    if (isa<protocol_ir::OracleForgetRowsOp, protocol_ir::RestrictRolesOp,
+    if (isa<protocol_ir::OracleForgetShapeOp, protocol_ir::RestrictRolesOp,
             protocol_ir::OracleSequenceAppendOp,
             protocol_ir::OracleComponentsOp>(op)) {
       for (Value input : op->getOperands())
-        if (failed(add(input, scope, Meaning::Handle)))
+        if (failed(add(input, scope, meaning)))
           return failure();
       return success();
     }
     if (auto at = dyn_cast<protocol_ir::OracleSequenceAtOp>(op)) {
-      if (failed(add(at.getSequence(), scope, Meaning::Handle)))
+      if (failed(add(at.getSequence(), scope, meaning)))
         return failure();
-      return add(at.getPosition(), scope, Meaning::Value);
+      return add(at.getPosition(), scope, Meaning{});
     }
     if (isa<protocol_ir::OracleSequenceEmptyOp>(op))
       return success();
@@ -184,7 +192,7 @@ public:
       : use(use), symbols(symbols), remaining(remaining),
         scopes{{program, {}}} {}
   LogicalResult run(Value root) {
-    if (failed(add(root, 0, Meaning::Value)))
+    if (failed(add(root, 0, Meaning{})))
       return failure();
     while (!pending.empty())
       if (failed(visit(pending.pop_back_val())))

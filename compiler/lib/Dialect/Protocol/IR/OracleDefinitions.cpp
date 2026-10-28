@@ -34,15 +34,29 @@ LogicalResult OracleDefinitionOp::verifyRegions() {
   auto yield = dyn_cast<OracleYieldOp>(getBody().front().back());
   if (!yield || yield.getAnswer().getType() != kind.getAnswerType())
     return emitOpError("query body must yield the kind's answer");
-  if (kind.getStaticRows()) {
-    if (getShapeArgument() || getMaximumRows())
-      return emitOpError("a sized virtual kind has no dynamic shape metadata");
-  } else if (!getShapeArgument() || !getMaximumRows() ||
-             *getShapeArgument() < getNumSources() ||
-             *getShapeArgument() >= signature.getNumInputs() - 1 ||
-             !signature.getInput(*getShapeArgument()).isUnsignedInteger(64))
-    return emitOpError(
-        "a dynamic virtual shape requires an index parameter and maximum");
+  if (failed(kind.verifyShapeBounds([&] { return emitOpError(); },
+                                    getShapeBounds())))
+    return failure();
+  unsigned dynamic = 0;
+  for (const auto &dimension : kind.getShapeDimensions()) {
+    auto argument = getShapeArguments().getAs<IntegerAttr>(dimension.name);
+    if (dimension.extent) {
+      if (getShapeArguments().get(dimension.name))
+        return emitOpError("a static virtual dimension has no shape parameter");
+      continue;
+    }
+    ++dynamic;
+    if (!argument || !argument.getType().isUnsignedInteger(64))
+      return emitOpError(
+          "dynamic virtual dimensions require named ui64 parameter indices");
+    uint64_t index = argument.getValue().getZExtValue();
+    if (index < getNumSources() || index >= signature.getNumInputs() - 1 ||
+        !signature.getInput(index).isUnsignedInteger(64))
+      return emitOpError(
+          "virtual shape must select an ordinary index parameter");
+  }
+  if (getShapeArguments().size() != dynamic)
+    return emitOpError("virtual shape arguments contain an unknown dimension");
   return success();
 }
 LogicalResult

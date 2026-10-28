@@ -23,12 +23,12 @@ module {
     %left = "protocol.oracle_query"(%first,%position) {site="left"} : (!H,ui64)->!F
     %right = "protocol.oracle_query"(%second,%position) {site="right"} : (!H,ui64)->!F
     "protocol.oracle_yield"(%left) : (!F)->()
-  }) {sym_name="select",function_type=(!H,!H,ui64,ui64)->!F,kind=#K,
+  }) {sym_name="select",function_type=(!H,!H,ui64,ui64)->!F,kind=#K,shape_arguments={},shape_bounds={},
       admissibility=@admissible} : ()->()
   "protocol.func"() ({
    ^bb0(%a:!D,%b:!D,%rows:ui64,%position:ui64,%parameter:ui64):
-    %first = "protocol.oracle_send"(%a,%rows) {sender="P",receivers=["V"],site="first"} : (!D,ui64)->!H
-    %second = "protocol.oracle_send"(%b,%rows) {sender="P",receivers=["V"],site="second"} : (!D,ui64)->!H
+    %first = "protocol.oracle_send"(%a,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="first"} : (!D,ui64)->!H
+    %second = "protocol.oracle_send"(%b,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="second"} : (!D,ui64)->!H
     %virtual = "protocol.oracle_virtual"(%first,%second,%parameter) {callee=@select,holder="P",receivers=["V"]} : (!H,!H,ui64)->!H
     %contents = "protocol.oracle_contents"(%virtual) {owner="P"} : (!H)->!D
     %value = "protocol.oracle_query"(%virtual,%position) {owner="V",site="read"} : (!H,ui64)->!F
@@ -160,25 +160,23 @@ int main() {
     refused(effect);
     refused(replace(source(), "kind=#K,", "kind=#K,unproved=true,"));
   });
-  cases.run(
-      "dynamic virtual shapes identify an initially bound parameter", [&] {
-        auto dynamic = replace(source(), ", 16 : ui64", "");
-        dynamic =
-            replace(dynamic, "kind=#K,",
-                    "kind=#K,shape_argument=2:ui64,maximum_rows=32:ui64,");
-        for (llvm::StringRef site : {"first", "second"})
-          dynamic =
-              replace(dynamic, ("site=\"" + site + "\"").str(),
-                      ("site=\"" + site + "\",maximum_rows=32:ui64").str());
-        accepted(dynamic);
-        refused(
-            replace(dynamic, "shape_argument=2:ui64", "shape_argument=0:ui64"));
-        refused(
-            replace(dynamic, "shape_argument=2:ui64", "shape_argument=3:ui64"));
-        refused(replace(dynamic, "maximum_rows=32:ui64,", ""));
-        refused(replace(source(), "kind=#K,",
-                        "kind=#K,shape_argument=2:ui64,maximum_rows=32:ui64,"));
-      });
+  cases.run("dynamic virtual shapes identify an initially bound parameter",
+            [&] {
+              auto dynamic = replace(source(), ", 16 : ui64", "");
+              dynamic = replace(dynamic, "shape_arguments={}",
+                                "shape_arguments={rows=2:ui64}");
+              for (unsigned i = 0; i < 3; ++i)
+                dynamic = replace(dynamic, "shape_bounds={}",
+                                  "shape_bounds={rows=32:ui64}");
+              accepted(dynamic);
+              refused(replace(dynamic, "shape_arguments={rows=2:ui64}",
+                              "shape_arguments={rows=0:ui64}"));
+              refused(replace(dynamic, "shape_arguments={rows=2:ui64}",
+                              "shape_arguments={rows=3:ui64}"));
+              refused(replace(dynamic, "shape_bounds={rows=32:ui64},", ""));
+              refused(replace(source(), "shape_arguments={}",
+                              "shape_arguments={rows=2:ui64}"));
+            });
   cases.run(
       "preparation keeps actual query definitions and fresh virtual anchors",
       [&] {

@@ -26,8 +26,12 @@ virtual declaration rows specified by the
 [native wire contract](../../../docs/spec/formats/structured-source.md#logical-oracle-vocabulary).
 It retains actual operands, roles, ordered query occurrences, labels, the
 admissibility relation and the entire virtual body. Table kinds derive their
-Data, Query and Answer types; shape and capacity fields are canonical unsigned
-64-bit decimal strings. Wire recognition alone does not establish that a row
+Data, Query and Answer types and own an ordered list of named dimensions.
+Send dimensions match that list exactly; shape bounds and virtual argument maps
+contain exactly the dynamic dimensions, in kind order. Shape reads name an
+existing dimension. Shape values and capacities are canonical unsigned 64-bit
+decimal strings. Static dimensions use empty maps, without null or positional
+alternatives. Wire recognition alone does not establish that a row
 kind, role assignment, footprint or program is admissible.
 
 `OracleAnchor` records a construction or input occurrence under an

@@ -48,7 +48,7 @@ int main() {
       require(instance.getDataType() == parseType(data, &context) &&
                   instance.getQueryType().isUnsignedInteger(64) &&
                   instance.getAnswerType() == parseType(row, &context) &&
-                  !instance.getStaticRows(),
+                  !instance.getStaticShape("rows"),
               "kind changed its Data/Query/Answer associations");
       auto logical =
           take(zkc::protocol::encodeBoundType(instance.getDataType(), false));
@@ -64,7 +64,8 @@ int main() {
         "table", {descriptor, TypeArgument::naturalArgument(16)}));
     require(shape.answer == row &&
                 shape.data.spelling() == "vector:koala-bear" &&
-                shape.query.spelling() == "index" && shape.rows == 16,
+                shape.query.spelling() == "index" &&
+                shape.staticShape("rows") == 16,
             "source-independent kind associations differ");
     auto refused = [](Expected<OracleKindSignature> value) {
       require(!value, "invalid logical kind descriptor admitted");
@@ -94,8 +95,9 @@ int main() {
     auto empty = kind("[i1, 0 : ui64]", context);
     auto largest = kind("[i1, 18446744073709551615 : ui64]", context);
     require(
-        !dynamic.getStaticRows() && empty.getStaticRows() == 0 &&
-            largest.getStaticRows() == std::numeric_limits<uint64_t>::max(),
+        !dynamic.getStaticShape("rows") && empty.getStaticShape("rows") == 0 &&
+            largest.getStaticShape("rows") ==
+                std::numeric_limits<uint64_t>::max(),
         "static rows were erased, narrowed or confused with an omitted size");
     require(
         dynamic != empty && empty != largest &&

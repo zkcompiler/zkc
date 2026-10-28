@@ -78,9 +78,9 @@ ZKC_MATH_OPERATION(data::PowerOfTwoOp, Total, Context::Protocol | Context::Parti
 
 ZKC_MATH_OPERATION(algebra::MultilinearRestrictPrefixOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 
-ZKC_MATH_OPERATION(protocol_ir::OracleSendOp, Action, Context::Protocol, "sender", "receivers", "site", "maximum_rows")
+ZKC_MATH_OPERATION(protocol_ir::OracleSendOp, Action, Context::Protocol, "sender", "receivers", "site", "shape_names", "shape_bounds")
 ZKC_MATH_OPERATION(protocol_ir::OracleQueryOp, Action, Context::Protocol, "owner", "site")
-ZKC_MATH_OPERATION(protocol_ir::OracleForgetRowsOp, Control, Context::Protocol)
+ZKC_MATH_OPERATION(protocol_ir::OracleForgetShapeOp, Control, Context::Protocol)
 ZKC_MATH_OPERATION(protocol_ir::OracleContentsOp, Control, Context::Protocol, "owner")
 ZKC_MATH_OPERATION(protocol_ir::OracleSequenceEmptyOp, Control, Context::Protocol)
 ZKC_MATH_OPERATION(protocol_ir::OracleSequenceAppendOp, Action, Context::Protocol, "roles", "site")
@@ -88,6 +88,6 @@ ZKC_MATH_OPERATION(protocol_ir::OracleSequenceAtOp, Action, Context::Protocol, "
 ZKC_MATH_OPERATION(protocol_ir::OracleSequenceLengthOp, Control, Context::Protocol)
 ZKC_MATH_OPERATION(protocol_ir::OracleVirtualOp, Action, Context::Protocol, "callee", "holder", "receivers")
 
-ZKC_MATH_OPERATION(protocol_ir::OracleInputOp, Action, Context::Protocol, "holder", "receivers", "maximum_rows")
+ZKC_MATH_OPERATION(protocol_ir::OracleInputOp, Action, Context::Protocol, "holder", "receivers", "shape_bounds")
 ZKC_MATH_OPERATION(protocol_ir::OracleComponentsOp, Control, Context::Protocol, "holder", "receivers")
-ZKC_MATH_OPERATION(protocol_ir::OracleRowsOp, Control, Context::Protocol)
+ZKC_MATH_OPERATION(protocol_ir::OracleShapeOp, Control, Context::Protocol, "dimension")

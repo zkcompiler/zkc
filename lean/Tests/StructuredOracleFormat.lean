@@ -55,6 +55,24 @@ private def run : IO Unit := do
     (.arr #[.str "anchor", .str "input", toJson (0 : Nat), .str "V"])).isOk)
   test "anchor noncanonical index refused" (!(Format.contractSelector
     (.arr #[.str "anchor", .str "input", .str "0"])).isOk)
+  let bound := Json.arr #[.arr #[.str "rows", .str "32"]]
+  test "kind owns named dimensions" (kind.shape == [("rows", some 16)])
+  test "static shapes have no dynamic bounds" (Format.oracleShapeValues kind (.arr #[]) == .ok [])
+  test "dynamic dimension bound retained" (Format.oracleShapeValues unsized bound == .ok [("rows", 32)])
+  for malformed in [Json.null, .arr #[], .arr #[.arr #[.str "vars", .str "32"]],
+      .arr #[.arr #[.str "rows", .str "32"], .arr #[.str "rows", .str "32"]],
+      .arr #[.arr #[.str "rows", .str "18446744073709551616"]]] do
+    test "malformed dynamic shape refused" (!(Format.oracleShapeValues unsized malformed).isOk)
+  test "static dimension cannot acquire a dynamic bound" (!(Format.oracleShapeValues kind bound).isOk)
+  test "send carries named dimensions" (Format.descriptor
+    (.arr #[.str "oracle_send", .str "P", .arr #[.str "V"], wireOracleKind unsized,
+      .arr #[.str "rows"], bound]) == .ok (.oracle (.send "P" ["V"] unsized ["rows"] [("rows",32)])))
+  test "unnamed send shape refused" (!(Format.descriptor
+    (.arr #[.str "oracle_send", .str "P", .arr #[.str "V"], wireOracleKind unsized, bound])).isOk)
+  test "shape read names a kind dimension" (Format.descriptor
+    (.arr #[.str "oracle_shape", wireOracleKind kind, .str "rows"]) == .ok (.oracle (.shape kind "rows")))
+  test "shape read cannot invent a dimension" (!(Format.descriptor
+    (.arr #[.str "oracle_shape", wireOracleKind kind, .str "vars"])).isOk)
   let descriptor := Json.arr #[.str "oracle_query", .null, wireOracleKind kind]
   test "query declaration owner omitted" (Format.descriptor descriptor == .ok (.oracle (.query none kind)))
   test "query role exact" (Format.descriptor (.arr #[.str "oracle_query", .str "V", wireOracleKind kind]) ==

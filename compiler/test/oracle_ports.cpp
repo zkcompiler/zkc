@@ -18,7 +18,7 @@ module {
  "protocol.module"() ({
   "protocol.func"() ({
    ^bb0(%data:!D,%anchor:!H,%rows:ui64,%position:ui64):
-    %word = "protocol.oracle_input"(%data,%anchor) {holder="A",receivers=["B"]} : (!D,!H)->!H
+    %word = "protocol.oracle_input"(%data,%anchor) {shape_bounds={},holder="A",receivers=["B"]} : (!D,!H)->!H
     %contents = "protocol.oracle_contents"(%word) {owner="A"} : (!H)->!D
     %value = "protocol.oracle_query"(%word,%position) {owner="B",site="read"} : (!H,ui64)->!F
     %parts:2 = "protocol.oracle_components"(%word) {holder="A",receivers=["B"]} : (!H)->(!D,!H)
@@ -28,10 +28,10 @@ module {
       output_roles=[["A"],["B"],["B"]]} : ()->()
   "protocol.func"() ({
    ^bb0(%data:!D,%rows:ui64,%position:ui64):
-    %word = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="word"} : (!D,ui64)->!H
+    %word = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="word"} : (!D,ui64)->!H
     %parts:2 = "protocol.oracle_components"(%word) {holder="P",receivers=["V"]} : (!H)->(!D,!H)
     %result:3 = "protocol.apply"(%parts#0,%parts#1,%rows,%position) {callee=@reader,roles=["P","V"],site="call"} : (!D,!H,ui64,ui64)->(!D,!H,!F)
-    %returned = "protocol.oracle_input"(%result#0,%result#1) {holder="P",receivers=["V"]} : (!D,!H)->!H
+    %returned = "protocol.oracle_input"(%result#0,%result#1) {shape_bounds={},holder="P",receivers=["V"]} : (!D,!H)->!H
     %contents = "protocol.oracle_contents"(%returned) {owner="P"} : (!H)->!D
     %value = "protocol.oracle_query"(%returned,%position) {owner="V",site="again"} : (!H,ui64)->!F
     "protocol.return"(%value) : (!F)->()
@@ -56,22 +56,10 @@ OwningOpRef<ModuleOp> parse(llvm::StringRef text, MLIRContext &context) {
 }
 std::string dynamic() {
   auto text = replace(source(), ", 16 : ui64", "");
-  size_t start = 0;
-  for (llvm::StringRef pattern : {"{holder=", "{sender="}) {
-    start = 0;
-    while ((start = text.find(pattern.str(), start)) != std::string::npos) {
-      // Only binding/sending operations own a shape maximum; component views do
-      // not.
-      auto line =
-          text.substr(text.rfind('\n', start), start - text.rfind('\n', start));
-      if (line.find("oracle_input") != std::string::npos ||
-          line.find("oracle_send") != std::string::npos) {
-        text.insert(start + 1, "maximum_rows=32:ui64,");
-        start += 22;
-      }
-      start += pattern.size();
-    }
-  }
+  size_t position;
+  while ((position = text.find("shape_bounds={}")) != std::string::npos)
+    text.replace(position, llvm::StringRef("shape_bounds={}").size(),
+                 "shape_bounds={rows=32:ui64}");
   return text;
 }
 } // namespace
@@ -120,14 +108,14 @@ int main() {
         refused(replace(source(), "{holder=\"A\",receivers=[\"B\"]}",
                         "{holder=\"B\",receivers=[\"A\"]}"));
         refused(replace(source(), "    %contents =", R"mlir(
-    %extra = "protocol.oracle_input"(%data,%anchor) {holder="A",receivers=["B"]} : (!D,!H)->!H
+    %extra = "protocol.oracle_input"(%data,%anchor) {shape_bounds={},holder="A",receivers=["B"]} : (!D,!H)->!H
     %contents =)mlir"));
       });
   cases.run(
       "root bindings precede protocol effects and remain when unused", [&] {
         refused(
             replace(source(), "    %word = \"protocol.oracle_input\"", R"mlir(
-    %early = "protocol.oracle_send"(%data,%rows) {sender="A",receivers=["B"],site="early"} : (!D,ui64)->!H
+    %early = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},sender="A",receivers=["B"],site="early"} : (!D,ui64)->!H
     %word = "protocol.oracle_input")mlir"));
         auto original = parse(source(), context);
         auto candidate = zkc::mathematical::prepareProtocol(*original);
@@ -146,7 +134,7 @@ int main() {
     refused(replace(source(), "\"protocol.oracle_input\"(%result#0,%result#1",
                     "\"protocol.oracle_input\"(%parts#0,%result#1"));
     auto two = replace(source(), "    %result:3 =", R"mlir(
-    %other = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="other"} : (!D,ui64)->!H
+    %other = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="other"} : (!D,ui64)->!H
     %otherParts:2 = "protocol.oracle_components"(%other) {holder="P",receivers=["V"]} : (!H)->(!D,!H)
     %result:3 =)mlir");
     accepted(two);
@@ -155,26 +143,30 @@ int main() {
   });
   cases.run("shape reads preserve initial input and send dependencies", [&] {
     auto text = replace(dynamic(), "    %result:3 =", R"mlir(
-    %actualRows = "protocol.oracle_rows"(%word) : (!H)->ui64
-    %next = "protocol.oracle_send"(%data,%actualRows) {sender="P",receivers=["V"],site="next",maximum_rows=32:ui64} : (!D,ui64)->!H
+    %actualRows = "protocol.oracle_shape"(%word) {dimension="rows"} : (!H)->ui64
+    %next = "protocol.oracle_send"(%data,%actualRows) {shape_names=["rows"],sender="P",receivers=["V"],site="next",shape_bounds={rows=32:ui64}} : (!D,ui64)->!H
     %result:3 =)mlir");
     accepted(text, true);
     auto returnedShape = replace(
         dynamic(), "    %contents = \"protocol.oracle_contents\"(%returned)",
         R"mlir(
-    %actualRows = "protocol.oracle_rows"(%returned) : (!H)->ui64
-    %next = "protocol.oracle_send"(%data,%actualRows) {sender="P",receivers=["V"],site="next",maximum_rows=32:ui64} : (!D,ui64)->!H
+    %actualRows = "protocol.oracle_shape"(%returned) {dimension="rows"} : (!H)->ui64
+    %next = "protocol.oracle_send"(%data,%actualRows) {shape_names=["rows"],sender="P",receivers=["V"],site="next",shape_bounds={rows=32:ui64}} : (!D,ui64)->!H
     %contents = "protocol.oracle_contents"(%returned))mlir");
     accepted(returnedShape, true);
     auto malformed = parse(source(), context);
     malformed->walk([&](OracleInputOp input) {
-      input.setMaximumRowsAttr(IntegerAttr::get(
-          IntegerType::get(&context, 64, IntegerType::Unsigned), 32));
+      input.setShapeBoundsAttr(DictionaryAttr::get(
+          &context, {NamedAttribute(StringAttr::get(&context, "rows"),
+                                    IntegerAttr::get(
+                                        IntegerType::get(&context, 64,
+                                                         IntegerType::Unsigned),
+                                        32))}));
     });
     require(failed(verify(*malformed)),
             "sized input accepted a second row maximum");
     auto unsized = dynamic();
-    refused(replace(unsized, "maximum_rows=32:ui64,", ""));
+    refused(replace(unsized, "shape_bounds={rows=32:ui64},", ""));
   });
   cases.run(
       "unsized selection preserves answer-dependent shape information", [&] {
@@ -192,34 +184,34 @@ int main() {
     %empty = "protocol.oracle_sequence_empty"() : ()->!S
     %sequence = "protocol.oracle_sequence_append"(%empty,%word) {roles=["V"],site="append"} : (!S,!H)->!S
     %selected = "protocol.oracle_sequence_at"(%sequence,%selector) {roles=["V"],site="select"} : (!S,ui64)->!H
-    %selectedRows = "protocol.oracle_rows"(%selected) : (!H)->ui64
+    %selectedRows = "protocol.oracle_shape"(%selected) {dimension="rows"} : (!H)->ui64
     %result:3 =)mlir");
         auto module = parse(text, context);
         require(succeeded(verify(*module)),
                 "dynamic selection fixture refused");
         OracleQueryOp query;
-        OracleRowsOp rows;
+        OracleShapeOp rows;
         module->walk([&](OracleQueryOp op) {
           if (op.getSite() == "selector")
             query = op;
         });
-        module->walk([&](OracleRowsOp op) { rows = op; });
+        module->walk([&](OracleShapeOp op) { rows = op; });
         SymbolTableCollection symbols;
         auto program = rows->getParentOfType<MathematicalOp>();
         unsigned remaining = 1000;
         require(query && rows &&
                     failed(zkc::mathematical::verifyInitialOracleShape(
-                        rows.getRows(), program, rows, symbols, remaining)),
+                        rows.getExtent(), program, rows, symbols, remaining)),
                 "answer-selected dimensions became initial configuration");
         auto selection = rows.getHandle().getDefiningOp<OracleSequenceAtOp>();
         selection.getPositionMutable().set(query.getPosition());
         remaining = 1000;
         require(succeeded(zkc::mathematical::verifyInitialOracleShape(
-                    rows.getRows(), program, rows, symbols, remaining)),
+                    rows.getExtent(), program, rows, symbols, remaining)),
                 "initially selected dimensions were refused");
         remaining = 0;
         require(failed(zkc::mathematical::verifyInitialOracleShape(
-                    rows.getRows(), program, rows, symbols, remaining)),
+                    rows.getExtent(), program, rows, symbols, remaining)),
                 "exhausted shape analysis admitted another traversal");
       });
   cases.run(
@@ -268,7 +260,7 @@ int main() {
   cases.run(
       "preparation checks actual paired operands after role substitution", [&] {
         auto text = replace(source(), "    %result:3 =", R"mlir(
-    %other = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="other"} : (!D,ui64)->!H
+    %other = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="other"} : (!D,ui64)->!H
     %otherParts:2 = "protocol.oracle_components"(%other) {holder="P",receivers=["V"]} : (!H)->(!D,!H)
     %result:3 =)mlir");
         auto original = parse(text, context);

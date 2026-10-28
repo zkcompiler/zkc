@@ -74,7 +74,7 @@ LogicalResult verifyOracleHolder(Value root, llvm::StringRef role,
       // No anchor exists in an empty sequence. Selection from it must stop,
       // so no successful contents operation gains a fabricated anchor.
       continue;
-    } else if (isa<protocol_ir::OracleForgetRowsOp,
+    } else if (isa<protocol_ir::OracleForgetShapeOp,
                    protocol_ir::RestrictRolesOp,
                    protocol_ir::OracleSequenceAppendOp>(producer)) {
       for (Value input : producer->getOperands())

@@ -674,8 +674,10 @@ class Reader {
         if (!handle || handle.getKind().getIdentity() != kind.kind ||
             !(*data == signature->data) ||
             handle.getKind().getDataType() != types[flat] ||
-            handle.getKind().getStaticRows() != signature->rows ||
-            signature->rows.has_value() == port.oracle->maximumRows.has_value())
+            handle.getKind().getStaticShape("rows") !=
+                signature->staticShape("rows") ||
+            signature->staticShape("rows").has_value() ==
+                port.oracle->maximumRows.has_value())
           return fail("oracle port kind, components or maximum differs");
         std::vector<unsigned> receivers;
         for (auto role : port.roles)
@@ -1242,9 +1244,15 @@ class Reader {
             function.getBody().front().getArgument(port.native[1]));
         if (found == bindings.end() ||
             found->second.getData() !=
-                function.getBody().front().getArgument(port.native[0]) ||
-            found->second.getMaximumRows() != port.oracle->maximumRows)
-          return fail("oracle interface maximum or input binding differs");
+                function.getBody().front().getArgument(port.native[0]))
+          return fail("oracle interface input binding differs");
+        auto bounds = found->second.getShapeBounds();
+        auto maximum = bounds.getAs<mlir::IntegerAttr>("rows");
+        if (bounds.size() != unsigned(port.oracle->maximumRows.has_value()) ||
+            (port.oracle->maximumRows &&
+             (!maximum || !maximum.getType().isUnsignedInteger(64) ||
+              maximum.getValue().getZExtValue() != *port.oracle->maximumRows)))
+          return fail("oracle interface shape bounds differ");
       }
     }
     std::set<std::string> names;

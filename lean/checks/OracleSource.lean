@@ -13,8 +13,8 @@ def main (args : List String) : IO Unit := do
   let some (Zkc.Source.Structured.Definition.oracle declaration) := snapshot.definitions[1]? |
     throw (IO.userError "virtual definition was not retained")
   unless declaration.name == "select" && declaration.kind == kind &&
-      declaration.admissibility == "admissible" && declaration.shapeArgument.isNone &&
-      declaration.maximumRows.isNone do throw (IO.userError "virtual header changed")
+      declaration.admissibility == "admissible" && declaration.shapeArguments.isEmpty &&
+      declaration.shapeBounds.isEmpty do throw (IO.userError "virtual header changed")
   let .block instructions terminal := declaration.body
   let [.instruction (.oracle (.query none first)) [0,2] [.field "koala-bear"] [] "first",
        .instruction (.oracle (.query none second)) [1,3] [.field "koala-bear"] [] "second",

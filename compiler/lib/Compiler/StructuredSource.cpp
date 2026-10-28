@@ -166,9 +166,14 @@ Expected<json::Value> encodeOracleKind(protocol_ir::OracleKindAttr kind,
   return json::Array{kind.getIdentity(), std::move(arguments)};
 }
 
-json::Value oracleNatural(IntegerAttr value) {
-  return value ? json::Value(std::to_string(value.getValue().getZExtValue()))
-               : json::Value(nullptr);
+json::Array oracleShapeValues(DictionaryAttr values) {
+  json::Array result;
+  for (auto entry : values)
+    result.push_back(json::Array{
+        entry.getName().getValue(),
+        std::to_string(
+            cast<IntegerAttr>(entry.getValue()).getValue().getZExtValue())});
+  return result;
 }
 
 Expected<json::Value> encodeSort(Type type, UsedIdentities &used,
@@ -851,8 +856,10 @@ class Exporter {
       SmallVector<StringRef> allowed{send ? "sender" : "holder", "receivers"};
       if (send)
         allowed.push_back("site");
+      if (send)
+        allowed.push_back("shape_names");
       if (send || input)
-        allowed.push_back("maximum_rows");
+        allowed.push_back("shape_bounds");
       if (virtualHandle)
         allowed.push_back("callee");
       if (auto e = attributes(op, allowed))
@@ -876,21 +883,24 @@ class Exporter {
           op.getAttrOfType<StringAttr>(send ? "sender" : "holder").getValue());
       descriptor.push_back(names(op.getAttrOfType<ArrayAttr>("receivers")));
       descriptor.push_back(std::move(*encoded));
+      if (send)
+        descriptor.push_back(names(op.getAttrOfType<ArrayAttr>("shape_names")));
       if (send || input)
-        descriptor.push_back(
-            oracleNatural(op.getAttrOfType<IntegerAttr>("maximum_rows")));
+        descriptor.push_back(oracleShapeValues(
+            op.getAttrOfType<DictionaryAttr>("shape_bounds")));
       return descriptor;
     }
     if (isa<protocol_ir::OracleQueryOp, protocol_ir::OracleContentsOp,
-            protocol_ir::OracleRowsOp, protocol_ir::OracleForgetRowsOp>(op)) {
+            protocol_ir::OracleShapeOp, protocol_ir::OracleForgetShapeOp>(op)) {
       bool query = isa<protocol_ir::OracleQueryOp>(op);
       bool contents = isa<protocol_ir::OracleContentsOp>(op);
-      bool forget = isa<protocol_ir::OracleForgetRowsOp>(op);
+      bool forget = isa<protocol_ir::OracleForgetShapeOp>(op);
       if (owner != "protocol" && !(owner == "oracle" && query))
         return error("structured-source-operation");
       if (auto e = attributes(op, query ? ArrayRef<StringRef>{"owner", "site"}
                                   : contents ? ArrayRef<StringRef>{"owner"}
-                                             : ArrayRef<StringRef>{}))
+                                  : forget ? ArrayRef<StringRef>{}
+                                           : ArrayRef<StringRef>{"dimension"}))
         return std::move(e);
       auto handle =
           cast<protocol_ir::OracleHandleType>(op.getOperand(0).getType());
@@ -899,14 +909,17 @@ class Exporter {
         return encoded.takeError();
       json::Array descriptor{query      ? "oracle_query"
                              : contents ? "oracle_contents"
-                             : forget   ? "oracle_forget_rows"
-                                        : "oracle_rows"};
+                             : forget   ? "oracle_forget_shape"
+                                        : "oracle_shape"};
       if (query || contents) {
         auto role = op.getAttrOfType<StringAttr>("owner");
         descriptor.push_back(role ? json::Value(role.getValue())
                                   : json::Value(nullptr));
       }
       descriptor.push_back(std::move(*encoded));
+      if (!query && !contents && !forget)
+        descriptor.push_back(
+            op.getAttrOfType<StringAttr>("dimension").getValue());
       if (forget) {
         auto target = encodeOracleKind(
             cast<protocol_ir::OracleHandleType>(op.getResult(0).getType())
@@ -1412,8 +1425,8 @@ class Exporter {
   Expected<json::Value> oracle(protocol_ir::OracleDefinitionOp op,
                                ArrayRef<unsigned> path) {
     if (auto e = attributes(*op, {"sym_name", "function_type", "kind",
-                                  "admissibility", "shape_argument",
-                                  "maximum_rows"}))
+                                  "admissibility", "shape_arguments",
+                                  "shape_bounds"}))
       return std::move(e);
     auto inputs = sorts(op.getFunctionType().getInputs());
     if (!inputs)
@@ -1434,8 +1447,8 @@ class Exporter {
                        std::move(*inputs),
                        std::move(*encodedKind),
                        op.getAdmissibility(),
-                       oracleNatural(op.getShapeArgumentAttr()),
-                       oracleNatural(op.getMaximumRowsAttr()),
+                       oracleShapeValues(op.getShapeArguments()),
+                       oracleShapeValues(op.getShapeBounds()),
                        std::move(*body)};
   }
 

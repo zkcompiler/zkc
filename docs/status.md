@@ -485,8 +485,12 @@ The Protocol dialect registers checked [logical oracle kinds and handle
 carriers](spec/ir/protocols.md#logical-oracle-kinds-and-handles), including sized
 tables and bounded handle sequences. They have no ordinary native codec.
 Common IR formation checks ordered oracle sends/queries, exact kind associations,
-role availability, initially bound shapes through recurrence edges and size
-refinement erasure. Checked preparation remaps oracle roles through applications
+role availability, kind-owned named dimensions, initially bound shapes through
+recurrence edges and static refinement erasure. Sends carry the exact dimension
+list; input and virtual bounds name every dynamic dimension. Shape maps and
+reads have the same strict independent wire contract. Invalid queries are
+specified to stop at the occurrence against the actual shape; dynamic enforcement
+remains part of the pending realization. Checked preparation remaps oracle roles through applications
 and preserves sends/queries under upstream CSE. Projection refuses unresolved
 oracle events before publishing participants. Holder-only contents and bounded,
 append-only sequences preserve role restrictions, dynamic anchors and ordered

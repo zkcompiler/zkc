@@ -789,27 +789,38 @@ class Comparator {
     llvm::sort(result);
     return result;
   }
+  bool oracleShapeBounds(mlir::Operation &operation,
+                         std::optional<uint64_t> maximum) {
+    auto bounds = operation.getAttrOfType<mlir::DictionaryAttr>("shape_bounds");
+    if (!bounds || bounds.size() != unsigned(maximum.has_value()))
+      return fail("oracle shape bounds differ");
+    if (maximum) {
+      auto bound = bounds.getAs<mlir::IntegerAttr>("rows");
+      if (!bound || !bound.getType().isUnsignedInteger(64) ||
+          bound.getValue().getZExtValue() != *maximum)
+        return fail("oracle row maximum differs");
+    }
+    return true;
+  }
   bool oraclePortAttributes(mlir::Operation &operation, const Port &port,
                             ArrayRef<unsigned> mapping, bool binding) {
     unsigned holder = port.oracle->holder;
     if (!mapping.empty())
       holder = mapping[holder];
-    bool bounded = binding && port.oracle->maximumRows.has_value();
-    if (!(bounded
-              ? attributes(operation, {"holder", "receivers", "maximum_rows"})
+    if (!(binding
+              ? attributes(operation, {"holder", "receivers", "shape_bounds"})
               : attributes(operation, {"holder", "receivers"})) ||
         !string(operation, "holder", nativeRoleName(holder)) ||
         !roleSet(operation.getAttr("receivers"),
                  oracleReceivers(port, mapping)))
       return fail("oracle port role family differs");
-    if (bounded) {
-      auto maximum = operation.getAttrOfType<mlir::IntegerAttr>("maximum_rows");
-      if (!maximum || !maximum.getType().isUnsignedInteger(64) ||
-          maximum.getValue().getZExtValue() !=
-              port.oracle->maximumRows->dimension.closedValue())
-        return fail("oracle port maximum differs");
-    }
-    return true;
+    return !binding ||
+           oracleShapeBounds(
+               operation,
+               port.oracle->maximumRows
+                   ? std::optional<uint64_t>(
+                         port.oracle->maximumRows->dimension.closedValue())
+                   : std::nullopt);
   }
   mlir::Operation *oracleComponents(mlir::Block &block,
                                     mlir::Block::iterator &cursor, Span span,
@@ -1400,20 +1411,21 @@ class Comparator {
                             flatten({send->data, send->rows}), 1);
         if (!actual)
           return false;
-        if (!(send->maximum
-                  ? attributes(*actual,
-                               {"sender", "receivers", "site", "maximum_rows"})
-                  : attributes(*actual, {"sender", "receivers", "site"})) ||
+        if (!attributes(*actual, {"sender", "receivers", "site", "shape_names",
+                                  "shape_bounds"}) ||
             !string(*actual, "sender", nativeRoleName(send->holder)) ||
             !roleSet(actual->getAttr("receivers"), send->receivers) ||
             !string(*actual, "site", site))
           return fail("oracle send roles or occurrence differ");
-        if (send->maximum) {
-          auto bound = actual->getAttrOfType<mlir::IntegerAttr>("maximum_rows");
-          if (!bound || !bound.getType().isUnsignedInteger(64) ||
-              bound.getValue().getZExtValue() != send->maximum->closedValue())
-            return fail("oracle send maximum differs");
-        }
+        auto dimensions = actual->getAttrOfType<mlir::ArrayAttr>("shape_names");
+        if (!dimensions || dimensions.size() != 1 ||
+            dimensions[0] !=
+                mlir::StringAttr::get(actual->getContext(), "rows") ||
+            !oracleShapeBounds(*actual, send->maximum
+                                            ? std::optional<uint64_t>(
+                                                  send->maximum->closedValue())
+                                            : std::nullopt))
+          return fail("oracle send named shape differs");
         result = Values(actual->getResults());
       } else if (auto *query = std::get_if<OracleQuery>(&op.action)) {
         auto packed =
@@ -1448,14 +1460,15 @@ class Comparator {
           return fail("oracle data owner differs");
         result = Values(actual->getResults());
       } else if (auto *rows = std::get_if<OracleRows>(&op.action)) {
-        auto *actual = next(block, cursor, op.span, "protocol.oracle_rows",
+        auto *actual = next(block, cursor, op.span, "protocol.oracle_shape",
                             values[rows->input.index], 1);
-        if (!actual || !attributes(*actual, {}))
+        if (!actual || !attributes(*actual, {"dimension"}) ||
+            !string(*actual, "dimension", "rows"))
           return fail("oracle row view differs");
         result = Values(actual->getResults());
       } else if (auto *forget = std::get_if<OracleForgetRows>(&op.action)) {
         auto *actual =
-            next(block, cursor, op.span, "protocol.oracle_forget_rows",
+            next(block, cursor, op.span, "protocol.oracle_forget_shape",
                  values[forget->input.index], 1);
         if (!actual || !attributes(*actual, {}))
           return fail("oracle shape refinement differs");

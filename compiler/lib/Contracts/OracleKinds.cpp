@@ -56,11 +56,12 @@ oracleKindSignature(StringRef identity, ArrayRef<TypeArgument> arguments) {
   auto collection = parseBoundType(data.spelling(), false);
   if (!collection)
     return collection.takeError();
-  return OracleKindSignature{std::move(*collection),
-                             {"index", {}, {}},
-                             std::move(*canonical),
-                             arguments.size() == 2
-                                 ? std::optional<uint64_t>(arguments[1].natural)
-                                 : std::nullopt};
+  return OracleKindSignature{
+      std::move(*collection),
+      {"index", {}, {}},
+      std::move(*canonical),
+      {{"rows", arguments.size() == 2
+                    ? std::optional<uint64_t>(arguments[1].natural)
+                    : std::nullopt}}};
 }
 } // namespace zkc::protocol

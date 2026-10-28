@@ -83,8 +83,8 @@ int main() {
     }
    )");
     require(source.bytes().contains("protocol.oracle_contents") &&
-                source.bytes().contains("protocol.oracle_rows") &&
-                source.bytes().contains("protocol.oracle_forget_rows"),
+                source.bytes().contains("protocol.oracle_shape") &&
+                source.bytes().contains("protocol.oracle_forget_shape"),
             "oracle views were erased");
   });
   cases.run("unsized delivery retains shared shape and full unsigned maximum",

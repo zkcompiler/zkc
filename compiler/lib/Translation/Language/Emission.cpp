@@ -527,6 +527,16 @@ class Emitter {
     llvm::sort(result);
     return result;
   }
+  mlir::DictionaryAttr oracleShapeBounds(std::optional<uint64_t> maximum) {
+    SmallVector<mlir::NamedAttribute> bounds;
+    if (maximum)
+      bounds.push_back(attr(
+          "rows",
+          builder.getIntegerAttr(
+              mlir::IntegerType::get(&context, 64, mlir::IntegerType::Unsigned),
+              APInt(64, *maximum))));
+    return builder.getDictionaryAttr(bounds);
+  }
   SmallVector<mlir::NamedAttribute>
   oracleAttributes(const Port &port, ArrayRef<unsigned> mapping, bool binding) {
     unsigned holder = port.oracle->holder;
@@ -535,12 +545,14 @@ class Emitter {
     SmallVector<mlir::NamedAttribute> result{
         text("holder", nativeRoleName(holder)),
         attr("receivers", roles(receivers(port, mapping)))};
-    if (binding && port.oracle->maximumRows)
-      result.push_back(attr(
-          "maximum_rows",
-          builder.getIntegerAttr(
-              mlir::IntegerType::get(&context, 64, mlir::IntegerType::Unsigned),
-              APInt(64, port.oracle->maximumRows->dimension.closedValue()))));
+    if (binding)
+      result.push_back(
+          attr("shape_bounds",
+               oracleShapeBounds(
+                   port.oracle->maximumRows
+                       ? std::optional<uint64_t>(
+                             port.oracle->maximumRows->dimension.closedValue())
+                       : std::nullopt)));
     return result;
   }
   std::optional<SmallVector<mlir::Type>> portTypes(const Port &port) {
@@ -1205,13 +1217,12 @@ class Emitter {
         SmallVector<mlir::NamedAttribute> attrs{
             text("sender", nativeRoleName(send->holder)),
             attr("receivers", roles(send->receivers)), text("site", site)};
-        if (send->maximum)
-          attrs.push_back(
-              attr("maximum_rows",
-                   builder.getIntegerAttr(
-                       mlir::IntegerType::get(&context, 64,
-                                              mlir::IntegerType::Unsigned),
-                       APInt(64, send->maximum->closedValue()))));
+        attrs.push_back(attr("shape_names", builder.getStrArrayAttr({"rows"})));
+        attrs.push_back(attr(
+            "shape_bounds",
+            oracleShapeBounds(send->maximum ? std::optional<uint64_t>(
+                                                  send->maximum->closedValue())
+                                            : std::nullopt)));
         auto *actual = make("protocol.oracle_send", resultTypes, input, attrs);
         if (!actual)
           return false;
@@ -1245,13 +1256,14 @@ class Emitter {
           return false;
         result = Values(actual->getResults());
       } else if (auto *rows = std::get_if<OracleRows>(&op.action)) {
-        auto *actual = make("protocol.oracle_rows", resultTypes,
-                            values[rows->input.index], {});
+        auto *actual =
+            make("protocol.oracle_shape", resultTypes,
+                 values[rows->input.index], {text("dimension", "rows")});
         if (!actual)
           return false;
         result = Values(actual->getResults());
       } else if (auto *forget = std::get_if<OracleForgetRows>(&op.action)) {
-        auto *actual = make("protocol.oracle_forget_rows", resultTypes,
+        auto *actual = make("protocol.oracle_forget_shape", resultTypes,
                             values[forget->input.index], {});
         if (!actual)
           return false;

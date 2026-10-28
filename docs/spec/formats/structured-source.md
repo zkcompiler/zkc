@@ -531,13 +531,13 @@ actual operand/result types; retaining it does not authorize a different kind.
 
 | Descriptor | Ordered operands | Results | Site |
 | --- | --- | --- | --- |
-| `["oracle_input", holder, receivers, kind, maximum-or-null]` | holder data, receiver anchor | role-family handle | empty |
-| `["oracle_send", holder, receivers, kind, maximum-or-null]` | data, rows | handle | send occurrence |
+| `["oracle_input", holder, receivers, kind, shape-bounds]` | holder data, receiver anchor | role-family handle | empty |
+| `["oracle_send", holder, receivers, kind, dimension-names, shape-bounds]` | data, dimension extents in kind order | handle | send occurrence |
 | `["oracle_query", owner-or-null, kind]` | handle, position | answer | query occurrence or declaration-local label |
 | `["oracle_contents", holder, kind]` | handle | data | empty |
 | `["oracle_components", holder, receivers, kind]` | handle | holder data, receiver anchor | empty |
-| `["oracle_rows", kind]` | handle | index | empty |
-| `["oracle_forget_rows", sized-kind, unsized-kind]` | sized handle | unsized view of the same anchor | empty |
+| `["oracle_shape", kind, dimension-name]` | handle | index | empty |
+| `["oracle_forget_shape", source-kind, target-kind]` | refined handle | view of the same anchor with fewer static extents | empty |
 | `["oracle_virtual", declaration, holder, receivers, kind]` | source handles, ordinary parameters | fresh virtual handle | empty |
 | `["oracle_sequence_empty", kind, maximum]` | none | sequence | empty |
 | `["oracle_sequence_append", kind, maximum, roles]` | sequence, handle | sequence | bounds-check occurrence |
@@ -550,22 +550,31 @@ Sequence append/selection retain their stopping checks. A virtual construction
 has an occurrence identity from its structural row and actual invocation/loop
 coordinates, without inventing a query event or using a diagnostic location as
 identity. Shape and capacity are distinct: an unsized anchor has an immutable
-row count; a sequence has a maximum number of handles.
+row count; a sequence has a maximum number of handles. A table query requires
+its position to be smaller than the actual row count, not merely the maximum.
+An invalid position stops at that query occurrence before answer exposure or
+opening work. Empty tables have no successful query. Virtual expansion retains
+the outer domain check and each reached source query check in order.
 
 Virtual declarations occupy the existing `definitions` table:
 
 ```text
 ["oracle", name, input-types, kind, admissibility-relation,
- shape-argument-or-null, maximum-rows-or-null, block]
+ shape-arguments, shape-bounds, block]
 ```
 
 Source handles form the input prefix, ordinary parameters follow, and the
 queried position is last. The block returns one value of the kind's Answer
 type. Its query labels are local to that declaration, and its actual source
 operands and mathematical helper bodies determine the ordered footprint.
-Shape argument and maximum are decimal strings and occur together only for an
-unsized kind. The shape argument selects an ordinary parameter, not the queried
-position. The native checker verifies the actual admissibility relation over
+Each shape map is an array of `[dimension-name, canonical-decimal]` pairs
+in kind order, containing exactly its dynamic dimensions. `table` owns the
+dimension `rows`; static tables use empty maps. Shape arguments are input
+indices selecting ordinary index parameters, never source handles or the queried
+position. Shape bounds are unsigned 64-bit maxima. The send dimension-name list
+contains every kind dimension, including static ones, in the exact kind order.
+Missing, repeated, extra and misordered names refuse; there is no positional
+row-count alternative. Shape reads must name a dimension of the actual kind. The native checker verifies the actual admissibility relation over
 source Data values and ordinary parameters, without proving it. A same-named
 replacement declaration is not correspondence evidence.
 

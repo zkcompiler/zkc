@@ -15,13 +15,22 @@ LogicalResult OracleSendOp::verify() {
       return emitOpError(
           "requires distinct nonempty receivers other than the sender");
   }
-  auto maximum = getMaximumRowsAttr();
-  if (kind.getStaticRows()) {
-    if (maximum)
-      return emitOpError("a sized kind already determines its row maximum");
-  } else if (!maximum || !maximum.getType().isUnsignedInteger(64))
-    return emitOpError("a runtime row count requires a ui64 maximum_rows");
-  return success();
+  auto dimensions = kind.getShapeDimensions();
+  if (getShape().size() != dimensions.size() ||
+      getShapeNames().size() != dimensions.size())
+    return emitOpError("shape operands must match every named kind dimension");
+  for (auto [name, dimension] : llvm::zip(getShapeNames(), dimensions))
+    if (cast<StringAttr>(name).getValue() != dimension.name)
+      return emitOpError(
+          "shape names must follow the kind's exact dimension order");
+  return kind.verifyShapeBounds([&] { return emitOpError(); },
+                                getShapeBounds());
+}
+Value OracleSendOp::getShapeOperand(llvm::StringRef name) {
+  for (auto [dimension, value] : llvm::zip(getShapeNames(), getShape()))
+    if (cast<StringAttr>(dimension).getValue() == name)
+      return value;
+  return {};
 }
 LogicalResult OracleQueryOp::verify() {
   bool declaration = isa<OracleDefinitionOp>((*this)->getParentOp());
@@ -34,14 +43,34 @@ LogicalResult OracleQueryOp::verify() {
     return emitOpError("position and answer must match the oracle kind");
   return success();
 }
-LogicalResult OracleForgetRowsOp::verify() {
+LogicalResult OracleForgetShapeOp::verify() {
   auto from = getInput().getType().getKind(),
        to = getOutput().getType().getKind();
-  if (!from.getStaticRows() || to.getStaticRows() ||
-      from.getIdentity() != to.getIdentity() ||
-      from.getAnswerType() != to.getAnswerType() || !to.getDataType())
-    return emitOpError("may only forget an exact row count of the same kind");
-  return success();
+  auto before = from.getShapeDimensions(), after = to.getShapeDimensions();
+  if (from.getIdentity() != to.getIdentity() ||
+      from.getDataType() != to.getDataType() ||
+      from.getQueryType() != to.getQueryType() ||
+      from.getAnswerType() != to.getAnswerType() ||
+      before.size() != after.size())
+    return emitOpError(
+        "shape erasure must preserve the oracle kind and associations");
+  bool erased = false;
+  for (auto [source, target] : llvm::zip(before, after)) {
+    if (source.name != target.name ||
+        (target.extent && target.extent != source.extent))
+      return emitOpError("shape erasure cannot add or change an extent");
+    erased |= source.extent.has_value() && !target.extent;
+  }
+  return erased ? success()
+                : emitOpError(
+                      "shape erasure must forget at least one static extent");
+}
+LogicalResult OracleShapeOp::verify() {
+  for (const auto &dimension :
+       getHandle().getType().getKind().getShapeDimensions())
+    if (dimension.name == getDimension())
+      return success();
+  return emitOpError("shape read must name a dimension of the oracle kind");
 }
 LogicalResult OracleContentsOp::verify() {
   if (getData().getType() != getHandle().getType().getKind().getDataType())
@@ -65,9 +94,8 @@ LogicalResult OracleInputOp::verify() {
   if (getAnchor().getType() != getHandle().getType() ||
       getData().getType() != kind.getDataType())
     return emitOpError("input components must preserve the kind and data type");
-  if (kind.getStaticRows() ? bool(getMaximumRowsAttr()) : !getMaximumRowsAttr())
-    return emitOpError("only an unsized input requires maximum_rows");
-  return success();
+  return kind.verifyShapeBounds([&] { return emitOpError(); },
+                                getShapeBounds());
 }
 LogicalResult OracleComponentsOp::verify() {
   if (getAnchor().getType() != getHandle().getType() ||

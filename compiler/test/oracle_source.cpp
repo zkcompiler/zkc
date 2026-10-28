@@ -30,21 +30,21 @@ module { "protocol.module"() ({
     %second = "protocol.oracle_query"(%source,%position) {site="second"} : (!H,ui64)->!F
     %value = func.call @identity(%first) : (!F)->!F
     "protocol.oracle_yield"(%value) : (!F)->()
-  }) {sym_name="select",function_type=(!H,ui64,ui64)->!F,kind=#K,
+  }) {sym_name="select",function_type=(!H,ui64,ui64)->!F,kind=#K,shape_arguments={},shape_bounds={},
       admissibility=@admissible} : ()->()
   "protocol.func"() ({
    ^bb0(%data:!D,%anchor:!H,%rows:ui64,%position:ui64):
-    %input = "protocol.oracle_input"(%data,%anchor) {holder="P",receivers=["V"]} : (!D,!H)->!H
-    %sent = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="sent"} : (!D,ui64)->!H
+    %input = "protocol.oracle_input"(%data,%anchor) {shape_bounds={},holder="P",receivers=["V"]} : (!D,!H)->!H
+    %sent = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="sent"} : (!D,ui64)->!H
     %virtual = "protocol.oracle_virtual"(%input,%rows) {callee=@select,holder="P",receivers=["V"]} : (!H,ui64)->!H
     %contents = "protocol.oracle_contents"(%virtual) {owner="P"} : (!H)->!D
     %answer = "protocol.oracle_query"(%virtual,%position) {owner="V",site="read"} : (!H,ui64)->!F
-    %unsized = "protocol.oracle_forget_rows"(%sent) : (!H)->!U
+    %unsized = "protocol.oracle_forget_shape"(%sent) : (!H)->!U
     %empty = "protocol.oracle_sequence_empty"() : ()->!S
     %sequence = "protocol.oracle_sequence_append"(%empty,%unsized) {roles=["P","V"],site="append"} : (!S,!U)->!S
     %selected = "protocol.oracle_sequence_at"(%sequence,%position) {roles=["P","V"],site="select"} : (!S,ui64)->!U
     %count = "protocol.oracle_sequence_length"(%sequence) : (!S)->ui64
-    %shape = "protocol.oracle_rows"(%selected) : (!U)->ui64
+    %shape = "protocol.oracle_shape"(%selected) {dimension="rows"} : (!U)->ui64
     %held, %returned = "protocol.oracle_components"(%selected) {holder="P",receivers=["V"]} : (!U)->(!D,!U)
     %ok = arith.constant true
     "protocol.return"(%held,%returned,%ok) : (!D,!U,i1)->()
@@ -132,8 +132,7 @@ int main(int argc, char **argv) {
         require(declaration.size() == 8 && declaration[0] == J("oracle") &&
                     declaration[1] == J("select") && declaration[3] == kind() &&
                     declaration[4] == J("admissible") &&
-                    declaration[5] == J(nullptr) &&
-                    declaration[6] == J(nullptr),
+                    declaration[5] == J(A{}) && declaration[6] == J(A{}),
                 "virtual declaration changed");
         require(at(snapshot, {7, 1, 7, 1}).getAsArray()->size() == 3,
                 "unused query disappeared");
@@ -149,10 +148,10 @@ int main(int argc, char **argv) {
         auto &ops = *at(snapshot, {7, 2, 9, 1}).getAsArray();
         require(ops.size() == 13, "oracle operation lost");
         require(at(ops[0], {0}) ==
-                    J(A{"oracle_input", "P", A{"V"}, kind(), nullptr}),
+                    J(A{"oracle_input", "P", A{"V"}, kind(), A{}}),
                 "input binding changed");
         require(at(ops[1], {0}) ==
-                    J(A{"oracle_send", "P", A{"V"}, kind(), nullptr}),
+                    J(A{"oracle_send", "P", A{"V"}, kind(), A{"rows"}, A{}}),
                 "send changed");
         require(at(ops[2], {0}) ==
                     J(A{"oracle_virtual", "select", "P", A{"V"}, kind()}),
@@ -160,7 +159,7 @@ int main(int argc, char **argv) {
         require(at(ops[4], {0}) == J(A{"oracle_query", "V", kind()}),
                 "query owner changed");
         require(at(ops[5], {0}) ==
-                    J(A{"oracle_forget_rows", kind(), kind(false)}),
+                    J(A{"oracle_forget_shape", kind(), kind(false)}),
                 "refinement erased");
         require(at(ops[6], {2, 0}) == J(A{"oracle_sequence", kind(false), "4"}),
                 "bounded sequence erased");
@@ -246,28 +245,26 @@ int main(int argc, char **argv) {
   cases.run(
       "unsized shapes and associated collection sorts stay explicit", [&] {
         auto text = replaceText(source(), ", 16 : ui64", "");
-        text = replaceText(text, "admissibility=@admissible}",
-                           "admissibility=@admissible,shape_argument=1:ui64,"
-                           "maximum_rows=64:ui64}");
-        text = replaceText(
-            text, "{holder=\"P\",receivers=[\"V\"]} : (!D,!H)",
-            "{holder=\"P\",receivers=[\"V\"],maximum_rows=64:ui64} : (!D,!H)");
-        text = replaceText(text, "site=\"sent\"}",
-                           "site=\"sent\",maximum_rows=64:ui64}");
+        text = replaceText(text, "shape_arguments={}",
+                           "shape_arguments={rows=1:ui64}");
+        for (unsigned i = 0; i < 3; ++i)
+          text = replaceText(text, "shape_bounds={}",
+                             "shape_bounds={rows=64:ui64}");
         // Forgetting rows requires an actual sized refinement, so use the same
         // unsized handle directly in this case.
-        text =
-            replaceText(text,
-                        "    %unsized = \"protocol.oracle_forget_rows\"(%sent) "
-                        ": (!H)->!U\n",
-                        "");
+        text = replaceText(
+            text,
+            "    %unsized = \"protocol.oracle_forget_shape\"(%sent) "
+            ": (!H)->!U\n",
+            "");
         text = replaceText(text, "(%empty,%unsized)", "(%empty,%sent)");
         auto snapshot = take(json::parse(take(capture(text)).bytes));
-        require(at(snapshot, {7, 1, 5}) == J("1") &&
-                    at(snapshot, {7, 1, 6}) == J("64"),
+        require(at(snapshot, {7, 1, 5}) == J(A{A{"rows", "1"}}) &&
+                    at(snapshot, {7, 1, 6}) == J(A{A{"rows", "64"}}),
                 "dynamic shape signature lost");
-        require(at(snapshot, {7, 2, 9, 1, 0, 0, 4}) == J("64") &&
-                    at(snapshot, {7, 2, 9, 1, 1, 0, 4}) == J("64"),
+        require(at(snapshot, {7, 2, 9, 1, 0, 0, 4}) == J(A{A{"rows", "64"}}) &&
+                    at(snapshot, {7, 2, 9, 1, 1, 0, 5}) ==
+                        J(A{A{"rows", "64"}}),
                 "dynamic maximum lost");
         for (bool index : {true, false}) {
           auto typed = source();

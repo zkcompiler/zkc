@@ -3,19 +3,24 @@
 include "zkc/Dialect/Protocol/IR/OracleTypes.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
-// An oracle send allocates an occurrence anchor. Its row count is checked
-// against the data and the static kind or the declared dynamic maximum.
+// An oracle send allocates an occurrence anchor. Named shape operands match
+// the data, static extents and explicit bounds for every dynamic dimension.
 def OracleSendOp : Op<ProtocolDialect, "oracle_send",
     [MemoryEffects<[MemRead, MemWrite]>,
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp"]>]> {
-  let arguments = (ins AnyType:$data, UI64:$rows, StrAttr:$sender,
+  let arguments = (ins AnyType:$data, Variadic<UI64>:$shape, StrArrayAttr:$shape_names, StrAttr:$sender,
     StrArrayAttr:$receivers, StrAttr:$site,
-    OptionalAttr<UI64Attr>:$maximum_rows);
+    DictionaryAttr:$shape_bounds);
   let results = (outs OracleHandle:$handle);
   let hasVerifier = 1;
+  let extraClassDeclaration = [{
+    ::mlir::Value getShapeOperand(::llvm::StringRef name);
+  }];
 }
 
 // Queries are ordered protocol events, including repeated and unused reads.
+// An invalid kind query (e.g. an index outside actual table rows) stops at this
+// occurrence before answer exposure or generated opening work.
 // The kind, rather than this operation, determines Query and Answer.
 def OracleQueryOp : Op<ProtocolDialect, "oracle_query",
     [MemoryEffects<[MemRead, MemWrite]>,
@@ -27,9 +32,9 @@ def OracleQueryOp : Op<ProtocolDialect, "oracle_query",
   let hasVerifier = 1;
 }
 
-// This only forgets an exact row-count refinement. It preserves the actual
+// This only forgets static shape refinements. It preserves the actual
 // handle and anchor, so CSE of the same input is valid.
-def OracleForgetRowsOp : Op<ProtocolDialect, "oracle_forget_rows",
+def OracleForgetShapeOp : Op<ProtocolDialect, "oracle_forget_shape",
     [Pure, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp"]>]> {
   let arguments = (ins OracleHandle:$input);
   let results = (outs OracleHandle:$output);
@@ -86,8 +91,8 @@ def OracleDefinitionOp : Op<ProtocolDialect, "oracle",
   let arguments = (ins SymbolNameAttr:$sym_name,
     TypeAttrOf<FunctionType>:$function_type, OracleKind:$kind,
     FlatSymbolRefAttr:$admissibility,
-    OptionalAttr<UI64Attr>:$shape_argument,
-    OptionalAttr<UI64Attr>:$maximum_rows);
+    DictionaryAttr:$shape_arguments,
+    DictionaryAttr:$shape_bounds);
   let regions = (region AnyRegion:$body);
   let hasRegionVerifier = 1;
   let extraClassDeclaration = [{
@@ -117,7 +122,7 @@ def OracleInputOp : Op<ProtocolDialect, "oracle_input",
     [MemoryEffects<[MemRead, MemWrite]>,
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp"]>]> {
   let arguments = (ins AnyType:$data, OracleHandle:$anchor,
-    StrAttr:$holder, StrArrayAttr:$receivers, OptionalAttr<UI64Attr>:$maximum_rows);
+    StrAttr:$holder, StrArrayAttr:$receivers, DictionaryAttr:$shape_bounds);
   let results = (outs OracleHandle:$handle);
   let hasVerifier = 1;
 }
@@ -130,9 +135,10 @@ def OracleComponentsOp : Op<ProtocolDialect, "oracle_components",
   let hasVerifier = 1;
 }
 
-def OracleRowsOp : Op<ProtocolDialect, "oracle_rows",
+def OracleShapeOp : Op<ProtocolDialect, "oracle_shape",
     [Pure, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp"]>]> {
-  let arguments = (ins OracleHandle:$handle);
-  let results = (outs UI64:$rows);
+  let arguments = (ins OracleHandle:$handle, StrAttr:$dimension);
+  let results = (outs UI64:$extent);
+  let hasVerifier = 1;
 }
 #endif

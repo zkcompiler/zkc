@@ -64,13 +64,41 @@ Type OracleKindAttr::getQueryType() const {
 Type OracleKindAttr::getAnswerType() const {
   return associatedType(*this, &protocol::OracleKindSignature::answer);
 }
-std::optional<uint64_t> OracleKindAttr::getStaticRows() const {
+std::vector<protocol::OracleShapeDimension>
+OracleKindAttr::getShapeDimensions() const {
   auto checked = signature(getIdentity(), getArguments());
   if (!checked) {
     consumeError(checked.takeError());
     return {};
   }
-  return checked->rows;
+  return checked->shape;
+}
+std::optional<uint64_t> OracleKindAttr::getStaticShape(StringRef name) const {
+  for (const auto &dimension : getShapeDimensions())
+    if (dimension.name == name)
+      return dimension.extent;
+  return {};
+}
+LogicalResult
+OracleKindAttr::verifyShapeBounds(llvm::function_ref<InFlightDiagnostic()> emit,
+                                  DictionaryAttr bounds) const {
+  if (!bounds)
+    return emit() << "oracle requires named shape bounds";
+  unsigned dynamic = 0;
+  for (const auto &dimension : getShapeDimensions()) {
+    auto bound = bounds.getAs<IntegerAttr>(dimension.name);
+    if (dimension.extent) {
+      if (bounds.get(dimension.name))
+        return emit() << "static oracle dimension cannot have a dynamic bound";
+    } else {
+      ++dynamic;
+      if (!bound || !bound.getType().isUnsignedInteger(64))
+        return emit() << "dynamic oracle dimension requires a named ui64 bound";
+    }
+  }
+  if (bounds.size() != dynamic)
+    return emit() << "oracle shape bounds contain an unknown dimension";
+  return success();
 }
 LogicalResult
 OracleHandleType::verify(llvm::function_ref<InFlightDiagnostic()> emit,

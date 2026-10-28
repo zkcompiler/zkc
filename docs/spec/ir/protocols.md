@@ -76,8 +76,13 @@ associated collection as well as to its row.
 An optional second argument, an unsigned 64-bit integer attribute, fixes the
 exact number of rows. Omission denotes a runtime row count; a present zero
 specifies an empty table. The sized kind retains this refinement even when its
-associated collection type has a runtime length. Realization must establish
-shape agreement and query bounds separately. Power-of-two restrictions and
+associated collection type has a runtime length. The kind owns named immutable
+shape dimensions: `table` has `rows`. A table query succeeds only when its position
+is smaller than the actual row count, independently of any static maximum.
+An invalid position stops at that query occurrence before an answer or generated
+opening work. An empty table has no successful query. Total ordinary collection
+lookup with a default value does not implement this stopping contract.
+Realization must preserve shape agreement, this refusal and the reached prefix. Power-of-two restrictions and
 native capacity bounds belong to the selected realization and execution
 admission. Unknown kinds, including reserved polynomial kinds, refuse.
 
@@ -93,14 +98,16 @@ admission boundaries; registration of these types grants no executable effect.
 
 ## Ordered oracle events
 
-`protocol.oracle_send(data, rows)` produces an `oracle<K>` handle at its
+`protocol.oracle_send(data, shape...)` produces an `oracle<K>` handle at its
 sender and distinct nonempty receivers. Data must have `K`'s associated type
-and be available at the sender; the row count is a `ui64` available at every
-participant in the send. A sized kind determines its exact count. An unsized
-kind requires `maximum_rows : ui64`; a sized kind refuses that redundant
-attribute. Formation retains these obligations: the actual data length must
-match the row count, which must respect the kind and maximum. Realization must
-establish them before publishing the corresponding delivery.
+and be available at the sender. Each `ui64` shape operand is available at every
+participant in the send. `shape_names` lists every dimension exactly once in
+kind order; `table` uses `["rows"]`. `shape_bounds` is a dictionary containing
+exactly the dynamic dimensions with unsigned 64-bit maxima. It is explicitly
+empty for a fully static kind. Missing, repeated or unknown names refuse.
+Formation retains the obligation that actual data dimensions match the shape
+operands and respect their static extents or dynamic bounds. Realization must
+establish it before publishing the corresponding delivery.
 
 Shapes may depend on initially bound inputs and closed total mathematics.
 The dependency check follows both initial and yielded values of every reached
@@ -117,7 +124,7 @@ occurrence anchors even for equal tables. Both operations declare ordered reads
 and writes through MLIR's existing effect resource, so generic CSE cannot merge
 or discard them or treat them as pure mathematical expressions.
 
-`protocol.oracle_forget_rows` removes a sized kind's exact-count refinement,
+`protocol.oracle_forget_shape` removes static extent refinements,
 retaining its answer type, actual handle, anchor and availability. It cannot
 add a size or change kind. This operation is pure: merging the same conversion
 of the same handle does not merge anchors or query events.
@@ -135,7 +142,7 @@ Registration and common formation do not supply an executable implementation.
 
 One source oracle port has two common interface leaves: ordinary data at its
 holder and a logical handle at its receivers. `oracle_input(data, anchor)`
-with `holder`, `receivers` and, only for unsized kinds, `maximum_rows`, binds them
+with `holder`, `receivers` and named `shape_bounds`, binds them
 into the role family used by the body. A raw handle entry argument has exactly
 one such binding, paired with a distinct holder data argument. Both leaves have
 exactly the declared roles. Root bindings precede protocol effects; pure initial
@@ -162,8 +169,9 @@ carry it before a compiled oracle claim is available. In a proof realization the
 receiver leaf is the selected public commitment and the holder leaf the witness.
 Native formation alone does not prove that the commitment opens to that witness.
 
-`oracle_rows` reads the immutable logical shape at each available component.
-For a sized kind its result is the type's count. For an unsized kind, using it as
+`oracle_shape(handle) {dimension="rows"}` reads one named immutable dimension
+at each available component. Unknown dimensions refuse. For a static extent its
+result is the type's count. For an unsized kind, using it as
 an initially bound shape follows actual input/send/virtual dimensions, sequence
 indices and loop backedges, substituting actual protocol-call operands. Root
 input dimensions are initially bound; a callee's formal input does not make a
@@ -240,11 +248,13 @@ The predicate covers the domain and shape assumptions needed for its query maps
 and pointwise holder data. It does not authorize sampling, stops or execution in
 the mathematical answer body.
 
-A sized result kind fixes the row count. An unsized result names a `shape_argument`
-among its ordinary index parameters and an unsigned `maximum_rows`. Each
-construction checks that the actual shape parameter is initially bound under the
-common shape policy. The shape/data consistency and declared maximum still need
-the realization checks before publication.
+The kind owns named dimensions and optional static extents. Every dynamic
+dimension appears once in `shape_arguments`, mapping its name to an ordinary
+index parameter, and once in `shape_bounds`, mapping it to an unsigned maximum.
+Static dimensions appear in neither map. A source handle or the query parameter
+cannot supply a shape argument. Each construction checks that every selected
+parameter is initially bound under the common shape policy. Shape/data
+consistency and each maximum still need realization checks before publication.
 
 `oracle_virtual` requires its sources and parameters at the holder and every
 receiver; the holder must hold each source's data. It allocates a fresh occurrence

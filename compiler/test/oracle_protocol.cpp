@@ -35,7 +35,7 @@ module {
 })mlir";
 }
 const char *send = R"mlir(
- %h = "protocol.oracle_send"(%data, %rows) {sender="P", receivers=["V"], site="layer"} : (!V, ui64) -> !H
+ %h = "protocol.oracle_send"(%data, %rows) {shape_names=["rows"],shape_bounds={},sender="P", receivers=["V"], site="layer"} : (!V, ui64) -> !H
  %answer = "protocol.oracle_query"(%h, %position) {owner="V", site="read"} : (!H, ui64) -> !F
 )mlir";
 std::string replace(std::string text, llvm::StringRef before,
@@ -94,19 +94,37 @@ int main() {
         replace(source(send), "[!algebra.field<\"koala-bear\">, 16 : ui64]",
                 "[!algebra.field<\"koala-bear\">]");
     refused(dynamic);
-    dynamic = replace(dynamic, "site=\"layer\"",
-                      "site=\"layer\", maximum_rows=32 : ui64");
+    dynamic =
+        replace(dynamic, "shape_bounds={}", "shape_bounds={rows=32 : ui64}");
     accepted(dynamic);
     accepted(replace(dynamic, "32 : ui64", "18446744073709551615 : ui64"));
     auto malformed = parse(dynamic, context);
     malformed->walk([&](OracleSendOp oracle) {
-      oracle.setMaximumRowsAttr(
-          IntegerAttr::get(IntegerType::get(&context, 64), 32));
+      oracle.setShapeBoundsAttr(DictionaryAttr::get(
+          &context, {NamedAttribute(StringAttr::get(&context, "rows"),
+                                    IntegerAttr::get(
+                                        IntegerType::get(&context, 64), 32))}));
     });
     require(failed(verify(*malformed)),
             "signedness of row maximum was ignored");
-    refused(replace(source(send), "site=\"layer\"",
-                    "site=\"layer\", maximum_rows=32 : ui64"));
+    refused(replace(source(send), "shape_bounds={}",
+                    "shape_bounds={rows=32 : ui64}"));
+  });
+  cases.run("shape dimensions and dynamic bounds have exact kind names", [&] {
+    auto value = source(send);
+    refused(replace(value, "shape_names=[\"rows\"]", "shape_names=[]"));
+    refused(replace(value, "shape_names=[\"rows\"]", "shape_names=[\"vars\"]"));
+    refused(replace(value, "shape_names=[\"rows\"]",
+                    "shape_names=[\"rows\",\"rows\"]"));
+    refused(replace(value, "shape_bounds={}", "shape_bounds={vars=16:ui64}"));
+    auto dynamic = replace(value, ", 16 : ui64", "");
+    dynamic =
+        replace(dynamic, "shape_bounds={}", "shape_bounds={rows=32:ui64}");
+    accepted(dynamic);
+    refused(replace(dynamic, "shape_bounds={rows=32:ui64}",
+                    "shape_bounds={vars=32:ui64}"));
+    refused(replace(dynamic, "shape_bounds={rows=32:ui64}",
+                    "shape_bounds={rows=32:ui64,vars=2:ui64}"));
   });
   cases.run("query types and handle message restrictions stay closed", [&] {
     auto module = parse(source(send), context);
@@ -116,18 +134,18 @@ int main() {
     require(failed(verify(*module)), "query with a wrong answer type admitted");
     module = parse(source(send), context);
     module->walk([&](OracleSendOp oracle) {
-      oracle.getDataMutable().set(oracle.getRows());
+      oracle.getDataMutable().set(oracle.getShape().front());
     });
     require(failed(verify(*module)), "send with a wrong data type admitted");
   });
   cases.run("forgetting size preserves availability and kind", [&] {
     auto body = std::string(send) + R"mlir(
- %u = "protocol.oracle_forget_rows"(%h) : (!H) -> !U
+ %u = "protocol.oracle_forget_shape"(%h) : (!H) -> !U
  %again = "protocol.oracle_query"(%u, %position) {owner="V", site="again"} : (!U, ui64) -> !F
 )mlir";
     accepted(source(body));
     auto malformed = parse(source(body), context);
-    malformed->walk([&](OracleForgetRowsOp forget) {
+    malformed->walk([&](OracleForgetShapeOp forget) {
       forget.getOutput().setType(forget.getInput().getType());
     });
     require(failed(verify(*malformed)),
@@ -151,7 +169,7 @@ int main() {
     auto loop = R"mlir(
  %last = "protocol.repeat"(%trips, %rows, %data, %position) ({
   ^bb0(%i:ui64, %n:ui64, %table:!V, %q:ui64):
-   %h = "protocol.oracle_send"(%table, %n) {sender="P", receivers=["V"], site="layer"} : (!V,ui64) -> !H
+   %h = "protocol.oracle_send"(%table, %n) {shape_names=["rows"],shape_bounds={},sender="P", receivers=["V"], site="layer"} : (!V,ui64) -> !H
    %answer = "protocol.oracle_query"(%h, %q) {owner="V", site="read"} : (!H,ui64) -> !F
    "protocol.yield"(%n) : (ui64) -> ()
  }) {site="round", carried=1:i64, maximum=3:i64, roles=["P","V"], carried_roles=[["P","V"]]} : (ui64,ui64,!V,ui64) -> ui64
@@ -171,7 +189,7 @@ int main() {
   cases.run("CSE preserves separate anchors and repeated unused query events",
             [&] {
               auto body = std::string(send) + R"mlir(
- %unused = "protocol.oracle_send"(%data, %rows) {sender="P", receivers=["V"], site="another_layer"} : (!V,ui64) -> !H
+ %unused = "protocol.oracle_send"(%data, %rows) {shape_names=["rows"],shape_bounds={},sender="P", receivers=["V"], site="another_layer"} : (!V,ui64) -> !H
  %repeated = "protocol.oracle_query"(%h, %position) {owner="V", site="repeated"} : (!H,ui64) -> !F
 )mlir";
               auto module = parse(source(body), context);
@@ -247,8 +265,8 @@ int main() {
   cases.run("checked preparation preserves events and simplifies handle views",
             [&] {
               auto body = std::string(send) + R"mlir(
- %u = "protocol.oracle_forget_rows"(%h) : (!H) -> !U
- %duplicate = "protocol.oracle_forget_rows"(%h) : (!H) -> !U
+ %u = "protocol.oracle_forget_shape"(%h) : (!H) -> !U
+ %duplicate = "protocol.oracle_forget_shape"(%h) : (!H) -> !U
  %again = "protocol.oracle_query"(%duplicate, %position) {owner="V", site="again"} : (!U,ui64) -> !F
 )mlir";
               auto module = parse(source(body), context);
@@ -365,7 +383,7 @@ int main() {
  %last = "protocol.repeat"(%trips,%h,%received,%rows) ({
   ^bb0(%i:ui64,%current:!H,%d:!V,%n:ui64):
    %contents = "protocol.oracle_contents"(%current) {owner="P"} : (!H) -> !V
-   %next = "protocol.oracle_send"(%d,%n) {sender="V",receivers=["P"],site="later"} : (!V,ui64) -> !H
+   %next = "protocol.oracle_send"(%d,%n) {shape_names=["rows"],shape_bounds={},sender="V",receivers=["P"],site="later"} : (!V,ui64) -> !H
    "protocol.yield"(%next) : (!H) -> ()
  }) {site="switch",carried=1:i64,maximum=2:i64,roles=["P","V"],carried_roles=[["P","V"]]} : (ui64,!H,!V,ui64) -> !H
 )mlir";
@@ -385,7 +403,7 @@ int main() {
       "preparation compares actual dynamic anchors and sequence positions",
       [&] {
         auto body = std::string(send) + R"mlir(
- %other = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="other"} : (!V,ui64) -> !H
+ %other = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="other"} : (!V,ui64) -> !H
  %empty = "protocol.oracle_sequence_empty"() : () -> !S
  %first = "protocol.oracle_sequence_append"(%empty,%h) {roles=["P","V"],site="append"} : (!S,!H) -> !S
  %selected = "protocol.oracle_sequence_at"(%first,%rows) {roles=["P","V"],site="select"} : (!S,ui64) -> !H
