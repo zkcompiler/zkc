@@ -14,6 +14,7 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test -f ${sources.compilerTests}/common/tests/fixtures/clean/air-control.json
   test -f ${sources.compilerTests}/common/tests/fixtures/program/bytes.json
   test -f ${sources.compilerTests}/compiler/test/CMakeLists.txt
+  test -f ${sources.compilerTests}/lean/bridges/common/fixtures/schnorr-forms.zkc
   test -f ${sources.compilerTests}/compiler/test/support/source_project.py
   test -f ${sources.compilerTests}/common/tests/support/project.py
   test -f ${sources.compilerTests}/libraries/protocols/polynomial/sumcheck/zkc.toml
