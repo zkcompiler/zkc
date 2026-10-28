@@ -11,34 +11,6 @@ namespace Zkc.Construction
 open Zkc.Source Zkc.Source.Structured
 variable {carriers : Carriers}
 
-theorem Domain.Value.encode_sort {ty : Ty} {input : carriers.Value ty}
-    {encoded : Domain.Value carriers} (ok : Domain.Value.encode ty input = some encoded) :
-    encoded.sort = .data ty := by
-  unfold Domain.Value.encode Domain.Payload.ofValue at ok
-  split at ok
-  · simp only [Option.map_some, Option.some.injEq] at ok
-    subst encoded
-    rfl
-  · simp at ok
-
-theorem Domain.encodeValues_sorts {tys : List Ty}
-    {input : Values carriers.Value tys} {encoded : Domain.Environment carriers}
-    (ok : Domain.encodeValues input = some encoded) :
-    encoded.map Domain.Value.sort = tys.map ValueSort.data := by
-  induction input generalizing encoded with
-  | nil => simp only [Domain.encodeValues, Option.some.injEq] at ok; subst encoded; rfl
-  | cons head tail ih =>
-    simp only [Domain.encodeValues] at ok
-    cases hh : Domain.Value.encode _ head with
-    | none => simp [hh] at ok
-    | some value =>
-      cases ht : Domain.encodeValues tail with
-      | none => simp [hh, ht] at ok
-      | some values =>
-        simp [hh, ht] at ok
-        subst encoded
-        simp only [List.map_cons, Domain.Value.encode_sort hh, ih ht]
-
 namespace Original
 
 def encodeHelperResult {tys : List Ty} (result : Values carriers.Value tys) :
@@ -53,6 +25,25 @@ theorem encodeHelperResult_sorts {tys : List Ty} (data : tys.all Domain.dataType
     (result : Values carriers.Value tys) :
     Domain.sortsMatch (tys.map ValueSort.data) (encodeHelperResult result) = true := by
   simp only [Domain.sortsMatch, Domain.encodeValues_sorts (encodeHelperResult_eq data result), beq_self_eq_true]
+
+/-- Generic nominal helper connection. The checked helper types supply the
+complete encoding on every outcome; no mathematical result law is required. -/
+def Simulation.linkedDataHelperOn (model : DomainModel) (program : Program) (routing : Routing)
+    (helper : Helper) (present : helper ∈ program.payload.definitions.map CheckedDefinition.helper)
+    (data : helper.outputs.all Domain.dataType = true)
+    (arguments : Values model.Value helper.inputs)
+    (environment : Domain.Environment model.toCarriers) (references : List Nat)
+    (read : Domain.read environment references = Domain.encodeValues arguments)
+    (state : State model.toCarriers) (inputData : helper.inputs.all Domain.dataType = true) :
+    Simulation (HelperReturns encodeHelperResult state environment) (fun _ frame => frame = environment)
+      (fold routing ((invoke (Domain.helperTable model program) helper arguments).interpret
+        (closedLift (I := Occurrence.signature model.toCarriers))) state)
+      (Domain.View.helper model program helper.name references
+        (helper.outputs.map ValueSort.data) environment) :=
+  Simulation.linkedHelperOn model program routing helper present arguments (encodeHelperResult arguments)
+    (encodeHelperResult_eq inputData arguments) encodeHelperResult
+    (encodeHelperResult_eq data) (encodeHelperResult_sorts data) state environment references
+    (read.trans (encodeHelperResult_eq inputData arguments))
 
 def Simulation.linkedDataHelper {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
     [DecidableEq F] [DecidableEq G] (program : Program) (routing : Routing)

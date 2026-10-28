@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Construction.Projection
+public import Zkc.Construction.SourceOccurrences
 public import Zkc.Construction.DomainCorrespondence
 public import Zkc.Source.Structured.OutputSelection
 
@@ -18,9 +19,34 @@ open Zkc.Source
 def checkCompiled {original : Structured.Snapshot} (imported : Structured.Imported original)
     (participant : Participant) : Except String Unit :=
   match checkExport original participant, exportContext original participant with
-  | .ok (), some context => project imported.program context participant
+  | .ok (), some context => do
+      SourceOccurrences.check original context participant
+      project imported.program context participant
   | .error error, _ => .error error
   | .ok (), none => .error "construction-context"
+
+/-- Successful admission retains construction, exact source occurrences and
+projection separately. This is an inversion of checks, not a simulation. -/
+theorem checkCompiled_components {original : Structured.Snapshot}
+    {imported : Structured.Imported original} {participant : Participant} {context : Context}
+    (found : exportContext original participant = some context)
+    (accepted : checkCompiled imported participant = .ok ()) :
+    checkExport original participant = .ok () ∧ check context participant = .ok () ∧
+      SourceOccurrences.check original context participant = .ok () ∧
+      project imported.program context participant = .ok () := by
+  cases exported : checkExport original participant with
+  | error error => simp [checkCompiled, exported] at accepted
+  | ok result =>
+      cases result
+      obtain ⟨actual, actualFound, construction⟩ := checkExport_sound exported
+      rw [found] at actualFound
+      cases actualFound
+      cases occurrences : SourceOccurrences.check original context participant with
+      | error error => simp [checkCompiled, exported, found, occurrences, Except.bind, bind] at accepted
+      | ok result =>
+          cases result
+          exact ⟨rfl, construction, rfl,
+            by simpa [checkCompiled, exported, found, occurrences, Except.bind, bind] using accepted⟩
 
 /-- An admission token is structural. Property consumers must additionally
 supply the complete actual Process binding and their property-specific laws. -/

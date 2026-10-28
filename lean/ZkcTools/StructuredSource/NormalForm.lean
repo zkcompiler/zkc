@@ -60,6 +60,7 @@ mutual
   def termJson {Δ : Scope} {ty : Ty} : Term laws Δ ty → Json
     | .var binder => .arr #[.str "var", nat binder.index]
     | .result binder position => .arr #[.str "result", nat binder.index, nat position.index]
+    | .capability service handle => .arr #[.str "capability", .str service, nat handle]
     | .index value => .arr #[.str "index", nat value]
     | .bool value => .arr #[.str "bool", .bool value]
     | .field domain value => .arr #[.str "field", .str domain, nat value]
@@ -128,6 +129,8 @@ def decodeInput : (ty : Ty) → Json → Except String (Input ty)
   | _, .str "absent" => .ok .absent
   | _, .str "present" => .ok .present
   | _, .str "optional" => .ok .optional
+  | .service service, .arr #[.str "capability", value] =>
+    return .capability service (← Format.decimal (← Format.string value))
   | .index, .arr #[.str "index", value] => return .index (← Format.decimal (← Format.string value))
   | .boolean, .arr #[.str "bool", .bool value] => .ok (.bool value)
   | .field domain, .arr #[.str "field", value] => return .field domain (← Format.decimal (← Format.string value))

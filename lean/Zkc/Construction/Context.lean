@@ -47,6 +47,12 @@ def fiatShamir (entry : String) (roles : List String) (producer validator servic
     (draws : List (String × String)) : Context :=
   ⟨⟨entry, roles, producer, validator⟩, .fiatShamir ⟨service, contract, request, suite, draws⟩⟩
 
+-- Realize this shared constructor equation at its definition. Otherwise a
+-- client using simp can become its apparent owner in a merged audit.
+section
+attribute [local simp] fiatShamir
+end
+
 def plain (entry : String) (roles : List String) (producer validator : Nat) : Context :=
   ⟨⟨entry, roles, producer, validator⟩, .plain⟩
 

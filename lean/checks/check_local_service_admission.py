@@ -147,8 +147,7 @@ def selected : Selection Source.snapshot :=
   ⟨artifacts, Validator.participant.policy, Producer.participant.symbol, Validator.participant.symbol,
     (inputContract Source.snapshot).getD ⟨[], []⟩,
     (Source.snapshot.contracts[0]'(by decide)).clauses[0]'(by decide)⟩
-def context : Context := (exportContext Source.snapshot Validator.participant).getD
-  ⟨"", [], 0, 1, 0, "", none, "", []⟩
+def context : Context := (exportContext Source.snapshot Validator.participant).get (by decide +kernel)
 example : select Source.snapshot artifacts "knowledge" = .ok selected := by decide +kernel
 example : Zkc.Construction.AuthoredPair.check imported selected artifacts = .ok () := by decide +kernel
 example : SourceOccurrences.check Source.snapshot context Producer.participant = .ok () := by decide +kernel

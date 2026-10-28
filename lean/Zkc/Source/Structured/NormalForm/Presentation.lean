@@ -240,100 +240,102 @@ theorem denote_finish {out : List Ty} (spec : Values (fun _ => Carried) out) :
           fun tuple => .done (embed model.Value spec (Tuple.toValues tuple))
   | _, .done values, finishes, binders => by
     obtain ⟨presentedValues, found, same⟩ := presented_embed results binders spec values finishes
-    simp only [Form.denote, Form.denoteWith, finishLeaf, found, PIR.Process.bind, Tuple.toValues_ofValues, same]
+    simp only [Form.denote, Form.denoteWith, Form.denoteOn, Form.denoteWithOn, finishLeaf, found, PIR.Process.bind, Tuple.toValues_ofValues, same]
   | _, .halt _, _, _ => rfl
   | _, .send ty site peer value next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Process.bind]
+    simp only [Form.denote, Form.denoteWith, Form.denoteOn, Form.denoteWithOn, participantActionsOn, PIR.Process.bind]
     exact congrArg (PIR.Process.call _) (funext fun _ => denote_finish spec next finishes binders)
   | _, .receive ty site peer next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Process.bind]
+    simp only [Form.denote, Form.denoteWith, Form.denoteOn, Form.denoteWithOn, participantActionsOn, PIR.Process.bind]
     exact congrArg (PIR.Process.call _) (funext fun reply => denote_finish spec next finishes (.cons reply binders))
   | _, .query site request args next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Process.bind]
+    simp only [Form.denote, Form.denoteWith, Form.denoteOn, Form.denoteWithOn, participantActionsOn, PIR.Process.bind]
     exact congrArg (PIR.Process.call _) (funext fun reply => denote_finish spec next finishes (.cons reply binders))
   | _, .split subject absent present, finishes, binders => by
     simp only [Form.finishes, Bool.and_eq_true] at finishes
-    simp only [Form.denote, Form.denoteWith]
+    simp only [Form.denote, Form.denoteWith, Form.denoteOn, Form.denoteWithOn]
     cases subject.eval results binders with
     | none => exact denote_finish spec absent finishes.1 binders
     | some value => exact denote_finish spec present finishes.2 (.cons value binders)
   | _, .guard equality left right next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith]
+    simp only [Form.denote, Form.denoteWith, Form.denoteOn, Form.denoteWithOn]
     split
     · exact denote_finish spec next finishes binders
     · rfl
   | _, .strict helper args next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Process.bind_assoc]
+    simp only [Form.denote, Form.denoteWith, Form.denoteOn, Form.denoteWithOn, PIR.Process.bind_assoc]
     exact congrArg (PIR.Process.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
   | _, .compute op allowed args next, finishes, binders
   | _, .math _ _ next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Process.bind_assoc]
+    simp only [Form.denote, Form.denoteWith, Form.denoteOn, Form.denoteWithOn, PIR.Process.bind_assoc]
     exact congrArg (PIR.Process.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
   | _, .byLaw _ _ next, finishes, binders => denote_finish spec next finishes binders
   | _, .owned _ _ _ next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Process.bind_assoc]
+    simp only [Form.denote, Form.denoteWith, Form.denoteOn, Form.denoteWithOn, PIR.Process.bind_assoc]
     exact congrArg (PIR.Process.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
   | _, .repeat _ _ _ _ _ _ next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Process.bind_assoc]
+    simp only [Form.denote, Form.denoteWith, Form.denoteOn, Form.denoteWithOn, PIR.Process.bind_assoc]
     exact congrArg (PIR.Process.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
   | _, .apply _ _ _ _ _ next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Process.bind_assoc]
+    simp only [Form.denote, Form.denoteWith, Form.denoteOn, Form.denoteWithOn, PIR.Process.bind_assoc]
     exact congrArg (PIR.Process.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
 
 /-- Two ways of running repeats that agree on every repeat give the same process. -/
 theorem denoteWith_runs {out : List Ty} {A : Type}
     (leaf : {Δ : Scope} → Values (Comp laws Δ) out → Binders model Δ → PIR.Process (Interface model) A)
     (first second : Runs model)
-    (agree : ∀ (spec : RepeatSpec) (region : Region protocolDialect (.index :: (spec.state ++ spec.captures)) spec.state)
+    (agree : ∀ (spec : RepeatSpec) (site : String) (region : Region protocolDialect (.index :: (spec.state ++ spec.captures)) spec.state)
       (count : Option Nat) (state : Values (Component model.Value) spec.state)
       (captures : Values (Component model.Value) spec.captures),
-        first.run spec count state captures (first.callback spec region) =
-          second.run spec count state captures (second.callback spec region)) :
+        first.run spec count state captures (first.callback spec region) site =
+          second.run spec count state captures (second.callback spec region) site) :
     {Δ : Scope} → (form : Form laws callees Δ out) → (binders : Binders model Δ) →
       form.denoteWith model tables results context first processes leaf binders =
         form.denoteWith model tables results context second processes leaf binders
   | _, .done _, _ => rfl
   | _, .halt _, _ => rfl
   | _, .send _ _ _ _ next, binders => by
-    simp only [Form.denoteWith]
+    simp only [Form.denoteWith, Form.denoteWithOn, participantActionsOn, PIR.Process.bind]
     exact congrArg (PIR.Process.call _) (funext fun _ => denoteWith_runs leaf first second agree next binders)
   | _, .receive _ _ _ next, binders => by
-    simp only [Form.denoteWith]
+    simp only [Form.denoteWith, Form.denoteWithOn, participantActionsOn, PIR.Process.bind]
     exact congrArg (PIR.Process.call _) (funext fun reply =>
       denoteWith_runs leaf first second agree next (.cons reply binders))
   | _, .query _ _ _ next, binders => by
-    simp only [Form.denoteWith]
+    simp only [Form.denoteWith, Form.denoteWithOn, participantActionsOn, PIR.Process.bind]
     exact congrArg (PIR.Process.call _) (funext fun reply =>
       denoteWith_runs leaf first second agree next (.cons reply binders))
   | _, .split subject absent present, binders => by
-    simp only [Form.denoteWith]
+    simp only [Form.denoteWith, Form.denoteWithOn]
     cases subject.eval results binders with
     | none => exact denoteWith_runs leaf first second agree absent binders
     | some value => exact denoteWith_runs leaf first second agree present (.cons value binders)
   | _, .guard _ _ _ next, binders => by
-    simp only [Form.denoteWith]
-    rw [denoteWith_runs leaf first second agree next binders]
+    simp only [Form.denoteWith, Form.denoteWithOn]
+    split
+    · exact denoteWith_runs leaf first second agree next binders
+    · rfl
   | _, .strict _ _ next, binders => by
-    simp only [Form.denoteWith]
+    simp only [Form.denoteWith, Form.denoteWithOn]
     exact congrArg (PIR.Process.bind _) (funext fun values =>
       denoteWith_runs leaf first second agree next (.cons values binders))
   | _, .compute _ _ _ next, binders
   | _, .math _ _ next, binders => by
-    simp only [Form.denoteWith]
+    simp only [Form.denoteWith, Form.denoteWithOn]
     exact congrArg (PIR.Process.bind _) (funext fun values =>
       denoteWith_runs leaf first second agree next (.cons values binders))
   | _, .byLaw _ _ next, binders => denoteWith_runs leaf first second agree next binders
   | _, .owned _ _ _ next, binders => by
-    simp only [Form.denoteWith]
+    simp only [Form.denoteWith, Form.denoteWithOn]
     exact congrArg (PIR.Process.bind _) (funext fun values =>
       denoteWith_runs leaf first second agree next (.cons values binders))
-  | _, .repeat spec _ callback _ _ _ next, binders => by
-    simp only [Form.denoteWith]
-    rw [agree spec callback]
+  | _, .repeat spec site callback _ _ _ next, binders => by
+    simp only [Form.denoteWith, Form.denoteWithOn]
+    rw [agree spec site callback]
     exact congrArg (PIR.Process.bind _) (funext fun values =>
       denoteWith_runs leaf first second agree next (.cons values binders))
   | _, .apply _ _ _ _ _ next, binders => by
-    simp only [Form.denoteWith]
+    simp only [Form.denoteWith, Form.denoteWithOn]
     exact congrArg (PIR.Process.bind _) (funext fun values =>
       denoteWith_runs leaf first second agree next (.cons values binders))
 
@@ -355,20 +357,26 @@ def Runs.uniform (tables : Evaluation.ComponentTables F G (participantInterface 
     (self : Nat) : Runs (ringModel F G) where
   callback _ region := fun args => region.denote
     (participantMeaningWith (.silent _) (participantActions F G) tables self protocols context) args.get
-  run spec := denoteRepeat spec context self
+  run spec count state captures body _ := denoteRepeat spec context self count state captures body
 
 theorem runs_uniform (tables : Evaluation.ComponentTables F G (participantInterface F G))
     (protocols : ProtocolTable (assignment F G) (participantInterface F G)) (context : ProtocolContext)
-    (role : Nat) (spec : RepeatSpec)
+    (role : Nat) (spec : RepeatSpec) (site : String)
     (region : Region protocolDialect (.index :: (spec.state ++ spec.captures)) spec.state)
     (count : Option Nat) (state : Values (Component (assignment F G)) spec.state)
     (captures : Values (Component (assignment F G)) spec.captures) :
     (runsAt (ringModel F G) tables.toOn protocols context role).run spec count state captures
-        ((runsAt (ringModel F G) tables.toOn protocols context role).callback spec region) =
+        ((runsAt (ringModel F G) tables.toOn protocols context role).callback spec region) site =
       (Runs.uniform tables protocols context (context.roles role)).run spec count state captures
-        ((Runs.uniform tables protocols context (context.roles role)).callback spec region) := by
-  simp only [runsAt, Runs.uniform]
+        ((Runs.uniform tables protocols context (context.roles role)).callback spec region) site := by
+  simp only [runsAt, runsAtOn, Runs.uniform]
   rw [denoteRepeat_eq_denoteRepeatOn]
+  have silent (body : RegionFunction (Component (assignment F G)) (participantInterface F G)
+      (.index :: (spec.state ++ spec.captures), spec.state)) :
+      denoteRepeatOn (carriers := uniformCarriers F G) spec context (context.roles role)
+          count state captures body .silent site =
+        denoteRepeatOn spec context (context.roles role) count state captures body .silent "" := rfl
+  rw [silent]
   congr 1
   funext args
   exact (denote_participantMeaningWith_eq _ _ _ _ _ _ region args.get).symm

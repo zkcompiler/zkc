@@ -173,6 +173,24 @@ ports, empty/odd/singleton vectors, excess coordinates and MSB order. This
 provides total source-model equations, without a native refinement or security
 claim.
 
+## Checked connection certificates
+
+The [certificate boundary](spec/participant-projection.md#checked-connection-certificates)
+now has a general proof from a finite typed alignment to a complete simulation
+in the plain profile. Observation-parametric normalization retains actual call
+and repeat occurrences. `Tests.SourceConnectionPilot` checks a composed actual
+nested-repeat source with two component applications, including arbitrary typed
+replies, a stopping helper, guards, full returns and independently required
+routing coverage. Complementary controls cover transcript delivery and a
+producer's private service.
+
+This is a checked connection foundation, not completed automation for all
+maintained subjects. The bounded public certificate has no retained-callee
+library; root and ABI installation and reached-source coverage still need
+assembly. Existing per-subject connections and the unproved structural
+projection walker remain active. No additional native execution or security
+claim follows from the new certificate alone.
+
 ## Selected finite codecs
 
 The [finite codec model](spec/data-codecs.md) proves partial-encoder success,

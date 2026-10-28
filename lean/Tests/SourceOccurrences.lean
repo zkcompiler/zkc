@@ -1,4 +1,5 @@
-import Zkc.Construction.SourceOccurrences
+import Zkc.Construction.ConnectionOrigins
+import ZkcExamples.Construction.SchnorrArtifact
 import Zkc.Construction.DomainExecution
 import ZkcExamples.Construction.SumcheckProofParticipant
 import ZkcExamples.Structured.SumcheckSourceData
@@ -49,6 +50,29 @@ example : (Domain.queryOrigin context context.suite "bls12-381.fr" queryTemplate
   decide +kernel
 example : Domain.queryOrigin context context.suite "bls12-381.fr" queryTemplate [] = none := by
   decide +kernel
+
+private def messageOrigin : Origin :=
+  context.message (messageTemplate.qualify (messageTemplate.event[2]?.getD "")) 0 1
+
+private theorem static_message : OccurrenceResolution.resolveStatic snapshot context messageOrigin
+    (repeatSites messageTemplate) [messageTemplate] = some messageTemplate := by decide +kernel
+
+-- The actual apply/repeat export has one finite certificate for every reached
+-- index, including indices unequal to zero. No runtime count is unfolded.
+example (index : Nat) :
+    OccurrenceResolution.resolve snapshot context messageOrigin
+      [⟨(repeatSites messageTemplate).headD "", index⟩] [messageTemplate] =
+      some (Domain.atCoordinates messageOrigin [index]) :=
+  OccurrenceResolution.resolve_of_static static_message _ (by rfl)
+
+example : OccurrenceResolution.resolveStatic snapshot context messageOrigin
+    (repeatSites messageTemplate) [] = none := rfl
+
+example : OccurrenceResolution.resolveStatic snapshot context messageOrigin
+    (repeatSites messageTemplate) [messageTemplate, messageTemplate] = none := by decide +kernel
+
+example : OccurrenceResolution.resolveStatic snapshot context messageOrigin
+    ["different-loop"] [messageTemplate] = none := by decide +kernel
 
 -- A normalized root port must not be accepted as retained local source data.
 example : valid snapshot context { queryTemplate with
@@ -104,3 +128,37 @@ example : valid (source true) rootContext { occurrence with event := occurrence.
 
 end RoleSubstitution
 end Tests.SourceOccurrences
+
+namespace Tests.CompiledSourceOccurrences
+open Zkc.Construction
+
+private abbrev original := ZkcExamples.Construction.SchnorrProof.participant
+private abbrev imported := ZkcExamples.Construction.SchnorrProof.imported
+private abbrev context := ZkcExamples.Construction.SchnorrProof.context
+
+-- The event remains syntactically a query but names the wrong source input.
+-- Projection and nominal occurrence formatting alone cannot authenticate it.
+private def wrongSourcePort : Participant := { original with
+  instructions := original.instructions.map fun instruction =>
+    match instruction.operation with
+    | .challenge suite field template =>
+        let changed : Template := { template with event := template.event.set 3 "input_0" }
+        { instruction with operation := .challenge suite field changed }
+    | _ => instruction }
+
+private def inventedPath : Participant := { original with
+  instructions := original.instructions.map fun instruction =>
+    match instruction.operation with
+    | .challenge suite field template =>
+        let changed : Template := { template with steps := [⟨"unknown", template.entry, "invented"⟩] }
+        { instruction with operation := .challenge suite field changed }
+    | _ => instruction }
+
+example : checkCompiled imported original = .ok () := by decide +kernel
+example : project imported.program context wrongSourcePort = .ok () := by decide +kernel
+example : checkCompiled imported wrongSourcePort = .error "construction-source-occurrence" := by
+  decide +kernel
+example : checkCompiled imported inventedPath = .error "construction-source-occurrence" := by
+  decide +kernel
+
+end Tests.CompiledSourceOccurrences

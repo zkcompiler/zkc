@@ -50,6 +50,34 @@ theorem service_refused (contract : String) (value : Value carriers) :
 
 end Value
 
+theorem Value.encode_sort {ty : Structured.Ty} {input : carriers.Value ty}
+    {encoded : Value carriers} (ok : Value.encode ty input = some encoded) :
+    encoded.sort = .data ty := by
+  unfold Value.encode Payload.ofValue at ok
+  split at ok
+  · simp only [Option.map_some, Option.some.injEq] at ok
+    subst encoded
+    rfl
+  · simp at ok
+
+theorem encodeValues_sorts {tys : List Structured.Ty}
+    {input : Values carriers.Value tys} {encoded : Environment carriers}
+    (ok : encodeValues input = some encoded) :
+    encoded.map Value.sort = tys.map ValueSort.data := by
+  induction input generalizing encoded with
+  | nil => simp only [encodeValues, Option.some.injEq] at ok; subst encoded; rfl
+  | cons head tail ih =>
+    simp only [encodeValues] at ok
+    cases hh : Value.encode _ head with
+    | none => simp [hh] at ok
+    | some value =>
+      cases ht : encodeValues tail with
+      | none => simp [hh, ht] at ok
+      | some values =>
+        simp [hh, ht] at ok
+        subst encoded
+        simp only [List.map_cons, Value.encode_sort hh, ih ht]
+
 /-- Every declared data coordinate has a nominal runtime encoding. Service
 handles are excluded by the admitted ABI, not by a protocol truth premise. -/
 theorem Value.encode_exists {ty : Structured.Ty} (data : dataType ty = true)

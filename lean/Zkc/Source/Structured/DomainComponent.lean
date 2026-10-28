@@ -48,6 +48,12 @@ def componentOperationOn (observations : SiteObservations interface)
       else strictComponent (meaningOn model observations tables.closed) (.invoke helper) args .nil
   | op, args, bodies => strictComponent (meaningOn model observations tables.closed) op args bodies
 
+-- Materialize generated equations in their defining module so all consumers
+-- share the same stored declarations without exporting a global simp rule.
+section
+attribute [local simp] componentOperationOn
+end
+
 def ComponentTablesOn.extend (observations : SiteObservations interface)
     (tables : ComponentTablesOn model.toCarriers interface) (definition : CheckedDefinition) :
     ComponentTablesOn model.toCarriers interface where

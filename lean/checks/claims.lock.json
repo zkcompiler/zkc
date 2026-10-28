@@ -124,14 +124,14 @@
     "Zkc.Source.Structured.NormalForm.callback_sound_uniform": {
       "package": "main",
       "module": "Zkc.Source.Structured.NormalForm.Presentation",
-      "structural": "95f9f153f22936cd",
-      "explicit": "0b30e1b3340c3628"
+      "structural": "ae01c1690b1399bd",
+      "explicit": "81468e90a58461f6"
     },
     "Zkc.Source.Structured.NormalForm.normalize_sound": {
       "package": "main",
       "module": "Zkc.Source.Structured.NormalForm.Soundness",
-      "structural": "82b2cba9b04ce96b",
-      "explicit": "42b48f65106f5623"
+      "structural": "2321ac4115d0a140",
+      "explicit": "e21eb3dd61d76c0e"
     },
     "Zkc.Source.Structured.check_ok_inversion": {
       "package": "main",
