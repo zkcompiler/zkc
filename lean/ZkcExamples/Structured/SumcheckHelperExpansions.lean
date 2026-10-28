@@ -58,7 +58,7 @@ theorem checkTable_expansion (table : Meanings F G) {bindings : MultilinearPrefi
         (invoke table (MultilinearPrefixBodies.valuesRealizationHelper bindings.values) residual).bind fun values =>
         .done (boolResult (decide ((values.get .here).sum = claim)))
       else .halt .exhausted := by
-  simp only [checkTableBody, checkInputs, inputs, boolResult, Region.denote, meaning,
+  simp only [checkTableBody, MultilinearBodies.checkTableBody, checkInputs, inputs, boolResult, Region.denote, meaning,
     Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
     Values.get_cons, prepend_empty, prepend_one, prepend_three,
     Environment.push, SiteObservations.closed, SiteObservations.silent,
@@ -94,9 +94,9 @@ theorem check_expansion (table : Meanings F G) (xs point : List F) (claim : F) :
           if valid.get .here then invoke table checkTableHelper (checkInputs xs point claim)
           else .done (boolResult false)
       else .halt .exhausted := by
-  simp only [checkBody, checkTrueBody, checkFalseBody, checkInputs, inputs, boolResult,
+  simp only [checkBody, MultilinearBodies.checkBody, MultilinearBodies.checkTrueBody, MultilinearBodies.checkFalseBody, checkInputs, inputs, boolResult,
     Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get,
+    Operands.eval, Regions.denote, Values.get_cons,
     prepend_empty, prepend_one, Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
     Primitive.evaluate]
   split

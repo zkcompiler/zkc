@@ -109,6 +109,16 @@ the environment containing the actual providers.
 
 ## Dependency policy and retained exceptions
 
+The generic connection elaborators (`Root`, `Inputs`, `LibraryBuilder`,
+`LibraryPlan`, `Alignment` and `Readback` under `ZkcTools.ConstructionBindings`)
+form a restricted proof-tool layer. Subjects may use these elaborators to
+construct ordinary kernel-checked declarations. The layer may import only
+core definitions, upstream Lean/Mathlib and other proof tools; it cannot reach
+protocol instances, the command-line generators or the old specialized binding
+analysis. Core semantics still cannot depend on proof tools. This is an
+allowed architectural layer with no dependency exceptions, shared by the import
+and declaration audits.
+
 The allowed-edge table in `ZkcTools/DeclarationAudit.lean` is shared data for
 `checks/check_library.py` and the Lean declaration audit. The source audit
 uses Lean's header parser and checks transitive imports; the declaration audit

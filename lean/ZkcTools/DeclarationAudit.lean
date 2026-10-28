@@ -231,6 +231,30 @@ private def dependencyPolicyJson : String := r##"{
       "subjects"
     ],
     [
+      "ZkcTools.ConstructionBindings.Root",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.Inputs",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.LibraryBuilder",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.LibraryPlan",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.Alignment",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.Readback",
+      "proof-tools"
+    ],
+    [
       "ZkcTools",
       "tools"
     ],
@@ -369,7 +393,8 @@ private def dependencyPolicyJson : String := r##"{
         "core",
         "families",
         "subjects",
-        "upstream"
+        "upstream",
+        "proof-tools"
       ]
     ],
     [
@@ -404,7 +429,8 @@ private def dependencyPolicyJson : String := r##"{
         "security-upstream",
         "clean-upstream",
         "algebra-upstream",
-        "upstream"
+        "upstream",
+        "proof-tools"
       ]
     ],
     [
@@ -427,7 +453,8 @@ private def dependencyPolicyJson : String := r##"{
         "security-upstream",
         "clean-upstream",
         "algebra-upstream",
-        "upstream"
+        "upstream",
+        "proof-tools"
       ]
     ],
     [
@@ -534,7 +561,8 @@ private def dependencyPolicyJson : String := r##"{
         "upstream",
         "algebra-upstream",
         "subjects",
-        "security-subjects"
+        "security-subjects",
+        "proof-tools"
       ]
     ],
     [
@@ -575,6 +603,14 @@ private def dependencyPolicyJson : String := r##"{
         "security-upstream",
         "clean-upstream",
         "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "proof-tools",
+      [
+        "core",
+        "proof-tools",
         "upstream"
       ]
     ]

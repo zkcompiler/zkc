@@ -24,6 +24,8 @@ ROLES = (
     "ChaumPedersenValidator",
     "OkamotoValidator",
     "GuessValidator",
+    "BatchOpeningProducer",
+    "BatchOpeningValidator",
 )
 
 
@@ -105,6 +107,7 @@ def main() -> None:
             "ZkcExamples.Construction.ChaumPedersenProofParticipant",
             "ZkcExamples.Construction.OkamotoProofParticipant",
             "ZkcExamples.Construction.GuessProofParticipant",
+            "ZkcExamples.Construction.BatchOpeningArtifacts",
         }:
             raise AssertionError('generated view imports an unexpected constructed pair')
         if re.search(r"\bDomain\.(?:evaluate|step)\b", text):
@@ -115,6 +118,33 @@ def main() -> None:
             raise AssertionError('generated view depends on a source-only participant')
         originals[role] = text
         receipts.append({"role": role, "sha256": hashlib.sha256(text.encode()).hexdigest()})
+
+    # Root certificates use the same common Lean printer for every selection.
+    # Compare the whole generated namespace, so adding a selected protocol does
+    # not require another protocol catalogue in this scheduler.
+    connection_output = directory / "connections"
+    result = subprocess.run(
+        ["lean", "--run", "checks/RunGenerators.lean", "connections", str(connection_output)],
+        cwd=root, env=env, text=True, capture_output=True, timeout=120,
+    )
+    (directory / "regenerate-connections.log").write_text(result.stdout + result.stderr)
+    if result.returncode:
+        raise AssertionError("Lean connection generation failed; see regenerate-connections.log")
+    namespace = Path("ZkcExamples/Structured/Generated/Connections")
+    generated_connections = sorted((connection_output / namespace).glob("*.lean"))
+    maintained_connections = sorted((root / namespace).glob("*.lean"))
+    if not generated_connections or [p.name for p in generated_connections] != [
+        p.name for p in maintained_connections
+    ]:
+        raise AssertionError("generated connection namespace differs from maintained files")
+    connection_receipts = []
+    for generated, maintained in zip(generated_connections, maintained_connections, strict=True):
+        content = generated.read_bytes()
+        if content != maintained.read_bytes():
+            raise AssertionError(f"stale generated connection: {maintained.name}")
+        connection_receipts.append({
+            "module": maintained.stem, "sha256": hashlib.sha256(content).hexdigest(),
+        })
 
     cases = [
         ("producer-same-typed-operands", "SmallSumcheckProducer", lambda s: change_action(
@@ -166,9 +196,11 @@ def main() -> None:
             raise AssertionError(name)
         mutations.append({"name": name, "role": role, "status": "kernel-equation-refused"})
         print(f"PASS {name}", flush=True)
-    report = {"format": "zkc.constructed-view-controls/0", "generated": receipts, "mutations": mutations}
+    report = {"format": "zkc.constructed-view-controls/0", "generated": receipts,
+              "connections": connection_receipts, "mutations": mutations}
     (directory / "report.json").write_text(json.dumps(report, indent=2) + "\n")
-    print(f"PASS {len(receipts)} regenerated views; {len(mutations)} stale structural proofs refused")
+    print(f"PASS {len(receipts)} regenerated views; {len(connection_receipts)} generated roots; "
+          f"{len(mutations)} stale structural proofs refused")
 
 
 if __name__ == "__main__":

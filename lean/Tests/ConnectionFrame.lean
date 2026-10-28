@@ -24,6 +24,7 @@ example : IsEmpty (Readback layout outputs [.data 1, .data 0]) := by
   constructor
   intro certificate
   cases certificate with
+  | guardedOriginal reference checked tail => simp [layout] at checked
   | data reference checked tail =>
     change some (.data (.present (.var (.there .here))) : Cell scope) =
       some (.data (.present (.var .here))) at checked

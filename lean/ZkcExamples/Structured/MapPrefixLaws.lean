@@ -71,7 +71,7 @@ theorem fold_body (table : Meanings F G) (xs : List F) (dimension columns : Nat)
       (Values.cons point (.cons xs (.cons dimension (.cons columns .nil)))).get =
       Evaluation.denoteFold table foldSpec
         (.cons point (.cons xs (.cons dimension (.cons columns .nil)))) := by
-  simp only [foldBody, MultilinearPrefixBodies.foldBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
+  simp only [foldBody, MultilinearPrefixBodies.foldBody, MultilinearBodies.foldBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Environment.push, Environment.push]
   trans (Evaluation.denoteFold table foldSpec
     (.cons point (.cons xs (.cons dimension (.cons columns .nil))))).bind .done
