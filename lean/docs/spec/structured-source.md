@@ -903,9 +903,12 @@ therefore follow the existing component meaning. An arbitrary present Boolean
 guard uses `Equality.boolean`; false rejects and an absent condition stops as
 incomplete. No premise asserts that a helper result or received Boolean is true.
 
-`NormalForm.normalize_sound` states that when normalization returns a form
-whose law uses call their laws' own helpers (`CallsMatch`), the body's
-participant process at the role is the form's process, in every model, for
+`NormalForm.normalize_soundOn` proves this equation for arbitrary action
+interpretations and iteration observations. Actual source call sites and dynamic
+repeat coordinates are retained in that interpretation. `normalize_sound` is its
+silent-observation specialization: when normalization returns a form whose law
+uses call their laws' own helpers (`CallsMatch`), the body's participant process
+at the role is the form's process, in every model, for
 every context whose mapped roster roles are distinct from the role
 (`RosterDistinct`), on every input the pattern describes, under every helper
 table whose invocations satisfy the signature's laws (`LawsHold`) and every
