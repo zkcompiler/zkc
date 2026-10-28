@@ -28,7 +28,17 @@ bool isTotal(Operation *op) {
 
 bool isProtocolValueExpression(Operation *op) {
   return isTotal(op) ||
-         isa<protocol_ir::RestrictRolesOp, protocol_ir::OracleForgetRowsOp>(op);
+         isa<protocol_ir::RestrictRolesOp, protocol_ir::OracleForgetRowsOp,
+             protocol_ir::OracleContentsOp, protocol_ir::OracleSequenceEmptyOp,
+             protocol_ir::OracleSequenceLengthOp>(op);
+}
+
+bool isLogicalOracleOperation(Operation *op) {
+  return isa<
+      protocol_ir::OracleSendOp, protocol_ir::OracleQueryOp,
+      protocol_ir::OracleForgetRowsOp, protocol_ir::OracleContentsOp,
+      protocol_ir::OracleSequenceEmptyOp, protocol_ir::OracleSequenceAppendOp,
+      protocol_ir::OracleSequenceAtOp, protocol_ir::OracleSequenceLengthOp>(op);
 }
 
 FailureOr<SmallVector<unsigned>> operandDependencies(Operation *op,

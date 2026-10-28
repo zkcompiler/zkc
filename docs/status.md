@@ -488,7 +488,9 @@ Common IR formation checks ordered oracle sends/queries, exact kind associations
 role availability, initially bound shapes through recurrence edges and size
 refinement erasure. Checked preparation remaps oracle roles through applications
 and preserves sends/queries under upstream CSE. Projection refuses unresolved
-oracle events before publishing participants.
+oracle events before publishing participants. Holder-only contents and bounded,
+append-only sequences preserve role restrictions, dynamic anchors and ordered
+bounds failures through checked preparation.
 Oracle ports, frontend emission, extended structured readers and checked semantic
 realization remain in progress; these formation checks do not enable execution.
 

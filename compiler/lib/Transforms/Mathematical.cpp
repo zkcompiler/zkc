@@ -587,8 +587,7 @@ public:
     // not acquire that query's metadata or disappear as unused mathematics.
     if (common
             .walk([&](Operation *op) {
-              if (!isa<protocol_ir::OracleSendOp, protocol_ir::OracleQueryOp,
-                       protocol_ir::OracleForgetRowsOp>(op))
+              if (!isLogicalOracleOperation(op))
                 return WalkResult::advance();
               diagnostics::emit(
                   op->emitError(), "mathematical-projection",

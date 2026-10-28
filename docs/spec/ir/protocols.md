@@ -132,6 +132,35 @@ unrealized oracle operations before publishing a participant candidate. Structur
 export and realization must recognize this vocabulary before it can proceed.
 Registration and common formation do not supply an executable implementation.
 
+### Holder contents and bounded handle sequences
+
+`protocol.oracle_contents(handle) {owner}` selects the immutable data at the
+holder. Ordinary handle availability alone is insufficient: every possible
+anchor reaching the operand must have that holder. A bounded backward dependency
+check follows input and yielded values of loops, both inputs of sequence append,
+selection from a sequence, and handle views. It does not choose the first
+syntactic origin or assume a loop executes. Unknown producers refuse. Role
+restrictions remain effective even when the underlying holder is known. The
+operation is pure after admission; specification-side anchor selectors have
+separate permissions and cannot authorize executable extraction at a receiver.
+
+A bounded handle sequence is persistent and ordered. `oracle_sequence_empty`
+constructs its empty value; `oracle_sequence_length` observes the length. Both
+are pure and create no anchor. `oracle_sequence_append` preserves the exact kind
+and maximum, appending the actual handle at the end. It stops when the sequence
+is full. `oracle_sequence_at` checks its index against the current length and
+returns that exact dynamic handle; it stops when out of range. A zero maximum
+is a valid empty container, so append always stops. The maximum does not grant
+allocation capacity or a native execution budget.
+
+Append and selection name a nonempty, distinct role set and an ordered site.
+Each role must have every operand. The result is available precisely at those
+roles. Their stopping checks are ordered effects even when their results are
+unused; generic simplification must preserve them. They neither send a handle
+as a message nor perform an oracle query. Realization must preserve their order,
+checks and dynamic anchor choice before projection. A static set of possible
+origins justifies holder access; it never replaces runtime selection.
+
 ## Total mathematics and helpers
 
 The [structured extension](mathematics.md) adds field constants and

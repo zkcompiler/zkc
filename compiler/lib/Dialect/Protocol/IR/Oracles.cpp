@@ -39,4 +39,21 @@ LogicalResult OracleForgetRowsOp::verify() {
     return emitOpError("may only forget an exact row count of the same kind");
   return success();
 }
+LogicalResult OracleContentsOp::verify() {
+  if (getData().getType() != getHandle().getType().getKind().getDataType())
+    return emitOpError("contents must have the oracle kind's data type");
+  return success();
+}
+LogicalResult OracleSequenceAppendOp::verify() {
+  auto type = getPrefix().getType();
+  if (getOutput().getType() != type ||
+      getElement().getType().getKind() != type.getKind())
+    return emitOpError("append must preserve the sequence bound and kind");
+  return success();
+}
+LogicalResult OracleSequenceAtOp::verify() {
+  if (getHandle().getType().getKind() != getSequence().getType().getKind())
+    return emitOpError("selection must preserve the actual handle kind");
+  return success();
+}
 } // namespace zkc::protocol_ir

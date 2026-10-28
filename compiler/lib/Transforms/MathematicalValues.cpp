@@ -386,6 +386,14 @@ ValueCorrespondence::Term ValueCorrespondence::value(Environment env,
       result = inputs[0];
     } else {
       auto attributes = op->getAttrDictionary();
+      if (auto contents = dyn_cast<protocol_ir::OracleContentsOp>(op)) {
+        auto mapped = p.scopes[scope].roles.lookup(contents.getOwner());
+        if (mapped) {
+          NamedAttrList renamed(attributes);
+          renamed.set("owner", mapped);
+          attributes = renamed.getDictionary(op->getContext());
+        }
+      }
       if (finite::isComputation(op)) {
         auto closure = finite::closureKey(op);
         if (failed(closure))

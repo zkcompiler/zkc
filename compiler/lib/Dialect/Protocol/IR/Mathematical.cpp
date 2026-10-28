@@ -1,4 +1,5 @@
 #include "zkc/Dialect/Mathematical.h"
+#include "OracleAnalysis.h"
 #include "ResourceOrigins.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Analysis/TotalClosure.h"
@@ -59,7 +60,8 @@ class Analysis {
   std::optional<NativeTypePolicy> commonValuePolicy(Type type) {
     // Logical handles belong to the pre-realization protocol only. Native
     // endpoint/type policies continue rejecting them, including in messages.
-    if (isa<protocol_ir::OracleHandleType>(type))
+    if (isa<protocol_ir::OracleHandleType, protocol_ir::OracleSequenceType>(
+            type))
       return NativeTypePolicy{false, true, false, false, false, false};
     return types.get(type);
   }
@@ -92,7 +94,8 @@ class Analysis {
           continue;
         auto repeat =
             dyn_cast<protocol_ir::RepeatOp>(argument.getOwner()->getParentOp());
-        if (!repeat)
+        if (!repeat || failed(repeat->getName().verifyInvariants(repeat)) ||
+            failed(repeat.verifyRegions()))
           return refuse(use, "oracle shape requires initially bound data");
         auto index = argument.getArgNumber();
         if (!enqueue(repeat.getOperand(index)))
@@ -104,7 +107,11 @@ class Analysis {
         continue;
       }
       auto *producer = value.getDefiningOp();
-      if (auto repeat = dyn_cast_or_null<protocol_ir::RepeatOp>(producer)) {
+      if (!producer || failed(producer->getName().verifyInvariants(producer)))
+        return refuse(use, "malformed oracle shape dependency");
+      if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(producer)) {
+        if (failed(repeat.verifyRegions()))
+          return failure();
         auto index = cast<OpResult>(value).getResultNumber();
         if (!enqueue(repeat.getInputs().front()) ||
             !enqueue(repeat.getOperand(index + 1)) ||
@@ -274,6 +281,11 @@ public:
             actionRoles = child.getRoles();
           else if (auto application = dyn_cast<protocol_ir::ApplyOp>(action))
             actionRoles = application.getRoles();
+          else if (auto append =
+                       dyn_cast<protocol_ir::OracleSequenceAppendOp>(action))
+            actionRoles = append.getRoles();
+          else if (auto at = dyn_cast<protocol_ir::OracleSequenceAtOp>(action))
+            actionRoles = at.getRoles();
           else if (auto send = dyn_cast<protocol_ir::OracleSendOp>(action))
             actionRoles = send.getReceivers();
           else if (auto start =
@@ -375,6 +387,24 @@ public:
         env.values[restrict.getOutput()] = std::move(selected);
       } else if (auto forget = dyn_cast<protocol_ir::OracleForgetRowsOp>(op)) {
         env.values[forget.getOutput()] = env.values.lookup(forget.getInput());
+      } else if (auto contents = dyn_cast<protocol_ir::OracleContentsOp>(op)) {
+        int owner = role(contents.getOwnerAttr());
+        if (owner < 0 || !env.values.lookup(contents.getHandle()).test(owner))
+          return refuse(
+              op, "oracle contents require an available holder component");
+        if (failed(verifyOracleHolder(contents.getHandle(), contents.getOwner(),
+                                      op, remaining)))
+          return failure();
+        BitVector available(count);
+        available.set(owner);
+        env.values[contents.getData()] = std::move(available);
+      } else if (auto empty =
+                     dyn_cast<protocol_ir::OracleSequenceEmptyOp>(op)) {
+        env.values[empty.getOutput()] = BitVector(count, true);
+      } else if (auto length =
+                     dyn_cast<protocol_ir::OracleSequenceLengthOp>(op)) {
+        env.values[length.getLength()] =
+            env.values.lookup(length.getSequence());
       } else if (auto statement = dyn_cast<zkc::protocol_ir::StatementOp>(op)) {
         if (depth != 0)
           return refuse(
@@ -401,13 +431,26 @@ public:
       } else if (isa<zkc::protocol_ir::ExchangeOp, zkc::protocol_ir::GuardOp,
                      zkc::protocol_ir::FinishIfOp, zkc::protocol_ir::QueryOp,
                      protocol_ir::OracleSendOp, protocol_ir::OracleQueryOp,
+                     protocol_ir::OracleSequenceAppendOp,
+                     protocol_ir::OracleSequenceAtOp,
                      zkc::protocol_ir::LocalCallOp,
                      zkc::protocol_ir::ConstructionStartOp>(op)) {
         auto site = op->getAttrOfType<StringAttr>("site");
         if (!site || !name(site.getValue()) ||
             !sites.insert(site.getValue()).second)
           return refuse(op, "ordered sites must be unique identifiers");
-        if (auto send = dyn_cast<protocol_ir::OracleSendOp>(op)) {
+        if (isa<protocol_ir::OracleSequenceAppendOp,
+                protocol_ir::OracleSequenceAtOp>(op)) {
+          BitVector selected;
+          if (failed(
+                  roles(op, op->getAttrOfType<ArrayAttr>("roles"), selected)))
+            return failure();
+          for (Value input : op->getOperands())
+            if (!subset(selected, env.values.lookup(input)))
+              return refuse(op, "oracle sequence operation requires every "
+                                "selected component");
+          env.values[op->getResult(0)] = std::move(selected);
+        } else if (auto send = dyn_cast<protocol_ir::OracleSendOp>(op)) {
           int sender = role(send.getSenderAttr());
           BitVector available;
           if (sender < 0 || failed(roles(op, send.getReceivers(), available)) ||

@@ -175,7 +175,8 @@ def main():
         "ZkcContracts": {ROOT / "lib/Contracts/RequirementChecks.h"},
         "ZkcRelation": {ROOT / "lib/Relation/Field.h", ROOT / "lib/Relation/BundleInternal.h"},
         "ZkcProgram": {ROOT / "lib/Program/EncodingLimits.h", ROOT / "lib/Program/Structure.h", ROOT / "lib/Program/ResourceOrigins.h"},
-        "ZkcIR": {ROOT / "lib/Dialect/Protocol/IR/ResourceOrigins.h", ROOT / "lib/Dialect/Verification.h", ROOT / "lib/Dialect/DomainVerification.h"},
+        "ZkcIR": {ROOT / "lib/Dialect/Protocol/IR/ResourceOrigins.h",
+        ROOT / "lib/Dialect/Protocol/IR/OracleAnalysis.h", ROOT / "lib/Dialect/Verification.h", ROOT / "lib/Dialect/DomainVerification.h"},
     }
     private_headers["ZkcIR"].add(ROOT / "lib/Analysis/FiniteCardinality.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Exec/ExecutionDefinitions.h")

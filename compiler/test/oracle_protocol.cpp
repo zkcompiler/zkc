@@ -19,6 +19,7 @@ std::string source(llvm::StringRef body) {
 !V = !algebra.field_vector<"koala-bear">
 !H = !protocol.oracle<#K>
 !U = !protocol.oracle<#U>
+!S = !protocol.oracle_sequence<#K, 4>
 module {
  "protocol.module"() ({
   "protocol.func"() ({
@@ -185,7 +186,14 @@ int main() {
                       "CSE erased an anchor allocation or query event");
             });
   cases.run("application expansion remaps overlapping oracle rosters", [&] {
-    auto module = parse(source(send), context);
+    auto module = parse(source(std::string(send) + R"mlir(
+ %contents = "protocol.oracle_contents"(%h) {owner="P"} : (!H) -> !V
+ %received = "protocol.exchange"(%contents) {sender="P",receiver="V",site="copy"} : (!V) -> !V
+ %empty = "protocol.oracle_sequence_empty"() : () -> !S
+ %next = "protocol.oracle_sequence_append"(%empty,%h) {roles=["P","V"],site="append"} : (!S,!H) -> !S
+ %selected = "protocol.oracle_sequence_at"(%next,%rows) {roles=["P","V"],site="select"} : (!S,ui64) -> !H
+)mlir"),
+                        context);
     auto unit = cast<ProtocolModuleOp>(module->getBody()->front());
     auto leaf = *unit.getBody().front().getOps<MathematicalOp>().begin();
     auto caller = cast<MathematicalOp>(leaf->clone());
@@ -262,5 +270,157 @@ int main() {
     require(unit.getProfile() == Profile::Protocol,
             "failed projection published a participant candidate");
   });
+  cases.run(
+      "contents require the actual holder and retained availability", [&] {
+        auto body = std::string(send) + R"mlir(
+ %contents = "protocol.oracle_contents"(%h) {owner="P"} : (!H) -> !V
+)mlir";
+        accepted(source(body));
+        refused(source(replace(body, "{owner=\"P\"}", "{owner=\"V\"}")));
+        refused(source(replace(body, "{owner=\"P\"}", "{owner=\"unknown\"}")));
+        auto hidden = replace(body, " %contents =", R"mlir(
+ %hidden = "protocol.restrict_roles"(%h) {roles=["V"]} : (!H) -> !H
+ %contents =)mlir");
+        refused(source(replace(hidden, R"(oracle_contents"(%h))",
+                               R"(oracle_contents"(%hidden))")));
+        auto malformed = parse(source(body), context);
+        malformed->walk([&](OracleContentsOp contents) {
+          contents.getData().setType(IntegerType::get(&context, 1));
+        });
+        require(failed(verify(*malformed)),
+                "contents with the wrong data type admitted");
+      });
+  cases.run(
+      "sequence formation preserves kinds roles and bounds failures", [&] {
+        auto body = std::string(send) + R"mlir(
+ %empty = "protocol.oracle_sequence_empty"() : () -> !S
+ %first = "protocol.oracle_sequence_append"(%empty,%h) {roles=["P","V"],site="append"} : (!S,!H) -> !S
+ %length = "protocol.oracle_sequence_length"(%first) : (!S) -> ui64
+ %selected = "protocol.oracle_sequence_at"(%first,%rows) {roles=["P","V"],site="select"} : (!S,ui64) -> !H
+ %contents = "protocol.oracle_contents"(%selected) {owner="P"} : (!H) -> !V
+ %value = "protocol.oracle_query"(%selected,%position) {owner="V",site="selected_read"} : (!H,ui64) -> !F
+)mlir";
+        accepted(source(body));
+        refused(source(replace(body, R"(roles=["P","V"],site="append")",
+                               R"(roles=["P"],site="append")")));
+        refused(source(replace(body, R"(roles=["P","V"],site="append")",
+                               R"(roles=[],site="append")")));
+        refused(source(replace(body, R"(roles=["P","V"],site="select")",
+                               R"(roles=["P","P"],site="select")")));
+        refused(source(replace(body, "(%first,%rows)", "(%first,%position)")));
+        auto malformed = parse(source(body), context);
+        malformed->walk([&](OracleSequenceAppendOp append) {
+          append.getOutput().setType(OracleSequenceType::get(
+              &context, append.getPrefix().getType().getKind(), 5));
+        });
+        require(failed(verify(*malformed)),
+                "append changed the sequence bound");
+        malformed = parse(source(body), context);
+        malformed->walk([&](OracleSequenceAtOp at) {
+          auto kind = at.getHandle().getType().getKind();
+          auto unsized = OracleKindAttr::get(
+              &context, kind.getIdentity(),
+              ArrayAttr::get(&context, {kind.getArguments()[0]}));
+          at.getHandle().setType(OracleHandleType::get(&context, unsized));
+        });
+        require(failed(verify(*malformed)),
+                "selection changed the handle kind");
+        // Zero capacity is meaningful. Append/selection remain stopping
+        // operations even when their results are unused; CSE cannot erase these
+        // checks.
+        auto zero = parse(replace(source(body), "<#K, 4>", "<#K, 0>"), context);
+        require(succeeded(verify(*zero)),
+                "zero-capacity sequence lost formation");
+        auto prepared = zkc::mathematical::prepareProtocol(*zero);
+        require(bool(prepared), "sequence preparation failed");
+        unsigned appends = 0, selections = 0;
+        prepared->walk([&](OracleSequenceAppendOp) { ++appends; });
+        prepared->walk([&](OracleSequenceAtOp) { ++selections; });
+        require(appends == 1 && selections == 1,
+                "preparation erased sequence bounds failures");
+      });
+  cases.run("append-only loop selection retains its dynamic anchor", [&] {
+    auto body = std::string(send) + R"mlir(
+ %empty = "protocol.oracle_sequence_empty"() : () -> !S
+ %final = "protocol.repeat"(%trips,%empty,%h) ({
+  ^bb0(%i:ui64,%layers:!S,%initial:!H):
+   %next = "protocol.oracle_sequence_append"(%layers,%initial) {roles=["P","V"],site="append"} : (!S,!H) -> !S
+   %selected = "protocol.oracle_sequence_at"(%next,%i) {roles=["P","V"],site="select"} : (!S,ui64) -> !H
+   %contents = "protocol.oracle_contents"(%selected) {owner="P"} : (!H) -> !V
+   "protocol.yield"(%next) : (!S) -> ()
+ }) {site="layers",carried=1:i64,maximum=4:i64,roles=["P","V"],carried_roles=[["P","V"]]} : (ui64,!S,!H) -> !S
+ %last = "protocol.oracle_sequence_at"(%final,%position) {roles=["V"],site="last"} : (!S,ui64) -> !H
+ %value = "protocol.oracle_query"(%last,%position) {owner="V",site="last_read"} : (!H,ui64) -> !F
+)mlir";
+    accepted(source(body));
+    auto module = parse(source(body), context);
+    require(bool(zkc::mathematical::prepareProtocol(*module)),
+            "loop-carried oracle sequence failed checked preparation");
+    refused(source(replace(body, R"(owner="P"} : (!H) -> !V)",
+                           R"(owner="V"} : (!H) -> !V)")));
+  });
+  cases.run("holder checks include later loop backedges", [&] {
+    auto body = std::string(send) + R"mlir(
+ %received = "protocol.exchange"(%data) {sender="P",receiver="V",site="copy"} : (!V) -> !V
+ %last = "protocol.repeat"(%trips,%h,%received,%rows) ({
+  ^bb0(%i:ui64,%current:!H,%d:!V,%n:ui64):
+   %contents = "protocol.oracle_contents"(%current) {owner="P"} : (!H) -> !V
+   %next = "protocol.oracle_send"(%d,%n) {sender="V",receivers=["P"],site="later"} : (!V,ui64) -> !H
+   "protocol.yield"(%next) : (!H) -> ()
+ }) {site="switch",carried=1:i64,maximum=2:i64,roles=["P","V"],carried_roles=[["P","V"]]} : (ui64,!H,!V,ui64) -> !H
+)mlir";
+    refused(source(body));
+    // If the carried value never changes holder, the unused later anchor does
+    // not contaminate it. This also checks the zero-trip incoming edge.
+    accepted(source(replace(body, R"(protocol.yield"(%next))",
+                            R"(protocol.yield"(%current))")));
+    auto malformed = parse(source(body), context);
+    malformed->walk([&](OracleSendOp event) {
+      if (event.getSite() == "later")
+        event->removeAttr("sender");
+    });
+    require(failed(verify(*malformed)), "malformed backedge producer admitted");
+  });
+  cases.run(
+      "preparation compares actual dynamic anchors and sequence positions",
+      [&] {
+        auto body = std::string(send) + R"mlir(
+ %other = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="other"} : (!V,ui64) -> !H
+ %empty = "protocol.oracle_sequence_empty"() : () -> !S
+ %first = "protocol.oracle_sequence_append"(%empty,%h) {roles=["P","V"],site="append"} : (!S,!H) -> !S
+ %selected = "protocol.oracle_sequence_at"(%first,%rows) {roles=["P","V"],site="select"} : (!S,ui64) -> !H
+)mlir";
+        auto original = parse(source(body), context);
+        auto candidate = zkc::mathematical::prepareProtocol(*original);
+        require(bool(candidate),
+                "anchor comparison control failed preparation");
+        Value other;
+        candidate->walk([&](OracleSendOp event) {
+          if (event.getSite() == "other")
+            other = event.getHandle();
+        });
+        candidate->walk([&](OracleSequenceAppendOp append) {
+          append.getElementMutable().set(other);
+        });
+        require(succeeded(verify(*candidate)),
+                "anchor mutation lost formation");
+        require(
+            failed(zkc::mathematical::verifyProtocolPreparationPreserved(
+                &original->getBody()->front(), &candidate->getBody()->front())),
+            "same-kind same-data anchor substitution passed correspondence");
+        candidate = zkc::mathematical::prepareProtocol(*original);
+        candidate->walk([&](OracleSequenceAtOp at) {
+          at.getPositionMutable().set(at->getParentOfType<MathematicalOp>()
+                                          .getBody()
+                                          .front()
+                                          .getArgument(3));
+        });
+        require(succeeded(verify(*candidate)),
+                "position mutation lost formation");
+        require(
+            failed(zkc::mathematical::verifyProtocolPreparationPreserved(
+                &original->getBody()->front(), &candidate->getBody()->front())),
+            "dynamic position substitution passed correspondence");
+      });
   return cases.result();
 }

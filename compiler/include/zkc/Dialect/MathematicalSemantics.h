@@ -21,6 +21,9 @@ bool isTotal(mlir::Operation *operation);
 // views. This does not grant ordinary total-Math or native type permissions.
 // Closed helper calls are handled separately by their admission/expansion.
 bool isProtocolValueExpression(mlir::Operation *operation);
+// Closed oracle vocabulary eliminated by semantic realization, including its
+// pure views. No physical/participant boundary may leave any of it unresolved.
+bool isLogicalOracleOperation(mlir::Operation *operation);
 // Shared by availability, helper summaries and projection. The current scalar
 // vocabulary requires each primitive result to depend on every operand. A
 // future subset-dependent primitive also needs a reviewed projection
