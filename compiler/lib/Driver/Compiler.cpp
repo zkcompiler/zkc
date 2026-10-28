@@ -54,6 +54,7 @@ int zkc::runCompiler(int argc, char **argv,
            "    Its --declarations option reports completed public "
            "contracts.\n"
            "    --api reports public exports, types and source references.\n"
+           "    --source-ast exports written syntax before elaboration.\n"
            "    --subject selects a closed protocol/proof, excluding Host "
            "functions.\n"
            "    --source-claims exports requests for an explicit subject or "
@@ -435,7 +436,7 @@ int zkc::runCompiler(int argc, char **argv,
       auto result = protocol::exportStructuredSource(*text, symbol, context);
       if (!result)
         return fail(result.takeError());
-      outs() << *result;
+      outs() << result->bytes;
       return 0;
     }
     if (sourceExport) {

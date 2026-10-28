@@ -1,6 +1,7 @@
 #ifndef ZKC_LANGUAGE_STATE_H
 #define ZKC_LANGUAGE_STATE_H
 #include "APIRecords.h"
+#include "LexicalRecords.h"
 #include "NotationRecords.h"
 #include "zkc/Language/Project.h"
 #include <map>
@@ -12,6 +13,7 @@ struct CaptureStorage {
   std::string identity, format;
 };
 struct SyntaxDeclaration;
+struct WrittenSources;
 struct ScopedSource;
 struct ScopedCallSource;
 struct ScopedInvocationSource;
@@ -37,8 +39,11 @@ struct CheckedStorage {
   std::string installation;
   uint64_t work = 0, declarationCount = 0, operationCount = 0;
   uint64_t notationDescriptors = 0, notationHoles = 0;
+  /// Written headers and parsed bodies, frozen before resolution/elaboration.
+  std::shared_ptr<const WrittenSources> writtenSources;
   NotationRecords notations;
   APIRecords api;
+  std::vector<LexicalResolution> lexicalResolutions;
   std::shared_ptr<const NameEnvironment> names;
   /// Immutable authored callback and effect contracts, independent of mutable
   /// checked metadata.

@@ -5,13 +5,10 @@ public import Mathlib.Data.List.Perm.Basic
 
 @[expose] public section
 
-/-! Finite syntax transformations of constructed participant layouts. These
-operations only propose artifacts. Structural admission and complete source
-simulation must be checked separately; renaming alone is not that evidence.
-Keeping the syntax here lets theorem statements name it without depending on
-the elaboration and generation tools. -/
+/-! Pure participant layout transformations. These transform syntax only;
+structural admission and source correspondence remain separate obligations. -/
 set_option autoImplicit false
-namespace Zkc.Construction.ParticipantTransform
+namespace Zkc.Construction.LayoutPermutation
 
 /-- A formal layout perturbation: rename input references throughout the
 recursive SSA tree, including loop yields. Newly allocated slots retain their
@@ -56,5 +53,4 @@ def permuteInputs (artifact : Participant) (order : List Nat) : Except String Pa
     instructions := reindexInstructions rename 1024 artifact.instructions
     returned := artifact.returned.map rename }
 
-
-end Zkc.Construction.ParticipantTransform
+end Zkc.Construction.LayoutPermutation

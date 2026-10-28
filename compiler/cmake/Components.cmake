@@ -59,6 +59,8 @@ add_zkc_component(Language
   lib/Language/Names.cpp
   lib/Language/Diagnostics.cpp
   lib/Language/Inspection.cpp
+  lib/Language/WrittenSource.cpp
+  lib/Language/SourceInstances.cpp
   lib/Language/NotationInspection.cpp
   lib/Language/NotationRecords.cpp
   lib/Language/SourceTerms.cpp
@@ -322,6 +324,7 @@ add_zkc_component(Compiler
   lib/Compiler/Observation.cpp
   lib/Compiler/SourceClaims.cpp
   lib/Compiler/ComponentContracts.cpp
+  lib/Compiler/SourceCorrespondence.cpp
   lib/Compiler/Compilation.cpp
   lib/Compiler/CommonSource.cpp
   lib/Compiler/StructuredSource.cpp
@@ -391,7 +394,7 @@ mlir_target_link_libraries(ZkcTransforms PUBLIC
   MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect MLIRLinalgTransforms)
 target_link_libraries(ZkcCompiler PUBLIC ZkcTransforms ZkcTranslation)
 target_link_libraries(ZkcDriver PUBLIC ZkcCompiler)
-mlir_target_link_libraries(ZkcCompiler PUBLIC MLIRParser)
+mlir_target_link_libraries(ZkcCompiler PUBLIC MLIRParser MLIRAsmParser)
 mlir_target_link_libraries(ZkcDriver PUBLIC MLIRParser)
 set(zkc_components ZkcSupport ZkcContracts ZkcLanguage ZkcRelation ZkcProgram ZkcIR ZkcTranslation ZkcTransforms ZkcCompiler ZkcDriver)
 

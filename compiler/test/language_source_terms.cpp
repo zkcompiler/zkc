@@ -163,9 +163,10 @@ int main() {
         mlir::DialectRegistry registry;
         zkc::registerDialects(registry);
         mlir::MLIRContext context(registry);
-        auto snapshot =
-            take(json::parse(take(zkc::protocol::exportStructuredSource(
-                original.bytes(), entry.protocol().symbol, context))));
+        auto snapshot = take(json::parse(
+            take(zkc::protocol::exportStructuredSource(
+                     original.bytes(), entry.protocol().symbol, context))
+                .bytes));
         bool found = false;
         for (const auto &row : *(*snapshot.getAsArray())[7].getAsArray()) {
           const auto *a = row.getAsArray();

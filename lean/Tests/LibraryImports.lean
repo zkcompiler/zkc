@@ -53,6 +53,7 @@ import Zkc.Construction.DomainView
 import Zkc.Construction.DomainViewLaws
 import Zkc.Construction.Encoding
 import Zkc.Construction.FiatShamir
+import Zkc.Construction.LayoutPermutation
 import Zkc.Construction.OccurrenceReindex
 import Zkc.Construction.OccurrenceResolution
 import Zkc.Construction.OriginProjection
@@ -77,7 +78,6 @@ import Zkc.Construction.OriginalRouting
 import Zkc.Construction.OriginalSimulation
 import Zkc.Construction.PairAcceptance
 import Zkc.Construction.Participant
-import Zkc.Construction.ParticipantTransform
 import Zkc.Construction.Pattern
 import Zkc.Construction.ProcessViewTactic
 import Zkc.Construction.Projection

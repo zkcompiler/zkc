@@ -1,5 +1,7 @@
 #include "zkc/Compiler/StructuredSource.h"
 #include "ComponentContracts.h"
+#include "mlir/AsmParser/AsmParser.h"
+#include "mlir/AsmParser/AsmParserState.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
@@ -20,8 +22,10 @@
 #include "zkc/Support/MLIRInput.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SHA256.h"
 #include "llvm/Support/SaveAndRestore.h"
+#include "llvm/Support/SourceMgr.h"
 
 using namespace llvm;
 using namespace mlir;
@@ -362,6 +366,14 @@ Expected<StringRef> visibility(Operation &op) {
   return attr.getValue();
 }
 
+using RowPath = SmallVector<unsigned, 8>;
+RowPath child(ArrayRef<unsigned> parent,
+              std::initializer_list<unsigned> suffix) {
+  RowPath result(parent);
+  llvm::append_range(result, suffix);
+  return result;
+}
+
 class Exporter {
   protocol_ir::ProtocolModuleOp unit;
   protocol_ir::MathematicalOp selected;
@@ -373,6 +385,38 @@ class Exporter {
   unsigned instructions = 0;
   UsedIdentities used;
   SourceExecutionClosure execution;
+  const AsmParserState &parser;
+  const SourceMgr &sourceManager;
+  std::vector<StructuredSourceAssociation> &associations;
+  uint64_t associationBytes = 0;
+
+  Error associate(ArrayRef<unsigned> row, Operation &op,
+                  StructuredSourceDerivation derivation =
+                      StructuredSourceDerivation::Direct) {
+    // Bound retained storage before copying paths or operation names. Reused
+    // closed regions have distinct emitted coordinates and spend work again.
+    uint64_t size = sizeof(StructuredSourceAssociation) +
+                    row.size() * sizeof(unsigned) +
+                    op.getName().getStringRef().size();
+    constexpr uint64_t limit = 16 * 1024 * 1024;
+    if (size > limit - associationBytes)
+      return error("structured-source-limit");
+    associationBytes += size;
+    std::optional<StructuredSourceTextRange> original;
+    if (const auto *written = parser.getOpDef(&op)) {
+      auto buffer =
+          sourceManager.getMemoryBuffer(sourceManager.getMainFileID());
+      const char *begin = buffer->getBufferStart();
+      auto [line, column] = sourceManager.getLineAndColumn(written->loc.Start);
+      original = StructuredSourceTextRange{
+          unsigned(written->loc.Start.getPointer() - begin),
+          unsigned(written->loc.End.getPointer() - begin), line, column};
+    }
+    associations.push_back({std::vector<unsigned>(row.begin(), row.end()),
+                            op.getName().getStringRef().str(), derivation,
+                            original});
+    return Error::success();
+  }
 
   Expected<json::Value> sort(Type type) { return encodeSort(type, used); }
   Expected<json::Array> sorts(TypeRange types, bool services = false) {
@@ -501,7 +545,9 @@ class Exporter {
   // The CFG reader checks all scope acquisition, failure propagation, transfer
   // cleanup and branch edges. Export its checked association using the actual
   // SSA formals, not Program value names (which may identify aliased captures).
-  Expected<json::Value> scopedBlock(func::FuncOp function, StringRef terminator,
+  Expected<json::Value> scopedBlock(func::FuncOp function,
+                                    ArrayRef<unsigned> path,
+                                    StringRef terminator,
                                     unsigned forwarded = 0,
                                     unsigned depth = 0) {
     if (depth > depthLimit)
@@ -546,6 +592,9 @@ class Exporter {
         auto result = indices(values);
         if (!result)
           return result.takeError();
+        if (auto e = associate(child(path, {2}), op,
+                               StructuredSourceDerivation::ScopedExecution))
+          return std::move(e);
         return json::Array{"block", std::move(encoded),
                            json::Array{terminator, std::move(*result)}};
       }
@@ -553,6 +602,9 @@ class Exporter {
         auto occurrence = site(op);
         if (!occurrence)
           return occurrence.takeError();
+        if (auto e = associate(child(path, {2}), op,
+                               StructuredSourceDerivation::ScopedExecution))
+          return std::move(e);
         return json::Array{"block", std::move(encoded),
                            json::Array{"stop", stop.getReason(), *occurrence}};
       }
@@ -574,7 +626,15 @@ class Exporter {
       if (!occurrence)
         return occurrence.takeError();
       json::Array regions;
+      auto row = child(path, {1, unsigned(encoded.size())});
+      if (auto e =
+              associate(row, op, StructuredSourceDerivation::ScopedExecution))
+        return std::move(e);
       for (auto nested : step.regions) {
+        auto regionPath = child(row, {3, unsigned(regions.size())});
+        if (auto e = associate(regionPath, *nested,
+                               StructuredSourceDerivation::ScopedExecution))
+          return std::move(e);
         bool loop = isa<exec::RangeOp>(op);
         unsigned captures =
             loop ? step.inputs.size() - 2 - step.outputs.size() : 0;
@@ -587,9 +647,9 @@ class Exporter {
         auto out = sorts(outputs);
         if (!out)
           return out.takeError();
-        auto content =
-            scopedBlock(nested, step.conditional ? "condition" : "yield",
-                        captures, depth + 1);
+        auto content = scopedBlock(nested, child(regionPath, {2}),
+                                   step.conditional ? "condition" : "yield",
+                                   captures, depth + 1);
         if (!content)
           return content.takeError();
         regions.push_back(
@@ -876,9 +936,9 @@ class Exporter {
 
   // A fresh context for every closed block is essential: two equal types (or
   // even two aliased actual arguments) still occupy distinct formal positions.
-  Expected<json::Value> block(Region &region, TypeRange outputs,
-                              StringRef owner, StringRef terminator,
-                              unsigned depth = 0) {
+  Expected<json::Value> block(Region &region, ArrayRef<unsigned> path,
+                              TypeRange outputs, StringRef owner,
+                              StringRef terminator, unsigned depth = 0) {
     if (depth > depthLimit)
       return error("structured-source-limit");
     if (!llvm::hasSingleElement(region) || region.front().empty())
@@ -917,6 +977,8 @@ class Exporter {
           return error("structured-source-region");
         if (auto e = attributes(op, {}))
           return std::move(e);
+        if (auto e = associate(child(path, {2}), op))
+          return std::move(e);
         return json::Array{"block", std::move(encoded),
                            json::Array{terminator, std::move(*args)}};
       }
@@ -943,6 +1005,9 @@ class Exporter {
           return checked.takeError();
         occurrence = *checked;
       }
+      auto row = child(path, {1, unsigned(encoded.size())});
+      if (auto e = associate(row, op))
+        return std::move(e);
       json::Array regions;
       if (op.getNumRegions()) {
         if (!isa<protocol_ir::RepeatOp>(op) || op.getNumRegions() != 1)
@@ -963,8 +1028,11 @@ class Exporter {
           auto out = sorts(expectedOutputs);
           if (!out)
             return out.takeError();
-          auto content =
-              block(nested, expectedOutputs, owner, "yield", depth + 1);
+          auto regionPath = child(row, {3, unsigned(regions.size())});
+          if (auto e = associate(regionPath, op))
+            return std::move(e);
+          auto content = block(nested, child(regionPath, {2}), expectedOutputs,
+                               owner, "yield", depth + 1);
           if (!content)
             return content.takeError();
           regions.push_back(json::Array{std::move(*in), std::move(*out),
@@ -984,7 +1052,7 @@ class Exporter {
     return error("structured-source-region");
   }
 
-  Expected<json::Value> domain(data::DomainOp op) {
+  Expected<json::Value> domain(data::DomainOp op, ArrayRef<unsigned> path) {
     if (auto e =
             attributes(*op, {"sym_name", "sym_visibility", "function_type"}))
       return std::move(e);
@@ -1060,6 +1128,9 @@ class Exporter {
         return error("structured-source-domain",
                      constructor.getName().getStringRef());
       }
+      if (auto e = associate(child(path, {3, unsigned(constructors.size())}),
+                             constructor))
+        return std::move(e);
       constructors.push_back(std::move(desc));
       for (auto &entry : refs)
         ++entry.second;
@@ -1067,6 +1138,8 @@ class Exporter {
     }
     Operation &yield = body.back();
     if (auto e = attributes(yield, {}))
+      return std::move(e);
+    if (auto e = associate(child(path, {4}), yield))
       return std::move(e);
     auto returned = refs.find(yield.getOperand(0));
     if (returned == refs.end())
@@ -1176,7 +1249,7 @@ class Exporter {
     return error("structured-source-operation", op.getName().getStringRef());
   }
 
-  Expected<json::Value> function(Operation &op) {
+  Expected<json::Value> function(Operation &op, ArrayRef<unsigned> path) {
     StringRef owner = kind(op);
     auto scoped = dyn_cast<func::FuncOp>(op);
     if (scoped && !isScopedExecutionFunction(scoped))
@@ -1270,9 +1343,9 @@ class Exporter {
         (op.getNumRegions() != 1 || !llvm::hasSingleElement(op.getRegion(0)) ||
          op.getRegion(0).front().getArgumentTypes() != type.getInputs()))
       return error("structured-source-region");
-    auto body =
-        scoped ? scopedBlock(scoped, "return")
-               : block(op.getRegion(0), type.getResults(), owner, "return");
+    auto body = scoped ? scopedBlock(scoped, child(path, {9}), "return")
+                       : block(op.getRegion(0), child(path, {9}),
+                               type.getResults(), owner, "return");
     if (!body)
       return body.takeError();
     return json::Array{"function",
@@ -1386,8 +1459,11 @@ class Exporter {
 
 public:
   Exporter(protocol_ir::ProtocolModuleOp unit,
-           protocol_ir::MathematicalOp selected)
-      : unit(unit), selected(selected), symbols(unit) {}
+           protocol_ir::MathematicalOp selected, const AsmParserState &parser,
+           const SourceMgr &sourceManager,
+           std::vector<StructuredSourceAssociation> &associations)
+      : unit(unit), selected(selected), symbols(unit), parser(parser),
+        sourceManager(sourceManager), associations(associations) {}
 
   Expected<json::Value> run(StringRef bytes) {
     if (auto e = attributes(*unit, {"profile", "source_declarations"}))
@@ -1411,7 +1487,10 @@ public:
       if (auto declaration = dyn_cast<data::DomainOp>(op)) {
         if (domains.size() == 128)
           return error("structured-source-limit");
-        auto encoded = domain(declaration);
+        RowPath path{4, unsigned(domains.size())};
+        if (auto e = associate(path, op))
+          return std::move(e);
+        auto encoded = domain(declaration, path);
         if (!encoded)
           return encoded.takeError();
         domains.push_back(std::move(*encoded));
@@ -1439,6 +1518,8 @@ public:
         for (const auto &argument : *staticArguments->getAsArray())
           if (auto e = collectStaticDomains(argument, used))
             return e;
+        if (auto e = associate({5, unsigned(relations.size())}, op))
+          return std::move(e);
         relations.push_back(json::Array{
             "relation", declaration.getSymName(), *visible,
             declaration.getKind(), declaration.getKey(),
@@ -1457,6 +1538,8 @@ public:
         auto binding = primitiveBinding(&op, used);
         if (!binding)
           return binding.takeError();
+        if (auto e = associate({6, unsigned(bindings.size())}, op))
+          return std::move(e);
         bindings.push_back(
             json::Array{"binding", binding->name, binding->application.contract,
                         names(op.getAttrOfType<ArrayAttr>("arguments")),
@@ -1467,7 +1550,10 @@ public:
           continue; // Checked and consumed at each exact closed-region use.
         if (definitions.size() == 128)
           return error("structured-source-limit");
-        auto encoded = function(op);
+        RowPath path{7, unsigned(definitions.size())};
+        if (auto e = associate(path, op))
+          return std::move(e);
+        auto encoded = function(op, path);
         if (!encoded)
           return encoded.takeError();
         definitions.push_back(std::move(*encoded));
@@ -1475,6 +1561,8 @@ public:
           if (protocol.getContractsAttr() &&
               protocol.getContractsAttr().size() > signatureLimit)
             return error("structured-source-limit");
+          if (auto e = associate({8, unsigned(contracts.size())}, op))
+            return std::move(e);
           contracts.push_back(
               json::Array{protocol.getSymName(),
                           protocol.getContractsAttr()
@@ -1488,6 +1576,9 @@ public:
       auto *origin = execution.computationOrigins.at(name);
       if (definitions.size() == 128 || !symbolsSeen.insert(name).second)
         return error("structured-source-limit");
+      if (auto e = associate({7, unsigned(definitions.size())}, *origin,
+                             StructuredSourceDerivation::Computation))
+        return std::move(e);
       auto encoded = computation(name, *origin);
       if (!encoded)
         return encoded.takeError();
@@ -1540,6 +1631,12 @@ public:
         return error("component-declaration");
       if (auto e = language::checkComponentDeclarations(*parsed))
         return std::move(e);
+      // These rows are emitted from the module's checked declaration context,
+      // not reconstructed from an executable function or a printed symbol.
+      for (unsigned table : {0, 1})
+        for (unsigned i = 0; i < (*rows)[table].getAsArray()->size(); ++i)
+          if (auto e = associate({10, table, i}, *unit))
+            return std::move(e);
       declarations = std::move(*parsed);
     }
     auto digest = SHA256::hash(arrayRefFromStringRef(bytes));
@@ -1558,11 +1655,21 @@ public:
 };
 } // namespace
 
-Expected<std::string> exportStructuredSource(StringRef bytes, StringRef name,
-                                             MLIRContext &context) {
+Expected<StructuredSource>
+exportStructuredSource(StringRef bytes, StringRef name, MLIRContext &context) {
   if (bytes.size() > 16 * 1024 * 1024 || !mlirNestingWithinLimit(bytes))
     return error("structured-source-limit");
-  auto original = parseSourceString<ModuleOp>(bytes, &context);
+  SourceMgr manager;
+  manager.AddNewSourceBuffer(MemoryBuffer::getMemBufferCopy(bytes, "original"),
+                             SMLoc());
+  AsmParserState parser;
+  Block parsed;
+  if (failed(parseAsmSourceFile(manager, &parsed, ParserConfig(&context, false),
+                                &parser)))
+    return error("structured-source-original");
+  auto original =
+      mlir::detail::constructContainerOpForParserIfNecessary<ModuleOp>(
+          &parsed, &context, FileLineColLoc::get(&context, "original", 1, 1));
   if (!original || failed(verify(*original)))
     return error("structured-source-original");
   if (auto e = attributes(**original, {}))
@@ -1577,7 +1684,9 @@ Expected<std::string> exportStructuredSource(StringRef bytes, StringRef name,
   auto selected = symbols.lookup<protocol_ir::MathematicalOp>(name);
   if (!selected)
     return error("structured-source-symbol");
-  auto exported = Exporter(unit, selected).run(bytes);
+  StructuredSource result;
+  auto exported =
+      Exporter(unit, selected, parser, manager, result.associations).run(bytes);
   if (!exported)
     return exported.takeError();
   if (!boundedSourceWire(*exported))
@@ -1586,6 +1695,7 @@ Expected<std::string> exportStructuredSource(StringRef bytes, StringRef name,
   auto serialized = printJson(*exported) + '\n';
   if (serialized.size() > 1024 * 1024)
     return error("structured-source-limit");
-  return serialized;
+  result.bytes = std::move(serialized);
+  return result;
 }
 } // namespace zkc::protocol

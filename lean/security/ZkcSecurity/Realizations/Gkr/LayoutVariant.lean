@@ -2,7 +2,7 @@ module
 
 public import ZkcSecurity.Realizations.Gkr.CanonicalPair
 public import ZkcExamples.Construction.GkrSourceRouting
-public import Zkc.Construction.ParticipantTransform
+public import Zkc.Construction.LayoutPermutation
 
 @[expose] public section
 
@@ -32,15 +32,15 @@ def producerOrder := order CanonicalPair.Producer.participant
 def validatorOrder := order CanonicalPair.Validator.participant
 
 def producer : Participant :=
-  ParticipantTransform.prependCoordinates ((ParticipantTransform.permuteInputs CanonicalPair.Producer.participant producerOrder).toOption.get (by decide +kernel))
+  LayoutPermutation.prependCoordinates ((LayoutPermutation.permuteInputs CanonicalPair.Producer.participant producerOrder).toOption.get (by decide +kernel))
 def validator : Participant :=
-  ParticipantTransform.prependCoordinates ((ParticipantTransform.permuteInputs CanonicalPair.Validator.participant validatorOrder).toOption.get (by decide +kernel))
+  LayoutPermutation.prependCoordinates ((LayoutPermutation.permuteInputs CanonicalPair.Validator.participant validatorOrder).toOption.get (by decide +kernel))
 
 theorem producer_provenance :
-    (ParticipantTransform.permuteInputs CanonicalPair.Producer.participant producerOrder).map ParticipantTransform.prependCoordinates = .ok producer := by
+    (LayoutPermutation.permuteInputs CanonicalPair.Producer.participant producerOrder).map LayoutPermutation.prependCoordinates = .ok producer := by
   decide +kernel
 theorem validator_provenance :
-    (ParticipantTransform.permuteInputs CanonicalPair.Validator.participant validatorOrder).map ParticipantTransform.prependCoordinates = .ok validator := by
+    (LayoutPermutation.permuteInputs CanonicalPair.Validator.participant validatorOrder).map LayoutPermutation.prependCoordinates = .ok validator := by
   decide +kernel
 
 theorem producer_changed : producer ≠ CanonicalPair.Producer.participant := by decide +kernel

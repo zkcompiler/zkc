@@ -1,13 +1,12 @@
 #include "zkc/Compiler/SourceClaims.h"
 #include "ComponentContracts.h"
+#include "SourceArtifacts.h"
 #include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
-#include "llvm/ADT/StringExtras.h"
-#include "llvm/Support/SHA256.h"
 
 using namespace llvm;
 namespace zkc::language {
@@ -21,7 +20,7 @@ Expected<json::Value> componentSnapshot(const CheckedOriginal &original) {
       original.bytes(), original.entry().protocol().symbol, context);
   if (!structured)
     return structured.takeError();
-  return json::parse(*structured);
+  return json::parse(structured->bytes);
 }
 } // namespace
 Expected<std::string> exportSourceClaims(const CheckedOriginal &original,
@@ -32,9 +31,6 @@ Expected<std::string> exportSourceClaims(const CheckedOriginal &original,
   auto value = json::parse(*claims);
   if (!value)
     return value.takeError();
-  auto sha256 = [](StringRef bytes) {
-    return "sha256:" + toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
-  };
   auto &root = *value->getAsObject();
   root["proposals"] = json::Array{};
   root["seams"] = json::Array{};
@@ -51,13 +47,7 @@ Expected<std::string> exportSourceClaims(const CheckedOriginal &original,
     root["proposals"] = std::move(*components->getArray("proposals"));
     root["seams"] = std::move(*components->getArray("seams"));
   }
-  root["admission"] = json::Object{
-      {"format", "zkc.structured-source/0"},
-      {"original_sha256", sha256(original.bytes())},
-      {"protocol_symbol", original.entry().protocol().symbol},
-      {"interface_sha256", sha256(original.interfaceJson())},
-      {"capture", original.entry().project().capture().identity()},
-      {"installation", original.entry().project().installationIdentity()}};
+  root["admission"] = detail::sourceAdmission(original);
   std::string bytes;
   BoundedStream out(bytes, limits.interfaceBytes);
   out << *value;

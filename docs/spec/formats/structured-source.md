@@ -893,3 +893,43 @@ regions and Local use refuse; there are no alternative spellings.
 Its [total meaning](../domains/polynomials.md#total-vector-prefix-restriction)
 has no vector-shape premise. This addition keeps format version zero and
 updates the native producer and strict Lean reader together.
+
+## Native row associations
+
+The C++ `exportStructuredSource` result contains the exact snapshot `bytes` and
+an `associations` table produced during the same row emission. The command
+`protocol-structured` continues to write only those snapshot bytes. Associations
+are proposals outside the admitted snapshot; they neither alter its identity nor
+prove correspondence with source or native execution.
+
+Each association names a row by an array-index path from the snapshot root and
+the original MLIR operation that produced it. For example, `[7,d,9,1,i]` selects
+instruction `i` in definition `d`; appending `[3,r,2,1,j]` selects instruction `j`
+in its region `r`. The function row selects its ports, so argument/result/operand
+positions are obtained from that actual row rather than a second semantic graph.
+Associations also cover relation, binding and domain declarations, domain
+constructors and results, contracts, nested regions and block terminators.
+Retained source-declaration rows use `[10,table,index]`, where table zero is
+records and table one is protocol ports. Their producer is the `protocol.module`
+carrying the checked `source_declarations` attribute; this does not invent an
+executable declaration operation or assert an exact authored-node match.
+Catalogue rows are installed meaning, not emitted source operations.
+
+The producer distinguishes direct rows, decoded scoped execution and derived
+computation declarations. Scoped regions name their actual closed helper;
+repeated uses have separate coordinates even when they share that helper.
+Scope, transfer and failure plumbing omitted from the structured profile does
+not acquire an invented executable row. An association to an operation records
+the producer's derivation; it does not assert a one-operation semantic rewrite.
+
+An original range selects the operation-name bytes in the supplied original,
+with exclusive end and one-based line/column. It comes from MLIR's assembly
+parser state, independently of `loc` annotations. A parser-inserted operation
+with no written definition has an absent range. The table owns its strings and
+coordinates after the MLIR context and parser are destroyed. Retained table
+storage is bounded before each copy, in addition to the snapshot's existing
+input, depth, instruction and byte limits. Failure returns no partial result.
+
+These coordinates renew when the export changes. Source-level binding,
+specialization and role proposals still require their own retained checking
+facts; a lexical range is not an authored AST identity or semantic evidence.
