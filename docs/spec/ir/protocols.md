@@ -132,6 +132,14 @@ establish that association. Type, work and capacity limits are compiler resource
 refusals, separate from the logical query-domain stop. No native oracle carrier
 or runtime interpreter is introduced by this representation.
 
+The lookup primitive checks that the reference names the selected constructor
+before reading its instance from that role's store. It returns the stored
+coordinates, dimensions and payload in their declared order. Its reader checks
+both variant destructuring regions, the exact tag comparison, instance operand,
+resolved sequence binding and returned fields. A forged tag or absent instance
+cannot select a different anchor. The surrounding realization still must choose
+its constructor from the runtime reference and bind the correct store.
+
 The generated table-read primitive compares the requested position with the
 supplied actual row count, requires that comparison, and only then reads the
 collection. Its independent reader checks the precise comparison operands,

@@ -91,4 +91,110 @@ emitOracleAnchorAllocator(ModuleOp candidate, const OracleAnchorStorage &plan,
   control.returned({handle, next});
   return helper;
 }
+Expected<func::FuncOp> emitOracleAnchorLookup(ModuleOp candidate,
+                                              const OracleAnchorStorage &plan,
+                                              unsigned constructor,
+                                              unsigned role) {
+  if (!candidate || !hasSingleElement(candidate.getBody()->getOperations()) ||
+      constructor >= plan.constructors.size() ||
+      role >= plan.constructors[constructor].roles.size())
+    return error("oracle-storage-lookup");
+  auto unit =
+      dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
+  if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol)
+    return error("oracle-storage-lookup");
+  const auto &layout = plan.constructors[constructor];
+  const auto &storage = layout.roles[role];
+  auto reference = oracleReferenceType(layout.kind);
+  if (!reference)
+    return reference.takeError();
+  auto record = encodeBoundType(storage.record, false);
+  if (!record)
+    return record.takeError();
+  OpBuilder builder(candidate.getContext());
+  auto loc = candidate.getLoc();
+  auto index =
+      IntegerType::get(candidate.getContext(), 64, IntegerType::Unsigned);
+  SmallVector<Type> fields;
+  for (const auto &field : storage.fields)
+    fields.push_back(field.type);
+  auto outcome = exec::OutcomeType::get(candidate.getContext(), fields);
+  auto function = [&](StringRef suffix, TypeRange inputs, bool region) {
+    OpBuilder::InsertionGuard guard(builder);
+    builder.setInsertionPointToEnd(&unit.getBody().front());
+    std::string prefix = "_oracle_lookup_" + std::to_string(constructor) + "_" +
+                         std::to_string(role) + "_" + suffix.str();
+    std::string name = prefix;
+    for (unsigned n = 0; SymbolTable::lookupSymbolIn(unit, name); ++n)
+      name = prefix + "_" + std::to_string(n);
+    SmallVector<Type> arguments{
+        runtime::ScopeType::get(candidate.getContext())};
+    append_range(arguments, inputs);
+    auto result = func::FuncOp::create(
+        builder, loc, name, builder.getFunctionType(arguments, outcome));
+    result.setPrivate();
+    result.setNoInline(true);
+    if (region)
+      result->setAttr("runtime.region", builder.getUnitAttr());
+    else
+      result->setAttr("runtime.origin",
+                      builder.getArrayAttr({builder.getStringAttr(name),
+                                            builder.getArrayAttr({})}));
+    result.addEntryBlock();
+    return result;
+  };
+  auto helper =
+      function("record", TypeRange{*reference, storage.sequence}, false);
+  mathematical::RealizationEmitter bindings(unit, "_oracle_lookup_binding_");
+  builder.setInsertionPointToEnd(&helper.getBody().front());
+  exec::ScopedExecutionBuilder control(builder, helper);
+  auto loaded = control.match(
+      helper.getArgument(1), helper.getArgument(2), fields, {"Record"},
+      "reference", [&](unsigned) {
+        auto selected = function(
+            "reference", TypeRange{index, index, storage.sequence}, true);
+        builder.setInsertionPointToEnd(&selected.getBody().front());
+        exec::ScopedExecutionBuilder body(builder, selected);
+        auto apply = [&](StringRef contract, ArrayRef<std::string> arguments,
+                         TypeRange outputs, ValueRange inputs, StringRef site,
+                         ArrayRef<std::string> parameters = {}) {
+          auto binding = bindings.binding(
+              builder, loc,
+              {contract.str(),
+               std::vector<std::string>(arguments.begin(), arguments.end()),
+               ""});
+          SmallVector<Attribute> attrs;
+          for (const auto &parameter : parameters)
+            attrs.push_back(builder.getStringAttr(parameter));
+          return body.invoke(
+              "exec.apply", outputs, body.scoped(inputs),
+              {builder.getNamedAttr("binding", binding),
+               builder.getNamedAttr("parameters", builder.getArrayAttr(attrs)),
+               builder.getNamedAttr("site", builder.getStringAttr(site))});
+        };
+        auto expected = apply("index.constant", {}, index, {}, "constructor",
+                              {std::to_string(constructor)})
+                            .front();
+        auto matches = apply("index.equal", {}, builder.getI1Type(),
+                             {selected.getArgument(1), expected}, "belongs_to")
+                           .front();
+        apply("control.require", {}, {}, matches, "admit_reference");
+        auto value =
+            apply("sequence.at", {record->spelling()}, storage.record,
+                  {selected.getArgument(3), selected.getArgument(2)}, "lookup")
+                .front();
+        auto values =
+            body.match(value, {}, fields, {"Record"}, "record", [&](unsigned) {
+              auto unpacked = function("fields", fields, true);
+              builder.setInsertionPointToEnd(&unpacked.getBody().front());
+              exec::ScopedExecutionBuilder unpack(builder, unpacked);
+              unpack.complete(unpacked.getArguments().drop_front());
+              return unpacked;
+            });
+        body.complete(values);
+        return selected;
+      });
+  control.returned(loaded);
+  return helper;
+}
 } // namespace zkc::protocol

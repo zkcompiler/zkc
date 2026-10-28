@@ -258,3 +258,9 @@ name = "oracle_queries"
 path = "src/oracle_queries.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "oracle_anchors"
+path = "src/oracle_anchors.rs"
+test = false
+bench = false

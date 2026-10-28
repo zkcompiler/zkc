@@ -67,5 +67,17 @@ llvm::Error checkOracleAnchorAllocator(mlir::ModuleOp candidate,
                                        mlir::func::FuncOp actual,
                                        const OracleAnchorStorage &,
                                        unsigned constructor, unsigned role);
+// Load one constructor's ordinary record through an actual reference. Verify
+// its constructor tag before indexing the selected role's immutable store;
+// return every recorded coordinate, dimension and payload field in order.
+// The surrounding dispatcher chooses this constructor; it must not substitute
+// a static possible origin for the reference's actual tag.
+llvm::Expected<mlir::func::FuncOp>
+emitOracleAnchorLookup(mlir::ModuleOp candidate, const OracleAnchorStorage &,
+                       unsigned constructor, unsigned role);
+llvm::Error checkOracleAnchorLookup(mlir::ModuleOp candidate,
+                                    mlir::func::FuncOp actual,
+                                    const OracleAnchorStorage &,
+                                    unsigned constructor, unsigned role);
 } // namespace zkc::protocol
 #endif

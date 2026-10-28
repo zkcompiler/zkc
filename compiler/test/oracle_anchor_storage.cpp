@@ -14,7 +14,10 @@
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Mathematical.h"
+#include <filesystem>
+#include <fstream>
 using namespace mlir;
 using namespace llvm;
 using namespace zkc;
@@ -62,7 +65,7 @@ std::vector<std::string> fields(const OracleRoleStorage &storage) {
   return names;
 }
 } // namespace
-int main() {
+int main(int argc, char **argv) {
   DialectRegistry registry;
   registerDialects(registry);
   MLIRContext context(registry);
@@ -393,6 +396,173 @@ int main() {
     require(succeeded(verify(compiled.compilation.module())),
             "physical allocation module failed admission");
     require(!compiled.bundle.empty(), "allocator has no executable bundle");
+  });
+  for (const auto scheme : {StringRef(), StringRef(merkle)}) {
+    auto plan = take(selects(scheme));
+    cases.run(
+        "actual reference lookup: " +
+            (scheme.empty() ? std::string("ideal") : scheme.str()),
+        [&] {
+          OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(prepared->clone()));
+          for (unsigned constructor = 0; constructor < plan.constructors.size();
+               ++constructor)
+            for (unsigned role = 0;
+                 role < plan.constructors[constructor].roles.size(); ++role) {
+              auto helper = take(
+                  emitOracleAnchorLookup(*candidate, plan, constructor, role));
+              require(succeeded(verify(*candidate)),
+                      "lookup formation failed: " + diagnostics);
+              if (auto e = checkOracleAnchorLookup(*candidate, helper, plan,
+                                                   constructor, role))
+                throw std::runtime_error(toString(std::move(e)));
+            }
+        });
+  }
+  for (unsigned mutation = 0; mutation < 7; ++mutation)
+    cases.run(Twine("well-formed lookup mutation ") + Twine(mutation), [&] {
+      OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(prepared->clone()));
+      auto helper = take(emitOracleAnchorLookup(*candidate, ideal, 2, 0));
+      auto unit =
+          cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
+      auto closure = take(readSourceExecutionClosure(unit));
+      auto &root = closure.bodies.at(helper.getSymName().str());
+      auto selected = root[0].regions[0];
+      auto &body = closure.bodies.at(selected.getSymName().str());
+      Builder builder(&context);
+      if (mutation == 0) {
+        auto constant = cast<exec::ApplyOp>(body[0].operation);
+        constant.setParametersAttr(builder.getStrArrayAttr({"1"}));
+      }
+      if (mutation == 1)
+        cast<exec::ApplyOp>(body[1].operation)
+            .getInputsMutable()[0]
+            .set(selected.getArgument(2));
+      if (mutation == 2)
+        cast<exec::ApplyOp>(body[3].operation)
+            .getInputsMutable()[1]
+            .set(selected.getArgument(1));
+      if (mutation == 3 || mutation == 4) {
+        auto unpacked = body[4].regions[0];
+        auto &unpack = closure.bodies.at(unpacked.getSymName().str());
+        auto complete = cast<exec::CompleteOp>(unpack[0].operation);
+        unsigned i = mutation == 3 ? 0 : 2;
+        auto left = complete.getValues()[i],
+             right = complete.getValues()[i + 1];
+        require(left.getType() == right.getType(),
+                "mutation types do not agree");
+        complete.getValuesMutable()[i].set(right);
+        complete.getValuesMutable()[i + 1].set(left);
+      }
+      if (mutation == 5)
+        selected.walk([&](Operation *op) {
+          auto site = op->getAttrOfType<StringAttr>("site");
+          if (site && site.getValue() == "record")
+            op->setAttr("site", builder.getStringAttr("changed_record"));
+        });
+      if (mutation == 6) {
+        auto call = cast<exec::ApplyOp>(body[1].operation);
+        auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+            call, call.getBindingAttr());
+        binding.setContract("index.less");
+      }
+      require(succeeded(verify(*candidate)),
+              "lookup mutation failed only formation: " + diagnostics);
+      auto rejected = checkOracleAnchorLookup(*candidate, helper, ideal, 2, 0);
+      require(bool(rejected), "lookup mutation passed correspondence");
+      require(namesIdentifier(toString(std::move(rejected)),
+                              "oracle-storage-lookup-body"),
+              "wrong lookup refusal");
+    });
+  cases.run("lookup selections refuse out-of-inventory indices", [&] {
+    refuses(emitOracleAnchorLookup(*prepared, ideal, 3, 0),
+            "oracle-storage-lookup");
+    refuses(emitOracleAnchorLookup(*prepared, ideal, 0, 2),
+            "oracle-storage-lookup");
+    require(OperationEquivalence::isEquivalentTo(
+                *prepared, *frozen, OperationEquivalence::IgnoreLocations),
+            "lookup refusal mutated original");
+  });
+  cases.run("allocation and lookup share the actual ordinary store", [&] {
+    auto candidate = parseSourceString<ModuleOp>(R"mlir(
+module { "protocol.module"() ({
+ "protocol.func"() ({ ^entry(%data:!algebra.indices,%rows:ui64):
+  %handle = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="table",shape_names=["rows"],shape_bounds={rows=16:ui64}} : (!algebra.indices,ui64)->!protocol.oracle<#protocol.oracle_kind<"table", [ui64]>>
+  "protocol.return"() : ()->()
+ }) {sym_name="main",function_type=(!algebra.indices,ui64)->(),roles=["P","V"],input_roles=[["P"],["P","V"]],output_roles=[]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir",
+                                                 &context);
+    require(bool(candidate), "lookup client source failed: " + diagnostics);
+    auto plan = take(planOracleAnchorStorage(
+        *candidate, "main",
+        [](const auto &) -> Expected<std::string> { return std::string(); }));
+    auto allocator = take(emitOracleAnchorAllocator(*candidate, plan, 0, 0));
+    auto lookup = take(emitOracleAnchorLookup(*candidate, plan, 0, 0));
+    auto unit =
+        cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
+    SymbolTable::lookupSymbolIn(unit, "main")->erase();
+    OpBuilder builder(&context);
+    auto loc = candidate->getLoc();
+    auto &storage = plan.constructors[0].roles[0];
+    auto dataType = plan.constructors[0].kind.getDataType();
+    auto index = IntegerType::get(&context, 64, IntegerType::Unsigned);
+    auto role = builder.getStrArrayAttr({"P"});
+    SmallVector<Type> inputs{dataType, dataType, index, index};
+    SmallVector<Type> outputs{index, dataType, index, index};
+    OperationState function(loc, "protocol.func");
+    function.addAttribute("sym_name", builder.getStringAttr("main"));
+    function.addAttribute(
+        "function_type",
+        TypeAttr::get(builder.getFunctionType(inputs, outputs)));
+    function.addAttribute("roles", role);
+    function.addAttribute(
+        "input_roles", builder.getArrayAttr(SmallVector<Attribute>(4, role)));
+    function.addAttribute(
+        "output_roles", builder.getArrayAttr(SmallVector<Attribute>(4, role)));
+    auto *body = new Block();
+    body->addArguments(inputs, SmallVector<Location>(4, loc));
+    function.addRegion()->push_back(body);
+    builder.setInsertionPointToEnd(&unit.getBody().front());
+    builder.create(function);
+    builder.setInsertionPointToEnd(body);
+    Value store = data::SequenceEmptyOp::create(builder, loc, storage.sequence);
+    SmallVector<Value> references;
+    for (unsigned i = 0; i < 2; ++i) {
+      auto rows =
+          data::DimOp::create(builder, loc, index, body->getArgument(i), 0);
+      auto allocated = protocol_ir::LocalCallOp::create(
+          builder, loc, scopedDataSignature(allocator).getResults(),
+          ValueRange{store, rows, body->getArgument(i)}, allocator.getSymName(),
+          "allocate_" + std::to_string(i), "P");
+      references.push_back(allocated.getOutputs()[0]);
+      store = allocated.getOutputs()[1];
+    }
+    auto reference = data::MakeOp::create(
+        builder, loc, references[0].getType(),
+        ValueRange{body->getArgument(2), body->getArgument(3)}, "Record");
+    auto loaded = protocol_ir::LocalCallOp::create(
+        builder, loc, scopedDataSignature(lookup).getResults(),
+        ValueRange{reference, store}, lookup.getSymName(), "lookup", "P");
+    auto first = data::GetOp::create(builder, loc, index, references[0], 1);
+    auto second = data::GetOp::create(builder, loc, index, references[1], 1);
+    protocol_ir::MathematicalReturnOp::create(builder, loc,
+                                              ValueRange{loaded.getOutputs()[0],
+                                                         loaded.getOutputs()[1],
+                                                         first, second});
+    require(succeeded(verify(*candidate)),
+            "lookup client malformed: " + diagnostics);
+    std::string source;
+    raw_string_ostream text(source);
+    candidate->print(text);
+    auto compiled =
+        take(compileRun(source, "oracle-anchor-lookup.mlir", {}, registry));
+    require(!compiled.bundle.empty(), "lookup client has no executable bundle");
+    if (argc == 2) {
+      std::filesystem::create_directories(argv[1]);
+      std::ofstream out(std::filesystem::path(argv[1]) / "anchors.bundle");
+      out << compiled.bundle;
+      require(bool(out), "could not retain anchor client");
+    }
   });
   return cases.result();
 }
