@@ -1,4 +1,5 @@
 #include "MathematicalValues.h"
+#include "mlir/IR/OperationSupport.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "llvm/ADT/StringMap.h"
@@ -42,7 +43,7 @@ class Correspondence {
     }
     DictionaryAttr attributes(Operation *op) const {
       NamedAttrList result(op->getAttrDictionary());
-      for (StringRef key : {"owner", "sender", "receiver", "role"})
+      for (StringRef key : {"owner", "sender", "receiver", "role", "holder"})
         if (auto attr = op->getAttrOfType<StringAttr>(key))
           result.set(key, role(attr));
       for (StringRef key : {"roles", "receivers"})
@@ -482,6 +483,34 @@ LogicalResult definitions(protocol_ir::ProtocolModuleOp before,
 LogicalResult verifyPreparedValues(protocol_ir::ProtocolModuleOp before,
                                    protocol_ir::ProtocolModuleOp after,
                                    ArrayRef<ApplicationStart> starts) {
+  // Query declarations are retained definitions, not trusted symbol names.
+  // Preparation leaves their bodies intact; compare every actual body.
+  auto originals =
+      before.getBody().front().getOps<protocol_ir::OracleDefinitionOp>();
+  auto candidates =
+      after.getBody().front().getOps<protocol_ir::OracleDefinitionOp>();
+  if (range_size(originals) != range_size(candidates))
+    return ValueCorrespondence(after).refuse(
+        "virtual declaration count differs");
+  if (!originals.empty() &&
+      failed(verifyAuthoredLocalsPreserved(before, after)))
+    return failure();
+  SymbolTable sourceSymbols(before), symbols(after);
+  for (auto original : originals) {
+    auto actual = dyn_cast_or_null<protocol_ir::OracleDefinitionOp>(
+        symbols.lookup(original.getSymName()));
+    if (!actual || !OperationEquivalence::isEquivalentTo(
+                       original, actual, OperationEquivalence::IgnoreLocations))
+      return ValueCorrespondence(after).refuse(
+          "virtual declaration body differs");
+    auto *predicate = sourceSymbols.lookup(original.getAdmissibility());
+    auto *actualPredicate = symbols.lookup(original.getAdmissibility());
+    if (!predicate || !actualPredicate ||
+        !OperationEquivalence::isEquivalentTo(
+            predicate, actualPredicate, OperationEquivalence::IgnoreLocations))
+      return ValueCorrespondence(after).refuse(
+          "virtual admissibility declaration differs");
+  }
   return definitions<protocol_ir::MathematicalOp>(before, after, starts);
 }
 LogicalResult verifyParticipantValues(protocol_ir::ProtocolModuleOp before,

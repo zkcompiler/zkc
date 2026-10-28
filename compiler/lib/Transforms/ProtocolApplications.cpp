@@ -117,6 +117,10 @@ LogicalResult expandApplications(protocol_ir::ProtocolModuleOp module,
           } else if (auto exchange = dyn_cast<protocol_ir::ExchangeOp>(copy)) {
             exchange.setSenderAttr(role(exchange.getSenderAttr()));
             exchange.setReceiverAttr(role(exchange.getReceiverAttr()));
+          } else if (auto constructed =
+                         dyn_cast<protocol_ir::OracleVirtualOp>(copy)) {
+            constructed.setHolderAttr(role(constructed.getHolderAttr()));
+            constructed.setReceiversAttr(mapped(constructed.getReceivers()));
           } else if (auto send = dyn_cast<protocol_ir::OracleSendOp>(copy)) {
             send.setSenderAttr(role(send.getSenderAttr()));
             send.setReceiversAttr(mapped(send.getReceivers()));

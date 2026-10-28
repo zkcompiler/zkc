@@ -24,6 +24,10 @@ LogicalResult OracleSendOp::verify() {
   return success();
 }
 LogicalResult OracleQueryOp::verify() {
+  bool declaration = isa<OracleDefinitionOp>((*this)->getParentOp());
+  if (declaration ? bool(getOwnerAttr()) : !getOwnerAttr())
+    return emitOpError(
+        "owner is implicit only inside a virtual query declaration");
   auto kind = getHandle().getType().getKind();
   if (!kind.getQueryType() || getPosition().getType() != kind.getQueryType() ||
       getAnswer().getType() != kind.getAnswerType())

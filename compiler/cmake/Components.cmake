@@ -212,6 +212,7 @@ add_zkc_component(IR
   lib/Dialect/Protocol/IR/Attributes.cpp
   lib/Dialect/Protocol/IR/OracleKinds.cpp
   lib/Dialect/Protocol/IR/Oracles.cpp
+  lib/Dialect/Protocol/IR/OracleDefinitions.cpp
   lib/Dialect/Protocol/IR/OracleAnalysis.cpp
   lib/Dialect/MathematicalSemantics.cpp
   lib/Dialect/Protocol/NativePolicy.cpp

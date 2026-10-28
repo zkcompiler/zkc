@@ -490,7 +490,10 @@ refinement erasure. Checked preparation remaps oracle roles through applications
 and preserves sends/queries under upstream CSE. Projection refuses unresolved
 oracle events before publishing participants. Holder-only contents and bounded,
 append-only sequences preserve role restrictions, dynamic anchors and ordered
-bounds failures through checked preparation.
+bounds failures through checked preparation. Virtual query declarations check
+answer-independent position maps, closed total helpers, actual polynomial bounds,
+explicit admissibility references and fresh occurrence anchors. Their obligation
+and footprint exports and realization are still pending.
 Oracle ports, frontend emission, extended structured readers and checked semantic
 realization remain in progress; these formation checks do not enable execution.
 

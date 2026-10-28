@@ -86,3 +86,4 @@ ZKC_MATH_OPERATION(protocol_ir::OracleSequenceEmptyOp, Control, Context::Protoco
 ZKC_MATH_OPERATION(protocol_ir::OracleSequenceAppendOp, Action, Context::Protocol, "roles", "site")
 ZKC_MATH_OPERATION(protocol_ir::OracleSequenceAtOp, Action, Context::Protocol, "roles", "site")
 ZKC_MATH_OPERATION(protocol_ir::OracleSequenceLengthOp, Control, Context::Protocol)
+ZKC_MATH_OPERATION(protocol_ir::OracleVirtualOp, Action, Context::Protocol, "callee", "holder", "receivers")

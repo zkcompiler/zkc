@@ -38,7 +38,9 @@ bool isLogicalOracleOperation(Operation *op) {
       protocol_ir::OracleSendOp, protocol_ir::OracleQueryOp,
       protocol_ir::OracleForgetRowsOp, protocol_ir::OracleContentsOp,
       protocol_ir::OracleSequenceEmptyOp, protocol_ir::OracleSequenceAppendOp,
-      protocol_ir::OracleSequenceAtOp, protocol_ir::OracleSequenceLengthOp>(op);
+      protocol_ir::OracleSequenceAtOp, protocol_ir::OracleSequenceLengthOp,
+      protocol_ir::OracleDefinitionOp, protocol_ir::OracleVirtualOp,
+      protocol_ir::OracleYieldOp>(op);
 }
 
 FailureOr<SmallVector<unsigned>> operandDependencies(Operation *op,

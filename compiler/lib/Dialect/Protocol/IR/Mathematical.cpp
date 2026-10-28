@@ -286,6 +286,9 @@ public:
             actionRoles = append.getRoles();
           else if (auto at = dyn_cast<protocol_ir::OracleSequenceAtOp>(action))
             actionRoles = at.getRoles();
+          else if (auto virtualOracle =
+                       dyn_cast<protocol_ir::OracleVirtualOp>(action))
+            actionRoles = virtualOracle.getReceivers();
           else if (auto send = dyn_cast<protocol_ir::OracleSendOp>(action))
             actionRoles = send.getReceivers();
           else if (auto start =
@@ -297,7 +300,8 @@ public:
                 !subset(required, participants))
               return refuse(&action, "action adds a nonparticipating role");
           }
-          for (StringRef key : {"owner", "sender", "receiver", "role"})
+          for (StringRef key :
+               {"owner", "sender", "receiver", "role", "holder"})
             if (auto owner = action.getAttrOfType<StringAttr>(key)) {
               int r = role(owner);
               if (r < 0 || !participants.test(r))
@@ -387,6 +391,33 @@ public:
         env.values[restrict.getOutput()] = std::move(selected);
       } else if (auto forget = dyn_cast<protocol_ir::OracleForgetRowsOp>(op)) {
         env.values[forget.getOutput()] = env.values.lookup(forget.getInput());
+      } else if (auto virtualOracle =
+                     dyn_cast<protocol_ir::OracleVirtualOp>(op)) {
+        auto declaration =
+            symbols.lookupNearestSymbolFrom<protocol_ir::OracleDefinitionOp>(
+                virtualOracle, virtualOracle.getCalleeAttr());
+        int holder = role(virtualOracle.getHolderAttr());
+        BitVector available;
+        if (!declaration || failed(virtualOracle.verifySymbolUses(symbols)) ||
+            holder < 0 ||
+            failed(roles(op, virtualOracle.getReceivers(), available)) ||
+            available.test(holder))
+          return refuse(op, "virtual construction requires its holder and "
+                            "distinct receivers");
+        available.set(holder);
+        for (auto [index, input] : enumerate(virtualOracle.getInputs())) {
+          if (!subset(available, env.values.lookup(input)))
+            return refuse(
+                op, "virtual sources and parameters require every component");
+          if (index < declaration.getNumSources() &&
+              failed(verifyOracleHolder(input, virtualOracle.getHolder(), op,
+                                        remaining)))
+            return failure();
+        }
+        if (auto shape = declaration.getShapeArgument())
+          if (failed(initialOracleShape(virtualOracle.getInputs()[*shape], op)))
+            return failure();
+        env.values[virtualOracle.getHandle()] = std::move(available);
       } else if (auto contents = dyn_cast<protocol_ir::OracleContentsOp>(op)) {
         int owner = role(contents.getOwnerAttr());
         if (owner < 0 || !env.values.lookup(contents.getHandle()).test(owner))
@@ -683,8 +714,9 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
       // Complete mathematical/scoped admission was performed above.
     } else if (isa<data::DomainOp>(op)) {
       // The descriptor and finite closure were checked before any liveness.
-    } else if (isa<protocol_ir::ConstructionOp, runtime::BindingOp,
-                   mlir::ModuleOp, poly::RecipeOp, poly::RealizeOp>(op)) {
+    } else if (isa<protocol_ir::OracleDefinitionOp, protocol_ir::ConstructionOp,
+                   runtime::BindingOp, mlir::ModuleOp, poly::RecipeOp,
+                   poly::RealizeOp>(op)) {
       // The owning verifiers check every retained declaration, including
       // dormant computation units and polynomial realizations.
     } else if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
@@ -699,7 +731,11 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
           "unclassified declaration in the 'protocol' profile");
     }
   }
-  if (!programs && module.getBody().front().getOps<func::FuncOp>().empty())
+  if (!programs && module.getBody().front().getOps<func::FuncOp>().empty() &&
+      module.getBody()
+          .front()
+          .getOps<protocol_ir::OracleDefinitionOp>()
+          .empty())
     return diagnostics::emit(module.emitOpError(), "mathematical-module",
                              "expected a mathematical definition");
   if (failed(verifyApplications(module)))
@@ -712,6 +748,8 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
   // One cache and work budget cover all mathematical protocols in this unit.
   unsigned remaining = 100000;
   uint64_t remainingAvailabilityWork = 1000000;
+  if (failed(verifyOracleDefinitions(module, helpers, types, remaining)))
+    return failure();
   SmallVector<protocol_ir::RepeatOp> originQueries;
   for (auto program :
        module.getBody().front().getOps<protocol_ir::MathematicalOp>()) {

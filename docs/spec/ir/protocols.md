@@ -161,6 +161,45 @@ as a message nor perform an oracle query. Realization must preserve their order,
 checks and dynamic anchor choice before projection. A static set of possible
 origins justifies holder access; it never replaces runtime selection.
 
+### Virtual query declarations
+
+`protocol.oracle` is a closed symbol with a single query region. Its function
+signature lists source handles first, ordinary parameters next, and the queried
+position last; its one result is the declared kind's answer. The body contains
+ordered source queries, closed total Math helpers and primitives, and one
+`oracle_yield`. Query owners are implicit inside this region and explicit in a
+protocol. Query sites remain distinct, including repeated or unused reads.
+
+Every query uses a declared source handle. Its position may depend on the queried
+position and ordinary parameters, but never on an earlier answer. The dependency
+check uses the actual closed helper summaries, so a helper cannot hide an adaptive
+query. Polynomial observations also check their actual degree bounds on a bounded
+private expansion, before unused work can be removed. All retained declarations,
+including unused ones, share the common admission allowance.
+
+The declaration names an admissibility predicate over source data and ordinary
+parameters. Each `oracle_virtual` occurrence instantiates that obligation using
+its actual anchors and parameters. Retaining the predicate is not proving it;
+source/export and the independent bridge must carry this obligation explicitly.
+The predicate covers the domain and shape assumptions needed for its query maps
+and pointwise holder data. It does not authorize sampling, stops or execution in
+the mathematical answer body.
+
+A sized result kind fixes the row count. An unsized result names a `shape_argument`
+among its ordinary index parameters and an unsigned `maximum_rows`. Each
+construction checks that the actual shape parameter is initially bound under the
+common shape policy. The shape/data consistency and declared maximum still need
+the realization checks before publication.
+
+`oracle_virtual` requires its sources and parameters at the holder and every
+receiver; the holder must hold each source's data. It allocates a fresh occurrence
+anchor, without an observed query event. Ordered allocation effects prevent CSE
+from merging equal constructions. Its actual closed declaration remains unchanged
+through preparation and is compared independently together with its retained
+helper/domain closure and actual admissibility declaration. A matching symbol
+name does not justify a substituted body or predicate. Queries on a dynamically selected virtual handle
+must later expand using that runtime anchor, not a static possible-origin list.
+
 ## Total mathematics and helpers
 
 The [structured extension](mathematics.md) adds field constants and

@@ -55,6 +55,14 @@ LogicalResult verifyOracleHolder(Value root, llvm::StringRef role,
     if (auto send = dyn_cast<protocol_ir::OracleSendOp>(producer)) {
       if (send.getSender() != role)
         return refuse();
+    } else if (auto constructed =
+                   dyn_cast<protocol_ir::OracleVirtualOp>(producer)) {
+      if (constructed.getHolder() != role)
+        return refuse();
+      for (Value input : constructed.getInputs())
+        if (isa<protocol_ir::OracleHandleType>(input.getType()) &&
+            !enqueue(input))
+          return exhausted();
     } else if (isa<protocol_ir::OracleSequenceEmptyOp>(producer)) {
       // No anchor exists in an empty sequence. Selection from it must stop,
       // so no successful contents operation gains a fabricated anchor.
