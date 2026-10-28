@@ -4,6 +4,7 @@
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Support/Refusal.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
 #include <map>
@@ -55,6 +56,12 @@ struct PlanBuilder {
   std::string occurrencePrefix;
   std::map<std::pair<unsigned, unsigned>, unsigned> store;
   llvm::DenseMap<Value, unsigned> values;
+  struct DataView {
+    unsigned reference;
+    std::string holder;
+    pir::OracleKindAttr kind;
+  };
+  llvm::DenseMap<Value, DataView> dataViews;
   std::vector<unsigned> coordinates;
   explicit PlanBuilder(ModuleOp source, pir::MathematicalOp program,
                        const OracleCommonRequirements &requirements,
@@ -166,6 +173,30 @@ struct PlanBuilder {
       return error("oracle-common-value");
     return found->second;
   }
+  Error demand(OracleCommonBlock &block, Value original,
+               ArrayRef<unsigned> path) {
+    if (values.contains(original))
+      return Error::success();
+    auto found = dataViews.find(original);
+    if (found == dataViews.end())
+      return error("oracle-common-value");
+    const auto &view = found->second;
+    auto *body =
+        controller(view.holder, view.kind, OracleControllerAccess::Holder);
+    if (!body || !body->contents)
+      return error("oracle-common-helper");
+    auto captures = stores(*body);
+    if (!captures)
+      return captures.takeError();
+    IDs arguments{view.reference};
+    append_range(arguments, *captures);
+    auto output = call(block, body->contents, view.holder, arguments,
+                       site(path, "component_data", view.holder));
+    if (!output)
+      return output.takeError();
+    values[original] = output->front();
+    return Error::success();
+  }
   Expected<IDs> inputs(ValueRange originals) {
     IDs result;
     for (Value original : originals) {
@@ -176,11 +207,12 @@ struct PlanBuilder {
     }
     return result;
   }
-  const OracleQueryController *controller(StringRef role,
-                                          pir::OracleKindAttr kind) {
+  const OracleQueryController *controller(
+      StringRef role, pir::OracleKindAttr kind,
+      OracleControllerAccess access = OracleControllerAccess::Available) {
     auto reference = cantFail(oracleReferenceType(kind));
     for (const auto &item : controllers)
-      if (item.role == role &&
+      if (item.role == role && item.access == access &&
           cantFail(oracleReferenceType(item.kind)) == reference)
         return &item.body;
     return nullptr;
@@ -487,12 +519,69 @@ struct PlanBuilder {
     values[op.getResult(0)] = *joined;
     return Error::success();
   }
+  // The admitted common language gives each handle an exact role family.
+  // Loop carriers declare their family; captures retain the actual operand's.
+  // This is availability, never an inference from possible anchor origins.
+  Expected<std::vector<std::string>> handleRoles(Value value,
+                                                 unsigned depth = 64) {
+    if (!depth || !allowance)
+      return error("oracle-common-limit");
+    --allowance;
+    ArrayAttr selected;
+    std::string holder;
+    if (auto argument = dyn_cast<BlockArgument>(value)) {
+      auto *parent = argument.getOwner()->getParentOp();
+      if (auto function = dyn_cast<pir::MathematicalOp>(parent))
+        selected =
+            cast<ArrayAttr>(function.getInputRoles()[argument.getArgNumber()]);
+      else if (auto repeat = dyn_cast<pir::RepeatOp>(parent)) {
+        unsigned index = argument.getArgNumber();
+        if (index > 0 && index <= unsigned(repeat.getCarried()))
+          selected = cast<ArrayAttr>(repeat.getCarriedRoles()[index - 1]);
+        else if (index > unsigned(repeat.getCarried()))
+          return handleRoles(repeat.getInputs()[index], depth - 1);
+      }
+    } else if (auto repeat = value.getDefiningOp<pir::RepeatOp>())
+      selected = cast<ArrayAttr>(
+          repeat.getCarriedRoles()[cast<OpResult>(value).getResultNumber()]);
+    else if (auto restrict = value.getDefiningOp<pir::RestrictRolesOp>())
+      selected = restrict.getRoles();
+    else if (auto forget = value.getDefiningOp<pir::OracleForgetShapeOp>())
+      return handleRoles(forget.getInput(), depth - 1);
+    else if (auto components = value.getDefiningOp<pir::OracleComponentsOp>())
+      selected = components.getReceivers();
+    else if (auto at = value.getDefiningOp<pir::OracleSequenceAtOp>())
+      selected = at.getRoles();
+    else if (auto send = value.getDefiningOp<pir::OracleSendOp>()) {
+      selected = send.getReceivers();
+      holder = send.getSender().str();
+    } else if (auto input = value.getDefiningOp<pir::OracleInputOp>()) {
+      selected = input.getReceivers();
+      holder = input.getHolder().str();
+    } else if (auto constructed = value.getDefiningOp<pir::OracleVirtualOp>()) {
+      selected = constructed.getReceivers();
+      holder = constructed.getHolder().str();
+    }
+    if (!selected)
+      return error("oracle-common-interface");
+    std::vector<std::string> roles;
+    for (auto attribute : program.getRoles()) {
+      auto role = cast<StringAttr>(attribute);
+      if (role.getValue() == holder || is_contained(selected, attribute))
+        roles.push_back(role.getValue().str());
+    }
+    return roles;
+  }
   Error repeat(OracleCommonBlock &block, pir::RepeatOp repeat,
                std::vector<unsigned> path, unsigned depth) {
+    for (Value input : repeat.getInputs())
+      if (auto e = demand(block, input, path))
+        return e;
     auto arguments = inputs(repeat.getInputs());
     if (!arguments)
       return arguments.takeError();
     auto previousValues = values;
+    auto previousViews = dataViews;
     auto previousStore = store;
     auto previousCoordinates = coordinates;
     std::vector<std::pair<unsigned, unsigned>> carriedStores;
@@ -570,6 +659,7 @@ struct PlanBuilder {
     if (!outputs)
       return outputs.takeError();
     values = std::move(previousValues);
+    dataViews = std::move(previousViews);
     store = std::move(previousStore);
     coordinates = std::move(previousCoordinates);
     for (auto [i, output] : enumerate(repeat.getOutputs()))
@@ -591,6 +681,72 @@ struct PlanBuilder {
           return e;
         continue;
       }
+      if (auto components = dyn_cast<pir::OracleComponentsOp>(op)) {
+        auto anchor = value(components.getHandle());
+        if (!anchor)
+          return anchor.takeError();
+        auto type = converted(components.getAnchor().getType());
+        if (!type)
+          return type.takeError();
+        auto receiver = make(
+            block, "protocol.restrict_roles", *type, {*anchor},
+            attrs({builder.getNamedAttr("roles", components.getReceivers())}));
+        if (!receiver)
+          return receiver.takeError();
+        values[components.getAnchor()] = receiver->front();
+        dataViews[components.getData()] = {
+            *anchor, components.getHolder().str(),
+            components.getHandle().getType().getKind()};
+        continue;
+      }
+      if (auto restrict = dyn_cast<pir::RestrictRolesOp>(op)) {
+        if (auto found = dataViews.find(restrict.getInput());
+            found != dataViews.end()) {
+          // Insertion can grow the map and invalidate the input iterator.
+          auto view = found->second;
+          dataViews[restrict.getOutput()] = std::move(view);
+          if (auto data = values.find(restrict.getInput());
+              data != values.end())
+            values[restrict.getOutput()] = data->second;
+          continue;
+        }
+      }
+      if (auto input = dyn_cast<pir::OracleInputOp>(op)) {
+        if (none_of(requirements.storage.constructors,
+                    [&](const auto &item) { return item.path == path; })) {
+          Value receiver = input.getAnchor();
+          while (auto view = receiver.getDefiningOp<pir::RestrictRolesOp>()) {
+            if (!allowance)
+              return error("oracle-common-limit");
+            --allowance;
+            receiver = view.getInput();
+          }
+          auto components = receiver.getDefiningOp<pir::OracleComponentsOp>();
+          if (!components)
+            return error("oracle-common-interface");
+          // Admission already checked the exact data/receiver pair. Retain the
+          // actual view's dynamic reference; possible origins are insufficient.
+          auto anchor = value(components.getHandle());
+          auto type = converted(input.getHandle().getType());
+          if (!anchor)
+            return anchor.takeError();
+          if (!type)
+            return type.takeError();
+          SmallVector<Attribute> roles{input.getHolderAttr()};
+          append_range(roles, input.getReceivers());
+          auto rebound =
+              make(block, "protocol.restrict_roles", *type, {*anchor},
+                   attrs({builder.getNamedAttr("roles",
+                                               builder.getArrayAttr(roles))}));
+          if (!rebound)
+            return rebound.takeError();
+          values[input.getHandle()] = rebound->front();
+          continue;
+        }
+      }
+      for (Value input : op.getOperands())
+        if (auto e = demand(block, input, path))
+          return e;
       if (isa<pir::OracleInputOp, pir::OracleSendOp, pir::OracleVirtualOp>(
               op)) {
         auto found =
@@ -623,6 +779,57 @@ struct PlanBuilder {
         values[query.getAnswer()] = output->front();
         continue;
       }
+      if (auto contents = dyn_cast<pir::OracleContentsOp>(op)) {
+        auto *body = controller(contents.getOwner(),
+                                contents.getHandle().getType().getKind(),
+                                OracleControllerAccess::Holder);
+        if (!body || !body->contents)
+          return error("oracle-common-helper");
+        auto arguments = inputs(contents->getOperands());
+        auto captures = stores(*body);
+        if (!arguments)
+          return arguments.takeError();
+        if (!captures)
+          return captures.takeError();
+        append_range(*arguments, *captures);
+        auto output =
+            call(block, body->contents, contents.getOwner(), *arguments,
+                 site(path, "contents", contents.getOwner()));
+        if (!output)
+          return output.takeError();
+        values[contents.getData()] = output->front();
+        continue;
+      }
+      if (auto shape = dyn_cast<pir::OracleShapeOp>(op)) {
+        if (shape.getDimension() != "rows")
+          return error("oracle-common-interface");
+        auto roles = handleRoles(shape.getHandle());
+        if (!roles)
+          return roles.takeError();
+        IDs components;
+        for (const auto &role : *roles) {
+          auto *body = controller(role, shape.getHandle().getType().getKind());
+          if (!body || body->rowCounts.empty())
+            return error("oracle-common-helper");
+          auto arguments = inputs(shape->getOperands());
+          auto captures = stores(*body);
+          if (!arguments)
+            return arguments.takeError();
+          if (!captures)
+            return captures.takeError();
+          append_range(*arguments, *captures);
+          auto output = call(block, body->rowCounts[0], role, *arguments,
+                             site(path, "shape_view", role));
+          if (!output)
+            return output.takeError();
+          components.push_back(output->front());
+        }
+        auto output = assemble(block, index, components, *roles);
+        if (!output)
+          return output.takeError();
+        values[shape.getExtent()] = *output;
+        continue;
+      }
       if (auto forget = dyn_cast<pir::OracleForgetShapeOp>(op)) {
         auto original = value(forget.getInput());
         if (!original)
@@ -636,8 +843,8 @@ struct PlanBuilder {
           return e;
         continue;
       }
-      // Holder views, boundary components and retained anchor clauses are
-      // deliberately not silently erased while their adapters are unfinished.
+      // Retained anchor clauses are not silently erased while their boundary
+      // adapters remain unfinished.
       if (op.getName().getStringRef().starts_with("protocol.oracle_"))
         return error("oracle-common-interface");
       if (op.getNumRegions() || isa<pir::ApplyOp>(op))
@@ -728,24 +935,63 @@ Expected<OracleCommonRequirements> idealOracleRequirements(ModuleOp source,
       result.capacity.leaves = std::max(result.capacity.leaves, bound.leaves);
       result.capacity.nodes = std::max(result.capacity.nodes, bound.nodes);
     }
-  auto add = [&](StringRef role, pir::OracleKindAttr kind) -> Error {
+  auto add = [&](StringRef role, pir::OracleKindAttr kind,
+                 OracleControllerAccess access) -> Error {
     if (kind.getIdentity() != "table")
       return refuse();
     auto reference = oracleReferenceType(kind);
     if (!reference)
       return reference.takeError();
-    for (const auto &[owner, other] : result.controllers)
-      if (owner == role && cantFail(oracleReferenceType(other)) == *reference)
+    for (const auto &other : result.controllers)
+      if (other.role == role && other.access == access &&
+          cantFail(oracleReferenceType(other.kind)) == *reference)
         return Error::success();
     if (result.controllers.size() >= 64)
       return error("oracle-common-limit");
-    result.controllers.push_back({role.str(), kind});
+    result.controllers.push_back({role.str(), kind, access});
     return Error::success();
   };
   for (const auto &constructor : result.storage.constructors)
     for (const auto &owner : constructor.roles)
-      if (auto e = add(owner.role, constructor.kind))
+      if (auto e = add(owner.role, constructor.kind,
+                       OracleControllerAccess::Available))
         return std::move(e);
+  Error failure = Error::success();
+  program.walk([&](pir::OracleContentsOp op) {
+    if (!failure)
+      failure = add(op.getOwner(), op.getHandle().getType().getKind(),
+                    OracleControllerAccess::Holder);
+  });
+  unsigned remaining = 100000;
+  program.walk([&](pir::OracleComponentsOp op) {
+    if (failure)
+      return;
+    SmallVector<Value> pending{op.getData()};
+    llvm::DenseSet<Value> seen;
+    bool needed = false;
+    while (!pending.empty() && !needed) {
+      Value data = pending.pop_back_val();
+      if (!seen.insert(data).second)
+        continue;
+      for (OpOperand &use : data.getUses()) {
+        if (!remaining) {
+          failure = error("oracle-common-limit");
+          return;
+        }
+        --remaining;
+        if (auto restriction = dyn_cast<pir::RestrictRolesOp>(use.getOwner()))
+          pending.push_back(restriction.getOutput());
+        else if (!isa<pir::OracleInputOp>(use.getOwner()) ||
+                 use.getOperandNumber() != 0)
+          needed = true;
+      }
+    }
+    if (needed)
+      failure = add(op.getHolder(), op.getHandle().getType().getKind(),
+                    OracleControllerAccess::Holder);
+  });
+  if (failure)
+    return std::move(failure);
   return result;
 }
 Expected<OracleCommonPlan>

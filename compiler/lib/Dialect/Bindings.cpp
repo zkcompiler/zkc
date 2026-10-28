@@ -1,4 +1,8 @@
 #include "zkc/Dialect/Bindings.h"
+#include "BindingTypeCache.h"
+#include "mlir/IR/BuiltinDialect.h"
+#include "mlir/IR/DialectInterface.h"
+#include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/SymbolTable.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/OperationShapes.h"
@@ -7,14 +11,57 @@
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/TypeAdapters/Support.h"
 #include "zkc/Support/Refusal.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringSet.h"
 #include <array>
+#include <mutex>
 
 using namespace llvm;
 using namespace mlir;
 namespace zkc::protocol {
 
 namespace {
+// Native types and the installed adapter set are immutable. Cache only a
+// successful complete encode/parse/exact-native roundtrip, keyed by the actual
+// type in its own context. Never cache source admission, mutable IR, failures,
+// or context pointers in process-global storage. This interface owns no law.
+class BindingTypeCache final : public DialectInterface::Base<BindingTypeCache> {
+  std::mutex mutex;
+  llvm::DenseMap<Type, BoundType> values;
+  size_t bytes = 0;
+
+public:
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(BindingTypeCache)
+  explicit BindingTypeCache(Dialect *dialect) : Base(dialect) {}
+  std::optional<BoundType> lookup(Type type) {
+    std::lock_guard<std::mutex> lock(mutex);
+    auto found = values.find(type);
+    return found == values.end() ? std::nullopt
+                                 : std::optional<BoundType>(found->second);
+  }
+  void remember(Type type, const BoundType &bound) {
+    // Limit both entry count and retained serialized metadata. Clearing only
+    // loses reuse; every miss executes the same complete checks below.
+    constexpr size_t maxEntries = 4096, maxBytes = 4 * 1024 * 1024;
+    size_t size = bound.spelling().size();
+    if (size > maxBytes)
+      return;
+    std::lock_guard<std::mutex> lock(mutex);
+    if (values.contains(type))
+      return;
+    if (values.size() == maxEntries || size > maxBytes - bytes) {
+      values.clear();
+      bytes = 0;
+    }
+    values.try_emplace(type, bound);
+    bytes += size;
+  }
+};
+BindingTypeCache *typeCache(Type type) {
+  auto *builtin = type.getContext()->getLoadedDialect<BuiltinDialect>();
+  return builtin ? builtin->getRegisteredInterface<BindingTypeCache>()
+                 : nullptr;
+}
 struct ContractAssociation {
   StringLiteral key;
   StringLiteral value;
@@ -46,6 +93,13 @@ const ContractAssociation *contractAssociation(StringRef key) {
   return found != rows.end() && found->key == key ? found : nullptr;
 }
 } // namespace
+
+void registerBindingTypeCache(DialectRegistry &registry) {
+  registry.addExtension(+[](MLIRContext *, BuiltinDialect *builtin) {
+    if (!builtin->getRegisteredInterface<BindingTypeCache>())
+      builtin->addInterfaces<BindingTypeCache>();
+  });
+}
 
 StringRef boundOperationName(StringRef contract) {
   if (!installedContract(contract))
@@ -108,6 +162,10 @@ Expected<BoundType> encodeBoundType(Type type, bool physical) {
     type = data.getLogical();
   } else if (physical)
     return error("binding-logical-type-at-physical-stage");
+  auto *cache = typeCache(original);
+  if (cache)
+    if (auto found = cache->lookup(original))
+      return *found;
   auto result = type_adapters::encodeLogicalType(type);
   if (!result)
     return result.takeError();
@@ -130,6 +188,8 @@ Expected<BoundType> encodeBoundType(Type type, bool physical) {
   // Compare the original carrier, including its exact physical wrapper.
   if (decodeBoundType(original.getContext(), *checked) != original)
     return error("binding-type-identity");
+  if (cache)
+    cache->remember(original, *checked);
   return checked;
 }
 

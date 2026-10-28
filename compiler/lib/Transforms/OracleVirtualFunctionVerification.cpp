@@ -1,6 +1,6 @@
 #include "MathematicalValues.h"
+#include "OracleVerificationContext.h"
 #include "OracleVirtualFunctions.h"
-#include "mlir/IR/Verifier.h"
 #include "zkc/Support/Refusal.h"
 using namespace mlir;
 using namespace llvm;
@@ -8,20 +8,29 @@ namespace zkc::protocol {
 Error checkOracleVirtualFunctions(ModuleOp candidate,
                                   protocol_ir::OracleDefinitionOp source,
                                   const OracleVirtualFunctions &actual) {
+  auto original = source ? source->getParentOfType<ModuleOp>() : ModuleOp{};
+  auto sourceContext = OracleVerificationContext::read(original);
+  if (!sourceContext) {
+    consumeError(sourceContext.takeError());
+    return error("oracle-virtual-function-body");
+  }
+  auto targetContext = OracleVerificationContext::read(candidate);
+  if (!targetContext) {
+    consumeError(targetContext.takeError());
+    return error("oracle-virtual-function-body");
+  }
+  return checkOracleVirtualFunctions(*targetContext, *sourceContext, source,
+                                     actual);
+}
+Error checkOracleVirtualFunctions(
+    const OracleVerificationContext &targetContext,
+    const OracleVerificationContext &sourceContext,
+    protocol_ir::OracleDefinitionOp source,
+    const OracleVirtualFunctions &actual) {
   auto refuse = [] { return error("oracle-virtual-function-body"); };
-  auto sourceUnit =
-      source ? dyn_cast<protocol_ir::ProtocolModuleOp>(source->getParentOp())
-             : protocol_ir::ProtocolModuleOp{};
-  if (!candidate || !sourceUnit ||
-      source.getContext() != candidate.getContext() ||
-      sourceUnit.getProfile() != protocol_ir::Profile::Protocol ||
-      failed(verify(sourceUnit)) || failed(verify(candidate)) ||
-      !hasSingleElement(candidate.getBody()->getOperations()))
-    return refuse();
-  auto unit =
-      dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
-  if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol ||
-      unit == sourceUnit)
+  auto sourceUnit = sourceContext.getUnit(), unit = targetContext.getUnit();
+  if (!source || source->getParentOp() != sourceUnit || sourceUnit == unit ||
+      source.getContext() != unit.getContext())
     return refuse();
   auto &body = source.getBody().front();
   unsigned sources = source.getNumSources();

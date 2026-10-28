@@ -39,8 +39,14 @@ def test_oracle_query_continuations(toolchain, directory, journal):
 
 def test_oracle_common_realization(toolchain, directory, journal):
     artifacts = directory / "common"
-    journal.run([
-        toolchain.tool("compiler", "test/zkc-oracle_common_realization-test"),
-        artifacts, "compile",
-    ], keep="compiler.txt", timeout=600)
+    # Each independently compiled module has the same bounded timeout. The
+    # growing client inventory must not share one module's time allowance.
+    for fixture in (
+        "common-recurrence", "common-holders", "common-input", "common-shape",
+        "common-contents", "common-views",
+    ):
+        journal.run([
+            toolchain.tool("compiler", "test/zkc-oracle_common_realization-test"),
+            artifacts, "compile", fixture,
+        ], keep=f"compiler-{fixture}.txt", timeout=600)
     journal.run([toolchain.driver("oracle_common"), artifacts], keep="native.txt")

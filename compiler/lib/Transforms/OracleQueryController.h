@@ -4,6 +4,9 @@
 #include "OracleQueryCapacity.h"
 #include "OracleVirtualFunctions.h"
 namespace zkc::protocol {
+// Available anchors serve ordinary queries. Holder access excludes unrelated
+// received commitments, even when the same party participates in both roles.
+enum class OracleControllerAccess { Available, Holder };
 struct OracleQueryContinuation {
   unsigned constructor, query;
   mlir::Type record, sequence;
@@ -29,6 +32,7 @@ struct OracleQueryController {
   };
   enum PhaseValue : unsigned { Enter, Return, Request, Completed };
   std::string role;
+  OracleControllerAccess access = OracleControllerAccess::Available;
   OracleQuerySize capacity;
   std::vector<protocol_ir::OracleKindAttr> kinds;
   std::vector<mlir::Type> answers, state, stores;
@@ -37,6 +41,8 @@ struct OracleQueryController {
   // Per-kind lookup of the stored structural leaf count. These helpers read
   // references and metadata only, never positions, domains or table contents.
   std::vector<mlir::func::FuncOp> leafCounts;
+  // Actual immutable table dimensions, selected by the dynamic reference.
+  std::vector<mlir::func::FuncOp> rowCounts;
   // Per-constructor recurrence: all declared child references, then stores,
   // return one for a base or the ordered sum of virtual query child counts.
   // The complete stage binds this value to the same anchor allocation.
@@ -49,6 +55,9 @@ struct OracleQueryController {
   // Present only when this role has every base table's data. Uses the same
   // controller to evaluate leaves locally; never substitutes for Merkle work.
   mlir::func::FuncOp evaluate;
+  // Holder-domain only: bases return stored data; virtuals evaluate rows when
+  // contents are demanded, under the retained source admissibility obligation.
+  mlir::func::FuncOp contents;
 };
 // Table-kind controller construction in an owned candidate. Every child kind
 // must also be a table; other closed kinds need their own domain semantics.
@@ -57,23 +66,22 @@ struct OracleQueryController {
 // selected entry. Discard partial output on failure. No production publication
 // is authorized by this producer; complete actual-body correspondence remains
 // a separate boundary.
-llvm::Expected<OracleQueryController>
-emitOracleQueryController(mlir::ModuleOp candidate, mlir::ModuleOp prepared,
-                          const OracleAnchorStorage &, llvm::StringRef role,
-                          protocol_ir::OracleKindAttr root,
-                          OracleQuerySize capacity,
-                          OracleVirtualFunctionWork &work);
+llvm::Expected<OracleQueryController> emitOracleQueryController(
+    mlir::ModuleOp candidate, mlir::ModuleOp prepared,
+    const OracleAnchorStorage &, llvm::StringRef role,
+    protocol_ir::OracleKindAttr root, OracleQuerySize capacity,
+    OracleVirtualFunctionWork &work,
+    OracleControllerAccess access = OracleControllerAccess::Available);
 // Read the actual scoped closure and compare all layouts, ordered transitions,
 // pure maps, domain checks, suspensions and resumptions. The surrounding stage
 // must independently derive storage/capacity and bind the root/call operands to
 // their source occurrences. This primitive check is not full realization or a
 // Lean simulation.
-llvm::Error checkOracleQueryController(mlir::ModuleOp candidate,
-                                       mlir::ModuleOp prepared,
-                                       const OracleAnchorStorage &,
-                                       llvm::StringRef role,
-                                       protocol_ir::OracleKindAttr root,
-                                       OracleQuerySize capacity,
-                                       const OracleQueryController &actual);
+llvm::Error checkOracleQueryController(
+    mlir::ModuleOp candidate, mlir::ModuleOp prepared,
+    const OracleAnchorStorage &, llvm::StringRef role,
+    protocol_ir::OracleKindAttr root, OracleQuerySize capacity,
+    const OracleQueryController &actual,
+    OracleControllerAccess access = OracleControllerAccess::Available);
 } // namespace zkc::protocol
 #endif

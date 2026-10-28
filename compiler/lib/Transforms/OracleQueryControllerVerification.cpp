@@ -1,6 +1,6 @@
 #include "OracleQueryController.h"
 #include "OracleTableRead.h"
-#include "mlir/IR/Verifier.h"
+#include "OracleVerificationContext.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -17,10 +17,11 @@ namespace pir = protocol_ir;
 using Controller = OracleQueryController;
 using Values = SmallVector<Value>;
 using Types = SmallVector<Type>;
-Error layout(ModuleOp candidate, ModuleOp prepared,
+Error layout(const OracleVerificationContext &targetContext,
+             const OracleVerificationContext &sourceContext,
              const OracleAnchorStorage &storage, StringRef role,
              pir::OracleKindAttr root, OracleQuerySize capacity,
-             const Controller &actual) {
+             const Controller &actual, OracleControllerAccess access) {
   auto refuse = [] { return error("oracle-controller-body"); };
   if (actual.state.size() > 512 || actual.stores.size() > 512 ||
       actual.state.size() + actual.stores.size() > 512 ||
@@ -28,13 +29,16 @@ Error layout(ModuleOp candidate, ModuleOp prepared,
       actual.kinds.size() > 512)
     return refuse();
   uint64_t metadataRemaining = 4 * 1024 * 1024;
-  if (actual.role != role || !(actual.capacity == capacity) || !root ||
+  if ((access != OracleControllerAccess::Available &&
+       access != OracleControllerAccess::Holder) ||
+      actual.access != access || actual.role != role ||
+      !(actual.capacity == capacity) || !root ||
       root.getIdentity() != "table" || !capacity.nodes ||
       capacity.leaves > capacity.nodes || capacity.nodes > (1048576 - 1) / 2 ||
       capacity.leaves >= 1048576)
     return refuse();
-  auto *context = candidate.getContext();
-  auto source = cast<pir::ProtocolModuleOp>(prepared.getBody()->front());
+  auto *context = targetContext.getModule().getContext();
+  auto source = sourceContext.getUnit();
   auto index = IntegerType::get(context, 64, IntegerType::Unsigned);
   std::vector<pir::OracleKindAttr> kinds;
   std::vector<Type> references, answers, stores;
@@ -75,7 +79,9 @@ Error layout(ModuleOp candidate, ModuleOp prepared,
   for (auto [ordinal, constructor] : enumerate(storage.constructors)) {
     auto owner = find_if(constructor.roles,
                          [&](const auto &owner) { return owner.role == role; });
-    if (owner == constructor.roles.end())
+    if (owner == constructor.roles.end() ||
+        (access == OracleControllerAccess::Holder &&
+         constructor.holder != role))
       continue;
     if (constructorCount >= actual.constructors.size())
       return refuse();
@@ -87,7 +93,7 @@ Error layout(ModuleOp candidate, ModuleOp prepared,
         item.role != unsigned(owner - constructor.roles.begin()) ||
         item.kind != *kind || item.firstContinuation != frameCount)
       return refuse();
-    if (auto e = checkOracleAnchorLookup(candidate, item.lookup, storage,
+    if (auto e = checkOracleAnchorLookup(targetContext, item.lookup, storage,
                                          ordinal, item.role))
       return e;
     stores.push_back(owner->sequence);
@@ -96,8 +102,8 @@ Error layout(ModuleOp candidate, ModuleOp prepared,
           SymbolTable::lookupSymbolIn(source, constructor.declaration));
       if (!original)
         return refuse();
-      if (auto e =
-              checkOracleVirtualFunctions(candidate, original, item.functions))
+      if (auto e = checkOracleVirtualFunctions(targetContext, sourceContext,
+                                               original, item.functions))
         return e;
       std::vector<Type> previous;
       unsigned queryIndex = 0;
@@ -150,6 +156,7 @@ Error layout(ModuleOp candidate, ModuleOp prepared,
       actual.answers != answers || actual.stores != stores ||
       actual.resume.size() != kinds.size() ||
       actual.leafCounts.size() != kinds.size() ||
+      actual.rowCounts.size() != kinds.size() ||
       actual.constructionCounts.size() != constructorCount)
     return refuse();
   std::vector<Type> state(7, index);
@@ -161,6 +168,7 @@ Error layout(ModuleOp candidate, ModuleOp prepared,
   return Error::success();
 }
 struct Reader {
+  const OracleVerificationContext &context;
   const OracleAnchorStorage &storage;
   const Controller &model;
   pir::ProtocolModuleOp unit;
@@ -168,8 +176,9 @@ struct Reader {
   Type index, scope, boolean;
   bool valid = true;
   Reader(const OracleAnchorStorage &storage, const Controller &model,
-         pir::ProtocolModuleOp unit, const SourceExecutionClosure &closure)
-      : storage(storage), model(model), unit(unit), closure(closure),
+         const OracleVerificationContext &context)
+      : context(context), storage(storage), model(model),
+        unit(context.getUnit()), closure(context.getClosure()),
         index(IntegerType::get(unit.getContext(), 64, IntegerType::Unsigned)),
         scope(runtime::ScopeType::get(unit.getContext())),
         boolean(IntegerType::get(unit.getContext(), 1)) {}
@@ -337,15 +346,21 @@ struct Reader {
       return values;
     }
     Values loop(Value lower, Value upper, ValueRange state, ValueRange stores,
-                StringRef site, llvm::function_ref<void(func::FuncOp)> check) {
+                TypeRange outputs, bool conditional, StringRef site,
+                llvm::function_ref<void(func::FuncOp)> check) {
       auto *step = take("exec.range", site);
       Values inputs{lower, upper};
       append_range(inputs, state);
       append_range(inputs, stores);
-      auto values = result(step, reader.model.state, inputs, 1);
-      if (reader.valid && reader.expect(step->conditional))
+      auto values = result(step, outputs, inputs, 1);
+      if (reader.valid && reader.expect(step->conditional == conditional))
         check(step->regions[0]);
       return values;
+    }
+    Values loop(Value lower, Value upper, ValueRange state, ValueRange stores,
+                StringRef site, llvm::function_ref<void(func::FuncOp)> check) {
+      return loop(lower, upper, state, stores, reader.model.state, true, site,
+                  check);
     }
     void finish(ValueRange values, bool region = false) {
       if (!reader.valid)
@@ -585,7 +600,7 @@ struct Reader {
                 llvm::function_ref<void(unsigned, func::FuncOp)> leaf) {
     dispatch(function, selector, cases, allTypes(), model.state, leaf);
   }
-  void counts() {
+  void metadata(StringRef fieldName, ArrayRef<func::FuncOp> functions) {
     Types dispatchTypes{index, index};
     append_range(dispatchTypes, model.stores);
     for (unsigned kind = 0; kind < model.kinds.size(); ++kind) {
@@ -596,7 +611,7 @@ struct Reader {
       auto reference = cantFail(oracleReferenceType(model.kinds[kind]));
       Types inputs{reference};
       append_range(inputs, model.stores);
-      body(model.leafCounts[kind], inputs, index, false,
+      body(functions[kind], inputs, index, false,
            [&](Cursor &c, ValueRange inputs) {
              auto identity =
                  c.unpack(inputs[0], TypeRange{index, index}, "reference");
@@ -610,25 +625,29 @@ struct Reader {
              append_range(identity, inputs.drop_front());
              func::FuncOp select;
              auto value = c.local(identity, index, "select_count", select);
-             dispatch(
-                 select, 0, cases, dispatchTypes, index,
-                 [&](unsigned source, func::FuncOp leaf) {
-                   auto found =
-                       find_if(model.constructors, [&](const auto &item) {
-                         return item.source == source;
-                       });
-                   unsigned constructor = found - model.constructors.begin();
-                   body(leaf, dispatchTypes, index, false,
-                        [&](Cursor &c, ValueRange arguments) {
-                          auto record =
-                              load(c, constructor, arguments[0], arguments[1],
-                                   arguments[2 + constructor]);
-                          c.finish(record[field(constructor, "query.leaves")]);
-                        });
-                 });
+             dispatch(select, 0, cases, dispatchTypes, index,
+                      [&](unsigned source, func::FuncOp leaf) {
+                        auto found =
+                            find_if(model.constructors, [&](const auto &item) {
+                              return item.source == source;
+                            });
+                        unsigned constructor =
+                            found - model.constructors.begin();
+                        body(leaf, dispatchTypes, index, false,
+                             [&](Cursor &c, ValueRange arguments) {
+                               auto record = load(c, constructor, arguments[0],
+                                                  arguments[1],
+                                                  arguments[2 + constructor]);
+                               c.finish(record[field(constructor, fieldName)]);
+                             });
+                      });
              c.finish(value);
            });
     }
+  }
+  void counts() {
+    metadata("query.leaves", model.leafCounts);
+    metadata("shape.rows", model.rowCounts);
     for (auto [ordinal, item] : enumerate(model.constructors)) {
       const auto &anchor = storage.constructors[item.source];
       Types sourceTypes;
@@ -822,8 +841,7 @@ struct Reader {
                              .front();
            if (valid)
              if (auto e = checkOracleTableRead(
-                     unit->getParentOfType<ModuleOp>(), read,
-                     storage.constructors[item.source].kind)) {
+                     context, read, storage.constructors[item.source].kind)) {
                consumeError(std::move(e));
                valid = false;
              }
@@ -831,6 +849,97 @@ struct Reader {
            append_range(arguments, ValueRange(values).take_front(5));
            arguments.push_back(answer);
            c.finish(c.call(model.resume[item.kind], arguments, "resume"));
+         });
+  }
+  void contents() {
+    if (model.access != OracleControllerAccess::Holder) {
+      expect(!model.contents);
+      return;
+    }
+    if (!expect(bool(model.evaluate)))
+      return;
+    auto root = model.kinds.front();
+    auto answer = encodeBoundType(root.getAnswerType(), false);
+    if (!answer) {
+      consumeError(answer.takeError());
+      valid = false;
+      return;
+    }
+    std::string family = "sequence";
+    std::vector<std::string> statics{answer->spelling()};
+    if (answer->kind == "index") {
+      family = "indices";
+      statics.clear();
+    } else if (answer->kind == "field" || answer->kind == "group") {
+      family = answer->kind == "field" ? "vector" : "curve";
+      statics = {answer->identity};
+    }
+    Type data = root.getDataType();
+    auto reference = cantFail(oracleReferenceType(root));
+    Types arguments{reference};
+    append_range(arguments, model.stores);
+    Types dispatchTypes{index, index};
+    append_range(dispatchTypes, model.stores);
+    SmallVector<unsigned> cases;
+    for (const auto &item : model.constructors)
+      if (item.kind == 0)
+        cases.push_back(item.source);
+    if (!expect(!cases.empty()))
+      return;
+    body(model.contents, arguments, data, false,
+         [&](Cursor &c, ValueRange inputs) {
+           auto identity =
+               c.unpack(inputs[0], TypeRange{index, index}, "reference");
+           append_range(identity, inputs.drop_front());
+           func::FuncOp select;
+           auto result = c.local(identity, data, "select_contents", select);
+           dispatch(
+               select, 0, cases, dispatchTypes, data,
+               [&](unsigned source, func::FuncOp leaf) {
+                 auto item = find_if(model.constructors, [&](const auto &item) {
+                   return item.source == source;
+                 });
+                 unsigned constructor = item - model.constructors.begin();
+                 body(leaf, dispatchTypes, data, false,
+                      [&](Cursor &c, ValueRange inputs) {
+                        auto record = load(c, constructor, inputs[0], inputs[1],
+                                           inputs[2 + constructor]);
+                        if (storage.constructors[source].constructor !=
+                            OracleAnchorConstructor::Kind::Virtual) {
+                          c.finish(record[field(constructor, "data")]);
+                          return;
+                        }
+                        auto root =
+                            c.pack(reference, inputs.take_front(2), "root");
+                        auto zero = c.number(0, "lower");
+                        auto empty = c.apply(family + ".empty", data, {},
+                                             "empty", statics)
+                                         .front();
+                        Values captures{root};
+                        append_range(captures, inputs.drop_front(2));
+                        auto result = c.loop(
+                            zero, record[field(constructor, "shape.rows")],
+                            empty, captures, data, false, "rows",
+                            [&](func::FuncOp row) {
+                              Types arguments{index, data, reference};
+                              append_range(arguments, model.stores);
+                              body(row, arguments, data, true,
+                                   [&](Cursor &c, ValueRange inputs) {
+                                     Values query{inputs[2], inputs[0]};
+                                     append_range(query, inputs.drop_front(3));
+                                     auto answer = c.call(model.evaluate, query,
+                                                          "evaluate")
+                                                       .front();
+                                     c.finish(c.apply(family + ".append", data,
+                                                      {inputs[1], answer},
+                                                      "append", statics),
+                                              true);
+                                   });
+                            });
+                        c.finish(result);
+                      });
+               });
+           c.finish(result);
          });
   }
   void evaluate() {
@@ -938,35 +1047,46 @@ Error checkOracleQueryController(ModuleOp candidate, ModuleOp prepared,
                                  const OracleAnchorStorage &storage,
                                  StringRef role, pir::OracleKindAttr root,
                                  OracleQuerySize capacity,
-                                 const Controller &actual) {
+                                 const Controller &actual,
+                                 OracleControllerAccess access) {
+  auto targetContext = OracleVerificationContext::read(candidate);
+  if (!targetContext) {
+    consumeError(targetContext.takeError());
+    return error("oracle-controller-body");
+  }
+  auto sourceContext = OracleVerificationContext::read(prepared);
+  if (!sourceContext) {
+    consumeError(sourceContext.takeError());
+    return error("oracle-controller-body");
+  }
+  return checkOracleQueryController(*targetContext, *sourceContext, storage,
+                                    role, root, capacity, actual, access);
+}
+Error checkOracleQueryController(const OracleVerificationContext &targetContext,
+                                 const OracleVerificationContext &sourceContext,
+                                 const OracleAnchorStorage &storage,
+                                 StringRef role, pir::OracleKindAttr root,
+                                 OracleQuerySize capacity,
+                                 const Controller &actual,
+                                 OracleControllerAccess access) {
   auto refuse = [] { return error("oracle-controller-body"); };
-  auto unit = [](ModuleOp module) -> pir::ProtocolModuleOp {
-    if (!module || !hasSingleElement(module.getBody()->getOperations()))
-      return {};
-    return dyn_cast<pir::ProtocolModuleOp>(module.getBody()->front());
-  };
-  auto target = unit(candidate), source = unit(prepared);
-  if (!target || !source || target == source ||
-      candidate.getContext() != prepared.getContext() ||
-      target.getProfile() != pir::Profile::Protocol ||
-      source.getProfile() != pir::Profile::Protocol ||
-      failed(verify(candidate)) || failed(verify(prepared)))
+  if (targetContext.getUnit() == sourceContext.getUnit() ||
+      targetContext.getModule().getContext() !=
+          sourceContext.getModule().getContext())
     return refuse();
-  if (auto e =
-          layout(candidate, prepared, storage, role, root, capacity, actual)) {
+  if (auto e = layout(targetContext, sourceContext, storage, role, root,
+                      capacity, actual, access)) {
     consumeError(std::move(e));
     return refuse();
   }
-  auto closure = readSourceExecutionClosure(target);
-  if (!closure)
-    return closure.takeError();
-  Reader reader(storage, actual, target, *closure);
+  Reader reader(storage, actual, targetContext);
   reader.counts();
   reader.initialize();
   reader.resume();
   reader.advance();
   reader.finish();
   reader.evaluate();
+  reader.contents();
   return reader.valid ? Error::success() : refuse();
 }
 } // namespace zkc::protocol

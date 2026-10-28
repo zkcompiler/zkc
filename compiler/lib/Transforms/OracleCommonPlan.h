@@ -45,10 +45,15 @@ struct OracleCommonPlan {
   std::vector<OracleLocalRecipe> locals;
   std::vector<OracleCommonOccurrence> occurrences;
 };
+struct OracleControllerRequirement {
+  std::string role;
+  protocol_ir::OracleKindAttr kind;
+  OracleControllerAccess access;
+};
 struct OracleCommonRequirements {
   OracleAnchorStorage storage;
   OracleQuerySize capacity;
-  std::vector<std::pair<std::string, protocol_ir::OracleKindAttr>> controllers;
+  std::vector<OracleControllerRequirement> controllers;
 };
 llvm::Expected<OracleCommonRequirements>
 idealOracleRequirements(mlir::ModuleOp prepared, llvm::StringRef entry);

@@ -1,5 +1,5 @@
 #include "OracleTableRead.h"
-#include "mlir/IR/Verifier.h"
+#include "OracleVerificationContext.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -11,18 +11,25 @@ using namespace llvm;
 namespace zkc::protocol {
 Error checkOracleTableRead(ModuleOp candidate, func::FuncOp actual,
                            protocol_ir::OracleKindAttr kind) {
+  auto context = OracleVerificationContext::read(candidate);
+  if (!context) {
+    consumeError(context.takeError());
+    return error("oracle-table-read-body");
+  }
+  return checkOracleTableRead(*context, actual, kind);
+}
+Error checkOracleTableRead(const OracleVerificationContext &context,
+                           func::FuncOp actual,
+                           protocol_ir::OracleKindAttr kind) {
   auto refuse = [] { return error("oracle-table-read-body"); };
-  if (!candidate || !actual || !kind || kind.getIdentity() != "table" ||
+  ModuleOp candidate = context.getModule();
+  if (!actual || !kind || kind.getIdentity() != "table" ||
       failed(protocol_ir::OracleKindAttr::verify(
           [&]() { return emitError(candidate.getLoc()); }, kind.getIdentity(),
-          kind.getArguments())) ||
-      failed(verify(candidate)) ||
-      !hasSingleElement(candidate.getBody()->getOperations()))
+          kind.getArguments())))
     return refuse();
-  auto unit =
-      dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
-  if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol ||
-      actual->getParentOp() != unit)
+  auto unit = context.getUnit();
+  if (actual->getParentOp() != unit)
     return refuse();
   auto index =
       IntegerType::get(candidate.getContext(), 64, IntegerType::Unsigned);
@@ -33,11 +40,9 @@ Error checkOracleTableRead(ModuleOp candidate, func::FuncOp actual,
   if (!equal(actual.getArgumentTypes(), inputs) ||
       !equal(actual.getResultTypes(), TypeRange(outcome)))
     return refuse();
-  auto closure = readSourceExecutionClosure(unit);
-  if (!closure)
-    return closure.takeError();
-  auto found = closure->bodies.find(actual.getSymName().str());
-  if (found == closure->bodies.end() || found->second.size() != 4)
+  const auto &closure = context.getClosure();
+  auto found = closure.bodies.find(actual.getSymName().str());
+  if (found == closure.bodies.end() || found->second.size() != 4)
     return refuse();
   const auto &steps = found->second;
   auto call = [&](unsigned i, StringRef contract,

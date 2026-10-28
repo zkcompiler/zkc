@@ -291,6 +291,7 @@ add_zkc_component(Transforms
   lib/Transforms/FiniteRealizations.cpp
   lib/Transforms/FiniteVerification.cpp
   lib/Transforms/RealizationEmission.cpp
+  lib/Transforms/OracleVerificationContext.cpp
   lib/Transforms/OracleCommonPlan.cpp
   lib/Transforms/OracleCommonRealization.cpp
   lib/Transforms/OracleCommonVerification.cpp

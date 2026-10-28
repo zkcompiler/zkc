@@ -530,9 +530,17 @@ handle sequences and queries. It threads each role's immutable stores through
 common repeats and checks complete generated SSA, local bodies and declaration
 custody against a source-derived recipe. Root input components remain distinct;
 realization does not assert their equality. Its current integration profile has
-one prepared entry and ordinary results. Holder views, returned logical ports,
-retained anchor clauses, Merkle request suspension and the complete realization
-record still need integration before this becomes the production stage. The independently checked table-read primitive
+one prepared entry and ordinary results. Named shape views read the actual record.
+Holder contents use a custody-specific controller, so unrelated received commitments
+cannot disable held data or expose another party's data. Base contents return stored
+values; virtual contents materialize at demand through the same ordered query
+controller, under the retained admissibility obligation. Component views preserve the
+actual reference through checked rebindings without fresh allocation or eager
+materialization. Independent readers share one immutable formation/execution view
+within each check; mutations always require a fresh check. Returned logical ports,
+retained anchor clauses, multi-entry adapters, Merkle request suspension and the
+complete realization record still need integration before this becomes the
+production stage. The independently checked table-read primitive
 stops before an out-of-domain read for field, group, index and sequence-backed
 rows. Its generated clients enter the physical pipeline; native controls check
 actual row counts and observable prefixes when a later query fails. Complete source adapters and semantic realization remain pending.

@@ -91,13 +91,13 @@ Expected<OracleCommonRealization> emitIdealOracleRealization(ModuleOp prepared,
   // require a formed protocol unit. Replace it only once the common plan
   // exists.
   OracleVirtualFunctionWork work;
-  for (const auto &[role, kind] : requirements->controllers) {
+  for (const auto &[role, kind, access] : requirements->controllers) {
     auto controller = emitOracleQueryController(
         *result.module, prepared, requirements->storage, role, kind,
-        requirements->capacity, work);
+        requirements->capacity, work, access);
     if (!controller)
       return controller.takeError();
-    result.controllers.push_back({role, kind, std::move(*controller)});
+    result.controllers.push_back({role, kind, access, std::move(*controller)});
   }
   for (auto [ordinal, constructor] :
        enumerate(requirements->storage.constructors)) {

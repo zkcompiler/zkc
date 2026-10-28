@@ -410,6 +410,50 @@ module { "protocol.module"() ({
         });
     }
   });
+  cases.run(
+      "holder contents remain available beside unrelated Merkle receipts", [&] {
+        auto original = parse(context, R"mlir(
+!F = !algebra.field<"koala-bear.ext4-binomial3">
+!D = !algebra.field_vector<"koala-bear.ext4-binomial3">
+#K = #protocol.oracle_kind<"table", [!F, 4 : ui64]>
+!H = !protocol.oracle<#K>
+module { "protocol.module"() ({
+ "protocol.func"() ({ ^bb0(%left:!D,%right:!D,%position:ui64):
+  %rows = "data.index"() {value="4"} : ()->ui64
+  %a = "protocol.oracle_send"(%left,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="held"} : (!D,ui64)->!H
+  %b = "protocol.oracle_send"(%right,%rows) {shape_names=["rows"],shape_bounds={},sender="Q",receivers=["P"],site="received"} : (!D,ui64)->!H
+  %answer = "protocol.oracle_query"(%b,%position) {owner="P",site="query"} : (!H,ui64)->!F
+  "protocol.return"(%answer) : (!F)->()
+ }) {sym_name="main",function_type=(!D,!D,ui64)->!F,roles=["P","Q","V"],input_roles=[["P"],["Q"],["P"]],output_roles=[["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir");
+        auto prepared = mathematical::prepareProtocol(*original, false);
+        require(bool(prepared), "mixed custody preparation failed");
+        auto plan = take(planOracleAnchorStorage(
+            *prepared, "main", [](const auto &) -> Expected<std::string> {
+              return std::string(
+                  "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0");
+            }));
+        for (auto access : {OracleControllerAccess::Available,
+                            OracleControllerAccess::Holder}) {
+          auto candidate = fresh(context);
+          OracleVirtualFunctionWork work;
+          auto controller = take(emitOracleQueryController(
+              *candidate, *prepared, plan, "P", plan.constructors[0].kind,
+              {1, 1}, work, access));
+          if (auto e = checkOracleQueryController(
+                  *candidate, *prepared, plan, "P", plan.constructors[0].kind,
+                  {1, 1}, controller, access))
+            throw std::runtime_error(toString(std::move(e)));
+          bool holder = access == OracleControllerAccess::Holder;
+          require(
+              bool(controller.evaluate) == holder &&
+                  bool(controller.contents) == holder,
+              "custody either hid held data or exposed received commitments");
+          require(controller.constructors.size() == (holder ? 1 : 2),
+                  "wrong controller domain");
+        }
+      });
   const char *mutations[] = {"root tag and instance",
                              "domain operands",
                              "domain relation",

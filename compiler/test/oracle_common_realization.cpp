@@ -3,12 +3,14 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "zkc/Compiler/Observation.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/ScopeExit.h"
+#include "llvm/Support/FormatVariadic.h"
 #include <filesystem>
 #include <fstream>
 using namespace mlir;
@@ -48,8 +50,11 @@ int main(int argc, char **argv) {
   Cases cases;
   bool compile = argc > 1 && (argc < 3 || StringRef(argv[2]) != "checks");
   bool mutations = argc < 3 || StringRef(argv[2]) != "compile";
-  for (StringRef fixture : {"common-recurrence", "common-holders",
-                            "common-input", "common-shape"}) {
+  for (StringRef fixture :
+       {"common-recurrence", "common-holders", "common-input", "common-shape",
+        "common-contents", "common-views"}) {
+    if (argc > 3 && fixture != argv[3])
+      continue;
     std::ifstream in(std::filesystem::path(ZKC_ORACLE_FIXTURES) /
                      (fixture.str() + ".mlir"));
     std::string text((std::istreambuf_iterator<char>(in)), {});
@@ -86,6 +91,79 @@ int main(int argc, char **argv) {
         cast<pir::ProtocolModuleOp>(candidate.module->getBody()->front());
     auto program =
         cast<pir::MathematicalOp>(SymbolTable::lookupSymbolIn(unit, "main"));
+    if (mutations && fixture == "common-views") {
+      cases.run("rebindings preserve the actual selected anchor", [&] {
+        SmallVector<pir::RestrictRolesOp> rebindings;
+        program.walk([&](pir::RestrictRolesOp op) {
+          if (op.getRoles().size() == 2)
+            rebindings.push_back(op);
+        });
+        require(rebindings.size() == 2, "expected two component rebindings");
+        auto original = rebindings[1].getInput();
+        auto restore = llvm::scope_exit(
+            [&] { rebindings[1].getInputMutable().set(original); });
+        rebindings[1].getInputMutable().set(rebindings[0].getInput());
+        require(succeeded(verify(*candidate.module)),
+                "rebind mutation is malformed");
+        refused(checkIdealOracleRealization(*prepared, "main", candidate),
+                "oracle-common-body");
+      });
+      cases.run("pair-only component views do not materialize data", [&] {
+        unsigned materializations = 0;
+        program.walk([&](pir::LocalCallOp op) {
+          materializations += op.getSite().ends_with("_component_data");
+        });
+        require(materializations == 1,
+                "unused component data was materialized");
+      });
+    }
+    if (mutations && fixture == "common-contents") {
+      auto holder = find_if(candidate.controllers, [](const auto &item) {
+        return item.access == OracleControllerAccess::Holder;
+      });
+      require(holder != candidate.controllers.end(),
+              "missing holder controller");
+      cases.run("holder domain excludes unrelated received anchors", [&] {
+        require(holder->body.constructors.size() == 3,
+                "holder domain includes unrelated received data");
+      });
+      cases.run("holder access metadata cannot widen custody", [&] {
+        auto restore = llvm::scope_exit(
+            [&] { holder->body.access = OracleControllerAccess::Holder; });
+        holder->body.access = OracleControllerAccess::Available;
+        refused(checkIdealOracleRealization(*prepared, "main", candidate),
+                "oracle-controller-body");
+      });
+      cases.run("contents checks actual materialization upper bound", [&] {
+        exec::RangeOp rows;
+        candidate.module->walk([&](exec::RangeOp op) {
+          if (op.getSite() == "rows" && !rows)
+            rows = op;
+        });
+        require(bool(rows), "missing contents loop");
+        // Range operands begin with scope, lower, upper. Changing the upper
+        // to zero is formed but would silently drop the virtual table.
+        auto upper = rows->getOperand(2);
+        auto restore = llvm::scope_exit([&] { rows->setOperand(2, upper); });
+        rows->setOperand(2, rows->getOperand(1));
+        require(succeeded(verify(*candidate.module)),
+                "loop mutation is malformed");
+        refused(checkIdealOracleRealization(*prepared, "main", candidate),
+                "oracle-controller-body");
+      });
+      cases.run("shape observers cannot substitute structural leaf count", [&] {
+        auto available = find_if(candidate.controllers, [](const auto &item) {
+          return item.access == OracleControllerAccess::Available &&
+                 item.role == "P";
+        });
+        auto original = available->body.rowCounts[0];
+        auto restore =
+            llvm::scope_exit([&] { available->body.rowCounts[0] = original; });
+        available->body.rowCounts[0] = available->body.leafCounts[0];
+        refused(checkIdealOracleRealization(*prepared, "main", candidate),
+                "oracle-controller-body");
+      });
+    }
     if (mutations) {
       SmallVector<pir::LocalCallOp> calls;
       program.walk([&](pir::LocalCallOp call) { calls.push_back(call); });
@@ -218,8 +296,17 @@ int main(int argc, char **argv) {
     if (compile)
       cases.run(fixture + " ordinary physical pipeline", [&] {
         auto realized = print(*candidate.module);
+        CompilationObservation observation;
+        RunOptions options;
+        options.observations = &observation;
         auto compiled =
-            compileRun(realized, "oracle-common.mlir", {}, registry);
+            compileRun(realized, "oracle-common.mlir", options, registry);
+        if (argc > 1) {
+          std::filesystem::create_directories(argv[1]);
+          auto path = std::filesystem::path(argv[1]) /
+                      (fixture.str() + ".compilation.json");
+          std::ofstream(path) << formatv("{0:2}", observation.json()).str();
+        }
         require(
             bool(compiled),
             "physical compilation: " +

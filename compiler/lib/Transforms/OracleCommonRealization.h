@@ -5,6 +5,7 @@ namespace zkc::protocol {
 struct OracleCommonController {
   std::string role;
   protocol_ir::OracleKindAttr kind;
+  OracleControllerAccess access;
   OracleQueryController body;
 };
 struct OracleCommonRealization {

@@ -232,5 +232,94 @@ fn main() {
             }
         }
     }
+    for fixture in ["common-contents", "common-views"] {
+        let bytes = std::fs::read(Path::new(&directory).join(format!("{fixture}.bundle"))).unwrap();
+        let bundle = Bundle::admit(
+            &bytes,
+            &backend("P"),
+            zkc_cpu::cpu_contracts(),
+            BundleLimits::default(),
+        )
+        .unwrap();
+        for trips in 0..=3 {
+            for extent in [0, 2, 4, 5] {
+                for mapped in [0, 3, 4] {
+                    for position in [0, 4] {
+                        let mut deliveries = Deliveries::default();
+                        let report = run(
+                            &bundle,
+                            "oracle_common",
+                            vec![
+                                input(
+                                    "P",
+                                    vec![
+                                        table(10, 4),
+                                        table(20, 4),
+                                        Value::Index(mapped),
+                                        Value::Index(extent),
+                                        Value::Index(trips),
+                                    ],
+                                ),
+                                input("Q", vec![table(30, 4)]),
+                                input(
+                                    "V",
+                                    vec![
+                                        Value::Index(mapped),
+                                        Value::Index(extent),
+                                        Value::Index(position),
+                                        Value::Index(trips),
+                                    ],
+                                ),
+                            ],
+                            RunLimits::default(),
+                            &mut deliveries,
+                        )
+                        .unwrap();
+                        let label = format!("{fixture}/{trips}/{extent}/{mapped}/{position}");
+                        // Zero trips select the original base. Empty virtual tables
+                        // evaluate no child queries, including an invalid unused map.
+                        let rows = if trips == 0 { 4 } else { extent };
+                        let valid = position < 4
+                            && (trips == 0 || (extent <= 4 && (extent == 0 || mapped < 4)));
+                        if valid {
+                            assert!(
+                                matches!(report.outcome, Outcome::Completed),
+                                "{label}: {:?}",
+                                report.outcome
+                            );
+                            let holder = report.roles.iter().find(|r| r.role == "P").unwrap();
+                            let receiver = report.roles.iter().find(|r| r.role == "V").unwrap();
+                            assert_eq!(holder.outputs.len(), 2, "{label}");
+                            assert_eq!(receiver.outputs.len(), 2, "{label}");
+                            let expected = (10..10 + rows).collect::<Vec<_>>();
+                            assert!(
+                                matches!(&holder.outputs[0], Value::Indices(values) if values.as_ref() == expected),
+                                "{label}"
+                            );
+                            assert!(
+                                matches!(holder.outputs[1], Value::Index(x) if x == rows),
+                                "{label}"
+                            );
+                            assert!(
+                                matches!(receiver.outputs[0], Value::Index(x) if x == 10 + position),
+                                "{label}"
+                            );
+                            assert!(
+                                matches!(receiver.outputs[1], Value::Index(x) if x == rows),
+                                "{label}"
+                            );
+                        } else {
+                            verify(&report, None, &label);
+                        }
+                        assert_eq!(deliveries.0.len(), 3, "{label}");
+                        for (_, backend) in &report.backends {
+                            assert_eq!(backend.active_frames(), 0, "{label}");
+                        }
+                        cases += 1;
+                    }
+                }
+            }
+        }
+    }
     println!("{cases} common ideal realization execution and delivery controls passed");
 }

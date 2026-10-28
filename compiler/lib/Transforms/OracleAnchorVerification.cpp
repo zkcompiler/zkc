@@ -1,5 +1,5 @@
 #include "OracleAnchorStorage.h"
-#include "mlir/IR/Verifier.h"
+#include "OracleVerificationContext.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -12,16 +12,24 @@ namespace zkc::protocol {
 Error checkOracleAnchorAllocator(ModuleOp candidate, func::FuncOp actual,
                                  const OracleAnchorStorage &plan,
                                  unsigned constructor, unsigned role) {
+  auto context = OracleVerificationContext::read(candidate);
+  if (!context) {
+    consumeError(context.takeError());
+    return error("oracle-storage-allocation-body");
+  }
+  return checkOracleAnchorAllocator(*context, actual, plan, constructor, role);
+}
+Error checkOracleAnchorAllocator(const OracleVerificationContext &context,
+                                 func::FuncOp actual,
+                                 const OracleAnchorStorage &plan,
+                                 unsigned constructor, unsigned role) {
   auto refuse = [] { return error("oracle-storage-allocation-body"); };
-  if (!candidate || !actual || failed(verify(candidate)) ||
-      !hasSingleElement(candidate.getBody()->getOperations()) ||
-      constructor >= plan.constructors.size() ||
+  ModuleOp candidate = context.getModule();
+  if (!actual || constructor >= plan.constructors.size() ||
       role >= plan.constructors[constructor].roles.size())
     return refuse();
-  auto unit =
-      dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
-  if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol ||
-      actual->getParentOp() != unit)
+  auto unit = context.getUnit();
+  if (actual->getParentOp() != unit)
     return refuse();
   const auto &layout = plan.constructors[constructor];
   const auto &storage = layout.roles[role];
@@ -40,11 +48,9 @@ Error checkOracleAnchorAllocator(ModuleOp candidate, func::FuncOp actual,
   if (!equal(actual.getArgumentTypes(), arguments) ||
       !equal(actual.getResultTypes(), TypeRange(outcome)))
     return refuse();
-  auto closure = readSourceExecutionClosure(unit);
-  if (!closure)
-    return closure.takeError();
-  auto found = closure->bodies.find(actual.getSymName().str());
-  if (found == closure->bodies.end() || found->second.size() != 6)
+  const auto &closure = context.getClosure();
+  auto found = closure.bodies.find(actual.getSymName().str());
+  if (found == closure.bodies.end() || found->second.size() != 6)
     return refuse();
   const auto &steps = found->second;
   auto site = [](const SourceExecutionStep &step, StringRef name) {
@@ -103,16 +109,24 @@ Error checkOracleAnchorAllocator(ModuleOp candidate, func::FuncOp actual,
 Error checkOracleAnchorLookup(ModuleOp candidate, func::FuncOp actual,
                               const OracleAnchorStorage &plan,
                               unsigned constructor, unsigned role) {
+  auto context = OracleVerificationContext::read(candidate);
+  if (!context) {
+    consumeError(context.takeError());
+    return error("oracle-storage-lookup-body");
+  }
+  return checkOracleAnchorLookup(*context, actual, plan, constructor, role);
+}
+Error checkOracleAnchorLookup(const OracleVerificationContext &context,
+                              func::FuncOp actual,
+                              const OracleAnchorStorage &plan,
+                              unsigned constructor, unsigned role) {
   auto refuse = [] { return error("oracle-storage-lookup-body"); };
-  if (!candidate || !actual || failed(verify(candidate)) ||
-      !hasSingleElement(candidate.getBody()->getOperations()) ||
-      constructor >= plan.constructors.size() ||
+  ModuleOp candidate = context.getModule();
+  if (!actual || constructor >= plan.constructors.size() ||
       role >= plan.constructors[constructor].roles.size())
     return refuse();
-  auto unit =
-      dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
-  if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol ||
-      actual->getParentOp() != unit)
+  auto unit = context.getUnit();
+  if (actual->getParentOp() != unit)
     return refuse();
   const auto &layout = plan.constructors[constructor];
   const auto &storage = layout.roles[role];
@@ -137,15 +151,13 @@ Error checkOracleAnchorLookup(ModuleOp candidate, func::FuncOp actual,
   };
   if (!signature(actual, TypeRange{*reference, storage.sequence}, false))
     return refuse();
-  auto closure = readSourceExecutionClosure(unit);
-  if (!closure)
-    return closure.takeError();
+  const auto &closure = context.getClosure();
   auto steps = [&](func::FuncOp function,
                    unsigned count) -> const std::vector<SourceExecutionStep> * {
     if (!function)
       return nullptr;
-    auto found = closure->bodies.find(function.getSymName().str());
-    return found != closure->bodies.end() && found->second.size() == count
+    auto found = closure.bodies.find(function.getSymName().str());
+    return found != closure.bodies.end() && found->second.size() == count
                ? &found->second
                : nullptr;
   };

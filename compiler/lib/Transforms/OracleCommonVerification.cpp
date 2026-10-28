@@ -1,6 +1,6 @@
 #include "OracleCommonPlan.h"
+#include "OracleVerificationContext.h"
 #include "mlir/IR/OperationSupport.h"
-#include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -183,11 +183,18 @@ Error checkIdealOracleRealization(ModuleOp prepared, StringRef entry,
   ModuleOp actualModule = actual.module.get();
   if (!actualModule || actualModule == prepared ||
       actualModule.getContext() != prepared.getContext() ||
-      failed(verify(*actual.module)) ||
       actualModule->getAttrDictionary() != prepared->getAttrDictionary() ||
       !hasSingleElement(actualModule.getBody()->getOperations()))
     return refuse();
-  auto source = cast<pir::ProtocolModuleOp>(prepared.getBody()->front());
+  auto sourceContext = OracleVerificationContext::read(prepared);
+  if (!sourceContext)
+    return sourceContext.takeError();
+  auto targetContext = OracleVerificationContext::read(actualModule);
+  if (!targetContext) {
+    consumeError(targetContext.takeError());
+    return refuse();
+  }
+  auto source = sourceContext->getUnit();
   auto candidate =
       dyn_cast<pir::ProtocolModuleOp>(actualModule.getBody()->front());
   if (!candidate ||
@@ -202,18 +209,22 @@ Error checkIdealOracleRealization(ModuleOp prepared, StringRef entry,
   };
   for (auto [expected, item] :
        zip(requirements->controllers, actual.controllers)) {
-    if (expected.first != item.role || expected.second != item.kind)
+    if (expected.role != item.role || expected.kind != item.kind ||
+        expected.access != item.access)
       return refuse();
     if (auto e = checkOracleQueryController(
-            *actual.module, prepared, requirements->storage, item.role,
-            item.kind, requirements->capacity, item.body))
+            *targetContext, *sourceContext, requirements->storage, item.role,
+            item.kind, requirements->capacity, item.body, item.access))
       return e;
     const auto &body = item.body;
     root(body.initialize);
     root(body.advance);
     root(body.finish);
     root(body.evaluate);
+    root(body.contents);
     for (auto helper : body.resume)
+      root(helper);
+    for (auto helper : body.rowCounts)
       root(helper);
     for (auto helper : body.leafCounts)
       root(helper);
@@ -232,7 +243,7 @@ Error checkIdealOracleRealization(ModuleOp prepared, StringRef entry,
       return refuse();
     for (auto [role, helper] : enumerate(actual.allocators[ordinal])) {
       if (auto e = checkOracleAnchorAllocator(
-              *actual.module, helper, requirements->storage, ordinal, role))
+              *targetContext, helper, requirements->storage, ordinal, role))
         return e;
       root(helper);
     }
@@ -248,11 +259,9 @@ Error checkIdealOracleRealization(ModuleOp prepared, StringRef entry,
       !block(plan->body, program.getBody().front()) ||
       actual.locals.size() != plan->locals.size())
     return refuse();
-  auto closure = readSourceExecutionClosure(candidate);
-  if (!closure)
-    return closure.takeError();
+  const auto &closure = targetContext->getClosure();
   for (auto [recipe, helper] : zip(plan->locals, actual.locals)) {
-    if (!local(recipe, helper, *closure))
+    if (!local(recipe, helper, closure))
       return refuse();
     root(helper);
   }
