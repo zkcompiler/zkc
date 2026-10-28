@@ -10,14 +10,55 @@ public meta import Lean.Compiler.NoncomputableAttr
 public meta section
 
 /-! Propose a finite source library from the admitted declaration graph.
-Each template is checked once in an auxiliary definition; applications retain
-that definition by reference. This shares source normalization, not target
-alignment. The selected library still requires the independent finite root
+Normalized source forms are frozen behind checked constants, shared when their
+complete type and value agree. Each declaration-specific template retains its
+exact admitted source, role and signature. This shares source normalization,
+not target alignment. The selected library still requires the independent finite root
 connection before it supplies execution correspondence. -/
 set_option autoImplicit false
 namespace ZkcTools.ConstructionBindings.LibraryBuilder
 open Lean Meta Elab Tactic
 open Zkc.Source Zkc.Source.Structured NormalForm Zkc.Construction ConnectionLibrary
+
+initialize normalizedBodies : SimplePersistentEnvExtension Name (Array Name) ←
+  registerSimplePersistentEnvExtension {
+    addEntryFn := Array.push
+    addImportedFn := fun imported => imported.foldl (· ++ ·) #[]
+  }
+
+private def sharedSourceBody (form : Expr) : TermElabM Expr := do
+  let type ← inferType form
+  for name in normalizedBodies.getState (← getEnv) do
+    unless (← getEnv).contains name do continue
+    let candidate := mkConst name
+    if (← withTransparency .all <| isDefEq (← inferType candidate) type) &&
+        (← withTransparency .all <| isDefEq candidate form) then return candidate
+  -- Respect the enclosing public/private context. A forced private name cannot
+  -- appear in a later exported template or its type.
+  let name ← mkAuxDeclName `normalizedConnectionBody
+  withOptions (Elab.async.set · false) <|
+    addDecl (.defnDecl {name, levelParams := [], type, value := form, hints := .abbrev, safety := .safe})
+  modifyEnv fun environment => addNoncomputable (normalizedBodies.addEntry environment name) name
+  return mkConst name
+
+/-- Freeze an explicit source-template record so selecting its finite key does
+not re-run its source normalizer. The auxiliary definition is kernel checked. -/
+private def freezeSourceTemplate (expression : Expr) : TermElabM Expr := do
+  Term.synthesizeSyntheticMVarsNoPostponing
+  let expression ← instantiateMVars expression
+  let type ← inferType expression
+  let value ← withTransparency .all <| whnf expression
+  unless value.isAppOf ``SourceTemplate.mk do
+    throwError "source-library-template-refused"
+  let parts := value.getAppArgs
+  let form ← withTransparency .all <| reduce parts[parts.size - 3]! true true true
+  let body ← sharedSourceBody form
+  let value := mkAppN value.getAppFn (parts.set! (parts.size - 3) body)
+  let name ← mkAuxDeclName `sourceConnectionBody
+  withOptions (Elab.async.set · false) <|
+    addDecl (.defnDecl {name, levelParams := [], type, value, hints := .abbrev, safety := .safe})
+  modifyEnv (addNoncomputable · name)
+  return mkConst name
 
 private def template (payload keys : Expr) (selection : LibraryPlan.Selection) : TacticM Expr := do
   let source ← Term.exprToSyntax payload
@@ -31,13 +72,7 @@ private def template (payload keys : Expr) (selection : LibraryPlan.Selection) :
   Term.synthesizeSyntheticMVarsNoPostponing
   let proposed ← instantiateMVars proposed
   if proposed.hasMVar then throwError "connection-library-template-unresolved"
-  let name ← mkAuxDeclName `connectionCallee
-  let reference ← mkAuxDefinitionFor name proposed (compile := false)
-  -- A template is checked proof data. Mark the auxiliary declaration as well
-  -- as its public consumer, so downstream code generation cannot try to
-  -- compile an intentionally uncompiled dependent record.
-  modifyEnv (addNoncomputable · name)
-  return reference
+  freezeSourceTemplate proposed
 
 private def listNodes (value : Expr) : MetaM (Array Expr) := do
   let mut cursor := value
