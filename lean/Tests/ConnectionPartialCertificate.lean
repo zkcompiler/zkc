@@ -30,14 +30,10 @@ def boundedView : ConnectionCertificate.Block := fun model =>
   Domain.View.sequence (Domain.View.calculation model (.boundedAt "bls12-381.fr") [0, 1] [.data field])
     Domain.View.empty
 
-def presentAccepted : Certificate routing [] {} [] 0 1 source presentPattern
-    [.data 2] presentLayout boundedView := by derive_connection_alignment
-def optionalAccepted : Certificate routing [] {} [] 0 1 source optionalPattern
-    [.data 2] optionalLayout boundedView := by derive_connection_alignment
-def absentAccepted : Certificate routing [] {} [] 0 1 source absentPattern
-    [.absent] [] (fun _ => Domain.View.empty) := by derive_connection_alignment
-def absentIndexAccepted : Certificate routing [] {} [] 0 1 source absentIndexPattern
-    [.absent] [] (fun _ => Domain.View.empty) := by derive_connection_alignment
+def presentAccepted : Certificate routing {} [] 0 1 source presentPattern [.data 2] none [] presentLayout boundedView := by derive_connection_alignment
+def optionalAccepted : Certificate routing {} [] 0 1 source optionalPattern [.data 2] none [] optionalLayout boundedView := by derive_connection_alignment
+def absentAccepted : Certificate routing {} [] 0 1 source absentPattern [.absent] none [] [] (fun _ => Domain.View.empty) := by derive_connection_alignment
+def absentIndexAccepted : Certificate routing {} [] 0 1 source absentIndexPattern [.absent] none [] [] (fun _ => Domain.View.empty) := by derive_connection_alignment
 
 -- A total instruction eliminated by normalization still precedes the partial
 -- call in the physical view. The proposer retains it and its checkpoints.
@@ -52,8 +48,7 @@ def literalView : ConnectionCertificate.Block := fun model =>
   Domain.View.sequence (Domain.View.calculation model (.indexConstant 0) [] [.data .index]) <|
   Domain.View.sequence (Domain.View.calculation model (.boundedAt "bls12-381.fr") [0, 1] [.data field])
     Domain.View.empty
-def literalAccepted : Certificate routing [] {} [] 0 1 literalSource (.cons .present .nil)
-    [.data 2] [.data (.present (.var .here))] literalView := by derive_connection_alignment
+def literalAccepted : Certificate routing {} [] 0 1 literalSource (.cons .present .nil) [.data 2] none [] [.data (.present (.var .here))] literalView := by derive_connection_alignment
 example : literalAccepted.alignment.size = 3 := rfl
 
 -- The second operation reuses the original optional vector and index through
@@ -71,8 +66,7 @@ def repeatedView : ConnectionCertificate.Block := fun model =>
   Domain.View.sequence (Domain.View.calculation model (.boundedAt "bls12-381.fr") [0, 1] [.data field]) <|
   Domain.View.sequence (Domain.View.calculation model (.boundedAt "bls12-381.fr") [0, 1] [.data field])
     Domain.View.empty
-def repeatedAccepted : Certificate routing [] {} [] 0 1 repeatedSource optionalPattern
-    [.data 3, .data 2] optionalLayout repeatedView := by derive_connection_alignment
+def repeatedAccepted : Certificate routing {} [] 0 1 repeatedSource optionalPattern [.data 3, .data 2] none [] optionalLayout repeatedView := by derive_connection_alignment
 
 -- Without a physical witness both optional branches are actually certified.
 -- Repeated use of the same optional source input must refine it only once.
@@ -88,8 +82,7 @@ def ignoredPattern : InputPattern [field] := .cons .optional .nil
 def ignoredView : ConnectionCertificate.Block := fun model =>
   Domain.View.sequence (Domain.View.calculation model (.booleanConstant true) [] [.data .boolean])
     Domain.View.empty
-def ignoredAccepted : Certificate routing [] {} [] 0 1 ignoredSource ignoredPattern
-    [.data 1] [.unused] ignoredView := by derive_connection_alignment
+def ignoredAccepted : Certificate routing {} [] 0 1 ignoredSource ignoredPattern [.data 1] none [] [.unused] ignoredView := by derive_connection_alignment
 example : normalize {} ignoredBody 0 1 ignoredPattern = .ok
     (.split (.input .here) (.done (.cons (.present (.bool true)) .nil))
       (.done (.cons (.present (.bool true)) .nil))) := rfl
@@ -111,13 +104,13 @@ example (model : DomainModel) (tables : Tables model (Occurrence.signature model
     (environment : Domain.Environment model.toCarriers)
     (related : Holds model binders state.history optionalLayout environment)
     (retained : ArtifactBinding.Captures captured environment) :
-    Original.Simulation (Returns [.data 3, .data 2] state captured)
+    Original.Simulation (Returns routing 0 repeatedSource.outputScopes [.data 3, .data 2] none state.frames captured)
       (Original.InputLive abi (optionalPattern.environment model binders) captured)
       (Original.fold routing (repeatedBody.denote
         (participantMeaningWithOn model (.silent _) Occurrence.actions tables 0 protocols {} Occurrence.iterations)
         (optionalPattern.environment model binders).get) state) (repeatedView model environment) :=
-  repeatedAccepted.simulation rfl (RosterDistinct.root _ _) model tables (fun entry => entry.elim0)
-    protocols state stack binders abi captured sorts bound inputRead environment related retained
+  repeatedAccepted.simulation (RosterDistinct.root _ _) model tables (fun entry => entry.elim0)
+    protocols state binders stack abi captured sorts bound inputRead environment related retained
 
 -- Actual source meanings preserve missing components, successful values and
 -- OOB refusal, without a hypothesis that the operation returns.
@@ -150,37 +143,32 @@ example (model : DomainModel) (value : model.Field "bls12-381.fr") :
 
 /-- error: alignment-return-or-view-mismatch -/
 #guard_msgs (substring := true) in
-example : Certificate routing [] {} [] 0 1 source absentPattern [.data 2] []
-    (fun _ => Domain.View.empty) := by derive_connection_alignment
+example : Certificate routing {} [] 0 1 source absentPattern [.data 2] none [] [] (fun _ => Domain.View.empty) := by derive_connection_alignment
 
 /-- error: alignment-return-or-view-mismatch -/
 #guard_msgs (substring := true) in
-example : Certificate routing [] {} [] 0 1 source presentPattern [.data 0] presentLayout boundedView := by
+example : Certificate routing {} [] 0 1 source presentPattern [.data 0] none [] presentLayout boundedView := by
   derive_connection_alignment
 
 /-- error: alignment-compute-view-mismatch -/
 #guard_msgs (substring := true) in
-example : Certificate routing [] {} [] 0 1 source presentPattern [.data 2] presentLayout
-    (fun _ => Domain.View.empty) := by derive_connection_alignment
+example : Certificate routing {} [] 0 1 source presentPattern [.data 2] none [] presentLayout (fun _ => Domain.View.empty) := by derive_connection_alignment
 
 -- Without actual physical input cells the absent branch cannot be skipped.
 /-- error: alignment-operand-not-data -/
 #guard_msgs (substring := true) in
-example : Certificate routing [] {} [] 0 1 source optionalPattern [.data 2] [.unused, .unused] boundedView := by
+example : Certificate routing {} [] 0 1 source optionalPattern [.data 2] none [] [.unused, .unused] boundedView := by
   derive_connection_alignment
 
 /-- error: alignment-compute-operation-or-view-mismatch -/
 #guard_msgs (substring := true) in
-example : Certificate routing [] {} [] 0 1 source presentPattern [.data 2] presentLayout
-    (fun model => Domain.View.sequence
+example : Certificate routing {} [] 0 1 source presentPattern [.data 2] none [] presentLayout (fun model => Domain.View.sequence
       (Domain.View.calculation model (.fieldAdd "bls12-381.fr") [0, 1] [.data field]) Domain.View.empty) := by
   derive_connection_alignment
 
 -- Certifying just the matching absent branch would be unsound here.
 /-- error: alignment-return-or-view-mismatch -/
 #guard_msgs (substring := true) in
-example : Derivation routing [] {} [] [] [] [] ([.unused] : Layout [.component .boolean])
-    (.split (.input .here) (.done .nil) (.halt .incomplete))
-    (fun _ => Domain.View.empty) := by derive_connection_alignment
+example : Derivation routing {} [] [] [] 0 [] [] none [] ([.unused] : Layout [.component .boolean]) (.split (.input .here) (.done .nil) (.halt .incomplete)) (fun _ => Domain.View.empty) := by derive_connection_alignment
 
 end Tests.ConnectionPartialCertificate

@@ -57,21 +57,31 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
       derive tail
       return
   let candidates ← cells layout
+  let mut selected : Option MVarId := none
   for reference in [:candidates.size] do
     let cell ← whnf candidates[reference]!
-    unless cell.isAppOf ``ConnectionFrame.Cell.data do continue
-    let saved ← saveState
-    try
-      setGoals [goal]
-      let position := Syntax.mkNumLit (toString reference)
-      evalTactic (← `(tactic| apply Zkc.Construction.ConnectionFrame.Readback.data $position:num))
-      let checked :: tail :: [] ← getGoals
-        | throwError "data readback did not expose its static equality and suffix"
-      checked.refl
-      derive tail
-      return
-    catch _ => saved.restore
-  throwError "no checked physical cell contains source output {source}; layout has {candidates.size} cells"
+    let rules := if cell.isAppOf ``ConnectionFrame.Cell.guarded then
+        [``ConnectionFrame.Readback.guardedOriginal, ``ConnectionFrame.Readback.guardedTrue]
+      else if cell.isAppOf ``ConnectionFrame.Cell.data then [``ConnectionFrame.Readback.data]
+      else []
+    for rule in rules do
+      let saved ← saveState
+      try
+        setGoals [goal]
+        let position := Syntax.mkNumLit (toString reference)
+        evalTactic (← `(tactic| apply ($(mkIdent rule) $position:num)))
+        let pending ← getGoals
+        for checked in pending do
+          if (← instantiateMVars (← checked.getType)).isAppOf ``Eq then checked.refl
+        let [tail] ← pending.filterM fun pending => return !(← pending.isAssigned)
+          | throwError "data readback did not expose its static equality and suffix"
+        selected := some tail
+        break
+      catch _ => saved.restore
+    if selected.isSome then break
+  let some tail := selected
+    | throwError "no checked physical cell contains source output {source}; layout has {candidates.size} cells"
+  derive tail
 
 /-- Propose and check locations for all source outputs. The proposition fixes
 those outputs before search; every successful path constructs Readback data. -/

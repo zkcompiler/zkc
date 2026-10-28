@@ -14,6 +14,7 @@ open Zkc.Source Zkc.Source.Structured NormalForm
 /-- Substitute a known-absent component in the tracked source expressions. -/
 def Cell.absentAt {scope : Scope} {ty : Ty} (subject : Subject scope ty) : Cell scope → Cell scope
   | .data component => .data (component.absentAt subject)
+  | .guarded component => .guarded (component.absentAt subject)
   | cell => cell
 
 /-- Substitute a known-present component and bind its value once. History and
@@ -21,6 +22,7 @@ coordinate entries are weakened through the same source scope change. -/
 def Cell.presentAt {scope : Scope} {ty : Ty} (subject : Subject scope ty) :
     Cell scope → Cell (.value ty :: scope)
   | .data component => .data (component.presentAt subject)
+  | .guarded component => .guarded (component.presentAt subject)
   | cell => cell.rename .there
 
 theorem Cell.Holds.absentAt {model : DomainModel} {scope : Scope} {ty : Ty}
@@ -33,6 +35,8 @@ theorem Cell.Holds.absentAt {model : DomainModel} {scope : Scope} {ty : Ty}
   | data component =>
     obtain ⟨value, present, encoded⟩ := related
     exact ⟨value, (comp_eval_absentAt _ subject binders absent component).trans present, encoded⟩
+  | guarded component =>
+    exact ⟨by simpa only [Cell.Holds, comp_eval_absentAt _ subject binders absent component] using related.1, related.2⟩
   | history | coordinates | unused => exact related
 
 theorem Cell.Holds.presentAt {model : DomainModel} {scope : Scope} {ty : Ty}
@@ -45,6 +49,8 @@ theorem Cell.Holds.presentAt {model : DomainModel} {scope : Scope} {ty : Ty}
   | data component =>
     obtain ⟨actual, evaluated, encoded⟩ := related
     exact ⟨actual, (comp_eval_presentAt _ subject value binders present component).trans evaluated, encoded⟩
+  | guarded component =>
+    exact ⟨by simpa only [Cell.Holds, comp_eval_presentAt _ subject value binders present component] using related.1, related.2⟩
   | history | coordinates | unused => exact related.rename .there (fun _ => rfl)
 
 theorem Holds.absentAt {model : DomainModel} {scope : Scope} {ty : Ty}

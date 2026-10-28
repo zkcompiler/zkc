@@ -37,6 +37,7 @@ private partial def inputPositions (types : Expr) : MetaM (Array Expr) := do
 
 private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
     Term.withoutErrToSorry <| withoutRecover do
+  if ← goal.isAssigned then return
   let expected ← instantiateMVars (← goal.getType)
   if expected.isAppOf ``ConnectionInputs.Shape then
     for rule in [``ConnectionInputs.Shape.nil, ``ConnectionInputs.Shape.absent,
