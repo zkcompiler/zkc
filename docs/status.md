@@ -295,9 +295,10 @@ symbols, resolved definitions, native type/role hover, visible-name completion
 and checked-syntax formatting. Its single worker uses immutable whole-project
 generations, bounded queues, explicit cancellation and stale-publication guards.
 Imported notation, private bodies and spec additions invalidate the active
-analysis. Invalid projects retain header symbols; semantic features require a
-checked project. Persistent caches, rename, Lean proof actions and production
-language cutover remain open.
+analysis. A failed body preserves independently valid neighboring facts; a
+failed signature preserves valid signatures but prevents global body checking.
+Only error-free analysis constructs a checked project. Persistent caches, rename,
+Lean proof actions and production language cutover remain open.
 
 `entry fn` exposes typed application control; `proof` configures independent
 proving and verification. Entry functions statically call numerical helpers,
