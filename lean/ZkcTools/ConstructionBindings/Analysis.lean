@@ -1,14 +1,13 @@
 module
 
 public import ZkcTools.ConstructionBindings.Common
-public import ZkcTools.StructuredSource.Methods.SumcheckRoot
 public import Zkc.Construction.SourceDelivery
 
 @[expose] public section
 
-/-! Proposals for construction bindings, obtained from admitted source paths and
-the actual artifact's SSA frame. This analysis grants no simulation authority.
-Generated full body equations and structural certificates are checked separately. -/
+/-! Static source-call and SSA metadata for derivation accounting. This utility
+grants no simulation authority and imports no family-specific source printer.
+The checked source connection has its own independent certificate boundary. -/
 set_option autoImplicit false
 namespace ZkcTools.ConstructionBindings
 open Zkc.Source Zkc.Source.Structured Zkc.Construction

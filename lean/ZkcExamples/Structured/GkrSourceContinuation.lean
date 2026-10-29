@@ -1,7 +1,8 @@
 module
 
 public import ZkcExamples.Structured.GkrSourceAdmission
-public import ZkcExamples.Structured.GkrSourceCallbacks
+public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import ZkcExamples.Structured.Generated.Presentations.Gkr
 public import ZkcExamples.Structured.GkrInputInvocation
 public import ZkcExamples.Structured.SumcheckHelperExpansions
 
@@ -18,7 +19,7 @@ set_option maxHeartbeats 16000000
 set_option backward.isDefEq.respectTransparency false
 namespace ZkcExamples.Structured.GkrSourceContinuation
 open Zkc.Source Zkc.Source.Structured PrimitiveLibrary SumcheckVerifierHelpers
-open GkrSourceCallbacks
+open Generated.Presentations.Gkr.Root
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
@@ -35,7 +36,7 @@ theorem empty_plain : invoke (closed (F := F) (G := G)) GkrSourceBodies.emptyHel
 
 /-- Actual dataflow after successful admission, before any reference circuit
 or claim truth is chosen. -/
-def process (initial outputs add mul : List F) (layers selector width handle : Nat) :
+noncomputable def process (initial outputs add mul : List F) (layers selector width handle : Nat) :
     PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) [.boolean]) :=
   (invoke closed GkrSourceBodies.emptyHelper .nil).bind fun empty =>
@@ -71,9 +72,7 @@ theorem participant (initial outputs add mul : List F) (layers selector width ha
     (capacity : layers ≤ 2 ^ selector) :
     GkrSourceAdmission.participant (G := G) initial outputs add mul layers selector width handle =
       process initial outputs add mul layers selector width handle := by
-  rw [GkrSourceAdmission.body]
-  have sameBody : GkrSourceBodies.gkrBody = GkrSourceCallbacks.gkrBody := by rfl
-  rw [sameBody]
+  rw [GkrSourceAdmission.presentation]
   have widthSmall : width < indexLimit := lt_of_le_of_lt widthBound (by decide)
   have layerSmall : layers < indexLimit := lt_of_le_of_lt layersBound (by decide)
   have selectorSmall : selector < 64 := by omega
@@ -102,45 +101,30 @@ theorem participant (initial outputs add mul : List F) (layers selector width ha
   have widthCheck : ¬ 4 < width := by omega
   have layersCheck : ¬ 4 < layers := by omega
   have capacityCheck : ¬ 2 ^ selector < layers := by omega
-  unfold GkrSourceCallbacks.gkrBody process
-  repeat' (rw [Region.denote]; simp [participantMeaningWith,
-    protocolOperationWith, Operands.eval, Regions.denote, Values.get, Values.get_cons,
-    Environment.prepend, Environment.push, GkrSourceAdmission.inputs, PIR.Process.bind, PIR.Process.bind_done, PIR.Process.bind_assoc,
-    SiteObservations.silent, empty_plain, GkrSourceAdmission.comparison_plain,
+  have input_call (values point : Option (List F)) (claim : Option F) :
+      invokeProtocol (GkrSourceViews.unit.plainProtocolTable F G)
+        GkrSourceBodies.sourceProtocol80Signature (({} : ProtocolContext).enter "label_696e707574" [1]) 1
+        (.cons values (.cons point (.cons claim .nil))) =
+      Generated.Presentations.Gkr.Input.verifierProcess values point claim :=
+    GkrInputInvocation.invoke _ values point claim
+  unfold Generated.Presentations.Gkr.Root.verifierProcess process
+  simp [Evaluation.ComponentTables.toOn, Generated.Presentations.Gkr.payload,
+    Generated.Presentations.Gkr.program, GkrSourceViews.program,
+    PIR.Process.bind_assoc, PIR.Process.bind_done, PIR.Process.bind,
+    Values.get, empty_plain, GkrSourceAdmission.comparison_plain,
     GkrSourceAdmission.shape_plain_values, GkrSourceAdmission.index_add_plain,
-    GkrSourceAdmission.power_plain, Primitive.evaluate, primitiveOutcome,
+    GkrSourceAdmission.power_plain,
     show 4 < indexLimit by decide, show 1 < indexLimit by decide,
     widthSmall, layerSmall, selectorIndex, widthDimension, selectorSmall,
-    capacityBound, tableBound, wiringBound, inputBound, outputBound, addBound, mulBound, initialShape, outputShape,
-    addShape, mulShape, dimensions, totalSmall, widthCheck, layersCheck, capacityCheck,
+    capacityBound, tableBound, wiringBound, inputBound, outputBound, addBound, mulBound,
+    initialShape, outputShape, addShape, mulShape, dimensions, totalSmall,
+    widthCheck, layersCheck, capacityCheck,
     show selector + width < indexLimit by omega,
     show selector + width + width < indexLimit by omega,
-    Participant.restrict, ProtocolContext.roles,
-    Evaluation.componentOperation, strictComponent, Participant.owned, Participant.guard,
-    RoleFamily.sequence, Values.absent, ProtocolOp.results, Values.split,
-    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    SumcheckHelperLaws.prepend_two, SumcheckHelperLaws.prepend_three,
-    boolResult, present_cons, Values.present, PIR.Process.interpret, participantActions,
-    Evaluation.meaning, Evaluation.operation, Op.calculationRegions,
-    GkrSourceBodies.gkrSignature, Op.results])
-  congr 1
-  funext output
-  cases output with | cons point rest =>
-    cases rest with | cons producerPoint rest =>
-      cases rest
-      cases point <;>
-        simp [Region.denote, participantMeaningWith, protocolOperationWith,
-          Operands.eval, Regions.denote, Values.get, Values.get_cons, Values.split,
-          Environment.prepend, Environment.push, SiteObservations.silent,
-          Participant.owned, Participant.restrict, Participant.guard,
-          RoleFamily.sequence, Values.absent, ProtocolOp.results,
-          PIR.Process.bind, PIR.Process.bind_assoc, PIR.Process.bind_done,
-          present_cons, Values.present, participantActions,
-          SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-          SumcheckHelperLaws.prepend_two, SumcheckHelperLaws.prepend_three,
-          Evaluation.componentOperation, strictComponent, ProtocolContext.contains,
-          ProtocolContext.enter, roleSubstitution, GkrSourceBodies.sourceProtocol80Signature,
-          SumcheckHelperLaws.singleton_eta]
-      all_goals rfl
+    boolResult, input_call,
+    Generated.Presentations.Gkr.Input.verifierView,
+    Bindings.optionalPattern, NormalForm.InputPattern.environment,
+    SumcheckHelperLaws.singleton_eta]
+  rfl
 
 end ZkcExamples.Structured.GkrSourceContinuation

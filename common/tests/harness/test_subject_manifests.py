@@ -30,7 +30,7 @@ def test_old_semantic_tables_are_rejected(table):
 
 
 def test_targetless_unclaimed_subjects_have_no_generated_source_authority():
-    for subject in manifests().load_all(["gkr", "deferred-rounds"]):
+    for subject in manifests().load_all(["deferred-rounds"]):
         assert subject.generated("claims") is None
         assert subject.get("lean", "namespace") is None
 
@@ -43,7 +43,7 @@ def test_no_manifest_property_fallback_in_generator():
     generated = renderer.claims_module(subject, {"claims": []})
     assert "claim_request" not in generated
     assert "KnowledgeSoundness" not in generated
-    assert "Endpoints" in generated
+    assert "Endpoints" not in generated
     changed = deepcopy(subject)
     changed.data["claims"] = {"properties": ["forged"]}
     assert renderer.claims_module(changed, {"claims": []}) == generated
@@ -156,3 +156,28 @@ def test_generated_symlink_cannot_replace_maintained_connection(tmp_path, monkey
     with pytest.raises(loader.Refused, match="construction.connection must differ"):
         loader.load(path)
     assert proof.read_text() == "maintained connection\n"
+
+
+def test_typed_library_owns_its_artifacts_without_a_uniform_adapter():
+    renderer = load("source_subject_library_evidence", "lean/bridges/pipeline/evidence.py")
+    subject = manifests().load_all(["gkr"])[0]
+    assert subject.generated("artifacts") is None
+    assert subject.get("lean", "library")
+    generated = renderer.claims_module(subject, {"claims": []})
+    assert "SubjectSoundnessRegistration" in generated
+    assert "Endpoints" not in generated
+    assert "Artifacts" not in generated
+    assert "claim_request" not in generated
+
+
+@pytest.mark.parametrize("library", ["bad-name", "Library\naxiom injected : False"])
+def test_typed_library_declaration_name_is_validated(tmp_path, library):
+    import json
+    loader = manifests()
+    subject = loader.load_all(["gkr"])[0]
+    old = subject.get("lean", "library")
+    text = subject.path.read_text().replace(f'library = "{old}"', 'library = ' + json.dumps(library))
+    path = tmp_path / "gkr.toml"
+    path.write_text(text)
+    with pytest.raises(loader.Refused, match="lean.library must be a Lean declaration name"):
+        loader.load(path)

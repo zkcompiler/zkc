@@ -12,9 +12,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
-import types
 
 
 CLIENTS = ("SmallSumcheck", "TwoSums", "GkrRounds")
@@ -29,23 +27,6 @@ def main() -> None:
     directory = (options.records or Path(tempfile.mkdtemp(prefix="zkc-structured-bindings-"))).resolve()
     directory.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "LEAN_NUM_THREADS": os.environ.get("LEAN_NUM_THREADS", "2")}
-    # Poison the legacy Python proof producer in this orchestration process.
-    # The Lean route must still produce identical checked artifacts.
-    class ForbiddenLegacyProducer:
-        def __new__(cls, *args, **kwargs):
-            raise AssertionError("legacy Python Evaluator/Step route was used")
-
-    legacy = types.ModuleType("bridges.structured.normal_forms")
-    legacy.Evaluator = ForbiddenLegacyProducer
-    legacy.Step = ForbiddenLegacyProducer
-    sys.modules[legacy.__name__] = legacy
-    for producer in (legacy.Evaluator, legacy.Step):
-        try:
-            producer()
-        except AssertionError:
-            pass
-        else:
-            raise AssertionError("legacy route refusal control failed")
     if options.overlay:
         paths = [options.overlay.resolve()]
         paths.extend((root / ".lake/packages").glob("*/.lake/build/lib/lean"))
@@ -67,10 +48,13 @@ def main() -> None:
     generated = []
     relative = Path("ZkcExamples/Structured/Generated/Bindings")
     for client in CLIENTS:
-        for printed, shipped in [
-            (".lean", ".lean"), (".inputs.lean", "Inputs.lean"), (".callbacks.lean", "Callbacks.lean"),
+        files = [
+            (".lean", ".lean"), (".callbacks.lean", "Callbacks.lean"),
             (".template.lean", "Gate.lean" if client == "GkrRounds" else "Sumcheck.lean"),
-        ]:
+        ]
+        if client != "GkrRounds":
+            files.append((".inputs.lean", "Inputs.lean"))
+        for printed, shipped in files:
             expected = (regenerated / relative / (client + printed)).read_bytes()
             actual = (root / relative / (client + shipped)).read_bytes()
             if expected != actual:
@@ -101,7 +85,7 @@ def main() -> None:
                    if row["route"] == "unattributed")):
             raise AssertionError('unattributed helper obligations must stay open')
     for printed, shipped in [(".lean", ".lean"), (".inputs.lean", "Inputs.lean"),
-                             (".callbacks.lean", "Callbacks.lean")]:
+                             (".callbacks.lean", "Callbacks.lean"), (".present.lean", "Present.lean")]:
         stem = "Tests/Generated/StructuredBindingsGeneric"
         expected = (regenerated / (stem + printed)).read_bytes()
         actual = (root / (stem + shipped)).read_bytes()
@@ -141,13 +125,13 @@ example : normalize TwoSums.protocol0Role0Signature (swapPrivate TwoSums.definit
   kernel_rfl
 """,
         "same-typed-operand-permutation": """
-example : GkrRoundsGate.valueDefinition.body.component
+example : GkrRoundsGate.gateValueDefinition.body.component
     (Evaluation.meaning (.silent (participantInterface ℚ ℚ))
       (Zkc.Source.Structured.Bindings.helpers GkrRounds.payload).closed)
     (Evaluation.componentOperation (.silent _)
       (Zkc.Source.Structured.Bindings.helpers GkrRounds.payload))
     ((Values.cons (some (1 : ℚ)) (.cons (some 2) (.cons (some 3) (.cons (some 4) .nil))) :
-      Values (Component (assignment ℚ ℚ)) GkrRoundsGate.valueDefinition.inputs).get) =
+      Values (Component (assignment ℚ ℚ)) GkrRoundsGate.gateValueDefinition.inputs).get) =
       PIR.Process.done (.cons (some (Zkc.Protocols.AlgebraicRounds.Gate.value (2 : ℚ) 1 3 4)) .nil) := by
   kernel_rfl
 """,
@@ -196,7 +180,7 @@ example : GkrRoundsGate.valueDefinition.body.component
             raise AssertionError(f"dispatch client failed: {name}")
         checked_dispatch.append(name)
         print(f"PASS {name}", flush=True)
-    report = {"format": "zkc.structured-binding-controls/0", "legacy_evaluator_step_disabled": True,
+    report = {"format": "zkc.structured-binding-controls/0",
               "generated": generated,
               "dispatch": checked_dispatch,
               "mutations": refused}

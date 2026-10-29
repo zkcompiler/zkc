@@ -48,13 +48,24 @@ theorem loweringChecked (subject : Subject F G art .executableBytes) : subject.L
 def constructionLink : Obligation :=
   ⟨"construction.checked", "admitted IR and selected participant", subject.ConstructionChecked, .infrastructure⟩
 
+/-- Keep the subject index before reducing the fixed connection proposition.
+Two subject references may share a participant; their stage links still belong
+to their respective subjects. Proofs use the same method-independent meaning. -/
+def SourceConnectionChecked : Prop :=
+  ConnectionAdmission.Required subject.compiled.imported.program
+    subject.compiled.selection.context .validator art.participant
+
+def sourceConnectionLink : Obligation :=
+  ⟨"construction.source_connection", "complete source-to-participant correspondence",
+    subject.SourceConnectionChecked, .infrastructure⟩
+
 def loweringLink (subject : Subject F G art .executableBytes) : Obligation :=
   ⟨"lowering.interpreted_bytes", "checked Lean executable validator", subject.LoweringChecked, .infrastructure⟩
 
 def stageLinks : List Obligation :=
   match endpoint with
-  | .idealMeaning => [subject.constructionLink]
-  | .executableBytes => [subject.constructionLink, subject.loweringLink]
+  | .idealMeaning => [subject.constructionLink, subject.sourceConnectionLink]
+  | .executableBytes => [subject.constructionLink, subject.sourceConnectionLink, subject.loweringLink]
 
 /-- Omitted proofs keep a receipt open; these proofs discharge exactly the
 interpreted-stage links already carried by the admitted subject. -/
@@ -64,12 +75,14 @@ def stageLinkProofs (index : Fin subject.stageLinks.length) :
   | idealMeaning =>
     match index with
     | ⟨0, _⟩ => exact some ⟨subject.constructionChecked⟩
-    | ⟨n + 1, impossible⟩ => exact False.elim (by simp [stageLinks] at impossible)
+    | ⟨1, _⟩ => exact subject.compiled.sourceConnection
+    | ⟨n + 2, impossible⟩ => exact False.elim (by simp [stageLinks] at impossible)
   | executableBytes =>
     match index with
     | ⟨0, _⟩ => exact some ⟨subject.constructionChecked⟩
-    | ⟨1, _⟩ => exact some ⟨subject.loweringChecked⟩
-    | ⟨n + 2, impossible⟩ => exact False.elim (by simp [stageLinks] at impossible)
+    | ⟨1, _⟩ => exact subject.compiled.sourceConnection
+    | ⟨2, _⟩ => exact some ⟨subject.loweringChecked⟩
+    | ⟨n + 3, impossible⟩ => exact False.elim (by simp [stageLinks] at impossible)
 
 end Subject
 end ZkcSecurity.Claims

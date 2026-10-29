@@ -1,6 +1,9 @@
 schema = "zkc.subject/0"
 name = "schnorr"
 
+[source_views]
+selections = ["SchnorrInteractive"]
+
 [source]
 project = "examples/projects/schnorr"
 

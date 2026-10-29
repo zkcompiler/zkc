@@ -12,5 +12,6 @@ import ZkcSecurity.Examples.NativePrograms.FactorHorner
 #check Zkc.Protocols.Sumcheck.Common.VerifierContract.randomized_soundness
 #check Zkc.Protocols.Sumcheck.FactorOpening.VerifierContract.conditional_soundness
 
-noncomputable def composedSourceSoundness :=
-  @ZkcExamples.NativePrograms.FactorHorner.property_interactive_soundness
+noncomputable def composedSourceSoundness {F : Type} [Field F] [DecidableEq F]
+    [Fintype F] :=
+  (ZkcExamples.NativePrograms.FactorHorner.contract (F := F)).soundness

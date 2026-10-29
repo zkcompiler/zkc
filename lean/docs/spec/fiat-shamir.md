@@ -217,7 +217,7 @@ The checks above establish structural admission. The selected execution
 connections use `Domain.Correspondence`, original-source simulations and
 Process handler laws, with exact artifact/source identities. They quantify all
 typed replies and retain failure paths; neither an honest trace nor a digest
-match supplies the needed equation. The [projection chapter](participant-projection.md#soundness)
+match supplies the needed equation. The [projection chapter](participant-projection.md#checked-derivations)
 describes this distinction and the maintained consumers.
 
 ## The compiled Schnorr proof Entry
@@ -244,10 +244,10 @@ compiled candidate. In `ZkcExamples.Construction.SchnorrProof`:
 
 The compiled proof Entries of the Sumcheck example, its composed variant, the
 Sigma example, the GKR example and the guessing fixture are checked the same way
-([Sumcheck](participant-projection.md#the-compiled-sumcheck-proof-entry),
-[Sigma](participant-projection.md#the-compiled-sigma-proof-entries),
-[GKR](participant-projection.md#the-compiled-gkr-proof-entry),
-[guessing](participant-projection.md#the-compiled-guessing-proof-entry)):
+([Sumcheck](participant-projection.md#property-consumers-and-receipts),
+[Sigma](participant-projection.md#property-consumers-and-receipts),
+[GKR](participant-projection.md#property-consumers-and-receipts),
+[guessing](participant-projection.md#property-consumers-and-receipts)):
 each selected canonical validator is connected to the Fiat–Shamir transform
 of its admitted original for every challenge function. For the compiled Sumcheck Entry,
 [multi-round security](fiat-shamir-security.md#the-compiled-sumcheck-proof-entry)

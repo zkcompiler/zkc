@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare native SSA interpretation with independently elaborated Lean source.
 
-Uses the explicit Z/97 scalar and additive-group test interpretation. Does not
+Uses the explicit BLS scalar-field and additive-group test interpretation. Does not
 execute a production field/curve backend. Every selected source is natively
 verified before export. Reports include seeds and original-byte identities.
 """
@@ -17,13 +17,14 @@ import tempfile
 import shutil
 
 from native_entry import native_subject
-from snapshot import render
+from structured import render, entry
 from contracts import check_contract_forms
 from factor_openings import check_factor_forms
 
 ROOT = Path(__file__).resolve().parents[3]
 FIELD = 'bls12-381.fr'
 GROUP = 'bls12-381.g1'
+MODULUS = 52435875175126190479447740508185965837690552500527637822603658699938581184513
 STOPS = ('reject', 'abort', 'exhausted', 'incomplete', 'refused')
 TYPES = {'f': '!F', 'g': '!G', 'b': 'i1', 's': '!S'}
 
@@ -53,7 +54,7 @@ module {{ "protocol.module"() ({{
 ^entry({argtext}):
 {chr(10).join(body)}
 "protocol.return"(%{output[0]}) : ({TYPES[output[1]]}) -> ()
-}}) {{sym_name="main", function_type=({argtypes})->{TYPES[output[1]]}, roles=["R0","R1","R2"], input_roles={scopes}, output_roles={outputroles}}} : () -> ()
+}}) {{sym_name="main", origin=["main",[]], function_type=({argtypes})->{TYPES[output[1]]}, roles=["R0","R1","R2"], input_roles={scopes}, output_roles={outputroles}}} : () -> ()
 }}) {{profile=#protocol.profile<protocol>}} : () -> ()
 }}
 '''
@@ -148,37 +149,84 @@ class Suite:
     def export(self, text, symbol='main'):
         source = self.directory / 'source.mlir'
         source.write_text(text)
-        data = json.loads(execute([self.args.compiler,'protocol-lean',source,'--symbol='+symbol]))
-        if not (data[1] == 'sha256:' + hashlib.sha256(text.encode()).hexdigest()):
-            raise AssertionError("bridges/common/check.py:151: data[1] == 'sha256:' + hashlib.sha256(text.encode()).hexdigest()")
+        data = json.loads(execute([self.args.compiler,'protocol-structured',source,'--symbol='+symbol]))
+        if not (data[2] == 'sha256:' + hashlib.sha256(text.encode()).hexdigest()):
+            raise AssertionError("bridges/common/check.py:151: data[2] == 'sha256:' + hashlib.sha256(text.encode()).hexdigest()")
         exported = self.directory / 'source.json'
         exported.write_text(json.dumps(data))
         execute([self.args.lean,'check',exported])
         return source, exported, data
 
+    def wire_request(self, data, request):
+        """Only wire adaptation for controls; neither source nor arithmetic is evaluated."""
+        selected = entry(data)
+        roles = selected[6][1]
+        role = request[1]
+        def value(v):
+            return v if v is None or type(v) is bool else str(v)
+        def action(a):
+            if a[0] == 'send':
+                return ['send', a[1], roles[role], roles[a[2]], a[3], value(a[4])]
+            if a[0] == 'receive':
+                return ['receive', a[1], roles[a[2]], roles[role], a[3]]
+            return ['draw', a[1], roles[role], 'random.' + a[2] + '/0', str(a[3]), a[2]]
+        replies = []
+        for a, reply in request[3]:
+            response = reply if reply[0] == 'stop' else (
+                ['unit'] if a[0] == 'send' else ['value', value(reply[1])])
+            replies.append(['reply', action(a), response])
+        return ['zkc.structured-open-request/0', roles[role], list(map(value, request[2])), replies, 4096]
+
+    def observe(self, result, data):
+        """Expose convenient scalar controls after exact canonical result comparison."""
+        roles = entry(data)[6][1]
+        def scalar(v):
+            return int(v) if isinstance(v, str) and v.isdecimal() else v
+        outcome = result[1]
+        if outcome[0] == 'returned':
+            outcome = ['returned', scalar(outcome[1][0])]
+        else:
+            outcome = outcome[:2]
+        events = []
+        for record in result[2]:
+            if record[0] == 'request':
+                a = record[2]
+                if a[0] == 'send':
+                    a = [a[0], a[1], roles.index(a[3]), a[4], scalar(a[5])]
+                elif a[0] == 'receive':
+                    a = [a[0], a[1], roles.index(a[2]), a[4]]
+                else:
+                    a = [a[0], a[1], a[5], int(a[4])]
+                events.append([a, ['missing']])
+            elif record[0] == 'reply':
+                events[-1][1] = record[2]
+        return ['scalar-observation', outcome, result[3], events]
+
     def compare(self, source, exported, symbol, request):
+        data = json.loads(exported.read_text())
         path = self.directory / 'request.json'
-        path.write_text(json.dumps(request))
-        left = json.loads(execute([self.args.reference,source,symbol,path]))
-        right = json.loads(execute([self.args.lean,'run',exported,path]))
+        path.write_text(json.dumps(self.wire_request(data, request)))
+        left = json.loads(execute([self.args.reference, 'open', source, symbol, path]))
+        right = json.loads(execute([self.args.lean, 'open', exported, path]))
         self.comparisons += 1
         if left != right:
             (self.directory / 'mismatch.json').write_text(json.dumps(
-                {'request':request,'native':left,'lean':right},indent=2))
+                {'request':json.loads(path.read_text()),'native':left,'lean':right},indent=2))
             raise AssertionError(f'complete execution mismatch; retained at {self.directory}')
-        return left
+        return self.observe(left, data)
 
     def value(self, ty):
         return self.rng.choice([False,True]) if ty[0]=='bool' else self.rng.randrange(97)
 
     def exercise(self, text, symbol='main', repetitions=2):
         source, exported, data = self.export(text,symbol)
-        self.sources.append({'sha256':data[1],'symbol':symbol,'instructions':len(data[8])})
-        self.instructions.update(x[1][0] if x[0]=='pure' else x[0] for x in data[8])
+        selected = entry(data)
+        self.sources.append({'sha256':data[2],'symbol':symbol,'instructions':len(selected[9][1])})
+        self.instructions.update(x[0][0] for x in selected[9][1])
         for _ in range(repetitions):
-            for role in range(len(data[3])):
-                inputs = [self.value(ty) if role in scopes else None for ty,scopes in zip(data[4],data[5],strict=True)]
-                request = ['zkc.common-run/0',role,inputs,[]]
+            for role in range(len(selected[6][1])):
+                inputs = [self.value(ty) if selected[6][1][role] in scopes else None for ty,scopes in zip(selected[4],selected[6][2],strict=True)]
+                request = ['scalar-control',role,inputs,[]]
                 for _ in range(65):
                     result = self.compare(source,exported,symbol,request)
                     events = result[3]
@@ -208,10 +256,10 @@ class Suite:
         source, exported, data = self.export(text, symbol)
         values = [2,3,5,7,11,13,17,19,23]
         def evaluate(row, x):
-            return (row[0] + x*row[1] + x*x*row[2]) % 97
+            return (row[0] + x*row[1] + x*x*row[2]) % MODULUS
         rows = [values[i:i+3] for i in (0,3,6)]
-        message = [(2*a+b+c)%97 for a,b,c in rows]
-        claim = (2*message[0]+message[1]+message[2])%97
+        message = [(2*a+b+c)%MODULUS for a,b,c in rows]
+        claim = (2*message[0]+message[1]+message[2])%MODULUS
         first, second = 3,5
         next_message = [evaluate([rows[i][j] for i in range(3)],first) for j in range(3)]
         def label(name):
@@ -225,7 +273,7 @@ class Suite:
         for attack in ('honest','first-boundary','terminal'):
             for role in (0,1):
                 inputs = [*values,claim,41 if role==1 else None]
-                request = ['zkc.common-run/0',role,inputs,[]]
+                request = ['scalar-control',role,inputs,[]]
                 for _ in range(16):
                     result=self.compare(source,exported,symbol,request)
                     if not result[3] or result[3][-1][1] != ['missing']: break
@@ -235,10 +283,10 @@ class Suite:
                     else:
                         value=received[action[1]]
                         if role==1 and attack=='first-boundary' and action[1]==label('first0'):
-                            value=(value+1)%97
+                            value=(value+1)%MODULUS
                         if role==1 and attack=='terminal':
-                            if action[1]==label('second0'): value=(value+1)%97
-                            if action[1]==label('second1'): value=(value-2)%97
+                            if action[1]==label('second0'): value=(value+1)%MODULUS
+                            if action[1]==label('second1'): value=(value-2)%MODULUS
                     request[3].append([action,['return',value]])
                 expected = ['returned',None] if role==0 else {
                     'honest':['returned',True], 'first-boundary':['stopped','reject'],
@@ -253,38 +301,69 @@ class Suite:
 
     def negatives(self, data):
         mutations = []
-        for position,value in [(0,'zkc.common-source/999'),(1,'sha256:bad'),(9,2049),
-                               (3,[]),(7,[]),(5,[[99]]*len(data[4]))]:
-            changed=copy.deepcopy(data); changed[position]=value; mutations.append(changed)
-        changed=copy.deepcopy(data); changed[8].insert(0,['pure',['field.add',FIELD],[2048,2048]]); mutations.append(changed)
-        changed=copy.deepcopy(data); changed.append('ignored'); mutations.append(changed)
+        for position, value in [(0, 'zkc.structured-source/999'), (2, 'sha256:bad'),
+                                (3, 'absent'), (7, [])]:
+            changed = copy.deepcopy(data); changed[position] = value; mutations.append(changed)
+        changed = copy.deepcopy(data); changed.append('ignored'); mutations.append(changed)
+        changed = copy.deepcopy(data)
+        entry(changed)[9][1].append([['field.add', FIELD], [4096,4096], [['field',FIELD]], [], ''])
+        mutations.append(changed)
         for changed in mutations:
-            path=self.directory/'negative.json'; path.write_text(json.dumps(changed))
-            execute([self.args.lean,'check',path],ok=False)
+            path = self.directory / 'negative.json'; path.write_text(json.dumps(changed))
+            execute([self.args.lean, 'check', path], ok=False)
         return len(mutations)
 
     def request_formats(self):
-        source, exported, _ = self.export(wrap([], [('a', 'f', [0, 1, 2])], ('a', 'f'), [0, 1, 2]))
-        if not (self.compare(source, exported, 'main', ['zkc.common-run/0', 0, [0], []])[1] == ['returned', 0]):
-            raise AssertionError("bridges/common/check.py:261: self.compare(source, exported, 'main', ['zkc.common-run/0', 0, [0], []])[1] == ['returned', 0]")
-        controls = [
-            '["zkc.common-run/0",-0,[0],[]]',
-            '["zkc.common-run/0",0,[-0],[]]',
-            '["zkc.common-run/0",0,[0],[[-1]]]',
-            '["zkc.common-run/0",0,[0],[{"x":0,"x":1}]]',
-            '["zkc.common-run/0",0,[0],[{"x":0}]]',
-            '["zkc.common-run/0",0,[0],[[1e0]]]',
-            '["zkc.common-run/0",0,[0],[[0.0]]]',
-        ]
+        source, exported, data = self.export(wrap([], [('a', 'f', [0,1,2])], ('a','f'), [0,1,2]))
+        request = self.wire_request(data, ['scalar-control',0,[0],[]])
         path = self.directory / 'raw-request.json'
+        controls = [json.dumps(request).replace('4096', '-0'),
+                    json.dumps(request).replace('4096', '1e0'),
+                    json.dumps(request).replace('4096', '0.0'),
+                    '{"x":0,"x":1}', json.dumps(request + ['extra'])]
+        for inputs in ([True], ['-0'], ['1e0'], [str(MODULUS)], [], ['0', '0']):
+            changed = copy.deepcopy(request)
+            changed[2] = inputs
+            controls.append(json.dumps(changed))
+        for replies in ([[['reply']]], [{'x': 0}]):
+            changed = copy.deepcopy(request)
+            changed[3] = replies
+            controls.append(json.dumps(changed))
         for text in controls:
             path.write_text(text)
-            execute([self.args.reference, source, 'main', path], ok=False, diagnostic='common-run-format')
-            refusal = json.loads(execute([self.args.lean, 'run', exported, path], ok=False))
-            if not (refusal == {'status': 'refused', 'code': 'common-run-json'}):
-                raise AssertionError(refusal)
-        # Lexical preflight must leave string contents alone, even in an unused tail.
-        self.compare(source, exported, 'main', ['zkc.common-run/0', 0, [0], ['-0{}1e0']])
+            execute([self.args.reference, 'open', source, 'main', path], ok=False)
+            execute([self.args.lean, 'open', exported, path], ok=False)
+        # All inputs and every unused reply envelope are validated. An unread
+        # well-formed reply stays unread; it cannot alter a returned value.
+        base = self.compare(source, exported, 'main', ['scalar-control',0,[0],[]])
+        suffix = ['scalar-control',0,[0],[[['draw','-0{}1e0',FIELD,7],['stop','abort']]]]
+        if self.compare(source, exported, 'main', suffix) != base:
+            raise AssertionError('unused reply changed a returned process')
+        # Structured validates unused envelopes, and checks a payload's type
+        # only if its action is consumed. An unread ill-typed payload remains
+        # unread, as in the former arbitrary-tail controls.
+        suffix[3][0][1] = ['return', True]
+        if self.compare(source, exported, 'main', suffix) != base:
+            raise AssertionError('unused reply payload was consumed')
+        # Pure operations propagate absent components; an effect that needs an
+        # absent handle stops. Present-input views cover neither arbitrary row.
+        if self.compare(source, exported, 'main', ['scalar-control',0,[None],[]])[1] != ['returned',None]:
+            raise AssertionError('absent output component was lost')
+        source, exported, _ = self.export(wrap(
+            ['%answer = algebra.field_add %a, %b : (!F,!F)->!F'],
+            [('a','f',[0,1,2]), ('b','f',[1])], ('answer','f'), [1]))
+        for role, inputs in ((1,[None,1]), (1,[1,None]), (0,[1,None])):
+            if self.compare(source, exported, 'main', ['scalar-control',role,inputs,[]])[1] != ['returned',None]:
+                raise AssertionError('pure absence or output filtering was lost')
+        source, exported, _ = self.export(wrap(
+            ['%answer = "protocol.query"(%svc) {method="draw",owner="R0",site="used"} : (!S)->!F'],
+            [('svc','s',[0])], ('answer','f'), [0]))
+        if self.compare(source, exported, 'main', ['scalar-control',0,[None],[]])[1] != ['stopped','incomplete']:
+            raise AssertionError('missing service did not stop')
+        bad = ['scalar-control',0,[7],[[['draw','used',FIELD,7],['return',True]]]]
+        observed = self.compare(source, exported, 'main', bad)
+        if observed[1:3] != [['stopped','refused'],0]:
+            raise AssertionError('a consumed ill-typed reply was accepted or consumed')
         return len(controls)
 
     def mutation_control(self):
@@ -295,10 +374,11 @@ class Suite:
               '%answer = algebra.field_add %a, %b : (!F,!F)->!F']
         def mismatch(candidate, inputs):
             source, exported, data = self.export(wrap(candidate,args,('answer','f'),[0,1,2]))
-            index=next(i for i,x in enumerate(data[8]) if x[0]=='pure' and x[1][0]=='field.add')
-            data[8][index][1][0]='field.subtract'; exported.write_text(json.dumps(data))
-            path=self.directory/'request.json'; path.write_text(json.dumps(['zkc.common-run/0',0,inputs,[]]))
-            return json.loads(execute([self.args.reference,source,'main',path])) != json.loads(execute([self.args.lean,'run',exported,path]))
+            instructions=entry(data)[9][1]
+            index=next(i for i,x in enumerate(instructions) if x[0][0]=='field.add')
+            instructions[index][0][0]='field.subtract'; exported.write_text(json.dumps(data))
+            path=self.directory/'request.json'; path.write_text(json.dumps(self.wire_request(data,['scalar-control',0,inputs,[]])))
+            return json.loads(execute([self.args.reference,'open',source,'main',path])) != json.loads(execute([self.args.lean,'open',exported,path]))
         if not (mismatch(body,[29,17])):
             raise AssertionError('bridges/common/check.py:293: mismatch(body,[29,17])')
         # Greedy definition deletion; candidates with dangling references are
@@ -323,8 +403,8 @@ class Suite:
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--compiler',type=Path,default=ROOT/'build/compiler/zkc-compile')
-    parser.add_argument('--reference',type=Path,default=ROOT/'build/compiler/test/zkc-common_reference-test')
-    parser.add_argument('--lean',type=Path,default=ROOT/'lean/.lake/build/bin/common-source')
+    parser.add_argument('--reference',type=Path,default=ROOT/'build/compiler/test/zkc-structured_reference-test')
+    parser.add_argument('--lean',type=Path,default=ROOT/'lean/.lake/build/bin/structured-source')
     parser.add_argument('--seed',type=int,default=20261012)
     parser.add_argument('--cases',type=int,default=40)
     parser.add_argument('--report',type=Path,required=True)
@@ -388,7 +468,7 @@ def main():
             outcomes=[]
             for text,symbol in algebra_sources[:2]:
                 source,exported,_=suite.export(text,symbol)
-                outcomes.append(suite.compare(source,exported,symbol,['zkc.common-run/0',1,inputs,[]]))
+                outcomes.append(suite.compare(source,exported,symbol,['scalar-control',1,inputs,[]]))
             if not (outcomes[0]==outcomes[1]):
                 raise AssertionError('helper/expanded fold mismatch')
             variation_checks+=1
@@ -403,7 +483,7 @@ def main():
                 'sumcheck_controls':sumcheck_controls,'source_variation_checks':variation_checks,
                 'contract_controls':contract_controls,'factor_opening_controls':factor_controls,
                 'instruction_coverage':dict(sorted(suite.instructions.items())),
-                'interpretation':'Z/97 field and additive group; production backend not covered'}
+                'interpretation':'BLS scalar field and additive group in both reference models; production curve/backend not covered'}
         args.report.write_text(json.dumps(report,indent=2)+'\n')
         print(json.dumps({k:v for k,v in report.items() if k!='sources'}))
     except Exception:

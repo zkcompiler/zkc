@@ -1,35 +1,30 @@
 module
 
 public import ZkcSecurity.FiatShamir.OccurrenceReading
-public import ZkcExamples.Construction.ComposedSumcheckSourceRouting
+public import ZkcExamples.Construction.ComposedSumcheckProof
 
 @[expose] public section
 
-/-! A second source client of the shared nominal reading laws. Both actual
-Sumcheck applications retain their source routes and arbitrary raw inputs. -/
+/-! The second source client consumes its stored complete connection. The
+all-input endpoint includes both applications and arbitrary capability labels;
+the independent nominal field-reading laws remain unchanged. -/
 set_option autoImplicit false
 noncomputable section
 namespace TestsSecurity.OccurrenceReading
-open Zkc.Source Zkc.Source.Structured Zkc.Construction
+open Zkc.Source Zkc.Construction
 open ZkcSecurity.FiatShamir
+open ZkcExamples.Construction
 variable {F G : Type} [Field F] [DecidableEq F]
   [AddCommGroup G] [Module F G] [DecidableEq G]
 
-theorem sumcheck_reading (left right : List F) (leftClaim rightClaim : F)
-    (count handle : Nat) (history : Domain.History (uniformCarriers F G)) :
-    let routing := ZkcExamples.Construction.ComposedSumcheckSourceRouting.Retained.routing handle
-    let source := Occurrence.participant (ringModel F G)
-      ZkcExamples.Construction.ComposedSumcheckSourceRouting.Retained.program 1
-      (.cons (some left) (.cons (some right) (.cons (some leftClaim) (.cons (some rightClaim)
-        (.cons (some count) (.cons (some handle) .nil))))))
-    let routed := ZkcExamples.Construction.ComposedSumcheckSourceRouting.participant (G := G)
-      left right leftClaim rightClaim count handle
-    DomainReduction.Bridge OccurrenceReading.interface (OccurrenceReading.Post []) history
-      (Original.fold routing source ⟨[], history⟩)
-      (OccurrenceReading.presentation routed history) :=
-  OccurrenceReading.reading rfl _ rfl
-    (ZkcExamples.Construction.ComposedSumcheckSourceRouting.participant
-      left right leftClaim rightClaim count handle) history
+/-- Exact source/compiler scalar reading for arbitrary raw inputs and replies. -/
+theorem sumcheck_reading {m : Type → Type} [Monad m] [LawfulMonad m]
+    (oracle : History F G → m F) (left right : List F) (leftClaim rightClaim : F)
+    (count handle : Nat) (initial : History F G) (proof : Proof F G) :
+    ComposedSumcheckProof.compiledVerifier oracle left right leftClaim rightClaim count initial proof =
+      transform ComposedSumcheckProof.context oracle
+        (ComposedSumcheckProof.verifier left right leftClaim rightClaim count handle) initial proof :=
+  ComposedSumcheckProof.compiled_transform oracle left right leftClaim rightClaim count handle initial proof
 
 #print axioms sumcheck_reading
 #print axioms OccurrenceReading.reading

@@ -13,10 +13,11 @@ schema = "zkc.claims/0"
 [[proved]]
 subject = "Scalar imports"
 result = '''
-Admission and open-process contracts of exported scalar programs; Schnorr completeness, special soundness and rejection; the two-round degree-two Sumcheck bound `4 / \|F\|`'''
+Structured admission and derived scalar open-process contracts of exported programs; Schnorr completeness, special soundness and rejection; the two-round degree-two Sumcheck bound `4 / \|F\|`'''
 owners = [["Scalar import", "docs/spec/common-source.md"], ["support", "docs/support.md"]]
 theorems = [
-  "Zkc.Source.Common.Native.Snapshot.check_parts",
+  "ZkcExamples.NativePrograms.SchnorrInputs.kernel_admission",
+  "ZkcExamples.NativePrograms.SumcheckInputs.kernel_admission",
   "Zkc.Protocols.Schnorr.Common.VerifierContract.perfect_completeness",
   "Zkc.Protocols.Schnorr.Common.VerifierContract.special_soundness",
   "Zkc.Protocols.Sumcheck.Common.VerifierContract.soundness",
@@ -31,6 +32,21 @@ theorems = [
   "Zkc.Source.Structured.Imported.exactSubject",
   "Zkc.Source.Structured.check_ok_inversion",
   "Zkc.Source.Structured.Imported.protocolApplication",
+]
+
+[[proved]]
+subject = "Checked source connections"
+result = '''
+Typed certificates establish complete nominal source-to-participant simulations and independent reached-source routing coverage. The admitted source, role, canonical input ABI and complete returned values are fixed before proof selection. Both SmallSumcheck and TwoSums roles use the generic certificate theorem, with arbitrary physical input rows, typed replies and reached stops; failed boundary selection admits no connection'''
+owners = [["Participant projection", "docs/spec/participant-projection.md"], ["Structured source", "docs/spec/structured-source.md"]]
+theorems = [
+  "Zkc.Construction.SourceConnection.ofRootCertificate",
+  "Zkc.Construction.SourceConnection.Connected.inputABI_unique",
+  "Zkc.Construction.ConnectionAdmission.refused",
+  "ZkcExamples.Structured.Generated.Connections.SmallSumcheck.producerConnected",
+  "ZkcExamples.Structured.Generated.Connections.SmallSumcheck.validatorConnected",
+  "ZkcExamples.Structured.Generated.Connections.TwoSums.producerConnected",
+  "ZkcExamples.Structured.Generated.Connections.TwoSums.validatorConnected",
 ]
 
 [[proved]]
@@ -88,7 +104,7 @@ subjects = ["sumcheck", "deferred-rounds"]
 subject = "Compiled Sumcheck proofs"
 result = '''
 The actual canonical validators of the Sumcheck example and its composed two-application variant have checked all-reply connections to their admitted original verifiers. The first's selected acceptance satisfies `(Q + n) / \|F\|` for a fixed well-formed false statement and the stated adaptive bound under typed public-value binding. This proves statement determination; native absorption remains assumed. The composed source has separate generated TwoSums root receipts; its construction connection alone is not a composed security theorem'''
-owners = [["Participant projection", "docs/spec/participant-projection.md#the-compiled-sumcheck-proof-entry"], ["multi-round security", "docs/spec/fiat-shamir-security.md#the-compiled-sumcheck-proof-entry"], ["support", "docs/support.md"]]
+owners = [["Participant projection", "docs/spec/participant-projection.md#property-consumers-and-receipts"], ["multi-round security", "docs/spec/fiat-shamir-security.md#the-compiled-sumcheck-proof-entry"], ["support", "docs/support.md"]]
 theorems = [
   "ZkcExamples.Construction.SumcheckProof.compiled_transform",
   "ZkcExamples.Construction.ComposedSumcheckProof.compiled_transform",
@@ -188,7 +204,7 @@ theorems = [
 subject = "Sigma compositions"
 result = '''
 Actual Schnorr AND and Chaum–Pedersen subjects; shared and independent witness contexts over the retained `DLog` relation; a generic shared-challenge composition theorem; VCVio completeness, special soundness and HVZK of both imported Σ-protocols, and fixed-statement Fiat–Shamir knowledge soundness of their transforms; the composed construction and projection check accepts both compiled proof Entries, whose ideal interpretations are the transforms of their original verifiers, and each compiled verifier has fixed-statement knowledge soundness in the random-oracle model as the registered knowledge endpoint applied to its subject's evidence'''
-owners = [["Sigma compositions", "docs/support.md#sigma-compositions"], ["participant projection", "docs/spec/participant-projection.md#the-compiled-sigma-proof-entries"]]
+owners = [["Sigma compositions", "docs/support.md#sigma-compositions"], ["participant projection", "docs/spec/participant-projection.md#property-consumers-and-receipts"]]
 theorems = [
   "ZkcSecurity.Examples.SchnorrAndSigma.knowledge_soundness",
   "ZkcSecurity.Examples.ChaumPedersenSigma.knowledge_soundness",
@@ -216,20 +232,20 @@ subjects = ["okamoto", "okamoto-proof"]
 [[proved]]
 subject = "Participant normal forms"
 result = '''
-`normal_forms.py` generates each role's process, its equation against the admitted unit, its run and the binding of a contract clause from a short request, as ordinary Lean source the kernel checks. Each process equation is an instance of one soundness theorem of the verified participant normalizer, whose form the compiled normalizer prints and the kernel checks by evaluation; a definitional root equation is checked by `kernel_rfl` alone. For a body that applies other protocols, also inside a repeat callback, the callee's generated normal form stands at the application's child context, and each role's invocation at any caller context is stated; a repeat anywhere in a body binds its returned state, and a callback's repeat on an admitted count is the fold of the callback's normal form, by one generic law. Chaum–Pedersen, Schnorr AND, interactive Schnorr, Okamoto, the Sumcheck units and roots, the GKR layer Sumcheck and the GKR root use it'''
+The shared Lean presentation tools derive each role's process and its equation against the admitted unit from typed source and library selections, as ordinary Lean source the kernel checks. Source invocation and contract-clause binding remain separate checked facts. Each process equation is an instance of one soundness theorem of the verified participant normalizer, whose form the compiled normalizer prints and the kernel checks by evaluation; a definitional root equation is checked by `kernel_rfl` alone. For a body that applies other protocols, also inside a repeat callback, the callee's generated normal form stands at the application's child context, and each role's invocation at any caller context is stated; a repeat anywhere in a body binds its returned state, and a callback's repeat on an admitted count is the fold of the callback's normal form, by one generic law. Chaum–Pedersen, Schnorr AND, interactive Schnorr, Okamoto, the Sumcheck units and roots, the GKR layer Sumcheck and the GKR root use it'''
 owners = [["Structured bridge", "bridges/structured/README.md#generated-participant-normal-forms"], ["support", "docs/support.md#source-only-sumcheck-verifier"]]
 theorems = [
-  "ZkcExamples.Structured.ChaumPedersenNormalForms.verifier_process",
-  "ZkcExamples.Structured.OkamotoNormalForms.verifier_process",
+  "ZkcExamples.Structured.Generated.Scalar.ChaumPedersen.Root.verifier_process",
+  "ZkcExamples.Structured.Generated.Scalar.Okamoto.Root.verifier_process",
   "ZkcExamples.Structured.OkamotoNormalForms.exact_clause",
-  "ZkcExamples.Structured.SchnorrAndNormalForms.verifier_process",
+  "ZkcExamples.Structured.Generated.Scalar.SchnorrAnd.Root.verifier_process",
   "Zkc.Source.Structured.NormalForm.normalize_sound",
   "Zkc.Source.Structured.NormalForm.callback_sound_uniform",
   "ZkcExamples.Structured.SumcheckSourceNormalForms.verifier_invoke",
-  "ZkcExamples.Structured.GkrRoundsNormalForms.verifierRounds_invoke",
-  "ZkcExamples.Structured.GkrRootNormalForms.verifierLayer_process",
+  "ZkcExamples.Structured.Generated.Presentations.Gkr.Rounds.verifierRounds_invocation",
+  "ZkcExamples.Structured.Generated.Presentations.Gkr.Root.verifierLayer_process",
   "ZkcExamples.Structured.NormalFormSteps.repeat_embed",
-  "ZkcExamples.Structured.GkrRootNormalForms.verifier_participant",
+  "ZkcExamples.Structured.Generated.Presentations.Gkr.Root.verifier_participant",
 ]
 
 [[proved]]

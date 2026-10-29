@@ -1,5 +1,5 @@
 import Tests.SumcheckMathematicalInstallation
-import ZkcSecurity.Families.Sumcheck.SourceRound
+import ZkcSecurity.Realizations.Sumcheck.SourceRound
 import ZkcSecurity.Families.Sumcheck.TableComponentNominal
 import ZkcSecurity.Tools.ComponentDerivation
 
@@ -8,7 +8,7 @@ noncomputable section
 namespace TestsSecurity.SumcheckMathematicalConsumers
 open Zkc.Source Zkc.Source.Structured Zkc.Transcript Zkc.Obligations
 open ZkcExamples.Structured
-open ZkcSecurity.Families.Sumcheck
+open ZkcSecurity.Families.Sumcheck ZkcSecurity.Realizations.Sumcheck
 open SumcheckReferenceInstallation
 open Tests.MultilinearReferences
 

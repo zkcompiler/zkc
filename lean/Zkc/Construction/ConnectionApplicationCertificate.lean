@@ -13,7 +13,7 @@ callback is an instance field. -/
 set_option autoImplicit false
 namespace Zkc.Construction.ConnectionApplications
 open Zkc.Source Zkc.Source.Structured NormalForm ConnectionFrame
-open ConnectionLibrary ConnectionCertificate
+open ConnectionLibrary ConnectionCertificate InputVisibility
 
 /-- The whole nominal output tuple, exact enclosing stack, reached transcript
 and retained caller frame at an actual application boundary. -/
@@ -81,7 +81,7 @@ normalization equation is taken once from the shared source template. -/
     Occurrence.actions (Occurrence.helpers model payload) context
     (runsAtOn model Occurrence.actions Occurrence.iterations (Occurrence.helpers model payload)
       (Occurrence.table model payload) context template.role) (library.processes model) template.form
-  have aligned := certificate.alignment.librarySimulation library model state captured binders stack
+  have aligned := Derivation.unselectedLibrarySimulation certificate.alignment library model state captured binders stack
     environment related retained
   apply Original.Simulation.linkedApplication model payload routing template.source
     (List.getElem_mem _) context (context.roles template.role) _ state

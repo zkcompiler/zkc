@@ -64,12 +64,12 @@ theorem context_eq : context =
     Context.fiatShamir ZkcExamples.Structured.GkrSourceData.snapshot.entry ["role00000000", "role00000001"] 0 1 7 "random.bls12-381.fr/0" (some (.draw "bls12-381.fr")) participant.policy.suite [("label_6f7574707574", "label_6f75747075745f64656c6976657279_0"), ("apply_14_label_6c656674_label_6368616c6c656e6765", "apply_14_label_6c656674_label_64656c6976657279_0"), ("apply_16_label_7269676874_label_6368616c6c656e6765", "apply_16_label_7269676874_label_64656c6976657279_0"), ("label_6c696e655f6368616c6c656e6765", "label_6c696e655f64656c6976657279_0")] := by
   decide +kernel
 
-/-- The composed check's two rules, each on the actual export. -/
+/-- The structural check and exact occurrence provenance on the actual export. -/
 theorem compiled_rules : checkExport ZkcExamples.Structured.GkrSourceData.snapshot participant = .ok () ∧ check context participant = .ok () ∧
-    project program context participant = .ok () := by
-  obtain ⟨exported, construction, _, projection⟩ :=
+    SourceOccurrences.check ZkcExamples.Structured.GkrSourceData.snapshot context participant = .ok () := by
+  obtain ⟨exported, construction, occurrences⟩ :=
     checkCompiled_components context_admitted compiled
-  exact ⟨exported, construction, projection⟩
+  exact ⟨exported, construction, occurrences⟩
 
 /-- The per-compile construction check accepts the actual export. -/
 theorem accepted : checkExport ZkcExamples.Structured.GkrSourceData.snapshot participant = .ok () := compiled_rules.1
@@ -77,8 +77,8 @@ theorem accepted : checkExport ZkcExamples.Structured.GkrSourceData.snapshot par
 /-- The transcript-construction rule accepts the actual export. -/
 theorem checked : check context participant = .ok () := compiled_rules.2.1
 
-/-- The participant projection rule accepts the actual export. -/
-theorem projected : project program context participant = .ok () := compiled_rules.2.2
+/-- Exact source occurrences are retained by the actual export. -/
+theorem source_occurrences : SourceOccurrences.check ZkcExamples.Structured.GkrSourceData.snapshot context participant = .ok () := compiled_rules.2.2
 
 set_option smartUnfolding true in
 theorem validator_eq : context.validator = 1 := by decide +kernel

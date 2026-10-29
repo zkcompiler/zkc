@@ -7,7 +7,10 @@ import hashlib
 import json
 
 from native_entry import native_subject
-from snapshot import render
+
+from structured import render
+
+MODULUS = 52435875175126190479447740508185965837690552500527637822603658699938581184513
 
 
 def label(name, exchange=True):
@@ -39,14 +42,14 @@ def check_contract_forms(suite, root, execute, originals):
             if not (render(data, f'ZkcExamples.NativePrograms.Variants.{family}{form}Data') == constructor.read_text()):
                 raise AssertionError("bridges/common/contracts.py:37: render(data, f'ZkcExamples.NativePrograms.Variants.{family}{form}Data') == constructor.read_text()")
             sources[family, form] = text, symbol
-            fixtures.append({'family': family, 'form': form, 'source': data[1]})
+            fixtures.append({'family': family, 'form': form, 'source': data[2]})
             if family == 'Sumcheck' and form != 'WrongResidual':
                 suite.sumcheck(text, symbol)
 
     def replay(source, inputs, reply):
         text, symbol = source
         native, exported, _ = suite.export(text, symbol)
-        request = ['zkc.common-run/0', 1, inputs, []]
+        request = ['scalar-control', 1, inputs, []]
         for _ in range(16):
             result = suite.compare(native, exported, symbol, request)
             if not result[3] or result[3][-1][1] != ['missing']:
@@ -72,14 +75,14 @@ def check_contract_forms(suite, root, execute, originals):
         coefficients = [suite.rng.randrange(97) for _ in range(9)]
         first, second = [suite.rng.randrange(97) for _ in range(2)]
         rows = [coefficients[i:i+3] for i in (0, 3, 6)]
-        message = [(2*a+b+c) % 97 for a, b, c in rows]
-        next_message = [(rows[0][j] + first*rows[1][j] + first*first*rows[2][j]) % 97 for j in range(3)]
-        claim = (2*message[0] + message[1] + message[2]) % 97
+        message = [(2*a+b+c) % MODULUS for a, b, c in rows]
+        next_message = [(rows[0][j] + first*rows[1][j] + first*first*rows[2][j]) % MODULUS for j in range(3)]
+        claim = (2*message[0] + message[1] + message[2]) % MODULUS
         if case % 3 == 1:
-            message[0] = (message[0] + 1) % 97
+            message[0] = (message[0] + 1) % MODULUS
         elif case % 3 == 2:
-            next_message[0] = (next_message[0] + 1) % 97
-            next_message[1] = (next_message[1] - 2) % 97
+            next_message[0] = (next_message[0] + 1) % MODULUS
+            next_message[1] = (next_message[1] - 2) % MODULUS
         values = {label(f'first{i}'): message[i] for i in range(3)}
         values.update({label(f'second{i}'): next_message[i] for i in range(3)})
         values.update({label('draw0', False): first, label('draw1', False): second})
@@ -94,7 +97,7 @@ def check_contract_forms(suite, root, execute, originals):
     for form in ('Original', 'EarlyChallenge'):
         text, symbol = sources['Schnorr', form]
         native, exported, _ = suite.export(text, symbol)
-        result = suite.compare(native, exported, symbol, ['zkc.common-run/0', 1, [1, 1, None, None, 7], []])
+        result = suite.compare(native, exported, symbol, ['scalar-control', 1, [1, 1, None, None, 7], []])
         if not (result[1] == ['stopped', 'incomplete']):
             raise AssertionError("bridges/common/contracts.py:93: result[1] == ['stopped', 'incomplete']")
         first_actions.append(result[3][0][0])

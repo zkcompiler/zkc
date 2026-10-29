@@ -934,7 +934,7 @@ acceptance of the image implies acceptance of the transform's outcome.
 
 `ZkcArkLib.Examples.CompiledSumcheckFiatShamir` composes these theorems with
 the transcript-construction and
-[participant projection](participant-projection.md#the-compiled-sumcheck-proof-entry)
+[participant projection](participant-projection.md#property-consumers-and-receipts)
 rules. Its subject is the compiled verifier itself: `compiledVerifier challenge
 raw claim count initial proof` runs `ScalarVerifier.verify` on the exported
 validator `SumcheckProof.participant`. This executes the actual checked Domain
@@ -1056,7 +1056,7 @@ width.
   that validator is the plain verifier
   (`ZkcExamples.Structured.GkrSourceVerifier.verifier_reads`): the generated
   normal form of the admitted root at the verifier
-  (`ZkcExamples.Structured.GkrRootNormalForms.verifier_participant`), each
+  (`ZkcExamples.Structured.Generated.Presentations.Gkr.Root.verifier_participant`), each
   loop read as the fold of its callback's generated normal form, the layer
   Sumcheck applications as their generated normal forms, and every helper call
   read with the admitted unit's own helper equations
@@ -1093,25 +1093,24 @@ circuit evaluation for every typed public statement. Circuit admission is a
 separate predicate: a shape-valid false output remains admissible, while malformed
 wiring makes the target false and is rejected by the actual validator.
 
-`OriginalCertificates.producer` and `.validator` relate the full constructed
-participants to the original occurrence processes for arbitrary typed inputs and
-replies. They preserve stops, all physical returns, the ordered history and the
-complete nested occurrence coordinates. Both property consumers use the same
-validator certificate installed by `CanonicalInstallation`; neither assumes a
+`ZkcExamples.Structured.Generated.Connections.Gkr` supplies a checked root
+certificate for each actual constructed participant. The common generator uses
+typed source/artifact derivations and one generic simulation theorem. Independent
+reached-source coverage and the canonical source-order input ABI are checked
+alongside the derivation. The resulting `SourceConnection.Connected` preserves
+stops, full physical returns, ordered history and nested occurrence coordinates
+for arbitrary typed inputs and replies. `CanonicalInstallation` consumes that
+same connection for completeness and soundness; neither property assumes a
 whole-program equality, helper success or an honest adversarial statement.
 
-The concrete GKR physical installation is owned by
-`lean/security/checks/generate_gkr_connections.py`. Recursive source/artifact
-descriptors supply frame lengths, read/yield maps and generated callback paths;
-the family template applies the existing explicit callback and loop laws.
-The generic `Original.Simulation.participant` checks the full input ABI, live
-captures and returned values around the generated body certificate. Every
-emitted proof is kernel checked. The same installation also certifies a formal
-artifact permutation with an additional root allocation and shifted callback
-frames (`TestsSecurity.GkrStructuralGeneration`); that control does not change
-the canonical native subject or assert a new native byte association. Exact
-regeneration ownership and the before/after authored inventory are recorded in
-`lean/security/checks/gkr-connection-{ownership,inventory}.json`.
+The data-only GKR selections are in `lean/Tests/ConnectionGeneration.lean`;
+`lean/Tests/Constructed/Generate.lean` owns the producer and validator views.
+Both use the common Lean printers, and each emitted declaration is kernel
+checked. No GKR-specific compiled-frame generator or callback proof template is
+needed. `TestsSecurity.GkrStructuralGeneration` retains pure alternate-layout
+syntax and provenance controls; it does not certify an alternate full connection
+or a new native byte association. The source-level invariant and reference
+proofs remain authored work and are included in the author-cost account.
 
 - `Generated.Completeness.compiled_ideal_complete` proves perfect completeness
   in the registered honest-pair model. The actual source producer computes its

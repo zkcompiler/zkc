@@ -12,7 +12,7 @@ views retain ordered split checks, map capacity/shape checks and all stops. -/
 
 namespace ZkcSecurity.Examples.Components.GkrRoundsProcesses
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.Bindings
-open ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs
+open ZkcExamples.Structured.GkrSourceViews
 open GkrRoundsHelpers
 open ZkcExamples.Structured.SumcheckHelperLaws (prepend_empty prepend_one prepend_two prepend_three singleton_eta)
 open Zkc.Polynomial.Multilinear

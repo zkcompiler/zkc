@@ -30,6 +30,7 @@ flowchart TD
 | `Zkc.Obligations` | Yes/No promises, contexts, frames and structural derivations without a probability dependency |
 | `ZkcSecurity.Obligations` | Actual-distribution escape laws and interpretation into the existing reduction engine |
 | `ZkcSecurity.Algebra` | Shared algebraic probability lemmas independent of a protocol family |
+| `ZkcSecurity.Source` | Composition and installation of properties on occurrence-preserving source processes |
 | `ZkcSecurity.Families` | Mathematical reference/message laws and reusable family consumers |
 | `ZkcSecurity.Realizations` | Checked laws for concrete source implementations, under the subject-level dependency boundary |
 | `ZkcSecurity.Examples` | Exact source-body instances, selected subjects and root proof applications |
@@ -83,6 +84,44 @@ coordinates and phases, and a handler/support invariant for state outside
 them. A conditional soundness theorem cannot frame a true or gap prefix.
 These contracts do not establish completeness, efficient knowledge extraction,
 or a canonical root receipt without their respective consumers and links.
+
+## Source property assembly
+
+The occurrence process is the shared source boundary for the current
+SmallSumcheck and TwoSums consumers. `Source.Template.Association` selects an
+actual payload declaration and checks its complete signature and raw body
+against a mathematical template. `derive_source_association` discovers the
+position and generates those checks; authors do not supply a numeric table
+position. Matching a name is only a proposal. A changed bound, signature or
+body cannot satisfy the association without a new checked law.
+
+The same associated body serves honest-pair and adversarial proofs. Their
+mathematical obligations stay separate. `Source.Pair` relates successful actual
+producer and validator computations, including the common arbitrary challenge
+reply. Messages retain their nominal data type, including aggregate and group
+values; service capabilities cannot be delivered as data. Its repeat contract requires an author-supplied invariant, step law and
+initial relation. It has no successful refusal rule. The adversarial path uses
+`Zkc.Obligations.Derivation` with its No predicate and actual-distribution escape
+law; a No/Yes gap is allowed, and presence/frame facts must hold independently
+of that No predicate. Sequential cost composition uses the actual reached
+history. Shared challenges require an explicit probability theorem; the
+assembler does not infer independence or replace a sum by a maximum.
+
+`assemble_source_pairs` and `assemble_source_no` apply selected component laws
+along matching process binds and discharge explicit pure seams. The kernel
+checks the complete application, arguments and returned relation. These tools
+do not discover arbitrary component mathematics or synthesize arbitrary loop
+invariants. Unmatched applications and missing laws remain typed goals.
+`source_presentation` handles bind coherence for an already selected source
+reference; its success alone establishes no security property.
+
+`Source.Installation` combines these source laws with the generated producer
+and validator roots. ABI reads and the mathematical terminal predicate remain
+explicit; the root supplies independent route coverage, full-return simulation,
+source reading and acceptance agreement. Companion lookup uses the exact
+expected type. A missing proof is an authoring obligation, and an invalid
+explicit companion does not silently fall back to a different method. These
+reports do not replace canonical receipt admission or its required stage links.
 
 ## Generated binding and its scope
 

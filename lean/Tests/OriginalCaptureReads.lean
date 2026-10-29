@@ -1,5 +1,5 @@
 module
-public import ZkcExamples.Construction.GkrOriginalCoefficient
+public import Zkc.Construction.OriginalLoop
 @[expose] public section
 set_option autoImplicit false
 set_option linter.unusedSimpArgs false

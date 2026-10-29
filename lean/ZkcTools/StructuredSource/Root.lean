@@ -125,6 +125,7 @@ def sourceAliasSource (moduleName sourceModule : String)
   return text ++ "end\nend " ++ moduleName ++ "\n"
 
 structure FixedSubjectOutput where
+  connectionModule : String
   moduleName : String
   sourceModule : String
   originalExpression : String
@@ -143,7 +144,8 @@ structure FixedSubjectOutput where
 def fixedSubjectSource (output : FixedSubjectOutput) : String :=
   let target := quoted output.targetName
   "module\n\npublic import " ++ output.sourceModule ++ "\npublic import " ++ output.pairModule ++
-  "\npublic import " ++ output.modelModule ++ "\npublic import ZkcSecurity.Tools.PairConstruction\n" ++
+  "\npublic import " ++ output.modelModule ++ "\npublic import " ++ output.connectionModule ++
+  "\npublic import ZkcSecurity.Tools.PairConstruction\n" ++
   "public import ZkcSecurity.Claims.SourceChargeSites\n\n" ++
   "@[expose] public section\n\n/-! Generated fixed request data and checked Subject assembly. -/\n" ++
   "namespace " ++ output.moduleName ++ "\nopen Zkc.Source.Structured\n" ++
@@ -156,6 +158,7 @@ def fixedSubjectSource (output : FixedSubjectOutput) : String :=
   "def subject : ZkcSecurity.Claims.HonestPair.Subject\n" ++
   "    " ++ paren output.modelExpression ++ " original imported selected := by\n" ++
   "  bind_authored_subject " ++ target ++ " with_registry " ++ output.registryExpression ++ "\n" ++
+  "    connections " ++ output.connectionModule ++ ".producer, " ++ output.connectionModule ++ ".validator\n" ++
   "    exports " ++ output.originalExportExpression ++ ", " ++ output.producerExportExpression ++ ", " ++
   output.validatorExportExpression ++ "\n\n" ++
   "abbrev validatorArtifacts := subject.validatorArtifacts\n" ++

@@ -14,7 +14,8 @@ predicate is `CircuitEncoding.Outputs`. A malformed circuit shape has a false
 target, including unused malformed wiring at zero layers. A shape-valid false
 output remains admitted.
 
-`CanonicalPair` retains the current native producer and validator exports.
+`ZkcExamples.Construction.Generated.GkrPair` retains the current native producer
+and validator exports in the core examples package.
 `Canonical` and `Generated.Subject` select the source's registered output
 clause through `Relations.registry`. `Canonical.holds_all` identifies its
 meaning for every typed adversarial statement. Soundness reads the actual
@@ -23,80 +24,59 @@ admission and role agreement for completeness.
 
 ## Actual source and compiled correspondence
 
-`GkrSourceAdmission` accounts for every raw admission branch. `RootSource`
-composes those branches with the complete source-reading theorem and the
-existing GKR component soundness laws. `CanonicalSource` gives fixed-target
+`GkrSourceAdmission` accounts for every raw admission branch. `SourceRoot`
+composes those branches with the source-reading theorem and the existing GKR
+component soundness laws; `SourceValidator` supplies the complete validator
+process, including malformed inputs and stopped helpers. `CanonicalSource` gives fixed-target
 rejection for all typed public statements without a supplied representation.
 The generated normal forms use the current eight-input Pending ABI, including
 the prefix carried into the right rounds, and the actual terminal input call.
 
-`OccurrenceRouting`, `OccurrenceLayerRouting` and `OccurrenceRootRouting`
-prove resolution for the full source validator. Every nested round,
-coefficient and layer index is retained. Shared `FiatShamir.OccurrenceReading`
-transfers reading, losslessness, constant-price rejection and costs over those
-checked routes. `CanonicalReading` retains full optional returns, exact
-ordered history, empty final occurrence frames, and every stop.
+`ZkcExamples.Structured.Generated.Connections.Gkr` supplies both production
+`RootCertificate`s, independent
+reached-source coverage, full source/physical returns, history, frames and the
+method-independent `Connected` propositions. `CanonicalInstallation` consumes
+`RootConnection.claimsInstallation` and its public-source losslessness rule.
+The shared reading/coherence and checked endpoint selection supply acceptance
+agreement. The source ABI fixes the selected validator capability at coordinate
+7; it is not an arbitrary caller-selected handle.
 
-`CanonicalVerifier` associates the complete nominal validator with the
-mathematical honest replay. `CanonicalReadback.actual` then relates the actual
-source producer to that actual validator: the producer computes its proof,
-both sides share the exact history, and their complete source returns remain
-in the postcondition. Its mathematical premises are independent admission and
-circuit outputs.
+`CanonicalReading` uses `RootConnection.publicPresentation` directly. Its
+constant-price rejection and pathwise costs reuse the scalar mathematics through
+`FiatShamir.FieldSourceProperties`, a generic theorem for field-only exchanges.
+A finite `FieldSourceSupport` check establishes that premise from source syntax.
+This transports properties to the ordinary nominal presentation; root coverage,
+reading and the full compiled simulation remain independently checked. It does
+not introduce another typed simulation wrapper or an assumed routing law.
 
-The generated `OriginalCertificates.producer` and `.validator`
-certify the full actual compiled participants, for all typed inputs and
-replies, including stops. Their live relations check the complete input ABI;
-return relations retain the complete physical frames and transcript values.
-`CanonicalInstallation` installs this validator certificate together with the
-same nominal reading used by `CanonicalCompleteness` for the pair. No helper
-success, representation witness or transcript equality is supplied by a caller.
+`CanonicalVerifier` associates the nominal validator with the mathematical
+honest replay. `CanonicalReadback.actual` relates the actual source producer to
+that validator: the producer computes its proof, both sides share the exact
+history, and both full source returns remain in the postcondition. Its premises
+are independent admission and circuit outputs. `CanonicalConnection` reuses this
+mathematics at the production root ABI. Role masking and template filtering use
+generic, kernel-checked congruence laws in `OriginalRoutingCongruence`.
+`CanonicalCompleteness` transports that pair through both root certificates and
+selects acceptance only after obtaining both `CompleteReturns` facts.
 
-## Structural connection generation
+The old `OriginalCertificates`, GKR-specific compiled callback/frame equations,
+their duplicate validator and alternate layout views, the old occurrence-reading
+route, and the GKR-specific connection driver/templates are removed. The
+coordinate refusal tests now use the source templates directly. The alternate
+layout's pure syntax/provenance controls remain; no alternate full connection
+or native byte association is claimed here.
 
-Run `python3 lean/security/checks/generate_gkr_connections.py --write` from the
-repository to regenerate the two constructed views and ten concrete connection
-modules for each installation. Omit `--write` for exact comparison, including
-the committed ownership and authored-connection inventory in `checks/`.
-The owner uses the selected `lake` executable (`--lake` overrides `PATH`), this
-checkout's toolchain and prepared dependencies. Historical before/after counts
-come from the committed baseline data; regeneration does not require development
-commits to remain in Git history.
-
-`ZkcTools.ConstructionBindings.Frames` traverses recursive SSA syntax. Qualified
-source repeat occurrences select the output, layer, two rounds and coefficient
-regions; the selected descriptors supply capture lengths, count/initial/yield
-references and callback paths. Source visibility and a proposed input permutation
-supply the full optional input ABI. `Generation.GkrConnections` is a registered
-family installation of the existing GKR callback laws. Its small typed
-`Installation` contains the actual participants and their input orders. The
-shared traversal and constructed-view printer contain no GKR dispatch or
-additional evaluator.
-
-`ConnectionTactics` shares the layer, root and repeat assembly strategies.
-`OutputTemplate` retains the parametric output-loop law as ordinary library
-mathematics. `Original.Simulation.participant` installs any full body certificate
-with its checked input/live relation and complete return readback. Generated
-callback equations and proofs are independently elaborated and kernel checked;
-the descriptor or printer does not grant semantic authority. Unsupported shapes
-refuse, or fail their emitted correspondence proof.
-
-`LayoutVariant` is a formal perturbation of the canonical artifact trees with
-explicit provenance: it reverses live input slots within equal nominal sorts,
-prepends a pure coordinate allocation and renames recursive uses and yields.
-This changes allocated offsets, input references and callback selectors. The
-same owner generates the `Rebound` connections, including both complete roots
-and their arbitrary-handler execution theorems. Structural and occurrence
-checks are independent of those full connections.
-`TestsSecurity.GkrStructuralGeneration` checks rebinding and refuses a mismatched
-input descriptor and the old callback descriptor. This variant has no claimed
-native byte identity; canonical artifacts and property consumers stay fixed.
-
-The ownership manifest records current input/output hashes. The inventory
-accounts separately for the original 20 linkage files, retained mathematical
-and source-presentation libraries, generated installations, and newly authored
-templates/rules. The original 2,709 lines were not all duplication, and moving
-work into a generator is not a reduction in total authored library code.
+This migration preserves the circuit/layer and Sumcheck mathematics. Scalar
+mathematical presentations are derived from the single Structured meaning;
+the independent Common frontend is retired. Shared Lean role-view generation
+replaces the four Python GKR presentations. Remaining helper, reference and
+honest-source proofs still count as authored work: removing the compiled
+linkage and generator does not establish zero mechanical proof overhead.
+Core connection generation is selected
+in `Tests.ConnectionGeneration`; both artifact views use
+`Tests.Constructed.Generate`. The common printers own the emitted proof syntax.
+The retired GKR-specific generator manifests are no longer current ownership
+records; the landing account measures authored and generated work separately.
 
 ## Generated endpoints
 
@@ -110,13 +90,17 @@ that ABI and supplies an admitted nonvacuous circuit.
 challenge sites. Each site has price `4 / cardinality(bls12-381.fr)`. The
 validator has at most 40 draws, and the scalar adaptive bound is
 `4 * (Q + 40) / cardinality(bls12-381.fr)`. `CanonicalCompleteness` transports
-the actual producer's readback through the same full correspondence and proves
+the actual producer's readback through both shared root connections and proves
 perfect compiled-ideal completeness.
 
-`checks/GenerateGkrCanonicalClaims.py` uses the common data-only request
-renderer. The proposed quantities acquire receipts only through the checked
-theorem applications in `Generated.SubjectSoundnessClaims` and
-`Generated.SubjectCompletenessClaims`.
+The scalar and charged soundness requests are authored in
+`examples/projects/gkr/main.zkc`. The common subject driver binds the native
+source export to the unchanged original/participant bytes and emits
+`Generated.SubjectSoundnessClaims` through the configured typed library.
+There is no GKR request-construction script. The library computes the fixed
+meaning before applying a proof; the source method cannot select another
+subject or weaker property. The separately generated perfect-completeness
+request remains in `Generated.SubjectCompletenessClaims`.
 
 ## Validation and maintained consumers
 
@@ -129,8 +113,8 @@ false outputs and malformed wiring. `GkrRootEncoding`, `GkrSourceAdmission`,
 contracts. These controls supplement the universal theorems.
 
 The maintained coordinate-erased whole compiled route remains available
-through `Source.compiled_binding` in `RootContract`, `GkrProof.compiled_transform` and the
-ArkLib compiled GKR soundness consumers. Its current bodies and imports are
+through `GkrProof.compiled_transform` and the ArkLib compiled GKR soundness
+consumers. Its current bodies and imports are
 ported directly. Superseded normal-form modules are replaced, without
 compatibility aliases. The protection ledger records the selected theorem
 statements; source and compiled artifact identities require separate exact

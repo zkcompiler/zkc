@@ -1,6 +1,8 @@
 module
 
 public import ZkcSecurity.Realizations.Gkr.HonestProducerSource
+public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import ZkcExamples.Structured.GkrVerifierProcess
 public import ZkcExamples.Structured.GkrLayerReading
 
 @[expose] public section
@@ -15,7 +17,7 @@ set_option backward.isDefEq.respectTransparency false
 noncomputable section
 namespace ZkcSecurity.Realizations.Gkr.CanonicalVerifier
 open Zkc Source Structured
-open ZkcExamples.Structured GkrSourceCallbacks SumcheckVerifierHelpers
+open ZkcExamples.Structured Generated.Presentations.Gkr.Root SumcheckVerifierHelpers
 open HonestProducerSource HonestProducerObservedLayers
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
@@ -23,7 +25,8 @@ theorem coefficient_reads (ctx : ProtocolContext) (coefficients : List F) :
     (verifierCoefficientProcess (F := F) (G := G) ctx (some coefficients)).interpret Occurrence.actions =
       (((GkrVerifier.lineCoefficient ctx coefficients).interpret CommonAdapter.embed).interpret
         Occurrence.actions).bind (fun next => .done (some next)) := by
-  simp only [verifierCoefficientProcess, GkrVerifier.lineCoefficient,
+  simp only [verifierCoefficientProcess, Evaluation.ComponentTables.toOn, Generated.Presentations.Gkr.payload,
+    Generated.Presentations.Gkr.program, GkrSourceViews.program, GkrVerifier.lineCoefficient,
     PIR.Process.interpret, CommonAdapter.embed, Occurrence.actions, PIR.Process.bind,
     GkrRoundsReading.append_plain]
   rfl
@@ -37,7 +40,7 @@ theorem coefficients_repeat (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ 
       Occurrence.iterations site =
       (validatorCoefficients ctx (qualifyProtocolSite ctx.applicationPrefix site) 0 count coefficients).bind
         (fun next => .done (verifierCoefficientState (some next))) := by
-  have repeated := observed_repeat (F := F) (G := G) coefficientSpec ctx (ctx.roles 1) (by simp)
+  have repeated := Zkc.Source.Structured.LoopPresentation.present (carriers := uniformCarriers F G) coefficientSpec ctx (ctx.roles 1) (by simp)
     (.cons none .nil)
     (fun args => coefficientBody.denote (participantMeaningWithOn (ringModel F G) (.silent _)
       Occurrence.actions observedHelpers (ctx.roles 1) [] ctx Occurrence.iterations) args.get)
@@ -47,23 +50,12 @@ theorem coefficients_repeat (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ 
     (fun coefficients _ => (((GkrVerifier.lineCoefficient ctx coefficients).interpret CommonAdapter.embed).interpret
       Occurrence.actions)) (by
       intro coefficients index
-      rw [coefficient_callback, verifierCoefficient_process ctx _ rfl separate,
-        PIR.Process.interpret_bind, coefficient_reads, PIR.Process.bind_assoc]
-      rfl) count bounded _ coefficients (verifierCoefficientState_masked ctx _ rfl _)
+      erw [coefficient_occurrence (F := F) (G := G) ctx (ctx.roles 1) []
+        (.cons (some index) ((verifierCoefficientState (some coefficients)).append (.cons (none) .nil))), verifierCoefficient_process ctx _ rfl (.ofSeparate separate (by decide)),
+        PIR.Process.interpret_bind, coefficient_reads, PIR.Process.bind_assoc]) count bounded _ coefficients (verifierCoefficientState_masked ctx _ rfl _)
   rw [repeated]
-  have folded (start count : Nat) (coefficients : List F) :
-      Finite.fold (fun coefficients index => Occurrence.iterations.within
-        (qualifyProtocolSite ctx.applicationPrefix site) index
-        (((GkrVerifier.lineCoefficient ctx coefficients).interpret CommonAdapter.embed).interpret Occurrence.actions))
-        (List.range' start count) coefficients =
-      validatorCoefficients (G := G) ctx (qualifyProtocolSite ctx.applicationPrefix site) start count coefficients := by
-    induction count generalizing start coefficients with
-    | zero => rfl
-    | succ count ih =>
-      rw [List.range'_succ, Finite.fold, validatorCoefficients]
-      apply congrArg (PIR.Process.bind _)
-      funext next
-      exact ih (start + 1) next
-  rw [folded]
+  rw [Zkc.Source.Structured.LoopPresentation.foldCounted _
+    (validatorCoefficients (G := G) ctx (qualifyProtocolSite ctx.applicationPrefix site))
+    (fun _ _ => rfl) (fun _ _ _ => rfl)]
 
 end ZkcSecurity.Realizations.Gkr.CanonicalVerifier

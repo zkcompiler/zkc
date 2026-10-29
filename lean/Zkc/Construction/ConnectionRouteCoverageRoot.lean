@@ -61,8 +61,7 @@ theorem source_eq_fold (root : RootCertificate program routing role artifact) (m
         (root.inputs.pattern.environment model binders) = root.inputs.pattern.environment model binders := by
       simpa only [CheckedProtocol.signature] using inputScopes_mask _ root.inputs.visible decoded
     rw [masked]
-    have body := root.alignment.routeCoverage root.distinct model (Occurrence.helpers model program.payload)
-      (fun _ => rfl) (Occurrence.table model program.payload) binders
+    have body := root.alignment.selectedRouteCoverage root.distinct model binders
       (root.inputs.initial physical).history physical related
     refine ⟨body.bind ?_⟩
     intro values

@@ -426,7 +426,7 @@ The bounded generator proposes only typed source constructors, without evaluatin
 operations or selecting runtime branches. Its sole `program` proposal field uses
 a restricted constructor vocabulary, with no commands, comments, imports, macros
 or tactics. The reviewed renderer owns the Lean declarations, subject bindings,
-normalization proofs and audits. Lean's `common_process%` elaborator simplifies
+normalization proofs and audits. Lean's `process_view%` elaborator simplifies
 the actual admitted program's denotation by unfolding the existing interpreter,
 checks definitional equality, and emits a process view connected by `rfl`.
 It supplies no independent runtime semantics. Lean checks admission and the

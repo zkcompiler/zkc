@@ -16,9 +16,15 @@ original_export = "lean/bridges/structured/fixtures/gkr-source.json"
 data = "lean/ZkcExamples/Structured/GkrSourceData.lean"
 participant = "lean/ZkcExamples/Construction/GkrProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/GkrArtifact.lean"
+claims = "lean/security/ZkcSecurity/Realizations/Gkr/Generated/SubjectSoundnessClaims.lean"
 
-[normal_forms]
-request = "lean/bridges/structured/normal-forms/gkr-root.toml"
+[lean]
+namespace = "ZkcSecurity.Realizations.Gkr.Generated.SubjectSoundnessClaims"
+imports = ["ZkcSecurity.Realizations.Gkr.Generated.SubjectSoundnessRegistration"]
+library = "ZkcSecurity.Realizations.Gkr.Generated.SubjectSoundnessRegistration.library"
+
+[source_views]
+selections = ["Gkr"]
 
 [assumptions]
 requested = ["exporter.structured-denotation", "model.history-oracle", "exporter.checked-candidate",

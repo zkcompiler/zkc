@@ -120,6 +120,11 @@ theorem budgetContract (shape : Shape) (occurrences : Occurrences shape) (helper
   openClaimCost := prices.openClaim
   atPrefixCost := prices.atPrefix
   checkCost := prices.check
-  round := round_fits shape occurrences helpers price appendBound prices
+  round := fun values publicClaim rounds initial =>
+    round_fits shape occurrences helpers price appendBound prices
+      (.data (.vector shape.names.scalar values)) (.data (.field shape.names.scalar publicClaim))
+      (.data (.index rounds)) (.transcript shape.names.suite initial)
+      (.data (.vector shape.names.scalar [])) (.data (.field shape.names.scalar publicClaim))
+      (.data (.vector shape.names.scalar [])) (.data (.field shape.names.scalar publicClaim))
 
 end ZkcExamples.Executable.SumcheckFamily.Source

@@ -1,7 +1,8 @@
 module
 
 public import ZkcExamples.Structured.GkrSourceVerifier
-public import ZkcExamples.Structured.GkrRootNormalForms
+public import ZkcExamples.Structured.GkrVerifierProcess
+public import ZkcExamples.Structured.Generated.Presentations.Gkr
 public import Zkc.Construction.Compiled
 public import ZkcExamples.Construction.GkrProofParticipant
 public meta import Mathlib.Tactic.FailIfNoProgress
@@ -58,7 +59,7 @@ def rounds (ctx : ProtocolContext) (handle count : Nat) (point : List F) (claim 
 
 theorem rounds_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
     (handle count : Nat) (point : List F) (claim : F) :
-    (GkrRoundsNormalForms.verifierRoundsProcess (F := F) (G := G) ctx (some point)
+    (Generated.Presentations.Gkr.Rounds.verifierRoundsProcess (F := F) (G := G) ctx (some point)
       (some claim) (some count) (some handle)).interpret CommonAdapter.project =
       (rounds ctx handle count point claim).bind fun result => .done (GkrRoundsReading.roundsResults result) := by
   by_cases bounded : count ≤ 4
@@ -68,10 +69,11 @@ theorem rounds_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.ro
     simp only [List.append_nil] at prefixed
     rw [prefixed, PIR.Process.bind_assoc]
     rfl
-  · simp only [GkrRoundsNormalForms.verifierRoundsProcess,
-      GkrRoundsReading.tuple40_plain, PIR.Process.bind, Values.get_cons,
+  · simp only [Generated.Presentations.Gkr.Rounds.verifierRoundsProcess,
+      Evaluation.ComponentTables.toOn, Generated.Presentations.Gkr.payload,
+      Generated.Presentations.Gkr.program, GkrSourceViews.program, GkrRoundsReading.tuple40_plain, PIR.Process.bind, Values.get_cons,
       rounds, bounded, ite_false, denoteRepeat, denoteRepeatOn,
-      GkrRoundsNormalForms.roundSpec, List.map_cons, List.map_nil,
+      Generated.Presentations.Gkr.Rounds.roundSpec, List.map_cons, List.map_nil,
       List.contains_cons, List.contains_nil, beq_self_eq_true, Bool.or_true,
       Bool.true_or, ↓reduceIte, PIR.Process.interpret]
 
@@ -81,22 +83,22 @@ def coefficients (ctx : ProtocolContext) (width : Nat) (initial : List F) :
 
 theorem coefficients_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
     (width : Nat) (initial : List F) :
-    ((denoteRepeat GkrSourceCallbacks.coefficientSpec ctx (ctx.roles 1) (some width)
+    ((denoteRepeat Generated.Presentations.Gkr.Root.coefficientSpec ctx (ctx.roles 1) (some width)
       (.cons (some initial) .nil) (.cons none .nil)
-      (GkrSourceCallbacks.coefficientFn (F := F) (G := G) ctx (ctx.roles 1))).bind
+      (Generated.Presentations.Gkr.Root.coefficientFn (F := F) (G := G) ctx (ctx.roles 1))).bind
         fun result => .done (result.get .here)).interpret CommonAdapter.project =
       (coefficients ctx width initial).bind fun result => .done (some result) := by
   by_cases bounded : width ≤ 4
-  · rw [GkrSourceCallbacks.verifierCoefficient_fold ctx separate none width bounded
+  · rw [Generated.Presentations.Gkr.Root.verifierCoefficient_fold ctx (.ofSeparate separate (by decide)) none width bounded
       (.cons (some initial) .nil) (some initial)
-      (GkrSourceCallbacks.verifierCoefficientState_masked ctx _ rfl (some initial))]
+      (Generated.Presentations.Gkr.Root.verifierCoefficientState_masked ctx _ rfl (some initial))]
     rw [Finite.fold_range_repeatN _ 0 width]
     simp only [PIR.Process.bind_assoc, PIR.Process.bind, Values.get, PIR.Process.interpret_bind]
     rw [GkrRoundsReading.repeatN_reads CommonAdapter.project _ (GkrVerifier.lineCoefficient ctx)
       some (fun state => GkrLayerReading.coefficient_reads ctx state) width initial]
-    simp only [coefficients, bounded, ite_true, PIR.Process.bind_assoc, PIR.Process.bind, GkrSourceCallbacks.verifierCoefficientState, Values.get, PIR.Process.interpret]
+    simp only [coefficients, bounded, ite_true, PIR.Process.bind_assoc, PIR.Process.bind, Generated.Presentations.Gkr.Root.verifierCoefficientState, Values.get, PIR.Process.interpret]
   · simp only [coefficients, bounded, ite_false, denoteRepeat, denoteRepeatOn,
-      GkrSourceCallbacks.coefficientSpec, GkrSourceCallbacks.coefficientMaximum,
+      Generated.Presentations.Gkr.Root.coefficientSpec, Generated.Presentations.Gkr.Root.coefficientMaximum,
       List.map_cons, List.map_nil, List.contains_cons, List.contains_nil,
       beq_self_eq_true, Bool.or_true, Bool.true_or, ↓reduceIte, PIR.Process.bind, PIR.Process.interpret]
 
@@ -114,8 +116,8 @@ def afterCoefficients (ctx : ProtocolContext) (index handle selector : Nat)
     (.cons (current.get .here) (.cons (split.get .here) (.cons (split.get (.there .here)) .nil))))).bind fun mulValue =>
   if combined.get (.there .here) = (addValue.get .here) * (first + total.get .here) +
       (mulValue.get .here) * first * total.get .here then
-    .call (.query (GkrSourceCallbacks.lineChallengeSite ctx) "bls12-381.fr" (.cons handle .nil)) fun challenge =>
-    .call (.send (ty := .field "bls12-381.fr") (GkrSourceCallbacks.lineDeliverySite ctx)
+    .call (.query (GkrVerifier.lineChallengeSite ctx) "bls12-381.fr" (.cons handle .nil)) fun challenge =>
+    .call (.send (ty := .field "bls12-381.fr") (GkrVerifier.lineDeliverySite ctx)
       (ctx.roles 0) challenge) fun _ =>
     (helper GkrSourceBodies.linePointHelper (.cons (split.get .here)
       (.cons (split.get (.there .here)) (.cons challenge .nil)))).bind fun next =>
@@ -129,28 +131,32 @@ def layer (ctx : ProtocolContext) (index handle selector width : Nat)
     (add mul point : List F) (claim : F) : PIR.Process (Actions F G) (List F × F) :=
   (helper GkrSourceBodies.sourceHelper20Helper (.cons point (.cons claim .nil))).bind fun current =>
   (helper GkrSourceBodies.sourceHelper37Helper (.cons (current.get (.there .here)) .nil)).bind fun pending =>
-  (rounds (GkrSourceCallbacks.leftContext ctx) handle width (pending.get .here)
+  (rounds (GkrVerifier.leftContext ctx) handle width (pending.get .here)
     (pending.get (.there .here))).bind fun left =>
-  (rounds (GkrSourceCallbacks.rightContext ctx) handle width left.1 left.2).bind fun right =>
+  (rounds (GkrVerifier.rightContext ctx) handle width left.1 left.2).bind fun right =>
   (helper GkrSourceBodies.sourceHelper40Helper (.cons right.1 (.cons right.2 .nil))).bind fun combined =>
   (helper GkrSourceBodies.sourceHelper50Helper (.cons (combined.get .here) .nil)).bind fun split =>
-  .call (.receive (.field "bls12-381.fr") (GkrSourceCallbacks.lineConstantSite ctx) (ctx.roles 0)) fun first =>
+  .call (.receive (.field "bls12-381.fr") (GkrVerifier.lineConstantSite ctx) (ctx.roles 0)) fun first =>
   (coefficients ctx width [first]).bind fun line =>
   afterCoefficients ctx index handle selector add mul current combined split first line
 
 theorem layer_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
     (index handle selector width : Nat) (add mul point : List F) (claim : F) :
-    (GkrSourceCallbacks.verifierLayerProcess (F := F) (G := G) ctx index (some add) (some mul)
+    (Generated.Presentations.Gkr.Root.verifierLayerProcess (F := F) (G := G) ctx index (some add) (some mul)
       (some selector) (some width) (some handle) (some point) (some claim)).interpret CommonAdapter.project =
       (layer ctx index handle selector width add mul point claim).bind fun result =>
         .done (some result.1, some result.2) := by
-  have leftSeparate : (GkrSourceCallbacks.leftContext ctx).roles 0 ≠
-      (GkrSourceCallbacks.leftContext ctx).roles 1 := by
-    simpa [GkrSourceCallbacks.leftContext, ProtocolContext.enter, roleSubstitution] using separate
-  have rightSeparate : (GkrSourceCallbacks.rightContext ctx).roles 0 ≠
-      (GkrSourceCallbacks.rightContext ctx).roles 1 := by
-    simpa [GkrSourceCallbacks.rightContext, ProtocolContext.enter, roleSubstitution] using separate
-  simp only [GkrSourceCallbacks.verifierLayerProcess, layer, helper,
+  have leftSeparate : (GkrVerifier.leftContext ctx).roles 0 ≠
+      (GkrVerifier.leftContext ctx).roles 1 := by
+    simpa [GkrVerifier.leftContext, ProtocolContext.enter, roleSubstitution] using separate
+  have rightSeparate : (GkrVerifier.rightContext ctx).roles 0 ≠
+      (GkrVerifier.rightContext ctx).roles 1 := by
+    simpa [GkrVerifier.rightContext, ProtocolContext.enter, roleSubstitution] using separate
+  simp only [Generated.Presentations.Gkr.Root.verifierLayerProcess, layer, helper,
+    Evaluation.ComponentTables.toOn, Generated.Presentations.Gkr.payload,
+      Generated.Presentations.Gkr.program, GkrSourceViews.program,
+    Generated.Presentations.Gkr.Rounds.verifierRoundsView,
+    Bindings.optionalPattern, NormalForm.InputPattern.environment, Values.get,
     PIR.Process.interpret_bind, PIR.Process.bind_assoc, PIR.Process.bind,
     rounds_source _ leftSeparate, rounds_source _ rightSeparate,
     GkrRoundsReading.roundsResults, Values.get_cons, TypedABI.get_cons_here,
@@ -207,22 +213,22 @@ def output (ctx : ProtocolContext) (handle count : Nat) (point : List F) :
 
 theorem output_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
     (handle count : Nat) (point : List F) :
-    (denoteRepeat GkrSourceCallbacks.outputSpec ctx (ctx.roles 1) (some count)
+    (denoteRepeat Generated.Presentations.Gkr.Root.outputSpec ctx (ctx.roles 1) (some count)
       (.cons (some point) (.cons none .nil)) (.cons (some handle) .nil)
-      (GkrSourceCallbacks.outputFn (F := F) (G := G) ctx (ctx.roles 1))).interpret CommonAdapter.project =
+      (Generated.Presentations.Gkr.Root.outputFn (F := F) (G := G) ctx (ctx.roles 1))).interpret CommonAdapter.project =
       (output ctx handle count point).bind fun result =>
-        .done (GkrSourceCallbacks.verifierOutputState (some result)) := by
+        .done (Generated.Presentations.Gkr.Root.verifierOutputState (some result)) := by
   by_cases bounded : count ≤ 4
-  · rw [GkrSourceCallbacks.verifierOutput_fold ctx separate (some handle) count bounded
+  · rw [Generated.Presentations.Gkr.Root.verifierOutput_fold ctx (.ofSeparate separate (by decide)) (some handle) count bounded
       (.cons (some point) (.cons none .nil)) (some point)
-      (GkrSourceCallbacks.verifierOutputState_masked ctx _ rfl (some point))]
+      (Generated.Presentations.Gkr.Root.verifierOutputState_masked ctx _ rfl (some point))]
     rw [Finite.fold_range_repeatN _ 0 count]
     simp only [PIR.Process.interpret_bind]
     rw [GkrRoundsReading.repeatN_reads CommonAdapter.project _ (GkrVerifier.outputRound ctx handle)
       some (GkrLayerReading.output_reads ctx handle) count point]
     simp only [output, bounded, ite_true, PIR.Process.bind_assoc, PIR.Process.bind, PIR.Process.interpret]
-  · simp only [denoteRepeat, denoteRepeatOn, GkrSourceCallbacks.outputSpec, output,
-      GkrSourceCallbacks.outputMaximum, bounded, ite_false,
+  · simp only [denoteRepeat, denoteRepeatOn, Generated.Presentations.Gkr.Root.outputSpec, output,
+      Generated.Presentations.Gkr.Root.outputMaximum, bounded, ite_false,
       List.map_cons, List.map_nil, List.contains_cons, List.contains_nil,
       beq_self_eq_true, Bool.or_true, Bool.true_or, ↓reduceIte, PIR.Process.bind, PIR.Process.interpret]
 
@@ -234,21 +240,21 @@ def layers (ctx : ProtocolContext) (handle selector width count : Nat)
 
 theorem layers_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
     (handle selector width count : Nat) (inputs add mul point : List F) (claim : F) :
-    (denoteRepeat GkrSourceCallbacks.layerSpec ctx (ctx.roles 1) (some count)
-      (GkrSourceCallbacks.verifierLayerState (some point) (some claim))
+    (denoteRepeat Generated.Presentations.Gkr.Root.layerSpec ctx (ctx.roles 1) (some count)
+      (Generated.Presentations.Gkr.Root.verifierLayerState (some point) (some claim))
       (.cons (some inputs) (.cons (some add) (.cons (some mul) (.cons (some count)
         (.cons (some selector) (.cons (some width) (.cons (some handle) .nil)))))))
-      (GkrSourceCallbacks.layerFn (F := F) (G := G) ctx (ctx.roles 1))).interpret CommonAdapter.project =
+      (Generated.Presentations.Gkr.Root.layerFn (F := F) (G := G) ctx (ctx.roles 1))).interpret CommonAdapter.project =
       (layers ctx handle selector width count add mul (point, claim)).bind fun result =>
-        .done (GkrSourceCallbacks.verifierLayerState (some result.1) (some result.2)) := by
+        .done (Generated.Presentations.Gkr.Root.verifierLayerState (some result.1) (some result.2)) := by
   by_cases bounded : count ≤ 4
-  · rw [GkrSourceCallbacks.verifierLayer_fold ctx separate (some inputs) (some add) (some mul)
+  · rw [Generated.Presentations.Gkr.Root.verifierLayer_fold ctx (.ofSeparate separate (by decide)) (some inputs) (some add) (some mul)
       (some count) (some selector) (some width) (some handle) count bounded _ (some point, some claim)
-      (GkrSourceCallbacks.verifierLayerState_masked ctx _ rfl (some point) (some claim))]
+      (Generated.Presentations.Gkr.Root.verifierLayerState_masked ctx _ rfl (some point) (some claim))]
     simp only [PIR.Process.interpret_bind]
     have foldLaw := finite_reads CommonAdapter.project
       (fun (state : Option (List F) × Option F) index =>
-        GkrSourceCallbacks.verifierLayerProcess (F := F) (G := G) ctx index (some add) (some mul)
+        Generated.Presentations.Gkr.Root.verifierLayerProcess (F := F) (G := G) ctx index (some add) (some mul)
           (some selector) (some width) (some handle) state.1 state.2)
       (fun (state : List F × F) index => layer ctx index handle selector width add mul state.1 state.2)
       (fun (state : List F × F) => (some state.1, some state.2))
@@ -256,8 +262,8 @@ theorem layers_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.ro
       (List.range' 0 count) (point, claim)
     rw [foldLaw]
     simp only [layers, bounded, ite_true, PIR.Process.bind_assoc, PIR.Process.bind, PIR.Process.interpret]
-  · simp only [denoteRepeat, denoteRepeatOn, GkrSourceCallbacks.layerSpec, layers,
-      GkrSourceCallbacks.layerMaximum, bounded, ite_false,
+  · simp only [denoteRepeat, denoteRepeatOn, Generated.Presentations.Gkr.Root.layerSpec, layers,
+      Generated.Presentations.Gkr.Root.layerMaximum, bounded, ite_false,
       List.map_cons, List.map_nil, List.contains_cons, List.contains_nil,
       beq_self_eq_true, Bool.or_true, Bool.true_or, ↓reduceIte, PIR.Process.bind, PIR.Process.interpret]
 
@@ -309,13 +315,7 @@ theorem source_equation (inputs outputs add mul : List F) (count selector width 
       (.cons (some count) (.cons (some selector) (.cons (some width)
         (.cons (some handle) .nil))))))))).bind
       fun result => .done (result.get .here)).interpret CommonAdapter.project = _
-  rw [GkrRootNormalForms.verifier_participant]
-  have output_fn (ctx : ProtocolContext) (self : Nat) :
-      GkrRootNormalForms.outputFn (F := F) (G := G) ctx self =
-        GkrSourceCallbacks.outputFn ctx self := rfl
-  have layer_fn (ctx : ProtocolContext) (self : Nat) :
-      GkrRootNormalForms.layerFn (F := F) (G := G) ctx self =
-        GkrSourceCallbacks.layerFn ctx self := rfl
+  rw [Generated.Presentations.Gkr.Root.verifier_participant]
   have interpret_branch {A : Type} (condition : Prop) [Decidable condition]
       (yes no : PIR.Process (participantInterface F G) A) :
       (if condition then yes else no).interpret CommonAdapter.project =
@@ -328,25 +328,30 @@ theorem source_equation (inputs outputs add mul : List F) (count selector width 
       (yesEq : yes = yes') (noEq : no = no') :
       (if condition then yes else no) = (if condition then yes' else no') := by
     rw [yesEq, noEq]
-  simp only [GkrRootNormalForms.verifierProcess, output_fn, layer_fn,
+  simp only [Generated.Presentations.Gkr.Root.verifierView,
+    Generated.Presentations.Gkr.Input.verifierView,
+    Bindings.optionalPattern, NormalForm.InputPattern.environment,
+    Evaluation.ComponentTables.toOn, Generated.Presentations.Gkr.payload,
+      Generated.Presentations.Gkr.program, GkrSourceViews.program,
+    Generated.Presentations.Gkr.Root.verifierProcess,
     sourceInputs, GkrRoundsReading.closed,
     PIR.Process.bind_assoc, PIR.Process.bind, Values.get, PIR.Process.interpret_bind,
     PIR.Process.bind_ite, interpret_branch, false_guard, Values.get_cons,
     TypedABI.get_cons_here, TypedABI.get_cons_there,
     GkrRoundsReading.empty_plain, output_source {} (by decide),
-    layers_source {} (by decide), GkrSourceCallbacks.verifierOutputState,
-    GkrSourceCallbacks.verifierLayerState, GkrInputNormalForms.verifierProcess,
+    layers_source {} (by decide), Generated.Presentations.Gkr.Root.verifierOutputState,
+    Generated.Presentations.Gkr.Root.verifierLayerState, Generated.Presentations.Gkr.Input.verifierProcess,
     PIR.Process.interpret, CommonAdapter.project, scalarDomain, verifier, helper]
   repeat' first
     | (fail_if_no_progress (simp only [PIR.Process.bind_assoc, PIR.Process.bind, PIR.Process.interpret_bind,
         PIR.Process.bind_ite, interpret_branch, false_guard, Values.get_cons,
         TypedABI.get_cons_here, TypedABI.get_cons_there,
         output_source {} (by decide), layers_source {} (by decide),
-        GkrSourceCallbacks.verifierOutputState, GkrSourceCallbacks.verifierLayerState]))
+        Generated.Presentations.Gkr.Root.verifierOutputState, Generated.Presentations.Gkr.Root.verifierLayerState]))
     | (apply congrArg (PIR.Process.bind _); funext result)
     | (apply branch_congr)
   erw [layers_source {} (by decide)]
-  simp only [PIR.Process.bind_assoc, PIR.Process.bind, GkrSourceCallbacks.verifierLayerState,
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind, Generated.Presentations.Gkr.Root.verifierLayerState,
     TypedABI.get_cons_here, TypedABI.get_cons_there, PIR.Process.interpret_bind,
     PIR.Process.interpret]
 

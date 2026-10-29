@@ -1,6 +1,8 @@
 module
 
-public import ZkcSecurity.Realizations.Gkr.HonestProducerPair
+public import ZkcSecurity.Realizations.Gkr.HonestProducerRoundAlgorithm
+public import ZkcSecurity.Source.PairFrames
+public import Zkc.Source.Structured.CommonAdapter
 
 @[expose] public section
 
@@ -15,7 +17,7 @@ namespace ZkcSecurity.Realizations.Gkr.HonestProducerOccurrences
 open Zkc Source Structured Construction
 open ZkcExamples.Structured
 open ZkcSecurity.Examples.Components
-open ZkcSecurity.FiatShamir HonestProducerComposition HonestProducerRounds HonestProducerPair
+open ZkcSecurity.Source HonestProducerRounds
 
 variable {F G : Type} [Field F] [DecidableEq F]
 
@@ -90,25 +92,6 @@ theorem erased_yields {A : Type} (source : PIR.Process (Signature F G) A)
     | leave frame => exact fun _ => ih () holds
     | action operation => exact fun reply => ih reply (holds reply)
 
-omit [Field F] [DecidableEq F] in
-theorem fold_yields {A : Type} (routing : Original.Routing) (source : PIR.Process (Signature F G) A)
-    (property : A → Prop) (holds : PIR.Yields property source) (state : State (F := F) (G := G)) :
-    PIR.Yields (fun result => property result.1) (Original.fold routing source state) := by
-  have all {I : PIR.Signature} {B : Type} (process : PIR.Process I B) :
-      PIR.Yields (fun _ => True) process := by
-    induction process with
-    | done => trivial
-    | halt => trivial
-    | call _ _ ih => exact ih
-  induction source generalizing state with
-  | done => exact holds
-  | halt => trivial
-  | call operation next ih =>
-    simp only [Original.fold, PIR.Process.interpretState]
-    apply (all (Original.operations routing operation state)).bind
-    rintro ⟨reply, reached⟩ _
-    exact ih reply (holds reply) reached
-
 omit [DecidableEq F] in
 /-- The complete producer carries an arbitrary pending point prefix without
 changing its computed messages or any actual iteration boundary. -/
@@ -182,49 +165,60 @@ theorem split_pending_point (width : Nat) (left right : List F) (sized : left.le
   subst width
   simp
 
-/-- Exact routes are required at each actual induction index, inside its real
-frame. The enclosing stack and history are carried without restriction. -/
-theorem rounds (routing : Original.Routing) (replacement : Replacement)
-    (profile : routing.context.profile = .fiatShamir replacement)
-    (ctx : ProtocolContext) (handle : Nat) (site : String) (start count : Nat) {n : Nat}
+/-- Honest source pairing is proved before routing. The same mathematical
+message and restriction laws are used by the degree-two Sumcheck reference. -/
+theorem rounds (ctx : ProtocolContext) (scope : PairScope)
+    (roles : ctx.roles 0 = scope.producer ∧ ctx.roles 1 = scope.validator)
+    (handle : Nat) (site : String) (start count : Nat) {n : Nat}
     (reference : GkrRoundsReference.State F (n + count)) (raw : Raw F) (point : List F)
     (allowed : GkrRoundsReference.admissible reference)
-    (state : State (F := F) (G := G))
-    (routes : ∀ index, RoundRoutes routing ctx (state.frames ++ [⟨site, index⟩]) handle) :
-    Readback (fun left right => ∃ result history,
-      left = (result, { state with history := history }) ∧
-      right = ((result.point, GkrRoundsReference.total result.reference), { state with history := history }))
-      (Original.fold { routing with mode := .producer }
-        (producerRounds ctx site start count reference raw point) state)
-      (Original.fold { routing with mode := .validator }
-        (validatorRounds ctx handle site start count (point, GkrRoundsReference.total reference)) state) := by
-  induction count generalizing start raw point state with
-  | zero => exact .done ⟨⟨reference, raw, point⟩, state.history, rfl, rfl⟩
+    (delivery : (GkrVerifier.challengeSite ctx,
+      GkrVerifier.deliverySite ctx) ∈ scope.deliveries) :
+    Pair scope (fun result value => value =
+      (result.point, GkrRoundsReference.total result.reference))
+      (producerRounds (G := G) ctx site start count reference raw point)
+      (validatorRounds ctx handle site start count (point, GkrRoundsReference.total reference)) := by
+  induction count generalizing start raw point with
+  | zero => exact .done rfl
   | succ count ih =>
-    rw [producerRounds, validatorRounds, Original.fold_bind, Original.fold_bind]
-    let entered : State (F := F) (G := G) := { state with frames := state.frames ++ [⟨site, start⟩] }
-    have one := HonestProducerPair.rounds (F := F) (G := G) routing replacement profile ctx handle 1
-      reference raw point allowed entered (routes start)
-    simp only [PIR.repeatN, PIR.Process.bind_done] at one
-    have invariant : PIR.Yields (fun output => GkrRoundsReference.admissible output.reference)
-        (execute (G := G) ctx 1 reference raw point) := by
-      intro _ _ _ r
-      exact allowed.2 r
-    have framed := frame_left one (constructed_yields _ _ _ invariant entered)
-    have wrapped := within routing site start state
-      ((execute ctx 1 reference raw point).interpret Occurrence.actions)
-      (((GkrVerifier.round ctx handle (point, GkrRoundsReference.total reference)).interpret
-        CommonAdapter.embed).interpret Occurrence.actions)
-      (fun left right => ∃ result history,
-        left = (result, { state with history := history }) ∧
-        right = ((result.point, GkrRoundsReference.total result.reference), { state with history := history }) ∧
-        GkrRoundsReference.admissible result.reference)
-      (framed.mono (by
-        rintro left right ⟨⟨result, history, rfl, rfl⟩, allowedResult⟩
-        exact ⟨rfl, rfl, result, history, rfl, rfl, allowedResult⟩))
-    apply wrapped.bind
-    rintro left right ⟨result, history, rfl, rfl, allowedResult⟩
-    exact ih (start + 1) result.reference result.raw result.point allowedResult
-      { state with history := history } routes
+    rw [producerRounds, validatorRounds]
+    have boundary : GkrRoundsReference.total reference =
+        (GkrRoundsReference.message reference).constant +
+        (GkrRoundsReference.message reference).constant +
+        (GkrRoundsReference.message reference).linear +
+        (GkrRoundsReference.message reference).quadratic := by
+      have law := GkrRoundsReference.laws.boundary_eq reference allowed
+      change (Zkc.Protocols.Sumcheck.messagePolynomial (GkrRoundsReference.message reference)).eval 0 +
+        (Zkc.Protocols.Sumcheck.messagePolynomial (GkrRoundsReference.message reference)).eval 1 = _ at law
+      rw [Zkc.Protocols.Sumcheck.messagePolynomial_eval, Zkc.Protocols.Sumcheck.messagePolynomial_eval] at law
+      simpa [Zkc.Protocols.AlgebraicRounds.Message.evaluate, GkrRoundsReference.data, add_assoc] using law.symm
+    have one : Pair scope
+        (fun (result : Output F (n + count)) value =>
+          value = (result.point, GkrRoundsReference.total result.reference) ∧
+          GkrRoundsReference.admissible result.reference)
+        ((execute (G := G) ctx 1 reference raw point).interpret Occurrence.actions)
+        (((GkrVerifier.round (G := G) ctx handle (point, GkrRoundsReference.total reference)).interpret
+          CommonAdapter.embed).interpret Occurrence.actions) := by
+      simp only [execute, GkrVerifier.round, GkrVerifier.roundFirst,
+        GkrVerifier.roundSecond, PIR.Process.interpret, CommonAdapter.embed,
+        Occurrence.actions, PIR.Process.bind]
+      apply Pair.message _ _ _ _ _ rfl roles
+      apply Pair.message _ _ _ _ _ rfl roles
+      apply Pair.message _ _ _ _ _ rfl roles
+      simp only [GkrVerifier.roundCheck, boundary, ↓reduceIte,
+        GkrVerifier.roundChallenge, PIR.Process.interpret, CommonAdapter.embed,
+        Occurrence.actions, PIR.Process.bind]
+      apply Pair.challenge _ _ _ _ _ _ roles delivery
+      intro r
+      exact .done ⟨by
+        have law := GkrRoundsReference.evaluation reference r allowed.1
+        apply congrArg (fun scalar => (point ++ [r], scalar))
+        change _ = GkrRoundsReference.total (GkrRoundsReference.restrict reference r)
+        rw [← law]
+        simp only [Zkc.Protocols.AlgebraicRounds.Message.evaluate]
+        ring, allowed.2 r⟩
+    exact (one.within site start).bind _ _ (by
+      rintro result value ⟨rfl, admissible⟩
+      exact ih (start + 1) result.reference result.raw result.point admissible)
 
 end ZkcSecurity.Realizations.Gkr.HonestProducerOccurrences

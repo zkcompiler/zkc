@@ -1,7 +1,9 @@
 module
 
 public import ZkcSecurity.Realizations.Gkr.HonestHelpersRounds
-public import ZkcExamples.Structured.GkrRoundsNormalForms
+public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import ZkcExamples.Structured.GkrVerifierProcess
+public import ZkcExamples.Structured.Generated.Presentations.Gkr
 
 @[expose] public section
 
@@ -13,7 +15,7 @@ namespace ZkcSecurity.Realizations.Gkr.HonestRound
 open Zkc Source Structured
 open ZkcExamples.Structured GkrSourceLaws SumcheckVerifierHelpers
 open ZkcSecurity.Examples.Components
-open GkrRoundsNormalForms
+open Generated.Presentations.Gkr.Rounds
 
 set_option backward.isDefEq.respectTransparency false
 
@@ -44,17 +46,18 @@ theorem process {n : Nat} (ctx : ProtocolContext) (raw : GkrRoundsRealization.Ra
     (state : GkrRoundsReference.State F (n + 1))
     (decoded : GkrRoundsRealization.Decodes raw state)
     (capacity : 2 ^ n < indexLimit) (point : List F) :
-    GkrRoundsNormalForms.proverProcess (G := G) ctx
+    Generated.Presentations.Gkr.Rounds.proverProcess (G := G) ctx
       (some raw.add) (some raw.mul) (some raw.left) (some raw.right) (some point) =
-      .call (.send (ty := .field scalarDomain) (round0Site ctx) (ctx.roles 1)
+      .call (.send (ty := .field scalarDomain) (GkrVerifier.roundSite ctx "0") (ctx.roles 1)
         (GkrRoundsReference.message state).constant) fun _ =>
-      .call (.send (ty := .field scalarDomain) (round1Site ctx) (ctx.roles 1)
+      .call (.send (ty := .field scalarDomain) (GkrVerifier.roundSite ctx "1") (ctx.roles 1)
         (GkrRoundsReference.message state).linear) fun _ =>
-      .call (.send (ty := .field scalarDomain) (round2Site ctx) (ctx.roles 1)
+      .call (.send (ty := .field scalarDomain) (GkrVerifier.roundSite ctx "2") (ctx.roles 1)
         (GkrRoundsReference.message state).quadratic) fun _ =>
-      .call (.receive (.field scalarDomain) (deliverySite ctx) (ctx.roles 1)) fun challenge =>
+      .call (.receive (.field scalarDomain) (GkrVerifier.deliverySite ctx) (ctx.roles 1)) fun challenge =>
       .done (result raw point challenge) := by
-  simp only [GkrRoundsNormalForms.proverProcess]
+  simp only [Generated.Presentations.Gkr.Rounds.proverProcess, Evaluation.ComponentTables.toOn, Generated.Presentations.Gkr.payload,
+    Generated.Presentations.Gkr.program, GkrSourceViews.program]
   rw [show invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
       GkrSourceBodies.helper41Helper
       (.cons raw.add (.cons raw.mul (.cons raw.left (.cons raw.right .nil)))) = _ from
@@ -75,15 +78,15 @@ theorem run {n : Nat} {H E : Type} (ctx : ProtocolContext)
     (decoded : GkrRoundsRealization.Decodes raw state)
     (capacity : 2 ^ n < indexLimit) (point : List F)
     (handler : PIR.Handler (participantInterface F G) H E) (initial : H) :
-    (GkrRoundsNormalForms.proverProcess ctx
+    (Generated.Presentations.Gkr.Rounds.proverProcess ctx
       (some raw.add) (some raw.mul) (some raw.left) (some raw.right) (some point)).run handler initial =
-      (handler (.send (ty := .field scalarDomain) (round0Site ctx) (ctx.roles 1)
+      (handler (.send (ty := .field scalarDomain) (GkrVerifier.roundSite ctx "0") (ctx.roles 1)
         (GkrRoundsReference.message state).constant) initial).follow fun _ afterConstant =>
-      (handler (.send (ty := .field scalarDomain) (round1Site ctx) (ctx.roles 1)
+      (handler (.send (ty := .field scalarDomain) (GkrVerifier.roundSite ctx "1") (ctx.roles 1)
         (GkrRoundsReference.message state).linear) afterConstant).follow fun _ afterLinear =>
-      (handler (.send (ty := .field scalarDomain) (round2Site ctx) (ctx.roles 1)
+      (handler (.send (ty := .field scalarDomain) (GkrVerifier.roundSite ctx "2") (ctx.roles 1)
         (GkrRoundsReference.message state).quadratic) afterLinear).follow fun _ afterQuadratic =>
-      (handler (.receive (.field scalarDomain) (deliverySite ctx) (ctx.roles 1)) afterQuadratic).follow
+      (handler (.receive (.field scalarDomain) (GkrVerifier.deliverySite ctx) (ctx.roles 1)) afterQuadratic).follow
         fun challenge reached => ⟨.returned (result raw point challenge), reached, []⟩ := by
   rw [process ctx raw state decoded capacity point]
   rfl

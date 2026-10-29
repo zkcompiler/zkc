@@ -1,6 +1,6 @@
 module
 
-public import ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs
+public import ZkcExamples.Structured.GkrSourceViews
 public import Zkc.Source.Structured.Bindings.Assembly
 public import Zkc.Source.Structured.NormalForm.Sites
 public import Mathlib.Data.Fintype.Basic
@@ -18,8 +18,8 @@ set_option maxHeartbeats 8000000
 set_option smartUnfolding false
 noncomputable section
 
-abbrev sourceImported := ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs.imported
-abbrev program : Program := ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs.program
+abbrev sourceImported := ZkcExamples.Structured.GkrSourceViews.imported
+abbrev program : Program := ZkcExamples.Structured.GkrSourceViews.program
 abbrev payload : UnitPayload := program.payload
 def sourceContracts := program.snapshot.contracts
 

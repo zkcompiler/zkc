@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Completeness
+public import ZkcSecurity.Examples.RootProperties.TwoSums
 public import ZkcSecurity.Examples.Generated.TwoSums
 public import ZkcSecurity.Claims.Completeness
 
@@ -19,6 +19,6 @@ local instance : ∀ event : Domain.Event ZkcSecurity.Examples.Generated.TwoSums
     SampleableType (Domain.Raw event) := rawSampleable blsModulus
 
 theorem compiled_ideal_complete : CanonicalCompleteness ZkcSecurity.Examples.Generated.TwoSums.subject (0) :=
-  ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Completeness.compiled_ideal_complete
+  ZkcSecurity.Examples.RootProperties.TwoSums.compiled_ideal_complete
 
 end ZkcSecurity.Examples.Generated.Components.TwoSumsCompleteness

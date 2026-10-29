@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Realizations.Gkr.CanonicalPair
+public import ZkcExamples.Construction.Generated.GkrPair
 public import ZkcExamples.Construction.GkrSourceRouting
 public import Zkc.Construction.LayoutPermutation
 
@@ -28,23 +28,23 @@ def order (artifact : Participant) : List Nat :=
       artifact.inputs[other]? == artifact.inputs[index]?
     peers.reverse[peers.idxOf index]!
 
-def producerOrder := order CanonicalPair.Producer.participant
-def validatorOrder := order CanonicalPair.Validator.participant
+def producerOrder := order ZkcExamples.Construction.Generated.GkrPair.Producer.participant
+def validatorOrder := order ZkcExamples.Construction.Generated.GkrPair.Validator.participant
 
 def producer : Participant :=
-  LayoutPermutation.prependCoordinates ((LayoutPermutation.permuteInputs CanonicalPair.Producer.participant producerOrder).toOption.get (by decide +kernel))
+  LayoutPermutation.prependCoordinates ((LayoutPermutation.permuteInputs ZkcExamples.Construction.Generated.GkrPair.Producer.participant producerOrder).toOption.get (by decide +kernel))
 def validator : Participant :=
-  LayoutPermutation.prependCoordinates ((LayoutPermutation.permuteInputs CanonicalPair.Validator.participant validatorOrder).toOption.get (by decide +kernel))
+  LayoutPermutation.prependCoordinates ((LayoutPermutation.permuteInputs ZkcExamples.Construction.Generated.GkrPair.Validator.participant validatorOrder).toOption.get (by decide +kernel))
 
 theorem producer_provenance :
-    (LayoutPermutation.permuteInputs CanonicalPair.Producer.participant producerOrder).map LayoutPermutation.prependCoordinates = .ok producer := by
+    (LayoutPermutation.permuteInputs ZkcExamples.Construction.Generated.GkrPair.Producer.participant producerOrder).map LayoutPermutation.prependCoordinates = .ok producer := by
   decide +kernel
 theorem validator_provenance :
-    (LayoutPermutation.permuteInputs CanonicalPair.Validator.participant validatorOrder).map LayoutPermutation.prependCoordinates = .ok validator := by
+    (LayoutPermutation.permuteInputs ZkcExamples.Construction.Generated.GkrPair.Validator.participant validatorOrder).map LayoutPermutation.prependCoordinates = .ok validator := by
   decide +kernel
 
-theorem producer_changed : producer ≠ CanonicalPair.Producer.participant := by decide +kernel
-theorem validator_changed : validator ≠ CanonicalPair.Validator.participant := by decide +kernel
+theorem producer_changed : producer ≠ ZkcExamples.Construction.Generated.GkrPair.Producer.participant := by decide +kernel
+theorem validator_changed : validator ≠ ZkcExamples.Construction.Generated.GkrPair.Validator.participant := by decide +kernel
 
 theorem producer_checked : AuthoredPair.checkProducer ZkcExamples.Structured.GkrSourceViews.program
     GkrSourceRouting.context producer = .ok () := by decide +kernel

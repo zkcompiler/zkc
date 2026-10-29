@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Construction.Participant
+public import ZkcTools.ConstructionBindings.ViewSyntax
 public import ZkcTools.StructuredSource.Presentation
 public import Lean
 
@@ -16,10 +16,6 @@ set_option autoImplicit false
 namespace ZkcTools.StructuredSource.Constructed
 open Zkc.Construction
 
-def app (head : String) (arguments : List String) : String :=
-  "(" ++ " ".intercalate (head :: arguments) ++ ")"
-def literal {A : Type} [Repr A] (value : A) : String := "(" ++ (reprStr value).replace "\n" " " ++ ")"
-
 structure Output where
   moduleName : String
   artifactModule : String
@@ -27,52 +23,6 @@ structure Output where
 
 def binders :=
   " (model : Structured.DomainModel) (program : Structured.Program) (context : Context)"
-def arguments := ["model", "program", "context"]
-
-/-- Print one independent action and the corresponding generic proof rule. -/
-def action (instruction : Instruction) (bodyName : String) : Except String (String × String) :=
-  let declared := literal instruction.results
-  let references := literal instruction.operands
-  let rule (name : String) (args : List String) : Except String (String × String) :=
-    .ok (app ("View." ++ name) args, app ("Correspondence." ++ name) args)
-  match instruction.operation, instruction.operands, instruction.body with
-  | .receive site schema peer ty, [], [] =>
-      rule "receive" [literal site, literal schema, literal peer, literal ty, declared]
-  | .send site schema peer, [reference], [] =>
-      rule "send" [literal site, literal schema, literal peer, toString reference, declared]
-  | .indicesEmpty, [], [] => rule "indicesEmpty" [declared]
-  | .indicesAppend, [coordinates, index], [] =>
-      rule "indicesAppend" [toString coordinates, toString index, declared]
-  | .observe suite template, [state, value, coordinates], [] =>
-      let args := [literal suite, literal template, toString state, toString value,
-        toString coordinates, declared]
-      .ok (app "View.observe" ("context" :: args), app "Correspondence.observe" args)
-  | .challenge suite field template, [state, coordinates], [] =>
-      let args := [literal suite, literal field, literal template, toString state,
-        toString coordinates, declared]
-      .ok (app "View.challenge" ("context" :: args), app "Correspondence.challenge" args)
-  | .localService port request template coordinates, _, [] =>
-      let args := [literal port, literal request, literal template, literal coordinates,
-        references, declared]
-      .ok (app "View.localService" ("context" :: args), app "Correspondence.localService" args)
-  | .calculate operation, _, [] =>
-      let args := [literal operation, references, declared]
-      .ok (app "View.calculation" ("model" :: args), app "Correspondence.calculation" args)
-  | .call name, _, [] =>
-      let args := [literal name, references, declared]
-      .ok (app "View.helper" (["model", "program"] ++ args), app "Correspondence.helper" args)
-  | .guard site, [condition], [] =>
-      .ok (app "View.guard" [toString condition, declared],
-       app "Correspondence.guard" [literal site, toString condition, declared])
-  | .loop site maximum yielded, count :: initial, _ =>
-      .ok (app "View.loop" [toString maximum, literal yielded, toString count,
-        literal initial, declared, app bodyName arguments],
-       app "Correspondence.loop" [literal site, toString maximum, literal yielded,
-        toString count, literal initial, declared, app (bodyName ++ "_eq") arguments])
-  | _, _, _ => throw ("constructed-view-unsupported-shape: operation=" ++
-      literal instruction.operation ++ "; operands=" ++ references ++ "; results=" ++
-      declared ++ "; body-instructions=" ++ toString instruction.body.length)
-
 /-- A block is emitted as named actions and bind composition. Nested loops
 remain named, parameterized blocks, never an unrolled trace. -/
 def block (fuel : Nat) (instructions : List Instruction) (name path : String)
@@ -95,7 +45,7 @@ def block (fuel : Nat) (instructions : List Instruction) (name path : String)
           ("(" ++ stepPath ++ ").body")
           (sorts ++ .data .index :: instruction.results) bodyInputPath)
     | _ => pure ()
-    let (view, proof) ← (action instruction (stepName ++ "Body")).mapError
+    let (view, proof) ← (action instruction (app (stepName ++ "Body") arguments, app (stepName ++ "Body_eq") arguments)).mapError
       (fun error => error ++ "; path=" ++ stepPath)
     let stepBinders := Presentation.explicitParameters binders arguments ("model " ++ view)
     text := text ++ "def " ++ stepName ++ stepBinders ++ " : View.Block model.toCarriers :=\n  " ++

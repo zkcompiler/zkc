@@ -1,9 +1,11 @@
 module
 
 meta import Lean.Elab.Command
+public import ZkcExamples.Structured.GkrVerifierProcess
+public import ZkcExamples.Structured.SumcheckVerifierHelpers
 meta import Lean.Meta.Eqns
 
-public import ZkcExamples.Structured.GkrSourceCallbacks
+public import ZkcExamples.Structured.Generated.Presentations.Gkr
 
 @[expose] public section
 
@@ -15,14 +17,14 @@ set_option backward.isDefEq.respectTransparency false
 namespace ZkcSecurity.Realizations.Gkr.HonestProducerPackets
 open Zkc Source Structured
 open Zkc.Polynomial Zkc.Polynomial.Multilinear
-open ZkcExamples.Structured SumcheckVerifierHelpers GkrSourceCallbacks
+open ZkcExamples.Structured SumcheckVerifierHelpers Generated.Presentations.Gkr.Root
 
 variable {F G : Type}
 
 def sendTail (ctx : ProtocolContext) : List F → PIR.Process (participantInterface F G) Unit
   | [] => .done ()
   | value :: rest => .call (.send (ty := .field "bls12-381.fr")
-      (lineCoefficientSite ctx) (ctx.roles 1) value) fun _ => sendTail ctx rest
+      (GkrVerifier.lineCoefficientSite ctx) (ctx.roles 1) value) fun _ => sendTail ctx rest
 
 def tail [Zero F] (line : List F) (start count : Nat) : List F :=
   List.ofFn (fun i : Fin count => (line)[start + i.val + 1]?.getD 0)

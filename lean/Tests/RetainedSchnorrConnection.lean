@@ -1,5 +1,5 @@
 import ZkcTools.ConstructionBindings.Root
-import ZkcTools.ConstructionBindings.RootRoutes
+import Zkc.Construction.ConnectionRootRoutes
 import ZkcExamples.Construction.SchnorrArtifact
 import ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator
 import ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedProducer
@@ -23,10 +23,10 @@ abbrev producerArtifact := ZkcExamples.Structured.Generated.Constructed.SchnorrR
 
 def capabilities : List (Nat × Nat) := [(3, 13), (4, 73)]
 def validatorRouting : Original.Routing :=
-  RootRoutes.routing program.snapshot context .validator capabilities validatorArtifact
+  ConnectionRootRoutes.routing program.snapshot context .validator capabilities validatorArtifact
     (by decide +kernel)
 def producerRouting : Original.Routing :=
-  RootRoutes.routing program.snapshot context .producer capabilities producerArtifact
+  ConnectionRootRoutes.routing program.snapshot context .producer capabilities producerArtifact
     (by decide +kernel)
 
 def validator : RootCertificate program validatorRouting 1 validatorArtifact := by
@@ -55,9 +55,9 @@ example (model : DomainModel) (physical : Domain.Environment model.toCarriers) :
       (Domain.participant model program context producerArtifact physical) :=
   producer.simulation model physical
 
-example : (RootRoutes.propose program.snapshot context .validator [(3, 13)] validatorArtifact).toOption = none := by
+example : (ConnectionRootRoutes.propose program.snapshot context .validator [(3, 13)] validatorArtifact).toOption = none := by
   decide +kernel
-example : (RootRoutes.propose program.snapshot context .producer [(4, 73)] producerArtifact).toOption = none := by
+example : (ConnectionRootRoutes.propose program.snapshot context .producer [(4, 73)] producerArtifact).toOption = none := by
   decide +kernel
 
 /-- Omitted source message routes cannot be rescued by matching refusals. -/

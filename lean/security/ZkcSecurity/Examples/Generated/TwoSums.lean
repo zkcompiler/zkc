@@ -3,6 +3,7 @@ module
 public import ZkcSecurity.Examples.Generated.Components.TwoSumsSources
 public import ZkcExamples.Construction.Generated.TwoSumsPair
 public import ZkcSecurity.Domains.PrimeField
+public import ZkcExamples.Structured.Generated.Connections.TwoSums
 public import ZkcSecurity.Tools.PairConstruction
 public import ZkcSecurity.Claims.SourceChargeSites
 
@@ -25,6 +26,7 @@ def selected : Zkc.Construction.AuthoredPair.Selection original :=
 def subject : ZkcSecurity.Claims.HonestPair.Subject
     (ZkcSecurity.Domains.PrimeField.blsScalarModel) original imported selected := by
   bind_authored_subject "public_sums" with_registry Zkc.Source.Structured.OpaqueRegistry.empty
+    connections ZkcExamples.Structured.Generated.Connections.TwoSums.producer, ZkcExamples.Structured.Generated.Connections.TwoSums.validator
     exports "sha256:7d2908d3289b179b13c3f076a28469bfe48e31f4555c3de227a2cecd0b4850b5", "sha256:e3a01344251e0dec9cd26c2f3ffa5196803446d2dc690e151ec9a5c7cfd1dc6c", "sha256:3dd7c3e1657ea6b89f6a25cc378ae3a11b33a85d13c27cb88a4e31793ec4137f"
 
 abbrev validatorArtifacts := subject.validatorArtifacts

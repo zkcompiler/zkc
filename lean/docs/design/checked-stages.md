@@ -67,35 +67,31 @@ input locations, helper laws, live-frame relations and complete output readback.
 full body certificate. It does not infer that body certificate from structural
 admission.
 
-## Structural admission and the remaining soundness step
+## Structural admission and checked source correspondence
 
-`project` walks the admitted original and exported role-local program in
-lockstep. It tracks which values the role holds, follows protocol applications,
-checks helper and calculation uses and matches repeat bodies with exported
-loops. `checkCompiled` combines projection and transcript admission against one
-`Structured.Imported` source. Selection additionally fixes the context, public
-input order, service replacement, sorts and acceptance position.
+`checkCompiled` checks transcript construction and exact occurrence provenance
+against one admitted source. Selection fixes the context, public input order,
+service replacement, sorts and acceptance position. Complete correspondence is
+a distinct, request-side requirement: `ConnectionAdmission.Required` selects the
+canonical source ABI and routing, then requires full simulation and independent
+reached-source coverage. Failure to select is false, and a missing proof leaves
+the receipt open.
 
-These are finite admission facts. There is currently **no generic theorem from
-`project` or `checkCompiled` acceptance to full source-to-participant simulation
-under the current Domain meaning**. The old proof for a different reading is
-not a theorem about this meaning. Maintained consumers instead provide checked
-source and helper laws and explicit simulations.
+A typed `ConnectionCertificate` now yields the simulation through one generic
+theorem. The root assembler handles both roles, symbolic repeats and repeated
+component applications, including full returned values and history. Its
+proposal is untrusted and its finite data and derivations are kernel checked.
+The earlier unproved `project` walker has been removed.
 
-For GKR, structural descriptors now supply physical input locations, nested
-loop frames, operands, yields and return selectors to reusable proof templates.
-Both the canonical layout and a changed layout obtain full checked connections.
-This reduces maintenance per layout. The templates, mathematical laws and
-remaining source connection are still authored work; this is not a generic
-checker soundness result. See the [connection owner](../../security/ZkcSecurity/Realizations/Gkr/README.md).
+GKR's canonical consumers use the common generated root connection. The old
+GKR-specific certificate generator and duplicate validator view are deleted;
+its remaining source mathematics/presentation is counted separately. No full
+connection for the retained alternate-layout syntax control is claimed. See the
+[connection owner](../../security/ZkcSecurity/Realizations/Gkr/README.md).
 
-The next connection unit uses the normal form as its anchor, installs helper
-laws by body shape, assembles derivations and reports remaining obligations at
-source locations. Its decisive theorem must turn a passing source-to-participant
-check into a simulation for the current meaning, first for validators and then
-producers. It must cover nested repeats and multiple component applications.
-GKR and a structurally different protocol must exercise that generality before
-using it to claim low per-protocol connection cost.
+Property builders reuse the source anchor and connection while consuming
+mathematical reference, honest, No/escape and cost laws. Successful structural
+correspondence does not by itself establish those laws or low author cost.
 
 ## Composition with security consumers
 

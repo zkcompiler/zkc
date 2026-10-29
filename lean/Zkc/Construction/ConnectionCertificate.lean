@@ -1,13 +1,17 @@
 module
 
 public import Zkc.Construction.ConnectionLibrary
+public import Zkc.Construction.ConnectionTargetExtent
+public import Zkc.Construction.ConnectionApplicationFrame
 public import Zkc.Construction.ConnectionProjectedLoops
 public import Zkc.Construction.ConnectionProjectedContinuation
+public import Zkc.Construction.ConnectionReturnProjection
 public import Zkc.Construction.ConnectionRepeatSupport
 public import Zkc.Construction.ConnectionComputation
 public import Zkc.Construction.ConnectionPresence
 public import Zkc.Construction.ConnectionHelpers
 public import Zkc.Construction.ConnectionHelperProjection
+public import Zkc.Construction.ConnectionHelperCalculation
 public import Zkc.Construction.ConnectionObservationPrefix
 public import Zkc.Construction.ConnectionActionSupport
 public import Zkc.Construction.ConnectionContext
@@ -24,8 +28,8 @@ in a constructor. Helpers carry finite exact declaration bindings. Symbolic
 source stacks, public and private queries, delivery and observation share the
 same derivation. Symbolic repeats check one normalized body independently of
 the runtime count and retain ordered occurrence coordinates and reached history.
-Their carried state supports source-owned private projections. Component
-applications still require a separate checked rule.
+Their carried state supports source-owned private projections. Finite selected-library
+applications compose their checked flat callee slice with the caller continuation.
 
 The output location row is fixed before proposal and includes every component.
 The root's role/profile schema and reached-source route coverage are separate
@@ -156,6 +160,16 @@ inductive HistoryReadback {scope : Scope} (layout : Layout scope) (suite : Strin
   | transcript (reference : Nat) (checked : layout[reference]? = some (.history suite)) :
       HistoryReadback layout suite (some reference)
 
+/-- Expose the finite input cell for independent presence reconstruction. -/
+theorem HistoryReadback.inputCell {scope : Scope} {layout : Layout scope} {suite : String}
+    {selector : Option Nat} (read : HistoryReadback layout suite selector) :
+    match (generalizing := false) selector with
+    | none => True
+    | some reference => layout[reference]? = some (.history suite) := by
+  cases read with
+  | plain => trivial
+  | transcript reference checked => exact checked
+
 def HistoryAt {model : DomainModel} (suite : String) (environment : Domain.Environment model.toCarriers)
     (history : Domain.History model.toCarriers) : Option Nat → Prop
   | none => True
@@ -179,58 +193,67 @@ theorem historyLocation_of_profile {model : DomainModel} {context : Context}
     | some reference =>
       simpa [HistoryAt, Original.HistoryLocation, Context.suite, Context.replacement?, selected] using read
 
-inductive Derivation (routing : Original.Routing)
-    (context : ProtocolContext) (definitions : List CheckedDefinition) (callees : List CalleeKey) :
+set_option linter.unusedVariables false in
+inductive Alignment (routing : Original.Routing) :
+    (context : ProtocolContext) → (definitions : List CheckedDefinition) → (callees : List CalleeKey) →
+    {selection : ConnectionLibrary.Selection definitions callees} →
     (out : List Ty) → (role : Nat) → (scopes : List (List Nat)) →
     (outputs : List Original.Location) → (history : Option Nat) →
     {scope : Scope} → ScopedFrames scope → Layout scope → Form [] callees scope out → Block → Type 1 where
-  | done {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | done {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope} {values : Values (Comp [] scope) out}
       (readback : Readback layout (mask role scopes values) outputs)
       (historyRead : HistoryReadback layout routing.context.suite history) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout (.done values) (fun _ => Domain.View.empty)
-  | halt {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.done values) (fun _ => Domain.View.empty)
+  | halt {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope} (reason : PIR.Stop) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout (.halt reason) (fun _ _ => .halt reason)
-  | split {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.halt reason) (fun _ _ => .halt reason)
+  | split {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope} {ty : Ty}
       (subject : Subject scope ty) {absent : Form [] callees scope out}
       {present : Form [] callees (.value ty :: scope) out} {target : Block}
-      (absentBranch : Derivation routing context definitions callees out role scopes outputs history frames
+      (absentBranch : Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames
         (layout.map (Cell.absentAt subject)) absent target)
-      (presentBranch : Derivation routing context definitions callees out role scopes outputs history (frames.rename .there)
+      (presentBranch : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
         (layout.map (Cell.presentAt subject)) present target) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
         (.split subject.comp absent present) target
-  | splitAbsent {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | splitAbsent {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope}
       {frames : ScopedFrames scope} {layout : Layout scope} {ty : Ty}
       {absent : Form [] callees scope out} {present : Form [] callees (.value ty :: scope) out} {target : Block}
       (presentMatched : present.CallsMatch)
-      (tail : Derivation routing context definitions callees out role scopes outputs history frames layout absent target) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout absent target) :
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
         (.split (.absent (ty := ty)) absent present) target
-  | splitValue {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | splitValue {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope}
       {frames : ScopedFrames scope} {layout : Layout scope} {ty : Ty}
       (value : Term [] scope ty)
       {absent : Form [] callees scope out} {present : Form [] callees (.value ty :: scope) out} {target : Block}
       (absentMatched : absent.CallsMatch)
-      (tail : Derivation routing context definitions callees out role scopes outputs history frames layout
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
         (ConnectionSubstitution.form present (ConnectionSubstitution.valueHead value)) target) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
         (.split (.present value) absent present) target
-  | splitPresent {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | splitPresent {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope} {ty : Ty}
       (subject : Subject scope ty) {absent : Form [] callees scope out}
       {present : Form [] callees (.value ty :: scope) out} {target : Block}
       (reference : Nat) (checked : layout[reference]? = some (.data subject.comp))
       (absentMatch : absent.CallsMatch)
-      (tail : Derivation routing context definitions callees out role scopes outputs history (frames.rename .there)
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
         (layout.map (Cell.presentAt subject)) present target) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
         (.split subject.comp absent present) target
-  | compute {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | compute {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       (operation : Calculation) (terms : Terms [] scope operation.op.arguments)
       {next : Form [] callees (.results operation.op.results :: scope) out} {rest : Block}
@@ -238,13 +261,14 @@ inductive Derivation (routing : Original.Routing)
       (inputsData : operation.op.arguments.all Domain.dataType = true)
       (outputsData : operation.op.results.all Domain.dataType = true)
       (readback : Readback layout (components terms) (references.map Original.Location.data))
-      (tail : Derivation routing context definitions callees out role scopes outputs history (frames.rename .there)
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
         (resultsLayout layout operation.op.results) next rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
         (.compute operation.op (ConnectionCalculations.calculation_allowed operation) terms next)
         (fun model => Domain.View.sequence
           (Domain.View.calculation model operation references (operation.op.results.map ValueSort.data)) (rest model))
-  | strictHelper {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | strictHelper {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       (program : Program) (helper : Helper)
       (binding : ConnectionHelpers.Binding definitions helper program)
@@ -254,12 +278,13 @@ inductive Derivation (routing : Original.Routing)
       (inputsData : helper.inputs.all Domain.dataType = true)
       (outputsData : helper.outputs.all Domain.dataType = true)
       (readback : Readback layout (components arguments) (references.map Original.Location.data))
-      (tail : Derivation routing context definitions callees out role scopes outputs history (frames.rename .there)
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
         (resultsLayout layout helper.outputs) next rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout (.strict helper arguments next)
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.strict helper arguments next)
         (fun model => Domain.View.sequence
           (Domain.View.helper model program helper.name references (helper.outputs.map ValueSort.data)) (rest model))
-  | ownedHelper {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | ownedHelper {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       (owner : Nat) (program : Program) (helper : Helper)
       (binding : ConnectionHelpers.Binding definitions helper program)
@@ -269,12 +294,13 @@ inductive Derivation (routing : Original.Routing)
       (inputsData : helper.inputs.all Domain.dataType = true)
       (outputsData : helper.outputs.all Domain.dataType = true)
       (readback : Readback layout arguments (references.map Original.Location.data))
-      (tail : Derivation routing context definitions callees out role scopes outputs history (frames.rename .there)
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
         (tupleLayout layout helper.outputs) next rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout (.owned owner helper arguments next)
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.owned owner helper arguments next)
         (fun model => Domain.View.sequence
           (Domain.View.helper model program helper.name references (helper.outputs.map ValueSort.data)) (rest model))
-  | mathHelper {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | mathHelper {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       (program : Program) (helper : Helper) (math : helper.kind = .math)
       (binding : ConnectionHelpers.Binding definitions helper program)
@@ -284,22 +310,51 @@ inductive Derivation (routing : Original.Routing)
       (inputsData : helper.inputs.all Domain.dataType = true)
       (outputsData : helper.outputs.all Domain.dataType = true)
       (readback : Readback layout arguments (references.map Original.Location.data))
-      (tail : Derivation routing context definitions callees out role scopes outputs history (frames.rename .there)
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
         (tupleLayout layout helper.outputs) next rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout (.math helper arguments next)
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.math helper arguments next)
         (fun model => Domain.View.sequence
           (Domain.View.helper model program helper.name references (helper.outputs.map ValueSort.data)) (rest model))
-  | projectionHelper {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | projectionHelper {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       (definition : CheckedDefinition) (projection : ConnectionHelpers.Projection definitions definition)
       (arguments : Values (Comp [] scope) definition.inputs)
       {next : Form [] callees (.tuple definition.outputs :: scope) out} {target : Block}
       (nextMatched : next.CallsMatch)
-      (tail : Derivation routing context definitions callees out role scopes outputs history frames layout
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
         (ConnectionSubstitution.form next (ConnectionSubstitution.tupleHead (lookup arguments projection.positions))) target) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
         (.math definition.helper arguments next) target
-  | calculation {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | inlineCalculation {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees}
+      {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+      {outputs : List Original.Location} {history : Option Nat} {scope : Scope}
+      {frames : ScopedFrames scope} {layout : Layout scope}
+      (definition : CheckedDefinition) (calculation : ConnectionHelpers.CalculationBody definitions definition)
+      (arguments : Terms [] scope definition.inputs)
+      {next : Form [] callees (.tuple definition.outputs :: scope) out} {target : Block}
+      (nextMatched : next.CallsMatch)
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
+        (ConnectionSubstitution.form next (ConnectionSubstitution.tupleHead (calculation.result arguments))) target) :
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
+        (.math definition.helper (components arguments) next) target
+  | inlineMissingCalculation {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees}
+      {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+      {outputs : List Original.Location} {history : Option Nat} {scope : Scope}
+      {frames : ScopedFrames scope} {layout : Layout scope}
+      (definition : CheckedDefinition) (calculation : ConnectionHelpers.CalculationBody definitions definition)
+      (arguments : Values (Comp [] scope) definition.inputs)
+      (missing : anyAbsent (lookup arguments calculation.inputs) = true)
+      {next : Form [] callees (.tuple definition.outputs :: scope) out} {target : Block}
+      (nextMatched : next.CallsMatch)
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
+        (ConnectionSubstitution.form next (ConnectionSubstitution.tupleHead (calculation.missingResult arguments))) target) :
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
+        (.math definition.helper arguments next) target
+  | calculation {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope} {form : Form [] callees scope out}
       (operation : Calculation) (total : operation.op.total = true)
       (terms : Terms [] scope operation.op.arguments) (references : List Nat)
@@ -307,12 +362,13 @@ inductive Derivation (routing : Original.Routing)
       (outputsData : operation.op.results.all Domain.dataType = true)
       (readback : Readback layout (components terms) (references.map Original.Location.data))
       {rest : Block}
-      (tail : Derivation routing context definitions callees out role scopes outputs history frames
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames
         (layout ++ cells (NormalForm.calculation operation.op total terms)) form rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout form
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout form
         (fun model => Domain.View.sequence
           (Domain.View.calculation model operation references (operation.op.results.map ValueSort.data)) (rest model))
-  | receive {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | receive {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope} (ty : Ty) (site : String) (peer : Nat)
       {next : Form [] callees (.value ty :: scope) out} {rest : Block}
       (plain : routing.context.profile = .plain) (template : Template)
@@ -320,13 +376,14 @@ inductive Derivation (routing : Original.Routing)
         (routing.context.message (qualifyProtocolSite context.applicationPrefix site)
           (context.roles peer) routing.self) frames.sites routing.messages = some template)
       (data : ty.isService = false)
-      (tail : Derivation routing context definitions callees out role scopes outputs history (frames.rename .there) (receiveLayout layout ty) next rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout (.receive ty site peer next)
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there) (receiveLayout layout ty) next rest) :
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.receive ty site peer next)
         (fun model => Domain.View.sequence
           (Domain.View.receive (qualifyProtocolSite context.applicationPrefix site)
             (qualifyProtocolSite context.applicationPrefix site) (routing.context.role (context.roles peer))
             ty [.data ty]) (rest model))
-  | send {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | send {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope} (ty : Ty) (site : String) (peer : Nat)
       (value : Term [] scope ty) {next : Form [] callees scope out} {rest : Block}
       (reference : Nat) (readback : Readback layout (.cons (.present value) .nil) [.data reference])
@@ -334,13 +391,14 @@ inductive Derivation (routing : Original.Routing)
       (route : OccurrenceResolution.resolveStatic routing.snapshot routing.context
         (routing.context.message (qualifyProtocolSite context.applicationPrefix site)
           routing.self (context.roles peer)) frames.sites routing.messages = some template)
-      (tail : Derivation routing context definitions callees out role scopes outputs history frames layout next rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout (.send ty site peer value next)
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout next rest) :
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.send ty site peer value next)
         (fun model => Domain.View.sequence
           (Domain.View.send (qualifyProtocolSite context.applicationPrefix site)
             (qualifyProtocolSite context.applicationPrefix site) (routing.context.role (context.roles peer))
             reference []) (rest model))
-  | observedSend {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | observedSend {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       (ty : Ty) (site : String) (peer : Nat) (value : Term [] scope ty)
       {next : Form [] callees scope out} {rest : Block}
@@ -356,9 +414,9 @@ inductive Derivation (routing : Original.Routing)
       (route : OccurrenceResolution.resolveStatic routing.snapshot routing.context
         (routing.context.message (qualifyProtocolSite context.applicationPrefix site)
           routing.self (context.roles peer)) frames.sites routing.messages = some template)
-      (tail : Derivation routing context definitions callees out role scopes outputs history frames
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames
         (observedLayout prepared routing.context.suite) next rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout (.send ty site peer value next)
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.send ty site peer value next)
         (fun model => match routing.mode with
           | .producer => Domain.View.sequence
               (Domain.View.send (qualifyProtocolSite context.applicationPrefix site)
@@ -369,7 +427,8 @@ inductive Derivation (routing : Original.Routing)
           | .validator => preparationProof.prepend (fun model => Domain.View.sequence
               (Domain.View.observe routing.context routing.context.suite template stateRef reference pathRef
                 [.transcript routing.context.suite]) (rest model)) model)
-  | observedReceive {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | observedReceive {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       (ty : Ty) (site : String) (peer : Nat)
       {next : Form [] callees (.value ty :: scope) out} {rest : Block}
@@ -385,16 +444,17 @@ inductive Derivation (routing : Original.Routing)
       (route : OccurrenceResolution.resolveStatic routing.snapshot routing.context
         (routing.context.message (qualifyProtocolSite context.applicationPrefix site)
           (context.roles peer) routing.context.validator) frames.sites routing.messages = some template)
-      (tail : Derivation routing context definitions callees out role scopes outputs history (frames.rename .there)
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
         (observedLayout prepared routing.context.suite) next rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout (.receive ty site peer next)
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.receive ty site peer next)
         (fun model => Domain.View.sequence
           (Domain.View.receive (qualifyProtocolSite context.applicationPrefix site)
             (qualifyProtocolSite context.applicationPrefix site) (routing.context.role (context.roles peer)) ty [.data ty])
           (preparationProof.prepend (fun model => Domain.View.sequence
             (Domain.View.observe routing.context routing.context.suite template stateRef layout.length pathRef
               [.transcript routing.context.suite]) (rest model)) model))
-  | delivery {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | delivery {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       (site field : String) (peer : Nat)
       {next : Form [] callees (.value (.field field) :: scope) out} {rest : Block}
@@ -413,34 +473,37 @@ inductive Derivation (routing : Original.Routing)
       (valueRead : prepared[layout.length]? = some (.data (.present (.var .here))))
       (observeStateRead : prepared[observeStateRef]? = some (.history routing.context.suite))
       (observePathRead : prepared[observePathRef]? = some (.coordinates (frames.rename .there).coordinates))
-      (tail : Derivation routing context definitions callees out role scopes outputs history (frames.rename .there)
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
         (observedLayout prepared routing.context.suite) next rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout (.receive (.field field) site peer next)
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.receive (.field field) site peer next)
         (fun model => Domain.View.sequence
           (Domain.View.challenge routing.context routing.context.suite field draw stateRef pathRef
             [.data (.field field), .transcript routing.context.suite])
           (preparationProof.prepend (fun model => Domain.View.sequence
             (Domain.View.observe routing.context routing.context.suite message observeStateRef layout.length observePathRef
               [.transcript routing.context.suite]) (rest model)) model))
-  | indicesEmpty {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | indicesEmpty {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       {form : Form [] callees scope out} {rest : Block}
-      (tail : Derivation routing context definitions callees out role scopes outputs history frames
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames
         (layout ++ [.coordinates []]) form rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout form
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout form
         (fun model => Domain.View.sequence (Domain.View.indicesEmpty [.indices]) (rest model))
-  | indicesAppend {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | indicesAppend {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       {form : Form [] callees scope out} {rest : Block}
       (terms : List (Term [] scope .index)) (term : Term [] scope .index)
       (coordinateRef indexRef : Nat)
       (coordinates : layout[coordinateRef]? = some (.coordinates terms))
       (index : layout[indexRef]? = some (.data (.present term)))
-      (tail : Derivation routing context definitions callees out role scopes outputs history frames
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames
         (layout ++ [.coordinates (terms ++ [term])]) form rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout form
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout form
         (fun model => Domain.View.sequence (Domain.View.indicesAppend coordinateRef indexRef [.indices]) (rest model))
-  | publicQuery {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | publicQuery {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       (site field : String) (handle : Nat) (selected : handle = routing.selectedHandle) {next : Form [] callees (.value (.field field) :: scope) out} {rest : Block}
       (mode : routing.mode = .validator) (publicService : routing.context.service.isSome = true)
@@ -453,14 +516,15 @@ inductive Derivation (routing : Original.Routing)
       (stateRef pathRef : Nat)
       (stateRead : layout[stateRef]? = some (.history routing.context.suite))
       (pathRead : layout[pathRef]? = some (.coordinates frames.coordinates))
-      (tail : Derivation routing context definitions callees out role scopes outputs history (frames.rename .there)
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
         (queryLayout layout field routing.context.suite) next rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
         (.query site field (.cons (.capability ("random." ++ field ++ "/0") handle) .nil) next)
         (fun model => Domain.View.sequence
           (Domain.View.challenge routing.context routing.context.suite field template stateRef pathRef
             [.data (.field field), .transcript routing.context.suite]) (rest model))
-  | localQuery {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | localQuery {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       (site field : String) (handle : Nat) {next : Form [] callees (.value (.field field) :: scope) out} {rest : Block}
       (port : ServicePort) (template : Template)
@@ -470,13 +534,14 @@ inductive Derivation (routing : Original.Routing)
         (qualifyProtocolSite context.applicationPrefix site) field handle port template)
       (contract : port.contract = "random." ++ field ++ "/0")
       (coordinates : List Nat) (readback : IndexReadback layout frames.coordinates coordinates)
-      (tail : Derivation routing context definitions callees out role scopes outputs history (frames.rename .there)
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there)
         (receiveLayout layout (.field field)) next rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
         (.query site field (.cons (.capability ("random." ++ field ++ "/0") handle) .nil) next)
         (fun model => Domain.View.sequence
           (Domain.View.localService routing.context port (.draw field) template coordinates [] [.data (.field field)]) (rest model))
-  | repeat {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | repeat {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat}
       {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       (spec : RepeatSpec) (site : String)
@@ -498,18 +563,19 @@ inductive Derivation (routing : Original.Routing)
       (bodyForm : Form [] callees (RepeatScope spec.state scope) spec.state)
       (normalized : normalizeRegion {strict := true, callees := callees} role roster callback
         ⟨repeatInputs captures, repeatInputs captures⟩ = .ok bodyForm)
-      (bodyCertificate : Derivation routing context definitions callees spec.state role spec.stateScopes
+      (bodyCertificate : Alignment routing context definitions callees (selection := selection) spec.state role spec.stateScopes
         (yieldData.map Original.Location.data) bodyHistory
         (repeatFrames frames (qualifyProtocolSite context.applicationPrefix site))
         (repeatLayout routing.context layout spec.state) bodyForm body)
-      (tail : Derivation routing context definitions callees out role scopes outputs history
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history
         (frames.rename .there) (repeatExitLayout routing.context layout spec.state) next rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
         (.repeat spec site callback (.present count) initial captures next)
         (fun model => Domain.View.sequence
           (Domain.View.loop spec.maximum yielded countReference initialReferences
             (Original.profileOutputSorts routing.context (spec.state.map ValueSort.data)) (body model)) (rest model))
-  | projectedRepeat {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | projectedRepeat {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat}
       {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       (spec : RepeatSpec) (site : String)
@@ -535,46 +601,169 @@ inductive Derivation (routing : Original.Routing)
       (bodyForm : Form [] callees (RepeatScope spec.state scope) spec.state)
       (normalized : normalizeRegion {strict := true, callees := callees} role roster callback
         ⟨projectedInputs role captures, projectedInputs role captures⟩ = .ok bodyForm)
-      (bodyCertificate : Derivation routing context definitions callees spec.state role spec.stateScopes
+      (bodyCertificate : Alignment routing context definitions callees (selection := selection) spec.state role spec.stateScopes
         yieldLocations bodyHistory (repeatFrames frames (qualifyProtocolSite context.applicationPrefix site))
         (projectedLayout routing.context role spec.stateScopes layout spec.state) bodyForm body)
       (nextMatched : next.CallsMatch)
-      (tail : Derivation routing context definitions callees out role scopes outputs history
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history
         (frames.rename .there) (projectedExitLayout routing.context role spec.stateScopes layout spec.state)
         (ConnectionSubstitution.maskNext role spec.stateScopes next) rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout
         (.repeat spec site callback (.present count) initial captures next)
         (fun model => Domain.View.sequence
           (Domain.View.loop spec.maximum yielded countReference initialReferences
             (Original.profileOutputSorts routing.context stateSorts) (body model)) (rest model))
-  | guard {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  /-- A selected checked callee followed by its caller continuation. The body
+  reference owns its source normalization. Only selected successful return
+  components need readback; a checked finite caller substitution proves their
+  sufficiency. The flat target spine and full exit frame remain checked. -/
+  | application {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+      {outputs : List Original.Location} {history : Option Nat} {scope : Scope}
+      {frames : ScopedFrames scope} {layout : Layout scope}
+      (payload : UnitPayload) (same : payload.definitions = definitions)
+      (library : ConnectionLibrary.Library payload callees) (callee : Fin callees.length)
+      (signature : ProtocolSignature) (signatureMatch : (calleeAt callees callee).signature = signature)
+      (roles : List Nat) (site : String)
+      (arguments : Values (Argument [] scope) (calleeAt callees callee).pattern.scope)
+      (calleeOutputs : List Original.Location) (calleeHistory : Option Nat)
+      (spine : ConnectionTargetPrefix.Prefix) (extent : Nat)
+      (physicalExtent : ConnectionTargetExtent.Extent layout.length extent spine.block)
+      (admission : applicationAdmitted layout.length extent calleeOutputs calleeHistory)
+      (returnSelection : ConnectionReturnProjection.Selection (calleeAt callees callee).signature.outputs)
+      (bodyCertificate : Alignment routing (context.enter site roles) definitions
+        (library.entry callee).earlierKeys
+        (selection := .selected payload same (library.entry callee).earlier)
+        (calleeAt callees callee).signature.outputs (calleeAt callees callee).role
+        (calleeAt callees callee).signature.outputScopes calleeOutputs calleeHistory frames layout
+        (ConnectionReturnProjection.form returnSelection
+          (ConnectionSubstitution.form (library.entry callee).form (fun binder => entryAt arguments binder))) spine.block)
+      (next : Form [] callees (.tuple (calleeAt callees callee).signature.outputs :: scope) out)
+      (continuationChecked : ConnectionReturnProjection.continuation returnSelection next = next)
+      (rest : Block)
+      (tail : Alignment routing context definitions callees (selection := .selected payload same library)
+        out role scopes outputs history (frames.rename .there)
+        (applicationLayout layout extent (calleeAt callees callee).role
+          (calleeAt callees callee).signature.outputScopes (calleeAt callees callee).signature.outputs
+          calleeOutputs calleeHistory routing.context.suite) next rest) :
+      Alignment routing context definitions callees (selection := .selected payload same library)
+        out role scopes outputs history frames layout (.apply callee signature roles site arguments next)
+        (spine.plug rest)
+  /-- A callee may retain a caller transcript only at a checked current-history
+  cell disjoint from every selected nominal data output. The body checks every
+  operation, selected return, history and capture. The caller substitution is
+  checked just as in the fresh-history case. -/
+  | applicationRetainedHistory {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+      {outputs : List Original.Location} {history : Option Nat} {scope : Scope}
+      {frames : ScopedFrames scope} {layout : Layout scope}
+      (payload : UnitPayload) (same : payload.definitions = definitions)
+      (library : ConnectionLibrary.Library payload callees) (callee : Fin callees.length)
+      (signature : ProtocolSignature) (signatureMatch : (calleeAt callees callee).signature = signature)
+      (roles : List Nat) (site : String)
+      (arguments : Values (Argument [] scope) (calleeAt callees callee).pattern.scope)
+      (calleeOutputs : List Original.Location) (calleeHistory : Option Nat)
+      (spine : ConnectionTargetPrefix.Prefix) (extent : Nat)
+      (physicalExtent : ConnectionTargetExtent.Extent layout.length extent spine.block)
+      (admission : applicationAdmitted layout.length extent calleeOutputs none)
+      (inputHistory : HistoryReadback layout routing.context.suite calleeHistory)
+      (separate : match (generalizing := false) calleeHistory with
+        | none => True
+        | some reference => .data reference ∉ calleeOutputs)
+      (returnSelection : ConnectionReturnProjection.Selection (calleeAt callees callee).signature.outputs)
+      (bodyCertificate : Alignment routing (context.enter site roles) definitions
+        (library.entry callee).earlierKeys
+        (selection := .selected payload same (library.entry callee).earlier)
+        (calleeAt callees callee).signature.outputs (calleeAt callees callee).role
+        (calleeAt callees callee).signature.outputScopes calleeOutputs calleeHistory frames layout
+        (ConnectionReturnProjection.form returnSelection
+          (ConnectionSubstitution.form (library.entry callee).form (fun binder => entryAt arguments binder))) spine.block)
+      (next : Form [] callees (.tuple (calleeAt callees callee).signature.outputs :: scope) out)
+      (continuationChecked : ConnectionReturnProjection.continuation returnSelection next = next)
+      (rest : Block)
+      (tail : Alignment routing context definitions callees (selection := .selected payload same library)
+        out role scopes outputs history (frames.rename .there)
+        (applicationLayout layout extent (calleeAt callees callee).role
+          (calleeAt callees callee).signature.outputScopes (calleeAt callees callee).signature.outputs
+          calleeOutputs calleeHistory routing.context.suite) next rest) :
+      Alignment routing context definitions callees (selection := .selected payload same library)
+        out role scopes outputs history frames layout (.apply callee signature roles site arguments next)
+        (spine.plug rest)
+  | guard {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope} {ty : Ty}
       (equality : Equality ty) (left right : Term [] scope ty)
       {next : Form [] callees scope out} {rest : Block}
       (reference : Nat)
       (readback : GuardReadback layout equality left right reference)
-      (tail : Derivation routing context definitions callees out role scopes outputs history frames readback.refine next rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout (.guard equality left right next)
+      (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames readback.refine next rest) :
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.guard equality left right next)
         (fun model => Domain.View.sequence (Domain.View.guard reference []) (rest model))
-  | trueGuard {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | trueGuard {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope} {form : Form [] callees scope out}
       (reference : Nat) (readback : Readback layout (.cons (.present (.bool true)) .nil) [.data reference])
-      {rest : Block} (tail : Derivation routing context definitions callees out role scopes outputs history frames layout form rest) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout form
+      {rest : Block} (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout form rest) :
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout form
         (fun model => Domain.View.sequence (Domain.View.guard reference []) (rest model))
-  | falseGuard {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+  | falseGuard {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
       (reference : Nat) (readback : Readback layout (.cons (.present (.bool false)) .nil) [.data reference])
       (rest : Block) :
-      Derivation routing context definitions callees out role scopes outputs history frames layout (.halt .reject)
+      Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.halt .reject)
         (fun model => Domain.View.sequence (Domain.View.guard reference []) (rest model))
 
+/-- Public alignment type; omitted selections support only callee-free paths. -/
+abbrev Derivation (routing : Original.Routing) (context : ProtocolContext)
+    (definitions : List CheckedDefinition) (callees : List CalleeKey)
+    (out : List Ty) (role : Nat) (scopes : List (List Nat))
+    (outputs : List Original.Location) (history : Option Nat)
+    {scope : Scope} (frames : ScopedFrames scope) (layout : Layout scope)
+    (form : Form [] callees scope out) (target : Block)
+    (selection : ConnectionLibrary.Selection definitions callees := .unselected) :=
+  Alignment routing context definitions callees (selection := selection)
+    out role scopes outputs history frames layout form target
+
+namespace Derivation
+abbrev done := @Alignment.done
+abbrev halt := @Alignment.halt
+abbrev split := @Alignment.split
+abbrev splitAbsent := @Alignment.splitAbsent
+abbrev splitValue := @Alignment.splitValue
+abbrev splitPresent := @Alignment.splitPresent
+abbrev compute := @Alignment.compute
+abbrev strictHelper := @Alignment.strictHelper
+abbrev ownedHelper := @Alignment.ownedHelper
+abbrev mathHelper := @Alignment.mathHelper
+abbrev projectionHelper := @Alignment.projectionHelper
+abbrev inlineCalculation := @Alignment.inlineCalculation
+abbrev inlineMissingCalculation := @Alignment.inlineMissingCalculation
+abbrev calculation := @Alignment.calculation
+abbrev receive := @Alignment.receive
+abbrev send := @Alignment.send
+abbrev observedSend := @Alignment.observedSend
+abbrev observedReceive := @Alignment.observedReceive
+abbrev delivery := @Alignment.delivery
+abbrev indicesEmpty := @Alignment.indicesEmpty
+abbrev indicesAppend := @Alignment.indicesAppend
+abbrev publicQuery := @Alignment.publicQuery
+abbrev localQuery := @Alignment.localQuery
+abbrev «repeat» := @Alignment.repeat
+abbrev projectedRepeat := @Alignment.projectedRepeat
+abbrev application := @Alignment.application
+abbrev applicationRetainedHistory := @Alignment.applicationRetainedHistory
+abbrev guard := @Alignment.guard
+abbrev trueGuard := @Alignment.trueGuard
+abbrev falseGuard := @Alignment.falseGuard
+end Derivation
+
 /-- Certificate size follows syntax, independently of values and replies. -/
-def Derivation.size {routing : Original.Routing} {context : ProtocolContext} {definitions : List CheckedDefinition}
-    {callees : List CalleeKey} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+def Alignment.size {routing : Original.Routing} {context : ProtocolContext} {definitions : List CheckedDefinition}
+    {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
     {outputs : List Original.Location} {history : Option Nat}
     {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope} {form : Form [] callees scope out} {target : Block} :
-    Derivation routing context definitions callees out role scopes outputs history frames layout form target → Nat
+    Derivation routing context definitions callees (selection := selection) out role scopes outputs history frames layout form target → Nat
   | .done .. | .halt _ | .falseGuard .. => 1
   | .split _ absent present => 1 + absent.size + present.size
   | .splitAbsent _ tail => 1 + tail.size
@@ -585,6 +774,8 @@ def Derivation.size {routing : Original.Routing} {context : ProtocolContext} {de
   | .ownedHelper _ _ _ _ _ _ _ _ _ tail => 1 + tail.size
   | .mathHelper _ _ _ _ _ _ _ _ _ tail => 1 + tail.size
   | .projectionHelper _ _ _ _ tail => 1 + tail.size
+  | .inlineCalculation _ _ _ _ tail => 1 + tail.size
+  | .inlineMissingCalculation _ _ _ _ _ tail => 1 + tail.size
   | .calculation _ _ _ _ _ _ _ tail => 1 + tail.size
   | .receive _ _ _ _ _ _ _ tail => 1 + tail.size
   | .send _ _ _ _ _ _ _ _ _ tail => 1 + tail.size
@@ -598,21 +789,26 @@ def Derivation.size {routing : Original.Routing} {context : ProtocolContext} {de
   | .repeat _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ body tail =>
       1 + body.size + tail.size
   | .projectedRepeat (bodyCertificate := body) (tail := tail) .. => 1 + body.size + tail.size
+  | .application (bodyCertificate := body) (tail := tail) .. => 1 + body.size + tail.size
+  | .applicationRetainedHistory (bodyCertificate := body) (tail := tail) .. => 1 + body.size + tail.size
   | .guard _ _ _ _ _ tail => 1 + tail.size
   | .trueGuard _ _ tail => 1 + tail.size
 
 /-- Structural helper bindings introduce no normalizer laws or callee calls. -/
-theorem Derivation.callsMatch {routing : Original.Routing} {context : ProtocolContext} {definitions : List CheckedDefinition}
-    {callees : List CalleeKey} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+theorem Alignment.callsMatch {routing : Original.Routing} {context : ProtocolContext} {definitions : List CheckedDefinition}
+    {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
     {outputs : List Original.Location} {history : Option Nat}
     {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope} {form : Form [] callees scope out} {target : Block}
-    (derivation : Derivation routing context definitions callees out role scopes outputs history frames layout form target) : form.CallsMatch := by
+    (derivation : Derivation routing context definitions callees (selection := selection) out role scopes outputs history frames layout form target) : form.CallsMatch := by
   induction derivation
   case splitValue value absentMatched tail ih =>
     have presentMatched := (ConnectionSubstitution.form_callsMatch _ _).mp ih
     simp_all only [Form.CallsMatch, Form.lawCalls, Form.calleeCalls, List.map_append, Prod.mk.injEq]
-  all_goals simp_all only [Form.CallsMatch, Form.lawCalls, Form.calleeCalls, List.map_append, Prod.mk.injEq]
+  all_goals simp_all only [Form.CallsMatch, Form.lawCalls, Form.calleeCalls, List.map_append, List.map_cons, Prod.mk.injEq]
   all_goals first | assumption | exact ⟨rfl, rfl⟩
+
+abbrev Derivation.size := @Alignment.size
+abbrev Derivation.callsMatch := @Alignment.callsMatch
 
 /-- Full source-owned visibility, exact reached stack and transcript, and retained inputs. -/
 def Returns {model : DomainModel} {out : List Ty} (routing : Original.Routing)
@@ -635,10 +831,10 @@ Input sorts, complete input readback and bounds are fixed ABI obligations.
 RouteCoverage and CompleteReturns remain available as independent root gates. -/
 private noncomputable def sound
     {routing : Original.Routing} {context : ProtocolContext} {definitions : List CheckedDefinition}
-    {callees : List CalleeKey} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+    {callees : List CalleeKey} {selection : ConnectionLibrary.Selection definitions callees} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
     {outputs : List Original.Location} {history : Option Nat}
     {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope} {form : Form [] callees scope out} {target : Block}
-    (derivation : Derivation routing context definitions callees out role scopes outputs history frames layout form target)
+    (derivation : Derivation routing context definitions callees (selection := selection) out role scopes outputs history frames layout form target)
     (model : DomainModel) (tables : Tables model (Occurrence.signature model.toCarriers))
     (bindings : ConnectionHelpers.TablesMatch model definitions tables)
     (runs : Runs model (Occurrence.signature model.toCarriers))
@@ -647,6 +843,7 @@ private noncomputable def sound
     (processes : CalleeProcesses model callees (Occurrence.signature model.toCarriers))
     (calleesHold : ∀ {types : List Ty} (inputs : Values (Component model.Value) types),
       CalleesHold protocols processes inputs)
+    (selectionMeaning : selection.Meaning model tables protocols processes)
     (expectedFrames : Original.Frames) (state : Original.State model.toCarriers) (stack : state.frames = expectedFrames)
     (captured : Domain.Environment model.toCarriers)
     (binders : Binders model scope) (reachedStack : state.frames = frames.eval model binders) (environment : Domain.Environment model.toCarriers)
@@ -656,7 +853,7 @@ private noncomputable def sound
       (fun _ frame => ArtifactBinding.Captures captured frame)
       (Original.fold routing (form.denoteOn model Occurrence.actions tables (LawResults.empty model)
         context runs processes binders) state) (target model environment) := by
-  induction derivation generalizing expectedFrames state captured environment with
+  induction derivation generalizing model tables protocols runs expectedFrames state captured environment with
   | done readback historyRead =>
     refine .done ⟨readback.masked related, stack, ?_, retained⟩
     cases historyRead with
@@ -667,15 +864,15 @@ private noncomputable def sound
     cases evaluated : subject.comp.eval (LawResults.empty model) binders with
     | none =>
       simpa only [Form.denoteOn, Form.denoteWithOn, evaluated] using
-        absentIH _runBinding expectedFrames state stack captured binders reachedStack environment (related.absentAt subject evaluated) retained
+        absentIH model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured binders reachedStack environment (related.absentAt subject evaluated) retained
     | some value =>
       simpa only [Form.denoteOn, Form.denoteWithOn, evaluated] using
-        presentIH _runBinding expectedFrames state stack captured (.cons value binders) (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) _).symm) environment (related.presentAt subject value evaluated) retained
+        presentIH model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured (.cons value binders) (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) _).symm) environment (related.presentAt subject value evaluated) retained
   | splitAbsent presentMatched tail ih =>
     simpa only [Form.denoteOn, Form.denoteWithOn, Comp.eval] using
-      ih _runBinding expectedFrames state stack captured binders reachedStack environment related retained
-  | @splitValue out role scopes outputs history scope frames layout ty value absent present target absentMatched tail ih =>
-    have aligned := ih _runBinding expectedFrames state stack captured binders reachedStack environment related retained
+      ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured binders reachedStack environment related retained
+  | @splitValue context definitions callees selection out role scopes outputs history scope frames layout ty value absent present target absentMatched tail ih =>
+    have aligned := ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured binders reachedStack environment related retained
     rw [ConnectionSubstitution.valueHead_denote] at aligned
     simpa only [Form.denoteOn, Form.denoteWithOn, Comp.eval] using aligned
   | splitPresent subject reference checked absentMatch tail ih =>
@@ -683,8 +880,8 @@ private noncomputable def sound
     | none => exact False.elim (related.not_absent checked evaluated)
     | some value =>
       simpa only [Form.denoteOn, Form.denoteWithOn, evaluated] using
-        ih _runBinding expectedFrames state stack captured (.cons value binders) (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) _).symm) environment (related.presentAt subject value evaluated) retained
-  | @compute out role scopes outputs history scope frames layout operation terms next rest references inputsData outputsData readback tail ih =>
+        ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured (.cons value binders) (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) _).symm) environment (related.presentAt subject value evaluated) retained
+  | @compute context definitions callees selection out role scopes outputs history scope frames layout operation terms next rest references inputsData outputsData readback tail ih =>
     rw [ConnectionCalculations.form_compute_closed model Occurrence.actions (LawResults.empty model)
       context runs processes tables operation terms next binders, Original.fold_bind]
     apply Original.Simulation.checkpoint environment retained
@@ -701,8 +898,8 @@ private noncomputable def sound
       have kept := ArtifactBinding.captures_trans retained (ArtifactBinding.captures_append
         environment (Original.encodeHelperResult values))
       exact ⟨.checkpoint _ kept
-        (ih _runBinding expectedFrames state stack captured (.cons values binders) (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) _).symm) _ (results_frame model outputsData values binders related) kept)⟩
-  | @strictHelper out role scopes outputs history scope frames layout program helper binding arguments next rest references inputsData outputsData
+        (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured (.cons values binders) (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) _).symm) _ (results_frame model outputsData values binders related) kept)⟩
+  | @strictHelper context definitions callees selection out role scopes outputs history scope frames layout program helper binding arguments next rest references inputsData outputsData
       readback tail ih =>
     change Original.Simulation _ _ (Original.fold routing
       ((invoke tables.closed helper (Terms.eval (LawResults.empty model) arguments binders)).bind
@@ -731,10 +928,10 @@ private noncomputable def sound
       have kept := ArtifactBinding.captures_trans retained (ArtifactBinding.captures_append
         environment (Original.encodeHelperResult values))
       exact ⟨.checkpoint _ kept
-        (ih _runBinding expectedFrames state stack captured (.cons values binders)
+        (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured (.cons values binders)
           (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) _).symm)
           _ (results_frame model outputsData values binders related) kept)⟩
-  | @ownedHelper out role scopes outputs history scope frames layout owner program helper binding arguments next rest references inputsData outputsData
+  | @ownedHelper context definitions callees selection out role scopes outputs history scope frames layout owner program helper binding arguments next rest references inputsData outputsData
       readback tail ih =>
     apply Classical.choice
     obtain ⟨values, present, read⟩ := read_components readback binders related
@@ -756,10 +953,10 @@ private noncomputable def sound
       have kept := ArtifactBinding.captures_trans retained (ArtifactBinding.captures_append
         environment (Original.encodeHelperResult values))
       exact ⟨.checkpoint _ kept
-        (ih _runBinding expectedFrames state stack captured (.cons values.present binders)
+        (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured (.cons values.present binders)
           (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) _).symm)
           _ (tuple_frame model outputsData values binders related) kept)⟩
-  | @mathHelper out role scopes outputs history scope frames layout program helper math binding arguments next rest references inputsData outputsData
+  | @mathHelper context definitions callees selection out role scopes outputs history scope frames layout program helper math binding arguments next rest references inputsData outputsData
       readback tail ih =>
     apply Classical.choice
     obtain ⟨values, present, read⟩ := read_components readback binders related
@@ -781,8 +978,8 @@ private noncomputable def sound
       have kept := ArtifactBinding.captures_trans retained (ArtifactBinding.captures_append
         environment (Original.encodeHelperResult values))
       exact ⟨.checkpoint _ kept
-        (ih _runBinding expectedFrames state stack captured (.cons values.present binders) (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) _).symm) _ (tuple_frame model outputsData values binders related) kept)⟩
-  | @projectionHelper out role scopes outputs history scope frames layout definition projection arguments next target nextMatched tail ih =>
+        (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured (.cons values.present binders) (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) _).symm) _ (tuple_frame model outputsData values binders related) kept)⟩
+  | @projectionHelper context definitions callees selection out role scopes outputs history scope frames layout definition projection arguments next target nextMatched tail ih =>
     have tableEquality := bindings ⟨projection.before.length, by
       have length := congrArg List.length projection.declarations
       simp only [List.length_append, List.length_cons] at length
@@ -805,8 +1002,54 @@ private noncomputable def sound
         (.cons (Comps.eval (LawResults.empty model) (lookup arguments projection.positions) binders) binders)) state) _
     rw [← ConnectionSubstitution.tupleHead_denote (lookup arguments projection.positions)
       Occurrence.actions tables context runs processes next binders]
-    exact ih _runBinding expectedFrames state stack captured binders reachedStack environment related retained
-  | @calculation out role scopes outputs history scope frames layout form operation total terms references inputsData outputsData readback rest tail ih =>
+    exact ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured binders reachedStack environment related retained
+  | @inlineCalculation context definitions callees selection out role scopes outputs history scope frames layout
+      definition calculation arguments next target nextMatched tail ih =>
+    have tableEquality := bindings ⟨calculation.before.length, by
+      have length := congrArg List.length calculation.declarations
+      simp only [List.length_append, List.length_cons] at length
+      omega⟩
+    have invoked : invoke tables.components definition.helper
+        (Comps.eval (LawResults.empty model) (components arguments) binders) =
+        .done (Comps.eval (LawResults.empty model) (calculation.result arguments) binders) := by
+      rw [tableEquality]
+      exact calculation.invoke model arguments binders
+    change Original.Simulation _ _ (Original.fold routing
+      ((invoke tables.components definition.helper
+        (Comps.eval (LawResults.empty model) (components arguments) binders)).bind
+        (fun values => _)) state) _
+    rw [invoked, PIR.Process.bind]
+    change Original.Simulation _ _ (Original.fold routing
+      (next.denoteOn model Occurrence.actions tables (LawResults.empty model) context runs processes
+        (.cons (Comps.eval (LawResults.empty model) (calculation.result arguments) binders) binders)) state) _
+    rw [← ConnectionSubstitution.tupleHead_denote (calculation.result arguments)
+      Occurrence.actions tables context runs processes next binders]
+    exact ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning
+      expectedFrames state stack captured binders reachedStack environment related retained
+  | @inlineMissingCalculation context definitions callees selection out role scopes outputs history scope frames layout
+      definition calculation arguments missing next target nextMatched tail ih =>
+    have tableEquality := bindings ⟨calculation.before.length, by
+      have length := congrArg List.length calculation.declarations
+      simp only [List.length_append, List.length_cons] at length
+      omega⟩
+    have invoked : invoke tables.components definition.helper
+        (Comps.eval (LawResults.empty model) arguments binders) =
+        .done (Comps.eval (LawResults.empty model) (calculation.missingResult arguments) binders) := by
+      rw [tableEquality]
+      exact calculation.invokeMissing model arguments missing binders
+    change Original.Simulation _ _ (Original.fold routing
+      ((invoke tables.components definition.helper
+        (Comps.eval (LawResults.empty model) arguments binders)).bind
+        (fun values => _)) state) _
+    rw [invoked, PIR.Process.bind]
+    change Original.Simulation _ _ (Original.fold routing
+      (next.denoteOn model Occurrence.actions tables (LawResults.empty model) context runs processes
+        (.cons (Comps.eval (LawResults.empty model) (calculation.missingResult arguments) binders) binders)) state) _
+    rw [← ConnectionSubstitution.tupleHead_denote (calculation.missingResult arguments)
+      Occurrence.actions tables context runs processes next binders]
+    exact ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning
+      expectedFrames state stack captured binders reachedStack environment related retained
+  | @calculation context definitions callees selection out role scopes outputs history scope frames layout form operation total terms references inputsData outputsData readback rest tail ih =>
     have step := ConnectionCalculations.view_calculation_total model operation total
       (Terms.eval (LawResults.empty model) terms binders) inputsData outputsData environment references
       (read_terms readback binders related)
@@ -816,8 +1059,8 @@ private noncomputable def sound
         (Terms.eval (LawResults.empty model) terms binders))))
     apply Original.Simulation.checkpoint environment retained
     rw [step]
-    exact .checkpoint _ kept (ih _runBinding expectedFrames state stack captured binders reachedStack _ extended kept)
-  | @receive out role scopes outputs history scope frames layout ty site peer next rest plain template route data tail ih =>
+    exact .checkpoint _ kept (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured binders reachedStack _ extended kept)
+  | @receive context definitions callees selection out role scopes outputs history scope frames layout ty site peer next rest plain template route data tail ih =>
     let qualified := qualifyProtocolSite context.applicationPrefix site
     have folded : Original.fold routing (Occurrence.actions
         (.receive ty qualified (context.roles peer))) state =
@@ -847,8 +1090,8 @@ private noncomputable def sound
       | mk value final =>
         simp only at same
         subst final
-        exact ⟨.checkpoint target kept (ih _runBinding expectedFrames state stack captured (.cons value binders) (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) _).symm) target extended kept)⟩
-  | @send out role scopes outputs history scope frames layout ty site peer value next rest reference readback plain template route tail ih =>
+        exact ⟨.checkpoint target kept (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured (.cons value binders) (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) _).symm) target extended kept)⟩
+  | @send context definitions callees selection out role scopes outputs history scope frames layout ty site peer value next rest reference readback plain template route tail ih =>
     apply Classical.choice
     obtain ⟨payload, payloadEq, read⟩ := readback.payload related
     refine ⟨?_⟩
@@ -876,8 +1119,8 @@ private noncomputable def sound
       exact retained
     · intro source target returned
       rw [returned.1, returned.2]
-      exact .checkpoint environment retained (ih _runBinding expectedFrames state stack captured binders reachedStack environment related retained)
-  | @observedSend out role scopes outputs history scope frames layout ty site peer value next rest replacement profile
+      exact .checkpoint environment retained (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured binders reachedStack environment related retained)
+  | @observedSend context definitions callees selection out role scopes outputs history scope frames layout ty site peer value next rest replacement profile
       prepared preparation preparationProof reference stateRef pathRef readback preparedReadback stateRead pathRead template route tail ih =>
     apply Classical.choice
     obtain ⟨payload, encoded, read⟩ := readback.payload related
@@ -929,7 +1172,7 @@ private noncomputable def sound
         rw [same, appended]
         have kept := ArtifactBinding.captures_trans preparedRetained (ArtifactBinding.captures_append preparedEnvironment
           [.transcript routing.context.suite (state.history ++ [.message origin payload])])
-        exact .checkpoint _ kept (ih _runBinding expectedFrames { state with history := state.history ++ [.message origin payload] } stack captured binders reachedStack _
+        exact .checkpoint _ kept (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames { state with history := state.history ++ [.message origin payload] } stack captured binders reachedStack _
           (Original.observation_frame preparedRelated routing.context.suite (.message origin payload)) kept)
     cases mode : routing.mode with
     | producer =>
@@ -945,7 +1188,7 @@ private noncomputable def sound
       have sender : routing.self = routing.context.validator := by simp only [Original.Routing.self, mode]
       simp only [Original.send, mode, ← sender, sourceRoute, encoded]
       exact finish
-  | @observedReceive out role scopes outputs history scope frames layout ty site peer next rest replacement profile mode data
+  | @observedReceive context definitions callees selection out role scopes outputs history scope frames layout ty site peer next rest replacement profile mode data
       prepared preparation preparationProof stateRef pathRef valueRead stateRead pathRead template route tail ih =>
     let qualified := qualifyProtocolSite context.applicationPrefix site
     let origin := Domain.atCoordinates (routing.context.message qualified (context.roles peer) routing.context.validator)
@@ -1010,10 +1253,10 @@ private noncomputable def sound
       have kept := ArtifactBinding.captures_trans preparedRetained (ArtifactBinding.captures_append _
         [.transcript routing.context.suite (state.history ++ [.message origin payload])])
       exact .checkpoint _ kept
-        (ih _runBinding expectedFrames { state with history := state.history ++ [.message origin payload] } stack captured (.cons value binders)
+        (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames { state with history := state.history ++ [.message origin payload] } stack captured (.cons value binders)
           (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) frames).symm) _
           (Original.observation_frame preparedRelated routing.context.suite (.message origin payload)) kept)
-  | @delivery out role scopes outputs history scope frames layout site field peer next rest replacement profile mode draw message binding
+  | @delivery context definitions callees selection out role scopes outputs history scope frames layout site field peer next rest replacement profile mode draw message binding
       contract request stateRef pathRef stateRead pathRead prepared preparation preparationProof
       observeStateRef observePathRef valueRead observeStateRead observePathRead tail ih =>
     let qualified := qualifyProtocolSite context.applicationPrefix site
@@ -1093,7 +1336,7 @@ private noncomputable def sound
         have kept := ArtifactBinding.captures_trans preparedRetained (ArtifactBinding.captures_append _
           [.transcript routing.context.suite (state.history ++ [.challenge queryOrigin] ++ [.message messageOrigin (.field field value)])])
         exact .checkpoint _ kept
-          (ih _runBinding expectedFrames { state with history := state.history ++ [.challenge queryOrigin] ++ [.message messageOrigin (.field field value)] } stack captured (.cons value binders)
+          (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames { state with history := state.history ++ [.challenge queryOrigin] ++ [.message messageOrigin (.field field value)] } stack captured (.cons value binders)
             (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) frames).symm) _
             (Original.observation_frame preparedRelated routing.context.suite (.message messageOrigin (.field field value))) kept)
   | indicesEmpty tail ih =>
@@ -1102,15 +1345,15 @@ private noncomputable def sound
     apply Original.Simulation.checkpoint environment retained
     change Original.Simulation _ _ _ ((PIR.Process.done (environment ++ [.indices []])).bind _)
     exact .checkpoint _ kept
-      (ih _runBinding expectedFrames state stack captured binders reachedStack _ related.indicesEmpty kept)
+      (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured binders reachedStack _ related.indicesEmpty kept)
   | indicesAppend terms term coordinateRef indexRef coordinates index tail ih =>
     obtain ⟨step, extended⟩ := related.indicesAppend coordinates index
     have kept := ArtifactBinding.captures_trans retained (ArtifactBinding.captures_append environment
       [.indices ((terms ++ [term]).map fun value => value.eval (LawResults.empty model) binders)])
     apply Original.Simulation.checkpoint environment retained
     rw [step]
-    exact .checkpoint _ kept (ih _runBinding expectedFrames state stack captured binders reachedStack _ extended kept)
-  | @publicQuery out role scopes outputs history scope frames layout site field handle selected next rest mode publicService contract request template route
+    exact .checkpoint _ kept (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured binders reachedStack _ extended kept)
+  | @publicQuery context definitions callees selection out role scopes outputs history scope frames layout site field handle selected next rest mode publicService contract request template route
       stateRef pathRef stateRead pathRead tail ih =>
     subst handle
     let qualified := qualifyProtocolSite context.applicationPrefix site
@@ -1148,10 +1391,10 @@ private noncomputable def sound
       subst reached target
       have kept := ArtifactBinding.captures_trans retained (ArtifactBinding.captures_append environment
         [.data (.field field value), .transcript routing.context.suite (state.history ++ [.challenge origin])])
-      exact .checkpoint _ kept (ih _runBinding expectedFrames { state with history := state.history ++ [.challenge origin] } stack captured (.cons value binders)
+      exact .checkpoint _ kept (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames { state with history := state.history ++ [.challenge origin] } stack captured (.cons value binders)
         (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) frames).symm) _
         (Original.query_frame related routing.context.suite field origin value) kept)
-  | @localQuery out role scopes outputs history scope frames layout site field handle next rest port template mode binding contract
+  | @localQuery context definitions callees selection out role scopes outputs history scope frames layout site field handle next rest port template mode binding contract
       coordinates readback tail ih =>
     let qualified := qualifyProtocolSite context.applicationPrefix site
     let origin := Domain.atCoordinates binding.origin ((frames.eval model binders).map (·.index))
@@ -1184,10 +1427,10 @@ private noncomputable def sound
       subst reached target
       have kept := ArtifactBinding.captures_trans retained (ArtifactBinding.captures_append environment
         [.data (.field field value)])
-      exact .checkpoint _ kept (ih _runBinding expectedFrames state stack captured (.cons value binders)
+      exact .checkpoint _ kept (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured (.cons value binders)
         (reachedStack.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) frames).symm) _
         (related.bindData (ty := .field field) value rfl) kept)
-  | @«repeat» out role scopes outputs history scope frames layout spec site callback count initial captures next body rest
+  | @«repeat» context definitions callees selection out role scopes outputs history scope frames layout spec site callback count initial captures next body rest
       roster distinct active visible mappedVisible countReference countRead stateReferences initialReferences
       yieldData yielded initialHistory bodyHistory initialRead historyRead initialProfile bodyProfile yieldLocations
       bodyForm normalized bodyCertificate tail bodyIH tailIH =>
@@ -1229,7 +1472,7 @@ private noncomputable def sound
             (repeatFrames frames (qualifyProtocolSite context.applicationPrefix site)).eval model nextBinders := by
           rw [repeatFrames_eval]
           rw [closed, reachedStack]
-        have checked := bodyIH _runBinding (reached.frames ++ [⟨qualifyProtocolSite context.applicationPrefix site,index⟩])
+        have checked := bodyIH model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning (reached.frames ++ [⟨qualifyProtocolSite context.applicationPrefix site,index⟩])
           {reached with frames := reached.frames ++ [⟨qualifyProtocolSite context.applicationPrefix site,index⟩]}
           rfl environment nextBinders bodyStack _ entered (ArtifactBinding.captures_append environment _)
         rw [_runBinding] at checked
@@ -1292,10 +1535,10 @@ private noncomputable def sound
         (Domain.inputFrame routing.context physicals reached.history))
       refine ⟨.checkpoint _ kept ?_⟩
       rw [← _runBinding]
-      exact tailIH _runBinding expectedFrames reached (closed.trans stack) captured (.cons actual.present binders)
+      exact tailIH model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames reached (closed.trans stack) captured (.cons actual.present binders)
         (closed.trans reachedStack |>.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) frames).symm)
         _ (related.repeatExit routing.context binders actual reached.history encodedActual) kept
-  | @projectedRepeat out role scopes outputs history scope frames layout spec site callback count initial captures next body rest
+  | @projectedRepeat context definitions callees selection out role scopes outputs history scope frames layout spec site callback count initial captures next body rest
       roster distinct active visibility stateSorts schema countReference countRead initialLocations yieldLocations
       stateReferences initialReferences yieldData yielded initialHistory bodyHistory initialRead initialProjection yieldProjection
       historyRead initialProfile bodyProfile bodyForm normalized bodyCertificate nextMatched tail bodyIH tailIH =>
@@ -1341,7 +1584,7 @@ private noncomputable def sound
         have bodyStack : (reached.frames ++ [⟨qualifyProtocolSite context.applicationPrefix site,index⟩]) =
             (repeatFrames frames (qualifyProtocolSite context.applicationPrefix site)).eval model nextBinders := by
           rw [repeatFrames_eval, closed, reachedStack]
-        have checked := bodyIH _runBinding (reached.frames ++ [⟨qualifyProtocolSite context.applicationPrefix site,index⟩])
+        have checked := bodyIH model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning (reached.frames ++ [⟨qualifyProtocolSite context.applicationPrefix site,index⟩])
           {reached with frames := reached.frames ++ [⟨qualifyProtocolSite context.applicationPrefix site,index⟩]}
           rfl environment nextBinders bodyStack _ entered (ArtifactBinding.captures_append environment _)
         rw [_runBinding] at checked
@@ -1407,10 +1650,98 @@ private noncomputable def sound
       dsimp only
       rw [← mask_visibility visibility, ← ConnectionSubstitution.maskNext_denote role spec.stateScopes
         Occurrence.actions tables context _ processes next binders value, ← _runBinding]
-      exact tailIH _runBinding expectedFrames reached (closed.trans stack) captured (.cons value binders)
+      exact tailIH model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames reached (closed.trans stack) captured (.cons value binders)
         (closed.trans reachedStack |>.trans (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) frames).symm)
         _ (related.projectedExit routing.context role spec.stateScopes binders value reached.history localEncoding) kept
-  | @guard out role scopes outputs history scope frames layout ty equality left right next rest reference readback tail ih =>
+  | @application context definitions callees out role scopes outputs history scope frames layout
+      payload same library callee signature signatureMatch roles site arguments calleeOutputs calleeHistory
+      spine extent physicalExtent admission returnSelection bodyCertificate next continuationChecked rest tail bodyIH tailIH =>
+    rcases selectionMeaning with ⟨rfl, rfl, rfl⟩
+    subst definitions
+    let selected := library.entry callee
+    have instantiated := ConnectionSubstitution.form_denote
+      (Arguments.eval (LawResults.empty model) arguments binders) binders
+      (fun binder => entryAt arguments binder) (ConnectionSubstitution.arguments_related arguments binders)
+      Occurrence.actions (Occurrence.helpers model payload) (context.enter site roles)
+      (runsAtOn model Occurrence.actions Occurrence.iterations (Occurrence.helpers model payload)
+        (Occurrence.table model payload) (context.enter site roles) (calleeAt callees callee).role)
+      (selected.earlier.processes model) selected.form
+    have aligned := bodyIH model (Occurrence.helpers model payload) (fun _ => rfl)
+      (runsAtOn model Occurrence.actions Occurrence.iterations (Occurrence.helpers model payload)
+        (Occurrence.table model payload) (context.enter site roles) (calleeAt callees callee).role)
+      (Occurrence.table model payload) rfl (selected.earlier.processes model) (selected.earlier.holds model)
+      ⟨rfl,rfl,rfl⟩ expectedFrames state stack environment binders reachedStack environment related
+      (by simp [ArtifactBinding.Captures])
+    have extentProof := physicalExtent.yields model environment related.length.symm
+    have aligned := aligned.withTargetInvariant extentProof
+    change Original.Simulation _ _ (Original.fold routing
+      ((library.processes model callee (context.enter site roles)
+        (Arguments.eval (LawResults.empty model) arguments binders)).bind fun values =>
+        next.denoteOn model Occurrence.actions (Occurrence.helpers model payload) (LawResults.empty model)
+          context runs (library.processes model) (.cons values binders)) state) _
+    rw [library.processes_entry, ConnectionLibrary.Entry.process_form, ← instantiated,
+      ConnectionReturnProjection.bind_continuation returnSelection _ next continuationChecked,
+      Original.fold_bind, spine.plug_eq_bind]
+    apply aligned.bind
+    · intro _ frame kept
+      exact ArtifactBinding.captures_trans retained kept
+    · intro source frame returned
+      obtain ⟨returned, size⟩ := returned
+      have kept := ArtifactBinding.captures_trans retained returned.2.2.2
+      have nextRelated := related.applicationExit binders returned.2.2.2 extent size source.1
+        (calleeAt callees callee).role (calleeAt callees callee).signature.outputScopes calleeOutputs
+        returned.1 calleeHistory routing.context.suite returned.2.2.1
+      exact tailIH model (Occurrence.helpers model payload) (fun _ => rfl) runs
+        (Occurrence.table model payload) _runBinding (library.processes model) (library.holds model)
+        ⟨rfl,rfl,rfl⟩ expectedFrames source.2 returned.2.1 captured (.cons source.1 binders)
+        (returned.2.1.trans (stack.symm.trans reachedStack) |>.trans
+          (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) frames).symm)
+        frame nextRelated kept
+  | @applicationRetainedHistory context definitions callees out role scopes outputs history scope frames layout
+      payload same library callee signature signatureMatch roles site arguments calleeOutputs calleeHistory
+      spine extent physicalExtent admission inputHistory separate returnSelection bodyCertificate next continuationChecked rest tail bodyIH tailIH =>
+    rcases selectionMeaning with ⟨rfl, rfl, rfl⟩
+    subst definitions
+    let selected := library.entry callee
+    have instantiated := ConnectionSubstitution.form_denote
+      (Arguments.eval (LawResults.empty model) arguments binders) binders
+      (fun binder => entryAt arguments binder) (ConnectionSubstitution.arguments_related arguments binders)
+      Occurrence.actions (Occurrence.helpers model payload) (context.enter site roles)
+      (runsAtOn model Occurrence.actions Occurrence.iterations (Occurrence.helpers model payload)
+        (Occurrence.table model payload) (context.enter site roles) (calleeAt callees callee).role)
+      (selected.earlier.processes model) selected.form
+    have aligned := bodyIH model (Occurrence.helpers model payload) (fun _ => rfl)
+      (runsAtOn model Occurrence.actions Occurrence.iterations (Occurrence.helpers model payload)
+        (Occurrence.table model payload) (context.enter site roles) (calleeAt callees callee).role)
+      (Occurrence.table model payload) rfl (selected.earlier.processes model) (selected.earlier.holds model)
+      ⟨rfl,rfl,rfl⟩ expectedFrames state stack environment binders reachedStack environment related
+      (by simp [ArtifactBinding.Captures])
+    have extentProof := physicalExtent.yields model environment related.length.symm
+    have aligned := aligned.withTargetInvariant extentProof
+    change Original.Simulation _ _ (Original.fold routing
+      ((library.processes model callee (context.enter site roles)
+        (Arguments.eval (LawResults.empty model) arguments binders)).bind fun values =>
+        next.denoteOn model Occurrence.actions (Occurrence.helpers model payload) (LawResults.empty model)
+          context runs (library.processes model) (.cons values binders)) state) _
+    rw [library.processes_entry, ConnectionLibrary.Entry.process_form, ← instantiated,
+      ConnectionReturnProjection.bind_continuation returnSelection _ next continuationChecked,
+      Original.fold_bind, spine.plug_eq_bind]
+    apply aligned.bind
+    · intro _ frame kept
+      exact ArtifactBinding.captures_trans retained kept
+    · intro source frame returned
+      obtain ⟨returned, size⟩ := returned
+      have kept := ArtifactBinding.captures_trans retained returned.2.2.2
+      have nextRelated := related.applicationExit binders returned.2.2.2 extent size source.1
+        (calleeAt callees callee).role (calleeAt callees callee).signature.outputScopes calleeOutputs
+        returned.1 calleeHistory routing.context.suite returned.2.2.1
+      exact tailIH model (Occurrence.helpers model payload) (fun _ => rfl) runs
+        (Occurrence.table model payload) _runBinding (library.processes model) (library.holds model)
+        ⟨rfl,rfl,rfl⟩ expectedFrames source.2 returned.2.1 captured (.cons source.1 binders)
+        (returned.2.1.trans (stack.symm.trans reachedStack) |>.trans
+          (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) frames).symm)
+        frame nextRelated kept
+  | @guard context definitions callees selection out role scopes outputs history scope frames layout ty equality left right next rest reference readback tail ih =>
     have readCondition := readback.read related
     apply Original.Simulation.checkpoint environment retained
     rw [Domain.View.guard_eq reference environment _ readCondition]
@@ -1421,7 +1752,7 @@ private noncomputable def sound
       simpa only [Form.denoteOn, Form.denoteWithOn, holds, ↓reduceIte, decide_true,
         PIR.Process.bind] using
         (Original.Simulation.checkpoint environment retained
-          (ih _runBinding expectedFrames state stack captured binders reachedStack environment (readback.refined related holds) retained))
+          (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured binders reachedStack environment (readback.refined related holds) retained))
     · change ¬ (left.eval (LawResults.empty model) binders = right.eval (LawResults.empty model) binders) at holds
       simp only [Form.denoteOn, Form.denoteWithOn, holds, ↓reduceIte, decide_false,
         Original.fold_halt]
@@ -1429,7 +1760,7 @@ private noncomputable def sound
   | trueGuard reference readback tail ih =>
     apply Original.Simulation.checkpoint environment retained
     rw [Domain.View.guard_eq reference environment true (read_boolean readback related)]
-    exact .checkpoint environment retained (ih _runBinding expectedFrames state stack captured binders reachedStack environment related retained)
+    exact .checkpoint environment retained (ih model tables bindings runs protocols _runBinding processes calleesHold selectionMeaning expectedFrames state stack captured binders reachedStack environment related retained)
   | falseGuard reference readback rest =>
     apply Original.Simulation.checkpoint environment retained
     rw [Domain.View.guard_eq reference environment false (read_boolean readback related)]
@@ -1437,7 +1768,7 @@ private noncomputable def sound
 
 /-- Use a finite checked source library without any author-supplied callee
 process equations. This also supplies the library law at every repeat frame. -/
-@[no_expose] noncomputable def Derivation.librarySimulation
+@[no_expose] noncomputable def Derivation.unselectedLibrarySimulation
     {payload : UnitPayload} {routing : Original.Routing} {context : ProtocolContext}
     {callees : List CalleeKey} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
     {outputs : List Original.Location} {history : Option Nat}
@@ -1461,7 +1792,35 @@ process equations. This also supplies the library law at every repeat frame. -/
   sound derivation model (Occurrence.helpers model payload) (fun _ => rfl)
     (runsAtOn model Occurrence.actions Occurrence.iterations (Occurrence.helpers model payload)
       (Occurrence.table model payload) context role) (Occurrence.table model payload) rfl
-    (library.processes model) (library.holds model) state.frames state rfl captured binders stack
+    (library.processes model) (library.holds model) trivial state.frames state rfl captured binders stack
+    environment related retained
+
+/-- The canonical selected-library specialization of the structural theorem. -/
+@[no_expose] noncomputable def Alignment.librarySimulation
+    {payload : UnitPayload} {routing : Original.Routing} {context : ProtocolContext}
+    {callees : List CalleeKey} (library : ConnectionLibrary.Library payload callees)
+    {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+    {outputs : List Original.Location} {history : Option Nat}
+    {scope : Scope} {frames : ScopedFrames scope} {layout : Layout scope}
+    {form : Form [] callees scope out} {target : Block}
+    (derivation : Derivation routing context payload.definitions callees out role scopes outputs history
+      frames layout form target (selection := .selected payload rfl library))
+    (model : DomainModel) (state : Original.State model.toCarriers)
+    (captured : Domain.Environment model.toCarriers) (binders : Binders model scope)
+    (stack : state.frames = frames.eval model binders) (environment : Domain.Environment model.toCarriers)
+    (related : Holds model binders state.history layout environment)
+    (retained : ArtifactBinding.Captures captured environment) :
+    Original.Simulation (Returns routing role scopes outputs history state.frames captured)
+      (fun _ frame => ArtifactBinding.Captures captured frame)
+      (Original.fold routing (form.denoteOn model Occurrence.actions (Occurrence.helpers model payload)
+        (LawResults.empty model) context
+        (runsAtOn model Occurrence.actions Occurrence.iterations (Occurrence.helpers model payload)
+          (Occurrence.table model payload) context role) (library.processes model) binders) state)
+      (target model environment) :=
+  sound derivation model (Occurrence.helpers model payload) (fun _ => rfl)
+    (runsAtOn model Occurrence.actions Occurrence.iterations (Occurrence.helpers model payload)
+      (Occurrence.table model payload) context role) (Occurrence.table model payload) rfl
+    (library.processes model) (library.holds model) ⟨rfl,rfl,rfl⟩ state.frames state rfl captured binders stack
     environment related retained
 
 /-- The source fixes participant visibility before proposal. The history selector
@@ -1469,12 +1828,14 @@ is fixed by the caller and must agree with the construction profile. -/
 structure Certificate (routing : Original.Routing) (context : ProtocolContext)
     (definitions : List CheckedDefinition) (role roster : Nat) (source : CheckedProtocol)
     (pattern : InputPattern source.inputs) (outputs : List Original.Location) (history : Option Nat)
-    (frames : ScopedFrames pattern.scope) (layout : Layout pattern.scope) (target : Block) where
+    (frames : ScopedFrames pattern.scope) (layout : Layout pattern.scope) (target : Block)
+    (callees : List CalleeKey := [])
+    (selection : ConnectionLibrary.Selection definitions callees := .unselected) where
   self : context.roles role = routing.self
   historyProfile : historyPolicy routing.context.profile history = true
-  form : Form [] [] pattern.scope source.outputs
-  normalized : normalize {strict := true} source.body role roster pattern = .ok form
-  alignment : Derivation routing context definitions [] source.outputs role source.outputScopes outputs history
+  form : Form [] callees pattern.scope source.outputs
+  normalized : normalize {strict := true, callees := callees} source.body role roster pattern = .ok form
+  alignment : Derivation routing context definitions callees (selection := selection) source.outputs role source.outputScopes outputs history
     frames layout form target
 
 /-- Kernel-checked connection to the actual occurrence-aware source denotation.
@@ -1509,7 +1870,45 @@ Admission, ABI assembly and property installation remain root obligations. -/
     (fun (entry : Fin 0) => entry.elim0) binders (LawsHold.empty _ _) (fun (entry : Fin 0) => entry.elim0)]
   apply (sound certificate.alignment model tables bindings
     (runsAtOn model Occurrence.actions Occurrence.iterations tables protocols context role) protocols rfl
-    (fun (entry : Fin 0) => entry.elim0) (fun inputs => noCallees_hold _ inputs) state.frames state rfl captured
+    (fun (entry : Fin 0) => entry.elim0) (fun inputs => noCallees_hold _ inputs) trivial state.frames state rfl captured
+    binders stack environment related retained).mapRelations
+  · intro source target returned
+    exact returned
+  · intro source frame kept
+    exact Original.inputLive_of_captures abi (pattern.environment model binders) captured frame source
+      sorts bound inputRead kept
+
+@[no_expose] noncomputable def Certificate.selectedSimulation
+    {routing : Original.Routing} {context : ProtocolContext} {payload : UnitPayload}
+    {callees : List CalleeKey} {library : ConnectionLibrary.Library payload callees}
+    {role roster : Nat} {source : CheckedProtocol} {pattern : InputPattern source.inputs}
+    {outputs : List Original.Location} {history : Option Nat} {frames : ScopedFrames pattern.scope}
+    {layout : Layout pattern.scope} {target : Block}
+    (certificate : Certificate routing context payload.definitions role roster source pattern outputs history frames layout target
+      callees (.selected payload rfl library))
+    (distinct : RosterDistinct context role roster)
+    (model : DomainModel)
+    (state : Original.State model.toCarriers)
+    (binders : Binders model pattern.scope) (stack : state.frames = frames.eval model binders) (abi : Original.InputABI)
+    (captured : Domain.Environment model.toCarriers)
+    (sorts : Domain.sortsMatch abi.sorts captured = true)
+    (bound : Original.LocationsBound captured.length abi.locations)
+    (inputRead : Original.ValuesHolds captured abi.locations (pattern.environment model binders))
+    (environment : Domain.Environment model.toCarriers)
+    (related : Holds model binders state.history layout environment)
+    (retained : ArtifactBinding.Captures captured environment) :
+    Original.Simulation (Returns routing role source.outputScopes outputs history state.frames captured)
+      (Original.InputLive abi (pattern.environment model binders) captured)
+      (Original.fold routing (source.body.denote
+        (participantMeaningWithOn model (.silent _) Occurrence.actions (Occurrence.helpers model payload) (context.roles role)
+          (Occurrence.table model payload) context Occurrence.iterations) (pattern.environment model binders).get) state)
+      (target model environment) := by
+  rw [normalize_occurrence_sound {strict := true, callees := callees} source.body role roster pattern certificate.form
+    certificate.normalized certificate.alignment.callsMatch distinct (LawResults.empty model)
+    (library.processes model) binders (LawsHold.empty _ _) (library.holds model _)]
+  apply (sound certificate.alignment model (Occurrence.helpers model payload) (fun _ => rfl)
+    (runsAtOn model Occurrence.actions Occurrence.iterations (Occurrence.helpers model payload) (Occurrence.table model payload) context role) (Occurrence.table model payload) rfl
+    (library.processes model) (library.holds model) ⟨rfl,rfl,rfl⟩ state.frames state rfl captured
     binders stack environment related retained).mapRelations
   · intro source target returned
     exact returned

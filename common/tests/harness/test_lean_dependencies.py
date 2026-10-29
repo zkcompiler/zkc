@@ -126,3 +126,61 @@ def test_separated_boundaries_are_enforced(owner, dependency):
                                        'Zkc.Protocols.Sumcheck.Verifier'])
 def test_generic_security_reuses_actual_vcvio_and_core_providers(dependency):
     assert policy().permitted('ZkcSecurity.Families.Schnorr', dependency)
+
+
+
+def test_generic_elaborators_are_reusable_without_opening_generator_dependencies():
+    audit = policy()
+    subject = 'ZkcExamples.Structured.Generated.Connections.Sample'
+    elaborator = 'ZkcTools.ConstructionBindings.Root'
+    audit.audit_graph({subject: [elaborator], elaborator: ['Zkc.Construction.ConnectionRoot']},
+                      ['ZkcExamples', 'ZkcTools', 'Zkc'])
+    assert audit.POLICY['exceptions'] == []
+    for forbidden in ['ZkcTools.ConstructionBindings.Generate',
+                      'ZkcTools.ConstructionBindings.Analysis', 'ZkcExamples.Structured.Sample']:
+        with pytest.raises(ValueError, match='forbidden dependency'):
+            audit.audit_graph({subject: [elaborator], elaborator: [forbidden]},
+                              ['ZkcExamples', 'ZkcTools'])
+    with pytest.raises(ValueError, match='forbidden dependency'):
+        audit.audit_graph({subject: ['ZkcTools.ConstructionBindings.Generate']}, ['ZkcExamples'])
+
+
+@pytest.mark.parametrize('owner', [
+    'ZkcSecurity.Source.Client',
+    'ZkcSecurity.Families.Sumcheck.Client',
+    'ZkcArkLib.Examples.Subjects.Guess.Client',
+])
+@pytest.mark.parametrize('elaborator', [
+    'ZkcTools.StructuredSource.InferReferenceInstallation',
+    'ZkcTools.StructuredSource.NormalizedRoot',
+    'ZkcTools.StructuredSource.Composition',
+])
+def test_security_clients_share_restricted_checked_elaborators(owner, elaborator):
+    audit = policy()
+    graph = {owner: [elaborator], elaborator: ['Zkc.Source.Structured.NormalizedRoot']}
+    audit.audit_graph(graph, ['ZkcSecurity', 'ZkcArkLib', 'ZkcTools', 'Zkc'])
+    for forbidden in ['ZkcTools.StructuredSource.Bindings', 'ZkcExamples.Structured.Sample',
+                      'ZkcSecurity.Examples.Subjects.Sample']:
+        with pytest.raises(ValueError, match='forbidden dependency'):
+            audit.audit_graph({owner: [elaborator], elaborator: [forbidden]},
+                              ['ZkcSecurity', 'ZkcArkLib', 'ZkcTools'])
+
+
+def test_source_realization_owns_concrete_programs_not_family_mathematics():
+    audit = policy()
+    source = 'ZkcExamples.Structured.SumcheckSourceSelections'
+    realization = 'ZkcSecurity.Realizations.Sumcheck.SourceFamilySelections'
+    family = 'ZkcSecurity.Families.Sumcheck.TableComponent'
+    audit.audit_graph({realization: [source, family]}, ['ZkcSecurity', 'ZkcExamples'])
+    for dependency in [source, realization]:
+        with pytest.raises(ValueError, match='security-families-to-'):
+            audit.audit_graph({family: [dependency]}, ['ZkcSecurity', 'ZkcExamples'])
+
+
+@pytest.mark.parametrize("missing", ["Zkc.Source.Retired", "ZkcTools.Retired",
+                                     "Tests.Retired", "ZkcSecurity.Retired"])
+def test_missing_owned_import_fails_before_build(missing):
+    audit = load("lean_library", "lean/checks/check_library.py")
+    with pytest.raises(AssertionError, match="unselected or missing owned import"):
+        audit.check_owned_imports({"Tests.Client": [missing]})
+    audit.check_owned_imports({"Tests.Client": [missing, "Mathlib.Data.Nat.Basic"], missing: []})

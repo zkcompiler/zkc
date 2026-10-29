@@ -1,10 +1,11 @@
 module
 
-public import Zkc.Source.Common
+public import Zkc.Source.Participant
+public import Zkc.Source.Mathematical
 
 @[expose] public section
 
-/-! Nominal scalar vocabulary for the native common-source connection.
+/-! Nominal scalar vocabulary for derived mathematical contract views.
 
 Domain strings remain part of source sorts and operation signatures. An
 interpretation must separately justify their carriers and algebraic laws.
@@ -60,26 +61,5 @@ abbrev services : Participant.Services Ty where
   Op := String
   arguments field := [.service ("random." ++ field ++ "/0")]
   result field := .field field
-
-inductive Instruction where
-  | pure (op : Op) (arguments : List Nat)
-  | restrict (roles : List Nat) (ty : Ty) (value : Nat)
-  | exchange (site : String) (sender receiver : Nat) (ty : Ty) (value : Nat)
-  | draw (site : String) (owner : Nat) (field : String) (service : Nat)
-  | guard (site : String) (owner value : Nat)
-  | statement (relation : String) (types : List Ty) (selectors arguments : List Nat)
-  deriving DecidableEq, Repr
-
-structure Snapshot where
-  source : String
-  symbol : String
-  roles : List String
-  inputs : List Ty
-  inputRoles : List (List Nat)
-  result : Ty
-  outputRoles : List Nat
-  instructions : List Instruction
-  returned : Nat
-  deriving DecidableEq, Repr
 
 end Zkc.Source.Common.Native

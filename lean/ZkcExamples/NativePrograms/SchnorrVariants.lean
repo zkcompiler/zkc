@@ -1,15 +1,15 @@
 module
 
 public import ZkcExamples.NativePrograms.Schnorr
-public import ZkcExamples.NativePrograms.Variants.SchnorrHelpersData
-
-public import ZkcExamples.NativePrograms.Variants.SchnorrReorderedData
+public import ZkcExamples.NativePrograms.SchnorrHelpers
+public import ZkcExamples.NativePrograms.SchnorrReordered
 
 @[expose] public section
 
 /-! Several native source forms share one semantic contract and its property theorems. -/
 
 set_option autoImplicit false
+noncomputable section
 
 namespace ZkcExamples.NativePrograms.SchnorrVariants
 open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
@@ -17,18 +17,11 @@ open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
 inductive Form where
   | original | helpers | reordered
 
-def helpersImport : Imported := Variants.SchnorrHelpersData.snapshot.check.toOption.get (by decide +kernel)
-
-def reorderedImport : Imported := Variants.SchnorrReorderedData.snapshot.check.toOption.get (by decide +kernel)
-
 variable {F G : Type} [Field F] [DecidableEq F]
     [AddCommGroup G] [Module F G] [DecidableEq G]
 
-def helpers (base key : G) (service : Nat) : PIR.Process (Zkc.Protocols.Schnorr.Common.actions (F := F) (G := G)) (Option Bool) :=
-  helpersImport.denote (scalarMeaning F G) id 1 (Schnorr.verifierInputs base key service)
-
-def reordered (base key : G) (service : Nat) : PIR.Process (Zkc.Protocols.Schnorr.Common.actions (F := F) (G := G)) (Option Bool) :=
-  reorderedImport.denote (scalarMeaning F G) id 1 (Schnorr.verifierInputs base key service)
+abbrev helpers := SchnorrHelpers.verifier (F := F) (G := G)
+abbrev reordered := SchnorrReordered.verifier (F := F) (G := G)
 
 def verifier (form : Form) : Zkc.Protocols.Schnorr.Common.Verifier F G :=
   match form with
@@ -37,22 +30,12 @@ def verifier (form : Form) : Zkc.Protocols.Schnorr.Common.Verifier F G :=
   | .reordered => reordered
 
 theorem helpers_correspondence (base key : G) (service : Nat) :
-    helpers (F := F) base key service = Schnorr.experiment base key service := by
-  rfl
+    helpers (F := F) base key service = Schnorr.experiment (F := F) base key service :=
+  (SchnorrHelpers.process_view_eq base key service).trans (SchnorrHelpers.correspondence base key service)
 
 theorem reordered_correspondence (base key : G) (service : Nat) :
-    reordered (F := F) base key service = Schnorr.experiment base key service := by
-  apply PIR.Process.call_congr
-  intro commitment
-  apply PIR.Process.call_congr
-  intro challenge
-  apply PIR.Process.call_congr
-  intro acknowledgement
-  apply PIR.Process.call_congr
-  intro response
-  change PIR.Process.done (some (decide (response • base = challenge • key + commitment))) =
-    PIR.Process.done (some (decide (response • base = commitment + challenge • key)))
-  rw [add_comm (challenge • key) commitment]
+    reordered (F := F) base key service = Schnorr.experiment (F := F) base key service :=
+  (SchnorrReordered.process_view_eq base key service).trans (SchnorrReordered.correspondence base key service)
 
 theorem contract (form : Form) : Zkc.Protocols.Schnorr.Common.VerifierContract Schnorr.wiring (verifier (F := F) (G := G) form) := by
   cases form with
@@ -77,3 +60,5 @@ theorem special_soundness (form : Form) (base key : G) (service : Nat) (prover :
   exact (contract form).special_soundness base key service prover first second distinct acceptFirst acceptSecond
 
 end ZkcExamples.NativePrograms.SchnorrVariants
+
+end

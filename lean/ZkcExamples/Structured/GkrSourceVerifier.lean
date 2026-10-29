@@ -1,6 +1,8 @@
 module
 
 public import ZkcExamples.Structured.GkrSourceContinuation
+public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import ZkcExamples.Structured.GkrVerifierProcess
 public import ZkcExamples.Structured.GkrLayerReading
 
 @[expose] public section
@@ -77,11 +79,11 @@ theorem verifier_reads (handle : Nat) (inputs outputs add mul : List F) (layers 
   unfold GkrSourceContinuation.process
   rw [GkrRoundsReading.empty_plain]
   simp only [PIR.Process.bind, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons]
-  have outputFold := GkrSourceCallbacks.verifierOutput_fold (F := F) (G := G) {} separate (some handle)
+  have outputFold := Generated.Presentations.Gkr.Root.verifierOutput_fold (F := F) (G := G) {} (.ofSeparate separate (by decide)) (some handle)
     width widthBound (.cons (some []) (.cons none .nil)) (some [])
-    (GkrSourceCallbacks.verifierOutputState_masked {} _ rfl (some []))
+    (Generated.Presentations.Gkr.Root.verifierOutputState_masked {} _ rfl (some []))
   erw [outputFold]
-  rw [Finite.fold_range_repeatN (fun result => GkrSourceCallbacks.verifierOutputProcess (G := G) {}
+  rw [Finite.fold_range_repeatN (fun result => Generated.Presentations.Gkr.Root.verifierOutputProcess (G := G) {}
       (some handle) result) 0 width (some []),
     PIR.Process.bind_assoc, PIR.Process.bind_assoc, PIR.Process.interpret_bind,
     repeatN_reads CommonAdapter.project _ (GkrVerifier.outputRound {} handle) some
@@ -94,13 +96,13 @@ theorem verifier_reads (handle : Nat) (inputs outputs add mul : List F) (layers 
     width 0 [] rfl
   refine outputsYield.bind_congr fun point pointLength => ?_
   simp only [Nat.zero_add] at pointLength
-  simp only [PIR.Process.bind, GkrSourceCallbacks.verifierOutputState, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons,
+  simp only [PIR.Process.bind, Generated.Presentations.Gkr.Root.verifierOutputState, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons,
     evaluate_plain width outputs point outputsTable outputsDecoded pointLength small outputsBound, GkrLayerReading.tuple19_plain, PIR.Process.bind]
-  have layerFold := GkrSourceCallbacks.verifierLayer_fold (F := F) (G := G) {} separate (some inputs)
+  have layerFold := Generated.Presentations.Gkr.Root.verifierLayer_fold (F := F) (G := G) {} (.ofSeparate separate (by decide)) (some inputs)
     (some add) (some mul) (some layers) (some selector) (some width) (some handle) layers layersBound
     (.cons none (.cons (some point) (.cons (some (extension width outputsTable (coordinates width point))) .nil)))
     (some point, some (extension width outputsTable (coordinates width point)))
-    (GkrSourceCallbacks.verifierLayerState_masked {} _ rfl (some point)
+    (Generated.Presentations.Gkr.Root.verifierLayerState_masked {} _ rfl (some point)
       (some (extension width outputsTable (coordinates width point))))
   erw [layerFold]
   rw [PIR.Process.bind_assoc, PIR.Process.bind_assoc, PIR.Process.interpret_bind]
@@ -117,11 +119,11 @@ theorem verifier_reads (handle : Nat) (inputs outputs add mul : List F) (layers 
       fun next advanced => ⟨by rw [advanced.1, valid.1], advanced.2⟩)
     layers 0 (0, point, extension width outputsTable (coordinates width point)) ⟨rfl, pointLength⟩
   refine layersYield.bind_congr fun final valid => ?_
-  simp only [PIR.Process.bind, GkrSourceCallbacks.verifierLayerState, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons]
+  simp only [PIR.Process.bind, Generated.Presentations.Gkr.Root.verifierLayerState, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons]
   erw [GkrInputInvocation.invoke (F := F) (G := G)
     (({} : ProtocolContext).enter "label_696e707574" [1])
     (some inputs) (some final.2.1) (some final.2.2)]
-  simp only [GkrInputNormalForms.verifierProcess, terminal_plain width inputs final.2.1
+  simp only [Evaluation.ComponentTables.toOn, Generated.Presentations.Gkr.payload, Generated.Presentations.Gkr.program, GkrSourceViews.program, Generated.Presentations.Gkr.Input.verifierProcess, terminal_plain width inputs final.2.1
     inputsTable final.2.2 inputsDecoded valid.2 small inputsBound, PIR.Process.bind,
     TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons, PIR.Process.interpret, GkrVerifier.decision]
 

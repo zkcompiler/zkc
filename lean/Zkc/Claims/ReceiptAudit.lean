@@ -384,7 +384,40 @@ def auditRequest (input item : Json) : Audit := Id.run do
   audit := { audit with envelope := ⟨has r, resolved, checks.toList ++ audit.envelope.checks⟩ }
   return audit
 
-/-- Scope errors apply to every row before classification. -/
+/-- An independently supplied consumer requirement is matched by its complete
+request data against the already audited canonical rows. Its label and any
+receipt digest confer no authority. Reusing a proof of the same fixed request
+at several consumer labels is allowed. -/
+def requiredCoverage (requirements : Json) (items rows : Array Json) : Except String (Array Json) := do
+  if requirements == .null then return #[]
+  unless str (get requirements "format") == "zkc.required-requests/0" do
+    throw "unsupported required-request format"
+  let required ← (get requirements "requests").getArr?
+  let identifiers := required.map (fun row => get row "id")
+  unless unique identifiers && identifiers.all (fun value =>
+      value.getStr?.isOk && !(str value).trimAscii.toString.isEmpty) do
+    throw "required-request identifiers must be distinct nonempty strings"
+  required.mapM fun requirement => do
+    let request := get requirement "request"
+    unless request.getObj?.isOk && has request do throw "required request is not an object"
+    let matched := (items.zip rows).filter (fun (item, row) =>
+      get item "request" == request && str (get row "claim_kind") == "canonical")
+    let certified := matched.filter (fun (_, row) =>
+      str (get (get row "audit") "status") == "certified")
+    let status := if !certified.isEmpty then "certified"
+      else if !matched.isEmpty && matched.all (fun (_, row) =>
+        str (get (get row "audit") "status") == "incomplete") then "incomplete" else "open"
+    return object [("id", get requirement "id"), ("request", request),
+      ("status", .str status),
+      ("matching_nodes", .arr (matched.map (fun (_, row) => get row "node"))),
+      ("certified_nodes", .arr (certified.map (fun (_, row) => get row "node"))),
+      ("reasons", toJson (if status == "certified" then (#[] : Array String) else
+        #[if matched.isEmpty then "required request is absent from the canonical source-claim scope"
+          else "required request has no certified canonical receipt"]))]
+
+/-- Scope errors apply to every row before classification. Consumer requirements
+can prevent the aggregate from being certified without changing any existing
+receipt's own type-level status. -/
 def run (input : Json) : Except String Json := do
   unless str (get input "format") == "zkc.receipt-audit-input/0" do
     throw "unsupported receipt audit input"
@@ -439,12 +472,19 @@ def run (input : Json) : Except String Json := do
       ("claim_kind", kind), ("semantic_dependencies", get item "semantic_dependencies"),
       ("audit", encode audit)]
   let security := rows.filter (fun row => !["author", "generic"].contains (str (get row "claim_kind")))
-  let established := !security.isEmpty && scopeReasons.isEmpty && security.all (fun row =>
+  let required ← requiredCoverage (get input "required_requests") items rows
+  let covered := required.all (fun row => str (get row "status") == "certified")
+  let established := !security.isEmpty && scopeReasons.isEmpty && covered && security.all (fun row =>
     str (get (get row "audit") "status") == "certified")
-  let state := if security.isEmpty && str (get source "format") == "zkc.bound-source-claims/0" then "no-claim"
-    else if established then "certified" else if !security.isEmpty && security.all (fun row =>
-      str (get (get row "audit") "status") == "incomplete") then "incomplete" else "open"
+  let state := if security.isEmpty && required.isEmpty && str (get source "format") == "zkc.bound-source-claims/0" then "no-claim"
+    else if established then "certified" else if !security.isEmpty &&
+      required.all (fun row => str (get row "status") == "incomplete") && security.all (fun row =>
+        str (get (get row "audit") "status") == "incomplete") then "incomplete" else "open"
   return object [("format", .str "zkc.receipt-status/0"), ("claims", .arr rows),
     ("status", .str state), ("outcome", .str (if established then "established" else "unresolved")),
-    ("reasons", toJson scopeReasons), ("audit_status", .str (if unaudited then "unaudited" else "checked"))]
+    ("reasons", toJson (scopeReasons ++ required.flatMap (fun row =>
+      (strings (get row "reasons")).map (fun reason => s!"{str (get row "id")}: {reason}")))),
+    ("requirements", if get input "required_requests" == .null then .null else object [
+      ("input", get input "required_requests"), ("claims", .arr required)]),
+    ("audit_status", .str (if unaudited then "unaudited" else "checked"))]
 end ReceiptAudit

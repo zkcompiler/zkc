@@ -29,6 +29,12 @@ private def cells (layout : Expr) : MetaM (Array Expr) := do
     rest := rest.getAppArgs[2]!
   return result
 
+private def readbackGoals (goals : List MVarId) : MetaM (List MVarId) :=
+  goals.filterM fun goal => do
+    if ← goal.isAssigned then return false
+    let type ← whnf (← instantiateMVars (← goal.getType))
+    return !(type.isAppOf ``List || type.isConstOf ``Nat)
+
 private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <| Term.withoutErrToSorry <| withoutRecover do
   let target ← instantiateMVars (← goal.getType)
   unless target.isAppOf ``ConnectionFrame.Readback do
@@ -37,7 +43,7 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
   let layout := arguments[1]!
   let values ← whnf arguments[3]!
   if values.isAppOf ``Zkc.Source.Values.nil then
-    let pending ← goal.apply (← mkConstWithFreshMVarLevels ``ConnectionFrame.Readback.nil)
+    let pending ← readbackGoals (← goal.apply (← mkConstWithFreshMVarLevels ``ConnectionFrame.Readback.nil))
     unless pending.isEmpty do throwError "empty source output did not match an empty layout"
     return
   unless values.isAppOf ``Zkc.Source.Values.cons do
@@ -45,20 +51,34 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
   let source := values.getAppArgs[values.getAppArgs.size - 2]!
   let source ← whnf source
   if source.isAppOf ``Zkc.Source.Structured.NormalForm.Comp.absent then
-    let [tail] ← goal.apply (← mkConstWithFreshMVarLevels ``ConnectionFrame.Readback.absent)
+    let [tail] ← readbackGoals (← goal.apply (← mkConstWithFreshMVarLevels ``ConnectionFrame.Readback.absent))
       | throwError "hidden source output requires an absent location"
     derive tail
     return
   if source.isAppOf ``Zkc.Source.Structured.NormalForm.Comp.present then
     let term ← whnf source.getAppArgs.back!
     if term.isAppOf ``Zkc.Source.Structured.NormalForm.Term.capability then
-      let [tail] ← goal.apply (← mkConstWithFreshMVarLevels ``ConnectionFrame.Readback.capability)
+      let [tail] ← readbackGoals (← goal.apply (← mkConstWithFreshMVarLevels ``ConnectionFrame.Readback.capability))
         | throwError "service output requires its exact ABI capability"
       derive tail
       return
   let candidates ← cells layout
+  -- Helper operands and root outputs usually fix their physical locations.
+  -- Do not retry every other cell before checking the one already requested.
+  -- Unspecified locations still use the ordinary finite proposal search; in
+  -- both cases the same Readback constructor checks the selected cell.
+  let locations ← whnf arguments[4]!
+  let fixed ← if locations.isAppOf ``List.cons then do
+      let location ← whnf locations.getAppArgs[1]!
+      if location.isAppOf ``Original.Location.data then
+        getNatValue? (← whnf location.getAppArgs.back!)
+      else pure none
+    else pure none
+  let references := match fixed with
+    | some reference => if reference < candidates.size then #[reference] else #[]
+    | none => (List.range candidates.size).toArray
   let mut selected : Option MVarId := none
-  for reference in [:candidates.size] do
+  for reference in references do
     let cell ← whnf candidates[reference]!
     let rules := if cell.isAppOf ``ConnectionFrame.Cell.guarded then
         [``ConnectionFrame.Readback.guardedOriginal, ``ConnectionFrame.Readback.guardedTrue]
@@ -70,7 +90,7 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
         setGoals [goal]
         let position := Syntax.mkNumLit (toString reference)
         evalTactic (← `(tactic| apply ($(mkIdent rule) $position:num)))
-        let pending ← getGoals
+        let pending ← readbackGoals (← getGoals)
         for checked in pending do
           if (← instantiateMVars (← checked.getType)).isAppOf ``Eq then checked.refl
         let [tail] ← pending.filterM fun pending => return !(← pending.isAssigned)
@@ -88,7 +108,14 @@ those outputs before search; every successful path constructs Readback data. -/
 elab "derive_source_readback" : tactic => withMainContext do
   let goal ← getMainGoal
   let pending := (← getGoals).tail
+  let start ← IO.monoMsNow
   derive goal
+  let elapsed := (← IO.monoMsNow) - start
+  if elapsed > 1000 && (← getOptions).getBool `zkc.connection.trace false then
+    let destination := (← getOptions).get `zkc.connection.traceFile ("" : String)
+    if !destination.isEmpty then
+      IO.FS.withFile destination .append fun handle =>
+        handle.putStrLn s!"readback ms={elapsed}"
   setGoals pending
 
 end ZkcTools.ConstructionBindings.Readback

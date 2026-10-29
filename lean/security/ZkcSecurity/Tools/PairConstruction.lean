@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.Claims.AuthoredPair
 public import Zkc.Construction.TargetElaboration
+public import ZkcTools.ConstructionBindings.Admission
 public meta import Lean.Elab.Tactic
 
 @[expose] public section
@@ -42,8 +43,9 @@ elab "bind_input_meanings" : tactic => Lean.Elab.Tactic.withMainContext do
   (← Lean.Elab.Tactic.getMainGoal).assign (← Lean.instantiateMVars generated)
   Lean.Elab.Tactic.replaceMainGoal []
 
-elab "bind_authored_subject " name:str " with_registry " registry:term
-    " exports " originalExport:term ", " producerExport:term ", " validatorExport:term : tactic =>
+private meta def bindAuthoredSubject (name : Lean.TSyntax `str)
+    (registry originalExport producerExport validatorExport : Lean.TSyntax `term)
+    (connections : Option (Lean.TSyntax `term × Lean.TSyntax `term)) : Lean.Elab.Tactic.TacticM Unit :=
     Lean.Elab.Tactic.withMainContext do
   let target ← Lean.Meta.whnf (← Lean.Elab.Tactic.getMainTarget)
   unless target.getAppFn.constName? == some ``Claims.HonestPair.Subject do
@@ -54,6 +56,12 @@ elab "bind_authored_subject " name:str " with_registry " registry:term
   let original ← Lean.Elab.Term.exprToSyntax arguments[1]!
   let imported ← Lean.Elab.Term.exprToSyntax arguments[2]!
   let selected ← Lean.Elab.Term.exprToSyntax arguments[3]!
+  let producerProof ← match connections.map Prod.fst with
+    | some root => `(some ⟨by derive_source_connection using $root⟩)
+    | none => `(by first | exact some ⟨by derive_source_connection⟩ | exact none)
+  let validatorProof ← match connections.map Prod.snd with
+    | some root => `(some ⟨by derive_source_connection using $root⟩)
+    | none => `(by first | exact some ⟨by derive_source_connection⟩ | exact none)
   let term ← `(let selection : Selection ($imported).program.payload.entry.outputs :=
                  (select $imported ($selected).artifacts.validator).get (by decide +kernel)
                have selectionExact : select $imported ($selected).artifacts.validator = some selection :=
@@ -81,6 +89,8 @@ elab "bind_authored_subject " name:str " with_registry " registry:term
                  selectionChecked := by decide +kernel
                  producerOccurrences := occurrences.1
                  validatorOccurrences := occurrences.2
+                 producerConnection := $producerProof
+                 validatorConnection := $validatorProof
                  target := target
                  relations := relations
                  meaning := by bind_retained_meaning
@@ -94,11 +104,27 @@ elab "bind_authored_subject " name:str " with_registry " registry:term
   (← Lean.Elab.Tactic.getMainGoal).assign (← Lean.instantiateMVars generated)
   Lean.Elab.Tactic.replaceMainGoal []
 
+elab "bind_authored_subject " name:str " with_registry " registry:term
+    " exports " originalExport:term ", " producerExport:term ", " validatorExport:term : tactic =>
+  bindAuthoredSubject name registry originalExport producerExport validatorExport none
+
+elab "bind_authored_subject " name:str " with_registry " registry:term
+    " connections " producer:term ", " validator:term
+    " exports " originalExport:term ", " producerExport:term ", " validatorExport:term : tactic =>
+  bindAuthoredSubject name registry originalExport producerExport validatorExport (some (producer, validator))
+
 /-- Formula-only subjects use the same builder with the empty registry. The
 whole relation table must still pass admission; this is not a fallback. -/
 macro "bind_authored_subject " name:str
     " exports " originalExport:term ", " producerExport:term ", " validatorExport:term : tactic =>
   `(tactic| bind_authored_subject $name with_registry OpaqueRegistry.empty exports
     $originalExport, $producerExport, $validatorExport)
+
+/-- Large roots reuse checked certificate declarations; an invalid supplied
+certificate refuses rather than falling back to an unresolved link. -/
+macro "bind_authored_subject " name:str " connections " producer:term ", " validator:term
+    " exports " originalExport:term ", " producerExport:term ", " validatorExport:term : tactic =>
+  `(tactic| bind_authored_subject $name with_registry OpaqueRegistry.empty
+    connections $producer, $validator exports $originalExport, $producerExport, $validatorExport)
 
 end ZkcSecurity.Tools

@@ -56,8 +56,8 @@ FIELDS = {
                   "interactive_bodies": STRING, "interactive_views": STRING,
                   "interactive_export": STRING, "interactive_source": STRING,
                   "original_source": STRING, "original_export": STRING, "artifacts": STRING, "claims": STRING, "lowering": STRING},
-    "normal_forms": {"request": STRING},
-    "lean": {"namespace": STRING, "imports": STRINGS},
+    "source_views": {"selections": STRINGS},
+    "lean": {"namespace": STRING, "imports": STRINGS, "library": STRING},
     "assumptions": {"requested": STRINGS},
     "mutations": {"kinds": STRINGS},
     "executable": {"threshold": {STRING, INTEGER}, "public": STRING, "witness": STRING, "variants": TABLE,
@@ -204,8 +204,12 @@ def load(path):
                 f"{path}: generated.{key} is not a Lean module path")
     paths = [subject.generated(key) for key in subject.table("generated")]
     require(len(paths) == len(set(paths)), f"{path}: generated output paths must be distinct")
-    require(not (subject.generated("claims") and subject.profile("executable")) or subject.generated("lowering"),
+    require(not (subject.generated("claims") and subject.profile("executable")
+                 and subject.generated("artifacts")) or subject.generated("lowering"),
             f"{path}: executable claims require generated.lowering")
+    require(not subject.generated("lowering") or
+            (subject.generated("artifacts") and subject.profile("executable")),
+            f"{path}: generated.lowering requires executable generated.artifacts")
     namespace = subject.get("lean", "namespace")
     require(namespace is None or __import__("re").fullmatch(NAMESPACE, namespace) is not None,
             f"{path}: lean.namespace must be a Lean namespace")
@@ -223,8 +227,13 @@ def load(path):
     for module in subject.get("lean", "imports", []):
         require(__import__("re").fullmatch(NAMESPACE, module) is not None,
                 f"{path}: lean.imports must contain Lean module names")
-    require(not subject.generated("claims") or (namespace and subject.generated("artifacts")),
-            f"{path}: generated.claims requires lean.namespace and generated.artifacts")
+    library = subject.get("lean", "library")
+    require(library is None or __import__("re").fullmatch(NAMESPACE, library) is not None,
+            f"{path}: lean.library must be a Lean declaration name")
+    require(not subject.generated("claims") or (namespace and subject.get("lean", "imports")),
+            f"{path}: generated.claims requires lean.namespace and lean.imports")
+    require(not subject.generated("claims") or subject.generated("artifacts") or library,
+            f"{path}: source claims need generated.artifacts or an explicit typed lean.library")
     if subject.profile("construction"):
         require(subject.get("entries", "proof") and subject.generated("participant") and subject.generated("data"),
                 f"{path}: the construction profile needs entries.proof, generated.data and generated.participant")
@@ -239,8 +248,6 @@ def load_all(names=None):
     paths = sorted(SUBJECTS.glob("*.toml"))
     subjects = {}
     for path in paths:
-        if path.name.endswith(".normal-forms.toml"):
-            continue
         subject = load(path)
         require(subject.name not in subjects, f"duplicate subject {subject.name}")
         subjects[subject.name] = subject

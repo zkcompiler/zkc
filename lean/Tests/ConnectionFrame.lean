@@ -16,6 +16,12 @@ def layout : Layout scope :=
 
 def readback : Readback layout outputs [.data 0, .data 1] := by derive_source_readback
 
+-- Location inference remains available when a caller has not fixed the row.
+def inferred : Sigma fun locations => Readback layout outputs locations :=
+  ⟨_, by derive_source_readback⟩
+
+example : inferred.1 = [.data 0, .data 1] := rfl
+
 example : ¬ (layout.map Cell.retireHistory)[2]? = some (.history "suite") := by
   simp [layout, Cell.retireHistory]
 

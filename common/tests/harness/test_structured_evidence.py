@@ -17,6 +17,15 @@ from harness import ROOT, executable, load
 BRIDGE = ROOT / "lean/bridges/structured"
 
 
+@pytest.mark.parametrize("command", ["check.py", "verify.py", "verify_tests.py", "intent_tests.py"])
+def test_retained_bridge_command_imports(command):
+    """Standalone bridge entry points use the current shared serializer."""
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "lean/bridges/common" / command), "--help"],
+        cwd=ROOT, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 @pytest.fixture
 def bridge(monkeypatch):
     monkeypatch.syspath_prepend(str(BRIDGE))
@@ -77,7 +86,7 @@ def repeat_tree(repeats, bridge, monkeypatch, tmp_path):
         "lean/Zkc/Dependency.lean": "def value := 1\n",
         "lean/ZkcTools/StructuredSource.lean": "import ZkcTools.StructuredSource.OpenEvaluation\n",
         "lean/checks/StructuredSource.lean": "import ZkcTools.StructuredSource\n",
-        "lean/ZkcTools/CommonSource.lean": "-- other executable root\n",
+        "lean/ZkcTools/ConstructionBindings.lean": "-- other executable root\n",
         "lean/ZkcTools/ImportHeaders.lean": "-- import auditing executable\n",
         "lean/checks/DeclarationRecords.lean": "-- declaration capture executable\n",
         "lean/ZkcTools/StructuredSource/OpenEvaluation.lean":

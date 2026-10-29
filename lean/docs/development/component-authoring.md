@@ -55,6 +55,30 @@ whatever the producer happens to compute the definition of truth. GKR's circuit
 evaluation and the separate extensions of its four gate factors illustrate why
 this distinction matters.
 
+## Keep source facts independent of the proof method
+
+The core `Zkc.Source.Structured` modules own input visibility, source-template
+association, occurrence presentation and loop presentation. Their theorems have
+no probability or security-package dependency. A mathematical library can reuse
+these facts for either participant, with the full returned row and visibility
+mask preserved. Construction certificates use the same visibility laws when
+connecting the source to its compiled participant.
+
+Mathematical family laws live under `ZkcSecurity.Families`. Adapters that read
+particular source templates, layouts or exported programs live under
+`ZkcSecurity.Realizations`, even when that adapter is reusable across several
+programs in one family. For example, the Sumcheck source adapters reuse its table
+mathematics without making the mathematical family import concrete programs.
+Restricted proof elaborators may be shared by these layers; source emitters and
+example catalogues remain outside the mathematical dependency boundary.
+
+A displayed process is a derived view. The untrusted `ZkcTools.ProcessView`
+elaborator checks definitional equality to its input expression; it supplies no
+separate evaluator. The present-input printer additionally emits a theorem from
+the admitted source to its checked normal form. That theorem covers the selected
+available-input pattern. Adversarial claims must use the appropriate optional
+input pattern and cannot infer universal input availability from this view.
+
 ## Bind one component
 
 [`ComponentInterface`](../../Zkc/Obligations/Component.lean) records:
@@ -128,3 +152,52 @@ When measuring author work, include reference/helper proofs, relation and
 connection laws, configuration and generator extensions. Generated source size
 and kernel checking cost are separate measurements. Moving a proof into a helper
 does not make that work disappear.
+
+
+## Source-addressed Lean companions
+
+`ZkcTools.Companions` indexes ordinary Lean declarations with `@[zkc "identity"]`.
+The source owner supplies the identity; the assembler fixes the expected type
+before lookup. A generic declaration can serve multiple static instances. An
+explicit instance takes precedence over its template, and an ill-typed explicit
+instance is refused rather than replaced by a template proof. For example, the
+checked API control uses:
+
+```lean
+@[zkc "Counter.base"] theorem base (n : Nat) : n + 0 = n := Nat.add_zero n
+
+example : 3 + 0 = 3 := zkc_companion ["Counter.base"[3]]
+example : 11 + 0 = 11 := zkc_companion ["Counter.base"[11]]
+```
+
+Contract values use the same lookup as proofs. An assembler supplies the actual
+`LoopContract` or scope type, including its parameters; discovery cannot choose
+a different contract. Registrations survive imports. Two visible declarations
+for one identity are ambiguous, and registrations for removed identities are
+reported as orphans.
+
+`Companions.assemble` accepts an ordered list of default proof proposals. An
+explicit companion overrides those proposals. A missing companion allows the
+defaults to run; an unfinished explicit companion remains open. Every accepted
+term has the fixed expected type and no unresolved metavariables or transitive
+`sorry`. The enclosing declaration is kernel checked. Receipt acceptance still
+requires its own exact meaning, premise, axiom and stage-link audit.
+
+`Companions.report` records the actual attempted obligation, its source identity
+and span, responsibility, expected type, method failures and stub location.
+These authoring statuses are separate from canonical receipt statuses. Static
+proof-search addresses do not become source labels or random-oracle keys.
+`appendStubs` only appends unseen identities and never rewrites an existing
+companion file. A proof stub uses Batteries' `proof_wanted`; a value stub is a
+commented declaration template. In the pinned Batteries version, `proof_wanted`
+creates a private `ProofWanted P` placeholder, which contains no proof of `P`.
+The lookup recognizes that placeholder as an open obligation. The printer adds
+the registration with a separate `attribute` command because the pinned wanted
+command does not preserve arbitrary declaration attributes.
+
+The lookup, ordered method selection, report and append-only printer are checked
+in `Tests.Companions`, `Tests.CompanionAssembly` and `Tests.CompanionReport`.
+Their integration with generated frame/goal modules and the source authoring
+command is a separate assembly step. The existing module-level method selection
+remains active until that cutover; this API does not implement claim defaults or
+change the request registry.

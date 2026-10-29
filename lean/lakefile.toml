@@ -1,6 +1,6 @@
 name = "zkc"
 version = "0.0.0"
-defaultTargets = ["Zkc", "ZkcExamples", "ZkcTools", "ZkcAudit", "ZkcTests", "common-source", "structured-source", "import-headers", "declaration-records"]
+defaultTargets = ["Zkc", "ZkcExamples", "ZkcTools", "ZkcAudit", "ZkcTests", "structured-source", "import-headers", "declaration-records"]
 
 [leanOptions]
 autoImplicit = false
@@ -23,12 +23,8 @@ requiresModuleSystem = true
 
 [[lean_lib]]
 name = "ZkcTools"
-globs = ["ZkcTools.JsonSupport", "ZkcTools.ProofAccount", "ZkcTools.CommonSource.Reference", "ZkcTools.StructuredSource.*", "ZkcTools.SourceClaims.+", "ZkcTools.ConstructionBindings.+"]
+globs = ["ZkcTools.JsonSupport", "ZkcTools.ProcessView", "ZkcTools.ProofAccount", "ZkcTools.Companions", "ZkcTools.Companions.+", "ZkcTools.StructuredSource.*", "ZkcTools.SourceClaims.+", "ZkcTools.ConstructionBindings.+"]
 requiresModuleSystem = true
-
-[[lean_exe]]
-name = "common-source"
-root = "ZkcTools.CommonSource"
 
 [[lean_exe]]
 name = "import-headers"

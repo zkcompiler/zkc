@@ -1,7 +1,6 @@
 module
 
 public import ZkcSecurity.Realizations.Gkr.HonestProducerObservedLayers
-public import ZkcSecurity.Realizations.Gkr.HonestProducer
 
 @[expose] public section
 
@@ -17,7 +16,7 @@ open Zkc Source Structured Construction
 open Zkc.Polynomial Zkc.Polynomial.Multilinear
 open ZkcExamples.Structured
 open ZkcSecurity.Examples.Components
-open ZkcSecurity.FiatShamir HonestProducerComposition HonestProducerOccurrences
+open ZkcSecurity.Source HonestProducerOccurrences
 open HonestProducerSource
 
 variable {F G : Type} [Field F] [DecidableEq F]
@@ -40,40 +39,31 @@ def validatorOutput (ctx : ProtocolContext) (handle : Nat) (site : String) : Nat
   | _, 0, point => .done point
   | index, count + 1, point =>
     (Occurrence.iterations.within site index
-      (((GkrVerifier.outputRound ctx handle point).interpret CommonAdapter.embed).interpret
+      (((GkrVerifier.outputRound (G := G) ctx handle point).interpret CommonAdapter.embed).interpret
         Occurrence.actions)).bind fun next => validatorOutput ctx handle site (index + 1) count next
 
 omit [Field F] [DecidableEq F] in
-theorem output_pair (routing : Original.Routing) (replacement : Replacement)
-    (profile : routing.context.profile = .fiatShamir replacement)
-    (ctx : ProtocolContext) (handle : Nat) (site : String) (index count : Nat) (point : List F)
-    (state : State (F := F) (G := G))
-    (routes : ∀ i, HonestProducer.OutputRoutes routing ctx (state.frames ++ [⟨site, i⟩]) handle) :
-    Readback (fun left right => ∃ next history,
-      left = (next, { state with history := history }) ∧
-      right = (next, { state with history := history }) ∧ next.length = point.length + count)
-      (Original.fold { routing with mode := .producer } (producerOutput ctx site index count point) state)
-      (Original.fold { routing with mode := .validator } (validatorOutput ctx handle site index count point) state) := by
-  induction count generalizing index point state with
-  | zero => exact .done ⟨point, state.history, rfl, rfl, by omega⟩
+theorem output_pair (ctx : ProtocolContext) (scope : PairScope)
+    (roles : ctx.roles 0 = scope.producer ∧ ctx.roles 1 = scope.validator)
+    (handle : Nat) (site : String) (index count : Nat) (point : List F)
+    (delivery : (GkrVerifier.outputSite ctx, GkrVerifier.outputDeliverySite ctx) ∈ scope.deliveries) :
+    Pair scope (fun next value => value = next ∧ next.length = point.length + count)
+      (producerOutput (G := G) ctx site index count point)
+      (validatorOutput ctx handle site index count point) := by
+  induction count generalizing index point with
+  | zero => exact .done ⟨rfl, by omega⟩
   | succ count ih =>
-    rw [producerOutput, validatorOutput, Original.fold_bind, Original.fold_bind]
-    let entered : State (F := F) (G := G) := { state with frames := state.frames ++ [⟨site, index⟩] }
-    have one := HonestProducer.output_pair (F := F) (G := G) routing replacement profile ctx handle 1 point
-      entered (routes index)
-    simp only [output, PIR.repeatN, PIR.Process.bind_done, HonestProducerPair.validator] at one
-    have wrapped := within routing site index state _ _
-      (fun left right => ∃ next history,
-        left = (next, { state with history := history }) ∧
-        right = (next, { state with history := history }) ∧ next.length = point.length + 1)
-      (one.mono (by
-        rintro left right ⟨next, history, rfl, rfl, size⟩
-        exact ⟨rfl, rfl, next, history, rfl, rfl, size⟩))
-    apply wrapped.bind
-    rintro left right ⟨next, history, rfl, rfl, size⟩
-    apply (ih (index + 1) next { state with history := history } routes).mono
-    rintro left right ⟨final, history, rfl, rfl, finalSize⟩
-    exact ⟨final, history, rfl, rfl, by omega⟩
+    rw [producerOutput, validatorOutput]
+    have one : Pair scope (fun (next value : List F) => value = next ∧ next.length = point.length + 1)
+        ((output (G := G) ctx 1 point).interpret Occurrence.actions)
+        (((GkrVerifier.outputRound (G := G) ctx handle point).interpret CommonAdapter.embed).interpret Occurrence.actions) :=
+      .challenge _ _ _ _ _ _ roles delivery (fun r => .done ⟨rfl, by simp⟩)
+    exact (one.within site index).bind _ _ (by
+      rintro next value ⟨same, size⟩
+      subst value
+      apply (ih (index + 1) next).mono
+      rintro result value ⟨rfl, finalSize⟩
+      exact ⟨rfl, by omega⟩)
 
 noncomputable def producerLayers (ctx : ProtocolContext) (sites : Sites) (encoding : CircuitEncoding F) :
     Nat → Nat → List F → PIR.Process (Signature F G) (List F)
@@ -93,46 +83,37 @@ def validatorLayers (ctx : ProtocolContext) (handle : Nat) (sites : Sites) (enco
         encoding.circuit.add encoding.circuit.mul value)).bind fun next =>
     validatorLayers ctx handle sites encoding (index + 1) count next
 
-theorem layers_pair (routing : Original.Routing) (replacement : Replacement)
-    (profile : routing.context.profile = .fiatShamir replacement)
-    (ctx : ProtocolContext) (handle : Nat) (sites : Sites) (encoding : CircuitEncoding F)
+theorem layers_pair (ctx : ProtocolContext) (scope : PairScope)
+    (roles : ctx.roles 0 = scope.producer ∧ ctx.roles 1 = scope.validator)
+    (handle : Nat) (sites : Sites) (encoding : CircuitEncoding F)
     (index count : Nat) (counted : index + count = encoding.layers)
     (point : List F) (pointSize : point.length = encoding.width)
-    (state : State (F := F) (G := G)) (routes : ∀ i, HonestProducerObservedLayers.Routes routing ctx
-      (state.frames ++ [⟨sites.layers, i⟩]) handle sites.layer) :
-    Readback (fun left right => ∃ next history,
-      left = (next, { state with history := history }) ∧
-      right = ((encoding.layers, next, extension encoding.width encoding.circuit.inputs
-        (coordinates encoding.width next)), { state with history := history }) ∧ next.length = encoding.width)
-      (Original.fold { routing with mode := .producer } (producerLayers ctx sites encoding index count point) state)
-      (Original.fold { routing with mode := .validator }
-        (validatorLayers ctx handle sites encoding index count
-          (index, point, extension encoding.width (encoding.circuit.wires count index)
-            (coordinates encoding.width point))) state) := by
-  induction count generalizing index point state with
+    (leftDelivery : (GkrVerifier.challengeSite (GkrVerifier.leftContext ctx),
+      GkrVerifier.deliverySite (GkrVerifier.leftContext ctx)) ∈ scope.deliveries)
+    (rightDelivery : (GkrVerifier.challengeSite (GkrVerifier.rightContext ctx),
+      GkrVerifier.deliverySite (GkrVerifier.rightContext ctx)) ∈ scope.deliveries)
+    (lineDelivery : (GkrVerifier.lineChallengeSite ctx,
+      GkrVerifier.lineDeliverySite ctx) ∈ scope.deliveries) :
+    Pair scope (fun next value => value =
+      (encoding.layers, next, extension encoding.width encoding.circuit.inputs
+        (coordinates encoding.width next)) ∧ next.length = encoding.width)
+      (producerLayers (G := G) ctx sites encoding index count point)
+      (validatorLayers ctx handle sites encoding index count
+        (index, point, extension encoding.width (encoding.circuit.wires count index)
+          (coordinates encoding.width point))) := by
+  induction count generalizing index point with
   | zero =>
-    apply Readback.done
-    refine ⟨point, state.history, rfl, ?_, pointSize⟩
     have same : index = encoding.layers := by omega
     subst index
-    rfl
+    exact .done ⟨rfl, pointSize⟩
   | succ count ih =>
     have remaining : encoding.layers - index - 1 = count := by omega
-    rw [producerLayers, validatorLayers, remaining, Original.fold_bind, Original.fold_bind]
-    let entered : State (F := F) (G := G) := { state with frames := state.frames ++ [⟨sites.layers, index⟩] }
-    have one := HonestProducerObservedLayers.layer_pair routing replacement profile ctx handle sites.layer
-      encoding.circuit count index point pointSize entered (routes index)
-    have wrapped := within routing sites.layers index state _ _
-      (fun left right => ∃ next history,
-        left = (next, { state with history := history }) ∧
-        right = ((index + 1, next, extension encoding.width (encoding.circuit.wires count (index + 1))
-          (coordinates encoding.width next)), { state with history := history }) ∧ next.length = encoding.width)
-      (one.mono (by
-        rintro left right ⟨next, history, rfl, rfl, size⟩
-        exact ⟨rfl, rfl, next, history, rfl, rfl, size⟩))
-    apply wrapped.bind
-    rintro left right ⟨next, history, rfl, rfl, nextSize⟩
-    exact ih (index + 1) (by omega) next nextSize { state with history := history } routes
+    rw [producerLayers, validatorLayers, remaining]
+    have one := HonestProducerObservedLayers.layer_pair (G := G) ctx scope roles handle sites.layer
+      encoding.circuit count index point pointSize leftDelivery rightDelivery lineDelivery
+    exact (one.within sites.layers index).bind _ _ (by
+      rintro next value ⟨rfl, nextSize⟩
+      exact ih (index + 1) (by omega) next nextSize)
 
 noncomputable def producer (ctx : ProtocolContext) (sites : Sites) (encoding : CircuitEncoding F) :
     PIR.Process (Signature F G) (Values (Component (assignment F G)) [.boolean]) :=
@@ -183,34 +164,34 @@ theorem producer_erase (ctx : ProtocolContext) (sites : Sites) (encoding : Circu
   unfold producer HonestProducerSource.producer
   simp only [PIR.Process.interpret_bind, producerOutput_erase, producerLayers_erase, PIR.Process.interpret]
 
-/-- Every challenge and every initial history succeeds for true independent
-outputs. No helper law, chosen transcript or oracle behavior is assumed. -/
-theorem pair (routing : Original.Routing) (replacement : Replacement)
-    (profile : routing.context.profile = .fiatShamir replacement)
-    (ctx : ProtocolContext) (handle : Nat) (sites : Sites) (encoding : CircuitEncoding F) (outputs : List F)
-    (correct : encoding.Outputs outputs) (state : State (F := F) (G := G))
-    (outputRoutes : ∀ i, HonestProducer.OutputRoutes routing ctx (state.frames ++ [⟨sites.output, i⟩]) handle)
-    (layerRoutes : ∀ i, HonestProducerObservedLayers.Routes routing ctx
-      (state.frames ++ [⟨sites.layers, i⟩]) handle sites.layer) :
-    Readback (fun left right => ∃ history,
-      left = (.cons none .nil, { state with history := history }) ∧
-      right = (some true, { state with history := history }))
-      (Original.fold { routing with mode := .producer } (producer ctx sites encoding) state)
-      (Original.fold { routing with mode := .validator } (validator ctx handle sites encoding outputs) state) := by
+/-- Successful source pairing for every challenge. The terminal relation keeps
+both complete source outputs; no handler success or refusal is assumed. -/
+theorem pair (ctx : ProtocolContext) (scope : PairScope)
+    (roles : ctx.roles 0 = scope.producer ∧ ctx.roles 1 = scope.validator)
+    (handle : Nat) (sites : Sites) (encoding : CircuitEncoding F) (outputs : List F)
+    (correct : encoding.Outputs outputs)
+    (outputDelivery : (GkrVerifier.outputSite ctx,
+      GkrVerifier.outputDeliverySite ctx) ∈ scope.deliveries)
+    (leftDelivery : (GkrVerifier.challengeSite (GkrVerifier.leftContext ctx),
+      GkrVerifier.deliverySite (GkrVerifier.leftContext ctx)) ∈ scope.deliveries)
+    (rightDelivery : (GkrVerifier.challengeSite (GkrVerifier.rightContext ctx),
+      GkrVerifier.deliverySite (GkrVerifier.rightContext ctx)) ∈ scope.deliveries)
+    (lineDelivery : (GkrVerifier.lineChallengeSite ctx,
+      GkrVerifier.lineDeliverySite ctx) ∈ scope.deliveries) :
+    Pair scope (fun p v => p = .cons none .nil ∧ v = some true)
+      (producer (G := G) ctx sites encoding) (validator ctx handle sites encoding outputs) := by
   unfold producer validator
   rw [correct.2]
   dsimp only [Option.getD]
-  rw [Original.fold_bind, Original.fold_bind]
-  apply (output_pair routing replacement profile ctx handle sites.output 0 encoding.width [] state outputRoutes).bind
-  rintro left right ⟨point, history, rfl, rfl, size⟩
+  apply (output_pair (G := G) ctx scope roles handle sites.output 0 encoding.width [] outputDelivery).bind
+  rintro point value ⟨same, size⟩
+  subst value
   have pointSize : point.length = encoding.width := by simpa only [List.length_nil, Nat.zero_add] using size
-  dsimp only
-  rw [Original.fold_bind, Original.fold_bind]
-  apply (layers_pair routing replacement profile ctx handle sites encoding 0 encoding.layers (by omega)
-    point pointSize { state with history := history } layerRoutes).bind
-  rintro left right ⟨next, finalHistory, rfl, rfl, _⟩
-  apply Readback.done
-  refine ⟨finalHistory, rfl, ?_⟩
-  simp only [GkrVerifier.decision, decide_true, PIR.Process.interpret, Original.fold, PIR.Process.interpretState]
+  apply (layers_pair (G := G) ctx scope roles handle sites encoding 0 encoding.layers (by omega)
+    point pointSize leftDelivery rightDelivery lineDelivery).bind
+  rintro next value ⟨rfl, _⟩
+  apply Pair.done
+  simp only [GkrVerifier.decision, decide_true, PIR.Process.interpret]
+  exact ⟨trivial, trivial⟩
 
 end ZkcSecurity.Realizations.Gkr.HonestProducerObserved

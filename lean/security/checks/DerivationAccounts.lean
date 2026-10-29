@@ -3,28 +3,25 @@ import ZkcSecurity.Examples.Generated.SmallSumcheckSoundnessClaims
 import ZkcSecurity.Examples.Generated.TwoSumsSoundnessClaims
 import Tests.ProofAccount
 
-/-! Non-module executable: private theorem bodies are available to the
-measurement inspector. No receipt status is computed by this executable. -/
+/-! Private bodies remain available to the one shared application inspector.
+This executable measures provenance; it computes no receipt acceptance status. -/
 set_option maxRecDepth 50000
 set_option maxHeartbeats 16000000
 open Lean Elab Command
 
--- Both names occur in this theorem, but it is not a call correspondence.
+-- A type-only name mention supplies no application in the checked proof body.
 theorem unrelatedMentions
-    (_unused : ZkcExamples.Structured.Generated.Original.TwoSums.step1Realized
-      (F := Rat) (G := Rat) (some 0) (some 0) (.cons (some []) (.cons (some 0) .nil)) =
-      ZkcExamples.Structured.Generated.Original.TwoSums.step1Realized
-      (F := Rat) (G := Rat) (some 0) (some 0) (.cons (some []) (.cons (some 0) .nil))) :
-    ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1 =
-      ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1 := rfl
+    (_unused : ZkcSecurity.Realizations.Sumcheck.SourceRootReference.reductionAssociation
+      ZkcExamples.Structured.SumcheckSourceSelections.Selection.twoSums =
+      ZkcSecurity.Realizations.Sumcheck.SourceRootReference.reductionAssociation
+        ZkcExamples.Structured.SumcheckSourceSelections.Selection.twoSums) : True := True.intro
 
 run_cmd do
   let mut accounts := #[]
   let roots ← ZkcSecurity.Generation.Roots.evaluateSelections
   for root in roots do
     let receipt := (root.subjectModule ++ "SoundnessClaims.request1Receipt").toName
-    let account ← liftTermElabM <| ZkcSecurity.Generation.SumcheckAccounts.measure root receipt
-    accounts := accounts.push account
+    accounts := accounts.push (← liftTermElabM <| ZkcSecurity.Generation.SumcheckAccounts.measure root receipt)
     liftTermElabM do
       Tests.ProofAccount.expectRefusal "stale source" "catalogue snapshot differs" <|
         ZkcSecurity.Generation.SumcheckAccounts.sourceAssociation
@@ -32,38 +29,28 @@ run_cmd do
       Tests.ProofAccount.expectRefusal "changed body, unchanged identity" "catalogue snapshot differs" <|
         ZkcSecurity.Generation.SumcheckAccounts.sourceAssociation
           { root with snapshot := { root.snapshot with definitions := [] } }
+      let graph ← ZkcTools.ProofAccount.reachable receipt
+      let selection ← ZkcSecurity.Generation.SumcheckAccounts.sourceAssociation root
+      Tests.ProofAccount.expectRefusal "wrong static bound" "typed association mismatch" <|
+        ZkcSecurity.Generation.SumcheckAccounts.templateAssociation graph selection 3
+      let .ok program := Zkc.Source.Structured.check root.snapshot | throwError "source admission"
+      let .ok layout := ZkcTools.ConstructionBindings.analyze program root.artifacts.validator
+        | throwError "source/artifact analysis"
+      if let first :: second :: _ := layout.calls then
+        Tests.ProofAccount.expectRefusal "sibling occurrence" "nominal source occurrence mismatch" <|
+          ZkcSecurity.Generation.SumcheckAccounts.occurrenceAssociation first second
+        Tests.ProofAccount.expectRefusal "changed query template" "nominal source occurrence mismatch" <|
+          ZkcSecurity.Generation.SumcheckAccounts.occurrenceAssociation first { first with query := second.query }
+        Tests.ProofAccount.expectRefusal "changed delivery template" "nominal source occurrence mismatch" <|
+          ZkcSecurity.Generation.SumcheckAccounts.occurrenceAssociation first { first with delivery := second.delivery }
+      Tests.ProofAccount.expectRefusal "wrong receipt root" "declaration is not reached" <|
+        ZkcSecurity.Generation.SumcheckAccounts.measure root ``Tests.ProofAccount.dependent
   liftTermElabM do
-    let graph ← ZkcTools.ProofAccount.reachable
-      ``ZkcSecurity.Examples.Generated.TwoSumsSoundnessClaims.request1Receipt
-    Tests.ProofAccount.expectRefusal "sibling occurrence" "typed association mismatch" <|
-      ZkcSecurity.Generation.SumcheckAccounts.occurrenceAssociation graph
-        ``ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.call0_raw
-        ``ZkcExamples.Structured.Generated.Original.TwoSums.step1Realized
-        ``ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1
-        4
-    Tests.ProofAccount.expectRefusal "wrong static bound" "typed association mismatch" <|
-      ZkcSecurity.Generation.SumcheckAccounts.occurrenceAssociation graph
-        ``ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.call0_raw
-        ``ZkcExamples.Structured.Generated.Original.TwoSums.step1Realized
-        ``ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0
-        3
-    Tests.ProofAccount.expectRefusal "names in an unrelated statement" "typed association mismatch" <|
-      ZkcSecurity.Generation.SumcheckAccounts.occurrenceAssociation
-        (← ZkcTools.ProofAccount.reachable ``unrelatedMentions) ``unrelatedMentions
-        ``ZkcExamples.Structured.Generated.Original.TwoSums.step1Realized
-        ``ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1
-        4
-    -- The WP root consumes the terminal contract. The mathematical discharge
-    -- is inside that reached contract, not a direct application in the root.
-    Tests.ProofAccount.expectRefusal "stale direct terminal attribution" "missing application" <|
-      ZkcTools.ProofAccount.account graph {
-        identifier := "stale-terminal", phase := "terminal", responsibility := "M"
-        owner := ``ZkcSecurity.Realizations.Sumcheck.OriginalRaw.composition_rejected
-        callee := ``ZkcSecurity.Realizations.Sumcheck.OriginalRaw.terminal_rejected
-        proofObjectHeads := [``Zkc.Obligations.Derivation], route := .familyPackage }
-    let some root := roots.head? | throwError "missing root"
-    Tests.ProofAccount.expectRefusal "wrong receipt root" "declaration is not reached" <|
-      ZkcSecurity.Generation.SumcheckAccounts.measure root ``Tests.ProofAccount.dependent
+    Tests.ProofAccount.expectRefusal "names only in a type" "missing application" <|
+      ZkcTools.ProofAccount.account (← ZkcTools.ProofAccount.reachable ``unrelatedMentions) {
+        identifier := "name-only", phase := "association", responsibility := "I"
+        owner := ``unrelatedMentions
+        callee := ``Zkc.Source.Structured.Template.Association.invoke, route := .generalRule }
   logInfo "DERIVATION-ASSOCIATION-CONTROLS-PASS"
   elabCommand (← `(def $(mkIdent `accountsJson) : String := $(quote (Json.arr accounts).compress)))
 

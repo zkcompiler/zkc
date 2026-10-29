@@ -1,4 +1,5 @@
 import ZkcSecurity.Realizations.Gkr.HonestHelpersSource
+import ZkcExamples.Structured.GkrVerifierProcess
 import ZkcSecurity.Realizations.Gkr.HonestRound
 import ZkcSecurity.Realizations.Gkr.HonestPackets
 import ZkcSecurity.Examples.Components.GkrFiniteCircuit
@@ -60,8 +61,8 @@ theorem read_past_end :
     (by norm_num [indexLimit]) (by norm_num [indexLimit])
 
 theorem line_packet (ctx : ProtocolContext) :
-    GkrSourceCallbacks.proverCoefficientProcess (F := ℚ) (G := ℚ) ctx 0 (some [8, 7]) =
-      .call (.send (ty := .field scalarDomain) (GkrSourceCallbacks.lineCoefficientSite ctx)
+    Generated.Presentations.Gkr.Root.proverCoefficientProcess (F := ℚ) (G := ℚ) ctx 0 (some [8, 7]) =
+      .call (.send (ty := .field scalarDomain) (GkrVerifier.lineCoefficientSite ctx)
         (ctx.roles 1) 7) fun _ => .done () := by
   simpa only [List.getElem?_cons_succ, List.getElem?_cons_zero, Option.getD_some] using
     HonestPackets.line_coefficient (G := ℚ) ctx ([8, 7] : List ℚ) 0
@@ -80,13 +81,13 @@ def handler : PIR.Handler (participantInterface ℚ ℚ) (List ℚ)
 
 def events (ctx : ProtocolContext) : List (participantInterface ℚ ℚ).Op :=
   [.send (ty := .field scalarDomain)
-      (GkrRoundsNormalForms.round0Site ctx) (ctx.roles 1) 120,
+      (GkrVerifier.roundSite ctx "0") (ctx.roles 1) 120,
    .send (ty := .field scalarDomain)
-      (GkrRoundsNormalForms.round1Site ctx) (ctx.roles 1) (-15),
+      (GkrVerifier.roundSite ctx "1") (ctx.roles 1) (-15),
    .send (ty := .field scalarDomain)
-      (GkrRoundsNormalForms.round2Site ctx) (ctx.roles 1) (-105),
+      (GkrVerifier.roundSite ctx "2") (ctx.roles 1) (-105),
    .receive (.field scalarDomain)
-      (GkrRoundsNormalForms.deliverySite ctx) (ctx.roles 1)]
+      (GkrVerifier.deliverySite ctx) (ctx.roles 1)]
 
 theorem first_message : GkrRoundsReference.message (GkrCallerRealization.reference (0 : ℚ)) =
     ⟨120, -15, -105⟩ := by
@@ -99,7 +100,7 @@ theorem first_message : GkrRoundsReference.message (GkrCallerRealization.referen
 /-- Actual source round, exact suffix and all three ordered payloads. The
 existing challenge prefix is retained in the returned point. -/
 theorem round_run (ctx : ProtocolContext) (point suffix : List ℚ) :
-    (GkrRoundsNormalForms.proverProcess (G := ℚ) ctx
+    (Generated.Presentations.Gkr.Rounds.proverProcess (G := ℚ) ctx
       (some (GkrCallerRealization.raw 0).add) (some (GkrCallerRealization.raw 0).mul)
       (some (GkrCallerRealization.raw 0).left) (some (GkrCallerRealization.raw 0).right)
       (some point)).run handler (0 :: suffix) =
@@ -112,7 +113,7 @@ theorem round_run (ctx : ProtocolContext) (point suffix : List ℚ) :
 /-- Exhausting the challenge script is failure, after the same emitted
 coefficient packet. It cannot be counted as a successful producer round. -/
 theorem missing_delivery (ctx : ProtocolContext) (point : List ℚ) :
-    (GkrRoundsNormalForms.proverProcess (G := ℚ) ctx
+    (Generated.Presentations.Gkr.Rounds.proverProcess (G := ℚ) ctx
       (some (GkrCallerRealization.raw 0).add) (some (GkrCallerRealization.raw 0).mul)
       (some (GkrCallerRealization.raw 0).left) (some (GkrCallerRealization.raw 0).right)
       (some point)).run handler [] = ⟨.stopped .refused, [], events ctx⟩ := by
@@ -133,13 +134,13 @@ theorem changed_message :
 /-- The same source round consumer rejects a changed constant, retaining
 the actual unread suffix and the three receive observations. -/
 theorem changed_message_rejected (ctx : ProtocolContext) (point suffix : List ℚ) :
-    (GkrRoundsNormalForms.verifierProcess (G := ℚ) ctx (some 83) (some point) (some 120)).run
+    (Generated.Presentations.Gkr.Rounds.verifierProcess (G := ℚ) ctx (some 83) (some point) (some 120)).run
       handler (121 :: (-15) :: (-105) :: suffix) =
       ⟨.stopped .reject, suffix,
-        [.receive (.field scalarDomain) (GkrRoundsNormalForms.round0Site ctx) (ctx.roles 0),
-         .receive (.field scalarDomain) (GkrRoundsNormalForms.round1Site ctx) (ctx.roles 0),
-         .receive (.field scalarDomain) (GkrRoundsNormalForms.round2Site ctx) (ctx.roles 0)]⟩ := by
-  norm_num [GkrRoundsNormalForms.verifierProcess, PIR.Process.run, handler, PIR.Execution.follow]
+        [.receive (.field scalarDomain) (GkrVerifier.roundSite ctx "0") (ctx.roles 0),
+         .receive (.field scalarDomain) (GkrVerifier.roundSite ctx "1") (ctx.roles 0),
+         .receive (.field scalarDomain) (GkrVerifier.roundSite ctx "2") (ctx.roles 0)]⟩ := by
+  norm_num [scalarDomain, GkrVerifier.roundSite, Generated.Presentations.Gkr.Rounds.verifierProcess, PIR.Process.run, handler, PIR.Execution.follow]
 
 theorem malformed_round :
     invoke (Zkc.Source.Structured.plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed

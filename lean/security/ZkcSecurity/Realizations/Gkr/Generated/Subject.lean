@@ -1,8 +1,9 @@
 module
 
 public import ZkcSecurity.Realizations.Gkr.Canonical
-public import ZkcSecurity.Realizations.Gkr.CanonicalPair
+public import ZkcExamples.Construction.Generated.GkrPair
 public import ZkcSecurity.Domains.PrimeField
+public import ZkcExamples.Structured.Generated.Connections.Gkr
 public import ZkcSecurity.Tools.PairConstruction
 public import ZkcSecurity.Claims.SourceChargeSites
 
@@ -17,7 +18,7 @@ noncomputable section
 
 abbrev original : Snapshot := ZkcSecurity.Realizations.Gkr.Canonical.original
 abbrev imported : Imported original := ZkcSecurity.Realizations.Gkr.Canonical.imported
-abbrev artifacts := ZkcSecurity.Realizations.Gkr.CanonicalPair.artifacts
+abbrev artifacts := ZkcExamples.Construction.Generated.GkrPair.artifacts
 
 def selected : Zkc.Construction.AuthoredPair.Selection original :=
   (Zkc.Construction.AuthoredPair.select original artifacts "circuit_outputs").toOption.get (by decide +kernel)
@@ -25,6 +26,7 @@ def selected : Zkc.Construction.AuthoredPair.Selection original :=
 def subject : ZkcSecurity.Claims.HonestPair.Subject
     (ZkcSecurity.Domains.PrimeField.blsScalarModel) original imported selected := by
   bind_authored_subject "circuit_outputs" with_registry (ZkcSecurity.Realizations.Gkr.Relations.registry ZkcSecurity.Domains.PrimeField.blsScalarModel)
+    connections ZkcExamples.Structured.Generated.Connections.Gkr.producer, ZkcExamples.Structured.Generated.Connections.Gkr.validator
     exports "sha256:624ace13f9ec65913feab37af7f567746f268585252e9c3bb0708e61e84a70dd", "sha256:f829be33b7fbf7688a97068f3e195f109cc8021bc40f90719a27510f630d25fc", "sha256:fd0bdc7ff8c6e5279e5e0d89df36aa36b3a9180f4ac027c2afb3cd7b9de6bd4b"
 
 abbrev validatorArtifacts := subject.validatorArtifacts

@@ -6,16 +6,10 @@ public meta import ZkcSecurity.Generation.Roots.SubjectImports
 public import ZkcSecurity.Generation.SubjectABI
 public meta import ZkcSecurity.Generation.SubjectABI
 public import ZkcSecurity.Generation.OriginalEndpoint
-public import ZkcSecurity.Generation.OriginalSecurityBindingsCatalogue
-public meta import ZkcSecurity.Generation.OriginalSecurityBindingsCatalogue
 public meta import ZkcSecurity.Generation.OriginalEndpoint
 public import ZkcSecurity.Generation.RootCompleteness
 public meta import ZkcSecurity.Generation.RootCompleteness
 
-public import ZkcSecurity.Generation.OriginalRootCatalogue
-public meta import ZkcSecurity.Generation.OriginalRootCatalogue
-public import ZkcSecurity.Generation.ConstructionBindingsCatalogue
-public meta import ZkcSecurity.Generation.ConstructionBindingsCatalogue
 public import ZkcSecurity.Generation.TargetSourceAliasesCatalogue
 public meta import ZkcSecurity.Generation.TargetSourceAliasesCatalogue
 
@@ -23,7 +17,8 @@ public meta import ZkcSecurity.Generation.TargetSourceAliasesCatalogue
 
 /-! Production endpoints consume installed original-source laws. The catalogue
 owns proof selection; admitted ABIs and artifacts supply structural metadata.
-Old compiled matcher outputs are generated only by regression drivers. -/
+The complete connection is generated separately by the shared source-to-participant
+certificate builder. No scalar or family-specific connection is emitted here. -/
 set_option maxRecDepth 50000
 set_option maxHeartbeats 16000000
 namespace ZkcSecurity.Generation.Roots
@@ -71,8 +66,7 @@ private meta def require {α : Type} : Except String α → Lean.Elab.Command.Co
 
 run_cmd do
   let mut sources : List (String × String × String) :=
-    (OriginalRootCatalogue.sources ++ ConstructionBindingsCatalogue.sources ++
-      TargetSourceAliasesCatalogue.sources).map fun (name, source) => ("bindings", name, source)
+    TargetSourceAliasesCatalogue.sources.map fun (name, source) => ("bindings", name, source)
   for root in ← evaluateSelections do
     let metadata ← Lean.Elab.Command.liftTermElabM do
       let subject := Lean.mkIdent ((root.subjectModule ++ ".subject").toName)
@@ -86,16 +80,11 @@ run_cmd do
         moduleName := root.componentModule "ABI", subjectModule := root.subjectModule }),
       ("soundness", root.componentModule "Soundness", ← require <| OriginalEndpoint.soundnessSource metadata pair.validator (soundnessOutput root)),
       ("completeness", root.componentModule "Completeness", RootCompleteness.directSource
-        (completenessSelection root) (root.securityModule ++ ".Completeness")
-        (root.securityModule ++ ".Completeness.compiled_ideal_complete") root.mathematics.sampling
+        (completenessSelection root) root.securityModule
+        (root.securityModule ++ ".compiled_ideal_complete") root.mathematics.sampling
         ["ZkcSecurity.Domains.PrimeField"]),
       ("completeness-claims", root.subjectModule ++ "CompletenessClaims", fixedCompletenessSource (completenessClaimsOutput root)),
       ("claim-libraries", root.subjectModule ++ "SoundnessRegistration", domainClaimLibrarySource (claimLibraryOutput root))]
-    for (name, source) in OriginalSecurityBindingsCatalogue.sources do
-      if name.startsWith (root.securityModule ++ ".") then
-        let stage := if name.endsWith ".Sources" || name.endsWith ".Installation" || name.endsWith ".Soundness"
-          then "soundness" else "completeness"
-        sources := sources ++ [(stage, name, source)]
   Lean.Elab.Command.elabCommand (← `(def $(Lean.mkIdent `stageSources) : List (String × String × String) := $(Lean.quote sources)))
 
 def generateStage (stage : String) (args : List String) : IO Unit := do

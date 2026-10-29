@@ -11,9 +11,14 @@ and not a malformed input's.
 
 Stages:
   construction  the constructed participant export, checked by
-                `Zkc.Construction.checkCompiled` (construction and projection);
+                `Zkc.Construction.checkCompiled` (structure and occurrence provenance);
                 the expected outcome is a refusal code, and whether the
                 construction rule alone accepts it;
+  connection    the complete source-to-participant proposition, checked by the
+                default typed derivation builder. The actual export must have
+                a kernel-checked connection; a mutation must trigger a specific
+                static alignment refusal, never a timeout or unrelated error.
+                This is a method-refusal control, not a counterexample theorem;
   native        the constructed candidate MLIR, checked by the native
                 `protocol-constructed-participant` before any export;
   lowering      the `zkc.program/0` validator program, checked by the Lean
@@ -45,10 +50,10 @@ TRANSCRIPT_CONTRACTS = ("transcript.native.indexed.observe.data", "transcript.na
 @dataclass(frozen=True)
 class Kind:
     """A mutation kind. `expected` is the refusal the kind targets; a construction
-    kind is accepted when its stage's rule refuses it (any refusal code with the
-    stage's prefix, `construction-` or `projection-`), and the actual code is
-    recorded. `construction_accepts` states that the construction rule alone
-    accepts the mutated export, so that the projection rule is what refuses it."""
+    kind is accepted when its stage's rule refuses it, and the actual code is
+    recorded. Connection controls require a static alignment refusal from the
+    proof-producing method. `construction_accepts` independently checks that the
+    export still has valid transcript wiring and occurrence provenance."""
     name: str
     stage: str
     property: str
@@ -214,7 +219,7 @@ def challenge_names_delivery(exported):
     return mutated(exported, first_only(edit))
 
 
-@kind("drop-guard", "construction", "every original guard is checked", "projection-guard",
+@kind("drop-guard", "connection", "every original guard is checked", "alignment-guard",
       construction_accepts=True)
 def drop_guard(exported):
     def change(value, site):
@@ -237,21 +242,21 @@ def self_operand(predicate, value, site_limit=None):
     return True
 
 
-@kind("equality-self", "construction", "a decision compares the values the original compares",
-      "projection-unexplained", construction_accepts=True)
+@kind("equality-self", "connection", "a decision compares the values the original compares",
+      "alignment-computation", construction_accepts=True)
 def equality_self(exported):
     return mutated(exported, first_only(lambda value: self_operand(
         lambda item: item[0] in ("algebra.field_equal", "algebra.group_equal"), value)))
 
 
-@kind("conjunction-self", "construction", "a conjunction reads both decisions", "projection-unexplained",
+@kind("conjunction-self", "connection", "a conjunction reads both decisions", "alignment-computation",
       construction_accepts=True)
 def conjunction_self(exported):
     return mutated(exported, first_only(lambda value: self_operand(lambda item: item[0] == "arith.andi", value)))
 
 
-@kind("update-self", "construction", "a loop's update reads the values the original reads",
-      "projection-unexplained", construction_accepts=True)
+@kind("update-self", "connection", "a loop's update reads the values the original reads",
+      "alignment-computation", construction_accepts=True)
 def update_self(exported):
     def change(value, site):
         bodies = [region[1] for item in nested(value[7]) if item[0] == "protocol.loop" for region in item[5]]
@@ -267,7 +272,7 @@ def update_self(exported):
     return mutated(exported, change)
 
 
-@kind("stale-yield", "construction", "a loop carries its updated values", "projection-repeat-yield",
+@kind("stale-yield", "connection", "a loop carries its updated values", "alignment-loop-yield",
       construction_accepts=True)
 def stale_yield(exported):
     def change(value, site):
@@ -286,7 +291,7 @@ def stale_yield(exported):
     return mutated(exported, change)
 
 
-@kind("call-reads-sibling", "construction", "a helper call reads its own operands", "projection-call",
+@kind("call-reads-sibling", "connection", "a helper call reads its own operands", "alignment-helper",
       construction_accepts=True)
 def call_reads_sibling(exported):
     def edit(value):
@@ -793,7 +798,7 @@ def kinds_for(names):
 def listing():
     table = {**KINDS, **NATIVE}
     return [dict(name=name, stage=kind_.stage, property=kind_.property, expected=kind_.expected,
-                 refusing_rule=kind_.refusing_rule if kind_.stage == "construction" else
+                 refusing_rule=kind_.refusing_rule if kind_.stage in {"construction", "connection"} else
                  "Zkc.Executable.checkHelpers" if kind_.stage == "helpers" else None,
                  construction_accepts=kind_.construction_accepts)
             for name, (kind_, _) in sorted(table.items())]

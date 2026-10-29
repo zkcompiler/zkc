@@ -1,5 +1,9 @@
 module
 public import ZkcSecurity.Realizations.Gkr.HonestProducerCurrentLayer
+public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Source.Structured.OccurrenceYields
+public meta import ZkcTools.StructuredSource.Composition
+
 @[expose] public section
 
 /-! Current GKR root occurrence binding and invariant-preserving source loop.
@@ -7,8 +11,9 @@ The callback equation is discharged by the actual producer source theorem. -/
 set_option autoImplicit false
 set_option backward.isDefEq.respectTransparency false
 set_option linter.unusedSimpArgs false
+noncomputable section
 namespace ZkcSecurity.Realizations.Gkr.HonestProducerSource
-open Zkc Source Structured ZkcExamples.Structured GkrSourceCallbacks SumcheckVerifierHelpers
+open Zkc Source Structured ZkcExamples.Structured Generated.Presentations.Gkr.Root SumcheckVerifierHelpers
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
 omit [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
@@ -45,23 +50,25 @@ theorem observed_layers_fold (encoding : CircuitEncoding F) (sites : HonestProdu
       (List.range' index count) (proverLayerState (some point)) =
       (HonestProducerObserved.producerLayers {} sites encoding index count point).bind
         (fun result => .done (proverLayerState (some result))) := by
-  induction count generalizing index point with
-  | zero => rfl
-  | succ count ih =>
-    rw [List.range'_succ, Finite.fold]
-    simp only [Repeat.stepOn, proverLayerState_masked {} 0 rfl, equation index point (by omega) pointSize,
-      IterationObservations.within_eq, PIR.Process.bind_assoc, PIR.Process.bind,
-      HonestProducerObserved.producerLayers]
-    apply congrArg (PIR.Process.bind _)
-    funext entered
-    apply (observed_layer_yields (G := G) sites.layer encoding index point).bind_congr
-    intro next nextSize
-    apply congrArg (PIR.Process.bind _)
-    funext left
-    simpa only [Repeat.stepOn, IterationObservations.within_eq, PIR.Process.bind_assoc,
-      proverLayerState_masked {} 0 rfl, PIR.Process.bind, ProtocolContext.mapScopes,
-      ProtocolContext.roles, List.map, List.map_nil, layerSpec] using
-      ih (index + 1) (by omega) next nextSize
+  have translated := Zkc.Source.Structured.LoopPresentation.foldInvariant
+    (fun state index => Repeat.stepOn layerSpec {} 0 (layerCapturesValues encoding)
+      (observedLayerBody (F := F) (G := G)) state index Occurrence.iterations sites.layers)
+    (fun point index => Occurrence.iterations.within sites.layers index
+      (HonestProducerObservedLayers.producerLayer {} sites.layer encoding.circuit
+        (encoding.layers - index - 1) index point))
+    (fun _ point => proverLayerState (some point))
+    (fun _ point => point.length = encoding.width) encoding.layers
+    (by
+      intro index point inside sized
+      simp only [Repeat.stepOn, proverLayerState_masked {} 0 rfl, equation index point inside sized,
+        IterationObservations.within_eq, PIR.Process.bind_assoc, PIR.Process.bind, qualifyProtocolSite])
+    (fun index point _ _ => Zkc.Source.Structured.OccurrenceYields.within _ _ _
+      (observed_layer_yields (G := G) sites.layer encoding index point))
+    index count inside point pointSize
+  rw [translated, Zkc.Source.Structured.LoopPresentation.foldCounted _
+    (HonestProducerObserved.producerLayers (G := G) {} sites encoding)
+    (fun _ _ => rfl) (fun _ _ _ => rfl)]
+
 def rootPresentation (tables : Evaluation.ComponentTablesOn (uniformCarriers F G) (Occurrence.signature (uniformCarriers F G))) (protocols : ProtocolTable (assignment F G) (Occurrence.signature (uniformCarriers F G))) (initial add mul : List F) (layers selector width : Nat) :
     PIR.Process (Occurrence.signature (uniformCarriers F G))
       (Values (Component (assignment F G)) [.boolean]) :=
@@ -85,38 +92,12 @@ theorem root_occurrence (initial add mul : List F) (layers selector width : Nat)
  gkrBody.denote (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions observedHelpers 0 (beforeRoot (F := F) (G := G)) {} Occurrence.iterations)
  ((.cons (some initial) (.cons none (.cons (some add) (.cons (some mul) (.cons (some layers) (.cons (some selector) (.cons (some width) (.cons none .nil)))))))) : Values (Component (assignment F G)) gkrInputs).get =
  rootPresentation observedHelpers beforeRoot initial add mul layers selector width := by
-  unfold gkrBody rootPresentation
-  repeat' (rw [Region.denote]; simp [participantMeaningWithOn, protocolOperationWithOn,
-    Operands.eval, Regions.denote, Values.get, Values.get_cons, Values.split,
-    TypedABI.get_cons_here, TypedABI.get_cons_there,
-    Environment.prepend, Environment.push, SiteObservations.silent,
-    Participant.owned, Participant.restrict, Participant.guard,
-    RoleFamily.sequence, Values.absent, ProtocolOp.results,
-    PIR.Process.bind, PIR.Process.bind_assoc, PIR.Process.bind_done, PIR.Process.interpret,
-    Values.present, participantActions, ProtocolContext.roles,
-    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    SumcheckHelperLaws.prepend_two, SumcheckHelperLaws.prepend_three,
-    Evaluation.componentOperationOn, Evaluation.operationOn, strictComponent, Evaluation.meaningOn,
-    Evaluation.operation, Op.calculationRegions, Primitive.evaluate, primitiveOutcome,
-    show 4 < indexLimit by decide, show 1 < indexLimit by decide,
-    Op.results, HonestProducerRounds.empty_plain, plainHelpers])
-  congr 1
-  funext output
-  simp [Region.denote, participantMeaningWithOn, protocolOperationWithOn,
-    Operands.eval, Regions.denote, Values.get, Values.get_cons, Values.split,
-    TypedABI.get_cons_here, TypedABI.get_cons_there,
-    Environment.prepend, Environment.push, SiteObservations.silent,
-    Participant.owned, Participant.restrict, Participant.guard,
-    RoleFamily.sequence, Values.absent, ProtocolOp.results,
-    PIR.Process.bind, PIR.Process.bind_assoc, PIR.Process.bind_done, PIR.Process.interpret,
-    Values.present, participantActions, ProtocolContext.roles,
-    SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    SumcheckHelperLaws.prepend_two, SumcheckHelperLaws.prepend_three,
-    Evaluation.componentOperationOn, Evaluation.operationOn, strictComponent, Evaluation.meaningOn,
-    Evaluation.operation, Op.calculationRegions, ProtocolContext.contains,
-    ProtocolContext.enter, roleSubstitution, GkrSourceBodies.sourceProtocol80Signature,
-    SumcheckHelperLaws.singleton_eta, plainHelpers, maskValues]
-  all_goals rfl
+  have normalized := prover_observed (F := F) (G := G) {} (NormalForm.RosterDistinct.root _ _)
+    beforeRoot beforeRoot_masked (some initial) (some add) (some mul)
+    (some layers) (some selector) (some width)
+  refine normalized.trans ?_
+  source_composition_equation atoms [invoke, denoteRepeatOn]
+
 
 
 theorem output_protocols (ctx : ProtocolContext) (self : Nat)
@@ -173,7 +154,7 @@ theorem observed_from_layer (encoding : CircuitEncoding F) (outputs : List F)
     HonestProducerObserved.producer {} ⟨"s37", "s57", layerSites⟩ encoding := by
   rw [root_body]
   unfold rootPresentation
-  rw [observed_helper, HonestProducerRounds.empty_plain]
+  rw [OccurrencePresentation.closed_helper, HonestProducerRounds.empty_plain]
   dsimp only [PIR.Process.interpret, PIR.Process.bind, Values.get, TypedABI.get_cons_here]
   rw [output_protocols]
   erw [output_repeat (F := F) (G := G) ({} : ProtocolContext) (by decide) "s37"

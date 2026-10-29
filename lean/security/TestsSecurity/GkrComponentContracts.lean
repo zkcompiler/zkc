@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Realizations.Gkr.RootSource
+public import ZkcSecurity.Realizations.Gkr.SourceValidator
 public import ZkcSecurity.Examples.Components.GkrFiniteCircuit
 
 public section
@@ -58,8 +58,20 @@ theorem represented : Source.Represents circuit 2 outputs runtime := by
         Fin.induction.go, circuit, GkrFiniteCircuit.mulWiring,
         CircuitEncoding.block, runtime, GkrCallerRealization.stackedMul] using decoded
 
-theorem source_binding : Source.body (G := ℚ) runtime = verifier :=
-  Source.binding circuit 2 outputs runtime represented
+def occurrenceHandler : PIR.Handler (Occurrence.signature (uniformCarriers ℚ ℚ))
+    (List ℚ × Nat × Nat) Unit
+  | .action (.receive (.field _) _ _), (value :: proof, queries, deliveries) =>
+      ⟨.returned value, (proof, queries, deliveries), []⟩
+  | .action (.query _ _ _), (proof, queries, deliveries) => by
+      change PIR.Execution (List ℚ × Nat × Nat) Unit ℚ
+      exact ⟨.returned 0, (proof, queries + 1, deliveries), []⟩
+  | .action (.send ..), (proof, queries, deliveries) =>
+      ⟨.returned (), (proof, queries, deliveries + 1), []⟩
+  | .enter _, state => ⟨.returned (), state, []⟩
+  | .leave _, state => ⟨.returned (), state, []⟩
+  | _, state => ⟨.stopped .refused, state, []⟩
+
+theorem admitted : runtime.Admitted := Source.represents_admitted _ _ _ _ represented
 
 example : ¬ Source.Represents circuit 2 (fun bits => outputs bits + 1) runtime := by
   intro substituted
@@ -74,8 +86,10 @@ and both combination polynomials; the unread suffix remains untouched. -/
 example : verifier.run consumerHandler (messages ++ [99], 0, 0) =
     ⟨.returned (some true), ([99], 7, 7), []⟩ := by cbv
 
-example : (Source.body (G := ℚ) runtime).run consumerHandler (messages ++ [99], 0, 0) =
-    ⟨.returned (some true), ([99], 7, 7), []⟩ := by rw [source_binding]; cbv
+example : (SourceValidator.body (G := ℚ) runtime).run occurrenceHandler (messages ++ [99], 0, 0) =
+    ⟨.returned (.cons (some true) .nil), ([99], 7, 7), []⟩ := by
+  rw [SourceValidator.admitted_body runtime admitted]
+  cbv
 
 example : verifier.run consumerHandler (121 :: messages.tail, 0, 0) =
     ⟨.stopped .reject, (messages.drop 3, 1, 1), []⟩ := by cbv
@@ -96,7 +110,7 @@ example : (GkrVerifier.verifier (F := ℚ) (G := ℚ) {} 0 2 1
 example : (verifier.run (fun _ state => ⟨.stopped .exhausted, state, [()]⟩)
     (messages, 0, 0)) = ⟨.stopped .exhausted, (messages, 0, 0), [()]⟩ := by cbv
 
-example : Source.body (G := ℚ) {runtime with width := 5} = .halt .reject :=
-  Source.width_refuses _ (by decide)
+example : SourceValidator.body (G := ℚ) {runtime with width := 5} = .halt .reject := by
+  kernel_rfl
 
 end TestsSecurity.GkrComponentContracts

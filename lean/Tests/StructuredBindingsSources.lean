@@ -1,6 +1,7 @@
 import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckSumcheck
 import ZkcExamples.Structured.Generated.Bindings.TwoSumsSumcheck
 import ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate
+import Zkc.Protocols.AlgebraicRounds.Gate
 
 /-! Structural mutations of the actual admitted sources. These transformations
 only change existing typed Region data; they introduce no execution language. -/

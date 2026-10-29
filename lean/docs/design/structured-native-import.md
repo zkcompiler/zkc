@@ -4,9 +4,10 @@
 
 The shared `Source.Region` carrier needs a checked connection to actual native
 structured programs. Its generic formation laws do not establish that a native
-helper, capture map, domain, or result list was imported faithfully. The scalar
-`zkc.common-source/0` bridge also cannot express these subjects: it expands pure
-helpers and has neither declaration identity nor structured callbacks.
+helper, capture map, domain, or result list was imported faithfully. The former
+`zkc.common-source/0` bridge expanded pure helpers and lacked declaration
+identity and structured callbacks. It is retired; its maintained scalar clients
+now derive views from the Structured reader.
 
 Import the original protocol-profile module after native formation and before
 preparation. Keep its declarations and contracts. Preparation can select finite
@@ -14,7 +15,7 @@ algorithms without scalar simplification, expands Local helpers, and eventually
 realizes total mathematics. A snapshot taken there is a different subject; it
 cannot establish the source side of a transformation it has already applied.
 
-The structured format is a sibling of the scalar format. Native parsing and
+The Structured format is the sole retained-source format for formal admission. Native parsing and
 verification precede export. Lean independently checks the supported vocabulary,
 binding interfaces, declaration references and static profile restrictions before
 constructing canonical regions. It supplies the operation meanings; input files

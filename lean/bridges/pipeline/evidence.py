@@ -61,7 +61,8 @@ def artifacts_module(subject, entry, glue_namespace, executable_namespace, artif
     """The subject's artifacts, compiled facts and lowering evidence."""
     namespace = subject.get("lean", "namespace")
     glue_module = subject.module_name("glue")
-    imports = ["ZkcSecurity.Claims.Subject", glue_module, subject.get("construction", "connection")]
+    imports = ["ZkcSecurity.Claims.Subject", "ZkcTools.ConstructionBindings.Admission",
+               glue_module, subject.get("construction", "connection")]
     if executable_namespace:
         imports.append(subject.module_name("program"))
     entry_name = subject.get("entries", "proof")
@@ -97,6 +98,7 @@ def compiled : Compiled artifacts where
   checked := {glue_namespace}.selection_checked
   publics := by decide +kernel
   occurrences := by decide +kernel
+  sourceConnection := some ⟨{glue_namespace}.sourceConnected⟩
 """
     pattern, variables = statement_pattern(len(entry.types))
     source += f"""
@@ -202,11 +204,10 @@ def claims_module(subject, bound):
     """Only data and generic Lean construction calls; never print a Prop."""
     namespace = subject.get("lean", "namespace")
     require(namespace, f"{subject.name}: source receipts need lean.namespace")
-    imports = ["ZkcSecurity.Tools.ClaimConstruction", module_name(subject, "Endpoints"),
-               *subject.get("lean", "imports", [])]
+    imports = ["ZkcSecurity.Tools.ClaimConstruction", *subject.get("lean", "imports", [])]
     source = HEADER.format(imports="\n".join(f"public import {name}" for name in dict.fromkeys(imports))
                            + "\n" + "\n".join(f"public meta import {name}" for name in subject.get("lean", "imports", [])),
                            doc="Generated source requests and typed receipts. Regenerate with "
-                               "`lean/bridges/subject.py --write`. Maintained Endpoints are independent "
-                               "regression clients, never source claim authority.")
-    return source + request_commands(namespace, bound)
+                               "`lean/bridges/subject.py --write`. Typed library exports fix the "
+                               "subject and registry; source requests select the property and method.")
+    return source + request_commands(namespace, bound, subject.get("lean", "library", "Registration.library"))

@@ -59,9 +59,11 @@ def Selection.subjectModule (root : Selection) : String :=
   "ZkcSecurity.Examples.Generated." ++ root.name
 def Selection.componentModule (root : Selection) (suffix : String) : String :=
   "ZkcSecurity.Examples.Generated.Components." ++ root.name ++ suffix
-/-- Naming follows the generated binding; it selects no handwritten root proof. -/
+/-- A library-owned property module uses the same checked source roots for both
+honest completeness and adversarial soundness. Structural connection code is
+never selected by this catalogue. -/
 def Selection.securityModule (root : Selection) : String :=
-  "ZkcSecurity.Examples.Generated.OriginalSecurity." ++ root.name
+  "ZkcSecurity.Examples.RootProperties." ++ root.name
 def Selection.constructedModule (root : Selection) (role : String) : String :=
   "ZkcExamples.Structured.Generated.Constructed." ++ root.name ++ role
 
@@ -126,6 +128,7 @@ def chargeLabels (root : Selection) : Except String (List String) := do
 
 def subjectOutput (root : Selection) (originalExport producerExport validatorExport : String) : Except String FixedSubjectOutput := do
   return {
+    connectionModule := "ZkcExamples.Structured.Generated.Connections." ++ root.name
     moduleName := root.subjectModule, sourceModule := root.sourceModule
     originalExpression := root.sourceModule ++ ".program.snapshot"
     importedExpression := root.sourceModule ++ ".imported"

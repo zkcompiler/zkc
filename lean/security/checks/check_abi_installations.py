@@ -138,8 +138,9 @@ example : NoDataABI.initialHistory =
 
 example (n : Nat) (service : Option Nat) :
     Constrained.subject.HonestInput (ConstrainedABI.inputs n service) ↔
-      n < indexLimit ∧ ConstrainedABI.inputCondition (ConstrainedABI.inputs n service) :=
-  ConstrainedABI.honestInput_iff n service
+      n < indexLimit ∧ ConstrainedABI.inputCondition (ConstrainedABI.inputs n service) := by
+  change _ ↔ n < indexLimit ∧ (some n : Option Nat) = some 1
+  simpa only [Option.some.injEq] using ConstrainedABI.honestInput_iff n service
 theorem interpreted_condition (n : Nat) (service : Option Nat) :
     ConstrainedInterpretedABI.inputCondition (ConstrainedInterpretedABI.inputs n service) ↔ n = 1 := by
   change (some n : Option Nat) = some 1 ↔ n = 1

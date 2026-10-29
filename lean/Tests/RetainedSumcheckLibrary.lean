@@ -24,12 +24,12 @@ abbrev program := ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.
 
 def reduce (role : Fin 2) : SourceTemplate program.payload [] :=
   (SourceTemplate.build program.payload [] ⟨0, by decide +kernel⟩ role
-    (rolePattern role program.payload.protocols[0].inputs program.payload.protocols[0].inputScopes)).toOption.get
+    (InputVisibility.rolePattern role program.payload.protocols[0].inputs program.payload.protocols[0].inputScopes)).toOption.get
     (by fin_cases role <;> decide +kernel)
 
 def root (role : Fin 2) : SourceTemplate program.payload [(reduce role).key] :=
   (SourceTemplate.build program.payload [(reduce role).key] ⟨1, by decide +kernel⟩ role
-    (rolePattern role program.payload.protocols[1].inputs program.payload.protocols[1].inputScopes)).toOption.get
+    (InputVisibility.rolePattern role program.payload.protocols[1].inputs program.payload.protocols[1].inputScopes)).toOption.get
     (by fin_cases role <;> decide +kernel)
 
 def library (role : Fin 2) : Library program.payload [(root role).key, (reduce role).key] :=
@@ -40,11 +40,11 @@ example : (root 1).form.calleeCalls.length = 1 := by decide +kernel
 example : (SourceTemplate.build program.payload
     [{(reduce 1).key with signature := {(reduce 1).source.signature with name := "changed"}}]
     ⟨1, by decide +kernel⟩ 1
-    (rolePattern 1 program.payload.protocols[1].inputs program.payload.protocols[1].inputScopes)).isOk = false :=
+    (InputVisibility.rolePattern 1 program.payload.protocols[1].inputs program.payload.protocols[1].inputScopes)).isOk = false :=
   by decide +kernel
 example : (SourceTemplate.build program.payload [{(reduce 1).key with role := 0}]
     ⟨1, by decide +kernel⟩ 1
-    (rolePattern 1 program.payload.protocols[1].inputs program.payload.protocols[1].inputScopes)).isOk = false :=
+    (InputVisibility.rolePattern 1 program.payload.protocols[1].inputs program.payload.protocols[1].inputScopes)).isOk = false :=
   by decide +kernel
 example (role : Fin 2) (model : DomainModel) {types : List Ty}
     (inputs : Values (Component model.Value) types) :
@@ -57,12 +57,12 @@ abbrev program := ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.progra
 
 def reduce (role : Fin 2) : SourceTemplate program.payload [] :=
   (SourceTemplate.build program.payload [] ⟨0, by decide +kernel⟩ role
-    (rolePattern role program.payload.protocols[0].inputs program.payload.protocols[0].inputScopes)).toOption.get
+    (InputVisibility.rolePattern role program.payload.protocols[0].inputs program.payload.protocols[0].inputScopes)).toOption.get
     (by fin_cases role <;> decide +kernel)
 
 def root (role : Fin 2) : SourceTemplate program.payload [(reduce role).key] :=
   (SourceTemplate.build program.payload [(reduce role).key] ⟨1, by decide +kernel⟩ role
-    (rolePattern role program.payload.protocols[1].inputs program.payload.protocols[1].inputScopes)).toOption.get
+    (InputVisibility.rolePattern role program.payload.protocols[1].inputs program.payload.protocols[1].inputScopes)).toOption.get
     (by fin_cases role <;> decide +kernel)
 
 def library (role : Fin 2) : Library program.payload [(root role).key, (reduce role).key] :=

@@ -157,3 +157,31 @@ def test_selected_report_comparison_rejects_regressions_and_keeps_open_subjects(
     api.compare(document, "subject-rows", header + "| certified | unresolved |\n",
                 False, failures, [], subjects={"certified"})
     assert failures and "stale" in failures[0]
+
+
+@pytest.mark.parametrize("case", ["no-subject", "two-subjects", "duplicate-json-key", "wrong-subject"])
+def test_required_request_cli_refuses_ambiguous_input_before_work(monkeypatch, tmp_path, capsys, case):
+    api = load("required_request_cli", "lean/checks/check_records.py")
+    required = tmp_path / "requirements.json"
+    required.write_text(json.dumps({"format": "zkc.required-requests/0", "subject": "schnorr", "requests": []}))
+    subjects = ["--subject", "schnorr"]
+    diagnostic = "exactly one --subject"
+    if case == "no-subject":
+        subjects = []
+    elif case == "two-subjects":
+        subjects += ["--subject", "sumcheck"]
+    elif case == "duplicate-json-key":
+        required.write_text('{"format":"zkc.required-requests/0","subject":"schnorr","requests":[],"requests":[]}')
+        diagnostic = "duplicate source-claim field"
+    else:
+        subjects = ["--subject", "sumcheck"]
+        diagnostic = "wrong subject"
+    output = tmp_path / "output"
+    monkeypatch.setattr(sys, "argv", ["check_records.py", "--required-requests", str(required),
+                                      "--output", str(output), *subjects])
+    monkeypatch.setattr(api, "select_packages", lambda *_: pytest.fail("invalid requirements reached package checks"))
+    with pytest.raises(SystemExit) as failed:
+        api.main()
+    assert failed.value.code == 2
+    assert diagnostic in capsys.readouterr().err
+    assert not output.exists()

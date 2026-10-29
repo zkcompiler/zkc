@@ -6,10 +6,9 @@ body is exported and admitted independently; a matching name never proves it.
 import copy
 import hashlib
 import json
-import subprocess
 
-from snapshot import render
-from program_syntax import program, indent
+from structured import entry, profile
+from bridges.structured.snapshot import render, text
 from request_support import require
 from verify import validate, VERSION
 
@@ -20,16 +19,16 @@ def resolve(spec, data, interface, compiler, output):
         'spec-shape', 'Expected the named verification-spec fields')
     require(spec['format'] == 'zkc.verification-spec/0', 'spec-version', 'Unsupported verification specification')
     require(interface.get('format') == 'zkc.language-interface/0' and
-            data[1] == 'sha256:' + interface['original'] and data[2] == interface['protocol'],
+            data[2] == 'sha256:' + interface['original'] and data[3] == interface['protocol'],
             'intent-identity', 'Interface and program export must describe the same source and selected protocol')
-    protocols = [p for p in interface['protocols'] if p['symbol'] == data[2]]
+    protocols = [p for p in interface['protocols'] if p['symbol'] == data[3]]
     require(len(protocols) == 1, 'intent-protocol', 'The selected protocol must occur exactly once')
     protocol = protocols[0]
     roles = protocol['roles']
     require(isinstance(spec['role'], str) and spec['role'] in roles,
             'intent-role', 'Select a declared verifier role by name')
     request = {k: copy.deepcopy(spec[k]) for k in ('contract', 'properties', 'experiment', 'wiring')}
-    request.update(format=VERSION, role=roles.index(spec['role']), inputs=[None] * len(data[4]))
+    request.update(format=VERSION, role=roles.index(spec['role']), inputs=[None] * len(entry(data)[4]))
     require(isinstance(request['wiring'], dict) and request['wiring'].get('prover') in roles,
             'intent-prover', 'Select a declared prover role by name')
     request['wiring']['prover'] = roles.index(request['wiring']['prover'])
@@ -45,7 +44,7 @@ def resolve(spec, data, interface, compiler, output):
     for binding, name in spec['inputs'].items():
         require(name in ports, 'intent-inputs', f'Unknown input or service: {name}')
         _, native = ports[name]
-        require(len(native) == 1 and type(native[0]) is int and 0 <= native[0] < len(data[4]),
+        require(len(native) == 1 and type(native[0]) is int and 0 <= native[0] < len(entry(data)[4]),
                 'intent-layout', 'This profile requires one scalar native leaf per binding')
         require(request['inputs'][native[0]] is None, 'intent-inputs', 'Two bindings select the same native leaf')
         request['inputs'][native[0]] = binding
@@ -82,11 +81,10 @@ def resolve(spec, data, interface, compiler, output):
             ['parameter', 'statement', 'witness'], 'intent-relation-formals', 'Wrong relation purposes')
     definition = relations[0]['definition']
     require(definition.get('kind') == 'formula', 'intent-relation-body', 'An opaque target needs its own proved adapter')
-    raw = subprocess.check_output([str(compiler), 'protocol-lean', str(output / 'native.mlir'),
-                                  '--symbol=' + definition['function']], text=True, timeout=30)
-    relation = json.loads(raw)
-    require(relation[1] == data[1] and relation[2] == definition['function'],
-            'intent-identity', 'Relation body and protocol must come from the same retained native source')
+    # Select the retained named formula from this same Structured unit. There is
+    # no relation-only Common export or second reader.
+    relation = {'snapshot': copy.deepcopy(data), 'helper': definition['function']}
+    validate_relation(relation, request)
     (output / 'relation.json').write_text(json.dumps(relation, indent=2) + '\n')
     return request, relation, {'clause': target['clause'], 'relation': clause['subject']['relation'],
         'interface_sha256': hashlib.sha256(json.dumps(interface, sort_keys=True).encode()).hexdigest(),
@@ -94,85 +92,85 @@ def resolve(spec, data, interface, compiler, output):
 
 
 def validate_relation(data, request):
-    render(data, 'RelationShape')
+    require(isinstance(data, dict) and set(data) == {'snapshot', 'helper'},
+            'intent-relation-profile', 'Select a named formula in the same Structured unit')
+    render(data['snapshot'], 'RelationShape')
     w = request['wiring']
-    require(data[4] == [['group', w['groupDomain']], ['group', w['groupDomain']], ['field', w['fieldDomain']]]
-            and data[5] == [[0], [0], [0]] and data[6] == ['bool'] and data[7] == [0]
-            and all(i[0] == 'pure' for i in data[8]),
-            'intent-relation-profile', 'The relation must be a pure scalar group predicate')
-    for instruction in data[8]:
-        op = instruction[1]
-        if op[0].startswith('group.'):
-            require(op[1] == w['groupDomain'], 'intent-relation-domain', 'Unassigned relation group')
-        if op[0].startswith('field.'):
-            require(op[1] == w['fieldDomain'], 'intent-relation-domain', 'Unassigned relation field')
-        if op[0] == 'group.scale':
-            require(op[2] == w['fieldDomain'], 'intent-relation-domain', 'Unassigned relation scalar action')
+    profile(data['snapshot'], w['fieldDomain'], w['groupDomain'])
+    matches = [d for d in data['snapshot'][7] if d[0] == 'function' and d[1] == data['helper']]
+    require(len(matches) == 1, 'intent-relation-profile', 'Formula helper is missing or ambiguous')
+    helper = matches[0]
+    require(helper[2] == 'math' and helper[4] == [['group', w['groupDomain']],
+            ['group', w['groupDomain']], ['field', w['fieldDomain']]] and helper[5] == [['bool']],
+            'intent-relation-profile', 'Expected the actual scalar group predicate signature')
+    return helper
 
 
 def relation_candidate(data, request):
-    """Propose pure syntax; admission, relation and audit commands are reviewed."""
     validate_relation(data, request)
-    return program(data)
+    return data
+
+
+def helper_term(data, request):
+    from bridges.structured.snapshot import seq, ty
+    helper = validate_relation(data, request)
+    return '⟨' + ', '.join([text(helper[1]), '.math', seq(helper[4], ty), seq(helper[5], ty)]) + '⟩'
 
 
 def render_relation(data, request, proposal):
-    from candidate import program_expression
+    from verify import audit
     validate_relation(data, request)
-    source_program = program_expression(proposal)
-    rendered = render(data, 'GeneratedRelation.Data').split('namespace ', 1)[1]
+    helper = helper_term(proposal, request)
     return f'''
-namespace {rendered}
 namespace GeneratedRelation
-open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
+open Zkc.Source Zkc.Source.Structured
+noncomputable section
 
-def sourceProgram : Program Nat language services Data.snapshot.inputs Data.snapshot.result :=
-{indent(source_program)}
-def sourceScopes : Values (fun _ => Nat → Bool) Data.snapshot.inputs :=
-  (inputScopes Data.snapshot.inputs Data.snapshot.inputRoles).get (by decide +kernel)
-def imported : Imported := ⟨Data.snapshot, sourceProgram, sourceScopes⟩
-theorem admitted : Data.snapshot.check = .ok imported := by
-  apply Data.snapshot.check_parts sourceProgram sourceScopes
-  · decide +kernel
-  · exact inputScopes_get Data.snapshot _
-  · rfl
-  · decide +kernel
-  · decide +kernel
+def helper : Helper := {helper}
+theorem helper_present : helper ∈ RelationCandidateInputs.program.payload.definitions.map (·.helper) := by
+  decide +kernel
 variable {{F G : Type}} [Field F] [DecidableEq F]
   [AddCommGroup G] [Module F G] [DecidableEq G]
-def inputs (base key : G) (secret : F) :
-    Values (fun ty => Option (ScalarValue F G ty)) Data.snapshot.inputs :=
-  .cons (some base) (.cons (some key) (.cons (some secret) .nil))
+
+def inputs (base key : G) (secret : F) : Values (assignment F G) helper.inputs :=
+  .cons base (.cons key (.cons secret .nil))
+
+/-- The named helper runs in the actual admitted Structured table. -/
 theorem corresponds (base key : G) (secret : F) :
-    imported.denote (scalarMeaning F G) id 0 (inputs base key secret) =
-      PIR.Process.done (some (decide (key = secret • base))) := by
-  change (imported.program.denote (scalarMeaning F G) id 0
-    (inputs base key secret).get).bind PIR.Process.done = _
-  rw [PIR.Process.bind_done]
+    invoke (RelationCandidateInputs.program.payload.tables F G).closed helper (inputs base key secret) =
+      PIR.Process.done (.cons (decide (key = secret • base)) .nil) := by
   rfl
+end
 end GeneratedRelation
-'''
+''' + audit('GeneratedRelation', ['helper_present', 'corresponds'], 'RELATION-KERNEL-PASS')
 
 
 def relation_subject(data, request):
-    validate_relation(data, request)
-    rendered = render(data, 'ExpectedRelation.Data').split('namespace ', 1)[1]
+    from verify import audit
+    helper = helper_term(data, request)
     return f'''
-namespace {rendered}
 namespace ExpectedRelation
-open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
-theorem admitted_subject : Data.snapshot.check = .ok GeneratedRelation.imported :=
-  GeneratedRelation.admitted
+open Zkc.Source Zkc.Source.Structured
+noncomputable section
+
+theorem snapshot_eq : RelationExpectedData.snapshot = RelationCandidateData.snapshot := by kernel_rfl
+/-- The request's authored relation and verifier have the same source unit. -/
+theorem same_source : RelationExpectedData.snapshot = ExpectedData.snapshot := by kernel_rfl
+
+def helper : Helper := {helper}
+theorem helper_present : helper ∈ RelationExpectedInputs.program.payload.definitions.map (·.helper) := by
+  decide +kernel
 variable {{F G : Type}} [Field F] [DecidableEq F]
   [AddCommGroup G] [Module F G] [DecidableEq G]
+
 theorem approvedRelation (base key : G) (secret : F) :
-    GeneratedRelation.imported.denote (scalarMeaning F G) id 0
-      (.cons (some base) (.cons (some key) (.cons (some secret) .nil))) =
-      PIR.Process.done (some (decide (key = secret • base))) :=
+    invoke (RelationExpectedInputs.program.payload.tables F G).closed helper
+      (.cons base (.cons key (.cons secret .nil))) =
+        PIR.Process.done (.cons (decide (key = secret • base)) .nil) :=
   GeneratedRelation.corresponds base key secret
 
-/-- Two accepting executions of the actual imported verifier yield a witness
-accepted by the actual imported authored relation. -/
+/-- Two accepting actual verifier executions yield a witness for the actual
+retained authored formula. Native selector resolution remains a tested edge. -/
 theorem target_special_soundness (base key : G) (service : Nat)
     (prover : Zkc.Protocols.Schnorr.Common.Strategy F G) (first second : F)
     (distinct : first ≠ second)
@@ -180,21 +178,15 @@ theorem target_special_soundness (base key : G) (service : Nat)
       base key service prover first).outcome = .returned (some true))
     (acceptSecond : (Zkc.Protocols.Schnorr.Common.run ExpectedRequest.expectedVerifier
       base key service prover second).outcome = .returned (some true)) :
-    GeneratedRelation.imported.denote (scalarMeaning F G) id 0
-      (.cons (some base) (.cons (some key) (.cons
-        (some ((prover.response first - prover.response second) / (first - second))) .nil))) =
-      PIR.Process.done (some true) := by
+    invoke (RelationExpectedInputs.program.payload.tables F G).closed helper
+      (.cons base (.cons key (.cons
+        ((prover.response first - prover.response second) / (first - second)) .nil))) =
+      PIR.Process.done (.cons true .nil) := by
   rw [approvedRelation]
   have opening := ExpectedRequest.approvedContract.special_soundness
     base key service prover first second distinct acceptFirst acceptSecond
   simp only [opening, decide_true]
-  rfl
+end
 end ExpectedRelation
-run_cmd do
-  for name in [`ExpectedRelation.admitted_subject, `ExpectedRelation.approvedRelation,
-      `ExpectedRelation.target_special_soundness] do
-    for axiomName in ← Lean.collectAxioms name do
-      unless [``propext, ``Classical.choice, ``Quot.sound].contains axiomName do
-        throwError "relation uses unexpected axiom: {{axiomName}}"
-  Lean.logInfo "RELATION-BOUNDARY-PASS"
-'''
+''' + audit('ExpectedRelation', ['snapshot_eq', 'same_source', 'helper_present', 'approvedRelation',
+                                'target_special_soundness'], 'RELATION-BOUNDARY-PASS')

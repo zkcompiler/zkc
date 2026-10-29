@@ -2,7 +2,7 @@ module
 
 public import ZkcTools.StructuredSource.Bindings.Callbacks
 public import ZkcTools.StructuredSource.Bindings.Calls
-public import Zkc.Protocols.AlgebraicRounds.Gate
+public import ZkcTools.StructuredSource.Bindings.Helpers
 
 @[expose] public section
 
@@ -123,16 +123,6 @@ def gkrCallerSource (program : Program) (output : Output) : Except String String
   unless layerCount == 1 do throw "gkr-layer-call-selection"
   return text ++ "end\nend " ++ output.moduleName ++ "Caller\n"
 
-/-- The admitted definitions are in dependency order. Follow their actual
-edges through scoped callbacks and mathematical realizations without assuming
-that a source wrapper calls its arithmetic implementation directly. -/
-def helperDependsOn (program : Program) (parent candidate : Helper) : Bool :=
-  let reachable := program.payload.definitions.foldl (fun found definition =>
-    if definition.helper == candidate || definition.helpers.any found.contains then
-      definition.helper :: found
-    else found) []
-  reachable.contains parent
-
 /-- Candidate associations follow complete signatures and actual dependency
 edges. Printed positions are checked membership witnesses, not dispatch keys. -/
 def gkrHelperAssociations (program : Program) (gate : GateOutput) :
@@ -141,11 +131,9 @@ def gkrHelperAssociations (program : Program) (gate : GateOutput) :
   let vector := Ty.vector "bls12-381.fr"
   let select := fun (name : String) (kind : HelperKind) (inputs outputs : List Ty)
       (within : Option CheckedDefinition) => do
-    let candidates := program.payload.definitions.zipIdx.filter fun (d, _) =>
-      d.kind == kind && d.inputs == inputs && d.outputs == outputs &&
-        (within.map (fun parent => helperDependsOn program parent.helper d.helper)).getD true
-    let [(definition, index)] := candidates | throw ("gkr-helper-association-" ++ name)
-    pure (definition, index)
+    match uniqueHelper program kind inputs outputs within with
+    | .ok result => pure result
+    | .error reason => throw ("gkr-helper-association-" ++ name ++ ": " ++ reason)
   let (_, empty) ← select "empty" .local [] [vector] none
   let (restriction, gateRestriction) ← select "gateRestriction" .local
     (List.replicate 4 vector ++ [field]) (List.replicate 4 vector) none
@@ -227,48 +215,15 @@ def gateSource (program : Program) (output : Output) (gate : GateOutput) : Excep
       quadratic.inputs == List.replicate 8 (.field domain) && quadratic.outputs == value.outputs do
     throw "gate-helper-signature"
   let mut text := "module\n\npublic import " ++ output.moduleName ++ "Callbacks\n" ++
-    "public import Zkc.Protocols.AlgebraicRounds.Gate\n\n@[expose] public section\n\n" ++
+    "\n@[expose] public section\n\n" ++
     "/-! Generated actual-helper gate equations. This is not a full GKR theorem. -/\nnamespace " ++ output.moduleName ++ "Gate\n" ++
     "open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm Zkc.Source.Structured.Bindings\n" ++
-    "open Zkc.Protocols.AlgebraicRounds\nopen " ++ output.moduleName ++ "\nset_option maxRecDepth 50000\nset_option maxHeartbeats 8000000\n" ++
+    "open " ++ output.moduleName ++ "\nset_option maxRecDepth 50000\nset_option maxHeartbeats 8000000\n" ++
     "set_option smartUnfolding false\nnoncomputable section\n" ++
     "variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]\n\n"
   for (name, index) in (← gkrHelperAssociations program gate) do
-    let some definition := program.payload.definitions[index]? | throw "gkr-associated-helper-index"
-    text := text ++ "abbrev " ++ name ++ "Definition : CheckedDefinition := payload.definitions.get ⟨" ++
-      toString index ++ ", by decide +kernel⟩\n" ++
-      "abbrev " ++ name ++ "Helper : Helper := " ++ helperText definition.helper ++ "\n" ++
-      "def " ++ name ++ "Body : Region dialect " ++ name ++ "Helper.inputs " ++ name ++
-      "Helper.outputs :=\n  " ++ helperRegionText definition.body ++ "\n" ++
-      "theorem " ++ name ++ "_closed (args : Values (assignment F G) " ++ name ++ "Helper.inputs) :\n" ++
-      "    invoke (helpers payload).closed " ++ name ++ "Helper args =\n" ++
-      "      " ++ name ++ "Body.denote (Evaluation.meaning (.silent (participantInterface F G)) (helpers payload).closed) args.get :=\n" ++
-      "  Evaluation.definitions_invoke_body_view_as (.silent _) payload.definitions payload.linked\n" ++
-      "    " ++ name ++ "Definition (List.get_mem _ _) " ++ helperText definition.helper ++ " rfl " ++
-      name ++ "Body rfl args\n\n"
-    if let [.collect spec] := definition.raw.operations then
-      text := text ++ "abbrev " ++ name ++ "Collection : CollectSpec :=\n  " ++
-        collectText spec ++ "\n\n"
-  for (name, index, arguments, expression) in [
-      ("value", gate.valueIndex, ["add", "mul", "left", "right"], "Gate.value add mul left right"),
-      ("quadratic", gate.quadraticIndex, ["a0", "a1", "m0", "m1", "l0", "l1", "r0", "r1"],
-        "Gate.quadratic a0 a1 m0 m1 l0 l1 r0 r1")] do
-    let args := valuesText (arguments.map fun argument => app "some" [argument])
-    let result := ".done (.cons (some (" ++ expression ++ ")) .nil)"
-    let parameters := "(" ++ " ".intercalate arguments ++ " : F)"
-    text := text ++ "abbrev " ++ name ++ "Definition : CheckedDefinition := payload.definitions.get ⟨" ++
-      toString index ++ ", by decide +kernel⟩\n\n" ++
-      "theorem " ++ name ++ "_body " ++ parameters ++ " :\n" ++
-      "    " ++ name ++ "Definition.body.component\n" ++
-      "      (Evaluation.meaning (.silent (participantInterface F G)) (helpers payload).closed)\n" ++
-      "      (Evaluation.componentOperation (.silent _) (helpers payload)) " ++
-      "(" ++ paren (args ++ " : Values (Component (assignment F G)) " ++ name ++ "Definition.inputs") ++ ".get) =\n" ++
-      "      " ++ result ++ " := by\n  kernel_rfl\n\n" ++
-      "theorem " ++ name ++ "_invoke " ++ parameters ++ " :\n" ++
-      "    invoke (helpers (F := F) (G := G) payload).components " ++ name ++ "Definition.helper " ++ args ++ " =\n" ++
-      "      " ++ result ++ " :=\n" ++
-      "  (helper_body payload " ++ name ++ "Definition (List.get_mem _ _) " ++ args ++ ").trans\n" ++
-      "    (" ++ name ++ "_body " ++ " ".intercalate arguments ++ ")\n\n"
+    text := text ++ (← helperAssociationSource program name index
+      "(helpers payload).closed" ".silent (participantInterface F G)")
   return text ++ "end\nend " ++ output.moduleName ++ "Gate\n"
 
 end ZkcTools.StructuredSource.Bindings

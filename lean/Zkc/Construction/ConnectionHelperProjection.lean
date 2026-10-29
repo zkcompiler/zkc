@@ -20,7 +20,7 @@ structure Projection (definitions : List CheckedDefinition) (definition : Checke
   positions : Operands definition.inputs definition.outputs
   body : definition.body = .ret positions
 
-private theorem component_find_other (model : DomainModel) {I : PIR.Signature}
+theorem component_find_other (model : DomainModel) {I : PIR.Signature}
     (tables : Evaluation.ComponentTablesOn model.toCarriers I) (definitions : List CheckedDefinition)
     (name : String) (fresh : definitions.all (fun other => other.name != name) = true) :
     (definitions.foldl (Evaluation.ComponentTablesOn.extend model (.silent I)) tables).components.find?

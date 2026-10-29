@@ -185,7 +185,7 @@ decimal strings, one input pattern entry per input (`"absent"`, `"present"`,
 `"optional"`, or a fixed `["index", "0"]`, `["field", "1"]` or `["bool", true]`),
 the laws (`[helper, "returns" | ["stops", reason], pins]`, a pin being `null` or
 an input position) and whether owned calls without a law are kept. It prints
-the compiled normalizer's form as JSON for `normal_forms.py`, with `names` set
+the compiled normalizer's form as JSON for inspection, with `names` set
 when laws had to be chosen by helper name as well as by signature; the run is
 not trusted, since the kernel checks every printed form.
 
@@ -340,201 +340,48 @@ protocol takes the manifest's local name and a unique relation formula is named
 
 ### Generated participant normal forms
 
-`normal_forms.py` writes the role-local facts that connect an admitted unit to
-its theorems: what each participant does, stated as a process, and the
-equation that the actual admitted body has that process. A short request
-names the retained snapshot, the bodies to read and the inputs each role holds:
+The shared Lean `Bindings.RoleViews` printer derives role-local process views
+from the admitted source and its typed normal forms. The source determines
+input visibility, complete return masks, callee arguments, callback state and
+loop captures. Catalogues in `Tests.Generators.ScalarViews` and
+`Tests.Generators.GkrPresentations` choose source snapshots and display names.
+They cannot override the source's operation order or route semantic slots.
 
 ```sh
-python3 lean/bridges/structured/normal_forms.py \
-  lean/bridges/structured/normal-forms/chaum-pedersen.toml
-python3 lean/bridges/structured/normal_forms.py REQUEST.toml --check
+python3 lean/bridges/structured/source_views.py --check
+python3 lean/checks/check_source_views.py
 ```
 
-The generator walks the retained instructions at one participant, following
-the participant rules of the [formal contract](../../docs/spec/structured-source.md),
-and writes the module the request's `output` names. `--check` fails when that
-module is not the generated one; `--output PATH` writes elsewhere. The module
-is ordinary Lean source: every definition and equation is elaborated and checked
-by the kernel, so a stale request or a changed unit is a failed equation, not a
-trusted claim. The maintained requests are in [`normal-forms/`](normal-forms):
+The first command regenerates all maintained selections and compares exact
+bytes. Omit `--check` to write the outputs, or pass selection names to limit
+the work. The second also checks every emitted Lean module and the semantic
+controls. Python schedules these commands and compares physical outputs; it
+does not interpret participant instructions or propose their proofs.
 
-| Request | Subject |
+| Selection | Subject |
 |---|---|
-| [`chaum-pedersen.toml`](normal-forms/chaum-pedersen.toml) | Both roles of the original-stage `sigma::ChaumPedersen` root and its `knowledge` clause |
-| [`schnorr-and.toml`](normal-forms/schnorr-and.toml) | Both roles of the original-stage `sigma::SchnorrAnd` root and its `knowledge` clause |
-| [`schnorr-interactive.toml`](normal-forms/schnorr-interactive.toml) | Both roles of the original-stage interactive Schnorr root and its `knowledge` clause |
-| [`okamoto.toml`](normal-forms/okamoto.toml) | Both roles of the original-stage `okamoto::Interactive` root of [`fixtures/okamoto.zkc`](fixtures/okamoto.zkc) and its `knowledge` clause |
-| [`sumcheck-bodies.toml`](normal-forms/sumcheck-bodies.toml) | The typed `Reduce` body shared by the Sumcheck units, with its repeat maximum as a parameter |
-| [`sumcheck-round.toml`](normal-forms/sumcheck-round.toml) | One round and the whole `Reduce` body at both roles, for every unit whose checked body is the shared one |
-| [`sumcheck-source.toml`](normal-forms/sumcheck-source.toml), [`sumcheck-reduction.toml`](normal-forms/sumcheck-reduction.toml), [`sumcheck-repacked.toml`](normal-forms/sumcheck-repacked.toml) | The original Sumcheck roots, which apply `Reduce`: both roles, their invocation at any caller context and their participants |
-| [`gkr-rounds.toml`](normal-forms/gkr-rounds.toml) | The layer Sumcheck (`gkr::Rounds`) of the original GKR Entry: its typed body and both roles' normal forms of one round (with its repeat as a fold) and of the whole body |
-| [`gkr-root.toml`](normal-forms/gkr-root.toml) | The root of the original GKR Entry (`gkr::Gkr`): its typed body with the output-point, layer and line-coefficient callbacks named; both roles' normal forms of each callback, with the layer Sumcheck applications substituted, and their repeats as folds; both roles' normal forms of the whole root, their invocations and their participants |
+| `ChaumPedersen`, `SchnorrAnd`, `SchnorrInteractive`, `Okamoto` | Both roles of the retained Sigma source and its complete root outputs |
+| `SumcheckSource`, `SumcheckReduction`, `SumcheckRepacked` | Both roles, the reduction callback, source-specific input and return layouts, and complete mathematical helper/body associations |
+| `Gkr` | Both roles of the original GKR Entry, its layer Sumcheck applications and nested output-point, layer and coefficient callbacks |
 
-The subject driver regenerates the Okamoto unit's retained export, JSON,
-constructor data, printed bodies and Views from the fixture and checks its
-request ([`lean/subjects/okamoto.toml`](../../subjects/okamoto.toml)). Its
-[formal support](../../docs/support.md#okamoto-representation-proof) states what
-is proved over the generated declarations.
+Every emitted process equation is kernel checked against the admitted typed
+body. The normalizer's soundness theorem connects the form to that body;
+occurrence-preserving equations retain call and loop coordinates. Invocation
+mask and loop-presentation laws handle missing inputs, stopped paths and full
+returns. A stale body or wrong same-sort operand is a failed equation.
 
-The GKR manifest ([`lean/subjects/gkr.toml`](../../subjects/gkr.toml)) owns both
-[`fixtures/gkr-source.mlir`](fixtures/gkr-source.mlir) and its exact structured
-export [`fixtures/gkr-source.json`](fixtures/gkr-source.json), together with
-`GkrSourceData` and the constructed participant. The subject driver regenerates
-these from the current source and checks the root request. Its check mode
-rejects stale retained bytes. The generated `GkrRoundsNormalForms` and
-`GkrSourceNormalForms` equations are separately kernel-checked against the
-admitted `GkrSourceViews` unit; regeneration does not establish native execution
-correspondence.
+Mathematical refinements remain authored library consumers. Sigma modules
+retain their transcript, formula, contract and acceptance facts. Sumcheck's
+shared mathematical forms are computed by the existing Lean normalizer, and
+full typed-body associations establish that a source may use its helper and
+callback laws. GKR's helper mathematics, state invariants and root property
+assembly also remain authored. Generated structural views do not establish
+these mathematical facts or native execution correspondence.
 
-A request is TOML. `fixture` is the retained JSON snapshot, `output` the Lean
-module to write, `namespace` its namespace, `imports` and `open` its imports
-and opened namespaces, `options` extra `set_option` lines, and `carrier` the
-field structure (`CommRing` by default, or `Field`). Site constants are named
-from source labels: `#[site(first_commitment)]` gives `firstCommitmentSite`, and
-the position suffix an exchange's label carries is dropped unless the label has
-several positions (`round0Site`, `round1Site`). `sites` names only the sites
-without a source label, which export positionally (`s0 = "nonceSite"`); labelling
-every action in the source makes it unnecessary. `helper_modules` lists
-typed-body modules whose `abbrev NAME : Helper := ⟨"RAW", ...⟩` declarations
-name retained helpers; `helpers` maps further retained names to Lean terms.
-Each of the following sections is optional:
-
-| Section | Generated declarations |
-|---|---|
-| `[root]` with `inputs` (one name per root input) and `roles` (one name per role) | A constant per action site, named from its source label (`#[site(first_commitment)]` gives `firstCommitmentSite`). Per role: `<role>Inputs` (the role's own inputs present, the others absent), the normal form `<role>Process`, its equation `<role>_process` against `program.participant F G r`, and, when the role's process has no branches, the reply script `<role>Replies` (received values by type and site, drawn values by site) and the observed run `<role>_run` |
-| `[contract]` with `clause` | For a target clause whose relation is a Boolean formula over root inputs and whose decision is a root output: `owner`, `clause`, `application`, `<argument>Selector` per relation argument, `decisionSelector`, `formulaBinding`, `arguments`, `Relation`, `formula_process`, `relation_iff` (the formula as a proposition), `environment`, `target`, `target_formula_law`, `assignments` (parameters and witnesses by selector), `observedBoundary` (the deciding role's run on its replies), `observed_accepts_iff`, `observed_read` and `observed_target_iff` |
-| `[bodies]` with `protocol`, `name`, `callback` | A typed protocol body that ends in one repeat followed by its return: `<name>Body maximum` with the repeat maximum as a parameter, `<callback>Body`, `repeatState`, `repeatSpec`, `<name>Return`, `<name>ReturnValues` and the return order `<name>ReturnIndices`. With `views`, `declaration` and `value`, also `<name>Body_raw`: the admitted declaration's checked tree is this body at that maximum |
-| `[bodies]` with `name`, `callbacks` (and `protocol`, by default the unit's entry) | A typed body of one unit with any number of repeats, nested ones and protocol applications included. `callbacks` maps each callback's name to a source label one of its own actions carries (`layer = "left"`), or to the repeat's site. Per callback: `<callback>State`, `<callback>Captures`, `<callback>Maximum` (the static maximum, read from the export), `<callback>Spec` and `<callback>Body`, nested callbacks first; then `<name>Body`, whose applications use the callee's declared signature. With `views` and `declaration`, also `<name>Body_raw` |
-| `[[shared]]` with `[[shared.roles]]` | Normal forms over a typed body that several units share (the request's `body`): a repeat callback (`repeat` names a callback of `[bodies] callbacks`, a source label its callback carries, or the repeat's site) or a whole protocol body, at each listed role, with the process equation of the role's normal form for every unit whose tables satisfy the named helper laws. A repeat callback's role also gets `<role><Slot>Position` and `<role><Slot>Slot` for each carried slot it names, so statements about the state need no literal positions, and with `fold = true` also `<role>_fold`: the repeat on an admitted count, from any state whose masked slots are given, is the fold of the role's normal form over the iteration indices (`NormalFormSteps.repeat_embed`) |
-| `[unit]` with `name`, `views`, `helpers`, `program` | The admitted unit a whole-body entry over one unit is stated with: its plain tables, the names `structured_views` gives its declarations (`<views>.<declaration>Definition`, `_member`, `_raw`, `_signature`) and its program. A whole-body entry then needs no `meaning`, `closed` or `components` |
-
-Root equations are definitional; `proof = "kernel"` in `[root]` checks them by
-`kernel_rfl` alone. Shared equations are proved by explicit operation steps
-generated together with the normal form, unless the role asks for
-normal-form proofs (below). A shared entry names
-the typed `body`, the `function` to define, its `parameters`, the participant
-`meaning`, the `closed` and `components` helper tables, and, for a body with a
-repeat that ends the body, the `repeat_spec` and the `callback` function; a
-repeat whose callback is named in `[bodies] callbacks` and stated over in its own
-entry needs neither, and may stand anywhere in the body. Each role names its
-`role` index and `name`, extra `binders` and `premises` of its equation, and
-either its carried `slots` in the role's own order (a repeat callback; `mode =
-"optional"` covers every presence, `value` fixes a slot) with its `captures`, or
-one entry per protocol input (`mode` present, optional or absent, or a fixed
-`value`). Its `laws` table gives, per helper, a Lean `term` proving the helper's
-invocation equation and either the `results` it yields or the `stop` it reaches;
-templates refer to the call's operands as `{0}`, `{1}`, ..., and `components =
-true` makes them the optional components of a Math call. `guards` gives a proof
-for a guard whose condition is not a decided proposition, and `rewrites` states
-facts (`expr`, `value`, `proof`) that the proof rewrites with, for example a
-comparison that a premise decides.
-
-**Normal-form proofs.** With `proof = "normal-form"` in a `[[shared.roles]]`
-entry (whose `[[shared]]` entry names its helper `tables` and `protocols`; a
-request with a `[unit]` supplies both), an equation is an instance of the
-normalizer's soundness theorem
-(`Zkc.Source.Structured.NormalForm.normalize_sound`) instead of a step script,
-and the module imports the normalizer.
-The generator runs the compiled normalizer (`structured-source normal-form`,
-built by `lake build structured-source`; `ZKC_STRUCTURED_SOURCE` selects
-another binary) and prints, per role, `<role>Pattern` (the inputs as the
-normalizer reads them), `<role>Form` (the role's form as a literal) and, for a
-callback, `<role>Signature` (the role's laws keyed by helper, each pinned to the
-inputs its call reads at every use), `<role>Results` (the results its laws
-present, from the request's templates), `<role>Finish` (the carried positions
-the role presents) and `<role>_laws` (each law premise discharged by the
-request's law term). The kernel alone checks `<role>_normalized` (the
-normalizer returns the literal), `<role>_lawsMatch` (every law use in the
-literal is a call of the law's own helper, compared as terms rather than by
-name), `<role>_presentation` (the literal's process is the readable one),
-`<role>_environment`, `<role>_finishes` and `<role>_embedding`. The statements of the readable definitions and of the
-process equations are unchanged, the masked-state theorems become
-instances of `NormalForm.maskValues_embed`, and a callback role's `fold` is
-stated and proved from its process equation as before. The compiled run is not
-trusted: a form it prints wrongly is a failed kernel check.
-
-A whole-body role (`[[shared.roles]]` with `inputs`) takes `proof =
-"normal-form"` too; its equation is an instance of `NormalForm.sound_uniform`.
-A repeat in a body is presented by its callback region: the callback's own
-entry when the request states one (named in `[bodies] callbacks`, or with a
-`repeat_spec`), else the entry's `callback_body` with its `repeat_spec`. Laws keep their request syntax
-and are read by shape: results that are arguments (`"{2}"`) or literals
-(`"false"`) are presented as such, a Math law with `components = true` passes
-argument components, and each argument a law reads at every use is pinned to
-an input or to a literal. `opaque` helpers stay owned calls on components. For
-each protocol application the role takes part in, whole-body and callback roles
-alike, the generator states the callee's invocation in this unit at any child
-context (`<declaration>_<callee role>_invoke`, from `<declaration>_view`, the
-callee's process theorem and `<declaration>_<callee role>_returned`), the callee
-processes the form applies (`<role>Callees`) and the premise that each callee
-presents its applications (`<role>_callees`). Applications of one callee role
-on the same input pattern share one callee; a callee whose process theorem has
-premises is pinned to the caller's inputs its binders receive.
-
-A whole-body entry over a `[unit]` may also name its `declaration` (and a `raw`
-equation when its `body` is not the one the views use). Each role then also gets
-`<declaration>_view` (the declaration's checked body between its input and
-output masks), `<role>_invoke` (the role's invocation at any caller context:
-the input masks, the body's normal form and the output masks, with
-`<role>_outputs` stating the latter) and, for the unit's entry,
-`<role>_participant`. Inputs outside a role's scope are declared `absent` and
-become arbitrary optional values of the invocation.
-
-**Protocol applications.** A body that applies other protocols lists one
-`[[shared.applications]]` entry per `protocol_apply` of its own body (a nested
-callback's applications belong to that callback's entry), in source order: the
-callee's `declaration` in the views, the typed `body` its normal forms are
-stated over, the `callee` request and its `function`, the callee's normal-form
-`arguments`, optionally a `name` (by default the declaration) and the names of
-the callee's `results` by position, and, per callee role spec named in `roles`,
-the values of that spec's `binders` and `premises`. The generator emits
-`<name>Context` (the child context: the application site qualifies the callee's
-sites and the listed roles map the callee's roles to the caller's), once per
-applied declaration `<declaration>Maximum` (the callee's repeat maximum in this
-unit, from the export) and `<declaration>_view`, and, per caller role, the
-callee's masked outputs. At each role of the callee's roster the caller's
-normal form binds the callee's generated normal form at the child context, on
-the caller's operands after the callee's input masks, and continues on the
-callee's results after its output masks; in a step proof the step is
-`NormalFormSteps.apply_step`, which rests on the generic call substitution rule,
-and `NormalFormSteps.apply_step_after` inside a repeat callback, whose normal
-form is followed by the embedding of its carried state; in a normal-form proof
-it is the application case of the normalizer's soundness theorem, with the
-callee summaries above as its premise.
-
-**Kept calls.** `opaque` lists helpers whose owned Local calls stay as their
-participant rule (`Participant.owned`) when no law is wanted; their results are
-bound and read as components. `strict` lists helpers (`*`: every helper without
-a law) whose owned calls stay as the helper's own invocation on present
-arguments (`invoke`): the arguments' presence is split first, the results are
-present, and a helper law about the invocation rewrites the call later.
-
-The supported fragment is closed. A role's normal form branches on an optional
-input, or on a component read from a bound tuple (a kept call's, a repeat's or
-an application's results), where an operation first demands it, and on a
-guard's Boolean value or decided proposition; an operand that is already
-absent decides its operation without further branching. Missing owned inputs
-stop `incomplete`, and a false guard rejects. Calculations of literals fold.
-Whole-body normal forms, applications and invocation theorems support one or
-two distinct roles. A one-role callee retains its actual input/output masks;
-a two-role caller still establishes its own role separation. Empty output
-scopes remain absent without inventing another callee role.
-
-The supported operations include calculations, Math and owned Local calls with
-named laws or kept, exchanges, restrictions, draws, guards and protocol
-applications. Repeat callbacks and their fold presentation still require two
-roles. A repeat can occur at the end or in the middle of a body, with its
-returned state bound like a kept call's results. Unsupported shapes are refused,
-for example `no law for helper ... at role 0`, `expected one or two distinct
-roles and an in-range role`, or `the repeat at site 's4' needs its callback`.
-The focused printer controls run through `lean/checks/check_normal_form_printer.py`;
-generated process equations additionally require their ordinary Lean checks.
-
-What remains authored: the helper laws in the participant tables (once per
-helper family, for example `SumcheckRoundLaws`), the premises and facts a role's
-equation needs, the protocol's own mathematics (extraction, completeness
-inductions, invariants) and the connection to a proof library.
+Subject manifests select these outputs with `[source_views] selections`.
+The subject driver rebuilds every selected output before recording success;
+the report freshness join hashes the same complete output inventory. The old
+Python normal-form evaluator and its TOML request language are removed.
 
 ### Adding a structured subject
 
@@ -555,8 +402,8 @@ Lean set up ([development guide](../../../docs/development/README.md)):
    selected subject, renders the data, builds it, prints the bodies and writes the Views
    module, which admits the unit with `structured_views`; `--check` later
    requires all of them to be unchanged.
-4. Write a normal-form request, name it under `[normal_forms] request`, and
-   generate the module with `normal_forms.py`; the driver checks it.
+4. Add a Lean source-view catalogue selection and name it under
+   `[source_views] selections`; the driver regenerates and checks every output.
 5. State the protocol's mathematics over the generated declarations and connect
    it to a library, as
    [`ChaumPedersenBinding`](../../ZkcExamples/Structured/ChaumPedersenBinding.lean)

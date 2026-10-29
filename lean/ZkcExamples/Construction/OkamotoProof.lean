@@ -13,6 +13,10 @@ set_option smartUnfolding false
 namespace ZkcExamples.Construction.OkamotoProof
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 
+/-- The endpoint stores the same complete generic connection used by execution transport. -/
+theorem sourceConnected : ConnectionAdmission.Required program context .validator participant :=
+  OkamotoDomainConnection.requiredConnection
+
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
 /-- Actual Domain execution with the fixed scalar ABI and oracle mapping. -/

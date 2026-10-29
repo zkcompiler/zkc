@@ -68,12 +68,12 @@ theorem context_eq : context =
     Context.fiatShamir ZkcExamples.Construction.GuessProofData.snapshot.entry ["role00000000", "role00000001"] 0 1 2 "random.bls12-381.fr/0" (some (.draw "bls12-381.fr")) participant.policy.suite [("label_6368616c6c656e6765", "label_64656c6976657279_0")] := by
   decide +kernel
 
-/-- The composed check's two rules, each on the actual export. -/
+/-- The structural check and exact occurrence provenance on the actual export. -/
 theorem compiled_rules : checkExport ZkcExamples.Construction.GuessProofData.snapshot participant = .ok () ∧ check context participant = .ok () ∧
-    project program context participant = .ok () := by
-  obtain ⟨exported, construction, _, projection⟩ :=
+    SourceOccurrences.check ZkcExamples.Construction.GuessProofData.snapshot context participant = .ok () := by
+  obtain ⟨exported, construction, occurrences⟩ :=
     checkCompiled_components context_admitted compiled
-  exact ⟨exported, construction, projection⟩
+  exact ⟨exported, construction, occurrences⟩
 
 /-- The per-compile construction check accepts the actual export. -/
 theorem accepted : checkExport ZkcExamples.Construction.GuessProofData.snapshot participant = .ok () := compiled_rules.1
@@ -81,8 +81,8 @@ theorem accepted : checkExport ZkcExamples.Construction.GuessProofData.snapshot 
 /-- The transcript-construction rule accepts the actual export. -/
 theorem checked : check context participant = .ok () := compiled_rules.2.1
 
-/-- The participant projection rule accepts the actual export. -/
-theorem projected : project program context participant = .ok () := compiled_rules.2.2
+/-- Exact source occurrences are retained by the actual export. -/
+theorem source_occurrences : SourceOccurrences.check ZkcExamples.Construction.GuessProofData.snapshot context participant = .ok () := compiled_rules.2.2
 
 set_option smartUnfolding true in
 theorem validator_eq : context.validator = 1 := by decide +kernel

@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Claims.Subject
+public import ZkcTools.ConstructionBindings.Admission
 public import ZkcExamples.Construction.OkamotoArtifact
 public import ZkcExamples.Construction.OkamotoProof
 
@@ -35,6 +36,7 @@ def compiled : Compiled artifacts where
   checked := ZkcExamples.Construction.OkamotoProof.selection_checked
   publics := by decide +kernel
   occurrences := by decide +kernel
+  sourceConnection := some ⟨ZkcExamples.Construction.OkamotoProof.sourceConnected⟩
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 

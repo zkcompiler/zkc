@@ -1,6 +1,6 @@
 module
 
-public import ZkcExamples.Construction.GkrOriginalOutput
+public import ZkcExamples.Construction.GkrSourceRouting
 
 @[expose] public section
 /-! Refusal controls for the actual nominal output and nested GKR templates.
@@ -10,14 +10,14 @@ set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
 namespace Tests.GkrOriginalOutput
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
-open ZkcExamples.Construction GkrSourceRouting GkrOriginalOutput
+open ZkcExamples.Construction GkrSourceRouting
 
 theorem missing_output_coordinate :
-    Domain.queryOrigin context context.suite "bls12-381.fr" drawTemplate [] = none := by
+    Domain.queryOrigin context context.suite "bls12-381.fr" template0 [] = none := by
   kernel_rfl
 
 theorem extra_output_coordinate (index extra : Nat) :
-    Domain.queryOrigin context context.suite "bls12-381.fr" drawTemplate [index, extra] = none := by
+    Domain.queryOrigin context context.suite "bls12-381.fr" template0 [index, extra] = none := by
   kernel_rfl
 
 theorem missing_layer_coordinate (round : Nat) :
@@ -38,8 +38,8 @@ theorem coefficient_coordinates (layer coefficient : Nat) :
 theorem wrong_output_site (index : Nat) :
     OccurrenceResolution.matchesOccurrence snapshot context
       (context.query "label_6f7574707574" (.draw "bls12-381.fr")) [⟨"s57", index⟩]
-      drawTemplate = false := by
-  have sites : SourceOccurrences.repeatSites drawTemplate = ["s37"] := rfl
+      template0 = false := by
+  have sites : SourceOccurrences.repeatSites template0 = ["s37"] := rfl
   have different : (["s37"] == ["s57"]) = false := rfl
   simp only [OccurrenceResolution.matchesOccurrence, sites, List.map_cons, List.map_nil,
     different, Bool.and_false, Bool.false_and]

@@ -70,9 +70,11 @@ inside the common certificate theorem. -/
     (inputLayout : Layout pattern.scope)
     (output : ReturnLayout program.payload.entry.signature routing.context role artifact)
     (target : ConnectionCertificate.Block)
+    (library : ConnectionLibrary.Bundle program.payload)
     (certificate : ConnectionCertificate.Certificate routing {} program.payload.definitions
       role program.payload.entry.roles.length program.payload.entry pattern
-      output.locations output.historyReference [] inputLayout target)
+      output.locations output.historyReference [] inputLayout target
+      library.keys (.selected program.payload rfl library.library))
     (distinct : RosterDistinct {} role program.payload.entry.roles.length)
     (visibility : inputScopes role program.payload.entry.inputScopes abi.locations = true)
     (inputSchema : artifact.inputs = abi.sorts)
@@ -91,8 +93,7 @@ inside the common certificate theorem. -/
       (Original.InputLive abi (pattern.environment model binders) physical)
       (Original.participant model program routing role (pattern.environment model binders) initial)
       (Domain.participant model program routing.context artifact physical) := by
-  have body := certificate.simulation distinct model (Occurrence.helpers model program.payload)
-    (fun _ => rfl) (Occurrence.table model program.payload) initial binders stack abi physical
+  have body := certificate.selectedSimulation distinct model initial binders stack abi physical
     sorts bounds decoded physical related (by simp [ArtifactBinding.Captures])
   apply ConnectionInstallation.install model program routing role artifact abi
     (pattern.environment model binders) physical initial output (target model)

@@ -800,12 +800,20 @@ statements, every round count up to the static maximum, malformed vectors
 included). A records run given the subject pipeline's evidence establishes the
 assurance reports of Schnorr, Chaum–Pedersen, AND, Okamoto, the guessing Entry
 and Sumcheck. Composed Sumcheck retains `target public_sums`; its maintained
-claims use the generated `TwoSums` root rather than that manifest report. The
-GKR Entry has no retained target clause for this claim-selection path.
+claims use the generated `TwoSums` root rather than that manifest report.
+GKR retains `target circuit_outputs` and has separate canonical scalar and
+charged source-claim receipts, plus perfect compiled-ideal completeness. They
+share the full nominal source-to-participant connection and fix width and layer
+maxima at four. The adaptive scalar bound is `4 * (Q + 40) / |F|`; the charged
+request assigns `4 / |F|` to each selected site and validator cost `160 / |F|`.
+These receipts include malformed adversarial statements. They are distinct from
+the fixed-statement GKR bound above and from the six manifest assurance reports.
+Neither route proves native GKR execution security.
 
-The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
-PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio
-security results. Its named DSL target path also checks an authored relation body.
+The [scalar Lean bridge](../lean/bridges/common/README.md) consumes the actual
+Structured export, derives scalar open-process contracts, and applies selected
+ArkLib/VCVio security results. The independent Common source format, admission
+and native exporter are retired. Its named DSL target path also checks an authored relation body.
 Native SSA/Lean differential tests cover the admitted finite scalar profile.
 The separate [structured import](spec/formats/structured-source.md) exports
 original protocol-stage units: shared helpers, protocol roots, retained contracts

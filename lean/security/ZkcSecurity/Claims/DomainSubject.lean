@@ -106,15 +106,24 @@ theorem constructionChecked : subject.ConstructionChecked :=
   ⟨subject.compiled.compiled, subject.compiled.selected, subject.compiled.checked,
     subject.compiled.publics, subject.compiled.occurrences⟩
 
+/-- A stage link is indexed by the actual subject even when two subjects
+share the same compiled program and fixed connection proposition. -/
+def SourceConnectionChecked : Prop :=
+  ConnectionAdmission.Required subject.compiled.imported.program
+    subject.compiled.selection.context .validator art.participant
+
 def stageLinks : List Obligation :=
   [⟨"construction.checked", "admitted IR and selected dependent participant",
-    subject.ConstructionChecked, .infrastructure⟩]
+    subject.ConstructionChecked, .infrastructure⟩,
+   ⟨"construction.source_connection", "complete source-to-participant correspondence",
+    subject.SourceConnectionChecked, .infrastructure⟩]
 
 def stageLinkProofs (index : Fin subject.stageLinks.length) :
     Option (PLift (subject.stageLinks.get index).goal) := by
   match index with
   | ⟨0, _⟩ => exact some ⟨subject.constructionChecked⟩
-  | ⟨n + 1, impossible⟩ => exact False.elim (by simp [stageLinks] at impossible)
+  | ⟨1, _⟩ => exact subject.compiled.sourceConnection
+  | ⟨n + 2, impossible⟩ => exact False.elim (by simp [stageLinks] at impossible)
 
 end Subject
 end ZkcSecurity.Claims.Domain

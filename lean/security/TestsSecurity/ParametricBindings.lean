@@ -2,7 +2,7 @@ module
 
 public import Zkc.Source.Structured.Bindings.Template
 public import ZkcExamples.Construction.EmbeddingEqualityBinding
-public import ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs
+public import ZkcExamples.Structured.GkrSourceViews
 public import ZkcSecurity.Domains.KoalaBearModel
 public import ZkcSecurity.Examples.EmbeddingEqualityCapabilities
 public import ZkcSecurity.Domains.PrimeField
@@ -69,7 +69,7 @@ theorem result_exact (a : model.Field baseIdentity) :
 end Mixed
 
 namespace Gates
-abbrev program := ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs.program
+abbrev program := ZkcExamples.Structured.GkrSourceViews.program
 abbrev model := ZkcSecurity.Domains.PrimeField.blsScalarModel
 
 def signature : Signature := ⟨[], false, true, program.payload.definitions.map (·.helper), []⟩

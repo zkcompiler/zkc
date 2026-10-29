@@ -1,6 +1,7 @@
 module
 
 public import ZkcExamples.Executable.SumcheckCompleteness
+public import ZkcExamples.Executable.SumcheckFamily
 public import Mathlib.Algebra.Field.ZMod
 
 @[expose] public section
@@ -17,8 +18,26 @@ open Zkc Zkc.Construction Zkc.Executable Zkc.Source
 open Zkc.Construction.Uniform Zkc.Construction.Uniform.DomainAdapter
 open Zkc.Construction.ArtifactBinding
 open ZkcExamples.Executable
+open Zkc.Source.Structured ZkcExamples.Structured Zkc.Polynomial.Multilinear
 
-abbrev actual : SumcheckFamily.Artifact := SumcheckDomainHonest.artifact
+/-- Finite native fixture metadata. The maintained compiled source connection
+is imported separately and does not use this test-only template instance. -/
+def actual : SumcheckFamily.Artifact where
+  description := SumcheckCharges.programShape SumcheckProof.maximum (by decide +kernel)
+  vocabulary := installed
+  participant := ZkcExamples.Construction.SumcheckProof.participant
+  validator := SumcheckProof.validator
+  lowered := SumcheckProof.lowered
+  final := SumcheckProof.nativeScope
+  checked := SumcheckProof.native_checked
+  instructions := by kernel_rfl
+  returns := by kernel_rfl
+  inputSorts := by kernel_rfl
+  codeReading := by rw [SumcheckCharges.lowered_eq]; rfl
+  returned := by kernel_rfl
+  coordinate := SumcheckProof.coordinate
+  plan := SumcheckProof.plan_eq
+  admitted := SumcheckProof.admitted
 
 def alternateEntry : String := "sumcheck.family.alternate"
 
@@ -116,52 +135,103 @@ theorem helper_functions_agree : ∀ name ∈ helperNames, FunctionAgrees actual
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
+/-- Reuse local source laws and the current cost contract for the independent
+native-template control. No source-to-participant equation is reconstructed. -/
+theorem fixtureHelpers : SumcheckFamily.Source.Helpers (F := F) (G := G) actual.description where
+  pending := (SumcheckCharges.programContract _ _).pending
+  openClaim := (SumcheckCharges.programContract _ _).openClaim
+  atPrefix := (SumcheckCharges.programContract _ _).atPrefix
+  append := SumcheckArtifacts.DomainHelpers.append ZkcExamples.Construction.SumcheckProof.program
+    (by change SumcheckUnitContracts.Bodies SumcheckCheckedRound.program.payload.definitions
+        rw [SumcheckCheckedRound.source_payload]
+        exact SumcheckSourceContracts.bodies)
+  check := by
+    intro values point claim pointSmall shaped
+    have pointBound : point.length < indexLimit := lt_trans pointSmall (by decide)
+    have vectorBound : values.length < indexLimit := by
+      rw [shaped]
+      exact SumcheckHelpers.indexLimit_pow pointSmall
+    apply SumcheckArtifacts.DomainHelpers.call_return ZkcExamples.Construction.SumcheckProof.program
+      SumcheckHelperBodies.checkHelper (SumcheckHelperLaws.checkInputs values point claim)
+      (PrimitiveLibrary.boolResult (decide ((restrictPrefixValues values point).sum = claim)))
+      ?_ _ _ rfl rfl
+    change invoke (closedMeanings SumcheckCheckedRound.program.payload.definitions) _ _ = _
+    rw [SumcheckCheckedRound.source_payload]
+    rw [SumcheckSourceContracts.check_equation values point claim vectorBound pointBound]
+    simp only [PrimitiveLibrary.HasShape, pointSmall, Nat.zero_lt_one, Nat.mod_one,
+      Nat.div_one, shaped, and_self, true_and]
+
+theorem fixtureRealization : SumcheckFamily.Realization (F := F) (G := G) actual 2 where
+  occurrences := {
+    firstSchema := by kernel_rfl
+    secondSchema := by kernel_rfl
+    first := fun _ => by kernel_rfl
+    second := fun _ => by kernel_rfl
+    draw := fun _ => by kernel_rfl
+    delivery := fun _ => by kernel_rfl
+    firstRequest := by kernel_rfl
+    secondRequest := by kernel_rfl
+    deliveryRequest := by kernel_rfl
+    firstKey := fun _ => by kernel_rfl
+    secondKey := fun _ => by kernel_rfl
+    drawKey := fun _ => by kernel_rfl
+    deliveryKey := fun _ => by kernel_rfl }
+  helpers := fixtureHelpers
+  prices := {
+    pending := (SumcheckCharges.programContract _ _).pendingCost
+    openClaim := (SumcheckCharges.programContract _ _).openClaimCost
+    atPrefix := (SumcheckCharges.programContract _ _).atPrefixCost
+    append := fun _ _ => helperCost_le installed SumcheckProof.validator
+      (show helperBound SumcheckProof.validator SumcheckCharges.names.appendHelper = some 2 by kernel_rfl) _
+    check := (SumcheckCharges.programContract _ _).checkCost }
+  prepared := SumcheckProof.domain_prepared
+
 theorem alternateRealization : SumcheckFamily.Realization (F := F) (G := G) alternate 2 where
   occurrences := alternateOccurrences
   helpers := {
-    pending := (SumcheckDomainHonest.realization (F := F) (G := G)).helpers.pending
-    openClaim := (SumcheckDomainHonest.realization (F := F) (G := G)).helpers.openClaim
-    atPrefix := (SumcheckDomainHonest.realization (F := F) (G := G)).helpers.atPrefix
-    append := (SumcheckDomainHonest.realization (F := F) (G := G)).helpers.append
-    check := (SumcheckDomainHonest.realization (F := F) (G := G)).helpers.check }
+    pending := (fixtureRealization (F := F) (G := G)).helpers.pending
+    openClaim := (fixtureRealization (F := F) (G := G)).helpers.openClaim
+    atPrefix := (fixtureRealization (F := F) (G := G)).helpers.atPrefix
+    append := (fixtureRealization (F := F) (G := G)).helpers.append
+    check := (fixtureRealization (F := F) (G := G)).helpers.check }
   prices := {
     pending := by
       intro claim
       change helperCost installed alternateValidator actual.description.names.pendingHelper
         [.data (.field actual.description.names.scalar claim)] ≤ 2
       rw [← helperCost_agrees installed (helper_functions_agree actual.description.names.pendingHelper (by simp [helperNames])) _]
-      exact (SumcheckDomainHonest.realization (F := F) (G := G)).prices.pending claim
+      exact (fixtureRealization (F := F) (G := G)).prices.pending claim
     openClaim := by
       intro point claim
       change helperCost installed alternateValidator actual.description.names.openClaimHelper
         [.vector actual.description.names.scalar point, .data (.field actual.description.names.scalar claim)] ≤ 1
       rw [← helperCost_agrees installed (helper_functions_agree actual.description.names.openClaimHelper (by simp [helperNames])) _]
-      exact (SumcheckDomainHonest.realization (F := F) (G := G)).prices.openClaim point claim
+      exact (fixtureRealization (F := F) (G := G)).prices.openClaim point claim
     atPrefix := by
       intro point claim
       change helperCost installed alternateValidator actual.description.names.atPrefixHelper
         [.vector actual.description.names.scalar point, .data (.field actual.description.names.scalar claim)] ≤ 1
       rw [← helperCost_agrees installed (helper_functions_agree actual.description.names.atPrefixHelper (by simp [helperNames])) _]
-      exact (SumcheckDomainHonest.realization (F := F) (G := G)).prices.atPrefix point claim
+      exact (fixtureRealization (F := F) (G := G)).prices.atPrefix point claim
     append := by
       intro point answer
       change helperCost installed alternateValidator actual.description.names.appendHelper
         [.vector actual.description.names.scalar point, .data (.field actual.description.names.scalar answer)] ≤ 2
       rw [← helperCost_agrees installed (helper_functions_agree actual.description.names.appendHelper (by simp [helperNames])) _]
-      exact (SumcheckDomainHonest.realization (F := F) (G := G)).prices.append point answer
+      exact (fixtureRealization (F := F) (G := G)).prices.append point answer
     check := by
       intro values point claim small shaped
       change helperCost installed alternateValidator actual.description.names.checkHelper
         [.vector actual.description.names.scalar values, .vector actual.description.names.scalar point,
           .data (.field actual.description.names.scalar claim)] = 62 + 20 * point.length
       rw [← helperCost_agrees installed (helper_functions_agree actual.description.names.checkHelper (by simp [helperNames])) _]
-      exact (SumcheckDomainHonest.realization (F := F) (G := G)).prices.check values point claim small shaped }
+      exact (fixtureRealization (F := F) (G := G)).prices.check values point claim small shaped }
   prepared := by
     have names : Instruction.helperList alternate.participant.instructions = helperNames := by kernel_rfl
     rw [names]
     intro name member
     apply prepared_agrees installed (helper_functions_agree name member)
-    apply (SumcheckDomainHonest.realization (F := F) (G := G)).prepared name
+    apply (fixtureRealization (F := F) (G := G)).prepared name
     have original : Instruction.helperList actual.participant.instructions = helperNames := by kernel_rfl
     rwa [original]
 

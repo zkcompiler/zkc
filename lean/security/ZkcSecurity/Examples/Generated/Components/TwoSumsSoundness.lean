@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Claims.CompiledSoundness
-public import ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Soundness
+public import ZkcSecurity.Examples.RootProperties.TwoSums.Soundness
 public import ZkcSecurity.Examples.Generated.TwoSums
 
 @[expose] public section
@@ -28,17 +28,17 @@ local instance : ∀ event : Domain.Event carriers, SampleableType (Domain.Raw e
 def syntacticBudget : Nat := 8
 def capabilities := ZkcSecurity.Domains.PrimeField.blsCapabilities original (by decide +kernel)
 
-def schedule : Claims.Domain.ChargeSchedule validatorSubject := ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Soundness.schedule
-def validatorCost : Nat → ENNReal := ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Soundness.validatorCost
+def schedule : Claims.Domain.ChargeSchedule validatorSubject := ZkcSecurity.Examples.RootProperties.TwoSums.Soundness.schedule
+def validatorCost : Nat → ENNReal := ZkcSecurity.Examples.RootProperties.TwoSums.Soundness.validatorCost
 
 def reductionExport (queries : Nat) :
     Claims.Domain.ChargedExport validatorSubject schedule queries (validatorCost queries) :=
-  ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Soundness.reductionExport queries
+  ZkcSecurity.Examples.RootProperties.TwoSums.Soundness.reductionExport queries
 
-def scalarBound : Nat → ENNReal := ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Soundness.scalarBound
+def scalarBound : Nat → ENNReal := ZkcSecurity.Examples.RootProperties.TwoSums.Soundness.scalarBound
 theorem scalar_bound (queries : Nat) :
     (queries : ENNReal) * schedule.maximum queries + validatorCost queries ≤ scalarBound queries :=
-  ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Soundness.scalar_bound queries
+  ZkcSecurity.Examples.RootProperties.TwoSums.Soundness.scalar_bound queries
 
 theorem adaptive (application : String) (queries : Nat)
     (prover : OracleComp (TranscriptOracle.DomainSpec carriers) (Statement × Domain.Proof carriers))

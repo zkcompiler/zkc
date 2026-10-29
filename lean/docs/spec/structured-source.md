@@ -879,6 +879,123 @@ index/vector/product/sequence messages refuses explicitly. Concrete contract use
 that its actual process lies in the supported fragment; the adapter supplies no
 relation binding or security assumption.
 
+## Checked source connections
+
+`ConnectionRoot.RootCertificate` is indexed by an admitted structured program,
+a construction routing, a source role and an actual constructed participant.
+Its fields contain finite input/output layouts, a reachable source library,
+the existing instruction correspondence and an `Alignment` derivation. The
+shared `RootCertificate.simulation` theorem produces `Original.Simulation`
+against the actual `Domain.participant`. It quantifies over nominal domain
+models, all physical input rows, typed external replies and stopping outcomes.
+Malformed input rows refuse; they do not acquire invented source values.
+
+The return relation is `Original.CompleteReturns`. It retains the entire
+role-visible nominal result row, its sorts and arity, the selected profile
+history and the empty root occurrence stack. Acceptance is a later projection
+of that relation. Each physical checkpoint retains the input frame and the
+source components decoded by the input ABI.
+
+The simulation is relative to the certificate's explicit source input ABI.
+Scope preservation alone does not fix the order of visible public inputs or
+require every visible component to be present. The common generator derives
+source-order data locations and service associations from the source signature.
+An admission consumer must pin that ABI to its source/request selection before
+using the connection as a required source-stage link; it must not existentially
+choose an ABI from proof evidence. The current root interface does not itself
+replace that admission boundary.
+
+`RootCertificate.facts` supplies three consequences of the same certificate:
+the exact source equation before construction, full simulation and reached-action
+coverage of the occurrence source. Coverage is a separate induction over the
+alignment derivation, before a missing route could turn construction into a
+refusal. It is not inferred from a simulation of two refusing processes, and
+it is not an additional protocol-author obligation.
+
+### Source libraries and symbolic composition
+
+A `ConnectionLibrary.SourceTemplate` fixes an actual declaration, its complete
+signature, role, input pattern and checked normalization. The library contains
+reachable declaration/role pairs in dependency order. The common proposer
+finds these from typed applications, including applications under repeats;
+author code supplies no declaration indices, per-call slot maps or reduced
+source process. Helpers execute their actual admitted bodies. Mathematical
+reference equations remain separate library laws.
+
+Library construction runs the existing normalizer in compiled Lean meta code
+and prints its result with the existing literal printer. It reduces the closed
+input data first; proposal generation does not repeatedly unfold the complete
+normalizer call in the elaborator. The resulting `SourceTemplate` retains the
+same kernel-checked normalization equation, call identities, role and visibility
+obligations. Native evaluation supplies no proof or admitted equation. Normalized
+bodies and the checked template records are shared through ordinary declarations.
+
+An application derivation checks a finite prefix of the actual flat target,
+its physical extent, every projected result and the caller continuation.
+A repeat checks its body/header interface with a symbolic count; no runtime
+iteration count is unrolled. The same constructors serve producer and validator
+roles, plain delivery, Fiat–Shamir delivery and supported private services.
+Unknown shapes refuse rather than become semantic assumptions.
+
+Internal applications carry a finite typed return selection. The
+`ConnectionReturnProjection.form_denote` theorem proves that projecting a
+callee changes only its successful return leaves: sends, queries, helper and
+partial calculation invocations, reached stops, nested applications and repeat
+callbacks remain unchanged. An omitted pure returned expression needs no
+physical cell. Each selected component still requires exact nominal readback.
+The application also checks the finite syntax equality
+`continuation selection next = next`. The shared `bind_continuation` theorem
+then proves composition with the actual caller for every model and typed reply;
+no semantic equation is assumed from an author. The ordinary library template
+and full nominal signature stay shared by reference. Root return relations,
+ABI assembly and independent route coverage remain complete and unchanged.
+
+A returned history occupies either a fresh cell separate from selected data
+outputs, or a checked incoming current-history cell disjoint from those outputs.
+The latter case still checks the exact suite, returned history and immutable
+caller captures. Layouts keep one logical designation per physical cell, so an
+alias-sensitive continuation may still be refused. Return selection supports
+any finite subset whose substitution passes the syntax equality; it does not
+prove algebraic equivalence of different continuations. Helper expansion handles
+a return projection or one total primitive with present operands or a
+statically absent operand; arbitrary helper inlining is not claimed. These are
+proposer/derivation coverage limits, not restrictions added to the theorem's
+runtime quantifiers.
+
+Normalized source syntax and templates are checked constants. Successful
+closed body alignments are checked once and referenced by their application;
+an imported exact placement may reuse that declaration. Different argument,
+frame, SSA or occurrence placements still require different alignments. This
+is not a theorem transporting an alignment under arbitrary relocation.
+The proposer may cache closed syntax or discover a prefix from residual target
+syntax. Those hints do not authorize evidence: the ordinary alignment, extent,
+readback and continuation rules check every accepted proposal.
+
+The pure input-layout and routing proposal functions belong to the core
+construction package because generated certificate types can mention them.
+They confer no authority without the checked certificate fields. Meta-level
+search and printing remain in the tooling package. Auxiliary declarations use
+Lean's ordinary expression-sharing operation before `addDecl`; their types and
+values still receive the same kernel checks.
+
+### Property consumers and remaining admission
+
+The security package derives public source reading, observation coherence,
+full-value transport and selected acceptance agreement from a root certificate.
+Its public Fiat–Shamir reading requires the selected replacement profile and
+no local service routes. Runtime simulation and sampled honest-pair consumers
+have their own interfaces and premises. A connection alone supplies neither
+soundness nor successful honest execution, a sampling law, an extractor law or
+a security receipt.
+
+`Construction.checkCompiled` checks transcript construction and exact source
+occurrences. The unproved projection walker has been removed. Receipt admission
+requires `ConnectionAdmission.Required` separately, with its canonical source ABI
+and routing fixed before proof selection. Missing connection evidence keeps the
+claim open. The typed root certificate is the default proof method; a direct
+proof of the same fixed proposition remains admissible. See
+[the correspondence contract](participant-projection.md).
+
 ## Mathematical reference installation
 
 A reference library supplies formulas and dependency laws separately from the

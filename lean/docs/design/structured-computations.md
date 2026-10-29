@@ -138,22 +138,18 @@ partly resolves locality while constructing a term. Its equation pairs a project
 for a role with that role's input environment. The mathematical meaning itself
 is role-independent: the projected restrictions record the selection.
 
-`Common.Program` remains the bounded global/participant reference and scalar
-native-import consumer. `Common.Program.toRegion` lowers all six constructors to
-the canonical carrier. Calculations become mathematical/restriction nodes and
-lexical bindings; no whole calculation is hidden in an opaque operation.
-`Common.Program.denote_toRegion` preserves its full process for every role and
-input. `Native.Imported.toRegion` also retains the import carrier's final output
-role restriction after execution, so an unavailable output does not skip actions
-or stops. Deterministic and monadic execution equations follow from this bridge.
-Fresh receive continuations, sender-side aliases, service ownership and the
-security contracts built on this profile are preserved. The participant
-operation type and dialect retain the selected role as a nominal parameter. A
-projection for one role cannot use another role's meaning accidentally. This
-keeps the projected representation and all operation meanings tied to one
-participant without adding a wrapper around the generic carrier. It does not
-authenticate an external role assignment; the importer still owns that
-admission.
+The former Common flat AST and its lowering theorem have been retired. Scalar
+native-import consumers now use the same Structured admission and typed
+participant semantics as the other maintained clients. A checked normal-form
+presentation supplies each complete source equation at its stated input
+availability pattern, and a derived scalar view feeds the existing mathematical
+contracts. This view is not another admission or execution authority.
+
+The participant operation type and dialect retain the selected role as a
+nominal parameter. The importer admits the external role assignment, while
+projection preserves fresh receive continuations, sender-side aliases, service
+ownership, output restrictions and reached stops. A present-input equation does
+not claim correctness for arbitrary unavailable inputs.
 
 These reference profiles carry different obligations and do not become a second
 compiler SSA representation. They remain reference authoring/admission interfaces,

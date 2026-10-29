@@ -23,8 +23,8 @@ artifacts = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Artif
 lowering = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Lowering.lean"
 claims = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Claims.lean"
 
-[normal_forms]
-request = "lean/bridges/structured/normal-forms/sumcheck-round.toml"
+[source_views]
+selections = ["SumcheckSource", "SumcheckReduction", "SumcheckRepacked"]
 
 [assumptions]
 requested = ["exporter.structured-denotation", "runtime.program-reader",

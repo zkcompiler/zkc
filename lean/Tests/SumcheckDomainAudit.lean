@@ -6,12 +6,10 @@ import ZkcTools.DeclarationAudit
 /-! Scoped axiom and semantic dependency checks for the retained migration. -/
 run_cmd ZkcTools.DeclarationAudit.check [
    `Zkc.Construction.Uniform.DomainExecution, `Zkc.Construction.Uniform.DomainHandler,
-   `Zkc.Construction.Uniform.DomainIteration, `Zkc.Construction.Uniform.DomainProperties,
-   `ZkcExamples.Construction.SumcheckArtifact, `ZkcExamples.Construction.SumcheckDomainConnection,
-   `ZkcExamples.Construction.SumcheckDomainControls, `ZkcExamples.Construction.SumcheckDomainRound,
-   `ZkcExamples.Construction.SumcheckDomainLoop, `ZkcExamples.Construction.SumcheckDomainRoot,
-   `ZkcExamples.Construction.SumcheckScalarProtocol, `ZkcExamples.Construction.SumcheckScalarRound,
-   `ZkcExamples.Construction.SumcheckDomainVerifier, `ZkcExamples.Construction.SumcheckSourceConnection,
+   `Zkc.Construction.ScalarConnection, `Zkc.Construction.Uniform.ScalarFragment,
+   `Zkc.Construction.Uniform.ScalarObservation,
+   `ZkcExamples.Construction.SumcheckArtifact,
+   `ZkcExamples.Construction.SumcheckSourceConnection,
    `ZkcExamples.Construction.SumcheckProof,
    `ZkcExamples.Construction.SumcheckProofRounds, `ZkcExamples.Executable.SumcheckProof] "SUMCHECK-DOMAIN-AUDIT-PASS" true
 

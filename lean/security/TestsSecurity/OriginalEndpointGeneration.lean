@@ -53,7 +53,7 @@ run_cmd do
       (root.componentModule "Soundness") (renamed.componentModule "Soundness")
     unless renamedExpected.replace root.securityModule renamed.securityModule == renamedSource do
       Lean.throwError "root name changes behavior rather than output naming"
-  unless stageSources.length == roots.length * 16 do
+  unless stageSources.length == roots.length * 6 do
     Lean.throwError "production output inventory differs"
   unless stageSources.all (fun (stage, _, source) =>
       stage != "rounds" && stage != "views" && !source.contains "RoundDescriptors" &&

@@ -1,5 +1,4 @@
 import Zkc.Source.Structured.ClosedProfile
-import Zkc.Source.Common.Format
 
 /-! Constant admission must reduce under the kernel, including the structured
 closed-profile checker. Runtime parsing and a native decision oracle are not used
@@ -19,7 +18,6 @@ example : Zkc.Source.Format.canonicalDecimal "" = none := by decide +kernel
 example : Zkc.Source.Format.canonicalDecimal "10" 1 = none := by decide +kernel
 
 example : Format.decimal "1" = .ok 1 := rfl
-example : Common.Native.Format.decimal (.str "1") = .ok 1 := rfl
 
 private def constantSnapshot : Snapshot :=
   (let contractDefinitions : List Definition := [
@@ -54,13 +52,7 @@ private def run : IO Unit := do
     (Zkc.Source.Format.canonicalDecimal (String.ofList (List.replicate 513 '9')) == none)
   check "structured-error"
     (match Format.decimal "01" with | .error error => error == "structured-decimal" | _ => false)
-  check "common-string-error"
-    (match Common.Native.Format.decimal (.str "") with
-      | .error error => error == "common-source-string" | _ => false)
-  check "common-constant-error"
-    (match Common.Native.Format.decimal (.str "01") with
-      | .error error => error == "common-source-constant" | _ => false)
-  IO.println "decimal admission: 1018 checks passed"
+  IO.println "decimal admission: 1016 checks passed"
 
 #eval run
 end Tests.DecimalAdmission

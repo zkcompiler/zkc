@@ -1,6 +1,8 @@
 import ZkcExamples.Construction.TableMembership
 import ZkcExamples.Construction.BatchOpening
 import Mathlib.Data.ZMod.Basic
+import ZkcTools.ConstructionBindings.Admission
+import Tests.ConnectionRefusal
 
 /-! Kernel controls through the actual admitted plain construction path.
 The batch checks concern transport and the source's finite validation helper;
@@ -10,6 +12,7 @@ set_option smartUnfolding false
 set_option maxRecDepth 20000
 set_option maxHeartbeats 8000000
 noncomputable section
+set_option linter.unusedTactic false
 namespace Tests.PlainConstruction
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 namespace Batch
@@ -57,10 +60,14 @@ private def emptyWrong : Domain.Payload selectedModel.toCarriers :=
 example : (Domain.validate (m := Id) selectedModel program context validator publicInputs
     [emptyWrong] oracle 0).outcome = .stopped .refused := by kernel_rfl
 
-example : project program context { validator with instructions :=
-    ⟨.receive "label_6261746368_0" "label_6261746368_0" "role00000000" wrongNominal,
-      [], [.data wrongNominal], []⟩ :: validator.instructions.drop 1 } =
-    .error "projection-receive" := by decide +kernel
+private def wrongNominalParticipant : Participant := { validator with instructions :=
+    (⟨.receive "label_6261746368_0" "label_6261746368_0" "role00000000" wrongNominal,
+      [], [.data wrongNominal], []⟩ :: validator.instructions.drop 1) }
+example : True := by
+  expect_connection_refusal "plain nominal message" because "alignment-"
+    have refused : ConnectionAdmission.Required program context .validator wrongNominalParticipant := by
+      derive_source_connection
+  trivial
 
 example (template : Template) : Domain.queryOrigin context "" "koala-bear" template [] = none := by
   kernel_rfl

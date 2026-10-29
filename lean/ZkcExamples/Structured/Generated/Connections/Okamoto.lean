@@ -1,7 +1,9 @@
 module
 
 public import ZkcTools.ConstructionBindings.Root
-public import ZkcTools.ConstructionBindings.RootRoutes
+public import Zkc.Construction.ConnectionRootRoutes
+public import Zkc.Construction.ConnectionRouteCoverageRoot
+public import Zkc.Construction.ConnectionCertificateAdmission
 public import ZkcExamples.Construction.OkamotoArtifact
 public import ZkcExamples.Structured.Generated.Constructed.OkamotoValidator
 
@@ -11,27 +13,37 @@ public import ZkcExamples.Structured.Generated.Constructed.OkamotoValidator
 Selected roles use the same admitted source and the shared finite connection theorem.
 This is correspondence evidence; property meanings and proofs are separate. -/
 set_option autoImplicit false
-set_option maxRecDepth 10000
-set_option maxHeartbeats 8000000
+set_option maxRecDepth 50000
+set_option maxHeartbeats 16000000
 noncomputable section
 namespace ZkcExamples.Structured.Generated.Connections.Okamoto
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ConnectionRoot
 open ZkcTools.ConstructionBindings
 
 abbrev program := ZkcExamples.Construction.OkamotoProof.program
-abbrev context := ZkcExamples.Construction.OkamotoProof.context
-def capabilities : List (Nat × Nat) := RootData.serviceCapabilities program.payload.entry.inputs
+def context : Context :=
+  (exportContext program.snapshot ZkcExamples.Structured.Generated.Constructed.OkamotoValidator.artifact).get (by decide +kernel)
+
+def sourceLibrary : ConnectionLibrary.Bundle program.payload := by
+  derive_connection_library roles [context.validator]
+
+def capabilities : List (Nat × Nat) := ConnectionRootInputs.serviceCapabilities program.payload.entry.inputs
 
 abbrev validatorArtifact := ZkcExamples.Structured.Generated.Constructed.OkamotoValidator.artifact
 
 def validatorRouting : Original.Routing :=
-  RootRoutes.routing program.snapshot context .validator capabilities
+  ConnectionRootRoutes.routing program.snapshot context .validator capabilities
     validatorArtifact (by decide +kernel)
 
 def validator : RootCertificate program validatorRouting context.validator validatorArtifact := by
-  derive_root_connection
+  derive_root_connection_with_library
     target (fun model => ZkcExamples.Structured.Generated.Constructed.OkamotoValidator.body model program context)
     correspondence (fun model => ZkcExamples.Structured.Generated.Constructed.OkamotoValidator.body_eq model program context)
-    services capabilities
+    services capabilities library sourceLibrary
+
+def validatorFacts := validator.facts
+
+theorem validatorConnected : SourceConnection.Connected program validatorRouting context.validator validator.inputs.abi validatorArtifact :=
+  SourceConnection.ofRootCertificate validator (by rfl)
 
 end ZkcExamples.Structured.Generated.Connections.Okamoto

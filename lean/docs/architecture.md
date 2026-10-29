@@ -23,18 +23,19 @@ open processes. Contextual equality, semantic totality and explicitly compatible
 higher-order effect translation are reusable laws over this carrier.
 `ScalarRegion` bridges the maintained single-result `Source.Program` reference
 profile. Mathematical projection directly produces canonical regions.
-`Common.Region` lowers the participant profile and admitted scalar programs with
-proved full-process equations; their bounded contracts and security consumers
-remain intact.
+`Structured` is the sole retained-source reader. Common scalar clients use its
+actual typed participants and checked returned-row views. `CommonAdapter` projects
+participant actions to the retained mathematical contracts; their bounded
+contracts and property consumers remain intact. The former Common reader, flat
+AST and independent lowering are retired.
 See [structured computations](design/structured-computations.md) for ownership,
 formation, examples and the native correspondence boundary.
 
 `Zkc.Source.Participant` owns typed sends, receives and service queries, together
 with the shared exchange, query, guard and restriction rules over optional
 components. It depends on typed contexts, role families and process semantics,
-without a mathematical language or scalar vocabulary. `Common.Program.denote`
-and `Common.participantMeaning` both compose these rules; action consumers name
-the same `Participant` interface directly. Services declare argument and result
+without a mathematical language or scalar vocabulary. `Structured` participant meanings compose these rules; Common action consumers
+use a checked projection of the same `Participant` interface. Services declare argument and result
 types while handlers supply behavior and sampling policy.
 
 `Zkc.Source.Mathematical` supplies a typed language/meaning interface. Role-local
@@ -108,6 +109,16 @@ subjects into a reusable library; package audits validate the named schemas in
 the environment containing the actual providers.
 
 ## Dependency policy and retained exceptions
+
+The generic connection elaborators (`Root`, `Inputs`, `LibraryBuilder`,
+`LibraryPlan`, `Alignment` and `Readback` under `ZkcTools.ConstructionBindings`)
+form a restricted proof-tool layer. Subjects may use these elaborators to
+construct ordinary kernel-checked declarations. The layer may import only
+core definitions, upstream Lean/Mathlib and other proof tools; it cannot reach
+protocol instances, the command-line generators or the old specialized binding
+analysis. Core semantics still cannot depend on proof tools. This is an
+allowed architectural layer with no dependency exceptions, shared by the import
+and declaration audits.
 
 The allowed-edge table in `ZkcTools/DeclarationAudit.lean` is shared data for
 `checks/check_library.py` and the Lean declaration audit. The source audit
@@ -191,26 +202,14 @@ declarations, so a stale or mistyped body fails a phase equation. Phase
 equations use `kernel_rfl`, which checks a definitional equality in the kernel
 only, for every value of the goal's binders at once.
 
-`bridges/structured/normal_forms.py` generates the role-local facts of an
-admitted unit from its retained snapshot and a short request: site constants,
-positional input builders, each participant's normal form with its process
-equation, carried-state embeddings, reply scripts and observed runs, and the
-relation binding and observed decision of a contract clause. A root equation
-that holds definitionally is checked by `kernel_rfl` alone. Every other process
-equation is an instance of one soundness theorem: `Structured.NormalForm`
-defines participant forms (`Syntax`) and their processes (`Denote`), a
-normalizer that computes one role's form of a typed body by symbolic
-evaluation under the participant rules (`Normalize`), and
-`NormalForm.normalize_sound` with its uniform-meaning corollaries
-(`Soundness`, `Presentation`). The compiled normalizer
-(`structured-source normal-form`) prints the form as a Lean literal; the kernel
-checks by evaluation that the normalizer returns it and that its process is the
-readable one, and the request's helper laws and callee summaries discharge the
-theorem's premises. For a body that applies other protocols the callee's
-generated normal form stands at the application's child context, between the
-callee's input and output masks, and each role's invocation at any caller
-context is stated. The generator's output is ordinary source that the kernel
-checks; what it cannot derive (helper laws, premises, protocol mathematics) stays authored.
+`Bindings.RoleViews` derives the participants' complete normal forms from the
+admitted typed source. Lean catalogues select snapshots and display names;
+source scopes determine input visibility, callback frames and callee arguments.
+Each emitted equation applies the verified normalizer's soundness theorem.
+Occurrence coordinates, missing inputs, arbitrary replies, stops and complete
+returns remain in the statement. `bridges/structured/source_views.py` only
+schedules Lean generation and compares output files. Mathematical helper laws,
+loop invariants and security reductions remain explicit library obligations.
 
 `Source.RegionDerivation` and its tactics derive process correspondence from the
 same typed body using local rules. `Structured.ContractCalls` enumerates lexical

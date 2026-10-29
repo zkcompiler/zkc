@@ -1,65 +1,128 @@
 module
 
-public import ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckProducerRoot
-public import ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckValidatorRoot
-public import ZkcExamples.Structured.OriginalArtifacts.TwoSumsProducerRoot
-public import ZkcExamples.Structured.OriginalArtifacts.TwoSumsValidatorRoot
+public import ZkcExamples.Structured.Generated.Connections.SmallSumcheck
+public import ZkcExamples.Structured.Generated.Connections.TwoSums
+public import Zkc.Construction.OriginalCorrespondence
 
 @[expose] public section
 
-/-! Full pair regression instances use the shared transport theorem. Their types
-are inferred from that theorem, avoiding a second spelling of its experiment. -/
+/-! Pair execution through the maintained generated roots. Arbitrary physical
+rows include malformed ABI inputs. The existing runtime retains every return,
+proof suffix, observation and oracle/private-service state; a stopped producer
+skips validation. No source-shape or honest-input premise restricts this test. -/
 set_option autoImplicit false
 set_option maxRecDepth 20000
 set_option maxHeartbeats 2000000
-set_option backward.isDefEq.respectTransparency false
 noncomputable section
+attribute [local implicit_reducible] Zkc.Source.Structured.CheckedProtocol.signature
 namespace TestsSecurity.OriginalPairExecution
-open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured
-open ZkcExamples.Structured.OriginalArtifacts
-variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
-  [DecidableEq F] [DecidableEq G]
+open Zkc.Source Zkc.Source.Structured Zkc.Construction
+open ZkcExamples.Structured.Generated.Connections
 
 namespace Small
+open SmallSumcheck
 
-/-- Both actual participant certificates feed the existing pair experiment.
-The producer's proof and complete oracle/service post-state feed validation;
-a stopped producer skips validation. Shape and size are explicit admission
-conditions for the original producer's table operations. -/
-theorem execute_pair (raw : List F) (scalar : F) (count handle : Nat)
-    (shape : PrimitiveLibrary.HasShape raw count 1) (bounded : raw.length < indexLimit)
-    (producerHistory validatorHistory : Domain.History (uniformCarriers F G))
+theorem execute_pair (model : DomainModel)
+    (producerInputs validatorInputs : Domain.Environment model.toCarriers)
     {m : Type → Type} [Monad m] [LawfulMonad m] {S : Type}
-    (oracle : Domain.Oracle m (uniformCarriers F G) S) (state : S)
-    (services : Domain.LocalServices m (uniformCarriers F G) S) : type_of% (
-  Original.executePair_eq (model := ringModel F G) (program := SmallSumcheck.program)
-    (SmallSumcheckProducerRoot.producer raw count handle shape bounded producerHistory)
-    (SmallSumcheckValidatorRoot.validator raw scalar count handle validatorHistory) oracle state services) :=
-  Original.executePair_eq (model := ringModel F G) (program := SmallSumcheck.program)
-    (SmallSumcheckProducerRoot.producer raw count handle shape bounded producerHistory)
-    (SmallSumcheckValidatorRoot.validator raw scalar count handle validatorHistory) oracle state services
+    (oracle : Domain.Oracle m model.toCarriers S) (state : S)
+    (services : Domain.LocalServices m model.toCarriers S) :
+    Domain.executePair model program context producerArtifact validatorArtifact
+      producerInputs validatorInputs oracle state services =
+      (do
+        let original ← Domain.run .producer oracle
+          (producerFacts.simulation model producerInputs).paired
+          ⟨producerInputs, [], state⟩ services
+        let produced := Original.mapExecution Prod.snd original
+        match produced.outcome with
+        | .stopped _ => pure ⟨produced, none⟩
+        | .returned _ =>
+            let original ← Domain.run .validator oracle
+              (validatorFacts.simulation model validatorInputs).paired
+              ⟨validatorInputs, produced.state.proof, produced.state.oracle⟩ services
+            pure ⟨produced, some (Original.mapExecution Prod.snd original)⟩) := by
+  have producerLaw := (producerFacts.simulation model producerInputs).runM
+    (Domain.handler .producer oracle services) ⟨producerInputs, [], state⟩
+  have validatorLaw := fun proof final => (validatorFacts.simulation model validatorInputs).runM
+    (Domain.handler .validator oracle services) ⟨validatorInputs, proof, final⟩
+  unfold Domain.executePair Domain.produce Domain.validate Domain.run
+  erw [producerLaw]
+  simp only [bind_assoc, pure_bind]
+  congr 1
+  funext original
+  cases outcome : (Original.mapExecution Prod.snd original).outcome with
+  | stopped => rfl
+  | returned =>
+    erw [validatorLaw]
+    simp only [bind_assoc, pure_bind]
 
+/-- Validation also preserves an arbitrary supplied unread proof suffix. -/
+theorem validate (model : DomainModel) (physical : Domain.Environment model.toCarriers)
+    {m : Type → Type} [Monad m] [LawfulMonad m] {S : Type}
+    (proof : Domain.Proof model.toCarriers) (oracle : Domain.Oracle m model.toCarriers S)
+    (state : S) (services : Domain.LocalServices m model.toCarriers S) :
+    Domain.validate model program context validatorArtifact physical proof oracle state services =
+      (do let execution ← Domain.run .validator oracle
+            (validatorFacts.simulation model physical).paired ⟨physical, proof, state⟩ services
+          pure (Original.mapExecution Prod.snd execution)) :=
+  (validatorFacts.simulation model physical).runM
+    (Domain.handler .validator oracle services) ⟨physical, proof, state⟩
+
+#print axioms execute_pair
+#print axioms validate
 end Small
 
 namespace Two
+open TwoSums
 
-/-- The same pair transport composes the two source-selected library calls
-on each side, retaining their separate full original ABI and shared history. -/
-theorem execute_pair (leftRaw rightRaw : List F) (leftScalar rightScalar : F)
-    (count handle : Nat)
-    (leftShape : PrimitiveLibrary.HasShape leftRaw count 1) (leftBound : leftRaw.length < indexLimit)
-    (rightShape : PrimitiveLibrary.HasShape rightRaw count 1) (rightBound : rightRaw.length < indexLimit)
-    (producerHistory validatorHistory : Domain.History (uniformCarriers F G))
+theorem execute_pair (model : DomainModel)
+    (producerInputs validatorInputs : Domain.Environment model.toCarriers)
     {m : Type → Type} [Monad m] [LawfulMonad m] {S : Type}
-    (oracle : Domain.Oracle m (uniformCarriers F G) S) (state : S)
-    (services : Domain.LocalServices m (uniformCarriers F G) S) : type_of% (
-  Original.executePair_eq (model := ringModel F G) (program := TwoSums.program)
-    (TwoSumsProducerRoot.producer leftRaw rightRaw count handle leftShape leftBound rightShape rightBound producerHistory)
-    (TwoSumsValidatorRoot.validator leftRaw rightRaw leftScalar rightScalar count handle validatorHistory) oracle state services) :=
-  Original.executePair_eq (model := ringModel F G) (program := TwoSums.program)
-    (TwoSumsProducerRoot.producer leftRaw rightRaw count handle leftShape leftBound rightShape rightBound producerHistory)
-    (TwoSumsValidatorRoot.validator leftRaw rightRaw leftScalar rightScalar count handle validatorHistory) oracle state services
+    (oracle : Domain.Oracle m model.toCarriers S) (state : S)
+    (services : Domain.LocalServices m model.toCarriers S) :
+    Domain.executePair model program context producerArtifact validatorArtifact
+      producerInputs validatorInputs oracle state services =
+      (do
+        let original ← Domain.run .producer oracle
+          (producerFacts.simulation model producerInputs).paired
+          ⟨producerInputs, [], state⟩ services
+        let produced := Original.mapExecution Prod.snd original
+        match produced.outcome with
+        | .stopped _ => pure ⟨produced, none⟩
+        | .returned _ =>
+            let original ← Domain.run .validator oracle
+              (validatorFacts.simulation model validatorInputs).paired
+              ⟨validatorInputs, produced.state.proof, produced.state.oracle⟩ services
+            pure ⟨produced, some (Original.mapExecution Prod.snd original)⟩) := by
+  have producerLaw := (producerFacts.simulation model producerInputs).runM
+    (Domain.handler .producer oracle services) ⟨producerInputs, [], state⟩
+  have validatorLaw := fun proof final => (validatorFacts.simulation model validatorInputs).runM
+    (Domain.handler .validator oracle services) ⟨validatorInputs, proof, final⟩
+  unfold Domain.executePair Domain.produce Domain.validate Domain.run
+  erw [producerLaw]
+  simp only [bind_assoc, pure_bind]
+  congr 1
+  funext original
+  cases outcome : (Original.mapExecution Prod.snd original).outcome with
+  | stopped => rfl
+  | returned =>
+    erw [validatorLaw]
+    simp only [bind_assoc, pure_bind]
 
+/-- Validation also preserves an arbitrary supplied unread proof suffix. -/
+theorem validate (model : DomainModel) (physical : Domain.Environment model.toCarriers)
+    {m : Type → Type} [Monad m] [LawfulMonad m] {S : Type}
+    (proof : Domain.Proof model.toCarriers) (oracle : Domain.Oracle m model.toCarriers S)
+    (state : S) (services : Domain.LocalServices m model.toCarriers S) :
+    Domain.validate model program context validatorArtifact physical proof oracle state services =
+      (do let execution ← Domain.run .validator oracle
+            (validatorFacts.simulation model physical).paired ⟨physical, proof, state⟩ services
+          pure (Original.mapExecution Prod.snd execution)) :=
+  (validatorFacts.simulation model physical).runM
+    (Domain.handler .validator oracle services) ⟨physical, proof, state⟩
+
+#print axioms execute_pair
+#print axioms validate
 end Two
 
 end TestsSecurity.OriginalPairExecution

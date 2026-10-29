@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Claims.CompiledSoundness
-public import ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Soundness
+public import ZkcSecurity.Examples.RootProperties.SmallSumcheck.Soundness
 public import ZkcSecurity.Examples.Generated.SmallSumcheck
 
 @[expose] public section
@@ -28,17 +28,17 @@ local instance : ∀ event : Domain.Event carriers, SampleableType (Domain.Raw e
 def syntacticBudget : Nat := 2
 def capabilities := ZkcSecurity.Domains.PrimeField.blsCapabilities original (by decide +kernel)
 
-def schedule : Claims.Domain.ChargeSchedule validatorSubject := ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Soundness.schedule
-def validatorCost : Nat → ENNReal := ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Soundness.validatorCost
+def schedule : Claims.Domain.ChargeSchedule validatorSubject := ZkcSecurity.Examples.RootProperties.SmallSumcheck.Soundness.schedule
+def validatorCost : Nat → ENNReal := ZkcSecurity.Examples.RootProperties.SmallSumcheck.Soundness.validatorCost
 
 def reductionExport (queries : Nat) :
     Claims.Domain.ChargedExport validatorSubject schedule queries (validatorCost queries) :=
-  ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Soundness.reductionExport queries
+  ZkcSecurity.Examples.RootProperties.SmallSumcheck.Soundness.reductionExport queries
 
-def scalarBound : Nat → ENNReal := ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Soundness.scalarBound
+def scalarBound : Nat → ENNReal := ZkcSecurity.Examples.RootProperties.SmallSumcheck.Soundness.scalarBound
 theorem scalar_bound (queries : Nat) :
     (queries : ENNReal) * schedule.maximum queries + validatorCost queries ≤ scalarBound queries :=
-  ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Soundness.scalar_bound queries
+  ZkcSecurity.Examples.RootProperties.SmallSumcheck.Soundness.scalar_bound queries
 
 theorem adaptive (application : String) (queries : Nat)
     (prover : OracleComp (TranscriptOracle.DomainSpec carriers) (Statement × Domain.Proof carriers))

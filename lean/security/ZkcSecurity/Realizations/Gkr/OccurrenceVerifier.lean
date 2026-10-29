@@ -1,7 +1,10 @@
 module
 
 public import ZkcSecurity.Realizations.Gkr.HonestProducerSource
+public import ZkcExamples.Structured.SumcheckVerifierHelpers
 public import ZkcExamples.Structured.GkrSourceContinuation
+
+public meta import ZkcTools.StructuredSource.Composition
 
 @[expose] public section
 
@@ -17,7 +20,7 @@ namespace ZkcSecurity.Realizations.Gkr.OccurrenceVerifier
 open Zkc Zkc.Source Zkc.Source.Structured
 open ZkcExamples.Structured
 open PrimitiveLibrary SumcheckVerifierHelpers
-open ZkcExamples.Structured GkrSourceCallbacks HonestProducerSource
+open ZkcExamples.Structured Generated.Presentations.Gkr.Root HonestProducerSource
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
@@ -80,7 +83,7 @@ theorem admitted (initial outputs add mul : List F) (layers selector width handl
     Occurrence.participant (ringModel F G) GkrSourceViews.program 1 (GkrSourceAdmission.inputs (G := G) initial outputs add mul layers selector width handle) =
       process initial outputs add mul layers selector width handle := by
   rw [body]
-  have sameBody : GkrSourceBodies.gkrBody = GkrSourceCallbacks.gkrBody := by rfl
+  have sameBody : GkrSourceBodies.gkrBody = Generated.Presentations.Gkr.Root.gkrBody := by rfl
   rw [sameBody]
   have widthSmall : width < indexLimit := lt_of_le_of_lt widthBound (by decide)
   have layerSmall : layers < indexLimit := lt_of_le_of_lt layersBound (by decide)
@@ -110,11 +113,21 @@ theorem admitted (initial outputs add mul : List F) (layers selector width handl
   have widthCheck : ¬ 4 < width := by omega
   have layersCheck : ¬ 4 < layers := by omega
   have capacityCheck : ¬ 2 ^ selector < layers := by omega
-  unfold GkrSourceCallbacks.gkrBody process
-  repeat' (rw [Region.denote]; simp [participantMeaningWithOn,
+  have normalized := verifier_observed (F := F) (G := G) {} (NormalForm.RosterDistinct.root _ _)
+    beforeRoot beforeRoot_masked (some initial) (some outputs) (some add) (some mul)
+    (some layers) (some selector) (some width) (some handle)
+  refine normalized.trans ?_
+  simp only [verifierForm, NormalForm.Form.denoteOn, NormalForm.Form.denoteWithOn,
+    Generated.Presentations.Gkr.payload, Generated.Presentations.Gkr.program, GkrSourceViews.program,
+    NormalForm.entryAt, Op.evalTotal, NormalForm.Comps.eval, NormalForm.Comp.eval, NormalForm.Term.eval, NormalForm.Terms.eval,
+    NormalForm.Arguments.eval, NormalForm.Argument.eval, NormalForm.runsAtOn,
+    NormalForm.meaningAtOn, ProtocolPresentation.callees, NormalForm.calleeAt,
+    NormalForm.InputPattern.environment, Bindings.optionalPattern, Values.get]
+  unfold process
+  simp [participantMeaningWithOn,
     protocolOperationWithOn, Operands.eval, Regions.denote, Values.get, Values.get_cons,
     Environment.prepend, Environment.push, GkrSourceAdmission.inputs, PIR.Process.bind, PIR.Process.bind_done, PIR.Process.bind_assoc,
-    SiteObservations.silent, observed_helper, GkrSourceContinuation.empty_plain, GkrSourceAdmission.comparison_plain,
+    SiteObservations.silent, OccurrencePresentation.closed_helper, GkrSourceContinuation.empty_plain, GkrSourceAdmission.comparison_plain,
     GkrSourceAdmission.shape_plain_values, GkrSourceAdmission.index_add_plain,
     GkrSourceAdmission.power_plain, Primitive.evaluate, primitiveOutcome,
     show 4 < indexLimit by decide, show 1 < indexLimit by decide,
@@ -130,24 +143,7 @@ theorem admitted (initial outputs add mul : List F) (layers selector width handl
     SumcheckHelperLaws.prepend_two, SumcheckHelperLaws.prepend_three,
     boolResult, present_cons, Values.present, PIR.Process.interpret, Occurrence.actions, participantActions,
     Evaluation.meaningOn, Evaluation.operationOn, Op.calculationRegions,
-    GkrSourceBodies.gkrSignature, Op.results])
-  congr 1
-  funext output
-  cases output with | cons point rest =>
-    cases rest with | cons producerPoint rest =>
-      cases rest
-      cases point <;>
-        simp [Region.denote, participantMeaningWithOn, protocolOperationWithOn,
-          Operands.eval, Regions.denote, Values.get, Values.get_cons, Values.split,
-          Environment.prepend, Environment.push, SiteObservations.silent, observed_helper,
-          Participant.owned, Participant.restrict, Participant.guard,
-          RoleFamily.sequence, Values.absent, ProtocolOp.results,
-          PIR.Process.bind, PIR.Process.bind_assoc, PIR.Process.bind_done,
-          present_cons, Values.present, participantActions,
-          SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-          SumcheckHelperLaws.prepend_two, SumcheckHelperLaws.prepend_three,
-          Evaluation.componentOperationOn, strictComponent, ProtocolContext.contains,
-          ProtocolContext.enter, roleSubstitution, GkrSourceBodies.sourceProtocol80Signature,
-          SumcheckHelperLaws.singleton_eta]
+    GkrSourceBodies.gkrSignature, Op.results]
+  source_composition_equation atoms [invoke, denoteRepeatOn, invokeProtocol]
 
 end ZkcSecurity.Realizations.Gkr.OccurrenceVerifier

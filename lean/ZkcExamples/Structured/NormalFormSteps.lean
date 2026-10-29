@@ -7,8 +7,7 @@ public import Zkc.Source.Structured.RepeatLaws
 
 @[expose] public section
 
-/-! Steps cited by generated participant normal forms
-(`lean/bridges/structured/normal_forms.py`): an owned Local call whose helper
+/-! Mathematical process-composition laws: an owned Local call whose helper
 law returns or stops behaves as that law at its owner; an operation whose
 meaning is a process followed by a returned tuple continues with that tuple; an
 active protocol application continues with the callee's masked returned

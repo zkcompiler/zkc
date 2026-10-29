@@ -11,6 +11,7 @@ import time
 from native_entry import native_subject
 from contracts import label
 from verify import verify, read_json
+from structured import entry
 
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
@@ -72,9 +73,9 @@ def main():
         raise AssertionError("bridges/common/verify_tests.py:70: interface['original'] == hashlib.sha256(mlir.encode()).hexdigest()")
     path = args.output / 'alternative.mlir'
     path.write_text(mlir)
-    data = json.loads(execute([args.compiler, 'protocol-lean', path, '--symbol=' + interface['protocol']]))
-    if not (data[1] == 'sha256:' + interface['original']):
-        raise AssertionError("bridges/common/verify_tests.py:74: data[1] == 'sha256:' + interface['original']")
+    data = json.loads(execute([args.compiler, 'protocol-structured', path, '--symbol=' + interface['protocol']]))
+    if not (data[2] == 'sha256:' + interface['original']):
+        raise AssertionError("bridges/common/verify_tests.py:74: data[2] == 'sha256:' + interface['original']")
     request = copy.deepcopy(requests['factor-openings'])
     request['inputs'][0], request['inputs'][1] = request['inputs'][1], request['inputs'][0]
     request['wiring']['leftSite'] = label('open_factor_a')
@@ -109,24 +110,23 @@ def main():
     request['wiring']['fieldDomain'] = 'another-field'
     check('different-field', original, request, 'input-domain')
     changed = copy.deepcopy(original)
-    changed[8].append(['pure', ['field.add', 'bls12-381.fr'], [2048, 2048]])
-    check('malformed-dormant-binding', changed, requests['factor-openings'], 'unsupported-input')
-    # Copying a positive hash/name onto a semantically wrong source grants no proof.
+    entry(changed)[9][1].append([['field.add','bls12-381.fr'], [4096,4096], [['field','bls12-381.fr']], [], ''])
+    check('malformed-dormant-binding', changed, requests['factor-openings'], 'structured-admission')
+    # Copying a positive source hash onto an admitted wrong body grants no proof.
     changed = read_json(FIXTURES / 'factor-wrongpoint.json')
-    changed[1:3] = original[1:3]
+    changed[2] = original[2]
     check('copied-positive-identity', changed, requests['factor-openings'], 'correspondence-unproved')
     changed = copy.deepcopy(original)
-    changed[8][0].append('ignored-field')
+    entry(changed)[9][1][0].append('ignored-field')
     check('instruction-extra-field', changed, requests['factor-openings'], 'unsupported-input')
     for name, operation in [('boolean-extra-field', ['bool.constant', True, 'ignored']),
                             ('constant-extra-field', ['field.constant', 'bls12-381.fr', '1', 'ignored'])]:
         changed = copy.deepcopy(original)
-        changed[8].append(['pure', operation, []])
-        changed[9] += 1
+        entry(changed)[9][1].append([operation, [], [['bool']], [], ''])
         check(name, changed, requests['factor-openings'], 'unsupported-input')
     changed = copy.deepcopy(original)
-    changed[1] = 'sha256:not-a-digest'
-    check('malformed-source-identity', changed, requests['factor-openings'], 'unsupported-input')
+    changed[2] = 'sha256:not-a-digest'
+    check('malformed-source-identity', changed, requests['factor-openings'], 'structured-admission')
     # Test the checker boundary itself: a corrupted generator candidate cannot be
     # admitted by its own success marker or by other valid property aliases.
     import verify as implementation
@@ -142,12 +142,12 @@ def main():
             implementation.generate = original_generator
     def corrupted_generator(data, request):
         candidate = original_generator(data, request)
-        candidate['program'] = 'by sorry'
+        candidate['snapshot'] = 'by sorry'
         return candidate
     implementation.generate = corrupted_generator
     try:
         check('generator-sorry-control', read_json(FIXTURES / 'sumcheck.json'),
-              requests['sumcheck'], 'candidate-syntax')
+              requests['sumcheck'], 'unsupported-input')
     finally:
         implementation.generate = original_generator
     for name, payload in [
@@ -157,10 +157,10 @@ def main():
             ('generator-line-comment-control', '.ret .here --'),
             ('generator-command-control', '.ret .here\ndef approvedContract := true')]:
         def active_generator(data, request, payload=payload):
-            return {'program': payload}
+            return {'snapshot': payload}
         implementation.generate = active_generator
         try:
-            check(name, read_json(FIXTURES / 'sumcheck.json'), requests['sumcheck'], 'candidate-syntax')
+            check(name, read_json(FIXTURES / 'sumcheck.json'), requests['sumcheck'], 'unsupported-input')
         finally:
             implementation.generate = original_generator
     def wrong_subject_generator(data, request):
@@ -172,7 +172,7 @@ def main():
     finally:
         implementation.generate = original_generator
     def mutating_generator(data, request):
-        data[8][:] = read_json(FIXTURES / 'factor-horner.json')[8]
+        data[:] = read_json(FIXTURES / 'factor-horner.json')
         return original_generator(data, request)
     implementation.generate = mutating_generator
     try:

@@ -1,6 +1,7 @@
 module
 
-public import Zkc.Construction.ConnectionCertificate
+public import Zkc.Construction.DomainView
+public import Zkc.Source.Structured.DomainModels
 
 @[expose] public section
 
@@ -9,23 +10,24 @@ terminal empty block; it does not wrap the prefix in another sequence or add
 checkpoints at an application boundary. Entries reference existing views. -/
 set_option autoImplicit false
 namespace Zkc.Construction.ConnectionTargetPrefix
-open ConnectionCertificate
+open Zkc.Source.Structured
+abbrev TargetBlock := (model : DomainModel) → Domain.View.Block model.toCarriers
 
 inductive Prefix where
   | empty
-  | step (view : Block) (rest : Prefix)
+  | step (view : TargetBlock) (rest : Prefix)
 
-def Prefix.plug (spine : Prefix) (suffix : Block) : Block :=
+def Prefix.plug (spine : Prefix) (suffix : TargetBlock) : TargetBlock :=
   match spine with
   | .empty => suffix
   | .step view rest => fun model => Domain.View.sequence (view model) (rest.plug suffix model)
 
-def Prefix.block (spine : Prefix) : Block :=
+def Prefix.block (spine : Prefix) : TargetBlock :=
   spine.plug (fun _ => Domain.View.empty)
 
 /-- The exact flat instruction/checkpoint schedule, for every continuation
 and environment. This equation concerns only existing target combinators. -/
-theorem Prefix.plug_eq_bind (spine : Prefix) (suffix : Block) (model : Zkc.Source.Structured.DomainModel)
+theorem Prefix.plug_eq_bind (spine : Prefix) (suffix : TargetBlock) (model : Zkc.Source.Structured.DomainModel)
     (environment : Domain.Environment model.toCarriers) :
     spine.plug suffix model environment =
       (spine.block model environment).bind (suffix model) := by

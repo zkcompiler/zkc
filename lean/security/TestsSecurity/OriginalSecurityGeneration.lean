@@ -1,108 +1,94 @@
 module
 
-import ZkcSecurity.Generation.OriginalSecurityBindingsCatalogue
-meta import ZkcSecurity.Generation.OriginalSecurityBindingsCatalogue
+import TestsSecurity.SourcePropertyAssociations
+import TestsSecurity.SourcePairProperties
+import TestsSecurity.SourcePropertyAssembly
+import TestsSecurity.GeneratedRootConnections
+import TestsSecurity.RootConnectionControls
+import ZkcTools.ConstructionBindings.Analysis
+meta import ZkcTools.ConstructionBindings.Analysis
+import ZkcSecurity.Generation.Roots.Catalogue
+meta import ZkcSecurity.Generation.Roots.Catalogue
+meta import Zkc.Construction.ConnectionInstallation
 
-/-! Controls use the production catalogue. This test supplies no root bindings,
-mathematical selections, occurrence coordinates or artifact return indices. -/
+/-! Replacement for the retired method-specific generator test. Exact typed
+signature/body and static-bound mismatch are kernel controls in Associations;
+complete non-Boolean returns, no successful halt and reached histories are
+checked in PairProperties/Assembly. GeneratedRootConnections consumes the
+production certificates and independent route coverage. A proposer refusal
+alone makes no assertion that the requested theorem has no proof. -/
 set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
 namespace TestsSecurity.OriginalSecurityGeneration
-open ZkcSecurity.Generation
-open ZkcSecurity.Generation.OriginalSecurityBindings
+open Zkc.Source Zkc.Source.Structured Zkc.Construction
+open ZkcExamples.Structured SumcheckSourceSelections
 
-/-- Same Boolean ABI, but selecting one operand is not conjunction. -/
-example : isConjunction (Zkc.Source.Region.ret
-    (Zkc.Source.Values.cons (Zkc.Source.Var.here) Zkc.Source.Values.nil) :
-      Zkc.Source.Region Zkc.Source.Structured.dialect [.boolean, .boolean] [.boolean]) = false := rfl
+/-- An identical helper name and Boolean ABI do not admit projection as conjunction. -/
+theorem projection_not_associated :
+    ¬ BodyIn (source .twoSums).payload.definitions Generated.Bindings.TwoSumsInputs.helper25Helper
+      (.ret (.cons .here .nil)) := by
+  have incompatible : ∀ candidate ∈ (source .twoSums).payload.definitions,
+      candidate.helper = Generated.Bindings.TwoSumsInputs.helper25Helper →
+        candidate.raw.operations.length ≠ 0 := by decide +kernel
+  rintro ⟨candidate, member, helper, body⟩
+  exact incompatible candidate member helper (congrArg (fun raw => raw.operations.length) body)
 
-private meta def refuses {α : Type} (label expected : String) (result : Except String α) :
+-- Proposal refusals test the current source/artifact boundary only. They do
+-- not assert that an arbitrary modified program has no possible connection.
+private meta def refuses {α : Type} (label : String) (result : Except String α) :
     Lean.Elab.Command.CommandElabM Unit := do
   match result with
-  | .ok _ => throwError "accepted invalid binding: {label}"
-  | .error reason =>
-    unless reason == expected do throwError "wrong refusal for {label}: expected {expected}, got {reason}"
-    Lean.logInfo m!"PASS {label}: {reason}"
+  | .ok _ => throwError "accepted invalid proposal: {label}"
+  | .error reason => Lean.logInfo m!"PASS source/artifact proposal {label}: {reason}"
 
 run_cmd do
-  let roots ← Roots.evaluateSelections
+  let roots ← ZkcSecurity.Generation.Roots.evaluateSelections
   for root in roots do
-    let .ok program := Zkc.Source.Structured.check root.snapshot | throwError "source admission"
-    let .ok binding := analyze program root.artifacts.validator root.artifacts.producer
-      | throwError "valid binding refused"
-    let metadata ← Lean.Elab.Command.liftTermElabM do
-      let subject := Lean.mkIdent ((root.subjectModule ++ ".subject").toName)
-      let expression ← Lean.Elab.Term.elabTerm (← `(SubjectABI.metadata $subject)) none
-      Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
-      let reduced ← Lean.Meta.withTransparency .all <| Lean.Meta.reduce (← Lean.instantiateMVars expression)
-      Lean.Meta.evalExpr SubjectABI.Metadata (Lean.mkConst ``SubjectABI.Metadata) reduced
-    unless validateABI program binding metadata == .ok () do throwError "valid subject ABI refused"
-    refuses "wrong public ABI association" "original-security-subject-abi-association" (validateABI program binding { metadata with publicPositions := [] })
-    refuses "wrong producer ABI association" "original-security-subject-abi-association" (validateABI program binding { metadata with producerPositions := some [] })
-    refuses "wrong nominal input types" "original-security-subject-abi-association" (validateABI program binding
-      { metadata with types := [] })
-    refuses "wrong service association" "original-security-subject-abi-association" (validateABI program binding
-      { metadata with context := metadata.context.mapReplacement (fun replacement => { replacement with service := metadata.types.length }) })
-    refuses "missing root calls" "construction-binding-source-query" (analyze program { root.artifacts.validator with instructions := [] } root.artifacts.producer)
-    refuses "wrong root instruction order" "construction-binding-forward-reference" (analyze program
-      { root.artifacts.validator with instructions := root.artifacts.validator.instructions.reverse } root.artifacts.producer)
-    refuses "wrong full return ABI" "original-security-validator-return" (analyze program
-      { root.artifacts.validator with returned := [] } root.artifacts.producer)
+    let .ok program := check root.snapshot | throwError "source admission"
+    let .ok layout := ZkcTools.ConstructionBindings.analyze program root.artifacts.validator
+      | throwError "current source/artifact association refused"
+    unless layout.calls.length == layout.loops.length do throwError "dropped source occurrence"
+    refuses "missing root calls" <| ZkcTools.ConstructionBindings.analyze program
+      { root.artifacts.validator with instructions := [] }
+    refuses "wrong root instruction order" <| ZkcTools.ConstructionBindings.analyze program
+      { root.artifacts.validator with instructions := root.artifacts.validator.instructions.reverse }
+    refuses "unavailable return reference" <| ZkcTools.ConstructionBindings.analyze program
+      { root.artifacts.validator with returned := [layout.arity] }
+    refuses "missing full return tuple" <| ConnectionInstallation.ReturnLayout.build
+      program.payload.entry.signature layout.context layout.context.validator
+      { root.artifacts.validator with returned := [] }
+    refuses "wrong nominal return types" <| ConnectionInstallation.ReturnLayout.build
+      program.payload.entry.signature layout.context layout.context.validator
+      { root.artifacts.validator with outputs := [] }
     for other in roots do
       if root.name != other.name then
-        refuses "wrong source/artifact association" "construction-binding-export-context" (analyze program other.artifacts.validator root.artifacts.producer)
-    unless binding.calls.length == (binding.assembly.steps.filter (fun step => step.callee.isSome)).length do
-      throwError "source call was dropped"
-    let some first := binding.calls.head? | throwError "missing call"
-    refuses "terminal from unchecked call result" "original-security-terminal-return" (analyzeTerminal program.payload.definitions
-      binding.calls binding.conjunctions
-      (some first.call.resultOrder))
-    if binding.calls.length > 1 then
-      refuses "dropped call from final conjunction" "original-security-conjunction-coverage" (analyzeTerminal program.payload.definitions
-        binding.calls binding.conjunctions
-        (some first.check.resultOrder))
-      let some last := binding.conjunctions.getLast? | throwError "missing conjunction"
-      let some helper := last.helper | throwError "missing terminal helper"
-      let terminal := analyzeTerminal program.payload.definitions
-        binding.calls
-      refuses "unknown terminal effect" "original-security-terminal-effect" (terminal
-        (binding.conjunctions.dropLast ++ [{ last with helper := none }]) binding.assembly.returnedOrder)
-      refuses "unknown terminal helper ABI" "original-security-terminal-helper" (terminal
-        (binding.conjunctions.dropLast ++ [{ last with helper := some { helper with outputs := [] } }])
-        binding.assembly.returnedOrder)
-      refuses "missing terminal helper body" "original-security-terminal-helper-body" (analyzeTerminal
-        (program.payload.definitions.filter (·.helper != helper))
-        binding.calls binding.conjunctions binding.assembly.returnedOrder)
-      refuses "non-Boolean terminal tuple coordinate" "original-security-conjunction-operands" (terminal
-        (binding.conjunctions.dropLast ++ [{ last with operands := last.operands.map fun (binder, _) => (binder, 1) }])
-        binding.assembly.returnedOrder)
-      refuses "missing terminal return" "original-security-terminal-return" (terminal binding.conjunctions none)
-      let body : Zkc.Source.Region Zkc.Source.Structured.dialect [.boolean, .boolean] [.boolean] :=
-        .ret (.cons .here .nil)
-      let replacement : Zkc.Source.Structured.CheckedDefinition := {
-        name := helper.name, kind := .math, inputs := [.boolean, .boolean], outputs := [.boolean],
-        raw := body.erase, body, formed := Zkc.Source.Region.elaborate_erase body }
-      let altered := program.payload.definitions.map fun definition =>
-        if definition.helper == helper then replacement else definition
-      refuses "same helper name and ABI with different body" "original-security-terminal-helper-body" (analyzeTerminal altered
-        binding.calls binding.conjunctions binding.assembly.returnedOrder)
-      let repeated := { last with operands := [(first.check.resultOrder, 0),
-        (first.check.resultOrder, 0)] }
-      refuses "duplicate leaf cannot cover other calls" "original-security-conjunction-coverage" (analyzeTerminal program.payload.definitions
-        binding.calls
-        (binding.conjunctions.dropLast ++ [repeated]) binding.assembly.returnedOrder)
-      let unavailable := { last with operands := [(1000000, 0), (1000001, 0)] }
-      refuses "unavailable terminal operand" "original-security-conjunction-dependency" (analyzeTerminal program.payload.definitions
-        binding.calls
-        (binding.conjunctions.dropLast ++ [unavailable]) binding.assembly.returnedOrder)
-  unless OriginalSecurityBindingsCatalogue.sources.length == roots.length * 5 do
-    throwError "generated binding inventory"
-  for (_, source) in OriginalSecurityBindingsCatalogue.sources do
-    for retired in ["OriginalSecurityMeanings", "OriginalSecurityInstallation", "OriginalRawSources",
-        "OriginalHonestSources", "OriginalHonestCompleteness", "pattern17", "pattern23",
-        "sourceTwoRoots", "twoRoots_bridge", "twoRoots_rejected", "twoRoots_cost"] do
-      if source.contains retired then throwError "generated binding retains handwritten wrapper: {retired}"
-  Lean.logInfo "PASS structural security generation, actual ABI associations and output inventory"
+        refuses "wrong source/artifact association" <|
+          ZkcTools.ConstructionBindings.analyze program other.artifacts.validator
+
+-- The actual source certificate refuses a missing physical ABI before running
+-- the source; full-return/history disagreements are proved in RootConnectionControls.
+example (model : DomainModel) :
+    Generated.Connections.SmallSumcheck.validator.source model [] = .halt .refused := rfl
+example (model : DomainModel) :
+    Generated.Connections.TwoSums.validator.source model [] = .halt .refused := rfl
+
+-- Identical host carriers cannot hide a wrong nominal vector sort in a full
+-- physical ABI. The actual root refuses before any source interaction.
+example (model : DomainModel) (raw : List (model.Field "other"))
+    (scalar : model.Field field) (count : Nat) (history : Domain.History model.toCarriers) :
+    Generated.Connections.SmallSumcheck.validator.source model
+      [.data (.vector "other" raw), .data (.field field scalar), .data (.index count),
+        .transcript Generated.Connections.SmallSumcheck.context.suite history] = .halt .refused := rfl
+
+#check TestsSecurity.SourcePropertyAssociations.changed_body
+#check TestsSecurity.SourcePropertyAssociations.changed_signature
+#check TestsSecurity.SourcePairProperties.no_stopped_completeness
+#check TestsSecurity.SourcePairProperties.captured_installed
+#check TestsSecurity.GeneratedRootConnections.smallCoherence
+#check TestsSecurity.GeneratedRootConnections.twoCoherence
+#check TestsSecurity.RootConnectionControls.wrong_residual
+#check TestsSecurity.RootConnectionControls.wrong_history
+#print axioms projection_not_associated
 
 end TestsSecurity.OriginalSecurityGeneration

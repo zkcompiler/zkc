@@ -1,6 +1,7 @@
 module
 
 public import ZkcExamples.Construction.EmbeddingEqualityBinding
+public import ZkcExamples.Structured.Generated.Connections.EmbeddingEquality
 public import ZkcSecurity.Endpoint.DomainCompiled
 public import ZkcSecurity.Endpoint.DomainSafety
 public import ZkcSecurity.Domains.KoalaBearModel
@@ -39,8 +40,16 @@ def embedBase (value : Base) : Octic := model.embed octicIdentity baseIdentity v
 
 def artifacts : Endpoint.Domain.Artifacts := ⟨snapshot, artifact, [.field baseIdentity, .field baseIdentity]⟩
 
-def checked : Endpoint.Domain.Compiled artifacts :=
-  ⟨imported, compiled, selection, selected, selection_checked, public_shape, source_occurrences⟩
+def checked : Endpoint.Domain.Compiled artifacts where
+  imported := imported
+  compiled := compiled
+  selection := selection
+  selected := selected
+  checked := selection_checked
+  publics := public_shape
+  occurrences := source_occurrences
+  sourceConnection := some ⟨ConnectionAdmission.ofRootCertificate
+    ZkcExamples.Structured.Generated.Connections.EmbeddingEquality.validator (by kernel_rfl)⟩
 
 abbrev Statement := artifacts.Statement model
 abbrev Payload := Construction.Domain.Payload model.toCarriers

@@ -64,11 +64,25 @@ def OccurrencesChecked (subject : Subject model original imported selected) : Pr
   SourceOccurrences.check original subject.selection.context selected.artifacts.producer = .ok () ∧
   SourceOccurrences.check original subject.selection.context selected.artifacts.validator = .ok ()
 
+/-- Keep each stage proposition indexed by the complete actual pair subject
+before reducing its independently selected connection meaning. -/
+def ProducerConnectionChecked (subject : Subject model original imported selected) : Prop :=
+  ConnectionAdmission.Required imported.program subject.selection.context
+    .producer selected.artifacts.producer
+
+def ValidatorConnectionChecked (subject : Subject model original imported selected) : Prop :=
+  ConnectionAdmission.Required imported.program subject.selection.context
+    .validator selected.artifacts.validator
+
 def stageLinks (subject : Subject model original imported selected) : List Obligation :=
   [⟨"pair.checked", "exact source, policy, producer and validator", subject.PairChecked, .infrastructure⟩,
    ⟨"pair.source", "retained target and honest input selection", subject.SourceChecked, .infrastructure⟩,
    ⟨"construction.checked", "admitted selected validator", subject.ValidatorChecked, .infrastructure⟩,
-   ⟨"pair.occurrences", "exact producer and validator source occurrences", subject.OccurrencesChecked, .infrastructure⟩]
+   ⟨"pair.occurrences", "exact producer and validator source occurrences", subject.OccurrencesChecked, .infrastructure⟩,
+   ⟨"pair.producer_connection", "complete source-to-producer correspondence",
+    subject.ProducerConnectionChecked, .infrastructure⟩,
+   ⟨"pair.validator_connection", "complete source-to-validator correspondence",
+    subject.ValidatorConnectionChecked, .infrastructure⟩]
 
 def stageLinkProofs (subject : Subject model original imported selected)
     (index : Fin subject.stageLinks.length) : Option (PLift (subject.stageLinks.get index).goal) := by
@@ -78,7 +92,9 @@ def stageLinkProofs (subject : Subject model original imported selected)
       subject.inputClausesExact, subject.preconditionsEmpty⟩
   | ⟨2, _⟩ => exact some ⟨subject.selectionExact, subject.selectionChecked⟩
   | ⟨3, _⟩ => exact some ⟨subject.producerOccurrences, subject.validatorOccurrences⟩
-  | ⟨n + 4, impossible⟩ => exact False.elim (by simp [stageLinks] at impossible)
+  | ⟨4, _⟩ => exact subject.producerConnection
+  | ⟨5, _⟩ => exact subject.validatorConnection
+  | ⟨n + 6, impossible⟩ => exact False.elim (by simp [stageLinks] at impossible)
 end Subject
 
 /-- Apply the same conservative dependency rule as soundness to every source

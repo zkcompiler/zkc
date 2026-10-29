@@ -1,6 +1,6 @@
 import ZkcSecurity.Claims.Completeness
 import ZkcSecurity.FiatShamir.HonestReadbackCompleteness
-import ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Completeness
+import ZkcSecurity.Examples.RootProperties.SmallSumcheck
 
 /-! Exact-run WP controls. The cache handler uses VCVio's actual `withCaching`,
 with an additional counter and ordered events. The final test re-establishes
@@ -172,7 +172,7 @@ theorem smallSumcheck_perfect_via_wp : CanonicalCompleteness SmallSumcheck.subje
     ZkcSecurity.Examples.Components.SmallSumcheck.Formula.nonvacuous (by rfl) (by rfl)
   intro inputs related honest producer validator prepared answers
   have aligned := Readback.of_abi SmallSumcheck.subject
-    Components.SmallSumcheckABI.abi OriginalSecurity.SmallSumcheck.Completeness.abi_readback
+    Components.SmallSumcheckABI.abi ZkcSecurity.Examples.RootProperties.SmallSumcheck.abi_readback
     inputs related honest producer validator prepared
   exact aligned.pair_wp _ _ _ _ _ _ _ _ answers
 

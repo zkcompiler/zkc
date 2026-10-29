@@ -4,7 +4,6 @@
 #include "Language.h"
 #include "Relations.h"
 #include "mlir/Parser/Parser.h"
-#include "zkc/Compiler/CommonSource.h"
 #include "zkc/Compiler/Compilation.h"
 #include "zkc/Compiler/NativeProof.h"
 #include "zkc/Compiler/PolynomialReduction.h"
@@ -69,7 +68,6 @@ int zkc::runCompiler(int argc, char **argv,
            "Logical source/library checking is target-independent.\n\n"
            "Protocol IR and native participant programs:\n"
            "  protocol-export FILE.mlir\n"
-           "  protocol-lean FILE.mlir --symbol=NAME\n"
            "  protocol-structured FILE.mlir --symbol=NAME\n"
            "  protocol-bundle FILE.mlir [--entry=NAME] [--no-simplify] "
            "[--release-storage] [--fuse-vector-reductions] "
@@ -416,8 +414,7 @@ int zkc::runCompiler(int argc, char **argv,
       outs() << result->bundle;
     return 0;
   }
-  if (mode == "protocol-export" || mode == "protocol-lean" ||
-      mode == "protocol-structured") {
+  if (mode == "protocol-export" || mode == "protocol-structured") {
     StringRef symbol;
     bool sourceExport = mode != "protocol-export";
     if (sourceExport && argc == 4) {
@@ -437,13 +434,6 @@ int zkc::runCompiler(int argc, char **argv,
       if (!result)
         return fail(result.takeError());
       outs() << result->bytes;
-      return 0;
-    }
-    if (sourceExport) {
-      auto result = protocol::exportCommonSource(*text, symbol, context);
-      if (!result)
-        return fail(result.takeError());
-      outs() << printJson(*result) << '\n';
       return 0;
     }
     auto module = mlir::parseSourceString<mlir::ModuleOp>(*text, &context);

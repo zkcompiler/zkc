@@ -19,7 +19,7 @@ FORMAT = "zkc.declarations/0"
 # as the declaration audit selects them. Executable roots, which define
 # `main`, are selected by their library directories.
 PACKAGES = {
-    "main": (LEAN, ["Zkc", "ZkcExamples", "Tests", "ZkcTools/CommonSource/Reference.lean",
+    "main": (LEAN, ["Zkc", "ZkcExamples", "Tests", "ZkcTools/ProcessView.lean", "ZkcTools/Companions.lean",
                     "ZkcTools/JsonSupport.lean", "ZkcTools/ProofAccount.lean",
                     "ZkcTools/StructuredSource",
                     "ZkcTools/ConstructionBindings"]),

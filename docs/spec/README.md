@@ -15,7 +15,7 @@ Examples are informative. [Status](../status.md) records implemented coverage.
 | Data | [Variants](ir/variants.md), [nested data](ir/data.md) |
 | Construction and analysis | [Transcripts](ir/construction.md), [construction obligations](ir/construction-obligations.md), [public-coin views](ir/public-coin.md), [compiler limits](ir/limits.md) |
 | Serialized artifacts | [Program](formats/program.md), [Entry package and interface](formats/entry.md), [proof deployment and transport](formats/proof.md), [message frames and setups](formats/messages.md) |
-| Formal import | [Scalar mathematical source](formats/common-source.md): retained program and relation-body exports; [structured source](formats/structured-source.md): original protocol-stage units with helpers, participants, contracts, applications and repeats; [constructed validator](formats/constructed-participant.md): a checked proof candidate's validator participant |
+| Formal import | [structured source](formats/structured-source.md): original protocol-stage units with helpers, participants, contracts, applications and repeats; [constructed validator](formats/constructed-participant.md): a checked proof candidate's validator participant |
 | Host execution | [Entries](runtime/entries.md), [joint bundles](runtime/joint.md), [proofs](runtime/proofs.md), [attempts](runtime/attempts.md), [services](runtime/services.md) |
 | Operational boundaries | [VM execution](runtime/vm.md), [numerical calls](runtime/numerical.md), [capacity](runtime/capacity.md), [file admission and publication](runtime/publication.md) |
 
@@ -23,6 +23,9 @@ The four MLIR profiles constrain one program at successive compilation
 boundaries; they are not four dialects. An artifact's structural admission does
 not establish its derivation from source. Version `0` names the current schema,
 without promising compatibility between development builds.
+
+See the [cross-component contract register](contracts.md) for owners, producers,
+independent consumers and the assurance/stage vocabularies.
 
 ## Mathematical and checking contracts
 

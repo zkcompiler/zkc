@@ -1,12 +1,12 @@
 import Tests.SumcheckSourceProperties
-import ZkcSecurity.Families.Sumcheck.SourceLossless
+import ZkcSecurity.Realizations.Sumcheck.SourceLossless
 
 set_option autoImplicit false
 noncomputable section
 namespace TestsSecurity.SumcheckSourceProperties
 open Zkc.Source Zkc.Source.Structured ReferenceLibrary Zkc.Transcript Zkc.Obligations
 open ZkcExamples.Structured SumcheckReferenceInstallation
-open ZkcSecurity.Families.Sumcheck TableComponent SourceIteration
+open ZkcSecurity.Families.Sumcheck ZkcSecurity.Realizations.Sumcheck TableComponent SourceIteration
 open SumcheckSourceSelections hiding field
 open OracleComp OracleSpec
 

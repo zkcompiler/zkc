@@ -7,19 +7,19 @@ public import ZkcExamples.Executable.SumcheckDomainHonest
 @[expose] public section
 
 /-! Honest completeness at the actual canonical Sumcheck Process and Code VM.
-The byte theorem composes actual checked native execution with honest success. -/
+The byte theorem composes actual checked interpreted execution with honest success. -/
 set_option autoImplicit false
 set_option maxRecDepth 50000
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 200000
 set_option backward.isDefEq.respectTransparency false
 namespace ZkcExamples.Executable.SumcheckCompleteness
 open Zkc Zkc.Construction Zkc.Executable Zkc.Source
 open SumcheckCharges
-open ZkcExamples.Construction.SumcheckDomainConnection
+open Zkc.Construction.Uniform.DomainAdapter
 
 -- Keep the certificate opaque while composing its already checked theorem.
 -- Otherwise elaboration unfolds the entire concrete Code before unification.
-attribute [local irreducible] DomainVM.Sufficient
+attribute [local irreducible] DomainVM.Sufficient DomainVM.Passes Executable.validate DomainVM.metered
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
@@ -34,14 +34,14 @@ theorem honest_metered (oracle : History F G → F) (budget : Nat) (values : Lis
     (initial : History F G) (fits : charge rounds ≤ budget) :
     ∃ history suffix, DomainVM.metered (m := Id) ZkcExamples.Construction.SumcheckProof.program
       ZkcExamples.Construction.SumcheckProof.context Origin.withoutCoordinates initial oracle cost budget
-      SumcheckProof.lowered (frame values values.sum rounds [])
+      SumcheckProof.lowered (SumcheckProof.physicalInputs values values.sum rounds [])
       ((honestRounds oracle initial values rounds).map (.field "bls12-381.fr")) =
         (.returned [.data (.boolean true), .transcript ZkcExamples.Construction.SumcheckProof.context.suite history], []) ∧
       Zkc.Construction.Uniform.DomainAdapter.readbackHistory Origin.withoutCoordinates history = some suffix := by
   obtain ⟨returned, unread, good, executed⟩ := DomainVM.metered_success (F := F) (G := G)
     ZkcExamples.Construction.SumcheckProof.program ZkcExamples.Construction.SumcheckProof.context
     Origin.withoutCoordinates initial oracle cost budget SumcheckProof.lowered
-    (frame values values.sum rounds []) _ _
+    (SumcheckProof.physicalInputs values values.sum rounds []) _ _
     (sufficient (F := F) (G := G) budget values values.sum rounds [] _ shaped fits)
     (SumcheckDomainHonest.observation_passes (F := F) (G := G) oracle initial values rounds admitted shaped)
   obtain ⟨selected, rfl, history, rfl, suffix, mapped⟩ := good
@@ -82,8 +82,8 @@ theorem honest_decoded (oracle : History F G → F)
   rw [receives, ← SumcheckMessages.honestRounds_length SumcheckDomainHonest.transcript oracle initial values rounds]
   exact decodeProof_messages decode SumcheckProof.coordinate encode (.field "bls12-381.fr") roundtrip bounded _
 
-/-- Canonical success on the bytes produced by the unchanged honest codec.
-The separate native bridge can compose this result and honest_header directly. -/
+/-- Canonical interpreted success on the bytes produced by the unchanged honest
+codec, together with the transcript suffix needed by execution consumers. -/
 theorem honest_metered_bytes (oracle : History F G → F)
     (decode : PhysicalType → List UInt8 → Option (Payload F G)) (encode : F → List UInt8)
     (roundtrip : ∀ value, decode SumcheckProof.coordinate (encode value) = some (.field "bls12-381.fr" value))
@@ -93,7 +93,7 @@ theorem honest_metered_bytes (oracle : History F G → F)
     (shaped : values.length = 2 ^ rounds) (initial : History F G) (fits : charge rounds ≤ budget) :
     ∃ history suffix, DomainVM.metered (m := Id) ZkcExamples.Construction.SumcheckProof.program
       ZkcExamples.Construction.SumcheckProof.context Origin.withoutCoordinates initial oracle cost budget
-      SumcheckProof.lowered (frame values values.sum rounds [])
+      SumcheckProof.lowered (SumcheckProof.physicalInputs values values.sum rounds [])
       (decodeProof decode
         (Plan.types (ZkcExamples.Construction.SumcheckProof.inputs (G := G) values values.sum rounds)
           SumcheckProof.lowered.plan)
@@ -103,7 +103,7 @@ theorem honest_metered_bytes (oracle : History F G → F)
   rw [honest_decoded oracle decode encode roundtrip bounded binding bindingLength values rounds admitted initial]
   exact honest_metered (F := F) (G := G) oracle budget values rounds admitted shaped initial fits
 
-/-- Honest native acceptance with the original field-coordinate codec laws,
+/-- Honest interpreted-byte acceptance with the original field-coordinate codec laws,
 binding length, table shape, admitted rounds and operational budget. -/
 theorem honest_accepted (oracle : History F G → F)
     (decode : PhysicalType → List UInt8 → Option (Payload F G)) (encode : F → List UInt8)
@@ -117,8 +117,25 @@ theorem honest_accepted (oracle : History F G → F)
       (ZkcExamples.Construction.SumcheckProof.inputs values values.sum rounds) initial
       (honestBytes encode binding (honestRounds oracle initial values rounds)) = true := by
   rw [ZkcExamples.Construction.SumcheckProof.acceptancePosition_eq]
-  apply SumcheckFamily.honest_accepted SumcheckDomainHonest.artifact 2 SumcheckDomainHonest.realization
-    oracle decode encode roundtrip bounded budget binding bindingLength values rounds admitted shaped initial
-  simpa only [SumcheckFamily.Artifact.charge, SumcheckCharges.charge_eq] using fits
+  obtain ⟨history, suffix, executed, mapped⟩ := honest_metered_bytes oracle decode encode roundtrip bounded
+    budget binding bindingLength values rounds admitted shaped initial fits
+  rw [DomainVM.checked_validate_metered (m := Id) ZkcExamples.Construction.SumcheckProof.program
+    ZkcExamples.Construction.SumcheckProof.context initial oracle installed
+    ZkcExamples.Construction.SumcheckProof.participant SumcheckProof.validator decode budget
+    SumcheckProof.domain_prepared SumcheckProof.lowered SumcheckProof.nativeScope SumcheckProof.native_checked
+    binding 0 (ZkcExamples.Construction.SumcheckProof.inputs values values.sum rounds)
+    (honestBytes encode binding (honestRounds oracle initial values rounds))
+    (SumcheckProof.admitted values values.sum rounds) (SumcheckProof.nominalInputs values values.sum rounds)
+    (SumcheckProof.embedded values values.sum rounds)]
+  rw [honest_header encode binding bindingLength _, ite_eq_left rfl]
+  change DomainVM.byteAcceptance 0
+    (DomainVM.nativeObservation ZkcExamples.Construction.SumcheckProof.context.suite Origin.withoutCoordinates initial
+      (DomainVM.metered (m := Id) ZkcExamples.Construction.SumcheckProof.program
+        ZkcExamples.Construction.SumcheckProof.context Origin.withoutCoordinates initial oracle cost budget
+        SumcheckProof.lowered (SumcheckProof.physicalInputs values values.sum rounds []) _)) = true
+  rw [executed]
+  simp [DomainVM.byteAcceptance, DomainVM.nativeObservation, Executable.observation,
+    Uniform.DomainAdapter.readbackOutcome, Uniform.DomainAdapter.readbackValues,
+    Uniform.DomainAdapter.readbackValue, Uniform.DomainAdapter.readbackData, mapped, selectedTrue]
 
 end ZkcExamples.Executable.SumcheckCompleteness

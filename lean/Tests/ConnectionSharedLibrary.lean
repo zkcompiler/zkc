@@ -2,12 +2,12 @@ import Zkc.Construction.ConnectionApplicationCertificate
 import ZkcTools.ConstructionBindings.Alignment
 import ZkcTools.ConstructionBindings.Root
 import Tests.SourceConnectionPilot
-import Tests.ConnectionSymbolicRepeat
 
 /-! One finite source body, two call placements, arbitrary enclosing repeat
 coordinates, and a stopping owned helper. These are linked applications of the
 admitted source declaration, not handwritten source process presentations.
-The two placements are not yet composed into a root certificate. -/
+The separate ConnectionNestedApplications fixture composes both actual calls
+into a complete root certificate with independent coverage. -/
 set_option autoImplicit false
 set_option maxRecDepth 16000
 set_option maxHeartbeats 2000000
@@ -167,39 +167,8 @@ example : True := by
       ⟨RosterDistinct.ofSeparate (by decide +kernel) (by decide +kernel), by derive_connection_alignment⟩
   trivial
 
-namespace Repeats
-abbrev program := Tests.ConnectionSymbolicRepeat.program
-abbrev pattern := Tests.ConnectionSymbolicRepeat.pattern
-abbrev routing := Tests.ConnectionSymbolicRepeat.routing Tests.ConnectionSymbolicRepeat.plainContext
-abbrev layout := Tests.ConnectionSymbolicRepeat.plainLayout
-abbrev target := Tests.ConnectionSymbolicRepeat.plainView
-
-def template : SourceTemplate program.payload [] :=
-  (SourceTemplate.build program.payload [] ⟨0, by decide⟩ 1 pattern).toOption.get (by decide +kernel)
-def library : Library program.payload [template.key] := .extend .empty template
-
-def form : Form [] [template.key] pattern.scope [.index] :=
-  (normalize {strict := true, callees := [template.key]}
-    Tests.ConnectionSymbolicRepeat.nestedBody 1 2 pattern).toOption.getD (.halt .refused)
-
-def accepted : ConnectionCertificate.Derivation routing {} program.payload.definitions [template.key]
-    [.index] 1 [[0,1]] [.data 3] none [] layout form target := by derive_connection_alignment
-
--- Generalizing repeats to a shared library preserves the finite certificate
--- size. Both arbitrary counts remain source binders, not expansion bounds.
-example : accepted.size = 6 := rfl
-
-def simulation (model : DomainModel) (outer inner seed : Nat)
-    (history : Domain.History model.toCarriers) :=
-  accepted.librarySimulation library model ⟨[],history⟩ []
-    (.cons outer (.cons inner (.cons seed .nil))) rfl
-    [.data (.index outer), .data (.index inner), .data (.index seed)]
-    (.cons ⟨outer,rfl,rfl⟩ (.cons ⟨inner,rfl,rfl⟩ (.cons ⟨seed,rfl,rfl⟩ .nil)))
-    (by simp [ArtifactBinding.Captures])
-end Repeats
 
 #print axioms placed
 #print axioms observedPlaced
 #print axioms Library.holds
-#print axioms Repeats.simulation
 end Tests.ConnectionSharedLibrary

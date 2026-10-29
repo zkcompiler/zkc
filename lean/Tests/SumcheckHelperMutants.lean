@@ -99,7 +99,7 @@ theorem check_permuted_expansion (table : Meanings F G) (xs point : List F) (cla
           if valid.get .here then invoke table checkTableHelper (checkInputs point xs claim)
           else .done (boolResult false)
       else .halt .exhausted := by
-  simp only [checkPermutedBody, checkTrueBody, checkFalseBody, checkInputs, inputs, boolResult,
+  simp only [checkPermutedBody, checkTrueBody, MultilinearBodies.checkTrueBody, checkFalseBody, MultilinearBodies.checkFalseBody, checkInputs, inputs, boolResult,
     Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get,
     prepend_empty, prepend_one, Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
@@ -125,7 +125,7 @@ theorem check_accept_malformed_expansion (table : Meanings F G) (xs point : List
           if valid.get .here then invoke table checkTableHelper (checkInputs xs point claim)
           else .done (boolResult true)
       else .halt .exhausted := by
-  simp only [checkAcceptMalformedBody, checkTrueBody, checkFalseAcceptBody, checkInputs, inputs, boolResult,
+  simp only [checkAcceptMalformedBody, checkTrueBody, MultilinearBodies.checkTrueBody, checkFalseAcceptBody, checkInputs, inputs, boolResult,
     Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get,
     prepend_empty, prepend_one, Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,

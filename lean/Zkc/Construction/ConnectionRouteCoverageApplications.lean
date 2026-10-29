@@ -11,7 +11,7 @@ shared with the finite application certificate and its simulation theorem. -/
 set_option autoImplicit false
 namespace Zkc.Construction.ConnectionApplications
 open Zkc.Source Zkc.Source.Structured NormalForm ConnectionFrame
-open ConnectionLibrary ConnectionCertificate
+open ConnectionLibrary ConnectionCertificate InputVisibility
 
 /-- Every reached effect of the actual linked application is covered, for all
 hidden logical inputs, enclosing coordinates, helper stops and typed replies.

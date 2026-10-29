@@ -4,7 +4,7 @@ public import ZkcExamples.Executable.SumcheckCompleteness
 
 @[expose] public section
 
-/-! Native byte regressions with symbolic field values, codec and oracle.
+/-! Interpreted-byte regressions with symbolic field values, codec and oracle.
 The same three budgets cover the actual zero-, one- and two-round verifier. -/
 set_option autoImplicit false
 set_option maxRecDepth 50000
@@ -13,7 +13,6 @@ set_option backward.isDefEq.respectTransparency false
 namespace Tests.SumcheckNativeConsumer
 open Zkc Zkc.Construction Zkc.Executable Zkc.Source
 open ZkcExamples.Executable
-open ZkcExamples.Construction.SumcheckDomainConnection
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 variable (oracle : History F G → F) (decode : PhysicalType → List UInt8 → Option (Payload F G))
@@ -60,7 +59,7 @@ theorem wrong_header (budget : Nat) (values : List F) (claim : F) (rounds : Nat)
 
 omit encode roundtrip bounded binding bindingLength in
 /-- Budget zero exhausts before the first helper, on arbitrary public inputs
-and proof bytes. The observation retains the native stop class. -/
+and proof bytes. The observation retains the interpreted stop class. -/
 theorem zero_budget (values : List F) (claim : F) (rounds : Nat) (bytes : List UInt8) :
     Run.observe (execute (m := Id) installed SumcheckProof.validator
       ZkcExamples.Construction.SumcheckProof.context oracle decode 0

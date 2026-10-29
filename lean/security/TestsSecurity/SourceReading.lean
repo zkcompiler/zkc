@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.FiatShamir.DomainSourceReading
-public import ZkcExamples.Structured.OriginalArtifacts.TwoSums
+public import ZkcExamples.Structured.Generated.Connections.TwoSums
 public import Zkc.Source.KernelRfl
 public import Mathlib.Data.ZMod.Basic
 
@@ -22,35 +22,29 @@ open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcSecurity.FiatShamir
 open ZkcSecurity.FiatShamir.DomainReduction
 
 section TwoSums
-open ZkcExamples.Structured.OriginalArtifacts.TwoSums
-variable {F G : Type} [CommRing F] [DecidableEq F]
-  [AddCommGroup G] [Module F G] [DecidableEq G]
+open ZkcExamples.Structured.Generated.Connections.TwoSums
 
-/-- Two real component applications with arbitrary symbolic repeat count and
-inputs. Source operation installation replaces all instance reading plumbing. -/
-theorem twoSums_reading (left right : List F) (leftClaim rightClaim : F)
-    (count handle : Nat) (history : Domain.History (uniformCarriers F G)) :
-    let source := Occurrence.participant (ringModel F G) program 1
-      (.cons (some left) (.cons (some right) (.cons (some leftClaim) (.cons (some rightClaim)
-        (.cons (some count) (.cons (some handle) .nil))))))
-    Bridge NominalDomain.interface SourceReading.Post history
-      (Original.fold (routing handle) source ⟨[], history⟩)
-      (DomainSourceReading.presentation (routing handle) source ⟨[], history⟩) := by
-  dsimp only
-  exact DomainSourceReading.reading (routing handle) _ rfl rfl _ ⟨[], history⟩
+/-- The actual generated validator root, for every physical ABI row. The
+source still contains arbitrary optional components and exact ABI refusals. -/
+theorem twoSums_reading (model : DomainModel) (physical : Domain.Environment model.toCarriers) :
+    Bridge NominalDomain.interface SourceReading.Post
+      (validator.inputs.initial physical).history
+      (validator.source model physical)
+      (DomainSourceReading.presentation validatorRouting
+        (validator.occurrenceSource model physical) (validator.inputs.initial physical)) := by
+  rw [validatorFacts.sourceEquation]
+  exact DomainSourceReading.reading validatorRouting _ rfl (by decide +kernel) _ (validator.inputs.initial physical)
 
-/-- The actual producer source has the same automatic endpoint projection.
-This deliberately makes no producer runtime/completeness assertion. -/
-theorem twoSums_producer_endpoint_reading (left right : List F) (leftClaim rightClaim : F)
-    (count handle : Nat) (history : Domain.History (uniformCarriers F G)) :
-    let source := Occurrence.participant (ringModel F G) program 0
-      (.cons (some left) (.cons (some right) (.cons (some leftClaim) (.cons (some rightClaim)
-        (.cons (some count) (.cons (some handle) .nil))))))
-    Bridge NominalDomain.interface SourceReading.Post history
-      (Original.fold (ProducerCall0.routing handle) source ⟨[], history⟩)
-      (DomainSourceReading.presentation (ProducerCall0.routing handle) source ⟨[], history⟩) := by
-  dsimp only
-  exact DomainSourceReading.reading (ProducerCall0.routing handle) _ rfl rfl _ ⟨[], history⟩
+/-- The actual generated producer root, for every physical ABI row. The
+source still contains arbitrary optional components and exact ABI refusals. -/
+theorem twoSums_producer_endpoint_reading (model : DomainModel) (physical : Domain.Environment model.toCarriers) :
+    Bridge NominalDomain.interface SourceReading.Post
+      (producer.inputs.initial physical).history
+      (producer.source model physical)
+      (DomainSourceReading.presentation producerRouting
+        (producer.occurrenceSource model physical) (producer.inputs.initial physical)) := by
+  rw [producerFacts.sourceEquation]
+  exact DomainSourceReading.reading producerRouting _ rfl (by decide +kernel) _ (producer.inputs.initial physical)
 
 end TwoSums
 

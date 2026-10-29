@@ -3,6 +3,7 @@ module
 public import Zkc.Construction.Compiled
 public import Zkc.Construction.SourceOccurrences
 public import Zkc.Construction.DomainProducer
+public import Zkc.Construction.ConnectionAdmission
 
 @[expose] public section
 
@@ -30,6 +31,10 @@ structure Compiled (art : Artifacts) where
   checked : selection.check imported art.participant = true
   publics : selection.publics = art.publics
   occurrences : SourceOccurrences.check art.original selection.context art.participant = .ok ()
+  /-- Proof of the request-fixed source boundary. Missing evidence leaves the
+  corresponding required stage link unresolved; it never weakens its goal. -/
+  sourceConnection : Option (PLift (ConnectionAdmission.Required imported.program
+    selection.context .validator art.participant)) := none
 
 namespace Compiled
 variable {art : Artifacts}

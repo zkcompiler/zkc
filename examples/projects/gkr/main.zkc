@@ -12,3 +12,22 @@ proof Proof = Gkr<Fr, 4, 4> {
 entry fn Interactive(inputs: Gkr<Fr, 4, 4>::Inputs) {
   return Gkr<Fr, 4, 4>::run(inputs);
 }
+
+spec ProofClaims for Proof {
+  ideal_sound: soundness@0(target.circuit_outputs,
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.adaptive,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q,
+      validator_cost=160/cardinality(Fr),application=application),
+    accept=out.accepted,stage=compiled_ideal,error=4*(Q+40)/cardinality(Fr));
+  charged: soundness@0(target.circuit_outputs,
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.adaptive,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q,
+      validator_cost=160/cardinality(Fr),application=application),
+    accept=out.accepted,stage=compiled_ideal,
+    charge=[per_site(sites.output,4/cardinality(Fr)),
+      per_site(sites.left.challenge,4/cardinality(Fr)),
+      per_site(sites.right.challenge,4/cardinality(Fr)),
+      per_site(sites.line_challenge,4/cardinality(Fr))]);
+}
+verify ProofClaims.ideal_sound=fs.keyed_soundness@0();
+verify ProofClaims.charged=fs.keyed_charged@0();

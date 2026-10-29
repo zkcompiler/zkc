@@ -80,7 +80,7 @@ mlir::LogicalResult verifyNumericalLowering(
 // Physical. Same-profile Exec and Physical require structural identity,
 // ignoring locations and SSA names. Materialization and storage rewrites use
 // their dedicated checks. Skipped or backward edges refuse. Executable inputs
-// without projection records acquire no common-source claim.
+// without projection records acquire no source-correspondence claim.
 /// Lowering of participant mathematics is checked against the calculation
 /// schedule of `policy`.
 mlir::LogicalResult

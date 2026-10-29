@@ -34,7 +34,7 @@ A complete-packet profile can instead require a successful result with `t = []`.
 Prefix decoding and full-packet acceptance therefore have different languages.
 
 An intermediate representation codec can replace `Bytes` by a specified syntax
-type. The [scalar common-source profile](../../../lean/docs/spec/common-source.md) uses
+type. The [Structured source profile](../../../lean/docs/spec/structured-source.md) uses
 JSON values and an error-returning decoder. It separately specifies parsing
 text into those values. An encode/decode pair alone asserts no inverse,
 faithfulness, injectivity or canonical serialization law.
@@ -105,7 +105,7 @@ A byte-facing text profile fixes the text encoding, invalid-text behavior,
 whole-document consumption and subsequent syntax decoder. A claim of canonical
 bytes additionally fixes whitespace, escaping and numeric spellings, or another
 exact serialization rule. Equality of decoded JSON values does not supply such
-a rule. The [scalar common-source format](../../../lean/docs/spec/common-source.md)
+a rule. The [Structured source format](../formats/structured-source.md)
 specifies its own noncanonical text boundary and decoder limits.
 
 ## Selected scalar codec
@@ -122,5 +122,5 @@ bytes, and [proof transport](../formats/proof.md) defines complete proof
 consumption. These are distinct accepted languages with their own limits and
 failure classes. Native checks and tests do not prove every general codec law.
 
-The scalar common-source model has its own admission and execution laws;
-they do not establish a native parser or receive theorem.
+Structured admission and participant execution laws do not establish a native
+parser or receive theorem. Common scalar clients use derived Structured views.

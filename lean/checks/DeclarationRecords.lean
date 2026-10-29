@@ -1455,7 +1455,19 @@ def claimAuditIdentity (row : Json) : Json := Id.run do
   let notes := ["provenance", "provenance_error", "root_route", "discharger",
     "evidence_attribution", "proof_dependencies"]
   let fields := receipt.getObj?.toOption.map (·.toArray.toList) |>.getD []
-  let receipt := Json.mkObj (fields.filter (fun pair => !notes.contains pair.1))
+  -- An identical generated equation can be stored by several imported
+  -- modules. Its selected container may change with the import closure.
+  -- `storedAxioms` checks every resolved body against all stored providers;
+  -- the dependency's name and statement stay part of this transport identity.
+  -- Keep the observed module in the report, but do not mistake an alternative
+  -- checked identical provider for a changed proposition or proof dependency.
+  let dependencyIdentity := (ReceiptAudit.arr (ReceiptAudit.get receipt "dependencies")).map fun item =>
+    let fields := item.getObj?.toOption.map (·.toArray.toList) |>.getD []
+    Json.mkObj (fields.filter (fun pair => pair.1 != "module"))
+  let dependencyIdentity := dependencyIdentity.qsort fun left right => left.compress < right.compress
+  let receipt := Json.mkObj ((fields.filter (fun pair =>
+    !notes.contains pair.1 && pair.1 != "dependencies")) ++
+    [("dependencies", Json.arr dependencyIdentity)])
   let fields := data.getObj?.toOption.map (·.toArray.toList) |>.getD []
   return Json.mkObj ((fields.filter (fun pair => pair.1 != "receipt")) ++ [("receipt", receipt)])
 
@@ -1512,12 +1524,8 @@ unsafe def receiptStatus : IO UInt32 := do
       -- Optional attribution and context-dependent request classification do
       -- not determine identity. Stored type/meaning/link facts still do.
       if operation != "extract" && isRoot && claimAuditIdentity row != claimAuditIdentity actual then
-        let diagnostics := ReceiptAudit.reasons (ReceiptAudit.auditReceipt
-          (ReceiptAudit.arr (ReceiptAudit.get input "headers")) supplied row
-          (ReceiptAudit.get input "request_record")
-          (ReceiptAudit.get (ReceiptAudit.claimData row) "wire_request")).envelope
-        throw <| IO.userError (s!"receipt status transport: stale or corrupt kernel export for {name}; " ++
-          String.intercalate "; " diagnostics.toList)
+        throw <| IO.userError
+          s!"receipt status transport: stale or corrupt kernel export for {name}; mandatory kernel observations changed"
       fresh := fresh.push actual
   for row in supplied do
     unless fresh.any (fun current => ReceiptAudit.get current "name" == ReceiptAudit.get row "name") do

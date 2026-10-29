@@ -1,9 +1,11 @@
 module
 
 public import ZkcSecurity.Realizations.Gkr.Rounds
+public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import ZkcExamples.Structured.GkrVerifierProcess
 public import Zkc.Semantics.Yields
 public import ZkcExamples.Structured.GkrSourceLaws
-public import ZkcExamples.Structured.GkrSourceCallbacks
+public import ZkcExamples.Structured.Generated.Presentations.Gkr
 
 @[expose] public section
 
@@ -106,13 +108,13 @@ def loop (ctx : ProtocolContext) : (count : Nat) → {n : Nat} →
     PIR.Process (participantInterface F G) (Result F)
   | 0, _, _, raw, point => .done (values raw point)
   | count + 1, _, state, raw, point =>
-    .call (.send (ty := .field scalarDomain) (GkrRoundsNormalForms.round0Site ctx) (ctx.roles 1)
+    .call (.send (ty := .field scalarDomain) (GkrVerifier.roundSite ctx "0") (ctx.roles 1)
       (GkrRoundsReference.message state).constant) fun _ =>
-    .call (.send (ty := .field scalarDomain) (GkrRoundsNormalForms.round1Site ctx) (ctx.roles 1)
+    .call (.send (ty := .field scalarDomain) (GkrVerifier.roundSite ctx "1") (ctx.roles 1)
       (GkrRoundsReference.message state).linear) fun _ =>
-    .call (.send (ty := .field scalarDomain) (GkrRoundsNormalForms.round2Site ctx) (ctx.roles 1)
+    .call (.send (ty := .field scalarDomain) (GkrVerifier.roundSite ctx "2") (ctx.roles 1)
       (GkrRoundsReference.message state).quadratic) fun _ =>
-    .call (.receive (.field scalarDomain) (GkrRoundsNormalForms.deliverySite ctx) (ctx.roles 1)) fun challenge =>
+    .call (.receive (.field scalarDomain) (GkrVerifier.deliverySite ctx) (ctx.roles 1)) fun challenge =>
     loop ctx count (GkrRoundsReference.restrict state challenge)
       (raw.restrict challenge) (point ++ [challenge])
 
@@ -122,13 +124,13 @@ def execute (ctx : ProtocolContext) : (count : Nat) → {n : Nat} →
     PIR.Process (participantInterface F G) (Output F n)
   | 0, _, state, raw, point => .done ⟨state, raw, point⟩
   | count + 1, _, state, raw, point =>
-    .call (.send (ty := .field scalarDomain) (GkrRoundsNormalForms.round0Site ctx) (ctx.roles 1)
+    .call (.send (ty := .field scalarDomain) (GkrVerifier.roundSite ctx "0") (ctx.roles 1)
       (GkrRoundsReference.message state).constant) fun _ =>
-    .call (.send (ty := .field scalarDomain) (GkrRoundsNormalForms.round1Site ctx) (ctx.roles 1)
+    .call (.send (ty := .field scalarDomain) (GkrVerifier.roundSite ctx "1") (ctx.roles 1)
       (GkrRoundsReference.message state).linear) fun _ =>
-    .call (.send (ty := .field scalarDomain) (GkrRoundsNormalForms.round2Site ctx) (ctx.roles 1)
+    .call (.send (ty := .field scalarDomain) (GkrVerifier.roundSite ctx "2") (ctx.roles 1)
       (GkrRoundsReference.message state).quadratic) fun _ =>
-    .call (.receive (.field scalarDomain) (GkrRoundsNormalForms.deliverySite ctx) (ctx.roles 1)) fun challenge =>
+    .call (.receive (.field scalarDomain) (GkrVerifier.deliverySite ctx) (ctx.roles 1)) fun challenge =>
     execute ctx count (GkrRoundsReference.restrict state challenge)
       (raw.restrict challenge) (point ++ [challenge])
 

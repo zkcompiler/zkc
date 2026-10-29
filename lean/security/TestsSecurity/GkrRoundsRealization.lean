@@ -9,7 +9,7 @@ set_option maxHeartbeats 8000000
 
 namespace TestsSecurity.GkrRoundsRealization
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.Bindings
-open ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs
+open ZkcExamples.Structured.GkrSourceViews
 open ZkcExamples.Structured.Generated.Bindings.GkrRounds (payload)
 open ZkcSecurity.Examples.Components
 open GkrRoundsHelpers GkrRoundsProcesses GkrRoundsReference GkrRoundsRealization GkrRoundsGateRealization

@@ -231,6 +231,82 @@ private def dependencyPolicyJson : String := r##"{
       "subjects"
     ],
     [
+      "ZkcTools.ConstructionBindings.Admission",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.Diagnostics",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.ViewSyntax",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.Root",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.Inputs",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.LibraryBuilder",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.LibraryPlan",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.Alignment",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.Syntax",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.Readback",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.Presentation.Syntax",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.Companions",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.ReferenceLaws",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ProcessView",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.ReferenceInstallation",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.InferReferenceInstallation",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.NormalizedRoot",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.Association",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.Composition",
+      "proof-tools"
+    ],
+    [
       "ZkcTools",
       "tools"
     ],
@@ -321,7 +397,8 @@ private def dependencyPolicyJson : String := r##"{
         "security-families",
         "security-upstream",
         "upstream",
-        "algebra-upstream"
+        "algebra-upstream",
+        "proof-tools"
       ]
     ],
     [
@@ -334,7 +411,8 @@ private def dependencyPolicyJson : String := r##"{
         "security-families",
         "security-upstream",
         "upstream",
-        "algebra-upstream"
+        "algebra-upstream",
+        "proof-tools"
       ]
     ],
     [
@@ -369,7 +447,8 @@ private def dependencyPolicyJson : String := r##"{
         "core",
         "families",
         "subjects",
-        "upstream"
+        "upstream",
+        "proof-tools"
       ]
     ],
     [
@@ -404,7 +483,8 @@ private def dependencyPolicyJson : String := r##"{
         "security-upstream",
         "clean-upstream",
         "algebra-upstream",
-        "upstream"
+        "upstream",
+        "proof-tools"
       ]
     ],
     [
@@ -427,7 +507,8 @@ private def dependencyPolicyJson : String := r##"{
         "security-upstream",
         "clean-upstream",
         "algebra-upstream",
-        "upstream"
+        "upstream",
+        "proof-tools"
       ]
     ],
     [
@@ -534,7 +615,8 @@ private def dependencyPolicyJson : String := r##"{
         "upstream",
         "algebra-upstream",
         "subjects",
-        "security-subjects"
+        "security-subjects",
+        "proof-tools"
       ]
     ],
     [
@@ -552,7 +634,8 @@ private def dependencyPolicyJson : String := r##"{
         "security-subjects",
         "adapters",
         "optional-subjects",
-        "arklib-upstream"
+        "arklib-upstream",
+        "proof-tools"
       ]
     ],
     [
@@ -575,6 +658,14 @@ private def dependencyPolicyJson : String := r##"{
         "security-upstream",
         "clean-upstream",
         "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "proof-tools",
+      [
+        "core",
+        "proof-tools",
         "upstream"
       ]
     ]

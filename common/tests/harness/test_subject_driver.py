@@ -59,39 +59,84 @@ def test_rewritten_module_invalidates_builds(driver_module, tmp_path, monkeypatc
 
 
 @pytest.mark.parametrize("write", [False, True])
-def test_normal_forms_require_a_fresh_module_build(driver_module, tmp_path, monkeypatch, write):
+def test_source_views_require_every_fresh_module_build(driver_module, tmp_path, monkeypatch, write):
     monkeypatch.setattr(driver_module, "ROOT", tmp_path)
     monkeypatch.setattr(driver_module, "LEAN", tmp_path / "lean")
-    output = tmp_path / "lean/Example/NormalForms.lean"
-    output.parent.mkdir(parents=True)
-    output.write_text("module\n")
-    request = tmp_path / "request.toml"
-    request.write_text('output = "lean/Example/NormalForms.lean"\n')
-    subject = SimpleNamespace(name="example", get=lambda *_: "request.toml")
+    modules = driver_module.source_views.modules("Gkr")
+    outputs = {}
+    for module in modules:
+        output = tmp_path / "lean" / (module.replace(".", "/") + ".lean")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text("module\n")
+        outputs[str(output.relative_to(tmp_path))] = output
+    subject = SimpleNamespace(name="example", get=lambda *_: ["Gkr"])
     driver, calls = recording(driver_module, tmp_path, write=write)
-    driver.built.add((str(driver_module.LEAN), "Example.NormalForms"))
+    driver.built.update((str(driver_module.LEAN), module) for module in modules)
     record = {"generated": {}, "checks": []}
-    driver.normal_forms(subject, record)
-    assert calls[0][0][-1] == (str(request) if write else "--check")
-    assert calls[-1][0] == ["lake", "build", "Example.NormalForms"]
-    assert record["generated"]["lean/Example/NormalForms.lean"]["sha256"] == driver_module.file_digest(output)
+    driver.source_views(subject, record)
+    assert calls[0][0][-1] == ("Gkr" if write else "--check")
+    assert [call[0] for call in calls[1:]] == [["lake", "build", *modules]]
+    assert set(record["generated"]) == set(outputs)
+    for path, output in outputs.items():
+        assert record["generated"][path]["sha256"] == driver_module.file_digest(output)
     assert record["checks"][0]["outcome"] == "accepted"
 
 
-def test_normal_forms_build_failure_cannot_record_acceptance(driver_module, tmp_path, monkeypatch):
+
+def test_construction_views_follow_fresh_source_and_precede_consumers(driver_module, tmp_path, monkeypatch):
+    monkeypatch.setattr(driver_module, "ROOT", tmp_path)
+    manifest = tmp_path / "subject.toml"
+    manifest.write_text("construction fixture")
+    subject = SimpleNamespace(
+        name="construction", path=manifest, modules={}, construction_namespace="Example",
+        profile=lambda name: name == "construction", table=lambda name: {},
+        get=lambda table, key, default=None: default,
+        generated=lambda key: key == "glue",
+        module_name=lambda key: {"data": "Example.Data", "participant": "Example.Participant",
+                                 "glue": "Example.Glue"}.get(key))
+    artifacts = dict(source=b"source", original_text="original", original=[], exported=[None, None, "candidate"],
+                     interface={}, candidate="candidate", export_text="export", deployment_text="deployment",
+                     policy={}, source_claims={"native_export_digest": "digest"})
+    driver, _ = recording(driver_module, tmp_path, write=True)
+    driver.args.compiler = "unused"
+    order = []
+    monkeypatch.setattr(driver_module.pipeline_compile, "proof_entry", lambda *_: artifacts)
+    monkeypatch.setattr(driver_module.structured, "render", lambda *_: "fresh source data")
+    monkeypatch.setattr(driver_module.constructed, "render", lambda *_: "fresh participant data")
+    monkeypatch.setattr(driver_module.glue, "Entry", lambda *_: object())
+    monkeypatch.setattr(driver_module.glue, "construction_glue", lambda *_: "consumer")
+    monkeypatch.setattr(driver, "generated", lambda subject, key, text, record: order.append(key))
+
+    def views(subject, record):
+        assert order == ["data", "participant"]
+        order.append("views")
+
+    monkeypatch.setattr(driver, "source_views", views)
+    monkeypatch.setattr(driver, "build", lambda module: order.append("build:" + module))
+    monkeypatch.setattr(driver, "construction_rule", lambda *_: order.append("construction"))
+    monkeypatch.setattr(driver, "native_refusals", lambda *_: None)
+    monkeypatch.setattr(driver, "claims", lambda *_: order.append("claims"))
+    driver.subject(subject)
+    assert order == ["data", "participant", "views", "glue", "build:Example.Glue", "construction", "claims"]
+
+def test_source_views_late_build_failure_cannot_record_acceptance(driver_module, tmp_path, monkeypatch):
     monkeypatch.setattr(driver_module, "ROOT", tmp_path)
     monkeypatch.setattr(driver_module, "LEAN", tmp_path / "lean")
-    (tmp_path / "request.toml").write_text('output = "lean/Example/NormalForms.lean"\n')
-    subject = SimpleNamespace(name="example", get=lambda *_: "request.toml")
+    modules = driver_module.source_views.modules("Gkr")
+    output = tmp_path / "lean" / (modules[0].replace(".", "/") + ".lean")
+    output.parent.mkdir(parents=True)
+    output.write_text("module\n")
+    subject = SimpleNamespace(name="example", get=lambda *_: ["Gkr"])
     driver, _ = recording(driver_module, tmp_path)
 
-    def fail(*_args, **_kwargs):
+    def build(*wanted, **_kwargs):
+        assert set(wanted) == set(modules)
         raise driver_module.Refused("generated theorem did not elaborate")
 
-    monkeypatch.setattr(driver, "build", fail)
+    monkeypatch.setattr(driver, "build", build)
     record = {"generated": {}, "checks": []}
     with pytest.raises(driver_module.Refused, match="did not elaborate"):
-        driver.normal_forms(subject, record)
+        driver.source_views(subject, record)
     assert record == {"generated": {}, "checks": []}
 
 
@@ -137,15 +182,17 @@ def test_threshold_is_evaluated_after_the_generated_facts(driver_module, tmp_pat
     ("open", [], []),
 ])
 @pytest.mark.parametrize("explicit_entries", [False, True])
+@pytest.mark.parametrize("owned_artifacts", [False, True])
 def test_claim_records_preserve_semantic_status_and_every_source_node(
-        driver_module, tmp_path, monkeypatch, status, definitions, attempts, explicit_entries):
+        driver_module, tmp_path, monkeypatch, status, definitions, attempts, explicit_entries, owned_artifacts):
     """Automation failure must not invent missing definitions or a receipt."""
     settings = {("lean", "namespace"): "Example", ("executable", "namespace"): None}
     subject = SimpleNamespace(
         name="example", construction_namespace="Example.Glue",
         get=lambda table, key, default=None: settings.get((table, key), default),
         profile=lambda key: False, module_name=lambda key: "Example." + key.capitalize(),
-        generated=lambda key: tmp_path / (key.capitalize() + ".lean"),
+        generated=lambda key: (tmp_path / (key.capitalize() + ".lean")
+                               if key == "claims" or (owned_artifacts and key == "artifacts") else None),
         generated_package=lambda key: tmp_path)
     claims = [{"attachment": {"node": {"owner": "proof", "claim": 0}}, "request_digest": "proof"}]
     interactive_claims = [{"attachment": {"node": {"owner": "interactive", "claim": 0}},
@@ -162,11 +209,16 @@ def test_claim_records_preserve_semantic_status_and_every_source_node(
     driver, _ = recording(driver_module, tmp_path, outputs={"example:claims-build": stdout})
     if explicit_entries:
         driver.args.claim_entry = ["example::Proof", "example::Interactive"]
-    monkeypatch.setattr(driver_module.evidence, "artifacts_module", lambda *args: "artifacts")
+    def render_artifacts(*args):
+        assert owned_artifacts, "an imported typed subject must not gain a second artifact adapter"
+        return "artifacts"
+    monkeypatch.setattr(driver_module.evidence, "artifacts_module", render_artifacts)
     monkeypatch.setattr(driver_module.evidence, "claims_module", lambda *args: "wire data")
-    monkeypatch.setattr(driver, "generated", lambda *args: None)
+    generated = []
+    monkeypatch.setattr(driver, "generated", lambda subject, key, source, record: generated.append(key))
     record = {"checks": []}
     driver.claims(subject, artifacts, None, record, interactive)
+    assert set(generated) == ({"claims", "artifacts"} if owned_artifacts else {"claims"})
     expected_entries = ["example::Proof", "example::Interactive"] if explicit_entries else ["example::Proof"]
     assert record["source_claims"]["entries"] == expected_entries
     assert [row["selection"] for row in record["source_claim_inventory"]] == [

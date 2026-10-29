@@ -2,6 +2,7 @@ module
 
 public import Zkc.Construction.ConnectionRoot
 public import Zkc.Construction.ConnectionInputLayout
+public import Zkc.Construction.ConnectionInputFrames
 
 @[expose] public section
 
@@ -16,21 +17,12 @@ open Zkc.Source Zkc.Source.Structured NormalForm ConnectionFrame ConnectionInput
 
 attribute [local implicit_reducible] CheckedProtocol.signature
 
-/-- At every checkpoint retain the whole physical input and every component
-that its actual ABI decodes. Malformed inputs still retain their physical row,
-without fabricating a successful source input tuple. -/
-def InputFrames {carriers : Carriers} {A : Type} (abi : Original.InputABI)
-    (types : List Ty) (physical : Domain.Environment carriers)
-    (_source : PIR.Process (Domain.effects carriers) A) (frame : Domain.Environment carriers) : Prop :=
-  ArtifactBinding.Captures physical frame ∧
-    ∀ values : Values (Component carriers.Value) types, abi.read physical types = some values →
-      Original.ValuesHolds frame abi.locations values
-
 /-- A root uses the actual admitted entry and actual constructed instructions.
 The generated instruction correspondence is independent of protocol mathematics;
 the source correspondence is obtained only from the finite alignment below. -/
 structure RootCertificate (program : Program) (routing : Original.Routing) (role : Nat)
     (artifact : Participant) where
+  library : ConnectionLibrary.Bundle program.payload := .empty program.payload
   snapshot : routing.snapshot = program.snapshot
   roleValid : role < program.payload.entry.roles.length
   distinct : RosterDistinct {} role program.payload.entry.roles.length
@@ -42,6 +34,7 @@ structure RootCertificate (program : Program) (routing : Original.Routing) (role
   alignment : ConnectionCertificate.Certificate routing {} program.payload.definitions
     role program.payload.entry.roles.length program.payload.entry inputs.pattern
     output.locations output.historyReference [] inputs.layout target
+    library.keys (.selected program.payload rfl library.library)
 
 namespace RootCertificate
 variable {program : Program} {routing : Original.Routing} {role : Nat} {artifact : Participant}
@@ -69,7 +62,7 @@ is a premise. This includes malformed input rows and all adversarial replies. -/
         some (root.inputs.pattern.environment model binders) :=
       (Original.InputABI.read_iff _ _ _ _).mpr ⟨sorted, decoded⟩
     have aligned := fromCertificate program routing role artifact root.inputs.abi root.snapshot
-      root.inputs.pattern root.inputs.layout root.output root.target root.alignment root.distinct
+      root.inputs.pattern root.inputs.layout root.output root.target root.library root.alignment root.distinct
       root.inputs.visible rfl model (root.correspondence model) binders physical
       (root.inputs.initial physical) rfl sorted
       (root.inputs.shape.physicalBounds root.inputs.sorted sorted) decoded related

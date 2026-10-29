@@ -19,6 +19,7 @@ separate boundaries, and the report names both.
 |---|---|
 | Subject manifest | `zkc.subject/0`: subject name, Entry selection and generated file paths |
 | Pipeline evidence | `zkc.subject-evidence/0`: artifacts, regenerated module digests, check outcomes, bound source requests and receipt associations |
+| Consumer requirements | Optional independent `zkc.required-requests/0` input: the complete requests the consumer requires, supplied separately from pipeline evidence |
 | Bound source requests | `zkc.bound-source-claims/0` in `source_claims`: every request, digest, attachment, proposed method and source site bindings |
 | Declaration records | `zkc.declarations/0`: actual elaborated declarations, premise telescopes, axiom closures and typed receipt extraction |
 | Mathematical ledger | `lean/checks/claims.toml` and `claims.lock.json`: maintained mathematical results, audited independently of source requests |
@@ -26,6 +27,50 @@ separate boundaries, and the report names both.
 The security and optional integration packages contribute compatible registry
 and endpoint tables. Conflicting identifiers, schemas and endpoint registrations
 are errors. A name or provenance string never constructs a proposition.
+
+## Independent consumer requirements
+
+A consumer may supply `--required-requests FILE --subject NAME` to
+`lean/checks/check_records.py`. The file has exactly this envelope:
+
+```json
+{
+  "format": "zkc.required-requests/0",
+  "subject": "NAME",
+  "requests": [
+    {"id": "consumer-chosen-label", "request": "<complete Wire.Request object>"}
+  ]
+}
+```
+
+The string placeholder in this schematic example must be replaced by the
+complete JSON request object, including the stage, target, model, quantity and
+artifact identities. Identifiers are distinct nonempty strings. Unknown envelope
+or row fields, a different subject, duplicate identifiers and empty request
+objects are refused. Labels do not select meanings. The reporter does not infer
+requirements from the source, from a manifest, or from receipts; doing so would
+hide precisely the omissions this input detects.
+
+The existing Lean receipt audit compares each full request with the selected
+scope's canonical security rows. A certified matching receipt satisfies it.
+Author-defined and generic claims cannot satisfy canonical requirements. A single
+proof may satisfy several consumer labels for the identical request. A different
+stage, quantity or artifact does not match; a digest alone never suffices.
+
+`requirements.input` retains the supplied file contents and `requirements.claims`
+contains one row per requirement, in input order: `id`, `request`, `status`,
+`matching_nodes`, `certified_nodes` and `reasons`. A missing request is `open`,
+even if no source claims were emitted. An exact match with only registered but
+undefined meanings is `incomplete`. Every required row must be `certified` for
+the selected aggregate to be certified. Existing receipt rows retain their own
+status, and trials remain separate from consumer coverage. A transport failure
+retains the supplied input under `required_requests` and makes no coverage claim.
+
+Without an independent input, `requirements` is null; an explicitly empty list
+is retained as such. Neither establishes that the consumer's requirements are
+exhaustive. Certification still rests on the existing kernel audit and stated
+external admissions. This comparison adds no proof of source or native-byte
+correspondence and no new status vocabulary.
 
 ## Pipeline association
 
@@ -135,6 +180,12 @@ arguments; reporting never erases them to turn a different request into a match.
 | `required_links` | Registry-owned dependent goals and actual proof presence; remaining telescope conditions are audited separately |
 | `stage_links` | Actual-subject stage obligations and physical artifact roles, with kernel goal comparisons and explicit subject-index comparisons against registered links |
 | `provenance`, `provenance_error` | Optional route/method notes and extraction diagnostics; strings cannot introduce assumptions |
+
+Registered stage goals keep their actual subject as an explicit index before
+reducing checker or connection propositions. Equal compiled participants do not
+make two different subject references interchangeable. This applies to uniform
+verifiers, dependent-domain verifiers, and both roles of an honest pair; it does
+not constrain the method used to prove their fixed goals.
 
 A failure to extract authoritative semantic fields is explicit and leaves the
 request open. Optional attribution failures are diagnostic only. A matching
@@ -501,3 +552,11 @@ locks. Missing theorem names, changed statements and forbidden axioms fail its
 check. Rendering and document-name auditing continue independently of source
 request certification. `--write` updates generated regions and locks; it is not
 a proof or approval of a new semantic claim.
+
+An identical generated Lean declaration may be stored in more than one imported
+module. Receipt transport preserves its name and statement observations while
+allowing the selected container to vary with the import closure. The actual
+container remains reported. Before classification, the stored-declaration audit
+compares complete types and bodies of duplicate providers and recomputes the
+transitive axiom closure; differing providers still refuse. This is not an
+exception for changed proof bodies, missing declarations or forbidden axioms.

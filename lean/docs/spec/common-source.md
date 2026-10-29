@@ -1,49 +1,30 @@
-# Scalar common-source profile
+# Derived Common scalar views
 
-The [native export contract](../../../docs/spec/formats/common-source.md) owns
-the compiler boundary; this page specifies its independent formal admission.
+The independent Common frontend is retired: there is no `zkc.common-source/0`
+admission, flat Common program AST, `common-source` executable or
+`protocol-lean` native export. Their former admission and lowering claims have
+been removed; a renamed claim does not stand in for them.
 
-`zkc-compile protocol-lean FILE --symbol=SYMBOL` verifies retained protocol-profile
-MLIR and exports a selected scalar mathematical program. A private, single-block
-pure function may also be selected to import an authored relation formula.
-Formula inputs and output belong to one synthetic participant; this is a
-mathematical predicate interpretation, not protocol communication.
+Maintained Common scalar source clients consume the [Structured source
+model](structured-source.md). Strict constructor serialization preserves the
+actual original-stage export. Lean-owned phased admission checks the complete
+unit, its typed participant bodies, role visibility and input/output rows.
 
-The exact JSON array schema is `zkc.common-source/0`:
+`Zkc.Source.Common.Vocabulary` and `Scalar` supply mathematical contract
+vocabulary, not an independently admitted source. `Structured.CommonAdapter`
+projects typed participant actions to that vocabulary. It refuses unsupported
+message sorts, and its embedding/projection law preserves every continuation and
+stop. Concrete source clients prove equations for their actual Structured
+participant followed by this projection.
 
-```text
-[format, source-sha256, symbol, roles, input-types, input-role-sets,
- result-type, output-role-set, instructions, returned-reference]
-```
+Lean's present-input printer emits a literal normal form, its checked complete
+returned-row equation and actual input constructors. It covers the explicit
+availability pattern, not arbitrary optional input rows. Separate input controls
+retain absent-input behavior. The mathematical Schnorr, Sumcheck and
+factor-opening properties retain their existing honest/adversarial experiments,
+causality and algebraic premises. No native correctness or security follows from
+source admission alone.
 
-References index the current context; each value-producing instruction prepends
-its result. Guards and statement annotations do not. Supported sorts are Boolean,
-nominal field, nominal group and nominal service references. Supported arithmetic
-includes field constants/add/subtract/multiply/equality, group identity/add/scale/
-equality, Boolean operations and selection. Effects are role restrictions,
-exchange, owner-local scalar draws, guards and retained statement metadata.
-The vocabulary and exact constructor arities live in
-`Zkc.Source.Common.Vocabulary` and `Zkc.Source.Common.Format`.
-
-The exporter admits one result, at most 16 roles, 512 inputs, 1024 instructions,
-64 static helper nesting levels and 4096 inspected operations. It bounds retained
-MLIR to 16 MiB and its JSON export to 1 MiB; strings are at most 512 bytes. Lean
-bounds JSON nesting and integer tokens before decoding and checks exact shapes,
-unique roles/sites, scopes, input arity, reference types and output availability.
-Malformed dormant definitions are refused, not silently discarded. Unsupported
-arrays, commitments, general control and other dialect operations require an
-extension with a stated interpretation.
-
-The source digest identifies retained native text. It does not prove semantics.
-The native `language-interface` identity and chosen symbol are compared before
-verification. Constructor data is freshly rendered, admitted by `Snapshot.check`,
-and tied to a separately generated requested-subject theorem. The renderer,
-parser and interface-name resolution are tested software boundaries.
-
-The finite reference request `zkc.common-run/0` is
-`[format, role, input-values, replay-entries]`. Both reference readers require
-unsigned integer tokens and tagged arrays; JSON objects are outside this
-profile, including in unused replay entries. Negative zero, fractional or
-exponent tokens and malformed JSON are refused before execution. Strings retain
-their contents. This admission policy is distinct from an executed malformed
-reply, which yields an explicit refused stop.
+[The bridge guide](../../bridges/common/README.md) specifies request generation,
+fresh expected subjects, relation selection, transitive axiom checks and bounded
+native-reference comparisons.

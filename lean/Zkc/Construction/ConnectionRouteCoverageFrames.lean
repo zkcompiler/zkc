@@ -37,6 +37,20 @@ theorem CoordinatePrefix.realize {scope : Scope} {input output : Layout scope}
   | indicesAppend terms term coordinateRef indexRef coordinates index tail ih =>
     exact ih (related.indicesAppend coordinates index).2
 
+theorem CoordinatePrefix.realizeRetained {scope : Scope} {input output : Layout scope}
+    {target : ConnectionCertificate.Block} (certificate : CoordinatePrefix input output target)
+    {model : DomainModel} {binders : Binders model scope} {history : Domain.History model.toCarriers}
+    {environment : Domain.Environment model.toCarriers} (related : Holds model binders history input environment) :
+    ∃ frame, Holds model binders history output frame ∧ ArtifactBinding.Captures environment frame := by
+  induction certificate generalizing environment with
+  | empty => exact ⟨environment, related, by simp [ArtifactBinding.Captures]⟩
+  | indicesEmpty tail ih =>
+    obtain ⟨frame, related, retained⟩ := ih related.indicesEmpty
+    exact ⟨frame, related, ArtifactBinding.captures_trans (ArtifactBinding.captures_append _ _) retained⟩
+  | indicesAppend terms term coordinateRef indexRef coordinates index tail ih =>
+    obtain ⟨frame, related, retained⟩ := ih (related.indicesAppend coordinates index).2
+    exact ⟨frame, related, ArtifactBinding.captures_trans (ArtifactBinding.captures_append _ _) retained⟩
+
 theorem frames_cons {model : DomainModel} {scope : Scope} {slot : Slot}
     (frames : ScopedFrames scope) (binders : Binders model scope) (value : Slot.Value model slot) :
     (frames.rename (target := slot :: scope) .there).eval model (.cons value binders) =

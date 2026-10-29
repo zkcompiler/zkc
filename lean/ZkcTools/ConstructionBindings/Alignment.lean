@@ -3,9 +3,20 @@ module
 public import Zkc.Construction.ConnectionCertificate
 public import Zkc.Construction.ConnectionInstallation
 public import ZkcTools.ConstructionBindings.Readback
+public meta import ZkcTools.ConstructionBindings.Syntax
 public meta import Lean.Elab.Tactic
 
 public meta section
+
+register_option zkc.connection.trace : Bool := {
+  defValue := false
+  descr := "print structural connection proposal phase markers"
+}
+
+register_option zkc.connection.traceFile : String := {
+  defValue := ""
+  descr := "optional destination for structural connection proposal traces"
+}
 
 /-! Untrusted proposal for finite alignment derivations. Search reads
 explicit source/view syntax and the symbolic frame; every accepted association
@@ -15,6 +26,14 @@ set_option autoImplicit false
 namespace ZkcTools.ConstructionBindings.Alignment
 open Lean Meta Elab Tactic
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
+
+def tracePhase (message : String) : TacticM Unit := do
+  if (← getOptions).getBool `zkc.connection.trace false then
+    let now ← IO.monoMsNow
+    let heartbeats ← IO.getNumHeartbeats
+    let destination := (← getOptions).get `zkc.connection.traceFile ("" : String)
+    if destination.isEmpty then logInfo m!"{now} {message}"
+    else IO.FS.withFile destination .append fun handle => handle.putStrLn s!"{now} hb={heartbeats} {message}"
 
 private def listEntries (expression : Expr) : MetaM (Array Expr) := do
   let mut entries := #[]
@@ -48,15 +67,42 @@ private def operandTerms (scope layout references : Expr) : MetaM Expr := do
     result ← mkAppM ``NormalForm.Terms.cons #[term, result]
   return result
 
+private def presentTerms (scope components : Expr) : MetaM Expr := do
+  let mut terms := #[]
+  let mut current := components
+  repeat
+    current ← whnf current
+    if current.isAppOf ``Values.nil then break
+    unless current.isAppOf ``Values.cons do throwError "alignment-nonfinite-helper-inputs"
+    let parts := current.getAppArgs
+    let component ← whnf parts[parts.size - 2]!
+    unless component.isAppOf ``NormalForm.Comp.present do
+      throwError "alignment-inline-helper-input-not-present"
+    terms := terms.push component.getAppArgs.back!
+    current := parts.back!
+  let laws ← mkListLit (mkConst ``NormalForm.LawKey) []
+  let mut result ← mkAppOptM ``NormalForm.Terms.nil #[some laws, some scope]
+  for term in terms.reverse do result ← mkAppM ``NormalForm.Terms.cons #[term, result]
+  return result
+
 private def tryReflexivity (goals : List MVarId) : TacticM (List MVarId) := do
   for goal in goals do
     unless ← goal.isAssigned do
       let saved ← saveState
       try goal.refl catch _ => saved.restore
-  goals.filterM fun goal => return !(← goal.isAssigned)
+  goals.filterM fun goal => do
+    if ← goal.isAssigned then return false
+    let type ← whnf (← instantiateMVars (← goal.getType))
+    -- These shared finite metavariables are determined by the return readback
+    -- or physical extent, rather than synthesized as independent proof goals.
+    return !(type.isAppOf ``List || type.isAppOf ``Option || type.isConstOf ``Nat)
 
 private def applyRule (goal : MVarId) (rule : Name) : TacticM (List MVarId) := do
-  let pending ← goal.apply (← mkConstWithFreshMVarLevels rule)
+  let expected ← whnf (← instantiateMVars (← goal.getType))
+  let constructor ← mkConstWithFreshMVarLevels rule
+  let constructor := if expected.isAppOf ``ConnectionCertificate.Alignment then
+      mkAppN constructor (expected.getAppArgs.extract 0 13) else constructor
+  let pending ← goal.apply constructor
   tryReflexivity pending
 
 /-- Keep unsolved finite proof fields as goals until their checking equalities
@@ -70,7 +116,7 @@ private def finiteApplication (name : Name) (supplied : Array (Option Expr)) : M
     let argument ← match proposed with
       | some value => pure value
       | none => mkFreshExprMVar domain
-    unless ← isDefEq (← inferType argument) domain do
+    unless ← withTransparency .all <| isDefEq (← inferType argument) domain do
       throwError "alignment-constructor-field-type: {name}, field={index}, expected={domain}, actual={← inferType argument}"
     arguments := arguments.push argument
     type := body.instantiate1 argument
@@ -79,7 +125,11 @@ private def finiteApplication (name : Name) (supplied : Array (Option Expr)) : M
 private def viewHead (expression : Expr) : MetaM Expr := do
   let mut current := expression
   repeat
-    current := current.headBeta
+    current := (← instantiateMVars current).consumeMData
+    while current.isHeadBetaTarget do current := current.headBeta.consumeMData
+    if let .letE _ _ value body _ := current then
+      current := body.instantiate1 value
+      continue
     if [``Domain.View.sequence, ``Domain.View.calculation, ``Domain.View.receive,
         ``Domain.View.send, ``Domain.View.guard, ``Domain.View.helper, ``Domain.View.loop,
         ``Domain.View.indicesEmpty, ``Domain.View.indicesAppend, ``Domain.View.observe,
@@ -138,16 +188,16 @@ private partial def coordinatePrefix (layout block model : Expr) : MetaM (Expr �
 unification is never asked to invent an instruction schedule. -/
 private def preparedAction (goal : MVarId) (rule : Name) (args : Array Expr)
     (model block first : Expr) : TacticM (List MVarId) := do
-  let source ← whnf args[12]!
+  let source ← whnf args[13]!
   let sourceParts := source.getAppArgs
-  if rule == ``ConnectionCertificate.Derivation.observedSend then
+  if rule == ``ConnectionCertificate.Alignment.observedSend then
     unless source.isAppOf ``NormalForm.Form.send do throwError "alignment-expected-send"
   else unless source.isAppOf ``NormalForm.Form.receive do throwError "alignment-expected-receive"
-  let layout := args[11]!
+  let layout := args[12]!
   let mut initial := layout
-  if rule == ``ConnectionCertificate.Derivation.observedReceive then
+  if rule == ``ConnectionCertificate.Alignment.observedReceive then
     initial ← mkAppM ``ConnectionCertificate.receiveLayout #[layout, sourceParts[sourceParts.size - 4]!]
-  if rule == ``ConnectionCertificate.Derivation.delivery then
+  if rule == ``ConnectionCertificate.Alignment.delivery then
     let ty ← whnf sourceParts[sourceParts.size - 4]!
     unless ty.isAppOf ``Ty.field do throwError "alignment-delivery-nominal-field"
     let suite ← mkAppM ``Context.suite #[← mkAppM ``Original.Routing.context #[args[0]!]]
@@ -165,19 +215,19 @@ private def preparedAction (goal : MVarId) (rule : Name) (args : Array Expr)
   unless observationParts.size > 6 do throwError "alignment-observation-arity: {observation}"
   let mut supplied : Array (Name × Expr) := #[( `prepared, certificateArgs[2]!),
     (`preparation, certificateArgs[3]!), (`preparationProof, certificate), (`rest, rest)]
-  if rule == ``ConnectionCertificate.Derivation.delivery then
+  if rule == ``ConnectionCertificate.Alignment.delivery then
     supplied := supplied ++ #[(`observeStateRef, observationParts[4]!), (`observePathRef, observationParts[6]!)]
   else
     supplied := supplied ++ #[(`stateRef, observationParts[4]!), (`pathRef, observationParts[6]!),
       (`template, observationParts[3]!)]
-    if rule == ``ConnectionCertificate.Derivation.observedSend then
+    if rule == ``ConnectionCertificate.Alignment.observedSend then
       supplied := supplied.push (`reference, observationParts[5]!)
   let constructor ← mkConstWithFreshMVarLevels rule
   let mut type ← inferType constructor
   let mut fields := #[]
   for index in [:200] do
     let .forallE name domain body _ := type | break
-    let value ← if index < 12 then pure args[index]! else
+    let value ← if index < 13 then pure args[index]! else
       match supplied.find? (fun item => item.1 == name) with
       | some (_, value) => pure value
       | none => mkFreshExprMVar domain
@@ -186,9 +236,7 @@ private def preparedAction (goal : MVarId) (rule : Name) (args : Array Expr)
     type := body.instantiate1 value
   tryReflexivity (← goal.apply (mkAppN constructor fields))
 
-private def refuseSource (source : Expr) : TacticM Unit := do
-  let source ← whnf source
-  if source.isAppOf ``NormalForm.Form.apply then throwError "alignment-unsupported-callee"
+
 
 
 private def splitSubject (component : Expr) : MetaM Expr := do
@@ -214,7 +262,16 @@ private def helperBinding (definitions helper program : Expr) : TacticM Expr := 
       return ← instantiateMVars binding
   throwError "alignment-helper-key-mismatch"
 
-private partial def staticGoal (goal : MVarId) : TacticM Unit := goal.withContext do
+mutual
+private partial def staticGoal (goal : MVarId) : TacticM Unit := do
+  let start ← IO.monoMsNow
+  let head := (← goal.getType).getAppFn.constName?
+  try staticStep goal
+  finally
+    let elapsed := (← IO.monoMsNow) - start
+    if elapsed > 1000 then tracePhase s!"static {head} ms={elapsed}"
+
+private partial def staticStep (goal : MVarId) : TacticM Unit := goal.withContext do
   if ← goal.isAssigned then return
   let saved ← saveState
   try
@@ -226,7 +283,7 @@ private partial def staticGoal (goal : MVarId) : TacticM Unit := goal.withContex
     goal.assumption
     return
   catch _ => saved.restore
-  let type ← instantiateMVars (← goal.getType)
+  let type ← whnf (← instantiateMVars (← goal.getType))
   if type.hasExprMVar && type.isAppOf ``Eq then
     let saved ← saveState
     try
@@ -238,12 +295,20 @@ private partial def staticGoal (goal : MVarId) : TacticM Unit := goal.withContex
     evalTactic (← `(tactic| derive_source_readback))
     return
   if type.isAppOf ``ConnectionCertificate.HistoryReadback then
-    for rule in [``ConnectionCertificate.HistoryReadback.plain, ``ConnectionCertificate.HistoryReadback.transcript] do
+    let args := type.getAppArgs
+    let frame ← listEntries args[1]!
+    for cell in frame, reference in [:frame.size] do
+      let cell ← whnf cell
+      if !(cell.isAppOf ``ConnectionFrame.Cell.history) then continue
       let saved ← saveState
       try
-        for pending in ← applyRule goal rule do staticGoal pending
+        let constructor ← mkAppOptM ``ConnectionCertificate.HistoryReadback.transcript
+          #[some args[0]!, some args[1]!, some args[2]!, some (mkNatLit reference)]
+        for pending in ← tryReflexivity (← goal.apply constructor) do staticGoal pending
         return
       catch _ => saved.restore
+    for pending in ← applyRule goal ``ConnectionCertificate.HistoryReadback.plain do staticGoal pending
+    return
   if type.isAppOf ``ConnectionStaticRoutes.Local || type.isAppOf ``ConnectionStaticRoutes.Delivery then
     let rule := if type.isAppOf ``ConnectionStaticRoutes.Local then
       ``ConnectionStaticRoutes.Local.mk else ``ConnectionStaticRoutes.Delivery.mk
@@ -279,33 +344,352 @@ private partial def staticGoal (goal : MVarId) : TacticM Unit := goal.withContex
         return
       catch _ => saved.restore
     throwError "alignment-coordinate-order-or-binder"
-  unless ← isProp type do throwError "alignment-unresolved-static-data: {type}"
+  unless ← isProp type do
+    if type.isAppOf ``List || type.isAppOf ``Option || type.isConstOf ``Nat then return
+    throwError "alignment-unresolved-static-data: {type}"
   setGoals [goal]
   evalTactic (← `(tactic| decide +kernel))
 
-private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
-    Term.withoutErrToSorry <| withoutRecover do
-  let expected ← instantiateMVars (← goal.getType)
-  if expected.isAppOf ``ConnectionCertificate.Certificate then
-    let [alignment] ← applyRule goal ``ConnectionCertificate.Certificate.mk
-      | throwError "alignment-normalization-failed"
-    derive alignment
-    return
-  unless expected.isAppOf ``ConnectionCertificate.Derivation do
-    throwError "alignment-expected-derivation"
+end
+
+private partial def deriveExtent (goal : MVarId) : TacticM Unit := goal.withContext do
+  let expected ← whnf (← instantiateMVars (← goal.getType))
   let args := expected.getAppArgs
-  let scope := args[9]!
-  let layout := args[11]!
-  let source ← whnf args[12]!
-  let target := args[13]!
+  let input := args[0]!
+  let output := args[1]!
+  let target := args[2]!
+  withLocalDeclD `extentModel (mkConst ``DomainModel) fun model => do
+    let view ← viewHead (mkApp target model)
+    if view.isAppOf ``Domain.View.empty then
+      for pending in ← applyRule goal ``ConnectionTargetExtent.Extent.empty do staticGoal pending
+      return
+    let parts := view.getAppArgs
+    if view.isAppOf ``Domain.View.sequence then
+      let first ← mkLambdaFVars #[model] parts[1]!
+      let rest ← mkLambdaFVars #[model] parts[2]!
+      let constructor ← finiteApplication ``ConnectionTargetExtent.Extent.sequence
+        #[some input, none, some output, some first, some rest]
+      let pending ← tryReflexivity (← goal.apply constructor)
+      for next in pending do
+        let nextType ← whnf (← instantiateMVars (← next.getType))
+        if nextType.isAppOf ``ConnectionTargetExtent.Extent then deriveExtent next
+      for next in pending do unless ← next.isAssigned do staticGoal next
+      return
+    let rules := [( ``Domain.View.receive, ``ConnectionTargetExtent.Extent.receive),
+      (``Domain.View.send, ``ConnectionTargetExtent.Extent.send),
+      (``Domain.View.indicesEmpty, ``ConnectionTargetExtent.Extent.indicesEmpty),
+      (``Domain.View.indicesAppend, ``ConnectionTargetExtent.Extent.indicesAppend),
+      (``Domain.View.observe, ``ConnectionTargetExtent.Extent.observe),
+      (``Domain.View.challenge, ``ConnectionTargetExtent.Extent.challenge),
+      (``Domain.View.localService, ``ConnectionTargetExtent.Extent.localService),
+      (``Domain.View.calculation, ``ConnectionTargetExtent.Extent.calculation),
+      (``Domain.View.helper, ``ConnectionTargetExtent.Extent.helper),
+      (``Domain.View.guard, ``ConnectionTargetExtent.Extent.guard),
+      (``Domain.View.loop, ``ConnectionTargetExtent.Extent.loop)]
+    for (viewName, rule) in rules do
+      unless view.isAppOf viewName do continue
+      let mut fields := #[some input] ++ (parts.extract 1 parts.size).map some
+      if viewName == ``Domain.View.loop then
+        fields := fields.set! (fields.size - 1) (some (← mkLambdaFVars #[model] parts.back!))
+      let constructor ← mkAppOptM rule fields
+      for pending in ← tryReflexivity (← goal.apply constructor) do staticGoal pending
+      return
+    throwError "alignment-unsupported-target-extent: target={target}, view={view}, type={← inferType view}"
+
+structure PlacementCost where
+  name : Name
+  proposalNanos : Nat
+  kernelNanos : Nat
+  deriving Inhabited, Repr
+
+initialize placementCosts : IO.Ref (Array PlacementCost) ← IO.mkRef #[]
+
+private def indexAlignment (state : Std.HashMap UInt64 (Array Name))
+    (entry : UInt64 × Name) : Std.HashMap UInt64 (Array Name) :=
+  state.insert entry.1 (((state[entry.1]?).getD #[]).push entry.2)
+
+initialize checkedAlignments :
+    SimplePersistentEnvExtension (UInt64 × Name) (Std.HashMap UInt64 (Array Name)) ←
+  registerSimplePersistentEnvExtension {
+    -- Local asynchronous additions do not synchronize theorem tasks. Hashes
+    -- select exact-placement candidates only; neither a hash nor a cache hit
+    -- supplies evidence without checking the declaration's complete type.
+    asyncMode := .local
+    addEntryFn := indexAlignment
+    addImportedFn := fun imported => imported.foldl
+      (fun state entries => entries.foldl indexAlignment state) {}
+  }
+
+/-- Close an exact retained placement behind a checked declaration. This is
+an exact-placement boundary: it does not assert relocation invariance. -/
+private def checkedBody (goal : MVarId) (build : MVarId → TacticM Unit) : TacticM Unit :=
+  goal.withContext do
+    let expected ← instantiateMVars (← goal.getType)
+    let candidates := ((checkedAlignments.getState (← getEnv))[expected.hash]?).getD #[]
+    for name in candidates do
+      unless (← getEnv).contains name do continue
+      let candidate := mkConst name
+      let type ← inferType candidate
+      if type.isForall || type != expected then continue
+      let saved ← saveState
+      if ← isDefEq type expected then
+        goal.assign candidate
+        return
+      saved.restore
+    let start ← IO.monoNanosNow
+    let body ← mkFreshExprSyntheticOpaqueMVar expected
+    build body.mvarId!
+    Term.synthesizeSyntheticMVarsNoPostponing
+    let value ← instantiateMVars body
+    if value.hasExprMVar then throwError "alignment-body-unresolved-finite-data"
+    -- Direct auxiliary declarations bypass Lean's predefinition pipeline.
+    -- Use its same hash-consing boundary before closing and checking the term;
+    -- this changes object sharing only, never the certificate or its type.
+    let value := _root_.ShareCommon.shareCommon' value
+    let name ← mkAuxDeclName `retainedConnectionAlignment
+    -- Finish closure before timing the synchronous declaration check. Only
+    -- used local variables are abstracted; the enclosing root is not captured.
+    let closed ← Closure.mkValueTypeClosure (← inferType value).headBeta value false
+    let (closedType, closedValue) := _root_.ShareCommon.shareCommon' (closed.type, closed.value)
+    let hints := ReducibilityHints.regular (getMaxHeight (← getEnv) closedValue + 1)
+    let declaration ← mkDefinitionValInferringUnsafe name closed.levelParams.toList
+      closedType closedValue hints
+    let proposed ← IO.monoNanosNow
+    withOptions (Elab.async.set · false) <| addDecl (.defnDecl declaration)
+    let checked ← IO.monoNanosNow
+    modifyEnv fun environment => addNoncomputable (checkedAlignments.addEntry environment (closedType.hash, name)) name
+    placementCosts.modify (·.push ⟨name, proposed - start, checked - proposed⟩)
+    tracePhase s!"checked body {name}: proposal_ns={proposed-start}; kernel_ns={checked-proposed}"
+    let reference := mkAppN (mkConst name closed.levelArgs.toList) closed.exprArgs
+    goal.assign reference
+
+/-- A proposal-local cache of closed syntax reductions. Backtracking across
+candidate target cuts does not change these finite source/layout expressions.
+It contains no evidence and is discarded after one root proposal. -/
+private abbrev SyntaxCache := Syntax.Cache
+
+private def reducedSyntax (cache : SyntaxCache) (expression : Expr) : TacticM Expr :=
+  Syntax.normalize cache expression
+
+/-- Propose liveness by finite typed substitutions. Each attempted omission
+is accepted only when the actual continuation is definitionally unchanged.
+The application constructor checks that equality again; this cache contains
+syntax only and supplies no semantic evidence. -/
+private def returnSelection (cache : SyntaxCache) (types next : Expr) : TacticM Expr := do
+  let entries ← listEntries types
+  let expected ← mkAppM ``ConnectionReturnProjection.Selection #[types]
+  let literal := fun (flags : Array Bool) => do
+    let mut literalSyntax ← `(term| Zkc.Source.Values.nil)
+    for keep in flags.reverse do
+      literalSyntax ← `(term| Zkc.Source.Values.cons $(quote keep) $literalSyntax)
+    Term.elabTerm literalSyntax (some expected)
+  let mut flags := Array.replicate entries.size true
+  let mut selected ← literal flags
+  for index in [:entries.size] do
+    let candidate ← literal (flags.set! index false)
+    let projected ← reducedSyntax cache (← mkAppM ``ConnectionReturnProjection.continuation #[candidate, next])
+    if ← isDefEq projected next then
+      flags := flags.set! index false
+      selected := candidate
+  return ← Syntax.freeze cache selected
+
+private structure CutDiscovery where
+  suffixes : Array Expr
+  found : IO.Ref (Option Nat)
+
+initialize discoveredCutException : InternalExceptionId ←
+  registerInternalExceptionId `ZkcTools.ConstructionBindings.discoveredCut
+
+/-- Discover a caller suffix by checked selected-return readback, without
+installing a new trusted rule. The final selected prefix is checked again by
+`Alignment.application`, including its extent, output row and continuation. -/
+private def discoverReturn (discovery : CutDiscovery) (expected : Expr) : TacticM Unit := do
+  let args := expected.getAppArgs
+  let target := args[14]!
+  withLocalDeclD `discoveryModel (mkConst ``DomainModel) fun model => do
+    let view ← viewHead (mkApp target model)
+    if view.isAppOf ``Domain.View.empty then return
+    let mut selected : Option Nat := none
+    for suffix in discovery.suffixes, index in [:discovery.suffixes.size] do
+      let candidate ← viewHead (mkApp suffix model)
+      if ← isDefEq view candidate then
+        selected := some index
+        break
+    let some index := selected | return
+    let saved ← saveState
+    let matched ← try
+      let carriers ← mkAppM ``FieldModel.toCarriers #[← mkAppM ``DomainModel.toFieldModel #[model]]
+      let empty ← mkLambdaFVars #[model] (← mkAppOptM ``Domain.View.empty #[some carriers])
+      let trial ← mkFreshExprSyntheticOpaqueMVar
+        (mkAppN expected.getAppFn (args.set! 14 empty))
+      let [readback, historyRead] ← tryReflexivity
+          (← trial.mvarId!.apply (← mkConstWithFreshMVarLevels ``ConnectionCertificate.Alignment.done))
+        | throwError "alignment-discovery-return-shape"
+      setGoals [readback]
+      evalTactic (← `(tactic| derive_source_readback))
+      staticGoal historyRead
+      pure true
+    catch _ => pure false
+    saved.restore
+    if matched then
+      discovery.found.set (some index)
+      throw (.internal discoveredCutException)
+
+private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscovery) (goal : MVarId) : TacticM Unit := goal.withContext <| withTransparency .all <|
+    Term.withoutErrToSorry <| withoutRecover do
+  let expected ← whnf (← instantiateMVars (← goal.getType))
+  if expected.isAppOf ``ConnectionCertificate.Certificate then
+    tracePhase "certificate constructor"
+    -- The root already fixes every certificate index. Supplying them before
+    -- applying the constructor avoids rediscovering the admitted source and
+    -- library by unification at each root.
+    let constructor ← mkConstWithFreshMVarLevels ``ConnectionCertificate.Certificate.mk
+    let pending ← goal.apply (mkAppN constructor expected.getAppArgs)
+    tracePhase "certificate fields"
+    let [alignment] ← tryReflexivity pending
+      | throwError "alignment-normalization-failed"
+    tracePhase "certificate normalized"
+    derive cache discovery alignment
+    return
+  unless expected.isAppOf ``ConnectionCertificate.Alignment do
+    throwError "alignment-expected-derivation"
+  let mut args := expected.getAppArgs
+  -- Canonicalize the dependent indices too. Leaving a computed scope or
+  -- library key row here makes every constructor compare that computation
+  -- against the compact indices of the cached source and frame.
+  for index in [3, 5, 7, 8, 9, 10, 11, 12, 13] do
+    let start ← IO.monoMsNow
+    args := args.set! index (← Syntax.freeze cache (← reducedSyntax cache args[index]!))
+    let elapsed := (← IO.monoMsNow) - start
+    if elapsed > 1000 then tracePhase s!"index {index} ms={elapsed}"
+  for index in [1, 2, 14] do
+    args := args.set! index (← Syntax.freeze cache args[index]!)
+  goal.setType (mkAppN expected.getAppFn args)
+  let scope := args[10]!
+  let layout := args[12]!
+  tracePhase "before source"
+  let source ← whnf args[13]!
+  tracePhase s!"source {source.getAppFn.constName?}"
+  let target := args[14]!
+  if source.isAppOf ``NormalForm.Form.apply then
+    let selection ← whnf args[4]!
+    unless selection.isAppOf ``ConnectionLibrary.Selection.selected do
+      throwError "alignment-unsupported-callee"
+    let selected := selection.getAppArgs
+    let payload := selected[selected.size - 3]!
+    let same := selected[selected.size - 2]!
+    let library := selected.back!
+    let parts := source.getAppArgs
+    let calleeType ← inferType parts[parts.size - 6]!
+    let position ← whnf (← mkAppM ``Fin.val #[parts[parts.size - 6]!])
+    let some position ← getNatValue? position | throwError "alignment-nonfinite-callee"
+    let callee ← Term.elabTerm (← `(⟨$(quote position), by decide +kernel⟩)) (some calleeType)
+    Term.synthesizeSyntheticMVarsNoPostponing
+    let signature := parts[parts.size - 5]!
+    let roles := parts[parts.size - 4]!
+    let site := parts[parts.size - 3]!
+    let arguments := parts[parts.size - 2]!
+    let next := parts.back!
+    let key ← mkAppM ``NormalForm.calleeAt #[args[3]!, callee]
+    let declared ← mkAppM ``NormalForm.CalleeKey.signature #[key]
+    let types ← reducedSyntax cache (← mkAppM ``ProtocolSignature.outputs #[declared])
+    let selection ← returnSelection cache types next
+    let continuationChecked ← mkEqRefl next
+    let slices ← withLocalDeclD `sliceModel (mkConst ``DomainModel) fun model => do
+      let mut current ← viewHead (mkApp target model)
+      let mut views : Array Expr := #[]
+      let mut result : Array (Expr × Expr) := #[]
+      repeat
+        let mut spine := mkConst ``ConnectionTargetPrefix.Prefix.empty
+        for view in views.reverse do spine ← mkAppM ``ConnectionTargetPrefix.Prefix.step #[view, spine]
+        result := result.push (spine, ← mkLambdaFVars #[model] current)
+        unless current.isAppOf ``Domain.View.sequence do break
+        views := views.push (← mkLambdaFVars #[model] current.getAppArgs[1]!)
+        current ← viewHead current.getAppArgs[2]!
+      return result
+    let search : CutDiscovery := ⟨slices.map Prod.snd, ← IO.mkRef none⟩
+    let candidatesFor := fun index =>
+      [(index, ``ConnectionCertificate.Alignment.application),
+       (index, ``ConnectionCertificate.Alignment.applicationRetainedHistory)]
+    let mut candidates := if slices.isEmpty then [] else
+      ((slices.size - 1) :: List.range (slices.size - 1)).flatMap candidatesFor
+    let mut visited : List (Nat × Name) := []
+    let mut failure : MessageData := "no finite target slice"
+    while !candidates.isEmpty do
+      let (index, rule) := candidates.head!
+      candidates := candidates.tail!
+      if visited.contains (index, rule) then continue
+      visited := (index, rule) :: visited
+      let (spine, rest) := slices[index]!
+      search.found.set none
+      tracePhase s!"application slice {index}/{slices.size} {rule}"
+
+      let saved ← saveState
+      try
+        let supplied := [( `payload, payload), (`same, same), (`library, library), (`callee, callee),
+          (`signature, signature), (`roles, roles), (`site, site), (`arguments, arguments),
+          (`spine, spine), (`next, next), (`rest, rest),
+          (`returnSelection, selection), (`continuationChecked, continuationChecked)]
+        let constructor ← mkConstWithFreshMVarLevels rule
+        let mut type ← inferType constructor
+        let mut fields := #[]
+        for index in [:100] do
+          let .forallE name domain body _ := type | break
+          let value ← if index < 4 then pure args[index]!
+            else if index < 12 then pure args[index + 1]! else
+            match supplied.find? (fun item => item.1 == name) with
+            | some (_, value) => pure value
+            | none => mkFreshExprMVar domain
+          unless ← withTransparency .all <| isDefEq (← inferType value) domain do
+            let actual ← inferType value
+            let wanted ← whnf domain.getAppArgs.back!
+            let got ← whnf actual.getAppArgs.back!
+            throwError "alignment-application-field {name}: wanted={wanted}, got={got}"
+          fields := fields.push value
+          type := body.instantiate1 value
+        tracePhase "application assemble"
+        let pending ← goal.apply (mkAppN constructor fields) {newGoals := .all}
+        tracePhase "application assembled"
+        let mut alignments := []
+        let mut statics := []
+        for pending in pending do
+          let pendingType ← whnf (← instantiateMVars (← pending.getType))
+          if pendingType.isAppOf ``ConnectionTargetExtent.Extent then
+            tracePhase "application extent"
+            deriveExtent pending
+            tracePhase "application extent complete"
+          else if pendingType.isAppOf ``ConnectionCertificate.Alignment then alignments := alignments ++ [pending]
+          else statics := statics ++ [pending]
+        match alignments with
+        | body :: tails =>
+          checkedBody body (derive cache (some search))
+          for pending in statics do unless ← pending.isAssigned do staticGoal pending
+          for alignment in tails do derive cache discovery alignment
+        | [] => throwError "alignment-application-body-missing"
+        return
+      catch error =>
+        saved.restore
+        if let .internal id _ := error then
+          if id == discoveredCutException then
+            if let some cut ← search.found.get then
+              tracePhase s!"application discovered prefix {cut}"
+              candidates := candidatesFor cut ++ candidates
+              continue
+            throw error
+        failure := error.toMessageData
+        -- Formatting a dependent failure can traverse an entire root proof,
+        -- even when tracePhase is disabled. Keep the original diagnostic for
+        -- the final error; the search trace records only the failed choice.
+        tracePhase s!"application slice {index} refused by {rule}"
+    throwError "alignment-callee-slice-refused: {failure}"
   if source.isAppOf ``NormalForm.Form.split then
     let parts := source.getAppArgs
     let component ← whnf parts[parts.size - 3]!
     if component.isAppOf ``NormalForm.Comp.absent || component.isAppOf ``NormalForm.Comp.present then
       let pending ← applyRule goal (if component.isAppOf ``NormalForm.Comp.absent then
-        ``ConnectionCertificate.Derivation.splitAbsent else ``ConnectionCertificate.Derivation.splitValue)
+        ``ConnectionCertificate.Alignment.splitAbsent else ``ConnectionCertificate.Alignment.splitValue)
       for remaining in pending do
-        if (← instantiateMVars (← remaining.getType)).isAppOf ``ConnectionCertificate.Derivation then derive remaining
+        if (← whnf (← instantiateMVars (← remaining.getType))).isAppOf ``ConnectionCertificate.Alignment then derive cache discovery remaining
         else staticGoal remaining
       return
     let subject ← splitSubject component
@@ -313,17 +697,17 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
     for cell in frame, index in [:frame.size] do
       let cell ← whnf cell
       if cell.isAppOf ``ConnectionFrame.Cell.data && (← isDefEq cell.getAppArgs.back! component) then
-        let constructor ← mkAppOptM ``ConnectionCertificate.Derivation.splitPresent
-          ((args.extract 0 12).map some ++ #[none, some subject, some parts[parts.size - 2]!, some parts.back!, some target, some (mkNatLit index)])
+        let constructor ← mkAppOptM ``ConnectionCertificate.Alignment.splitPresent
+          ((args.extract 0 13).map some ++ #[none, some subject, some parts[parts.size - 2]!, some parts.back!, some target, some (mkNatLit index)])
         let [tail] ← tryReflexivity (← goal.apply constructor)
           | throwError "alignment-presence-static-mismatch"
-        derive tail
+        derive cache discovery tail
         return
-    let constructor ← mkAppOptM ``ConnectionCertificate.Derivation.split
-      ((args.extract 0 12).map some ++ #[none, some subject, some parts[parts.size - 2]!, some parts.back!, some target])
+    let constructor ← mkAppOptM ``ConnectionCertificate.Alignment.split
+      ((args.extract 0 13).map some ++ #[none, some subject, some parts[parts.size - 2]!, some parts.back!, some target])
     let [absent, present] ← goal.apply constructor | throwError "alignment-split-shape"
-    derive absent
-    derive present
+    derive cache discovery absent
+    derive cache discovery present
     return
   if source.isAppOf ``NormalForm.Form.math then
     let sourceParts := source.getAppArgs
@@ -340,34 +724,60 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
       for entry in entries, index in [:entries.size] do
         if ← isDefEq (← mkAppM ``CheckedDefinition.helper #[entry]) helper then
           let body ← whnf (← mkAppM ``CheckedDefinition.body #[entry])
-          unless body.isAppOf ``Region.ret do break
           let before ← mkAppM ``List.take #[mkNatLit index, args[2]!]
           let after ← mkAppM ``List.drop #[mkNatLit (index + 1), args[2]!]
           let definitionsSyntax ← Term.exprToSyntax args[2]!
           let selected ← Term.elabTerm
             (← `(($definitionsSyntax).get ⟨$(quote index), by decide +kernel⟩)) (mkConst ``CheckedDefinition)
-          let projectionType ← mkAppM ``ConnectionHelpers.Projection #[args[2]!, selected]
           let beforeSyntax ← Term.exprToSyntax before
           let afterSyntax ← Term.exprToSyntax after
-          let positionsSyntax ← Term.exprToSyntax body.getAppArgs.back!
-          let projection ← Term.elabTerm
-            (← `(⟨$beforeSyntax, $afterSyntax, rfl, by decide +kernel, $positionsSyntax, rfl⟩)) projectionType
+          let (rule, certificate, suppliedArguments, extra) ← if body.isAppOf ``Region.ret then do
+              let projectionType ← mkAppM ``ConnectionHelpers.Projection #[args[2]!, selected]
+              let positionsSyntax ← Term.exprToSyntax body.getAppArgs.back!
+              let projection ← Term.elabTerm
+                (← `(⟨$beforeSyntax, $afterSyntax, rfl, by decide +kernel, $positionsSyntax, rfl⟩)) projectionType
+              pure (``ConnectionCertificate.Alignment.projectionHelper, projection, sourceParts[sourceParts.size - 2]!, #[])
+            else do
+              unless body.isAppOf ``Region.letOp do break
+              let bodyParts := body.getAppArgs
+              let returned ← whnf bodyParts.back!
+              unless returned.isAppOf ``Region.ret do break
+              let operation ← whnf (← mkAppM ``Calculation.ofOp? #[bodyParts[bodyParts.size - 4]!])
+              unless operation.isAppOf ``Option.some do break
+              let operation := operation.getAppArgs.back!
+              let operationSyntax ← Term.exprToSyntax operation
+              let inputsSyntax ← Term.exprToSyntax bodyParts[bodyParts.size - 3]!
+              let outputsSyntax ← Term.exprToSyntax returned.getAppArgs.back!
+              let certificateType ← mkAppM ``ConnectionHelpers.CalculationBody #[args[2]!, selected]
+              let certificate ← Term.elabTerm
+                (← `(⟨$beforeSyntax, $afterSyntax, rfl, by decide +kernel,
+                  $operationSyntax, by decide +kernel, $inputsSyntax, $outputsSyntax, rfl⟩)) certificateType
+              let arguments := sourceParts[sourceParts.size - 2]!
+              let selected ← mkAppM ``NormalForm.lookup #[arguments, bodyParts[bodyParts.size - 3]!]
+              let absent ← whnf (← mkAppM ``NormalForm.anyAbsent #[selected])
+              if absent.isConstOf ``Bool.true then
+                pure (``ConnectionCertificate.Alignment.inlineMissingCalculation, certificate,
+                  arguments, #[← mkEqRefl (mkConst ``Bool.true)])
+              else
+                pure (``ConnectionCertificate.Alignment.inlineCalculation, certificate,
+                  ← presentTerms scope arguments, #[])
           Term.synthesizeSyntheticMVarsNoPostponing
-          let constructor ← mkAppOptM ``ConnectionCertificate.Derivation.projectionHelper
-            ((args.extract 0 12).map some ++ #[some selected, some projection,
-              some sourceParts[sourceParts.size - 2]!, some sourceParts.back!, some target])
+          let constructor ← mkAppOptM rule
+            ((args.extract 0 13).map some ++ #[some selected, some certificate,
+              some suppliedArguments] ++ extra.map some ++ #[some sourceParts.back!, some target])
           let mut tails := []
           for pending in ← goal.apply constructor do
-            if (← instantiateMVars (← pending.getType)).isAppOf ``ConnectionCertificate.Derivation then
+            if (← whnf (← instantiateMVars (← pending.getType))).isAppOf ``ConnectionCertificate.Alignment then
               tails := tails ++ [pending]
             else staticGoal pending
-          for tail in tails do derive tail
+          for tail in tails do derive cache discovery tail
           return
-  if !(source.isAppOf ``NormalForm.Form.math) then refuseSource source
+  if source.isAppOf ``NormalForm.Form.done then
+    if let some search := discovery then discoverReturn search (← instantiateMVars (← goal.getType))
   let saved ← saveState
   let mut returnFailure : MessageData := "not a return"
   try
-    let [readback, historyRead] ← goal.apply (← mkConstWithFreshMVarLevels ``ConnectionCertificate.Derivation.done)
+    let [readback, historyRead] ← tryReflexivity (← goal.apply (← mkConstWithFreshMVarLevels ``ConnectionCertificate.Alignment.done))
       | throwError "alignment-not-return"
     setGoals [readback]
     evalTactic (← `(tactic| derive_source_readback))
@@ -378,7 +788,7 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
     saved.restore
   let saved ← saveState
   try
-    let pending ← applyRule goal ``ConnectionCertificate.Derivation.halt
+    let pending ← applyRule goal ``ConnectionCertificate.Alignment.halt
     unless pending.isEmpty do throwError "alignment-not-stop"
     return
   catch _ => saved.restore
@@ -392,6 +802,7 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
       if source.isAppOf ``NormalForm.Form.repeat then throwError "alignment-loop-view-mismatch"
       throwError "alignment-return-or-view-mismatch: source={source.getAppFn}, view={block.getAppFn}"
     let first ← viewHead block.getAppArgs[1]!
+    tracePhase s!"target {first.getAppFn.constName?}"
     if first.isAppOf ``Domain.View.calculation then
       let parts := first.getAppArgs
       let operation := parts[1]!
@@ -406,15 +817,15 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
         let yes ← mkEqRefl (mkConst ``Bool.true)
         let rest ← mkLambdaFVars #[model] block.getAppArgs[2]!
         let pending ← try
-          let constructor ← mkAppOptM ``ConnectionCertificate.Derivation.compute
-            ((args.extract 0 12).map some ++
+          let constructor ← mkAppOptM ``ConnectionCertificate.Alignment.compute
+            ((args.extract 0 13).map some ++
               #[some operation, some terms, some sourceParts.back!, some rest, some references, some yes, some yes])
           goal.apply constructor
           catch _ => throwError "alignment-compute-operation-or-view-mismatch"
-        let [readback, tail] := pending | throwError "alignment-compute-shape"
+        let [readback, tail] ← tryReflexivity pending | throwError "alignment-compute-shape"
         setGoals [readback]
         evalTactic (← `(tactic| derive_source_readback))
-        derive tail
+        derive cache discovery tail
         return
       -- Normalization removes total source instructions before a compute node.
       -- Retain their real target checkpoints and extend the symbolic frame
@@ -422,44 +833,44 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
       let pending ← try
         let terms ← operandTerms scope layout references
         let yes ← mkEqRefl (mkConst ``Bool.true)
-        let supplied := (args.extract 0 13).map some ++
+        let supplied := (args.extract 0 14).map some ++
           #[some operation, some yes, some terms, some references, some yes, some yes]
-        let constructor ← mkAppOptM ``ConnectionCertificate.Derivation.calculation supplied
+        let constructor ← mkAppOptM ``ConnectionCertificate.Alignment.calculation supplied
         goal.apply constructor
       catch exception =>
         if computing then throwError "alignment-compute-operation-or-view-mismatch"
         else throw exception
-      setGoals pending
-      let [readback, tail] ← getUnsolvedGoals | throwError "alignment-calculation-shape"
+      let [readback, tail] ← tryReflexivity pending
+        | throwError "alignment-calculation-shape"
       setGoals [readback]
       evalTactic (← `(tactic| derive_source_readback))
-      derive tail
+      derive cache discovery tail
       return
     if [``Domain.View.receive, ``Domain.View.send, ``Domain.View.observe, ``Domain.View.challenge,
         ``Domain.View.localService, ``Domain.View.indicesEmpty, ``Domain.View.indicesAppend].any first.isAppOf then
       let rules := if first.isAppOf ``Domain.View.receive then
-          [``ConnectionCertificate.Derivation.receive, ``ConnectionCertificate.Derivation.observedReceive]
+          [``ConnectionCertificate.Alignment.receive, ``ConnectionCertificate.Alignment.observedReceive]
         else if first.isAppOf ``Domain.View.send then
-          [``ConnectionCertificate.Derivation.send, ``ConnectionCertificate.Derivation.observedSend]
-        else if first.isAppOf ``Domain.View.observe then [``ConnectionCertificate.Derivation.observedSend]
+          [``ConnectionCertificate.Alignment.send, ``ConnectionCertificate.Alignment.observedSend]
+        else if first.isAppOf ``Domain.View.observe then [``ConnectionCertificate.Alignment.observedSend]
         else if first.isAppOf ``Domain.View.challenge then
-          [``ConnectionCertificate.Derivation.publicQuery, ``ConnectionCertificate.Derivation.delivery]
-        else if first.isAppOf ``Domain.View.localService then [``ConnectionCertificate.Derivation.localQuery]
-        else if first.isAppOf ``Domain.View.indicesEmpty then [``ConnectionCertificate.Derivation.indicesEmpty]
-        else [``ConnectionCertificate.Derivation.indicesAppend]
+          [``ConnectionCertificate.Alignment.publicQuery, ``ConnectionCertificate.Alignment.delivery]
+        else if first.isAppOf ``Domain.View.localService then [``ConnectionCertificate.Alignment.localQuery]
+        else if first.isAppOf ``Domain.View.indicesEmpty then [``ConnectionCertificate.Alignment.indicesEmpty]
+        else [``ConnectionCertificate.Alignment.indicesAppend]
       let mut selected : Option (List MVarId) := none
       let mut failure : MessageData := "no applicable action rule"
       for rule in rules do
         let saved ← saveState
         try
-          let pending ← if [``ConnectionCertificate.Derivation.observedSend,
-              ``ConnectionCertificate.Derivation.observedReceive, ``ConnectionCertificate.Derivation.delivery].contains rule then
+          let pending ← if [``ConnectionCertificate.Alignment.observedSend,
+              ``ConnectionCertificate.Alignment.observedReceive, ``ConnectionCertificate.Alignment.delivery].contains rule then
               preparedAction goal rule args model block first
             else applyRule goal rule
           let mut tails := []
           for remaining in pending do
             let type ← instantiateMVars (← remaining.getType)
-            if type.isAppOf ``ConnectionCertificate.Derivation then tails := tails ++ [remaining]
+            if type.isAppOf ``ConnectionCertificate.Alignment then tails := tails ++ [remaining]
             else staticGoal remaining
           selected := some tails
           break
@@ -470,12 +881,12 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
         | throwError "alignment-route-request-history-coordinate-or-operand-mismatch: {failure}"
       -- Once finite indices and readbacks select the rule, continuation failure
       -- belongs to that suffix. Do not retry other actions or hide its location.
-      for tail in tails do derive tail
+      for tail in tails do derive cache discovery tail
       return
     if first.isAppOf ``Domain.View.guard then
       let mut selected : Option (List MVarId) := none
-      for rule in [``ConnectionCertificate.Derivation.guard,
-          ``ConnectionCertificate.Derivation.trueGuard, ``ConnectionCertificate.Derivation.falseGuard] do
+      for rule in [``ConnectionCertificate.Alignment.guard,
+          ``ConnectionCertificate.Alignment.trueGuard, ``ConnectionCertificate.Alignment.falseGuard] do
         let saved ← saveState
         try
           let pending ← applyRule goal rule
@@ -491,14 +902,14 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
                 saved.restore
                 for checked in ← applyRule pendingGoal ``ConnectionCertificate.GuardReadback.boolean do
                   staticGoal checked
-            else if type.isAppOf ``ConnectionCertificate.Derivation then
+            else if type.isAppOf ``ConnectionCertificate.Alignment then
               tails := pendingGoal :: tails
             else staticGoal pendingGoal
           selected := some tails
           break
         catch _ => saved.restore
       let some tails := selected | throwError "alignment-guard-mismatch"
-      for tail in tails do derive tail
+      for tail in tails do derive cache discovery tail
       return
     if first.isAppOf ``Domain.View.helper then
       unless source.isAppOf ``NormalForm.Form.math || source.isAppOf ``NormalForm.Form.strict ||
@@ -516,13 +927,13 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
       let rest ← mkLambdaFVars #[model] block.getAppArgs[2]!
       let strict := source.isAppOf ``NormalForm.Form.strict
       let owned := source.isAppOf ``NormalForm.Form.owned
-      let rule := if strict then ``ConnectionCertificate.Derivation.strictHelper
-        else if owned then ``ConnectionCertificate.Derivation.ownedHelper
-        else ``ConnectionCertificate.Derivation.mathHelper
+      let rule := if strict then ``ConnectionCertificate.Alignment.strictHelper
+        else if owned then ``ConnectionCertificate.Alignment.ownedHelper
+        else ``ConnectionCertificate.Alignment.mathHelper
       let fields := (if owned then #[some sourceParts[sourceParts.size - 4]!] else #[]) ++
         #[some program, some helper] ++ (if strict || owned then #[] else #[some math])
       let constructor ← mkAppOptM rule
-        ((args.extract 0 12).map some ++ fields ++ #[some binding,
+        ((args.extract 0 13).map some ++ fields ++ #[some binding,
           some arguments, some sourceParts.back!, some rest, some references, some yes, some yes])
       let pending ← try goal.apply constructor
         catch exception => throwError "alignment-helper-static-mismatch: {exception.toMessageData}"
@@ -531,7 +942,7 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
       setGoals [readback]
       try evalTactic (← `(tactic| derive_source_readback))
       catch _ => throwError "alignment-helper-operand-readback-mismatch-or-optional"
-      derive tail
+      derive cache discovery tail
       return
     if first.isAppOf ``Domain.View.loop then
       unless source.isAppOf ``NormalForm.Form.repeat do throwError "alignment-loop-source-mismatch"
@@ -558,31 +969,31 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
       let (stateReferences, initialHistory) ← splitProfile initial
       let (yieldData, bodyHistory) ← splitProfile yielded
       let roster ← mkAppM ``List.length #[← mkAppM ``ContextIdentity.roles #[← mkAppM ``Context.toContextIdentity #[context]]]
-      let distinct ← mkAppM ``ConnectionFrame.rosterCheck_sound #[args[1]!, args[5]!, roster,
+      let distinct ← mkAppM ``ConnectionFrame.rosterCheck_sound #[args[1]!, args[6]!, roster,
         ← mkEqRefl (mkConst ``Bool.true)]
       let body ← mkLambdaFVars #[model] viewParts[6]!
       let rest ← mkLambdaFVars #[model] block.getAppArgs[2]!
       let visible ← whnf (← mkAppM ``ConnectionFrame.visibleState
-        #[args[5]!, ← mkAppM ``RepeatSpec.stateScopes #[spec], ← mkAppM ``RepeatSpec.state #[spec]])
+        #[args[6]!, ← mkAppM ``RepeatSpec.stateScopes #[spec], ← mkAppM ``RepeatSpec.state #[spec]])
       let constructor ← if visible.isConstOf ``Bool.true then
-        finiteApplication ``ConnectionCertificate.Derivation.repeat
-          ((args.extract 0 12).map some ++ #[some spec, some site, some callback, some count.getAppArgs.back!,
+        finiteApplication ``ConnectionCertificate.Alignment.repeat
+          ((args.extract 0 13).map some ++ #[some spec, some site, some callback, some count.getAppArgs.back!,
             some parts[parts.size - 3]!, some parts[parts.size - 2]!, some parts.back!, some body, some rest,
             some roster, some distinct, none, none, none, some viewParts[3]!, none,
             some stateReferences, some initial, some yieldData, some yielded, some initialHistory, some bodyHistory])
       else do
         let scopes ← mkAppM ``RepeatSpec.stateScopes #[spec]
-        let initialLocations ← whnf (← mkAppM ``ConnectionInstallation.returnLocations #[args[5]!, scopes, stateReferences])
-        let yieldLocations ← whnf (← mkAppM ``ConnectionInstallation.returnLocations #[args[5]!, scopes, yieldData])
+        let initialLocations ← whnf (← mkAppM ``ConnectionInstallation.returnLocations #[args[6]!, scopes, stateReferences])
+        let yieldLocations ← whnf (← mkAppM ``ConnectionInstallation.returnLocations #[args[6]!, scopes, yieldData])
         unless initialLocations.isAppOf ``Option.some && yieldLocations.isAppOf ``Option.some do
           throwError "alignment-loop-projected-location-arity"
-        let mappedRole ← mkAppM ``ProtocolContext.roles #[args[1]!, args[5]!]
+        let mappedRole ← mkAppM ``ProtocolContext.roles #[args[1]!, args[6]!]
         let mappedScopes ← mkAppM ``ProtocolContext.mapScopes #[args[1]!, scopes]
         let schema ← whnf (← mkAppM ``Original.roleOutputSorts
           #[mappedRole, mappedScopes, ← mkAppM ``RepeatSpec.state #[spec]])
         unless schema.isAppOf ``Option.some do throwError "alignment-loop-projected-schema"
-        finiteApplication ``ConnectionCertificate.Derivation.projectedRepeat
-          ((args.extract 0 12).map some ++ #[some spec, some site, some callback, some count.getAppArgs.back!,
+        finiteApplication ``ConnectionCertificate.Alignment.projectedRepeat
+          ((args.extract 0 13).map some ++ #[some spec, some site, some callback, some count.getAppArgs.back!,
             some parts[parts.size - 3]!, some parts[parts.size - 2]!, some parts.back!, some body, some rest,
             some roster, some distinct, none, none, some schema.getAppArgs.back!, none, some viewParts[3]!, none,
             some initialLocations.getAppArgs.back!, some yieldLocations.getAppArgs.back!,
@@ -593,7 +1004,7 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
       for remaining in pending do
         if ← remaining.isAssigned then continue
         let type ← instantiateMVars (← remaining.getType)
-        if type.isAppOf ``ConnectionCertificate.Derivation then tails := tails ++ [remaining]
+        if type.isAppOf ``ConnectionCertificate.Alignment then tails := tails ++ [remaining]
         else if type.isAppOf ``ConnectionFrame.Readback then
           setGoals [remaining]
           try evalTactic (← `(tactic| derive_source_readback))
@@ -601,7 +1012,7 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
         else
           try staticGoal remaining
           catch _ => throwError "alignment-loop-count-scope-profile-or-return-mismatch"
-      for tail in tails do derive tail
+      for tail in tails do derive cache discovery tail
       return
     throwError "alignment-unsupported-target"
 
@@ -611,7 +1022,13 @@ search are untrusted; successful output is data checked by the Lean kernel. -/
 elab "derive_connection_alignment" : tactic => withMainContext do
   let goal ← getMainGoal
   let pending := (← getGoals).tail
-  derive goal
+  let cache ← Syntax.newCache
+  let start ← IO.monoNanosNow
+  derive cache none goal
+  let elapsed := (← IO.monoNanosNow) - start
+  tracePhase s!"alignment proposal total_ns={elapsed}; syntax_kernel_ns={← cache.kernelNanos.get}; syntax_declarations={(← cache.declarations.get).size}"
+  let result ← instantiateMVars (mkMVar goal)
+  if result.hasExprMVar then throwError "alignment-unresolved-finite-admission"
   setGoals pending
 
 end ZkcTools.ConstructionBindings.Alignment
