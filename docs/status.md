@@ -544,15 +544,19 @@ within each check; mutations always require a fresh check. Returned oracle resul
 keep their original reference positions and append mapped immutable stores only at
 their receiving roles. Aliases share support stores; nested calls and recurrence
 retain actual anchors and final store snapshots. These private interface maps do
-not enable cross-entry graph import. Retained anchor clauses, Merkle request
-suspension and production use of the checked transition still need integration.
+not enable cross-entry graph import. Logical anchor-clause interpretation,
+Merkle request suspension and native proof integration remain pending.
 The private realization owner consumes a prepared source, validates the complete
 serialized record against both modules and retains the frozen pair. Inspection
 returns independent clones; changed snapshots do not inherit checked authority.
+Joint run compilation now consumes this owner before projection and keeps the
+complete edge in the final Compilation. Native scheduling reads the represented
+common interface; proof construction still refuses logical oracle sources.
 Ordinary modules pass through an exact identity edge with an empty oracle inventory. The independently checked table-read primitive
 stops before an out-of-domain read for field, group, index and sequence-backed
 rows. Its generated clients enter the physical pipeline; native controls check
-actual row counts and observable prefixes when a later query fails. Complete source adapters and semantic realization remain pending.
+actual row counts and observable prefixes when a later query fails. Logical
+claim transport and the independent semantic realization bridge remain pending.
 The private whole-stage reader consumes a version-zero
 [realization record](spec/formats/oracle-realization.md), the prepared original
 and the actual candidate. It reads independently parsed candidates, checks exact
@@ -571,7 +575,7 @@ predicates on native representations. The record is not a production admission t
 Empty sequence observations need no allocated anchor. Unreachable queries and
 shape views have a complete refusing controller without an invented store;
 indexing still stops at its original occurrence and preserves earlier delivery.
-Controller roles must belong to the original entry roster. Merkle realization and production publication remain
+Controller roles must belong to the original entry roster. Merkle realization and native proof publication remain
 pending.
 
 Common oracle ports pair actual holder data and receiver handles through inputs,

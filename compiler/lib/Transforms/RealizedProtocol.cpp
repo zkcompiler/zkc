@@ -33,4 +33,12 @@ OwningOpRef<ModuleOp> RealizedProtocol::candidateSnapshot() const {
              ? OwningOpRef<ModuleOp>(cast<ModuleOp>(candidate.get()->clone()))
              : OwningOpRef<ModuleOp>();
 }
+OwningOpRef<ModuleOp> RealizedProtocol::project(bool simplify) const {
+  auto actual = candidateSnapshot();
+  if (!actual)
+    return {};
+  // The actual-body reader established the complete prepared candidate:
+  // original ordinary siblings and the closed oracle generation grammar.
+  return PreparedProtocol(std::move(actual)).project(simplify);
+}
 } // namespace zkc::mathematical

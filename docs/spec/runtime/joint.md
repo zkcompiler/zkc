@@ -9,13 +9,33 @@ it does not independently establish correspondence to source.
 ## Compiler ownership
 
 `compileRun(text, filename, options, registry)` accepts mathematical
-MLIR in the `protocol` profile. It owns the context, runs prepare, projection,
+MLIR in the `protocol` profile. It owns the context, runs preparation, checked
+ideal oracle realization, projection,
 optional participant simplification, math lowering and physical selection, then
 exports the typed physical participant carrier. Adjacent-stage preservation
 checks retain action order, calculation origins, statement interfaces and result
 maps. The API returns an owned final `Compilation` and a complete bundle. The
-compilation owns its MLIR context, module and statistics. Failures are owned
+compilation owns its MLIR context, module, statistics and the complete checked
+common realization edge. Failures are owned
 `CompilationError` values; no partial bundle is returned.
+
+`Compilation::oracleRealizationSnapshot()` returns independent clones of the
+prepared original and actual common candidate, with the owned
+[realization record](../formats/oracle-realization.md). The clones borrow the
+compilation's context and must be destroyed before that compilation is destroyed
+or reassigned. Changes to them cannot change the retained edge. Ordinary sources
+use the same path with an exact identity edge and empty oracle entry inventory.
+
+For logical oracles the current execution mode is ideal: input receivers supply
+their own Data representation, separately from the holder's Data. Returned
+handles are references with explicit support stores. The bundle uses this native
+interface; logical handles have no generic wire codec. Original clauses and exact
+statement selections remain on the original, not on the changed native
+signature. Run execution does not interpret these logical predicates or establish
+oracle simulation. Native proof construction still refuses this logical profile
+until its selected-target transport and construction are implemented. The bundle
+schema below contains execution data; it does not embed or authorize a logical
+claim or the independently retained realization record.
 
 The command writes exactly the returned bundle bytes, without an added newline.
 An application pin for this artifact therefore also names the compiler's exact
@@ -36,8 +56,9 @@ exported typed carrier. Instruction indices count actual emitted carrier body
 instructions, including return. Guard recipes belong to their source action even
 though they also have calculation origins. Other generated calculations precede
 the demanding action, or precede that role's return. Generated-looking names have
-no special meaning. The final module owns retained statement information; the
-bundle carries executable scheduling data. It adds no IR stage or dialect.
+no special meaning. Ordinary statement manifests remain in the final module;
+oracle clauses remain in the compilation's frozen original. The bundle carries
+executable scheduling data. It adds no IR stage or dialect.
 
 ## Bundle and admission
 

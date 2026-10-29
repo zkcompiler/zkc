@@ -252,6 +252,63 @@ fn main() {
             cases += 1;
         }
     }
+    let bytes = std::fs::read(Path::new(&directory).join("common-clauses.bundle")).unwrap();
+    let bundle = Bundle::admit(
+        &bytes,
+        &backend("P", "main"),
+        zkc_cpu::cpu_contracts(),
+        BundleLimits::default(),
+    )
+    .unwrap();
+    for lengths in [[4, 4], [3, 4], [4, 3]] {
+        for receiver_base in [0, 40] {
+            for position in 0..=4 {
+                let report = run(
+                    &bundle,
+                    "oracle_common",
+                    vec![
+                        input("P", vec![table(10, lengths[0])]),
+                        input(
+                            "V",
+                            vec![table(receiver_base, lengths[1]), Value::Index(position)],
+                        ),
+                    ],
+                    RunLimits::default(),
+                    &mut NoHooks,
+                )
+                .unwrap();
+                let label = format!("clauses/{lengths:?}/{receiver_base}/{position}");
+                if lengths == [4, 4] && position < 4 {
+                    assert!(matches!(report.outcome, Outcome::Completed), "{label}");
+                    let holder = &report.roles.iter().find(|r| r.role == "P").unwrap().outputs;
+                    let receiver = &report.roles.iter().find(|r| r.role == "V").unwrap().outputs;
+                    assert_eq!(holder.len(), 1, "{label}");
+                    assert!(
+                        matches!(&holder[0], Value::Indices(xs) if xs.as_ref() == [10,11,12,13]),
+                        "{label}"
+                    );
+                    assert_eq!(index(&receiver[1]), receiver_base + position, "{label}");
+                    // The decision is an actual output, not execution of the
+                    // external logical predicate or an inferred honesty guard.
+                    assert!(
+                        matches!(&receiver[2], Value::Bool(accepted) if *accepted == (receiver_base == 0)),
+                        "{label}"
+                    );
+                    assert_eq!(
+                        returned_row(&receiver[3..], &receiver[0], position, 64),
+                        receiver_base + position,
+                        "{label}"
+                    );
+                    for (_, native) in &report.backends {
+                        assert_eq!(native.active_frames(), 0, "{label}");
+                    }
+                } else {
+                    verify(&report, None, &label);
+                }
+                cases += 1;
+            }
+        }
+    }
     let bytes = std::fs::read(Path::new(&directory).join("common-shape.bundle")).unwrap();
     let bundle = Bundle::admit(
         &bytes,

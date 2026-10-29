@@ -44,7 +44,7 @@ def test_oracle_common_realization(toolchain, directory, journal):
     for fixture in (
         "common-recurrence", "common-holders", "common-input", "common-shape",
         "common-contents", "common-views", "common-entries", "common-return",
-        "common-empty",
+        "common-empty", "common-clauses",
     ):
         journal.run([
             toolchain.tool("compiler", "test/zkc-oracle_common_realization-test"),

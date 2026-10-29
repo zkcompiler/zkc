@@ -4,8 +4,9 @@
 realization. Its inputs are the immutable prepared original, a separate actual
 common module and the record. The native reader checks all three together.
 The record is not executable code, a claim of prior admission, a proof of oracle
-simulation, or permission to publish a proof artifact. Production integration,
-logical-contract transport and Merkle realization remain separate obligations.
+simulation, or permission to publish a proof artifact. Joint execution retains
+this checked edge through compilation; logical-contract transport, native proof
+integration and Merkle realization remain separate obligations.
 
 The current mode is `ideal`. It uses ordinary data, references and immutable
 stores for table oracles. Virtual anchors are never committed. The same
@@ -17,7 +18,9 @@ the actual candidate and the reader-checked serialized record together. Its
 inspection APIs return independent module clones. Mutating an inspected clone
 cannot change the owned edge or confer checked status on the mutation. An empty
 oracle inventory uses the same reader and preserves the ordinary module exactly.
-This ownership boundary does not yet authorize production projection or claim
+Joint compilation projects a private copy of the checked candidate, reads the
+native schedule against that candidate's interface and retains the entire edge
+in the final compilation owner. Execution does not authorize logical claim
 publication; the complete logical-contract interpretation remains required.
 
 ## JSON envelope and limits
@@ -91,7 +94,7 @@ This layout records associations, not equality between role components or a
 cryptographic interpretation of a clause. Returned references connect to actual
 support stores through `result_references`; they are not serialized Data values.
 Logical anchor-clause transport still requires its typed interpretation before
-production projection can accept that profile.
+native proof publication can accept that profile.
 
 The `contracts` object has exactly `clauses` and `statements`. Clauses follow
 original declaration order and contain `kind`, `name`, `subject`, `residual` and

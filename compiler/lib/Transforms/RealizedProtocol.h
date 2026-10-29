@@ -13,8 +13,8 @@ namespace zkc::mathematical {
 // This is native structural correspondence, not a semantic simulation or
 // authority to publish logical claims. Logical clauses and selections stay on
 // the original, never on the candidate's changed signature. Production
-// consumers must interpret the complete edge before projecting or publishing
-// claims.
+// consumers retain this edge through execution and must interpret it before
+// publishing logical claims.
 class RealizedProtocol {
   mlir::OwningOpRef<mlir::ModuleOp> original, candidate;
   std::string record;
@@ -31,6 +31,9 @@ public:
   mlir::OwningOpRef<mlir::ModuleOp> originalSnapshot() const;
   mlir::OwningOpRef<mlir::ModuleOp> candidateSnapshot() const;
   llvm::StringRef realizationRecord() const { return record; }
+  // Project an independent copy of the checked native side. Retain the edge
+  // for the entire compilation; projection alone grants no logical claim.
+  mlir::OwningOpRef<mlir::ModuleOp> project(bool simplify) const;
 };
 } // namespace zkc::mathematical
 

@@ -334,14 +334,15 @@ rejects("Compiler cannot acquire CLI headers",
 rejects("Compiler cannot link Driver", manifest,
         lambda text: text.replace("ZkcCompiler|", "ZkcCompiler|ZkcDriver;", 1),
         "hidden private or extra interface dependencies")
-rejects("prepared protocol bridge cannot enter public Compiler headers",
-        root / "include/zkc/Compiler/Compilation.h",
-        lambda text: '#include "../../../lib/Transforms/PreparedProtocol.h"\n' + text,
-        "public header includes private implementation")
-rejects("Driver cannot directly use the prepared protocol bridge",
-        root / "lib/Driver/Compiler.cpp",
-        lambda text: '#include "../Transforms/PreparedProtocol.h"\n' + text,
-        "private component dependency")
+for stage in ("PreparedProtocol", "RealizedProtocol"):
+    rejects(f"{stage} bridge cannot enter public Compiler headers",
+            root / "include/zkc/Compiler/Compilation.h",
+            lambda text, stage=stage: f'#include "../../../lib/Transforms/{stage}.h"\n' + text,
+            "public header includes private implementation")
+    rejects(f"Driver cannot directly use the {stage} bridge",
+            root / "lib/Driver/Compiler.cpp",
+            lambda text, stage=stage: f'#include "../Transforms/{stage}.h"\n' + text,
+            "private component dependency")
 rejects("prepared protocol bridge grants no other private transform header",
         root / "lib/Compiler/Compilation.cpp",
         lambda text: '#include "../Transforms/MathematicalSupport.h"\n' + text,

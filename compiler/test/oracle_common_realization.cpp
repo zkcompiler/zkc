@@ -697,13 +697,13 @@ int main(int argc, char **argv) {
         selected.push_back("at");
       for (StringRef selectedEntry : selected)
         cases.run(fixture + " physical entry " + selectedEntry, [&] {
-          auto realized = print(*candidate.module);
+          auto logicalSource = print(*source);
           CompilationObservation observation;
           RunOptions options;
           options.entry = selectedEntry.str();
           options.observations = &observation;
-          auto compiled =
-              compileRun(realized, "oracle-common.mlir", options, registry);
+          auto compiled = compileRun(logicalSource, "oracle-common.mlir",
+                                     options, registry);
           std::string name = fixture.str();
           if (selectedEntry != "main")
             name += "-" + selectedEntry.str();
@@ -718,11 +718,22 @@ int main(int argc, char **argv) {
               "physical compilation: " +
                   (compiled ? std::string() : toString(compiled.takeError())) +
                   diagnostics);
+          auto edge = compiled->compilation.oracleRealizationSnapshot();
+          require(bool(edge), "production compilation lost realization");
+          checked(checkIdealOracleRealization(*edge->original, *edge->candidate,
+                                              edge->record));
+          require(print(*edge->original) == frozen,
+                  "production changed the retained logical subject");
+          require(edge->record == take(serializeIdealOracleRealization(
+                                      *prepared, candidate)),
+                  "production record differs from the independently inspected "
+                  "edge");
           if (argc > 1) {
             auto base = std::filesystem::path(argv[1]) / name;
-            std::ofstream(base.string() + ".mlir") << realized;
-            std::ofstream(base.string() + ".realization.json")
-                << take(serializeIdealOracleRealization(*prepared, candidate));
+            std::ofstream(base.string() + ".mlir") << print(*edge->candidate);
+            std::ofstream(base.string() + ".original.mlir")
+                << print(*edge->original);
+            std::ofstream(base.string() + ".realization.json") << edge->record;
             std::ofstream(base.string() + ".bundle") << compiled->bundle;
           }
         });

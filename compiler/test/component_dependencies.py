@@ -276,7 +276,8 @@ def main():
     # Implementation bridges are explicit and uninstalled. Each grants only
     # the named header, never the rest of its owner's private implementation.
     bridges = {("ZkcDriver", ROOT / "lib/Support/Input.h"),
-               ("ZkcCompiler", ROOT / "lib/Transforms/PreparedProtocol.h")}
+               ("ZkcCompiler", ROOT / "lib/Transforms/PreparedProtocol.h"),
+               ("ZkcCompiler", ROOT / "lib/Transforms/RealizedProtocol.h")}
     assert not (ROOT / "include/zkc/Dialect/Builders.h").exists(), "raw builders belong to unsupported detail"
 
     def check_private_edge(component, path, target):
