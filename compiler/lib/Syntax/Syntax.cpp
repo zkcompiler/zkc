@@ -78,6 +78,7 @@ const source::Revision &Snapshot::revision() const { return storage->revision; }
 source::SourceId Snapshot::sourceId() const { return storage->sourceId; }
 Status Snapshot::status() const { return storage->status; }
 bool Snapshot::headersOnly() const { return storage->headersOnly; }
+uint64_t Snapshot::workUsed() const { return storage->workUsed; }
 llvm::ArrayRef<Token> Snapshot::tokens() const { return storage->tokens; }
 llvm::ArrayRef<Node> Snapshot::nodes() const { return storage->nodes; }
 llvm::ArrayRef<source::Diagnostic> Snapshot::diagnostics() const {

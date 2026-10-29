@@ -112,6 +112,10 @@ void corpus() {
     check(equivalent(s, reparsed), "format parse equivalence");
     check(format(reparsed).text == formatted.text, "format idempotence");
   }
+  auto metered = read("module m\ndef f():\n    x + y\n");
+  check(metered.workUsed() > metered.tokens().size() &&
+            metered.workUsed() <= Budget{}.work,
+        "syntax work is available for project aggregate charging");
   check(files == 13, "complete accepted example corpus");
 }
 void designCases() {

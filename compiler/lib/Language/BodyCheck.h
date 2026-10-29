@@ -28,6 +28,8 @@ private:
   std::vector<UsagePlan::Value> usageValues;
   unsigned callDepth;
   uint32_t statement = 0;
+  /// Only the outer expression selected by an authored `<-` may be ordered.
+  std::optional<uint32_t> orderedRoot;
   bool retainExpressionValues = false;
   Placement *placement = nullptr;
   const ExpressionTypes *inference = nullptr;

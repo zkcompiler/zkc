@@ -46,6 +46,25 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
   }
   using K = Expression::Kind;
   using T = Type::Kind;
+  if (syntax.layoutSyntax) {
+    bool ordered = expr.kind == K::MethodCall;
+    if (auto found = inference->callees.find(id);
+        found != inference->callees.end()) {
+      const auto &callee =
+          checker.output.declarations[found->second.declaration.index];
+      ordered |= callee.kind == Declaration::Kind::Local ||
+                 callee.kind == Declaration::Kind::EntryFunction ||
+                 (callee.generated && callee.generated->operation.has_value());
+    }
+    if ((ordered && orderedRoot != id) || (!ordered && orderedRoot == id)) {
+      fail("source.action",
+           ordered
+               ? "ordered action requires the outer '<-' position"
+               : "'<-' requires an ordered action; use '=' for a pure value",
+           expr.span);
+      return {};
+    }
+  }
   std::optional<ValueId> result;
   if (expr.kind == K::FinishIf) {
     fail("source.mode", "protocol action requires a complete let statement",

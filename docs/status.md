@@ -284,8 +284,16 @@ incomplete editor buffers and format complete syntax with a reparse check.
 `compiler/test/source_syntax.cpp` covers the selected example corpus, notation,
 positions, mutations and refusal budgets. The source/syntax installed-consumer
 fixture exercises static/shared linkage and Unicode dependency discovery.
-The production checker/CLI still uses its existing syntax entry; syntax support
-alone does not establish execution or formal support for the new forms.
+The explicit development entry `--source-format=zkc-layout` now connects the
+[new syntax to native execution](spec/language/layout-execution.md). It reuses
+name/type/role/resource/effect checking, specialization, actual IR comparison and
+the Rust Host. The maintained new-syntax Schnorr fixture executes valid and
+invalid witnesses, extra unused random draws and reached guards. Optional specs
+retain their authored source and resolved protocol attachment, with assurance
+reported as unavailable; native checking does not prove them. The ordinary
+project/SDK default remains the existing syntax. Shortened implementation
+signatures, complete mathematical control, schemes, formal projections and
+oracle execution remain outside the development execution profile.
 
 `entry fn` exposes typed application control; `proof` configures independent
 proving and verification. Entry functions statically call numerical helpers,

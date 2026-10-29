@@ -238,9 +238,16 @@ bool BodyChecker::statementBody(const Statement &s) {
     return fail("source.unreachable", "statement follows a guaranteed stop",
                 s.span);
   StatementPlacement inference(*this);
+  SaveAndRestore orderedScope(
+      orderedRoot, s.evaluation == Statement::Evaluation::Ordered && !s.exchange
+                       ? std::optional(s.expression)
+                       : std::nullopt);
   const auto &expr = syntax.expressions[s.expression];
   if (s.kind == Statement::Kind::Let && expr.kind == Expression::Kind::Name &&
       expr.binding && syntax.bindings[expr.binding->index].service) {
+    if (syntax.layoutSyntax && orderedRoot)
+      return fail("source.action", "a service alias uses a pure binding",
+                  s.span);
     auto root = service(expr);
     if (!root)
       return false;
@@ -249,6 +256,9 @@ bool BodyChecker::statementBody(const Statement &s) {
   }
   if (s.kind == Statement::Kind::Let && s.pattern.binding &&
       syntax.bindings[s.pattern.binding->index].domain) {
+    if (syntax.layoutSyntax && orderedRoot)
+      return fail("source.action", "a domain alias uses a pure binding",
+                  s.span);
     TypeScope types(*this, s.expression, {}, true);
     if (!types)
       return false;
@@ -270,6 +280,9 @@ bool BodyChecker::statementBody(const Statement &s) {
       return false;
     if (target && checker.output.declarations[target->index].kind ==
                       Declaration::Kind::Protocol) {
+      if (syntax.layoutSyntax && orderedRoot != s.expression)
+        return fail("source.action", "protocol application requires '<-'",
+                    s.span);
       if (s.exchange || (s.kind != Statement::Kind::Let &&
                          s.kind != Statement::Kind::Assign &&
                          s.kind != Statement::Kind::Expression))
@@ -355,8 +368,20 @@ bool BodyChecker::statementBody(const Statement &s) {
     return true;
   }
   if (s.exchange) {
-    auto sender = checker.roles(decl, {s.exchange->first}, s.span),
-         receiver = checker.roles(decl, {s.exchange->second}, s.span);
+    std::optional<std::vector<unsigned>> sender;
+    if (s.exchange->first.empty() && syntax.layoutSyntax) {
+      auto chosen = placement->owner(s.span);
+      if (!chosen ||
+          !placement->together(*chosen, components(*value), s.span) ||
+          !inference.commit())
+        return false;
+      // Solve using only the current payload. Neither the recipient nor the
+      // receiving binding can constrain the omitted sending participant.
+      sender = std::vector<unsigned>{
+          inference.state->selected(chosen->owners.front())};
+    } else
+      sender = checker.roles(decl, {s.exchange->first}, s.span);
+    auto receiver = checker.roles(decl, {s.exchange->second}, s.span);
     if (!sender || !receiver || !active(*sender, s.span) ||
         !active(*receiver, s.span))
       return false;

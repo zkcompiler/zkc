@@ -87,6 +87,8 @@ add_zkc_component(Language
   lib/Language/Natural.cpp
   lib/Language/Project.cpp
   lib/Language/Syntax.cpp
+  lib/Language/LayoutSyntax.cpp
+  lib/Language/LayoutSpecifications.cpp
   lib/Language/Arguments.cpp
   lib/Language/Elaboration.cpp
   lib/Language/Booleans.cpp

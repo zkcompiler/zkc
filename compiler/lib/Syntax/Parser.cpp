@@ -714,6 +714,35 @@ class Parser {
     lineEnd();
     return make(Kind::Notation, begin, children);
   }
+  NodeId imports() {
+    auto begin = mark();
+    expect("{");
+    std::vector<NodeId> children;
+    if (at("}"))
+      missing("nonempty import list");
+    while (!end() && !at("}")) {
+      auto first = mark();
+      if ((at("operator") || at("reduction") || at("notation")) &&
+          text(1) != "," && text(1) != "}" && text(1) != "::") {
+        advance();
+        if (at(TokenKind::Punctuation))
+          advance();
+        else
+          missing("notation symbol");
+        children.push_back(make(Kind::ImportSelector, first));
+      } else if (at("indexing") && text(1) == "[") {
+        advance();
+        expect("[");
+        expect("]");
+        children.push_back(make(Kind::ImportSelector, first));
+      } else
+        children.push_back(name());
+      if (!take(","))
+        break;
+    }
+    expect("}");
+    return make(Kind::Parameters, begin, children);
+  }
   NodeId declaration() {
     auto begin = mark();
     auto oldEnv = environment;
@@ -764,7 +793,7 @@ class Parser {
       else
         children.push_back(name());
       if (take("::"))
-        children.push_back(list(Kind::Parameters, "{", "}"));
+        children.push_back(imports());
       if (take("as"))
         children.push_back(name(false));
       lineEnd();
@@ -1035,6 +1064,7 @@ public:
     data->root = make(Kind::File, 0, children);
     data->nodes[data->root.index].firstToken = 0;
     data->nodes[data->root.index].lastToken = uint32_t(data->tokens.size() - 1);
+    data->workUsed = work.budget.work - work.remaining;
     return Snapshot(data);
   }
 };
