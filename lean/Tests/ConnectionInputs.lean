@@ -1,5 +1,6 @@
 import ZkcTools.ConstructionBindings.Inputs
 import Zkc.Construction.ConnectionPresence
+import Zkc.Construction.ConnectionInputSchema
 
 /-! Full ABI assembly with hidden data, a fixed capability, nominal data and
 history. A changed service handle or a stale physical selector cannot match. -/
@@ -50,6 +51,24 @@ example : InitialLayout pattern locations "suite" (some 2) 0
 #guard_msgs in
 example : InitialLayout pattern locations "suite" (some 0) 0 layout := by
   derive_connection_inputs
+
+def inputSorts : List ValueSort := [.data .boolean, .data (.field "f"), .transcript "suite"]
+
+example : shape.sortsValid inputSorts = true := rfl
+-- Same host carrier does not permit a different nominal field in this ABI.
+example : shape.sortsValid [.data .boolean, .data (.field "other"), .transcript "suite"] = false := by decide
+example : shape.sortsValid [.data .boolean] = false := by decide
+example : shape.sortsValid [.data (.field "f"), .data .boolean, .transcript "suite"] = false := by decide
+
+example (model : DomainModel) (frame : Domain.Environment model.toCarriers)
+    (sorted : Domain.sortsMatch inputSorts frame = true) :
+    ∃ binders : Binders model pattern.scope,
+      Original.ValuesHolds frame locations (pattern.environment model binders) :=
+  shape.binders_of_sorts rfl frame sorted
+
+example (model : DomainModel) (frame : Domain.Environment model.toCarriers)
+    (sorted : Domain.sortsMatch inputSorts frame = true) :
+    Original.LocationsBound frame.length locations := shape.physicalBounds rfl sorted
 
 -- Presence refinement cannot silently erase a source value with physical data.
 example (model : DomainModel) (value : model.Field "f") (history : Domain.History model.toCarriers) :

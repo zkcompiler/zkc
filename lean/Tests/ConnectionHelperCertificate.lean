@@ -75,8 +75,7 @@ def scalarLayout : Layout scalarPattern.scope :=
 def scalarView (changed : Bool) : ConnectionCertificate.Block := fun model =>
   Domain.View.sequence (Domain.View.helper model (scalarProgram changed) "differenceAndInput"
     [0, 1] [.data field, .data field]) Domain.View.empty
-def scalarAccepted : Certificate scalarRouting [] {} (scalarDefinitions false) 0 1 scalarSource scalarPattern
-    [.data 2, .data 3] scalarLayout (scalarView false) := by derive_connection_alignment
+def scalarAccepted : Certificate scalarRouting {} (scalarDefinitions false) 0 1 scalarSource scalarPattern [.data 2, .data 3] none [] scalarLayout (scalarView false) := by derive_connection_alignment
 example : scalarAccepted.alignment.size = 2 := rfl
 
 -- A bounded helper is admitted with a bound declaration, but its actual body
@@ -138,8 +137,7 @@ def readLayout : Layout readPattern.scope := [.data (.input .here), .data (.inpu
 def readView : ConnectionCertificate.Block := fun model =>
   Domain.View.sequence (Domain.View.helper model readProgram "readAndIndex" [0, 1] [.data field, .data .index])
     Domain.View.empty
-def readAccepted : Certificate scalarRouting [] {} readDefinitions 0 1 readSource readPattern
-    [.data 2, .data 3] readLayout readView := by derive_connection_alignment
+def readAccepted : Certificate scalarRouting {} readDefinitions 0 1 readSource readPattern [.data 2, .data 3] none [] readLayout readView := by derive_connection_alignment
 example : readAccepted.alignment.size = 2 := rfl
 
 def repeatedBody : Region protocolDialect readInputs [field, .boolean, .boolean] :=
@@ -156,8 +154,7 @@ def repeatedView : ConnectionCertificate.Block := fun model =>
   Domain.View.sequence (Domain.View.helper model readProgram "readAndIndex" [0, 1] [.data field, .data .index]) <|
   Domain.View.sequence (Domain.View.calculation model .indexEqual [3, 1] [.data .boolean]) <|
   Domain.View.sequence (Domain.View.calculation model .indexEqual [3, 1] [.data .boolean]) Domain.View.empty
-def repeatedAccepted : Certificate scalarRouting [] {} readDefinitions 0 1 repeatedSource readPattern
-    [.data 2, .data 4, .data 5] readLayout repeatedView := by derive_connection_alignment
+def repeatedAccepted : Certificate scalarRouting {} readDefinitions 0 1 repeatedSource readPattern [.data 2, .data 4, .data 5] none [] readLayout repeatedView := by derive_connection_alignment
 example : repeatedAccepted.alignment.size = 6 := rfl
 
 -- There is one public accepted-data boundary, including its structural table
@@ -174,13 +171,13 @@ example (model : DomainModel) (tables : Tables model (Occurrence.signature model
     (environment : Domain.Environment model.toCarriers)
     (related : Holds model binders state.history readLayout environment)
     (retained : ArtifactBinding.Captures captured environment) :
-    Original.Simulation (Returns [.data 2, .data 3] state captured)
+    Original.Simulation (Returns scalarRouting 0 readSource.outputScopes [.data 2, .data 3] none state.frames captured)
       (Original.InputLive abi (readPattern.environment model binders) captured)
       (Original.fold scalarRouting (readBody.denote
         (participantMeaningWithOn model (.silent _) Occurrence.actions tables 0 protocols {} Occurrence.iterations)
         (readPattern.environment model binders).get) state) (readView model environment) :=
-  readAccepted.simulation rfl (RosterDistinct.root _ _) model tables bindings protocols state stack
-    binders abi captured sorts bound inputRead environment related retained
+  readAccepted.simulation (RosterDistinct.root _ _) model tables bindings protocols state
+    binders stack abi captured sorts bound inputRead environment related retained
 
 def readTables (model : DomainModel) : Tables model (Occurrence.signature model.toCarriers) :=
   readDefinitions.foldl (Evaluation.ComponentTablesOn.extend model (.silent _)) ⟨[], []⟩
@@ -219,35 +216,27 @@ example (model : DomainModel) (index : Nat) :
 
 /-- error: alignment-helper-declaration-mismatch -/
 #guard_msgs (substring := true) in
-example : Certificate scalarRouting [] {} (scalarDefinitions false) 0 1 scalarSource scalarPattern
-    [.data 2, .data 3] scalarLayout (scalarView true) := by derive_connection_alignment
+example : Certificate scalarRouting {} (scalarDefinitions false) 0 1 scalarSource scalarPattern [.data 2, .data 3] none [] scalarLayout (scalarView true) := by derive_connection_alignment
 
 /-- error: alignment-helper-key-mismatch -/
 #guard_msgs (substring := true) in
-example : Certificate scalarRouting [] {} (scalarDefinitions false) 0 1 readSource readPattern
-    [.data 2, .data 3] readLayout (scalarView false) := by derive_connection_alignment
+example : Certificate scalarRouting {} (scalarDefinitions false) 0 1 readSource readPattern [.data 2, .data 3] none [] readLayout (scalarView false) := by derive_connection_alignment
 
 /-- error: alignment-helper-operand-readback-mismatch-or-optional -/
 #guard_msgs (substring := true) in
-example : Certificate scalarRouting [] {} readDefinitions 0 1 readSource readPattern
-    [.data 2, .data 3] [.unused, .unused] readView := by derive_connection_alignment
+example : Certificate scalarRouting {} readDefinitions 0 1 readSource readPattern [.data 2, .data 3] none [] [.unused, .unused] readView := by derive_connection_alignment
 
 /-- error: alignment-helper-operand-readback-mismatch-or-optional -/
 #guard_msgs (substring := true) in
-example : Certificate scalarRouting [] {} readDefinitions 0 1 readSource
-    (.cons .absent (.cons .present .nil)) [.data 2, .data 3]
-    [.unused, .data (.present (.var .here))] readView := by derive_connection_alignment
+example : Certificate scalarRouting {} readDefinitions 0 1 readSource (.cons .absent (.cons .present .nil)) [.data 2, .data 3] none [] [.unused, .data (.present (.var .here))] readView := by derive_connection_alignment
 
 /-- error: alignment-return-or-view-mismatch -/
 #guard_msgs (substring := true) in
-example : Certificate scalarRouting [] {} readDefinitions 0 1 readSource readPattern
-    [.data 2, .data 2] readLayout readView := by derive_connection_alignment
+example : Certificate scalarRouting {} readDefinitions 0 1 readSource readPattern [.data 2, .data 2] none [] readLayout readView := by derive_connection_alignment
 
 /-- error: alignment-helper-static-mismatch -/
 #guard_msgs (substring := true) in
-example : Certificate scalarRouting [] {} readDefinitions 0 1 readSource readPattern
-    [.data 2, .data 3] readLayout
-    (fun model => Domain.View.sequence (Domain.View.helper model readProgram "read" [0, 1]
+example : Certificate scalarRouting {} readDefinitions 0 1 readSource readPattern [.data 2, .data 3] none [] readLayout (fun model => Domain.View.sequence (Domain.View.helper model readProgram "read" [0, 1]
       [.data field, .data .index]) Domain.View.empty) := by derive_connection_alignment
 
 -- Keeping the name while changing the complete output signature is refused.
@@ -260,16 +249,12 @@ def changedKeySource : CheckedProtocol :=
     changedKeyBody.erase, changedKeyBody, changedKeyBody.elaborate_erase⟩
 /-- error: alignment-helper-key-mismatch -/
 #guard_msgs (substring := true) in
-example : Certificate scalarRouting [] {} readDefinitions 0 1 changedKeySource readPattern
-    [.data 2, .data 3] readLayout
-    (fun model => Domain.View.sequence (Domain.View.helper model readProgram "readAndIndex" [0, 1]
+example : Certificate scalarRouting {} readDefinitions 0 1 changedKeySource readPattern [.data 2, .data 3] none [] readLayout (fun model => Domain.View.sequence (Domain.View.helper model readProgram "readAndIndex" [0, 1]
       [.data field, .data field]) Domain.View.empty) := by derive_connection_alignment
 
 /-- error: alignment-helper-static-mismatch -/
 #guard_msgs (substring := true) in
-example : Certificate scalarRouting [] {} readDefinitions 0 1 readSource readPattern
-    [.data 2, .data 3] readLayout
-    (fun model => Domain.View.sequence (Domain.View.helper model readProgram "readAndIndex" [0, 1]
+example : Certificate scalarRouting {} readDefinitions 0 1 readSource readPattern [.data 2, .data 3] none [] readLayout (fun model => Domain.View.sequence (Domain.View.helper model readProgram "readAndIndex" [0, 1]
       [.data field, .data field]) Domain.View.empty) := by derive_connection_alignment
 
 end Tests.ConnectionHelperCertificate

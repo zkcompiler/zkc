@@ -62,8 +62,7 @@ example : (check arithmeticSnapshot).isOk = true := by kernel_rfl
 def arithmeticRouting : Original.Routing :=
   ⟨arithmeticSnapshot, .plain "arithmetic" ["P", "V"] 0 1, .producer, 0, [], [], [], []⟩
 
-def arithmeticCertificate : Derivation arithmeticRouting [] {} [] [] outputs [.data 3, .data 2]
-    arithmeticLayout arithmeticForm (arithmeticView false) := by
+def arithmeticCertificate : Derivation arithmeticRouting {} [] [] outputs 0 (List.replicate outputs.length [0, 1]) [.data 3, .data 2] none [] arithmeticLayout arithmeticForm (arithmeticView false) := by
   derive_connection_alignment
 
 /-- A receive, a nominal calculation, a guard and a send, on arbitrary inputs
@@ -129,19 +128,16 @@ def messageView : ConnectionCertificate.Block := fun model =>
   Domain.View.sequence (Domain.View.calculation model (.booleanConstant true) [] [.data .boolean])
     Domain.View.empty
 
-def messageCertificate : Derivation messageRouting [] {} [] [] outputs [.data 5, .data 2]
-    messageLayout messageForm messageView := by
+def messageCertificate : Derivation messageRouting {} [] [] outputs 1 (List.replicate outputs.length [0, 1]) [.data 5, .data 2] none [] messageLayout messageForm messageView := by
   derive_connection_alignment
 
 example : arithmeticCertificate.size = 3 := rfl
 example : messageCertificate.size = 8 := rfl
 
-def arithmeticAccepted : Certificate arithmeticRouting [] {} [] 0 2 arithmeticChecked arithmeticPattern
-    [.data 3, .data 2] arithmeticLayout (arithmeticView false) := by
+def arithmeticAccepted : Certificate arithmeticRouting {} [] 0 2 arithmeticChecked arithmeticPattern [.data 3, .data 2] none [] arithmeticLayout (arithmeticView false) := by
   derive_connection_alignment
 
-def messageAccepted : Certificate messageRouting [] {} [] 1 2 messageChecked messagePattern
-    [.data 5, .data 2] messageLayout messageView := by
+def messageAccepted : Certificate messageRouting {} [] 1 2 messageChecked messagePattern [.data 5, .data 2] none [] messageLayout messageView := by
   derive_connection_alignment
 
 -- The sole public soundness boundary starts at the actual checked source body,
@@ -157,13 +153,13 @@ example (model : DomainModel) (tables : Tables model (Occurrence.signature model
     (environment : Domain.Environment model.toCarriers)
     (related : Holds model binders state.history arithmeticLayout environment)
     (retained : ArtifactBinding.Captures captured environment) :
-    Original.Simulation (Returns [.data 3, .data 2] state captured)
+    Original.Simulation (Returns arithmeticRouting 0 arithmeticChecked.outputScopes [.data 3, .data 2] none state.frames captured)
       (Original.InputLive abi (arithmeticPattern.environment model binders) captured)
       (Original.fold arithmeticRouting (arithmeticBody.denote
         (participantMeaningWithOn model (.silent _) Occurrence.actions tables 0 protocols {} Occurrence.iterations)
         (arithmeticPattern.environment model binders).get) state) (arithmeticView false model environment) :=
-  arithmeticAccepted.simulation rfl (RosterDistinct.root _ _) model tables (fun entry => entry.elim0) protocols state stack
-    binders abi captured sorts bound inputRead environment related retained
+  arithmeticAccepted.simulation (RosterDistinct.root _ _) model tables (fun entry => entry.elim0) protocols state
+    binders stack abi captured sorts bound inputRead environment related retained
 
 example (model : DomainModel) (tables : Tables model (Occurrence.signature model.toCarriers))
     (protocols : ProtocolTable model.Value (Occurrence.signature model.toCarriers))
@@ -176,26 +172,24 @@ example (model : DomainModel) (tables : Tables model (Occurrence.signature model
     (environment : Domain.Environment model.toCarriers)
     (related : Holds model binders state.history messageLayout environment)
     (retained : ArtifactBinding.Captures captured environment) :
-    Original.Simulation (Returns [.data 5, .data 2] state captured)
+    Original.Simulation (Returns messageRouting 1 messageChecked.outputScopes [.data 5, .data 2] none state.frames captured)
       (Original.InputLive abi (messagePattern.environment model binders) captured)
       (Original.fold messageRouting (messageBody.denote
         (participantMeaningWithOn model (.silent _) Occurrence.actions tables 1 protocols {} Occurrence.iterations)
         (messagePattern.environment model binders).get) state) (messageView model environment) :=
-  messageAccepted.simulation rfl (RosterDistinct.root _ _) model tables (fun entry => entry.elim0) protocols state stack
-    binders abi captured sorts bound inputRead environment related retained
+  messageAccepted.simulation (RosterDistinct.root _ _) model tables (fun entry => entry.elim0) protocols state
+    binders stack abi captured sorts bound inputRead environment related retained
 
 -- A producer of alignment data cannot change the independently fixed output
 -- row, even while preserving the acceptance result.
 /-- error: alignment-return-or-view-mismatch -/
 #guard_msgs (substring := true) in
-example : Derivation arithmeticRouting [] {} [] [] outputs [.data 3, .data 2]
-    arithmeticLayout arithmeticForm (arithmeticView true) := by
+example : Derivation arithmeticRouting {} [] [] outputs 0 (List.replicate outputs.length [0, 1]) [.data 3, .data 2] none [] arithmeticLayout arithmeticForm (arithmeticView true) := by
   derive_connection_alignment
 
 /-- error: alignment-return-or-view-mismatch -/
 #guard_msgs (substring := true) in
-example : Derivation arithmeticRouting [] {} [] [] outputs [.data 3, .data 0]
-    arithmeticLayout arithmeticForm (arithmeticView false) := by
+example : Derivation arithmeticRouting {} [] [] outputs 0 (List.replicate outputs.length [0, 1]) [.data 3, .data 0] none [] arithmeticLayout arithmeticForm (arithmeticView false) := by
   derive_connection_alignment
 
 def changedResidualView : ConnectionCertificate.Block := fun model =>
@@ -205,8 +199,7 @@ def changedResidualView : ConnectionCertificate.Block := fun model =>
 
 /-- error: alignment-return-or-view-mismatch -/
 #guard_msgs (substring := true) in
-example : Derivation arithmeticRouting [] {} [] [] outputs [.data 3, .data 2]
-    arithmeticLayout arithmeticForm changedResidualView := by
+example : Derivation arithmeticRouting {} [] [] outputs 0 (List.replicate outputs.length [0, 1]) [.data 3, .data 2] none [] arithmeticLayout arithmeticForm changedResidualView := by
   derive_connection_alignment
 
 def extraFalseView : ConnectionCertificate.Block := fun model =>
@@ -217,35 +210,30 @@ def extraFalseView : ConnectionCertificate.Block := fun model =>
 
 /-- error: alignment-guard-mismatch -/
 #guard_msgs (substring := true) in
-example : Derivation arithmeticRouting [] {} [] [] outputs [.data 3, .data 2]
-    arithmeticLayout arithmeticForm extraFalseView := by
+example : Derivation arithmeticRouting {} [] [] outputs 0 (List.replicate outputs.length [0, 1]) [.data 3, .data 2] none [] arithmeticLayout arithmeticForm extraFalseView := by
   derive_connection_alignment
 
-/-- error: alignment-route-or-operand-mismatch -/
+/-- error: alignment-route-request-history-coordinate-or-operand-mismatch -/
 #guard_msgs (substring := true) in
-example : Derivation { messageRouting with messages := [] } [] {} [] [] outputs [.data 5, .data 2]
-    messageLayout messageForm messageView := by
+example : Derivation { messageRouting with messages := [] } {} [] [] outputs 1 (List.replicate outputs.length [0, 1]) [.data 5, .data 2] none [] messageLayout messageForm messageView := by
   derive_connection_alignment
 
-/-- error: alignment-route-or-operand-mismatch -/
+/-- error: alignment-route-request-history-coordinate-or-operand-mismatch -/
 #guard_msgs (substring := true) in
-example : Derivation { messageRouting with messages := messageRouting.messages ++ messageRouting.messages }
-    [] {} [] [] outputs [.data 5, .data 2] messageLayout messageForm messageView := by
+example : Derivation { messageRouting with messages := messageRouting.messages ++ messageRouting.messages } {} [] [] outputs 1 (List.replicate outputs.length [0, 1]) [.data 5, .data 2] none [] messageLayout messageForm messageView := by
   derive_connection_alignment
 
-/-- error: alignment-route-or-operand-mismatch -/
+/-- error: alignment-route-request-history-coordinate-or-operand-mismatch -/
 #guard_msgs (substring := true) in
 example : Derivation { messageRouting with messages := [⟨"other", [],
-    ["message", "message", "incoming", "incoming", "P", "V"]⟩] }
-    [] {} [] [] outputs [.data 5, .data 2] messageLayout messageForm messageView := by
+    ["message", "message", "incoming", "incoming", "P", "V"]⟩] } {} [] [] outputs 1 (List.replicate outputs.length [0, 1]) [.data 5, .data 2] none [] messageLayout messageForm messageView := by
   derive_connection_alignment
 
 -- A transcript designation can never discharge a nominal data operand.
 -- Public-history actions themselves remain outside this plain fragment.
 /-- error: alignment-operand-not-data -/
 #guard_msgs (substring := true) in
-example : Derivation arithmeticRouting [] {} [] [] outputs [.data 3, .data 2]
-    [.history "stale", .data (.present (.var (.there .here)))] arithmeticForm (arithmeticView false) := by
+example : Derivation arithmeticRouting {} [] [] outputs 0 (List.replicate outputs.length [0, 1]) [.data 3, .data 2] none [] [.history "stale", .data (.present (.var (.there .here)))] arithmeticForm (arithmeticView false) := by
   derive_connection_alignment
 
 def literalBody : Region protocolDialect [] [.boolean] :=
@@ -262,7 +250,7 @@ def literalView : ConnectionCertificate.Block := fun model =>
   Domain.View.sequence (Domain.View.calculation model .booleanAnd [0, 1] [.data .boolean]) Domain.View.empty
 
 example : normalize {} literalBody 0 2 .nil = .ok literalForm := rfl
-example : Derivation arithmeticRouting [] {} [] [] [.boolean] [.data 2] [] literalForm literalView := by
+example : Derivation arithmeticRouting {} [] [] [.boolean] 0 [[0, 1]] [.data 2] none [] [] literalForm literalView := by
   derive_connection_alignment
 
 def falseGuardBody : Region protocolDialect [] [] :=
@@ -275,82 +263,64 @@ def falseGuardView : ConnectionCertificate.Block := fun model =>
   Domain.View.sequence (Domain.View.guard 0 []) Domain.View.empty
 
 example : normalize {} falseGuardBody 0 2 .nil = .ok falseGuardForm := rfl
-example : Derivation arithmeticRouting [] {} [] [] [] [] [] falseGuardForm falseGuardView := by
+example : Derivation arithmeticRouting {} [] [] [] 0 [] [] none [] [] falseGuardForm falseGuardView := by
   derive_connection_alignment
 
 def booleanGuardForm : Form [] [] [.value .boolean] [.boolean] :=
   .guard .boolean (.var .here) (.bool true) (.done (.cons (.present (.var .here)) .nil))
-example : Derivation arithmeticRouting [] {} [] [] [.boolean] [.data 0]
-    [.data (.present (.var .here))] booleanGuardForm
-    (fun _ => Domain.View.sequence (Domain.View.guard 0 []) Domain.View.empty) := by
+example : Derivation arithmeticRouting {} [] [] [.boolean] 0 [[0, 1]] [.data 0] none [] [.data (.present (.var .here))] booleanGuardForm (fun _ => Domain.View.sequence (Domain.View.guard 0 []) Domain.View.empty) := by
   derive_connection_alignment
 
 -- A true guard removed by normalization is still a real target checkpoint.
-example : Derivation arithmeticRouting [] {} [] [] [.boolean] [.data 0]
-    ([.data (.present (.bool true))] : Layout []) (.done (.cons (.present (.bool true)) .nil))
-    (fun _ => Domain.View.sequence (Domain.View.guard 0 []) Domain.View.empty) := by
+example : Derivation arithmeticRouting {} [] [] [.boolean] 0 [[0, 1]] [.data 0] none [] ([.data (.present (.bool true))] : Layout []) (.done (.cons (.present (.bool true)) .nil)) (fun _ => Domain.View.sequence (Domain.View.guard 0 []) Domain.View.empty) := by
   derive_connection_alignment
 
-example (reason : PIR.Stop) : Derivation arithmeticRouting [] {} [] [] [] [] ([] : Layout [])
-    (.halt reason) (fun _ _ => .halt reason) := by
+example (reason : PIR.Stop) : Derivation arithmeticRouting {} [] [] [] 0 [] [] none [] ([] : Layout []) (.halt reason) (fun _ _ => .halt reason) := by
   derive_connection_alignment
 
 /-- error: alignment-return-or-view-mismatch -/
 #guard_msgs (substring := true) in
-example : Derivation arithmeticRouting [] {} [] [] [] [] ([] : Layout [])
-    (.halt .refused) (fun _ _ => .halt .reject) := by
+example : Derivation arithmeticRouting {} [] [] [] 0 [] [] none [] ([] : Layout []) (.halt .refused) (fun _ _ => .halt .reject) := by
   derive_connection_alignment
 
 private def unknownHelper : Helper := ⟨"unknown", .math, [], []⟩
-/-- error: alignment-unsupported-helper -/
+/-- error: alignment-return-or-view-mismatch -/
 #guard_msgs (substring := true) in
-example : Derivation arithmeticRouting [] {} [] [] [] [] ([] : Layout [])
-    (.strict unknownHelper .nil (.done .nil))
-    (fun _ => Domain.View.empty) := by
+example : Derivation arithmeticRouting {} [] [] [] 0 [] [] none [] ([] : Layout []) (.strict unknownHelper .nil (.done .nil)) (fun _ => Domain.View.empty) := by
   derive_connection_alignment
 
 /-- error: alignment-compute-view-mismatch -/
 #guard_msgs (substring := true) in
-example : Derivation arithmeticRouting [] {} [] [] [] [] ([] : Layout [.value (.vector "bls12-381.fr"), .value .index])
-    (.compute (.boundedAt "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there .here)) .nil)) (.done .nil))
-    (fun _ => Domain.View.empty) := by
-  derive_connection_alignment
-
-/-- error: alignment-unsupported-query -/
-#guard_msgs (substring := true) in
-example : Derivation arithmeticRouting [] {} [] [] [] [] ([] : Layout [.value (.service "random.bls12-381.fr/0")])
-    (.query "query" "bls12-381.fr" (.cons (.var .here) .nil) (.done .nil)) (fun _ => Domain.View.empty) := by
+example : Derivation arithmeticRouting {} [] [] [] 0 [] [] none [] ([] : Layout [.value (.vector "bls12-381.fr"), .value .index]) (.compute (.boundedAt "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there .here)) .nil)) (.done .nil)) (fun _ => Domain.View.empty) := by
   derive_connection_alignment
 
 /-- error: alignment-return-or-view-mismatch -/
 #guard_msgs (substring := true) in
-example : Derivation arithmeticRouting [] {} [] [] [] [] ([] : Layout [.component .boolean])
-    (.split (.input .here) (.halt .incomplete) (.done .nil)) (fun _ => Domain.View.empty) := by
+example : Derivation arithmeticRouting {} [] [] [] 0 [] [] none [] ([] : Layout [.value (.service "random.bls12-381.fr/0")]) (.query "query" "bls12-381.fr" (.cons (.var .here) .nil) (.done .nil)) (fun _ => Domain.View.empty) := by
   derive_connection_alignment
 
-/-- error: alignment-unsupported-loop -/
+/-- error: alignment-return-or-view-mismatch -/
+#guard_msgs (substring := true) in
+example : Derivation arithmeticRouting {} [] [] [] 0 [] [] none [] ([] : Layout [.component .boolean]) (.split (.input .here) (.halt .incomplete) (.done .nil)) (fun _ => Domain.View.empty) := by
+  derive_connection_alignment
+
+/-- error: alignment-loop-view-mismatch -/
 #guard_msgs (substring := true) in
 example (spec : RepeatSpec)
     (callback : Region protocolDialect (.index :: (spec.state ++ spec.captures)) spec.state)
     (state : Values (Comp [] []) spec.state) (captures : Values (Comp [] []) spec.captures) :
-    Derivation arithmeticRouting [] {} [] [] [] [] ([] : Layout [])
-      (.repeat spec "loop" callback (.present (.index 2)) state captures (.done .nil))
-      (fun _ => Domain.View.empty) := by
+    Derivation arithmeticRouting {} [] [] [] 0 [] [] none [] ([] : Layout []) (.repeat spec "loop" callback (.present (.index 2)) state captures (.done .nil)) (fun _ => Domain.View.empty) := by
   derive_connection_alignment
 
 private def callee : CalleeKey := ⟨⟨"callee", ["P", "V"], [], [], [], []⟩, 0, .nil, []⟩
 /-- error: alignment-unsupported-callee -/
 #guard_msgs (substring := true) in
-example : Derivation arithmeticRouting [] {} [] [callee] [] [] ([] : Layout [])
-    (.apply ⟨0, by decide⟩ callee.signature [0, 1] "call" .nil (.done .nil))
-    (fun _ => Domain.View.empty) := by
+example : Derivation arithmeticRouting {} [] [callee] [] 0 [] [] none [] ([] : Layout []) (.apply ⟨0, by decide⟩ callee.signature [0, 1] "call" .nil (.done .nil)) (fun _ => Domain.View.empty) := by
   derive_connection_alignment
 
 /-- error: alignment-reference-out-of-range -/
 #guard_msgs (substring := true) in
-example : Derivation arithmeticRouting [] {} [] [] outputs [.data 3, .data 2]
-    arithmeticLayout arithmeticForm
-    (fun model => Domain.View.sequence
+example : Derivation arithmeticRouting {} [] [] outputs 0 (List.replicate outputs.length [0, 1]) [.data 3, .data 2] none [] arithmeticLayout arithmeticForm (fun model => Domain.View.sequence
       (Domain.View.calculation model (.fieldSubtract "bls12-381.fr") [0, 17] [.data field]) Domain.View.empty) := by
   derive_connection_alignment
 

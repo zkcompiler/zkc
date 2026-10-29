@@ -3,6 +3,8 @@ module
 public import ZkcExamples.Structured.PrimitiveShapeViews
 public import Zkc.Source.Structured.PrimitiveLaws
 public import Zkc.Source.RegionContracts
+public import Zkc.Source.Structured.MultilinearAdmissionReference
+public import ZkcExamples.Structured.MultilinearSourceBindings
 
 @[expose] public section
 
@@ -34,27 +36,6 @@ def indexResult {F G : Type} (value : Nat) : Values (assignment F G) [.index] :=
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-private theorem singleton_prepend {types : List Ty} {type : Ty}
-    (env : Environment (assignment F G) types) (values : Values (assignment F G) [type]) :
-    env.prepend values .here = values.get .here := by
-  cases values with | cons value rest => cases rest; rfl
-
-omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-private theorem singleton_eta {type : Ty} (values : Values (assignment F G) [type]) :
-    Values.cons (values.get .here) Values.nil = values := by
-  cases values with | cons value rest => cases rest; rfl
-
-omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-private theorem singleton_append {type : Ty} (values : Values (assignment F G) [type]) :
-    values.append Values.nil = values := by
-  cases values with | cons value rest => cases rest; rfl
-
-omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-private theorem singleton_split {type : Ty} (values : Values (assignment F G) [type]) :
-    (values.split [type]).1 = values := by
-  cases values with | cons value rest => cases rest; rfl
-
 /-- The source library guard's exact checked comparison. -/
 theorem less_body (table : Meanings F G) (a b : Nat)
     (aBound : a < indexLimit) (bBound : b < indexLimit) :
@@ -82,38 +63,12 @@ theorem rows_body (table : Meanings F G) (less : LessLaw table) (dimension : Nat
     (bound : dimension < 64) :
     rowsBody.denote (meaning F G table) (indexResult dimension).get =
       .done (indexResult (2 ^ dimension)) := by
-  have dimensionBound : dimension < indexLimit := by
-    exact Nat.lt_trans bound (by decide +kernel)
-  have comparison := less dimension 64 dimensionBound (by decide +kernel)
-  simp only [rowsBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Environment.prepend, indexResult,
-    SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
-    Primitive.evaluate, primitiveOutcome]
-  simp only [show 64 < indexLimit by decide +kernel, show 1 < indexLimit by decide +kernel,
-    show 0 < indexLimit by decide +kernel, ite_true, PIR.Process.bind,
-    comparison, boolResult, decide_eq_true bound, Evaluation.invokeCallback, Environment.prepend, Environment.push, Values.split]
-  simp only [Evaluation.denoteLoop, Evaluation.invokeCallback, Finite.execute,
-    Finite.Domain.admit, Finite.admitThen, Nat.sub_zero]
-  have folded := Finite.fold_range_state
-    (I := closedInterface)
-    (fun (current : Values (assignment F G) [.index]) (_ : Nat) =>
-      (primitiveOutcome ((Primitive.indexMul).evaluate
-        (.cons (current.get .here) (.cons 2 .nil))) : Closed _))
-    (fun i => indexResult (F := F) (G := G) (2 ^ i)) 0 dimension (by
-      intro i _ upper
-      have iBound : i < 64 := by omega
-      have nextBound : i + 1 < 64 := by omega
-      have multiplyBound : 2 ^ i * 2 < indexLimit := by
-        simpa only [Nat.pow_succ] using power_bound (i + 1) nextBound
-      simp [indexResult, Values.get, Primitive.evaluate, checkedIndices,
-        power_bound i iBound, show 2 < indexLimit by decide +kernel, multiplyBound,
-        primitiveOutcome, Nat.pow_succ])
-  simp only [indexResult, Values.get_cons, Values.get, show 2 < indexLimit by decide +kernel,
-    primitiveOutcome, PIR.Process.bind, Nat.pow_zero, Environment.prepend, Environment.push,
-    Values.get_cons, Primitive.evaluate, checkedIndices,
-    singleton_prepend, singleton_eta, singleton_append, singleton_split, PIR.Process.bind_done, ite_true, and_true, Nat.zero_add] at folded ⊢
-  refine Eq.trans ?_ folded
-  congr 1
+  rw [Evaluation.denote_meaning_eq_meaningOn]
+  apply ReferenceLibrary.Multilinear.Admission.rows_body (ringModel F G) "bls12-381.fr"
+    MultilinearSourceBindings.common table dimension bound
+  simpa [ReferenceLibrary.Multilinear.Admission.boolResult, boolResult, bound,
+    ReferenceLibrary.Multilinear.lessHelper, PrimitiveShapeViews.lessHelper, MultilinearSourceBindings.common] using
+    less dimension 64 (Nat.lt_trans bound (by decide +kernel)) (by decide +kernel)
 
 
 

@@ -4,6 +4,7 @@ import ZkcExamples.Construction.Generated.TwoSumsPair
 import ZkcExamples.Construction.ChaumPedersenProofParticipant
 import ZkcExamples.Construction.OkamotoProofParticipant
 import ZkcExamples.Construction.GuessProofParticipant
+import ZkcExamples.Construction.BatchOpeningArtifacts
 
 namespace Tests.Constructed.Generate
 
@@ -28,7 +29,11 @@ def main (args : List String) : IO Unit := do
        ("OkamotoValidator", "ZkcExamples.Construction.OkamotoProofParticipant", "ZkcExamples.Construction.OkamotoProofParticipant.participant",
           ZkcExamples.Construction.OkamotoProofParticipant.participant),
        ("GuessValidator", "ZkcExamples.Construction.GuessProofParticipant", "ZkcExamples.Construction.GuessProofParticipant.participant",
-          ZkcExamples.Construction.GuessProofParticipant.participant)] do
+          ZkcExamples.Construction.GuessProofParticipant.participant),
+       ("BatchOpeningProducer", "ZkcExamples.Construction.BatchOpeningArtifacts", "ZkcExamples.Construction.BatchOpeningArtifacts.Producer.participant",
+          ZkcExamples.Construction.BatchOpeningArtifacts.Producer.participant),
+       ("BatchOpeningValidator", "ZkcExamples.Construction.BatchOpeningArtifacts", "ZkcExamples.Construction.BatchOpeningArtifacts.Validator.participant",
+          ZkcExamples.Construction.BatchOpeningArtifacts.Validator.participant)] do
     let output : Output := ⟨"ZkcExamples.Structured.Generated.Constructed." ++ name,
       artifactModule, expression⟩
     match source artifact output with
