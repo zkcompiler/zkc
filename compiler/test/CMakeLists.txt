@@ -60,6 +60,8 @@ target_compile_definitions(zkc-oracle_common_realization-test PRIVATE
   ZKC_ORACLE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles")
 mlir_target_link_libraries(zkc-oracle_query_capacity-test PRIVATE MLIRParser)
 add_zkc_test(source_correspondence Compiler source-correspondence)
+add_zkc_test(language_authoring Language language-authoring)
+add_zkc_test(source_requests Source source-requests)
 target_compile_definitions(zkc-source_correspondence-test PRIVATE
   ZKC_CORRESPONDENCE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/source-claims")
 add_zkc_test(structured_associations Compiler structured-associations)
@@ -484,8 +486,14 @@ set(zkc_script_environment
 # glob does not descend, so vocabulary these tests share sits in support/, and
 # what they share with another build's tests sits in common/tests/support.
 file(GLOB zkc_scripts CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.py)
+if(TARGET zkc-source-lsp)
+  list(APPEND zkc_script_environment ZKC_CTEST_SOURCE_LSP=$<TARGET_FILE:zkc-source-lsp>)
+endif()
 foreach(script ${zkc_scripts})
   get_filename_component(stem ${script} NAME_WE)
+  if(stem STREQUAL "source_lsp" AND NOT TARGET zkc-source-lsp)
+    continue()
+  endif()
   string(REPLACE "_" "-" name ${stem})
   add_test(NAME ${name} COMMAND ${Python3_EXECUTABLE} ${script})
   set_tests_properties(${name} PROPERTIES ENVIRONMENT "${zkc_script_environment}")

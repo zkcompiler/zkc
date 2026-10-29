@@ -13,10 +13,17 @@ struct LexicalReference {
   enum class Access { Read, Call, Assign } access;
   LexicalNode use;
   std::optional<LexicalNode> binder;
+  Span span, definition;
+};
+struct LexicalBinding {
+  std::string name;
+  Span definition, visible;
+  unsigned depth;
 };
 struct LexicalResolution {
   Span declaration;
   std::vector<LexicalReference> references;
+  std::vector<LexicalBinding> bindings;
 };
 } // namespace zkc::language::detail
 #endif

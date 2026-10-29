@@ -970,13 +970,51 @@ class ExpressionInference {
         alternatives = checker.types.alternatives(*type, expr.span);
         if (!alternatives)
           break;
+        auto &arms = output.matchArms[id];
+        std::set<unsigned> seen;
+        for (unsigned i = 0; i < expr.labels.size(); ++i) {
+          StringRef label = expr.labels[i];
+          auto occurrence = expr.constructorSpans.empty()
+                                ? expr.span
+                                : expr.constructorSpans[i];
+          if (label.contains("::")) {
+            auto [qualifier, alternative] = label.rsplit("::");
+            auto target = checker.resolve(decl, qualifier, occurrence);
+            if (!target)
+              break;
+            const auto &nominal = checker.output.declarations[target->index];
+            if (nominal.kind != Declaration::Kind::Variant ||
+                nominal.qualifiedName != type->domain) {
+              fail("source.match",
+                   "qualified constructor belongs to a different enum",
+                   occurrence);
+              break;
+            }
+            label = alternative;
+          }
+          auto found =
+              llvm::find_if(*alternatives, [&](const auto &alternative) {
+                return alternative.name == label;
+              });
+          if (found == alternatives->end()) {
+            fail("source.match", "unknown alternative: " + label, occurrence);
+            break;
+          }
+          unsigned ordinal = found - alternatives->begin();
+          if (!seen.insert(ordinal).second) {
+            fail("source.match", "alternative is matched more than once",
+                 occurrence);
+            break;
+          }
+          arms.push_back(ordinal);
+        }
+        if (arms.size() != expr.regions.size())
+          break;
       }
       result.stopped = true;
       for (unsigned i = 0; i < expr.regions.size(); ++i) {
         if (alternatives) {
-          auto alt = llvm::find_if(*alternatives, [&](const auto &alternative) {
-            return alternative.name == expr.labels[i];
-          });
+          auto alt = alternatives->begin() + output.matchArms.at(id)[i];
           if (alt == alternatives->end() ||
               alt->fields.size() != expr.payloads[i].size()) {
             fail("source.match", "unknown alternative or wrong payload count",

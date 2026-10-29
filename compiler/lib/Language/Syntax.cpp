@@ -310,7 +310,9 @@ private:
   using Position = NotationDescriptor::Position;
   using Association = NotationDescriptor::Association;
   static bool operatorSymbol(StringRef symbol) {
-    if (symbol == "+" || symbol == "-" || symbol == "*" || symbol == "==")
+    if (llvm::any_of(syntax::defaultNotations(), [&](const auto &notation) {
+          return notation.symbol == symbol;
+        }))
       return true;
     auto scalar = decodeSourceScalar(symbol, 0);
     return scalar && scalar->bytes == symbol.size() &&
@@ -1946,16 +1948,12 @@ private:
         auto ports = std::move(d.inputs);
         d.inputs.clear();
         for (auto &port : ports) {
-          bool service = protocol && port.type.kind == SyntaxType::Kind::Name &&
-                         port.type.name == "Random";
           auto &selected = port.domain   ? d.domainInputs
                            : port.scoped ? d.scopedInputs
-                           : service     ? d.services
                                          : d.inputs;
           d.inputOrder.push_back(
               {port.domain   ? Declaration::InputSlot::Kind::Domain
                : port.scoped ? Declaration::InputSlot::Kind::Scoped
-               : service     ? Declaration::InputSlot::Kind::Service
                              : Declaration::InputSlot::Kind::Data,
                unsigned(selected.size())});
           selected.push_back(std::move(port));
@@ -2728,6 +2726,10 @@ private:
       }
       auto infix = notation(text(), Position::Infix);
       if (!infix) {
+        if (notation(text(), Position::Prefix)) {
+          fail("source.syntax", "prefix notation requires an operand position");
+          return {};
+        }
         if (operatorSymbol(text())) {
           fail("source.notation-visibility",
                "no visible infix or postfix notation for " + text());

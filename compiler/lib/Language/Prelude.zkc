@@ -1,5 +1,7 @@
 module zkc::prelude;
 
+pub interface Random<F: Field> {}
+
 pub math fn field_add<F: Field>(a: F, b: F) -> F = primitive("field.add");
 pub math fn field_subtract<F: Field>(a: F, b: F) -> F = primitive("field.sub");
 pub math fn field_multiply<F: Field>(a: F, b: F) -> F = primitive("field.mul");
@@ -16,8 +18,8 @@ pub math fn index_equal(a: index, b: index) -> bool = primitive("index.equal");
 pub operator + = field_add;
 pub operator + = group_add;
 pub operator + = index_add;
-pub operator - = field_subtract;
-pub operator - = index_subtract;
+pub operator infixl(65) - = field_subtract;
+pub operator infixl(65) - = index_subtract;
 pub operator * = field_multiply;
 pub operator * = group_scale;
 pub operator * = index_multiply;

@@ -72,6 +72,9 @@ add_zkc_component(Syntax
 )
 target_link_libraries(ZkcSyntax PUBLIC ZkcSource)
 add_zkc_component(Language
+  lib/Language/Authoring.cpp
+  lib/Language/Companions.cpp
+  lib/Language/ManagedServices.cpp
   lib/Language/Diagnostics.cpp
   lib/Language/Inspection.cpp
   lib/Language/WrittenSource.cpp
@@ -88,6 +91,12 @@ add_zkc_component(Language
   lib/Language/Project.cpp
   lib/Language/Syntax.cpp
   lib/Language/LayoutSyntax.cpp
+  lib/Language/LayoutReader.cpp
+  lib/Language/FormalSourceWriter.cpp
+  lib/Language/FormalSource.cpp
+  lib/Language/LayoutDeclarations.cpp
+  lib/Language/LayoutExpressions.cpp
+  lib/Language/LayoutBodies.cpp
   lib/Language/LayoutSpecifications.cpp
   lib/Language/Arguments.cpp
   lib/Language/Elaboration.cpp

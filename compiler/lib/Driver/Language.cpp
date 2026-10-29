@@ -361,7 +361,23 @@ int runLanguageCompiler(int argc, char **argv) {
     checked["source_claim_inventory"] = cantFail(json::parse(*claims));
     if (captured->format() == "zkc-layout") {
       json::Array pending;
-      for (const auto &spec : project->pendingSpecifications())
+      for (const auto &spec : project->pendingSpecifications()) {
+        json::Array obligations;
+        for (const auto &obligation : spec.obligations)
+          obligations.push_back(json::Object{
+              {"role", obligation.kind == PendingObligation::Kind::Postcondition
+                           ? "postcondition"
+                           : "request"},
+              {"label", obligation.label ? json::Value(*obligation.label)
+                                         : json::Value(nullptr)},
+              {"ordinal", obligation.ordinal},
+              {"begin", obligation.span.begin},
+              {"end", obligation.span.end},
+              {"companion", obligation.companion
+                                ? json::Value(*obligation.companion)
+                                : json::Value(nullptr)},
+              {"status", "open"},
+              {"reason", "formal elaboration pending"}});
         pending.push_back(json::Object{
             {"module",
              project->declarations()[spec.module.index].qualifiedName},
@@ -373,10 +389,13 @@ int runLanguageCompiler(int argc, char **argv) {
             {"public", spec.isPublic},
             {"source", spec.span.source.index},
             {"begin", spec.span.begin},
-            {"end", spec.span.end}});
-      checked["assurance"] = json::Object{
-          {"status", pending.empty() ? "not-requested" : "unavailable"},
-          {"specifications", std::move(pending)}};
+            {"end", spec.span.end},
+            {"obligations", std::move(obligations)}});
+      }
+      checked["assurance"] =
+          json::Object{{"status", pending.empty() ? "no-claim" : "open"},
+                       {"outcome", "unresolved"},
+                       {"specifications", std::move(pending)}};
     }
   }
   if (sourceAst) {

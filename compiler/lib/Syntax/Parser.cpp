@@ -182,19 +182,13 @@ class Parser {
       return Operator{n->precedence,
                       n->association == NotationDescriptor::Association::Right,
                       n->association == NotationDescriptor::Association::None};
-    if (op == "or" || op == "∨" || op == "||")
-      return Operator{10, false, false};
-    if (op == "and" || op == "∧" || op == "&&")
-      return Operator{20, false, false};
-    if (op == "==" || op == "!=" || op == "<=" || op == ">=" || op == "<" ||
-        op == ">" || op == "∈")
-      return Operator{50, false, true};
-    if (op == "+" || op == "-" || op == "++")
-      return Operator{65, false, false};
-    if (op == "*" || op == "/" || op == "⋅" || op == "%")
-      return Operator{70, false, false};
-    if (op == "^")
-      return Operator{72, true, false};
+    for (const auto &fixed : defaultNotations())
+      if (fixed.symbol == op &&
+          fixed.position == NotationDescriptor::Position::Infix)
+        return Operator{
+            fixed.precedence,
+            fixed.association == NotationDescriptor::Association::Right,
+            fixed.association == NotationDescriptor::Association::None};
     return std::nullopt;
   }
   NodeId argument(bool parameter = false) {
@@ -212,7 +206,7 @@ class Parser {
     return make(parameter ? Kind::Parameter : Kind::Argument, begin, children);
   }
   NodeId list(Kind kind, StringRef open, StringRef close,
-              bool parameter = false) {
+              bool parameter = false, bool *separated = nullptr) {
     auto begin = mark();
     expect(open);
     unsigned oldAngle = angleDepth;
@@ -222,8 +216,11 @@ class Parser {
     while (!end() && !at(close) && !boundary()) {
       auto before = cursor;
       children.push_back(argument(parameter));
-      if (take(",") || ((parameter || kind == Kind::Tuple) && take(";")))
+      if (take(",") || ((parameter || kind == Kind::Tuple) && take(";"))) {
+        if (separated)
+          *separated = true;
         continue;
+      }
       if (cursor == before)
         advance();
       if (!at(close)) {
@@ -262,6 +259,13 @@ class Parser {
     auto leave = scope_exit([&] { --recursion; });
     NodeId left{0};
     auto prefix = notation(text(), NotationDescriptor::Position::Prefix);
+    if (!prefix)
+      for (const auto &fixed : defaultNotations())
+        if (fixed.position == NotationDescriptor::Position::Prefix &&
+            fixed.symbol == text()) {
+          prefix = &fixed;
+          break;
+        }
     auto delimited = notation(text(), NotationDescriptor::Position::Delimited);
     auto reduction = notation(text(), NotationDescriptor::Position::Reduction);
     if (at("if") || at("match")) {
@@ -280,8 +284,8 @@ class Parser {
             make(Kind::Else, first, {suite(SuiteKind::Statements)}));
       }
       left = make(matching ? Kind::Match : Kind::If, begin, parts);
-    } else if (at("-") || at("!") || at("not") || at("¬") || prefix) {
-      unsigned power = prefix ? prefix->precedence : 75;
+    } else if (prefix) {
+      unsigned power = prefix->precedence;
       if (minimum > power)
         error("syntax.association",
               "a weaker prefix in a stronger operand requires parentheses");
@@ -368,8 +372,9 @@ class Parser {
       expect(descriptor.closing);
       left = make(Kind::Delimited, begin, children);
     } else if (at("(")) {
-      left = list(Kind::Tuple, "(", ")");
-      if (data->nodes[left.index].childCount == 1)
+      bool separated = false;
+      left = list(Kind::Tuple, "(", ")", false, &separated);
+      if (data->nodes[left.index].childCount == 1 && !separated)
         data->nodes[left.index].kind = Kind::Group;
     } else if (at("[")) {
       left = list(Kind::Array, "[", "]");
@@ -677,8 +682,9 @@ class Parser {
           scalar && scalar->bytes == text().size() && scalar->value > 127 &&
           source::isMathematicalSymbol(scalar->value) && text() != "∑" &&
           text() != "∏" && text() != "∈" && text() != "∀" && text() != "∃";
-      bool fixed = at("+") || at("-") || at("*") || at("==") || at("!") ||
-                   at("&&") || at("||");
+      bool fixed = llvm::any_of(defaultNotations(), [&](const auto &notation) {
+        return notation.symbol == text();
+      });
       if ((explicitFixity && !validNotationDescriptor(descriptor)) ||
           (!explicitFixity && !custom && !fixed))
         error("syntax.notation", "invalid operator symbol or fixed syntax");

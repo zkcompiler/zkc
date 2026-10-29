@@ -36,8 +36,7 @@ BodyChecker::sourcePlace(uint32_t id, unsigned depth, bool optional) {
       type->kind != Type::Kind::Array) {
     if (!optional)
       fail("source.place",
-           "projection requires a named place; bind the indexed value with let "
-           "first",
+           "projection requires a named place; bind the indexed value first",
            expr.span);
     return {};
   }

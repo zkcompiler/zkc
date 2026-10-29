@@ -129,3 +129,40 @@ edit. Formatting is idempotent. Incomplete syntax is retained with
 
 Formatting changes exact source bytes. Consumers must recompute captured source
 identities rather than reuse evidence tied to the previous revision.
+
+## Contextual words and delimiter decisions
+
+Layout parsing uses word tokens with priority in the following contexts; a word
+is not a globally registered security property or installed operation merely
+because it occurs in this table.
+
+| Context | Structural words |
+| --- | --- |
+| Declaration suite | `pub`, `use`, `section`, `module`, `interface`, `local`, `def`, `protocol`, `spec`, `relation`, `ghost`, `oracle`, `law`, `type`, `domain`, `struct`, `enum`, `operator`, `notation`, `indexing`, `reduction`, `scheme`, `entry` |
+| Header continuation | `roles`, `where`, `effects`, `for`, `as`, `lean` where the owning production admits them |
+| Statement head | `return`, `for`, `if`, `else`, `match`, `mut`; `guard` has the explicit exceptions described above |
+| Ordered action | `send`, `from`, `to`, `query`, `at` |
+| Contract suite | `requires`, `ensures`, `target`, `reduces`, `to`; other request labels remain ordinary names |
+| Expression/binder | `true`, `false`, `if`, `else`, `match`, `and`, `or`, `not`, `ghost` in an actual argument; parameter-purpose words in parameter lists |
+
+This is contextual parsing: naming a declaration with a word does not suppress
+that word's structural role at a statement or expression head. Use a qualified
+reference when the bare spelling would select a structural production. Captured
+module paths also obey the shared reserved-path validation in
+[the source name contract](lexical.md). Retained brace syntax has its own reserved
+words and is not silently reparsed as layout syntax.
+
+The core `|...|` form uses a fixed syntactic decision, independent of resolved
+types. `|name, ...| body` starts a lambda. `|name| body` starts a lambda only when
+the following token is a word, number, `(` or `[`. Otherwise it is paired
+delimiter notation. Parenthesize a lambda body beginning with a prefix operator,
+for example `|x| (-x)`. A delimiter expression followed by a binary operator,
+`|x| + y`, remains a delimiter application and an addition. Parsing the delimiter
+does not install a cardinality meaning; its callable meaning still requires a
+visible binding. Empty lambdas are outside this profile.
+
+`(x)` is grouping and `(x,)` is a one-element tuple. The accepted tuple separator
+`;` also preserves tuple intent. The authored model retains this distinction,
+including in formal clauses. Formatting preserves these separators. Short
+operator bindings require a unique visible fixity; when a glyph has both prefix
+and infix syntax, write the intended fixity explicitly.

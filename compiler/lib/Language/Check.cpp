@@ -38,8 +38,10 @@ Error Checker::run() {
     return written.takeError();
   if (auto error = expandLayoutSections(syntax, work))
     return error;
-  if (!collect() || !imports() || !prepareNotationSyntax())
+  if (!collect() || !imports() || !classifyServices() ||
+      !prepareNotationSyntax())
     return types.takeError();
+  namesReady = true;
   std::vector<std::vector<BodyParseScope>> bodyScopes(output.sources->size());
   for (auto id : moduleIds) {
     auto *module = sources[id.index];
@@ -52,19 +54,21 @@ Error Checker::run() {
       bodyScopes[decl.span.source.index].push_back(
           {sources[decl.id.index], notationEnvironments[decl.module.index]});
   for (unsigned i = 0; i < bodyScopes.size(); ++i) {
-    auto error =
-        output.layoutHeaders[i]
-            ? parseLayoutBodies(SourceId{i}, bodyScopes[i], output, work)
-            : parseBodies((*output.sources)[i], SourceId{i}, output.tokens[i],
-                          bodyScopes[i], work);
+    auto error = output.layoutHeaders[i]
+                     ? parseLayoutBodies(SourceId{i}, bodyScopes[i], output,
+                                         work, recoveryDiagnostics)
+                     : parseBodies((*output.sources)[i], SourceId{i},
+                                   output.tokens[i], bodyScopes[i], work);
     if (error)
       return error;
   }
   if (!layoutSpecifications())
     return types.takeError();
-  if (auto error = retainWrittenBodies(**written, sources, work))
-    return error;
-  output.writtenSources = std::move(*written);
+  if (!recoveryDiagnostics || recoveryDiagnostics->empty()) {
+    if (auto error = retainWrittenBodies(**written, sources, work))
+      return error;
+    output.writtenSources = std::move(*written);
+  }
   for (auto &decl : output.declarations)
     if (!decl.abstract && !sources[decl.id.index]->explicitRequirements &&
         (decl.kind == Declaration::Kind::Math ||
@@ -124,9 +128,20 @@ Error Checker::run() {
   bodyState.resize(output.declarations.size());
   bodyHeights.resize(output.declarations.size());
   entryStates.resize(output.declarations.size());
+  bool failedSignatures = false;
   for (unsigned i = 0; i < output.declarations.size(); ++i)
-    if (!sources[i]->constructionHandler && !signature(DeclarationId{i}))
-      return types.takeError();
+    if (!sources[i]->constructionHandler && !signature(DeclarationId{i})) {
+      failedSignatures = true;
+      auto error = types.takeError();
+      if (!recoveryDiagnostics)
+        return error;
+      if (!recover(std::move(error)))
+        return Error::success();
+    }
+  // Invalid signatures can affect overload and representation formation.
+  // Preserve the independent signature facts, without running those phases.
+  if (failedSignatures)
+    return Error::success();
   if (!prepareOperators())
     return types.takeError();
   if (!relationIdentities())
@@ -186,9 +201,16 @@ Error Checker::run() {
          (decl.kind == Declaration::Kind::Relation &&
           decl.relation->kind == RelationDefinition::Kind::Formula)) &&
         !decl.abstract && !decl.generated && !sources[i]->constructionHandler &&
-        !body(decl.id, 1))
-      return types.takeError();
+        !sources[i]->invalidBody && !body(decl.id, 1)) {
+      auto error = types.takeError();
+      if (!recoveryDiagnostics)
+        return error;
+      if (!recover(std::move(error)))
+        return Error::success();
+    }
   }
+  if (recoveryDiagnostics && !recoveryDiagnostics->empty())
+    return Error::success();
   if (!constructions() || !entries() || !sourceClaims())
     return types.takeError();
   inferredContracts.clear();
@@ -633,8 +655,75 @@ std::optional<std::vector<unsigned>> Checker::roles(const Declaration &decl,
   }
   return result;
 }
+bool Checker::recover(Error error) {
+  auto diagnostic = diagnose(std::move(error));
+  if (!diagnostic)
+    return false;
+  bool resumable = diagnostic->code != "source.limit" &&
+                   diagnostic->code != "source.cancelled";
+  recoveryDiagnostics->push_back(std::move(*diagnostic));
+  return resumable;
+}
+Expected<std::shared_ptr<const AuthoringStorage>> Checker::retainAnalysis() {
+  auto result = std::make_shared<AuthoringStorage>();
+  if (!namesReady)
+    return std::shared_ptr<const AuthoringStorage>(std::move(result));
+  // Existing checks already meter retained types and bodies. Charge the
+  // observations copied here, including lookup and reference records.
+  uint64_t count = output.declarations.size() + output.api.references.size() +
+                   output.lexicalResolutions.size() +
+                   output.pendingSpecifications.size();
+  for (const auto &scope : visible)
+    count += scope.size();
+  for (const auto &scope : output.lexicalResolutions)
+    count += scope.references.size() + scope.bindings.size();
+  if (auto error = work.charge(count))
+    return error;
+  result->declarations = output.declarations;
+  for (unsigned i = 0; i < result->declarations.size(); ++i) {
+    bool signature = i < signatureState.size() && signatureState[i] == 2;
+    bool body = i < bodyState.size() && bodyState[i] == 2;
+    result->signatures.push_back(signature);
+    result->bodies.push_back(body);
+    // Never retain partially constructed type or execution metadata in a view.
+    auto &declaration = result->declarations[i];
+    if (!signature) {
+      declaration.parameters.clear();
+      declaration.inputs.clear();
+      declaration.services.clear();
+      declaration.inputOrder.clear();
+      declaration.outputs.clear();
+    }
+    if (!body)
+      declaration.body.reset();
+  }
+  result->pendingSpecifications = output.pendingSpecifications;
+  result->layoutBodies = output.layoutBodies;
+  for (unsigned i = 0; i < result->layoutBodies.size(); ++i)
+    if (!result->layoutBodies[i])
+      result->layoutBodies[i] = output.layoutHeaders[i];
+  result->api = output.api;
+  result->lexicalResolutions = output.lexicalResolutions;
+  result->names = output.names ? output.names
+                               : std::make_shared<NameEnvironment>(
+                                     NameEnvironment{modules, visible});
+  return std::shared_ptr<const AuthoringStorage>(std::move(result));
+}
 Error check(std::vector<SyntaxDeclaration> syntax, CheckedStorage &output,
-            Work &work) {
-  return Checker(std::move(syntax), output, work).run();
+            Work &work, AnalysisStorage *analysis) {
+  Checker checker(std::move(syntax), output, work);
+  if (analysis)
+    checker.recoveryDiagnostics = &analysis->diagnostics;
+  auto error = checker.run();
+  if (!analysis)
+    return error;
+  if (error)
+    checker.recover(std::move(error));
+  auto view = checker.retainAnalysis();
+  if (!view)
+    return view.takeError();
+  analysis->authoring = std::move(*view);
+  output.authoring = analysis->authoring;
+  return Error::success();
 }
 } // namespace zkc::language::detail

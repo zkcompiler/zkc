@@ -88,6 +88,8 @@ struct ExpressionTypes {
   /// Resolve against the authored declaration once; body checking consumes the
   /// same target, including bound interface members and nominal constructors.
   std::map<uint32_t, Callable> callees;
+  /// Authored match arm -> resolved nominal alternative ordinal.
+  std::map<uint32_t, std::vector<unsigned>> matchArms;
   struct Operator {
     std::vector<std::string> family;
     Span binding;
