@@ -3,8 +3,8 @@
 This contract defines the target compiler structure and its shared boundaries.
 It is specified before the implementation cutover; [status](../../status.md)
 distinguishes specified formats from supported producers and consumers. The
-[interface inventory](../formats/foundation-interfaces.md) assigns versions and
-records the changes consumers must implement.
+[interface inventory](../formats/foundation-interfaces.md) records the schema
+changes consumers must implement under development version `0`.
 
 ## Ownership and stages
 
@@ -150,6 +150,6 @@ Shared catalog data describes signatures, rules and mathematical obligations;
 it does not implement or prove a Lean meaning. Native C++ and Rust consumers
 retain independent admission and execution obligations. The foundation changes
 no file under `lean/`, produces no Lean patch or handoff, and uses no Lean build
-as its landing gate. Formal interpretation follows the published versions and
-remains separately reported. A supported native format never implies that the
-same version is already admitted by a formal consumer.
+as its landing gate. Formal interpretation follows the published schemas and
+remains separately reported. Native support for a schema never implies that a
+formal consumer already admits it.

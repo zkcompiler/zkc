@@ -1,6 +1,6 @@
 # Application correspondence map
 
-`zkc.application-map/1` records compiler-known application boundaries and value
+`zkc.application-map/0` records compiler-known application boundaries and value
 associations. It is untrusted auxiliary data. It changes neither transcript
 inputs nor cryptographic commitment preimages and grants no source connection.
 Consumers check the retained source, actual candidate and map together. A map
@@ -10,7 +10,7 @@ The root has exactly these fields:
 
 | Field | Shape and meaning |
 |---|---|
-| `format` | `zkc.application-map/1` |
+| `format` | `zkc.application-map/0` |
 | `source` | `{format, digest, entry}` identifying the retained original |
 | `candidate` | `{format, digest}` identifying the actual selected output |
 | `applications` | Materialized application occurrence forest in source preorder |
@@ -19,6 +19,22 @@ The root has exactly these fields:
 Digests use the exact byte/hash construction of the named artifact format.
 They have the `sha256:` prefix and 64 lowercase hexadecimal digits. This map
 does not redefine source hashing or substitute a reprinted byte string.
+
+The foundation producer maps retained applications between the original and
+prepared structured-source views, both `zkc.structured-source/0`. Each view is
+derived from its actual supplied MLIR artifact under that schema's complete
+admission rules, and both select the same entry. Paths below address logical
+rows in those views; they are not paths through raw MLIR blocks. An unsupported
+source or candidate carrier refuses instead of guessing an address projection.
+
+Scoped Func/CF bodies can have multiple blocks. Their structured export already
+checks the actual scope, outcome, stop and transfer edges before emitting a
+logical block or closed region. This map consumes those checked associations;
+it cannot omit an arbitrary CFG block or invent an instruction for administrative
+plumbing. Independent admission and actual-candidate comparison still check the
+complete native bodies, including dormant definitions. Downstream projection
+and byte associations retain their owning contracts; this map alone makes no
+connection from a logical row to an arbitrary native instruction.
 
 Each application is exactly:
 
@@ -88,7 +104,7 @@ Each instruction association is exactly:
  source_path, purpose}
 ```
 
-The target pair selects the actual candidate instruction or terminator.
+The target pair selects the actual candidate logical instruction or terminator.
 `application` selects its containing expansion, or is null for a retained
 shared/dormant definition. `source_definition` names the actual original
 definition and agrees with the expansion's callee when an application is

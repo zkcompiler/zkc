@@ -4,8 +4,9 @@ This register assigns one semantic owner to each shared contract and records its
 producers, consumers and delivery boundary. The linked specifications own the
 exact definitions. Registration is not implementation, semantic admission or a
 proof. The [foundation interface inventory](formats/foundation-interfaces.md)
-specifies the upcoming version changes; current and designed support remain
-distinct and no compatibility reader is introduced.
+lists the upcoming schema changes. All formats remain at version `0`; current
+and designed schemas are distinguished by their stated support, not a version
+bump. No compatibility reader is introduced.
 
 A contract-changing PR updates its row, enumerations and affected consumers. Its
 review records identify which consumer boundaries were checked and which remain
@@ -31,7 +32,9 @@ valid receipt's meaning or proof status.
 ### Specified foundation interfaces
 
 These rows are **Designed**. The production rows below continue to describe the
-current `/0` implementation until cutover. IR owns the catalog, lowering and
+current implementation until cutover. Both use version `0`; the foundation
+change list defines the intended replacement schema, not a second admitted route.
+IR owns the catalog, lowering and
 native contract changes during this unit; frontend owns the checked program.
 The broad migration begins only after main contains the frontend redesign and
 native Common-export retirement. Native interface checks replace cross-session
@@ -39,12 +42,12 @@ review loops for this unit. Formal interpretation is a later independent task.
 
 | Identifier / version | Specification and owner | Producer → consumers | Missing integration |
 |---|---|---|---|
-| `zkc.logical-types/1` | [Logical type data](formats/logical-types.md), IR / Contracts | Typed IR export → native artifact readers, independent semantic readers | All producers/readers pending |
-| `zkc.contract-declarations/1` | [Catalog](formats/contract-declarations.md), IR / Contracts | Neutral declarations → Language, MLIR, Rust and serialized formal-consumer data | Generated projections and native comparison pending; no Lean implementation in this unit |
-| `zkc.structured-source/1` | [Cutover](formats/foundation-interfaces.md#structured-source), IR / Protocol | Structured exporter → independent semantic readers | Native producer pending; independent reader version unsupported |
-| `zkc.constructed-participant/1`, `zkc.constructed-pair/1` | [Cutover](formats/foundation-interfaces.md#constructed-participants), IR / Construction | Actual candidate export → independent construction/projection readers | Native producer pending; independent reader versions unsupported |
-| `zkc.oracle-realization/1` | [Cutover](formats/foundation-interfaces.md#realization-and-application-records), IR / Transforms | Realization producer → native actual-body reader, independent interpretation | Native producer/reader pending; independent interpretation unsupported |
-| `zkc.application-map/1` | [Application map](formats/application-map.md), IR / Transforms | Source/candidate association → native comparison, independent correspondence reader | Producer and comparison pending; no correspondence theorem implied |
+| `zkc.logical-types/0` | [Logical type data](formats/logical-types.md), IR / Contracts | Typed IR export → native artifact readers, independent semantic readers | All producers/readers pending |
+| `zkc.contract-declarations/0` | [Catalog](formats/contract-declarations.md), IR / Contracts | Neutral declarations → Language, MLIR, Rust and serialized formal-consumer data | Generated projections and native comparison pending; no Lean implementation in this unit |
+| `zkc.structured-source/0` | [Cutover](formats/foundation-interfaces.md#structured-source), IR / Protocol | Structured exporter → independent semantic readers | Native producer pending; independent reader support for changed schema pending |
+| `zkc.constructed-participant/0`, `zkc.constructed-pair/0` | [Cutover](formats/foundation-interfaces.md#constructed-participants), IR / Construction | Actual candidate export → independent construction/projection readers | Native producer pending; independent reader support for changed schemas pending |
+| `zkc.oracle-realization/0` | [Cutover](formats/foundation-interfaces.md#realization-and-application-records), IR / Transforms | Realization producer → native actual-body reader, independent interpretation | Native producer/reader pending; independent interpretation unsupported |
+| `zkc.application-map/0` | [Application map](formats/application-map.md), IR / Transforms | Source/candidate association → native comparison, independent correspondence reader | Producer and comparison pending; no correspondence theorem implied |
 | Outcome, stop, budget meaning | [Native foundation](ir/native-foundation.md#outcomes-observations-and-budgets), IR / Execution | Typed invocation → compiler admission and native VM/providers | Existing reached schedule retained; typed-route implementation pending |
 | `zkc.program/0` | [Retained byte language](formats/foundation-interfaces.md#executable-byte-language), IR / Program | Compiler → independent C++/Rust readers and other target consumers | Byte meaning unchanged; new internal encoder adapter pending |
 
@@ -86,7 +89,6 @@ contract change, not the most recent documentation-only registration.
 | Layout requests and authored site selection | [Layout syntax](language/layout-syntax.md), [site defaults](language/layout-execution.md) | Frontend / Language | Lossless syntax and native projection → written occurrences and pending obligations | Partial: source association retained; typed request generation and independent checking pending | Selects existing meanings; adds no assurance stage | [#186](https://github.com/zkcompiler/zkc/pull/186) |
 | Retired proposal `zkc.lean-interface/0` | [Shared interfaces plan](../roadmap.md#shared-interfaces-before-implementation) | Frontend / Language | Existing declarations and bound requests → frontend resolution | Retired proposal: extend existing transports; no parallel format is admitted | None | — |
 | Restricted logical aggregates; version unassigned | [Logical aggregate plan](../roadmap.md#shared-interfaces-before-implementation) | IR / Protocol | Future frontend claim views → Protocol formation and Lean reader | Designed: typed field paths and role components; ordinary data/codec boundaries continue to exclude handles | None | — |
-| Application correspondence map; version unassigned | [Correspondence plan](../roadmap.md#shared-interfaces-before-implementation) | IR / Protocol | Future compiler proposal → Lean source connection checker | Designed: shared format and arbitrary relocation proof open | No new trusted link; proposals must be checked | — |
 | Block/gated request wire; version unassigned | [Block requests and gating](../roadmap.md#block-requests-and-gating), [current transcript bytes](ir/construction.md) | IR / Construction | Future construction emission → runtime kernel and Lean simulation | Designed: request bytes, refusal state and accounting require joint review before installation | No registered gate premise | — |
 | Installed transcript and Merkle suites | [Transcripts](ir/construction.md), [Merkle schemes](domains/oracles.md), [services](runtime/services.md) | Runtime / Providers | [Backend registry](../../crates/zkc-cpu/src/backend/registry.rs) → Contracts selection, native invocation, Lean installed vocabulary | Partial: installed native instances are explicit; flagship quartic Keccak and Lean coverage pending | Kernel interpretation remains explicit | [#174](https://github.com/zkcompiler/zkc/pull/174) |
 

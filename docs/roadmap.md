@@ -48,7 +48,7 @@ what actually landed. The completion criteria below belong inside those units.
 
 | Unit | Required outcome |
 |---|---|
-| Catalog and MLIR execution foundation | Publish versioned shared specs, measure the main baseline, select typed invocation and structured types, generate neutral catalog projections, migrate all affected native code and remove replaced routes in one PR |
+| Catalog and MLIR execution foundation | Publish shared schema changes at version `0`, measure the main baseline, select typed invocation and structured types, generate neutral catalog projections, migrate all affected native code and remove replaced routes in one PR |
 | Virtual batching and FRI | Build on the landed foundation and existing table/Merkle realization. Complete dynamic virtual query blocks, ordered domain/failure prefixes and the same-subject FRI client. Consume the specified checked index family and runtime-owned quartic Keccak; keep formal realization closure separately reported |
 | STARK compiler support | Complete block-draw and gated-request emission, witness codec slot and record consumption; exercise the common frontend FRI/STARK acceptance client under selected transcript/extension fields, realizations and layouts |
 | Represented execution | Canonical logical collection ownership across Data/Algebra, Residue and Codec semantics, private buffer contracts and admitted Arith/Vector/Bufferization lowering; compare native kernels and transparent schedules |
@@ -57,7 +57,7 @@ what actually landed. The completion criteria below belong inside those units.
 ### Shared interfaces before implementation
 
 Publish each cross-layer interface against landed sources, including its
-accepted profile, actual input/output subjects, observations, version changes
+accepted profile, actual input/output subjects, observations, schema changes
 and remaining assumptions. The [foundation interface inventory](spec/formats/foundation-interfaces.md)
 specifies structured source, program bytes, realization records, application
 maps, outcomes and budgets, and the catalog. Independent consumers adapt from

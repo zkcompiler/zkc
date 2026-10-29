@@ -7,32 +7,41 @@ contracts, not a claim that current tools emit or admit them. The
 the current producer profile from the cutover. The foundation lands one native
 route; old readers and compatibility wrappers do not remain in that route.
 
-## Versions and retained meanings
+## Schema changes and retained meanings
+
+All zkc-owned formats stay at version `0` until the first stabilized external
+contract. This foundation is no exception, and new formats also start at `/0`.
+The table and sections below specify the schema changes; a matching format tag
+alone does not establish compatibility across development builds. At cutover,
+update affected native producers, readers and fixtures together, retire the old
+schema and retain no compatibility reader. Exact artifact subjects and digests
+continue to distinguish the actual inputs. Independently maintained consumers
+report which schema they support rather than infer support from the tag.
 
 | Contract | Foundation form | Consumer-visible change |
 |---|---|---|
-| Structured original | `zkc.structured-source/1` | Structured logical types, typed binding arguments/signatures and invocation parameters |
-| Constructed participant | `zkc.constructed-participant/1` | Structured types and attributes replace printed MLIR types and the generic text escape |
-| Constructed pair | `zkc.constructed-pair/1` | Both children use the new participant form |
-| Oracle realization | `zkc.oracle-realization/1` | Interned types become structured data; source-relative roots and actual-body checking remain |
-| Application correspondence | `zkc.application-map/1` | New explicit auxiliary association, bound to the actual original and candidate |
-| Shared declarations | `zkc.contract-declarations/1` | Complete structured declaration data and parameter schemas; no retired interpreter-profile bit |
-| Logical type vocabulary | `zkc.logical-types/1` | Shared typed trees, including complete nominal identities and ordered alternatives |
+| Structured original | `zkc.structured-source/0` | Structured logical types, typed binding arguments/signatures and invocation parameters |
+| Constructed participant | `zkc.constructed-participant/0` | Structured types and attributes replace printed MLIR types and the generic text escape |
+| Constructed pair | `zkc.constructed-pair/0` | Both children use the new participant form |
+| Oracle realization | `zkc.oracle-realization/0` | Interned types become structured data; source-relative roots and actual-body checking remain |
+| Application correspondence | `zkc.application-map/0` | New explicit auxiliary association, bound to the actual original and candidate |
+| Shared declarations | `zkc.contract-declarations/0` | Complete structured declaration data and parameter schemas; no retired interpreter-profile bit |
+| Logical type vocabulary | `zkc.logical-types/0` | Shared typed trees, including complete nominal identities and ordered alternatives |
 | Executable bytes | `zkc.program/0` | Unchanged grammar, layout, canonical spellings and execution meaning |
 
 Source AST, checked-source associations, native-origin framing, message codecs,
 proof framing and transcript hash constructions keep their owning contracts.
 An internal spelling change can change the original MLIR bytes and their exact
 hash; it does not change the hash algorithm or authorize reusing an old subject.
-Regenerate affected subjects from actual artifacts. No version bump implies a
-formal reader or theorem for that version is available.
+Regenerate affected subjects from actual artifacts. A retained `/0` tag does
+not imply that an independent reader or theorem supports the changed schema.
 
 ## Structured source
 
 The envelope retains the eleven required slots and their order:
 
 ```text
-["zkc.structured-source/1", "original", source-sha256, entry-name,
+["zkc.structured-source/0", "original", source-sha256, entry-name,
  domains, relations, bindings, definitions, contracts, catalogue,
  source-declarations]
 ```
@@ -69,8 +78,8 @@ invocation ABI; it adds no source body and no inlining permission.
 ## Constructed participants
 
 The participant envelope retains its ten slots, hashes, policy and service-port
-rules. Its tag becomes `zkc.constructed-participant/1`. The pair is exactly
-`["zkc.constructed-pair/1", producer-record, validator-record]`, with matching
+rules. Its tag remains `zkc.constructed-participant/0`. The pair is exactly
+`["zkc.constructed-pair/0", producer-record, validator-record]`, with matching
 source, candidate and policy. The [construction contract](constructed-participant.md)
 continues to require checking the supplied actual candidate first.
 
@@ -102,7 +111,7 @@ objects use the [catalog schema](contract-declarations.md#invocation-parameters)
 
 ## Realization and application records
 
-`zkc.oracle-realization/1` keeps exactly `{format, selection, types, entries,
+`zkc.oracle-realization/0` keeps exactly `{format, selection, types, entries,
 declarations}`. Its `types` entries are complete logical `Type` trees in
 first-use order. Existing unsigned JSON type references remain unsigned JSON
 references here; they do not change to printed MLIR spellings or decimal

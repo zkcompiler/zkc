@@ -1,6 +1,6 @@
 # Shared declaration catalog
 
-`zkc.contract-declarations/1` is neutral declaration data. It contains no MLIR
+`zkc.contract-declarations/0` is neutral declaration data. It contains no MLIR
 objects, backend function pointers, Lean declarations or admission certificates.
 The catalog owns operation identities, kinded signatures, requirements, type
 permissions and semantic facets. Implementations and mathematical laws remain
@@ -19,7 +19,7 @@ no theorem or semantic function to a catalog row.
 The root has exactly `format`, `sorts`, `types`, `operations`, `members`, `rules`,
 `capabilities`, `exports`, `families`, `associatedTypes`, `mathematicalIdentities`
 and `mathematicalIntrinsics`. The format tag is
-`zkc.contract-declarations/1`. Every list follows the contribution dependency
+`zkc.contract-declarations/0`. Every list follows the contribution dependency
 order and then its explicit declaration order. No consumer may infer meaning
 from an ordinal instead of the declared identity. Unknown fields, duplicate
 identities or keys, invalid Unicode and unresolved references refuse.

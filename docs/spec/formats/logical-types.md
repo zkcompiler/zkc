@@ -1,15 +1,18 @@
 # Structured logical type data
 
-This page specifies `zkc.logical-types/1`, used by the foundation's versioned
-shared exports. It is structured interchange data, not MLIR textual assembly,
+This page specifies `zkc.logical-types/0`, used by the foundation's shared
+exports. It is structured interchange data, not MLIR textual assembly,
 a native handle or a mathematical admission certificate. Current support is
 recorded in [status](../../status.md).
 
-The standalone record is `["zkc.logical-types/1", types]`. Enclosing formats
-may embed the `types` array under their own version. Entries are complete type
-trees, interned by exact structural equality in first-use order. References are
-canonical unsigned decimal strings indexing this table. Duplicate and unused
-entries refuse; references cannot invent domain or installation authority.
+The standalone record is `["zkc.logical-types/0", types]`: an ordered inventory
+of complete type trees, with every entry a root and no internal table references.
+Duplicate entries refuse. An enclosing format may instead use a referenced type
+table. Its entries are interned by exact structural equality in first-use order;
+duplicate and unused entries refuse there. References are canonical unsigned
+decimal strings unless the enclosing format explicitly defines another encoding.
+References cannot invent domain or installation authority. Inline type trees,
+such as structured-source type positions, need no interning table.
 
 ```text
 Type = ["apply", constructor, [Argument...]]

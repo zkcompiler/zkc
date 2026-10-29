@@ -121,13 +121,14 @@ belongs in the pull request body, which is what survives the squash.
   independent consumers adapt from them. The Lean component owns all changes
   under `lean/`; this native unit does not supply patches or require Lean builds.
 - **Formats and identities.** Version persisted or exchanged formats and
-  cryptographic byte constructions. The native foundation explicitly versions
-  changed shared formats before migration; unchanged meanings, including
-  `zkc.program/0`, retain their version. Update affected native producers,
-  readers and fixtures together and record independently maintained gaps.
-  Maintain one current schema with exact shape and unknown-field validation;
-  do not add compatibility readers. Record consumer-visible cutover changes in
-  the owning specification, not a parallel schema history. See the
+  cryptographic byte constructions. Before stabilization, all zkc-owned formats
+  stay at version `0`, including new foundation formats. Publish schema changes
+  in the owning specification and contract register before migration. Update
+  affected native producers, readers and fixtures together, and record gaps in
+  independently maintained consumers. Maintain one current schema with exact
+  shape and unknown-field validation; do not add compatibility readers. Equal
+  development version tags do not guarantee equal schemas; exact subjects and
+  digests identify the actual artifacts. See the
   [format version policy](../docs/development/maintenance.md#format-versions).
 - **Independent implementations.** The compiler and native runtime independently
   validate the executable program carrier. A change to that surface updates both.
