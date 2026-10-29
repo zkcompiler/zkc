@@ -129,7 +129,10 @@ bool inventory(pir::ProtocolModuleOp source, pir::ProtocolModuleOp candidate,
     allowed.insert(name.getValue());
     if (!original.contains(name.getValue()))
       if (auto function = dyn_cast<func::FuncOp>(op)) {
-        if (!function.isPrivate())
+        if (!function.isPrivate() ||
+            (function.getNumArguments() &&
+             isa<runtime::ScopeType>(function.getArgument(0).getType()) &&
+             function->getAttrs().size() != 5))
           return false;
         if (function.getNumArguments() &&
             isa<runtime::ScopeType>(function.getArgument(0).getType()) &&
@@ -176,28 +179,23 @@ bool inventory(pir::ProtocolModuleOp source, pir::ProtocolModuleOp candidate,
   return true;
 }
 } // namespace
-Error checkIdealOracleRealization(ModuleOp prepared,
-                                  const OracleCommonRealization &actual) {
+Error checkIdealOracleRealizationModel(
+    const OracleVerificationContext &sourceContext,
+    const OracleVerificationContext &targetContext,
+    ArrayRef<OracleCommonEntryRealization> actualEntries) {
+  ModuleOp prepared = sourceContext.getModule(),
+           actualModule = targetContext.getModule();
   auto entries = idealOracleEntries(prepared);
   if (!entries)
     return entries.takeError();
-  ModuleOp actualModule = actual.module.get();
   if (!actualModule || actualModule == prepared ||
       actualModule.getContext() != prepared.getContext() ||
       actualModule->getAttrDictionary() != prepared->getAttrDictionary() ||
       !hasSingleElement(actualModule.getBody()->getOperations()) ||
-      actual.entries.size() != entries->size())
+      actualEntries.size() != entries->size())
     return refuse();
-  auto sourceContext = OracleVerificationContext::read(prepared);
-  if (!sourceContext)
-    return sourceContext.takeError();
-  auto targetContext = OracleVerificationContext::read(actualModule);
-  if (!targetContext) {
-    consumeError(targetContext.takeError());
-    return refuse();
-  }
-  auto source = sourceContext->getUnit();
-  auto candidate = targetContext->getUnit();
+  auto source = sourceContext.getUnit();
+  auto candidate = targetContext.getUnit();
   if (source->getAttrDictionary() != candidate->getAttrDictionary())
     return refuse();
   SmallVector<Operation *> roots;
@@ -205,7 +203,7 @@ Error checkIdealOracleRealization(ModuleOp prepared,
     if (function)
       roots.push_back(function);
   };
-  for (auto [entry, realized] : zip(*entries, actual.entries)) {
+  for (auto [entry, realized] : zip(*entries, actualEntries)) {
     if (entry != realized.entry)
       return refuse();
     auto requirements = idealOracleRequirements(prepared, entry);
@@ -220,7 +218,7 @@ Error checkIdealOracleRealization(ModuleOp prepared,
           expected.access != item.access)
         return refuse();
       if (auto e = checkOracleQueryController(
-              *targetContext, *sourceContext, requirements->storage, item.role,
+              targetContext, sourceContext, requirements->storage, item.role,
               item.kind, requirements->capacity, item.body, item.access))
         return e;
       const auto &body = item.body;
@@ -250,7 +248,7 @@ Error checkIdealOracleRealization(ModuleOp prepared,
         return refuse();
       for (auto [role, helper] : enumerate(realized.allocators[ordinal])) {
         if (auto e = checkOracleAnchorAllocator(
-                *targetContext, helper, requirements->storage, ordinal, role))
+                targetContext, helper, requirements->storage, ordinal, role))
           return e;
         root(helper);
       }
@@ -270,7 +268,7 @@ Error checkIdealOracleRealization(ModuleOp prepared,
         !block(plan->body, program.getBody().front()) ||
         realized.locals.size() != plan->locals.size())
       return refuse();
-    const auto &closure = targetContext->getClosure();
+    const auto &closure = targetContext.getClosure();
     for (auto [recipe, helper] : zip(plan->locals, realized.locals)) {
       if (!local(recipe, helper, closure))
         return refuse();

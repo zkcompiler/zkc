@@ -20,6 +20,12 @@ using namespace zkc::protocol;
 using namespace zkc::test;
 namespace pir = protocol_ir;
 namespace {
+Error checkCandidate(ModuleOp prepared, const OracleCommonRealization &actual) {
+  auto record = serializeIdealOracleRealization(prepared, actual);
+  if (!record)
+    return record.takeError();
+  return checkIdealOracleRealization(prepared, actual.module.get(), *record);
+}
 void checked(Error error) {
   if (error)
     throw std::runtime_error(toString(std::move(error)));
@@ -53,7 +59,8 @@ int main(int argc, char **argv) {
   bool selectedFixture = false;
   for (StringRef fixture :
        {"common-recurrence", "common-holders", "common-input", "common-shape",
-        "common-contents", "common-views", "common-entries", "common-return"}) {
+        "common-contents", "common-views", "common-entries", "common-return",
+        "common-empty"}) {
     if (argc > 3 && fixture != argv[3])
       continue;
     selectedFixture = true;
@@ -73,9 +80,10 @@ int main(int argc, char **argv) {
                 (emitted ? std::string() : toString(emitted.takeError())) +
                 "\n" + diagnostics);
     auto candidate = std::move(*emitted);
-    unsigned expectedEntries = fixture == "common-return"    ? 3
-                               : fixture == "common-entries" ? 2
-                                                             : 1;
+    unsigned expectedEntries =
+        fixture == "common-return"                                   ? 3
+        : (fixture == "common-entries" || fixture == "common-empty") ? 2
+                                                                     : 1;
     require(candidate.entries.size() == expectedEntries,
             "wrong oracle entry inventory");
     auto mainEntry = find_if(candidate.entries, [](const auto &item) {
@@ -84,7 +92,7 @@ int main(int argc, char **argv) {
     require(mainEntry != candidate.entries.end(), "missing main entry");
     auto &entry = *mainEntry;
     cases.run(fixture + " actual common body", [&] {
-      checked(checkIdealOracleRealization(*prepared, candidate));
+      checked(checkCandidate(*prepared, candidate));
       require(print(*prepared) == frozen,
               "emission or reading changed original");
       bool leftover = false;
@@ -103,6 +111,138 @@ int main(int argc, char **argv) {
         cast<pir::ProtocolModuleOp>(candidate.module->getBody()->front());
     auto program =
         cast<pir::MathematicalOp>(SymbolTable::lookupSymbolIn(unit, "main"));
+    if (mutations) {
+      cases.run(fixture + " independent record and fresh candidate read", [&] {
+        auto record =
+            take(serializeIdealOracleRealization(*prepared, candidate));
+        auto copy = parseSourceString<ModuleOp>(print(*candidate.module),
+                                                ParserConfig(&context, false));
+        require(bool(copy), "candidate text did not parse");
+        checked(checkIdealOracleRealization(*prepared, *copy, record));
+        require(record ==
+                    take(serializeIdealOracleRealization(*prepared, candidate)),
+                "record is not deterministic");
+      });
+    }
+    if (mutations && fixture == "common-input") {
+      auto record = take(serializeIdealOracleRealization(*prepared, candidate));
+      auto changed = [&](StringRef name,
+                         llvm::function_ref<void(json::Object &)> change) {
+        cases.run("record refuses " + name, [&] {
+          auto parsed = take(json::parse(record));
+          change(*parsed.getAsObject());
+          std::string text;
+          raw_string_ostream(text) << parsed;
+          refused(
+              checkIdealOracleRealization(*prepared, *candidate.module, text),
+              "oracle-realization-record");
+        });
+      };
+      changed("unknown root field",
+              [&](auto &value) { value["extra"] = true; });
+      changed("other version", [&](auto &value) {
+        value["format"] = "zkc.oracle-realization/1";
+      });
+      changed("other mode", [&](auto &value) { value["mode"] = "merkle"; });
+      changed("unknown entry field", [&](auto &value) {
+        (*value.getArray("entries"))[0].getAsObject()->insert({"extra", true});
+      });
+      changed("duplicate type", [&](auto &value) {
+        auto &types = *value.getArray("types");
+        types.push_back(types.front());
+      });
+      changed("unused type", [&](auto &value) {
+        value.getArray("types")->push_back("bytes");
+      });
+      changed("missing helper", [&](auto &value) {
+        auto &entry = *(*value.getArray("entries"))[0].getAsObject();
+        auto &controller = *(*entry.getArray("controllers"))[0].getAsObject();
+        (*controller.getObject("body"))["initialize"] =
+            "not_a_generated_helper";
+      });
+      changed("foreign type index", [&](auto &value) {
+        auto &entry = *(*value.getArray("entries"))[0].getAsObject();
+        auto &controller = *(*entry.getArray("controllers"))[0].getAsObject();
+        (*controller.getObject("body")->getArray("state"))[0] = 999999;
+      });
+      changed("changed source constructor", [&](auto &value) {
+        auto &entry = *(*value.getArray("entries"))[0].getAsObject();
+        (*(*entry.getArray("constructors"))[0]
+              .getAsObject())["maximum_instances"] = 2;
+      });
+      changed("changed occurrence path", [&](auto &value) {
+        auto &entry = *(*value.getArray("entries"))[0].getAsObject();
+        (*(*entry.getArray("occurrences"))[0].getAsObject())["path"] =
+            json::Array{999};
+      });
+      changed("changed output role", [&](auto &value) {
+        auto &entry = *(*value.getArray("entries"))[0].getAsObject();
+        (*entry.getObject("interface"))["output_roles"] =
+            json::Array{json::Array{"P"}};
+      });
+      changed("declaration order", [&](auto &value) {
+        auto &declarations = *value.getArray("declarations");
+        std::swap(declarations[0], declarations[1]);
+      });
+      cases.run("record refuses an oversized type table", [&] {
+        auto parsed = take(json::parse(record));
+        auto &types = *parsed.getAsObject()->getArray("types");
+        while (types.size() <= 4096)
+          types.push_back("ui64");
+        std::string text;
+        raw_string_ostream(text) << parsed;
+        refused(checkIdealOracleRealization(*prepared, *candidate.module, text),
+                "oracle-realization-record-limit");
+      });
+      cases.run("record refuses duplicate decoded keys", [&] {
+        std::string duplicate = record;
+        duplicate.insert(1, "\"mode\":\"ideal\",");
+        refused(checkIdealOracleRealization(*prepared, *candidate.module,
+                                            duplicate),
+                "oracle-realization-record");
+      });
+      cases.run("record binds generated binding names", [&] {
+        runtime::BindingOp binding;
+        unit.walk([&](runtime::BindingOp op) {
+          if (!binding && op.getSymName().starts_with("_oracle_"))
+            binding = op;
+        });
+        require(bool(binding), "missing generated binding");
+        auto original = binding.getSymNameAttr();
+        auto replacement = StringAttr::get(&context, "changed_binding");
+        require(succeeded(SymbolTable::replaceAllSymbolUses(binding,
+                                                            replacement, unit)),
+                "could not rename binding uses");
+        binding->setAttr("sym_name", replacement);
+        auto restore = llvm::scope_exit([&] {
+          (void)SymbolTable::replaceAllSymbolUses(binding, original, unit);
+          binding->setAttr("sym_name", original);
+        });
+        require(succeeded(verify(*candidate.module)),
+                "renamed binding is malformed");
+        refused(
+            checkIdealOracleRealization(*prepared, *candidate.module, record),
+            "oracle-realization-record");
+      });
+    }
+    if (mutations && fixture == "common-empty") {
+      cases.run("empty sequence has no allocated anchor or controller", [&] {
+        require(entry.controllers.empty() && entry.allocators.empty() &&
+                    entry.locals.empty(),
+                "invented an anchor for an empty collection");
+      });
+      cases.run("empty length cannot become an unrelated input", [&] {
+        auto returned =
+            cast<pir::MathematicalReturnOp>(program.getBody().front().back());
+        Value original = returned->getOperand(0);
+        auto restore =
+            llvm::scope_exit([&] { returned->setOperand(0, original); });
+        returned->setOperand(0, program.getBody().front().getArgument(0));
+        require(succeeded(verify(*candidate.module)),
+                "empty mutation is malformed");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
+      });
+    }
     if (mutations && fixture == "common-return") {
       cases.run("returned aliases share role-specific support stores", [&] {
         require(entry.resultStores == std::vector<OracleResultStore>(
@@ -119,32 +259,28 @@ int main(int argc, char **argv) {
         auto restore = llvm::scope_exit(
             [&] { entry.resultReferences[0].result = original; });
         entry.resultReferences[0].result = 3;
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
       });
       cases.run("changed support role refuses", [&] {
         auto original = entry.resultStores[0].role;
         auto restore =
             llvm::scope_exit([&] { entry.resultStores[0].role = original; });
         entry.resultStores[0].role = 0;
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
       });
       cases.run("changed native store position refuses", [&] {
         auto original = entry.resultStores[0].port;
         auto restore =
             llvm::scope_exit([&] { entry.resultStores[0].port = original; });
         entry.resultStores[0].port = 8;
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
       });
       cases.run("missing support association refuses", [&] {
         auto &ports = entry.resultReferences[0].storePorts;
         auto original = ports.back();
         ports.pop_back();
         auto restore = llvm::scope_exit([&] { ports.push_back(original); });
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
       });
       cases.run("same-typed returned reference substitution refuses", [&] {
         auto *returned = program.getBody().front().getTerminator();
@@ -154,8 +290,7 @@ int main(int argc, char **argv) {
         returned->setOperand(1, returned->getOperand(5));
         require(succeeded(verify(*candidate.module)),
                 "returned reference mutation is malformed");
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
       });
       cases.run("stale returned store refuses", [&] {
         auto *returned = program.getBody().front().getTerminator();
@@ -171,8 +306,7 @@ int main(int argc, char **argv) {
         returned->setOperand(9, empty);
         require(succeeded(verify(*candidate.module)),
                 "returned store mutation is malformed");
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
       });
     }
     if (mutations && fixture == "common-entries") {
@@ -197,24 +331,21 @@ int main(int argc, char **argv) {
         std::swap(candidate.entries[0], candidate.entries[1]);
         auto restore = llvm::scope_exit(
             [&] { std::swap(candidate.entries[0], candidate.entries[1]); });
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
       });
       cases.run("missing entry records refuse", [&] {
         auto missing = std::move(candidate.entries.back());
         candidate.entries.pop_back();
         auto restore = llvm::scope_exit(
             [&] { candidate.entries.push_back(std::move(missing)); });
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
       });
       cases.run("duplicate entry identities refuse", [&] {
         auto original = candidate.entries[1].entry;
         auto restore =
             llvm::scope_exit([&] { candidate.entries[1].entry = original; });
         candidate.entries[1].entry = candidate.entries[0].entry;
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
       });
       cases.run("same-typed entry body substitution refuses", [&] {
         auto companion = cast<pir::MathematicalOp>(
@@ -229,8 +360,7 @@ int main(int argc, char **argv) {
         auto restore = llvm::scope_exit(exchange);
         require(succeeded(verify(*candidate.module)),
                 "entry body swap is malformed");
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
       });
       cases.run("ordinary sibling body remains checked", [&] {
         auto ordinary = cast<pir::MathematicalOp>(
@@ -242,8 +372,7 @@ int main(int argc, char **argv) {
         returned->setOperand(0, ordinary.getBody().front().getArgument(1));
         require(succeeded(verify(*candidate.module)),
                 "ordinary sibling mutation is malformed");
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
       });
       cases.run("ordinary-only modules use the same complete reader", [&] {
         OwningOpRef<ModuleOp> plain(cast<ModuleOp>(prepared->clone()));
@@ -256,7 +385,7 @@ int main(int argc, char **argv) {
         auto realized = emitIdealOracleRealization(*plain);
         require(bool(realized), "ordinary emission failed");
         require(realized->entries.empty(), "invented oracle entry");
-        checked(checkIdealOracleRealization(*plain, *realized));
+        checked(checkCandidate(*plain, *realized));
         require(print(*plain) == print(*realized->module),
                 "ordinary declarations changed");
         auto after =
@@ -265,8 +394,7 @@ int main(int argc, char **argv) {
             SymbolTable::lookupSymbolIn(after, "ordinary"));
         ordinary.getBody().front().getTerminator()->setOperand(
             0, ordinary.getBody().front().getArgument(1));
-        refused(checkIdealOracleRealization(*plain, *realized),
-                "oracle-common-body");
+        refused(checkCandidate(*plain, *realized), "oracle-common-body");
       });
     }
     if (mutations && fixture == "common-views") {
@@ -283,8 +411,7 @@ int main(int argc, char **argv) {
         rebindings[1].getInputMutable().set(rebindings[0].getInput());
         require(succeeded(verify(*candidate.module)),
                 "rebind mutation is malformed");
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
       });
       cases.run("pair-only component views do not materialize data", [&] {
         unsigned materializations = 0;
@@ -308,8 +435,7 @@ int main(int argc, char **argv) {
         auto restore = llvm::scope_exit(
             [&] { holder->body.access = OracleControllerAccess::Holder; });
         holder->body.access = OracleControllerAccess::Available;
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-controller-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-controller-body");
       });
       cases.run("contents checks actual materialization upper bound", [&] {
         exec::RangeOp rows;
@@ -325,8 +451,7 @@ int main(int argc, char **argv) {
         rows->setOperand(2, rows->getOperand(1));
         require(succeeded(verify(*candidate.module)),
                 "loop mutation is malformed");
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-controller-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-controller-body");
       });
       cases.run("shape observers cannot substitute structural leaf count", [&] {
         auto available = find_if(entry.controllers, [](const auto &item) {
@@ -337,11 +462,10 @@ int main(int argc, char **argv) {
         auto restore =
             llvm::scope_exit([&] { available->body.rowCounts[0] = original; });
         available->body.rowCounts[0] = available->body.leafCounts[0];
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-controller-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-controller-body");
       });
     }
-    if (mutations) {
+    if (mutations && fixture != "common-empty") {
       SmallVector<pir::LocalCallOp> calls;
       program.walk([&](pir::LocalCallOp call) { calls.push_back(call); });
       cases.run(fixture + " changed query occurrence", [&] {
@@ -353,8 +477,7 @@ int main(int argc, char **argv) {
         auto restore = llvm::scope_exit([&] { found->setSiteAttr(original); });
         found->setSite("changed");
         require(succeeded(verify(*candidate.module)), "mutation is malformed");
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
         found->setSiteAttr(original);
       });
       if (fixture == "common-recurrence" || fixture == "common-holders")
@@ -377,8 +500,7 @@ int main(int argc, char **argv) {
           found->getInputsMutable()[0].set(replacement);
           require(succeeded(verify(*candidate.module)),
                   "anchor mutation is malformed");
-          refused(checkIdealOracleRealization(*prepared, candidate),
-                  "oracle-common-body");
+          refused(checkCandidate(*prepared, candidate), "oracle-common-body");
           found->getInputsMutable()[0].set(original);
         });
       if (fixture != "common-input")
@@ -395,8 +517,7 @@ int main(int argc, char **argv) {
           exchange.setSite("other_delivery");
           require(succeeded(verify(*candidate.module)),
                   "mutation is malformed");
-          refused(checkIdealOracleRealization(*prepared, candidate),
-                  "oracle-common-body");
+          refused(checkCandidate(*prepared, candidate), "oracle-common-body");
           exchange.setSiteAttr(original);
         });
       cases.run(fixture + " changed shape predicate", [&] {
@@ -415,8 +536,7 @@ int main(int argc, char **argv) {
             [&] { predicate.getInputsMutable()[1].set(second); });
         predicate.getInputsMutable()[1].set(first);
         require(succeeded(verify(*candidate.module)), "mutation is malformed");
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
         predicate.getInputsMutable()[1].set(second);
       });
       cases.run(fixture + " extra body refuses", [&] {
@@ -425,8 +545,7 @@ int main(int argc, char **argv) {
         unit.getBody().front().push_back(extra);
         auto restore = llvm::scope_exit([&] { extra.erase(); });
         require(succeeded(verify(*candidate.module)), "mutation is malformed");
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
       });
       cases.run(fixture + " changed helper occurrence origin", [&] {
         auto helper = entry.locals.front();
@@ -440,8 +559,7 @@ int main(int argc, char **argv) {
                                   builder.getArrayAttr({})}));
         require(succeeded(verify(*candidate.module)),
                 "origin mutation is malformed");
-        refused(checkIdealOracleRealization(*prepared, candidate),
-                "oracle-common-body");
+        refused(checkCandidate(*prepared, candidate), "oracle-common-body");
       });
       if (fixture == "common-recurrence") {
         pir::RepeatOp repeat;
@@ -464,8 +582,7 @@ int main(int argc, char **argv) {
               repeat.getBody().front().getArgument(changed + 1));
           require(succeeded(verify(*candidate.module)),
                   "stale store is malformed");
-          refused(checkIdealOracleRealization(*prepared, candidate),
-                  "oracle-common-body");
+          refused(checkCandidate(*prepared, candidate), "oracle-common-body");
           yield.getInputsMutable()[changed].set(original);
         });
       }
@@ -476,6 +593,8 @@ int main(int argc, char **argv) {
         append_range(selected, ArrayRef<StringRef>{"companion", "ordinary"});
       if (fixture == "common-return")
         selected.push_back("wrapper");
+      if (fixture == "common-empty")
+        selected.push_back("at");
       for (StringRef selectedEntry : selected)
         cases.run(fixture + " physical entry " + selectedEntry, [&] {
           auto realized = print(*candidate.module);
@@ -502,6 +621,8 @@ int main(int argc, char **argv) {
           if (argc > 1) {
             auto base = std::filesystem::path(argv[1]) / name;
             std::ofstream(base.string() + ".mlir") << realized;
+            std::ofstream(base.string() + ".realization.json")
+                << take(serializeIdealOracleRealization(*prepared, candidate));
             std::ofstream(base.string() + ".bundle") << compiled->bundle;
           }
         });

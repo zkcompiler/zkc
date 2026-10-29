@@ -551,5 +551,50 @@ fn main() {
             }
         }
     }
+    for suffix in ["", "-at"] {
+        let entry = if suffix.is_empty() { "main" } else { "at" };
+        let role_input = |role: &str, values| RoleInput {
+            role: role.to_owned(),
+            backend: backend(role, entry),
+            values,
+        };
+        let bytes =
+            std::fs::read(Path::new(&directory).join(format!("common-empty{suffix}.bundle")))
+                .unwrap();
+        let bundle = Bundle::admit(
+            &bytes,
+            &backend("P", entry),
+            zkc_cpu::cpu_contracts(),
+            BundleLimits::default(),
+        )
+        .unwrap();
+        for marker in [0, 1, 99] {
+            for position in [0, 2, u64::MAX] {
+                let mut deliveries = Deliveries::default();
+                let values = if suffix.is_empty() {
+                    vec![
+                        role_input("P", vec![Value::Index(marker)]),
+                        role_input("V", vec![Value::Index(marker)]),
+                    ]
+                } else {
+                    vec![
+                        role_input("P", vec![Value::Index(marker)]),
+                        role_input("V", vec![Value::Index(position)]),
+                    ]
+                };
+                let report = run(
+                    &bundle,
+                    "oracle_common",
+                    values,
+                    RunLimits::default(),
+                    &mut deliveries,
+                )
+                .unwrap();
+                verify(&report, suffix.is_empty().then_some(0), "empty sequence");
+                assert_eq!(deliveries.0.len(), usize::from(!suffix.is_empty()));
+                cases += 1;
+            }
+        }
+    }
     println!("{cases} common ideal realization execution and delivery controls passed");
 }

@@ -260,26 +260,47 @@ int main(int argc, char **argv) {
           }
           refused(*candidate, definition(*original), functions);
         });
-  cases.run("candidate calls are checked through their actual helper bodies",
-            [&] {
-              auto original = parse(context, source());
-              auto candidate = fresh(context);
-              OracleVirtualFunctionWork work;
-              auto functions = take(emitOracleVirtualFunctions(
-                  *candidate, definition(*original), work));
-              OpBuilder builder(&context);
-              auto position = functions.queries[1].position;
-              auto helper = cast<func::FuncOp>(position->clone());
-              helper.setSymName("replacement");
-              unit(*candidate).getBody().front().push_back(helper);
-              builder.setInsertionPoint(&position.front().back());
-              auto call = func::CallOp::create(builder, position.getLoc(),
-                                               helper, position.getArguments());
-              position.front().back().setOperand(0, call.getResult(0));
-              checked(*candidate, definition(*original), functions);
-              helper.front().back().setOperand(0, helper.getArgument(2));
-              refused(*candidate, definition(*original), functions);
-            });
+  cases.run("extra pure helper indirection is outside the closed recipe", [&] {
+    auto original = parse(context, source());
+    auto candidate = fresh(context);
+    OracleVirtualFunctionWork work;
+    auto functions = take(
+        emitOracleVirtualFunctions(*candidate, definition(*original), work));
+    OpBuilder builder(&context);
+    auto position = functions.queries[1].position;
+    auto helper = cast<func::FuncOp>(position->clone());
+    helper.setSymName("replacement");
+    unit(*candidate).getBody().front().push_back(helper);
+    builder.setInsertionPoint(&position.front().back());
+    auto call = func::CallOp::create(builder, position.getLoc(), helper,
+                                     position.getArguments());
+    position.front().back().setOperand(0, call.getResult(0));
+    refused(*candidate, definition(*original), functions);
+    helper.front().back().setOperand(0, helper.getArgument(2));
+    refused(*candidate, definition(*original), functions);
+  });
+  for (bool attribute : {false, true})
+    cases.run(attribute ? "extra pure helper attribute refuses"
+                        : "unused pure operation refuses",
+              [&] {
+                auto original = parse(context, source());
+                auto candidate = fresh(context);
+                OracleVirtualFunctionWork work;
+                auto functions = take(emitOracleVirtualFunctions(
+                    *candidate, definition(*original), work));
+                OpBuilder builder(&context);
+                if (attribute)
+                  functions.answer->setAttr("data.preconditions",
+                                            builder.getArrayAttr({}));
+                else {
+                  auto *operation = &functions.answer.front().front();
+                  require(!isa<func::ReturnOp>(operation),
+                          "missing total answer operation");
+                  builder.setInsertionPoint(&functions.answer.front().back());
+                  builder.clone(*operation);
+                }
+                refused(*candidate, definition(*original), functions);
+              });
   for (bool slots : {false, true})
     cases.run(slots ? "bounded slot work" : "bounded operation work", [&] {
       auto original = parse(context, source());

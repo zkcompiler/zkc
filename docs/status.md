@@ -550,6 +550,15 @@ production stage. The independently checked table-read primitive
 stops before an out-of-domain read for field, group, index and sequence-backed
 rows. Its generated clients enter the physical pipeline; native controls check
 actual row counts and observable prefixes when a later query fails. Complete source adapters and semantic realization remain pending.
+The private whole-stage reader consumes a version-zero
+[realization record](spec/formats/oracle-realization.md), the prepared original
+and the actual candidate. It reads independently parsed candidates, checks exact
+pure helper recipes, and rederives interfaces, stores and symbolic generation
+slots. The record is not a production admission token or a Lean simulation.
+Empty sequence observations need no allocated anchor; indexing still stops at
+its original occurrence. Merkle realization and production publication remain
+pending.
+
 Common oracle ports pair actual holder data and receiver handles through inputs,
 returns and applications, with explicit shapes and independent preparation checks.
 The native [structured exporter](spec/formats/structured-source.md#logical-oracle-vocabulary)

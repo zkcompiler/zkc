@@ -154,12 +154,15 @@ child answer in declaration order. The retained query inventory identifies the
 source formal, kind and occurrence site, including duplicate queries and unused
 answers. Helper dependencies follow actual return values, so an ignored helper
 argument does not create a false dependency on an earlier answer. An independent
-reader compares the actual helper closures with the frozen declaration and
-checks the complete ordered inventory. These functions neither query nor check
+reader derives a closed substitution recipe from the frozen declaration and
+checks exact operations, attributes, operands, nested regions, return values and
+the complete ordered query inventory. Extra pure operations and alternative
+helper indirection are not part of this representation, even when they compute
+the same value. These functions neither query nor check
 query domains: the surrounding realization must validate the outer domain and
 then execute each reached child query in order before calling the answer
-function. This pure substitution check does not establish that control lowering
-or the association with actual anchors.
+function. This pure substitution check does not establish the surrounding
+control lowering or its association with actual anchors.
 
 Structural query capacity is derived from the prepared entry. A base table
 contributes one leaf and one node; a virtual contributes one node plus the
@@ -233,6 +236,14 @@ The reader derives the map from the original and checks final return operands,
 including loop-updated stores. Repeated aliases share the same environment;
 equal data does not merge distinct anchors. This representation grants neither
 logical-handle serialization nor import of arbitrary graphs at another root.
+
+The [realization record](../formats/oracle-realization.md) is the complete
+native reader's input alongside the prepared original and actual common module.
+It replaces process-local function references at that boundary with closed typed
+metadata and exact symbolic generation slots. The reader derives constructors,
+interfaces and occurrences independently; it does not regenerate MLIR. Empty
+handle collections require no invented anchor or allocation: length is zero and
+indexing checks its bound at the original occurrence, after earlier deliveries.
 
 ## Ordered oracle events
 

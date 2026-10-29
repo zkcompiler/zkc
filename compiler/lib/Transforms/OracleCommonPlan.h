@@ -65,5 +65,11 @@ llvm::Expected<OracleCommonPlan> planIdealOracleCommon(
     mlir::ModuleOp prepared, llvm::StringRef entry,
     const OracleCommonRequirements &, llvm::ArrayRef<OracleCommonController>,
     llvm::ArrayRef<std::vector<mlir::func::FuncOp>> allocators);
+// Internal parsed-model reader. Only the record reader publishes its result.
+class OracleVerificationContext;
+llvm::Error checkIdealOracleRealizationModel(
+    const OracleVerificationContext &source,
+    const OracleVerificationContext &target,
+    llvm::ArrayRef<OracleCommonEntryRealization> entries);
 } // namespace zkc::protocol
 #endif

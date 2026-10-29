@@ -295,6 +295,7 @@ add_zkc_component(Transforms
   lib/Transforms/OracleCommonPlan.cpp
   lib/Transforms/OracleCommonRealization.cpp
   lib/Transforms/OracleCommonVerification.cpp
+  lib/Transforms/OracleRealizationRecord.cpp
   lib/Transforms/OracleQueryCapacity.cpp
   lib/Transforms/OracleQueryController.cpp
   lib/Transforms/OracleQueryControllerVerification.cpp
@@ -303,6 +304,7 @@ add_zkc_component(Transforms
   lib/Transforms/OracleAnchorVerification.cpp
   lib/Transforms/OracleTableRead.cpp
   lib/Transforms/OracleTableReadVerification.cpp
+  lib/Transforms/OracleVirtualRecipe.cpp
   lib/Transforms/OracleVirtualFunctions.cpp
   lib/Transforms/OracleVirtualFunctionVerification.cpp
   lib/Transforms/CollectionRealization.cpp

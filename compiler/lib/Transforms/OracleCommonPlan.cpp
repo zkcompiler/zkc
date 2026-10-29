@@ -1000,7 +1000,7 @@ Expected<OracleCommonRequirements> idealOracleRequirements(ModuleOp source,
   auto unit = cast<pir::ProtocolModuleOp>(source.getBody()->front());
   auto program = dyn_cast_or_null<pir::MathematicalOp>(
       SymbolTable::lookupSymbolIn(unit, entry));
-  if (!program || storage->constructors.empty())
+  if (!program)
     return refuse();
   auto capacity = analyzeOracleQueryCapacity(source, entry);
   if (!capacity)

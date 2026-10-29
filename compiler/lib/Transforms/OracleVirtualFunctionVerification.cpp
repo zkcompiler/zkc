@@ -1,6 +1,6 @@
-#include "MathematicalValues.h"
 #include "OracleVerificationContext.h"
 #include "OracleVirtualFunctions.h"
+#include "OracleVirtualRecipe.h"
 #include "zkc/Support/Refusal.h"
 using namespace mlir;
 using namespace llvm;
@@ -32,60 +32,69 @@ Error checkOracleVirtualFunctions(
   if (!source || source->getParentOp() != sourceUnit || sourceUnit == unit ||
       source.getContext() != unit.getContext())
     return refuse();
-  auto &body = source.getBody().front();
-  unsigned sources = source.getNumSources();
-  SmallVector<protocol_ir::OracleQueryOp> queries(
-      body.getOps<protocol_ir::OracleQueryOp>());
-  if (actual.queries.size() != queries.size())
+  OracleVirtualFunctionWork work;
+  auto recipe = planOracleVirtualFunctions(source, work);
+  if (!recipe) {
+    consumeError(recipe.takeError());
     return refuse();
-  mathematical::ValueCorrespondence terms(source);
-  auto original = terms.environment();
-  SmallVector<mathematical::ValueCorrespondence::Term> parameters, answers;
-  SmallVector<Type> types;
-  for (Value argument : body.getArguments().drop_front(sources)) {
-    auto anchor = terms.anchor(argument.getType());
-    terms.bind(original, argument, anchor);
-    parameters.push_back(anchor);
-    types.push_back(argument.getType());
   }
-  // Bind every occurrence independently, including unused or equal queries.
-  // Actual helper calls are interpreted in their own symbol tables; names do
-  // not substitute for body correspondence.
-  for (auto query : queries) {
-    auto anchor = terms.anchor(query.getAnswer().getType());
-    terms.bind(original, query.getAnswer(), anchor);
-    answers.push_back(anchor);
-  }
-  auto compare = [&](func::FuncOp function, Value expected,
-                     ArrayRef<mathematical::ValueCorrespondence::Term> inputs,
-                     TypeRange inputTypes) {
+  if (actual.queries.size() != recipe->queries.size())
+    return refuse();
+  auto compare = [&](func::FuncOp function, const OracleVirtualBody &body) {
     if (!function || function->getParentOp() != unit || !function.isPrivate() ||
-        !function.getBody().hasOneBlock() ||
-        !equal(function.getArgumentTypes(), inputTypes) ||
-        !equal(function.getResultTypes(), TypeRange(expected.getType())))
+        !function.getBody().hasOneBlock() || function->getAttrs().size() != 3 ||
+        !equal(function.getArgumentTypes(), body.block.types) ||
+        !equal(function.getResultTypes(), TypeRange(body.resultType)))
+      return false;
+    llvm::DenseMap<unsigned, Value> environment;
+    auto block = [&](auto &&block, const OracleVirtualBlock &expected,
+                     Block &actual, llvm::DenseMap<unsigned, Value> &values,
+                     bool root) -> bool {
+      if (!equal(actual.getArgumentTypes(), expected.types) ||
+          actual.getOperations().size() !=
+              expected.instructions.size() + unsigned(root))
+        return false;
+      for (auto [id, value] : zip(expected.arguments, actual.getArguments()))
+        if (!values.try_emplace(id, value).second)
+          return false;
+      auto next = actual.begin();
+      for (const auto &item : expected.instructions) {
+        auto &op = *next++;
+        if (op.getName() != item.source->getName() ||
+            op.getAttrDictionary() != item.source->getAttrDictionary() ||
+            !equal(op.getResultTypes(), item.source->getResultTypes()) ||
+            op.getNumOperands() != item.inputs.size() ||
+            op.getNumRegions() != item.regions.size() || op.getNumSuccessors())
+          return false;
+        for (auto [id, input] : zip(item.inputs, op.getOperands()))
+          if (!values.contains(id) || values.lookup(id) != input)
+            return false;
+        for (auto [nested, region] : zip(item.regions, op.getRegions())) {
+          auto local = values;
+          if (!region.hasOneBlock() ||
+              !block(block, *nested, region.front(), local, false))
+            return false;
+        }
+        for (auto [id, value] : zip(item.outputs, op.getResults()))
+          if (!values.try_emplace(id, value).second)
+            return false;
+      }
+      return true;
+    };
+    if (!block(block, body.block, function.front(), environment, true))
       return false;
     auto returned = dyn_cast<func::ReturnOp>(function.front().back());
-    if (!returned || returned.getNumOperands() != 1)
-      return false;
-    auto target = terms.environment();
-    for (auto [argument, input] : zip(function.getArguments(), inputs))
-      terms.bind(target, argument, input);
-    return terms.compare(original, expected, target, returned.getOperand(0));
+    return returned && returned->getAttrs().empty() &&
+           returned.getNumOperands() == 1 &&
+           environment.contains(body.result) &&
+           returned.getOperand(0) == environment.lookup(body.result);
   };
-  for (auto [expected, function] : zip(queries, actual.queries)) {
-    auto argument = cast<BlockArgument>(expected.getHandle());
-    if (function.source != argument.getArgNumber() ||
-        function.site != expected.getSite() ||
-        function.kind != expected.getHandle().getType().getKind() ||
-        !compare(function.position, expected.getPosition(), parameters, types))
+  for (auto [expected, function] : zip(recipe->queries, actual.queries))
+    if (function.source != expected.source || function.site != expected.site ||
+        function.kind != expected.kind ||
+        !compare(function.position, expected.position))
       return refuse();
-  }
-  append_range(parameters, answers);
-  for (auto query : queries)
-    types.push_back(query.getAnswer().getType());
-  if (!compare(actual.answer,
-               cast<protocol_ir::OracleYieldOp>(body.back()).getAnswer(),
-               parameters, types))
+  if (!compare(actual.answer, recipe->answer))
     return refuse();
   return Error::success();
 }

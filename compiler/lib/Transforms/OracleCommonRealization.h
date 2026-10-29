@@ -50,7 +50,11 @@ emitIdealOracleRealization(mlir::ModuleOp prepared);
 // Re-derive layouts, capacities and the common recipe from the frozen original,
 // then read the actual common SSA and every generated helper body. The reader
 // never invokes emission. This is native correspondence, not a Lean simulation.
+llvm::Expected<std::string>
+serializeIdealOracleRealization(mlir::ModuleOp prepared,
+                                const OracleCommonRealization &actual);
 llvm::Error checkIdealOracleRealization(mlir::ModuleOp prepared,
-                                        const OracleCommonRealization &actual);
+                                        mlir::ModuleOp candidate,
+                                        llvm::StringRef record);
 } // namespace zkc::protocol
 #endif
