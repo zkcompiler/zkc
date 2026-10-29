@@ -132,6 +132,8 @@ inductive Input : Ty → Type where
   | present {ty : Ty} : Input ty
   /-- Present or absent; decided where first needed. -/
   | optional {ty : Ty} : Input ty
+  /-- A service handle fixed by the input ABI, not a physical data cell. -/
+  | capability (service : String) (handle : Nat) : Input (.service service)
   | index (value : Nat) : Input .index
   | field (domain : String) (value : Nat) : Input (.field domain)
   | bool (value : Bool) : Input .boolean
@@ -144,6 +146,7 @@ def InputPattern.scope : {Γ : List Ty} → InputPattern Γ → Scope
   | ty :: _, .cons .present rest => .value ty :: scope rest
   | ty :: _, .cons .optional rest => .component ty :: scope rest
   | _ :: _, .cons .absent rest => scope rest
+  | _ :: _, .cons (.capability ..) rest => scope rest
   | _ :: _, .cons (.index _) rest => scope rest
   | _ :: _, .cons (.field ..) rest => scope rest
   | _ :: _, .cons (.bool _) rest => scope rest
@@ -234,6 +237,8 @@ mutual
     | var {ty : Ty} (binder : Var Δ (.value ty)) : Term laws Δ ty
     | result {types : List Ty} {ty : Ty} (binder : Var Δ (.results types)) (position : Var types ty) :
         Term laws Δ ty
+    /-- The nominal service capability selected by the source input ABI. -/
+    | capability (service : String) (handle : Nat) : Term laws Δ (.service service)
     | index (value : Nat) : Term laws Δ .index
     | bool (value : Bool) : Term laws Δ .boolean
     /-- A field literal, presented as `0`, `1` or the cast of the natural. -/

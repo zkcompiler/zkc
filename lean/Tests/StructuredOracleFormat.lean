@@ -5,6 +5,7 @@ import Zkc.Source.Structured.Admission
 import Zkc.Construction.Scalar
 import Zkc.Construction.DomainTranscript
 import Zkc.Construction.Projection
+import Zkc.Construction.ConnectionOutputs
 
 /-! Wire recognition is distinct from semantic admission. New logical sorts
 must not inherit ordinary Math or message rights before the oracle profile. -/
@@ -95,6 +96,11 @@ private def run : IO Unit := do
       (.sequence (.oracle kind)) [anchor]).isNone)
   test "logical handle cannot enter ordinary message projection"
     (!(Zkc.Construction.transportData (.oracle kind)))
+  for type in [Ty.oracle kind, .oracleSequence kind 4, .sequence (.oracle kind)] do
+    test "source connection refuses visible logical-handle outputs"
+      ((Zkc.Construction.Original.roleOutputSorts 0 [[0]] [type]).isNone)
+    test "source connection retains absent logical-handle outputs"
+      (Zkc.Construction.Original.roleOutputSorts 0 [[1]] [type] == some [])
   IO.println s!"structured-oracle-format: {← count.get} controls passed"
 
 #eval run

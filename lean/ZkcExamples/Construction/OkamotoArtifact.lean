@@ -71,18 +71,9 @@ theorem context_eq : context =
 /-- The composed check's two rules, each on the actual export. -/
 theorem compiled_rules : checkExport ZkcExamples.Construction.OkamotoProofData.snapshot participant = .ok () ∧ check context participant = .ok () ∧
     project program context participant = .ok () := by
-  have accepted := compiled
-  unfold checkCompiled at accepted
-  split at accepted
-  · rename_i context' exported found
-    rw [context_admitted] at found
-    cases found
-    obtain ⟨context'', found', checked⟩ := checkExport_sound exported
-    rw [context_admitted] at found'
-    cases found'
-    exact ⟨exported, checked, accepted⟩
-  · cases accepted
-  · cases accepted
+  obtain ⟨exported, construction, _, projection⟩ :=
+    checkCompiled_components context_admitted compiled
+  exact ⟨exported, construction, projection⟩
 
 /-- The per-compile construction check accepts the actual export. -/
 theorem accepted : checkExport ZkcExamples.Construction.OkamotoProofData.snapshot participant = .ok () := compiled_rules.1

@@ -46,7 +46,7 @@ set_option autoImplicit false
 namespace Zkc.Construction
 open Zkc.Source Zkc.Source.Structured
 
-/-- Typed transport eligibility is exactly recursive service exclusion. -/
+/-- Typed transport eligibility is exactly recursive logical-handle exclusion. -/
 def transportData (ty : Ty) : Bool := !ty.isHandle
 
 /-- What the projected role holds for one original component: nothing (the
@@ -298,6 +298,11 @@ def walkOperation (ctx : ProtocolContext) (n : Nat) (op : ProtocolOp) (arguments
   | .restrict _ roles =>
       .ok (instructions,
         [if (roles.map ctx.roles).contains self then arguments.headD .absent else .absent], n)
+  | .assemble _ roles =>
+      if roles.length != arguments.length then .error "projection-assembly"
+      else
+        let selected := (roles.zip arguments).find? (fun item => ctx.roles item.1 == self)
+        .ok (instructions, [selected.map Prod.snd |>.getD .absent], n)
   | .calculate operation _ => walkCalculation program context n operation arguments instructions
   | .localCall helper _ owner _ =>
       if ctx.roles owner = self then
@@ -428,6 +433,8 @@ def walkStep (recurse : Walker) (ctx : ProtocolContext) (n : Nat) :
       walkOperation program context ctx n (.exchange ty sender receiver site) arguments instructions
   | .restrict ty roles, arguments, _, instructions =>
       walkOperation program context ctx n (.restrict ty roles) arguments instructions
+  | .assemble ty roles, arguments, _, instructions =>
+      walkOperation program context ctx n (.assemble ty roles) arguments instructions
   | .draw owner field site, arguments, _, instructions =>
       walkOperation program context ctx n (.draw owner field site) arguments instructions
   | .statement relation types selectors acceptance, arguments, _, instructions =>

@@ -275,6 +275,7 @@ import ZkcSecurity.FiatShamir.DomainCoherence
 import ZkcSecurity.FiatShamir.DomainComposition
 import ZkcSecurity.FiatShamir.DomainReading
 import ZkcSecurity.FiatShamir.DomainReduction
+import ZkcSecurity.FiatShamir.DomainSourceReading
 import ZkcSecurity.FiatShamir.DomainUniform
 import ZkcSecurity.FiatShamir.DomainViewReading
 import ZkcSecurity.FiatShamir.Grinding
@@ -293,6 +294,7 @@ import ZkcSecurity.FiatShamir.Laws
 import ZkcSecurity.FiatShamir.Lifting
 import ZkcSecurity.FiatShamir.LosslessPresentation
 import ZkcSecurity.FiatShamir.LosslessPresentationClaims
+import ZkcSecurity.FiatShamir.NominalDomain
 import ZkcSecurity.FiatShamir.NominalField
 import ZkcSecurity.FiatShamir.Obligations
 import ZkcSecurity.FiatShamir.OccurrenceReading
@@ -309,6 +311,7 @@ import ZkcSecurity.FiatShamir.SampledReadbackCompleteness
 import ZkcSecurity.FiatShamir.Sampling
 import ZkcSecurity.FiatShamir.SamplingControl
 import ZkcSecurity.FiatShamir.Soundness
+import ZkcSecurity.FiatShamir.SourceReading
 import ZkcSecurity.FiatShamir.TranscriptOracle
 import ZkcSecurity.FiatShamir.Typed
 import ZkcSecurity.Generation.ConstructionBindings
@@ -683,6 +686,7 @@ import TestsSecurity.SourceAdmission.Roots
 import TestsSecurity.SourceAdmission.ShapeFixture
 import TestsSecurity.SourceBoundOraclePermutation
 import TestsSecurity.SourceChargeSites
+import TestsSecurity.SourceReading
 import TestsSecurity.StageComposition
 import TestsSecurity.StatementBindings
 import TestsSecurity.StructuredObligations

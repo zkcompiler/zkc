@@ -1,6 +1,7 @@
 import Zkc.Source.KernelRfl
 import Zkc.Source.Structured.Import
 import Zkc.Source.Structured.NormalForm.Presentation
+import Zkc.Construction.Projection
 
 /-! Disjoint assembly selects the role's existing value. These are independent
 formal controls, not a claim that the native projector is proved in Lean. -/
@@ -49,5 +50,22 @@ private def components : Values (fun _ : Ty => Option Bool) [.boolean, .boolean]
 example : assembleComponent (fun role => role == 0) none [0, 1] components = some true := rfl
 example : assembleComponent (fun role => role == 1) none [0, 1] components = some false := rfl
 example : assembleComponent (fun role => role == 2) none [0, 1] components = none := rfl
+
+-- Assembly adds no participant instruction or physical reference. The reader
+-- retains the exact selected component, including the source's absence mask.
+example (program : Program) (context : Zkc.Construction.Context) :
+    Zkc.Construction.walkOperation program context {} 20
+      (.assemble .boolean [context.validator]) [.held 17] [] =
+        .ok ([], [.held 17], 20) := by
+  simp [Zkc.Construction.walkOperation]
+example (program : Program) (context : Zkc.Construction.Context) :
+    Zkc.Construction.walkOperation program context {} 20
+      (.assemble .boolean [context.validator]) [.absent] [] =
+        .ok ([], [.absent], 20) := by
+  simp [Zkc.Construction.walkOperation]
+example (program : Program) (context : Zkc.Construction.Context) :
+    Zkc.Construction.walkOperation program context {} 20
+      (.assemble .boolean [context.validator]) [.held 17, .held 18] [] =
+        .error "projection-assembly" := rfl
 
 end Tests.StructuredAssembly

@@ -2,6 +2,7 @@ module
 
 public import Zkc.Construction.OriginalABI
 public import Zkc.Source.Structured.Linking
+public import Zkc.Source.Structured.DomainLinking
 
 @[expose] public section
 /-! The actual closed helper table supplies one reusable certificate for all
@@ -55,6 +56,34 @@ def Simulation.closedHelper (model : DomainModel) (program : Program) (routing :
       PIR.Process.interpretState]
     exact .halt reason
   | call operation _ => exact nomatch operation
+
+/-- The admitted declaration fold provides exact helper lookup for every
+nominal domain model. Only membership and complete ABI encoding remain to
+check; the instance never supplies a successful-outcome equation. -/
+def Simulation.linkedHelperOn (model : DomainModel) (program : Program) (routing : Routing)
+    (helper : Helper) (present : helper ∈ program.payload.definitions.map CheckedDefinition.helper)
+    (arguments : Values model.Value helper.inputs)
+    (encoded : Domain.Environment model.toCarriers)
+    (inputEncoding : Domain.encodeValues arguments = some encoded)
+    (encode : Values model.Value helper.outputs → Domain.Environment model.toCarriers)
+    (outputEncoding : ∀ result, Domain.encodeValues result = some (encode result))
+    (outputSorts : ∀ result,
+      Domain.sortsMatch (helper.outputs.map ValueSort.data) (encode result) = true)
+    (state : State model.toCarriers) (environment : Domain.Environment model.toCarriers)
+    (references : List Nat) (read : Domain.read environment references = some encoded) :
+    Simulation (HelperReturns encode state environment) (fun _ frame => frame = environment)
+      (fold routing ((invoke (Domain.helperTable model program) helper arguments).interpret
+        (closedLift (I := Occurrence.signature model.toCarriers))) state)
+      (Domain.View.helper model program helper.name references
+        (helper.outputs.map ValueSort.data) environment) := by
+  apply Classical.choice
+  obtain ⟨entry, found, signature⟩ := Evaluation.linked_lookupOn model SiteObservations.closed
+    program.payload.linked helper present
+  change (Domain.helperTable model program).find? _ = some entry at found
+  subst helper
+  simp only [invoke, found, ↓reduceDIte]
+  exact ⟨Simulation.closedHelper model program routing entry found arguments encoded
+    inputEncoding encode outputEncoding outputSorts state environment references read⟩
 
 /-- Linked membership selects the actual closure, including its captured
 definition prefix. This uniform specialization needs no helper outcome law. -/

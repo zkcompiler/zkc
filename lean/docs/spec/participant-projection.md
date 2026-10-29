@@ -59,6 +59,9 @@ source binding must account for. For each original operation:
 - marks and retained statements have no action and no exported counterpart;
 - a restriction keeps its operand's slot when the validator is among its roles,
   and is absent otherwise;
+- assembly selects the slot assigned to the validator's mapped role, or is
+  absent when no role selects it. It consumes no instruction or reference; a
+  malformed operand count is refused (`projection-assembly`);
 - a calculation of the carrier vocabulary with an absent operand is absent.
   Otherwise the next instruction must be the same calculation on the references
   that hold its operands, with data results; its result is then held. If the next
@@ -80,8 +83,8 @@ source binding must account for. For each original operation:
   other roles are absent;
 - a guard owned by the validator must be implemented by a guard on the
   reference holding its condition;
-- an exchange must have distinct sender and receiver roles and a recursively service-free data type. A
-  message from the producer to the validator must be implemented by a receive at
+- an exchange must have distinct sender and receiver roles and a recursively
+  handle-free data type (including services and logical oracle handles). A message from the producer to the validator must be implemented by a receive at
   the same qualified site with the same type; the received value is held. A
   message from the validator to the producer must be implemented by the
   observation of the reference holding it as a message the validator sends at
@@ -149,6 +152,33 @@ invariant or prove its intended reference law. Helpers and loops use reusable
 structural rules; authors supply the missing helper mathematics, source routing
 and state relation when existing library laws do not suffice. Actual artifact
 and source identities are kernel checked, not inferred from matching labels.
+
+### Checked connection certificates
+
+`ConnectionCertificate.Certificate` fixes the checked source body, role and
+roster, input pattern, complete output locations, initial frame layout and
+indexed target block before certificate search. Its fields contain a checked
+normalization result and a finite typed alignment derivation. Search is
+untrusted: an accepted derivation is ordinary kernel-checked data, with no
+instance-supplied root execution equation.
+
+`ConnectionCertificate.Certificate.simulation` proves the corresponding
+`Original.Simulation` for the plain profile. It quantifies over the nominal
+model, exact helper-table interpretation, source binders, physical environment,
+ABI-related captured inputs and frame/history relation. It retains all typed
+replies, stops and complete returns. A malformed or missing routing entry must
+not be justified by a vacuous refusal simulation: reached-source routing
+coverage remains a separate caller obligation.
+
+This bounded certificate interface has no normalizer-law or retained-callee
+environment. The occurrence-preserving nested-application pilot composes
+source normalization, selected callee equations and finite connection rules
+explicitly; transcript delivery and private-service rules have complementary
+checks. These pilots do not establish a generic certificate for every admitted
+root. Root masks, ABI assembly, routing coverage and retained-callee installation
+are not yet generated for all maintained clients. The structural `project`
+walker remains in admission and has no passing-check-to-simulation theorem.
+Its retirement and complete common root assembly remain separate work.
 
 ## Composition with transcript construction
 

@@ -27,7 +27,7 @@ operation's arity, and no step unfolds a helper body or a protocol table.
   normalizer decides `owner = role` on numerals; `RosterDistinct` makes the
   participant rules agree with that decision.
 * Refusals. Anything outside the supported fragment is refused with a named
-  reason: calculations that can stop outside a Math call, laws whose pins or
+  reason: unhandled partial calculations, laws whose pins or
   shapes do not match, owned calls without a law
   when calls are not kept, applications without a callee form, and the
   shared-suffix `bind` form.
@@ -79,6 +79,7 @@ mutual
   def Term.rename {Δ Δ' : Scope} (rename : Rename Δ Δ') {ty : Ty} : Term laws Δ ty → Term laws Δ' ty
     | .var binder => .var (rename binder)
     | .result binder position => .result (rename binder) position
+    | .capability service handle => .capability service handle
     | .index value => .index value
     | .bool value => .bool value
     | .field domain value => .field domain value
@@ -252,6 +253,7 @@ Math call is presented through a law on components or its exact invocation,
 and a kept owned call takes its operands as components, so neither demands them. -/
 def demanded (sig : Signature) {Δ : Scope} (role : Nat) :
     (op : ProtocolOp) → Values (Comp sig.laws Δ) op.arguments → Bool
+  | .calculate (.boundedAt _) _, operands => !anyAbsent operands
   | .calculate op _, operands => op.total && !anyAbsent operands
   | .localCall helper _ owner _, operands => owner == role && !anyAbsent operands && !sig.keeps helper
   | .exchange _ sender _ _, _ => sender == role
@@ -269,9 +271,15 @@ def constantResults {Δ : Scope} : (op : Op) → Option (Values (Comp laws Δ) o
   | .groupIdentity domain => some (.cons (.present (.groupZero domain)) .nil)
   | _ => none
 
+/-- Service identity is checked separately from mathematical literals. -/
+def Term.capability? {Δ : Scope} {ty : Ty} : Term laws Δ ty → Option Nat
+  | .capability _ handle => some handle
+  | _ => none
+
 def Term.index? {Δ : Scope} {ty : Ty} : Term laws Δ ty → Option Nat
   | .var _ => none
   | .result .. => none
+  | .capability .. => none
   | .index value => some value
   | .bool _ => none
   | .field .. => none
@@ -282,6 +290,7 @@ def Term.index? {Δ : Scope} {ty : Ty} : Term laws Δ ty → Option Nat
 def Term.bool? {Δ : Scope} {ty : Ty} : Term laws Δ ty → Option Bool
   | .var _ => none
   | .result .. => none
+  | .capability .. => none
   | .index _ => none
   | .bool value => some value
   | .field .. => none
@@ -365,6 +374,7 @@ def findLaw (names : Bool) (helper : Helper) :
 def Term.var? {Δ : Scope} {ty : Ty} : Term laws Δ ty → Option (Var Δ (.value ty))
   | .var binder => some binder
   | .result .. => none
+  | .capability .. => none
   | .index _ => none
   | .bool _ => none
   | .field .. => none
@@ -375,6 +385,7 @@ def Term.var? {Δ : Scope} {ty : Ty} : Term laws Δ ty → Option (Var Δ (.valu
 def Term.literal? {Δ : Scope} {ty : Ty} : Term laws Δ ty → Option Nat
   | .var _ => none
   | .result .. => none
+  | .capability .. => none
   | .index value => some value
   | .bool value => some value.toNat
   | .field _ value => some value
@@ -465,6 +476,7 @@ def findCallee (names : Bool) (signature : ProtocolSignature) (role : Nat) :
 def Term.fieldValue? {Δ : Scope} {ty : Ty} : Term laws Δ ty → Option Nat
   | .var _ => none
   | .result .. => none
+  | .capability .. => none
   | .index _ => none
   | .bool _ => none
   | .field _ value => some value
@@ -497,6 +509,10 @@ def calleeArguments {Δ : Scope} : {Γ : List Ty} → (pattern : InputPattern Γ
   | ty :: _, .cons .optional rest, .cons comp comps => (calleeArguments rest comps).map fun args =>
       (.cons (comp : Argument laws Δ (.component ty)) args : Values (Argument laws Δ) (.component ty :: InputPattern.scope rest))
   | _ :: _, .cons .absent rest, .cons _ comps => calleeArguments rest comps
+  | _ :: _, .cons (.capability _ handle) rest, .cons comp comps =>
+    match comp.term? with
+    | none => none
+    | some term => onlyIf (term.capability? == some handle) (calleeArguments rest comps)
   | _ :: _, .cons (.index value) rest, .cons comp comps =>
     match comp.term? with
     | none => none
@@ -578,7 +594,25 @@ def mathCall (sig : Signature) {Γ : List Ty} (helper : Helper) (args : Operands
     | none => exactMathCall sig helper args state next
   else .error "calculation-can-stop"
 
-/-- A calculation: total ones as terms, Math calls by law or exact invocation. -/
+/-- Keep a partial strict calculation as an effectful node. Absent operands
+still produce absent components without executing the operation. Present
+operands bind results only after the actual calculation has returned. -/
+def partialCalculation (sig : Signature) {Γ : List Ty} (op : Op) (allowed : op.isCalculation = true)
+    (args : Operands Γ op.arguments) {Δ : Scope} (state : State sig.laws Γ₀ Δ Γ)
+    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (op.results ++ Γ) → Except Refusal (Form sig.laws sig.callees Δ' out)) :
+    Except Refusal (Form sig.laws sig.callees Δ out) :=
+  let operands := lookup state.env args
+  if anyAbsent operands then next (state.push (absentComps op.results))
+  else
+    match presentTerms operands with
+    | none => .error "undecided-operand"
+    | some terms => do
+      let rest ← next ((state.weaken (.results op.results)).push
+        (mapValues (fun position => .present (.result .here position)) (Operands.identity op.results)))
+      pure (.compute op allowed terms rest)
+
+/-- Total calculations become terms, bounded reads retain stops, and Math
+calls use a law or their exact component invocation. -/
 def calculateOperation (sig : Signature) {Γ : List Ty} (op : Op) (args : Operands Γ op.arguments) {Δ : Scope}
     (state : State sig.laws Γ₀ Δ Γ)
     (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (op.results ++ Γ) → Except Refusal (Form sig.laws sig.callees Δ' out)) :
@@ -587,6 +621,7 @@ def calculateOperation (sig : Signature) {Γ : List Ty} (op : Op) (args : Operan
   else
     match op, args, @next with
     | .invoke helper, args, next => mathCall sig helper args state next
+    | .boundedAt domain, args, next => partialCalculation sig (.boundedAt domain) rfl args state next
     | _, _, _ => .error "calculation-can-stop"
 
 /-- A call presented by a returning law: its results, then the continuation. -/
@@ -772,6 +807,8 @@ def InputPattern.initialIn {Δ : Scope} : {Γ : List Ty} → (pattern : InputPat
     let lift : Rename (.component ty :: InputPattern.scope rest) Δ := lift
     .cons (.input (lift .here)) (initialIn rest fun binder => lift binder.there)
   | _ :: _, .cons .absent rest, lift => .cons .absent (initialIn rest lift)
+  | _ :: _, .cons (.capability service handle) rest, lift =>
+    .cons (.present (.capability service handle)) (initialIn rest lift)
   | _ :: _, .cons (.index value) rest, lift => .cons (.present (.index value)) (initialIn rest lift)
   | _ :: _, .cons (.field domain value) rest, lift => .cons (.present (.field domain value)) (initialIn rest lift)
   | _ :: _, .cons (.bool value) rest, lift => .cons (.present (.bool value)) (initialIn rest lift)

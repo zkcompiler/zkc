@@ -7,10 +7,11 @@ public import Zkc.Source.Structured.NormalForm.Syntax
 /-! The participant meaning of a form, over a domain model.
 
 Binders are the values of a scope. Terms evaluate to values and components to
-optional values. A form denotes a process of the plain participant interface:
-sends, receives and service queries at sites qualified by the protocol
-context, kept helper calls and stopping calculations through the helper
-tables, decided conditions as conditionals and every other stop as itself.
+optional values. A form denotes a process under an action interpretation and
+reached iteration observations. Sends, receives and service queries retain sites
+qualified by the protocol context. Kept helpers and stopping calculations use
+the original helper tables; conditions, all outputs and every stop are preserved.
+The plain participant meaning specializes these observations to silent ones.
 
 The meaning of a law's results is a table of functions (`LawResults`). Which
 helper behaviour justifies them is a proposition (`LawsHold`), assumed by the
@@ -94,6 +95,7 @@ mutual
       Term laws Δ ty → Binders model Δ → model.Value ty
     | .var binder, binders => entryAt (V := Slot.Value model) binders binder
     | .result binder position, binders => (entryAt (V := Slot.Value model) binders binder).get position
+    | .capability _ handle, _ => handle
     | .index value, _ => value
     | .bool value, _ => value
     | .field domain value, _ => fieldLiteral model.toFieldModel domain value
@@ -147,83 +149,102 @@ def Equality.decide (model : DomainModel) : {ty : Ty} → Equality ty → Decida
 /-- The plain participant interface over the model's carriers. -/
 abbrev Interface (model : DomainModel) := participantInterfaceOn model.toCarriers
 
-/-- Plain helper tables with silent sites. -/
-abbrev Tables (model : DomainModel) :=
-  Evaluation.ComponentTablesOn model.toCarriers (Interface model)
+/-- Helper tables in the selected effect interface; helper sites remain silent. -/
+abbrev Tables (model : DomainModel) (I : PIR.Signature := Interface model) :=
+  Evaluation.ComponentTablesOn model.toCarriers I
 
 /-- What a form's repeats run: the function a callback region denotes and the
 repeat rule at the participant. The soundness theorem takes the participant
 rules of the domain model; the uniform presentation takes the uniform ones,
-which name the same constants as the readable processes. -/
-structure Runs (model : DomainModel) where
+which name the same constants as the readable processes. The retained repeat
+site is passed to the runner; the source repeat interpreter supplies actual
+dynamic induction indices. -/
+structure Runs (model : DomainModel) (I : PIR.Signature := Interface model) where
   callback : (spec : RepeatSpec) → Region protocolDialect (.index :: (spec.state ++ spec.captures)) spec.state →
-    RegionFunction (Component model.Value) (Interface model) (.index :: (spec.state ++ spec.captures), spec.state)
+    RegionFunction (Component model.Value) I (.index :: (spec.state ++ spec.captures), spec.state)
   run : (spec : RepeatSpec) → Option Nat → Values (Component model.Value) spec.state →
     Values (Component model.Value) spec.captures →
-    RegionFunction (Component model.Value) (Interface model) (.index :: (spec.state ++ spec.captures), spec.state) →
-    PIR.Process (Interface model) (Values (Component model.Value) spec.state)
+    RegionFunction (Component model.Value) I (.index :: (spec.state ++ spec.captures), spec.state) →
+    (site : String := "") → PIR.Process I (Values (Component model.Value) spec.state)
 
 /-- The callees' presented processes, one per callee of the signature, at a child
 context and on the callee's binders. -/
-abbrev CalleeProcesses (model : DomainModel) (callees : List CalleeKey) :=
+abbrev CalleeProcesses (model : DomainModel) (callees : List CalleeKey)
+    (I : PIR.Signature := Interface model) :=
   (callee : Fin callees.length) → ProtocolContext → Binders model (calleeAt callees callee).pattern.scope →
-    PIR.Process (Interface model) (Values (Component model.Value) (calleeAt callees callee).signature.outputs)
+    PIR.Process I (Values (Component model.Value) (calleeAt callees callee).signature.outputs)
 
 section Denote
-variable (model) (tables : Tables model) (results : LawResults model laws)
-  (context : ProtocolContext) (runs : Runs model) (processes : CalleeProcesses model callees) {out : List Ty}
+variable (model) {I : PIR.Signature}
+  (actions : PIR.OperationInterpretation (Interface model) I) (tables : Tables model I) (results : LawResults model laws)
+  (context : ProtocolContext) (runs : Runs model I) (processes : CalleeProcesses model callees I) {out : List Ty}
 
 /-- A form's process, with the given meaning of its returned tuples. -/
-def Form.denoteWith {A : Type}
-    (leaf : {Δ : Scope} → Values (Comp laws Δ) out → Binders model Δ → PIR.Process (Interface model) A) :
-    {Δ : Scope} → Form laws callees Δ out → Binders model Δ → PIR.Process (Interface model) A
+def Form.denoteWithOn {A : Type}
+    (leaf : {Δ : Scope} → Values (Comp laws Δ) out → Binders model Δ → PIR.Process I A) :
+    {Δ : Scope} → Form laws callees Δ out → Binders model Δ → PIR.Process I A
   | _, .done values, binders => leaf values binders
   | _, .halt reason, _ => .halt reason
   | _, .send ty site peer value next, binders =>
-      .call (.send (ty := ty) (qualifyProtocolSite context.applicationPrefix site) (context.roles peer)
-        (value.eval results binders)) fun _ => next.denoteWith leaf binders
+      (actions (.send (ty := ty) (qualifyProtocolSite context.applicationPrefix site) (context.roles peer)
+        (value.eval results binders))).bind fun _ => next.denoteWithOn leaf binders
   | _, .receive ty site peer next, binders =>
-      .call (.receive ty (qualifyProtocolSite context.applicationPrefix site) (context.roles peer))
-        fun reply => next.denoteWith leaf (.cons reply binders)
+      (actions (.receive ty (qualifyProtocolSite context.applicationPrefix site) (context.roles peer))).bind
+        fun reply => next.denoteWithOn leaf (.cons reply binders)
   | _, .query site request args next, binders =>
-      .call (.query (qualifyProtocolSite context.applicationPrefix site) request
-        (Terms.eval results args binders)) fun reply => next.denoteWith leaf (.cons reply binders)
+      (actions (.query (qualifyProtocolSite context.applicationPrefix site) request
+        (Terms.eval results args binders))).bind fun reply => next.denoteWithOn leaf (.cons reply binders)
   | _, .split subject absent present, binders =>
       match subject.eval results binders with
-      | none => absent.denoteWith leaf binders
-      | some value => present.denoteWith leaf (.cons value binders)
+      | none => absent.denoteWithOn leaf binders
+      | some value => present.denoteWithOn leaf (.cons value binders)
   | _, .guard equality left right next, binders =>
       @ite _ (left.eval results binders = right.eval results binders)
-        (equality.decide model _ _) (next.denoteWith leaf binders) (.halt .reject)
+        (equality.decide model _ _) (next.denoteWithOn leaf binders) (.halt .reject)
   | _, .strict helper args next, binders =>
       (invoke tables.closed helper (Terms.eval results args binders)).bind fun values =>
-        next.denoteWith leaf (.cons values binders)
+        next.denoteWithOn leaf (.cons values binders)
   | _, .compute op allowed args next, binders =>
       (Evaluation.operationOn model (.silent _) tables.closed op (Terms.eval results args binders)
         (op.calculationRegions allowed)).bind fun values =>
-          next.denoteWith leaf (.cons values binders)
+          next.denoteWithOn leaf (.cons values binders)
   | _, .math helper args next, binders =>
       (invoke tables.components helper (Comps.eval results args binders)).bind fun values =>
-        next.denoteWith leaf (.cons values binders)
-  | _, .byLaw _ _ next, binders => next.denoteWith leaf binders
+        next.denoteWithOn leaf (.cons values binders)
+  | _, .byLaw _ _ next, binders => next.denoteWithOn leaf binders
   | _, .owned owner helper args next, binders =>
       (Participant.owned (context.roles owner) (context.roles owner) (invoke tables.closed helper)
-        (Comps.eval results args binders)).bind fun values => next.denoteWith leaf (.cons values binders)
-  | _, .repeat spec _ callback count state captures next, binders =>
+        (Comps.eval results args binders)).bind fun values => next.denoteWithOn leaf (.cons values binders)
+  | _, .repeat spec site callback count state captures next, binders =>
       (runs.run spec (count.eval results binders) (Comps.eval results state binders)
-        (Comps.eval results captures binders) (runs.callback spec callback)).bind fun values =>
-          next.denoteWith leaf (.cons values binders)
+        (Comps.eval results captures binders) (runs.callback spec callback) site).bind fun values =>
+          next.denoteWithOn leaf (.cons values binders)
   | _, .apply callee _ roles site args next, binders =>
       (processes callee (context.enter site roles) (Arguments.eval results args binders)).bind fun values =>
-        next.denoteWith leaf (.cons values binders)
+        next.denoteWithOn leaf (.cons values binders)
 
 /-- A form's process, returning its tuple of components. -/
-def Form.denote {Δ : Scope} (form : Form laws callees Δ out) (binders : Binders model Δ) :
-    PIR.Process (Interface model) (Values (Component model.Value) out) :=
-  form.denoteWith model tables results context runs processes
+def Form.denoteOn {Δ : Scope} (form : Form laws callees Δ out) (binders : Binders model Δ) :
+    PIR.Process I (Values (Component model.Value) out) :=
+  form.denoteWithOn model actions tables results context runs processes
     (fun values binders => .done (Comps.eval results values binders)) binders
 
 end Denote
+
+/-- The plain form meaning is the silent specialization of the observation-parametric meaning. -/
+def Form.denoteWith (model : DomainModel) (tables : Tables model) (results : LawResults model laws)
+    (context : ProtocolContext) (runs : Runs model) (processes : CalleeProcesses model callees)
+    {out : List Ty} {A : Type}
+    (leaf : {Δ : Scope} → Values (Comp laws Δ) out → Binders model Δ → PIR.Process (Interface model) A)
+    {Δ : Scope} (form : Form laws callees Δ out) (binders : Binders model Δ) : PIR.Process (Interface model) A :=
+  form.denoteWithOn model (participantActionsOn model.toCarriers) tables results context runs processes leaf binders
+
+/-- The plain form meaning, retaining its complete returned tuple. -/
+def Form.denote (model : DomainModel) (tables : Tables model) (results : LawResults model laws)
+    (context : ProtocolContext) (runs : Runs model) (processes : CalleeProcesses model callees)
+    {out : List Ty} {Δ : Scope} (form : Form laws callees Δ out) (binders : Binders model Δ) :
+    PIR.Process (Interface model) (Values (Component model.Value) out) :=
+  form.denoteOn model (participantActionsOn model.toCarriers) tables results context runs processes binders
 
 /-- The inputs the pattern's binders give. -/
 def InputPattern.environment (model : DomainModel) : {Γ : List Ty} → (pattern : InputPattern Γ) →
@@ -238,6 +259,8 @@ def InputPattern.environment (model : DomainModel) : {Γ : List Ty} → (pattern
     match binders with
     | .cons value binders => .cons value (environment model rest binders)
   | _ :: _, .cons .absent rest, binders => .cons none (environment model rest binders)
+  | _ :: _, .cons (.capability _ handle) rest, binders =>
+    .cons (some handle) (environment model rest binders)
   | _ :: _, .cons (.index value) rest, binders => .cons (some value) (environment model rest binders)
   | _ :: _, .cons (.field domain value) rest, binders =>
     .cons (some (fieldLiteral model.toFieldModel domain value)) (environment model rest binders)
@@ -249,6 +272,7 @@ def InputPattern.absentTypes : {Γ : List Ty} → InputPattern Γ → List Ty
   | ty :: _, .cons .absent rest => ty :: absentTypes rest
   | _ :: _, .cons .present rest => absentTypes rest
   | _ :: _, .cons .optional rest => absentTypes rest
+  | _ :: _, .cons (.capability ..) rest => absentTypes rest
   | _ :: _, .cons (.index _) rest => absentTypes rest
   | _ :: _, .cons (.field ..) rest => absentTypes rest
   | _ :: _, .cons (.bool _) rest => absentTypes rest
@@ -270,6 +294,8 @@ def InputPattern.fill (model : DomainModel) : {Γ : List Ty} → (pattern : Inpu
     let others : Values (Component model.Value) (ty :: InputPattern.absentTypes rest) := others
     match others with
     | .cons other others => .cons other (fill model rest binders others)
+  | _ :: _, .cons (.capability _ handle) rest, binders, others =>
+    .cons (some handle) (fill model rest binders others)
   | _ :: _, .cons (.index value) rest, binders, others => .cons (some value) (fill model rest binders others)
   | _ :: _, .cons (.field domain value) rest, binders, others =>
     .cons (some (fieldLiteral model.toFieldModel domain value)) (fill model rest binders others)
@@ -443,7 +469,7 @@ theorem Form.lawsMatch_of_callsMatch {out : List Ty} {Δ : Scope} (form : Form l
   form.lawsMatch_of_lists (congrArg Prod.fst same) (congrArg Prod.snd same)
 
 /-- No callees: a body without applications. -/
-def noCallees (model : DomainModel) : CalleeProcesses model [] := fun callee => callee.elim0
+def noCallees (model : DomainModel) (I : PIR.Signature := Interface model) : CalleeProcesses model [] I := fun callee => callee.elim0
 
 /-- Every other role of the roster is played by a different participant. -/
 def RosterDistinct (context : ProtocolContext) (role roster : Nat) : Prop :=
@@ -487,8 +513,8 @@ def CalleePinned {Γ₀ : List Ty} (inputs : Values (Component model.Value) Γ�
 /-- Each callee's invocation at a participant of its roster is its presented
 process followed by the participant's view of the returned tuple, on every
 input its pattern describes; a pinned callee only at the caller's inputs. -/
-def CalleesHold {Γ₀ : List Ty} (protocols : ProtocolTable model.Value (Interface model))
-    (processes : CalleeProcesses model callees) (inputs : Values (Component model.Value) Γ₀) : Prop :=
+def CalleesHold {Γ₀ : List Ty} {I : PIR.Signature} (protocols : ProtocolTable model.Value I)
+    (processes : CalleeProcesses model callees I) (inputs : Values (Component model.Value) Γ₀) : Prop :=
   ∀ (callee : Fin callees.length) (context : ProtocolContext)
     (binders : Binders model (calleeAt callees callee).pattern.scope)
     (others : Values (Component model.Value) (calleeAt callees callee).pattern.absentTypes),
@@ -500,8 +526,8 @@ def CalleesHold {Γ₀ : List Ty} (protocols : ProtocolTable model.Value (Interf
         .done (staticMask (calleeAt callees callee).role out (calleeAt callees callee).signature.outputScopes
           (Operands.identity (calleeAt callees callee).signature.outputs))
 
-theorem noCallees_hold {Γ₀ : List Ty} (protocols : ProtocolTable model.Value (Interface model))
-    (inputs : Values (Component model.Value) Γ₀) : CalleesHold protocols (noCallees model) inputs :=
+theorem noCallees_hold {Γ₀ : List Ty} {I : PIR.Signature} (protocols : ProtocolTable model.Value I)
+    (inputs : Values (Component model.Value) Γ₀) : CalleesHold protocols (noCallees model I) inputs :=
   fun callee => callee.elim0
 
 end NormalForm

@@ -277,7 +277,10 @@ requires distinct nonempty role names, availability of each selected component
 and an ordinary data type. Services and logical handles are excluded. Selection
 is not communication or an equality check between roles. Participant meaning,
 component routing and the sound normalizer use this same pointwise rule; an
-absent unselected component cannot suppress a selected one.
+absent unselected component cannot suppress a selected one. The normalization
+proof is parametric in observations and iteration laws, and protocol dependency
+linking preserves this operation. Structural projection and discovery retain the
+selected slot without introducing a runtime instruction.
 
 Service values originate only at singly owned formal protocol input ports.
 Draw and protocol forwarding check their exact contract and mapped singleton
@@ -964,9 +967,12 @@ therefore follow the existing component meaning. An arbitrary present Boolean
 guard uses `Equality.boolean`; false rejects and an absent condition stops as
 incomplete. No premise asserts that a helper result or received Boolean is true.
 
-`NormalForm.normalize_sound` states that when normalization returns a form
-whose law uses call their laws' own helpers (`CallsMatch`), the body's
-participant process at the role is the form's process, in every model, for
+`NormalForm.normalize_soundOn` proves this equation for arbitrary action
+interpretations and iteration observations. Actual source call sites and dynamic
+repeat coordinates are retained in that interpretation. `normalize_sound` is its
+silent-observation specialization: when normalization returns a form whose law
+uses call their laws' own helpers (`CallsMatch`), the body's participant process
+at the role is the form's process, in every model, for
 every context whose mapped roster roles are distinct from the role
 (`RosterDistinct`), on every input the pattern describes, under every helper
 table whose invocations satisfy the signature's laws (`LawsHold`) and every
