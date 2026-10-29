@@ -4,6 +4,7 @@
 #include "LexicalRecords.h"
 #include "NotationRecords.h"
 #include "zkc/Language/Project.h"
+#include "zkc/Syntax/Syntax.h"
 #include <map>
 #include <set>
 namespace zkc::language::detail {
@@ -35,7 +36,10 @@ struct CheckedStorage {
   std::vector<Asset> assets;
   std::shared_ptr<const std::vector<SourceBuffer>> sources;
   std::vector<std::vector<Token>> tokens;
+  /// Immutable authored layout trees, retained before semantic elaboration.
+  std::vector<std::optional<syntax::Snapshot>> layoutHeaders, layoutBodies;
   std::vector<Declaration> declarations;
+  std::vector<PendingSpecification> pendingSpecifications;
   std::string installation;
   uint64_t work = 0, declarationCount = 0, operationCount = 0;
   uint64_t notationDescriptors = 0, notationHoles = 0;

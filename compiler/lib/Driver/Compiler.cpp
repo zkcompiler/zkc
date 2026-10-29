@@ -39,7 +39,7 @@ int zkc::runCompiler(int argc, char **argv,
            "Language (.zkc; explicit module map):\n"
            "  language-check | language-emit | language-interface | "
            "language-bundle | language-package\n"
-           "    --source-format=zkc [--entry=NAME | --subject=NAME] "
+           "    --source-format=zkc|zkc-layout [--entry=NAME | --subject=NAME] "
            "--module=MODULE=FILE.zkc\n"
            "    [--module=MODULE=FILE.zkc ...] [--asset=NAME=FORMAT=FILE ...]\n"
            "    [--no-simplify] [--release-storage] "

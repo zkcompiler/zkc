@@ -164,6 +164,7 @@ private:
   bool configureSetups(Declaration &, const Declaration &,
                        llvm::ArrayRef<SyntaxSetupSlot>);
   bool collect();
+  bool layoutSpecifications();
   bool imports();
   bool prepareNotationSyntax();
   bool prepareOperators();

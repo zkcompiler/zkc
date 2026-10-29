@@ -665,6 +665,11 @@ Expected<std::string> inspectSourceClaims(const ClosedEntry &entry,
         "Host Entry claims require a separate correspondence; "
         "select a closed protocol or proof subject");
   const auto &project = entry.project();
+  if (!project.pendingSpecifications().empty())
+    return detail::failure("source.assurance-unavailable",
+                           "layout specifications require formal elaboration; "
+                           "no claim export was produced",
+                           project.pendingSpecifications().front().span);
   if (project.checkedWork() > limits.work ||
       project.checkedDeclarations() > limits.declarations ||
       project.checkedOperations() > limits.operations)

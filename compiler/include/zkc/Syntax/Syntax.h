@@ -89,6 +89,7 @@ public:
   source::SourceId sourceId() const;
   Status status() const;
   bool headersOnly() const;
+  uint64_t workUsed() const;
   llvm::ArrayRef<Token> tokens() const;
   llvm::ArrayRef<Node> nodes() const;
   llvm::ArrayRef<source::Diagnostic> diagnostics() const;

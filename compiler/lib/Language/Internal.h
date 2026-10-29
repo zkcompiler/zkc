@@ -102,6 +102,7 @@ struct SyntaxPort {
   std::optional<SyntaxSelector> binding;
   std::optional<SyntaxScopedSignature> scoped;
   std::optional<SyntaxType> domain;
+  bool unnamed = false;
 };
 struct SyntaxParameter {
   std::string name;
@@ -215,6 +216,11 @@ struct Statement {
   std::optional<std::string> site;
   uint32_t expression;
   Span span;
+  enum class Evaluation {
+    Legacy,
+    Pure,
+    Ordered
+  } evaluation = Evaluation::Legacy;
 };
 struct SyntaxBody {
   std::vector<SyntaxOperator> operators;
@@ -225,6 +231,8 @@ struct SyntaxBody {
   std::vector<std::pair<std::string, uint32_t>> results;
   bool stopped = false;
   bool returned = false;
+  /// Mathematical final expression; checking still requires a complete result.
+  bool implicitResult = false;
   bool region = false;
   std::string stopReason;
   Span span;
@@ -327,7 +335,20 @@ struct SyntaxSourceClaimBlock {
   SourceClaimBlock value;
   SyntaxType subject;
 };
+/// Syntax-only formal declarations. The retained CST is not an elaborated
+/// proposition and cannot supply executable types or a security receipt.
+struct FormalSyntax {
+  syntax::Snapshot tree;
+  syntax::NodeId node;
+  std::optional<SyntaxType> subject;
+  std::string name;
+  bool isPublic = false;
+};
 struct SyntaxDeclaration {
+  std::vector<FormalSyntax> formalSyntax;
+  bool layoutSyntax = false;
+  /// Authored parameter group, erased before native declaration collection.
+  bool section = false;
   std::optional<std::string> generated;
   Declaration::Kind kind;
   /// A domain declaration's target is its sort word; its domain is the
@@ -413,6 +434,11 @@ struct BodyParseScope {
 };
 llvm::Error parseBodies(const SourceBuffer &, SourceId, llvm::ArrayRef<Token>,
                         llvm::ArrayRef<BodyParseScope>, Work &);
+llvm::Expected<SyntaxDeclaration>
+parseLayoutHeaders(const SourceBuffer &, SourceId, CheckedStorage &, Work &);
+llvm::Error parseLayoutBodies(SourceId, llvm::ArrayRef<BodyParseScope>,
+                              CheckedStorage &, Work &);
+llvm::Error expandLayoutSections(std::vector<SyntaxDeclaration> &, Work &);
 NotationEnvironment fixedNotationEnvironment(SourceId);
 llvm::Error resolveNotationSyntax(std::vector<SyntaxOperator> &,
                                   NotationEnvironment &, Work &);

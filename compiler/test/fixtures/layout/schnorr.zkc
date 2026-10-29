@@ -1,0 +1,26 @@
+module schnorr
+
+domain Curve = group("bls12-381.g1")
+
+pub protocol Schnorr<G: Group> roles(P, V)(
+    base: G @(P, V);
+    point: G @(P, V);
+    scalar: G::Scalar @P;
+    nonces: Random<G::Scalar> @P;
+    challenges: Random<G::Scalar> @V
+) -> bool @V:
+    nonce <- nonces.draw()
+    #[site(commitment)]
+    commitment <- send base * nonce to V
+    #[site(challenge)]
+    challenge <- challenges.draw()
+    #[site(delivery)]
+    received <- send challenge to P
+    #[site(response)]
+    response <- send nonce + received * scalar to V
+    accepted = base * response == commitment + point * challenge
+    return accepted
+
+entry def Run(inputs: Schnorr<Curve>::Inputs):
+    result <- Schnorr<Curve>::run(inputs)
+    return result

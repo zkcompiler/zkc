@@ -220,9 +220,10 @@ Expected<CapturedProject> capture(std::vector<SourceBuffer> sources,
                                   const CaptureOptions &options) {
   if (auto error = checkLimits(options.limits))
     return std::move(error);
-  if (options.format != "zkc")
-    return detail::failure("source.format",
-                           "expected explicit source format 'zkc'");
+  if (options.format != "zkc" && options.format != "zkc-layout")
+    return detail::failure(
+        "source.format",
+        "expected explicit source format 'zkc' or 'zkc-layout'");
   if (auto error = detail::checkSources(sources, assets, options.limits))
     return std::move(error);
   std::sort(sources.begin(), sources.end(),
@@ -274,6 +275,9 @@ ArrayRef<SourceBuffer> Analysis::sources() const { return *storage->sources; }
 ArrayRef<Asset> CheckedProject::assets() const { return storage->assets; }
 ArrayRef<Declaration> CheckedProject::declarations() const {
   return storage->declarations;
+}
+ArrayRef<PendingSpecification> CheckedProject::pendingSpecifications() const {
+  return storage->pendingSpecifications;
 }
 ArrayRef<Token> CheckedProject::tokens(SourceId id) const {
   return id.index < storage->tokens.size()
@@ -341,8 +345,19 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits) {
       checked->assets.push_back(std::move(*value));
     }
     checked->tokens.resize(sources->size());
+    checked->layoutHeaders.resize(sources->size());
+    checked->layoutBodies.resize(sources->size());
     std::vector<detail::SyntaxDeclaration> modules;
     for (unsigned i = 0; i < sources->size(); ++i) {
+      if (capture.format() == "zkc-layout" &&
+          (*sources)[i].origin == SourceOrigin::Captured) {
+        auto syntax = detail::parseLayoutHeaders((*sources)[i], SourceId{i},
+                                                 *checked, work);
+        if (!syntax)
+          return syntax.takeError();
+        modules.push_back(std::move(*syntax));
+        continue;
+      }
       if (auto error =
               detail::lex((*sources)[i], SourceId{i}, work, checked->tokens[i]))
         return error;

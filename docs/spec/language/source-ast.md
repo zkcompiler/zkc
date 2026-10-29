@@ -140,6 +140,36 @@ written effects. Permission lists retain written order and do not insert the
 ports do not carry a visibility field. Bounds and claim domain spellings remain
 unnormalized.
 
+## Layout-source additions
+
+The same version-0 format carries the development layout frontend. A statement's
+`evaluation` is `pure` for `=`/`:=`/ordinary expressions, `ordered` for `<-`, and
+null for an older-syntax statement. A send's `from` is null when omitted;
+`to` remains authored. A single unnamed protocol result has a null port name.
+The internal result binder used by checking is not written source.
+
+`section` contains its written `parameters`, `members` and `formal` occurrences.
+It is embedded in its enclosing declaration's member list through a `section`
+edge. Real enclosed declarations retain their enclosing namespace, with no
+section owner inserted. Its parameter nodes do not contain inferred copies.
+
+Declarations and sections have a `formal` list. Each edge points to a
+`formal_syntax` node with a `syntax_kind` name, ordered `children` paths, and
+`tokens`. Syntax-kind names are the named forms in the public layout syntax
+inventory, such as `Spec`, `Requires`, `Request`, `Name`, and `Call`; no enum
+ordinal or arena index is exported. A token has `text`, `begin` and `end`.
+Each node owns only its nontrivia, non-synthetic tokens outside its direct
+children. Children carry their own tokens, so a deep expression does not repeat
+its entire source text at every ancestor. Spans recover trivia from the exact
+capture. The root formal occurrence is frozen from the full body parse before
+attachment. Relations, laws, ghost definitions and Lean import requests use the
+same syntax-only representation.
+
+These formal nodes are retained source, not an elaborated proposition or a
+claim accepted by a formal reader. The native attachment inventory is separate
+from them. The independent actual-interface reader checks pending occurrence
+coverage for layout source; general formal elaboration remains unavailable.
+
 ## Limits and assurance
 
 Retention spends checking work before copying headers and bodies. Inspection

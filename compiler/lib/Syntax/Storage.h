@@ -8,6 +8,7 @@ struct Storage {
   source::SourceId sourceId;
   Status status = Status::Complete;
   bool headersOnly = false;
+  uint64_t workUsed = 0;
   std::vector<Token> tokens;
   std::vector<Node> nodes;
   std::vector<NodeId> children;

@@ -119,6 +119,12 @@ private:
     auto prior = names.find(name.str());
     if (prior != names.end()) {
       const auto &binding = syntax.bindings[prior->second.index];
+      if (syntax.layoutSyntax && binding.scope == scope) {
+        fail("source.shadow",
+             "binding already exists in this scope; use ':=' for mutable state",
+             span);
+        return {};
+      }
       if (unique || service || binding.service ||
           (binding.mutableBinding && binding.scope < scope)) {
         fail("source.shadow",

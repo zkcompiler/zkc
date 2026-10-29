@@ -36,6 +36,8 @@ Error Checker::run() {
   auto written = retainWrittenHeaders(syntax, work);
   if (!written)
     return written.takeError();
+  if (auto error = expandLayoutSections(syntax, work))
+    return error;
   if (!collect() || !imports() || !prepareNotationSyntax())
     return types.takeError();
   std::vector<std::vector<BodyParseScope>> bodyScopes(output.sources->size());
@@ -44,10 +46,22 @@ Error Checker::run() {
     bodyScopes[module->span.source.index].push_back(
         {module, notationEnvironments[id.index]});
   }
-  for (unsigned i = 0; i < bodyScopes.size(); ++i)
-    if (auto error = parseBodies((*output.sources)[i], SourceId{i},
-                                 output.tokens[i], bodyScopes[i], work))
+  for (const auto &decl : output.declarations)
+    if (decl.kind == Declaration::Kind::Interface &&
+        sources[decl.id.index]->layoutSyntax)
+      bodyScopes[decl.span.source.index].push_back(
+          {sources[decl.id.index], notationEnvironments[decl.module.index]});
+  for (unsigned i = 0; i < bodyScopes.size(); ++i) {
+    auto error =
+        output.layoutHeaders[i]
+            ? parseLayoutBodies(SourceId{i}, bodyScopes[i], output, work)
+            : parseBodies((*output.sources)[i], SourceId{i}, output.tokens[i],
+                          bodyScopes[i], work);
+    if (error)
       return error;
+  }
+  if (!layoutSpecifications())
+    return types.takeError();
   if (auto error = retainWrittenBodies(**written, sources, work))
     return error;
   output.writtenSources = std::move(*written);
@@ -495,7 +509,8 @@ Checker::resolve(const Declaration &context, StringRef name, Span span,
   auto [head, tail] = name.split("::");
   std::optional<DeclarationId> root;
   if (!absolute && !externalSelection) {
-    auto scope = context.kind == Declaration::Kind::Module
+    auto scope = (context.kind == Declaration::Kind::Module ||
+                  context.kind == Declaration::Kind::Interface)
                      ? std::optional(context.id)
                      : context.parent;
     for (; scope; scope = output.declarations[scope->index].parent) {

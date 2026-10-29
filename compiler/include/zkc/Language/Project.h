@@ -776,6 +776,16 @@ struct Declaration {
   std::vector<SetupSlot> setups;
 };
 
+/// Native resolution of an authored spec's protocol owner. Terms, static
+/// arguments and requests remain unelaborated until formal integration.
+/// Neither owner attachment nor this record establishes any proposition.
+struct PendingSpecification {
+  DeclarationId module, protocol;
+  std::string name;
+  bool owner = false, isPublic = false;
+  Span span;
+};
+
 namespace detail {
 struct CaptureStorage;
 struct CheckedStorage;
@@ -852,6 +862,9 @@ public:
   const CapturedProject &capture() const;
   llvm::ArrayRef<Asset> assets() const;
   llvm::ArrayRef<Declaration> declarations() const;
+  /// Exact source occurrences with unavailable formal elaboration. An empty
+  /// array means that no layout spec was requested, not verified security.
+  llvm::ArrayRef<PendingSpecification> pendingSpecifications() const;
   llvm::ArrayRef<Token> tokens(SourceId) const;
   llvm::StringRef installationIdentity() const;
   uint64_t checkedWork() const;
