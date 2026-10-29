@@ -720,7 +720,12 @@ unique names and clause-specific residual/decision rules follow the
 admits at most 4096 clauses and 100000 units of application, selector and entry
 agreement work. Invalid contracts use `protocol-contract`; disagreement with an
 entry statement uses `protocol-contract-statement`. Invalid formula links use
-`relation-formula`. These checks also apply to hand-authored original PIR.
+`relation-formula`. These checks also apply to hand-authored original PIR. The same owner supplies
+a typed contract inventory to downstream readers: component selectors retain
+role, direction, port and type; anchor selectors retain direction, port and kind.
+Continuation residuals and exact named statement selections remain distinct.
+This view borrows the original context, is invalid after mutation, and does not
+admit the remaining program or interpret external predicates.
 
 Contracts do not add statement operations, guards or witness equalities.
 Application expansion retains the declaration inventory and its symbol

@@ -54,6 +54,7 @@ operations, executable operands, literal values or helper bodies.
 | `occurrences` | Source-derived generated common sites and their purpose/role/path |
 | `interface` | Complete native input/output type references and role families |
 | `logical_interface` | Original oracle input/output pairings, distinct from native representation leaves |
+| `contracts` | Complete original clause inventory and exact statement selections |
 
 Each constructor records `constructor` (`input`, `send` or `virtual`), `path`,
 `kind`, `holder`, ordered `receivers`, `site`, `declaration`, `scheme`,
@@ -83,6 +84,27 @@ cryptographic interpretation of a clause. Returned references connect to actual
 support stores through `result_references`; they are not serialized Data values.
 Logical anchor-clause transport still requires its typed interpretation before
 production projection can accept that profile.
+
+The `contracts` object has exactly `clauses` and `statements`. Clauses follow
+original declaration order and contain `kind`, `name`, `subject`, `residual` and
+`decision`. A subject or residual is `{relation, operands}`, with the exact local
+relation symbol; absent residuals and decisions are JSON null. A selector is one
+of `{component: {direction, port, role, type}}` or
+`{anchor: {direction, port, pair, kind}}`. Directions are `input` or `output`;
+`type` uses the shared type table, and `kind` uses the kind schema. The `pair`
+index selects the corresponding input or output in `logical_interface`; it does
+not select a participant's data as the anchor's meaning. Decisions use the
+component object's fields directly and must name a Boolean output.
+
+Statement rows are `{operation, target}`. `operation` is the zero-based operation
+ordinal in the original entry block. `target` is the exact named target's clause
+index or null for an unnamed statement. Equal relation/selector/decision tuples
+do not merge distinct named targets. The original fixes the complete statement
+binding and relation declarations, which the actual-body reader also preserves.
+These fields are rederived by Protocol's shared bounded contract reader, not
+accepted as producer-supplied predicates. Recording an anchor selector does not
+supply its native predicate adapter; the current private emission still refuses
+that profile before projection.
 
 ## Controller metadata
 

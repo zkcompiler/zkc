@@ -138,6 +138,39 @@ int main(int argc, char **argv) {
               "oracle-realization-record");
         });
       };
+      changed("missing contract", [&](auto &value) {
+        auto &entry = *(*value.getArray("entries"))[0].getAsObject();
+        entry.getObject("contracts")->getArray("clauses")->pop_back();
+      });
+      changed("contract component port", [&](auto &value) {
+        auto &entry = *(*value.getArray("entries"))[0].getAsObject();
+        auto &clause = *(*entry.getObject("contracts")->getArray("clauses"))[0]
+                            .getAsObject();
+        auto &operand = *(*clause.getObject("subject")->getArray("operands"))[0]
+                             .getAsObject();
+        (*operand.getObject("component"))["port"] = 1;
+      });
+      changed("contract relation", [&](auto &value) {
+        auto &entry = *(*value.getArray("entries"))[0].getAsObject();
+        auto &clause = *(*entry.getObject("contracts")->getArray("clauses"))[0]
+                            .getAsObject();
+        (*clause.getObject("subject"))["relation"] = "other";
+      });
+      changed("continuation residual direction", [&](auto &value) {
+        auto &entry = *(*value.getArray("entries"))[0].getAsObject();
+        auto &clause = *(*entry.getObject("contracts")->getArray("clauses"))[2]
+                            .getAsObject();
+        auto &operand =
+            *(*clause.getObject("residual")->getArray("operands"))[0]
+                 .getAsObject();
+        (*operand.getObject("component"))["direction"] = "input";
+      });
+      changed("invented statement selection", [&](auto &value) {
+        auto &entry = *(*value.getArray("entries"))[0].getAsObject();
+        entry.getObject("contracts")
+            ->getArray("statements")
+            ->push_back(json::Object{{"operation", 0}, {"target", 0}});
+      });
       changed("unknown root field",
               [&](auto &value) { value["extra"] = true; });
       changed("other version", [&](auto &value) {

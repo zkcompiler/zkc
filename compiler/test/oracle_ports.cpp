@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Protocol/Contracts.h"
 #include "zkc/Dialect/Protocol/OraclePorts.h"
 #include "zkc/Transforms/Mathematical.h"
 using namespace mlir;
@@ -55,6 +56,30 @@ OwningOpRef<ModuleOp> parse(llvm::StringRef text, MLIRContext &context) {
   require(bool(module), "port fixture did not parse");
   return module;
 }
+std::string contractSource() {
+  return R"mlir(
+#K = #protocol.oracle_kind<"table", [ui64,4:ui64]>
+!H = !protocol.oracle<#K>
+!D = !algebra.indices
+module { "protocol.module"() ({
+ relation.declare @claimed {kind="external",key="test/anchor-contract",revision="0",signature=(!D)->i1,purposes=["statement"]}
+ "protocol.func"() ({
+ ^entry(%data:!D,%anchor:!H):
+  %handle = "protocol.oracle_input"(%data,%anchor) {holder="A",receivers=["B"],shape_bounds={}} : (!D,!H)->!H
+  %parts:2 = "protocol.oracle_components"(%handle) {holder="A",receivers=["B"]} : (!H)->(!D,!H)
+  %accepted = arith.constant true
+  "protocol.statement"(%anchor) {relation=@claimed,selectors=["anchor"],target="selected",acceptance=2:i64} : (!H)->()
+  "protocol.return"(%parts#0,%parts#1,%accepted) : (!D,!H,i1)->()
+ }) {sym_name="reader",function_type=(!D,!H)->(!D,!H,i1),roles=["A","B"],input_roles=[["A"],["B"]],output_roles=[["A"],["B"],["B"]],contracts=[
+  ["target","other",[@claimed,[["anchor","input",1:i64]]],unit,["output",2:i64,"B"]],
+  ["input","premise",[@claimed,[["input",0:i64,"A"]]],unit,unit],
+  ["output","result",[@claimed,[["anchor","output",1:i64]]],unit,unit],
+  ["continuation","reduction",[@claimed,[["anchor","input",1:i64]]],[@claimed,[["anchor","output",1:i64]]],["output",2:i64,"B"]],
+  ["target","selected",[@claimed,[["anchor","input",1:i64]]],unit,["output",2:i64,"B"]]
+ ]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+}
 std::string dynamic() {
   auto text = replace(source(), ", 16 : ui64", "");
   size_t position;
@@ -90,6 +115,96 @@ int main() {
     auto module = parse(text, context);
     require(failed(verify(*module)), "invalid oracle ports admitted");
   };
+  cases.run(
+      "typed contracts preserve anchors, residuals and exact selection", [&] {
+        auto module = parse(contractSource(), context);
+        require(succeeded(verify(*module)), "contract fixture formation");
+        auto unit = *module->getOps<ProtocolModuleOp>().begin();
+        auto reader =
+            cast<MathematicalOp>(SymbolTable::lookupSymbolIn(unit, "reader"));
+        SymbolTableCollection symbols;
+        auto inventory = readContracts(reader, symbols);
+        require(succeeded(inventory) && inventory->clauses.size() == 5 &&
+                    inventory->statements.size() == 1,
+                "incomplete contract inventory");
+        auto &clauses = inventory->clauses;
+        auto &anchor =
+            std::get<ContractAnchor>(clauses[0].subject.operands.front());
+        auto &data =
+            std::get<ContractComponent>(clauses[1].subject.operands.front());
+        auto &residual =
+            std::get<ContractAnchor>(clauses[3].residual->operands.front());
+        require(!anchor.port.output && anchor.port.index == 1 &&
+                    anchor.kind.getDataType() == data.type &&
+                    !data.port.output && data.port.index == 0 &&
+                    data.role == "A" && residual.port.output &&
+                    residual.port.index == 1 && residual.kind == anchor.kind,
+                "anchor became a role-local data read or residual lost its "
+                "direction");
+        require(
+            clauses[4].decision && clauses[4].decision->port.output &&
+                clauses[4].decision->port.index == 2 &&
+                clauses[4].decision->role == "B" &&
+                inventory->statements.front().clause == 4,
+            "equal predicates collapsed the selected target or decision role");
+        auto selected = inventory->statements.front().statement;
+        selected.setTargetAttr(StringAttr::get(&context, "other"));
+        inventory = readContracts(reader, symbols);
+        require(succeeded(inventory) &&
+                    inventory->statements.front().clause == 0,
+                "mutation reused a stale selected-target view");
+      });
+  auto contractRefusal = [&](llvm::StringRef name, llvm::StringRef before,
+                             llvm::StringRef after, llvm::StringRef code) {
+    cases.run(name, [&] {
+      auto module = parse(replace(contractSource(), before, after), context);
+      auto unit = *module->getOps<ProtocolModuleOp>().begin();
+      auto reader =
+          cast<MathematicalOp>(SymbolTable::lookupSymbolIn(unit, "reader"));
+      std::string message;
+      ScopedDiagnosticHandler capture(&context, [&](Diagnostic &diagnostic) {
+        message += diagnostic.str();
+        return success();
+      });
+      SymbolTableCollection symbols;
+      require(failed(readContracts(reader, symbols)) &&
+                  namesIdentifier(message, code),
+              "typed contract reader missed refusal: " + message);
+    });
+  };
+  contractRefusal("typed contracts refuse anchor-to-component substitution",
+                  "[\"anchor\",\"input\",1:i64]", "[\"input\",1:i64,\"B\"]",
+                  "protocol-contract");
+  contractRefusal(
+      "typed contracts refuse wrong residual direction",
+      "[@claimed,[[\"anchor\",\"output\",1:i64]]],[\"output\",2:i64,\"B\"]",
+      "[@claimed,[[\"anchor\",\"input\",1:i64]]],[\"output\",2:i64,\"B\"]",
+      "protocol-contract");
+  contractRefusal("typed contracts refuse unavailable decision role",
+                  "[\"output\",2:i64,\"B\"]", "[\"output\",2:i64,\"A\"]",
+                  "protocol-contract");
+  cases.run("typed contracts refuse a mutated referenced signature", [&] {
+    auto module = parse(contractSource(), context);
+    auto unit = *module->getOps<ProtocolModuleOp>().begin();
+    auto reader =
+        cast<MathematicalOp>(SymbolTable::lookupSymbolIn(unit, "reader"));
+    auto *relation = SymbolTable::lookupSymbolIn(unit, "claimed");
+    relation->setAttr("signature",
+                      TypeAttr::get(IntegerType::get(&context, 64)));
+    std::string message;
+    ScopedDiagnosticHandler capture(&context, [&](Diagnostic &diagnostic) {
+      message += diagnostic.str();
+      return success();
+    });
+    SymbolTableCollection symbols;
+    require(failed(readContracts(reader, symbols)) &&
+                namesIdentifier(message, "protocol-contract"),
+            "malformed referenced signature reached typed readback: " +
+                message);
+  });
+  contractRefusal("typed contracts refuse unknown selected target",
+                  "target=\"selected\"", "target=\"absent\"",
+                  "protocol-contract-statement");
   cases.run("typed oracle interface retains the actual paired leaves", [&] {
     auto module = parse(source(), context);
     require(succeeded(verify(*module)), "source formation");

@@ -1,6 +1,7 @@
 #include "zkc/Dialect/Protocol/Contracts.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringSet.h"
 
 using namespace mlir;
@@ -59,7 +60,17 @@ class Contracts {
     return Selector{output, unsigned(port), role, types[port]};
   }
 
-  LogicalResult application(Attribute attr, bool &hasOutput) {
+  ContractSelector typed(const Selector &value) {
+    ContractPort port{value.output, value.port};
+    if (!value.anchor)
+      return ContractComponent{port, value.role, value.type};
+    auto types = value.output ? owner.getFunctionType().getResults()
+                              : owner.getFunctionType().getInputs();
+    return ContractAnchor{port,
+                          cast<OracleHandleType>(types[value.port]).getKind()};
+  }
+  LogicalResult application(Attribute attr, bool &hasOutput,
+                            ContractApplication *result = nullptr) {
     auto row = dyn_cast<ArrayAttr>(attr);
     if (!remaining || !row || row.size() != 2)
       return refuse(
@@ -71,19 +82,28 @@ class Contracts {
         reference ? symbols.lookupNearestSymbolFrom<relation::DeclareOp>(
                         owner, reference)
                   : relation::DeclareOp();
-    if (!declaration || !operands ||
+    auto signatureAttribute =
+        declaration ? declaration->getAttrOfType<TypeAttr>("signature")
+                    : TypeAttr();
+    auto signature = signatureAttribute
+                         ? dyn_cast<FunctionType>(signatureAttribute.getValue())
+                         : FunctionType();
+    if (!declaration || !signature || !operands ||
         declaration->getParentOp() != owner->getParentOp() ||
-        operands.size() != declaration.getSignature().getNumInputs())
+        operands.size() != signature.getNumInputs())
       return refuse(
           "application requires an owned relation and its complete input ABI");
+    if (result)
+      result->relation = reference;
     hasOutput = false;
-    for (auto [operand, type] :
-         zip(operands, declaration.getSignature().getInputs())) {
+    for (auto [operand, type] : zip(operands, signature.getInputs())) {
       auto selected = selector(operand);
       if (!selected || selected->type != type)
         return refuse(
             "selector port, role or type differs from the relation ABI");
       hasOutput |= selected->output;
+      if (result)
+        result->operands.push_back(typed(*selected));
     }
     return success();
   }
@@ -119,7 +139,7 @@ class Contracts {
 public:
   Contracts(MathematicalOp owner, SymbolTableCollection &symbols)
       : owner(owner), symbols(symbols) {}
-  LogicalResult run() {
+  LogicalResult run(DeclarationContracts *result = nullptr) {
     auto clauses = owner.getContractsAttr();
     if (!clauses)
       clauses = ArrayAttr::get(owner.getContext(), {});
@@ -127,6 +147,7 @@ public:
       return refuse("contract inventory exceeds the declaration limit");
     llvm::StringSet<> names;
     SmallVector<ArrayAttr> targets;
+    llvm::DenseMap<StringAttr, unsigned> clauseIndices;
     for (auto attr : clauses) {
       auto row = dyn_cast<ArrayAttr>(attr);
       if (!row || row.size() != 5)
@@ -140,14 +161,21 @@ public:
           !name || name.getValue().empty() || name.getValue().size() > 512 ||
           !names.insert(name.getValue()).second)
         return refuse("clause kind or unique name is invalid");
+      ContractClause clause;
+      clause.kind = kind;
+      clause.name = name;
       bool output;
-      if (failed(application(row[2], output)))
+      if (failed(
+              application(row[2], output, result ? &clause.subject : nullptr)))
         return failure();
       if (((kind == "input" || kind == "continuation") && output) ||
           (kind == "output" && !output))
         return refuse("clause subject has invalid input/output directions");
       if (kind == "continuation") {
-        if (failed(application(row[3], output)))
+        if (result)
+          clause.residual.emplace();
+        if (failed(application(row[3], output,
+                               result ? &*clause.residual : nullptr)))
           return failure();
         if (!output)
           return refuse("continuation residual must select an output");
@@ -158,12 +186,20 @@ public:
         if (kind == "input" || !decision || decision->anchor ||
             !decision->output || !decision->type.isSignlessInteger(1))
           return refuse("decision requires one available Boolean output");
+        if (result)
+          clause.decision = std::get<ContractComponent>(typed(*decision));
       } else if (kind == "target")
         return refuse("target requires a decision");
       if (kind == "target")
         targets.push_back(row);
+      if (result) {
+        clauseIndices[name] = result->clauses.size();
+        result->clauses.push_back(std::move(clause));
+      }
     }
     for (auto statement : owner.getBody().front().getOps<StatementOp>()) {
+      if (result && failed(statement->getName().verifyInvariants(statement)))
+        return failure();
       // Named Entry projections resolve only within this declaration. Unnamed
       // standalone statements do not supply exact selected-target evidence.
       auto selected = statement.getTargetAttr();
@@ -179,6 +215,12 @@ public:
             statement.emitOpError(), "protocol-contract-statement",
             "entry statement target is absent or disagrees with its owned "
             "declaration");
+      if (result) {
+        std::optional<unsigned> index;
+        if (selected)
+          index = clauseIndices.lookup(selected);
+        result->statements.push_back({statement, index});
+      }
     }
     return success();
   }
@@ -187,6 +229,20 @@ public:
 LogicalResult verifyContracts(MathematicalOp owner,
                               SymbolTableCollection &symbols) {
   return Contracts(owner, symbols).run();
+}
+FailureOr<DeclarationContracts> readContracts(MathematicalOp owner,
+                                              SymbolTableCollection &symbols) {
+  if (!owner || failed(owner->getName().verifyInvariants(owner)) ||
+      !hasSingleElement(owner.getBody()) || owner.getBody().front().empty() ||
+      owner.getBody().front().getArgumentTypes() !=
+          owner.getFunctionType().getInputs() ||
+      owner.getInputRoles().size() != owner.getFunctionType().getNumInputs() ||
+      owner.getOutputRoles().size() != owner.getFunctionType().getNumResults())
+    return failure();
+  DeclarationContracts result;
+  if (failed(Contracts(owner, symbols).run(&result)))
+    return failure();
+  return result;
 }
 ArrayAttr getStatementTarget(StatementOp statement) {
   auto owner = dyn_cast<MathematicalOp>(statement->getParentOp());

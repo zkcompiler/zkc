@@ -2,6 +2,7 @@
 #include "OracleVerificationContext.h"
 #include "zkc/Contracts/OracleKinds.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Protocol/Contracts.h"
 #include "zkc/Dialect/Protocol/OraclePorts.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
@@ -359,6 +360,7 @@ struct Codec {
       object.derived("occurrences");
       object.derived("interface");
       object.derived("logical_interface");
+      object.derived("contracts");
     });
   }
   json::Value type(Type value) {
@@ -387,6 +389,83 @@ json::Array roles(ArrayAttr values) {
     result.push_back(std::move(names));
   }
   return result;
+}
+Expected<json::Value> contracts(Codec &codec,
+                                protocol_ir::MathematicalOp program,
+                                const mathematical::OraclePortLayout &layout,
+                                SymbolTableCollection &symbols) {
+  auto inventory = protocol_ir::readContracts(program, symbols);
+  if (failed(inventory))
+    return refuse();
+  auto component = [&](const protocol_ir::ContractComponent &value) {
+    return json::Object{{"direction", value.port.output ? "output" : "input"},
+                        {"port", value.port.index},
+                        {"role", value.role.getValue()},
+                        {"type", codec.type(value.type)}};
+  };
+  auto selector =
+      [&](const protocol_ir::ContractSelector &value) -> Expected<json::Value> {
+    if (auto *local = std::get_if<protocol_ir::ContractComponent>(&value))
+      return json::Object{{"component", component(*local)}};
+    const auto &anchor = std::get<protocol_ir::ContractAnchor>(value);
+    const auto &pairs = anchor.port.output ? layout.outputs : layout.inputs;
+    auto pair = find_if(pairs, [&](const auto &pair) {
+      return pair.anchor == anchor.port.index && pair.kind == anchor.kind;
+    });
+    if (pair == pairs.end())
+      return refuse();
+    return json::Object{
+        {"anchor",
+         json::Object{{"direction", anchor.port.output ? "output" : "input"},
+                      {"port", anchor.port.index},
+                      {"pair", unsigned(pair - pairs.begin())},
+                      {"kind", codec.kind(anchor.kind)}}}};
+  };
+  auto application = [&](const protocol_ir::ContractApplication &value)
+      -> Expected<json::Value> {
+    json::Array operands;
+    for (const auto &operand : value.operands) {
+      auto actual = selector(operand);
+      if (!actual)
+        return actual.takeError();
+      operands.push_back(std::move(*actual));
+    }
+    return json::Object{{"relation", value.relation.getValue()},
+                        {"operands", std::move(operands)}};
+  };
+  json::Array clauses, statements;
+  for (const auto &clause : inventory->clauses) {
+    auto subject = application(clause.subject);
+    if (!subject)
+      return subject.takeError();
+    json::Value residual(nullptr), decision(nullptr);
+    if (clause.residual) {
+      auto actual = application(*clause.residual);
+      if (!actual)
+        return actual.takeError();
+      residual = std::move(*actual);
+    }
+    if (clause.decision)
+      decision = component(*clause.decision);
+    clauses.push_back(json::Object{{"kind", clause.kind.getValue()},
+                                   {"name", clause.name.getValue()},
+                                   {"subject", std::move(*subject)},
+                                   {"residual", std::move(residual)},
+                                   {"decision", std::move(decision)}});
+  }
+  llvm::DenseMap<Operation *, unsigned> positions;
+  for (auto [i, operation] : enumerate(program.getBody().front()))
+    positions[&operation] = i;
+  for (const auto &selection : inventory->statements) {
+    json::Value target(nullptr);
+    if (selection.clause)
+      target = *selection.clause;
+    statements.push_back(
+        json::Object{{"operation", positions.lookup(selection.statement)},
+                     {"target", std::move(target)}});
+  }
+  return json::Object{{"clauses", std::move(clauses)},
+                      {"statements", std::move(statements)}};
 }
 Expected<json::Object> derived(Codec &codec, ModuleOp prepared,
                                const OracleCommonEntryRealization &entry) {
@@ -422,6 +501,9 @@ Expected<json::Object> derived(Codec &codec, ModuleOp prepared,
   };
   auto logicalInputs = pairs(logical->inputs);
   auto logicalOutputs = pairs(logical->outputs);
+  auto logicalContracts = contracts(codec, program, *logical, symbols);
+  if (!logicalContracts)
+    return logicalContracts.takeError();
   json::Array constructors;
   for (const auto &item : requirements->storage.constructors) {
     json::Array owners, receivers;
@@ -467,6 +549,7 @@ Expected<json::Object> derived(Codec &codec, ModuleOp prepared,
   for (Type value : signature.getResults())
     outputs.push_back(codec.type(value));
   return json::Object{
+      {"contracts", std::move(*logicalContracts)},
       {"constructors", std::move(constructors)},
       {"occurrences", std::move(occurrences)},
       {"logical_interface",

@@ -556,7 +556,11 @@ and the actual candidate. It reads independently parsed candidates, checks exact
 pure helper recipes, and rederives interfaces, stores and symbolic generation
 slots. Logical input/result pairings use Protocol admission's shared typed reader;
 original anchor/data ports, kinds and role families remain distinct from native
-representations and their support stores. The record is not a production admission token or a Lean simulation.
+representations and their support stores. The same Protocol owner supplies typed
+contracts, distinguishing anchor selectors from role components and retaining
+continuation residuals and exact named target selections. The realization record
+rederives the complete supported clause inventory; this does not yet interpret
+logical anchor predicates on native representations. The record is not a production admission token or a Lean simulation.
 Empty sequence observations need no allocated anchor. Unreachable queries and
 shape views have a complete refusing controller without an invented store;
 indexing still stops at its original occurrence and preserves earlier delivery.
