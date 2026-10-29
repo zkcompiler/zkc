@@ -47,7 +47,7 @@ calculation-batching=false
     report = directory/'observations'
     first = journal.json(command(toolchain, 'compile', '--profile=native', f'--output={plain}'), cwd=root)
     second = journal.json(command(toolchain, 'compile', '--profile=native', f'--output={observed}',
-        f'--report={report}', '--dump=entry,protocol,participant,exec,execution,physical'), cwd=root)
+        f'--report={report}', '--dump=entry,protocol,realized,participant,exec,execution,physical'), cwd=root)
     assert plain.read_bytes() == observed.read_bytes()
     assert first['package_sha256'] == second['compilation']['package_sha256']
     assert len(second['compilation']['toolchain']['binary_sha256']) == 64
@@ -191,7 +191,7 @@ protocol Echo<T:Type> roles(P)(value:T@P)->(out:T@P){return value;}
 def test_test_recipes_diagnostics_and_toolchain_outside_project(toolchain, journal, directory):
     capabilities = journal.json(command(toolchain, 'inspect', '--view=toolchain'), cwd=directory)
     assert len(capabilities['toolchain']['binary_sha256']) == 64
-    assert capabilities['toolchain']['phases'] == ['entry','protocol','participant','exec','execution','physical']
+    assert capabilities['toolchain']['phases'] == ['entry','protocol','realized','participant','exec','execution','physical']
     root = project(toolchain, journal, directory)
     modules = tomllib.loads((root/'zkc.toml').read_text())['modules']
     low_level = [toolchain.compiler, 'language-check', '--source-format=zkc',
@@ -271,7 +271,7 @@ entry fn Main(value:index,expected:bool,candidate:bool){
         '--release-storage', f'--output={plain}'), cwd=root)
     report = journal.json(command(toolchain, 'compile', 'Main', '--no-calculation-batching',
         '--release-storage', f'--output={observed}', f'--report={directory/"nested-report"}',
-        '--dump=entry,protocol,participant,exec,execution,physical'), cwd=root)
+        '--dump=entry,protocol,realized,participant,exec,execution,physical'), cwd=root)
     assert plain.read_bytes() == observed.read_bytes()
     package = json.loads(observed.read_text())
     artifact = json.loads(package['artifact'])
@@ -283,6 +283,7 @@ entry fn Main(value:index,expected:bool,candidate:bool){
     assert report['compilation']['dropped_phases'] == 0
     assert all(phase['unit'][0] == 'example::Main' for phase in phases)
     assert len({phase['ir_file'] for phase in phases}) == len(phases)
+    assert any(phase['phase'] == 'realized' for phase in phases)
     assert sum(phase['phase'] == 'physical' for phase in phases) >= 5
     assert all(row['operation'] == 'builtin.module' for row in report['compilation']['passes'])
     assert all('builtin.module' in phase['histogram'] for phase in phases)

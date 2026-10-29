@@ -90,6 +90,16 @@ Error preflight(StringRef bytes, size_t stringLimit, StringRef invalidCode) {
   return Error::success();
 }
 } // namespace
+json::Value detail::encodeInterfaceOracle(const InterfaceOracle &oracle) {
+  json::Array arguments;
+  for (const auto &argument : oracle.arguments)
+    arguments.push_back(
+        argument.kind == protocol::TypeArgument::Kind::Nat
+            ? json::Array{"nat", std::to_string(argument.natural)}
+            : json::Array{"type", argument.type->spelling()});
+  return json::Object{{"kind", oracle.kind},
+                      {"arguments", std::move(arguments)}};
+}
 json::Value detail::encodeInterfaceSchema(const InterfaceSchema &s) {
   auto fields = [](ArrayRef<InterfaceField> fields) {
     json::Array result;
@@ -110,7 +120,7 @@ json::Value detail::encodeInterfaceSchema(const InterfaceSchema &s) {
     permissions.push_back("Drop");
   for (const auto &l : s.leaves)
     leaves.push_back(l);
-  return json::Object{{"kind", typeKindName(s.kind)},
+  json::Object result{{"kind", typeKindName(s.kind)},
                       {"identity", s.identity},
                       {"type", s.type},
                       {"custody", s.custody},
@@ -119,6 +129,9 @@ json::Value detail::encodeInterfaceSchema(const InterfaceSchema &s) {
                       {"fields", fields(s.fields)},
                       {"alternatives", std::move(alternatives)},
                       {"leaves", std::move(leaves)}};
+  if (s.oracle)
+    result["oracle"] = encodeInterfaceOracle(*s.oracle);
+  return result;
 }
 Expected<json::Value> detail::parseInterface(StringRef bytes,
                                              const Limits &limits) {
@@ -236,7 +249,7 @@ Error checkInterface(const CheckedOriginal &original, StringRef bytes,
   auto expected = json::parse(original.interfaceJson());
   if (!expected)
     return expected.takeError();
-  if (*actual != *expected)
+  if (!zkc::equalNaturalJson(*actual, *expected))
     return error(
         "source.interface",
         "interface does not match the retained original and selected Entry");

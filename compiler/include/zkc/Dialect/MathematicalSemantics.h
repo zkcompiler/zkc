@@ -17,6 +17,13 @@ struct OperationSemantics {
 // Exact registered operation identity, never purity or interface presence.
 std::optional<OperationSemantics> classify(mlir::Operation *operation);
 bool isTotal(mlir::Operation *operation);
+// Pure value forms in an admitted common protocol, including role-family
+// views. This does not grant ordinary total-Math or native type permissions.
+// Closed helper calls are handled separately by their admission/expansion.
+bool isProtocolValueExpression(mlir::Operation *operation);
+// Closed oracle vocabulary eliminated by semantic realization, including its
+// pure views. No physical/participant boundary may leave any of it unresolved.
+bool isLogicalOracleOperation(mlir::Operation *operation);
 // Shared by availability, helper summaries and projection. The current scalar
 // vocabulary requires each primitive result to depend on every operand. A
 // future subset-dependent primitive also needs a reviewed projection

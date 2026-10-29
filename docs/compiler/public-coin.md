@@ -57,7 +57,9 @@ contracts supply the analysis inputs. Reports use numeric dependency anchors
 and prefix lengths to avoid copying each growing transcript.
 
 The independent requirement pins entry ports and ordered query/delivery sites.
-The implementation discovers the actual edges. It refuses hidden V-local calls,
+The implementation discovers the actual edges. Each challenge retains its
+service contract, method and exact static arguments, distinguishing a field draw
+from scalar `UniformIndex` without merging event boundaries. It refuses hidden V-local calls,
 unmatched or changed coins and omitted verifier dependencies. Report checking
 recomputes everything, including preparation under an independently supplied
 policy. The view records `finite_bulk`, `fuse_vector_reductions` and

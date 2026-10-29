@@ -458,6 +458,12 @@ class Admission {
                     "one generated family was rebound to a different child");
     }
     const auto &protocol = child.selectedProtocol();
+    for (const auto &port :
+         llvm::concat<const InterfacePort>(protocol.inputs, protocol.outputs))
+      if (port.oracle)
+        return fail(
+            "entry.signature",
+            "logical oracle interfaces require realization before Host use");
     auto ordinary = [&](unsigned index) {
       const auto &port = protocol.inputs[index];
       for (const auto &setup : child.setups)

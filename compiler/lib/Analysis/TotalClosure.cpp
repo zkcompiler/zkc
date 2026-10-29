@@ -54,35 +54,49 @@ struct TotalClosure::Impl {
     return result;
   }
 
-  LogicalResult checkObservations(func::FuncOp function) {
-    auto chargeObservation = [&](Operation *op) -> LogicalResult {
-      uint64_t work = 1 + op->getNumOperands() + op->getNumResults();
+  LogicalResult checkObservations(Block &body, bool deferUnknown) {
+    auto *owner = body.getParentOp();
+    if (!owner || !body.getParent() ||
+        !llvm::hasSingleElement(*body.getParent()) ||
+        SymbolTable::getNearestSymbolTable(owner) != unit)
+      return refuse(unit,
+                    "observation checking requires one owned, formed block");
+    auto chargeObservation = [&](uint64_t work) -> LogicalResult {
       if (work > remainingObservationWork)
-        return limit(function,
+        return limit(owner,
                      "polynomial observation expansion exceeds 1000000 slots");
       remainingObservationWork -= work;
       return success();
     };
-    for (auto &op : function.front())
-      if (failed(chargeObservation(&op)))
+    if (failed(chargeObservation(body.getNumArguments())))
+      return failure();
+    for (auto &op : body) {
+      if (op.getNumRegions())
+        return refuse(&op, "observation checking requires a flat body");
+      if (failed(
+              chargeObservation(1 + op.getNumOperands() + op.getNumResults())))
         return failure();
-    OwningOpRef<func::FuncOp> scratch(cast<func::FuncOp>(function->clone()));
+    }
+    Region scratch;
+    IRMapping copied;
+    body.getParent()->cloneInto(&scratch, copied);
     SmallVector<func::CallOp> pending;
-    scratch->walk([&](func::CallOp call) { pending.push_back(call); });
+    scratch.walk([&](func::CallOp call) { pending.push_back(call); });
     while (!pending.empty()) {
       auto call = pending.pop_back_val();
       auto helper =
           tables.lookupSymbolIn<func::FuncOp>(unit, call.getCalleeAttr());
       // Signatures and the acyclic closure were checked before this replay.
       if (!helper || helper.isExternal())
-        return refuse(function, "missing polynomial observation helper");
+        return refuse(owner, "missing polynomial observation helper");
       IRMapping mapping;
       for (auto [argument, value] :
            zip(helper.getArguments(), call.getOperands()))
         mapping.map(argument, value);
       OpBuilder builder(call);
       for (auto &op : helper.front().without_terminator()) {
-        if (failed(chargeObservation(&op)))
+        if (failed(chargeObservation(1 + op.getNumOperands() +
+                                     op.getNumResults())))
           return failure();
         auto *copy = builder.clone(op, mapping);
         if (auto nested = dyn_cast<func::CallOp>(copy))
@@ -93,14 +107,19 @@ struct TotalClosure::Impl {
         value.replaceAllUsesWith(mapping.lookup(returned));
       call.erase();
     }
-    bool formalPolynomial = any_of(function.getArgumentTypes(), [](Type type) {
-      return isa<poly::PolynomialType>(type);
-    });
     poly::Degrees degrees;
-    return poly::deriveDegrees(scratch->front(), degrees, formalPolynomial);
+    return poly::deriveDegrees(scratch.front(), degrees, deferUnknown);
   }
 
 public:
+  LogicalResult verifyObservations(Block &body) {
+    for (auto call : body.getOps<func::CallOp>()) {
+      const TotalSummary *summary;
+      if (failed(get(call, summary)))
+        return failure();
+    }
+    return checkObservations(body, false);
+  }
   Impl(Operation *unit, SymbolTableCollection &tables, func::FuncOp entry)
       : unit(unit), tables(tables), types(unit), entry(entry) {}
   LogicalResult get(func::FuncOp function, const TotalSummary *&result) {
@@ -225,7 +244,11 @@ public:
                       "helper contains an operation without total semantics");
       }
     }
-    if (summary.observesPolynomial && failed(checkObservations(function)))
+    bool formalPolynomial = any_of(function.getArgumentTypes(), [](Type type) {
+      return isa<poly::PolynomialType>(type);
+    });
+    if (summary.observesPolynomial &&
+        failed(checkObservations(function.front(), formalPolynomial)))
       return failure();
     for (const auto &requirement : summary.requirements)
       summary.replayIndices += requirement.size();
@@ -295,6 +318,13 @@ LogicalResult TotalClosure::get(func::CallOp call,
   auto status = impl->get(call, result);
   impl->refused = failed(status);
   return status;
+}
+LogicalResult TotalClosure::verifyObservations(Block &body) {
+  if (impl->refused)
+    return failure();
+  auto result = impl->verifyObservations(body);
+  impl->refused = failed(result);
+  return result;
 }
 LogicalResult verifyTotalClosure(Operation *owner, func::FuncOp entry) {
   SymbolTableCollection symbols;

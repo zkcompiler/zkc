@@ -187,10 +187,19 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
     options.observations->decisions(*result->module, preparationTrace);
   if (!preparation || diagnostics.hasErrors())
     return diagnostics.failure();
-  auto prepared = preparation->snapshot();
-  result->module =
-      std::move(*preparation)
-          .project(!options.polynomialRequirements && options.simplify);
+  auto realization = mathematical::RealizedProtocol::realize(
+      std::move(*preparation), options.oracleRealization);
+  if (!realization)
+    return diagnostics.failure(realization.takeError());
+  result->realization.emplace(std::move(*realization));
+  // Native scheduling consumes the actual represented interface. The original
+  // logical clauses remain owned alongside the checked edge through
+  // publication.
+  auto prepared = result->realization->candidateSnapshot();
+  if (options.observations)
+    options.observations->phase("realized", *prepared);
+  result->module = result->realization->project(
+      !options.polynomialRequirements && options.simplify);
   if (!result->module || diagnostics.hasErrors())
     return diagnostics.failure();
   if (options.polynomialRequirements) {

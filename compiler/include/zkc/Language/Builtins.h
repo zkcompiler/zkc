@@ -18,6 +18,9 @@ using NativeLayoutResolver =
     std::function<llvm::Expected<protocol::BoundType>(const Type &)>;
 /// Resolve a catalog association, retaining a symbolic projection when needed.
 llvm::Expected<Type> domainMember(const Type &, llvm::StringRef member);
+/// Logical Data/Query/Answer association, deferred only when its kind or row
+/// head is unknown.
+llvm::Expected<Type> oracleMember(const Type &, llvm::StringRef member);
 llvm::Expected<std::string> kernelArgument(const Type &, llvm::StringRef sort);
 /// Formal values are eliminated before execution and have no native data codec.
 llvm::Expected<Type> formalType(llvm::StringRef, llvm::ArrayRef<Type>);

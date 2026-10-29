@@ -339,9 +339,31 @@ ValueCorrespondence::Term ValueCorrespondence::value(Environment env,
       continue;
     }
     auto *op = current.getDefiningOp();
-    if (!op ||
-        (!isTotal(op) && !isa<func::CallOp, protocol_ir::RestrictRolesOp>(op)))
+    if (!op || (!isProtocolValueExpression(op) && !isa<func::CallOp>(op)))
       return 0;
+    if (auto assembly = dyn_cast<protocol_ir::AssembleRolesOp>(op);
+        assembly && p.roleComponents) {
+      auto owner = p.scopes[scope].component;
+      if (!owner)
+        return 0;
+      Value input;
+      for (auto [argument, role] :
+           zip(assembly.getInputs(), assembly.getRoles())) {
+        auto mapped =
+            p.scopes[scope].roles.lookup(cast<StringAttr>(role).getValue());
+        if ((mapped ? mapped : role) == owner)
+          input = argument;
+      }
+      if (!input)
+        return 0;
+      if (!p.scopes[scope].values.contains(input)) {
+        pending.push_back({scope, input});
+        continue;
+      }
+      bind(scope, current, p.scopes[scope].values.lookup(input));
+      pending.pop_back();
+      continue;
+    }
     bool ready = true;
     for (Value input : op->getOperands()) {
       if (!p.charge())
@@ -387,6 +409,24 @@ ValueCorrespondence::Term ValueCorrespondence::value(Environment env,
       result = inputs[0];
     } else {
       auto attributes = op->getAttrDictionary();
+      if (isa<protocol_ir::OracleContentsOp, protocol_ir::OracleComponentsOp>(
+              op)) {
+        NamedAttrList renamed(attributes);
+        for (StringRef key : {"owner", "holder"})
+          if (auto role = op->getAttrOfType<StringAttr>(key))
+            if (auto mapped = p.scopes[scope].roles.lookup(role.getValue()))
+              renamed.set(key, mapped);
+        if (auto receivers = op->getAttrOfType<ArrayAttr>("receivers")) {
+          SmallVector<Attribute> mapped;
+          for (auto receiver : receivers) {
+            auto role = p.scopes[scope].roles.lookup(
+                cast<StringAttr>(receiver).getValue());
+            mapped.push_back(role ? role : receiver);
+          }
+          renamed.set("receivers", ArrayAttr::get(op->getContext(), mapped));
+        }
+        attributes = renamed.getDictionary(op->getContext());
+      }
       if (finite::isComputation(op)) {
         auto closure = finite::closureKey(op);
         if (failed(closure))
@@ -394,6 +434,17 @@ ValueCorrespondence::Term ValueCorrespondence::value(Environment env,
         NamedAttrList complete(attributes);
         complete.set("finite.closure", *closure);
         attributes = complete.getDictionary(op->getContext());
+      }
+      if (auto assembly = dyn_cast<protocol_ir::AssembleRolesOp>(op)) {
+        SmallVector<Attribute> owners;
+        for (auto role : assembly.getRoles()) {
+          auto mapped =
+              p.scopes[scope].roles.lookup(cast<StringAttr>(role).getValue());
+          owners.push_back(mapped ? mapped : role);
+        }
+        NamedAttrList renamed(attributes);
+        renamed.set("roles", p.builder.getArrayAttr(owners));
+        attributes = renamed.getDictionary(op->getContext());
       }
       if (auto restriction = dyn_cast<protocol_ir::RestrictRolesOp>(op)) {
         SmallVector<Attribute> owners;

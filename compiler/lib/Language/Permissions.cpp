@@ -184,7 +184,7 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
   if (type.kind == K::Boolean || type.kind == K::Index ||
       type.kind == K::Field || type.kind == K::Group || type.kind == K::Unit)
     return Permissions{true, true};
-  if (type.kind == K::Formal)
+  if (type.kind == K::Formal || isOracleHandle(type))
     return Permissions{true, true};
   if (type.kind == K::Builtin) {
     auto formed = builtinType(type.domain, type.arguments);
@@ -267,6 +267,9 @@ bool Semantics::executableType(const Type &type, Span span, unsigned depth) {
     return diagnostic ? false
                       : fail("source.limit", "executable type depth", span);
   using K = Type::Kind;
+  if (isOracleHandle(type))
+    return fail("source.oracle-boundary",
+                "logical oracle handles require semantic realization", span);
   if (type.kind == K::Formal)
     return fail("source.formal",
                 "formal values cannot cross an executable boundary", span);
@@ -307,6 +310,9 @@ bool Semantics::mathematicalData(const Type &type, Span span,
                                   "mathematical values require Copy"))
     return false;
   using K = Type::Kind;
+  if (isOracleHandle(type))
+    return fail("source.oracle-boundary",
+                "logical oracle handles are outside ordinary Math", span);
   if (type.kind == K::Builtin) {
     auto policy = protocol::nativeTypeConstructorPolicy(type.domain);
     if (!policy || (!policy->total && type.domain != "sequence"))

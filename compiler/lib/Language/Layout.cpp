@@ -31,6 +31,9 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
     hash.frame(allowed ? "1" : "0");
   hash.frame(std::to_string(layout.leaves.size()));
   for (const auto &leaf : layout.leaves) {
+    if (leaf.oracle())
+      return error("source.oracle-boundary",
+                   "relation data schema contains an oracle handle");
     if (!leaf.data())
       return error("source.formal", "relation schema contains a formal leaf");
     hash.frame(*leaf.data());
@@ -99,6 +102,35 @@ detail::Semantics::nativeLayout(const Type &type) {
     return std::move(charged);
   return std::move(result->carrier);
 }
+Expected<OracleKindLayout> Layouts::oracleKind(const Type &kind) {
+  if (kind.kind != Type::Kind::OracleKind || kind.symbolic)
+    return error("source.oracle-kind", "oracle layout requires a closed kind");
+  auto complexity = typeComplexity(kind, limits.typeNodes, limits.typeDepth);
+  if (!complexity)
+    return complexity.takeError();
+  if (auto e = charge(*complexity))
+    return std::move(e);
+  auto formed = builtinType(oracleConstructor(kind), kind.arguments);
+  if (!formed)
+    return formed.takeError();
+  auto row = packed(kind.arguments.front());
+  if (!row)
+    return row.takeError();
+  std::vector<protocol::TypeArgument> arguments{
+      protocol::TypeArgument::typeArgument(row->carrier)};
+  if (kind.arguments.size() == 2) {
+    const auto &rows = kind.arguments[1].dimension;
+    if (!rows.isClosed())
+      return error("source.generic", "oracle cardinality remains symbolic");
+    arguments.push_back(
+        protocol::TypeArgument::naturalArgument(rows.closedValue()));
+  }
+  auto signature = protocol::oracleKindSignature(kind.domain, arguments);
+  if (!signature)
+    return error("source.oracle-kind", toString(signature.takeError()));
+  return OracleKindLayout{kind.domain, std::move(arguments),
+                          std::move(*signature)};
+}
 Expected<PackedLayout> Layouts::packed(const Type &type) {
   auto flat = get(type);
   if (!flat)
@@ -164,8 +196,16 @@ Layouts::kernelArguments(StringRef contract, ArrayRef<Type> arguments) {
 Error Layouts::charge(uint64_t n) { return state->work.charge(n); }
 Expected<LayoutSlice> Layouts::select(const Declaration &decl,
                                       const SpecificationSelector &selector) {
-  return select(selector.output ? decl.outputs : decl.inputs, selector.port,
-                selector.path);
+  auto slice = select(selector.output ? decl.outputs : decl.inputs,
+                      selector.port, selector.path);
+  if (!slice || !selector.anchor)
+    return slice;
+  if (!selector.path.empty() || !slice->layout->oracleData ||
+      slice->layout->oracleData->leaves.size() != 1)
+    return error("source.layout", "invalid logical anchor data layout");
+  ++slice->offset;
+  slice->layout = slice->layout->oracleData;
+  return slice;
 }
 Expected<LayoutSlice> Layouts::selectInput(const Declaration &decl,
                                            const InputSelector &selector) {
@@ -186,7 +226,7 @@ Expected<LayoutSlice> Layouts::select(ArrayRef<Port> ports, unsigned port,
     if (i == port)
       selected = *layout;
     else
-      offset += (*layout)->leaves.size();
+      offset += ports[i].oracle ? 2 : (*layout)->leaves.size();
   }
   for (auto field : path) {
     if (auto error = charge(1))
@@ -314,6 +354,9 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     auto closed = substitute(field, bindings, depth + 1);
     if (!closed)
       return closed.takeError();
+    if (isOracleHandle(*closed))
+      return error("source.oracle-aggregate",
+                   "ordinary aggregates cannot contain oracle handles");
     auto layout = build(*closed, depth + 1);
     if (!layout)
       return layout.takeError();
@@ -338,7 +381,31 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     result->leaves = {"field:" + type.domain};
   else if (type.kind == K::Group)
     result->leaves = {"group:" + type.domain};
-  else if (type.kind == K::Formal) {
+  else if (isOracleHandle(type)) {
+    auto formed = builtinType(oracleConstructor(type), type.arguments);
+    if (!formed)
+      return formed.takeError();
+    auto kind = oracleKind(type.arguments.front());
+    if (!kind)
+      return kind.takeError();
+    std::optional<uint64_t> maximum;
+    if (type.kind == K::OracleSequence) {
+      if (!type.arguments[1].dimension.isClosed())
+        return error("source.generic",
+                     "oracle sequence maximum remains symbolic");
+      maximum = type.arguments[1].dimension.closedValue();
+    }
+    if (type.kind == K::Oracle) {
+      auto data = oracleMember(type.arguments.front(), "Data");
+      if (!data)
+        return data.takeError();
+      auto layout = build(*data, depth + 1);
+      if (!layout)
+        return layout.takeError();
+      result->oracleData = *layout;
+    }
+    result->leaves = {OracleLayout{std::move(*kind), maximum}};
+  } else if (type.kind == K::Formal) {
     auto formed = formalType(type.domain, type.arguments);
     if (!formed)
       return formed.takeError();
@@ -393,6 +460,9 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
       auto element = substitute(type.arguments.front(), bindings, depth + 1);
       if (!element)
         return element.takeError();
+      if (isOracleHandle(*element))
+        return error("source.oracle-aggregate",
+                     "empty arrays cannot erase oracle handles");
       auto layout = build(*element, depth + 1);
       if (!layout)
         return layout.takeError();

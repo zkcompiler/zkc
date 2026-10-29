@@ -3,6 +3,7 @@
 
 include "zkc/Dialect/Protocol/IR/ProtocolDialect.td"
 include "mlir/IR/EnumAttr.td"
+include "zkc/Dialect/Protocol/IR/OracleAttrs.td"
 
 class ProtocolEnum<string name, string description,
                    list<I32EnumAttrCase> cases>

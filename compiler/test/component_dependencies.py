@@ -27,7 +27,7 @@ HEADER_ROOTS = {
     "ZkcProgram": ["Program"],
     "ZkcTransforms": ["Transforms", "Target"],
     "ZkcCompiler": [f"Compiler/{name}.h" for name in (
-        "Compilation", "Diagnostics", "Observation", "Host", "Language", "LanguageInterface", "AssetSharing", "StructuredSource",
+        "Compilation", "Diagnostics", "Observation", "Host", "Language", "LanguageInterface", "AssetSharing", "StructuredSource", "OracleObligations",
         "LanguagePackage", "LanguageInspection", "SourceClaims", "SourceCorrespondence", "NativeProof", "Run",
         "PolynomialReduction", "PublicCoin", "Passes", "Pipelines")],
     "ZkcDriver": ["Driver"],
@@ -175,9 +175,11 @@ def main():
         "ZkcContracts": {ROOT / "lib/Contracts/RequirementChecks.h"},
         "ZkcRelation": {ROOT / "lib/Relation/Field.h", ROOT / "lib/Relation/BundleInternal.h"},
         "ZkcProgram": {ROOT / "lib/Program/EncodingLimits.h", ROOT / "lib/Program/Structure.h", ROOT / "lib/Program/ResourceOrigins.h"},
-        "ZkcIR": {ROOT / "lib/Dialect/Protocol/IR/ResourceOrigins.h", ROOT / "lib/Dialect/Verification.h", ROOT / "lib/Dialect/DomainVerification.h"},
+        "ZkcIR": {ROOT / "lib/Dialect/Protocol/IR/ResourceOrigins.h",
+        ROOT / "lib/Dialect/Protocol/IR/OracleAnalysis.h", ROOT / "lib/Dialect/Verification.h", ROOT / "lib/Dialect/DomainVerification.h"},
     }
     private_headers["ZkcIR"].add(ROOT / "lib/Analysis/FiniteCardinality.h")
+    private_headers["ZkcIR"].add(ROOT / "lib/Dialect/BindingTypeCache.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Exec/ExecutionDefinitions.h")
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/FiniteCardinality.h")
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/APIRecords.h")
@@ -188,6 +190,7 @@ def main():
         ROOT / "lib/Target/AggregateLayouts.h", ROOT / "lib/Target/ExecutionPorts.h",
         ROOT / "lib/Conversion/Storage.h", ROOT / "lib/Target/StorageSchedule.h",
         ROOT / "lib/Transforms/MathematicalSupport.h",
+        ROOT / "lib/Transforms/MathematicalPreservation.h",
         ROOT / "lib/Transforms/ScopedCandidate.h",
         ROOT / "lib/Transforms/ScopedCallback.h",
         ROOT / "lib/Transforms/ScopedSubstitution.h",
@@ -208,12 +211,28 @@ def main():
         ROOT / "lib/Transforms/CollectionInterpretation.h",
         ROOT / "lib/Transforms/CollectionRealization.h",
         ROOT / "lib/Transforms/RealizationEmission.h",
+        ROOT / "lib/Transforms/OracleCommonRealization.h",
+        ROOT / "lib/Transforms/OracleCommonPlan.h",
+        ROOT / "lib/Transforms/OracleRealizationSelection.h",
+        ROOT / "lib/Transforms/OracleVirtualRecipe.h",
+        ROOT / "lib/Transforms/OracleVerificationContext.h",
+        ROOT / "lib/Transforms/OracleQueryCapacity.h",
+        ROOT / "lib/Transforms/OracleQueryController.h",
+        ROOT / "lib/Transforms/OracleQueryExchange.h",
+        ROOT / "lib/Transforms/OracleAnchorStorage.h",
+        ROOT / "lib/Transforms/OracleLayout.h",
+        ROOT / "lib/Transforms/OracleSchedule.h",
+        ROOT / "lib/Transforms/OracleQueryBlocks.h",
+        ROOT / "lib/Transforms/OracleMerkle.h",
+        ROOT / "lib/Transforms/OracleTableRead.h",
+        ROOT / "lib/Transforms/OracleVirtualFunctions.h",
         ROOT / "lib/Transforms/MathematicalRecipes.h",
         ROOT / "lib/Transforms/LaneRealization.h",
         ROOT / "lib/Transforms/NumericalSelection.h",
         ROOT / "lib/Transforms/MathematicalComparison.h",
         ROOT / "lib/Transforms/MathematicalValues.h",
         ROOT / "lib/Transforms/PreparedProtocol.h",
+        ROOT / "lib/Transforms/RealizedProtocol.h",
         ROOT / "lib/Transforms/ProtocolApplications.h"
     }
     private_headers["ZkcTransforms"].update(
@@ -261,7 +280,8 @@ def main():
     # Implementation bridges are explicit and uninstalled. Each grants only
     # the named header, never the rest of its owner's private implementation.
     bridges = {("ZkcDriver", ROOT / "lib/Support/Input.h"),
-               ("ZkcCompiler", ROOT / "lib/Transforms/PreparedProtocol.h")}
+               ("ZkcCompiler", ROOT / "lib/Transforms/PreparedProtocol.h"),
+               ("ZkcCompiler", ROOT / "lib/Transforms/RealizedProtocol.h")}
     assert not (ROOT / "include/zkc/Dialect/Builders.h").exists(), "raw builders belong to unsupported detail"
 
     def check_private_edge(component, path, target):
@@ -399,9 +419,9 @@ def main():
         *(ROOT / f"lib/Transforms/{name}.h" for name in (
             "ComputationEquations", "ComputationSelection", "MathematicalRecipes",
             "CollectionRealization", "RealizationEmission",
-            "ScopedFinite", "ScopedPreparation")),
+            "ScopedFinite", "ScopedPreparation", "MathematicalSupport")),
     }
-    for reader in ("../Analysis/StructuredComputation", "FiniteVerification", "MathLoweringVerification",
+    for reader in ("OracleVerificationContext", "OracleRealizationRecord", "OracleCommonVerification", "OracleQueryControllerVerification", "OracleVirtualFunctionVerification", "OracleTableReadVerification", "OracleMerkleVerification", "OracleQueryExchangeVerification", "OracleAnchorVerification", "../Analysis/StructuredComputation", "FiniteVerification", "MathLoweringVerification",
                    "MathematicalComparison",
                    "HelperNormalizationVerification",
                    "ScopedAlgorithmVerification", "PolynomialRecipeVerification",

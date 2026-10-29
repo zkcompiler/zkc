@@ -3,6 +3,7 @@
 
 include "mlir/IR/AttrTypeBase.td"
 include "zkc/Dialect/Protocol/IR/ProtocolDialect.td"
+include "zkc/Dialect/Protocol/IR/OracleTypes.td"
 
 def ServiceReference : TypeDef<ProtocolDialect, "ServiceReference"> {
   let mnemonic = "service_ref";

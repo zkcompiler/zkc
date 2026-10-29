@@ -54,7 +54,7 @@ bool BodyChecker::settle(Placement &plan) {
   for (const auto &[id, formula] : plan.values) {
     auto &value = body.values[id];
     value.components = plan.resolve(formula);
-    if (value.components.size() > 1) {
+    if (value.components.size() > 1 && !isOracleHandle(value.type)) {
       if (!checker.types.admit(value.type, Boundary::Participants, value.span,
                                &decl))
         return false;
@@ -73,6 +73,9 @@ bool BodyChecker::settle(Placement &plan) {
           return false;
       }
   }
+  for (auto [index, variable] : plan.oracleQueries)
+    std::get<OracleQuery>(body.operations[index].action).owner =
+        plan.selected(variable);
   for (auto index : plan.applications) {
     const auto &operation = body.operations[index];
     const auto &application = std::get<ProtocolApplication>(operation.action);

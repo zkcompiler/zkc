@@ -7,6 +7,7 @@
 #include "zkc/Dialect/TypeAdapters.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/raw_ostream.h"
+#include <future>
 
 using namespace llvm;
 using namespace mlir;
@@ -29,6 +30,11 @@ void roundTrip(MLIRContext &context, const BoundType &bound, bool physical) {
   require(bool(native), "decoding refused an admitted type");
   auto encoded = take(encodeBoundType(native, physical));
   require(encoded == bound, "logical identity or representation changed");
+  require(take(encodeBoundType(native, physical)) == bound,
+          "repeated translation changed identity");
+  refuses(encodeBoundType(native, !physical),
+          physical ? "binding-physical-type-at-logical-stage"
+                   : "binding-logical-type-at-physical-stage");
   require(decodeBoundType(&context, encoded) == native,
           "native type identity changed");
   std::string printed;
@@ -211,6 +217,45 @@ int main() {
                     "translation initialized a dialect");
           });
   }
+  cases.run("cached and standalone translation preserve exact carriers", [&] {
+    // Loading the owners directly omits registry extensions. Both paths must
+    // admit precisely the same closed logical and physical identities.
+    MLIRContext standalone;
+    standalone
+        .loadDialect<algebra::AlgebraDialect, data::DataDialect,
+                     crypto::CryptoDialect, poly::PolynomialDialect,
+                     runtime::RuntimeDialect, commitment::CommitmentDialect>();
+    for (const auto &[spelling, native] : nativeCases) {
+      auto bound = take(parseBoundType(spelling, false));
+      auto other = decodeBoundType(&standalone, bound);
+      require(bool(other), "standalone carrier missing");
+      require(take(encodeBoundType(native, false)) ==
+                  take(encodeBoundType(other, false)),
+              "context extension changed logical translation");
+      auto physical = defaultRepresentation(bound);
+      if (!physical) {
+        consumeError(physical.takeError());
+        continue;
+      }
+      roundTrip(standalone, *physical, true);
+      roundTrip(context, *physical, true);
+    }
+  });
+  cases.run("parallel repeated translation retains context and stage", [&] {
+    std::vector<std::future<void>> workers;
+    for (unsigned i = 0; i < 4; ++i)
+      workers.push_back(std::async(std::launch::async, [&] {
+        for (unsigned round = 0; round < 4; ++round)
+          for (const auto &[spelling, native] : nativeCases) {
+            require(take(encodeBoundType(native, false)).spelling() == spelling,
+                    "parallel translation changed identity");
+            refuses(encodeBoundType(native, true),
+                    "binding-logical-type-at-physical-stage");
+          }
+      }));
+    for (auto &worker : workers)
+      worker.get();
+  });
   cases.run("builtin carriers need no zkc dialect", [&] {
     MLIRContext fresh;
     for (StringRef kind : {"bool", "index"})

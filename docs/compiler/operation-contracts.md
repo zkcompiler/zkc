@@ -16,7 +16,8 @@ source function APIs or turn installed operations into implicit imports.
 ## Execution ownership
 
 The same operation has three distinct sets of obligations. Existing binding and
-invocation records carry them; no separate contract registry is needed.
+invocation records carry them. The [cross-component register](../spec/contracts.md)
+records ownership and consumers; it adds no execution registry or authority.
 
 | Boundary | Owner and checked facts |
 |---|---|

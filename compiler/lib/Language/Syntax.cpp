@@ -552,6 +552,34 @@ private:
                ? accept(work.charge(1, current().span))
                : fail("source.limit", "parse depth limit exceeded");
   }
+  bool oracleQueryPrefix() {
+    if (!at("query") || cursor + 1 >= tokens.size() ||
+        (tokens[cursor + 1].kind != TokenKind::Word && look(1) != "("))
+      return false;
+    // `query` remains an identifier, including in construction clauses and
+    // loop binders. Only the complete prefix `query <handle> at` selects an
+    // oracle action. Parenthesized handles and calls may contain nested `at`
+    // identifiers; those do not select the outer expression.
+    unsigned nesting = 0;
+    for (unsigned offset = 1; cursor + offset < tokens.size(); ++offset) {
+      if (!accept(work.charge(1, tokens[cursor + offset].span)))
+        return false;
+      auto token = look(offset);
+      if (token == "(" || token == "[" || token == "{")
+        ++nesting;
+      else if (token == ")" || token == "]" || token == "}") {
+        if (!nesting)
+          return false;
+        --nesting;
+      } else if (!nesting) {
+        if (token == "at")
+          return true;
+        if (token == ";" || token == "," || token.empty())
+          return false;
+      }
+    }
+    return false;
+  }
   bool name(std::string &output) {
     if (current().kind != TokenKind::Word || isReserved(text()))
       return fail("source.name", "expected non-reserved identifier");
@@ -693,7 +721,7 @@ private:
       advance();
     } else {
       if (at("bool") || at("index") || at("nat") || at("Type") || at("Field") ||
-          at("Group")) {
+          at("Group") || at("OracleKind")) {
         out.name = text().str();
         advance();
       } else if (!path(out.name, true, true))
@@ -1415,6 +1443,20 @@ private:
                       "protocol ports cannot be static arguments");
         if (roles && (!expect("@") || !roleList(p.roles)))
           return false;
+        if (roles && take("->")) {
+          if (p.roles.size() != 1)
+            return fail("source.oracle-port", "oracle ports have one holder");
+          p.oracleHolder = p.roles.front();
+          p.roles.clear();
+          if (!roleList(p.roles))
+            return false;
+          if (take("max")) {
+            SyntaxType maximum;
+            if (!type(maximum))
+              return false;
+            p.oracleMaximum = std::move(maximum);
+          }
+        }
         p.span.end = previousEnd;
         ports.push_back(std::move(p));
       } while (take(",") && !at(")"));
@@ -2220,6 +2262,69 @@ private:
              "expected matching notation closer " + delimited->closing);
         return {};
       }
+    } else if (oracleQueryPrefix()) {
+      advance();
+      if (minimum) {
+        fail("source.syntax", "query operand requires parentheses here");
+        return {};
+      }
+      value.kind = Expression::Kind::OracleQuery;
+      auto handle = expression(decl, depth + 1);
+      if (!handle || !expect("at"))
+        return {};
+      auto position = expression(decl, depth + 1);
+      if (!position)
+        return {};
+      value.children = {*handle, *position};
+    } else if (at("oracle") && cursor + 1 < tokens.size() &&
+               StringRef(source.text)
+                       .slice(tokens[cursor + 1].span.begin,
+                              tokens[cursor + 1].span.end) == ".") {
+      advance();
+      if (!expect("."))
+        return {};
+      unsigned operands = 1;
+      if (take("data"))
+        value.kind = Expression::Kind::OracleContents;
+      else if (take("rows"))
+        value.kind = Expression::Kind::OracleRows;
+      else if (take("forget_rows"))
+        value.kind = Expression::Kind::OracleForgetRows;
+      else if (take("length"))
+        value.kind = Expression::Kind::OracleSequenceLength;
+      else if (take("append")) {
+        value.kind = Expression::Kind::OracleSequenceAppend;
+        operands = 2;
+      } else if (take("at")) {
+        value.kind = Expression::Kind::OracleSequenceAt;
+        operands = 2;
+      } else if (take("empty")) {
+        value.kind = Expression::Kind::OracleSequenceEmpty;
+        operands = 0;
+        SyntaxType kind, maximum;
+        if (!expect("<") || !type(kind) || !expect(",") || !type(maximum) ||
+            !expect(">") || !expect("roles"))
+          return {};
+        value.arguments = {std::move(kind), std::move(maximum)};
+        value.roles.emplace();
+        if (!names(*value.roles))
+          return {};
+      } else {
+        fail("source.oracle-action", "unknown oracle operation");
+        return {};
+      }
+      if (!expect("("))
+        return {};
+      for (unsigned i = 0; i < operands; ++i) {
+        if (i && !expect(","))
+          return {};
+        auto input = expression(decl, depth + 1);
+        if (!input)
+          return {};
+        value.children.push_back(*input);
+      }
+      if (!expect(")"))
+        return {};
     } else if (at("kernel") || at("intrinsic")) {
       value.kind = take("intrinsic") ? Expression::Kind::Intrinsic
                                      : Expression::Kind::Kernel;
@@ -2935,6 +3040,8 @@ private:
           return {};
       } else
         s.kind = Statement::Kind::Expression;
+      std::vector<std::string> oracleReceivers;
+      Span sendSpan = current().span;
       if (take("send")) {
         if (!protocol || (s.kind != Statement::Kind::Let &&
                           s.kind != Statement::Kind::Assign &&
@@ -2942,10 +3049,11 @@ private:
           fail("source.send", "send requires a protocol statement");
           return {};
         }
-        std::string from, to;
-        if (!name(from) || !expect("->") || !name(to) || !expect("("))
+        std::string from;
+        if (!name(from) || !expect("->") || !roleList(oracleReceivers) ||
+            !expect("("))
           return {};
-        s.exchange = std::make_pair(std::move(from), std::move(to));
+        s.exchange = std::make_pair(std::move(from), oracleReceivers.front());
       }
       auto expr =
           expression(decl, depth, 0, true,
@@ -2955,6 +3063,42 @@ private:
       s.expression = *expr;
       if (s.exchange && !expect(")"))
         return {};
+      if (s.exchange && take("as")) {
+        Expression send;
+        send.kind = Expression::Kind::OracleSend;
+        send.span = sendSpan;
+        send.roles = std::vector<std::string>{s.exchange->first};
+        send.roles->insert(send.roles->end(), oracleReceivers.begin(),
+                           oracleReceivers.end());
+        send.children = {*expr};
+        SyntaxType kind;
+        if (!expect("oracle") || !expect("<") || !type(kind) || !expect(">"))
+          return {};
+        send.arguments.push_back(std::move(kind));
+        if (take("(")) {
+          if (!expect("rows") || !expect("="))
+            return {};
+          auto rows = expression(decl, depth + 1);
+          if (!rows || !expect(")"))
+            return {};
+          send.children.push_back(*rows);
+        }
+        if (take("max")) {
+          SyntaxType maximum;
+          if (!type(maximum))
+            return {};
+          send.arguments.push_back(std::move(maximum));
+        }
+        send.span.end = previousEnd;
+        auto delivery = appendExpression(decl, std::move(send));
+        if (!delivery)
+          return {};
+        s.expression = *delivery;
+        s.exchange.reset();
+      } else if (s.exchange && oracleReceivers.size() != 1) {
+        fail("source.send", "ordinary send requires one receiver");
+        return {};
+      }
       s.terminated = take(";");
       auto kind = decl.expressions[*expr].kind;
       bool blockLike =

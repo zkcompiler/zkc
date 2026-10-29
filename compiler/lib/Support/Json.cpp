@@ -2,6 +2,7 @@
 #include "zkc/Support/MLIRInput.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/raw_ostream.h"
+#include <algorithm>
 
 using namespace llvm;
 namespace zkc {
@@ -69,10 +70,14 @@ std::optional<size_t> scanNaturalJsonKeys(StringRef text) {
     } else if (text[i] == '-' || text[i] == '+' || text[i] == '.') {
       return std::nullopt;
     } else if (isDigit(text[i])) {
+      size_t start = i;
       if (text[i] == '0' && i + 1 < text.size() && isDigit(text[i + 1]))
         return std::nullopt;
       while (i + 1 < text.size() && isDigit(text[i + 1]))
         ++i;
+      uint64_t number;
+      if (text.slice(start, i + 1).getAsInteger(10, number))
+        return std::nullopt;
       if (i + 1 < text.size() &&
           (text[i + 1] == '.' || text[i + 1] == 'e' || text[i + 1] == 'E'))
         return std::nullopt;
@@ -112,6 +117,41 @@ Expected<json::Value> parseNaturalJson(StringRef text, size_t byteLimit,
   if (countNaturalJsonKeys(*parsed) != *keys)
     return error(invalidCode);
   return parsed;
+}
+bool equalNaturalJson(const json::Value &left, const json::Value &right) {
+  if (left.kind() != right.kind())
+    return false;
+  switch (left.kind()) {
+  case json::Value::Null:
+    return true;
+  case json::Value::Boolean:
+    return left.getAsBoolean() == right.getAsBoolean();
+  case json::Value::String:
+    return left.getAsString() == right.getAsString();
+  case json::Value::Number: {
+    // LLVM's generic equality promotes unsigned carriers to double, losing
+    // distinctions above 2^53. This profile permits only exact unsigned values.
+    auto number = left.getAsUINT64();
+    return number && number == right.getAsUINT64();
+  }
+  case json::Value::Array: {
+    const auto &a = *left.getAsArray(), &b = *right.getAsArray();
+    return a.size() == b.size() &&
+           std::equal(a.begin(), a.end(), b.begin(), equalNaturalJson);
+  }
+  case json::Value::Object: {
+    const auto &a = *left.getAsObject(), &b = *right.getAsObject();
+    if (a.size() != b.size())
+      return false;
+    for (const auto &item : a) {
+      const auto *other = b.get(item.first);
+      if (!other || !equalNaturalJson(item.second, *other))
+        return false;
+    }
+    return true;
+  }
+  }
+  llvm_unreachable("unknown JSON kind");
 }
 Expected<json::Value> parseJson(StringRef text,
                                 std::optional<size_t> *invalidStringOffset) {

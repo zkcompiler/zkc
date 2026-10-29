@@ -34,6 +34,9 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
     case Parameter::Sort::Natural:
       sort = "nat";
       break;
+    case Parameter::Sort::OracleKind:
+      sort = "oracle_kind";
+      break;
     case Parameter::Sort::Module:
       sort = "module";
       break;

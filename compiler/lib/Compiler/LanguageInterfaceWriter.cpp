@@ -145,8 +145,18 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
           });
         }
       });
+      if (layout.type.kind == Type::Kind::Oracle) {
+        const auto &kind = layout.leaves.front().oracle()->kind;
+        out.attribute("oracle",
+                      encodeInterfaceOracle({kind.identity, kind.arguments}));
+        out.attributeBegin("data_schema");
+        schema(*layout.oracleData, port);
+        out.attributeEnd();
+      }
       out.attributeArray("leaves", [&] {
         for (auto &leaf : layout.leaves) {
+          if (leaf.oracle())
+            continue;
           if (!charge(leaf.cost()))
             break;
           const auto *data = leaf.data();
@@ -175,8 +185,18 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
               out.value(protocol.roles[role]);
           });
           out.attribute("index", i);
+          if (source[i].oracle) {
+            const auto &port = *source[i].oracle;
+            out.attribute("holder", protocol.roles[port.holder]);
+            out.attribute("maximum_rows",
+                          port.maximumRows
+                              ? json::Value(std::to_string(
+                                    port.maximumRows->dimension.closedValue()))
+                              : json::Value(nullptr));
+          }
           out.attributeArray("native", [&] {
-            for (unsigned j = 0; j < layouts[i]->leaves.size(); ++j)
+            unsigned count = source[i].oracle ? 2 : layouts[i]->leaves.size();
+            for (unsigned j = 0; j < count; ++j)
               out.value(flat++);
           });
           out.attributeBegin("schema");
@@ -188,14 +208,17 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
   };
   auto selector = [&](const Declaration &protocol,
                       const SpecificationSelector &value) {
-    if (!charge(value.path.size() + protocol.roles[value.role].size() + 1)) {
+    if (!charge(value.path.size() +
+                (value.anchor ? 0 : protocol.roles[value.role].size()) + 1)) {
       out.value(nullptr);
       return;
     }
     out.object([&] {
       out.attribute("direction", value.output ? "output" : "input");
       out.attribute("port", value.port);
-      out.attribute("role", protocol.roles[value.role]);
+      out.attribute("role", value.anchor
+                                ? json::Value(nullptr)
+                                : json::Value(protocol.roles[value.role]));
       out.attributeArray("path", [&] {
         for (auto index : value.path)
           out.value(index);

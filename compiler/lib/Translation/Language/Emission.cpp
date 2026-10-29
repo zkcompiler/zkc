@@ -122,6 +122,38 @@ class Emitter {
         result.push_back(type);
         continue;
       }
+      if (const auto *oracle = leaf.oracle()) {
+        SmallVector<mlir::Attribute> arguments;
+        for (const auto &argument : oracle->kind.arguments) {
+          if (argument.kind == protocol::TypeArgument::Kind::Nat)
+            arguments.push_back(builder.getIntegerAttr(
+                mlir::IntegerType::get(&context, 64,
+                                       mlir::IntegerType::Unsigned),
+                APInt(64, argument.natural)));
+          else if (argument.kind == protocol::TypeArgument::Kind::Type &&
+                   argument.type) {
+            auto type = protocol::decodeBoundType(&context, *argument.type);
+            if (!type) {
+              failure =
+                  error("source.layout", "oracle row type is unavailable");
+              return {};
+            }
+            arguments.push_back(mlir::TypeAttr::get(type));
+          } else {
+            failure =
+                error("source.oracle-kind", "invalid logical kind argument");
+            return {};
+          }
+        }
+        auto kind = protocol_ir::OracleKindAttr::get(
+            &context, oracle->kind.identity, builder.getArrayAttr(arguments));
+        if (oracle->maximum)
+          result.push_back(protocol_ir::OracleSequenceType::get(
+              &context, kind, *oracle->maximum));
+        else
+          result.push_back(protocol_ir::OracleHandleType::get(&context, kind));
+        continue;
+      }
       auto bound = take(protocol::parseBoundType(*leaf.data(), false));
       if (!bound)
         return {};
@@ -355,6 +387,11 @@ class Emitter {
   }
   mlir::ArrayAttr contractSelector(const SpecificationSelector &selector,
                                    unsigned port) {
+    if (selector.anchor)
+      return builder.getArrayAttr(
+          {builder.getStringAttr("anchor"),
+           builder.getStringAttr(selector.output ? "output" : "input"),
+           builder.getI64IntegerAttr(port)});
     return builder.getArrayAttr(
         {builder.getStringAttr(selector.output ? "output" : "input"),
          builder.getI64IntegerAttr(port),
@@ -481,6 +518,72 @@ class Emitter {
     return scoped->match(value, {}, *flat, {layout.alternative}, site,
                          [&](unsigned) { return helper; });
   }
+  std::vector<unsigned> receivers(const Port &port,
+                                  ArrayRef<unsigned> mapping = {}) {
+    std::vector<unsigned> result;
+    for (auto role : port.roles)
+      if (role != port.oracle->holder)
+        result.push_back(mapping.empty() ? role : mapping[role]);
+    llvm::sort(result);
+    return result;
+  }
+  mlir::DictionaryAttr oracleShapeBounds(std::optional<uint64_t> maximum) {
+    SmallVector<mlir::NamedAttribute> bounds;
+    if (maximum)
+      bounds.push_back(attr(
+          "rows",
+          builder.getIntegerAttr(
+              mlir::IntegerType::get(&context, 64, mlir::IntegerType::Unsigned),
+              APInt(64, *maximum))));
+    return builder.getDictionaryAttr(bounds);
+  }
+  SmallVector<mlir::NamedAttribute>
+  oracleAttributes(const Port &port, ArrayRef<unsigned> mapping, bool binding) {
+    unsigned holder = port.oracle->holder;
+    if (!mapping.empty())
+      holder = mapping[holder];
+    SmallVector<mlir::NamedAttribute> result{
+        text("holder", nativeRoleName(holder)),
+        attr("receivers", roles(receivers(port, mapping)))};
+    if (binding)
+      result.push_back(
+          attr("shape_bounds",
+               oracleShapeBounds(
+                   port.oracle->maximumRows
+                       ? std::optional<uint64_t>(
+                             port.oracle->maximumRows->dimension.closedValue())
+                       : std::nullopt)));
+    return result;
+  }
+  std::optional<SmallVector<mlir::Type>> portTypes(const Port &port) {
+    auto layout = take(layouts.get(port.type));
+    if (!layout)
+      return {};
+    auto result = types(**layout);
+    if (result && port.oracle) {
+      auto handle = mlir::cast<protocol_ir::OracleHandleType>(result->front());
+      result->insert(result->begin(), handle.getKind().getDataType());
+    }
+    return result;
+  }
+  std::optional<Values> oracleComponents(mlir::Value value, const Port &port,
+                                         ArrayRef<unsigned> mapping = {}) {
+    auto handle = mlir::cast<protocol_ir::OracleHandleType>(value.getType());
+    SmallVector<mlir::Type> result{handle.getKind().getDataType(), handle};
+    auto *operation = make("protocol.oracle_components", result, value,
+                           oracleAttributes(port, mapping, false));
+    if (!operation)
+      return {};
+    return Values(operation->getResults());
+  }
+  std::optional<mlir::Value> bindOracle(mlir::ValueRange pair, const Port &port,
+                                        ArrayRef<unsigned> mapping = {}) {
+    auto *operation = make("protocol.oracle_input", pair[1].getType(), pair,
+                           oracleAttributes(port, mapping, true));
+    if (!operation)
+      return {};
+    return operation->getResult(0);
+  }
   bool body(const Declaration &decl, const Body &source, mlir::Block &block,
             bool region = false, unsigned forwarded = 0) {
     if (region && source.mode == Body::Mode::Math) {
@@ -499,6 +602,20 @@ class Emitter {
     llvm::scope_exit restore([&] { scoped = previous; });
     unsigned argument = 1;
     for (unsigned i = 0; i < source.inputs; ++i) {
+      if (!region && source.mode == Body::Mode::Protocol &&
+          decl.inputs[i].oracle) {
+        auto ts = portTypes(decl.inputs[i]);
+        if (!ts)
+          return false;
+        Values pair;
+        for (auto type : *ts)
+          pair.push_back(block.addArgument(type, location));
+        auto joined = bindOracle(pair, decl.inputs[i]);
+        if (!joined)
+          return false;
+        values[i] = {*joined};
+        continue;
+      }
       auto layout = take(layouts.get(source.values[i].type));
       if (!layout)
         return false;
@@ -538,7 +655,8 @@ class Emitter {
           return false;
         for (unsigned i = 0; i < slice->layout->leaves.size(); ++i) {
           operands.push_back(block.getArgument(slice->offset + i));
-          selectors.push_back(nativeRoleName(operand.role));
+          selectors.push_back(operand.anchor ? "anchor"
+                                             : nativeRoleName(operand.role));
         }
       }
       auto acceptance = take(layouts.select(decl, proof->acceptance));
@@ -1024,14 +1142,129 @@ class Emitter {
       } else if (auto *application =
                      std::get_if<ProtocolApplication>(&op.action)) {
         const auto &target = project.declarations()[application->callee.index];
-        auto operands = flatten(application->operands);
+        Values operands;
+        for (unsigned i = 0; i < application->operands.size(); ++i) {
+          const auto &input = values[application->operands[i].index];
+          if (target.inputs[i].oracle) {
+            auto parts = oracleComponents(input.front(), target.inputs[i],
+                                          application->roles);
+            if (!parts)
+              return false;
+            llvm::append_range(operands, *parts);
+          } else
+            llvm::append_range(operands, input);
+        }
         for (auto service : application->services)
           operands.push_back(services[service.index]);
+        SmallVector<mlir::Type> outputs;
+        for (const auto &port : target.outputs) {
+          auto ts = portTypes(port);
+          if (!ts)
+            return false;
+          llvm::append_range(outputs, *ts);
+        }
         auto *actual = make(
-            "protocol.apply", resultTypes, operands,
+            "protocol.apply", outputs, operands,
             {attr("callee",
                   mlir::FlatSymbolRefAttr::get(&context, target.symbol)),
              text("site", site), attr("roles", roles(application->roles))});
+        if (!actual)
+          return false;
+        unsigned offset = 0;
+        for (unsigned i = 0; i < target.outputs.size(); ++i) {
+          const auto &port = target.outputs[i];
+          unsigned count = port.oracle ? 2 : resultLayouts[i]->leaves.size();
+          auto output = actual->getResults().slice(offset, count);
+          if (port.oracle) {
+            auto joined = bindOracle(output, port, application->roles);
+            if (!joined)
+              return false;
+            result.push_back(*joined);
+          } else
+            llvm::append_range(result, output);
+          offset += count;
+        }
+      } else if (std::holds_alternative<OracleSequenceEmpty>(op.action)) {
+        auto *actual =
+            make("protocol.oracle_sequence_empty", resultTypes, {}, {});
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *append = std::get_if<OracleSequenceAppend>(&op.action)) {
+        auto *actual =
+            make("protocol.oracle_sequence_append", resultTypes,
+                 flatten({append->prefix, append->element}),
+                 {attr("roles", roles(append->roles)), text("site", site)});
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *at = std::get_if<OracleSequenceAt>(&op.action)) {
+        auto *actual =
+            make("protocol.oracle_sequence_at", resultTypes,
+                 flatten({at->input, at->position}),
+                 {attr("roles", roles(at->roles)), text("site", site)});
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *length = std::get_if<OracleSequenceLength>(&op.action)) {
+        auto *actual = make("protocol.oracle_sequence_length", resultTypes,
+                            values[length->input.index], {});
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *send = std::get_if<OracleSend>(&op.action)) {
+        auto input = flatten({send->data, send->rows});
+        SmallVector<mlir::NamedAttribute> attrs{
+            text("sender", nativeRoleName(send->holder)),
+            attr("receivers", roles(send->receivers)), text("site", site)};
+        attrs.push_back(attr("shape_names", builder.getStrArrayAttr({"rows"})));
+        attrs.push_back(attr(
+            "shape_bounds",
+            oracleShapeBounds(send->maximum ? std::optional<uint64_t>(
+                                                  send->maximum->closedValue())
+                                            : std::nullopt)));
+        auto *actual = make("protocol.oracle_send", resultTypes, input, attrs);
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *query = std::get_if<OracleQuery>(&op.action)) {
+        auto packed =
+            take(layouts.packed(source.values[op.results.front().index].type));
+        if (!packed)
+          return false;
+        auto answer = protocol::decodeBoundType(&context, packed->carrier);
+        if (!answer) {
+          failure =
+              error("source.layout", "oracle answer has no total carrier");
+          return false;
+        }
+        auto *actual = make(
+            "protocol.oracle_query", answer,
+            flatten({query->handle, query->position}),
+            {text("owner", nativeRoleName(query->owner)), text("site", site)});
+        if (!actual)
+          return false;
+        auto flat = unpack(*packed, actual->getResult(0), site + "_unpack");
+        if (!flat)
+          return false;
+        result = std::move(*flat);
+      } else if (auto *contents = std::get_if<OracleContents>(&op.action)) {
+        auto *actual = make("protocol.oracle_contents", resultTypes,
+                            values[contents->input.index],
+                            {text("owner", nativeRoleName(contents->owner))});
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *rows = std::get_if<OracleRows>(&op.action)) {
+        auto *actual =
+            make("protocol.oracle_shape", resultTypes,
+                 values[rows->input.index], {text("dimension", "rows")});
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *forget = std::get_if<OracleForgetRows>(&op.action)) {
+        auto *actual = make("protocol.oracle_forget_shape", resultTypes,
+                            values[forget->input.index], {});
         if (!actual)
           return false;
         result = Values(actual->getResults());
@@ -1181,7 +1414,18 @@ class Emitter {
       }
       return true;
     }
-    auto results = flatten(source.results);
+    Values results;
+    for (unsigned i = 0; i < source.results.size(); ++i) {
+      const auto &value = values[source.results[i].index];
+      if (!region && source.mode == Body::Mode::Protocol &&
+          decl.outputs[i].oracle) {
+        auto parts = oracleComponents(value.front(), decl.outputs[i]);
+        if (!parts)
+          return false;
+        llvm::append_range(results, *parts);
+      } else
+        llvm::append_range(results, value);
+    }
     if (scoped) {
       if (forwarded > results.size() ||
           forwarded > block.getNumArguments() - 1 ||
@@ -1404,15 +1648,17 @@ public:
       SmallVector<mlir::Attribute> inRoles, outRoles;
       for (bool input : {true, false})
         for (auto &port : input ? decl.inputs : decl.outputs) {
-          auto layout = take(layouts.get(port.type));
-          if (!layout)
-            return std::move(failure);
-          auto ts = types(**layout);
+          auto ts = portTypes(port);
           if (!ts)
             return std::move(failure);
           llvm::append_range(input ? ins : outs, *ts);
           for (unsigned i = 0; i < ts->size(); ++i)
-            (input ? inRoles : outRoles).push_back(roles(port.roles));
+            (input ? inRoles : outRoles)
+                .push_back(roles(
+                    port.oracle
+                        ? (i == 0 ? std::vector<unsigned>{port.oracle->holder}
+                                  : receivers(port))
+                        : port.roles));
         }
       for (const auto &port : decl.services) {
         ins.push_back(

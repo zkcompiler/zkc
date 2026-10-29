@@ -41,9 +41,25 @@ void mapBodyValues(Body &body, const std::function<ValueId(ValueId)> &map) {
               list(action.predicate->captures);
           } else if constexpr (std::is_same_v<T, Projection> ||
                                std::is_same_v<T, Consume> ||
-                               std::is_same_v<T, Restriction>)
+                               std::is_same_v<T, Restriction> ||
+                               std::is_same_v<T, OracleContents> ||
+                               std::is_same_v<T, OracleRows> ||
+                               std::is_same_v<T, OracleForgetRows> ||
+                               std::is_same_v<T, OracleSequenceLength>)
             action.input = map(action.input);
-          else if constexpr (std::is_same_v<T, Require>)
+          else if constexpr (std::is_same_v<T, OracleSend>) {
+            action.data = map(action.data);
+            action.rows = map(action.rows);
+          } else if constexpr (std::is_same_v<T, OracleQuery>) {
+            action.handle = map(action.handle);
+            action.position = map(action.position);
+          } else if constexpr (std::is_same_v<T, OracleSequenceAppend>) {
+            action.prefix = map(action.prefix);
+            action.element = map(action.element);
+          } else if constexpr (std::is_same_v<T, OracleSequenceAt>) {
+            action.input = map(action.input);
+            action.position = map(action.position);
+          } else if constexpr (std::is_same_v<T, Require>)
             action.condition = map(action.condition);
           else if constexpr (std::is_same_v<T, ProtocolCompletion>) {
             action.condition = map(action.condition);

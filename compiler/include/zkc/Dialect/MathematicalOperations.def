@@ -17,6 +17,7 @@ ZKC_MATH_OPERATION(func::CallOp, Application, Context::Protocol | Context::Helpe
 ZKC_MATH_OPERATION(func::ReturnOp, Control, Context::Helper)
 ZKC_MATH_OPERATION(protocol_ir::MathematicalReturnOp, Control, Context::Protocol)
 ZKC_MATH_OPERATION(protocol_ir::RestrictRolesOp, Control, Context::Protocol, "roles")
+ZKC_MATH_OPERATION(protocol_ir::AssembleRolesOp, Control, Context::Protocol, "roles")
 ZKC_MATH_OPERATION(protocol_ir::StatementOp, Declaration, Context::Protocol, "relation", "selectors", "acceptance", "target")
 ZKC_MATH_OPERATION(protocol_ir::ExchangeOp, Action, Context::Protocol, "site", "sender", "receiver")
 ZKC_MATH_OPERATION(protocol_ir::GuardOp, Action, Context::Protocol | Context::Participant, "site", "owner")
@@ -77,3 +78,17 @@ ZKC_MATH_OPERATION(poly::MultiplyQuotientOp, Total, Context::Protocol | Context:
 ZKC_MATH_OPERATION(data::PowerOfTwoOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 
 ZKC_MATH_OPERATION(algebra::MultilinearRestrictPrefixOp, Total, Context::Protocol | Context::Participant | Context::Helper)
+
+ZKC_MATH_OPERATION(protocol_ir::OracleSendOp, Action, Context::Protocol, "sender", "receivers", "site", "shape_names", "shape_bounds")
+ZKC_MATH_OPERATION(protocol_ir::OracleQueryOp, Action, Context::Protocol, "owner", "site")
+ZKC_MATH_OPERATION(protocol_ir::OracleForgetShapeOp, Control, Context::Protocol)
+ZKC_MATH_OPERATION(protocol_ir::OracleContentsOp, Control, Context::Protocol, "owner")
+ZKC_MATH_OPERATION(protocol_ir::OracleSequenceEmptyOp, Control, Context::Protocol)
+ZKC_MATH_OPERATION(protocol_ir::OracleSequenceAppendOp, Action, Context::Protocol, "roles", "site")
+ZKC_MATH_OPERATION(protocol_ir::OracleSequenceAtOp, Action, Context::Protocol, "roles", "site")
+ZKC_MATH_OPERATION(protocol_ir::OracleSequenceLengthOp, Control, Context::Protocol)
+ZKC_MATH_OPERATION(protocol_ir::OracleVirtualOp, Action, Context::Protocol, "callee", "holder", "receivers")
+
+ZKC_MATH_OPERATION(protocol_ir::OracleInputOp, Action, Context::Protocol, "holder", "receivers", "shape_bounds")
+ZKC_MATH_OPERATION(protocol_ir::OracleComponentsOp, Control, Context::Protocol, "holder", "receivers")
+ZKC_MATH_OPERATION(protocol_ir::OracleShapeOp, Control, Context::Protocol, "dimension")

@@ -44,7 +44,8 @@ bool BodyChecker::importPlace(BodyChecker &nested, const FreePlace &place,
                               ValueId operand, Span span) {
   const auto &source = bindings.at(place.binding);
   const auto &value = body.values[operand.index];
-  auto input = nested.input(value.type, value.components, span);
+  auto input =
+      nested.input(value.type, value.components, span, value.oracleHolder);
   if (!input)
     return false;
   auto [it, inserted] = nested.bindings.try_emplace(
@@ -57,6 +58,9 @@ bool BodyChecker::importPlace(BodyChecker &nested, const FreePlace &place,
 }
 bool BodyChecker::inheritBinding(BodyChecker &nested, BindingId id, Span span) {
   const auto &state = bindings.at(id);
-  return nested.addInput(id, state.type, state.roles, span);
+  return nested.addInput(id, state.type, state.roles, span,
+                         state.value
+                             ? body.values[state.value->index].oracleHolder
+                             : std::nullopt);
 }
 } // namespace zkc::language::detail

@@ -13,7 +13,8 @@ public:
   bool addScoped(BindingId, const ScopedSignature &, Span);
   bool addDomain(BindingId, const DomainParameter &, unsigned);
   bool addService(BindingId, const ServicePort &);
-  bool addInput(BindingId, const Type &, std::vector<unsigned>, Span);
+  bool addInput(BindingId, const Type &, std::vector<unsigned>, Span,
+                std::optional<unsigned> holder = {});
 
 private:
   friend class ExpressionInference;
@@ -109,6 +110,8 @@ private:
   std::optional<Semantics::CallSignature>
   kernelSignature(const Expression &, std::vector<Type> &,
                   std::vector<std::string> &, std::vector<AssetReference> &);
+  std::optional<ValueId> oracle(const Expression &, unsigned);
+  std::optional<ValueId> oracleSequence(const Expression &, unsigned);
   std::optional<ValueId> intrinsic(const Expression &, unsigned);
   std::optional<Semantics::CallSignature>
   intrinsicSignature(const Expression &, std::vector<Type> &);
@@ -118,7 +121,8 @@ private:
   bool finishValue(ValueId, Span, bool prefixOnly = true);
   bool finishOwner(unsigned, Span);
   bool available(ValueId, llvm::ArrayRef<unsigned> = {});
-  std::optional<ValueId> input(const Type &, std::vector<unsigned>, Span);
+  std::optional<ValueId> input(const Type &, std::vector<unsigned>, Span,
+                               std::optional<unsigned> holder = {});
   bool bindPattern(const Pattern &, ValueId, unsigned = 1);
   bool bindResults(const Statement &, llvm::ArrayRef<ValueId>);
   bool assign(BindingId, ValueId, Span);

@@ -242,6 +242,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         p.permissions.copy = p.permissions.drop = true;
     } else if (name == "nat")
       p.sort = Parameter::Sort::Natural;
+    else if (name == "OracleKind")
+      p.sort = Parameter::Sort::OracleKind;
     else {
       std::optional<DeclarationId> provider;
       auto target = resolve(decl, name, src.span, true, nullptr, &provider);
@@ -311,7 +313,9 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     } else {
       bool domain = decl.kind == Declaration::Kind::Associated &&
                     isDomainSort(decl.associatedSort);
-      if (!domain && !valueType(*def))
+      bool oracleKind = decl.kind == Declaration::Kind::Alias &&
+                        def->kind == Type::Kind::OracleKind;
+      if (!domain && !oracleKind && !valueType(*def))
         return types.fail("source.type",
                           "alias or representation must denote a value type",
                           decl.span);
@@ -341,6 +345,11 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         return false;
       if (!valueType(*t))
         return types.fail("source.type", "field cannot contain a static term",
+                          src.span);
+      if (isOracleHandle(*t))
+        return types.fail("source.oracle-aggregate",
+                          "logical oracle handles require protocol ports or "
+                          "their bounded sequence",
                           src.span);
       to.push_back({src.name, *t, src.isPublic, src.span});
     }
@@ -409,7 +418,9 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
           return types.fail("source.type", "port cannot contain a static term",
                             src.span);
         if (decl.kind != Declaration::Kind::Math &&
-            !types.executableType(*t, src.span))
+            !(decl.kind == Declaration::Kind::Protocol
+                  ? types.protocolValue(*t, src.span)
+                  : types.executableType(*t, src.span)))
           return false;
         if (decl.kind == Declaration::Kind::DomainFunction &&
             !types.requireUsage(*t, Usage::Copy, src.span, &decl,
@@ -422,6 +433,25 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
           if (!set)
             return false;
           p.roles = std::move(*set);
+          if (src.oracleHolder) {
+            auto holder = roles(decl, {*src.oracleHolder}, src.span);
+            if (!holder)
+              return false;
+            if (llvm::is_contained(p.roles, holder->front()))
+              return types.fail("source.oracle-port",
+                                "oracle holder cannot also be a receiver",
+                                src.span);
+            p.oracle = OraclePort{holder->front(), {}};
+            p.roles.push_back(holder->front());
+            llvm::sort(p.roles);
+            if (src.oracleMaximum) {
+              p.oracle->maximumRows = type(decl, *src.oracleMaximum, depth + 1);
+              if (!p.oracle->maximumRows)
+                return false;
+            }
+          }
+          if (!types.oraclePort(p))
+            return false;
         }
         (input ? decl.inputs : decl.outputs).push_back(std::move(p));
       }

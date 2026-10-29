@@ -3,6 +3,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Support/Json.h"
@@ -328,9 +329,25 @@ public:
         continue;
       }
       if (auto query = dyn_cast<pir::QueryOp>(op)) {
-        if (query.getMethod() != "draw" || query.getOwner() != r.verifier ||
+        bool index = query.getMethod() == "index";
+        if ((!index && query.getMethod() != "draw") ||
+            query.getOwner() != r.verifier ||
             query.getReference() != block.getArgument(r.service))
           return error("public-coin-service");
+        json::Array arguments;
+        if (index) {
+          // Reuse the admitted service's exact static domain. The request
+          // descriptor does not reinterpret an index as a field element or
+          // combine several sequential samples into one compound event.
+          auto constant =
+              query.getInputs().front().getDefiningOp<data::IndexOp>();
+          auto domain =
+              constant ? protocol::parseUniformIndexBound(constant.getValue())
+                       : std::nullopt;
+          if (!domain)
+            return error("public-coin-service");
+          arguments.push_back(*domain);
+        }
         if (pending || nextDraw >= r.draws.size() ||
             query.getSite() != r.draws[nextDraw].first)
           return error("public-coin-delivery");
@@ -338,6 +355,10 @@ public:
         if (!record)
           return record.takeError();
         (*record)["prefix_length"] = events.size();
+        (*record)["request"] =
+            json::Object{{"contract", service.getContract().str()},
+                         {"method", query.getMethod().str()},
+                         {"arguments", std::move(arguments)}};
         draws.push_back(std::move(*record));
         auto anchor = occurrences.action(query.getSite());
         if (!anchor)
@@ -514,7 +535,7 @@ Error checkPublicCoin(ModuleOp original, StringRef requirement, StringRef text,
   auto checked = analyzePublicCoin(original, requirement, policy);
   if (!checked)
     return checked.takeError();
-  if (*candidate != *checked)
+  if (!zkc::equalNaturalJson(*candidate, *checked))
     return error("public-coin-report");
   return Error::success();
 }

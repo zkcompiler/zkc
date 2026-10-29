@@ -56,7 +56,14 @@ interface retain logical schemas, availability, services and relation clauses.
 
 Preparation admits every original definition before erasure, expands supported
 helpers and applications under [bounded work](../spec/ir/limits.md), and checks
-the actual expanded candidate. Projection computes each role's values without
+the actual expanded candidate. Joint execution then realizes logical oracles
+through the checked ideal common stage, retaining its original, candidate and
+record through compilation. Ordinary units use its identity edge. Oracle clauses
+remain on the logical original; the native signature describes actual Data,
+references and support stores. Proof construction requires a separate logical
+target interpretation and does not yet accept this profile.
+
+Projection computes each role's values without
 adding communication. A receive is a fresh role-local input even if the receiver
 already has a same-typed value. [Participant generation](../rationale/participant-generation.md)
 explains this restriction. Repetition retains counts, captures, carried values,

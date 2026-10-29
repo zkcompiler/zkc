@@ -15,6 +15,12 @@
 using namespace llvm;
 using namespace mlir;
 namespace zkc {
+ArrayRef<StringRef> compilationObservationPhases() {
+  static const StringRef names[] = {"entry",       "protocol", "realized",
+                                    "participant", "exec",     "execution",
+                                    "physical"};
+  return names;
+}
 namespace {
 using Clock = std::chrono::steady_clock;
 std::string digest(StringRef text) {

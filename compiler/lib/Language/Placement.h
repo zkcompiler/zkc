@@ -31,6 +31,7 @@ public:
   std::map<unsigned, Components> values;
   std::vector<std::pair<unsigned, unsigned>> calls;
   std::vector<unsigned> applications;
+  std::vector<std::pair<unsigned, unsigned>> oracleQueries;
   const Placement *enclosing;
 
 private:

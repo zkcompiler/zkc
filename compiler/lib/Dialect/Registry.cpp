@@ -1,4 +1,5 @@
 #include "zkc/Dialect/Registry.h"
+#include "BindingTypeCache.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -31,6 +32,7 @@ void registerDialects(mlir::DialectRegistry &registry) {
                   mlir::cf::ControlFlowDialect, mlir::linalg::LinalgDialect,
                   mlir::tensor::TensorDialect>();
   registerMathematicalInterfaces(registry);
+  protocol::registerBindingTypeCache(registry);
 }
 bool hasProtocolDialects(mlir::MLIRContext &context) {
   return ProtocolDialects::loadedIn(context);
