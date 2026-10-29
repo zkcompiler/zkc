@@ -4,6 +4,8 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Run.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Support/Json.h"
@@ -253,11 +255,11 @@ int main(int argc, char **argv) {
         require(bool(copy), "query realization did not parse");
         checked(checkOracleRealization(*prepared, *copy, record, policy));
         bool changed = false;
-        copy->walk([&](protocol_ir::LocalCallOp call) {
+        copy->walk([&](func::CallOp call) {
           if (call.getCallee() !=
               candidate.entries[0].merkle[0].authenticate.getSymName())
             return;
-          call->setOperand(2, call.getOperand(1));
+          call->setOperand(3, call.getOperand(2));
           changed = true;
         });
         require(changed && succeeded(verify(*copy)),
@@ -266,13 +268,12 @@ int main(int argc, char **argv) {
         copy = parseSourceString<ModuleOp>(print(*candidate.module), &context);
         changed = false;
         copy->walk([&](protocol_ir::ExchangeOp exchange) {
-          if (!exchange.getSite().contains("opening_instance"))
+          if (!exchange.getSite().contains("opening_request"))
             return;
-          auto request =
-              exchange.getInput().getDefiningOp<protocol_ir::LocalCallOp>();
-          require(bool(request) && request.getNumResults() == 2,
+          auto request = exchange.getInput().getDefiningOp<data::MakeOp>();
+          require(bool(request) && request.getNumOperands() == 3,
                   "missing request coordinates");
-          exchange->setOperand(0, request.getResult(1));
+          request->setOperand(1, request.getOperand(2));
           changed = true;
         });
         require(changed && succeeded(verify(*copy)),
@@ -376,6 +377,83 @@ int main(int argc, char **argv) {
       }
     });
   }
+  for (StringRef mode : {"multiple", "mixed-kind", "mixed-scheme"}) {
+    runCase("query-" + mode, [&] {
+      std::ifstream input(std::filesystem::path(ZKC_ORACLE_FIXTURES) /
+                          "query-constructors.mlir");
+      require(bool(input), "missing constructor query fixture");
+      std::string text((std::istreambuf_iterator<char>(input)), {});
+      auto replace = [&](StringRef from, StringRef to) {
+        size_t at = 0;
+        while ((at = text.find(from.str(), at)) != std::string::npos) {
+          text.replace(at, from.size(), to.str());
+          at += to.size();
+        }
+      };
+      if (mode == "multiple")
+        replace("\"koala-bear\"", "\"koala-bear.ext4-binomial3\"");
+      else if (mode == "mixed-scheme")
+        replace("koala-bear.ext4-binomial3", "koala-bear");
+      auto original = parseSourceString<ModuleOp>(text, &context);
+      require(bool(original), "constructor query did not parse");
+      auto owner = mathematical::PreparedProtocol::prepare(*original);
+      require(bool(owner), "constructor query did not prepare");
+      auto prepared = owner->snapshot();
+      auto roots = take(resolveOracleRealizationSelection(*prepared, {}));
+      require(roots.size() == 2, "wrong constructor inventory");
+      roots[0].realization = {
+          mode == "mixed-scheme" ? "rows.merkle-poseidon2-16.koala-bear/0"
+                                 : scheme.str(),
+          OracleLeafGrouping::AntipodalPairs, OracleLeafOrder::Natural};
+      roots[1].realization = {
+          mode == "multiple" ? scheme.str()
+                             : "rows.merkle-keccak256.koala-bear/0",
+          OracleLeafGrouping::AntipodalPairs, OracleLeafOrder::Natural};
+      OracleRealizationPolicy policy;
+      policy.roots = roots;
+      auto candidate = take(emitOracleRealization(*prepared, policy));
+      auto record =
+          take(serializeOracleRealization(*prepared, candidate, policy));
+      auto copy =
+          parseSourceString<ModuleOp>(print(*candidate.module), &context);
+      require(bool(copy), "constructor realization did not parse");
+      checked(checkOracleRealization(*prepared, *copy, record, policy));
+      bool changed = false;
+      copy->walk([&](exec::ApplyOp op) {
+        if (!op.getSite().ends_with("_request_constructor"))
+          return;
+        op->setOperand(2, op.getOperand(1));
+        changed = true;
+      });
+      require(changed && succeeded(verify(*copy)),
+              "constructor guard mutation must be well formed");
+      refused(checkOracleRealization(*prepared, *copy, record, policy));
+      if (mode == "multiple") {
+        copy = parseSourceString<ModuleOp>(print(*candidate.module), &context);
+        changed = false;
+        copy->walk([&](exec::VariantOp op) {
+          if (!op.getSite().ends_with("_response") ||
+              op.getAlternative() != "Constructor0")
+            return;
+          op->setAttr("alternative", StringAttr::get(&context, "Constructor1"));
+          changed = true;
+        });
+        require(changed && succeeded(verify(*copy)),
+                "response alternative mutation must be well formed");
+        refused(checkOracleRealization(*prepared, *copy, record, policy));
+      }
+      RunOptions options;
+      options.oracleRealization = policy;
+      auto run =
+          take(compileRun(text, "oracle-constructors.mlir", options, registry));
+      if (argc >= 2) {
+        std::ofstream output(std::filesystem::path(argv[1]) /
+                             ("query-" + mode.str() + ".bundle"));
+        output << run.bundle;
+        require(bool(output), "could not retain constructor query bundle");
+      }
+    });
+  }
   runCase("selection order is canonical", [&] {
     auto text = source(false, false);
     auto begin = text.find("%handle =");
@@ -416,8 +494,11 @@ int main(int argc, char **argv) {
     auto queryOwner = mathematical::PreparedProtocol::prepare(*withQuery);
     require(bool(queryOwner), "two-root query did not prepare");
     auto queryPrepared = queryOwner->snapshot();
-    refuses(emitOracleRealization(*queryPrepared, policy),
-            "oracle-common-communication-profile");
+    auto queried = take(emitOracleRealization(*queryPrepared, policy));
+    auto queryRecord =
+        take(serializeOracleRealization(*queryPrepared, queried, policy));
+    checked(checkOracleRealization(*queryPrepared, *queried.module, queryRecord,
+                                   policy));
   });
   runCase("query policies never silently fall back", [&] {
     auto text = source(false, false);

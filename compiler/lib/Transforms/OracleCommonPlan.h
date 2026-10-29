@@ -1,8 +1,10 @@
 #ifndef ZKC_TRANSFORMS_ORACLECOMMONPLAN_H
 #define ZKC_TRANSFORMS_ORACLECOMMONPLAN_H
 #include "OracleCommonRealization.h"
+#include "OracleQueryExchange.h"
 #include "zkc/Contracts/Binding.h"
 #include <memory>
+#include <variant>
 namespace zkc::protocol {
 // A finite declarative recipe, derived only from the original and checked
 // primitive identities. IDs are lexical SSA coordinates, never native handles.
@@ -27,12 +29,19 @@ struct OracleLocalInstruction {
   std::vector<unsigned> inputs, outputs;
   std::vector<mlir::Type> types;
 };
-struct OracleLocalRecipe {
-  std::string name;
-  std::vector<mlir::Type> inputs, outputs;
+struct OracleLocalRecipe : OracleHelperSignature {
   std::vector<OracleLocalInstruction> instructions;
   std::vector<unsigned> results;
 };
+using OracleCommonLocal = std::variant<OracleLocalRecipe, OracleExchangeRecipe>;
+inline const OracleHelperSignature &
+localSignature(const OracleCommonLocal &local) {
+  return std::visit(
+      [](const auto &recipe) -> const OracleHelperSignature & {
+        return recipe;
+      },
+      local);
+}
 // Generated identifiers use the program grammar. Full source coordinates stay
 // separate from their short spelling, for the eventual realization record.
 struct OracleCommonOccurrence {
@@ -42,7 +51,7 @@ struct OracleCommonOccurrence {
 struct OracleCommonPlan {
   mlir::DictionaryAttr attributes;
   OracleCommonBlock body;
-  std::vector<OracleLocalRecipe> locals;
+  std::vector<OracleCommonLocal> locals;
   std::vector<OracleCommonOccurrence> occurrences;
   std::vector<OracleInputShape> inputShapes;
   std::vector<OracleResultStore> resultStores;

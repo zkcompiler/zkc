@@ -148,9 +148,9 @@ struct PlanBuilder {
         attrs({builder.getNamedAttr("callee", FlatSymbolRefAttr::get(helper)),
                text("role", role), text("site", site)}));
   }
-  Expected<IDs> call(OracleCommonBlock &block, const OracleLocalRecipe &local,
-                     StringRef role, ArrayRef<unsigned> inputs,
-                     StringRef site) {
+  Expected<IDs> call(OracleCommonBlock &block,
+                     const OracleHelperSignature &local, StringRef role,
+                     ArrayRef<unsigned> inputs, StringRef site) {
     return make(block, "protocol.local_call", local.outputs, inputs,
                 attrs({builder.getNamedAttr(
                            "callee", FlatSymbolRefAttr::get(
@@ -246,7 +246,7 @@ struct PlanBuilder {
       recipe.name = prefix + std::to_string(suffix++);
     } while (SymbolTable::lookupSymbolIn(unit, recipe.name) ||
              any_of(result.locals, [&](const auto &other) {
-               return other.name == recipe.name;
+               return localSignature(other).name == recipe.name;
              }));
     recipe.inputs.assign(inputs.begin(), inputs.end());
     recipe.outputs.assign(outputs.begin(), outputs.end());
@@ -751,7 +751,7 @@ struct PlanBuilder {
     return Error::success();
   }
   // The counted common language has static peers. This profile has one
-  // remote base constructor, possibly many instances and virtual ancestors.
+  // remote holder, with multiple constructors, instances and virtual ancestors.
   // It never broadcasts a dynamically selected request. General multi-holder
   // selection needs a checked knowledge-of-choice communication rule.
   Expected<IDs> remoteQuery(OracleCommonBlock &block, pir::OracleQueryOp query,
@@ -759,7 +759,7 @@ struct PlanBuilder {
                             ArrayRef<unsigned> arguments,
                             ArrayRef<unsigned> path) {
     using C = OracleQueryController;
-    const OracleQueryControllerConstructor *base = nullptr;
+    std::string holderRole;
     bool hasVirtual = false;
     for (const auto &item : receiver.constructors) {
       const auto &anchor = requirements.storage.constructors[item.source];
@@ -767,28 +767,36 @@ struct PlanBuilder {
         hasVirtual = true;
         continue;
       }
-      if (base || anchor.scheme.empty() || anchor.holder == receiver.role)
+      if (anchor.scheme.empty() || anchor.holder == receiver.role ||
+          (!holderRole.empty() && holderRole != anchor.holder))
         return error("oracle-common-communication-profile");
-      base = &item;
+      holderRole = anchor.holder;
     }
-    if (!base)
+    if (holderRole.empty())
       return error("oracle-common-communication-profile");
-    const auto &anchor = requirements.storage.constructors[base->source];
     auto *holder =
-        controller(anchor.holder, query.getHandle().getType().getKind());
+        controller(holderRole, query.getHandle().getType().getKind());
     if (!holder)
       return error("oracle-common-helper");
-    auto holderBase = find_if(holder->constructors, [&](const auto &item) {
-      return item.source == base->source;
-    });
-    if (holderBase == holder->constructors.end())
-      return error("oracle-common-helper");
+    auto exchangeModel = planOracleQueryExchange(requirements.storage, receiver,
+                                                 *holder, merkle);
+    if (!exchangeModel)
+      return exchangeModel.takeError();
+    auto model =
+        std::make_shared<const OracleQueryExchange>(std::move(*exchangeModel));
     auto receiverStores = stores(receiver);
     if (!receiverStores)
       return receiverStores.takeError();
-    auto holderStore = store.find({base->source, holderBase->role});
-    if (holderStore == store.end())
-      return error("oracle-common-communication-profile");
+    IDs holderStores;
+    for (const auto &arm : model->arms) {
+      auto held = find_if(holder->constructors, [&](const auto &item) {
+        return item.source == arm.constructor;
+      });
+      auto found = store.find({arm.constructor, held->role});
+      if (found == store.end())
+        return error("oracle-common-communication-profile");
+      holderStores.push_back(found->second);
+    }
     auto initial = call(block, receiver.initialize, receiver.role, arguments,
                         site(path, "query_initialize", receiver.role));
     if (!initial)
@@ -810,10 +818,10 @@ struct PlanBuilder {
       auto roles = handleRoles(query.getHandle());
       if (!roles)
         return roles.takeError();
-      if (!is_contained(*roles, anchor.holder))
+      if (!is_contained(*roles, holderRole))
         return error("oracle-common-communication-profile");
       IDs counts;
-      std::vector<std::string> owners{receiver.role, anchor.holder};
+      std::vector<std::string> owners{receiver.role, holderRole};
       for (const auto *body : {&receiver, holder}) {
         auto captures = stores(*body);
         if (!captures)
@@ -830,24 +838,25 @@ struct PlanBuilder {
       if (!count)
         return count.takeError();
     }
-    auto request = local(receiver.state, TypeRange{index, index});
+    auto request = local(receiver.state, TypeRange{index, index, index});
     same(request, C::Phase, number(request, C::Request));
-    same(request, C::Constructor, number(request, base->source));
-    same(request, C::Kind, number(request, base->kind));
-    request.results = {C::Instance, C::Position};
+    request.results = {C::Constructor, C::Instance, C::Position};
     auto region = std::make_shared<OracleCommonBlock>();
     region->types = {index};
     append_range(region->types, receiver.state);
     append_range(region->types, receiver.stores);
-    region->types.push_back(anchor.roles[holderBase->role].sequence);
+    append_range(region->types, model->holderStores);
     for ([[maybe_unused]] auto type : region->types)
       region->arguments.push_back(id());
     auto stateStart = region->arguments.begin() + 1;
     IDs suspended(stateStart, stateStart + receiver.state.size());
-    IDs captures(stateStart + receiver.state.size(),
-                 region->arguments.end() - 1);
-    auto requestValues = call(*region, request, receiver.role, suspended,
-                              site(path, "opening_request", receiver.role));
+    auto capturesStart = stateStart + receiver.state.size();
+    IDs captures(capturesStart, capturesStart + receiver.stores.size());
+    IDs heldStores(capturesStart + receiver.stores.size(),
+                   region->arguments.end());
+    auto requestValues =
+        call(*region, request, receiver.role, suspended,
+             site(path, "opening_request_values", receiver.role));
     if (!requestValues)
       return requestValues.takeError();
     result.locals.push_back(std::move(request));
@@ -862,86 +871,50 @@ struct PlanBuilder {
         return output.takeError();
       return output->front();
     };
-    auto instance = exchange((*requestValues)[0], index, receiver.role,
-                             anchor.holder, "opening_instance");
-    if (!instance)
-      return instance.takeError();
-    auto position = exchange((*requestValues)[1], index, receiver.role,
-                             anchor.holder, "opening_position");
-    if (!position)
-      return position.takeError();
-    auto tag = constant(*region, base->source);
-    if (!tag)
-      return tag.takeError();
-    auto reference = oracleReferenceType(anchor.kind);
-    if (!reference)
-      return reference.takeError();
-    auto heldReference =
-        make(*region, "data.make", *reference, {*tag, *instance},
-             attrs({text("alternative", "Record")}));
-    if (!heldReference)
-      return heldReference.takeError();
-    auto held = call(*region, holderBase->lookup, anchor.holder,
-                     {heldReference->front(), region->arguments.back()},
-                     site(path, "opening_anchor", anchor.holder));
-    if (!held)
-      return held.takeError();
-    auto field = [&](unsigned role, StringRef name) -> unsigned {
-      const auto &fields = anchor.roles[role].fields;
-      return find_if(fields,
-                     [&](const auto &item) { return item.name == name; }) -
-             fields.begin();
-    };
-    auto opening = field(holderBase->role, "opening_state");
-    auto holderRows = field(holderBase->role, "shape.rows");
-    auto root = field(base->role, "root");
-    auto receiverRows = field(base->role, "shape.rows");
-    if (opening >= held->size() || holderRows >= held->size() ||
-        root >= anchor.roles[base->role].fields.size() ||
-        receiverRows >= anchor.roles[base->role].fields.size())
-      return error("oracle-common-helper");
-    auto functions = merkle[base->source];
-    auto opened = call(*region, functions.open, anchor.holder,
-                       {(*held)[opening], (*held)[holderRows], *position},
-                       site(path, "opening", anchor.holder));
+    auto packed = make(*region, "data.make", model->request, *requestValues,
+                       attrs({text("alternative", "Record")}));
+    if (!packed)
+      return packed.takeError();
+    auto receivedRequest =
+        exchange(packed->front(), model->request, receiver.role, holderRole,
+                 "opening_request");
+    if (!receivedRequest)
+      return receivedRequest.takeError();
+    Types openingTypes{model->request};
+    append_range(openingTypes, model->holderStores);
+    OracleExchangeRecipe opening;
+    static_cast<OracleHelperSignature &>(opening) =
+        local(openingTypes, model->response);
+    opening.action = OracleExchangeAction::Open;
+    opening.exchange = model;
+    IDs openingInputs{*receivedRequest};
+    append_range(openingInputs, heldStores);
+    auto opened = call(*region, opening, holderRole, openingInputs,
+                       site(path, "opening_dispatch", holderRole));
     if (!opened)
       return opened.takeError();
-    auto payload = cast<exec::OutcomeType>(functions.open.getResultTypes()[0])
-                       .getPayload();
-    auto row = exchange((*opened)[0], payload[0], anchor.holder, receiver.role,
-                        "opening_row");
-    if (!row)
-      return row.takeError();
-    auto proof = exchange((*opened)[1], payload[1], anchor.holder,
-                          receiver.role, "opening_proof");
-    if (!proof)
-      return proof.takeError();
-    auto receiverSlot = base - receiver.constructors.data();
-    auto receivedReference =
-        make(*region, "data.make", *reference,
-             {suspended[C::Constructor], suspended[C::Instance]},
-             attrs({text("alternative", "Record")}));
-    if (!receivedReference)
-      return receivedReference.takeError();
-    auto received = call(*region, base->lookup, receiver.role,
-                         {receivedReference->front(), captures[receiverSlot]},
-                         site(path, "authenticated_anchor", receiver.role));
-    if (!received)
-      return received.takeError();
-    auto answer = call(*region, functions.authenticate, receiver.role,
-                       {(*received)[root], (*received)[receiverRows],
-                        suspended[C::Position], *row, *proof},
-                       site(path, "authenticate", receiver.role));
-    if (!answer)
-      return answer.takeError();
-    IDs resumedInputs = suspended;
-    append_range(resumedInputs, ArrayRef<unsigned>(suspended).take_front(5));
-    resumedInputs.push_back(answer->front());
+    result.locals.push_back(std::move(opening));
+    auto response = exchange(opened->front(), model->response, holderRole,
+                             receiver.role, "opening_response");
+    if (!response)
+      return response.takeError();
+    Types authenticationTypes{model->response};
+    append_range(authenticationTypes, receiver.state);
+    append_range(authenticationTypes, receiver.stores);
+    OracleExchangeRecipe authentication;
+    static_cast<OracleHelperSignature &>(authentication) =
+        local(authenticationTypes, receiver.state);
+    authentication.action = OracleExchangeAction::Authenticate;
+    authentication.exchange = model;
+    IDs authenticationInputs{*response};
+    append_range(authenticationInputs, suspended);
+    append_range(authenticationInputs, captures);
     auto resumed =
-        call(*region, receiver.resume[base->kind], receiver.role, resumedInputs,
-             site(path, "query_resume", receiver.role));
+        call(*region, authentication, receiver.role, authenticationInputs,
+             site(path, "authenticate_resume", receiver.role));
     if (!resumed)
       return resumed.takeError();
+    result.locals.push_back(std::move(authentication));
     append_range(*resumed, captures);
     // Including after the last opening: trailing zero-query virtual children
     // still run their domain checks before the outer answer can be returned.
@@ -955,21 +928,20 @@ struct PlanBuilder {
     IDs loopInputs{*count};
     append_range(loopInputs, *state);
     append_range(loopInputs, *receiverStores);
-    loopInputs.push_back(holderStore->second);
+    append_range(loopInputs, holderStores);
     SmallVector<Attribute> carried(receiver.state.size(),
                                    builder.getStrArrayAttr({receiver.role}));
     auto final = make(
         block, "protocol.repeat", receiver.state, loopInputs,
-        attrs(
-            {text("site", site(path, "query_requests", receiver.role)),
-             builder.getNamedAttr(
-                 "carried", builder.getI64IntegerAttr(receiver.state.size())),
-             builder.getNamedAttr("maximum", builder.getI64IntegerAttr(
-                                                 receiver.capacity.leaves)),
-             builder.getNamedAttr("roles", builder.getStrArrayAttr(
-                                               {anchor.holder, receiver.role})),
-             builder.getNamedAttr("carried_roles",
-                                  builder.getArrayAttr(carried))}),
+        attrs({text("site", site(path, "query_requests", receiver.role)),
+               builder.getNamedAttr(
+                   "carried", builder.getI64IntegerAttr(receiver.state.size())),
+               builder.getNamedAttr("maximum", builder.getI64IntegerAttr(
+                                                   receiver.capacity.leaves)),
+               builder.getNamedAttr("roles", builder.getStrArrayAttr(
+                                                 {holderRole, receiver.role})),
+               builder.getNamedAttr("carried_roles",
+                                    builder.getArrayAttr(carried))}),
         region);
     if (!final)
       return final.takeError();

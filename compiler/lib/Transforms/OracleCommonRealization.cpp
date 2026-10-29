@@ -140,7 +140,15 @@ emitOracleRealization(ModuleOp prepared,
     if (!plan)
       return plan.takeError();
     for (const auto &recipe : plan->locals)
-      item.locals.push_back(local(unit, recipe));
+      item.locals.push_back(std::visit(
+          [&](const auto &body) -> func::FuncOp {
+            if constexpr (std::is_same_v<std::decay_t<decltype(body)>,
+                                         OracleLocalRecipe>)
+              return local(unit, body);
+            else
+              return emitOracleQueryExchange(*result.module, body);
+          },
+          recipe));
     item.inputShapes = plan->inputShapes;
     item.resultStores = plan->resultStores;
     item.resultReferences = plan->resultReferences;

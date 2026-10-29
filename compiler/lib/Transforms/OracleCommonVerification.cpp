@@ -290,7 +290,17 @@ Error checkOracleRealizationModel(
       return refuse();
     const auto &closure = targetContext.getClosure();
     for (auto [recipe, helper] : zip(plan->locals, realized.locals)) {
-      if (!local(recipe, helper, closure))
+      auto actual = helper;
+      bool checked = std::visit(
+          [&](const auto &body) {
+            if constexpr (std::is_same_v<std::decay_t<decltype(body)>,
+                                         OracleLocalRecipe>)
+              return local(body, actual, closure);
+            else
+              return checkOracleQueryExchange(targetContext, actual, body);
+          },
+          recipe);
+      if (!checked)
         return refuse();
       root(helper);
     }

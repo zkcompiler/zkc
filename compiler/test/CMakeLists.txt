@@ -45,6 +45,8 @@ add_zkc_test(oracle_anchor_storage Compiler oracle-anchor-storage)
 add_zkc_test(oracle_table_read Compiler oracle-table-read)
 add_zkc_test(oracle_merkle Compiler oracle-merkle)
 add_zkc_test(oracle_commitment_roots Compiler oracle-commitment-roots)
+target_compile_definitions(zkc-oracle_commitment_roots-test PRIVATE
+  ZKC_ORACLE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles")
 add_zkc_test(oracle_virtual_functions Compiler oracle-virtual-functions)
 add_zkc_test(oracle_query_capacity Transforms oracle-query-capacity)
 add_zkc_test(oracle_query_controller Compiler oracle-query-controller)

@@ -1,7 +1,7 @@
 //! Common oracle roots use the selected scheme and preserve receiver shape custody.
 use std::path::Path;
 use zkc_cpu::merkle::Scheme;
-use zkc_cpu::{CpuBackend, Domain, EntryPolicy, KoalaBear, KoalaBearExt4, Policy, Value};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, KoalaBear, KoalaBearExt4, Policy, Value, Variant};
 use zkc_kernels::plonky3::{
     merkle::{commit, poseidon2::Quartic},
     oracle::Shape,
@@ -160,6 +160,7 @@ fn main() {
     }
     cases += query_trials(directory);
     cases += virtual_trials(directory);
+    cases += multiple_trials(directory);
     println!("{cases} native selected-root, authenticated-query and refusal controls passed");
 }
 
@@ -177,30 +178,56 @@ impl Hooks<CpuBackend> for QueryMessages {
     ) -> Result<Option<Vec<u8>>, String> {
         assert!(bytes.len() <= limit);
         self.sites.push(exchange.site.to_owned());
-        let expected = if exchange.site.contains("opening_instance")
-            || exchange.site.contains("opening_position")
-        {
-            ("V", "P")
-        } else {
-            ("P", "V")
-        };
+        let request = exchange.site.contains("opening_request");
+        let response = exchange.site.contains("opening_response");
+        let expected = if request { ("V", "P") } else { ("P", "V") };
         assert_eq!((exchange.sender, exchange.receiver), expected);
-        let replacement = match self.fault {
-            "instance" if exchange.site.contains("opening_instance") => Some(Value::Index(1)),
-            "position" if exchange.site.contains("opening_position") => Some(Value::Index(1)),
-            "row" if exchange.site.contains("opening_row") => Some(Value::KoalaBearExt4Vector(
-                vec![scalar(77), scalar(88)].into(),
-            )),
-            "root" if exchange.site.contains("deliver") => Some(Value::MerkleDigest(
+        if self.fault == "proof" && response {
+            let mut changed = bytes.to_vec();
+            *changed.last_mut().unwrap() ^= 1;
+            return Ok(Some(changed));
+        }
+        let replacement = if (request
+            && matches!(
+                self.fault,
+                "instance" | "position" | "constructor" | "unknown_constructor"
+            ))
+            || (response && matches!(self.fault, "row" | "response_constructor"))
+        {
+            let decoded = backend("V")
+                .decode_native_value(exchange.ty, bytes)
+                .unwrap();
+            let Value::Variant(value) = decoded else {
+                panic!("non-variant opening")
+            };
+            let mut payload = value.payload().to_vec();
+            let mut alternative = value.alternative();
+            match self.fault {
+                "instance" => payload[1] = Value::Index(1),
+                "position" => payload[2] = Value::Index(1),
+                "constructor" => payload[0] = Value::Index(1),
+                "unknown_constructor" => payload[0] = Value::Index(99),
+                "response_constructor" => alternative = 1 - alternative,
+                "row" => {
+                    payload[0] = match payload[0] {
+                        Value::KoalaBearVector(_) => Value::KoalaBearVector(
+                            vec![KoalaBear::new(77), KoalaBear::new(88)].into(),
+                        ),
+                        _ => Value::KoalaBearExt4Vector(vec![scalar(77), scalar(88)].into()),
+                    };
+                }
+                _ => unreachable!(),
+            }
+            Some(Value::Variant(
+                Variant::new(exchange.ty.clone(), alternative, payload).unwrap(),
+            ))
+        } else if self.fault == "root" && exchange.site.contains("deliver") {
+            Some(Value::MerkleDigest(
                 Scheme::Poseidon2KoalaBearExt4,
                 vec![0; 32].into(),
-            )),
-            "proof" if exchange.site.contains("opening_proof") => {
-                let mut changed = bytes.to_vec();
-                *changed.last_mut().unwrap() ^= 1;
-                return Ok(Some(changed));
-            }
-            _ => None,
+            ))
+        } else {
+            None
         };
         Ok(replacement.map(|value| backend("V").encode_native_value(&value).unwrap()))
     }
@@ -289,13 +316,10 @@ fn query_trials(directory: &Path) -> usize {
                         .iter()
                         .filter(|s| s.contains("opening_"))
                         .collect();
-                    assert_eq!(reached.len(), 4);
-                    for (site, purpose) in reached.iter().zip([
-                        "opening_instance",
-                        "opening_position",
-                        "opening_row",
-                        "opening_proof",
-                    ]) {
+                    assert_eq!(reached.len(), 2);
+                    for (site, purpose) in
+                        reached.iter().zip(["opening_request", "opening_response"])
+                    {
                         assert!(
                             site.contains(purpose),
                             "wrong request/response order: {site}"
@@ -427,12 +451,141 @@ fn virtual_trials(directory: &Path) -> usize {
                 let openings = messages
                     .sites
                     .iter()
-                    .filter(|s| s.contains("opening_proof"))
+                    .filter(|s| s.contains("opening_response"))
                     .count();
                 assert_eq!(
                     openings, expected,
                     "{name}/{trips}/{position}/{mapped}/{fault}"
                 );
+                for (_, native) in &report.backends {
+                    assert_eq!(native.active_frames(), 0);
+                }
+                cases += 1;
+            }
+        }
+    }
+    cases
+}
+
+fn multiple_trials(directory: &Path) -> usize {
+    let mut cases = 0;
+    for mode in ["multiple", "mixed-kind", "mixed-scheme"] {
+        let name = format!("query-{mode}");
+        let bundle = Bundle::admit(
+            &std::fs::read(directory.join(format!("{name}.bundle"))).unwrap(),
+            &backend("V"),
+            zkc_cpu::cpu_contracts(),
+            BundleLimits::default(),
+        )
+        .unwrap();
+        for trips in 0..=3 {
+            for (position, mapped, fault) in [
+                (0, 0, ""),
+                (1, 3, ""),
+                (3, 1, ""),
+                (4, 0, ""),
+                (0, 4, ""),
+                (0, 0, "instance"),
+                (0, 0, "position"),
+                (0, 0, "unknown_constructor"),
+                (0, 0, "proof"),
+                (0, 0, "row"),
+                (0, 0, "constructor"),
+                (0, 0, "response_constructor"),
+            ] {
+                // The equal-typed modes use identical tables and layouts. A
+                // substituted constructor can return an otherwise valid proof,
+                // so these cases depend on the suspended-constructor guard.
+                if fault == "response_constructor" && mode != "multiple" {
+                    continue;
+                }
+                let base = || {
+                    Value::KoalaBearVector(
+                        (0..4)
+                            .map(|i| KoalaBear::new(i + 11))
+                            .collect::<Vec<_>>()
+                            .into(),
+                    )
+                };
+                let extension =
+                    || Value::KoalaBearExt4Vector((0..4).map(scalar).collect::<Vec<_>>().into());
+                let mut messages = QueryMessages {
+                    fault,
+                    ..Default::default()
+                };
+                let report = run(
+                    &bundle,
+                    "oracle_roots",
+                    vec![
+                        RoleInput {
+                            role: "P".into(),
+                            backend: backend("P"),
+                            values: vec![
+                                if mode == "mixed-scheme" {
+                                    base()
+                                } else {
+                                    extension()
+                                },
+                                if mode == "multiple" {
+                                    extension()
+                                } else {
+                                    base()
+                                },
+                                Value::Index(mapped),
+                                Value::Index(trips),
+                            ],
+                        },
+                        RoleInput {
+                            role: "V".into(),
+                            backend: backend("V"),
+                            values: vec![
+                                Value::Index(mapped),
+                                Value::Index(position),
+                                Value::Index(trips),
+                            ],
+                        },
+                    ],
+                    RunLimits::default(),
+                    &mut messages,
+                )
+                .unwrap();
+                let complete = position < 4 && (trips == 0 || mapped < 4) && fault.is_empty();
+                assert_eq!(
+                    matches!(report.outcome, Outcome::Completed),
+                    complete,
+                    "{name}/{trips}/{position}/{mapped}/{fault}: {:?}",
+                    report.outcome
+                );
+                let verifier = report.roles.iter().find(|r| r.role == "V").unwrap();
+                if complete {
+                    assert_eq!(verifier.outputs.len(), 1);
+                    if mode == "mixed-scheme" {
+                        assert!(
+                            matches!(verifier.outputs[0], Value::KoalaBearField(value) if value == KoalaBear::new(position as u32 + 11))
+                        );
+                    } else {
+                        assert!(
+                            matches!(verifier.outputs[0], Value::KoalaBearExt4Field(value) if value == scalar(position))
+                        );
+                    }
+                } else {
+                    assert!(matches!(report.outcome, Outcome::ParticipantStopped { .. }));
+                    assert!(verifier.outputs.is_empty());
+                }
+                let responses = messages
+                    .sites
+                    .iter()
+                    .filter(|s| s.contains("opening_response"))
+                    .count();
+                let expected =
+                    if position >= 4 || matches!(fault, "instance" | "unknown_constructor") {
+                        0
+                    } else if !complete {
+                        1
+                    } else {
+                        trips as usize + 1
+                    };
+                assert_eq!(responses, expected, "{name}/{trips}/{fault}");
                 for (_, native) in &report.backends {
                     assert_eq!(native.active_frames(), 0);
                 }

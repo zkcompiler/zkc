@@ -293,6 +293,8 @@ add_zkc_component(Transforms
   lib/Transforms/RealizationEmission.cpp
   lib/Transforms/OracleVerificationContext.cpp
   lib/Transforms/OracleRealizationSelection.cpp
+  lib/Transforms/OracleQueryExchange.cpp
+  lib/Transforms/OracleQueryExchangeVerification.cpp
   lib/Transforms/OracleCommonPlan.cpp
   lib/Transforms/OracleCommonRealization.cpp
   lib/Transforms/RealizedProtocol.cpp

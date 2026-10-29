@@ -570,16 +570,19 @@ append explicit receiver-owned shape ports; fixed extents need no extra input.
 The record reader rederives these associations under the caller's requested
 policy. Native controls exercise fixed/dynamic input/send roots, independent
 receiver shapes and exact antipodal root bytes. Immediate receiver queries now
-suspend, exchange actual instance/position requests with one holder, authenticate
+suspend, exchange actual constructor/instance/position requests with one holder, authenticate
 complete rows against the suspended anchor's root and expected shape, then resume
-that exact continuation. The current profile admits one remote base constructor,
-including multiple instances and recurrent virtual ancestors. With virtuals, the
+that exact continuation. The profile admits multiple remote base constructors at
+one holder, including different answer kinds and selected schemes, multiple
+instances and recurrent virtual ancestors. Closed response variants are checked
+against the suspended constructor before authentication. With virtuals, the
 queried handle must already be available at both roles so no future-count message
 is invented. The [record contract](spec/formats/oracle-realization.md#common-opening-communication)
 specifies this capability boundary. Native controls cover input/send queries,
 every valid position, corrupted requests/roots/rows/proofs, duplicate and unused
-openings, and trailing zero-query domain failures. Multi-constructor routing,
-batching and native proof publication remain pending.
+openings, equal-typed constructor substitutions, heterogeneous scheme dispatch,
+and trailing zero-query domain failures. Mixed local/remote or multi-holder
+routing, batching and native proof publication remain pending.
 The private whole-stage reader consumes a version-zero
 [realization record](spec/formats/oracle-realization.md), the prepared original
 and the actual candidate. It reads independently parsed candidates, checks exact

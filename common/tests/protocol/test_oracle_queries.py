@@ -67,6 +67,7 @@ def test_oracle_commitment_roots(toolchain, directory, journal):
     for fixture in (
         "send-dynamic", "send-fixed", "input-dynamic", "input-fixed",
         "query-recurrence", "query-zero-trailing", "query-zero-only",
+        "query-multiple", "query-mixed-kind", "query-mixed-scheme",
         "selection order is canonical", "query policies never silently fall back",
     ):
         journal.run([

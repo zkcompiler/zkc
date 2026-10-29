@@ -160,26 +160,43 @@ publication must consume and interpret the complete checked edge.
 
 ## Common opening communication
 
-The current immediate-query profile has one remote base constructor in the
-receiver controller's inventory. That constructor may allocate many instances,
-and virtual constructions may form a recurrent graph over those instances.
-The enclosing common regions must already include the holder.
-Multiple base constructors, mixed local/remote bases and selection across holders
+The immediate-query profile admits multiple remote base constructors at one
+holder in the receiver controller's inventory. Constructors may use different
+answer kinds and installed Merkle schemes, allocate multiple instances, and
+participate in recurrent virtual graphs. The enclosing common regions must
+already include the holder. Mixed local/remote bases and selection across holders
 refuse with `oracle-common-communication-profile`. This is a realization
 capability restriction, not a restriction on logical oracle formation or an
-implicit switch to ideal data.
+implicit switch to ideal data. The profile is conservative over the controller's
+whole constructor inventory, not a claim of per-query reachability precision.
 
 A query initializes its controller from the actual reference and position and
-advances it before opening communication. Each suspension checks its phase,
-constructor and answer kind. The receiver sends the actual instance and position
-to the fixed holder as two ordered ordinary exchanges. The holder loads that
-instance's private opening state and shape, opens it, and sends the complete row
-then the proof as two ordered exchanges. The receiver loads the root and expected
-shape through the **suspended reference**, authenticates at the **suspended
-position**, and resumes with the original five request/continuation coordinates.
-An untrusted response cannot select a different anchor, position or continuation.
-The complete common-body reader checks all these SSA associations and sites;
-checking the opening helpers alone would not establish them.
+advances it before opening communication. A Request-phase suspension produces
+one request record with ordered fields `(constructor, instance, position)`.
+The holder dispatches the actual constructor, rejecting an unknown tag, loads
+that instance's private opening state and shape, and opens it. Its response is a
+closed variant with one `ConstructorN` alternative per source constructor; each
+payload is the complete row followed by its proof. Request and response each
+use one ordinary exchange. Their nominal descriptors retain the source entry,
+receiver, holder and ordered constructor inventory, and obey ordinary variant
+limits, including at most 32 response alternatives.
+
+Before reading an anchor or using a response, the receiver's selected arm checks
+that the suspended phase is Request, that its constructor equals the response
+alternative, and that its answer kind is the expected kind. It loads the root
+and expected shape through the **suspended reference**, authenticates at the
+**suspended position**, and resumes with the original five request/continuation
+coordinates. An untrusted response cannot select a different anchor, position or
+continuation, including when constructors have identical payload types and roots.
+
+Holder dispatch and receiver authentication/resumption are specialized scoped
+helpers. A separate reader checks their actual conditional/match bodies,
+resolved helper identities, ordered guards and SSA operands. The common-body
+reader checks the request construction, exchanges, stores and continuation calls.
+There is one route for single and multiple constructors; there is no new runtime
+oracle object, wire opcode or general-purpose local recipe language. These
+native checks establish correspondence to the selected recipe, not a Lean
+simulation theorem or a cryptographic authenticity theorem.
 
 When virtual constructors are present, the queried handle must already be
 available at both receiver and holder. Each role computes the structural leaf
