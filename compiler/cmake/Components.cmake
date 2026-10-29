@@ -303,6 +303,9 @@ add_zkc_component(Transforms
   lib/Transforms/OracleAnchorStorage.cpp
   lib/Transforms/OracleAnchorEmission.cpp
   lib/Transforms/OracleAnchorVerification.cpp
+  lib/Transforms/OracleLayout.cpp
+  lib/Transforms/OracleMerkle.cpp
+  lib/Transforms/OracleMerkleVerification.cpp
   lib/Transforms/OracleTableRead.cpp
   lib/Transforms/OracleTableReadVerification.cpp
   lib/Transforms/OracleVirtualRecipe.cpp
@@ -337,7 +340,6 @@ add_zkc_component(Transforms
   lib/Target/StorageSchedule.cpp
 )
 add_zkc_component(Compiler
-  lib/Compiler/OracleLayout.cpp
   lib/Compiler/OracleSchedule.cpp
   lib/Compiler/OracleObservations.cpp
   lib/Compiler/OracleObligations.cpp

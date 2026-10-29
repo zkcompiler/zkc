@@ -51,3 +51,11 @@ def test_oracle_common_realization(toolchain, directory, journal):
             artifacts, "compile", fixture,
         ], keep=f"compiler-{fixture}.txt", timeout=600)
     journal.run([toolchain.driver("oracle_common"), artifacts], keep="native.txt")
+
+
+def test_oracle_merkle_layout_and_authentication(toolchain, directory, journal):
+    artifacts = directory / "merkle"
+    journal.run([
+        toolchain.tool("compiler", "test/zkc-oracle_merkle-test"), artifacts,
+    ], keep="compiler.txt", timeout=600)
+    journal.run([toolchain.driver("oracle_merkle"), artifacts], keep="native.txt")

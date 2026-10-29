@@ -209,6 +209,26 @@ round executes any trailing zero-query virtual children, including their domain
 checks. Local evaluation exists only when the role retains every base table;
 a Merkle receiver instead needs the surrounding common opening exchange.
 
+For direct field tables, ordinary scoped Merkle primitives map a logical query
+`q` and dynamic row count `N` to physical height, leaf and payload slot. They
+require a positive power-of-two `N` and `q < N`. Individual grouping has width
+`W = 1`; antipodal grouping requires `N >= 2`, has `W = 2` and places logical
+rows `i` and `i + N/2` in one leaf. With `H = N/W`, the slot is `q/H` and the
+logical leaf is `q % H`. Optional bit reversal permutes exactly `log2(H)` leaf
+bits after grouping and preserves the order within each leaf. Shape checking and
+bit reversal use ordinary checked index operations and an early-ending scoped
+loop; no field conversion or new runtime primitive defines the query index.
+
+Commit preparation requires exactly `N` field values, transposes the two halves
+for antipodal grouping and then applies the chosen leaf permutation. The selected
+vector-commitment signature must match the exact field carrier. Authentication
+checks the caller's root, width, physical height and mapped leaf against the
+complete returned row and proof. Its successful guard precedes selection of the
+logical payload slot. These primitive checks do not associate an opening state
+or root with an original anchor. The enclosing realization still owns that
+association, shape authority, role delivery and ordered query/batching semantics;
+the cryptographic simulation is a separate obligation.
+
 The independent primitive reader checks actual scoped control, SSA operands,
 layouts, pure maps, domain guards, ordered frames and all helper bodies. It
 neither invokes the emitter nor accepts a symbol name as body evidence. The

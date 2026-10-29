@@ -557,6 +557,13 @@ stops before an out-of-domain read for field, group, index and sequence-backed
 rows. Its generated clients enter the physical pipeline; native controls check
 actual row counts and observable prefixes when a later query fails. Logical
 claim transport and the independent semantic realization bridge remain pending.
+Private Merkle helpers now compile ordinary scoped position mapping, commit
+preparation, opening and guarded answer selection. The independent reader checks
+actual helper bodies, exact field/scheme signatures, grouping, leaf permutation,
+shape and query guards. Native primitive controls cover all four grouping/order
+combinations, KoalaBear quartic Poseidon2 openings, invalid shapes/queries and
+hostile root/row/proof delivery. This is not yet a common Merkle realization,
+batching implementation or native proof deployment path.
 The private whole-stage reader consumes a version-zero
 [realization record](spec/formats/oracle-realization.md), the prepared original
 and the actual candidate. It reads independently parsed candidates, checks exact

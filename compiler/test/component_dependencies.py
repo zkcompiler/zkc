@@ -218,6 +218,8 @@ def main():
         ROOT / "lib/Transforms/OracleQueryCapacity.h",
         ROOT / "lib/Transforms/OracleQueryController.h",
         ROOT / "lib/Transforms/OracleAnchorStorage.h",
+        ROOT / "lib/Transforms/OracleLayout.h",
+        ROOT / "lib/Transforms/OracleMerkle.h",
         ROOT / "lib/Transforms/OracleTableRead.h",
         ROOT / "lib/Transforms/OracleVirtualFunctions.h",
         ROOT / "lib/Transforms/MathematicalRecipes.h",
@@ -236,7 +238,6 @@ def main():
     private_headers["ZkcCompiler"] = {
         ROOT / "lib/Compiler/CompilationState.h",
         ROOT / "lib/Compiler/ComponentContracts.h",
-        ROOT / "lib/Compiler/OracleLayout.h",
         ROOT / "lib/Compiler/OracleSchedule.h",
         ROOT / "lib/Compiler/SourceArtifacts.h",
         ROOT / "lib/Compiler/Run.h", ROOT / "lib/Compiler/ArtifactJson.h",
@@ -417,7 +418,7 @@ def main():
             "CollectionRealization", "RealizationEmission",
             "ScopedFinite", "ScopedPreparation", "MathematicalSupport")),
     }
-    for reader in ("OracleVerificationContext", "OracleRealizationRecord", "OracleCommonVerification", "OracleQueryControllerVerification", "OracleVirtualFunctionVerification", "OracleTableReadVerification", "OracleAnchorVerification", "../Analysis/StructuredComputation", "FiniteVerification", "MathLoweringVerification",
+    for reader in ("OracleVerificationContext", "OracleRealizationRecord", "OracleCommonVerification", "OracleQueryControllerVerification", "OracleVirtualFunctionVerification", "OracleTableReadVerification", "OracleMerkleVerification", "OracleAnchorVerification", "../Analysis/StructuredComputation", "FiniteVerification", "MathLoweringVerification",
                    "MathematicalComparison",
                    "HelperNormalizationVerification",
                    "ScopedAlgorithmVerification", "PolynomialRecipeVerification",

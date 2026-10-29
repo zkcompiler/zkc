@@ -1,5 +1,5 @@
-#ifndef ZKC_COMPILER_ORACLELAYOUT_H
-#define ZKC_COMPILER_ORACLELAYOUT_H
+#ifndef ZKC_TRANSFORMS_ORACLELAYOUT_H
+#define ZKC_TRANSFORMS_ORACLELAYOUT_H
 #include "llvm/Support/Error.h"
 #include <cstdint>
 

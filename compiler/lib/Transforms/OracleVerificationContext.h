@@ -1,5 +1,6 @@
 #ifndef ZKC_TRANSFORMS_ORACLEVERIFICATIONCONTEXT_H
 #define ZKC_TRANSFORMS_ORACLEVERIFICATIONCONTEXT_H
+#include "OracleMerkle.h"
 #include "OracleQueryController.h"
 #include "zkc/Dialect/Exec/Execution.h"
 namespace zkc::protocol {
@@ -30,6 +31,11 @@ llvm::Error checkOracleAnchorLookup(const OracleVerificationContext &,
                                     mlir::func::FuncOp,
                                     const OracleAnchorStorage &,
                                     unsigned constructor, unsigned role);
+llvm::Error checkOracleMerkle(const OracleVerificationContext &,
+                              const OracleMerkleFunctions &,
+                              protocol_ir::OracleKindAttr,
+                              llvm::StringRef scheme, OracleLeafGrouping,
+                              OracleLeafOrder);
 llvm::Error checkOracleTableRead(const OracleVerificationContext &,
                                  mlir::func::FuncOp,
                                  protocol_ir::OracleKindAttr);

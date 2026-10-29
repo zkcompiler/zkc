@@ -282,3 +282,9 @@ name = "oracle_common"
 path = "src/oracle_common.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "oracle_merkle"
+path = "src/oracle_merkle.rs"
+test = false
+bench = false
