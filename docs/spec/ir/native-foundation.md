@@ -83,13 +83,29 @@ publication call the same admission service. No public entry may rely on the
 side effect of a previous module verifier or a copied checked annotation.
 The complete mutation-to-publication path rechecks the applicable stage.
 
-Analyses are owned by the module/symbol scope they inspect. AnalysisManager
-tracks dependencies and invalidation. Invalidation includes changed callees,
-roles, domains, parameters, installations and bodies, even when the caller is
-unchanged. Cache policy-independent facts; a policy-dependent result is valid
-only under the exact immutable policy and module revision. Direct APIs either
-invalidate explicitly or compute fresh facts. Context-uniqued types do not
-certify a mutable declaration's meaning or permission to execute.
+Analyses are owned by the isolated module/symbol scope containing the mutable
+dependencies they inspect. Cross-callable admission runs at that enclosing
+scope; a nested function pass must not walk sibling definitions. Such a pass
+may consume a parent snapshot only when the inspected facts remain fixed for
+that phase. A cached parent analysis can be stale: its presence does not
+certify current closure admission.
+
+AnalysisManager supplies caching and invalidation mechanics. Analyses must
+explicitly implement dependency invalidation when selective preservation is
+used; requesting another analysis does not register that rule automatically.
+Preserving a derived analysis requires preserving every fact on which it
+depends. Invalidation includes changed callees, roles, domains, parameters,
+installations and bodies, even when the caller is unchanged. These requirements
+follow the [MLIR pass restrictions and analysis rules](https://mlir.llvm.org/docs/PassManagement/).
+
+Cache policy-independent facts; a policy-dependent result is valid only under
+the exact immutable policy and unchanged inspected IR. Direct APIs either
+invalidate at the owning scope or compute fresh facts. Mutating IR does not
+notify an AnalysisManager automatically, and invalidating a child analysis
+does not refresh a parent snapshot. Reacquire facts after mutation before
+admission or publication; do not reuse references to invalidated analyses.
+Context-uniqued types do not certify a mutable declaration's meaning or
+permission to execute.
 
 Use ordinary rewrite patterns for local changes and explicit legality plus
 TypeConverter for stage/type conversion. Global projection and realization may
