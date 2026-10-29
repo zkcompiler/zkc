@@ -683,6 +683,11 @@ struct PlanBuilder {
     for (auto [ordinal, op] : enumerate(original)) {
       auto path = prefix;
       path.push_back(ordinal);
+      // Statements select logical claims, not executable effects. The frozen
+      // original and checked record retain their full binding. A candidate
+      // alone cannot publish the original claim after representation changes.
+      if (isa<pir::StatementOp>(op))
+        continue;
       if (auto repetition = dyn_cast<pir::RepeatOp>(op)) {
         if (auto e = repeat(block, repetition, path, depth))
           return e;
@@ -850,8 +855,6 @@ struct PlanBuilder {
           return e;
         continue;
       }
-      // Retained anchor clauses are not silently erased while their boundary
-      // adapters remain unfinished.
       if (op.getName().getStringRef().starts_with("protocol.oracle_"))
         return error("oracle-common-interface");
       if (op.getNumRegions() || isa<pir::ApplyOp>(op))
@@ -950,6 +953,10 @@ struct PlanBuilder {
           result.resultReferences.push_back(std::move(reference));
         }
     NamedAttrList attributes(program->getAttrs());
+    // Logical port selectors belong to the original signature. Keeping them
+    // here could silently reinterpret an anchor as a native reference or store.
+    // Their complete inventory remains in the checked realization edge.
+    attributes.erase("contracts");
     attributes.set("function_type",
                    TypeAttr::get(builder.getFunctionType(inputs, outputs)));
     attributes.set("output_roles", builder.getArrayAttr(outputRoles));

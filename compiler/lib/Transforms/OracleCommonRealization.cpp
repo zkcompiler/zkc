@@ -130,6 +130,9 @@ emitIdealOracleRealization(ModuleOp prepared) {
   for (auto [entry, plan] : zip(*entries, plans)) {
     auto original =
         cast<pir::MathematicalOp>(SymbolTable::lookupSymbolIn(unit, entry));
+    // setAttrs updates supplied inherent properties; an omitted optional
+    // property on the cloned operation must be cleared explicitly.
+    original.removeContractsAttr();
     original->setAttrs(plan.attributes);
     original.getBody().getBlocks().clear();
     auto *block = new Block;

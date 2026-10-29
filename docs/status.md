@@ -562,8 +562,12 @@ original anchor/data ports, kinds and role families remain distinct from native
 representations and their support stores. The same Protocol owner supplies typed
 contracts, distinguishing anchor selectors from role components and retaining
 continuation residuals and exact named target selections. The realization record
-rederives the complete supported clause inventory; this does not yet interpret
-logical anchor predicates on native representations. The record is not a production admission token or a Lean simulation.
+rederives the complete clause inventory, including anchor input/output clauses,
+continuation residuals and selected targets. Those annotations remain on the
+frozen original, not on the candidate's changed signature. Controls distinguish
+logical target changes even when native code is identical, and refuse clauses
+inserted into the native candidate. This does not yet interpret logical anchor
+predicates on native representations. The record is not a production admission token or a Lean simulation.
 Empty sequence observations need no allocated anchor. Unreachable queries and
 shape views have a complete refusing controller without an invented store;
 indexing still stops at its original occurrence and preserves earlier delivery.

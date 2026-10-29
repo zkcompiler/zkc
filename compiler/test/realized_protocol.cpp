@@ -118,22 +118,99 @@ module { "protocol.module"() ({
     require(record.getAsObject()->getArray("entries")->empty(),
             "identity edge invented an oracle entry");
   });
-  cases.run("unsupported anchor transport publishes no checked owner", [&] {
-    std::string anchored = text.str();
-    auto position = anchored.find(" relation.declare");
-    require(position != std::string::npos, "fixture has no declaration slot");
-    anchored.insert(position, R"mlir(
- relation.declare @logical {kind="external",key="test/logical",revision="0",signature=(!D)->i1,purposes=["statement"]}
-)mlir");
-    position = anchored.find("contracts=[");
-    require(position != std::string::npos, "fixture has no contract slot");
-    anchored.insert(position + StringRef("contracts=[").size(), R"mlir(
- ["input","logical",[@logical,[["anchor","input",1:i64]]],unit,unit],
-)mlir");
-    auto unsupported = parseSourceString<ModuleOp>(anchored, &context);
-    require(bool(unsupported), "logical anchor fixture must be admitted");
-    refuses(RealizedProtocol::ideal(prepare(*unsupported)),
-            "oracle-common-formation");
+  auto clausesFile =
+      MemoryBuffer::getFile(ZKC_REALIZED_FIXTURES "/common-clauses.mlir");
+  require(bool(clausesFile), "missing logical clause fixture");
+  auto logical =
+      parseSourceString<ModuleOp>((*clausesFile)->getBuffer(), &context);
+  require(bool(logical), "logical clause fixture must be admitted");
+  auto clauses = take(RealizedProtocol::ideal(prepare(*logical)));
+  auto main = [](ModuleOp module) {
+    auto unit = cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
+    return cast<protocol_ir::MathematicalOp>(
+        SymbolTable::lookupSymbolIn(unit, "main"));
+  };
+  auto rejects = [&](ModuleOp original, ModuleOp candidate, StringRef record,
+                     StringRef code) {
+    auto failure =
+        protocol::checkIdealOracleRealization(original, candidate, record);
+    require(bool(failure), "changed edge retained correspondence");
+    require(namesIdentifier(toString(std::move(failure)), code),
+            "unexpected correspondence refusal");
+  };
+  cases.run("logical clauses stay on the original signature", [&] {
+    checked(clauses);
+    auto original = clauses.originalSnapshot(),
+         candidate = clauses.candidateSnapshot();
+    require(main(*original).getContracts()->size() == 5,
+            "original lost a clause");
+    require(!main(*candidate).getContracts(),
+            "native signature inherited logical clauses");
+    require(main(*candidate)
+                .getBody()
+                .front()
+                .getOps<protocol_ir::StatementOp>()
+                .empty(),
+            "native candidate inherited a logical statement");
+    auto record = take(json::parse(clauses.realizationRecord()));
+    auto entry =
+        record.getAsObject()->getArray("entries")->front().getAsObject();
+    auto contracts = entry->getObject("contracts");
+    auto selections = contracts->getArray("statements");
+    require(contracts->getArray("clauses")->size() == 5 &&
+                selections->size() == 1 &&
+                selections->front().getAsObject()->getInteger("operation") ==
+                    1 &&
+                selections->front().getAsObject()->getInteger("target") == 4,
+            "record lost the original clause inventory or exact selection");
+    require(
+        entry->getObject("logical_interface")->getArray("outputs")->size() ==
+                1 &&
+            entry->getArray("result_references")->size() == 1 &&
+            !entry->getArray("result_stores")->empty(),
+        "returned anchor lost its actual representation associations");
+  });
+  cases.run("equal predicates do not merge named target selections", [&] {
+    auto original = clauses.originalSnapshot(),
+         candidate = clauses.candidateSnapshot();
+    auto record = take(json::parse(clauses.realizationRecord()));
+    auto entry =
+        record.getAsObject()->getArray("entries")->front().getAsObject();
+    (*entry->getObject("contracts")->getArray("statements"))[0].getAsObject()->
+    operator[]("target") = 3;
+    std::string changed;
+    raw_string_ostream(changed) << record;
+    rejects(*original, *candidate, changed, "oracle-realization-record");
+  });
+  cases.run("identical native code cannot substitute a logical target", [&] {
+    auto original = clauses.originalSnapshot(),
+         candidate = clauses.candidateSnapshot();
+    auto statements =
+        main(*original).getBody().front().getOps<protocol_ir::StatementOp>();
+    (*statements.begin())
+        ->setAttr("target", StringAttr::get(&context, "decoy"));
+    require(succeeded(verify(*original)), "alternate target must be admitted");
+    auto changed = take(RealizedProtocol::ideal(prepare(*original)));
+    checked(changed);
+    auto other = changed.candidateSnapshot();
+    require(OperationEquivalence::isEquivalentTo(
+                *candidate, *other, OperationEquivalence::IgnoreLocations),
+            "logical target unexpectedly changed native code");
+    require(changed.realizationRecord() != clauses.realizationRecord(),
+            "record collapsed distinct logical selections");
+    rejects(*original, *candidate, clauses.realizationRecord(),
+            "oracle-realization-record");
+  });
+  cases.run("candidate cannot insert its own ordinary clause", [&] {
+    auto original = owner.originalSnapshot(),
+         candidate = owner.candidateSnapshot();
+    main(*candidate)
+        ->setAttr("contracts", main(*original)->getAttr("contracts"));
+    require(succeeded(verify(*candidate)),
+            "ordinary clause mutation must be admitted");
+    rejects(*original, *candidate, owner.realizationRecord(),
+            "oracle-common-body");
+    checked(owner);
   });
   return cases.result();
 }

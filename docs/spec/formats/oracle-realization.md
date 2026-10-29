@@ -111,8 +111,15 @@ do not merge distinct named targets. The original fixes the complete statement
 binding and relation declarations, which the actual-body reader also preserves.
 These fields are rederived by Protocol's shared bounded contract reader, not
 accepted as producer-supplied predicates. Recording an anchor selector does not
-supply its native predicate adapter; the current private emission still refuses
-that profile before projection.
+supply its native predicate adapter. Rewritten oracle entries have neither
+`contracts` nor `protocol.statement` on their native signatures: the frozen
+original and this complete record retain those logical declarations instead.
+Ordinary siblings retain their clauses and statements unchanged. The actual-body
+reader refuses additional clauses or statements in a rewritten candidate.
+Two originals can select different named targets yet produce identical native
+code; their records still differ. A standalone executable candidate therefore
+carries no authority to publish either original logical claim. Production claim
+publication must consume and interpret the complete checked edge.
 
 ## Controller metadata
 

@@ -60,7 +60,7 @@ int main(int argc, char **argv) {
   for (StringRef fixture :
        {"common-recurrence", "common-holders", "common-input", "common-shape",
         "common-contents", "common-views", "common-entries", "common-return",
-        "common-empty"}) {
+        "common-empty", "common-clauses"}) {
     if (argc > 3 && fixture != argv[3])
       continue;
     selectedFixture = true;
@@ -603,7 +603,7 @@ int main(int argc, char **argv) {
           refused(checkCandidate(*prepared, candidate), "oracle-common-body");
           found->getInputsMutable()[0].set(original);
         });
-      if (fixture != "common-input")
+      if (fixture != "common-input" && fixture != "common-clauses")
         cases.run(fixture + " changed delivery occurrence", [&] {
           pir::ExchangeOp exchange;
           program.walk([&](pir::ExchangeOp op) {

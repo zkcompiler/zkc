@@ -11,9 +11,10 @@ namespace zkc::mathematical {
 // become a checked edge. All modules borrow the caller's MLIR context.
 //
 // This is native structural correspondence, not a semantic simulation or
-// authority to publish logical claims. The current ideal profile refuses
-// unsupported contract transport; production consumers must retain both sides
-// and their complete interpretation before projecting/publishing the edge.
+// authority to publish logical claims. Logical clauses and selections stay on
+// the original, never on the candidate's changed signature. Production
+// consumers must interpret the complete edge before projecting or publishing
+// claims.
 class RealizedProtocol {
   mlir::OwningOpRef<mlir::ModuleOp> original, candidate;
   std::string record;
