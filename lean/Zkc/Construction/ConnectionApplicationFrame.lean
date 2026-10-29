@@ -111,7 +111,7 @@ theorem Holds.applicationExit {model : DomainModel} {scope : Scope}
   rw [remaining] at base
   have installed := installComponents_holds (.cons values binders) base
     (calleeOutputs role scopes (Operands.identity types)) outputs (by
-      rw [comps_eval_calleeOutputs, ConnectionLibrary.staticMask_identity]
+      rw [comps_eval_calleeOutputs, InputVisibility.staticMask_identity]
       exact read)
   cases history with
   | none => exact installed

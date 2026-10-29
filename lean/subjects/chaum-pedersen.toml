@@ -25,8 +25,8 @@ interactive_views = "lean/ZkcExamples/Structured/ChaumPedersenViews.lean"
 interactive_export = "lean/bridges/structured/fixtures/chaum-pedersen.json"
 interactive_source = "lean/bridges/structured/fixtures/chaum-pedersen.mlir"
 
-[normal_forms]
-request = "lean/bridges/structured/normal-forms/chaum-pedersen.toml"
+[source_views]
+selections = ["ChaumPedersen"]
 
 [assumptions]
 requested = ["exporter.structured-denotation", "exporter.checked-candidate",

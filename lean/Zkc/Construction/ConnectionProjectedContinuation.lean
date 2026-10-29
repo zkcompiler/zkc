@@ -35,7 +35,7 @@ theorem maskNext_denote {model : DomainModel} {I : PIR.Signature} {scope : Scope
   cases binder with
   | here =>
     exact (comps_eval_calleeOutputs (LawResults.empty model) binders role values scopes
-      (Operands.identity types)).trans (ConnectionLibrary.staticMask_identity role scopes values)
+      (Operands.identity types)).trans (InputVisibility.staticMask_identity role scopes values)
   | there binder =>
     exact identityArgument_eval (.there binder)
       (show Binders model (.tuple types :: scope) from .cons values binders)

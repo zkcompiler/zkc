@@ -1,6 +1,8 @@
 module
 
-public import ZkcExamples.Structured.GkrSourceCallbacks
+public import ZkcExamples.Structured.Generated.Presentations.Gkr
+public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import ZkcExamples.Structured.GkrVerifierProcess
 public import ZkcExamples.Structured.GkrRoundsReading
 public import Zkc.Semantics.Yields
 public import Zkc.Source.TypedABI
@@ -65,19 +67,19 @@ theorem split_pending_plain (left right : List F) (sameLength : right.length = l
       show 0 < left.length by omega, Values.get, List.take_left, List.drop_left]
 
 theorem output_reads (ctx : ProtocolContext) (handle : Nat) (point : List F) :
-    (GkrSourceCallbacks.verifierOutputProcess (F := F) (G := G) ctx (some handle)
+    (Generated.Presentations.Gkr.Root.verifierOutputProcess (F := F) (G := G) ctx (some handle)
         (some point)).interpret CommonAdapter.project =
       (GkrVerifier.outputRound ctx handle point).bind (fun next => .done (some next)) := by
-  simp only [GkrSourceCallbacks.verifierOutputProcess, GkrVerifier.outputRound,
+  simp only [Generated.Presentations.Gkr.Root.verifierOutputProcess, GkrVerifier.outputRound,
     GkrVerifier.outputDelivery, PIR.Process.interpret, CommonAdapter.project, PIR.Process.bind, GkrRoundsReading.append_plain]
   rfl
 
 /-- One line-coefficient iteration of the original is one further coefficient. -/
 theorem coefficient_reads (ctx : ProtocolContext) (coefficients : List F) :
-    (GkrSourceCallbacks.verifierCoefficientProcess (F := F) (G := G) ctx
+    (Generated.Presentations.Gkr.Root.verifierCoefficientProcess (F := F) (G := G) ctx
         (some coefficients)).interpret CommonAdapter.project =
       (GkrVerifier.lineCoefficient ctx coefficients).bind (fun next => .done (some next)) := by
-  simp only [GkrSourceCallbacks.verifierCoefficientProcess, GkrVerifier.lineCoefficient,
+  simp only [Generated.Presentations.Gkr.Root.verifierCoefficientProcess, GkrVerifier.lineCoefficient,
     PIR.Process.interpret, CommonAdapter.project, PIR.Process.bind, GkrRoundsReading.append_plain]
   rfl
 
@@ -206,7 +208,7 @@ theorem layer_reads (handle layers width selector : Nat) (add mul : List F)
       (GkrSourceLaws.block mul layer (2 ^ (width + width + width))) = some (mulTables layer))
     (selectorBound : layers ≤ 2 ^ selector) (widthBound : width ≤ 4)
     (state : GkrVerifier.State F) (inside : state.1 < layers) (pointLength : state.2.1.length = width) :
-    (GkrSourceCallbacks.verifierLayerProcess (F := F) (G := G) {} state.1 (some add) (some mul)
+    (Generated.Presentations.Gkr.Root.verifierLayerProcess (F := F) (G := G) {} state.1 (some add) (some mul)
         (some selector) (some width) (some handle) (some state.2.1) (some state.2.2)).interpret
         CommonAdapter.project =
       (GkrVerifier.layerStep {} handle width addTables mulTables state).bind
@@ -214,14 +216,14 @@ theorem layer_reads (handle layers width selector : Nat) (add mul : List F)
   obtain ⟨layer, point, claim⟩ := state
   dsimp only at inside pointLength ⊢
   obtain ⟨separate, leftSeparate, rightSeparate⟩ := contexts_separate
-  unfold GkrSourceCallbacks.verifierLayerProcess GkrVerifier.layerStep GkrVerifier.layerAfterLeft
-  simp only [tuple20_plain, pending_plain, PIR.Process.bind, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons, Values.get]
-  erw [PIR.Process.interpret_bind, GkrRoundsReading.reads _ leftSeparate handle width widthBound [] claim,
-    PIR.Process.bind_assoc, PIR.Process.bind_assoc]
+  unfold Generated.Presentations.Gkr.Root.verifierLayerProcess GkrVerifier.layerStep GkrVerifier.layerAfterLeft
+  simp only [Evaluation.ComponentTables.toOn, Generated.Presentations.Gkr.payload, Generated.Presentations.Gkr.program, GkrSourceViews.program, Generated.Presentations.Gkr.Rounds.verifierRoundsView, Bindings.optionalPattern, NormalForm.InputPattern.environment, tuple20_plain, pending_plain, PIR.Process.bind, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons, Values.get, PIR.Process.bind_assoc]
+  erw [PIR.Process.interpret_bind, GkrRoundsReading.reads _ leftSeparate handle width widthBound [] claim]
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind]
   refine (rounds_yields _ handle width claim).bind_congr fun left leftLength => ?_
   simp only [PIR.Process.bind, GkrRoundsReading.roundsResults, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons, List.nil_append]
-  erw [PIR.Process.interpret_bind, GkrRoundsReading.reads _ rightSeparate handle width widthBound left.1 left.2,
-    PIR.Process.bind_assoc, PIR.Process.bind_assoc]
+  erw [PIR.Process.interpret_bind, GkrRoundsReading.reads _ rightSeparate handle width widthBound left.1 left.2]
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind]
   refine (rounds_yields _ handle width left.2).bind_congr fun right rightLength => ?_
   simp only [PIR.Process.bind, GkrRoundsReading.roundsResults, Values.get, GkrVerifier.layerAfterRight,
     GkrVerifier.layerAfterConstant, GkrRoundsReading.tuple40_plain, TypedABI.get_cons_here, TypedABI.get_cons_there, Values.get_cons, split_pending_plain left.1 right.1
@@ -235,11 +237,11 @@ theorem layer_reads (handle layers width selector : Nat) (add mul : List F)
     Nat.lt_of_le_of_lt (by simp [GkrSourceLaws.block]) addBound
   have mulBlock : (GkrSourceLaws.block mul layer (2 ^ (width + width + width))).length < indexLimit :=
     Nat.lt_of_le_of_lt (by simp [GkrSourceLaws.block]) mulBound
-  have fold := GkrSourceCallbacks.verifierCoefficient_fold (F := F) (G := G) {} separate none width
+  have fold := Generated.Presentations.Gkr.Root.verifierCoefficient_fold (F := F) (G := G) {} (.ofSeparate separate (by decide)) none width
     widthBound (.cons (some [first]) .nil) (some [first])
-    (GkrSourceCallbacks.verifierCoefficientState_masked {} _ rfl (some [first]))
+    (Generated.Presentations.Gkr.Root.verifierCoefficientState_masked {} _ rfl (some [first]))
   erw [fold]
-  rw [Finite.fold_range_repeatN (fun result => GkrSourceCallbacks.verifierCoefficientProcess (G := G) {}
+  rw [Finite.fold_range_repeatN (fun result => Generated.Presentations.Gkr.Root.verifierCoefficientProcess (G := G) {}
     result) 0 width (some [first]), PIR.Process.interpret_bind,
     GkrRoundsReading.repeatN_reads CommonAdapter.project _ (GkrVerifier.lineCoefficient {}) some
       (fun coefficients => coefficient_reads {} coefficients) width [first]]
@@ -254,7 +256,7 @@ theorem layer_reads (handle layers width selector : Nat) (add mul : List F)
   have coefficientsBound : coefficients.length < indexLimit := by
     rw [coefficientsLength]; unfold indexLimit; omega
   have pointsBound : left.1.length < indexLimit := by rw [leftLength]; unfold indexLimit; omega
-  simp only [GkrSourceCallbacks.verifierCoefficientState, Values.get, sum_plain,
+  simp only [Generated.Presentations.Gkr.Root.verifierCoefficientState, Values.get, sum_plain,
     selectBlock_plain add layer selector _ addShape positive position addBound,
     selectBlock_plain mul layer selector _ mulShape positive position mulBound,
     evaluateWiring_plain width _ point left.1 right.1 (addTables layer) (addDecoded layer inside)
@@ -319,7 +321,7 @@ theorem layers_reads (handle layers width selector : Nat) (add mul : List F)
     (selectorBound : layers ≤ 2 ^ selector) (widthBound : width ≤ 4) :
     ∀ (count : Nat) (state : GkrVerifier.State F), state.1 + count ≤ layers → state.2.1.length = width →
       (Finite.fold (fun (result : Option (List F) × Option F) index =>
-          GkrSourceCallbacks.verifierLayerProcess (F := F) (G := G) {} index (some add) (some mul)
+          Generated.Presentations.Gkr.Root.verifierLayerProcess (F := F) (G := G) {} index (some add) (some mul)
             (some selector) (some width) (some handle) result.1 result.2)
           (List.range' state.1 count) (some state.2.1, some state.2.2)).interpret CommonAdapter.project =
         (PIR.repeatN count (GkrVerifier.layerStep {} handle width addTables mulTables) state).bind

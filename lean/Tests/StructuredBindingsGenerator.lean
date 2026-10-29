@@ -2,11 +2,12 @@ import Tests.Generators.SumcheckBindings
 import ZkcTools.StructuredSource.Bindings.Gkr
 import ZkcTools.StructuredSource.Root
 import ZkcTools.StructuredSource.Bindings.Inputs
+import ZkcTools.StructuredSource.Bindings.PresentInputs
 import ZkcTools.StructuredSource.Bindings.Ledger
 import Tests.StructuredBindingsGeneric
 import ZkcExamples.Structured.SumcheckSourceData
 import ZkcExamples.Structured.Generated.Bindings.TwoSumsData
-import ZkcExamples.Structured.Generated.Bindings.GkrRoundsData
+import ZkcExamples.Structured.GkrSourceData
 
 namespace Tests.StructuredBindingsGenerator
 
@@ -16,23 +17,22 @@ No old Python execution AST or evaluator participates in this route. -/
 
 open Zkc.Source.Structured ZkcTools.StructuredSource.Bindings
 
-private def clients : List (Snapshot × Output × Bool × String) := [
+private def clients : List (Snapshot × Output × Bool × Option String) := [
   (ZkcExamples.Structured.SumcheckSourceData.snapshot,
     { moduleName := "ZkcExamples.Structured.Generated.Bindings.SmallSumcheck"
       sourceModule := "ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs"
       programExpression := "ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.program"
-      importedExpression := "ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.imported" }, false, "ZkcExamples.Structured.SumcheckSourceData"),
+      importedExpression := "ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.imported" }, false, some "ZkcExamples.Structured.SumcheckSourceData"),
   (ZkcExamples.Structured.Generated.Bindings.TwoSumsData.snapshot,
     { moduleName := "ZkcExamples.Structured.Generated.Bindings.TwoSums"
       sourceModule := "ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs"
       programExpression := "ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.program"
-      importedExpression := "ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.imported" }, false, "ZkcExamples.Structured.Generated.Bindings.TwoSumsData"),
-  (ZkcExamples.Structured.Generated.Bindings.GkrRoundsData.snapshot,
+      importedExpression := "ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.imported" }, false, some "ZkcExamples.Structured.Generated.Bindings.TwoSumsData"),
+  (ZkcExamples.Structured.GkrSourceData.snapshot,
     { moduleName := "ZkcExamples.Structured.Generated.Bindings.GkrRounds"
-      sourceModule := "ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs"
-      programExpression := "ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs.program"
-      importedExpression := "ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs.imported" }, true,
-      "ZkcExamples.Structured.Generated.Bindings.GkrRoundsData")]
+      sourceModule := "ZkcExamples.Structured.GkrSourceViews"
+      programExpression := "ZkcExamples.Structured.GkrSourceViews.program"
+      importedExpression := "ZkcExamples.Structured.GkrSourceViews.imported" }, true, none)]
 
 private def require (result : Except String String) : IO String :=
   match result with
@@ -47,19 +47,22 @@ def main (args : List String) : IO Unit := do
         throw (IO.userError "unknown bindings client")
       pure (directory, some client)
     | _ => throw (IO.userError "expected output directory [--only client]")
-  let generic := Tests.StructuredBindingsGeneric.program
-  let genericOutput : Output := {
-    moduleName := "Tests.Generated.StructuredBindingsGeneric"
-    sourceModule := "Tests.Generated.StructuredBindingsGenericInputs"
-    programExpression := "Tests.Generated.StructuredBindingsGenericInputs.program"
-    importedExpression := "Tests.Generated.StructuredBindingsGenericInputs.imported" }
-  let genericPath := System.FilePath.mk directory / "Tests/Generated/StructuredBindingsGeneric.lean"
-  IO.FS.createDirAll genericPath.parent.get!
-  IO.FS.writeFile (genericPath.withExtension "inputs.lean") (inputsSource generic
-    genericOutput.sourceModule "Tests.StructuredBindingsGeneric")
-  IO.FS.writeFile genericPath (← require (source generic genericOutput))
-  IO.FS.writeFile (genericPath.withExtension "callbacks.lean") (← require (callbacksSource generic genericOutput))
-  IO.println "generated no-helper default callback fixture"
+  if selected.isNone then
+    let generic := Tests.StructuredBindingsGeneric.program
+    let genericOutput : Output := {
+      moduleName := "Tests.Generated.StructuredBindingsGeneric"
+      sourceModule := "Tests.Generated.StructuredBindingsGenericInputs"
+      programExpression := "Tests.Generated.StructuredBindingsGenericInputs.program"
+      importedExpression := "Tests.Generated.StructuredBindingsGenericInputs.imported" }
+    let genericPath := System.FilePath.mk directory / "Tests/Generated/StructuredBindingsGeneric.lean"
+    IO.FS.createDirAll genericPath.parent.get!
+    IO.FS.writeFile (genericPath.withExtension "inputs.lean") (inputsSource generic
+      genericOutput.sourceModule "Tests.StructuredBindingsGeneric")
+    IO.FS.writeFile genericPath (← require (source generic genericOutput))
+    IO.FS.writeFile (genericPath.withExtension "present.lean") (← require (PresentInputs.source generic
+      { genericOutput with moduleName := "Tests.Generated.StructuredBindingsGenericPresent" } 0))
+    IO.FS.writeFile (genericPath.withExtension "callbacks.lean") (← require (callbacksSource generic genericOutput))
+    IO.println "generated no-helper default callback fixture"
   for (snapshot, output, gate, dataModule) in clients do
     if selected.any (fun client => !output.moduleName.endsWith ("." ++ client)) then continue
     let program ← match check snapshot with
@@ -73,7 +76,8 @@ def main (args : List String) : IO Unit := do
       else pure output
     let path := System.FilePath.mk directory / (output.moduleName.replace "." "/" ++ ".lean")
     IO.FS.createDirAll path.parent.get!
-    IO.FS.writeFile (path.withExtension "inputs.lean") (inputsSource program output.sourceModule dataModule)
+    if let some dataModule := dataModule then
+      IO.FS.writeFile (path.withExtension "inputs.lean") (inputsSource program output.sourceModule dataModule)
     IO.FS.writeFile path (← require (source program output))
     IO.FS.writeFile (path.withExtension "callbacks.lean") (← require (if gate then callbacksSource program output else
       Tests.Generators.SumcheckBindings.sumcheckCallbacksSource program output))
@@ -86,6 +90,7 @@ def main (args : List String) : IO Unit := do
     IO.println s!"generated {output.moduleName}"
 
 private def subjectDescriptor : ZkcTools.StructuredSource.Root.FixedSubjectOutput := {
+  connectionModule := "Generated.Connection"
   moduleName := "Generated.Subject", sourceModule := "Source", pairModule := "Pair", modelModule := "Model"
   originalExpression := "snapshot", importedExpression := "imported", artifactsExpression := "artifacts"
   modelExpression := "model", targetName := "fixed_target"

@@ -85,8 +85,8 @@ def lean_native(args):
     if "bridges" in stages:
         with native_stage(selection, "bridges"):
             run([sys.executable, bridge / "check.py", "--compiler", compiler / "zkc-compile",
-                 "--reference", compiler / "test/zkc-common_reference-test",
-                 "--lean", ROOT / "lean/.lake/build/bin/common-source", "--cases", "80",
+                 "--reference", compiler / "test/zkc-structured_reference-test",
+                 "--lean", ROOT / "lean/.lake/build/bin/structured-source", "--cases", "80",
                  "--report", output / "differential.json"], env=store)
             run([sys.executable, ROOT / "lean/bridges/structured/check.py",
                  "--compiler", compiler / "zkc-compile",
@@ -156,8 +156,7 @@ def lean_native(args):
             evidence = subjects / "evidence"
     if "normal-forms" in stages:
         with native_stage(selection, "normal-forms"):
-            for request in sorted((ROOT / "lean/bridges/structured/normal-forms").glob("*.toml")):
-                run([sys.executable, ROOT / "lean/bridges/structured/normal_forms.py", request, "--check"], env=store)
+            run([sys.executable, ROOT / "lean/checks/check_source_views.py"], env=store)
     if "reports" in stages:
         with native_stage(selection, "reports"):
             # The assurance reports join the declaration records with this run's evidence.

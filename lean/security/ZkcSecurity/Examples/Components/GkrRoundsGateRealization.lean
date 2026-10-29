@@ -11,7 +11,7 @@ circuit correctness, target truth or honesty of a received verifier message. -/
 set_option autoImplicit false
 namespace ZkcSecurity.Examples.Components.GkrRoundsGateRealization
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.Bindings
-open ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs
+open ZkcExamples.Structured.GkrSourceViews
 open GkrRoundsHelpers GkrRoundsProcesses GkrRoundsReference GkrRoundsRealization
 open Zkc.Polynomial.Multilinear
 open ZkcSecurity.Families.Sumcheck

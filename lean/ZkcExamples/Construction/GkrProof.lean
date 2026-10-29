@@ -31,23 +31,14 @@ theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
     compiledVerifier challenge inputValues outputValues add mul layers selector width initial proof =
       transform context challenge (verifier inputValues outputValues add mul layers selector width handle) initial proof := by
   rw [compiledVerifier, ScalarVerifier.verify_eq_runK program context participant acceptancePosition
-    challenge (inputs inputValues outputValues add mul layers selector width) (GkrDomainRoot.artifactInputs inputValues outputValues add mul layers selector width []) (by rfl) initial proof]
+    challenge (inputs inputValues outputValues add mul layers selector width) (GkrDomainConnection.artifactInputs inputValues outputValues add mul layers selector width []) (by rfl) initial proof]
   have keys : ScalarVerifier.origin participant = Origin.withoutCoordinates := by funext origin; rfl
   rw [keys]
   have context_same : context = GkrSourceProtocol.context := by rw [context_eq]; rfl
   have accepts (result : Domain.Result (uniformCarriers F G)) :
       ScalarVerifier.acceptance acceptancePosition result = Uniform.SourceProcess.acceptance result.values := by
     rw [acceptancePosition_eq]
-    unfold ScalarVerifier.acceptance
-    cases result.values with
-    | nil => rfl
-    | cons head tail =>
-      cases head with
-      | data payload =>
-        rcases payload with ⟨ty, admissible, value⟩
-        cases ty <;> rfl
-      | transcript => rfl
-      | indices => rfl
+    exact ScalarConnection.acceptance_first result
   simp only [accepts, context_same]
   exact GkrDomainConnection.domain_to_source challenge inputValues outputValues add mul layers selector width handle initial proof
 

@@ -44,13 +44,10 @@ types and exact closed region signatures, including dormant bodies. Typed erasur
 roundtrips for all regions; successful formation preserves all raw structure.
 Each import profile supplies its own operation resolution.
 The single-result `Source.Program` is an independent reference
-profile with the exact bridge `Program.denote_toRegion`. The participant profile
-and admitted scalar imports have the corresponding `Common` bridges, retaining
-the final output-role restriction as well as all actions and stops.
-`Common.ParticipantOp` and its dialect are indexed by the selected participant.
-A region lowered for one participant cannot be interpreted by another
-participant's meaning without an explicit change of representation.
-Structured protocol roots instead use a role-agnostic dialect: role indices are
+profile with the exact bridge `Program.denote_toRegion`. The former Common flat-AST lowering and its theorems are retired. Common scalar
+clients now derive their process equations from Structured participant meanings,
+retaining final output-role restriction, actions and stops.
+Structured protocol roots use a role-agnostic dialect: role indices are
 resolved within each root, and the meaning receives the chosen participant.
 Closed helper dialects have no protocol effects, and roots never enter helper
 closure tables.
@@ -192,7 +189,7 @@ prefix to the full finite execution. `eventually_finishes` proves that every
 fixed total handler reaches the same complete result at some finite budget.
 It does not assert a uniform depth across all reply-dependent continuations or
 a finite number of branches when the reply type is infinite.
-The scalar profile admits finite straight-line bodies with bounded static
-helper inlining, without general native loops or recursion.
+The derived scalar request profile selects finite straight-line Structured
+bodies with pure helpers, without general native loops or recursion.
 A partial external-reply/waiting scheduler is not supplied by the total-handler
 model; it requires a separately specified interface.

@@ -13,10 +13,16 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 
 
 ROLES = (
+    "EmbeddingEqualityValidator",
+    "GkrProducer",
+    "GkrValidator",
+    "SchnorrValidator",
+    "SchnorrAndValidator",
     "SmallSumcheckProducer",
     "SmallSumcheckValidator",
     "TwoSumsProducer",
@@ -104,10 +110,15 @@ def main() -> None:
         if imports[0] not in {
             "ZkcExamples.Construction.Generated.SmallSumcheckPair",
             "ZkcExamples.Construction.Generated.TwoSumsPair",
+            "ZkcExamples.Construction.Generated.GkrPair",
+            "ZkcExamples.Construction.GkrProofParticipant",
+            "ZkcExamples.Construction.SchnorrProofParticipant",
+            "ZkcExamples.Construction.SchnorrAndProofParticipant",
             "ZkcExamples.Construction.ChaumPedersenProofParticipant",
             "ZkcExamples.Construction.OkamotoProofParticipant",
             "ZkcExamples.Construction.GuessProofParticipant",
             "ZkcExamples.Construction.BatchOpeningArtifacts",
+            "ZkcExamples.Construction.EmbeddingEqualityParticipant",
         }:
             raise AssertionError('generated view imports an unexpected constructed pair')
         if re.search(r"\bDomain\.(?:evaluate|step)\b", text):
@@ -196,6 +207,16 @@ def main() -> None:
             raise AssertionError(name)
         mutations.append({"name": name, "role": role, "status": "kernel-equation-refused"})
         print(f"PASS {name}", flush=True)
+    # A changed internal callback layout must pass the same generic root engine,
+    # including full returns, rather than a family-specific generator template.
+    shifted = subprocess.run(
+        [sys.executable, str(root / "checks/check_connection_layout.py"),
+         "--records", str(directory.resolve() / "shifted-layout")],
+        cwd=root, env=env, text=True, capture_output=True, timeout=900,
+    )
+    (directory / "shifted-layout.log").write_text(shifted.stdout + shifted.stderr)
+    if shifted.returncode:
+        raise AssertionError("generic shifted-layout connection failed; see shifted-layout.log")
     report = {"format": "zkc.constructed-view-controls/0", "generated": receipts,
               "connections": connection_receipts, "mutations": mutations}
     (directory / "report.json").write_text(json.dumps(report, indent=2) + "\n")

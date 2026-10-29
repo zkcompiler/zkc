@@ -11,7 +11,7 @@ public meta import Zkc.Construction.ArtifactBindingTactic
 
 @[expose] public section
 
-/-! Actual native bytes, canonical metered execution and authored source
+/-! Interpreted bytes, canonical metered execution and authored source
 acceptance. No relation, honesty or codec premise restricts the byte bridge. -/
 set_option autoImplicit false
 set_option maxRecDepth 50000
@@ -107,8 +107,14 @@ theorem embedded (values : List F) (claim : F) (rounds : Nat) :
       some (nominalInputs values claim rounds) := rfl
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- The actual public input row followed by the profile's transcript input. -/
+def physicalInputs (values : List F) (claim : F) (rounds : Nat)
+    (history : Domain.History (Structured.uniformCarriers F G)) : DomainVM.Environment F G :=
+  Domain.inputFrame SumcheckProof.context (nominalInputs values claim rounds) history
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem input_schema (values : List F) (claim : F) (rounds : Nat) :
-    (SumcheckDomainConnection.frame (G := G) values claim rounds []).map Domain.Value.sort =
+    (physicalInputs (G := G) values claim rounds []).map Domain.Value.sort =
       SumcheckProof.participant.inputs := rfl
 
 theorem return_schema : DomainVM.ReturnSchema SumcheckProof.participant := by decide +kernel
@@ -117,10 +123,10 @@ theorem scalar_origin : ScalarVerifier.origin SumcheckProof.participant = Origin
 
 theorem normalized (values : List F) (claim : F) (rounds : Nat) :
     DomainVM.observation SumcheckProof.program SumcheckProof.context
-      (Code.instructions lowered.code) lowered.returned (SumcheckDomainConnection.frame (G := G) values claim rounds []) =
+      (Code.instructions lowered.code) lowered.returned (physicalInputs (G := G) values claim rounds []) =
     DomainVM.observation SumcheckProof.program SumcheckProof.context
       SumcheckProof.participant.instructions SumcheckProof.participant.returned
-      (SumcheckDomainConnection.frame values claim rounds []) := by
+      (physicalInputs values claim rounds []) := by
   apply CanonicalNormalization.accepted_sound
   · simpa only [Code.instructionList_eq] using (checkLowering_checks accepted).2.2.2.2.2.2
   · exact input_schema values claim rounds
@@ -134,7 +140,7 @@ theorem executable_metered {m : Type → Type} [Monad m] [LawfulMonad m]
         (SumcheckProof.inputs values claim rounds) initial bytes =
       DomainVM.nativeObservation SumcheckProof.context.suite Origin.withoutCoordinates initial <$>
         DomainVM.metered SumcheckProof.program SumcheckProof.context Origin.withoutCoordinates initial challenge
-          (helperCost installed validator) budget lowered (SumcheckDomainConnection.frame values claim rounds [])
+          (helperCost installed validator) budget lowered (physicalInputs values claim rounds [])
           (decodeProof decode (Plan.types (SumcheckProof.inputs (G := G) values claim rounds) lowered.plan) bytes) :=
   DomainVM.checked_execute_metered SumcheckProof.program SumcheckProof.context initial challenge
     installed SumcheckProof.participant validator decode budget domain_prepared lowered nativeScope native_checked
@@ -181,7 +187,7 @@ theorem domain_prunes {m : Type → Type} [Monad m] [LawfulMonad m]
         (decodeProof decode (Plan.types (SumcheckProof.inputs (G := G) values claim rounds) lowered.plan) (bytes.drop 40))) := by
   conv_rhs =>
     rw [DomainVM.verifier_observation _ _ _ _ _ _
-      (SumcheckDomainConnection.frame values claim rounds []) rfl
+      (physicalInputs values claim rounds []) rfl
       (input_schema values claim rounds) return_schema, scalar_origin, Functor.map_map]
     simp only [← nominal_accepting]
     rw [← normalized values claim rounds]

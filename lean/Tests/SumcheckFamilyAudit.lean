@@ -1,4 +1,22 @@
 module
+import all Zkc.Source.Structured.Bindings.Assembly
+import all Zkc.Source.Structured.Bindings.Component
+import all Zkc.Source.Structured.Bindings.Selection
+import all Zkc.Source.Structured.LoopPresentation
+import all Zkc.Source.Structured.NormalForm.Sites
+import all Zkc.Source.Structured.OccurrencePresentation
+import all Zkc.Source.Structured.ProtocolPresentation
+import all ZkcExamples.Structured.Generated.Scalar.SumcheckSource
+import all ZkcExamples.Structured.Generated.Scalar.SumcheckSourceBindings
+import all ZkcExamples.Structured.Generated.Scalar.SumcheckSourceBindingsCallbacks
+import all ZkcExamples.Structured.Generated.Scalar.SumcheckSourceLibrary
+import all ZkcTools.ConstructionBindings.Alignment
+import all ZkcTools.ConstructionBindings.Inputs
+import all ZkcTools.ConstructionBindings.LibraryBuilder
+import all ZkcTools.ConstructionBindings.LibraryPlan
+import all ZkcTools.ConstructionBindings.Readback
+import all ZkcTools.ConstructionBindings.Root
+import all ZkcTools.ConstructionBindings.Syntax
 import all Zkc.Source.Structured.ReferenceLaws
 import all Zkc.Source.Structured.ReferenceLibrary
 import all Zkc.Source.Structured.MultilinearBodies
@@ -46,7 +64,7 @@ import all Zkc.Construction.OriginalLaws
 import all Zkc.Construction.OriginalRouting
 import all Zkc.Construction.OriginalSimulation
 import all Zkc.Construction.Participant
-import all Zkc.Construction.Projection
+import all Zkc.Construction.InputSelection
 import all Zkc.Construction.Rule
 import all Zkc.Construction.Scalar
 import all Zkc.Construction.ScalarAdapter
@@ -143,7 +161,6 @@ import all Zkc.Semantics.Interpretation
 import all Zkc.Semantics.MonadExecution
 import all Zkc.Semantics.StateInterpretation
 import all Zkc.Semantics.Yields
-import all Zkc.Source.Common
 import all Zkc.Source.Common.Scalar
 import all Zkc.Source.Common.Vocabulary
 import all Zkc.Source.Component
@@ -249,16 +266,8 @@ import all Zkc.Specification
 import all Zkc.Transcript.Interface
 import all ZkcExamples.Construction.Generated.SmallSumcheckPair
 import all ZkcExamples.Construction.SumcheckArtifact
-import all ZkcExamples.Construction.SumcheckDomainConnection
-import all ZkcExamples.Construction.SumcheckDomainControls
-import all ZkcExamples.Construction.SumcheckDomainLoop
-import all ZkcExamples.Construction.SumcheckDomainRoot
-import all ZkcExamples.Construction.SumcheckDomainRound
-import all ZkcExamples.Construction.SumcheckDomainVerifier
 import all ZkcExamples.Construction.SumcheckProof
 import all ZkcExamples.Construction.SumcheckProofParticipant
-import all ZkcExamples.Construction.SumcheckScalarProtocol
-import all ZkcExamples.Construction.SumcheckScalarRound
 import all ZkcExamples.Construction.SumcheckSourceConnection
 import all ZkcExamples.Executable.SumcheckCharges
 import all ZkcExamples.Executable.SumcheckCompleteness
@@ -317,6 +326,103 @@ import all ZkcExamples.Structured.SumcheckVerifierLaws
 import all ZkcExamples.Structured.SumcheckVerifierPrelude
 import all ZkcExamples.Structured.SumcheckVerifierProcess
 import all ZkcExamples.Structured.SumcheckVerifierTerminal
+import all Zkc.Construction.ConnectionActionCoverage
+import all Zkc.Construction.ConnectionActionSupport
+import all Zkc.Construction.ConnectionActions
+import all Zkc.Construction.ConnectionAdmission
+import all Zkc.Construction.ConnectionApplicationCoverageFrame
+import all Zkc.Construction.ConnectionApplicationFrame
+import all Zkc.Construction.ConnectionApplications
+import all Zkc.Construction.ConnectionCalculations
+import all Zkc.Construction.ConnectionCertificate
+import all Zkc.Construction.ConnectionCertificateAdmission
+import all Zkc.Construction.ConnectionComputation
+import all Zkc.Construction.ConnectionContext
+import all Zkc.Construction.ConnectionCoordinates
+import all Zkc.Construction.ConnectionFrame
+import all Zkc.Construction.ConnectionHelperCalculation
+import all Zkc.Construction.ConnectionHelperProjection
+import all Zkc.Construction.ConnectionHelpers
+import all Zkc.Construction.ConnectionInputFrames
+import all Zkc.Construction.ConnectionInputLayout
+import all Zkc.Construction.ConnectionInputSchema
+import all Zkc.Construction.ConnectionInputs
+import all Zkc.Construction.ConnectionInstallation
+import all Zkc.Construction.ConnectionLayout
+import all Zkc.Construction.ConnectionLibrary
+import all Zkc.Construction.ConnectionLoopFrames
+import all Zkc.Construction.ConnectionLoops
+import all Zkc.Construction.ConnectionMasking
+import all Zkc.Construction.ConnectionObservationPrefix
+import all Zkc.Construction.ConnectionObservations
+import all Zkc.Construction.ConnectionOrigins
+import all Zkc.Construction.ConnectionOutputSelection
+import all Zkc.Construction.ConnectionOutputs
+import all Zkc.Construction.ConnectionPresence
+import all Zkc.Construction.ConnectionProjectedContinuation
+import all Zkc.Construction.ConnectionReturnProjection
+import all Zkc.Construction.ConnectionProjectedFrames
+import all Zkc.Construction.ConnectionProjectedLoops
+import all Zkc.Construction.ConnectionRepeatSupport
+import all Zkc.Construction.ConnectionRoot
+import all Zkc.Construction.ConnectionRootCertificate
+import all Zkc.Construction.ConnectionRootInputs
+import all Zkc.Construction.ConnectionRootRoutes
+import all Zkc.Construction.ConnectionRouteCoverage
+import all Zkc.Construction.ConnectionRouteCoverageFrames
+import all Zkc.Construction.ConnectionRouteCoverageLoops
+import all Zkc.Construction.ConnectionRouteCoverageRoot
+import all Zkc.Construction.ConnectionRouteCoverageSupport
+import all Zkc.Construction.ConnectionRouting
+import all Zkc.Construction.ConnectionStaticRoutes
+import all Zkc.Construction.ConnectionSubstitution
+import all Zkc.Construction.ConnectionTargetExtent
+import all Zkc.Construction.ConnectionTargetPrefix
+import all Zkc.Construction.ConnectionTranscript
+import all Zkc.Construction.OriginalABI
+import all Zkc.Construction.OriginalEffects
+import all Zkc.Construction.OriginalFrameRelations
+import all Zkc.Construction.OriginalHeadReduction
+import all Zkc.Construction.OriginalHelperEncoding
+import all Zkc.Construction.OriginalHelpers
+import all Zkc.Construction.OriginalInputs
+import all Zkc.Construction.OriginalLoop
+import all Zkc.Construction.OriginalParticipant
+import all Zkc.Construction.PairAcceptance
+import all Zkc.Construction.ScalarConnection
+import all Zkc.Construction.SourceConnection
+import all Zkc.Construction.Uniform.LoopedSourceProcess
+import all Zkc.Construction.Uniform.ScalarCheckedBytes
+import all Zkc.Construction.Uniform.ScalarCheckedFrames
+import all Zkc.Construction.Uniform.ScalarFragment
+import all Zkc.Construction.Uniform.ScalarHandles
+import all Zkc.Construction.Uniform.ScalarObservation
+import all Zkc.Construction.Uniform.ScalarProjection
+import all Zkc.Construction.Uniform.ScalarSourceCost
+import all Zkc.Construction.Uniform.ScalarSupport
+import all Zkc.Construction.Uniform.ScalarSupportProposer
+import all Zkc.Construction.Uniform.SourceProcess
+import all Zkc.Semantics.OperationSupport
+import all Zkc.Source.OperationSupport
+import all Zkc.Source.Structured.BodyBindings
+import all Zkc.Source.Structured.ComponentClosure
+import all Zkc.Source.Structured.ComponentDeclarations
+import all Zkc.Source.Structured.DomainFrame
+import all Zkc.Source.Structured.DomainLinking
+import all Zkc.Source.Structured.DomainProtocolLinking
+import all Zkc.Source.Structured.InputVisibility
+import all Zkc.Source.Structured.NormalForm.Observation
+import all ZkcExamples.Executable.SumcheckCheckedRound
+import all ZkcExamples.Executable.SumcheckSourceHonest
+import all ZkcExamples.Structured.Generated.Connections.SmallSumcheck
+import all ZkcExamples.Structured.Generated.Constructed.SmallSumcheckProducer
+import all ZkcExamples.Structured.MultilinearSourceBindings
+import all ZkcExamples.Structured.OriginalSumcheckChecks
+import all ZkcExamples.Structured.OriginalSumcheckLibrary
+import all ZkcExamples.Structured.SumcheckMathBindings
+import all ZkcExamples.Structured.SumcheckPendingBodies
+import all ZkcExamples.Structured.SumcheckProverLaws
+import all ZkcExamples.Structured.SumcheckProverProcess
 public import Lean.Util.FoldConsts
 
 /-! Strict type/body auditing. Ownership is determined by the defining module,
@@ -431,10 +537,9 @@ run_cmd do
     `ZkcExamples.Executable.SumcheckFamily.receive_types,
     `ZkcExamples.Executable.SumcheckFamily.honest_accepted,
     `ZkcExamples.Executable.SumcheckCharges.sufficient_family,
-    `ZkcExamples.Executable.SumcheckDomainHonest.programOccurrences,
-    `ZkcExamples.Executable.SumcheckDomainHonest.programHelpers,
-    `ZkcExamples.Executable.SumcheckDomainHonest.programPrices,
-    `ZkcExamples.Executable.SumcheckDomainHonest.realization,
+    `ZkcExamples.Executable.SumcheckCheckedRound.target_yields,
+    `ZkcExamples.Executable.SumcheckSourceHonest.source_passes,
+    `ZkcExamples.Executable.SumcheckDomainHonest.returned,
     `ZkcExamples.Executable.SumcheckDomainHonest.observation_passes,
     `ZkcExamples.Executable.SumcheckCompleteness.honest_metered,
     `ZkcExamples.Executable.SumcheckCompleteness.honest_accepted,
@@ -468,7 +573,8 @@ run_cmd do
         `ZkcExamples.Executable.SumcheckFamily.honest_metered,
         `ZkcExamples.Executable.SumcheckFamily.Source.observation_passes].contains root then
       for used in names do
-        if #[`ZkcExamples.Construction.SumcheckProof, `ZkcExamples.Construction.SumcheckDomainConnection,
+        if #[`ZkcExamples.Construction.SumcheckProof, `ZkcExamples.Construction.SumcheckSourceConnection,
+            `ZkcExamples.Structured.Generated.Connections.SmallSumcheck,
             `ZkcExamples.Executable.SumcheckProof, `ZkcExamples.Executable.SumcheckHelpers,
             `ZkcExamples.Executable.SumcheckDomainHonest,
             `ZkcExamples.Executable.SumcheckFamily.ProgramShape.honest_success,

@@ -207,7 +207,7 @@ class Generation:
         package = self.package if source.is_relative_to(self.package) else LEAN
         flags = ([f"--root={source_root}"] if source_root is not None else
                  [] if source.is_relative_to(package) else [f"--root={source.parent}"])
-        command = [self.lean, "-DwarningAsError=true", *flags]
+        command = [self.lean, "-j2", "-M16384", "-DwarningAsError=true", *flags]
         command += ["--run", source] if run else ["-o", target, source]
         print(f"Checking {module}", flush=True)
         return self.execute(command, package)
@@ -284,7 +284,8 @@ class Generation:
         (directory / "identities.json").write_text(json.dumps(identities, indent=2) + "\n")
 
     def assemble(self, root, config):
-        self.prepare(["ZkcTools.StructuredSource.Root"])
+        self.prepare(["ZkcTools.StructuredSource.Root",
+                      "ZkcTools.ConstructionBindings.Generate"])
         name = root["name"]
         directory = self.directory / name
         identities = json.loads((directory / "identities.json").read_text())
@@ -294,12 +295,16 @@ class Generation:
         subject = f"ZkcSecurity.Examples.Generated.{name}"
         producer = f"ZkcExamples.Structured.Generated.Constructed.{name}Producer"
         validator = producer.removesuffix("Producer") + "Validator"
+        connection = f"ZkcExamples.Structured.Generated.Connections.{name}"
         # Printers write into scratch. retain() owns comparisons and writes.
-        paths = {module: directory / (module.rsplit(".", 1)[1] + ".lean")
-                 for module in (inputs, producer, validator, subject)}
+        paths = {module: directory.joinpath(*module.split(".")).with_suffix(".lean")
+                 for module in (inputs, producer, validator, connection, subject)}
+        for path in paths.values():
+            path.parent.mkdir(parents=True, exist_ok=True)
         self.printer("Assemble" + name, f'''import ZkcTools.StructuredSource.Bindings.Inputs
 import ZkcTools.StructuredSource.Constructed
 import ZkcTools.StructuredSource.Root
+import ZkcTools.ConstructionBindings.Generate
 import {data}
 import {pair_module}
 open Zkc.Source.Structured ZkcTools.StructuredSource
@@ -314,7 +319,19 @@ def main : IO Unit := do
     match Constructed.source artifact {{moduleName, artifactModule := {quoted(pair_module)}, artifactExpression}} with
     | .error reason => throw (IO.userError reason)
     | .ok source => IO.FS.writeFile path source
+  let .ok connection := ZkcTools.ConstructionBindings.Generate.source
+    {{ sourceModule := {quoted(inputs)}.toName, program := {quoted(inputs + '.program')}.toName }}
+    {{ moduleName := {quoted(connection)}.toName, participants := [
+      {{ mode := .producer, artifactModule := {quoted(pair_module)}.toName,
+         artifact := {quoted(pair_module + '.Producer.participant')}.toName,
+         viewModule := {quoted(producer)}.toName }},
+      {{ mode := .validator, artifactModule := {quoted(pair_module)}.toName,
+         artifact := {quoted(pair_module + '.Validator.participant')}.toName,
+         viewModule := {quoted(validator)}.toName }}] }}
+    | throw (IO.userError "connection proposal refused")
+  IO.FS.writeFile {quoted(str(paths[connection]))} connection
   IO.FS.writeFile {quoted(str(paths[subject]))} (Root.fixedSubjectSource {{
+    connectionModule := {quoted(connection)},
     moduleName := {quoted(subject)}, sourceModule := {quoted(inputs)},
     originalExpression := {quoted(data+'.snapshot')}, importedExpression := {quoted(inputs+'.imported')},
     pairModule := {quoted(pair_module)}, artifactsExpression := {quoted(pair_module+'.artifacts')},
@@ -325,7 +342,7 @@ def main : IO Unit := do
     producerExportExpression := {quoted(quoted(identities['producer']))},
     validatorExportExpression := {quoted(quoted(identities['validator']))} }})
 ''')
-        for module in (inputs, producer, validator, subject):
+        for module in (inputs, producer, validator, connection, subject):
             self.retain(module, paths[module].read_text())
         self.prepare(["ZkcSecurity.Generation.SubjectABI",
                       "ZkcSecurity.Generation.SubjectABI.Command"])

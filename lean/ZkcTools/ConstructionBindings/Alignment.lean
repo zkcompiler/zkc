@@ -3,6 +3,7 @@ module
 public import Zkc.Construction.ConnectionCertificate
 public import Zkc.Construction.ConnectionInstallation
 public import ZkcTools.ConstructionBindings.Readback
+public meta import ZkcTools.ConstructionBindings.Syntax
 public meta import Lean.Elab.Tactic
 
 public meta section
@@ -29,9 +30,10 @@ open Zkc.Source Zkc.Source.Structured Zkc.Construction
 def tracePhase (message : String) : TacticM Unit := do
   if (← getOptions).getBool `zkc.connection.trace false then
     let now ← IO.monoMsNow
+    let heartbeats ← IO.getNumHeartbeats
     let destination := (← getOptions).get `zkc.connection.traceFile ("" : String)
     if destination.isEmpty then logInfo m!"{now} {message}"
-    else IO.FS.withFile destination .append fun handle => handle.putStrLn s!"{now} {message}"
+    else IO.FS.withFile destination .append fun handle => handle.putStrLn s!"{now} hb={heartbeats} {message}"
 
 private def listEntries (expression : Expr) : MetaM (Array Expr) := do
   let mut entries := #[]
@@ -96,7 +98,11 @@ private def tryReflexivity (goals : List MVarId) : TacticM (List MVarId) := do
     return !(type.isAppOf ``List || type.isAppOf ``Option || type.isConstOf ``Nat)
 
 private def applyRule (goal : MVarId) (rule : Name) : TacticM (List MVarId) := do
-  let pending ← goal.apply (← mkConstWithFreshMVarLevels rule)
+  let expected ← whnf (← instantiateMVars (← goal.getType))
+  let constructor ← mkConstWithFreshMVarLevels rule
+  let constructor := if expected.isAppOf ``ConnectionCertificate.Alignment then
+      mkAppN constructor (expected.getAppArgs.extract 0 13) else constructor
+  let pending ← goal.apply constructor
   tryReflexivity pending
 
 /-- Keep unsolved finite proof fields as goals until their checking equalities
@@ -121,6 +127,9 @@ private def viewHead (expression : Expr) : MetaM Expr := do
   repeat
     current := (← instantiateMVars current).consumeMData
     while current.isHeadBetaTarget do current := current.headBeta.consumeMData
+    if let .letE _ _ value body _ := current then
+      current := body.instantiate1 value
+      continue
     if [``Domain.View.sequence, ``Domain.View.calculation, ``Domain.View.receive,
         ``Domain.View.send, ``Domain.View.guard, ``Domain.View.helper, ``Domain.View.loop,
         ``Domain.View.indicesEmpty, ``Domain.View.indicesAppend, ``Domain.View.observe,
@@ -253,7 +262,16 @@ private def helperBinding (definitions helper program : Expr) : TacticM Expr := 
       return ← instantiateMVars binding
   throwError "alignment-helper-key-mismatch"
 
-private partial def staticGoal (goal : MVarId) : TacticM Unit := goal.withContext do
+mutual
+private partial def staticGoal (goal : MVarId) : TacticM Unit := do
+  let start ← IO.monoMsNow
+  let head := (← goal.getType).getAppFn.constName?
+  try staticStep goal
+  finally
+    let elapsed := (← IO.monoMsNow) - start
+    if elapsed > 1000 then tracePhase s!"static {head} ms={elapsed}"
+
+private partial def staticStep (goal : MVarId) : TacticM Unit := goal.withContext do
   if ← goal.isAssigned then return
   let saved ← saveState
   try
@@ -332,6 +350,8 @@ private partial def staticGoal (goal : MVarId) : TacticM Unit := goal.withContex
   setGoals [goal]
   evalTactic (← `(tactic| decide +kernel))
 
+end
+
 private partial def deriveExtent (goal : MVarId) : TacticM Unit := goal.withContext do
   let expected ← whnf (← instantiateMVars (← goal.getType))
   let args := expected.getAppArgs
@@ -384,10 +404,20 @@ structure PlacementCost where
 
 initialize placementCosts : IO.Ref (Array PlacementCost) ← IO.mkRef #[]
 
-initialize checkedAlignments : SimplePersistentEnvExtension Name (Array Name) ←
+private def indexAlignment (state : Std.HashMap UInt64 (Array Name))
+    (entry : UInt64 × Name) : Std.HashMap UInt64 (Array Name) :=
+  state.insert entry.1 (((state[entry.1]?).getD #[]).push entry.2)
+
+initialize checkedAlignments :
+    SimplePersistentEnvExtension (UInt64 × Name) (Std.HashMap UInt64 (Array Name)) ←
   registerSimplePersistentEnvExtension {
-    addEntryFn := Array.push
-    addImportedFn := fun imported => imported.foldl (· ++ ·) #[]
+    -- Local asynchronous additions do not synchronize theorem tasks. Hashes
+    -- select exact-placement candidates only; neither a hash nor a cache hit
+    -- supplies evidence without checking the declaration's complete type.
+    asyncMode := .local
+    addEntryFn := indexAlignment
+    addImportedFn := fun imported => imported.foldl
+      (fun state entries => entries.foldl indexAlignment state) {}
   }
 
 /-- Close an exact retained placement behind a checked declaration. This is
@@ -395,11 +425,12 @@ an exact-placement boundary: it does not assert relocation invariance. -/
 private def checkedBody (goal : MVarId) (build : MVarId → TacticM Unit) : TacticM Unit :=
   goal.withContext do
     let expected ← instantiateMVars (← goal.getType)
-    for name in checkedAlignments.getState (← getEnv) do
+    let candidates := ((checkedAlignments.getState (← getEnv))[expected.hash]?).getD #[]
+    for name in candidates do
       unless (← getEnv).contains name do continue
       let candidate := mkConst name
       let type ← inferType candidate
-      if type.isForall then continue
+      if type.isForall || type != expected then continue
       let saved ← saveState
       if ← isDefEq type expected then
         goal.assign candidate
@@ -426,7 +457,7 @@ private def checkedBody (goal : MVarId) (build : MVarId → TacticM Unit) : Tact
     let proposed ← IO.monoNanosNow
     withOptions (Elab.async.set · false) <| addDecl (.defnDecl declaration)
     let checked ← IO.monoNanosNow
-    modifyEnv fun environment => addNoncomputable (checkedAlignments.addEntry environment name) name
+    modifyEnv fun environment => addNoncomputable (checkedAlignments.addEntry environment (closedType.hash, name)) name
     placementCosts.modify (·.push ⟨name, proposed - start, checked - proposed⟩)
     tracePhase s!"checked body {name}: proposal_ns={proposed-start}; kernel_ns={checked-proposed}"
     let reference := mkAppN (mkConst name closed.levelArgs.toList) closed.exprArgs
@@ -435,16 +466,32 @@ private def checkedBody (goal : MVarId) (build : MVarId → TacticM Unit) : Tact
 /-- A proposal-local cache of closed syntax reductions. Backtracking across
 candidate target cuts does not change these finite source/layout expressions.
 It contains no evidence and is discarded after one root proposal. -/
-private abbrev SyntaxCache := IO.Ref (Std.HashMap Expr Expr)
+private abbrev SyntaxCache := Syntax.Cache
 
-private def reducedSyntax (cache : SyntaxCache) (expression : Expr) : MetaM Expr := do
-  let expression ← instantiateMVars expression
-  let closed := !expression.hasMVar && !expression.hasFVar
-  if closed then
-    if let some result := (← cache.get)[expression]? then return result
-  let result ← withTransparency .all <| reduce expression true true true
-  if closed then cache.modify (·.insert expression result)
-  return result
+private def reducedSyntax (cache : SyntaxCache) (expression : Expr) : TacticM Expr :=
+  Syntax.normalize cache expression
+
+/-- Propose liveness by finite typed substitutions. Each attempted omission
+is accepted only when the actual continuation is definitionally unchanged.
+The application constructor checks that equality again; this cache contains
+syntax only and supplies no semantic evidence. -/
+private def returnSelection (cache : SyntaxCache) (types next : Expr) : TacticM Expr := do
+  let entries ← listEntries types
+  let expected ← mkAppM ``ConnectionReturnProjection.Selection #[types]
+  let literal := fun (flags : Array Bool) => do
+    let mut literalSyntax ← `(term| Zkc.Source.Values.nil)
+    for keep in flags.reverse do
+      literalSyntax ← `(term| Zkc.Source.Values.cons $(quote keep) $literalSyntax)
+    Term.elabTerm literalSyntax (some expected)
+  let mut flags := Array.replicate entries.size true
+  let mut selected ← literal flags
+  for index in [:entries.size] do
+    let candidate ← literal (flags.set! index false)
+    let projected ← reducedSyntax cache (← mkAppM ``ConnectionReturnProjection.continuation #[candidate, next])
+    if ← isDefEq projected next then
+      flags := flags.set! index false
+      selected := candidate
+  return ← Syntax.freeze cache selected
 
 private structure CutDiscovery where
   suffixes : Array Expr
@@ -453,7 +500,7 @@ private structure CutDiscovery where
 initialize discoveredCutException : InternalExceptionId ←
   registerInternalExceptionId `ZkcTools.ConstructionBindings.discoveredCut
 
-/-- Discover a caller suffix by the existing full-return readback, without
+/-- Discover a caller suffix by checked selected-return readback, without
 installing a new trusted rule. The final selected prefix is checked again by
 `Alignment.application`, including its extent, output row and continuation. -/
 private def discoverReturn (discovery : CutDiscovery) (expected : Expr) : TacticM Unit := do
@@ -507,9 +554,16 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
   unless expected.isAppOf ``ConnectionCertificate.Alignment do
     throwError "alignment-expected-derivation"
   let mut args := expected.getAppArgs
-  let sourceSyntax ← reducedSyntax cache args[13]!
-  let frameSyntax ← reducedSyntax cache args[12]!
-  args := (args.set! 13 sourceSyntax).set! 12 frameSyntax
+  -- Canonicalize the dependent indices too. Leaving a computed scope or
+  -- library key row here makes every constructor compare that computation
+  -- against the compact indices of the cached source and frame.
+  for index in [3, 5, 7, 8, 9, 10, 11, 12, 13] do
+    let start ← IO.monoMsNow
+    args := args.set! index (← Syntax.freeze cache (← reducedSyntax cache args[index]!))
+    let elapsed := (← IO.monoMsNow) - start
+    if elapsed > 1000 then tracePhase s!"index {index} ms={elapsed}"
+  for index in [1, 2, 14] do
+    args := args.set! index (← Syntax.freeze cache args[index]!)
   goal.setType (mkAppN expected.getAppFn args)
   let scope := args[10]!
   let layout := args[12]!
@@ -536,6 +590,11 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
     let site := parts[parts.size - 3]!
     let arguments := parts[parts.size - 2]!
     let next := parts.back!
+    let key ← mkAppM ``NormalForm.calleeAt #[args[3]!, callee]
+    let declared ← mkAppM ``NormalForm.CalleeKey.signature #[key]
+    let types ← reducedSyntax cache (← mkAppM ``ProtocolSignature.outputs #[declared])
+    let selection ← returnSelection cache types next
+    let continuationChecked ← mkEqRefl next
     let slices ← withLocalDeclD `sliceModel (mkConst ``DomainModel) fun model => do
       let mut current ← viewHead (mkApp target model)
       let mut views : Array Expr := #[]
@@ -549,25 +608,29 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
         current ← viewHead current.getAppArgs[2]!
       return result
     let search : CutDiscovery := ⟨slices.map Prod.snd, ← IO.mkRef none⟩
+    let candidatesFor := fun index =>
+      [(index, ``ConnectionCertificate.Alignment.application),
+       (index, ``ConnectionCertificate.Alignment.applicationRetainedHistory)]
     let mut candidates := if slices.isEmpty then [] else
-      (slices.size - 1) :: (List.range (slices.size - 1))
-    let mut visited : List Nat := []
+      ((slices.size - 1) :: List.range (slices.size - 1)).flatMap candidatesFor
+    let mut visited : List (Nat × Name) := []
     let mut failure : MessageData := "no finite target slice"
     while !candidates.isEmpty do
-      let index := candidates.head!
+      let (index, rule) := candidates.head!
       candidates := candidates.tail!
-      if visited.contains index then continue
-      visited := index :: visited
+      if visited.contains (index, rule) then continue
+      visited := (index, rule) :: visited
       let (spine, rest) := slices[index]!
       search.found.set none
-      tracePhase s!"application slice {index}/{slices.size}"
+      tracePhase s!"application slice {index}/{slices.size} {rule}"
 
       let saved ← saveState
       try
         let supplied := [( `payload, payload), (`same, same), (`library, library), (`callee, callee),
           (`signature, signature), (`roles, roles), (`site, site), (`arguments, arguments),
-          (`spine, spine), (`next, next), (`rest, rest)]
-        let constructor ← mkConstWithFreshMVarLevels ``ConnectionCertificate.Alignment.application
+          (`spine, spine), (`next, next), (`rest, rest),
+          (`returnSelection, selection), (`continuationChecked, continuationChecked)]
+        let constructor ← mkConstWithFreshMVarLevels rule
         let mut type ← inferType constructor
         let mut fields := #[]
         for index in [:100] do
@@ -600,9 +663,9 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
         match alignments with
         | body :: tails =>
           checkedBody body (derive cache (some search))
+          for pending in statics do unless ← pending.isAssigned do staticGoal pending
           for alignment in tails do derive cache discovery alignment
         | [] => throwError "alignment-application-body-missing"
-        for pending in statics do unless ← pending.isAssigned do staticGoal pending
         return
       catch error =>
         saved.restore
@@ -610,11 +673,14 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
           if id == discoveredCutException then
             if let some cut ← search.found.get then
               tracePhase s!"application discovered prefix {cut}"
-              candidates := cut :: candidates
+              candidates := candidatesFor cut ++ candidates
               continue
             throw error
         failure := error.toMessageData
-        tracePhase s!"slice failed: {← failure.toString}"
+        -- Formatting a dependent failure can traverse an entire root proof,
+        -- even when tracePhase is disabled. Keep the original diagnostic for
+        -- the final error; the search trace records only the failed choice.
+        tracePhase s!"application slice {index} refused by {rule}"
     throwError "alignment-callee-slice-refused: {failure}"
   if source.isAppOf ``NormalForm.Form.split then
     let parts := source.getAppArgs
@@ -736,6 +802,7 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
       if source.isAppOf ``NormalForm.Form.repeat then throwError "alignment-loop-view-mismatch"
       throwError "alignment-return-or-view-mismatch: source={source.getAppFn}, view={block.getAppFn}"
     let first ← viewHead block.getAppArgs[1]!
+    tracePhase s!"target {first.getAppFn.constName?}"
     if first.isAppOf ``Domain.View.calculation then
       let parts := first.getAppArgs
       let operation := parts[1]!
@@ -955,8 +1022,11 @@ search are untrusted; successful output is data checked by the Lean kernel. -/
 elab "derive_connection_alignment" : tactic => withMainContext do
   let goal ← getMainGoal
   let pending := (← getGoals).tail
-  let cache ← IO.mkRef ({} : Std.HashMap Expr Expr)
+  let cache ← Syntax.newCache
+  let start ← IO.monoNanosNow
   derive cache none goal
+  let elapsed := (← IO.monoNanosNow) - start
+  tracePhase s!"alignment proposal total_ns={elapsed}; syntax_kernel_ns={← cache.kernelNanos.get}; syntax_declarations={(← cache.declarations.get).size}"
   let result ← instantiateMVars (mkMVar goal)
   if result.hasExprMVar then throwError "alignment-unresolved-finite-admission"
   setGoals pending

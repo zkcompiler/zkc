@@ -393,7 +393,7 @@ macro "retain_connection_frame" : tactic => `(tactic|
         (related.projectedExit routing.context role spec.stateScopes binders value reachedHistory encodedValues) (by retain_connection_frame)
   | @application context definitions callees out role scopes outputs history scope frames layout
       payload same library callee signature signatureMatch roles site arguments calleeOutputs calleeHistory
-      spine extent physicalExtent admission bodyCertificate next rest tail bodyIH tailIH =>
+      spine extent physicalExtent admission returnSelection bodyCertificate next continuationChecked rest tail bodyIH tailIH =>
     rcases selectionMeaning with ⟨rfl, rfl, rfl⟩
     subst definitions
     let selected := library.entry callee
@@ -409,8 +409,12 @@ macro "retain_connection_frame" : tactic => `(tactic|
       ⟨rfl,rfl,rfl⟩ environment binders reachedHistory environment related
       (by simp [ArtifactBinding.Captures])
     change Covered _ _ _ _ ((library.processes model callee (context.enter site roles)
-      (Arguments.eval (LawResults.empty model) arguments binders)).bind _)
-    rw [library.processes_entry, ConnectionLibrary.Entry.process_form, ← instantiated]
+      (Arguments.eval (LawResults.empty model) arguments binders)).bind fun values =>
+        next.denoteOn model Occurrence.actions (Occurrence.helpers model payload) (LawResults.empty model)
+          context (runsAtOn model Occurrence.actions Occurrence.iterations (Occurrence.helpers model payload)
+            (Occurrence.table model payload) context role) (library.processes model) (.cons values binders))
+    rw [library.processes_entry, ConnectionLibrary.Entry.process_form, ← instantiated,
+      ConnectionReturnProjection.bind_continuation returnSelection _ next continuationChecked]
     apply checked.bind
     intro values returned
     apply Classical.choice
@@ -418,6 +422,42 @@ macro "retain_connection_frame" : tactic => `(tactic|
     obtain ⟨result, resultKept, nextRelated⟩ := applicationWitness binders related kept extent values
       (calleeAt callees callee).role (calleeAt callees callee).signature.outputScopes
       calleeOutputs read calleeHistory routing.context.suite admission
+    refine ⟨?_⟩
+    simpa only [frames_cons, Form.denoteOn, PIR.Process.bind] using
+      tailIH model (Occurrence.helpers model payload) (fun _ => rfl) (Occurrence.table model payload)
+        (library.processes model) (library.holds model) ⟨rfl,rfl,rfl⟩ captured (.cons values binders)
+        reachedHistory result nextRelated (ArtifactBinding.captures_trans retained resultKept)
+  | @applicationRetainedHistory context definitions callees out role scopes outputs history scope frames layout
+      payload same library callee signature signatureMatch roles site arguments calleeOutputs calleeHistory
+      spine extent physicalExtent admission inputHistory separate returnSelection bodyCertificate next continuationChecked rest tail bodyIH tailIH =>
+    rcases selectionMeaning with ⟨rfl, rfl, rfl⟩
+    subst definitions
+    let selected := library.entry callee
+    have instantiated := ConnectionSubstitution.form_denote
+      (Arguments.eval (LawResults.empty model) arguments binders) binders
+      (fun binder => entryAt arguments binder) (ConnectionSubstitution.arguments_related arguments binders)
+      Occurrence.actions (Occurrence.helpers model payload) (context.enter site roles)
+      (runsAtOn model Occurrence.actions Occurrence.iterations (Occurrence.helpers model payload)
+        (Occurrence.table model payload) (context.enter site roles) (calleeAt callees callee).role)
+      (selected.earlier.processes model) selected.form
+    have checked := bodyIH model (Occurrence.helpers model payload) (fun _ => rfl)
+      (Occurrence.table model payload) (selected.earlier.processes model) (selected.earlier.holds model)
+      ⟨rfl,rfl,rfl⟩ environment binders reachedHistory environment related
+      (by simp [ArtifactBinding.Captures])
+    change Covered _ _ _ _ ((library.processes model callee (context.enter site roles)
+      (Arguments.eval (LawResults.empty model) arguments binders)).bind fun values =>
+        next.denoteOn model Occurrence.actions (Occurrence.helpers model payload) (LawResults.empty model)
+          context (runsAtOn model Occurrence.actions Occurrence.iterations (Occurrence.helpers model payload)
+            (Occurrence.table model payload) context role) (library.processes model) (.cons values binders))
+    rw [library.processes_entry, ConnectionLibrary.Entry.process_form, ← instantiated,
+      ConnectionReturnProjection.bind_continuation returnSelection _ next continuationChecked]
+    apply checked.bind
+    intro values returned
+    apply Classical.choice
+    obtain ⟨frame, read, kept⟩ := returned
+    obtain ⟨result, resultKept, nextRelated⟩ := retainedApplicationWitness binders related kept extent values
+      (calleeAt callees callee).role (calleeAt callees callee).signature.outputScopes
+      calleeOutputs read calleeHistory routing.context.suite admission inputHistory.inputCell
     refine ⟨?_⟩
     simpa only [frames_cons, Form.denoteOn, PIR.Process.bind] using
       tailIH model (Occurrence.helpers model payload) (fun _ => rfl) (Occurrence.table model payload)

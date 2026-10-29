@@ -51,6 +51,10 @@ private def zeroOracle : Domain.Oracle Id model.toCarriers Nat
   | _, .challenge ⟨_, _, some ⟨_, _, .field _⟩⟩, state => (.returned 0, state + 1)
   | _, .challenge ⟨_, _, some ⟨_, _, .boolean⟩⟩, state => (.returned (), state)
   | _, .challenge ⟨_, _, some ⟨_, _, .group _⟩⟩, state => (.returned (), state)
+  | _, .challenge ⟨_, _, some ⟨_, _, .groups _⟩⟩, state => (.returned (), state)
+  | _, .challenge ⟨_, _, some ⟨_, _, .indices⟩⟩, state => (.returned (), state)
+  | _, .challenge ⟨_, _, some ⟨_, _, .oracle _⟩⟩, state => (.returned (), state)
+  | _, .challenge ⟨_, _, some ⟨_, _, .oracleSequence _ _⟩⟩, state => (.returned (), state)
   | _, .challenge ⟨_, _, some ⟨_, _, .service _⟩⟩, state => (.returned (), state)
   | _, .challenge ⟨_, _, some ⟨_, _, .index⟩⟩, state => (.returned (), state)
   | _, .challenge ⟨_, _, some ⟨_, _, .vector _⟩⟩, state => (.returned (), state)
@@ -71,16 +75,31 @@ theorem actual_one_layer_proof : pairedExecution.producer.state.proof =
 example : pairedExecution.producer.state.oracle = 1 := by kernel_rfl
 example : pairedExecution.validator.map (fun result => result.state.oracle) = some 2 := by kernel_rfl
 example : pairedExecution.validator.map (fun result => result.state.proof) = some [] := by kernel_rfl
-/-- Exact full source histories follow from the universal actual-pair theorem.
-The finite producer-created proof and endpoint decisions remain separate controls. -/
+/-- The universal source pair retains arbitrary replies and every occurrence
+boundary. Concrete producer output and endpoint decisions remain separate controls. -/
 example (encoding : CircuitEncoding ℚ) (outputs : List ℚ)
     (admitted : encoding.Admitted 4 4 outputs) (correct : encoding.Outputs outputs)
-    (handle : Nat) (service : Option Nat)
-    (history : Domain.History (uniformCarriers ℚ ℚ)) :
-    ZkcSecurity.FiatShamir.Readback CanonicalReadback.Post
-      (CanonicalReadback.producer encoding outputs handle service history)
-      (CanonicalReadback.validator encoding outputs handle history) :=
-  CanonicalReadback.actual encoding outputs admitted correct handle service history
+    (handle : Nat) (service : Option Nat) (scope : ZkcSecurity.Source.PairScope)
+    (roles : scope.producer = 0 ∧ scope.validator = 1)
+    (outputDelivery : (ZkcExamples.Structured.GkrVerifier.outputSite {},
+      ZkcExamples.Structured.GkrVerifier.outputDeliverySite {}) ∈ scope.deliveries)
+    (leftDelivery : (ZkcExamples.Structured.GkrVerifier.challengeSite
+      (ZkcExamples.Structured.GkrVerifier.leftContext {}),
+      ZkcExamples.Structured.GkrVerifier.deliverySite
+      (ZkcExamples.Structured.GkrVerifier.leftContext {})) ∈ scope.deliveries)
+    (rightDelivery : (ZkcExamples.Structured.GkrVerifier.challengeSite
+      (ZkcExamples.Structured.GkrVerifier.rightContext {}),
+      ZkcExamples.Structured.GkrVerifier.deliverySite
+      (ZkcExamples.Structured.GkrVerifier.rightContext {})) ∈ scope.deliveries)
+    (lineDelivery : (ZkcExamples.Structured.GkrVerifier.lineChallengeSite {},
+      ZkcExamples.Structured.GkrVerifier.lineDeliverySite {}) ∈ scope.deliveries) :
+    ZkcSecurity.Source.Pair scope CanonicalReadback.Post
+      (Occurrence.participant (ringModel ℚ ℚ) ZkcExamples.Structured.GkrSourceViews.program 0
+        (HonestProducerSource.currentInputs encoding outputs service))
+      (Occurrence.participant (ringModel ℚ ℚ) ZkcExamples.Structured.GkrSourceViews.program 1
+        (HonestProducerSource.currentInputs encoding outputs (some handle))) :=
+  CanonicalReadback.actual encoding outputs admitted correct handle service scope roles
+    outputDelivery leftDelivery rightDelivery lineDelivery
 
 theorem actual_one_layer_accepts : (pairedExecution.validator.map (fun result =>
     match result.outcome with

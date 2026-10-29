@@ -21,10 +21,10 @@ open Zkc.Source
 
 /-- Data transported in a proof or bound in a public statement. The nominal
 sort determines the existing recursive value interpretation. Eligibility excludes
-capabilities recursively; it does not assume relation validity or finite size. -/
+services and logical oracle handles recursively; it does not assume relation validity or finite size. -/
 structure Payload (carriers : Structured.Carriers) where
   ty : Structured.Ty
-  admissible : ty.isService = false
+  admissible : ty.isHandle = false
   contents : carriers.Value ty
 
 namespace Payload
@@ -42,7 +42,7 @@ universe. General products and sequences use the same dependent constructor. -/
   ⟨.group domain, rfl, value⟩
 
 def ofValue (ty : Structured.Ty) (contents : carriers.Value ty) : Option (Payload carriers) :=
-  if admissible : ty.isService = false then some ⟨ty, admissible, contents⟩ else none
+  if admissible : ty.isHandle = false then some ⟨ty, admissible, contents⟩ else none
 
 /-- Only exact nominal equality authorizes transport. Equal host carrier types
 cannot identify different fields, products, constructors or ordered fields. -/
@@ -81,17 +81,17 @@ theorem value_wrong_type {ty : Structured.Ty} {payload : Payload carriers}
     (different : payload.ty ≠ ty) : payload.value ty = none := by
   simp [value, different]
 
-/-- A capability cannot occur even inside an otherwise ordinary aggregate. -/
-theorem value_service_refused {ty : Structured.Ty} (service : ty.isService = true)
+/-- A logical handle cannot occur even inside an otherwise ordinary aggregate. -/
+theorem value_handle_refused {ty : Structured.Ty} (handle : ty.isHandle = true)
     (payload : Payload carriers) : payload.value ty = none := by
   apply value_wrong_type
   intro same
   have admissible := payload.admissible
-  rw [same, service] at admissible
+  rw [same, handle] at admissible
   cases admissible
 
 /-- Fixed-sort packaging is injective; eligibility proof witnesses carry no identity. -/
-@[simp] theorem mk_inj {ty : Structured.Ty} {firstProof secondProof : ty.isService = false}
+@[simp] theorem mk_inj {ty : Structured.Ty} {firstProof secondProof : ty.isHandle = false}
     {first second : carriers.Value ty} :
     (Payload.mk ty firstProof first : Payload carriers) = ⟨ty, secondProof, second⟩ ↔
       first = second := by
@@ -102,7 +102,7 @@ theorem value_service_refused {ty : Structured.Ty} (service : ty.isService = tru
   · rintro rfl
     rfl
 
-theorem ofValue_injective {ty : Structured.Ty} (admissible : ty.isService = false) :
+theorem ofValue_injective {ty : Structured.Ty} (admissible : ty.isHandle = false) :
     Function.Injective (ofValue (carriers := carriers) ty) := by
   intro first second same
   have decoded := congrArg (fun encoded => encoded >>= value ty) same

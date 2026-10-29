@@ -18,9 +18,9 @@ open ZkcSecurity.Claims
 
 private def digest := "sha256:" ++ String.ofList (List.replicate 64 '0')
 private def input : ContractClause :=
-  ⟨.input, "honest", ⟨"Truth", [⟨.input, 0, "P"⟩]⟩, none, none⟩
+  ⟨.input, "honest", ⟨"Truth", [⟨.input, 0, "P", false⟩]⟩, none, none⟩
 private def target (role : String) : ContractClause :=
-  ⟨.target, "truth", ⟨"Truth", [⟨.input, 0, role⟩]⟩, none, some ⟨.output, 0, "V"⟩⟩
+  ⟨.target, "truth", ⟨"Truth", [⟨.input, 0, role, false⟩]⟩, none, some ⟨.output, 0, "V", false⟩⟩
 private def declaration : Relation :=
   ⟨"Truth", .publicDef, "example.boolean/0", "truth", "1", [.boolean], [.boolean],
     ["statement"], none, [.index, .natural "7"]⟩

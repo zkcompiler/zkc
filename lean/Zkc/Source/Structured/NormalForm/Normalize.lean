@@ -333,6 +333,7 @@ def literalTerm {Δ : Scope} : (ty : Ty) → Nat → Option (Term laws Δ ty)
   | .vector _, _ => none
   | .group _, _ => none
   | .service _, _ => none
+  | .indices, _ | .groups _, _ | .oracle _, _ | .oracleSequence .., _
   | .sequence _, _ | .product .., _ => none
 
 /-- A returning law's results as components: from its result function, from the
@@ -717,6 +718,10 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
     if roles.any (roster ≤ ·) then .error "role-outside-roster"
     else if roles.contains role then next (state.push (.cons (entryAt state.env arg) .nil))
     else next (state.push (.cons .absent .nil))
+  | .assemble _ roles, args, _, _, state, next =>
+    if roles.any (roster ≤ ·) then .error "role-outside-roster"
+    else next (state.push (.cons
+      (assembleComponent (fun owner => owner == role) .absent roles (lookup state.env args)) .nil))
   | .draw owner field site, .cons arg .nil, _, _, state, next =>
     if roster ≤ owner then .error "role-outside-roster"
     else if owner != role then next (state.push (.cons .absent .nil))

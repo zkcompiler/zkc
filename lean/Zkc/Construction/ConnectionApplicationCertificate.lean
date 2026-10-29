@@ -13,7 +13,7 @@ callback is an instance field. -/
 set_option autoImplicit false
 namespace Zkc.Construction.ConnectionApplications
 open Zkc.Source Zkc.Source.Structured NormalForm ConnectionFrame
-open ConnectionLibrary ConnectionCertificate
+open ConnectionLibrary ConnectionCertificate InputVisibility
 
 /-- The whole nominal output tuple, exact enclosing stack, reached transcript
 and retained caller frame at an actual application boundary. -/

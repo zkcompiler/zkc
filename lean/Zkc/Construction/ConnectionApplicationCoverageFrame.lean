@@ -107,4 +107,46 @@ theorem applicationWitness {model : DomainModel} {scope : Scope}
     exact ⟨result, keptResult, related.applicationExit binders keptResult extent resultSize values
       role scopes outputs readResult (some reference) suite historyRead⟩
 
+/-- An existing current-history cell needs no fabricated transcript. Immutable
+captures transport it to the exact exit extent, independently of target execution. -/
+theorem retainedApplicationWitness {model : DomainModel} {scope : Scope}
+    (binders : Binders model scope) {history : Domain.History model.toCarriers}
+    {layout : Layout scope} {before frame : Domain.Environment model.toCarriers}
+    (related : Holds model binders history layout before)
+    (retained : ArtifactBinding.Captures before frame) (extent : Nat)
+    {types : List Ty} (values : Values (Component model.Value) types)
+    (role : Nat) (scopes : List (List Nat)) (outputs : List Original.Location)
+    (read : Original.ValuesHolds frame outputs (maskValues role scopes values))
+    (selector : Option Nat) (suite : String)
+    (admission : applicationAdmitted layout.length extent outputs none)
+    (inputHistory : match selector with
+      | none => True
+      | some reference => layout[reference]? = some (.history suite)) :
+    ∃ result, ArtifactBinding.Captures before result ∧
+      Holds model (.cons values binders) history
+        (applicationLayout layout extent role scopes types outputs selector suite) result := by
+  have bound : before.length ≤ extent := by rw [← related.length]; exact admission.1
+  have kept := fitFrame_captures bound retained
+  have outputBound : ∀ reference, .data reference ∈ outputs → reference < extent := by
+    intro reference member
+    have check := List.all_eq_true.mp admission.2.1 (.data reference) member
+    simpa using check
+  have readFit := valuesHolds_transport outputs (maskValues role scopes values) read
+    (fun reference member _ found => fitFrame_read (outputBound reference member) found)
+  cases selector with
+  | none =>
+    exact ⟨fitFrame extent frame, kept, related.applicationExit binders kept extent
+      (fitFrame_length _ _) values role scopes outputs readFit none suite trivial⟩
+  | some reference =>
+    obtain ⟨physical, found, meaning⟩ := related.lookup inputHistory
+    have oldRead : before[reference]? = some (.transcript suite history) := by
+      simpa only [Cell.Holds] using meaning ▸ found
+    have inLayout := List.getElem?_eq_some_iff.mp inputHistory |>.1
+    have inBefore : reference < before.length := by rw [← related.length]; exact inLayout
+    have inFrame : reference < extent := Nat.lt_of_lt_of_le inLayout admission.1
+    rw [← retained, List.getElem?_take_of_lt inBefore] at oldRead
+    have historyRead := fitFrame_read inFrame oldRead
+    exact ⟨fitFrame extent frame, kept, related.applicationExit binders kept extent
+      (fitFrame_length _ _) values role scopes outputs readFit (some reference) suite historyRead⟩
+
 end Zkc.Construction.ConnectionFrame

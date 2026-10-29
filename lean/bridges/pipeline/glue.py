@@ -270,12 +270,12 @@ theorem context_eq : context =
     {context_literal} := by
   decide +kernel
 
-/-- The composed check's two rules, each on the actual export. -/
+/-- The structural check and exact occurrence provenance on the actual export. -/
 theorem compiled_rules : checkExport {data}.snapshot participant = .ok () ∧ check context participant = .ok () ∧
-    project program context participant = .ok () := by
-  obtain ⟨exported, construction, _, projection⟩ :=
+    SourceOccurrences.check {data}.snapshot context participant = .ok () := by
+  obtain ⟨exported, construction, occurrences⟩ :=
     checkCompiled_components context_admitted compiled
-  exact ⟨exported, construction, projection⟩
+  exact ⟨exported, construction, occurrences⟩
 
 /-- The per-compile construction check accepts the actual export. -/
 theorem accepted : checkExport {data}.snapshot participant = .ok () := compiled_rules.1
@@ -283,8 +283,8 @@ theorem accepted : checkExport {data}.snapshot participant = .ok () := compiled_
 /-- The transcript-construction rule accepts the actual export. -/
 theorem checked : check context participant = .ok () := compiled_rules.2.1
 
-/-- The participant projection rule accepts the actual export. -/
-theorem projected : project program context participant = .ok () := compiled_rules.2.2
+/-- Exact source occurrences are retained by the actual export. -/
+theorem source_occurrences : SourceOccurrences.check {data}.snapshot context participant = .ok () := compiled_rules.2.2
 
 set_option smartUnfolding true in
 theorem validator_eq : context.validator = {validator} := by decide +kernel

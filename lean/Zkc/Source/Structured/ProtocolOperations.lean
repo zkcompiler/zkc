@@ -35,6 +35,15 @@ structure RepeatSpec where
   maximum : Nat
   deriving DecidableEq, Repr
 
+/-- Select the already present component for one role. Formation requires
+nonempty distinct role names and availability of each corresponding operand.
+The fallback is absence, never another role's component. -/
+def assembleComponent {V : Ty → Type} {ty : Ty} (selected : Nat → Bool) (absent : V ty) :
+    (roles : List Nat) → Values V (roles.map (fun _ => ty)) → V ty
+  | [], .nil => absent
+  | role :: roles, .cons value values =>
+    if selected role then value else assembleComponent selected absent roles values
+
 /-- Protocol roots have their own operation family, on the same Region carrier.
 Role indices are resolved against the containing root's roster, never global. -/
 inductive ProtocolOp where
@@ -43,6 +52,7 @@ inductive ProtocolOp where
   | guard (owner : Nat) (site : String)
   | exchange (type : Ty) (sender receiver : Nat) (site : String)
   | restrict (type : Ty) (roles : List Nat)
+  | assemble (type : Ty) (roles : List Nat)
   | draw (owner : Nat) (field site : String)
   | statement (relation : String) (types : List Ty) (selectors : List String) (acceptance : Nat)
   | mark (site : String)
@@ -56,6 +66,7 @@ def ProtocolOp.arguments : ProtocolOp → List Ty
   | .repeat spec _ => .index :: (spec.state ++ spec.captures)
   | .guard .. => [.boolean]
   | .exchange ty .. | .restrict ty .. => [ty]
+  | .assemble ty roles => roles.map (fun _ => ty)
   | .draw _ field _ => [.service ("random." ++ field ++ "/0")]
   | .statement _ types .. => types
   | .mark _ => []
@@ -66,7 +77,7 @@ def ProtocolOp.results : ProtocolOp → List Ty
   | .protocolApply callee .. => callee.outputs
   | .repeat spec _ => spec.state
   | .guard .. | .statement .. | .mark _ => []
-  | .exchange ty .. | .restrict ty .. => [ty]
+  | .exchange ty .. | .restrict ty .. | .assemble ty .. => [ty]
   | .draw _ field _ => [.field field]
 
 def ProtocolOp.helpers : ProtocolOp → List Helper

@@ -1,6 +1,7 @@
 module
 
 public import ZkcExamples.Executable.SumcheckCompleteness
+public import Tests.SumcheckFamilyControls
 
 @[expose] public section
 
@@ -61,11 +62,11 @@ theorem unreadable_suffix (low high : F) (proof : Proof F G) :
 
 /-- Mere origin presence from the old interface admits a non-draw request. -/
 def malformedContext : Context :=
-  SumcheckDomainHonest.artifact.description.context.mapReplacement fun replacement =>
+  Tests.SumcheckFamilyControls.actual.description.context.mapReplacement fun replacement =>
     { replacement with request := some ⟨"unsupported", [], .field "bls12-381.fr"⟩ }
 
 def malformedDescription : SumcheckFamily.ProgramShape.Description :=
-  { SumcheckDomainHonest.artifact.description with context := malformedContext, suite := rfl }
+  { Tests.SumcheckFamilyControls.actual.description with context := malformedContext, suite := rfl }
 
 theorem old_origin_presence :
     (malformedDescription.names.firstMessage.origin malformedContext).isSome ∧
@@ -86,11 +87,11 @@ theorem malformed_occurrences_impossible : ¬ SumcheckFamily.Source.Occurrences 
 /-- The raw native lowering check is unchanged, but nominal request admission
 rejects this context with its exact finite-check diagnostic. -/
 theorem malformed_native_refused : DomainVM.checkNativeLowering malformedDescription.program malformedContext
-    installed SumcheckDomainHonest.artifact.participant SumcheckDomainHonest.artifact.validator =
+    installed Tests.SumcheckFamilyControls.actual.participant Tests.SumcheckFamilyControls.actual.validator =
       .error (.different "nominal operation scope") := by
   unfold DomainVM.checkNativeLowering
-  have checked : checkLowering installed SumcheckDomainHonest.artifact.participant
-      SumcheckDomainHonest.artifact.validator = .ok SumcheckProof.lowered := SumcheckProof.accepted
+  have checked : checkLowering installed Tests.SumcheckFamilyControls.actual.participant
+      Tests.SumcheckFamilyControls.actual.validator = .ok SumcheckProof.lowered := SumcheckProof.accepted
   rw [checked]
   kernel_rfl
 

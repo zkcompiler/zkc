@@ -1,11 +1,12 @@
 module
 
+public import ZkcSecurity.Tools.ClaimConstruction
 public import ZkcSecurity.Realizations.Gkr.Generated.SubjectSoundnessRegistration
 public meta import ZkcSecurity.Realizations.Gkr.Generated.SubjectSoundnessRegistration
 
 @[expose] public section
 
-/-! Generated fixed requests. Regenerate with checks/GenerateGkrCanonicalClaims.py. The common renderer emits data and checked receipt-construction calls. -/
+/-! Generated source requests and typed receipts. Regenerate with `lean/bridges/subject.py --write`. Typed library exports fix the subject and registry; source requests select the property and method. -/
 
 namespace ZkcSecurity.Realizations.Gkr.Generated.SubjectSoundnessClaims
 open Zkc.Claims ZkcSecurity.Tools.ClaimConstruction

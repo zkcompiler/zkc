@@ -4,7 +4,10 @@ public import ZkcExamples.Structured.Generated.Constructed.OkamotoValidator
 public import ZkcExamples.Construction.OkamotoProofData
 public import ZkcExamples.Construction.OkamotoProofBodies
 public import ZkcExamples.Construction.OkamotoProofModel
-public import Zkc.Construction.Uniform.SourceProcess
+public import Zkc.Construction.ScalarConnection
+public import Zkc.Construction.Uniform.ScalarSupportProposer
+public import Zkc.Construction.Uniform.ScalarHandles
+public import ZkcExamples.Structured.Generated.Connections.Okamoto
 public import ZkcExamples.Construction.OkamotoArtifact
 public import Zkc.Source.Structured.UnitViews
 
@@ -67,58 +70,47 @@ def inputs (firstBase secondBase point : G) : Domain.Environment (uniformCarrier
 theorem input_sorts (firstBase secondBase point : G) :
     Domain.sortsMatch artifact.inputs (inputs (F := F) (G := G) firstBase secondBase point) = true := by kernel_rfl
 
-/-- Exact Domain participant return, including the transcript and all stops;
-only administrative checkpoint effects are projected away. -/
-theorem participant_values (firstBase secondBase point : G) (handle : Nat) :
-    ((Domain.participant (ringModel F G) program context artifact (inputs firstBase secondBase point)).bind
-      fun result => .done result.values).interpret Original.forgetCheckpoints =
-    (sourceView context (sourceDecision firstBase secondBase point handle) []).bind
-      fun result => .done (returnValues context.suite result) := by
-  rw [← artifact_identity, OkamotoValidator.participant_eq]
-  simp only [OkamotoValidator.view, OkamotoValidator.inputSorts, OkamotoValidator.outputSorts,
-    OkamotoValidator.returned, OkamotoValidator.body,
-    OkamotoValidator.bodyStep0, OkamotoValidator.bodyStep1, OkamotoValidator.bodyStep2, OkamotoValidator.bodyStep3, OkamotoValidator.bodyStep4, OkamotoValidator.bodyStep5, OkamotoValidator.bodyStep6, OkamotoValidator.bodyStep7, OkamotoValidator.bodyStep8, OkamotoValidator.bodyStep9, OkamotoValidator.bodyStep10, OkamotoValidator.bodyStep11, OkamotoValidator.bodyStep12, OkamotoValidator.bodyStep13, OkamotoValidator.bodyStep14, OkamotoValidator.bodyStep15, OkamotoValidator.bodyStep16, OkamotoValidator.bodyStep17, OkamotoValidator.bodyStep18]
-  normalize_scalar_connection
-    unfolding [inputs, context, artifact, OkamotoProofParticipant.participant, OkamotoProofData.snapshot, sourceDecision, source_equation,
-      Zkc.Protocols.Schnorr.Variants.representation, OkamotoProof.wiring]
+def sourceABI : Original.InputABI :=
+  (SourceConnection.canonicalABI program 1 artifact).toOption.get (by decide +kernel)
 
+/-- The exact retained artifact uses the existing generic checked connection. -/
+theorem checkedConnection : SourceConnection.Connected program
+    ZkcExamples.Structured.Generated.Connections.Okamoto.validatorRouting 1 sourceABI artifact :=
+  ScalarConnection.canonicalize
+    ZkcExamples.Structured.Generated.Connections.Okamoto.validatorConnected (by rfl)
+
+/-- Method-independent endpoint admission uses this same complete connection. -/
+theorem requiredConnection : ConnectionAdmission.Required program context .validator artifact :=
+  ConnectionAdmission.ofConnected (boundary := ⟨sourceABI,
+    ZkcExamples.Structured.Generated.Connections.Okamoto.validatorRouting⟩)
+    (by kernel_rfl) checkedConnection
+
+/-- Source-only presentation law for the capability label unobserved by the scalar handler. -/
+theorem source_handle (firstBase secondBase point : G) (original replacement : Nat) :
+    (sourceVerifier (F := F) firstBase secondBase point original).interpret (Uniform.ScalarHandles.replace replacement) =
+      sourceVerifier firstBase secondBase point replacement := by
+  simp only [source_equation]
+  rfl
 
 section Boundary
-variable {m : Type → Type} [Monad m]
+variable {m : Type → Type} [Monad m] [LawfulMonad m]
 
-/-- All returns, stops and unread proof suffixes of the actual participant,
-with an arbitrary consumer of its complete returned tuple. -/
-theorem participant_run {R : Type} (challenge : History F G → m F)
-    (firstBase secondBase point : G) (handle : Nat) (initial : History F G) (proof : Proof F G)
-    (next : Domain.Environment (uniformCarriers F G) → Proof F G → m (PIR.Outcome R × Proof F G)) :
-    runK legacyOrigin initial challenge
-        (Domain.participant (ringModel F G) program context artifact (inputs firstBase secondBase point)) proof
-        (fun result unread => next result.values unread) =
-      runK legacyOrigin initial challenge (sourceView context (sourceDecision firstBase secondBase point handle) []) proof
-        (fun result unread => next (returnValues context.suite result) unread) := by
-  have equation := participant_values (F := F) (G := G) firstBase secondBase point handle
-  have handled := congrArg (fun process => runK legacyOrigin initial challenge process proof next) equation
-  rw [runK_forgetCheckpoints legacyOrigin initial challenge _ proof next] at handled
-  rw [runK_bind, runK_bind] at handled
-  simpa only [runK] using handled
-
-variable [LawfulMonad m]
-
-/-- The replacement for the retained scalar compiled-transform consumer:
-all typed public values, every proof and challenge function in any lawful monad.
-The legacy key adapter runs before the existing challenge oracle. -/
+/-- The full checked connection supplies execution transport for all proofs and replies. -/
 theorem domain_transform (challenge : History F G → m F)
     (firstBase secondBase point : G) (handle : Nat) (initial : History F G) (proof : Proof F G) :
     runK legacyOrigin initial challenge
-        (Domain.participant (ringModel F G) program context artifact (inputs firstBase secondBase point)) proof
-        (fun result unread => pure (.returned (Uniform.SourceProcess.acceptance result.values), unread)) =
-      transform context challenge (sourceVerifier firstBase secondBase point handle) initial proof := by
-  rw [participant_run challenge firstBase secondBase point handle initial proof
-    (fun values unread => pure (.returned (Uniform.SourceProcess.acceptance values), unread))]
-  have law := sourceView_transform_map context challenge
-    (sourceDecision (F := F) (G := G) firstBase secondBase point handle) some initial proof
-  rw [← source_decision] at law
-  exact law
+      (Domain.participant (ringModel F G) program context artifact (inputs firstBase secondBase point)) proof
+      (fun result unread => pure (.returned (Uniform.SourceProcess.acceptance result.values), unread)) =
+    transform context challenge (sourceVerifier firstBase secondBase point handle) initial proof := by
+  let canonical := ZkcExamples.Structured.Generated.Connections.Okamoto.validatorRouting.selectedHandle
+  have law := ScalarConnection.transform (F := F) (G := G) checkedConnection rfl _ rfl (by decide +kernel)
+    (inputs firstBase secondBase point) (sourceInputs firstBase secondBase point canonical) (by kernel_rfl) (by kernel_rfl)
+    (by derive_scalar_support) .here (by rfl) challenge initial proof
+  change _ = transform context challenge (sourceVerifier firstBase secondBase point canonical) initial proof at law
+  have relabel := Uniform.ScalarHandles.transform context canonical challenge
+    (sourceVerifier (F := F) firstBase secondBase point handle) initial proof
+  rw [source_handle] at relabel
+  exact law.trans relabel
 
 /-- The installed Domain runtime has the same complete outcome and unread
 proof after selecting Uniform.SourceProcess.acceptance. Physical frames remain with Domain.run.

@@ -3,6 +3,7 @@ module
 public import ZkcSecurity.Examples.Generated.Components.SmallSumcheckSources
 public import ZkcExamples.Construction.Generated.SmallSumcheckPair
 public import ZkcSecurity.Domains.PrimeField
+public import ZkcExamples.Structured.Generated.Connections.SmallSumcheck
 public import ZkcSecurity.Tools.PairConstruction
 public import ZkcSecurity.Claims.SourceChargeSites
 
@@ -25,6 +26,7 @@ def selected : Zkc.Construction.AuthoredPair.Selection original :=
 def subject : ZkcSecurity.Claims.HonestPair.Subject
     (ZkcSecurity.Domains.PrimeField.blsScalarModel) original imported selected := by
   bind_authored_subject "public_sum" with_registry Zkc.Source.Structured.OpaqueRegistry.empty
+    connections ZkcExamples.Structured.Generated.Connections.SmallSumcheck.producer, ZkcExamples.Structured.Generated.Connections.SmallSumcheck.validator
     exports "sha256:6902d499b5e9984f122dea039a651f2ea32a05e8edbb49f45c28900b27001a20", "sha256:966355c25a8cd7ec3a89fcc0ec7f2b5131d1bf5681bf557f674553b66a022cfb", "sha256:d846cde8e5acaa8352f2370f00ac2443a5709e43238b8fef9c49d4442c5934c4"
 
 abbrev validatorArtifacts := subject.validatorArtifacts

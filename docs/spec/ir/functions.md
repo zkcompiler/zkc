@@ -3,7 +3,7 @@
 Ordinary helper expansion operates on admitted standard `func.func` bodies with
 explicit scope and outcome control. The compiler retains the original and reads
 the actual candidate independently before publication. The
-[formal bridge](../../../lean/docs/spec/common-source.md) imports its declared
+[formal bridge](../../../lean/docs/spec/structured-source.md) imports its declared
 subset; general native expansion retains its own correspondence obligation.
 
 ## Formation and intermediate representation

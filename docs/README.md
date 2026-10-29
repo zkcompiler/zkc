@@ -26,6 +26,9 @@ the [walkthrough](getting-started.md) compiles and runs a complete example.
 implementation requires an explicit correspondence. A specification, compiler
 check, test and security proof establish different claims.
 
+The [contract register](spec/contracts.md) records cross-component owners,
+consumers and interface vocabularies.
+
 Guides explain these contracts without redefining them. Component READMEs own
 their APIs and procedures. [Status](status.md) records implementation coverage;
 [roadmap](roadmap.md) records remaining work. Research proposals, review logs and

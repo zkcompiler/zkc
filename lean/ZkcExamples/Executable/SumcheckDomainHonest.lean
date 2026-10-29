@@ -1,139 +1,82 @@
 module
 
-public import ZkcExamples.Executable.SumcheckFamily
+public import ZkcExamples.Executable.SumcheckSourceHonest
 public import ZkcExamples.Executable.SumcheckCharges
-public import ZkcExamples.Executable.SumcheckProof
-public import ZkcExamples.Executable.SumcheckMetadata
 
 @[expose] public section
 
-/-! The actual retained participant instantiates the reusable canonical family.
-All mathematical induction and generated round/resource correspondence belong
-to the family modules. This module discharges only actual local admission facts. -/
+/-! Honest source success transported through the retained artifact's full
+checked connection. Output, transcript readback and cost use that same artifact. -/
 set_option autoImplicit false
-set_option maxRecDepth 50000
-set_option maxHeartbeats 8000000
 set_option backward.isDefEq.respectTransparency false
+noncomputable section
 namespace ZkcExamples.Executable.SumcheckDomainHonest
 open Zkc Zkc.Construction Zkc.Executable Zkc.Source Zkc.Source.Structured
-open Zkc.Construction.Uniform Zkc.Construction.Uniform.DomainAdapter
-open Zkc.Construction.ArtifactBinding
-open ZkcExamples.Construction.SumcheckDomainConnection
-open Zkc.Polynomial.Multilinear
+open Uniform Uniform.DomainAdapter
+open ZkcExamples.Construction.SumcheckSourceConnection
+attribute [local implicit_reducible] CheckedProtocol.signature
+attribute [local irreducible] DomainVM.Passes
 
 abbrev transcript : SumcheckMessages.Transcript := SumcheckProof.transcript
 abbrev messages {F G : Type} [Field F] (oracle : History F G → F) :=
   SumcheckMessages.honestRounds transcript oracle
 
-/-- The actual artifact, with finite native admission and exact static witnesses. -/
-def artifact : SumcheckFamily.Artifact where
-  description := SumcheckCharges.programShape SumcheckProof.maximum (by decide +kernel)
-  vocabulary := installed
-  participant := ZkcExamples.Construction.SumcheckProof.participant
-  validator := SumcheckProof.validator
-  lowered := SumcheckProof.lowered
-  final := SumcheckProof.nativeScope
-  checked := SumcheckProof.native_checked
-  instructions := by kernel_rfl
-  returns := by kernel_rfl
-  inputSorts := by kernel_rfl
-  codeReading := by rw [SumcheckCharges.lowered_eq]; rfl
-  returned := by kernel_rfl
-  coordinate := SumcheckProof.coordinate
-  plan := SumcheckProof.plan_eq
-  admitted := SumcheckProof.admitted
-
-/-- Every selected occurrence, schema and typed request is checked against the
-actual retained templates. These facts are independent of the static maximum. -/
-theorem programOccurrences (maximum : Nat) (small : maximum < 64) :
-    SumcheckFamily.Source.Occurrences (SumcheckCharges.programShape maximum small) where
-  firstSchema := by kernel_rfl
-  secondSchema := by kernel_rfl
-  first := fun _ => by kernel_rfl
-  second := fun _ => by kernel_rfl
-  draw := fun _ => by kernel_rfl
-  delivery := fun _ => by kernel_rfl
-  firstRequest := by kernel_rfl
-  secondRequest := by kernel_rfl
-  deliveryRequest := by kernel_rfl
-  firstKey := fun _ => by kernel_rfl
-  secondKey := fun _ => by kernel_rfl
-  drawKey := fun _ => by kernel_rfl
-  deliveryKey := fun _ => by kernel_rfl
-
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
-/-- Local mathematical helper laws, derived from actual closed Domain calls.
-Only bounded shaped terminal arguments are required by the family theorem. -/
-theorem programHelpers (maximum : Nat) (small : maximum < 64) :
-    SumcheckFamily.Source.Helpers (F := F) (G := G) (SumcheckCharges.programShape maximum small) where
-  pending := pending_helper
-  openClaim := openClaim_helper
-  atPrefix := atPrefix_helper
-  append := append_helper
-  check := by
-    intro values point claim pointSmall shaped
-    change Domain.callHelper (ringModel F G) ZkcExamples.Construction.SumcheckProof.program
-      ZkcExamples.Structured.SumcheckHelperBodies.checkHelper.name [.data .boolean]
-      [.data (.vector "bls12-381.fr" values), .data (.vector "bls12-381.fr" point),
-        .data (.field "bls12-381.fr" claim)] = _
-    rw [check_helper]
-    have pointBound : point.length < indexLimit := lt_trans pointSmall (by decide)
-    have vectorBound : values.length < indexLimit := by rw [shaped]; exact SumcheckHelpers.indexLimit_pow pointSmall
-    simp only [pointBound, pointSmall, vectorBound, ite_true]
-    have decoded : (ofList? (0 + point.length) values).isSome :=
-      (ofList?_isSome_iff values).mpr (by simpa only [Nat.zero_add] using shaped)
-    obtain ⟨table, tableEq⟩ := Option.isSome_iff_exists.mp decoded
-    rw [Zkc.Protocols.Sumcheck.Multilinear.check, tableEq,
-      restrictPrefixValues_complete values point table tableEq, List.sum_singleton]
+def Success (returned : DomainVM.Environment F G) (unread : Proof F G) : Prop :=
+  returned[0]? = some (.data (.boolean true)) ∧ unread = [] ∧
+    ∃ history, returned = [.data (.boolean true), .transcript context.suite history] ∧
+      ∃ suffix, readbackHistory Origin.withoutCoordinates history = some suffix
 
-/-- The retained helper prices generate the exact current 72 + 59r budget. -/
-theorem programPrices (maximum : Nat) (small : maximum < 64) :
-    SumcheckFamily.Source.Prices (SumcheckCharges.programShape maximum small)
-      (helperCost installed SumcheckProof.validator (F := F) (G := G)) 2 where
-  pending := fun _ => helperCost_le installed SumcheckProof.validator
-    (show helperBound SumcheckProof.validator SumcheckCharges.names.pendingHelper = some 2 by kernel_rfl) _
-  openClaim := fun _ _ => helperCost_le installed SumcheckProof.validator
-    (show helperBound SumcheckProof.validator SumcheckCharges.names.openClaimHelper = some 1 by kernel_rfl) _
-  atPrefix := fun _ _ => helperCost_le installed SumcheckProof.validator
-    (show helperBound SumcheckProof.validator SumcheckCharges.names.atPrefixHelper = some 1 by kernel_rfl) _
-  append := fun _ _ => helperCost_le installed SumcheckProof.validator
-    (show helperBound SumcheckProof.validator SumcheckCharges.names.appendHelper = some 2 by kernel_rfl) _
-  check := fun _ _ _ small shaped => SumcheckHelpers.check_cost small shaped
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- Complete output ABI and the artifact-fixed history projection preserve
+both the actual selected Boolean and readable transcript suffix. -/
+theorem returned (scalar : Values (Component (assignment F G)) program.payload.entry.outputs ×
+    Domain.History (uniformCarriers F G))
+    (actual : Values (Component (assignment F G)) program.payload.entry.outputs × Original.State (uniformCarriers F G))
+    (target : Domain.Result (uniformCarriers F G)) (unread : Proof F G)
+    (result : scalar.1 = actual.1)
+    (history : scalar.2 = ScalarProjection.history (ScalarProjection.iterations artifact) actual.2.history)
+    (related : Original.CompleteReturns program.payload.entry.signature routing.context 1 artifact actual target)
+    (good : SumcheckSourceHonest.SourceSuccess scalar unread) : Success target.values unread := by
+  obtain ⟨data, encoding, targetValues⟩ := related.values
+  have outputs : actual.1 = .cons (some true) .nil := result.symm.trans good.1
+  rw [outputs] at encoding
+  change some [.data (.boolean true)] = some data at encoding
+  cases encoding
+  rw [targetValues]
+  refine ⟨rfl, good.2.1, actual.2.history, rfl, ?_⟩
+  rw [← LoopedSourceProcess.readback_history]
+  change ∃ suffix, readbackHistory SourceProcess.legacyOrigin
+    (ScalarProjection.history (ScalarProjection.iterations artifact) actual.2.history) = some suffix
+  rw [← history]
+  exact good.2.2
 
-/-- No whole-run success or equality is supplied by the concrete instance. -/
-theorem realization : SumcheckFamily.Realization (F := F) (G := G) artifact 2 where
-  occurrences := programOccurrences _ _
-  helpers := programHelpers _ _
-  prices := programPrices _ _
-  prepared := SumcheckProof.domain_prepared
-
-/-- Concrete observation success is an instance of the shared mathematical
-proof, preserving the original postcondition and exact unread suffix. -/
+/-- Exact retained observation success, with the original postcondition and
+exact unread suffix. Shape and admission enter only the honest-source premise. -/
 theorem observation_passes (oracle : History F G → F) (initial : History F G)
     (values : List F) (rounds : Nat) (admitted : rounds ≤ SumcheckProof.maximum)
     (shaped : values.length = 2 ^ rounds) :
     DomainVM.Passes Origin.withoutCoordinates initial oracle
-      (DomainVM.observation ZkcExamples.Construction.SumcheckProof.program
-        ZkcExamples.Construction.SumcheckProof.context
-        (Code.instructions SumcheckProof.lowered.code) SumcheckProof.lowered.returned
-        (frame values values.sum rounds []))
-      ((messages oracle initial values rounds).map (.field "bls12-381.fr"))
-      (fun returned unread => returned[0]? = some (.data (.boolean true)) ∧ unread = [] ∧
-        ∃ history, returned = [.data (.boolean true), .transcript ZkcExamples.Construction.SumcheckProof.context.suite history] ∧
-          ∃ suffix, readbackHistory Origin.withoutCoordinates history = some suffix) := by
-  rw [SumcheckCharges.lowered_eq]
-  change DomainVM.Passes Origin.withoutCoordinates initial oracle
-    (DomainVM.observation artifact.description.program artifact.description.context
-      (Code.instructions (SumcheckShape.code artifact.description.names artifact.description.maximum)) [13,10]
-      (SumcheckFamily.ProgramShape.inputs artifact.description values values.sum rounds [])) _ _
-  rw [SumcheckFamily.code_instructions]
-  have realized := realization (F := F) (G := G)
-  apply DomainVM.Passes.mono Origin.withoutCoordinates initial oracle _ _ _ _ ?_
-    (SumcheckFamily.Source.observation_passes artifact.description realized.occurrences realized.helpers
-      oracle initial values rounds admitted shaped)
-  intro returned unread good
-  obtain ⟨rfl, history, rfl, suffix, mapped⟩ := good
-  exact ⟨rfl, rfl, history, rfl, suffix, mapped⟩
+      (DomainVM.observation program context (Code.instructions SumcheckProof.lowered.code) SumcheckProof.lowered.returned
+        (SumcheckProof.physicalInputs values values.sum rounds []))
+      ((messages oracle initial values rounds).map (.field "bls12-381.fr")) Success := by
+  have source := SumcheckSourceHonest.source_passes (G := G) oracle initial values rounds routing.selectedHandle admitted shaped
+  rw [SumcheckSourceHonest.transcript_identity] at source
+  have passes := ScalarCheckedBytes.connected (F := F) (G := G) checkedConnection rfl _ rfl (by decide +kernel)
+    (SumcheckProof.physicalInputs values values.sum rounds [])
+    (ZkcExamples.Construction.SumcheckProof.verifierInputs values values.sum rounds routing.selectedHandle)
+    (by kernel_rfl) (by kernel_rfl) (by derive_scalar_support) initial oracle
+    ((messages oracle initial values rounds).map (.field "bls12-381.fr"))
+    SumcheckSourceHonest.SourceSuccess (fun result rest => Success result.values rest)
+    source returned
+  rw [SumcheckProof.normalized]
+  apply DomainVM.Passes.participant_observation
+  rw [DomainVM.Passes.forgetCheckpoints, DomainVM.Passes.bind]
+  have key : ScalarVerifier.origin artifact = Origin.withoutCoordinates := by kernel_rfl
+  rw [key] at passes
+  apply DomainVM.Passes.mono _ _ _ _ _ _ _ ?_ passes
+  intro value unread good
+  simpa only [DomainVM.Passes] using good
 
 end ZkcExamples.Executable.SumcheckDomainHonest

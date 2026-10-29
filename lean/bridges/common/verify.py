@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check an explicit proof request against an actual common-source export.
+"""Check an explicit proof request against an actual Structured export.
 
 Candidate expressions are untrusted. Reviewed code owns their validation and
 the Lean command stream. Success requires kernel checking, a separate requested-
@@ -14,6 +14,7 @@ import json
 import os
 import re
 import signal
+import time
 from pathlib import Path
 import subprocess
 import sys
@@ -21,9 +22,8 @@ import sys
 from native_entry import native_subject
 from registry import CONTRACTS
 from request_support import Obligation, require
-from snapshot import render, string, natural
-from program_syntax import program, indent
-from candidate import program_expression
+from structured import entry, profile, views, compile_modules, lean_environment
+from bridges.structured.snapshot import render, text, nat
 
 ROOT = Path(__file__).resolve().parents[2]
 VERSION = 'zkc.proof-request/0'
@@ -90,14 +90,17 @@ def validate(data, request):
                 f'{prop}: no consumer registered for {request["contract"]}; a new security theorem or adapter is required')
         require(request['experiment'] == contract.properties[prop].experiment,
                 'experiment-mismatch', f'{prop} requires {contract.properties[prop].experiment}')
-    # Rendering validates all constructors, even instructions dormant at this role.
-    render(data, 'GeneratedCertificate.Data')
+    # The sole serializer validates the complete Structured grammar.
+    selected = entry(data)
+    roles, input_scopes, output_scopes = selected[6][1:]
+    input_scopes = [[roles.index(r) for r in scope] for scope in input_scopes]
+    output_scopes = [[roles.index(r) for r in scope] for scope in output_scopes]
     role = request['role']
-    require(type(role) is int and 0 <= role < len(data[3]) and role in data[7],
+    require(type(role) is int and 0 <= role < len(roles) and role in output_scopes[0],
             'role-selection', 'The selected participant must have the Boolean output')
-    require(data[6] == ['bool'], 'output-type', 'This contract requires a Boolean verifier result')
+    require(selected[5] == [['bool']], 'output-type', 'This contract requires a Boolean verifier result')
     bindings = request['inputs']
-    require(isinstance(bindings, list) and len(bindings) == len(data[4]),
+    require(isinstance(bindings, list) and len(bindings) == len(selected[4]),
             'input-bindings', 'Bind every declared input in declaration order')
     require(all(binding is None or isinstance(binding, str) for binding in bindings),
             'input-bindings', 'Input bindings must be registered names or null for foreign inputs')
@@ -111,19 +114,19 @@ def validate(data, request):
             rounds | ({'leftSite', 'rightSite'} if contract.composed else set()))
     require(isinstance(wiring, dict) and set(wiring) == keys,
             'wiring-shape', 'Bind all and only the effect sites, domains and prover role of this contract')
-    require(type(wiring['prover']) is int and 0 <= wiring['prover'] < len(data[3]) and
+    require(type(wiring['prover']) is int and 0 <= wiring['prover'] < len(roles) and
             wiring['prover'] != role, 'prover-role', 'Prover and verifier must be distinct declared participants')
     for key, value in wiring.items():
         if key == 'prover':
-            natural(value)
+            nat(value)
         elif key in ('firstSites', 'secondSites'):
             require(isinstance(value, list) and len(value) == 3,
                     'wiring-shape', f'{key} must bind three coefficient sites')
             for site in value:
-                string(site)
+                text(site)
         else:
-            string(value)
-    for binding, dtype, scopes in zip(bindings, data[4], data[5]):
+            text(value)
+    for binding, dtype, scopes in zip(bindings, selected[4], input_scopes):
         if binding is None:
             require(role not in scopes, 'input-availability', 'A verifier-visible input cannot be silently discarded')
         else:
@@ -133,256 +136,216 @@ def validate(data, request):
                 domain = 'random.' + domain + '/0'
             require(dtype == [kind, domain] and role in scopes,
                     'input-domain', f'{binding}: type, nominal domain or availability disagrees with the request')
-    # ScalarValue interprets all tags uniformly. Restrict this profile to exactly
-    # the explicitly selected domains, rather than collapsing distinct fields.
-    encoded = json.dumps(data)
-    types = list(data[4]) + [data[6]]
-    for instr in data[8]:
-        if instr[0] == 'pure':
-            op = instr[1]
-            if op[0].startswith('field.'):
-                require(op[1] == wiring['fieldDomain'], 'domain-assignment', 'An operation uses another field')
-            if op[0].startswith('group.'):
-                require(contract.group and op[1] == wiring['groupDomain'], 'domain-assignment', 'An operation uses another group')
-                if op[0] == 'group.scale':
-                    require(op[2] == wiring['fieldDomain'], 'domain-assignment', 'Scalar domain differs')
-            if op[0] == 'select':
-                types.append(op[1])
-        elif instr[0] == 'exchange':
-            types.append(instr[4])
-        elif instr[0] == 'restrict':
-            types.append(instr[2])
-        elif instr[0] == 'draw':
-            require(instr[3] == wiring['fieldDomain'], 'domain-assignment', 'A query uses another field')
-        elif instr[0] == 'statement':
-            types.extend(instr[2])
-    for dtype in types:
-        if dtype[0] in ('field', 'service'):
-            expected = wiring['fieldDomain'] if dtype[0] == 'field' else 'random.' + wiring['fieldDomain'] + '/0'
-            require(dtype[1] == expected, 'domain-assignment', 'Another field/service domain is present')
-        elif dtype[0] == 'group':
-            require(contract.group and dtype[1] == wiring['groupDomain'], 'domain-assignment', 'Another group domain is present')
-    require(len(encoded) < 500_000, 'source-size', 'Source exceeds this proof-generation profile')
+    profile(data, wiring['fieldDomain'], wiring.get('groupDomain'))
+    require(len(json.dumps(data)) < 500_000, 'source-size', 'Source exceeds this request profile')
     return contract
 
 
 def wiring_term(contract, wiring):
     def q(key):
-        return string(wiring[key])
+        return text(wiring[key])
     if contract.group:
-        return '⟨' + ', '.join([natural(wiring['prover']), q('groupDomain'), q('fieldDomain'),
+        return '⟨' + ', '.join([nat(wiring['prover']), q('groupDomain'), q('fieldDomain'),
             q('commitmentSite'), q('challengeSite'), q('deliverySite'), q('responseSite')]) + '⟩'
     def triple(key):
-        return '(' + ', '.join(map(string, wiring[key])) + ')'
-    rounds = '⟨' + ', '.join([natural(wiring['prover']), q('fieldDomain'), triple('firstSites'),
+        return '(' + ', '.join(map(text, wiring[key])) + ')'
+    rounds = '⟨' + ', '.join([nat(wiring['prover']), q('fieldDomain'), triple('firstSites'),
         triple('secondSites'), q('firstChallenge'), q('secondChallenge'), q('firstDelivery'), q('secondDelivery')]) + '⟩'
     return '⟨' + rounds + ', ' + q('leftSite') + ', ' + q('rightSite') + '⟩' if contract.composed else rounds
 
 
 def generate(data, request):
-    """Propose pure expressions only; the reviewed renderer owns all commands."""
+    '''An untrusted proposal is data only, serialized by the strict reader edge.'''
     validate(data, request)
-    return {'program': program(data)}
+    return {'snapshot': data}
 
 
-def render_certificate(data, request, proposal):
-    contract = validate(data, request)
-    require(type(proposal) is dict and set(proposal) == {'program'},
-            'candidate-shape', 'Expected only a typed program constructor proposal')
-    source_program = program_expression(proposal['program'])
-    namespace = contract.namespace
-    initial = [None if binding is None else contract.inputs[binding][0] for binding in request['inputs']]
-    values = '.nil'
-    for value in reversed(initial):
-        values = f'.cons {"none" if value is None else "(some " + value + ")"} ({values})'
+def property_source(contract, request, certificate, parameters):
+    result = ''
+    names = []
+    for prop in request['properties']:
+        item = contract.properties[prop]
+        name = 'property_' + prop.replace('-', '_')
+        names.append(name)
+        context = item.context or ('[Fintype F] ' if item.experiment.endswith('uniform-field/0') else '')
+        application = (f'{item.consumer} ({certificate} {parameters})' if item.consumer
+                       else f'({certificate} {parameters}).{item.theorem}')
+        result += f'\n/-- Premises: {"; ".join(item.premises)}. -/\n'
+        result += f'theorem {name} {context}: type_of% ({application}) := {application}\n'
+    return result, names
+
+
+def audit(namespace, names, marker):
+    return ('\nrun_cmd do\n  for name in [' + ', '.join('`' + namespace + '.' + n for n in names) + '''] do
+    let _ ← Lean.getConstInfo name
+    for axiomName in ← Lean.collectAxioms name do
+      unless [``propext, ``Classical.choice, ``Quot.sound].contains axiomName do
+        throwError "unexpected certificate axiom: {axiomName}"
+  Lean.logInfo "''' + marker + '"\n')
+
+
+def client_source(request, prefix, namespace, *, positive=True, properties=True):
+    contract = CONTRACTS[request['contract']]
     generic = 'G' if contract.group else 'F'
-    context = ('\n    [AddCommGroup G] [Module F G] [DecidableEq G]' if contract.group else '')
     parameters = '(F := F)' + (' (G := G)' if contract.group else '')
-    actual_type = f'PIR.Process (Participant.interface Nat Ty services (ScalarValue F {generic})) (Option Bool)'
+    scalar_parameters = f'(F := F) (G := {generic})'
+    context = ('\n  [AddCommGroup G] [Module F G] [DecidableEq G]' if contract.group else '')
+    values = '.nil'
+    for binding in reversed(request['inputs']):
+        value = 'none' if binding is None else '(some ' + contract.inputs[binding][0] + ')'
+        values = f'.cons {value} ({values})'
+    arguments = ' '.join('(' + contract.inputs[b][0] + ')' for b in request['inputs'] if b is not None)
+    actual_type = f'PIR.Process (CommonAdapter.commonInterface F {generic}) (Option Bool)'
     cert_args = 'wiring ' + ('publicChecks ' if contract.composed else '') + f'(verifier {parameters})'
-    unfolds = ['processView', 'wiring'] + [name if '.' in name else namespace + '.' + name for name in contract.unfold]
-
-    group_rule = '    (add safe tactic (by abel1))\n' if contract.group else ''
-
-    source_data = render(data, 'GeneratedCertificate.Data').split('namespace ', 1)[1]
-    external_imports = ''.join('import ' + module + '\n' for module in sorted({
-        contract.properties[prop].module for prop in request['properties']
-        if contract.properties[prop].module}))
-    result = external_imports + f'''import Zkc.Source.Common.ProcessView
-import {contract.module}
-import Mathlib.Tactic.Ring
-import Mathlib.Tactic.Abel
-import Mathlib.Tactic.FailIfNoProgress
-import Lean
-import Aesop
-
-/-! Generated candidate: source identity alone proves no semantic property. -/
+    unfolds = ['processView', 'wiring'] + [n if '.' in n else contract.namespace + '.' + n for n in contract.unfold]
+    imports = {contract.module, prefix + 'View', 'Zkc.Source.Structured.CommonAdapter',
+               'ZkcTools.ProcessView', 'Mathlib.Tactic.Ring', 'Mathlib.Tactic.Abel',
+               'Mathlib.Tactic.FailIfNoProgress', 'Lean', 'Aesop'}
+    if properties:
+        imports.update(contract.properties[prop].module for prop in request['properties'] if contract.properties[prop].module)
+    result = ''.join('import ' + m + '\n' for m in sorted(imports)) + f'''
 set_option autoImplicit false
 set_option maxRecDepth 20000
 set_option maxHeartbeats 1500000
+noncomputable section
+namespace {namespace}
+open Zkc.Source Zkc.Source.Structured
+open {contract.namespace}
 
-namespace {source_data}
-namespace GeneratedCertificate
-open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
-open {namespace}
-
-def sourceProgram : Program Nat language services Data.snapshot.inputs Data.snapshot.result :=
-{indent(source_program)}
-
-def sourceScopes : Values (fun _ => Nat → Bool) Data.snapshot.inputs :=
-  (inputScopes Data.snapshot.inputs Data.snapshot.inputRoles).get (by decide +kernel)
-
-def imported : Imported := ⟨Data.snapshot, sourceProgram, sourceScopes⟩
-
-theorem admitted : Data.snapshot.check = .ok imported := by
-  apply Data.snapshot.check_parts sourceProgram sourceScopes
-  · decide +kernel
-  · exact inputScopes_get Data.snapshot _
-  · rfl
-  · decide +kernel
-  · decide +kernel
+abbrev program := {prefix}Inputs.program
+abbrev imported := {prefix}Inputs.imported
 
 def wiring : Wiring := {wiring_term(contract, request['wiring'])}
-
 variable {{F{(' G' if contract.group else '')} : Type}} [Field F] [DecidableEq F]{context}
 
-def inputs {contract.binders} :
-    Values (fun ty => Option (ScalarValue F {generic} ty)) Data.snapshot.inputs :=
+def inputs {contract.binders} : Values (Component (assignment F {generic})) program.payload.entry.inputs :=
   {values}
 
+/-- The derived scalar observation of the actual typed Structured participant. -/
 def verifier {contract.binders} : {actual_type} :=
-  imported.denote (scalarMeaning F {generic}) id {request['role']} (inputs {parameters} {contract.arguments})
+  ((program.participant F {generic} {request['role']} (inputs {parameters} {contract.arguments})).bind
+    fun values => PIR.Process.done (values.get .here)).interpret CommonAdapter.project
 
 noncomputable def processView {contract.binders} : {actual_type} :=
-  common_process% (verifier {parameters} {contract.arguments})
+  process_view% (({prefix}View.view {scalar_parameters} {arguments}).bind
+    fun values => PIR.Process.done (values.get .here)).interpret CommonAdapter.project
 
 theorem process_view_eq {contract.binders} :
-    verifier {parameters} {contract.arguments} = processView {parameters} {contract.arguments} := rfl
-
+    verifier {parameters} {contract.arguments} = processView {parameters} {contract.arguments} := by
+  unfold verifier
+  change ((program.participant F {generic} {request['role']}
+    ({prefix}View.inputs {scalar_parameters} {arguments})).bind _).interpret _ = _
+  rw [{prefix}View.source_equation]
+  rfl
+'''
+    if positive:
+        result += f'''
 theorem correspondence {contract.binders} :
     processView {parameters} {contract.arguments} = experiment {parameters} wiring {contract.arguments} := by
   aesop (rule_sets := [-builtin, -default]) (config := {{ enableSimp := false }})
-    (add norm tactic (by fail_if_no_progress dsimp +instances [{', '.join(unfolds)}, PIR.Process.bind{', terminal, publicChecks, value' if contract.composed else ''}]))
+    (add norm tactic (by fail_if_no_progress dsimp +instances [{', '.join(unfolds)}, PIR.Process.bind]))
     (add norm tactic (by rw [PIR.Process.bind_ite]))
+    (add norm tactic (by fail_if_no_progress simp only [apply_ite]))
+    (add norm tactic (by fail_if_no_progress ring_nf))
+    (add norm tactic (by fail_if_no_progress simp_all only [ite_true, ite_false, decide_true, decide_false, Bool.false_eq_true, not_false_eq_true, not_true_eq_false]))
+    (add safe tactic (by split_ifs))
     (add safe tactic (by apply PIR.Process.call_congr; intro reply))
     (add safe tactic (by rfl))
     (add safe tactic (by apply funext; intro reply))
     (add safe tactic (by ring1))
-{group_rule}    (add 50% tactic (by fail_if_no_progress congr 1))
+{('    (add safe tactic (by abel1))' if contract.group else '')}
+    (add 50% tactic (by fail_if_no_progress congr 1))
 
 theorem contract : VerifierContract {cert_args} :=
   ⟨fun {contract.arguments} => ⟨(process_view_eq {parameters} {contract.arguments}).trans
     (correspondence {parameters} {contract.arguments})⟩⟩
 '''
-    names = ['admitted', 'process_view_eq', 'correspondence', 'contract']
-    for prop in request['properties']:
-        registered = contract.properties[prop]
-        name = 'property_' + prop.replace('-', '_')
-        names.append(name)
-        context = registered.context or ('[Fintype F] ' if registered.experiment.endswith('uniform-field/0') else '')
-        result += f'\n/-- Premises: {"; ".join(registered.premises)}. -/\n'
-        application = (f'{registered.consumer} (contract {parameters})' if registered.consumer
-                       else f'(contract {parameters}).{registered.theorem}')
-        result += f'theorem {name} {context}: type_of% ({application}) := {application}\n'
-    result += '\nend GeneratedCertificate\n\n'
-    result += 'run_cmd do\n'
-    result += '  for name in [' + ', '.join('`GeneratedCertificate.' + name for name in names) + '] do\n'
-    result += '''    let _ ← Lean.getConstInfo name
-    for axiomName in ← Lean.collectAxioms name do
-      unless [``propext, ``Classical.choice, ``Quot.sound].contains axiomName do
-        throwError "certificate uses unexpected axiom: {axiomName}"
-  Lean.logInfo "PROOF-REQUEST-KERNEL-PASS"
-'''
-    return result
+    names = ['process_view_eq'] + (['correspondence', 'contract'] if positive else [])
+    if positive and properties:
+        extra, props = property_source(contract, request, 'contract', parameters)
+        result += extra
+        names += props
+    result += '\nend ' + namespace + '\nend\n'
+    return result, names
+
+
+def render_certificate(data, request, proposal):
+    validate(data, request)
+    require(type(proposal) is dict and set(proposal) == {'snapshot'},
+            'candidate-shape', 'Expected only a Structured snapshot proposal')
+    # No Lean expressions are accepted from a proposal.
+    render(proposal['snapshot'], 'CandidateData')
+    result, names = client_source(request, 'Candidate', 'GeneratedCertificate')
+    return result + audit('GeneratedCertificate', names, 'PROOF-REQUEST-KERNEL-PASS')
 
 
 def check_subject(data, request):
-    """Small reviewed request interpreter, separate from candidate generation.
-
-The importer result is tied to fresh input constructors; the expected contract
-mentions its actual denotation and request-selected bindings, never the
-candidate's verifier or input aliases. Properties are re-derived from this
-checked subject. Parsing/rendering/registry interpretation are tested boundaries.
-"""
+    '''Fresh request-fixed constructors and admission, never candidate aliases.'''
     contract = validate(data, request)
     generic = 'G' if contract.group else 'F'
     parameters = '(F := F)' + (' (G := G)' if contract.group else '')
-    context = ('\n    [AddCommGroup G] [Module F G] [DecidableEq G]' if contract.group else '')
+    context = ('\n  [AddCommGroup G] [Module F G] [DecidableEq G]' if contract.group else '')
     values = '.nil'
     for binding in reversed(request['inputs']):
         value = 'none' if binding is None else '(some ' + contract.inputs[binding][0] + ')'
         values = f'.cons {value} ({values})'
-    source = render(data, 'ExpectedRequest.Data').split('namespace ', 1)[1]
-    result = f"""\nnamespace {source}
+    result = f'''
 namespace ExpectedRequest
-open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
+open Zkc.Source Zkc.Source.Structured
 open {contract.namespace}
+noncomputable section
 
-theorem admitted_subject : Data.snapshot.check = .ok GeneratedCertificate.imported :=
-  GeneratedCertificate.admitted
+theorem snapshot_eq : ExpectedData.snapshot = CandidateData.snapshot := requested_subject
+
+theorem admitted_subject : check ExpectedData.snapshot = .ok CandidateInputs.program := by
+  rw [snapshot_eq]
+  exact CandidateInputs.kernel_admission
+
+theorem program_eq : ExpectedInputs.program = CandidateInputs.program :=
+  Except.ok.inj (ExpectedInputs.kernel_admission.symm.trans admitted_subject)
 
 def wiring : Wiring := {wiring_term(contract, request['wiring'])}
 variable {{F{(' G' if contract.group else '')} : Type}} [Field F] [DecidableEq F]{context}
 
 def expectedInputs {contract.binders} :
-    Values (fun ty => Option (ScalarValue F {generic} ty)) GeneratedCertificate.imported.snapshot.inputs :=
+    Values (Component (assignment F {generic})) ExpectedInputs.program.payload.entry.inputs :=
   {values}
 
 def expectedVerifier {contract.binders} :
-    PIR.Process (Participant.interface Nat Ty services (ScalarValue F {generic})) (Option Bool) :=
-  GeneratedCertificate.imported.denote (scalarMeaning F {generic}) id {request['role']}
-    (expectedInputs {parameters} {contract.arguments})
+    PIR.Process (CommonAdapter.commonInterface F {generic}) (Option Bool) :=
+  ((ExpectedInputs.program.participant F {generic} {request['role']} (expectedInputs {parameters} {contract.arguments})).bind
+    fun values => PIR.Process.done (values.get .here)).interpret CommonAdapter.project
 
-theorem approvedContract : VerifierContract wiring {('publicChecks ' if contract.composed else '')}(expectedVerifier {parameters}) :=
-  GeneratedCertificate.contract
-"""
-    names = ['admitted_subject', 'approvedContract']
-    for prop in request['properties']:
-        item = contract.properties[prop]
-        name = 'property_' + prop.replace('-', '_')
-        names.append(name)
-        finite = item.context or ('[Fintype F] ' if item.experiment.endswith('uniform-field/0') else '')
-        application = (f'{item.consumer} (approvedContract {parameters})' if item.consumer
-                       else f'(approvedContract {parameters}).{item.theorem}')
-        result += f'\ntheorem {name} {finite}: type_of% ({application}) := {application}\n'
-    result += '\nend ExpectedRequest\n\nrun_cmd do\n'
-    result += '  for name in [' + ', '.join('`ExpectedRequest.' + name for name in names) + '] do\n'
-    result += '''    let _ ← Lean.getConstInfo name
-    for axiomName in ← Lean.collectAxioms name do
-      unless [``propext, ``Classical.choice, ``Quot.sound].contains axiomName do
-        throwError "request boundary uses unexpected axiom: {axiomName}"
-  Lean.logInfo "PROOF-REQUEST-BOUNDARY-PASS"
+theorem approvedContract : VerifierContract wiring {('publicChecks ' if contract.composed else '')}(expectedVerifier {parameters}) := by
+  have same : expectedVerifier {parameters} = GeneratedCertificate.verifier {parameters} := by
+    funext {contract.arguments}
+    unfold expectedVerifier GeneratedCertificate.verifier
+    rfl
+  rw [same]
+  exact GeneratedCertificate.contract
 '''
-    return result
+    extra, props = property_source(contract, request, 'approvedContract', parameters)
+    return result + extra + '\nend\nend ExpectedRequest\n' + audit('ExpectedRequest', ['admitted_subject', 'approvedContract'] + props, 'PROOF-REQUEST-BOUNDARY-PASS')
 
 
-def render_client(data, request, name):
-    """Maintained example modules reuse the same untrusted candidate generator."""
-    allowed = {'FactorExpanded', 'FactorHorner', 'FactorWrongPoint', 'FactorWrongResidual'}
-    if name not in allowed:
-        raise ValueError('unsupported maintained client')
-    candidate = render_certificate(data, request, generate(copy.deepcopy(data), copy.deepcopy(request)))
-    start = candidate.index('namespace GeneratedCertificate.Data')
-    finish = candidate.index('end GeneratedCertificate.Data') + len('end GeneratedCertificate.Data')
-    candidate = candidate[:start] + candidate[finish:]
-    candidate = candidate[:candidate.index('run_cmd do')]
-    if name in {'FactorWrongPoint', 'FactorWrongResidual'}:
-        candidate = candidate[:candidate.index('theorem correspondence')] + 'end GeneratedCertificate\n'
-    module = 'ZkcExamples.NativePrograms.Variants.' + name + 'Data'
-    candidate = 'import ' + module + '\n' + candidate
-    candidate = candidate.replace('Data.snapshot', module + '.snapshot')
-    candidate = candidate.replace('GeneratedCertificate', 'ZkcExamples.NativePrograms.' + name)
-    candidate = re.sub(r'^import ', 'public import ', candidate, flags=re.M)
-    imports = list(re.finditer(r'^public import [^\n]+\n', candidate, re.M))
-    end = imports[-1].end()
-    candidate = candidate[:end] + '\n@[expose] public section\n' + candidate[end:]
-    return 'module\n\n' + candidate.rstrip() + '\n'
+def render_client(data, request, name, *, positive=True):
+    """Fixture wrapper around the same request template; no source-name theorem lookup."""
+    validate(data, request)
+    prefix = 'ZkcExamples.NativePrograms.Variants.' + name
+    source, _ = client_source(request, prefix, 'ZkcExamples.NativePrograms.' + name,
+                             positive=positive, properties=False)
+    source = re.sub(r'^import ', 'public import ', source, flags=re.M)
+    end = list(re.finditer(r'^public import [^\n]+\n', source, re.M))[-1].end()
+    return 'module\n\n' + source[:end] + '\n@[expose] public section\n' + source[end:]
 
 
 def verify(data, request, output, lake='lake', timeout=180, relation=None):
     # Each generator sees its own disposable inputs. The requested subject and
     # receipt retain independent snapshots even if a generator mutates its copy.
     data, request, relation = copy.deepcopy((data, request, relation))
+    deadline = time.monotonic() + timeout
+    def remaining():
+        return max(0.001, deadline - time.monotonic())
     output.mkdir(parents=True, exist_ok=True)
     receipt = {'format': RECEIPT, 'status': 'unresolved', 'claim_scope': 'formal-model',
                'contract': request.get('contract') if isinstance(request, dict) else None,
@@ -391,7 +354,7 @@ def verify(data, request, output, lake='lake', timeout=180, relation=None):
                'verified_properties': [], 'obligations': [],
                'external_boundaries': ['native-source-to-export (check separately)', 'export-to-constructor-rendering (check separately)',
                    'request-parser and registry interpretation (reviewed and tested)',
-                   'candidate expression validation and command rendering (reviewed and tested)',
+                   'strict Structured serialization and Lean-owned view printing (tested)',
                    'Python execution and selected Lean toolchain (trusted)'],
                'not_established': ['native-runtime arithmetic and sampling conformance',
                    'DSL compiler correctness', 'Fiat-Shamir security', 'PCS binding or extractability',
@@ -401,25 +364,45 @@ def verify(data, request, output, lake='lake', timeout=180, relation=None):
     try:
         proposal = generate(copy.deepcopy(data), copy.deepcopy(request))
         candidate = render_certificate(data, request, proposal) + check_subject(data, request)
+        modules = views(proposal['snapshot'], output, 'Candidate', request['role'], timeout=remaining())
+        modules += views(data, output, 'Expected', request['role'], timeout=remaining())
+        # Check literal subject identity in its own kernel module before Lean
+        # attempts any dependent process transport. A different candidate must
+        # fail at this boundary, rather than spend the budget comparing bodies.
+        (output / 'SubjectIdentity.lean').write_text('''import CandidateData
+import ExpectedData
+import Zkc.Source.KernelRfl
+
+theorem requested_subject : ExpectedData.snapshot = CandidateData.snapshot := by
+  kernel_rfl
+''')
+        modules = ['CandidateData', 'ExpectedData', 'SubjectIdentity'] + [
+            module for module in modules if module not in ('CandidateData', 'ExpectedData')]
+        candidate = 'import SubjectIdentity\nimport ExpectedInputs\n' + candidate
         if relation is not None:
             from intent import relation_candidate, render_relation, relation_subject
             relation_proposal = relation_candidate(copy.deepcopy(relation), copy.deepcopy(request))
+            modules += views(relation_proposal['snapshot'], output, 'RelationCandidate', request['role'], timeout=remaining())[:2]
+            modules += views(relation['snapshot'], output, 'RelationExpected', request['role'], timeout=remaining())[:2]
+            candidate = 'import RelationCandidateInputs\nimport RelationExpectedInputs\n' + candidate
             candidate += render_relation(relation, request, relation_proposal) + relation_subject(relation, request)
         path = output / 'Certificate.lean'
         path.write_text(candidate)
         receipt['certificate_sha256'] = hashlib.sha256(candidate.encode()).hexdigest()
         contract = CONTRACTS[request['contract']]
-        modules = [contract.properties[prop].module or contract.module for prop in request['properties']]
-        environment = (ROOT / 'integrations/arklib' if any(m.startswith('ZkcArkLib.') for m in modules)
-                       else ROOT / 'security' if any(m.startswith('ZkcSecurity.') for m in modules) else ROOT)
+        property_modules = [contract.properties[prop].module or contract.module for prop in request['properties']]
+        environment = (ROOT / 'integrations/arklib' if any(m.startswith('ZkcArkLib.') for m in property_modules)
+                       else ROOT / 'security' if any(m.startswith('ZkcSecurity.') for m in property_modules) else ROOT)
+        compile_modules(output, modules, environment, lake, remaining())
         receipt['toolchain'] = (environment / 'lean-toolchain').read_text().strip()
         receipt['dependency_manifest_sha256'] = hashlib.sha256(
             (environment / 'lake-manifest.json').read_bytes()).hexdigest()
-        with subprocess.Popen([lake, 'lean', str(path.resolve())], cwd=environment,
+        with subprocess.Popen(['lean', '-j2', '-M16384', '--root=' + str(output.resolve()), str(path.resolve())], cwd=output,
+                              env=lean_environment(environment, output, lake),
                               text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               start_new_session=True) as child:
             try:
-                stdout, _ = child.communicate(timeout=timeout)
+                stdout, _ = child.communicate(timeout=remaining())
             except subprocess.TimeoutExpired:
                 os.killpg(child.pid, signal.SIGKILL)
                 stdout, _ = child.communicate()
@@ -468,8 +451,8 @@ def export_native(modules, subject, compiler, output):
     require(interface['original'] == digest, 'native-identity', 'Native interface and retained source disagree')
     source = output / 'native.mlir'
     source.write_text(text)
-    data = json.loads(execute([compiler, 'protocol-lean', source, '--symbol=' + interface['protocol']]))
-    require(data[1] == 'sha256:' + digest and data[2] == interface['protocol'],
+    data = json.loads(execute([compiler, 'protocol-structured', source, '--symbol=' + interface['protocol']]))
+    require(data[2] == 'sha256:' + digest and data[3] == interface['protocol'],
             'native-identity', 'Exported source identity disagrees with retained bytes or selected symbol')
     return data, {'source_sha256': digest, 'symbol': interface['protocol'],
                   'compiler_sha256': hashlib.sha256(compiler.read_bytes()).hexdigest()}

@@ -55,6 +55,7 @@ def originalFunction? (snapshot : Snapshot) (reference : Option String) : Option
 /-- Recover the exact typed port and participant, including its declared scope. -/
 def selector? (signature : ProtocolSignature) (type : Ty) (source : ContractSelector) :
     Option (BoundarySelector signature type) := do
+  if source.anchor then none else pure ()
   let port ← match source.direction with
     | .input => (Var.decode signature.inputs type source.port).map BoundaryPort.input
     | .output => (Var.decode signature.outputs type source.port).map BoundaryPort.output

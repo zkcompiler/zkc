@@ -19,6 +19,16 @@ ROOT = Path(__file__).resolve().parents[1]
 INTEGRATIONS = {name: roots for name, (_, roots) in PACKAGES.items() if name != 'main'}
 
 
+def check_owned_imports(graph):
+    """Reject retired or unselected owned modules before an expensive build."""
+    owned = [root for _, roots in PACKAGES.values() for root in roots]
+    for owner, imports in graph.items():
+        for dependency in imports:
+            if any(dependency == root or dependency.startswith(root + ".") for root in owned):
+                if dependency not in graph:
+                    raise AssertionError(f"unselected or missing owned import: {owner} -> {dependency}")
+
+
 def check(selected, lake):
     packages = [PACKAGES[name] for name in select_packages(selected)]
     for name in select_packages(selected):
@@ -78,11 +88,7 @@ def check(selected, lake):
             overlap = prefix == target or broad and target.startswith(prefix + '.') or other_broad and prefix.startswith(target + '.')
             if not (not overlap):
                 raise AssertionError(f'overlapping Lake ownership: {owner}:{prefix} and {other}:{target}')
-    for owner, imports in graph.items():
-        for dep in imports:
-            if dep.startswith(('ZkcSecurity.', 'ZkcArkLib.')):
-                if dep not in graph:
-                    raise AssertionError(f'unselected or missing owned import: {owner} -> {dep}')
+    check_owned_imports(graph)
     dependencies = audit_graph(graph, [family for _, families in packages for family in families])
     return {'status': 'pass', 'toolchain': toolchain.strip(), 'packages': len(packages),
             'modules': len(graph), 'dependencies': dependencies, 'pins': pins, 'source_sha256': source_hashes}

@@ -65,7 +65,7 @@ def main():
     args.check = False
     generation = Generation(args)
     entry = generation.package / "checks/DerivationAccounts.lean"
-    report = {"format": "zkc.derivation-account-check/0", "status": "failed",
+    report = {"format": "zkc.derivation-account-check/1", "status": "failed",
               "acceptance_authority": False,
               "dependency_policy": "existing checked objects; project import sources and directly encountered objects pinned; transitive external objects not inventoried"}
     destination = generation.directory / "validation.json"
@@ -79,6 +79,11 @@ def main():
         if any(digest(path) != pin for path, pin in (sources | objects).items()):
             raise ValueError("a source or checked object changed during measurement")
         accounts = json.loads(output.read_text())
+        unattributed = [{"root": row["root"], "id": binding["id"], "reason": binding["reason"]}
+                        for row in accounts for binding in row["proof_bindings"]
+                        if binding["proof_status"] == "unattributed"]
+        report.update(attribution_status="partial" if unattributed else "complete",
+                      unattributed=unattributed, receipt_status_computed=False)
         report.update(status="pass", accounts={"path": str(output), "sha256": digest(output)},
                       sources={str(path): pin for path, pin in sources.items()},
                       objects={str(path): pin for path, pin in objects.items()},

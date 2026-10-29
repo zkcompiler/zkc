@@ -1,181 +1,110 @@
-# Native common-source bridge
+# Derived Common scalar clients
 
-This optional bridge connects retained common PIR to the independent Lean
-model. It requires the native compiler, a separately implemented native SSA
-reference, and the Lean `common-source` executable. It is outside the default
-standalone Lean checks.
+Common clients use `protocol-structured`, the strict Structured serializer and
+Lean's phased unit admission. `Common.Import`, `Common.Format`, the flat Common
+program AST, its Python program/proof renderer, `common-source`, and the native
+`protocol-lean` export are retired. There is no compatibility reader.
 
-From the repository root in the pinned development environment:
+`Common.Vocabulary` and `Common.Scalar` retain mathematical scalar vocabulary.
+The checked `Structured.CommonAdapter` projects actual typed participant actions
+to the interfaces of the existing mathematical Schnorr, quadratic Sumcheck and
+factor-opening contracts. It is a derived observation, not source admission.
+Projection refuses the additional Structured message sorts.
+
+The maintained exports are the actual Schnorr library protocol, the two-round
+unrolled quadratic Sumcheck fixture, their helper/arithmetic variants, and the
+factor-opening fixtures. Positive variants retain their completeness,
+Schnorr special-soundness and Sumcheck property consumers. Early challenge,
+wrong residual and wrong opening point remain admitted counterexamples to those
+specific contracts; they cannot borrow a positive certificate.
+
+## Regeneration and checks
+
+Build `structured-source` in the prepared core Lean package and build the native
+compiler and `zkc-structured_reference-test` in this checkout. Then run:
 
 ```sh
-cmake --build build/compiler --target zkc-compile zkc-common_reference-test -j 4
-(cd lean && lake build)
-python3 lean/bridges/common/check.py \
-  --report build/experiments/common-source/report.json
+python3 lean/bridges/common/generate.py --compiler build/compiler/zkc-compile --check
+python3 lean/bridges/common/check.py --report build/common-comparison.json
+python3 lean/bridges/common/verify_tests.py --output build/common-requests
+python3 lean/bridges/common/intent_tests.py --compiler build/compiler/zkc-compile --output build/common-intent
 ```
 
-The runner copies the selected executables for a stable run and records their
-hashes, the seed and source identities. `--compiler`, `--reference`, `--lean`,
-`--seed` and `--cases` select explicit inputs. Failures retain their native text,
-export and request beside the report. Successful temporary inputs are removed;
-the deterministic seed and checked-in fixtures reproduce them.
+The native comparison reads original SSA independently of the export. Both
+references use the existing Structured tool's BLS scalar field, with an additive
+group model. The former Common differential executable used Z/97. Its independent
+SSA comparison has moved to the existing Structured reference rather than adding
+another evaluator. Symbolic certificates still quantify over their stated
+fields/modules; the negative mathematical controls can still specialize to Z/97.
+The exact old native Z/97 differential claim is retired, not transferred: the
+existing `StructuredSource.Evaluation.scalarModel` and
+`compiler/test/structured_reference.cpp::modulus` fix the BLS scalar modulus.
+Keeping that numeric claim would require a different executable interpretation.
+The maintained comparison uses those existing engines and records their scope.
+None of these comparisons implements a production curve or validates native
+sampling, compiler correctness or resource equivalence.
 
-The suite regenerates the closed Schnorr protocol and an unrolled two-round
-quadratic Sumcheck DSL fixture. It checks their complete exported snapshots and
-generated Lean constructor data. Six additional exports cover helper-based and
-algebraically rearranged implementations plus early-challenge and wrong-residual
-controls. `contracts.py` compares the three positive verifier forms per protocol
-on shared replies and intentional guard/terminal branches; it also checks that
-the negative sources differ as predicted by their Lean refutations.
-It also exercises repeated mathematical helper
-calls, rearranged two-layer scalar folding, an AIR-style residual, and generated
-three-role graphs. Cases retain all definitions, including unused ones.
+The controls compare complete canonical Structured observations before exposing
+scalar outcomes for test assertions. They preserve arbitrary reply and stop
+prefixes, mismatched sites, absent inputs, unread replies, helper equality,
+honest and dishonest transcripts, and a deliberately corrupted export control.
+Python constructs requests and transcripts and adapts wire values; it never
+interprets source instructions.
 
-Each role runs against the same explicit inputs and replay prefix in two
-implementations. The C++ reference interprets original SSA directly; it does
-not consume the exported descriptors. Lean elaborates those descriptors and
-runs its independent semantics. Comparisons include actual request order,
-service handles, sent values, returned components, every stop reason, consumed
-replies and events. Replay prefixes explore arbitrary replies and request
-substitution. Sumcheck controls distinguish honest success, rejection before a
-challenge, and a false terminal result after valid boundaries.
-
-A deliberate addition-to-subtraction mutation must be detected. Its control
-removes unused native definitions and reduces inputs while rechecking native
-admission, leaving a one-operation counterexample. This is a bounded greedy
-shrinking control, not a general minimal-counterexample theorem.
-
-The field and additive group use **Z/97** in both references. These comparisons
-check the selected scalar PIR interpretation, not production BLS12-381 kernels,
-four lowering stages, Rust execution, real randomness or full FRI/STARK security.
-See [the supported connection boundaries](../../docs/support.md).
-
-## Constructor data
-
-`snapshot.py INPUT.json OUTPUT.lean --namespace NAME` renders transparent
-constructor data. It does not synthesize a security theorem. The fixture bridge
-checks exact regeneration; Lean separately checks admission and program proofs.
-Refreshing a source fixture requires reviewing changed correspondence, not just
-replacing a hash to obtain a passing test.
-
-[Schnorr](../../ZkcExamples/NativePrograms/Schnorr.lean) and
-[Sumcheck](../../ZkcExamples/NativePrograms/Sumcheck.lean) are concrete clients.
-Variant clients [reuse their contracts and property theorems](../../docs/architecture.md#reuse-and-composition).
-Their positive proofs are for arbitrary
-fields/modules under stated hypotheses, rather
-than exhaustive checks of Z/97. Explicit proof requests automate bounded
-correspondence and registered property application; arbitrary-source theorem
-selection is outside that profile.
-
-## Explicit proof requests
-
-A request supplies the intended contract, mathematical experiment, properties,
-public-input binding and effect wiring. The tool generates proofs for that
-choice; it does not infer a security claim from a protocol name. See the
-[request and receipt contract](../../docs/spec/verification.md).
-
-From the repository root, after building Lean and the native compiler:
+## Explicit requests
 
 ```sh
 python3 lean/bridges/common/verify.py \
-  --module factor_openings=lean/bridges/common/fixtures/factor-openings.zkc \
-  --subject factor_openings::HornerProtocol \
+  --snapshot lean/ZkcExamples/NativePrograms/fixtures/factor-horner.json \
   --request lean/bridges/common/requests/factor-openings.json \
-  --output build/experiments/proof-request
+  --output build/factor-request
 ```
 
-Alternatively, use `--snapshot lean/ZkcExamples/NativePrograms/fixtures/factor-horner.json`
-in place of `--module` and `--subject`. `--module NAME=PATH` is repeatable for
-multi-module sources. `--compiler` and `--lake` select explicit tools.
+`--module NAME=PATH --subject MODULE::PROTOCOL` obtains a fresh native Structured
+export instead. The versioned request selects a registered mathematical
+contract, its exact properties and experiment, verifier role, nominal domains,
+input availability and wiring. Unknown or unsupported requests stay unresolved.
 
-A successful receipt says `verified-in-model` and lists each property and its
-premises. `Certificate.lean` contains admission, a definitionally checked view of
-the actual Lean interpreter, source-to-contract equality and the property terms. Lean checks the
-candidate and audits its transitive axioms. A separate request interpreter checks
-that this contract concerns the admitted source's actual denotation with the
-requested inputs and wiring, then derives the reported `ExpectedRequest`
-properties. `lean.log` records both checks. The parser, constructor renderer and
-request interpreter remain reviewed, tested parts of the tool.
-Unknown claims, incompatible experiments, wrong bindings, unproved equalities
-and proof-budget failures produce `unresolved` receipts and a nonzero exit.
-A copied hash or a printed success marker cannot replace a proof.
+The candidate proposes only Structured constructor data. The strict serializer
+accepts no Lean expression or command. The existing Lean printers emit typed
+bodies, phased admission and a complete returned-row source equation. Each is
+compiled with the kernel. The process presentation elaborator checks definitional
+equality; it supplies no semantic evaluator.
 
-`registry.py` owns reviewed contract descriptions and independent property
-consumers. `program_syntax.py` renders typed source constructors and checks variable
-references against their binding contexts, without executing instructions.
-The only proposal field is `program`; `candidate.py` restricts it
-to constructor syntax. The reviewed renderer owns every Lean command, proof script
-and audit. Generator inputs are disposable copies, separate from the checker and
-receipt subjects. The proposed syntax is untrusted; Python execution, the
-validator, renderer, registry and selected toolchain remain trusted.
-`Snapshot.check_parts` requires all admission checks and equality to the actual
-elaboration.
+The expected subject is separately serialized and admitted from the untouched
+request/source copies. Its verifier uses fresh request-fixed input constructors
+and wiring. Source and program identity, requested contracts and exact registered
+properties are checked separately from candidate generation. A separate kernel
+module checks literal candidate/request source identity before dependent process
+transport, so a different subject fails promptly within the existing budget.
+Every selected
+theorem is audited transitively for axioms other than `propext`,
+`Classical.choice`, and `Quot.sound`. Mutation controls include candidate source
+and request mutation, command injection, copied identities and wrong subjects.
 
-`common_process%` in `Zkc.Source.Common.ProcessView` definitionally reduces the
-actual `Imported.denote` term with Lean's reduction and traversal APIs. It unfolds
-the existing interpreter definitions, preserving symbolic arithmetic, unresolved
-conditionals and decisions, arbitrary replies, guards and stops; it defines no
-operation or instruction evaluator. The elaborator
-checks definitional equality, and each certificate proves `process_view_eq` with
-`rfl`. Correspondence then connects this view to the requested contract with pure
-algebra and process laws. This is bounded normalization and equality checking,
-not a general theorem search.
+The present-input view covers exactly the declared availability pattern: visible
+inputs are present and foreign inputs absent. It does not prove arbitrary-input
+validity. Missing-input and foreign-role behavior have separate Structured
+participant controls. Open-process equalities retain every independent reply,
+continuation, handler state, event and stop; honest-message restrictions are
+confined to the mathematical experiment or theorem premises.
 
-The three registered contracts cover Schnorr, two-round quadratic Sumcheck and
-Sumcheck followed by public factor openings. Completeness and soundness properties
-reuse one implementation certificate per source. Adding a supported source form
-does not add another security argument for every property. New cryptographic
-experiments still require proved consumers and their real premises.
+Success remains **`verified-in-model`**. It is neither a canonical established
+claim nor native security. Receipts retain the exact registered experiment and
+premises, and explicitly exclude native sampling/arithmetic conformance,
+Fiat-Shamir security, PCS binding and whole native prover correctness.
 
-Run the source/property matrix and refusal controls with:
+## Authored targets
 
-```sh
-python3 lean/bridges/common/verify_tests.py \
-  --output build/experiments/proof-request-matrix
-```
+`--spec lean/bridges/common/requests/schnorr-dsl.json` resolves named DSL ports,
+roles and the authored target using the native interface. The selected formula
+is retained as a named helper in the same Structured source unit. The relation
+candidate and expected relation copies are separate. Kernel equations connect
+its actual table invocation to the discrete-log predicate and connect two
+accepting verifier executions to a witness for that predicate. A constant-true
+formula, swapped selector or different relation subject cannot pass.
 
-It includes a newly compiled source with renamed module/protocol/sites and
-reordered inputs, stale bindings, changed equations/effect order, a copied
-positive identity, unsupported PCS/Fiat–Shamir claims, incorrect coin models and
-deliberately corrupted expression candidates, commands and comments in proposals,
-changed generator inputs, valid expressions for a different program, proof-budget
-exhaustion and JSON parser bounds. Its report counts `verified_requests`, one
-per verified request rather than per distinct source, separately from property
-instances and unresolved controls. The ordinary bridge additionally
-checks expanded/Horner composed sources, both opening failures, wrong points
-and residuals, and stopped prefixes at every reached action. These executions
-use Z/97; symbolic certificates quantify over the stated fields/modules.
-
-Generated maintained factor clients are reproduced by `verify.render_client`
-from their JSON exports and explicit request. The ordinary bridge checks them
-byte for byte. Editing a request or generator requires regenerating these clients
-and rechecking admission, correspondence, property terms and controls.
-
-## Authored targets and external consumers
-
-The named `--spec` path resolves an existing DSL `spec` target through the native
-interface and separately imports its relation formula. The current scalar
-Schnorr/discrete-log adapter proves the formula correspondence and connects two
-accepting actual verifier transcripts to a witness accepted by that authored
-relation. `requests/schnorr-dsl.json` shows the required named roles, inputs,
-service, target, contract and experiment. An opaque or different relation requires
-another proved adapter. The schema is defined in the
-[verification specification](../../docs/spec/verification.md).
-
-`requests/schnorr-simulation.json` selects VCVio honest-verifier simulation;
-`requests/sumcheck-arklib.json` selects ArkLib interactive soundness. Build the
-optional security package before using these requests. The same consumers work
-for original, helper-based and reordered/Horner source forms.
-
-```sh
-python3 lean/bridges/common/intent_tests.py \
-  --compiler build/compiler/zkc-compile \
-  --output build/reports/lean/intent
-```
-
-These controls include false relation bodies with the expected names/selectors,
-wrong-relation certificates, wrong target operands, explicit refusal diagnostics,
-and external consumer reuse. Reader refusal controls require exit status 1 with
-the expected diagnostic, and request controls require the expected receipt code;
-a crash or signal termination never counts as a refusal. Generic extensions can use the typed Lean
-`Certificate`/`Consumer` API without changing this bounded registry.
+Native name/selector resolution, source export, strict serialization, Python
+orchestration and the chosen toolchain remain tested or trusted boundaries.
+The existing ArkLib Sumcheck and honest-verifier simulation consumers retain
+their original scopes and independent dependency packages.

@@ -5,6 +5,7 @@ public import Zkc.Construction.AuthoredPair
 public import Zkc.Construction.RetainedTarget
 public import Zkc.Source.Structured.DomainContract
 public import Zkc.Construction.SourceOccurrences
+public import Zkc.Construction.ConnectionAdmission
 public import Zkc.Source.Structured.InputAdmission
 public import ZkcSecurity.FiatShamir.HonestCompiled
 
@@ -33,6 +34,12 @@ structure Subject (model : DomainModel) (original : Snapshot) (imported : Import
   selectionChecked : selection.check imported selected.artifacts.validator = true
   producerOccurrences : SourceOccurrences.check original selection.context selected.artifacts.producer = .ok ()
   validatorOccurrences : SourceOccurrences.check original selection.context selected.artifacts.validator = .ok ()
+  /-- Role connections share one fixed source; each missing proof is reported
+  as an open required link, independently of mathematical property evidence. -/
+  producerConnection : Option (PLift (ConnectionAdmission.Required imported.program
+    selection.context .producer selected.artifacts.producer)) := none
+  validatorConnection : Option (PLift (ConnectionAdmission.Required imported.program
+    selection.context .validator selected.artifacts.validator)) := none
   target : RetainedTarget imported selected.policy selection.publics
   relations : RegisteredRelations model.Value original.relations
   meaning : RelationMeaning imported target.application.relation model.Value relations.registry

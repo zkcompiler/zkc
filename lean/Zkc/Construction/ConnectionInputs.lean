@@ -20,7 +20,7 @@ inductive Shape : {types : List Ty} → InputPattern types → List Original.Loc
   | absent {ty : Ty} {types : List Ty} {pattern : InputPattern types} {locations : List Original.Location}
       (tail : Shape pattern locations) : Shape (.cons (.absent (ty := ty)) pattern) (.absent :: locations)
   | data {ty : Ty} {types : List Ty} {pattern : InputPattern types} {locations : List Original.Location}
-      (reference : Nat) (allowed : ty.isService = false) (tail : Shape pattern locations) :
+      (reference : Nat) (allowed : ty.isHandle = false) (tail : Shape pattern locations) :
       Shape (.cons (.present (ty := ty)) pattern) (.data reference :: locations)
   | capability {service : String} {handle : Nat} {types : List Ty}
       {pattern : InputPattern types} {locations : List Original.Location}

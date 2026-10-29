@@ -8,7 +8,7 @@ trees. The model is a transcription of the library verifier, related line by
 line to the source; it makes no claim about the compiled library, its proof
 Entry or native execution. Before [committed words](#committed-words) it reads
 every commitment as the vector it commits to. The modules are
-`ZkcSecurity.ArkLib.Fri.*`, `ZkcArkLib.Examples.FriFiatShamir` and
+`ZkcArkLib.Fri.*`, `ZkcArkLib.Examples.FriFiatShamir` and
 `ZkcArkLib.Examples.CommittedFri` in the
 [security integration](../../integrations/arklib/README.md).
 

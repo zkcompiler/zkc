@@ -2,6 +2,7 @@ module
 
 public import Zkc.Construction.ConnectionRoot
 public import Zkc.Construction.ConnectionInputLayout
+public import Zkc.Construction.ConnectionInputFrames
 
 @[expose] public section
 
@@ -15,16 +16,6 @@ namespace Zkc.Construction.ConnectionRoot
 open Zkc.Source Zkc.Source.Structured NormalForm ConnectionFrame ConnectionInputs
 
 attribute [local implicit_reducible] CheckedProtocol.signature
-
-/-- At every checkpoint retain the whole physical input and every component
-that its actual ABI decodes. Malformed inputs still retain their physical row,
-without fabricating a successful source input tuple. -/
-def InputFrames {carriers : Carriers} {A : Type} (abi : Original.InputABI)
-    (types : List Ty) (physical : Domain.Environment carriers)
-    (_source : PIR.Process (Domain.effects carriers) A) (frame : Domain.Environment carriers) : Prop :=
-  ArtifactBinding.Captures physical frame ∧
-    ∀ values : Values (Component carriers.Value) types, abi.read physical types = some values →
-      Original.ValuesHolds frame abi.locations values
 
 /-- A root uses the actual admitted entry and actual constructed instructions.
 The generated instruction correspondence is independent of protocol mathematics;

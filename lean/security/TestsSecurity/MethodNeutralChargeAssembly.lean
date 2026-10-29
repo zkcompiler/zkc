@@ -1,5 +1,5 @@
 import TestsSecurity.DomainCharges
-import ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Soundness
+import ZkcSecurity.Examples.RootProperties.TwoSums.Soundness
 import ZkcSecurity.Claims.ChargeMonotonicity
 import ZkcSecurity.FiatShamir.DomainViewReading
 import ZkcSecurity.FiatShamir.CostComposition
@@ -28,8 +28,33 @@ local instance : DecidableEq (Domain.Event carriers) := Classical.decEq _
 local instance : ∀ event : Domain.Event carriers, SampleableType (Domain.Raw event) :=
   ZkcSecurity.Domains.PrimeField.rawSampleable blsModulus
 
+/-- Decreasing the prices preserves the existing pathwise cost semantics. -/
+private theorem smallerPrices {I : PIR.Signature} {E P A : Type} {Raw : E → Type}
+    (absorb : Typed.Interface I E P Raw) (small large : List E → E → ENNReal)
+    (prices : ∀ history event, small history event ≤ large history event) :
+    ∀ (process : PIR.Process I A) (history : List E) (budget : ENNReal),
+      Typed.ChargedCostBound absorb large process history budget →
+      Typed.ChargedCostBound absorb small process history budget
+  | .done _, _, _, _ => trivial
+  | .halt _, _, _, _ => trivial
+  | .call operation next, history, budget, bounded => by
+    rcases absorbed : absorb operation with ⟨event, recover⟩ | ⟨event, value⟩ | ⟨event, decode⟩ | _
+    · simp only [Typed.ChargedCostBound, absorbed] at bounded ⊢
+      exact fun packet value recovered => smallerPrices absorb small large prices (next value) _ budget
+        (bounded packet value recovered)
+    · simp only [Typed.ChargedCostBound, absorbed] at bounded ⊢
+      exact smallerPrices absorb small large prices (next value) _ budget bounded
+    · simp only [Typed.ChargedCostBound, absorbed] at bounded ⊢
+      obtain ⟨remaining, charged, rest⟩ := bounded
+      exact ⟨remaining, (add_le_add (prices history event) le_rfl).trans charged,
+        fun value => smallerPrices absorb small large prices (next value) _ remaining (rest value)⟩
+    · simp only [Typed.ChargedCostBound, absorbed]
+
+attribute [local irreducible] ZkcExamples.Structured.Generated.Connections.TwoSums.validator
+  Occurrence.participant RootConnection.publicPresentation
+
 namespace Heterogeneous
-open OriginalSecurity.TwoSums.Installation
+open ZkcSecurity.Examples.RootProperties.TwoSums.Soundness (installation)
 abbrev schedule := TestsSecurity.DomainCharges.schedule
 
 theorem maximum (queries : Nat) : schedule.maximum queries = 2 := by
@@ -58,32 +83,49 @@ def rejected (queries : Nat) (statement : Statement)
     Zkc.Obligations.Derivation installation.absorb (boundedEscape (schedule.charge queries))
       (fun _ result => installation.acceptance result ≠ some true) initial
       (installation.presented statement initial) :=
-  (OriginalSecurity.TwoSums.Soundness.rejected statement falseStatement initial).mapEscape
+  (ZkcSecurity.Examples.RootProperties.TwoSums.Soundness.rejected statement falseStatement initial).mapEscape
     (fun history event _ _ => (prEvent_le_one _).trans (minimum queries history event))
 
-theorem inputCosts (queries : Nat) (left right : List Scalar) (leftClaim rightClaim : Scalar)
-    (count : Nat) (initial : Domain.History carriers) :
-    Typed.ChargedCostBound (NominalField.interface (G := Group) "bls12-381.fr")
-      (schedule.charge queries) (presentedInputs left right leftClaim rightClaim count initial) initial 16 := by
-  simpa only [OriginalSecurity.TwoSums.Installation.presentedInputs,
-      OriginalSecurity.TwoSums.Sources.presented, OriginalSecurity.TwoSums.Sources.calls, List.length_cons, List.length_nil, show ((2 * 4) • (2 : ENNReal)) = 16 by norm_num] using
-    ZkcSecurity.Realizations.Sumcheck.OriginalRaw.composition_cost 2
-    (fun history origin => by simpa only [maximum] using schedule.charge_le_maximum queries history (.challenge origin))
-    4 (OriginalSecurity.TwoSums.Sources.calls left right leftClaim rightClaim count 0)
-    OriginalSecurity.TwoSums.Sources.terminalTree ⟨[], initial⟩ initial
-
+/-- Lift the installed all-input source cost to the loose nonuniform prices.
+The generic monotonicity rule checks every reached operation. -/
 theorem costs (queries : Nat) (statement : Statement) (initial : Domain.History carriers) :
     Typed.ChargedCostBound installation.absorb (schedule.charge queries)
       (installation.presented statement initial) initial (validatorCost queries) := by
+  -- Uniform price 2 bounds both entries of this independently selected schedule.
+  have : Fact (IsField (model.Field ZkcExamples.Structured.SumcheckReferenceInstallation.field)) := ⟨Field.toIsField Scalar⟩
+  have uniform := ZkcSecurity.Realizations.Sumcheck.SourcePublicInstallations.two_cost model 2
+  have installed (left right : List Scalar) (a b : Scalar) (count : Nat) :=
+    ZkcSecurity.Source.RootPublic.cost_inputFrame
+      ZkcExamples.Structured.Generated.Connections.TwoSums.validator rfl model
+      (ZkcSecurity.Realizations.Sumcheck.SourceRootReference.rootInputs model .twoSums
+        (.cons (some left) (.cons (some right) (.cons (some a) (.cons (some b)
+          (.cons (some count) (.cons (some ZkcSecurity.Examples.RootProperties.TwoSums.serviceHandle) .nil))))))) 2
+      ((Domain.encodeValues (ZkcSecurity.Examples.Generated.Components.TwoSumsABI.statement left right a b count)).getD []) initial _ rfl
+      (ZkcSecurity.Examples.RootProperties.TwoSums.Soundness.source_inputs left right a b count initial) [] _
+      (uniform left right a b count ZkcSecurity.Examples.RootProperties.TwoSums.serviceHandle [])
+  have budget : ZkcExamples.Structured.SumcheckSourceSelections.maximum .twoSums • (2 : ENNReal) +
+      ZkcExamples.Structured.SumcheckSourceSelections.maximum .twoSums • (2 : ENNReal) = 16 := by
+    norm_num [ZkcExamples.Structured.SumcheckSourceSelections.maximum]
+  simp only [budget] at installed
+  have uniformCosts (statement : Statement) :
+      Typed.ChargedCostBound installation.absorb (fun _ _ => 2)
+        (installation.presented statement initial) initial 16 := by
+    bind_subject_abi using installed
   apply chargedCostBound_mono_bound _ _ _ _ 16 _ ?_ (le_add_right le_rfl)
-  bind_subject_abi using inputCosts queries
+  exact smallerPrices _ _ _
+    (fun history event => by simpa only [maximum] using schedule.charge_le_maximum queries history event)
+    _ _ _ (uniformCosts statement)
 
 def reductionExport (queries : Nat) :
     Claims.Domain.ChargedExport TwoSums.validatorSubject schedule queries (validatorCost queries) :=
-  installation.losslessChargedExport (NominalField.lossless "bls12-381.fr")
+  RootConnection.losslessChargedExport TwoSums.validatorSubject
+    ZkcExamples.Structured.Generated.Connections.TwoSums.validatorRouting rfl
+    ZkcExamples.Structured.Generated.Connections.TwoSums.validator
+    ZkcSecurity.Examples.RootProperties.TwoSums.Soundness.supported _ rfl
+    ZkcSecurity.Examples.RootProperties.TwoSums.noLocal
     schedule queries (validatorCost queries) (rejected queries) (costs queries)
 
-def capabilities := OriginalSecurity.TwoSums.Soundness.capabilities
+def capabilities := ZkcSecurity.Examples.RootProperties.TwoSums.Soundness.claimCapabilities
 def scalarBound (queries : Nat) : ENNReal := (queries : ENNReal) * 2 + validatorCost queries
 
 theorem scalar_bound (queries : Nat) :

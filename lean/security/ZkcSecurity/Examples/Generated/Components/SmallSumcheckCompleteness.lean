@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Completeness
+public import ZkcSecurity.Examples.RootProperties.SmallSumcheck
 public import ZkcSecurity.Examples.Generated.SmallSumcheck
 public import ZkcSecurity.Claims.Completeness
 
@@ -19,6 +19,6 @@ local instance : ∀ event : Domain.Event ZkcSecurity.Examples.Generated.SmallSu
     SampleableType (Domain.Raw event) := rawSampleable blsModulus
 
 theorem compiled_ideal_complete : CanonicalCompleteness ZkcSecurity.Examples.Generated.SmallSumcheck.subject (0) :=
-  ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Completeness.compiled_ideal_complete
+  ZkcSecurity.Examples.RootProperties.SmallSumcheck.compiled_ideal_complete
 
 end ZkcSecurity.Examples.Generated.Components.SmallSumcheckCompleteness

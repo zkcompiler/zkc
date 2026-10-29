@@ -4,7 +4,11 @@ public import ZkcExamples.Construction.SchnorrProofData
 public import ZkcExamples.Construction.SchnorrProofBodies
 public import ZkcExamples.Construction.SchnorrProofModel
 public import ZkcExamples.Construction.SchnorrProofParticipant
-public import Zkc.Construction.Uniform.SourceProcess
+public import Zkc.Construction.ScalarConnection
+public import Zkc.Construction.Uniform.ScalarSupportProposer
+public import Zkc.Construction.Uniform.ScalarHandles
+public import Zkc.Construction.Uniform.ScalarPresentation
+public import ZkcExamples.Structured.Generated.Connections.SchnorrRandomized
 public import ZkcExamples.Construction.SchnorrArtifact
 public import Zkc.Source.Structured.UnitViews
 public import ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator
@@ -66,58 +70,81 @@ def inputs (base point : G) : Domain.Environment (uniformCarriers F G) :=
 theorem input_sorts (base point : G) :
     Domain.sortsMatch artifact.inputs (inputs (F := F) (G := G) base point) = true := by kernel_rfl
 
-/-- Exact Domain participant return, including the transcript and all stops;
-only administrative checkpoint effects are projected away. -/
+def sourceABI : Original.InputABI :=
+  (SourceConnection.canonicalABI program 1 artifact).toOption.get (by decide +kernel)
+
+/-- The exact retained artifact consumes the same generic checked root as nominal clients. -/
+theorem checkedConnection : SourceConnection.Connected program
+    ZkcExamples.Structured.Generated.Connections.SchnorrRandomized.validatorRouting 1
+    sourceABI artifact :=
+  ScalarConnection.canonicalize
+    ZkcExamples.Structured.Generated.Connections.SchnorrRandomized.validatorConnected (by rfl)
+
+/-- Method-independent endpoint admission uses this same complete connection. -/
+theorem requiredConnection : ConnectionAdmission.Required program context .validator artifact :=
+  ConnectionAdmission.ofConnected (boundary := ⟨sourceABI,
+    ZkcExamples.Structured.Generated.Connections.SchnorrRandomized.validatorRouting⟩)
+    (by kernel_rfl) checkedConnection
+
+/-- Capability labels are unobserved by the retained scalar API. This equation
+is source mathematics; the nominal connection retains its canonical label. -/
+theorem source_handle (base point : G) (original replacement : Nat) :
+    (sourceVerifier (F := F) base point original).interpret (Uniform.ScalarHandles.replace replacement) =
+      sourceVerifier base point replacement := by
+  simp only [source_equation]
+  rfl
+
+/-- Complete source result as a presentation of the existing family process. -/
+theorem source_values (base point : G) (handle : Nat) :
+    (program.participant F G 1 (sourceInputs base point handle)).interpret CommonAdapter.project =
+      (sourceDecision base point handle).bind fun decision => .done (.cons (some decision) .nil) := by
+  kernel_rfl
+
+/-- Complete values and transcript follow from the generic connection. -/
 theorem participant_values (base point : G) (handle : Nat) :
     ((Domain.participant (ringModel F G) program context artifact (inputs base point)).bind
       fun result => .done result.values).interpret Original.forgetCheckpoints =
     (sourceView context (sourceDecision base point handle) []).bind
       fun result => .done (returnValues context.suite result) := by
-  rw [← artifact_identity, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.participant_eq]
-  simp only [ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.view, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.inputSorts, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.outputSorts,
-    ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.returned, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.body,
-    ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.bodyStep0, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.bodyStep1, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.bodyStep2, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.bodyStep3, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.bodyStep4, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.bodyStep5, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.bodyStep6, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.bodyStep7, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.bodyStep8, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.bodyStep9, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.bodyStep10, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.bodyStep11, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.bodyStep12, ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.bodyStep13]
-  normalize_scalar_connection
-    unfolding [inputs, context, artifact, SchnorrProofParticipant.participant, SchnorrProofData.snapshot, sourceDecision, source_equation,
-      Zkc.Protocols.Schnorr.Common.experiment, SchnorrProof.wiring]
-
+  let canonical := ZkcExamples.Structured.Generated.Connections.SchnorrRandomized.validatorRouting.selectedHandle
+  have law := Uniform.ScalarPresentation.connected (F := F) (G := G) checkedConnection rfl _ rfl (by decide +kernel)
+    (inputs base point) (sourceInputs base point canonical) (by kernel_rfl) (by kernel_rfl)
+    (by derive_scalar_support)
+  change _ = (sourceView context
+    ((program.participant F G 1 (sourceInputs base point canonical)).interpret CommonAdapter.project) []).bind
+      (fun result => .done (Uniform.ScalarPresentation.values program.payload.entry.signature context 1 result)) at law
+  rw [source_values, Uniform.LoopedSourceProcess.sourceView_bind] at law
+  simp only [PIR.Process.bind_assoc, sourceView, PIR.Process.bind] at law
+  have relabel := Uniform.ScalarHandles.sourceView context canonical (sourceDecision (F := F) base point handle) []
+  have handles : (sourceDecision (F := F) base point handle).interpret (Uniform.ScalarHandles.replace canonical) =
+      sourceDecision base point canonical := by
+    unfold sourceDecision
+    rw [PIR.Process.interpret_bind, source_handle]
+    rfl
+  rw [handles] at relabel
+  rw [← relabel]
+  exact law
 
 section Boundary
-variable {m : Type → Type} [Monad m]
+variable {m : Type → Type} [Monad m] [LawfulMonad m]
 
-/-- All returns, stops and unread proof suffixes of the actual participant,
-with an arbitrary consumer of its complete returned tuple. -/
-theorem participant_run {R : Type} (challenge : History F G → m F)
-    (base point : G) (handle : Nat) (initial : History F G) (proof : Proof F G)
-    (next : Domain.Environment (uniformCarriers F G) → Proof F G → m (PIR.Outcome R × Proof F G)) :
-    runK legacyOrigin initial challenge
-        (Domain.participant (ringModel F G) program context artifact (inputs base point)) proof
-        (fun result unread => next result.values unread) =
-      runK legacyOrigin initial challenge (sourceView context (sourceDecision base point handle) []) proof
-        (fun result unread => next (returnValues context.suite result) unread) := by
-  have equation := participant_values (F := F) (G := G) base point handle
-  have handled := congrArg (fun process => runK legacyOrigin initial challenge process proof next) equation
-  rw [runK_forgetCheckpoints legacyOrigin initial challenge _ proof next] at handled
-  rw [runK_bind, runK_bind] at handled
-  simpa only [runK] using handled
-
-variable [LawfulMonad m]
-
-/-- The replacement for the retained scalar compiled-transform consumer:
-all typed public values, every proof and challenge function in any lawful monad.
-The legacy key adapter runs before the existing challenge oracle. -/
+/-- The retained scalar equation is derived from Connected, independent reached
+coverage and checked scalar support, preserving every proof and oracle reply. -/
 theorem domain_transform (challenge : History F G → m F)
     (base point : G) (handle : Nat) (initial : History F G) (proof : Proof F G) :
     runK legacyOrigin initial challenge
         (Domain.participant (ringModel F G) program context artifact (inputs base point)) proof
         (fun result unread => pure (.returned (Uniform.SourceProcess.acceptance result.values), unread)) =
       transform context challenge (sourceVerifier base point handle) initial proof := by
-  rw [participant_run challenge base point handle initial proof
-    (fun values unread => pure (.returned (Uniform.SourceProcess.acceptance values), unread))]
-  have law := sourceView_transform_map context challenge
-    (sourceDecision (F := F) (G := G) base point handle) some initial proof
-  rw [← source_decision] at law
-  exact law
+  let canonical := ZkcExamples.Structured.Generated.Connections.SchnorrRandomized.validatorRouting.selectedHandle
+  have law := ScalarConnection.transform (F := F) (G := G) checkedConnection rfl _ rfl (by decide +kernel)
+    (inputs base point) (sourceInputs base point canonical) (by kernel_rfl) (by kernel_rfl)
+    (by derive_scalar_support) .here (by rfl) challenge initial proof
+  change _ = transform context challenge (sourceVerifier base point canonical) initial proof at law
+  have relabel := Uniform.ScalarHandles.transform context canonical challenge
+    (sourceVerifier (F := F) base point handle) initial proof
+  rw [source_handle] at relabel
+  exact law.trans relabel
 
 /-- The installed Domain runtime has the same complete outcome and unread
 proof after selecting Uniform.SourceProcess.acceptance. Physical frames remain with Domain.run.

@@ -27,7 +27,7 @@ structure InteractiveSubject where
   acceptanceRole : Fin owner.protocol.roles.length
   boolean : owner.protocol.outputs.get acceptancePort = .boolean
   decision : (owner.clause clauseIndex).decision =
-    some ⟨.output, acceptancePort.val, owner.protocol.roles.get acceptanceRole⟩
+    some ⟨.output, acceptancePort.val, owner.protocol.roles.get acceptanceRole, false⟩
 
 namespace InteractiveSubject
 

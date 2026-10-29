@@ -36,7 +36,7 @@ import all Zkc.Construction.OriginalLaws
 import all Zkc.Construction.OriginalRouting
 import all Zkc.Construction.OriginalSimulation
 import all Zkc.Construction.Participant
-import all Zkc.Construction.Projection
+import all Zkc.Construction.InputSelection
 import all Zkc.Construction.Rule
 import all Zkc.Construction.Scalar
 import all Zkc.Construction.ScalarAdapter
@@ -120,8 +120,6 @@ import all Zkc.Semantics.Interpretation
 import all Zkc.Semantics.MonadExecution
 import all Zkc.Semantics.StateInterpretation
 import all Zkc.Semantics.Yields
-import all Zkc.Source.Common
-import all Zkc.Source.Common.Import
 import all Zkc.Source.Common.Scalar
 import all Zkc.Source.Common.Vocabulary
 import all Zkc.Source.Component

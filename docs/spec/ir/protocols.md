@@ -962,7 +962,7 @@ This comparison checks the compiler's specified schedule and recipes, rather
 than accepting arbitrary equivalent executable programs. Protocol-to-participant
 projection and mathematical simplification still rely on their implementations,
 MLIR rewrites and their own structural checks; the lowering postcondition does not
-provide independent common-source correspondence or prove backend primitives. Projection, simplification, lowering, and physical selection
+provide independent Structured source correspondence or prove backend primitives. Projection, simplification, lowering, and physical selection
 preserve the retained interfaces and statement bindings.
 
 The projection-preservation API compares protocol-to-participant,
@@ -971,7 +971,7 @@ subjects. Skipped and backward edges refuse with `mathematical-projection`;
 protocol preparation has its own check. An admitted edge does not expand the
 check's evidence scope. Executable subjects without projection metadata still
 receive the participant count and logical-body comparison. This adjacent check
-adds no common-source correspondence to their separate admission contract.
+adds no Structured source correspondence to their separate admission contract.
 
 Every math lowering result selects the native participant execution
 contract, with physical-only external export. The realization uses the existing

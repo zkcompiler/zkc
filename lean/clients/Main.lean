@@ -15,7 +15,6 @@ import ZkcExamples.Structured.SumcheckReduceVerifier
 import Zkc.Source.Structured.RepeatLaws
 import ZkcExamples.NativePrograms.CustomProperty
 import Zkc.Specification
-import Zkc.Source.Common.Region
 import Zkc.Source.Region
 import Zkc.Protocols.Sumcheck.Multilinear
 import ZkcExamples.Structured.MapContractInstances
@@ -41,16 +40,14 @@ theorem contextualReplacement {dialect : Zkc.Source.Dialect} {interface : PIR.Si
   Zkc.Source.Region.exactRefinement meaning
     (Zkc.Source.Region.bind_congr meaning same (fun _ => rfl)) env
 
-theorem importedStructuredSourceCorrespondence
-    (imported : Zkc.Source.Common.Native.Imported)
-    (meaning : Zkc.Source.Mathematical.Meaning Zkc.Source.Common.Native.language)
-    (condition : meaning.Value .boolean → Bool) (self : Nat)
-    (inputs : Zkc.Source.Values (fun ty => Option (meaning.Value ty)) imported.snapshot.inputs) :
-    (imported.toRegion self).denote (Zkc.Source.Common.participantMeaning meaning condition self)
-        inputs.get =
-      (imported.denote meaning condition self inputs).bind
-        (fun value => .done (Zkc.Source.Values.singleton value)) :=
-  imported.denote_toRegion meaning condition self inputs
+/-- The former generic Common flat-AST lowering theorem is retired. This client
+consumes the actual Schnorr Structured participant equation. -/
+theorem importedSchnorrSourceCorrespondence
+    {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
+    (base key : G) (service : Nat) :
+    ZkcExamples.NativePrograms.Schnorr.verifier (F := F) base key service =
+      ZkcExamples.NativePrograms.Schnorr.experiment (F := F) base key service :=
+  ZkcExamples.NativePrograms.Schnorr.verifier_correspondence base key service
 
 /-- A downstream client consumes complete-process equations for actual admitted
 structured compiler artifacts, without importing test modules. -/

@@ -146,6 +146,9 @@ def trueLinks (_subject : Subject F G artifacts .idealMeaning) : List Obligation
   [⟨"construction.checked", "false attribution", True, .infrastructure⟩]
 def foreignLinks (_subject : Subject F G artifacts .idealMeaning) : List Obligation :=
   [(foreignSubject (F := F) (G := G) .idealMeaning).constructionLink]
+def foreignSourceLinks (_subject : Subject F G artifacts .idealMeaning) : List Obligation :=
+  [(subject (F := F) (G := G) .idealMeaning).constructionLink,
+   (foreignSubject (F := F) (G := G) .idealMeaning).sourceConnectionLink]
 def otherArtifactsSubject : Subject F G ZkcSecurity.Examples.Subjects.ChaumPedersen.artifacts .idealMeaning where
   reference := ZkcSecurity.Examples.Subjects.ChaumPedersen.sourceReference .compiledIdeal
   stageMatched := rfl
@@ -206,6 +209,14 @@ noncomputable def foreignReceipt : Receipt (extensionMeaning (F := F) (G := G) f
       have equal : index = 0 := Nat.lt_one_iff.mp bounded
       subst index
       exact some ⟨(foreignSubject .idealMeaning).constructionChecked⟩)
+/-- The foreign subject has the identical participant and connection proof.
+Its distinct source reference must still prevent using its stage link here. -/
+noncomputable def foreignSourceReceipt : Receipt (extensionMeaning (F := F) (G := G) foreignSourceLinks) :=
+  Receipt.ofEndpoint (knowledgeEndpoint (knowledge .idealMeaning) (replay .idealMeaning)) provenance
+    (fun index => match index with
+      | ⟨0, _⟩ => some ⟨(subject .idealMeaning).constructionChecked⟩
+      | ⟨1, _⟩ => (foreignSubject .idealMeaning).compiled.sourceConnection
+      | ⟨n + 2, impossible⟩ => False.elim (by change n + 2 < 2 at impossible; omega))
 noncomputable def constructionOnlyReceipt : Receipt (extensionMeaning (F := F) (G := G) constructionLinks) :=
   Receipt.ofEndpoint (knowledgeEndpoint (knowledge .executableBytes) (replay .executableBytes)) provenance
     (fun ⟨index, bounded⟩ => by
@@ -228,10 +239,9 @@ noncomputable def conditionalReceipt
     (assumed : (subject (F := F) (G := G) .idealMeaning).ConstructionChecked) :
     Receipt (meaning (F := F) (G := G) .idealMeaning) :=
   Receipt.ofEndpoint (knowledgeEndpoint (knowledge .idealMeaning) (replay .idealMeaning)) provenance
-    (fun ⟨index, bounded⟩ => by
-      have equal : index = 0 := Nat.lt_one_iff.mp bounded
-      subst index
-      exact some ⟨assumed⟩)
+    (fun index => match index with
+      | ⟨0, _⟩ => some ⟨assumed⟩
+      | ⟨n + 1, bounded⟩ => (subject .idealMeaning).stageLinkProofs ⟨n + 1, bounded⟩)
 
 /- Selected built-ins remain canonical when unrelated exports are appended. -/
 noncomputable def extendedRegistry : Registry (PropertyExport (Subject F G artifacts .idealMeaning)) :=

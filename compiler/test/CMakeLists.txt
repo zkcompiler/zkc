@@ -127,8 +127,6 @@ target_compile_definitions(zkc-total_closure-test PRIVATE
 mlir_target_link_libraries(zkc-total_closure-test PRIVATE MLIRParser)
 
 add_zkc_test(mathematical_facts Contracts mathematical-facts)
-add_zkc_test(common_reference Translation)
-mlir_target_link_libraries(zkc-common_reference-test PRIVATE MLIRParser)
 add_zkc_test(structured_reference IR)
 mlir_target_link_libraries(zkc-structured_reference-test PRIVATE MLIRParser)
 add_zkc_test(finite_cardinality Contracts finite-cardinality)

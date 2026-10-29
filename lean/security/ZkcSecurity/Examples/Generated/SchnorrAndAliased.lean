@@ -3,6 +3,7 @@ module
 public import ZkcExamples.Structured.Generated.Bindings.SchnorrAndAliasedInputs
 public import ZkcExamples.Construction.Generated.SchnorrAndAliasedPair
 public import ZkcSecurity.Domains.PrimeField
+public import ZkcExamples.Structured.Generated.Connections.SchnorrAndAliased
 public import ZkcSecurity.Tools.PairConstruction
 public import ZkcSecurity.Claims.SourceChargeSites
 
@@ -25,6 +26,7 @@ def selected : Zkc.Construction.AuthoredPair.Selection original :=
 def subject : ZkcSecurity.Claims.HonestPair.Subject
     (ZkcSecurity.Domains.PrimeField.blsScalarModel) original imported selected := by
   bind_authored_subject "knowledge" with_registry Zkc.Source.Structured.OpaqueRegistry.empty
+    connections ZkcExamples.Structured.Generated.Connections.SchnorrAndAliased.producer, ZkcExamples.Structured.Generated.Connections.SchnorrAndAliased.validator
     exports "sha256:c7c145f1282a4c532a879d163483acc9b9a1002a3831d1af927d3b81f7e266c0", "sha256:7842474edcd56f4ed420e30b3b1398e6950aff0db76154d08f5e76fb75316036", "sha256:c93db224a507fc28c0031184a8f5b3089d90a1c6e14878cc592d4341435a0427"
 
 abbrev validatorArtifacts := subject.validatorArtifacts

@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Claims.Subject
+public import ZkcTools.ConstructionBindings.Admission
 public import ZkcExamples.Construction.SumcheckArtifact
 public import ZkcExamples.Construction.SumcheckProof
 public import ZkcExamples.Executable.SumcheckProofProgramData
@@ -37,6 +38,7 @@ def compiled : Compiled artifacts where
   checked := ZkcExamples.Construction.SumcheckProof.selection_checked
   publics := by decide +kernel
   occurrences := by decide +kernel
+  sourceConnection := some ⟨ZkcExamples.Construction.SumcheckProof.sourceConnected⟩
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 

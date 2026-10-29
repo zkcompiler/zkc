@@ -19,6 +19,7 @@ separate boundaries, and the report names both.
 |---|---|
 | Subject manifest | `zkc.subject/0`: subject name, Entry selection and generated file paths |
 | Pipeline evidence | `zkc.subject-evidence/0`: artifacts, regenerated module digests, check outcomes, bound source requests and receipt associations |
+| Consumer requirements | Optional independent `zkc.consumer-requirements/0` input: exact occurrence/request requirements pinned to the selected manifest and checker environment |
 | Bound source requests | `zkc.bound-source-claims/0` in `source_claims`: every request, digest, attachment, proposed method and source site bindings |
 | Declaration records | `zkc.declarations/0`: actual elaborated declarations, premise telescopes, axiom closures and typed receipt extraction |
 | Mathematical ledger | `lean/checks/claims.toml` and `claims.lock.json`: maintained mathematical results, audited independently of source requests |
@@ -26,6 +27,71 @@ separate boundaries, and the report names both.
 The security and optional integration packages contribute compatible registry
 and endpoint tables. Conflicting identifiers, schemas and endpoint registrations
 are errors. A name or provenance string never constructs a proposition.
+
+## Independent consumer requirements
+
+A consumer supplies `--requirements FILE --subject NAME` to
+`lean/checks/check_records.py`. The file has exactly this envelope:
+
+```json
+{
+  "format": "zkc.consumer-requirements/0",
+  "context": {
+    "subject": "NAME",
+    "manifest_sha256": "<exact selected manifest SHA-256>",
+    "checker": {"...": "<complete independently selected checker environment>"}
+  },
+  "claims": [
+    {
+      "node": {"kind": "source-claim", "owner": "qualified owner", "block": 0, "claim": 0},
+      "request": {"...": "<complete Wire.Request object>"}
+    }
+  ]
+}
+```
+
+The placeholders stand for complete existing records, not wildcard fields. The
+request includes the exact stage, target, model, quantity and artifact identities.
+The occurrence set is nonempty and unique. Unknown envelope, context or row
+fields, duplicate occurrences, empty request objects, ambiguous JSON members and
+non-finite numbers are refused. The CLI reads at most 4 MiB of UTF-8 input and
+permits at most 64 nested arrays or objects; brackets inside JSON strings do not
+count toward that bound. Oversize, excessively nested or invalid UTF-8 inputs
+are refused before package checks. The report does not infer this independent set
+from pipeline evidence, source claims or receipts: doing so would hide omissions.
+
+The existing Lean audit first classifies each receipt under its fixed meaning.
+It then compares each required occurrence and full request with those audited
+rows. The selected subject, current manifest hash and independently verified
+checker environment must equal the consumer's context. A different context,
+missing occurrence or changed request leaves coverage open while valid supplied
+receipts retain their own type-level status. A request digest alone does not
+establish equality. Trials are separate scopes and cannot cover selected work.
+
+An author or generic receipt may satisfy an explicit authoring requirement.
+This does not grant canonical security authority. A proof can serve two source
+occurrences with the identical request, but both occurrences must actually be
+present. A registered but undefined matching meaning is `incomplete`; an omitted
+request is `open`.
+
+The final audit and assurance report echo the input under `consumer_requirements`.
+`requirements` contains `input`, the independently observed `context`, `status`,
+`outcome` and ordered `claims`. Each claim row retains `node`, `request`, `status`,
+`matching_nodes`, `certified_nodes` and `reasons`. The exchange is bound to the
+fresh invocation's nonce and input digest. Transport failure retains the input
+and makes no coverage claim. Without an independent input both fields are null.
+
+Every required item must be certified before the selected security aggregate
+can be certified. Successful author-only coverage has `requirements.status =
+"certified"` while the security headline remains `no-claim` and `unresolved`.
+The explicit-requirements CLI checks coverage, so that author-only workflow can
+succeed without inventing a security claim. Missing required work keeps even an
+empty provider inventory open. No new status vocabulary or classifier is added.
+
+This comparison proves neither source elaboration nor native-byte correspondence
+and adds no security premise. Certification retains the existing kernel checks
+and external admissions. The supplied requirements describe the consumer's
+chosen scope; the system does not prove that this scope is exhaustive.
 
 ## Pipeline association
 
@@ -135,6 +201,12 @@ arguments; reporting never erases them to turn a different request into a match.
 | `required_links` | Registry-owned dependent goals and actual proof presence; remaining telescope conditions are audited separately |
 | `stage_links` | Actual-subject stage obligations and physical artifact roles, with kernel goal comparisons and explicit subject-index comparisons against registered links |
 | `provenance`, `provenance_error` | Optional route/method notes and extraction diagnostics; strings cannot introduce assumptions |
+
+Registered stage goals keep their actual subject as an explicit index before
+reducing checker or connection propositions. Equal compiled participants do not
+make two different subject references interchangeable. This applies to uniform
+verifiers, dependent-domain verifiers, and both roles of an honest pair; it does
+not constrain the method used to prove their fixed goals.
 
 A failure to extract authoritative semantic fields is explicit and leaves the
 request open. Optional attribution failures are diagnostic only. A matching
@@ -501,3 +573,11 @@ locks. Missing theorem names, changed statements and forbidden axioms fail its
 check. Rendering and document-name auditing continue independently of source
 request certification. `--write` updates generated regions and locks; it is not
 a proof or approval of a new semantic claim.
+
+An identical generated Lean declaration may be stored in more than one imported
+module. Receipt transport preserves its name and statement observations while
+allowing the selected container to vary with the import closure. The actual
+container remains reported. Before classification, the stored-declaration audit
+compares complete types and bodies of duplicate providers and recomputes the
+transitive axiom closure; differing providers still refuse. This is not an
+exception for changed proof bodies, missing declarations or forbidden axioms.

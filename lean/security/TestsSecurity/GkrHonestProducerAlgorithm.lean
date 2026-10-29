@@ -1,4 +1,4 @@
-import ZkcSecurity.Realizations.Gkr.HonestProducerExecution
+import ZkcSecurity.Realizations.Gkr.HonestProducerObserved
 
 set_option autoImplicit false
 set_option backward.isDefEq.respectTransparency false
@@ -83,23 +83,21 @@ theorem wrong_shape : ¬ ({ mixed with inputs := [2] } : CircuitEncoding ℚ).Ad
 
 /-- The full mixed circuit pair specializes to different scalar and group
 carriers, retaining all histories and every possible challenge reply. -/
-theorem mixed_pair_distinct_group (routing : Original.Routing) (replacement : Replacement)
-    (profile : routing.context.profile = .fiatShamir replacement)
-    (ctx : ProtocolContext) (handle : Nat) (sites : HonestProducerObserved.Sites)
-    (state : HonestProducerComposition.State (F := ℚ) (G := ℚ × ℚ))
-    (outputRoutes : ∀ i, HonestProducer.OutputRoutes routing ctx
-      (state.frames ++ [⟨sites.output, i⟩]) handle)
-    (layerRoutes : ∀ i, HonestProducerObservedLayers.Routes routing ctx
-      (state.frames ++ [⟨sites.layers, i⟩]) handle sites.layer) :
-    ZkcSecurity.FiatShamir.Readback (fun left right => ∃ history,
-      left = (.cons none .nil, { state with history := history }) ∧
-      right = (some true, { state with history := history }))
-      (Original.fold { routing with mode := .producer }
-        (HonestProducerObserved.producer ctx sites mixed) state)
-      (Original.fold { routing with mode := .validator }
-        (HonestProducerObserved.validator ctx handle sites mixed [4352, 4352]) state) :=
-  HonestProducerObserved.pair routing replacement profile ctx handle sites mixed [4352, 4352]
-    correct state outputRoutes layerRoutes
+theorem mixed_pair_distinct_group (scope : ZkcSecurity.Source.PairScope)
+    (roles : scope.producer = 0 ∧ scope.validator = 1)
+    (handle : Nat) (sites : HonestProducerObserved.Sites)
+    (outputDelivery : (GkrVerifier.outputSite {}, GkrVerifier.outputDeliverySite {}) ∈ scope.deliveries)
+    (leftDelivery : (GkrVerifier.challengeSite (GkrVerifier.leftContext {}),
+      GkrVerifier.deliverySite (GkrVerifier.leftContext {})) ∈ scope.deliveries)
+    (rightDelivery : (GkrVerifier.challengeSite (GkrVerifier.rightContext {}),
+      GkrVerifier.deliverySite (GkrVerifier.rightContext {})) ∈ scope.deliveries)
+    (lineDelivery : (GkrVerifier.lineChallengeSite {}, GkrVerifier.lineDeliverySite {}) ∈ scope.deliveries) :
+    ZkcSecurity.Source.Pair scope (fun _ accepted => accepted = some true)
+      (HonestProducerObserved.producer (G := ℚ × ℚ) {} sites mixed)
+      (HonestProducerObserved.validator {} handle sites mixed [4352, 4352]) :=
+  (HonestProducerObserved.pair (G := ℚ × ℚ) {} scope ⟨roles.1.symm, roles.2.symm⟩
+    handle sites mixed [4352, 4352] correct outputDelivery leftDelivery rightDelivery lineDelivery).mono
+      (fun _ _ result => result.2)
 
 /-- An invalid actual close refuses, preserving the actual stop. -/
 theorem unmatched_frame (routing : Original.Routing) :
@@ -112,13 +110,10 @@ theorem changed_coefficients :
   norm_num [GkrVerifier.roundCheck]
 
 #print axioms HonestProducerRounds.execute_yields
-#print axioms HonestProducer.pair
 #print axioms HonestProducerOccurrences.validatorRounds_prefix
 #print axioms HonestProducerOccurrences.rounds
 #print axioms HonestProducerObservedLayers.layer_pair
 #print axioms HonestProducerObserved.pair
-#print axioms HonestProducerExecution.producer_returns
-#print axioms HonestProducerExecution.pair_returns
 #print axioms HonestProducerOccurrences.producerRounds_prefix
 #print axioms mixed_pair_distinct_group
 #print axioms correct

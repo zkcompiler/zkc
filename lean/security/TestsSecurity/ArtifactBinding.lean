@@ -7,7 +7,7 @@ No concrete field execution, fixed callback recognizer, or receipt is used. -/
 set_option autoImplicit false
 namespace TestsSecurity.ArtifactBinding
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
-open ZkcExamples.Structured.OriginalArtifacts
+open ZkcExamples.Structured.Generated.Connections
 
 /-- Changing a nominal query identity cannot be certified by the structural
 rules. Checkpoints cannot hide the differing observable operation. -/
@@ -34,8 +34,7 @@ theorem refusal_before_query {carriers : Carriers}
   cases derivation
 
 /-- Omitting a guard that rejects cannot be certified as successful production.
-This control concerns the failing branch; producer correspondence separately
-states its honest-input admission assumptions. -/
+This control concerns the failing branch; the connection also covers malformed inputs and reached stops. -/
 theorem omitted_failed_guard {carriers : Carriers} {A B : Type}
     (relation : A → B → Prop)
     (live : PIR.Process (Domain.effects carriers) A → Domain.Environment carriers → Prop)
@@ -44,29 +43,29 @@ theorem omitted_failed_guard {carriers : Carriers} {A B : Type}
   rintro ⟨derivation⟩
   cases derivation
 
-/-- The real Small source route refuses a handle different from the selected
-root service, independently of the callback's field values. -/
-example (selected supplied : Nat) (different : supplied ≠ selected)
+/-- Every source route refuses a handle different from the capability selected
+by the checked root ABI, independently of callback values and occurrence frames. -/
+theorem wrong_query_handle (routing : Original.Routing) (supplied : Nat)
+    (different : supplied ≠ routing.selectedHandle)
     (frames : Original.Frames) (site field : String) :
-    (SmallSumcheck.routing selected).draw frames site field supplied = none := by
+    routing.draw frames site field supplied = none := by
   simp [Original.Routing.draw, different]
 
-example (selected supplied : Nat) (different : supplied ≠ selected)
+example (supplied : Nat) (different : supplied ≠ SmallSumcheck.validatorRouting.selectedHandle)
     (frames : Original.Frames) (site field : String) :
-    (TwoSums.routing selected).draw frames site field supplied = none := by
-  simp [Original.Routing.draw, different]
+    SmallSumcheck.validatorRouting.draw frames site field supplied = none :=
+  wrong_query_handle _ supplied different frames site field
 
-#print axioms Zkc.Construction.ArtifactBinding.captures_trans
-#print axioms ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.original_round
-#print axioms ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.VerifierCallback.reduce
-#print axioms ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.terminal
-#print axioms SmallSumcheck.ValidatorCall0.round
-#print axioms TwoSums.ValidatorCall0.round
-#print axioms TwoSums.ValidatorCall1.round
-#print axioms SmallSumcheckValidatorRoot.validator
-#print axioms TwoSumsValidatorRoot.validator
-#print axioms SmallSumcheckProducerRoot.producer
-#print axioms TwoSumsProducerRoot.producer
+example (supplied : Nat) (different : supplied ≠ TwoSums.validatorRouting.selectedHandle)
+    (frames : Original.Frames) (site field : String) :
+    TwoSums.validatorRouting.draw frames site field supplied = none :=
+  wrong_query_handle _ supplied different frames site field
+
+#print axioms SmallSumcheck.validatorConnected
+#print axioms TwoSums.validatorConnected
+#print axioms SmallSumcheck.producerConnected
+#print axioms TwoSums.producerConnected
+#print axioms wrong_query_handle
 #print axioms TestsSecurity.OriginalPairExecution.Small.execute_pair
 #print axioms TestsSecurity.OriginalPairExecution.Two.execute_pair
 #print axioms query_identity

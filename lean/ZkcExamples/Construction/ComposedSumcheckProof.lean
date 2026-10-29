@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Construction.ComposedSumcheckArtifact
-public import ZkcExamples.Construction.ComposedSumcheckDomainConnection
+public import ZkcExamples.Construction.ComposedSumcheckScalarConnection
 public import Zkc.Construction.ScalarVerifier
 
 @[expose] public section
@@ -15,6 +15,10 @@ set_option backward.isDefEq.respectTransparency false
 set_option maxRecDepth 50000
 namespace ZkcExamples.Construction.ComposedSumcheckProof
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
+/-- The endpoint uses the retained artifact's single stored checked root. -/
+theorem sourceConnected : ConnectionAdmission.Required program context .validator participant :=
+  ComposedSumcheckScalarConnection.requiredConnection
+
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
 /-- The actual participant with its fixed scalar input/output and oracle ABI. -/
@@ -32,29 +36,11 @@ theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
     compiledVerifier challenge left right leftSum rightSum rounds initial proof =
       transform context challenge (verifier left right leftSum rightSum rounds handle) initial proof := by
   rw [compiledVerifier, ScalarVerifier.verify_eq_runK program context participant acceptancePosition
-    challenge (inputs left right leftSum rightSum rounds) (ComposedSumcheckDomainConnection.inputs left right leftSum rightSum rounds) (by rfl) initial proof]
-  have keys : ScalarVerifier.origin participant = Origin.withoutCoordinates := by funext origin; rfl
-  rw [keys]
-  have context_same : context = ComposedSumcheckDomainConnection.context := by decide +kernel
-  have accepts (result : Domain.Result (uniformCarriers F G)) :
-      ScalarVerifier.acceptance acceptancePosition result = Uniform.SourceProcess.acceptance result.values := by
-    rw [acceptancePosition_eq]
-    unfold ScalarVerifier.acceptance
-    cases result.values with
-    | nil => rfl
-    | cons head tail =>
-      cases head with
-      | data payload =>
-        rcases payload with ⟨ty, admissible, value⟩
-        cases ty <;> rfl
-      | transcript => rfl
-      | indices => rfl
-  simp only [accepts, context_same]
-  convert ComposedSumcheckDomainConnection.domain_to_source challenge left right leftSum rightSum rounds handle initial proof using 1
-  · kernel_rfl
-  · apply congrArg (fun source => transform ComposedSumcheckDomainConnection.context challenge source initial proof)
-    simp only [verifier, process, ComposedSumcheckDomainConnection.sourceVerifier,
-      PIR.Process.interpret_bind, PIR.Process.interpret]
-    kernel_rfl
+    challenge (inputs left right leftSum rightSum rounds)
+    [.data (.vector "bls12-381.fr" left), .data (.vector "bls12-381.fr" right),
+      .data (.field "bls12-381.fr" leftSum), .data (.field "bls12-381.fr" rightSum),
+      .data (.index rounds), .transcript context.suite []] rfl initial proof,
+    acceptancePosition_eq]
+  exact ComposedSumcheckScalarConnection.transform challenge left right leftSum rightSum rounds handle initial proof
 
 end ZkcExamples.Construction.ComposedSumcheckProof

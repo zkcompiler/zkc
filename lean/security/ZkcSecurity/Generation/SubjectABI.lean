@@ -50,6 +50,7 @@ or recursive data encoding is owned by the generator. The kernel checks the
 closed capability-exclusion proof in the generated module. -/
 def encoded (ty : Ty) (name : String) : Except String String :=
   if ty.isService then .error "subject-abi-service-projection"
+  else if ty.isHandle then .error "subject-abi-handle-projection"
   else .ok (".data ⟨" ++ literal ty ++ ", by decide, " ++ name ++ "⟩")
 
 def atPositions (types : List Ty) (positions : List Nat) : Except String (List Ty) :=

@@ -9,6 +9,7 @@ public import Zkc.Protocols.Sumcheck.Common
 /-! Security of the actual imported two-round verifier under fresh uniform coins. -/
 
 set_option autoImplicit false
+noncomputable section
 
 namespace ZkcExamples.NativePrograms.Sumcheck
 
@@ -51,3 +52,5 @@ theorem completeness (coefficients : Coefficients F) (service : Nat) (first seco
 
 
 end ZkcExamples.NativePrograms.Sumcheck
+
+end

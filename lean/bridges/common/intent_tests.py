@@ -92,7 +92,7 @@ def main():
     finally:
         intent.relation_candidate = generator
     def changing_relation(data, request):
-        data[8][:] = correct[8]
+        data['snapshot'][7][:] = correct['snapshot'][7]
         return generator(data, request)
     intent.relation_candidate = changing_relation
     try:

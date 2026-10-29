@@ -15,7 +15,7 @@ that all native behavior already has a Lean model.
   observations, termination and exact refinement.
 - [Verification](spec/verification.md): explicit intent, contracts, consumers,
   authored targets, candidate generation and receipt semantics.
-- [Scalar import](spec/common-source.md): admitted syntax and encoding.
+- [Derived Common scalar views](spec/common-source.md): Structured participants and retained mathematical contracts.
 - [Structured import](spec/structured-source.md): checked original protocol-stage
   programs with shared helpers, participants, services, retained contracts,
   protocol applications and repeats.

@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.GkrSourceLaws
-public import ZkcExamples.Structured.GkrSourceCallbacks
+public import ZkcExamples.Structured.Generated.Presentations.Gkr
 public import Zkc.Source.Structured.CommonAdapter
 
 public section
@@ -31,7 +31,7 @@ role masks and every stopped execution retained. -/
 theorem producer_binding (inputs outputs add mul : Option (List F))
     (layers selector width handle : Option Nat) :
     producer (G := G) inputs outputs add mul layers selector width handle =
-      ((GkrSourceCallbacks.gkrBody.denote
+      ((Generated.Presentations.Gkr.Root.gkrBody.denote
         (participantMeaningWith (.silent _) (participantActions F G)
           (Zkc.Source.Structured.plainHelpers (F := F) (G := G) GkrSourceViews.unit) 0
           (GkrSourceViews.unit.plainProtocolTable F G) {})
@@ -49,7 +49,7 @@ theorem producer_binding (inputs outputs add mul : Option (List F))
       (Zkc.Source.Structured.plainHelpers (F := F) (G := G) GkrSourceViews.unit)
       GkrSourceViews.unit.protocols GkrSourceViews.unit.protocolsLinked
       GkrSourceViews.gkrDefinition GkrSourceViews.gkr_member
-      GkrSourceCallbacks.gkrBody GkrSourceCallbacks.gkrBody_raw {} 0 args)
+      Generated.Presentations.Gkr.Root.gkrBody Generated.Presentations.Gkr.Root.gkrBody_raw {} 0 args)
   exact (congrArg (fun process : PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) GkrSourceBodies.gkrSignature.outputs) =>
     (process.bind fun result => .done (result.get .here)).interpret CommonAdapter.project)

@@ -235,9 +235,10 @@ theorem reading {A : Type} (routing : Original.Routing) (replacement : Replaceme
   (interpretation routing replacement profile noLocal).reading source state
 
 /-- The source effect condition needed by the public lossless adapter. Service
-queries retain handles; proof receives must exclude capabilities recursively. -/
+queries retain handles; proof receives must exclude capabilities and logical
+oracle handles recursively. -/
 @[expose] def DataOperation : (Occurrence.signature carriers).Op → Prop
-  | .action (.receive ty ..) => ty.isService = false
+  | .action (.receive ty ..) => ty.isHandle = false
   | _ => True
 
 private theorem queryField_data (state : Original.State carriers) (origin : Origin) (field : String) :
@@ -248,7 +249,7 @@ private theorem queryField_data (state : Original.State carriers) (origin : Orig
   · trivial
 
 private theorem receive_data (routing : Original.Routing) (state : Original.State carriers)
-    (ty : Ty) (site : String) (sender : Nat) (data : ty.isService = false) :
+    (ty : Ty) (site : String) (sender : Nat) (data : ty.isHandle = false) :
     OperationSupport NominalDomain.DataOperation (receive routing state ty site sender) := by
   unfold receive
   cases routing.mode with
@@ -308,5 +309,9 @@ theorem presentation_lossless (model : DomainModel) (routing : Original.Routing)
     (data : OperationSupport DataOperation source) (state : Original.State model.toCarriers) :
     Original.LosslessOn NominalDomain.interface (presentation routing source state) :=
   NominalDomain.losslessOn model _ (data.interpretState (operations routing) (operations_data routing) state)
+
+-- Materialize these equations in their owning module. Lazy copies in consumers
+-- can refer to different private splitters. No global simp rule is installed.
+attribute [local simp] receive.eq_2
 
 end ZkcSecurity.FiatShamir.DomainSourceReading

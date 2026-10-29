@@ -275,4 +275,8 @@ theorem optional_fill (model : DomainModel) : (types : List Ty) →
       rw [optional_fill model rest binders others]
       rfl
 
+-- Materialize these equations in their owning module. Lazy copies in consumers
+-- can refer to different private splitters. No global simp rule is installed.
+attribute [local simp] optionalPattern.eq_def
+
 end Zkc.Source.Structured.Bindings

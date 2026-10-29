@@ -11,6 +11,7 @@ public import Mathlib.Algebra.Field.ZMod
 /-! Actual native exports that cannot implement the selected composed contract.
 These are contract counterexamples, not a blanket insecurity claim. -/
 set_option autoImplicit false
+noncomputable section
 namespace ZkcExamples.NativePrograms.FactorControls
 open Zkc.Protocols.Sumcheck.FactorOpening
 
@@ -66,3 +67,5 @@ theorem wrong_residual_no_contract :
   cases same
 
 end ZkcExamples.NativePrograms.FactorControls
+
+end

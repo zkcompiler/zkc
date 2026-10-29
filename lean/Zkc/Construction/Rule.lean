@@ -47,7 +47,7 @@ def CheckState.path (state : CheckState) (reference : Nat) : Option (List Nat) :
   state.paths.lookup reference
 
 def isData : Option ValueSort → Bool
-  | some (.data ty) => !ty.isService
+  | some (.data ty) => !ty.isHandle
   | _ => false
 
 /-- The transcript occurrence carries exactly the enclosing induction values. -/
@@ -73,7 +73,7 @@ def checkStep (context : Context) (state : CheckState) : Instruction → Except 
   | ⟨.receive site schema peer ty, [], results, []⟩ =>
       match state.pending with
       | .none =>
-          if ty.isService then .error "construction-receive-type" else
+          if ty.isHandle then .error "construction-receive-type" else
           if schema = site ∧ peer = context.role context.producer ∧ results = [.data ty] then
             .ok { state with
               sorts := state.sorts ++ [.data ty]
@@ -227,7 +227,7 @@ def checkPlainFrom (context : Context) (self peer : Nat) :
 def checkPlainStep (context : Context) (self peer : Nat) (state : PlainState) :
     Instruction → Except String PlainState
   | ⟨.receive site schema sender ty, [], results, []⟩ =>
-      if !ty.isService ∧ schema = site ∧ sender = context.role peer ∧ results = [.data ty] then
+      if !ty.isHandle ∧ schema = site ∧ sender = context.role peer ∧ results = [.data ty] then
         .ok { state with sorts := state.sorts ++ results }
       else .error "construction-plain-receive"
   | ⟨.send site schema receiver, [value], [], []⟩ =>

@@ -11,7 +11,7 @@ Every restriction updates all four factors separately. -/
 
 namespace ZkcSecurity.Examples.Components.GkrRoundsRealization
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.Bindings
-open ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs
+open ZkcExamples.Structured.GkrSourceViews
 open ZkcExamples.Structured.Generated.Bindings.GkrRounds (payload)
 open GkrRoundsHelpers GkrRoundsProcesses GkrRoundsReference
 open Zkc.Protocols.AlgebraicRounds

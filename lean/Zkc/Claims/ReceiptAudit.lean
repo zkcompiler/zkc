@@ -384,7 +384,67 @@ def auditRequest (input item : Json) : Audit := Id.run do
   audit := { audit with envelope := ⟨has r, resolved, checks.toList ++ audit.envelope.checks⟩ }
   return audit
 
-/-- Scope errors apply to every row before classification. -/
+/-- Consumer policy has one exact envelope. Context and occurrence identity
+constrain coverage; they never change a receipt's type-level proof status. -/
+def exactFields (value : Json) (expected : List String) : Bool :=
+  match value.getObj? with
+  | .error _ => false
+  | .ok fields =>
+    let names := fields.toArray.map Prod.fst
+    names.size == expected.length && names.all expected.contains
+
+/-- Compare independent requirements with the already audited rows. This also
+serves author and generic obligations without granting canonical authority. -/
+def requiredCoverage (requirements context : Json) (items rows : Array Json) :
+    Except String Json := do
+  if requirements == .null then return .null
+  unless exactFields requirements ["format", "context", "claims"] &&
+      str (get requirements "format") == "zkc.consumer-requirements/0" do
+    throw "invalid consumer requirements envelope"
+  let expectedContext := get requirements "context"
+  unless exactFields expectedContext ["subject", "manifest_sha256", "checker"] &&
+      !(str (get expectedContext "subject")).trimAscii.toString.isEmpty &&
+      !(str (get expectedContext "manifest_sha256")).trimAscii.toString.isEmpty &&
+      (get expectedContext "checker").getObj?.isOk do
+    throw "invalid consumer requirements context"
+  let required ← (get requirements "claims").getArr?
+  unless !required.isEmpty && unique (required.map (get · "node")) do
+    throw "consumer requirements need a nonempty set of distinct occurrences"
+  let contextMatches := expectedContext == context
+  let claims ← required.mapM fun requirement => do
+    let node := get requirement "node"
+    let request := get requirement "request"
+    unless exactFields requirement ["node", "request"] &&
+        node.getObj?.isOk && has node && request.getObj?.isOk && has request do
+      throw "consumer requirement needs an occurrence and a complete request object"
+    let occurrences := (items.zip rows).filter (fun (item, _) =>
+      get (get item "attachment") "node" == node)
+    let matched := occurrences.filter (fun (item, _) => get item "request" == request)
+    let certified := if contextMatches && occurrences.size == 1 then
+        matched.filter (fun (_, row) => str (get (get row "audit") "status") == "certified")
+      else #[]
+    let status := if !certified.isEmpty then "certified"
+      else if contextMatches && occurrences.size == 1 && matched.size == 1 &&
+        matched.all (fun (_, row) => str (get (get row "audit") "status") == "incomplete")
+      then "incomplete" else "open"
+    let reasons : Array String := if status == "certified" then #[]
+      else if !contextMatches then #["consumer requirements name another subject, manifest or checker environment"]
+      else if occurrences.size != 1 then #["consumer-required occurrence is missing or ambiguous"]
+      else if matched.isEmpty then #["consumer-required request differs from the supplied request"]
+      else #["consumer-required request has no certified receipt"]
+    return object [("node", node), ("request", request), ("status", .str status),
+      ("matching_nodes", .arr (matched.map (fun (_, row) => get row "node"))),
+      ("certified_nodes", .arr (certified.map (fun (_, row) => get row "node"))),
+      ("reasons", toJson reasons)]
+  let status := if claims.all (fun row => str (get row "status") == "certified") then "certified"
+    else if claims.all (fun row => str (get row "status") == "incomplete") then "incomplete" else "open"
+  return object [("input", requirements), ("context", context), ("claims", .arr claims),
+    ("status", .str status),
+    ("outcome", .str (if status == "certified" then "established" else "unresolved"))]
+
+/-- Scope errors apply to every row before classification. Consumer requirements
+can prevent the aggregate from being certified without changing any existing
+receipt's own type-level status. -/
 def run (input : Json) : Except String Json := do
   unless str (get input "format") == "zkc.receipt-audit-input/0" do
     throw "unsupported receipt audit input"
@@ -439,12 +499,20 @@ def run (input : Json) : Except String Json := do
       ("claim_kind", kind), ("semantic_dependencies", get item "semantic_dependencies"),
       ("audit", encode audit)]
   let security := rows.filter (fun row => !["author", "generic"].contains (str (get row "claim_kind")))
-  let established := !security.isEmpty && scopeReasons.isEmpty && security.all (fun row =>
+  let requirements ← requiredCoverage (get input "consumer_requirements")
+    (get input "consumer_context") items rows
+  let required := arr (get requirements "claims")
+  let covered := required.all (fun row => str (get row "status") == "certified")
+  let established := !security.isEmpty && scopeReasons.isEmpty && covered && security.all (fun row =>
     str (get (get row "audit") "status") == "certified")
-  let state := if security.isEmpty && str (get source "format") == "zkc.bound-source-claims/0" then "no-claim"
-    else if established then "certified" else if !security.isEmpty && security.all (fun row =>
-      str (get (get row "audit") "status") == "incomplete") then "incomplete" else "open"
+  let state := if security.isEmpty && covered && str (get source "format") == "zkc.bound-source-claims/0" then "no-claim"
+    else if established then "certified" else if !security.isEmpty &&
+      required.all (fun row => str (get row "status") == "incomplete") && security.all (fun row =>
+        str (get (get row "audit") "status") == "incomplete") then "incomplete" else "open"
   return object [("format", .str "zkc.receipt-status/0"), ("claims", .arr rows),
     ("status", .str state), ("outcome", .str (if established then "established" else "unresolved")),
-    ("reasons", toJson scopeReasons), ("audit_status", .str (if unaudited then "unaudited" else "checked"))]
+    ("reasons", toJson (scopeReasons ++ required.flatMap (fun row =>
+      (strings (get row "reasons")).map (fun reason => s!"{(get row "node").compress}: {reason}")))),
+    ("consumer_requirements", get input "consumer_requirements"), ("requirements", requirements),
+    ("audit_status", .str (if unaudited then "unaudited" else "checked"))]
 end ReceiptAudit

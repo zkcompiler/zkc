@@ -50,8 +50,10 @@ placements are shared. Distinct physical placements are checked separately.
 Public Fiat–Shamir reading and observation coherence follow from the same root
 certificate under the adapter's profile and no-local-service premises. These
 are correspondence results, not cryptographic property receipts or native
-compiler correctness. The GKR source-library closure is checked; its complete
-new root connection and the old admission-walker retirement remain open.
+compiler correctness. The same route now checks both complete canonical GKR
+roles. Structural admission no longer contains a second, unproved projection
+walker: canonical receipts require the separate semantic connection evidence.
+The remaining GKR mathematical installation cost is described below.
 
 All results below concern stated mathematical models and exact selected imports.
 They do not certify arbitrary DSL programs or the full native lowering pipeline.
@@ -74,7 +76,7 @@ nonvacuity evidence remain checked against the fixed subject.
 | [Bounded component exports](spec/components.md#associated-component-exports) | Retained linear declarations and exact port layouts; independent recomputation of per-call proposals, direct/pure/terminal routes, acceptance exits and repeat initial/yield/result association; typed bridges to existing assignments, checked applications and formula processes; conjunction acceptance-path theorem | Structural association only. Reached runtime observations, selected mathematical meanings, totality, readback, separate No transport and terminal adequacy remain explicit obligations. Root generators and protocol examples require integration; no whole-protocol security theorem |
 | [Logical contexts](design/logical-contexts.md) | Port-independent binders, transport along port maps, translation of the contract layer, exported-metadata checking; the Sumcheck residual request on the retained and a repacked Reduction export with the unchanged `count / \|F\|` bound; loop frames observing a repeat's carried state, with a step-obligation rule and exported-frame checking | Lean modules over manually authored contexts; static sort arities; frames observe carried state, not actions inside an iteration; no native export or source syntax; the residual bound is the optional security package's, under the uniform query service (`ZkcArkLib.Examples.CausalSumcheck.LogicalResidual`) |
 | Structural proof construction | Source-indexed derivation soundness with local operation/callback laws; exhaustive lexical call inventory and generic checked-callee substitution preserving masks, stops, state and continuations | Local mathematical laws and loop/callback proofs remain required; selected requests do not discover undeclared intentions or prove the exporter correct |
-| Structural authoring automation | `structured_views` emits checked unit payloads and their kernel-checked admission phases from typed bodies; `bind_contract` recovers retained owners, formula helpers and typed selectors; `derive_region` composes local laws over the actual checked body, including callbacks and lexical binds; the Lean `structured-source component-bindings` printer generates checked source views, whole-process equations and occurrence-indexed obligations; retained older clients also use `bridges/structured/normal_forms.py` for participant normal forms, positional builders, embeddings and contract bindings, normal forms of roots that apply other protocols (the callee's generated normal form substituted at the application's child context), each role's invocation at any caller context, and named positions of carried repeat slots; each generated normal-form equation is an instance of one soundness theorem of the verified normalizer (`Zkc.Source.Structured.NormalForm.normalize_sound`), whose form the compiled normalizer (`structured-source normal-form`) prints and the kernel checks by evaluation, and the Σ root equations are checked by `kernel_rfl` alone | Kernel-checked proof construction; unsupported mathematics remains a goal. Direct body projection is the default; materializing large views or proofs can be expensive |
+| Structural authoring automation | `structured_views` emits checked admission phases; `bind_contract` recovers retained formula helpers and typed selectors; `derive_region` composes local laws over the checked body. The Lean `Bindings.RoleViews` printer derives role visibility, full returns, callbacks and actual callee arguments for Sigma, Sumcheck and GKR. Process equations use the verified normalizer; occurrence-preserving equations retain call and loop coordinates. Python only schedules generation and compares outputs | Kernel-checked proof construction; helper mathematics, loop invariants and property assembly remain explicit. Materializing large views or proofs can be expensive |
 | Optional component semantics | Same typed Region with closed callbacks; generic lookup, optional named Math calls, all-present adequacy, exact resolution and full-table framing; shared scalar/group evaluator | Static availability is a separate computational check; adequacy alone proves neither admission nor native correspondence |
 | [Structured primitives](#library-primitive-subjects) | Conditional u64 index arithmetic, list length/sum/split/append/equality laws and strict exec sequencing; complete library Shape/Table/Halves wrappers, an arithmetic/vector Sequence caller and a two-role pure-index caller | Library equations state their representation premises; logical lists, without host allocation or native resource correspondence; no observed Shape/Table/Halves site law |
 | [Retained protocol applications](#protocol-application-subjects) | Exact original/checked association in both directions; complete-signature linking, contextual prefix/full-table laws, optional call masks, outside-roster skip and effect interpretation | Supported static native profile; no generic availability/preflight soundness or native execution correspondence |
@@ -91,7 +93,7 @@ nonvacuity evidence remain checked against the fixed subject.
 | [Compiled Schnorr Fiat–Shamir](spec/fiat-shamir.md) | Finite admission plus the actual all-reply Domain/source binding connects selected canonical execution to the original Proof verifier transform. The fixed-statement history-oracle experiment reduces to the VCVio Schnorr run and yields `acc * (acc / (Q + 1) - 1 / \|F\|)` for extraction of the retained relation. The interactive Sigma transform has its separately stated bound | Field/module laws and the fixed scalar history-oracle model; checked source/artifact identities and explicit ABI. Native realization, provider/encoding laws and deployed binding remain separate. No efficiency, adaptive knowledge, zero-knowledge or concrete Merlin/BLS claim |
 | [Executable lowering and the Schnorr verifier](spec/executable.md) | The actual native reading is checked against both input and output schemas, even for identical schedules. `DomainVM.checked_execute_metered` relates its byte execution to canonical Code metering with actual helper costs; `checked_validate_prunes` gives all-budget acceptance domination while retaining preceding oracle effects. Canonical normalization proves observation equality for rescheduled pure calculations. Schnorr reaches its source transform at budget 25 and its exact registered scalar verifier at every budget; DeferredRounds preserves full returned-tuple/readback behavior at budget 35 | Interpreted native machine and explicit finite native admission, prepared helpers, arbitrary decoders/bytes and lawful monads. Returned values and unread emptiness are preserved on success; stopped byte cursors, counters and cleanup traces are outside that observation. Frame cleanup has a separate theorem. No Rust implementation or nominal-ROM equivalence |
 | [Executable Sumcheck verifier](spec/executable.md#the-compiled-sumcheck-proof-verifier) | The actual looped validator and its three helper bodies connect to canonical Domain execution and the admitted original source. All-budget byte pruning transports fixed and adaptive soundness; the actual typed public row determines the adaptive statement. The same canonical Code supplies cost and honest-success laws. Honest byte completeness retains its 32-byte binding, message-only codec inversion/size laws, valid table shape and round bound, with sufficient budget `72 + 59 · rounds` (190 at two rounds). Helper preparation includes terminal interpolation and ordered shape/resource failures | Arbitrary-byte soundness needs no honest or codec-inversion hypothesis. Mathematical security needs a well-formed false statement, finite field and the stated scalar oracle/decoding model. Native absorption and runtime/kernel/renderer links remain assumptions. Honest completeness covers the instruction budget, not every host resource limit; the terminal point bound requires the family maximum below 64. No knowledge claim |
-| [Compiled Sumcheck Fiat–Shamir transform](spec/participant-projection.md#the-compiled-sumcheck-proof-entry) | Checked all-reply source connections for the actual canonical Sumcheck and composed two-application participants; exact typed raw inputs, output selection, stops and unread suffixes. The ordinary Sumcheck source is additionally rewritten as rounds plus multilinear terminal under its explicit decoded-table premises | Structural admission alone does not imply the equation. Helper/body identities, routing and loop state laws are checked separately. No honest-input restriction in the source connection; no native byte or composed security theorem follows merely from it |
+| [Compiled Sumcheck Fiat–Shamir transform](spec/participant-projection.md#property-consumers-and-receipts) | Checked all-reply source connections for the actual canonical Sumcheck and composed two-application participants; exact typed raw inputs, output selection, stops and unread suffixes. The ordinary Sumcheck source is additionally rewritten as rounds plus multilinear terminal under its explicit decoded-table premises | Structural admission alone does not imply the equation. Helper/body identities, routing and loop state laws are checked separately. No honest-input restriction in the source connection; no native byte or composed security theorem follows merely from it |
 | [Compiled Sumcheck Fiat–Shamir soundness](spec/fiat-shamir-security.md#the-compiled-sumcheck-proof-entry) | The compiled Sumcheck `example::Proof` verifier's actual canonical execution (`compiledVerifier`, with its fixed scalar ABI and acceptance selection) is, for every challenge function, the transform of the imported verifier (`construction`, from the checked all-reply source connection and `verifier_imported`); with a random oracle on all typed histories it accepts a false claim on the raw table values with probability at most `(Q + count) / \|F\|` for a fixed well-formed statement (the raw values decode to a table at the count) and initial transcript (`soundness`), and at most `(Q + 2) * (1 / \|F\| + loss)`, two being the Entry's round maximum, for adaptively chosen well-formed statements under a binding whose initial transcripts determine them (`adaptive_soundness`; `reduced_soundness` with `loss = \|F\| / N`). On a `ZMod 5` instance the bound is attained on the compiled program (exactly `1 / 5`), the compiled program evaluated in the kernel accepts the cheating proof exactly at one challenge and the honest proof for a true claim at every challenge, and without a determining binding a one-query prover is accepted with probability `4 / 5`, above the adaptive bound | Ideal interpretation of the constructed validator: the random-oracle idealization, encoding and transcript-state correspondence, exporter and rendering boundaries and native correctness of the compiled Schnorr row, and the helper and coordinate boundaries of the previous row; the adaptive premise is discharged by the typed public-value binding of the statement (`adaptive_soundness_public`), which the executable Sumcheck row uses; that binding establishes statement determination only, and native absorption of the encoded rows remains assumed; well-formed statements only, fixed or adaptive; soundness, not knowledge soundness; the executable program the runtime admits is covered by the executable Sumcheck row; no running-time claim |
 | [GKR Fiat–Shamir soundness](spec/fiat-shamir-security.md#the-plain-gkr-verifier) | The plain GKR verifier of a decoded statement (output and input tables of the width, each layer's add and mul wiring) has a charged certificate over the transcript interface of the common actions, composed from one reduction per phase with the charged `Typed.Reduction.bind`, `repeatN`, `union` and `receive`, each charged at its own challenge site (`siteCharge`): output point `1 / \|F\|`, each degree-two round `2 / \|F\|` (ArkLib's `uniform_successor_soundness` on the layer's gate polynomial, whose Boolean sum is the layer's extension), the line challenge `width / \|F\|` (Schwartz–Zippel for the restriction of a multilinear extension to a line), and the input check. Against a weighted adversary budget, each oracle key charged its site's error, its transform accepts claimed outputs other than the circuit's outputs with probability at most the prover's charge plus `(width + layers (2 width + 1)) max 2 width / \|F\|` (`soundness_charged`); against `Q` queries, at most `(Q + width + layers (2 width + 1)) max 2 width / \|F\|` (`soundness`), since a total budget lets the prover place every query at the most expensive site | Finite field; fixed statement and initial transcript; the random-oracle experiment and obligations of the multi-round row; soundness, not knowledge soundness; uniform width and dense public wiring; no adaptive statement choice; the verifier's own charge is bounded by its query count at the largest site error |
 | [Compiled GKR Fiat–Shamir soundness](spec/fiat-shamir-security.md#the-compiled-gkr-proof-entry) | The full canonical GKR participant, including output, layer, degree-two round and line phases, connects to its admitted original for all raw typed inputs and replies. On a well-formed statement the original becomes the plain mathematical verifier, so selected acceptance inherits the weighted and query-count bounds in the preceding row | Fixed well-formed statements, widths and layers at most four, projected scalar history-oracle model. Acceptance ignores unread messages as its selected stage requires. This is the full constructed root, distinct from the finite GKR gate; no native GKR byte or nominal-ROM preservation theorem |
@@ -188,7 +190,7 @@ claim.
 
 ## Checked connection certificates
 
-The [certificate boundary](spec/participant-projection.md#checked-connection-certificates)
+The [certificate boundary](spec/participant-projection.md#checked-derivations)
 now has a general proof from a finite typed alignment to a complete simulation
 in the plain profile. Observation-parametric normalization retains actual call
 and repeat occurrences. `Tests.SourceConnectionPilot` checks a composed actual
@@ -197,12 +199,15 @@ replies, a stopping helper, guards, full returns and independently required
 routing coverage. Complementary controls cover transcript delivery and a
 producer's private service.
 
-This is a checked connection foundation, not completed automation for all
-maintained subjects. The bounded public certificate has no retained-callee
-library; root and ABI installation and reached-source coverage still need
-assembly. Existing per-subject connections and the unproved structural
-projection walker remain active. No additional native execution or security
-claim follows from the new certificate alone.
+The root engine checks reachable source libraries and exact placements once,
+and derives reached-source coverage with the complete simulation. Generic
+installation can propose a connection for small roots or reuse a checked
+certificate for a larger root; both prove the same request-owned requirement.
+Structural admission checks typing and occurrence association only. A missing
+semantic connection leaves the corresponding canonical receipt open. The old
+projection walker is removed. Some mathematical property installation remains
+authored, as documented for each client. No additional native execution or
+security claim follows from the connection certificate alone.
 
 ## Selected finite codecs
 
@@ -682,11 +687,10 @@ record names it through an explicit checked formula symbol, and the contract
 table retains every protocol's clauses. `ZkcExamples.Structured.SchnorrBinding`
 uses this metadata to select the actual target's ports, roles, decision and
 formula body; no association is inferred from names. The binding, selectors,
-formula process and target are the generated declarations of
-`SchnorrInteractiveNormalForms` (from
-[`schnorr-interactive.toml`](../bridges/structured/normal-forms/schnorr-interactive.toml)),
-which also states both participants' processes and runs; `SchnorrBinding` keeps
-them under the names its consumers use.
+formula process, target and transcript facts remain authored in
+`SchnorrInteractiveNormalForms`. Its run equations use the source-generated
+participant equations in `Generated.Scalar.SchnorrInteractive.Root`;
+`SchnorrBinding` supplies the theorem names consumed by its family mathematics.
 
 ## Sigma compositions
 
@@ -700,15 +704,15 @@ commits one nonce at both bases and sends one response. A
 site, which observes the verifier's actual returned decision for one
 transcript and the prover's actual ordered sends.
 
-For both protocols, these processes, the reply scripts and runs, and the
-binding below are generated (`SchnorrAndNormalForms` and
-`ChaumPedersenNormalForms`, from `bridges/structured/normal-forms/schnorr-and.toml`
-and `chaum-pedersen.toml`); their process equations are checked by kernel
-evaluation alone (`kernel_rfl`). `SchnorrAnd` and `ChaumPedersen` keep the prover-side
-names (sites, inputs, reply scripts and runs) that the Σ-protocol instantiations
-state their theorems with.
+For both protocols, `Generated.Scalar.SchnorrAnd.Root` and
+`Generated.Scalar.ChaumPedersen.Root` provide the checked scoped participant
+views. Reply scripts, run facts and contract bindings remain authored in
+`SchnorrAndNormalForms` and `ChaumPedersenNormalForms`. The source normalizer
+and its soundness theorem authorize the process equations; the run facts use
+those equations. `SchnorrAnd` and `ChaumPedersen` retain the prover-side names
+(sites, inputs, reply scripts and runs) used by the Sigma family theorems.
 
-The generated modules bind the retained `knowledge` targets with
+The mathematical consumer modules bind the retained `knowledge` targets with
 `bind_contract`. The `DLogPair` target has two witness selectors on different
 prover ports; the `DLogEquality` target has one. Each proves that its formula
 process is the conjunction of the two Schnorr equations and that the selected
@@ -786,10 +790,10 @@ receives one challenge `c` and sends the responses `z₁ = r₁ + c · w₁` and
 `z₂ = r₂ + c · w₂`; the verifier accepts when
 `first_base · z₁ + second_base · z₂ = commitment + point · c`.
 `OkamotoViews` kernel-admits the retained unit from printed typed bodies
-(`OkamotoBodies`). Both participants' processes, their runs, the binding of the
-`knowledge` clause to the retained `Representation` formula and the verifier's
-observed decision are the generated declarations of `OkamotoNormalForms`, from
-the request [`okamoto.toml`](../bridges/structured/normal-forms/okamoto.toml).
+(`OkamotoBodies`). The source-generated scoped processes are in
+`Generated.Scalar.Okamoto.Root`. Their runs, the binding of the `knowledge`
+clause to the retained `Representation` formula and the verifier's observed
+decision remain mathematical consumer facts in `OkamotoNormalForms`.
 Over them, for every field `F` and `F`-module `G`:
 
 - `extract_representation` and `extracted_target`: two accepting runs of the
@@ -824,27 +828,24 @@ literal Reduce body has maximum 2 in Source
 and maximum 4 in Reduction; the actual child return order is `[3, 0, 1, 2, 4, 5]`.
 The six carried slots are P entries,
 P dimension, P width, P point, V point and V claim; the verifier embedding
-leaves the first four absent. The shared typed body (`SumcheckVerifierBodies`)
-and the verifier's round and whole-body normal forms with their process
-equations (`SumcheckRoundNormalForms`) are generated from the retained
-Reduction unit by `bridges/structured/normal_forms.py`, which also names each
-role's carried slots (`verifierPointSlot`, `proverEntriesPosition`, ...) and the
-return order (`reduceReturnIndices`). Each generated process equation is an
-instance of the normalizer's soundness theorem
-(`Zkc.Source.Structured.NormalForm.normalize_sound`, through `sound_uniform` and
-`callback_sound_uniform`): the compiled normalizer prints the role's form, and
-the kernel checks by evaluation that the verified normalizer returns that form
-and that its process is the readable one; the request's helper laws and the
-callee summaries discharge the theorem's premises. The roots' own normal forms are generated
-too (`SumcheckSourceNormalForms`, `SumcheckReductionNormalForms` and
-`SumcheckRepackedNormalForms`): at each role, the generated `Reduce` normal form
-is substituted at the application's child context (`reduceContext`), between
-the callee's input and output masks, and each role's invocation at any caller
-context and participant follow. The verifier equations of
+leaves the first four absent. The shared typed mathematical body (`SumcheckVerifierBodies`) and helper laws
+remain authored library facts. `Generated.Scalar.SumcheckSourceLibrary`,
+`SumcheckReductionLibrary` and `SumcheckRepackedLibrary` check each source's
+complete helper, callback and reduction body against those facts. Matching a
+helper name or signature alone is insufficient.
+
+The shared mathematical normal forms (`SumcheckRoundNormalForms` and the
+prelude/root modules) are computed by the existing Lean normalizer. Their
+process equations apply `normalize_sound`, `sound_uniform` and
+`callback_sound_uniform` with explicit helper-law premises. The source-derived
+scoped forms in `Generated.Scalar` separately determine both roles' input
+visibility, callback state, return order and invocation at caller contexts.
 `SumcheckSourceVerifier`, `SumcheckReduceVerifier` and `SumcheckRepackedVerifier`
-are derived from these and the admitted repeat
-(`SumcheckVerifierPrelude.verifierReduce_rounds`); statements about each unit's
-maximum use the maximum read from its export (`reduceMaximum`).
+combine the checked body associations with the mathematical reduction law
+(`SumcheckVerifierPrelude.verifierReduce_rounds`). Each unit's `reduceMaximum`
+continues to come from its export. The Python evaluator and its request files
+are retired; this does not eliminate the remaining authored mathematical
+refinements and their instantiation glue.
 
 `Zkc.Source.DenotationLaws` provides operation-step proof rules for the
 Region interpreter. Its general bind rule retains an arbitrary operation process;
@@ -931,31 +932,36 @@ projection, from the generated root normal forms at the prover and
 `SumcheckProverPrelude.proverReduce_honest`. Only present prover inputs are
 covered.
 
-The layer Sumcheck of the original GKR Entry (`gkr::Rounds`) has generated
-normal forms at both roles over the admitted unit (`GkrRoundsNormalForms`, from
-[`gkr-rounds.toml`](../bridges/structured/normal-forms/gkr-rounds.toml) and the
-retained export [`gkr-source.json`](../bridges/structured/fixtures/gkr-source.json)):
-its typed body with the admitted declaration's raw equation, one round (with its
-repeat as a fold of the round's normal form) and the whole body, and each role's
-invocation at any caller context. The GKR root (`gkr::Gkr`) has generated
-normal forms too (`GkrRootNormalForms`, from
-[`gkr-root.toml`](../bridges/structured/normal-forms/gkr-root.toml)): its
-typed body with the output-point, layer and line-coefficient callbacks named
-and the admitted declaration's raw equation (`gkrBody_raw`); each callback at
-both roles, the layer callback with both layer Sumcheck applications
-substituted, and each callback's repeat as a fold; and the whole validator root,
-with `verifier_participant` stating `program.participant` itself. The producer
-root's current occurrence-preserving equation is in `GkrProverContinuation`. Owned helper calls stay as the helpers' own
-invocations on present arguments, so the admitted unit's helper laws
-(`GkrSourceLaws`) rewrite them; no helper law is assumed. As for Sumcheck, every
-process equation of both modules is an instance of
-`Zkc.Source.Structured.NormalForm.normalize_sound` checked by kernel
-evaluation, the layer Sumcheck applications through their callee summaries.
-`GkrSourceVerifier.verifier_reads` reads the root at the verifier, on a
-well-formed statement, as the plain GKR verifier: each loop through the fold of
-its callback's normal form, the layer Sumcheck applications through their
-generated normal forms and every helper call through its law; the compiled GKR
-theorems use it with `GkrProof.compiled_transform`.
+The layer Sumcheck and whole GKR Entry use the shared Lean role-view printer
+(`ZkcTools.StructuredSource.Bindings.RoleViews`).
+`Generated.Presentations.Gkr` is selected by
+[`GenerateGkrPresentations.lean`](../checks/GenerateGkrPresentations.lean) from the
+retained admitted [`gkr-source.json`](../bridges/structured/fixtures/gkr-source.json).
+The source determines input visibility, complete return masks, callback state
+and captures, and actual callee arguments. The GKR catalogue supplies names;
+it does not supply SSA positions or a separate interpretation. Both roles have
+checked source invocation equations. The root's output-point, layer and
+line-coefficient callbacks retain their source identities, and the two layer
+Sumcheck applications remain ordinary calls to the admitted declarations.
+
+The occurrence equations use `normalize_occurrence_sound` with the actual
+helper and callee tables. Generic masking and loop-presentation laws preserve
+stopped helpers, arbitrary replies, complete returns and nested repeat
+observations. The four former Python-generated GKR normal-form modules and
+their request files are retired. A generated equation is checked by Lean; the
+printer's successful run is not semantic evidence.
+
+Mathematical reference, helper and honest-producer laws remain authored and
+count toward protocol cost. `GkrSourceVerifier.verifier_reads` connects the
+coordinate-erased view to the existing plain GKR mathematics for well-formed
+statements. The canonical pair additionally preserves actual occurrence frames
+and uses the generic full-return connection for completeness and adaptive
+soundness. Removing the old generator does not assert that this remaining
+source-to-mathematics proof work has been eliminated.
+The same forms also support occurrence-preserving equations for declaration-built
+protocol tables. `ProtocolPresentation` proves invocation masks independently
+of helper mathematics and successful returns. `LoopPresentation` transports
+mask-stable callback state through plain or observed bounded loops.
 
 `SumcheckFoldInvariant.prover_frames` is the per-round invariant. Its
 interaction phase records the challenges the prover receives at the delivery
@@ -1447,3 +1453,20 @@ declaration of `ZkcSecurity` and `TestsSecurity`, enforces the allowed axioms.
 The axiom closures of their theorems are subsets of `propext`,
 `Classical.choice` and `Quot.sound`; the counterexamples that compute with
 inverses in `ZMod 5` use `decide +kernel` on four or twenty-five cases.
+
+### Logical oracle reader and role assembly
+
+The independent structured reader recognizes the twelve logical oracle descriptors,
+table associated types, bounded handle sequences, virtual declarations, named
+shapes and anchor selectors. `OracleObligations` independently derives and compares
+occurrence-bound condition templates and ordered source-query footprints. This
+comparison does not prove the predicates or admit oracle execution. Native export
+fixtures are reader controls, not source or execution correspondence theorems.
+
+Pointwise assembly uses the existing Domain participant interpretation and the
+occurrence-preserving NormalForm soundness theorem. Different role components
+remain different; partial and absent components retain their meanings. Ordinary
+admission and native payloads exclude logical handles recursively. Oracle execution,
+realization correspondence, ideal-to-Merkle simulation, native VM correctness and
+cryptographic reduction remain separate. No realization stage or receipt link is
+registered by this extension.

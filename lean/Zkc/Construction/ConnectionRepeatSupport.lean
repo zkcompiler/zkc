@@ -17,7 +17,7 @@ open Zkc.Source Zkc.Source.Structured NormalForm ConnectionComputation
 /-- A complete data state visible to this role, with an exact scope row. -/
 def visibleState (role : Nat) : List (List Nat) → List Ty → Bool
   | [], [] => true
-  | scope :: scopes, ty :: types => scope.contains role && !ty.isService && visibleState role scopes types
+  | scope :: scopes, ty :: types => scope.contains role && !ty.isHandle && visibleState role scopes types
   | _, _ => false
 
 theorem visibleState_mask {role : Nat} {scopes : List (List Nat)} {types : List Ty}

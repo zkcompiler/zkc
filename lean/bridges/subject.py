@@ -45,7 +45,6 @@ import json
 from pathlib import Path
 import re
 import sys
-import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 LEAN = ROOT / "lean"
@@ -59,10 +58,10 @@ from bridges.construction import render as constructed  # noqa: E402
 from bridges.executable import render as executable  # noqa: E402
 from bridges.pipeline import compile as pipeline_compile, evidence, glue, manifest, mutations, runtime  # noqa: E402
 from bridges.pipeline.source_claims import canonical  # noqa: E402
-from bridges.structured import bodies as printer, snapshot as structured  # noqa: E402
+from bridges.structured import bodies as printer, snapshot as structured, source_views  # noqa: E402
 
 BODIES = ROOT / "lean/bridges/structured/bodies.py"
-NORMAL_FORMS = ROOT / "lean/bridges/structured/normal_forms.py"
+SOURCE_VIEWS = ROOT / "lean/bridges/structured/source_views.py"
 # Example-namespace theorems are Entry-specific. Among those a proof reaches, the
 # walk lists every equation between processes (`PIR.Process`), whether the kernel
 # checks it by evaluation (`rfl`), and whether its statement names a meaning of a
@@ -200,6 +199,8 @@ class Driver(Runner):
         data, participant = subject.module_name("data"), subject.module_name("participant")
         self.generated(subject, "data", structured.render(artifacts["original"], data), modules)
         self.generated(subject, "participant", constructed.render(artifacts["exported"], participant), modules)
+        # Presentations read the refreshed source and precede every consumer.
+        self.source_views(subject, record)
         entry = glue.Entry(artifacts["original"], artifacts["exported"], artifacts["interface"])
         names = {"glue": subject.construction_namespace, "data": data, "participant": participant}
         admission = subject.get("construction", "admission", "views")
@@ -239,21 +240,28 @@ class Driver(Runner):
         return artifacts, entry
 
     def construction_rule(self, subject, artifacts, record):
-        """The composed Lean check on the fresh export and on generic mutations."""
+        """Structural admission and checked source connections on fresh exports.
+
+        Negative connection cases test the default proof method. They do not
+        claim that every refused candidate is semantically inequivalent.
+        """
         exported, original = artifacts["exported"], artifacts["original"]
         rule = subject.get("construction", "rule", "compiled")
         glue_module = subject.module_name("glue")
         glue_namespace = subject.construction_namespace
         data = subject.module_name("data")
         kinds = [item for item in mutations.kinds_for(subject.get("mutations", "kinds", []))
-                 if item[1].stage == "construction"]
+                 if item[1].stage in {"construction", "connection"}]
 
         def templates(instructions):
             for item in mutations.nested(instructions):
                 if mutations.bound(item, mutations.OBSERVE) or mutations.bound(item, mutations.CHALLENGE):
                     yield list(bytes.fromhex(dict(item[1])["parameters"][1][0]))
 
-        parts = [f"import {glue_module}", "import Zkc.Construction.Encoding", "set_option maxRecDepth 20000",
+        parts = [f"import {glue_module}", "import Zkc.Construction.Encoding",
+                 "import ZkcTools.ConstructionBindings.Admission", "import Tests.ConnectionRefusal",
+                 "set_option maxRecDepth 50000", "set_option maxHeartbeats 16000000",
+                 "set_option linter.unusedTactic false",
                  strip_header(structured.render(original, "Fresh.Original")),
                  strip_header(constructed.render(exported, "Fresh.Actual")),
                  "/-- Whether a check refuses with a code of the given rule. -/\n"
@@ -274,17 +282,21 @@ class Driver(Runner):
                        "Fresh.Actual.participant = .ok () := by decide +kernel",
                        "theorem actual_selected : (Zkc.Construction.select freshImported "
                        "Fresh.Actual.participant).any (fun selection => "
-                       "selection.check freshImported Fresh.Actual.participant) = true := by decide +kernel"]
+                       "selection.check freshImported Fresh.Actual.participant) = true := by decide +kernel",
+                       "theorem actual_connected : Zkc.Construction.ConnectionAdmission.Required "
+                       f"freshImported.program {glue_namespace}.context .validator Fresh.Actual.participant := by\n"
+                       "  derive_source_connection",
+                       "#print axioms actual_connected"]
         else:
             proofs.append("theorem actual_accepted : Zkc.Construction.checkExport Fresh.Original.snapshot "
                           "Fresh.Actual.participant = .ok () := by decide +kernel")
         outcomes = {}
         index = 0
         for name, kind, function in kinds:
-            if rule != "compiled" and kind.refusing_rule != "construction-":
-                # Without the projection rule, only the construction rule's obligations apply.
+            if rule != "compiled" and kind.stage == "connection":
+                # This route has no admitted source-to-participant obligation.
                 outcomes[name] = dict(stage=kind.stage, property=kind.property, expected=kind.expected, sites=[],
-                                      applicable=False, reason="the projection rule is not applied to this Entry")
+                                      applicable=False, reason="this Entry does not register a source connection")
                 continue
             copies = function(exported)
             sites = []
@@ -301,13 +313,26 @@ class Driver(Runner):
                     proofs.append(f"/-- {name} -/\ntheorem mutation{index}_construction_accepted : "
                                   f"Zkc.Construction.checkExport Fresh.Original.snapshot {namespace}.participant "
                                   "= .ok () := by decide +kernel")
-                checked = (f"Zkc.Construction.checkCompiled freshImported {namespace}.participant" if rule == "compiled"
-                           else f"Zkc.Construction.checkExport Fresh.Original.snapshot {namespace}.participant")
-                proofs.append(f"/-- {name} -/\ntheorem mutation{index}_refused : refusedBy \"{kind.refusing_rule}\" "
-                              f"({checked}) = true := by decide +kernel")
-                evaluations.append(f'#eval IO.println ("mutation {index} " ++ (repr ({checked})).pretty 1000)')
-                sites.append(dict(site=len(sites), applicable=True, theorem=f"mutation{index}_refused", index=index,
-                                  refusing_rule=kind.refusing_rule, construction_accepts=kind.construction_accepts))
+                if kind.stage == "connection":
+                    proofs.append(
+                        f"/-- {name}: refusal of the default method, not an attack theorem. -/\n"
+                        "example : True := by\n"
+                        f'  expect_connection_refusal "mutation {index}" because "{kind.refusing_rule}"\n'
+                        "    have rejected : Zkc.Construction.ConnectionAdmission.Required "
+                        f"freshImported.program {glue_namespace}.context .validator {namespace}.participant := by\n"
+                        "      derive_source_connection\n  trivial")
+                    sites.append(dict(site=len(sites), applicable=True, control=f"mutation {index}", index=index,
+                                      refusing_rule=kind.refusing_rule, construction_accepts=kind.construction_accepts,
+                                      evidence="builder-refusal"))
+                else:
+                    checked = (f"Zkc.Construction.checkCompiled freshImported {namespace}.participant" if rule == "compiled"
+                               else f"Zkc.Construction.checkExport Fresh.Original.snapshot {namespace}.participant")
+                    proofs.append(f"/-- {name} -/\ntheorem mutation{index}_refused : refusedBy \"{kind.refusing_rule}\" "
+                                  f"({checked}) = true := by decide +kernel")
+                    evaluations.append(f'#eval IO.println ("mutation {index} " ++ (repr ({checked})).pretty 1000)')
+                    sites.append(dict(site=len(sites), applicable=True, theorem=f"mutation{index}_refused", index=index,
+                                      refusing_rule=kind.refusing_rule, construction_accepts=kind.construction_accepts,
+                                      evidence="kernel-refusal"))
                 index += 1
             outcomes[name] = dict(stage=kind.stage, property=kind.property, expected=kind.expected,
                                   sites=sites, applicable=any(site["applicable"] for site in sites))
@@ -316,6 +341,7 @@ class Driver(Runner):
         self.check(f"{subject.name}:lean-rule", axioms_allowed(result.stdout, "actual_accepted"),
                    result.stdout[-400:])
         codes = dict(re.findall(r"^mutation (\d+) Except\.error \"([^\"]*)\"$", result.stdout, re.M))
+        codes.update(re.findall(r"checked_refusal: mutation (\d+); reason=([^\n]+)", result.stdout))
         for name, outcome in outcomes.items():
             for site in outcome["sites"]:
                 if site["applicable"]:
@@ -325,7 +351,14 @@ class Driver(Runner):
             outcome["refused"] = sum(1 for site in outcome["sites"] if site["applicable"])
         axioms = printed_axioms(result.stdout).get("actual_accepted")
         record["kernel"]["construction"] = dict(rule=rule, file="FreshExport.lean", accepted=True, axioms=axioms)
-        record_accepted(record, "construction-and-projection" if rule == "compiled" else "construction", axioms=axioms)
+        record_accepted(record, "construction", axioms=axioms)
+        if rule == "compiled":
+            self.check(f"{subject.name}:source-connection-axioms", axioms_allowed(result.stdout, "actual_connected"),
+                       result.stdout[-400:])
+            connection_axioms = printed_axioms(result.stdout).get("actual_connected")
+            record["kernel"]["source_connection"] = dict(file="FreshExport.lean", accepted=True,
+                                                         axioms=connection_axioms)
+            record_accepted(record, "source-connection", axioms=connection_axioms)
         if rule == "compiled":
             record_accepted(record, "selection")
         record_accepted(record, "occurrence-encoding")
@@ -851,18 +884,15 @@ class Driver(Runner):
                 for claim in selected_claims]
             return
         executable_namespace = subject.get("executable", "namespace") if subject.profile("executable") else None
-        sources = {
-            "artifacts": evidence.artifacts_module(subject, entry, subject.construction_namespace,
-                                                   executable_namespace, artifacts),
-            "claims": evidence.claims_module(subject, bound),
-        }
-        if executable_namespace:
+        sources = {"claims": evidence.claims_module(subject, bound)}
+        if subject.generated("artifacts"):
+            sources["artifacts"] = evidence.artifacts_module(
+                subject, entry, subject.construction_namespace, executable_namespace, artifacts)
+        if subject.generated("lowering"):
             sources["lowering"] = evidence.lowering_module(subject, entry, executable_namespace)
         for key, source in sources.items():
-            path = subject.generated(key)
-            expected = subject.generated("claims").with_name(key.capitalize() + ".lean")
-            self.check(f"{subject.name}:claims-path:{key}", path == expected,
-                       f"[generated] {key} must be beside the subject's Claims module")
+            # The manifest owns exact, distinct package-local destinations.
+            # Typed imports, not filename conventions, connect their meanings.
             self.generated(subject, key, source, record)
         module = subject.module_name("claims")
         built = self.lake("build", module, cwd=subject.generated_package("claims"),
@@ -894,24 +924,27 @@ class Driver(Runner):
             if receipt:
                 record_accepted(record, "claim-receipt", module=module, request=request, receipt=receipt)
 
-    # Normal forms and the record.
+    # Lean-owned source presentations and the record.
 
-    def normal_forms(self, subject, record):
-        request = subject.get("normal_forms", "request")
-        if not request:
+    def source_views(self, subject, record):
+        selections = subject.get("source_views", "selections", [])
+        if not selections:
             return
-        self.run([sys.executable, NORMAL_FORMS, ROOT / request, *([] if self.args.write else ["--check"])],
-                 name=f"{subject.name}:normal-forms")
-        output = (ROOT / tomllib.loads((ROOT / request).read_text())["output"]).resolve()
-        module = ".".join(output.relative_to(LEAN).with_suffix("").parts)
-        # The generator can rewrite a module already imported earlier in this
-        # run. Build it before recording success, even if its text matches.
+        modules = [module for selection in selections for module in source_views.modules(selection)]
+        self.run([sys.executable, SOURCE_VIEWS, *selections,
+                  *([] if self.args.write else ["--check"])], name=f"{subject.name}:source-views")
+        # Rebuild every emitted equation before recording success, including
+        # outputs that an earlier stage imported before regeneration.
         self.built.clear()
-        self.build(module)
-        record["generated"][str(output.relative_to(ROOT))] = dict(
-            sha256=file_digest(output), role="normal-forms")
-        record["normal_forms"] = dict(request=request, module=module)
-        record_accepted(record, "normal-forms", request=request, module=module)
+        self.build(*modules)
+        generated = {}
+        for module in modules:
+            output = LEAN / (module.replace(".", "/") + ".lean")
+            generated[str(output.relative_to(ROOT))] = dict(
+                sha256=file_digest(output), role="source-views")
+        record["generated"].update(generated)
+        record["source_views"] = dict(selections=selections, modules=modules)
+        record_accepted(record, "source-views", selections=selections, modules=modules)
 
     def subject(self, subject):
         record = dict(format="zkc.subject-evidence/0", subject=subject.name,
@@ -936,7 +969,8 @@ class Driver(Runner):
         if subject.profile("structured"):
             interactive = self.interactive(subject, record)
             self.claim_inventory(record, [interactive])
-        self.normal_forms(subject, record)
+        if not subject.profile("construction"):
+            self.source_views(subject, record)
         run = None
         if subject.profile("construction"):
             artifacts, entry = self.proof(subject, record)

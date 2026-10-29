@@ -347,5 +347,9 @@ def carried : {out : List Ty} → Values (fun _ => Carried) out → List (Ty × 
   | ty :: _, .cons .present rest => (ty, false) :: carried rest
   | ty :: _, .cons .optional rest => (ty, true) :: carried rest
 
+-- Materialize these equations in their owning module. Lazy copies in consumers
+-- can refer to different private splitters. No global simp rule is installed.
+attribute [local simp] entryAt.eq_def
+
 end NormalForm
 end Zkc.Source.Structured

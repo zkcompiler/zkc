@@ -2,8 +2,8 @@ module
 
 public import ZkcExamples.NativePrograms.SchnorrVariants
 public import ZkcSecurity.Examples.NativePrograms.SumcheckVariants
-public import ZkcExamples.NativePrograms.Variants.SchnorrEarlyChallengeData
-public import ZkcExamples.NativePrograms.Variants.SumcheckWrongResidualData
+public import ZkcExamples.NativePrograms.SchnorrEarlyChallenge
+public import ZkcExamples.NativePrograms.SumcheckWrongResidual
 
 public import Mathlib.Algebra.Field.ZMod
 
@@ -13,6 +13,7 @@ public import Mathlib.Algebra.Field.ZMod
 Failure to implement this contract is distinct from proving a protocol insecure.
 -/
 set_option autoImplicit false
+noncomputable section
 
 namespace ZkcExamples.NativePrograms.ContractControls
 open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
@@ -20,17 +21,8 @@ open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
 abbrev F := ZMod 97
 instance : Fact (Nat.Prime 97) := ⟨by decide⟩
 
-def earlyImport : Imported := Variants.SchnorrEarlyChallengeData.snapshot.check.toOption.get (by decide +kernel)
-def residualImport : Imported := Variants.SumcheckWrongResidualData.snapshot.check.toOption.get (by decide +kernel)
-
-def earlyVerifier : Zkc.Protocols.Schnorr.Common.Verifier F F :=
-  fun base key service => earlyImport.denote (scalarMeaning F F) id 1
-    (Schnorr.verifierInputs base key service)
-
-set_option maxRecDepth 20000 in
-def wrongResidual : Zkc.Protocols.Sumcheck.Common.Verifier F :=
-  fun coefficients claim service => residualImport.denote (scalarMeaning F F) id 1
-    (Sumcheck.verifierInputs coefficients claim service)
+abbrev earlyVerifier := SchnorrEarlyChallenge.verifier (F := F) (G := F)
+abbrev wrongResidual := SumcheckWrongResidual.verifier (F := F)
 
 /-- Stop immediately, retaining whether the reached first action is a query. -/
 def firstAction : PIR.Handler (Schnorr.actions (F := F) (G := F)) Unit Bool :=
@@ -39,11 +31,16 @@ def firstAction : PIR.Handler (Schnorr.actions (F := F) (G := F)) Unit Bool :=
 /-- Acceptance/outcome equality alone misses a challenge moved before commitment. -/
 theorem early_same_outcome :
     ((earlyVerifier 1 1 7).run firstAction ()).outcome =
-      ((Schnorr.experiment (F := F) 1 1 7).run firstAction ()).outcome := by rfl
+      ((Schnorr.experiment (F := F) 1 1 7).run firstAction ()).outcome := by
+  unfold earlyVerifier
+  rw [SchnorrEarlyChallenge.process_view_eq]
+  rfl
 
 theorem early_different_events :
     ((earlyVerifier 1 1 7).run firstAction ()).events ≠
       ((Schnorr.experiment (F := F) 1 1 7).run firstAction ()).events := by
+  unfold earlyVerifier
+  rw [SchnorrEarlyChallenge.process_view_eq]
   change [true] ≠ [false]
   decide
 
@@ -64,7 +61,10 @@ theorem correct_residual_accepts :
 set_option maxRecDepth 20000 in
 theorem wrong_residual_rejects :
     ((wrongResidual coefficients 2 7).run (Sumcheck.transcriptHandler prover 1 0) 0).outcome =
-      .stopped .reject := by rfl
+      .stopped .reject := by
+  unfold wrongResidual
+  rw [SumcheckWrongResidual.process_view_eq]
+  rfl
 
 set_option maxRecDepth 20000 in
 /-- A changed residual cannot borrow the same Sumcheck security theorem. -/
@@ -77,3 +77,5 @@ theorem residual_no_contract :
   cases same
 
 end ZkcExamples.NativePrograms.ContractControls
+
+end

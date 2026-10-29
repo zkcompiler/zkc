@@ -52,7 +52,10 @@ def roleSource (label : String) (mode : Domain.Mode) (viewModule : Name) : Strin
   "    target (fun model => " ++ viewModule.toString ++ ".body model program context)\n" ++
   "    correspondence (fun model => " ++ viewModule.toString ++ ".body_eq model program context)\n" ++
   "    services capabilities library sourceLibrary\n\n" ++
-  "def " ++ label ++ "Facts := " ++ label ++ ".facts\n\n"
+  "def " ++ label ++ "Facts := " ++ label ++ ".facts\n\n" ++
+  "theorem " ++ label ++ "Connected : SourceConnection.Connected program " ++ label ++
+    "Routing context." ++ modeName ++ " " ++ label ++ ".inputs.abi " ++ label ++ "Artifact :=\n" ++
+  "  SourceConnection.ofRootCertificate " ++ label ++ " (by rfl)\n\n"
 
 /-- One declaration selection feeds every requested role. Mathematical claims
 and source-output selection stay with their own property consumers. -/
@@ -64,7 +67,7 @@ def source (selection : Selection) (output : Output) : Except String String := d
     match participant.mode with | .validator => true | .producer => false)
     | throw "connection-validator-context-required"
   let imports := ([`ZkcTools.ConstructionBindings.Root, `Zkc.Construction.ConnectionRootRoutes,
-    `Zkc.Construction.ConnectionRouteCoverageRoot,
+    `Zkc.Construction.ConnectionRouteCoverageRoot, `Zkc.Construction.ConnectionCertificateAdmission,
     selection.sourceModule] ++ output.participants.map (·.viewModule)).eraseDups
   let header := "module\n\n" ++ String.join (imports.map fun name =>
     "public import " ++ name.toString ++ "\n") ++ "\n@[expose] public section\n\n" ++
@@ -101,5 +104,15 @@ def bundle (selection : Selection) (moduleName : Name)
       ⟨selected.viewModule.toString, selected.artifactModule.toString, selected.artifact.toString⟩
     return (selected.viewModule, view)
   return views ++ [(moduleName, connection)]
+
+/-- Core and security catalogues select declarations; this common writer owns
+file placement and refuses every invalid selection before writing that file. -/
+def write (directory : System.FilePath) (selections : List (Selection × Output)) : IO Unit := do
+  for (selection, output) in selections do
+    let .ok text := source selection output
+      | throw (IO.userError s!"connection selection refused: {output.moduleName}")
+    let path := directory / (output.moduleName.toString.replace "." "/" ++ ".lean")
+    IO.FS.createDirAll path.parent.get!
+    IO.FS.writeFile path text
 
 end ZkcTools.ConstructionBindings.Generate

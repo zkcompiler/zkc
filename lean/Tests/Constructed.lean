@@ -103,11 +103,11 @@ example : View.participant [.data .boolean] [.data .boolean] [1] View.empty inpu
 -- Unsupported static shapes cause printing refusal, never evaluator fallback.
 -- Match the stable code; ConstructedDiagnostics checks the full added context.
 #guard match ZkcTools.StructuredSource.Constructed.action
-    ⟨.send "m" "m" "V", [], [], []⟩ "unused" with
+    ⟨.send "m" "m" "V", [], [], []⟩ ("unused", "unused") with
   | .error reason => reason.startsWith "constructed-view-unsupported-shape:"
   | .ok _ => false
 #guard match ZkcTools.StructuredSource.Constructed.action
-    ⟨.unsupported "private-coins", [], [], []⟩ "unused" with
+    ⟨.unsupported "private-coins", [], [], []⟩ ("unused", "unused") with
   | .error reason => reason.startsWith "constructed-view-unsupported-shape:"
   | .ok _ => false
 #guard match ZkcTools.StructuredSource.Constructed.block 0 [] "body" "artifact.instructions" with

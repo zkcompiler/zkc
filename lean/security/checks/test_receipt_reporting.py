@@ -540,6 +540,201 @@ def test_public_report_keeps_selected_scope_and_incomplete_trial(api, scoped_rep
     assert trial["claims"][0]["attempts"] == [{"result": "timeout", "partial": True}]
 
 
+def consumer_requirements(api, manifest, records, item):
+    """Independent policy fixture, never inferred by the production reporter."""
+    environment, _ = api.verified_environment(records)
+    return {"format": "zkc.consumer-requirements/0",
+            "context": {"subject": "control", "manifest_sha256": api.sha256(manifest), "checker": environment},
+            "claims": [{"node": deepcopy(item["attachment"]["node"]), "request": deepcopy(item["request"])}]}
+
+
+@pytest.mark.parametrize("kind", ["author", "generic"])
+def test_consumer_author_requirement_does_not_create_canonical_security(api, scoped_report, receipt_case, kind):
+    manifest, records, evidence = scoped_report
+    receipt_case[3]["authority"]["kind"] = kind
+    required = consumer_requirements(api, manifest, records, evidence["source_claims"]["claims"][0])
+    report = api.build(manifest, records, consumer_requirements=required)
+    assert report["status"] == "no-claim"
+    assert report["outcome"] == "unresolved"
+    assert report["security_claims"] == []
+    assert report[f"{kind}_claims"][0]["status"] == "certified"
+    assert report["requirements"]["input"] == report["consumer_requirements"] == required
+    assert report["requirements"]["status"] == "certified"
+    assert report["requirements"]["outcome"] == "established"
+
+
+@pytest.fixture
+def consumer_case(api, receipt_case, scoped_report, monkeypatch):
+    manifest, records, evidence = scoped_report
+    request, data, _, proof, _ = receipt_case
+    for wire in (request, data["detail"]["claim_data"]["wire_request"], proof["wire_request"]):
+        wire["property"]["name"] = "soundness"
+    proof.update(registered_property={"name": "soundness", "version": 0},
+                 authority={"kind": "canonical", "checked": True},
+                 quantity_kind="scalar", exported_capabilities=[], capability_consumer="soundness@0",
+                 registry_checks={key: True for key in ("lookup", "property_definition", "property_export", "model_export")},
+                 application_coverage={"mode": "fixed-statement", "checked": True})
+    proof["subject"] = {"artifacts_head": "Demo.artifacts", "original_entry": "demo"}
+    proof["admission"] = {"security_subject": True, "associated": True,
+        "association": "typed-certificate", "certificate_checked": True,
+        "subject_checked": True, "model_status": "admitted"}
+    records.by_name["Demo.artifacts"] = {"name": "Demo.artifacts", "module": data["module"],
+        "kind": "definition", "axioms": [], "statement": {"structural": "artifact", "explicit": "artifact"}}
+    digest = api.data_digest(request)
+    evidence["source_claims"]["claims"][0]["request_digest"] = digest
+    evidence["claim_receipts"][0]["request_digest"] = digest
+    environment = {"lean": ["consumer-test-environment"]}
+    monkeypatch.setattr(api, "verified_environment", lambda *_: (environment, []))
+    item = evidence["source_claims"]["claims"][0]
+    requirements = {"format": "zkc.consumer-requirements/0",
+        "context": {"subject": "control", "manifest_sha256": api.sha256(manifest), "checker": environment},
+        "claims": [{"node": deepcopy(item["attachment"]["node"]), "request": deepcopy(request)}]}
+    return manifest, records, evidence, requirements
+
+
+def test_consumer_canonical_coverage_and_missing_author_requirement(api, consumer_case):
+    manifest, records, evidence, required = consumer_case
+    positive = api.build(manifest, records, consumer_requirements=required)
+    assert positive["status"] == positive["requirements"]["status"] == "certified", positive
+    missing = deepcopy(required["claims"][0])
+    missing["node"]["claim"] += 1
+    missing["request"]["property"]["name"] = "user.postcondition"
+    required["claims"].append(missing)
+    report = api.build(manifest, records, consumer_requirements=required)
+    assert report["status"] == report["requirements"]["status"] == "open"
+    assert report["security_claims"][0]["status"] == "certified"
+    assert [row["status"] for row in report["requirements"]["claims"]] == ["certified", "open"]
+
+
+def test_consumer_missing_occurrence_does_not_demote_valid_receipt(api, scoped_report):
+    manifest, records, evidence = scoped_report
+    required = consumer_requirements(api, manifest, records, evidence["source_claims"]["claims"][0])
+    missing = deepcopy(required["claims"][0])
+    missing["node"]["claim"] += 1
+    required["claims"].append(missing)
+    report = api.build(manifest, records, consumer_requirements=required)
+    assert report["status"] == "open"
+    assert report["author_claims"][0]["status"] == "certified"
+    assert [row["status"] for row in report["requirements"]["claims"]] == ["certified", "open"]
+
+
+def test_consumer_requirement_survives_omitted_source_claim(api, scoped_report):
+    manifest, records, evidence = scoped_report
+    required = consumer_requirements(api, manifest, records, evidence["source_claims"]["claims"][0])
+    evidence["source_claims"]["claims"] = []
+    evidence["claim_receipts"] = []
+    report = api.build(manifest, records, consumer_requirements=required)
+    assert report["status"] == "open"
+    assert report["claims"] == []
+    assert report["requirements"]["claims"][0]["status"] == "open"
+    assert report["source_claim_trials"][0]["requirements"] is None
+
+
+@pytest.mark.parametrize("field", ["subject", "manifest_sha256", "checker"])
+def test_consumer_stale_context_does_not_demote_valid_receipt(api, scoped_report, field):
+    manifest, records, evidence = scoped_report
+    required = consumer_requirements(api, manifest, records, evidence["source_claims"]["claims"][0])
+    required["context"][field] = {"another": "environment"} if field == "checker" else "another"
+    report = api.build(manifest, records, consumer_requirements=required)
+    assert report["status"] == "open"
+    assert report["claims"][0]["status"] == "certified"
+    assert report["requirements"]["status"] == "open"
+    assert report["requirements"]["claims"][0]["certified_nodes"] == []
+
+
+def test_consumer_missing_requirement_is_not_a_missing_definition(api, scoped_report):
+    manifest, records, evidence = scoped_report
+    trial = evidence["source_claim_trials"].pop()
+    evidence["source_claim_scope"] = {"entries": [trial["entry"]], "selection": "explicit"}
+    evidence["source_claims"].update(entries=[trial["entry"]], claims=trial["claims"])
+    evidence["claim_receipts"] = trial["claim_receipts"]
+    required = consumer_requirements(api, manifest, records, trial["claims"][0])
+    incomplete = api.build(manifest, records, consumer_requirements=required)
+    assert incomplete["requirements"]["status"] == "incomplete"
+    required["claims"][0]["request"]["subject"]["entry"] = "omitted::Proof"
+    report = api.build(manifest, records, consumer_requirements=required)
+    assert report["claims"][0]["status"] == "incomplete"
+    assert report["requirements"]["claims"][0]["status"] == "open"
+    assert report["status"] == "open"
+
+
+def test_source_evidence_cannot_supply_consumer_requirements(api, scoped_report):
+    manifest, records, evidence = scoped_report
+    evidence["consumer_requirements"] = {"unrequested": "claim"}
+    report = api.build(manifest, records)
+    assert report["status"] == "no-claim"
+    assert report["requirements"] is None
+    assert report["consumer_requirements"] is None
+
+
+@pytest.mark.parametrize("change", ["format", "unknown", "duplicate", "empty-node", "empty-claims",
+                                    "unknown-row", "empty-request", "claims-not-array", "context",
+                                    "unknown-context", "nonobject-row"])
+def test_consumer_requirement_input_is_strict(api, scoped_report, change):
+    manifest, records, evidence = scoped_report
+    required = consumer_requirements(api, manifest, records, evidence["source_claims"]["claims"][0])
+    if change == "format":
+        required["format"] = "wrong"
+    elif change == "unknown":
+        required["extra"] = []
+    elif change == "duplicate":
+        required["claims"] *= 2
+    elif change == "empty-node":
+        required["claims"][0]["node"] = {}
+    elif change == "empty-claims":
+        required["claims"] = []
+    elif change == "unknown-row":
+        required["claims"][0]["digest"] = "caller-proposed"
+    elif change == "empty-request":
+        required["claims"][0]["request"] = {}
+    elif change == "context":
+        required["context"] = "not-a-context"
+    elif change == "unknown-context":
+        required["context"]["extra"] = True
+    elif change == "nonobject-row":
+        required["claims"] = ["claim"]
+    else:
+        required["claims"] = {}
+    with pytest.raises(ValueError, match="consumer requirements"):
+        api.build(manifest, records, consumer_requirements=required)
+
+
+@pytest.mark.parametrize("corruption", ["omit", "request", "status", "nodes", "reasons", "context", "echo", "coverage"])
+def test_corrupt_consumer_requirement_export_is_a_transport_failure(api, scoped_report, monkeypatch, corruption):
+    manifest, records, evidence = scoped_report
+    required = consumer_requirements(api, manifest, records, evidence["source_claims"]["claims"][0])
+    invoke = api._invoke_receipt_classifier
+
+    def corrupt(*args):
+        result = invoke(*args)
+        if result.get("requirements") is None:
+            return result
+        if corruption == "omit":
+            result.pop("requirements")
+        elif corruption == "context":
+            result["requirements"]["context"] = {}
+        elif corruption == "echo":
+            result["consumer_requirements"] = {}
+        elif corruption == "coverage":
+            result["requirements"].update(status="open", outcome="unresolved")
+        else:
+            row = result["requirements"]["claims"][0]
+            if corruption == "request":
+                row["request"] = {}
+            elif corruption == "status":
+                row["status"] = "open"
+            elif corruption == "nodes":
+                row["certified_nodes"] = [{"invented": True}]
+            else:
+                row["reasons"] = [1]
+        return result
+
+    monkeypatch.setattr(api, "_invoke_receipt_classifier", corrupt)
+    report = api.build(manifest, records, consumer_requirements=required)
+    assert report["status"] == "transport-failure"
+    assert report["consumer_requirements"] == required
+
+
 def test_explicit_empty_entry_cannot_be_hidden_by_another_certified_entry(api, scoped_report):
     manifest, records, evidence = scoped_report
     evidence["source_claim_scope"] = {"entries": ["demo::Proof", "demo::WrongSpecialization"],
@@ -752,7 +947,8 @@ def security_kernel_records(tmp_path_factory):
                    check=True, capture_output=True, text=True)
     prefix = "TestsSecurity.ClaimReporting."
     names = ["idealData", "HigherOrder.unattributedReceipt", "Canonical.checkedReceipt",
-             "HigherOrder.extraPremiseReceipt", "omittedReceipt", "replacedModelReceipt", "artifacts"]
+             "HigherOrder.extraPremiseReceipt", "omittedReceipt", "replacedModelReceipt", "artifacts",
+             "extensionIdealData", "foreignSourceReceipt"]
     payload = {"format": "zkc.receipt-audit-input/0", "operation": "extract",
                "records": [{"name": prefix + name, "module": "TestsSecurity.ClaimReporting"} for name in names]}
     result = subprocess.run(["lake", "env", str(root / ".lake/build/bin/declaration-records"),
@@ -782,6 +978,23 @@ def test_production_security_kernel_controls(security_kernel_records, name, diag
         assert reasons == []
     else:
         assert any(diagnostic in reason for reason in reasons), reasons
+
+
+def test_source_link_cannot_borrow_a_different_subjects_identical_participant(security_kernel_records):
+    api = load("production_subject_link_cli", "lean/checks/check_records.py").reports
+    records = security_kernel_records
+    request = records.get("TestsSecurity.ClaimReporting.extensionIdealData")
+    receipt = records.get("TestsSecurity.ClaimReporting.foreignSourceReceipt")
+    audited, _, _, reasons = api.audit_receipt(receipt, request, request["detail"]["claim_data"]["wire_request"],
+                                              api.Registry([], []), records)
+    # This deliberately forged extension is independently refused as a registry
+    # choice. Inspect the stage comparison itself so that rejection cannot hide
+    # the crossed-subject bug under an unrelated failure.
+    assert "wrong actual subject or goal for interpreted-stage link: construction.source_connection" in reasons
+    links = {link["identifier"]: link for link in audited["stage_links"]["obligations"]}
+    assert links["construction.checked"]["matches"][0]["subject_matches"] is True
+    assert links["construction.source_connection"]["matches"][0] == {
+        "index": 1, "goal_defeq": None, "subject_matches": False}
 
 
 def test_production_report_consumes_final_lean_scope_status(security_kernel_records, tmp_path, monkeypatch):
@@ -821,6 +1034,33 @@ def test_production_report_consumes_final_lean_scope_status(security_kernel_reco
     assert report["status"] == "certified", report
     assert report["claims"][0]["root_route"] == "unattributed"
     assert report["claims"][0]["audit_checks"]
+    # The complete request and actual occurrence determine coverage.
+    # The same proof can be reused at two distinct source occurrences.
+    required = consumer_requirements(api, manifest, records, item)
+    second = deepcopy(item)
+    second["attachment"]["node"]["claim"] = 1
+    evidence["source_claims"]["claims"].append(second)
+    evidence["claim_receipts"].append({**mapping, "node": second["attachment"]["node"]})
+    required["claims"].append({"node": second["attachment"]["node"], "request": deepcopy(request)})
+    covered = api.build(manifest, records, consumer_requirements=required)
+    assert covered["status"] == "certified", covered
+    assert [row["certified_nodes"] for row in covered["requirements"]["claims"]] == [
+        [node], [second["attachment"]["node"]]]
+    for field in ("quantity", "stage", "artifact"):
+        missing = deepcopy(required)
+        changed_request = missing["claims"][0]["request"]
+        if field == "quantity":
+            changed_request["quantity"] = {"kind": "scalar", "expression": {"kind": "natural", "value": "1234567"}}
+        elif field == "stage":
+            changed_request["subject"]["stage"] = "executable-bytes"
+        else:
+            changed_request["subject"]["artifacts"][0]["digest"] = "sha256:another-artifact"
+        uncovered = api.build(manifest, records, consumer_requirements=missing)
+        assert uncovered["status"] == "open", uncovered
+        assert uncovered["claims"][0]["status"] == "certified"
+        assert [row["status"] for row in uncovered["requirements"]["claims"]] == ["open", "certified"]
+    evidence["source_claims"]["claims"].pop()
+    evidence["claim_receipts"].pop()
     mapping["resolution"] = {"status": "incomplete", "kind": "registered-undefined", "definitions": ["meaning"]}
     changed = api.build(manifest, records)
     assert changed["status"] == "open"
@@ -840,6 +1080,45 @@ def test_production_report_consumes_final_lean_scope_status(security_kernel_reco
     refused = api.build(manifest, records)
     assert refused["status"] == "transport-failure"
     assert refused["claims"][0]["status"] == "transport-failure"
+
+
+@pytest.fixture(scope="module")
+def source_kernel_records():
+    """Audit real pair and heterogeneous-domain receipts, not mock metadata."""
+    root = Path(__file__).resolve().parents[3] / "lean"
+    modules = ["ZkcSecurity.Examples.Generated.SmallSumcheckCompletenessClaims",
+               "ZkcSecurity.Examples.EmbeddingEqualityClient"]
+    subprocess.run(["lake", "build", *["+" + name for name in modules]], cwd=root / "security",
+                   check=True, capture_output=True, text=True)
+    names = [(modules[0], "completeData"), (modules[0], "completeReceipt"),
+             (modules[1], "idealData"), (modules[1], "idealReceipt")]
+    payload = {"format": "zkc.receipt-audit-input/0", "operation": "extract",
+               "records": [{"name": module + "." + name, "module": module} for module, name in names]}
+    result = subprocess.run(["lake", "env", str(root / ".lake/build/bin/declaration-records"),
+                             "--receipt-status"], cwd=root / "security", input=json.dumps(payload) + "\n",
+                            check=True, capture_output=True, text=True)
+    exported = json.loads(result.stdout)
+    assert exported["format"] == "zkc.receipt-kernel-export/0"
+    declarations = load("source_shape_receipt_declarations", "lean/checks/records/declarations.py")
+    return declarations.Records({"security": exported["headers"][0]}, exported["records"])
+
+
+@pytest.mark.parametrize("module,prefix,expected_links", [
+    ("ZkcSecurity.Examples.Generated.SmallSumcheckCompletenessClaims", "complete",
+     {"pair.checked", "pair.source", "construction.checked", "pair.occurrences",
+      "pair.producer_connection", "pair.validator_connection"}),
+    ("ZkcSecurity.Examples.EmbeddingEqualityClient", "ideal",
+     {"construction.checked", "construction.source_connection"}),
+])
+def test_all_source_subject_shapes_keep_their_actual_stage_links(source_kernel_records, module, prefix, expected_links):
+    api = load("source_shape_receipt_cli", "lean/checks/check_records.py").reports
+    records = source_kernel_records
+    request = records.get(module + "." + prefix + "Data")
+    receipt = records.get(module + "." + prefix + "Receipt")
+    _, _, discharged, reasons = api.audit_receipt(receipt, request,
+        request["detail"]["claim_data"]["wire_request"], api.Registry([], []), records)
+    assert reasons == [], reasons
+    assert {link["id"] for link in discharged} == expected_links
 
 
 def test_production_optional_attribution_never_vetoes_receipt(kernel_records):

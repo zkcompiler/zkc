@@ -69,11 +69,15 @@ structure Contract (shape : Description) (cost : String → List (Value F G) →
   checkCost : ∀ (values point : List F) (claim : F), point.length < 64 → values.length = 2 ^ point.length →
     cost shape.names.checkHelper [.vector shape.names.scalar values, .vector shape.names.scalar point,
       .data (.field shape.names.scalar claim)] = 62 + 20 * point.length
-  round : ∀ (a b c d e f g h : Domain.Value (Structured.uniformCarriers F G)) (index : Nat) (point : List F) (claim : F)
+  round : ∀ (values : List F) (publicClaim : F) (rounds : Nat)
+    (initial : Domain.History (Structured.uniformCarriers F G)) (index : Nat) (point : List F) (claim : F)
     (history : Domain.History (Structured.uniformCarriers F G)) (proof : Proof F G) (used budget : Nat),
     used + roundCost ≤ budget →
     DomainVM.FitsK shape.program shape.context cost budget (roundCode shape.names)
-      ([a,b,c,d,e,f,g,h] ++ .data (.index index) :: carried shape point claim history) proof used
+      (inputs shape values publicClaim rounds initial ++
+        [.data (.vector shape.names.scalar []), .data (.field shape.names.scalar publicClaim),
+          .data (.vector shape.names.scalar []), .data (.field shape.names.scalar publicClaim)] ++
+          .data (.index index) :: carried shape point claim history) proof used
       (fun final unread charged => charged ≤ used + roundCost ∧ ∀ values,
         Domain.read final yielded = some values → Domain.sortsMatch (carriedSorts shape.names) values = true →
           Invariant shape (point.length + 1) values unread)
@@ -111,10 +115,7 @@ theorem sufficient (shape : Description) (price : String → List (Value F G) �
       · intro index carried unread charged valid within
         obtain ⟨point, scalar, suffix, rfl, length⟩ := valid
         apply DomainVM.FitsK.mono _ _ _ _ _ _ _ _ _ _ ?_
-          (contract.round (.data (.vector shape.names.scalar values)) (.data (.field shape.names.scalar claim))
-            (.data (.index rounds)) (.transcript shape.names.suite history) (.data (.vector shape.names.scalar []))
-            (.data (.field shape.names.scalar claim)) (.data (.vector shape.names.scalar []))
-            (.data (.field shape.names.scalar claim)) index point scalar suffix unread charged budget (by omega))
+          (contract.round values claim rounds history index point scalar suffix unread charged budget (by omega))
         intro final unread charged found
         refine ⟨found.1, ?_⟩
         intro result readEq sorted

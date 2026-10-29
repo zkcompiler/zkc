@@ -70,6 +70,56 @@ example (value : Nat) :
   have impossible := related.frames
   contradiction
 
+/-- A producer's two vector outputs have the same nominal sort. Swapping
+them still violates the complete source return, independently of acceptance. -/
+private def producerSignature : ProtocolSignature :=
+  ⟨"Producer", ["P", "V"], [], [.vector "f", .index, .index, .vector "f"], [],
+    [[0], [0], [0], [0]]⟩
+private def producerArtifact : Participant :=
+  { artifact with
+    symbol := "producer"
+    outputs := [.data (.vector "f"), .data .index, .data .index, .data (.vector "f")]
+    returned := [0, 1, 2, 3] }
+private def producerSource (raw point : List (carriers.Field "f")) (dimension width : Nat) :
+    Values (Component carriers.Value) producerSignature.outputs × State carriers :=
+  ⟨.cons (some raw) (.cons (some dimension) (.cons (some width) (.cons (some point) .nil))), {}⟩
+private def producerTarget (raw point : List (carriers.Field "f")) (dimension width : Nat) :
+    Domain.Result carriers :=
+  let values := [.data (.vector "f" raw), .data (.index dimension),
+    .data (.index width), .data (.vector "f" point)]
+  ⟨values, values⟩
+
+private theorem producerComplete (raw point : List (carriers.Field "f")) (dimension width : Nat) :
+    CompleteReturns producerSignature context 0 producerArtifact
+      (producerSource raw point dimension width) (producerTarget raw point dimension width) := by
+  constructor
+  · exact ⟨_, rfl, rfl⟩
+  · exact ⟨_, rfl, rfl⟩
+  · rfl
+  · rfl
+  · rfl
+
+theorem wrong_producer_slot (raw point : List (carriers.Field "f")) (dimension width : Nat)
+    (different : raw ≠ point) :
+    ¬ CompleteReturns producerSignature context 0 producerArtifact
+      (producerSource raw point dimension width) (producerTarget point raw dimension width) := by
+  intro related
+  have same := (producerComplete raw point dimension width).values_unique related
+  have decoded := congrArg (fun values => (values[0]?).bind (Domain.Value.decode (.vector "f"))) same
+  exact different (Option.some.inj decoded)
+
+theorem wrong_producer_simulation (raw point : List (carriers.Field "f")) (dimension width : Nat)
+    (different : raw ≠ point) :
+    ¬ Nonempty (Simulation (carriers := carriers) (CompleteReturns producerSignature context 0 producerArtifact)
+      (fun _ _ => True) (.done (producerSource raw point dimension width))
+      (.done (producerTarget point raw dimension width))) := by
+  rintro ⟨simulation⟩
+  cases simulation with
+  | done returned => exact wrong_producer_slot raw point dimension width different returned
+
+#print axioms wrong_producer_slot
+#print axioms wrong_producer_simulation
+
 private def snapshot : Snapshot where
   source := "sha256:0000000000000000000000000000000000000000000000000000000000000000"
   entry := "Root"

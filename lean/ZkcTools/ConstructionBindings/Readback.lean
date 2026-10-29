@@ -63,8 +63,22 @@ private partial def derive (goal : MVarId) : TacticM Unit := goal.withContext <|
       derive tail
       return
   let candidates ← cells layout
+  -- Helper operands and root outputs usually fix their physical locations.
+  -- Do not retry every other cell before checking the one already requested.
+  -- Unspecified locations still use the ordinary finite proposal search; in
+  -- both cases the same Readback constructor checks the selected cell.
+  let locations ← whnf arguments[4]!
+  let fixed ← if locations.isAppOf ``List.cons then do
+      let location ← whnf locations.getAppArgs[1]!
+      if location.isAppOf ``Original.Location.data then
+        getNatValue? (← whnf location.getAppArgs.back!)
+      else pure none
+    else pure none
+  let references := match fixed with
+    | some reference => if reference < candidates.size then #[reference] else #[]
+    | none => (List.range candidates.size).toArray
   let mut selected : Option MVarId := none
-  for reference in [:candidates.size] do
+  for reference in references do
     let cell ← whnf candidates[reference]!
     let rules := if cell.isAppOf ``ConnectionFrame.Cell.guarded then
         [``ConnectionFrame.Readback.guardedOriginal, ``ConnectionFrame.Readback.guardedTrue]
@@ -94,7 +108,14 @@ those outputs before search; every successful path constructs Readback data. -/
 elab "derive_source_readback" : tactic => withMainContext do
   let goal ← getMainGoal
   let pending := (← getGoals).tail
+  let start ← IO.monoMsNow
   derive goal
+  let elapsed := (← IO.monoMsNow) - start
+  if elapsed > 1000 && (← getOptions).getBool `zkc.connection.trace false then
+    let destination := (← getOptions).get `zkc.connection.traceFile ("" : String)
+    if !destination.isEmpty then
+      IO.FS.withFile destination .append fun handle =>
+        handle.putStrLn s!"readback ms={elapsed}"
   setGoals pending
 
 end ZkcTools.ConstructionBindings.Readback

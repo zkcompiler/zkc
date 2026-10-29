@@ -146,7 +146,7 @@ theorem projectedState_eval {model : DomainModel} {scope : Scope} {types : List 
       (show Binders model (RepeatScope types scope) from .cons index (.cons values binders)) (fun _ => rfl) component)
     (calleeOutputs (laws := []) (Δ := scope) role scopes (Operands.identity types))
   exact renamed.trans ((comps_eval_calleeOutputs (LawResults.empty model) binders role values scopes
-    (Operands.identity types)).trans (ConnectionLibrary.staticMask_identity role scopes values))
+    (Operands.identity types)).trans (InputVisibility.staticMask_identity role scopes values))
 
 theorem projectedInputs_eval {model : DomainModel} {scope : Scope} {spec : RepeatSpec}
     (role : Nat) (binders : Binders model scope) (values : Values (Component model.Value) spec.state)
@@ -204,7 +204,7 @@ theorem Holds.projectedExit {model : DomainModel} {scope : Scope} {types : List 
     (next := .cons values binders) (fun _ => rfl)
   have row := projectedProfile_frame context role scopes (.cons values binders) nextHistory
     (calleeOutputs role scopes (Operands.identity types)) (by
-      rw [comps_eval_calleeOutputs, ConnectionLibrary.staticMask_identity]
+      rw [comps_eval_calleeOutputs, InputVisibility.staticMask_identity]
       exact encoded)
   simpa only [projectedExitLayout, List.append_assoc] using retainedFrame.append row
 

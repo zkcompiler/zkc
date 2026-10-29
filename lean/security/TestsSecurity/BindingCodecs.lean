@@ -37,16 +37,46 @@ private def queryType : Zkc.Source.Structured.Ty :=
   .product "table.query" "Query" (.cons .boolean (.cons (.field "scalar") .nil))
 
 example {G : Type} (first second : List (Bool × (F × Unit)))
-    (same : ZkcSecurity.Endpoint.publicValue (F := F) (G := G) (.sequence queryType) first =
-      ZkcSecurity.Endpoint.publicValue (.sequence queryType) second) : first = second :=
-  ZkcSecurity.Endpoint.publicValue_injective (.sequence queryType) same
+    (same : ZkcSecurity.Endpoint.publicValue (F := F) (G := G) (.sequence queryType) (by decide) first =
+      ZkcSecurity.Endpoint.publicValue (.sequence queryType) (by decide) second) : first = second :=
+  ZkcSecurity.Endpoint.publicValue_injective (.sequence queryType) (by decide) same
 
 example {G : Type} (first second : F) (different : first ≠ second) :
-    ZkcSecurity.Endpoint.publicValue (F := F) (G := G) queryType (false, (first, ())) ≠
-      ZkcSecurity.Endpoint.publicValue queryType (false, (second, ())) := by
+    ZkcSecurity.Endpoint.publicValue (F := F) (G := G) queryType (by decide) (false, (first, ())) ≠
+      ZkcSecurity.Endpoint.publicValue queryType (by decide) (false, (second, ())) := by
   intro same
   exact different (congrArg (fun value : Bool × (F × Unit) => value.2.1)
-    (ZkcSecurity.Endpoint.publicValue_injective queryType same))
+    (ZkcSecurity.Endpoint.publicValue_injective queryType (by decide) same))
+
+-- Schema admission excludes direct and nested logical anchors before a binding
+-- codec can be formed; raw data validity is deliberately a different question.
+private def tableKind : Zkc.Source.Structured.OracleKind := .table (.field "scalar") none
+example : ¬ Zkc.Construction.Domain.PublicBinding.DataSchema [.oracle tableKind] := by
+  simp [Zkc.Construction.Domain.PublicBinding.DataSchema, Zkc.Construction.Domain.dataType,
+    Zkc.Source.Structured.Ty.isHandle]
+example : ¬ Zkc.Construction.Domain.PublicBinding.DataSchema [.oracleSequence tableKind 4] := by
+  simp [Zkc.Construction.Domain.PublicBinding.DataSchema, Zkc.Construction.Domain.dataType,
+    Zkc.Source.Structured.Ty.isHandle]
+example : ¬ Zkc.Construction.Domain.PublicBinding.DataSchema
+    [.product "wrapper" "Wrap" (.cons (.sequence (.oracle tableKind)) .nil)] := by
+  simp [Zkc.Construction.Domain.PublicBinding.DataSchema, Zkc.Construction.Domain.dataType,
+    Zkc.Source.Structured.Ty.isHandle, Zkc.Source.Structured.ProductFields.hasHandle]
+example : ¬ Zkc.Construction.Domain.PublicBinding.DataSchema [.service "random"] := by
+  simp [Zkc.Construction.Domain.PublicBinding.DataSchema, Zkc.Construction.Domain.dataType,
+    Zkc.Source.Structured.Ty.isHandle]
+example : Zkc.Construction.Domain.PublicBinding.DataSchema [.groups "g", .indices] := by
+  simp [Zkc.Construction.Domain.PublicBinding.DataSchema, Zkc.Construction.Domain.dataType,
+    Zkc.Source.Structured.Ty.isHandle]
+
+example {G : Type} (first second : List G)
+    (same : ZkcSecurity.Endpoint.publicValue (F := F) (.groups "g") (by decide) first =
+      ZkcSecurity.Endpoint.publicValue (.groups "g") (by decide) second) : first = second :=
+  ZkcSecurity.Endpoint.publicValue_injective (.groups "g") (by decide) same
+
+example {G : Type} (first second : List Nat)
+    (same : ZkcSecurity.Endpoint.publicValue (F := F) (G := G) .indices (by decide) first =
+      ZkcSecurity.Endpoint.publicValue .indices (by decide) second) : first = second :=
+  ZkcSecurity.Endpoint.publicValue_injective .indices (by decide) same
 
 /-- The canonical row: the table, the claim and the round count, in input order. -/
 def row (statement : RawStatement F) : Row F :=

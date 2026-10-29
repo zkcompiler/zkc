@@ -1,4 +1,0 @@
-module
-
-public import ZkcSecurity.Realizations.Gkr.OriginalProducerLayer
-public import ZkcSecurity.Realizations.Gkr.OriginalValidatorLayer

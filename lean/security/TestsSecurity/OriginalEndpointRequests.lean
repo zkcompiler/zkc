@@ -84,7 +84,16 @@ run_cmd do
         "SmallSumcheckValidatorView", "TwoSumsValidatorView"] do
       if spelling.contains retired then
         throwError "production receipt depends on retired generated binding: {name}"
-    for handwritten in ["ZkcSecurity.Examples.Components.OriginalRaw.",
+    for handwritten in ["ZkcSecurity.Examples.Generated.OriginalSecurity.",
+        "ZkcSecurity.Realizations.Sumcheck.OriginalRaw.",
+        "ZkcSecurity.Realizations.Sumcheck.OriginalHonest.",
+        "ZkcSecurity.Realizations.Sumcheck.OriginalSecurity.",
+        "Zkc.Protocols.Sumcheck.Common.",
+        "Zkc.Source.Common.",
+        "ZkcSecurity.Families.Sumcheck.CompiledRound.",
+        "ZkcSecurity.Families.Sumcheck.CompiledValidator.",
+        "ZkcExamples.Structured.OriginalArtifacts.",
+        "ZkcSecurity.Examples.Components.OriginalRaw.",
         "ZkcSecurity.Examples.Components.OriginalSecurity.", "ZkcSecurity.Examples.Components.OriginalHonest.",
         "ZkcSecurity.Examples.Components.ArtifactBinding.Small.",
         "ZkcSecurity.Examples.Components.ArtifactBinding.Two.",
@@ -102,17 +111,59 @@ run_cmd do
         pending := info.type.getUsedConstants.toList ++ pending
         if let some value := info.value? (allowOpaque := true) then
           pending := value.getUsedConstants.toList ++ pending
-  for required in [``ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckValidatorRoot.validator,
-      ``ZkcExamples.Structured.OriginalArtifacts.TwoSumsValidatorRoot.validator,
-      ``ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Sources.source_root,
-      ``ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.source_root,
-      ``ZkcSecurity.FiatShamir.Original.Claims.Installation.losslessChargedExport,
-      ``ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Completeness.compiled_ideal_complete,
-      ``ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Completeness.compiled_ideal_complete,
-      ``ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckProducerRoot.producer,
-      ``ZkcExamples.Structured.OriginalArtifacts.TwoSumsProducerRoot.producer] do
+  for required in [``ZkcExamples.Structured.Generated.Connections.SmallSumcheck.validator,
+      ``ZkcExamples.Structured.Generated.Connections.TwoSums.validator,
+      ``ZkcSecurity.Realizations.Sumcheck.SourceRootReference.actual_reference,
+      ``ZkcSecurity.FiatShamir.RootConnection.losslessChargedExport,
+      ``ZkcSecurity.Examples.RootProperties.SmallSumcheck.compiled_ideal_complete,
+      ``ZkcSecurity.Examples.RootProperties.TwoSums.compiled_ideal_complete,
+      ``ZkcExamples.Structured.Generated.Connections.SmallSumcheck.producer,
+      ``ZkcExamples.Structured.Generated.Connections.TwoSums.producer,
+      ``ZkcSecurity.Source.Installation.accepted,
+      ``ZkcSecurity.Source.Installation.rejected] do
     unless seen.contains required do
-      throwError "production receipt did not reach required original-source evidence: {required}"
-  Lean.logInfo s!"PASS six production receipts: original-source evidence, full exports, no retired bindings ({seen.size} declarations visited)"
+      throwError "production receipt did not reach required source-property evidence: {required}"
+  Lean.logInfo s!"PASS six production receipts: current source properties, generated roots and full exports ({seen.size} declarations visited)"
+
+/- Each request separately reaches its own current root. Completeness uses both
+roles and soundness uses that same validator, independently of the union above. -/
+run_cmd do
+  let env := (← Lean.getEnv).setExporting false
+  for (receipt, required) in [
+      (``SmallSumcheckSoundnessClaims.request0Receipt,
+        [``ZkcExamples.Structured.Generated.Connections.SmallSumcheck.validator,
+         ``ZkcSecurity.Examples.RootProperties.SmallSumcheck.Soundness.rejectedInputs]),
+      (``SmallSumcheckSoundnessClaims.request1Receipt,
+        [``ZkcExamples.Structured.Generated.Connections.SmallSumcheck.validator,
+         ``ZkcSecurity.Examples.RootProperties.SmallSumcheck.Soundness.rejectedInputs]),
+      (``TwoSumsSoundnessClaims.request0Receipt,
+        [``ZkcExamples.Structured.Generated.Connections.TwoSums.validator,
+         ``ZkcSecurity.Examples.RootProperties.TwoSums.Soundness.rejectedInputs]),
+      (``TwoSumsSoundnessClaims.request1Receipt,
+        [``ZkcExamples.Structured.Generated.Connections.TwoSums.validator,
+         ``ZkcSecurity.Examples.RootProperties.TwoSums.Soundness.rejectedInputs]),
+      (``SmallSumcheckCompletenessClaims.completeReceipt,
+        [``ZkcExamples.Structured.Generated.Connections.SmallSumcheck.producer,
+         ``ZkcExamples.Structured.Generated.Connections.SmallSumcheck.validator,
+         ``ZkcSecurity.Source.Installation.accepted]),
+      (``TwoSumsCompletenessClaims.completeReceipt,
+        [``ZkcExamples.Structured.Generated.Connections.TwoSums.producer,
+         ``ZkcExamples.Structured.Generated.Connections.TwoSums.validator,
+         ``ZkcSecurity.Source.Installation.accepted])] do
+    let mut seen : Lean.NameSet := {}
+    let mut pending := [receipt]
+    while !pending.isEmpty do
+      let name := pending.head!
+      pending := pending.tail!
+      if seen.contains name then continue
+      seen := seen.insert name
+      let spelling := name.toString
+      if spelling.startsWith "Zkc" || spelling.startsWith "_private.Zkc" then
+        if let some info := env.find? name then
+          if let some value := info.value? (allowOpaque := true) then
+            pending := value.getUsedConstants.toList ++ pending
+    for evidence in required do
+      unless seen.contains evidence do throwError "{receipt} does not use {evidence}"
+  Lean.logInfo "PASS per-request shared producer/validator root dependencies"
 
 end TestsSecurity.OriginalEndpointRequests

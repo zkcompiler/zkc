@@ -16,6 +16,7 @@ import tomllib
 import uuid
 
 from .declarations import ALLOWED_AXIOMS, forbidden_axioms
+from bridges.structured.source_views import modules as source_view_modules
 
 LEAN = Path(__file__).resolve().parents[2]
 ROOT = LEAN.parent
@@ -126,10 +127,9 @@ def attached(manifest):
     """Digests the manifest's generated modules carry, with each file's digest."""
     rows = []
     generated = dict(manifest.get("generated") or {})
-    if request := (manifest.get("normal_forms") or {}).get("request"):
-        # The request owns the output path; do not duplicate that configuration
-        # in the subject manifest or omit it from the freshness join.
-        generated["normal-forms"] = tomllib.loads((ROOT / request).read_text())["output"]
+    for selection in (manifest.get("source_views") or {}).get("selections", []):
+        for module in source_view_modules(selection):
+            generated[f"source-views:{module}"] = "lean/" + module.replace(".", "/") + ".lean"
     for key, value in sorted(generated.items()):
         paths = value if isinstance(value, list) else [value]
         for relative in paths:
@@ -957,7 +957,8 @@ def source_entry(item):
 
 
 def _scope_export(source, mappings, records, modules, evidence, checks, reasons,
-                  environment, environment_reasons, reused_records, *, trial=False, scope=None, proof_entry=None):
+                  environment, environment_reasons, reused_records, *, trial=False, scope=None, proof_entry=None,
+                  consumer_requirements=None, consumer_context=None):
     roots = [records.get(mapping.get(key)) for mapping in mappings
              for key in ("request_declaration", "receipt_declaration")]
     selected_records = _referenced_records(records, roots)
@@ -977,7 +978,8 @@ def _scope_export(source, mappings, records, modules, evidence, checks, reasons,
         source={**source, "claims": items}, mappings=mappings, evidence=evidence or {}, validation=checks,
         reasons=reasons, environment_reasons=environment_reasons, attached_modules=attached_modules,
         reused_reason=reused_reason(reused_records) if reused_records is not None else None,
-        trial=trial, scope=scope, proof_entry=proof_entry,
+        trial=trial, scope=scope, proof_entry=proof_entry, consumer_requirements=consumer_requirements,
+        consumer_context=consumer_context,
         validate_scope=scope is not None or proof_entry is not None)
     export = _invoke_receipt_classifier(payload, records.packages())
     if not isinstance(export, dict) or export.get("format") != "zkc.receipt-status/0":
@@ -1008,6 +1010,47 @@ def _scope_export(source, mappings, records, modules, evidence, checks, reasons,
             any(row["audit"]["status"] != "certified" for row in security_rows))) or
             (export["status"] == "no-claim" and security_rows)):
         raise ReceiptTransportError("inconsistent Lean scope/item status exports")
+    if export.get("consumer_requirements") != consumer_requirements:
+        raise ReceiptTransportError("Lean scope audit answered another consumer requirement set")
+    requirements = export.get("requirements")
+    if consumer_requirements is None:
+        if requirements is not None:
+            raise ReceiptTransportError("Lean export invented consumer requirements")
+    else:
+        if (not isinstance(requirements, dict) or requirements.get("input") != consumer_requirements
+                or requirements.get("context") != consumer_context
+                or requirements.get("status") not in {"certified", "open", "incomplete"}
+                or requirements.get("outcome") not in {"established", "unresolved"}
+                or (requirements["status"] == "certified") != (requirements["outcome"] == "established")
+                or not isinstance(requirements.get("claims"), list)
+                or len(requirements["claims"]) != len(consumer_requirements["claims"])):
+            raise ReceiptTransportError("Lean export changed the consumer requirement set or context")
+        context_matches = consumer_requirements["context"] == consumer_context
+        for expected, row in zip(consumer_requirements["claims"], requirements["claims"], strict=True):
+            if (not isinstance(row, dict) or row.get("node") != expected["node"]
+                    or row.get("request") != expected["request"]
+                    or row.get("status") not in {"certified", "open", "incomplete"}
+                    or not isinstance(row.get("matching_nodes"), list)
+                    or not isinstance(row.get("certified_nodes"), list)
+                    or not isinstance(row.get("reasons"), list)
+                    or any(not isinstance(reason, str) for reason in row.get("reasons", []))):
+                raise ReceiptTransportError("Lean export has a wrong consumer requirement association")
+            # Consistency of this transport with its already audited rows. This
+            # does not classify proofs or match caller-provided request digests.
+            occurrences = [(item, claim) for item, claim in zip(items, rows, strict=True)
+                           if claim["node"] == expected["node"]]
+            candidates = [claim for item, claim in occurrences if item.get("request") == expected["request"]]
+            proved = ([claim for claim in candidates if claim["audit"]["status"] == "certified"]
+                      if context_matches and len(occurrences) == 1 else [])
+            if (row["matching_nodes"] != [claim["node"] for claim in candidates]
+                    or row["certified_nodes"] != [claim["node"] for claim in proved]
+                    or (row["status"] == "certified") != bool(proved)):
+                raise ReceiptTransportError("inconsistent Lean consumer requirement status export")
+        covered = all(row["status"] == "certified" for row in requirements["claims"])
+        if (requirements["status"] == "certified") != covered:
+            raise ReceiptTransportError("inconsistent Lean consumer coverage export")
+        if export["status"] in {"certified", "no-claim"} and not covered:
+            raise ReceiptTransportError("Lean aggregate omitted a consumer requirement")
     return export, items
 
 
@@ -1101,11 +1144,13 @@ def scope_reasons(source, scope, proof_entry=None):
 
 
 def report_claim_scope(source, mappings, records, registry, modules, evidence, checks, reasons,
-                       environment, environment_reasons, reused_records, *, trial=False, scope=None, proof_entry=None):
+                       environment, environment_reasons, reused_records, *, trial=False, scope=None, proof_entry=None,
+                       consumer_requirements=None, consumer_context=None):
     """Join/render exactly one Lean classification for every requested item."""
     try:
         export, _ = _scope_export(source, mappings, records, modules, evidence, checks, reasons,
-            environment, environment_reasons, reused_records, trial=trial, scope=scope, proof_entry=proof_entry)
+            environment, environment_reasons, reused_records, trial=trial, scope=scope, proof_entry=proof_entry,
+            consumer_requirements=consumer_requirements, consumer_context=consumer_context)
     except (ReceiptTransportError, OSError) as error:
         # A failed transport has no security decision. In particular it cannot
         # become `incomplete` by consulting a frontend resolution fallback.
@@ -1116,7 +1161,8 @@ def report_claim_scope(source, mappings, records, registry, modules, evidence, c
                   for item in source.get("claims", [])]
         return {"claims": claims, "security_claims": claims, "author_claims": [], "generic_claims": [],
                 "status": "transport-failure", "outcome": "unresolved", "reasons": [diagnostic],
-                "audit_status": "transport-failure"}
+                "audit_status": "transport-failure", "requirements": None,
+                "consumer_requirements": consumer_requirements}
     claims = [requested_claim(item, mappings, records, registry, modules, evidence, checks,
         reasons, environment, environment_reasons, reused_records, _export=row)
         for item, row in zip(source.get("claims", []), export["claims"], strict=True)]
@@ -1125,12 +1171,77 @@ def report_claim_scope(source, mappings, records, registry, modules, evidence, c
             "author_claims": [item for item in claims if item["claim_kind"] == "author"],
             "generic_claims": [item for item in claims if item["claim_kind"] == "generic"],
             "outcome": export["outcome"], "status": export["status"], "reasons": export["reasons"],
-            "audit_status": export.get("audit_status", "checked")}
+            "audit_status": export.get("audit_status", "checked"),
+            "requirements": export.get("requirements"),
+            "consumer_requirements": export.get("consumer_requirements")}
 
 
-def build(manifest_path, records, ledger=None, evidence_directory=None, reused_records=None):
+
+CONSUMER_REQUIREMENTS_MAX_BYTES = 4 * 1024 * 1024
+CONSUMER_REQUIREMENTS_MAX_DEPTH = 64
+
+
+def read_consumer_requirements(path):
+    """Bound untrusted input before the strict JSON and envelope checks."""
+    from bridges.pipeline.source_claims import decode
+
+    with Path(path).open("rb") as source:
+        data = source.read(CONSUMER_REQUIREMENTS_MAX_BYTES + 1)
+    if len(data) > CONSUMER_REQUIREMENTS_MAX_BYTES:
+        raise ValueError("consumer requirements exceed the 4 MiB byte limit")
+    text = data.decode("utf-8")
+    depth = 0
+    quoted = escaped = False
+    for char in text:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+        elif char == '"':
+            quoted = True
+        elif char in "[{":
+            depth += 1
+            if depth > CONSUMER_REQUIREMENTS_MAX_DEPTH:
+                raise ValueError("consumer requirements exceed the nesting limit of 64")
+        elif char in "]}":
+            depth -= 1
+    try:
+        return validate_consumer_requirements(decode(text))
+    except RecursionError as error:
+        raise ValueError("consumer requirements exceed decoder recursion limits") from error
+
+
+def validate_consumer_requirements(value):
+    """Validate transport shape; only Lean assigns consumer coverage status."""
+    if (not isinstance(value, dict) or set(value) != {"format", "context", "claims"}
+            or value.get("format") != "zkc.consumer-requirements/0"
+            or not isinstance(value.get("claims"), list) or not value["claims"]):
+        raise ValueError("invalid consumer requirements envelope or empty claim set")
+    context = value.get("context")
+    if (not isinstance(context, dict) or set(context) != {"subject", "manifest_sha256", "checker"}
+            or any(not isinstance(context.get(key), str) or not context[key].strip()
+                   for key in ("subject", "manifest_sha256"))
+            or not isinstance(context.get("checker"), dict)):
+        raise ValueError("invalid consumer requirements context")
+    nodes = []
+    for row in value["claims"]:
+        if (not isinstance(row, dict) or set(row) != {"node", "request"}
+                or not isinstance(row.get("node"), dict) or not row["node"] or row["node"] in nodes
+                or not isinstance(row.get("request"), dict) or not row["request"]):
+            raise ValueError("consumer requirements need distinct occurrences and full request objects")
+        nodes.append(row["node"])
+    return value
+
+
+def build(manifest_path, records, ledger=None, evidence_directory=None, reused_records=None, *,
+          consumer_requirements=None):
     """Build reports only from source requests and checked emitted receipts."""
     manifest = load_manifest(manifest_path)
+    if consumer_requirements is not None:
+        validate_consumer_requirements(consumer_requirements)
     evidence = load_evidence(evidence_directory, manifest["name"])
     modules = attached(manifest)
     connected, connected_reasons = connection(manifest, manifest_path, modules, evidence)
@@ -1156,7 +1267,10 @@ def build(manifest_path, records, ledger=None, evidence_directory=None, reused_r
     selected = report_claim_scope(source, (evidence or {}).get("claim_receipts") or [], records, registry,
                                   modules, evidence, checks, selected_reasons, environment,
                                   environment_reasons, reused_records, scope=scope,
-                                  proof_entry=(manifest.get("entries") or {}).get("proof"))
+                                  proof_entry=(manifest.get("entries") or {}).get("proof"),
+                                  consumer_requirements=consumer_requirements,
+                                  consumer_context={"subject": manifest["name"],
+                                      "manifest_sha256": sha256(manifest_path), "checker": environment})
     trials = []
     for trial in (evidence or {}).get("source_claim_trials") or []:
         entry = trial.get("entry")

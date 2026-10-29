@@ -45,12 +45,22 @@ mutual
       let [.str "group", .str actual, value] ← Format.array json | throw "structured-input-type"
       if actual != domain then throw "structured-input-domain"
       scalar value
+    | .groups domain, json => do
+      let [.str "groups", .str actual, values] ← Format.array json | throw "structured-input-type"
+      if actual != domain then throw "structured-input-domain"
+      (← Format.array values 4096).mapM scalar
+    | .indices, json => do
+      let [.str "indices", values] ← Format.array json | throw "structured-input-type"
+      (← Format.array values 4096).mapM fun value => Structured.Format.natural value (indexLimit - 1)
+    | .oracle _, _ | .oracleSequence .., _ => throw "structured-oracle-profile"
     | .service _, _ => throw "structured-open-profile"
     | .sequence element, json => do
+      if element.isHandle then throw "structured-input-handle"
       let [.str "sequence", elementType, values] ← Format.array json | throw "structured-input-type"
       if (← Structured.Format.type elementType) != element then throw "structured-input-domain"
       (← Format.array values 4096).mapM (input element)
     | .product identity constructor fields, json => do
+      if fields.hasHandle then throw "structured-input-handle"
       let [.str "product", .str actual, .str alternative, values] ← Format.array json
         | throw "structured-input-type"
       if actual != identity || alternative != constructor then throw "structured-input-domain"
@@ -79,10 +89,16 @@ mutual
         .ok (.arr #[.str "vector", .str domain,
           .arr ((show List Scalar from values).map scalarJson).toArray])
     | .group domain, value => .ok (.arr #[.str "group", .str domain, scalarJson value])
+    | .groups domain, values => .ok (.arr #[.str "groups", .str domain,
+        .arr ((show List Scalar from values).map scalarJson).toArray])
+    | .indices, values => .ok (.arr #[.str "indices", .arr (values.map toJson).toArray])
+    | .oracle _, _ | .oracleSequence .., _ => .error "structured-oracle-profile"
     | .service _, _ => .error "structured-open-profile"
     | .sequence element, values => do
+        if element.isHandle then throw "structured-input-handle"
         return .arr #[.str "sequence", wireType element, .arr (← values.mapM (output element)).toArray]
     | .product identity constructor fields, value => do
+        if fields.hasHandle then throw "structured-input-handle"
         return .arr #[.str "product", .str identity, .str constructor,
           .arr (← outputProduct fields value).toArray]
 

@@ -301,7 +301,7 @@ def main():
         if not (json.loads(result.stdout) == [permitted(*pair) for pair in pairs]):
             raise AssertionError('checks/check_enforcement.py:274: json.loads(result.stdout) == [permitted(*pair) for pair in pairs]')
         rows.append(f'shared-policy-interpreter-parity-{len(pairs)}')
-        executable = ROOT / '.lake/build/bin/common-source'
+        executable = ROOT / '.lake/build/bin/structured-source'
 
         def invoke(name, arguments, expected):
             result = subprocess.run([str(executable), *map(str, arguments)],
@@ -312,11 +312,11 @@ def main():
                 raise AssertionError((name, result))
             rows.append(name)
 
-        invoke('arity', [], 'common-source-arguments')
-        invoke('missing-file', ['check', directory / 'missing.json'], 'common-source-io')
+        invoke('arity', [], 'structured-source-arguments')
+        invoke('missing-file', ['check', directory / 'missing.json'], 'structured-source-io')
         for name, raw, diagnostic in [
             ('invalid-utf8', b'[\xff]', 'invalid-utf8'),
-            ('byte-limit', b' ' * (1024 * 1024 + 1), 'byte-limit'),
+            ('byte-limit', b' ' * (16 * 1024 * 1024 + 1), 'byte-limit'),
             ('large-number', b'[' + b'9' * 1025 + b']', 'number-limit'),
         ]:
             path = directory / (name + '.json')

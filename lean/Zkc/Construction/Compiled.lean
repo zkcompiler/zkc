@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Construction.Projection
+public import Zkc.Construction.InputSelection
 public import Zkc.Construction.SourceOccurrences
 public import Zkc.Construction.DomainCorrespondence
 public import Zkc.Source.Structured.OutputSelection
@@ -8,32 +8,30 @@ public import Zkc.Source.Structured.OutputSelection
 @[expose] public section
 
 /-! Admission of exact constructed participants in either explicit profile.
-The structural rule and projection check retain the original subject. Generic
-semantic evidence uses full nominal Process equations (`Domain.Correspondence`).
+The structural rule retains the original subject and exact source occurrences.
+Complete source correspondence is required separately by receipt admission as
+`ConnectionAdmission.Required`, independent of the proof method used.
 Scalar consumers reuse this admission and require their own actual Domain
 connection; admission alone supplies no execution correspondence. -/
 set_option autoImplicit false
 namespace Zkc.Construction
 open Zkc.Source
 
-def checkCompiled {original : Structured.Snapshot} (imported : Structured.Imported original)
+def checkCompiled {original : Structured.Snapshot} (_imported : Structured.Imported original)
     (participant : Participant) : Except String Unit :=
   match checkExport original participant, exportContext original participant with
-  | .ok (), some context => do
-      SourceOccurrences.check original context participant
-      project imported.program context participant
+  | .ok (), some context => SourceOccurrences.check original context participant
   | .error error, _ => .error error
   | .ok (), none => .error "construction-context"
 
-/-- Successful admission retains construction, exact source occurrences and
-projection separately. This is an inversion of checks, not a simulation. -/
+/-- Successful structural admission retains construction and exact source
+occurrences separately. This is an inversion of checks, not a simulation. -/
 theorem checkCompiled_components {original : Structured.Snapshot}
     {imported : Structured.Imported original} {participant : Participant} {context : Context}
     (found : exportContext original participant = some context)
     (accepted : checkCompiled imported participant = .ok ()) :
     checkExport original participant = .ok () ∧ check context participant = .ok () ∧
-      SourceOccurrences.check original context participant = .ok () ∧
-      project imported.program context participant = .ok () := by
+      SourceOccurrences.check original context participant = .ok () := by
   cases exported : checkExport original participant with
   | error error => simp [checkCompiled, exported] at accepted
   | ok result =>
@@ -42,11 +40,10 @@ theorem checkCompiled_components {original : Structured.Snapshot}
       rw [found] at actualFound
       cases actualFound
       cases occurrences : SourceOccurrences.check original context participant with
-      | error error => simp [checkCompiled, exported, found, occurrences, Except.bind, bind] at accepted
+      | error error => simp [checkCompiled, exported, found, occurrences] at accepted
       | ok result =>
           cases result
-          exact ⟨rfl, construction, rfl,
-            by simpa [checkCompiled, exported, found, occurrences, Except.bind, bind] using accepted⟩
+          exact ⟨rfl, construction, rfl⟩
 
 /-- An admission token is structural. Property consumers must additionally
 supply the complete actual Process binding and their property-specific laws. -/
@@ -76,7 +73,7 @@ def select {original : Snapshot} (imported : Imported original) (participant : P
 def Selection.check {original : Structured.Snapshot} (imported : Structured.Imported original)
     (selection : Selection imported.program.payload.entry.outputs) (participant : Participant) : Bool :=
   let entry := imported.program.payload.entry
-  selection.publics.all (fun ty => !ty.isService) &&
+  selection.publics.all (fun ty => !ty.isHandle) &&
     (decide (selection.position < (selection.context.dataPorts participant.returned).length) &&
     selection.publics.length == participant.policy.publicInputs.length &&
     Structured.inScope selection.context.validator entry.outputScopes selection.output &&

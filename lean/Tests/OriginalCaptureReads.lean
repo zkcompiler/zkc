@@ -1,5 +1,5 @@
 module
-public import ZkcExamples.Construction.GkrOriginalCoefficient
+public import Zkc.Construction.OriginalLoop
 @[expose] public section
 set_option autoImplicit false
 set_option linter.unusedSimpArgs false
@@ -46,7 +46,7 @@ example {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [De
       ((.cons add (.cons mul (.cons initial (.cons layers (.cons selector (.cons width (.cons layer .nil))))))) :
         Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .index, .index]) := by
   simp (disch := omega) only [Domain.read, List.mapM_cons, List.mapM_nil, Domain.encodeValues,
-    Domain.Value.encode, Domain.Payload.ofValue, Ty.isService,
+    Domain.Value.encode, Domain.Payload.ofValue, Ty.isHandle,
     List.getElem?_append_left, List.getElem?_append_right,
     size, inputRead, addRead, mulRead, layersRead, selectorRead, widthRead,
     List.getElem?_cons_zero, List.getElem?_cons_succ, List.cons_append, List.nil_append,

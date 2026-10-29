@@ -26,13 +26,13 @@ theorem draw_data : PublicSourceSupport.check RootConnectionPublicDraw.program =
 
 /-- The check includes captured components and repeat callbacks, with no bound
 unrolling and no restriction on the actual TwoSums arguments or private handles. -/
-theorem twoSums_data : PublicSourceSupport.check ZkcExamples.Structured.OriginalArtifacts.TwoSums.program = true := by
+theorem twoSums_data : PublicSourceSupport.check ZkcExamples.Structured.Generated.Connections.TwoSums.program = true := by
   kernel_rfl
 
 theorem twoSums_supported (model : DomainModel) (role : Nat)
-    (inputs : Values (Component model.Value) ZkcExamples.Structured.OriginalArtifacts.TwoSums.program.payload.entry.inputs) :
+    (inputs : Values (Component model.Value) ZkcExamples.Structured.Generated.Connections.TwoSums.program.payload.entry.inputs) :
     OperationSupport DomainSourceReading.DataOperation
-      (Occurrence.participant model ZkcExamples.Structured.OriginalArtifacts.TwoSums.program role inputs) :=
+      (Occurrence.participant model ZkcExamples.Structured.Generated.Connections.TwoSums.program role inputs) :=
   PublicSourceSupport.participant _ twoSums_data model role inputs
 
 def aggregate (model : DomainModel) (physical : Domain.Environment model.toCarriers) :=

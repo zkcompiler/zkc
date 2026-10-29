@@ -13,7 +13,7 @@ open ZkcExamples.Structured
 
 /-- Zero rounds preserve the complete pending prefix without any interaction. -/
 theorem zero_rounds (a b claim : ℚ) :
-    GkrRoundsNormalForms.verifierRoundsProcess (F := ℚ) (G := ℚ) {}
+    Generated.Presentations.Gkr.Rounds.verifierRoundsProcess (F := ℚ) (G := ℚ) {}
       (some [a, b]) (some claim) (some 0) (some 0) =
       .done (GkrRoundsReading.roundsResults ([a, b], claim)) := by kernel_rfl
 
@@ -33,10 +33,8 @@ theorem empty_split :
 #print axioms GkrProverContinuation.participant
 #print axioms GkrSourceVerifier.verifier_reads
 #print axioms ZkcSecurity.Realizations.Gkr.Source.admitted_represents
-#print axioms ZkcSecurity.Realizations.Gkr.Source.binding
-#print axioms ZkcSecurity.Realizations.Gkr.Source.admitted_binding
-#print axioms ZkcSecurity.Realizations.Gkr.Source.rejected
-#print axioms ZkcSecurity.Realizations.Gkr.Source.run_binding
+#print axioms ZkcSecurity.Realizations.Gkr.SourceValidator.rejected
+#print axioms ZkcSecurity.Realizations.Gkr.SourceValidator.costs
 #print axioms ZkcSecurity.Realizations.Gkr.CanonicalSource.rejected
 #print axioms zero_rounds
 #print axioms empty_split

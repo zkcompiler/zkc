@@ -64,8 +64,8 @@ example (service : Option Nat) :
 
 #print axioms Generated.Components.SmallSumcheckCompleteness.compiled_ideal_complete
 #print axioms Generated.Components.TwoSumsCompleteness.compiled_ideal_complete
-#print axioms ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Completeness.abi_readback
-#print axioms ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Completeness.abi_readback
+#print axioms ZkcSecurity.Examples.RootProperties.SmallSumcheck.abi_readback
+#print axioms ZkcSecurity.Examples.RootProperties.TwoSums.abi_readback
 
 end
 end TestsSecurity.SumcheckRootCompleteness

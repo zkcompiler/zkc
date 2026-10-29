@@ -1,6 +1,7 @@
 module
 
 public import ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate
+public import Zkc.Protocols.AlgebraicRounds.Gate
 public import Zkc.Source.Structured.CollectionReferenceLaws
 public import Zkc.Source.TypedABI
 public import ZkcSecurity.Examples.Components.GkrRoundsLayout
@@ -13,7 +14,7 @@ name. Logical index capacity is the source map's existing u64 admission. -/
 
 namespace ZkcSecurity.Examples.Components.GkrRoundsHelpers
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.Bindings
-open ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs
+open ZkcExamples.Structured.GkrSourceViews
 open ZkcExamples.Structured.Generated.Bindings.GkrRounds (payload)
 open Zkc.Protocols.AlgebraicRounds
 open Zkc.Polynomial.Multilinear

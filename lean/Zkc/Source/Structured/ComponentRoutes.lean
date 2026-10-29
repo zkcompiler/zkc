@@ -395,6 +395,7 @@ def block (snapshot : Snapshot) (owner : Function) : Nat → Block → List Ty �
       let position := path ++ [ordinal]
       let mut results : Environment := List.replicate types.length []
       match descriptor with
+      | .oracle _ => throw "component-seam-oracle"
       | .protocolApply name actualRoles =>
         let callee ← function snapshot name
         let child ← requireSome callee.interface "component-seam-role"
@@ -501,14 +502,18 @@ def block (snapshot : Snapshot) (owner : Function) : Nat → Block → List Ty �
         unless regions.isEmpty do throw "component-seam-control"
         for role in interface.roles do
           let allowed := match descriptor with
-            | .restrict roles => roles.contains role
+            | .restrict roles | .assemble roles => roles.contains role
             | .localCall _ holder | .draw holder _ => holder == role
             | .exchange _ receiver => receiver == role
             | _ => true
           if allowed then
             let mut operands := []
             let mut available := true
-            for argument in args do
+            let selected : List Nat := match descriptor with
+              | .assemble roles => (roles.zip args).filterMap fun (owner, argument) =>
+                  if owner == role then some argument else none
+              | _ => args
+            for argument in selected do
               let family ← requireSome environment[argument]? "component-seam-reference"
               let sourceRole := match descriptor with | .exchange sender _ => sender | _ => role
               match family.lookup sourceRole with
@@ -535,7 +540,7 @@ def block (snapshot : Snapshot) (owner : Function) : Nat → Block → List Ty �
               | _ => pure ()
               for (type, index) in types.zipIdx do
                 let route := match descriptor with
-                  | .restrict _ => (operands.headD base).route
+                  | .restrict _ | .assemble _ => (operands.headD base).route
                   | .localCall .. => if base.pending.isEmpty && base.effect.isNone then .result site index role else
                     .pure descriptor position index role (operands.map (·.route))
                   | .draw .. | .exchange .. => .action descriptor position index role (operands.map (·.route))
@@ -583,6 +588,11 @@ def block (snapshot : Snapshot) (owner : Function) : Nat → Block → List Ty �
       return returned
 
 def derive (snapshot : Snapshot) : Except String Result := do
+  for owner in snapshot.contracts do
+    for clause in owner.clauses do
+      for application in clause.subject :: clause.residual.toList do
+        if application.selectors.any (·.anchor) then throw "component-seam-oracle"
+
   if !(snapshot.sourceDeclarations.records.any (·.resource == "linear")) then return {}
   let owners := snapshot.protocolFunctions
   let (_, result) ← (do

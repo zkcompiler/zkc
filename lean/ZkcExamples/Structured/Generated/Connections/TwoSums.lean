@@ -3,6 +3,7 @@ module
 public import ZkcTools.ConstructionBindings.Root
 public import Zkc.Construction.ConnectionRootRoutes
 public import Zkc.Construction.ConnectionRouteCoverageRoot
+public import Zkc.Construction.ConnectionCertificateAdmission
 public import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
 public import ZkcExamples.Structured.Generated.Constructed.TwoSumsProducer
 public import ZkcExamples.Structured.Generated.Constructed.TwoSumsValidator
@@ -43,6 +44,9 @@ def producer : RootCertificate program producerRouting context.producer producer
 
 def producerFacts := producer.facts
 
+theorem producerConnected : SourceConnection.Connected program producerRouting context.producer producer.inputs.abi producerArtifact :=
+  SourceConnection.ofRootCertificate producer (by rfl)
+
 abbrev validatorArtifact := ZkcExamples.Structured.Generated.Constructed.TwoSumsValidator.artifact
 
 def validatorRouting : Original.Routing :=
@@ -56,5 +60,8 @@ def validator : RootCertificate program validatorRouting context.validator valid
     services capabilities library sourceLibrary
 
 def validatorFacts := validator.facts
+
+theorem validatorConnected : SourceConnection.Connected program validatorRouting context.validator validator.inputs.abi validatorArtifact :=
+  SourceConnection.ofRootCertificate validator (by rfl)
 
 end ZkcExamples.Structured.Generated.Connections.TwoSums

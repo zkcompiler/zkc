@@ -1,5 +1,6 @@
 import ZkcSecurity.Examples.EmbeddingEqualitySoundness
 import Zkc.Construction.DomainExecutionLaws
+import ZkcTools.ConstructionBindings.Admission
 
 /-! Refusal and necessity controls for the actual mixed-domain endpoint. -/
 set_option autoImplicit false
@@ -21,27 +22,55 @@ local instance : DecidableEq Octic := model.fieldDecEq octicIdentity
 theorem wrong_nominal_reply (a : Base) :
     (Domain.Payload.field baseIdentity a : Domain.Payload model.toCarriers).value
       (.field octicIdentity) = none := by
-  simp [Domain.Payload.value, baseIdentity, octicIdentity]
+  exact Domain.Payload.value_wrong_type (by
+    change (Ty.field baseIdentity) ≠ .field octicIdentity
+    decide)
 
 /-- Even an identical host carrier cannot substitute a nominal field name. -/
 theorem wrong_name_same_host (a : model.Field "unadmitted") :
     (Domain.Payload.field "unadmitted" a : Domain.Payload model.toCarriers).value
       (.field baseIdentity) = none := by
-  simp [Domain.Payload.value, baseIdentity]
+  exact Domain.Payload.value_wrong_type (by
+    change (Ty.field "unadmitted") ≠ .field baseIdentity
+    decide)
 
 theorem nonquery_reply_is_unit (origin : Origin) (payload : Domain.Payload model.toCarriers) :
     Domain.Raw (Domain.Event.message origin payload) = Unit := rfl
 
-theorem same_name_wrong_artifact :
-    checkCompiled imported { artifact with returned := [14, 10] } ≠ .ok () := by
+/-- Return rewiring preserves structural admission; it needs a separate
+source-connection proof before any canonical receipt can be established. -/
+theorem changed_first_return_admitted :
+    checkCompiled imported { artifact with returned := [14, 10] } = .ok () := by
   decide +kernel
 
 theorem same_name_preserved :
     ({ artifact with returned := [14, 10] } : Participant).symbol = artifact.symbol := rfl
 
-theorem second_only_wrong_artifact :
-    checkCompiled imported { artifact with returned := [18, 10] } ≠ .ok () := by
+theorem changed_second_return_admitted :
+    checkCompiled imported { artifact with returned := [18, 10] } = .ok () := by
   decide +kernel
+
+
+set_option maxRecDepth 50000 in
+set_option maxHeartbeats 16000000 in
+theorem complete_source_connection :
+    ConnectionAdmission.Required program context .validator artifact := by
+  derive_source_connection
+
+/- The same method accepts the original above and refuses either discarded
+conjunct below. Method refusal alone is not a semantic impossibility theorem. -/
+set_option maxRecDepth 50000 in
+set_option maxHeartbeats 16000000 in
+example : True := by
+  fail_if_success
+    have : ConnectionAdmission.Required program context .validator
+        { artifact with returned := [14, 10] } := by
+      derive_source_connection
+  fail_if_success
+    have : ConnectionAdmission.Required program context .validator
+        { artifact with returned := [18, 10] } := by
+      derive_source_connection
+  trivial
 
 theorem dropping_second_check (c : Octic) :
     (0 : Base) ≠ 1 ∧

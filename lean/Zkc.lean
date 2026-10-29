@@ -1,3 +1,3 @@
 module
 
-public import Zkc.Source.Common.Import
+public import Zkc.Source.Structured.Import

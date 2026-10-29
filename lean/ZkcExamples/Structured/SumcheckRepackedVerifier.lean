@@ -1,5 +1,7 @@
 module
 
+public import ZkcExamples.Structured.Generated.Scalar.SumcheckRepackedLibrary
+
 public import ZkcExamples.Structured.SumcheckRepackedViews
 public import ZkcExamples.Structured.SumcheckReduceVerifier
 public import ZkcExamples.Structured.SumcheckRepackedNormalForms
@@ -20,7 +22,7 @@ theorem helperBodies : SumcheckVerifierHelpers.Bodies unit.definitions :=
 
 /-- Exact consuming and constructing bodies; discharged within the source package. -/
 theorem claimBodies : SumcheckPendingLaws.Bodies unit.definitions :=
-  SumcheckReduceVerifier.claimBodies
+  Generated.Scalar.SumcheckRepackedLibrary.claims
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]

@@ -2,6 +2,7 @@ module
 
 public import ZkcTools.ConstructionBindings.LibraryBuilder
 public import Zkc.Construction.ConnectionRootInputs
+public import Zkc.Construction.ConnectionRootCertificate
 public import ZkcTools.ConstructionBindings.Inputs
 public import ZkcTools.ConstructionBindings.Alignment
 public meta import Lean.Elab.Tactic
@@ -24,10 +25,18 @@ private def finite (goal : MVarId) : TacticM Unit := do
 private def input (goal : MVarId) (capabilities : Expr) : TacticM Unit := goal.withContext do
   let expected ← instantiateMVars (← goal.getType)
   let args := expected.getAppArgs
-  let signature := args[0]!
-  let context := args[1]!
-  let role := args[2]!
-  let sorts := args[3]!
+  -- Input certificates repeatedly inspect these finite indices. Normalize
+  -- them once, including projections out of a modified actual artifact, so
+  -- a refused candidate cannot force the whole input proposal to reduce the
+  -- same artifact expression at every constructor. Ordinary definitional
+  -- equality still checks the normalized goal against its original indices.
+  let cache ← Syntax.newCache
+  let signature ← Syntax.normalize cache args[0]!
+  let context ← Syntax.normalize cache args[1]!
+  let role ← Syntax.normalize cache args[2]!
+  let sorts ← Syntax.normalize cache args[3]!
+  goal.setType (mkAppN expected.getAppFn #[signature, context, role, sorts])
+  Alignment.tracePhase "root input indices normalized"
   let candidate ← mkAppM ``ConnectionRootInputs.locations #[signature, role, capabilities]
   let result ← withTransparency .all <| whnf candidate
   unless result.isAppOf ``Except.ok do throwError "root-input-proposal-refused: {result}"
@@ -37,6 +46,7 @@ private def input (goal : MVarId) (capabilities : Expr) : TacticM Unit := goal.w
   let shape ← mkFreshExprMVar (← mkAppM ``ConnectionInputs.Shape #[pattern, locations])
   setGoals [shape.mvarId!]
   evalTactic (← `(tactic| derive_connection_inputs))
+  Alignment.tracePhase "root input shape checked"
   let pattern ← instantiateMVars pattern
   let shape ← instantiateMVars shape
   let suite ← mkAppM ``Context.suite #[context]
@@ -52,7 +62,11 @@ private def input (goal : MVarId) (capabilities : Expr) : TacticM Unit := goal.w
   layoutGoal.assign layout
   setGoals [cellsGoal]
   evalTactic (← `(tactic| derive_connection_inputs))
-  for next in [sortedGoal, visibleGoal, lengthGoal, historyGoal] do finite next
+  Alignment.tracePhase "root input cells checked"
+  for (label, next) in [("sorts", sortedGoal), ("visibility", visibleGoal),
+      ("length", lengthGoal), ("history", historyGoal)] do
+    Alignment.tracePhase s!"root input finite {label}"
+    finite next
 
 private def deriveRoot (target correspondence services : Syntax)
     (selectedLibrary : Option Syntax) : TacticM Unit := withMainContext do

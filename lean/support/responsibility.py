@@ -73,6 +73,7 @@ def classify(value, policy=POLICY):
             "clean": ("general-methods", ("S",), "shared relation adapter"),
             "tests": ("support-infrastructure", ("X",), "test infrastructure is not theorem evidence"),
             "tools": ("support-infrastructure", ("X",), "generation and audit infrastructure"),
+            "proof-tools": ("support-infrastructure", ("X",), "proof elaboration infrastructure; emitted terms are checked against the semantic foundation"),
         }
         if any(module == prefix or module.startswith(prefix + ".")
                for prefix in ("ZkcSecurity.Endpoint", "ZkcSecurity.Claims")):

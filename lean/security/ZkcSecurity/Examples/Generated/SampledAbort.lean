@@ -3,6 +3,7 @@ module
 public import ZkcExamples.Structured.Generated.Bindings.SampledAbortInputs
 public import ZkcExamples.Construction.Generated.SampledAbortPair
 public import ZkcSecurity.Domains.PrimeField
+public import ZkcExamples.Structured.Generated.Connections.SampledAbort
 public import ZkcSecurity.Tools.PairConstruction
 public import ZkcSecurity.Claims.SourceChargeSites
 
@@ -25,6 +26,7 @@ def selected : Zkc.Construction.AuthoredPair.Selection original :=
 def subject : ZkcSecurity.Claims.HonestPair.Subject
     (ZkcSecurity.Domains.PrimeField.blsScalarModel) original imported selected := by
   bind_authored_subject "equality" with_registry Zkc.Source.Structured.OpaqueRegistry.empty
+    connections ZkcExamples.Structured.Generated.Connections.SampledAbort.producer, ZkcExamples.Structured.Generated.Connections.SampledAbort.validator
     exports "sha256:245ab21ea13d02b2b1442402628ec178eca23df3aef0537c7dbc863fac8c90eb", "sha256:cd254b61ffeccb77cdc3da4e4137bcb376fdf21b320a23e41e5c7522606eb141", "sha256:78a29ecdc5b44a0609257409d1043cf63a8a4f37ee32c539614cedc360c97fda"
 
 abbrev validatorArtifacts := subject.validatorArtifacts

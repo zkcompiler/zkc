@@ -3,7 +3,8 @@ module
 public import ZkcTools.ConstructionBindings.Root
 public import Zkc.Construction.ConnectionRootRoutes
 public import Zkc.Construction.ConnectionRouteCoverageRoot
-public import ZkcExamples.Construction.SchnorrArtifact
+public import Zkc.Construction.ConnectionCertificateAdmission
+public import ZkcExamples.Structured.Generated.Bindings.SchnorrRandomizedInputs
 public import ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedProducer
 public import ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator
 
@@ -20,7 +21,7 @@ namespace ZkcExamples.Structured.Generated.Connections.SchnorrRandomized
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ConnectionRoot
 open ZkcTools.ConstructionBindings
 
-abbrev program := ZkcExamples.Construction.SchnorrProof.program
+abbrev program := ZkcExamples.Structured.Generated.Bindings.SchnorrRandomizedInputs.program
 def context : Context :=
   (exportContext program.snapshot ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.artifact).get (by decide +kernel)
 
@@ -43,6 +44,9 @@ def producer : RootCertificate program producerRouting context.producer producer
 
 def producerFacts := producer.facts
 
+theorem producerConnected : SourceConnection.Connected program producerRouting context.producer producer.inputs.abi producerArtifact :=
+  SourceConnection.ofRootCertificate producer (by rfl)
+
 abbrev validatorArtifact := ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.artifact
 
 def validatorRouting : Original.Routing :=
@@ -56,5 +60,8 @@ def validator : RootCertificate program validatorRouting context.validator valid
     services capabilities library sourceLibrary
 
 def validatorFacts := validator.facts
+
+theorem validatorConnected : SourceConnection.Connected program validatorRouting context.validator validator.inputs.abi validatorArtifact :=
+  SourceConnection.ofRootCertificate validator (by rfl)
 
 end ZkcExamples.Structured.Generated.Connections.SchnorrRandomized

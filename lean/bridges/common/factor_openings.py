@@ -5,13 +5,16 @@ import json
 
 from contracts import label
 from native_entry import native_subject
-from snapshot import render
+
+from structured import render
 from verify import read_json, render_client
+
+MODULUS = 52435875175126190479447740508185965837690552500527637822603658699938581184513
 
 
 def factor(coefficients, first, second):
     a, b, c, d = coefficients
-    return (a + second * b + first * (c + second * d)) % 97
+    return (a + second * b + first * (c + second * d)) % MODULUS
 
 
 def product(left, right):
@@ -19,28 +22,28 @@ def product(left, right):
     for i, a in enumerate(left):
         for j, b in enumerate(right):
             x, y = i // 2 + j // 2, i % 2 + j % 2
-            result[x][y] = (result[x][y] + a * b) % 97
+            result[x][y] = (result[x][y] + a * b) % MODULUS
     return result
 
 
 def transcript(left, right, first, second, attack='honest'):
     rows = product(left, right)
-    message = [(2*a+b+c) % 97 for a, b, c in rows]
-    claim = (2*message[0]+message[1]+message[2]) % 97
-    next_message = [(rows[0][j]+first*rows[1][j]+first*first*rows[2][j]) % 97 for j in range(3)]
+    message = [(2*a+b+c) % MODULUS for a, b, c in rows]
+    claim = (2*message[0]+message[1]+message[2]) % MODULUS
+    next_message = [(rows[0][j]+first*rows[1][j]+first*first*rows[2][j]) % MODULUS for j in range(3)]
     if attack == 'first-boundary':
-        message[0] = (message[0] + 1) % 97
+        message[0] = (message[0] + 1) % MODULUS
     if attack == 'second-boundary':
-        next_message[0] = (next_message[0] + 1) % 97
+        next_message[0] = (next_message[0] + 1) % MODULUS
     if attack == 'terminal':
-        next_message[0] = (next_message[0] + 1) % 97
-        next_message[1] = (next_message[1] - 2) % 97
+        next_message[0] = (next_message[0] + 1) % MODULUS
+        next_message[1] = (next_message[1] - 2) % MODULUS
     replies = {label(f'first{i}'): value for i, value in enumerate(message)}
     replies.update({label(f'second{i}'): value for i, value in enumerate(next_message)})
     replies.update({label('draw0', False): first, label('draw1', False): second,
                     label('deliver0'): first, label('deliver1'): second,
-                    label('left'): (factor(left, first, second) + (attack == 'left')) % 97,
-                    label('right'): (factor(right, first, second) + (attack == 'right')) % 97})
+                    label('left'): (factor(left, first, second) + (attack == 'left')) % MODULUS,
+                    label('right'): (factor(right, first, second) + (attack == 'right')) % MODULUS})
     return claim, replies
 
 
@@ -63,10 +66,11 @@ def check_factor_forms(suite, root, execute):
             raise AssertionError("bridges/common/factor_openings.py:60: render(data, f'ZkcExamples.NativePrograms.Variants.Factor{form}Data') == constructor.read_text()")
         request = read_json(root / 'lean/bridges/common/requests/factor-openings.json')
         client = root / f'lean/security/ZkcSecurity/Examples/NativePrograms/Factor{form}.lean'
-        if not (render_client(data, request, f'Factor{form}') == client.read_text()):
+        if not (render_client(data, request, f'Factor{form}',
+                              positive=form not in ('WrongPoint', 'WrongResidual')) == client.read_text()):
             raise AssertionError("bridges/common/factor_openings.py:63: render_client(data, request, f'Factor{form}') == client.read_text()")
         sources[form] = text, symbol
-        fixtures.append({'form': form, 'source': data[1]})
+        fixtures.append({'form': form, 'source': data[2]})
 
     stopped_prefixes = 0
     def replay(form, left, right, first, second, attack='honest', role=1, stops=False):
@@ -74,7 +78,7 @@ def check_factor_forms(suite, root, execute):
         text, symbol = sources[form]
         native, exported, _ = suite.export(text, symbol)
         claim, replies = transcript(left, right, first, second, attack)
-        request = ['zkc.common-run/0', role, [*left, *right, claim, 7 if role == 1 else None], []]
+        request = ['scalar-control', role, [*left, *right, claim, 7 if role == 1 else None], []]
         for _ in range(16):
             result = suite.compare(native, exported, symbol, request)
             if not result[3] or result[3][-1][1] != ['missing']:
@@ -130,4 +134,4 @@ def check_factor_forms(suite, root, execute):
             'stopped_prefix_controls': stopped_prefixes, 'outcomes': outcomes,
             'wrong_point_outcomes': [r[1] for r in wrong_point],
             'wrong_residual_outcomes': [r[1] for r in wrong_residual],
-            'interpretation': 'finite Z/97 differential evidence, independent of symbolic security proofs'}
+            'interpretation': 'finite BLS scalar-field differential evidence, independent of symbolic security proofs'}

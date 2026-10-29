@@ -18,11 +18,11 @@ def PreparationProfile.error : PreparationProfile → String
   | .realization => "structured-realization"
   | .map => "structured-map"
 
-/-- Map closures stay in scalar fields; realizations exclude services. The
+/-- Map closures stay in scalar fields; realizations exclude handles. The
 identities are admitted against the unit's catalogue rows. -/
 def PreparationProfile.typeAllowed (profile : PreparationProfile) (type : Ty) : Bool :=
   match profile, type with
-  | .realization, type => !type.isService
+  | .realization, type => !type.isHandle
   | .map, .field _ => true
   | .map, _ => false
 

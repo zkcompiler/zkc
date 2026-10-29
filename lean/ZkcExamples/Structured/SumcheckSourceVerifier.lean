@@ -1,5 +1,7 @@
 module
 
+public import ZkcExamples.Structured.Generated.Scalar.SumcheckSourceLibrary
+
 public import ZkcExamples.Structured.SumcheckSourceAssociations
 public import ZkcExamples.Structured.SumcheckSourceNormalForms
 public import ZkcExamples.Structured.SumcheckVerifierBodies
@@ -36,7 +38,7 @@ theorem reduce_raw : reduceDefinition.raw = (SumcheckVerifierBodies.reduceBody S
 
 /-- Exact consuming and constructing bodies; discharged within the source package. -/
 theorem claimBodies : SumcheckPendingLaws.Bodies unit.definitions :=
-  ⟨SumcheckSourceAssociations.pending_association, SumcheckSourceAssociations.openClaim_association, SumcheckSourceAssociations.atPrefix_association⟩
+  Generated.Scalar.SumcheckSourceLibrary.claims
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]

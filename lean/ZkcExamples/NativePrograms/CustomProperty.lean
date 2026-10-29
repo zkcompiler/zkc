@@ -9,30 +9,33 @@ public import Zkc.Specification
 contract, source certificate, or Python registry. The typed API is extensible;
 the bounded command-line generator deliberately has a reviewed registry. -/
 
+noncomputable section
 namespace ZkcExamples.NativePrograms.CustomProperty
-open Zkc.Verification Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
+open Zkc.Verification Zkc.Source Zkc.Source.Structured
 open Zkc.Protocols.Schnorr.Common
 
-def source : Zkc.Verification.Imported Snapshot.check SchnorrData.snapshot :=
-  ⟨Schnorr.imported, by rfl⟩
+def source : Zkc.Verification.Imported check SchnorrData.snapshot :=
+  ⟨Schnorr.program, SchnorrInputs.kernel_admission⟩
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G]
   [Module F G] [DecidableEq G]
 
-def denote (program : Zkc.Source.Common.Native.Imported) : Verifier F G :=
+def denote (program : Program) : Verifier F G :=
   fun base key service =>
-    if same : program.snapshot.inputs = SchnorrData.snapshot.inputs then
-      if result : program.snapshot.result = .boolean then
-        cast (congrArg (fun ty => PIR.Process (actions (F := F) (G := G))
-          (Option (ScalarValue F G ty))) result)
-          (program.denote (scalarMeaning F G) id 1
-            (same ▸ Schnorr.verifierInputs (F := F) base key service))
+    if same : program.payload.entry.inputs = Schnorr.program.payload.entry.inputs then
+      if result : program.payload.entry.outputs = [.boolean] then
+        ((program.participant F G 1
+          (cast (congrArg (Values (Component (assignment F G))) same.symm)
+            (Schnorr.verifierInputs base key service))).bind fun values =>
+          .done ((cast (congrArg (Values (Component (assignment F G))) result) values).get .here)).interpret
+            CommonAdapter.project
       else .halt .refused
     else .halt .refused
 
 theorem sourceCertificate : Certificate source (denote (F := F) (G := G))
-    (VerifierContract Schnorr.wiring) :=
-  ⟨Schnorr.contract⟩
+    (VerifierContract Schnorr.wiring) := by
+  constructor
+  exact Schnorr.contract
 
 /-- An extension selects a precisely stated property, not a theorem name inferred
 from the source text. Here an invalid response equation must not accept. -/
@@ -58,3 +61,5 @@ theorem imported_rejects (base key : G) (service : Nat) (prover : Strategy F G)
   sourceCertificate.verify (rejectionConsumer Schnorr.wiring base key service prover challenge)
 
 end ZkcExamples.NativePrograms.CustomProperty
+
+end

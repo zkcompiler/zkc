@@ -4,7 +4,10 @@ public import ZkcExamples.Structured.Generated.Constructed.GuessValidator
 public import ZkcExamples.Construction.GuessProofData
 public import ZkcExamples.Construction.GuessProofBodies
 public import ZkcExamples.Construction.GuessProofModel
-public import Zkc.Construction.Uniform.SourceProcess
+public import Zkc.Construction.ScalarConnection
+public import Zkc.Construction.Uniform.ScalarSupportProposer
+public import Zkc.Construction.Uniform.ScalarHandles
+public import ZkcExamples.Structured.Generated.Connections.Guess
 public import ZkcExamples.Construction.GuessArtifact
 public import Zkc.Source.Structured.UnitViews
 
@@ -67,58 +70,45 @@ def inputs (offset : F) : Domain.Environment (uniformCarriers F G) :=
 theorem input_sorts (offset : F) :
     Domain.sortsMatch artifact.inputs (inputs (F := F) (G := G) offset) = true := by kernel_rfl
 
-/-- Exact Domain participant return, including the transcript and all stops;
-only administrative checkpoint effects are projected away. -/
-theorem participant_values (offset : F) (handle : Nat) :
-    ((Domain.participant (ringModel F G) program context artifact (inputs offset)).bind
-      fun result => .done result.values).interpret Original.forgetCheckpoints =
-    (sourceView context (sourceDecision offset handle) []).bind
-      fun result => .done (returnValues context.suite result) := by
-  rw [← artifact_identity, GuessValidator.participant_eq]
-  simp only [GuessValidator.view, GuessValidator.inputSorts, GuessValidator.outputSorts,
-    GuessValidator.returned, GuessValidator.body,
-    GuessValidator.bodyStep0, GuessValidator.bodyStep1, GuessValidator.bodyStep2, GuessValidator.bodyStep3, GuessValidator.bodyStep4, GuessValidator.bodyStep5, GuessValidator.bodyStep6, GuessValidator.bodyStep7, GuessValidator.bodyStep8]
-  normalize_scalar_connection
-    unfolding [inputs, context, artifact, GuessProofParticipant.participant, GuessProofData.snapshot, sourceDecision, source_equation,
-      GuessProof.experiment, GuessProof.experiment]
+def sourceABI : Original.InputABI :=
+  (SourceConnection.canonicalABI program 1 artifact).toOption.get (by decide +kernel)
 
+abbrev routing := ZkcExamples.Structured.Generated.Connections.Guess.validatorRouting
+
+/-- Reuse the single root emitted by the common data-only generator catalogue. -/
+theorem checkedConnection : SourceConnection.Connected program routing 1 sourceABI artifact :=
+  ScalarConnection.canonicalize
+    ZkcExamples.Structured.Generated.Connections.Guess.validatorConnected (by kernel_rfl)
+
+theorem requiredConnection : ConnectionAdmission.Required program context .validator artifact :=
+  ConnectionAdmission.ofConnected (boundary := ⟨sourceABI, routing⟩) (by kernel_rfl) checkedConnection
+
+/-- Source-only presentation law for the capability label unobserved by the scalar handler. -/
+theorem source_handle (offset : F) (original replacement : Nat) :
+    (sourceVerifier (F := F) (G := G) offset original).interpret (Uniform.ScalarHandles.replace replacement) =
+      sourceVerifier offset replacement := by
+  simp only [source_equation]
+  rfl
 
 section Boundary
-variable {m : Type → Type} [Monad m]
+variable {m : Type → Type} [Monad m] [LawfulMonad m]
 
-/-- All returns, stops and unread proof suffixes of the actual participant,
-with an arbitrary consumer of its complete returned tuple. -/
-theorem participant_run {R : Type} (challenge : History F G → m F)
-    (offset : F) (handle : Nat) (initial : History F G) (proof : Proof F G)
-    (next : Domain.Environment (uniformCarriers F G) → Proof F G → m (PIR.Outcome R × Proof F G)) :
-    runK legacyOrigin initial challenge
-        (Domain.participant (ringModel F G) program context artifact (inputs offset)) proof
-        (fun result unread => next result.values unread) =
-      runK legacyOrigin initial challenge (sourceView context (sourceDecision offset handle) []) proof
-        (fun result unread => next (returnValues context.suite result) unread) := by
-  have equation := participant_values (F := F) (G := G) offset handle
-  have handled := congrArg (fun process => runK legacyOrigin initial challenge process proof next) equation
-  rw [runK_forgetCheckpoints legacyOrigin initial challenge _ proof next] at handled
-  rw [runK_bind, runK_bind] at handled
-  simpa only [runK] using handled
-
-variable [LawfulMonad m]
-
-/-- The replacement for the retained scalar compiled-transform consumer:
-all typed public values, every proof and challenge function in any lawful monad.
-The legacy key adapter runs before the existing challenge oracle. -/
+/-- The full checked connection supplies execution transport for all proofs and replies. -/
 theorem domain_transform (challenge : History F G → m F)
     (offset : F) (handle : Nat) (initial : History F G) (proof : Proof F G) :
     runK legacyOrigin initial challenge
-        (Domain.participant (ringModel F G) program context artifact (inputs offset)) proof
-        (fun result unread => pure (.returned (Uniform.SourceProcess.acceptance result.values), unread)) =
-      transform context challenge (sourceVerifier offset handle) initial proof := by
-  rw [participant_run challenge offset handle initial proof
-    (fun values unread => pure (.returned (Uniform.SourceProcess.acceptance values), unread))]
-  have law := sourceView_transform_map context challenge
-    (sourceDecision (F := F) (G := G) offset handle) some initial proof
-  rw [← source_decision] at law
-  exact law
+      (Domain.participant (ringModel F G) program context artifact (inputs offset)) proof
+      (fun result unread => pure (.returned (Uniform.SourceProcess.acceptance result.values), unread)) =
+    transform context challenge (sourceVerifier offset handle) initial proof := by
+  let canonical := routing.selectedHandle
+  have law := ScalarConnection.transform (F := F) (G := G) checkedConnection rfl _ rfl (by decide +kernel)
+    (inputs offset) (sourceInputs offset canonical) (by kernel_rfl) (by kernel_rfl)
+    (by derive_scalar_support) .here (by rfl) challenge initial proof
+  change _ = transform context challenge (sourceVerifier offset canonical) initial proof at law
+  have relabel := Uniform.ScalarHandles.transform context canonical challenge
+    (sourceVerifier (F := F) offset handle) initial proof
+  rw [source_handle] at relabel
+  exact law.trans relabel
 
 /-- The installed Domain runtime has the same complete outcome and unread
 proof after selecting Uniform.SourceProcess.acceptance. Physical frames remain with Domain.run.

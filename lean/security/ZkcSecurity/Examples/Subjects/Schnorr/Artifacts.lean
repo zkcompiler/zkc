@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Claims.Subject
+public import ZkcTools.ConstructionBindings.Admission
 public import ZkcExamples.Construction.SchnorrArtifact
 public import ZkcExamples.Construction.SchnorrProof
 public import ZkcExamples.Executable.SchnorrProofProgramData
@@ -37,6 +38,7 @@ def compiled : Compiled artifacts where
   checked := ZkcExamples.Construction.SchnorrProof.selection_checked
   publics := by decide +kernel
   occurrences := by decide +kernel
+  sourceConnection := some ⟨ZkcExamples.Construction.SchnorrProof.sourceConnected⟩
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 

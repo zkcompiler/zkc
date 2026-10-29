@@ -6,6 +6,7 @@ public import ZkcSecurity.Families.Sumcheck.Common
 @[expose] public section
 
 set_option autoImplicit false
+noncomputable section
 
 namespace ZkcExamples.NativePrograms.Sumcheck
 
@@ -52,3 +53,5 @@ theorem randomized_soundness {Seed : Type} [Fintype Seed] [Nonempty Seed]
 
 
 end ZkcExamples.NativePrograms.Sumcheck
+
+end

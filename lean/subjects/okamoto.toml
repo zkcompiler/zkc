@@ -18,8 +18,8 @@ interactive_views = "lean/ZkcExamples/Structured/OkamotoViews.lean"
 interactive_export = "lean/bridges/structured/fixtures/okamoto.json"
 interactive_source = "lean/bridges/structured/fixtures/okamoto.mlir"
 
-[normal_forms]
-request = "lean/bridges/structured/normal-forms/okamoto.toml"
+[source_views]
+selections = ["Okamoto"]
 
 
 [assumptions]

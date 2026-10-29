@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Construction.ConnectionRootCertificate
+public import Zkc.Construction.ConnectionInputLayout
 
 @[expose] public section
 
@@ -34,7 +34,7 @@ def inputLocations (role : Nat) (capabilities : List (Nat × Nat)) :
         let some handle := capabilities.lookup input | throw "connection-missing-service-capability"
         return .capability handle :: (← inputLocations role capabilities types scopes (input + 1) physical)
       | _ =>
-        if ty.isService then throw "connection-input-not-data"
+        if ty.isHandle then throw "connection-input-not-data"
         return .data physical :: (← inputLocations role capabilities types scopes (input + 1) (physical + 1))
   | _, _, _, _ => .error "connection-input-scope-arity"
 

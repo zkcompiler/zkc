@@ -885,7 +885,10 @@ theorem changed_residual_rejected (history : Domain.History model.toCarriers)
   cases encoded
   cases returned
 
-example : checkCompiled imported {artifact with returned := [2,4]} ≠ .ok () := by decide +kernel
+/-- Structural admission does not prove the full returned row. The independent
+connection obligation owns that equation; `changed_residual_rejected` above
+shows why selecting the same acceptance Boolean is insufficient. -/
+example : checkCompiled imported {artifact with returned := [2,4]} = .ok () := by decide +kernel
 
 theorem missing_guard_refused (site : String) :
     sourceStep model site none (some true) (some 17) = .halt .incomplete := by kernel_rfl

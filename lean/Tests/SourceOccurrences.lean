@@ -155,7 +155,6 @@ private def inventedPath : Participant := { original with
     | _ => instruction }
 
 example : checkCompiled imported original = .ok () := by decide +kernel
-example : project imported.program context wrongSourcePort = .ok () := by decide +kernel
 example : checkCompiled imported wrongSourcePort = .error "construction-source-occurrence" := by
   decide +kernel
 example : checkCompiled imported inventedPath = .error "construction-source-occurrence" := by

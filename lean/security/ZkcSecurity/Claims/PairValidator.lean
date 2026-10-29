@@ -54,6 +54,7 @@ def validatorCompiled (subject : Subject model original imported selected) :
   checked := subject.selectionChecked
   publics := rfl
   occurrences := subject.validatorOccurrences
+  sourceConnection := subject.validatorConnection
 
 /-- Only the policy index changes along the admitted equality. The exact
 source formula and selectors are retained. -/

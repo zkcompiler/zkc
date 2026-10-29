@@ -108,14 +108,14 @@ private def statementRoot := root [.boolean] [.boolean] [["P"]] [["P"]]
   (.block [.instruction (.statement "relation" ["P"] 0 none) [0] [] [] ""] (.ret [0]))
 private def statementSource : Snapshot :=
   { unit [statementRoot] [relation] with contracts := [⟨"main", [
-    ⟨.target, "claim", ⟨"relation", [⟨.input, 0, "P"⟩]⟩, none, some ⟨.output, 0, "P"⟩⟩]⟩] }
+    ⟨.target, "claim", ⟨"relation", [⟨.input, 0, "P", false⟩]⟩, none, some ⟨.output, 0, "P", false⟩⟩]⟩] }
 example : accepted statementSource = true := by rfl
 example : accepted (unit [statementRoot] [relation]) = true := by rfl
 example : accepted { statementSource with contracts := [⟨"main", [
-    ⟨.input, "premise", ⟨"relation", [⟨.input, 0, "P"⟩]⟩, none, none⟩]⟩] } = true := by rfl
+    ⟨.input, "premise", ⟨"relation", [⟨.input, 0, "P", false⟩]⟩, none, none⟩]⟩] } = true := by rfl
 example : accepted { statementSource with
     contracts := [⟨"main", [
-      ⟨.target, "claim", ⟨"other", [⟨.input, 0, "P"⟩]⟩, none, some ⟨.output, 0, "P"⟩⟩]⟩]
+      ⟨.target, "claim", ⟨"other", [⟨.input, 0, "P", false⟩]⟩, none, some ⟨.output, 0, "P", false⟩⟩]⟩]
     relations := [relation, {relation with name := "other"}] } = false := by rfl
 example : accepted (unit [statementRoot]) = false := by decide +kernel
 example : accepted (unit [statementRoot] [{relation with purposes := []}]) = false := by decide +kernel

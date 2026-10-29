@@ -7,15 +7,19 @@ public import ZkcExamples.Executable.SumcheckCompleteness
 /-! Symbolic consumers and negative controls for the full retained Sumcheck. -/
 set_option autoImplicit false
 set_option maxRecDepth 50000
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 200000
 set_option backward.isDefEq.respectTransparency false
 namespace Tests.SumcheckCanonicalCompleteness
 open Zkc Zkc.Construction Zkc.Executable Zkc.Source
+open Zkc.Source.Structured
 open ZkcExamples.Executable
-open ZkcExamples.Construction.SumcheckDomainConnection
+open ZkcExamples.Structured
+open Uniform
+attribute [local implicit_reducible] CheckedProtocol.signature
 open Zkc.Construction.Uniform.DomainAdapter
 
-attribute [local irreducible] DomainVM.Sufficient
+attribute [local irreducible] DomainVM.Sufficient DomainVM.Passes DomainVM.metered
+  ZkcExamples.Construction.SumcheckProof.compiledVerifier ZkcExamples.Construction.SumcheckProof.verifier
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
@@ -23,7 +27,7 @@ abbrev run (oracle : History F G → F) (budget : Nat) (values : List F) (claim 
     (rounds : Nat) (proof : Proof F G) :=
   DomainVM.metered (m := Id) ZkcExamples.Construction.SumcheckProof.program
     ZkcExamples.Construction.SumcheckProof.context Origin.withoutCoordinates [] oracle
-    SumcheckCharges.cost budget SumcheckProof.lowered (frame values claim rounds []) proof
+    SumcheckCharges.cost budget SumcheckProof.lowered (SumcheckProof.physicalInputs values claim rounds []) proof
 
 /-- The consumer keeps the round count symbolic and uses the actual Entry. -/
 theorem variable_honest (oracle : History F G → F) (values : List F) (rounds : Nat)
@@ -63,7 +67,7 @@ theorem variable_budget (maximum rounds : Nat) (small : maximum < 64)
     (proof : Proof F G) (shaped : values.length = 2 ^ rounds) :
     DomainVM.Sufficient ZkcExamples.Construction.SumcheckProof.program
       ZkcExamples.Construction.SumcheckProof.context SumcheckCharges.cost (72 + 59 * rounds)
-      (SumcheckCharges.lowered maximum) (frame values claim rounds history) proof :=
+      (SumcheckCharges.lowered maximum) (SumcheckProof.physicalInputs values claim rounds history) proof :=
   SumcheckCharges.sufficient_family maximum small _ values claim rounds history proof shaped
     (by rw [SumcheckCharges.charge_eq])
 
@@ -77,69 +81,105 @@ theorem zero_budget (oracle : History F G → F) (values : List F) (claim : F)
     DomainVM.meteredK, DomainVM.meteredStep]
   rfl
 
-/-- Transport any constructed successful retained root to its canonical Code
-observation, preserving its postcondition and every unread message. -/
-private theorem observation_of_root_passes (oracle : History F G → F) (initial : History F G)
-    (values : List F) (claim : F) (rounds : Nat)
-    (history : Domain.History (Structured.uniformCarriers F G)) (proof : Proof F G)
-    (holds : DomainVM.Environment F G → Proof F G → Prop)
-    (passes : DomainVM.Passes Origin.withoutCoordinates initial oracle
-      (rootProcess values claim rounds history) proof holds) :
-    DomainVM.Passes Origin.withoutCoordinates initial oracle
-      (DomainVM.observation ZkcExamples.Construction.SumcheckProof.program
-        ZkcExamples.Construction.SumcheckProof.context
-        (Code.instructions ZkcExamples.Executable.SumcheckProof.lowered.code)
-        ZkcExamples.Executable.SumcheckProof.lowered.returned (frame values claim rounds history)) proof holds := by
-  have instructions : Code.instructions ZkcExamples.Executable.SumcheckProof.lowered.code =
-      ZkcExamples.Construction.SumcheckProof.participant.instructions := by
-    rw [← Code.instructionList_eq]
-    decide +kernel
-  have returned : ZkcExamples.Executable.SumcheckProof.lowered.returned =
-      ZkcExamples.Construction.SumcheckProof.participant.returned := by kernel_rfl
-  rw [instructions, returned]
-  apply DomainVM.Passes.participant_observation
-  change DomainVM.Passes Origin.withoutCoordinates initial oracle (rootProjection values claim rounds history) _ _
-  rw [root_projection]
-  exact passes
+/-- False zero-round claims remain false through the all-input checked
+endpoint, independently of the proof suffix and oracle. -/
+theorem false_claim_compiled (oracle : History F G → F) (value claim : F) (wrong : value ≠ claim)
+    (proof : Proof F G) :
+    ZkcExamples.Construction.SumcheckProof.compiledVerifier (m := Id) oracle [value] claim 0 [] proof =
+      (.returned (some false), proof) := by
+  rw [ZkcExamples.Construction.SumcheckProof.compiled_transform (m := Id) oracle [value] claim 0 77]
+  unfold ZkcExamples.Construction.SumcheckProof.verifier ZkcExamples.Construction.SumcheckProof.process
+  have zero := SumcheckSourceVerifier.verifier_zero (F := F) (G := G) (some [value]) claim (some 77)
+  change ZkcExamples.Construction.SumcheckProof.program.participant F G 1
+    (ZkcExamples.Construction.SumcheckProof.verifierInputs [value] claim 0 77) = _ at zero
+  rw [zero, SumcheckVerifierTerminal.terminal_equation]
+  · simp [PrimitiveLibrary.HasShape, Zkc.Polynomial.Multilinear.restrictPrefixValues, wrong,
+      PIR.Process.bind, PIR.Process.interpret, transform]
+    rfl
+  · change 1 < indexLimit; decide
+  · change 0 < indexLimit; decide
 
-
-/-- Budget sufficiency does not force a returned Boolean to be true. The
-zero-round actual terminal check returns false on a false public claim, and
-preserves the entire supplied unread suffix. -/
+/-- The full metered result and exact unread suffix are preserved for false
+claims as well as honest true claims. -/
 theorem false_claim (oracle : History F G → F) (value claim : F) (wrong : value ≠ claim)
     (proof : Proof F G) :
     run oracle 72 [value] claim 0 proof =
       (.returned [.data (.boolean false), .transcript ZkcExamples.Construction.SumcheckProof.context.suite []], proof) := by
-  have checked : Zkc.Protocols.Sumcheck.Multilinear.check [value] (Fin.elim0 : Fin 0 → F) claim = false := by
-    apply Bool.eq_false_iff.mpr
-    intro accepted
-    have same := Zkc.Protocols.Sumcheck.Multilinear.check_zero_iff [value] claim |>.mp accepted
-    exact wrong (List.singleton_inj.mp same)
-  have point : Zkc.Polynomial.Quadratic.point 0 (Zkc.Polynomial.coordinates 0 []) Fin.elim0 =
-      (Fin.elim0 : Fin 0 → F) := funext fun index => Fin.elim0 index
-  have passes : DomainVM.Passes Origin.withoutCoordinates ([] : History F G) oracle
-      (rootProcess [value] claim 0 []) proof
-      (fun returned unread => returned =
-        [.data (.boolean false), .transcript ZkcExamples.Construction.SumcheckProof.context.suite []] ∧ unread = proof) := by
-    simp [rootProcess, reduce, PIR.Process.bind, terminal, Structured.indexLimit, DomainVM.Passes, point, checked]
+  let sourcePost := fun (result : Values (Component (assignment F G))
+      ZkcExamples.Construction.SumcheckProof.program.payload.entry.outputs × Domain.History (uniformCarriers F G))
+      (unread : Proof F G) => result = (.cons (some false) .nil, []) ∧ unread = proof
+  let post := fun (result : Domain.Result (uniformCarriers F G)) (unread : Proof F G) =>
+    result.values = [.data (.boolean false), .transcript ZkcExamples.Construction.SumcheckProof.context.suite []] ∧ unread = proof
+  have source : DomainVM.Passes Uniform.SourceProcess.legacyOrigin [] oracle
+      (Uniform.SourceProcess.sourceView ZkcExamples.Construction.SumcheckProof.context
+        ((ZkcExamples.Construction.SumcheckProof.program.participant F G 1
+          (ZkcExamples.Construction.SumcheckProof.verifierInputs [value] claim 0
+            ZkcExamples.Construction.SumcheckSourceConnection.routing.selectedHandle)).interpret CommonAdapter.project) [])
+      proof sourcePost := by
+    have zero := SumcheckSourceVerifier.verifier_zero (F := F) (G := G) (some [value]) claim
+      (some ZkcExamples.Construction.SumcheckSourceConnection.routing.selectedHandle)
+    change ZkcExamples.Construction.SumcheckProof.program.participant F G 1
+      (ZkcExamples.Construction.SumcheckProof.verifierInputs [value] claim 0
+        ZkcExamples.Construction.SumcheckSourceConnection.routing.selectedHandle) = _ at zero
+    rw [zero, SumcheckVerifierTerminal.terminal_equation 1 [value] [] claim
+      (by change 1 < indexLimit; decide) (by change 0 < indexLimit; decide)]
+    simp [PrimitiveLibrary.HasShape, Zkc.Polynomial.Multilinear.restrictPrefixValues, wrong,
+      List.foldl_nil, PIR.Process.interpret,
+      Uniform.SourceProcess.sourceView, DomainVM.Passes, sourcePost]
+  have passes := Uniform.ScalarCheckedBytes.connected (F := F) (G := G)
+    ZkcExamples.Construction.SumcheckSourceConnection.checkedConnection rfl _ rfl (by decide +kernel)
+    (SumcheckProof.physicalInputs [value] claim 0 [])
+    (ZkcExamples.Construction.SumcheckProof.verifierInputs [value] claim 0
+      ZkcExamples.Construction.SumcheckSourceConnection.routing.selectedHandle)
+    (by kernel_rfl) (by kernel_rfl) (by derive_scalar_support) [] oracle proof sourcePost post source (by
+      intro scalar actual target unread result history related good
+      obtain ⟨rfl, rfl⟩ := good
+      have output : actual.1 = .cons (some false) .nil := result.symm
+      have empty : actual.2.history = [] := by
+        simpa only [Uniform.ScalarProjection.history, List.map_eq_nil_iff] using history.symm
+      obtain ⟨data, encoding, targetValues⟩ := related.values
+      rw [output] at encoding
+      change some [.data (.boolean false)] = some data at encoding
+      cases encoding
+      dsimp only [post]
+      refine ⟨?_, rfl⟩
+      rw [targetValues, empty]
+      rfl)
+  have observed : DomainVM.Passes Origin.withoutCoordinates [] oracle
+      (DomainVM.observation ZkcExamples.Construction.SumcheckProof.program
+        ZkcExamples.Construction.SumcheckProof.context (Code.instructions SumcheckProof.lowered.code)
+        SumcheckProof.lowered.returned (SumcheckProof.physicalInputs [value] claim 0 [])) proof
+      (fun returned unread => returned = [.data (.boolean false),
+        .transcript ZkcExamples.Construction.SumcheckProof.context.suite []] ∧ unread = proof) := by
+    rw [SumcheckProof.normalized]
+    apply DomainVM.Passes.participant_observation
+    rw [DomainVM.Passes.forgetCheckpoints, DomainVM.Passes.bind]
+    have key : ScalarVerifier.origin ZkcExamples.Construction.SumcheckProof.participant = Origin.withoutCoordinates := rfl
+    rw [key] at passes
+    apply DomainVM.Passes.mono _ _ _ _ _ _ _ ?_ passes
+    intro returned unread good
+    simpa only [DomainVM.Passes] using good
   obtain ⟨returned, unread, good, executed⟩ := DomainVM.metered_success (F := F) (G := G)
     ZkcExamples.Construction.SumcheckProof.program ZkcExamples.Construction.SumcheckProof.context
     Origin.withoutCoordinates [] oracle SumcheckCharges.cost 72 SumcheckProof.lowered
-    (frame [value] claim 0 []) proof _
-    (SumcheckCharges.sufficient (F := F) (G := G) 72 [value] claim 0 [] proof (by simp)
-      (by rw [SumcheckCharges.charge_eq]))
-    (observation_of_root_passes (F := F) (G := G) oracle [] [value] claim 0 [] proof _ passes)
-  rcases good with ⟨rfl, rfl⟩
+    (SumcheckProof.physicalInputs [value] claim 0 []) proof _
+    (SumcheckCharges.sufficient 72 [value] claim 0 [] proof (by simp) (by rw [SumcheckCharges.charge_eq])) observed
+  obtain ⟨rfl, rfl⟩ := good
   exact executed
 
-omit [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- Wrong-shaped tables cannot have a true terminal decision even with no
-messages required. This is the actual all-input source-connected root. -/
+/-- A malformed empty table cannot produce a true zero-round decision. -/
 theorem wrong_shape (oracle : History F G → F) (claim : F) (proof : Proof F G) :
-    ¬ DomainVM.Passes Origin.withoutCoordinates ([] : History F G) oracle
-      (rootProcess [] claim 0 []) proof
-      (fun returned _ => returned[0]? = some (.data (.boolean true))) := by
-  simp [rootProcess, reduce, PIR.Process.bind, terminal, Structured.indexLimit, DomainVM.Passes,
-    Zkc.Protocols.Sumcheck.Multilinear.check, Zkc.Polynomial.Multilinear.ofList?]
+    ZkcExamples.Construction.SumcheckProof.compiledVerifier (m := Id) oracle [] claim 0 [] proof =
+      (.returned (some false), proof) := by
+  rw [ZkcExamples.Construction.SumcheckProof.compiled_transform (m := Id) oracle [] claim 0 77]
+  unfold ZkcExamples.Construction.SumcheckProof.verifier ZkcExamples.Construction.SumcheckProof.process
+  have zero := SumcheckSourceVerifier.verifier_zero (F := F) (G := G) (some []) claim (some 77)
+  change ZkcExamples.Construction.SumcheckProof.program.participant F G 1
+    (ZkcExamples.Construction.SumcheckProof.verifierInputs [] claim 0 77) = _ at zero
+  rw [zero, SumcheckVerifierTerminal.terminal_equation]
+  · simp [PrimitiveLibrary.HasShape, PIR.Process.bind, PIR.Process.interpret, transform]
+    rfl
+  · change 0 < indexLimit; decide
+  · change 0 < indexLimit; decide
 
 end Tests.SumcheckCanonicalCompleteness

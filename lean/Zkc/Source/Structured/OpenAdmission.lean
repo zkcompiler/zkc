@@ -9,7 +9,7 @@ namespace Zkc.Source.Structured
 def Relation.valid (relation : Relation) : Bool :=
   validString relation.name && validString relation.kind && validString relation.key &&
   validString relation.revision && validTypes relation.inputs &&
-  !relation.inputs.any Ty.isService && relation.outputs == [.boolean] &&
+  !relation.inputs.any Ty.isHandle && relation.outputs == [.boolean] &&
   relation.purposes.length == relation.inputs.length &&
   relation.purposes.all (fun purpose => ["parameter", "statement", "witness"].contains purpose)
 
@@ -19,7 +19,7 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     (context : List Ty) (origins : List (Option Nat)) (facts : Facts) (identities : List Nat)
     (descriptor : Descriptor) (operands : List Nat) (results : List Ty) (site : String) :
     LowerM ProtocolOp := do
-  if !validRefs operands || !validTypes results || results.any Ty.isService then
+  if !validRefs operands || !validTypes results || results.any Ty.isHandle then
     throw "structured-protocol-signature"
   if !site.isEmpty && !validProtocolIdentifier site then throw "structured-site"
   let arguments ← typesAt context operands
@@ -56,14 +56,22 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     let receiver ← role receiver
     if sender == receiver then throw "structured-exchange-endpoints"
     let [type] := arguments | throw "structured-exchange-signature"
-    if type.isService then throw "structured-service-use"
+    if type.isHandle then throw "structured-service-use"
     return .exchange type sender receiver site
   | .restrict selected =>
     if !site.isEmpty then throw "structured-pure-site"
     recordSite site false
     let [type] := arguments | throw "structured-restrict-signature"
-    if type.isService then throw "structured-service-use"
+    if type.isHandle then throw "structured-service-use"
     return .restrict type (← resolveScope interface.roles selected)
+  | .assemble selected =>
+    if !site.isEmpty then throw "structured-pure-site"
+    recordSite site false
+    let [type] := results | throw "structured-assemble-signature"
+    if type.isHandle then throw "structured-assemble-type"
+    let roles ← resolveScope interface.roles selected
+    if arguments != roles.map (fun _ => type) then throw "structured-assemble-signature"
+    return .assemble type roles
   | .draw owner field =>
     recordSite site true
     snapshot.catalogue.require field .field "Field"
@@ -82,7 +90,7 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     recordSite site false
     let some declaration := snapshot.relations.find? (·.name == relation) |
       throw "structured-unknown-relation"
-    if arguments != declaration.inputs || !results.isEmpty || arguments.any Ty.isService then
+    if arguments != declaration.inputs || !results.isEmpty || arguments.any Ty.isHandle then
       throw "structured-statement-signature"
     if selectors.length != operands.length || function.outputs[acceptance]? != some .boolean then
       throw "structured-statement-acceptance"
@@ -92,7 +100,7 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
       if !(inputScopes[input]?.getD []).contains selected then throw "structured-statement-selector"
     let selectedInputs ← (operands.zip selectors).mapM fun (operand, selector) => do
       let some (some input) := origins[operand]? | throw "structured-statement-input"
-      pure (ContractSelector.mk .input input selector)
+      pure (ContractSelector.mk .input input selector false)
     let targets := (snapshot.contracts.filter (·.owner == function.name)).flatMap
       (fun contract => contract.clauses.filter (·.kind == .target))
     let projectionMatches := fun clause : ContractClause =>
@@ -450,7 +458,7 @@ theorem resolveProtocolOp_application {snapshot : Snapshot} {domains : List Doma
           function.inputs[input]? = some type ∧
           (scope.map (fun role => indices[role]?.getD 0)).length = 1 ∧
           scopes[input]? = some (scope.map (fun role => indices[role]?.getD 0))) := by
-  by_cases badSignature : (!validRefs operands || !validTypes results || results.any Ty.isService) = true
+  by_cases badSignature : (!validRefs operands || !validTypes results || results.any Ty.isHandle) = true
   · simp [resolveProtocolOp, badSignature, StateT.run, bind, StateT.bind, pure,
       throw, throwThe, MonadExceptOf.throw, StateT.lift, Except.bind] at accepted
   by_cases badSite : (!sourceSite.isEmpty && !validProtocolIdentifier sourceSite) = true
@@ -741,7 +749,7 @@ theorem lowerProtocol_statementFree {snapshot : Snapshot} {domains : List Domain
 
 /-- Closed value profile. Group values retain the same explicit F/G assignment;
 service capabilities remain at the open boundary. -/
-def Ty.closedValue (type : Ty) : Bool := !type.isService
+def Ty.closedValue (type : Ty) : Bool := !type.isHandle
 
 def Op.closedValues (op : Op) : Bool := (op.arguments ++ op.results).all Ty.closedValue
 

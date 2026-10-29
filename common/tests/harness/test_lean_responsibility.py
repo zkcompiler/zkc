@@ -111,3 +111,15 @@ def test_inventory_uses_tracked_working_bytes_and_does_not_follow_symlinks(tmp_p
     assert paths["compiler/lib/Edited.cpp"]["sha256"] == sha256(b"after").hexdigest()
     assert "untracked" in record["scope"]
     assert "content hashes" in record["policy_source"]
+
+
+@pytest.mark.parametrize("module", [
+    "ProcessView",
+    "StructuredSource.NormalizedRoot",
+    "StructuredSource.ReferenceInstallation",
+])
+def test_proof_elaborators_have_an_explicit_infrastructure_owner(module):
+    row = classifier().classify(f"lean/ZkcTools/{module.replace('.', '/')}.lean")
+    assert row.responsibility == "support-infrastructure"
+    assert row.dependency_layer == "proof-tools"
+    assert row.edit_candidates == ("X",)

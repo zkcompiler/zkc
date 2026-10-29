@@ -5,6 +5,7 @@ public import Zkc.Construction.ConnectionTargetExtent
 public import Zkc.Construction.ConnectionApplicationFrame
 public import Zkc.Construction.ConnectionProjectedLoops
 public import Zkc.Construction.ConnectionProjectedContinuation
+public import Zkc.Construction.ConnectionReturnProjection
 public import Zkc.Construction.ConnectionRepeatSupport
 public import Zkc.Construction.ConnectionComputation
 public import Zkc.Construction.ConnectionPresence
@@ -158,6 +159,16 @@ inductive HistoryReadback {scope : Scope} (layout : Layout scope) (suite : Strin
   | plain : HistoryReadback layout suite none
   | transcript (reference : Nat) (checked : layout[reference]? = some (.history suite)) :
       HistoryReadback layout suite (some reference)
+
+/-- Expose the finite input cell for independent presence reconstruction. -/
+theorem HistoryReadback.inputCell {scope : Scope} {layout : Layout scope} {suite : String}
+    {selector : Option Nat} (read : HistoryReadback layout suite selector) :
+    match (generalizing := false) selector with
+    | none => True
+    | some reference => layout[reference]? = some (.history suite) := by
+  cases read with
+  | plain => trivial
+  | transcript reference checked => exact checked
 
 def HistoryAt {model : DomainModel} (suite : String) (environment : Domain.Environment model.toCarriers)
     (history : Domain.History model.toCarriers) : Option Nat → Prop
@@ -364,7 +375,7 @@ inductive Alignment (routing : Original.Routing) :
       (route : OccurrenceResolution.resolveStatic routing.snapshot routing.context
         (routing.context.message (qualifyProtocolSite context.applicationPrefix site)
           (context.roles peer) routing.self) frames.sites routing.messages = some template)
-      (data : ty.isService = false)
+      (data : ty.isHandle = false)
       (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there) (receiveLayout layout ty) next rest) :
       Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.receive ty site peer next)
         (fun model => Domain.View.sequence
@@ -422,7 +433,7 @@ inductive Alignment (routing : Original.Routing) :
       (ty : Ty) (site : String) (peer : Nat)
       {next : Form [] callees (.value ty :: scope) out} {rest : Block}
       (replacement : Replacement) (profile : routing.context.profile = .fiatShamir replacement)
-      (mode : routing.mode = .validator) (data : ty.isService = false)
+      (mode : routing.mode = .validator) (data : ty.isHandle = false)
       {prepared : Layout (.value ty :: scope)} {preparation : Block}
       (preparationProof : CoordinatePrefix (receiveLayout layout ty) prepared preparation)
       (stateRef pathRef : Nat)
@@ -603,8 +614,9 @@ inductive Alignment (routing : Original.Routing) :
           (Domain.View.loop spec.maximum yielded countReference initialReferences
             (Original.profileOutputSorts routing.context stateSorts) (body model)) (rest model))
   /-- A selected checked callee followed by its caller continuation. The body
-  reference owns its source normalization; the flat target spine and full exit
-  frame remain finite structural admission, including all unused SSA cells. -/
+  reference owns its source normalization. Only selected successful return
+  components need readback; a checked finite caller substitution proves their
+  sufficiency. The flat target spine and full exit frame remain checked. -/
   | application {context : ProtocolContext} {definitions : List CheckedDefinition}
       {callees : List CalleeKey} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
       {outputs : List Original.Location} {history : Option Nat} {scope : Scope}
@@ -618,13 +630,56 @@ inductive Alignment (routing : Original.Routing) :
       (spine : ConnectionTargetPrefix.Prefix) (extent : Nat)
       (physicalExtent : ConnectionTargetExtent.Extent layout.length extent spine.block)
       (admission : applicationAdmitted layout.length extent calleeOutputs calleeHistory)
+      (returnSelection : ConnectionReturnProjection.Selection (calleeAt callees callee).signature.outputs)
       (bodyCertificate : Alignment routing (context.enter site roles) definitions
         (library.entry callee).earlierKeys
         (selection := .selected payload same (library.entry callee).earlier)
         (calleeAt callees callee).signature.outputs (calleeAt callees callee).role
         (calleeAt callees callee).signature.outputScopes calleeOutputs calleeHistory frames layout
-        (ConnectionSubstitution.form (library.entry callee).form (fun binder => entryAt arguments binder)) spine.block)
+        (ConnectionReturnProjection.form returnSelection
+          (ConnectionSubstitution.form (library.entry callee).form (fun binder => entryAt arguments binder))) spine.block)
       (next : Form [] callees (.tuple (calleeAt callees callee).signature.outputs :: scope) out)
+      (continuationChecked : ConnectionReturnProjection.continuation returnSelection next = next)
+      (rest : Block)
+      (tail : Alignment routing context definitions callees (selection := .selected payload same library)
+        out role scopes outputs history (frames.rename .there)
+        (applicationLayout layout extent (calleeAt callees callee).role
+          (calleeAt callees callee).signature.outputScopes (calleeAt callees callee).signature.outputs
+          calleeOutputs calleeHistory routing.context.suite) next rest) :
+      Alignment routing context definitions callees (selection := .selected payload same library)
+        out role scopes outputs history frames layout (.apply callee signature roles site arguments next)
+        (spine.plug rest)
+  /-- A callee may retain a caller transcript only at a checked current-history
+  cell disjoint from every selected nominal data output. The body checks every
+  operation, selected return, history and capture. The caller substitution is
+  checked just as in the fresh-history case. -/
+  | applicationRetainedHistory {context : ProtocolContext} {definitions : List CheckedDefinition}
+      {callees : List CalleeKey} {out : List Ty} {role : Nat} {scopes : List (List Nat)}
+      {outputs : List Original.Location} {history : Option Nat} {scope : Scope}
+      {frames : ScopedFrames scope} {layout : Layout scope}
+      (payload : UnitPayload) (same : payload.definitions = definitions)
+      (library : ConnectionLibrary.Library payload callees) (callee : Fin callees.length)
+      (signature : ProtocolSignature) (signatureMatch : (calleeAt callees callee).signature = signature)
+      (roles : List Nat) (site : String)
+      (arguments : Values (Argument [] scope) (calleeAt callees callee).pattern.scope)
+      (calleeOutputs : List Original.Location) (calleeHistory : Option Nat)
+      (spine : ConnectionTargetPrefix.Prefix) (extent : Nat)
+      (physicalExtent : ConnectionTargetExtent.Extent layout.length extent spine.block)
+      (admission : applicationAdmitted layout.length extent calleeOutputs none)
+      (inputHistory : HistoryReadback layout routing.context.suite calleeHistory)
+      (separate : match (generalizing := false) calleeHistory with
+        | none => True
+        | some reference => .data reference ∉ calleeOutputs)
+      (returnSelection : ConnectionReturnProjection.Selection (calleeAt callees callee).signature.outputs)
+      (bodyCertificate : Alignment routing (context.enter site roles) definitions
+        (library.entry callee).earlierKeys
+        (selection := .selected payload same (library.entry callee).earlier)
+        (calleeAt callees callee).signature.outputs (calleeAt callees callee).role
+        (calleeAt callees callee).signature.outputScopes calleeOutputs calleeHistory frames layout
+        (ConnectionReturnProjection.form returnSelection
+          (ConnectionSubstitution.form (library.entry callee).form (fun binder => entryAt arguments binder))) spine.block)
+      (next : Form [] callees (.tuple (calleeAt callees callee).signature.outputs :: scope) out)
+      (continuationChecked : ConnectionReturnProjection.continuation returnSelection next = next)
       (rest : Block)
       (tail : Alignment routing context definitions callees (selection := .selected payload same library)
         out role scopes outputs history (frames.rename .there)
@@ -697,6 +752,7 @@ abbrev localQuery := @Alignment.localQuery
 abbrev «repeat» := @Alignment.repeat
 abbrev projectedRepeat := @Alignment.projectedRepeat
 abbrev application := @Alignment.application
+abbrev applicationRetainedHistory := @Alignment.applicationRetainedHistory
 abbrev guard := @Alignment.guard
 abbrev trueGuard := @Alignment.trueGuard
 abbrev falseGuard := @Alignment.falseGuard
@@ -734,6 +790,7 @@ def Alignment.size {routing : Original.Routing} {context : ProtocolContext} {def
       1 + body.size + tail.size
   | .projectedRepeat (bodyCertificate := body) (tail := tail) .. => 1 + body.size + tail.size
   | .application (bodyCertificate := body) (tail := tail) .. => 1 + body.size + tail.size
+  | .applicationRetainedHistory (bodyCertificate := body) (tail := tail) .. => 1 + body.size + tail.size
   | .guard _ _ _ _ _ tail => 1 + tail.size
   | .trueGuard _ _ tail => 1 + tail.size
 
@@ -1598,7 +1655,7 @@ private noncomputable def sound
         _ (related.projectedExit routing.context role spec.stateScopes binders value reached.history localEncoding) kept
   | @application context definitions callees out role scopes outputs history scope frames layout
       payload same library callee signature signatureMatch roles site arguments calleeOutputs calleeHistory
-      spine extent physicalExtent admission bodyCertificate next rest tail bodyIH tailIH =>
+      spine extent physicalExtent admission returnSelection bodyCertificate next continuationChecked rest tail bodyIH tailIH =>
     rcases selectionMeaning with ⟨rfl, rfl, rfl⟩
     subst definitions
     let selected := library.entry callee
@@ -1623,6 +1680,51 @@ private noncomputable def sound
         next.denoteOn model Occurrence.actions (Occurrence.helpers model payload) (LawResults.empty model)
           context runs (library.processes model) (.cons values binders)) state) _
     rw [library.processes_entry, ConnectionLibrary.Entry.process_form, ← instantiated,
+      ConnectionReturnProjection.bind_continuation returnSelection _ next continuationChecked,
+      Original.fold_bind, spine.plug_eq_bind]
+    apply aligned.bind
+    · intro _ frame kept
+      exact ArtifactBinding.captures_trans retained kept
+    · intro source frame returned
+      obtain ⟨returned, size⟩ := returned
+      have kept := ArtifactBinding.captures_trans retained returned.2.2.2
+      have nextRelated := related.applicationExit binders returned.2.2.2 extent size source.1
+        (calleeAt callees callee).role (calleeAt callees callee).signature.outputScopes calleeOutputs
+        returned.1 calleeHistory routing.context.suite returned.2.2.1
+      exact tailIH model (Occurrence.helpers model payload) (fun _ => rfl) runs
+        (Occurrence.table model payload) _runBinding (library.processes model) (library.holds model)
+        ⟨rfl,rfl,rfl⟩ expectedFrames source.2 returned.2.1 captured (.cons source.1 binders)
+        (returned.2.1.trans (stack.symm.trans reachedStack) |>.trans
+          (ScopedFrames.eval_rename .there binders _ (fun _ => rfl) frames).symm)
+        frame nextRelated kept
+  | @applicationRetainedHistory context definitions callees out role scopes outputs history scope frames layout
+      payload same library callee signature signatureMatch roles site arguments calleeOutputs calleeHistory
+      spine extent physicalExtent admission inputHistory separate returnSelection bodyCertificate next continuationChecked rest tail bodyIH tailIH =>
+    rcases selectionMeaning with ⟨rfl, rfl, rfl⟩
+    subst definitions
+    let selected := library.entry callee
+    have instantiated := ConnectionSubstitution.form_denote
+      (Arguments.eval (LawResults.empty model) arguments binders) binders
+      (fun binder => entryAt arguments binder) (ConnectionSubstitution.arguments_related arguments binders)
+      Occurrence.actions (Occurrence.helpers model payload) (context.enter site roles)
+      (runsAtOn model Occurrence.actions Occurrence.iterations (Occurrence.helpers model payload)
+        (Occurrence.table model payload) (context.enter site roles) (calleeAt callees callee).role)
+      (selected.earlier.processes model) selected.form
+    have aligned := bodyIH model (Occurrence.helpers model payload) (fun _ => rfl)
+      (runsAtOn model Occurrence.actions Occurrence.iterations (Occurrence.helpers model payload)
+        (Occurrence.table model payload) (context.enter site roles) (calleeAt callees callee).role)
+      (Occurrence.table model payload) rfl (selected.earlier.processes model) (selected.earlier.holds model)
+      ⟨rfl,rfl,rfl⟩ expectedFrames state stack environment binders reachedStack environment related
+      (by simp [ArtifactBinding.Captures])
+    have extentProof := physicalExtent.yields model environment related.length.symm
+    have aligned := aligned.withTargetInvariant extentProof
+    change Original.Simulation _ _ (Original.fold routing
+      ((library.processes model callee (context.enter site roles)
+        (Arguments.eval (LawResults.empty model) arguments binders)).bind fun values =>
+        next.denoteOn model Occurrence.actions (Occurrence.helpers model payload) (LawResults.empty model)
+          context runs (library.processes model) (.cons values binders)) state) _
+    rw [library.processes_entry, ConnectionLibrary.Entry.process_form, ← instantiated,
+      ConnectionReturnProjection.bind_continuation returnSelection _ next continuationChecked,
       Original.fold_bind, spine.plug_eq_bind]
     apply aligned.bind
     · intro _ frame kept

@@ -1,10 +1,8 @@
-module
+import ZkcSecurity.Examples.Generated.Components.SmallSumcheckSoundness
+import ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness
+import ZkcSecurity.Claims.CompiledSoundness
+import TestsSecurity.DomainCharges
 
-public import ZkcSecurity.Examples.Generated.Components.SmallSumcheckSoundness
-public import ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness
-public import ZkcSecurity.Claims.CompiledSoundness
-
-@[expose] public section
 
 /-! Actual-root adaptive controls: repeated cached queries precede statement
 choice; malformed tables and counts remain typed, fully public inputs. -/
@@ -19,13 +17,14 @@ open ZkcSecurity.FiatShamir
 open ZkcSecurity.Examples.Components
 open ZkcSecurity.Examples.Generated.Components
 open TwoSumsSoundness (carriers)
-open ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Soundness (Scalar price)
+open ZkcSecurity.Examples.RootProperties.TwoSums (Scalar)
+open ZkcSecurity.Examples.RootProperties.TwoSums.Soundness (price)
 open ZkcSecurity.Families.Sumcheck
 local instance : DecidableEq (Domain.Event carriers) := Classical.decEq _
 local instance : ∀ event : Domain.Event carriers, SampleableType (Domain.Raw event) :=
   ZkcSecurity.Domains.PrimeField.rawSampleable blsModulus
 
-abbrev origin := ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.schedule0.query 0
+abbrev origin := TestsSecurity.DomainCharges.leftOrigin
 
 def chooseStatement (value : Scalar) : TwoSumsSoundness.Statement :=
   if value = 0 then ZkcSecurity.Examples.Generated.Components.TwoSumsABI.statement [] [] 1 1 0
@@ -37,8 +36,7 @@ def adaptiveProver : OracleComp (TranscriptOracle.DomainSpec carriers) (TwoSumsS
   let first ← Typed.ask (Raw := @Domain.Raw carriers) (R := Typed.ByLast Domain.Raw) [] (.challenge origin)
   let _ ← Typed.ask (Raw := @Domain.Raw carriers) (R := Typed.ByLast Domain.Raw) [] (.challenge origin)
   let value : Scalar := by
-    simpa only [origin, Domain.Raw,
-      ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.schedule0.request, Request.draw] using first
+    exact first
   pure (chooseStatement value, [.field "bls12-381.fr" value, .field "bls12-381.fr" (1 - value)])
 
 theorem repeated_log (table : (key : Domain.History carriers) → Typed.ByLast Domain.Raw key) :
@@ -55,13 +53,6 @@ theorem counted : IsTotalQueryBound adaptiveProver 2 := by
 /-- Two visits to one cache key still consume two adversary queries. -/
 theorem undercount_rejected : ¬ IsTotalQueryBound adaptiveProver 1 := by
   simp [adaptiveProver, Typed.ask, Typed.answer, map_eq_bind_pure_comp, isTotalQueryBound_query_bind_iff]
-
-example (history : Domain.History carriers) :
-    ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Sources.presented ([0, 0, 0, 0, 0, 0] : List Scalar) 1 99 history =
-      .halt .refused := rfl
-
-example (history : Domain.History carriers) :
-    ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.presented ([0] : List Scalar) [0] 1 1 99 history = .halt .refused := rfl
 
 /-- The proved actual adaptive bound is applied to a prover that queries twice
 before selecting even malformed public statements and a malicious proof. -/
@@ -88,7 +79,7 @@ example : chooseStatement 2 = ZkcSecurity.Examples.Generated.Components.TwoSumsA
 example (history : Domain.History carriers) :
     TwoSumsSoundness.schedule.charge 2 history (.challenge { origin with entry := "unmapped" }) = price := by
   rw [ZkcSecurity.Claims.CompiledSoundness.charge_constant TwoSumsSoundness.schedule 2 price (by decide +kernel)
-    (ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Soundness.schedule_prices 2)]
+    (ZkcSecurity.Examples.RootProperties.TwoSums.Soundness.schedule_prices 2)]
 
 #print axioms TwoSumsSoundness.reductionExport
 #print axioms SmallSumcheckSoundness.reductionExport

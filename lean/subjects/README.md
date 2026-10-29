@@ -46,15 +46,16 @@ root.
 | `profiles` | `structured` | export, Data, Bodies and Views of the interactive protocol |
 | `profiles` | `construction` | original Data, constructed participant, generated glue, kernel checks |
 | `profiles` | `executable` | program data, executable facts, Lean lowering rule, runtime differential |
-| `profiles` | `scalar` | the scalar common-source contract in `[scalar]` |
+| `profiles` | `scalar` | the derived Common scalar contract over Structured participants in `[scalar]` |
 | `generated` | `data`, `bodies`, `participant`, `glue`, `program`, `facts` | generated modules of the Proof Entry |
 | `generated` | `interactive_data`, `interactive_bodies`, `interactive_views` | generated modules of the interactive protocol |
 | `generated` | `interactive_export`, `interactive_source` | retained JSON and MLIR of the interactive protocol |
 | `generated` | `original_export` | retained original JSON of the Proof Entry, before preparation or projection |
 | `generated` | `original_source` | exact original MLIR bytes of the Proof Entry that the retained JSON names |
 | `generated` | `artifacts`, `claims` | physical generated modules: artifact/compilation facts and exact source Wire.Request data with typed Lean resolution, evaluation and receipts |
-| `normal_forms` | `request` | normal-form request checked with `normal_forms.py --check`, then its output built before dependent receipts |
+| `source_views` | `selections` | Lean source-view catalogue selections; every output is regenerated, rebuilt and included in report freshness |
 | `lean` | `namespace`, `imports` | generated declaration namespace and maintained Lean registration imports; physical configuration only |
+| `lean` | `library` | optional qualified `ClaimConstruction.Library` declaration; defaults to `Registration.library` in the generated namespace |
 | `assumptions` | `requested` | identifiers of the assumption registry (`ZkcSecurity.Registry`) the author expects; the driver refuses others |
 | `mutations` | `kinds` | generic mutation kinds the driver applies (see below) |
 | `executable` | `threshold` | `"derived"`: the acceptance threshold comes from the Lean charge |
@@ -97,7 +98,7 @@ method. A source with no claims has no source receipt, even if maintained
 endpoint theorems exist. The separate scalar bridge remains selected by
 `scalar.properties`; it does not authorize source requests.
 
-For a configured Lean namespace, `Artifacts.lean` contains the freshly exported
+When `generated.artifacts` is configured, `Artifacts.lean` contains the freshly exported
 original, participant and optional program, plus checked admission and source
 connection facts. Executable claims explicitly name `generated.lowering`, whose
 module carries the separate byte-to-Domain transport; it imports the maintained
@@ -112,10 +113,16 @@ Each generated receipt is an `AdmittedReceipt`: it also carries the exact
 subject check and an actual model-resolution witness for the selected typed
 model registry. Method consumers use its enclosed generic receipt.
 
+A typed library may already own the actual subject and its independently checked
+artifact connections. In that case configure `lean.library` and its importing
+modules without `generated.artifacts`; the driver generates only the source
+request client. This changes physical ownership, not the request's meaning or
+required links. There is no property or theorem selection in Python.
+
 `Endpoints.lean` maintains the prior endpoint theorem APIs as independent
-regression clients. Generated Claims imports it for API continuity. Those
-statements are not rebuilt from source labels and never authorize source
-receipts. The six split modules are Schnorr, ChaumPedersen, SchnorrAnd, Okamoto
+regression clients. Source request clients import their selected typed libraries;
+they do not depend on those regression APIs. Their statements are not rebuilt
+from source labels and never authorize source receipts. The six split modules are Schnorr, ChaumPedersen, SchnorrAnd, Okamoto
 in the generic security package and Sumcheck, Guess in optional ArkLib. Their
 declaration namespaces remain `ZkcSecurity.Examples.Subjects.*`.
 

@@ -89,7 +89,7 @@ theorem importedReductionResidualBound {F G S E : Type}
       let e ← (SumcheckReduceViews.imported.program.participant F G 1
         (SumcheckReduceVerifier.reduceRootInputs xs dimension (some claim) (some n)
           (some handle))).runM
-            (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0,1]) handle]
+            (withUniformQueries network [queryKey (ProtocolContext.enter {} "s5" [0,1]) handle]
               before after) s
       pure (returnedSatisfies (residualObservation remaining n table) e)) ≤
         (n : ENNReal) / Fintype.card F :=

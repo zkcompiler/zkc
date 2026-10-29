@@ -34,7 +34,7 @@ def opaqueDeclaration : Relation :=
     formula := none
     staticArguments := [.index, .natural "2"] }
 def application (direction : ContractDirection) : RelationApplication :=
-  ⟨"All", [⟨direction, 0, "V"⟩, ⟨direction, 1, "V"⟩]⟩
+  ⟨"All", [⟨direction, 0, "V", false⟩, ⟨direction, 1, "V", false⟩]⟩
 def pending : OriginTerm := .nominal .record "PendingPair" []
 def ports : List SourcePort := [⟨"pair", pending, ["V"], 0, 2⟩]
 def plainInputs : List SourcePort :=
@@ -59,7 +59,7 @@ def original (declaration : Relation) : Snapshot :=
       some ⟨["V"], [["V"], ["V"]], [["V"], ["V"]]⟩, [], some (.protocol ⟨"repack", []⟩),
       .block [.instruction (.call "swap") [0, 1] pairTypes [] ""] (.ret [0, 1])⟩],
     [⟨"repack", [⟨.continuation, "next", application .input, some (application .output), none⟩]⟩,
-     ⟨"decide", [⟨.target, "truth", application .input, none, some ⟨.output, 0, "V"⟩⟩]⟩,
+     ⟨"decide", [⟨.target, "truth", application .input, none, some ⟨.output, 0, "V", false⟩⟩]⟩,
      ⟨"main", []⟩], blsRows,
     ⟨[⟨pending, "linear", true, [("first", .boolean), ("second", .boolean)]⟩],
       [⟨"repack", ports, ports⟩, ⟨"decide", ports, plainOutput⟩,

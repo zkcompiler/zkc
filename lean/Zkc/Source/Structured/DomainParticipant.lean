@@ -145,6 +145,8 @@ def protocolOperationWithOn {I : PIR.Signature} (observations : SiteObservations
       actions).bind fun result => .done (.cons result .nil)
   | .restrict _ roles, .cons value .nil =>
     .done (.cons (Participant.restrict ((roles.map context.roles).contains self) value) .nil)
+  | .assemble _ roles, values =>
+    .done (.cons (assembleComponent (fun role => context.roles role == self) none roles values) .nil)
   | .draw owner field site, args =>
     ((Participant.query (services := services) self (context.roles owner)
       (qualifyProtocolSite context.applicationPrefix site) field args).interpret

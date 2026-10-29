@@ -1,5 +1,6 @@
-import ZkcSecurity.Realizations.Gkr.HonestProducerCurrentExecution
-import ZkcSecurity.Realizations.Gkr.HonestProducerCurrentVerifier
+import ZkcSecurity.Realizations.Gkr.CanonicalReadback
+import ZkcExamples.Structured.SumcheckVerifierHelpers
+import ZkcExamples.Structured.GkrVerifierProcess
 
 set_option autoImplicit false
 set_option backward.isDefEq.respectTransparency false
@@ -116,10 +117,13 @@ theorem changed_helper :
 
 /-- The current source refuses a count outside its admitted repeat bound. -/
 theorem refused_round_count :
-    GkrRoundsNormalForms.proverRoundsProcess (F := ℚ) (G := ℚ) {} none none none none (some 5) =
+    Generated.Presentations.Gkr.Rounds.proverRoundsProcess (F := ℚ) (G := ℚ) {} none none none none (some 5) =
       .halt .refused := by
-  rw [GkrRoundsNormalForms.proverRoundsProcess, HonestProducerRounds.empty_plain]
-  norm_num [PIR.Process.bind, denoteRepeat, GkrRoundsNormalForms.roundSpec, ProtocolContext.roles]
+  unfold Generated.Presentations.Gkr.Rounds.proverRoundsProcess
+  change (invoke (plainHelpers (F := ℚ) (G := ℚ) GkrSourceViews.unit).closed
+    GkrSourceBodies.emptyHelper .nil).bind _ = _
+  rw [HonestProducerRounds.empty_plain]
+  norm_num [PIR.Process.bind, denoteRepeat, Generated.Presentations.Gkr.Rounds.roundSpec, ProtocolContext.roles]
 
 /-- The source association also elaborates for an independently chosen group
 carrier. No field/group equality or finite enumeration is used. -/
@@ -131,34 +135,24 @@ theorem current_distinct_group :
       HonestProducerSource.producer (G := ℚ × ℚ) {} mixed :=
   HonestProducerSource.original mixed [4352, 4352] admitted none
 
-/-- The actual current producer generates the replayed proof for two layers
-with both gate operations and independently proved output values. -/
-theorem actual_generated_proof (routing : Original.Routing) (replacement : Replacement)
-    (profile : routing.context.profile = .fiatShamir replacement)
-    (handle : Nat)
-    (service : Option Nat)
-    (state : HonestProducerComposition.State (F := ℚ) (G := ℚ × ℚ))
-    (outputRoutes : ∀ i, HonestProducer.OutputRoutes routing {} (state.frames ++ [⟨currentSites.output, i⟩]) handle)
-    (layerRoutes : ∀ i, HonestProducerObservedLayers.Routes routing {}
-      (state.frames ++ [⟨currentSites.layers, i⟩]) handle currentSites.layer)
-    (answers : QueryImpl (TranscriptOracle.DomainSpec (uniformCarriers ℚ (ℚ × ℚ))) Id)
-    (producerEnvironment validatorEnvironment : Domain.Environment (uniformCarriers ℚ (ℚ × ℚ)))
-    (preceding suffix : Domain.Proof (uniformCarriers ℚ (ℚ × ℚ))) :
-    ∃ history producerFinal validatorFinal producerEvents validatorEvents generated,
-      (Original.fold { routing with mode := .producer } (Occurrence.participant (ringModel ℚ (ℚ × ℚ)) GkrSourceViews.program 0
-        (currentInputs mixed [4352, 4352] service)) state).run
-        (Domain.handler .producer (HonestCompiled.tableOracle answers))
-        ⟨producerEnvironment, preceding, ()⟩ =
-          ⟨.returned (.cons none .nil, { state with history := history }),
-            ⟨producerFinal, preceding ++ generated, ()⟩, producerEvents⟩ ∧
-      (Original.fold { routing with mode := .validator }
-        (HonestProducerObserved.validator {} handle currentSites mixed [4352, 4352]) state).run
-        (Domain.handler .validator (HonestCompiled.tableOracle answers))
-        ⟨validatorEnvironment, generated ++ suffix, ()⟩ =
-          ⟨.returned (some true, { state with history := history }),
-            ⟨validatorFinal, suffix, ()⟩, validatorEvents⟩ :=
-  HonestProducerCurrentExecution.pair_returns routing replacement profile handle mixed [4352, 4352]
-    admitted correct service state outputRoutes layerRoutes answers producerEnvironment validatorEnvironment preceding suffix
+/-- The actual mixed-circuit source pair returns both complete rows, including
+the absent private producer Boolean and the present accepting validator Boolean.
+Every challenge reply and the missing producer service are retained. -/
+theorem actual_generated_proof (scope : ZkcSecurity.Source.PairScope)
+    (roles : scope.producer = 0 ∧ scope.validator = 1) (handle : Nat)
+    (outputDelivery : (GkrVerifier.outputSite {}, GkrVerifier.outputDeliverySite {}) ∈ scope.deliveries)
+    (leftDelivery : (GkrVerifier.challengeSite (GkrVerifier.leftContext {}),
+      GkrVerifier.deliverySite (GkrVerifier.leftContext {})) ∈ scope.deliveries)
+    (rightDelivery : (GkrVerifier.challengeSite (GkrVerifier.rightContext {}),
+      GkrVerifier.deliverySite (GkrVerifier.rightContext {})) ∈ scope.deliveries)
+    (lineDelivery : (GkrVerifier.lineChallengeSite {}, GkrVerifier.lineDeliverySite {}) ∈ scope.deliveries) :
+    ZkcSecurity.Source.Pair scope CanonicalReadback.Post
+      (Occurrence.participant (ringModel ℚ (ℚ × ℚ)) GkrSourceViews.program 0
+        (currentInputs mixed [4352, 4352] none))
+      (Occurrence.participant (ringModel ℚ (ℚ × ℚ)) GkrSourceViews.program 1
+        (currentInputs mixed [4352, 4352] (some handle))) :=
+  CanonicalReadback.actual mixed [4352, 4352] admitted correct handle none scope roles
+    outputDelivery leftDelivery rightDelivery lineDelivery
 
 /-- An invalid actual close refuses, preserving the actual stop. -/
 theorem unmatched_frame (routing : Original.Routing) :
@@ -167,18 +161,11 @@ theorem unmatched_frame (routing : Original.Routing) :
 
 #print axioms HonestProducerSource.observed
 #print axioms HonestProducerSource.layer_actual
-#print axioms HonestProducerCurrentExecution.producer_returns
-#print axioms HonestProducerCurrentExecution.pair
-#print axioms HonestProducerCurrentExecution.pair_returns
-#print axioms HonestProducerCurrentVerifier.same_verifier
 #print axioms actual_generated_proof
 #print axioms HonestProducerSource.original
-#print axioms HonestProducer.pair
 #print axioms HonestProducerOccurrences.rounds
 #print axioms HonestProducerObservedLayers.layer_pair
 #print axioms HonestProducerObserved.pair
-#print axioms HonestProducerExecution.producer_returns
-#print axioms HonestProducerExecution.pair_returns
 #print axioms HonestProducerOccurrences.producerRounds_prefix
 #print axioms current_distinct_group
 #print axioms unmatched_frame

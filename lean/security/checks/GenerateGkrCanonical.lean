@@ -27,18 +27,19 @@ run_cmd do
     let reduced ← Lean.Meta.withTransparency .all <| Lean.Meta.reduce (← Lean.instantiateMVars expression)
     Lean.Meta.evalExpr SubjectABI.Metadata (Lean.mkConst ``SubjectABI.Metadata) reduced
   let artifacts ← Lean.Elab.Command.liftTermElabM do
-    let reduced ← Lean.Meta.withTransparency .all <| Lean.Meta.reduce (Lean.mkConst ``CanonicalPair.artifacts)
+    let reduced ← Lean.Meta.withTransparency .all <| Lean.Meta.reduce (Lean.mkConst ``ZkcExamples.Construction.Generated.GkrPair.artifacts)
     Lean.Meta.evalExpr Zkc.Construction.AuthoredPair.Artifacts
       (Lean.mkConst ``Zkc.Construction.AuthoredPair.Artifacts) reduced
   let modulePrefix := "ZkcSecurity.Realizations.Gkr.Generated."
   let subject := modulePrefix ++ "Subject"
   let fixed : FixedSubjectOutput := {
+    connectionModule := "ZkcExamples.Structured.Generated.Connections.Gkr"
     moduleName := subject
     sourceModule := "ZkcSecurity.Realizations.Gkr.Canonical"
     originalExpression := "ZkcSecurity.Realizations.Gkr.Canonical.original"
     importedExpression := "ZkcSecurity.Realizations.Gkr.Canonical.imported"
-    pairModule := "ZkcSecurity.Realizations.Gkr.CanonicalPair"
-    artifactsExpression := "ZkcSecurity.Realizations.Gkr.CanonicalPair.artifacts"
+    pairModule := "ZkcExamples.Construction.Generated.GkrPair"
+    artifactsExpression := "ZkcExamples.Construction.Generated.GkrPair.artifacts"
     modelModule := "ZkcSecurity.Domains.PrimeField"
     modelExpression := "ZkcSecurity.Domains.PrimeField.blsScalarModel"
     targetName := "circuit_outputs"

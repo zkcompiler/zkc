@@ -1,7 +1,8 @@
 module
 
 public import ZkcSecurity.Realizations.Gkr.HonestProducerOccurrences
-public import ZkcSecurity.Realizations.Gkr.HonestProducerLayers
+public import ZkcSecurity.Realizations.Gkr.HonestProducerAlgorithm
+public import ZkcSecurity.Families.Gkr.Combination
 
 @[expose] public section
 
@@ -17,8 +18,8 @@ open Zkc Source Structured Construction
 open Zkc.Polynomial Zkc.Polynomial.Multilinear CoefficientRows
 open ZkcExamples.Structured
 open ZkcSecurity.Examples.Components
-open ZkcSecurity.FiatShamir HonestProducerComposition HonestProducerRounds
-open HonestProducerPackets HonestProducerSource HonestProducerLayers HonestProducerOccurrences
+open ZkcSecurity.Source HonestProducerRounds
+open HonestProducerPackets HonestProducerSource HonestProducerOccurrences
 
 variable {F G : Type} [Field F] [DecidableEq F]
 
@@ -29,25 +30,13 @@ structure Sites where
   right : String
   coefficients : String
 
-structure Routes (routing : Original.Routing) (ctx : ProtocolContext)
-    (frames : Original.Frames) (handle : Nat) (sites : Sites)
-    extends LineChallengeRoutes routing ctx frames handle where
-  left : ∀ index, HonestProducerPair.RoundRoutes routing (GkrSourceCallbacks.leftContext ctx)
-    (frames ++ [⟨sites.left, index⟩]) handle
-  right : ∀ index, HonestProducerPair.RoundRoutes routing (GkrSourceCallbacks.rightContext ctx)
-    (frames ++ [⟨sites.right, index⟩]) handle
-  packetOrigin : Nat → Origin
-  coefficient : ∀ index, routing.message (frames ++ [⟨sites.coefficients, index⟩])
-    (GkrSourceCallbacks.lineCoefficientSite ctx) routing.context.producer routing.context.validator =
-      some (packetOrigin index)
-
 def producerCoefficients (ctx : ProtocolContext) (site : String) : Nat → List F →
     PIR.Process (Signature F G) Unit
   | _, [] => .done ()
   | index, value :: rest =>
     (Occurrence.iterations.within site index
       ((@PIR.Process.call (participantInterface F G) Unit (.send (ty := .field "bls12-381.fr")
-        (GkrSourceCallbacks.lineCoefficientSite ctx) (ctx.roles 1) value) .done).interpret
+        (GkrVerifier.lineCoefficientSite ctx) (ctx.roles 1) value) .done).interpret
           Occurrence.actions)).bind fun _ => producerCoefficients ctx site (index + 1) rest
 
 def validatorCoefficients (ctx : ProtocolContext) (site : String) : Nat → Nat → List F →
@@ -73,42 +62,33 @@ theorem producerCoefficients_erase (ctx : ProtocolContext) (site : String) (inde
     exact ih (index + 1)
 
 omit [Field F] [DecidableEq F] in
-theorem coefficient_pair (routing : Original.Routing) (replacement : Replacement)
-    (profile : routing.context.profile = .fiatShamir replacement)
-    (ctx : ProtocolContext) (producer : ctx.roles 0 = routing.context.producer)
-    (validatorRole : ctx.roles 1 = routing.context.validator)
-    (site : String) (index : Nat) (state : State (F := F) (G := G)) (origins : Nat → Origin)
-    (route : ∀ i, routing.message (state.frames ++ [⟨site, i⟩])
-      (GkrSourceCallbacks.lineCoefficientSite ctx)
-      routing.context.producer routing.context.validator = some (origins i))
-    (values coefficients : List F) :
-    Readback (fun left right => ∃ history,
-      left = ((), { state with history := history }) ∧
-      right = (coefficients ++ values, { state with history := history }))
-      (Original.fold { routing with mode := .producer } (producerCoefficients ctx site index values) state)
-      (Original.fold { routing with mode := .validator }
-        (validatorCoefficients ctx site index values.length coefficients) state) := by
-  induction values generalizing index coefficients state with
-  | nil => exact .done ⟨state.history, rfl, by simp⟩
+theorem coefficient_pair (ctx : ProtocolContext) (scope : PairScope)
+    (roles : ctx.roles 0 = scope.producer ∧ ctx.roles 1 = scope.validator)
+    (site : String) (index : Nat) (values coefficients : List F) :
+    Pair scope (fun _ received => received = coefficients ++ values)
+      (producerCoefficients (G := G) ctx site index values)
+      (validatorCoefficients ctx site index values.length coefficients) := by
+  induction values generalizing index coefficients with
+  | nil => exact .done (by simp)
   | cons value rest ih =>
-    rw [producerCoefficients, List.length_cons, validatorCoefficients, Original.fold_bind, Original.fold_bind]
-    let entered : State (F := F) (G := G) := { state with frames := state.frames ++ [⟨site, index⟩] }
-    have one := HonestProducerLayers.coefficient_pair routing replacement profile ctx producer validatorRole
-      entered (origins index) (route index) [value] coefficients
-    simp only [sendTail, PIR.repeatN, List.length_cons, List.length_nil, PIR.Process.bind_done,
-      HonestProducerPair.validator] at one
-    have wrapped := within routing site index state _ _
-      (fun left right => ∃ history,
-        left = ((), { state with history := history }) ∧
-        right = (coefficients ++ [value], { state with history := history }))
-      (one.mono (by
-        rintro left right ⟨history, rfl, rfl⟩
-        exact ⟨rfl, rfl, history, rfl, rfl⟩))
-    apply wrapped.bind
-    rintro left right ⟨history, rfl, rfl⟩
-    apply (ih (index + 1) { state with history := history } route (coefficients ++ [value])).mono
-    rintro left right ⟨history, rfl, rfl⟩
-    exact ⟨history, rfl, by simp only [List.append_assoc, List.singleton_append]⟩
+    rw [producerCoefficients, List.length_cons, validatorCoefficients]
+    have one : Pair scope (fun (_ : Unit) next => next = coefficients ++ [value])
+        ((@PIR.Process.call (participantInterface F G) Unit (.send (ty := .field "bls12-381.fr")
+          (GkrVerifier.lineCoefficientSite ctx) (ctx.roles 1) value) .done).interpret Occurrence.actions)
+        (((GkrVerifier.lineCoefficient ctx coefficients).interpret CommonAdapter.embed).interpret Occurrence.actions) :=
+      by
+        simp only [GkrVerifier.lineCoefficient, PIR.Process.interpret,
+          CommonAdapter.embed, Occurrence.actions, PIR.Process.bind,
+          GkrVerifier.lineCoefficientSite, GkrVerifier.lineCoefficientSite]
+        rw [show (@PIR.Process.done (Signature F G) Unit) = (fun _ => .done ()) from by
+          funext reply; cases reply; rfl]
+        apply Pair.message _ _ _ _ _ rfl roles
+        exact .done rfl
+    exact (one.within site index).bind _ _ (by
+      rintro ignored received rfl
+      apply (ih (index + 1) (coefficients ++ [value])).mono
+      intro _ result same
+      simpa only [List.append_assoc, List.singleton_append] using same)
 
 omit [Field F] [DecidableEq F] in
 theorem validatorCoefficients_erase (ctx : ProtocolContext) (site : String)
@@ -129,26 +109,26 @@ noncomputable def producerLayer (ctx : ProtocolContext) (sites : Sites) {width :
     (circuit : Families.Gkr.Circuit F width) (remaining index : Nat) (point : List F) :
     PIR.Process (Signature F G) (List F) :=
   let reference := Circuit.factors circuit remaining index (coordinates width point)
-  (producerRounds (GkrSourceCallbacks.leftContext ctx) sites.left 0 width (n := width)
+  (producerRounds (GkrVerifier.leftContext ctx) sites.left 0 width (n := width)
     reference (encode reference) []).bind fun left =>
-  (producerRounds (GkrSourceCallbacks.rightContext ctx) sites.right 0 width (n := 0)
+  (producerRounds (GkrVerifier.rightContext ctx) sites.right 0 width (n := 0)
     ((Nat.zero_add width).symm ▸ left.reference) left.raw []).bind fun right =>
   let coefficients := line (circuit.wires remaining (index + 1)) left.point right.point
   ((@PIR.Process.call (participantInterface F G) Unit (.send (ty := .field "bls12-381.fr")
-    (GkrSourceCallbacks.lineConstantSite ctx) (ctx.roles 1) ((coefficients)[0]?.getD 0)) .done).interpret
+    (GkrVerifier.lineConstantSite ctx) (ctx.roles 1) ((coefficients)[0]?.getD 0)) .done).interpret
       Occurrence.actions).bind fun _ =>
   (producerCoefficients ctx sites.coefficients 0 (tail coefficients 0 width)).bind fun _ =>
   ((@PIR.Process.call (participantInterface F G) F (.receive (.field "bls12-381.fr")
-    (GkrSourceCallbacks.lineDeliverySite ctx) (ctx.roles 1)) .done).interpret Occurrence.actions).bind fun r =>
+    (GkrVerifier.lineDeliverySite ctx) (ctx.roles 1)) .done).interpret Occurrence.actions).bind fun r =>
   .done (linePoints left.point right.point r)
 
 def validatorLayer (ctx : ProtocolContext) (handle width : Nat) (sites : Sites)
     (add mul : Nat → Table F (width + width + width)) (value : Nat × List F × F) :
     PIR.Process (Signature F G) (Nat × List F × F) :=
-  (validatorRounds (GkrSourceCallbacks.leftContext ctx) handle sites.left 0 width ([], value.2.2)).bind fun left =>
-  (validatorRounds (GkrSourceCallbacks.rightContext ctx) handle sites.right 0 width ([], left.2)).bind fun right =>
+  (validatorRounds (GkrVerifier.leftContext ctx) handle sites.left 0 width ([], value.2.2)).bind fun left =>
+  (validatorRounds (GkrVerifier.rightContext ctx) handle sites.right 0 width ([], left.2)).bind fun right =>
   (((@PIR.Process.call (Actions F G) F (.receive (.field "bls12-381.fr")
-    (GkrSourceCallbacks.lineConstantSite ctx) (ctx.roles 0)) .done).interpret
+    (GkrVerifier.lineConstantSite ctx) (ctx.roles 0)) .done).interpret
       CommonAdapter.embed).interpret Occurrence.actions).bind fun constant =>
   (validatorCoefficients ctx sites.coefficients 0 width [constant]).bind fun coefficients =>
   (((GkrVerifier.lineCheck ctx handle width (add value.1) (mul value.1) value left.1 right.1 right.2 constant coefficients).interpret
@@ -173,48 +153,70 @@ theorem validatorLayer_erase (ctx : ProtocolContext) (handle width : Nat) (sites
   simp only [PIR.Process.interpret, PIR.Process.bind, CommonAdapter.embed, GkrVerifier.rounds,
     PIR.Process.interpret_bind]
 
-theorem layer_pair (routing : Original.Routing) (replacement : Replacement)
-    (profile : routing.context.profile = .fiatShamir replacement)
-    (ctx : ProtocolContext) (handle : Nat) (sites : Sites) {width : Nat}
+omit [DecidableEq F] in
+theorem gate_terminal {width : Nat} (circuit : Families.Gkr.Circuit F width)
+    (remaining index : Nat) (point left right : List F)
+    (pointSize : point.length = width) (leftSize : left.length = width) (rightSize : right.length = width) :
+    Rounds.value (Circuit.factors circuit remaining index (coordinates width point))
+      (coordinates (width + width) (left ++ right)) =
+      GkrVerifier.wiringValue
+        (extension (width + width + width) (circuit.add index)
+          (coordinates (width + width + width) (point ++ left ++ right)))
+        (extension (width + width + width) (circuit.mul index)
+          (coordinates (width + width + width) (point ++ left ++ right)))
+        (extension width (circuit.wires remaining (index + 1)) (coordinates width left))
+        (extension width (circuit.wires remaining (index + 1)) (coordinates width right)) := by
+  have law := Circuit.factors_evaluation circuit remaining index (coordinates width point)
+    (coordinates width left) (coordinates width right)
+  dsimp only at law
+  rw [← coordinates_three _ _ _ pointSize leftSize rightSize,
+    point_coordinates width _ _ leftSize rightSize] at law
+  exact law
+
+/-- Both Sumcheck applications and the line polynomial compose at the source
+level. Roles, deliveries and full returned values precede routing installation. -/
+theorem layer_pair (ctx : ProtocolContext) (scope : PairScope)
+    (roles : ctx.roles 0 = scope.producer ∧ ctx.roles 1 = scope.validator)
+    (handle : Nat) (sites : Sites) {width : Nat}
     (circuit : Families.Gkr.Circuit F width) (remaining index : Nat)
     (point : List F) (pointSize : point.length = width)
-    (state : State (F := F) (G := G)) (routes : Routes routing ctx state.frames handle sites) :
-    Readback (fun left right => ∃ next history,
-      left = (next, { state with history := history }) ∧
-      right = ((index + 1, next, extension width (circuit.wires remaining (index + 1))
-        (coordinates width next)), { state with history := history }) ∧ next.length = width)
-      (Original.fold { routing with mode := .producer }
-        (producerLayer ctx sites circuit remaining index point) state)
-      (Original.fold { routing with mode := .validator }
-        (validatorLayer ctx handle width sites circuit.add circuit.mul
-          (index, point, extension width (circuit.wires (remaining + 1) index) (coordinates width point))) state) := by
+    (leftDelivery : (GkrVerifier.challengeSite (GkrVerifier.leftContext ctx),
+      GkrVerifier.deliverySite (GkrVerifier.leftContext ctx)) ∈ scope.deliveries)
+    (rightDelivery : (GkrVerifier.challengeSite (GkrVerifier.rightContext ctx),
+      GkrVerifier.deliverySite (GkrVerifier.rightContext ctx)) ∈ scope.deliveries)
+    (lineDelivery : (GkrVerifier.lineChallengeSite ctx,
+      GkrVerifier.lineDeliverySite ctx) ∈ scope.deliveries) :
+    Pair scope (fun next value => value =
+      (index + 1, next, extension width (circuit.wires remaining (index + 1))
+        (coordinates width next)) ∧ next.length = width)
+      (producerLayer (G := G) ctx sites circuit remaining index point)
+      (validatorLayer ctx handle width sites circuit.add circuit.mul
+        (index, point, extension width (circuit.wires (remaining + 1) index) (coordinates width point))) := by
   let reference := Circuit.factors circuit remaining index (coordinates width point)
   have allowed := Circuit.factors_admissible circuit remaining index (coordinates width point)
   unfold producerLayer validatorLayer
   dsimp only
-  rw [Original.fold_bind, Original.fold_bind]
   rw [Circuit.layer_identity]
-  apply (frame_left (HonestProducerOccurrences.rounds routing replacement profile (GkrSourceCallbacks.leftContext ctx) handle sites.left 0 width
-    reference (encode reference) [] allowed state routes.left)
-    (fold_yields _ _ _ (erased_yields _ _ (by
-      rw [producerRounds_erase]
-      exact execute_yields _ width reference (encode reference) [] (encode_decodes reference) allowed)) state)).bind
-  rintro l v ⟨⟨left, leftHistory, rfl, rfl⟩, leftDecoded, leftAllowed,
-    leftSuffix, leftPoint, leftSize, leftAnchor⟩
+  have left := (rounds (G := G) (GkrVerifier.leftContext ctx) scope roles handle sites.left 0 width
+    reference (encode reference) [] allowed leftDelivery).frame_left
+      (erased_yields _ _ (by
+        rw [producerRounds_erase]
+        exact execute_yields _ width reference (encode reference) [] (encode_decodes reference) allowed))
+  apply left.bind
+  rintro left value ⟨rfl, leftDecoded, leftAllowed, leftSuffix, leftPoint, leftSize, leftAnchor⟩
   have leftLength : left.point.length = width := by simp_all
   have leftPointEq : left.point = leftSuffix := by simpa only [List.nil_append] using leftPoint
-  let afterLeft : State (F := F) (G := G) := { state with history := leftHistory }
   let rightReference : GkrRoundsReference.State F (0 + width) := (Nat.zero_add width).symm ▸ left.reference
   have rightDecoded := cast_decodes (Nat.zero_add width).symm left.reference left.raw leftDecoded
   have rightAllowed := cast_admissible (Nat.zero_add width).symm left.reference leftAllowed
-  simp only [Original.fold_bind]
-  have pairedRight := HonestProducerOccurrences.rounds (F := F) (G := G) routing replacement profile
-    (GkrSourceCallbacks.rightContext ctx) handle sites.right 0 width rightReference left.raw [] rightAllowed afterLeft routes.right
-  rw [cast_total] at pairedRight
-  apply (frame_left pairedRight (fold_yields _ _ _ (erased_yields _ _ (by
-      rw [producerRounds_erase]
-      exact execute_yields _ width rightReference left.raw [] rightDecoded rightAllowed)) afterLeft)).bind
-  rintro l v ⟨⟨right, rightHistory, rfl, rfl⟩, _, _, rightSuffix, rightPoint, rightSize, rightAnchor⟩
+  have right := (rounds (G := G) (GkrVerifier.rightContext ctx) scope roles handle sites.right 0 width
+    rightReference left.raw [] rightAllowed rightDelivery).frame_left
+      (erased_yields _ _ (by
+        rw [producerRounds_erase]
+        exact execute_yields _ width rightReference left.raw [] rightDecoded rightAllowed))
+  rw [cast_total] at right
+  apply right.bind
+  rintro right value ⟨rfl, _, _, rightSuffix, rightPoint, rightSize, rightAnchor⟩
   have rightLength : right.point.length = width := by simp_all
   have rightPointEq : right.point = rightSuffix := by simpa only [List.nil_append] using rightPoint
   let coefficients := line (circuit.wires remaining (index + 1)) left.point right.point
@@ -238,47 +240,24 @@ theorem layer_pair (routing : Original.Routing) (replacement : Replacement)
     rw [show (coefficients)[0]?.getD 0 = coefficients.headD 0 from by cases coefficients <;> rfl,
       endpoints.1, endpoints.2]
     exact terminal.trans gate
-  let afterRight : State (F := F) (G := G) := { state with history := rightHistory }
-  have constant := message (F := F) (G := G) routing replacement profile afterRight
-    (GkrSourceCallbacks.lineConstantSite ctx) "bls12-381.fr" ((coefficients)[0]?.getD 0)
-    routes.constantOrigin routes.constantRoute
-  rw [← routes.validator, ← routes.producer] at constant
-  apply constant.bind
-  rintro l v ⟨rfl, rfl⟩
-  let afterConstant : State (F := F) (G := G) := { afterRight with history := afterRight.history ++
-    [.message routes.constantOrigin (.field "bls12-381.fr" ((coefficients)[0]?.getD 0))] }
-  have packets := coefficient_pair (F := F) (G := G) routing replacement profile ctx routes.producer routes.validator
-    sites.coefficients 0 afterConstant routes.packetOrigin routes.coefficient (tail coefficients 0 width) [((coefficients)[0]?.getD 0)]
+  change Pair scope _ (.call (.action (.send _ _ _)) _) (.call (.action (.receive _ _ _)) _)
+  apply Pair.message _ _ _ _ _ rfl roles
   have tailSize : (tail coefficients 0 width).length = width := by simp [tail]
+  have packets := coefficient_pair (G := G) ctx scope roles sites.coefficients 0
+    (tail coefficients 0 width) [((coefficients)[0]?.getD 0)]
   rw [tailSize] at packets
   apply packets.bind
-  rintro l v ⟨history, rfl, rfl⟩
+  rintro ignored received rfl
   rw [show [((coefficients)[0]?.getD 0)] ++ tail coefficients 0 width = coefficients from
     reconstruct coefficients width coefficientSize]
-  let beforeDraw : State (F := F) (G := G) := { state with history := history }
-  change Readback _
-    ((constructed { routing with mode := .producer }
-      (.call (.receive (.field "bls12-381.fr") (GkrSourceCallbacks.lineDeliverySite ctx) (ctx.roles 1)) .done)
-        beforeDraw).bind fun result =>
-      constructed { routing with mode := .producer } (.done (linePoints left.point right.point result.1)) result.2)
-    (HonestProducerPair.validator routing
-      (GkrVerifier.lineCheck ctx handle width (circuit.add index) (circuit.mul index)
-        (index, point, GkrRoundsReference.total reference) left.point right.point
-        (GkrRoundsReference.total right.reference) ((coefficients)[0]?.getD 0) coefficients) beforeDraw)
-  rw [← constructed_bind (F := F) (G := G) { routing with mode := .producer }
-    (.call (.receive (.field "bls12-381.fr") (GkrSourceCallbacks.lineDeliverySite ctx) (ctx.roles 1)) .done)
-    (fun r => .done (linePoints left.point right.point r)) beforeDraw]
-  simp only [GkrVerifier.lineCheck, PIR.Process.bind]
-  rw [ite_eq_left checked]
-  simp only [GkrVerifier.lineDelivery, HonestProducerPair.validator,
-    PIR.Process.interpret, CommonAdapter.embed, PIR.Process.bind]
-  rw [routes.validator, routes.producer]
-  apply challenge_step routing replacement profile beforeDraw _ _ "bls12-381.fr" handle routes.drawOrigin
-    routes.deliveryOrigin routes.deliveryRoute routes.queryRoute routes.sentRoute routes.request
+  dsimp only [coefficients] at checked ⊢
+  simp only [GkrVerifier.lineCheck, checked, ↓reduceIte, GkrVerifier.lineDelivery,
+    PIR.Process.interpret, CommonAdapter.embed, Occurrence.actions, PIR.Process.bind]
+  apply Pair.challenge _ _ _ _ _ _ roles lineDelivery
   intro r
-  apply Readback.done
-  refine ⟨linePoints left.point right.point r, _, rfl, ?_, ?_⟩
-  · congr 2
+  apply Pair.done
+  constructor
+  · congr 1
     rw [Families.Gkr.Combination.honest_evaluation _ _ _ _ polynomial,
       coordinates_linePoints _ _ _ leftLength rightLength]
   · simp only [linePoints_length, leftLength, rightLength, min_self]
