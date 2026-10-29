@@ -63,9 +63,16 @@ def test_oracle_merkle_layout_and_authentication(toolchain, directory, journal):
 
 def test_oracle_commitment_roots(toolchain, directory, journal):
     artifacts = directory / "roots"
-    journal.run([
-        toolchain.tool("compiler", "test/zkc-oracle_commitment_roots-test"), artifacts,
-    ], keep="compiler.txt", timeout=600)
+    # Bound each source client independently as the query inventory grows.
+    for fixture in (
+        "send-dynamic", "send-fixed", "input-dynamic", "input-fixed",
+        "query-recurrence", "query-zero-trailing", "query-zero-only",
+        "selection order is canonical", "query policies never silently fall back",
+    ):
+        journal.run([
+            toolchain.tool("compiler", "test/zkc-oracle_commitment_roots-test"),
+            artifacts, fixture,
+        ], keep=f"compiler-{fixture.replace(' ', '-')}.txt", timeout=600)
     journal.run([
         toolchain.driver("oracle_commitment_roots"), artifacts,
     ], keep="native.txt")

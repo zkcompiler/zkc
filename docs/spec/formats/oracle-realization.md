@@ -110,8 +110,7 @@ A holder checks its own Data and shape, commits it and retains Data plus private
 opening state. A send delivers only the root. A receiver checks its own expected
 shape, including the selected layout's positive power-of-two premise, and stores
 that shape with the root. Input construction does not equate the supplied root
-with a commitment to the holder's Data. Query authentication, when implemented,
-must use that same stored root and expected shape.
+with a commitment to the holder's Data. Query authentication uses that same stored root and expected shape.
 
 Appended support stores are native representation leaves, distinguished from authored results by the result maps.
 They do not establish a general logical-handle codec or cross-entry graph ABI.
@@ -158,6 +157,43 @@ Two originals can select different named targets yet produce identical native
 code; their records still differ. A standalone executable candidate therefore
 carries no authority to publish either original logical claim. Production claim
 publication must consume and interpret the complete checked edge.
+
+## Common opening communication
+
+The current immediate-query profile has one remote base constructor in the
+receiver controller's inventory. That constructor may allocate many instances,
+and virtual constructions may form a recurrent graph over those instances.
+The enclosing common regions must already include the holder.
+Multiple base constructors, mixed local/remote bases and selection across holders
+refuse with `oracle-common-communication-profile`. This is a realization
+capability restriction, not a restriction on logical oracle formation or an
+implicit switch to ideal data.
+
+A query initializes its controller from the actual reference and position and
+advances it before opening communication. Each suspension checks its phase,
+constructor and answer kind. The receiver sends the actual instance and position
+to the fixed holder as two ordered ordinary exchanges. The holder loads that
+instance's private opening state and shape, opens it, and sends the complete row
+then the proof as two ordered exchanges. The receiver loads the root and expected
+shape through the **suspended reference**, authenticates at the **suspended
+position**, and resumes with the original five request/continuation coordinates.
+An untrusted response cannot select a different anchor, position or continuation.
+The complete common-body reader checks all these SSA associations and sites;
+checking the opening helpers alone would not establish them.
+
+When virtual constructors are present, the queried handle must already be
+available at both receiver and holder. Each role computes the structural leaf
+count from its own component and immutable stores; role assembly supplies the
+counted loop's pointwise count. Assembly establishes availability, not component
+agreement. No extra count message exposes later work before it is reached.
+Without virtual constructors, a base query has exactly one leaf and needs no
+holder-side handle. The loop carries receiver-only controller state and captures
+the appropriate role stores. It advances after every authenticated answer,
+including the last, before finishing the outer query. Thus an invalid later or
+zero-query virtual child retains the prior opening prefix but prevents the outer
+answer. Zero structural leaves perform no opening exchanges. Duplicate and
+unused queries remain separate reached openings. There is no batching in this
+profile, and complete multi-constructor/multi-holder routing remains unfinished.
 
 ## Controller metadata
 

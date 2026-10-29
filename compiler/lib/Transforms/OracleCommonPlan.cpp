@@ -750,6 +750,232 @@ struct PlanBuilder {
       store[key] = (*outputs)[repeat.getCarried() + i];
     return Error::success();
   }
+  // The counted common language has static peers. This profile has one
+  // remote base constructor, possibly many instances and virtual ancestors.
+  // It never broadcasts a dynamically selected request. General multi-holder
+  // selection needs a checked knowledge-of-choice communication rule.
+  Expected<IDs> remoteQuery(OracleCommonBlock &block, pir::OracleQueryOp query,
+                            const OracleQueryController &receiver,
+                            ArrayRef<unsigned> arguments,
+                            ArrayRef<unsigned> path) {
+    using C = OracleQueryController;
+    const OracleQueryControllerConstructor *base = nullptr;
+    bool hasVirtual = false;
+    for (const auto &item : receiver.constructors) {
+      const auto &anchor = requirements.storage.constructors[item.source];
+      if (anchor.constructor == OracleAnchorConstructor::Kind::Virtual) {
+        hasVirtual = true;
+        continue;
+      }
+      if (base || anchor.scheme.empty() || anchor.holder == receiver.role)
+        return error("oracle-common-communication-profile");
+      base = &item;
+    }
+    if (!base)
+      return error("oracle-common-communication-profile");
+    const auto &anchor = requirements.storage.constructors[base->source];
+    auto *holder =
+        controller(anchor.holder, query.getHandle().getType().getKind());
+    if (!holder)
+      return error("oracle-common-helper");
+    auto holderBase = find_if(holder->constructors, [&](const auto &item) {
+      return item.source == base->source;
+    });
+    if (holderBase == holder->constructors.end())
+      return error("oracle-common-helper");
+    auto receiverStores = stores(receiver);
+    if (!receiverStores)
+      return receiverStores.takeError();
+    auto holderStore = store.find({base->source, holderBase->role});
+    if (holderStore == store.end())
+      return error("oracle-common-communication-profile");
+    auto initial = call(block, receiver.initialize, receiver.role, arguments,
+                        site(path, "query_initialize", receiver.role));
+    if (!initial)
+      return initial.takeError();
+    IDs advanceInputs = *initial;
+    append_range(advanceInputs, *receiverStores);
+    // The first domain/position check precedes any opening communication.
+    auto state = call(block, receiver.advance, receiver.role, advanceInputs,
+                      site(path, "query_advance", receiver.role));
+    if (!state)
+      return state.takeError();
+    Expected<unsigned> count = constant(block, 1);
+    if (!count)
+      return count.takeError();
+    if (hasVirtual) {
+      // Each participant computes its own component from an already available
+      // handle. Sending a future request count would disclose work that a
+      // failed authentication or later domain check may never reach.
+      auto roles = handleRoles(query.getHandle());
+      if (!roles)
+        return roles.takeError();
+      if (!is_contained(*roles, anchor.holder))
+        return error("oracle-common-communication-profile");
+      IDs counts;
+      std::vector<std::string> owners{receiver.role, anchor.holder};
+      for (const auto *body : {&receiver, holder}) {
+        auto captures = stores(*body);
+        if (!captures)
+          return captures.takeError();
+        IDs inputs{arguments[0]};
+        append_range(inputs, *captures);
+        auto counted = call(block, body->leafCounts[0], body->role, inputs,
+                            site(path, "query_count", body->role));
+        if (!counted)
+          return counted.takeError();
+        counts.push_back(counted->front());
+      }
+      count = assemble(block, index, counts, owners);
+      if (!count)
+        return count.takeError();
+    }
+    auto request = local(receiver.state, TypeRange{index, index});
+    same(request, C::Phase, number(request, C::Request));
+    same(request, C::Constructor, number(request, base->source));
+    same(request, C::Kind, number(request, base->kind));
+    request.results = {C::Instance, C::Position};
+    auto region = std::make_shared<OracleCommonBlock>();
+    region->types = {index};
+    append_range(region->types, receiver.state);
+    append_range(region->types, receiver.stores);
+    region->types.push_back(anchor.roles[holderBase->role].sequence);
+    for ([[maybe_unused]] auto type : region->types)
+      region->arguments.push_back(id());
+    auto stateStart = region->arguments.begin() + 1;
+    IDs suspended(stateStart, stateStart + receiver.state.size());
+    IDs captures(stateStart + receiver.state.size(),
+                 region->arguments.end() - 1);
+    auto requestValues = call(*region, request, receiver.role, suspended,
+                              site(path, "opening_request", receiver.role));
+    if (!requestValues)
+      return requestValues.takeError();
+    result.locals.push_back(std::move(request));
+    auto exchange = [&](unsigned input, Type type, StringRef sender,
+                        StringRef recipient,
+                        StringRef purpose) -> Expected<unsigned> {
+      auto output =
+          make(*region, "protocol.exchange", type, {input},
+               attrs({text("sender", sender), text("receiver", recipient),
+                      text("site", site(path, purpose, recipient))}));
+      if (!output)
+        return output.takeError();
+      return output->front();
+    };
+    auto instance = exchange((*requestValues)[0], index, receiver.role,
+                             anchor.holder, "opening_instance");
+    if (!instance)
+      return instance.takeError();
+    auto position = exchange((*requestValues)[1], index, receiver.role,
+                             anchor.holder, "opening_position");
+    if (!position)
+      return position.takeError();
+    auto tag = constant(*region, base->source);
+    if (!tag)
+      return tag.takeError();
+    auto reference = oracleReferenceType(anchor.kind);
+    if (!reference)
+      return reference.takeError();
+    auto heldReference =
+        make(*region, "data.make", *reference, {*tag, *instance},
+             attrs({text("alternative", "Record")}));
+    if (!heldReference)
+      return heldReference.takeError();
+    auto held = call(*region, holderBase->lookup, anchor.holder,
+                     {heldReference->front(), region->arguments.back()},
+                     site(path, "opening_anchor", anchor.holder));
+    if (!held)
+      return held.takeError();
+    auto field = [&](unsigned role, StringRef name) -> unsigned {
+      const auto &fields = anchor.roles[role].fields;
+      return find_if(fields,
+                     [&](const auto &item) { return item.name == name; }) -
+             fields.begin();
+    };
+    auto opening = field(holderBase->role, "opening_state");
+    auto holderRows = field(holderBase->role, "shape.rows");
+    auto root = field(base->role, "root");
+    auto receiverRows = field(base->role, "shape.rows");
+    if (opening >= held->size() || holderRows >= held->size() ||
+        root >= anchor.roles[base->role].fields.size() ||
+        receiverRows >= anchor.roles[base->role].fields.size())
+      return error("oracle-common-helper");
+    auto functions = merkle[base->source];
+    auto opened = call(*region, functions.open, anchor.holder,
+                       {(*held)[opening], (*held)[holderRows], *position},
+                       site(path, "opening", anchor.holder));
+    if (!opened)
+      return opened.takeError();
+    auto payload = cast<exec::OutcomeType>(functions.open.getResultTypes()[0])
+                       .getPayload();
+    auto row = exchange((*opened)[0], payload[0], anchor.holder, receiver.role,
+                        "opening_row");
+    if (!row)
+      return row.takeError();
+    auto proof = exchange((*opened)[1], payload[1], anchor.holder,
+                          receiver.role, "opening_proof");
+    if (!proof)
+      return proof.takeError();
+    auto receiverSlot = base - receiver.constructors.data();
+    auto receivedReference =
+        make(*region, "data.make", *reference,
+             {suspended[C::Constructor], suspended[C::Instance]},
+             attrs({text("alternative", "Record")}));
+    if (!receivedReference)
+      return receivedReference.takeError();
+    auto received = call(*region, base->lookup, receiver.role,
+                         {receivedReference->front(), captures[receiverSlot]},
+                         site(path, "authenticated_anchor", receiver.role));
+    if (!received)
+      return received.takeError();
+    auto answer = call(*region, functions.authenticate, receiver.role,
+                       {(*received)[root], (*received)[receiverRows],
+                        suspended[C::Position], *row, *proof},
+                       site(path, "authenticate", receiver.role));
+    if (!answer)
+      return answer.takeError();
+    IDs resumedInputs = suspended;
+    append_range(resumedInputs, ArrayRef<unsigned>(suspended).take_front(5));
+    resumedInputs.push_back(answer->front());
+    auto resumed =
+        call(*region, receiver.resume[base->kind], receiver.role, resumedInputs,
+             site(path, "query_resume", receiver.role));
+    if (!resumed)
+      return resumed.takeError();
+    append_range(*resumed, captures);
+    // Including after the last opening: trailing zero-query virtual children
+    // still run their domain checks before the outer answer can be returned.
+    auto advanced = call(*region, receiver.advance, receiver.role, *resumed,
+                         site(path, "query_continue", receiver.role));
+    if (!advanced)
+      return advanced.takeError();
+    auto yield = make(*region, "protocol.yield", {}, *advanced);
+    if (!yield)
+      return yield.takeError();
+    IDs loopInputs{*count};
+    append_range(loopInputs, *state);
+    append_range(loopInputs, *receiverStores);
+    loopInputs.push_back(holderStore->second);
+    SmallVector<Attribute> carried(receiver.state.size(),
+                                   builder.getStrArrayAttr({receiver.role}));
+    auto final = make(
+        block, "protocol.repeat", receiver.state, loopInputs,
+        attrs(
+            {text("site", site(path, "query_requests", receiver.role)),
+             builder.getNamedAttr(
+                 "carried", builder.getI64IntegerAttr(receiver.state.size())),
+             builder.getNamedAttr("maximum", builder.getI64IntegerAttr(
+                                                 receiver.capacity.leaves)),
+             builder.getNamedAttr("roles", builder.getStrArrayAttr(
+                                               {anchor.holder, receiver.role})),
+             builder.getNamedAttr("carried_roles",
+                                  builder.getArrayAttr(carried))}),
+        region);
+    if (!final)
+      return final.takeError();
+    return call(block, receiver.finish, receiver.role, *final,
+                site(path, "query_finish", receiver.role));
+  }
   Error visit(OracleCommonBlock &block, Block &original,
               std::vector<unsigned> prefix, unsigned depth,
               ArrayRef<std::pair<unsigned, unsigned>> yieldedStores = {}) {
@@ -850,7 +1076,7 @@ struct PlanBuilder {
       if (auto query = dyn_cast<pir::OracleQueryOp>(op)) {
         auto *body = controller(*query.getOwner(),
                                 query.getHandle().getType().getKind());
-        if (!body || !body->evaluate)
+        if (!body)
           return error("oracle-common-helper");
         auto arguments = inputs(query->getOperands());
         auto captures = stores(*body);
@@ -858,9 +1084,13 @@ struct PlanBuilder {
           return arguments.takeError();
         if (!captures)
           return captures.takeError();
-        append_range(*arguments, *captures);
-        auto output = call(block, body->evaluate, *query.getOwner(), *arguments,
-                           site(path, "query", *query.getOwner()));
+        Expected<IDs> output = [&]() -> Expected<IDs> {
+          if (!body->evaluate)
+            return remoteQuery(block, query, *body, *arguments, path);
+          append_range(*arguments, *captures);
+          return call(block, body->evaluate, *query.getOwner(), *arguments,
+                      site(path, "query", *query.getOwner()));
+        }();
         if (!output)
           return output.takeError();
         values[query.getAnswer()] = output->front();
