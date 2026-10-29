@@ -26,9 +26,15 @@ compilation's context and must be destroyed before that compilation is destroyed
 or reassigned. Changes to them cannot change the retained edge. Ordinary sources
 use the same path with an exact identity edge and empty oracle entry inventory.
 
-For logical oracles the current execution mode is ideal: input receivers supply
-their own Data representation, separately from the holder's Data. Returned
-handles are references with explicit support stores. The bundle uses this native
+For logical oracles the default realization is ideal: input receivers supply
+their own Data representation, separately from the holder's Data. The C++
+`RunOptions.oracleRealization` policy can explicitly select Merkle schemes and
+layouts for every base input/send occurrence. Merkle receivers retain public
+roots and actual shapes; holders retain private opening state. Queries use the
+[checked request/authentication profile](../formats/oracle-realization.md#common-opening-communication),
+including the supported fixed base-query blocks. The CLI currently exposes no
+realization selector and uses the default. Returned handles are references with
+explicit support stores. The bundle uses this native
 interface; logical handles have no generic wire codec. Original clauses and exact
 statement selections remain on the original, not on the changed native
 signature. Run execution does not interpret these logical predicates or establish
