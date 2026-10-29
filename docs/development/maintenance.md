@@ -13,20 +13,23 @@ Host requests and results, relation formats, proof bindings and transcript
 framing. Opaque compiler fingerprints, generated symbol seeds and in-process
 structures do not need independent format versions.
 
-Before stabilization, use version `0` for all zkc-owned formats and constructions,
-including binary headers, suite identifiers and independent research tools. Use
-`0.0.0` where package manifests require SemVer. Keep these versions fixed during
-internal development. Update producers, readers, examples and fixtures together,
-including independently derived byte and hash vectors when their inputs change.
-Maintain one current schema with strict admission; do not add
-older readers, compatibility layers or migration histories. Equal version numbers
-do not guarantee that artifacts from different development builds are compatible.
+Existing development formats retain their version until their owner explicitly
+changes the encoding or meaning. The [native foundation interface cutover](../spec/formats/foundation-interfaces.md)
+bumps changed shared contracts so independent consumers can adapt from published
+specifications. This exception to the earlier all-`0` policy is deliberate;
+version `1` here does not promise external stabilization. Unchanged byte
+languages and cryptographic constructions retain their existing version.
+Package manifests continue to use `0.0.0` before stabilization.
 
-Use version `1` for the first stabilized external contract. After that, review
-version changes when its encoding, interpretation or cryptographic construction
-changes. Ordinary implementation refactoring does not require a format version
-change. Upstream standards, algorithm names and dependency releases retain their
-own version rules.
+Update affected native producers, readers, examples and fixtures together,
+including independently derived byte and hash vectors when their inputs change.
+Record an independently maintained consumer's unsupported version explicitly;
+do not pretend it has migrated. Maintain one current native schema with strict
+admission and no compatibility reader. Before implementation, the owning
+specification lists the cutover changes and its target status. At cutover,
+replace the old schema description rather than retain two supported routes.
+Ordinary implementation refactoring does not itself require a version change.
+Upstream standards, algorithm names and dependency releases retain their rules.
 
 ## Pins and source ownership
 

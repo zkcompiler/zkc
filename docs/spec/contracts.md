@@ -3,7 +3,9 @@
 This register assigns one semantic owner to each shared contract and records its
 producers, consumers and delivery boundary. The linked specifications own the
 exact definitions. Registration is not implementation, semantic admission or a
-proof. Version `0` denotes the current schema, with no compatibility reader.
+proof. The [foundation interface inventory](formats/foundation-interfaces.md)
+specifies the upcoming version changes; current and designed support remain
+distinct and no compatibility reader is introduced.
 
 A contract-changing PR updates its row, enumerations and affected consumers. Its
 review records identify which consumer boundaries were checked and which remain
@@ -12,8 +14,9 @@ does not replace independent interpretation or admission. The Lean component is
 the sole writer of `lean/`. Native owners specify their formats in this register
 and `docs/spec`; Lean adapts its readers, interpretations and exact-subject
 artifacts against those landed contracts. A native landing may precede that
-formal adaptation; its row must keep the missing consumer explicit. Archived
-`INTERFACE.md` coordination documents are retired
+formal adaptation; its row must keep the missing consumer explicit. During the
+native foundation, IR publishes shared contracts first; no Lean patch, handoff
+or build is part of the native unit. Archived `INTERFACE.md` coordination documents are retired
 as interface authorities; this register and its linked specifications replace
 them.
 
@@ -24,6 +27,28 @@ receipt audit. Consumer requirement coverage does not change an independently
 valid receipt's meaning or proof status.
 
 ## Contract inventory
+
+### Specified foundation interfaces
+
+These rows are **Designed**. The production rows below continue to describe the
+current `/0` implementation until cutover. IR owns the catalog, lowering and
+native contract changes during this unit; frontend owns the checked program.
+The broad migration begins only after main contains the frontend redesign and
+native Common-export retirement. Native interface checks replace cross-session
+review loops for this unit. Formal interpretation is a later independent task.
+
+| Identifier / version | Specification and owner | Producer → consumers | Missing integration |
+|---|---|---|---|
+| `zkc.logical-types/1` | [Logical type data](formats/logical-types.md), IR / Contracts | Typed IR export → native artifact readers, independent semantic readers | All producers/readers pending |
+| `zkc.contract-declarations/1` | [Catalog](formats/contract-declarations.md), IR / Contracts | Neutral declarations → Language, MLIR, Rust and serialized formal-consumer data | Generated projections and native comparison pending; no Lean implementation in this unit |
+| `zkc.structured-source/1` | [Cutover](formats/foundation-interfaces.md#structured-source), IR / Protocol | Structured exporter → independent semantic readers | Native producer pending; independent reader version unsupported |
+| `zkc.constructed-participant/1`, `zkc.constructed-pair/1` | [Cutover](formats/foundation-interfaces.md#constructed-participants), IR / Construction | Actual candidate export → independent construction/projection readers | Native producer pending; independent reader versions unsupported |
+| `zkc.oracle-realization/1` | [Cutover](formats/foundation-interfaces.md#realization-and-application-records), IR / Transforms | Realization producer → native actual-body reader, independent interpretation | Native producer/reader pending; independent interpretation unsupported |
+| `zkc.application-map/1` | [Application map](formats/application-map.md), IR / Transforms | Source/candidate association → native comparison, independent correspondence reader | Producer and comparison pending; no correspondence theorem implied |
+| Outcome, stop, budget meaning | [Native foundation](ir/native-foundation.md#outcomes-observations-and-budgets), IR / Execution | Typed invocation → compiler admission and native VM/providers | Existing reached schedule retained; typed-route implementation pending |
+| `zkc.program/0` | [Retained byte language](formats/foundation-interfaces.md#executable-byte-language), IR / Program | Compiler → independent C++/Rust readers and other target consumers | Byte meaning unchanged; new internal encoder adapter pending |
+
+### Current producers and consumers
 
 `Implemented` describes the named producer/consumer profile, not all possible
 consumers. `Partial` names a missing consumer or behavior. `Designed` has no

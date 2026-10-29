@@ -35,12 +35,11 @@ same execution contract; the VM separation itself makes no performance claim.
 ## Deliver the IR architecture in dependency order
 
 The [IR ownership design](compiler/ir-design.md) defines the target boundaries.
-The consolidation establishes the checked production Tensor/Linalg path, IR
-interpretation versus Transforms production, complete pass-policy forwarding
-and one Computation owner. Before oracle feature work, integrate that baseline
-and the landed component-contract foundation; review the actual native,
-frontend and formal interfaces together. This reconciliation is entry work,
-not an additional feature pull request.
+The maintained path already has checked Tensor/Linalg computation, separate IR
+interpretation and transformation production, and one Computation owner. The
+next unit replaces the remaining duplicated executable wrappers, string-carried
+schemas and implicit whole-stage verifier work with the
+[native MLIR foundation](spec/ir/native-foundation.md).
 
 Each unit below is one substantial pull request: research alternatives and
 consumers, specify concrete semantics/refusals, implement the complete unit,
@@ -49,19 +48,20 @@ what actually landed. The completion criteria below belong inside those units.
 
 | Unit | Required outcome |
 |---|---|
-| Merkle query realization | Land Protocol-owned oracle kinds/anchors, named shapes, typed records between preparation and projection, independent actual-body comparisons, immediate Merkle queries and fixed base-query blocks. The byte grammar and written-source export are already separate foundations. Hand off Lean changes to its owner and publish the shared contract register |
-| Virtual batching and FRI | Complete dynamic virtual query blocks, ordered domain/failure prefixes and the same-subject FRI client. Settle index-map semantics jointly with Lean before admission. Consume runtime-owned quartic Keccak installation; keep native claim publication and its formal realization connection explicit |
-| Catalog and MLIR execution foundation | Start a four-face operation-family probe before implementation. Then measure admission cost, use structured ODS signatures instead of embedded schemas, generate shared declaration faces and preserve independent semantic readers |
+| Catalog and MLIR execution foundation | Publish versioned shared specs, measure the main baseline, select typed invocation and structured types, generate neutral catalog projections, migrate all affected native code and remove replaced routes in one PR |
+| Virtual batching and FRI | Build on the landed foundation and existing table/Merkle realization. Complete dynamic virtual query blocks, ordered domain/failure prefixes and the same-subject FRI client. Consume the specified checked index family and runtime-owned quartic Keccak; keep formal realization closure separately reported |
 | STARK compiler support | Complete block-draw and gated-request emission, witness codec slot and record consumption; exercise the common frontend FRI/STARK acceptance client under selected transcript/extension fields, realizations and layouts |
 | Represented execution | Canonical logical collection ownership across Data/Algebra, Residue and Codec semantics, private buffer contracts and admitted Arith/Vector/Bufferization lowering; compare native kernels and transparent schedules |
 | Constraints and semantic consumers | One assignment-level owner, source-to-encoding adequacy, lookup/multiset and chronological-memory consumers, exact statement/witness maps and actual commitment/terminal connections |
 
 ### Shared interfaces before implementation
 
-Agree each cross-layer interface against the landed sources, including its
-accepted profile, actual input/output subjects, observations and remaining
-assumptions. The compiler supplies concrete inputs to the independent formal
-consumers; those consumers retain their existing owners:
+Publish each cross-layer interface against landed sources, including its
+accepted profile, actual input/output subjects, observations, version changes
+and remaining assumptions. The [foundation interface inventory](spec/formats/foundation-interfaces.md)
+specifies structured source, program bytes, realization records, application
+maps, outcomes and budgets, and the catalog. Independent consumers adapt from
+these repository specifications, not another session's unlanded implementation:
 
 | Connection | Compiler deliverable | Formal consumer |
 |---|---|---|
@@ -71,13 +71,17 @@ consumers; those consumers retain their existing owners:
 
 The [contract register](spec/contracts.md) owns this inventory and its current
 producer/consumer gaps. Frontend owns source spelling, companions and source-AST
-contracts; Lean is the sole writer of `lean/`. Supply changes to Lean as reviewable
-patches rather than maintaining a second writer. Native Common-source removal
-is paired with Lean retiring its last consumer; it must not leave a redundant
-producer after the structured source route replaces it.
+contracts; the checked program belongs to frontend, its lowering and the catalog
+to IR. Before the mass migration, main must contain the current connection unit
+that retires the native Common exporter and the frontend redesign stack. Run
+main-only experiments and specification work while those land. IR is the sole
+writer of compiler/catalog/generated registry structure during this unit.
+Lean remains the sole writer of `lean/`; the foundation neither edits it nor
+supplies patches or handoffs, fixes Lean failures, or runs Lean as a landing
+gate. Its later interpretation does not delay native migration.
 
 Restricted logical aggregates retain typed field paths, actual handles and role
-components for claim records. They require shared frontend/IR/Lean admission;
+components for claim records. They require explicit native frontend/IR admission;
 ordinary native data aggregates and codecs continue to exclude oracle handles.
 Companion and declaration-interface proposals must reuse the existing request,
 subject, declaration and assurance pipeline rather than create a parallel one.
@@ -88,7 +92,7 @@ or still trusted. Regeneration checks consistency with a producer; it does not
 independently establish that producer's semantics. Do not report the complete
 source-to-bytes claim while one of its required formal links remains open.
 
-Runtime owns per-target installation, checked compound realization and native
+After the foundation lands, runtime resumes per-target installation, checked compound realization and native
 Merkle/grinding kernels. The compiler owns request layout, emitted behavior
 and propagation of the selected installation through its own choices and
 validation. Common target ingress stays before native resident handles; no
@@ -97,26 +101,29 @@ are regenerated from the agreed current schema.
 
 ### Catalog and MLIR foundation probe
 
-Carry one operation family through four faces before implementing the catalog
-redesign: frontend spelling, typed ODS signature, execution installation
-(Rust registry, VM/kernels and Lean byte table), and a Lean definition with
-reusable laws. FRI index maps are the first candidate. IR owns the native
-contract; Lean owns its interpretation and proofs; frontend and runtime own
-their adapters. The joint decision must fix bounds, unsigned widths, zero-size
-and overflow behavior, and whether a map is total under a checked domain premise.
-An unchecked integer remainder or an overflow flag does not discharge that premise.
+Milestone A runs against main, without reading another session's worktree as an
+integration base. Measure ordinary, numerical, oracle and repeated-helper
+clients. Prototype two scalar operations and an affine/resource operation with
+typed callable bindings, checked outcomes, symbol interfaces and target
+restrictions. Exercise wrong operands, signatures, roles, source paths and
+installation constraints. Scalar-only success is insufficient.
 
-Compare a library family over existing operations with a new primitive family.
-Select new primitives only where they preserve useful semantics or remove
-measured duplication. Probe actual frontend emission, ODS verification, native
-execution, byte interpretation and one reused Lean law on honest and invalid
-inputs. Generated signatures may be shared; mathematical laws, admission and
-independent readers remain separately justified. Record missing consumers before
-broad generation or typed-IR migration. No global admission cache or permissive
-index-arithmetic vocabulary is introduced as a shortcut.
+Use the existing checked u64 index vocabulary for the FRI-map family. Fix
+zero-size, overflow, bounds and pairing-order premises in the native contract;
+IR owns that decision. The catalog's formal-consumer face is data, with no Lean
+definition or law required by this milestone. Probe declaration agreement,
+MLIR formation and native execution independently. Generated signatures do not
+prove mathematical laws or establish a future semantic interpretation.
 
-The index decision is a dependency of virtual FRI realization; the complete
-foundation migration may proceed in its own substantial PR after the probe.
+Milestone B migrates structured types, declarations and invocation across all
+affected code outside `lean/`. Milestone C separates structural verification
+from explicit admission, adds correctly scoped analyses and conversion legality,
+and preserves source/application correspondence. Milestone D reviews and
+validates the complete native default route, installed SDK/CLI consumers,
+malformed inputs and mutation/invalidation controls. Remove all replaced
+wrappers and inner string-schema verification; leave no fallback route. Run
+one broad native validation at this boundary, repeating only after relevant
+changes or unresolved failures. Lean builds and formal pipelines are excluded.
 
 ### Block requests and gating
 

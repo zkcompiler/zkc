@@ -9,10 +9,18 @@ Links identify maintained checks, not a claim that they ran for this revision.
 ## Current public interfaces
 
 Artifacts use one current schema with exact tags, record shapes and unknown-field
-validation. Boundary versions remain `0` during development; equal versions do
-not guarantee compatibility across builds. Their specification owners define the
+validation. Existing tools currently use the versions below. The foundation's
+specified `/1` interfaces are not yet implemented. Specification owners define the
 accepted contents; the [maintenance policy](development/maintenance.md#format-versions)
 defines when versions change.
+
+The [native foundation](spec/ir/native-foundation.md) is in specification and
+main-only experiment work. Its [interface inventory](spec/formats/foundation-interfaces.md)
+defines the intended catalog, structured types, source/constructed exports,
+realization records and application map before migration. The broad cutover
+starts on main after the native Common-export retirement and frontend stack
+land. No `/1` emission, wrapper retirement, speedup or formal interpretation is
+claimed yet. Lean work and validation are outside this native unit.
 
 | Interface | Contract |
 |---|---|

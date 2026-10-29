@@ -14,6 +14,7 @@ consumers, identity domains and cross-subsystem integration gates.
 |---|---|
 | Source language | [Definitions, types, bodies, Entries and translation](language/README.md) |
 | Protocol IR | [Profiles](ir/protocols.md), [mathematics](ir/mathematics.md), [numerical units](ir/computation.md), [polynomial recipes](ir/polynomials.md) |
+| Foundation cutover | [Native ownership and semantics](ir/native-foundation.md), [versioned interfaces](formats/foundation-interfaces.md), [shared catalog](formats/contract-declarations.md), [logical types](formats/logical-types.md), [application map](formats/application-map.md); target contracts with support tracked separately |
 | Composition and control | [Applications](ir/composition.md), [iteration](ir/iteration.md), [finite computations](ir/finite.md), [functions](ir/functions.md), [control](ir/control.md), [completion](ir/completion.md) |
 | Data | [Variants](ir/variants.md), [nested data](ir/data.md) |
 | Construction and analysis | [Transcripts](ir/construction.md), [construction obligations](ir/construction-obligations.md), [public-coin views](ir/public-coin.md), [compiler limits](ir/limits.md) |
@@ -24,8 +25,9 @@ consumers, identity domains and cross-subsystem integration gates.
 
 The four MLIR profiles constrain one program at successive compilation
 boundaries; they are not four dialects. An artifact's structural admission does
-not establish its derivation from source. Version `0` names the current schema,
-without promising compatibility between development builds.
+not establish its derivation from source. Boundary versions follow the
+[format policy](../development/maintenance.md#format-versions); a specified
+version does not imply an implemented producer or independent consumer.
 
 See the [cross-component contract register](contracts.md) for owners, producers,
 independent consumers and the assurance/stage vocabularies.

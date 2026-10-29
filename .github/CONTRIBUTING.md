@@ -115,15 +115,19 @@ belongs in the pull request body, which is what survives the squash.
   [status](../docs/status.md) and theorem scope in
   [formal support](../lean/docs/support.md).
 - **Shared contracts.** Update the [contract register](../docs/spec/contracts.md)
-  when changing a cross-component contract. Name its producer/consumer review
-  and record missing integrations explicitly. The Lean component owns changes
-  under `lean/`; other components supply reviewed patches for it to integrate.
+  when changing a cross-component contract. Name the checked producer/consumer
+  boundaries and record missing integrations explicitly. During the native
+  foundation cutover, publish shared specifications before broad migration;
+  independent consumers adapt from them. The Lean component owns all changes
+  under `lean/`; this native unit does not supply patches or require Lean builds.
 - **Formats and identities.** Version persisted or exchanged formats and
-  cryptographic byte constructions. Before stabilization, keep zkc-owned
-  format and construction versions at `0` and update producers, readers and
-  fixtures together.
+  cryptographic byte constructions. The native foundation explicitly versions
+  changed shared formats before migration; unchanged meanings, including
+  `zkc.program/0`, retain their version. Update affected native producers,
+  readers and fixtures together and record independently maintained gaps.
   Maintain one current schema with exact shape and unknown-field validation;
-  do not add compatibility readers or migration notes. See the
+  do not add compatibility readers. Record consumer-visible cutover changes in
+  the owning specification, not a parallel schema history. See the
   [format version policy](../docs/development/maintenance.md#format-versions).
 - **Independent implementations.** The compiler and native runtime independently
   validate the executable program carrier. A change to that surface updates both.
