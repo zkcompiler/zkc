@@ -39,7 +39,7 @@ Displayed protocol signatures keep data and random-service parameters in their c
 
 Successful project checking retains each full syntax tree under its exact imported notation environment. Formatting uses that tree and the Syntax formatter's equivalence check. An invalid project still supplies recoverable header symbols, but semantic queries and formatting refuse unavailable information. The service does not guess expression grouping when imports are broken. Rename, whole-project references, proof actions and Lean companion navigation are not implemented.
 
-The diagnostic `zkc/status` request takes `{ "textDocument": { "uri": "..." } }`. Its response contains the project `generation`, exact `capture` identity, `native` (`checked` or `invalid`) and `assurance` (`not-requested`, `unavailable` or `unknown`). These fields describe authoring state; they are not admission receipts or reusable proof identities.
+The diagnostic `zkc/status` request takes `{ "textDocument": { "uri": "..." } }`. Its response contains the project `generation`, exact `capture` identity, `native` (`checked` or `invalid`) and `assurance` (`no-claim`, `open`, or `null` when invalid source prevents classification). These fields describe authoring state; they are not admission receipts or reusable proof identities.
 
 ## Revisions and cancellation
 

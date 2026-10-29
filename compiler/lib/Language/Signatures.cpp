@@ -1,6 +1,7 @@
 #include "Checker.h"
 #include "Effects.h"
 #include "zkc/Contracts/Declarations.h"
+#include "zkc/Contracts/Services.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/ScopeExit.h"
 #include <algorithm>
@@ -154,6 +155,9 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   if (depth > work.limits.typeDepth || signatureDepth >= work.limits.typeDepth)
     return types.fail("source.limit", "type declaration depth limit",
                       decl.span);
+  if (signatureState[id.index] == 3)
+    return types.fail("source.dependency",
+                      "signature depends on an invalid declaration", decl.span);
   if (signatureState[id.index] == 1)
     return types.fail("source.cycle", "recursive type or static signature",
                       decl.span);
@@ -189,6 +193,10 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   ++signatureDepth;
   auto restoreDepth = llvm::scope_exit([&] { --signatureDepth; });
   signatureState[id.index] = 1;
+  auto finishState = llvm::scope_exit([&] {
+    if (signatureState[id.index] == 1)
+      signatureState[id.index] = 3;
+  });
   if (decl.parent) {
     if (!signature(*decl.parent, depth + 1))
       return false;
@@ -576,12 +584,17 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         !joinEffects(types, *decl.effectAllowance, EffectSummary{}, decl.span))
       return false;
     for (const auto &src : source.services) {
-      if (decl.kind != Declaration::Kind::Protocol ||
-          src.type.kind != SyntaxType::Kind::Name ||
-          src.type.name != "Random" || src.type.arguments.size() != 1 ||
+      auto *service = src.serviceConstructor
+                          ? protocol::sourceService(*src.serviceConstructor)
+                          : nullptr;
+      if (decl.kind != Declaration::Kind::Protocol || !service ||
+          service->family != protocol::ServiceFamily::Random ||
+          src.type.arguments.size() != service->parameters ||
           !src.type.labels.empty())
-        return types.fail("source.service",
-                          "expected a Random<Field> managed port", src.span);
+        return types.fail(
+            "source.service",
+            "managed port differs from its installed service signature",
+            src.span);
       if (!bindingName(decl, src.name, src.span) ||
           llvm::any_of(decl.inputs,
                        [&](const auto &p) { return p.name == src.name; }) ||

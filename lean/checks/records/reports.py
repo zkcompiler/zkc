@@ -957,7 +957,8 @@ def source_entry(item):
 
 
 def _scope_export(source, mappings, records, modules, evidence, checks, reasons,
-                  environment, environment_reasons, reused_records, *, trial=False, scope=None, proof_entry=None):
+                  environment, environment_reasons, reused_records, *, trial=False, scope=None, proof_entry=None,
+                  consumer_requirements=None, consumer_context=None):
     roots = [records.get(mapping.get(key)) for mapping in mappings
              for key in ("request_declaration", "receipt_declaration")]
     selected_records = _referenced_records(records, roots)
@@ -978,11 +979,14 @@ def _scope_export(source, mappings, records, modules, evidence, checks, reasons,
         reasons=reasons, environment_reasons=environment_reasons, attached_modules=attached_modules,
         reused_reason=reused_reason(reused_records) if reused_records is not None else None,
         trial=trial, scope=scope, proof_entry=proof_entry,
+        consumer_requirements=consumer_requirements, consumer_context=consumer_context,
         validate_scope=scope is not None or proof_entry is not None)
     export = _invoke_receipt_classifier(payload, records.packages())
     if not isinstance(export, dict) or export.get("format") != "zkc.receipt-status/0":
         raise ReceiptTransportError("missing or corrupt Lean scope status export")
     rows = export.get("claims")
+    if export.get("consumer_requirements") != consumer_requirements:
+        raise ReceiptTransportError("Lean scope audit answered another consumer requirement set")
     if (not isinstance(rows, list) or len(rows) != len(items) or
             export.get("status") not in {"certified", "open", "incomplete", "no-claim"} or
             export.get("outcome") not in {"established", "unresolved"} or
@@ -1101,11 +1105,13 @@ def scope_reasons(source, scope, proof_entry=None):
 
 
 def report_claim_scope(source, mappings, records, registry, modules, evidence, checks, reasons,
-                       environment, environment_reasons, reused_records, *, trial=False, scope=None, proof_entry=None):
+                       environment, environment_reasons, reused_records, *, trial=False, scope=None, proof_entry=None,
+                       consumer_requirements=None, consumer_context=None):
     """Join/render exactly one Lean classification for every requested item."""
     try:
         export, _ = _scope_export(source, mappings, records, modules, evidence, checks, reasons,
-            environment, environment_reasons, reused_records, trial=trial, scope=scope, proof_entry=proof_entry)
+            environment, environment_reasons, reused_records, trial=trial, scope=scope, proof_entry=proof_entry,
+            consumer_requirements=consumer_requirements, consumer_context=consumer_context)
     except (ReceiptTransportError, OSError) as error:
         # A failed transport has no security decision. In particular it cannot
         # become `incomplete` by consulting a frontend resolution fallback.
@@ -1125,10 +1131,12 @@ def report_claim_scope(source, mappings, records, registry, modules, evidence, c
             "author_claims": [item for item in claims if item["claim_kind"] == "author"],
             "generic_claims": [item for item in claims if item["claim_kind"] == "generic"],
             "outcome": export["outcome"], "status": export["status"], "reasons": export["reasons"],
-            "audit_status": export.get("audit_status", "checked")}
+            "audit_status": export.get("audit_status", "checked"),
+            "consumer_requirements": export.get("consumer_requirements")}
 
 
-def build(manifest_path, records, ledger=None, evidence_directory=None, reused_records=None):
+def build(manifest_path, records, ledger=None, evidence_directory=None, reused_records=None,
+          consumer_requirements=None):
     """Build reports only from source requests and checked emitted receipts."""
     manifest = load_manifest(manifest_path)
     evidence = load_evidence(evidence_directory, manifest["name"])
@@ -1156,7 +1164,10 @@ def build(manifest_path, records, ledger=None, evidence_directory=None, reused_r
     selected = report_claim_scope(source, (evidence or {}).get("claim_receipts") or [], records, registry,
                                   modules, evidence, checks, selected_reasons, environment,
                                   environment_reasons, reused_records, scope=scope,
-                                  proof_entry=(manifest.get("entries") or {}).get("proof"))
+                                  proof_entry=(manifest.get("entries") or {}).get("proof"),
+                                  consumer_requirements=consumer_requirements,
+                                  consumer_context={"subject": manifest["name"],
+                                      "manifest_sha256": sha256(manifest_path), "checker": environment})
     trials = []
     for trial in (evidence or {}).get("source_claim_trials") or []:
         entry = trial.get("entry")

@@ -501,3 +501,21 @@ locks. Missing theorem names, changed statements and forbidden axioms fail its
 check. Rendering and document-name auditing continue independently of source
 request certification. `--write` updates generated regions and locks; it is not
 a proof or approval of a new semantic claim.
+
+### Independently selected consumer requirements
+
+The frontend-owned [consumer requirements contract](../../../docs/spec/language/companions.md#consumer-requirements-transport)
+adds `consumer_requirements` and `consumer_context` to the existing
+`zkc.receipt-audit-input/0` scope operation. `ReceiptAudit.consumerReasons`
+checks exact expected occurrence/request coverage and the selected context before
+classifying rows. The final scope also requires certified receipts for every
+required occurrence, including any required author or generic item. These items
+do not become canonical security claims by being required.
+
+The scope export and `zkc.assurance-report/0` retain `consumer_requirements`
+(`null` when absent). Missing requirements keep even an empty provider scope
+open. No separate security-status classifier or proof admission path is added.
+`check_records.py --subject NAME --requirements PATH` accepts one independently
+chosen file for one selected subject; it fails if the audited outcome remains
+unresolved. Existing reports without a consumer file retain their declared-scope
+meaning, which does not assert that every external consumer need was requested.

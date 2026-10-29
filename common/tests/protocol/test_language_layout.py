@@ -97,13 +97,13 @@ spec for Schnorr:
                f"--module=schnorr={source}"]
     checked = journal.json(command + ["--source-ast"])
     assert checked["status"] == "checked"
-    assert checked["assurance"]["status"] == "unavailable"
+    assert checked["assurance"]["status"] == "open"
     spec, = checked["assurance"]["specifications"]
     assert spec["protocol"] == "schnorr::Schnorr"
     assert spec["owner"] is True
     assert spec["name"] is None
     nodes = [node for owner in checked["source_ast"]["declarations"] for node in owner["nodes"]]
-    assert any(node["kind"] == "formal_syntax" for node in nodes)
+    assert any(node["kind"] == "formal.specification" for node in nodes)
     journal.run(command + ["--subject=schnorr::Schnorr<schnorr::Curve>", "--source-claims"],
                 refuses="source.assurance-unavailable")
 

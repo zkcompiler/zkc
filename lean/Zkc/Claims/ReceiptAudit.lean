@@ -384,6 +384,38 @@ def auditRequest (input item : Json) : Audit := Id.run do
   audit := { audit with envelope := ⟨has r, resolved, checks.toList ++ audit.envelope.checks⟩ }
   return audit
 
+/-- Consumer requirements are fixed independently of the provider's inventory.
+They constrain this audit; they never establish a proposition on their own. -/
+def consumerReasons (input : Json) : Array String := Id.run do
+  let required := get input "consumer_requirements"
+  if required == .null then return #[]
+  let mut reasons := #[]
+  if str (get required "format") != "zkc.consumer-requirements/0" then
+    reasons := reasons.push "unsupported consumer requirements format"
+  let context := get required "context"
+  if !has context || context != get input "consumer_context" ||
+      !has (get context "checker") || str (get context "manifest_sha256") == "" ||
+      str (get context "subject") == "" then
+    reasons := reasons.push "consumer requirements name another subject or environment"
+  let expected := arr (get required "claims")
+  if expected.isEmpty then
+    reasons := reasons.push "consumer requirements must contain a nonempty expected request set"
+  let nodes := expected.map (fun item => get item "node")
+  if !unique nodes then reasons := reasons.push "duplicate consumer requirement occurrence"
+  let supplied := arr (get (get input "source") "claims")
+  for item in expected do
+    let node := get item "node"
+    let request := get item "request"
+    if !has node || !has request then
+      reasons := reasons.push "consumer requirement lacks an occurrence or a complete request"
+    let candidates := supplied.filter (fun actual =>
+      get (get actual "attachment") "node" == node)
+    if candidates.size != 1 then
+      reasons := reasons.push "consumer-required request occurrence is missing or ambiguous"
+    else if get candidates[0]! "request" != request then
+      reasons := reasons.push "consumer-required request differs from the supplied request"
+  return reasons
+
 /-- Scope errors apply to every row before classification. -/
 def run (input : Json) : Except String Json := do
   unless str (get input "format") == "zkc.receipt-audit-input/0" do
@@ -402,7 +434,7 @@ def run (input : Json) : Except String Json := do
   let source := get input "source"
   let items := arr (get source "claims")
   let nodes := items.map (fun item => get (get item "attachment") "node")
-  let mut scopeReasons := strings (get input "reasons")
+  let mut scopeReasons := strings (get input "reasons") ++ consumerReasons input
   if yes (get input "validate_scope") then
     scopeReasons := scopeReasons ++ ReceiptAudit.scopeReasons source (get input "scope") (get input "proof_entry")
   let available := (arr (get input "mappings")).size == items.size &&
@@ -439,12 +471,19 @@ def run (input : Json) : Except String Json := do
       ("claim_kind", kind), ("semantic_dependencies", get item "semantic_dependencies"),
       ("audit", encode audit)]
   let security := rows.filter (fun row => !["author", "generic"].contains (str (get row "claim_kind")))
-  let established := !security.isEmpty && scopeReasons.isEmpty && security.all (fun row =>
+  let requiredNodes := (arr (get (get input "consumer_requirements") "claims")).map (get · "node")
+  let requiredChecked := requiredNodes.all (fun node => rows.any (fun row =>
+    get row "node" == node && str (get (get row "audit") "status") == "certified"))
+  if !requiredChecked then
+    scopeReasons := scopeReasons.push "consumer-required request has no certified receipt"
+  let established := !security.isEmpty && scopeReasons.isEmpty && requiredChecked && security.all (fun row =>
     str (get (get row "audit") "status") == "certified")
-  let state := if security.isEmpty && str (get source "format") == "zkc.bound-source-claims/0" then "no-claim"
+  let state := if security.isEmpty && get input "consumer_requirements" == .null &&
+      str (get source "format") == "zkc.bound-source-claims/0" then "no-claim"
     else if established then "certified" else if !security.isEmpty && security.all (fun row =>
       str (get (get row "audit") "status") == "incomplete") then "incomplete" else "open"
   return object [("format", .str "zkc.receipt-status/0"), ("claims", .arr rows),
     ("status", .str state), ("outcome", .str (if established then "established" else "unresolved")),
+    ("consumer_requirements", get input "consumer_requirements"),
     ("reasons", toJson scopeReasons), ("audit_status", .str (if unaudited then "unaudited" else "checked"))]
 end ReceiptAudit

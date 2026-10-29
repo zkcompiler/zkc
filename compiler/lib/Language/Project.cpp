@@ -371,8 +371,11 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits,
         return syntax.takeError();
       modules.push_back(std::move(*syntax));
     }
-    if (auto error = detail::check(std::move(modules), *checked, work))
+    if (auto error =
+            detail::check(std::move(modules), *checked, work, output.get()))
       return error;
+    if (!output->diagnostics.empty())
+      return Error::success();
     checked->installation = installedCatalogIdentity();
     checked->work = work.used;
     checked->declarationCount = work.declarations;
@@ -881,6 +884,10 @@ std::string installedCatalogIdentity() {
   };
   row({"source-name-profile", sourceNameProfileIdentity()});
   row({"prelude", "zkc::prelude", detail::digest(installedPrelude)});
+  for (const auto &service : protocol::sourceServices)
+    row({"source-service", service.module, service.name,
+         std::to_string(static_cast<unsigned>(service.family)),
+         std::to_string(service.parameters)});
   const auto &catalog = protocol::installedDomains();
   for (const auto &domain : catalog.allDomains()) {
     row({"domain", domain.identity, domain.sort, domain.modulus,

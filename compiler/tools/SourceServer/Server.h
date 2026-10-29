@@ -1,6 +1,7 @@
 #ifndef ZKC_SOURCE_SERVER_H
 #define ZKC_SOURCE_SERVER_H
 
+#include "RequestQueue.h"
 #include "zkc/Language/Authoring.h"
 #include "llvm/Support/LSP/Transport.h"
 #include <condition_variable>
@@ -82,9 +83,7 @@ private:
   llvm::lsp::OutgoingNotification<llvm::json::Value> publish, log;
   std::map<std::string, Document> documents;
   std::shared_ptr<Snapshot> current;
-  std::map<std::string, std::shared_ptr<Job>> active;
-  std::deque<std::shared_ptr<Job>> queue;
-  std::shared_ptr<Job> running;
+  RequestQueue<Job> requests;
   std::mutex mutex;
   std::condition_variable ready;
   std::thread worker;

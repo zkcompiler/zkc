@@ -2,6 +2,7 @@
 #include "zkc/Support/Json.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/raw_ostream.h"
 #include <cerrno>
 #include <cstdio>
 #include <fstream>
@@ -12,6 +13,7 @@ Error error(StringRef message, lsp::ErrorCode code) {
   return make_error<lsp::LSPError>(message.str(), code);
 }
 LogicalResult Input::stop() {
+  llvm::errs() << "source transport: invalid message\n";
   invalid = ended = true;
   errno = EINVAL;
   return failure();

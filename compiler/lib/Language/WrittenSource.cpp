@@ -1,4 +1,5 @@
 #include "WrittenSource.h"
+#include "FormalSourceWriter.h"
 #include "WrittenSourceIndex.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Support/BoundedStream.h"
@@ -647,35 +648,23 @@ private:
     }
     return emit("requirement", value.span, std::move(result));
   }
-  json::Value formalNode(const syntax::Snapshot &tree, syntax::NodeId id) {
-    json::Array children, tokens;
-    const auto &node = tree.node(id);
-    unsigned cursor = node.firstToken;
-    auto appendTokens = [&](unsigned end) {
-      for (; cursor < end && !error; ++cursor) {
-        auto token = tree.tokens()[cursor];
-        if (token.synthetic() || token.trivia())
-          continue;
-        auto text = tree.text(token);
-        if (auto failure = work.charge(text.size() + 1, tree.span(id))) {
-          error = std::move(failure);
-          return;
-        }
-        tokens.push_back(json::Object{
-            {"text", text}, {"begin", token.begin}, {"end", token.end}});
-      }
-    };
-    for (auto nested : tree.children(id)) {
-      appendTokens(tree.node(nested).firstToken);
-      children.push_back(child("child", children.size(),
-                               [&] { return formalNode(tree, nested); }));
-      cursor = tree.node(nested).lastToken;
+  json::Value formalNode(const FormalSyntax &formal) {
+    if (!formal.authored) {
+      if (!error)
+        error =
+            failure("source.formal-syntax", "formal source was not projected",
+                    formal.tree.span(formal.node));
+      return nullptr;
     }
-    appendTokens(node.lastToken);
-    return emit("formal_syntax", tree.span(id),
-                json::Object{{"syntax_kind", syntax::spelling(node.kind)},
-                             {"children", std::move(children)},
-                             {"tokens", std::move(tokens)}});
+    return writeFormalSource(
+        *formal.authored,
+        [&](StringRef kind, Span span, json::Object fields) {
+          return emit(kind, span, std::move(fields));
+        },
+        [&](StringRef field, unsigned index,
+            std::function<json::Value()> write) {
+          return child(field, index, std::move(write));
+        });
   }
   json::Value declarationNode(const SyntaxDeclaration &value, StringRef owner,
                               bool anonymous = false) {
@@ -712,14 +701,12 @@ private:
                     })},
               {"members", std::move(members)},
               {"formal", list("formal", value.formalSyntax, [&](auto &formal) {
-                 return formalNode(formal.tree, formal.node);
+                 return formalNode(formal);
                })}});
     }
     json::Object result{
         {"formal", list("formal", value.formalSyntax,
-                        [&](auto &formal) {
-                          return formalNode(formal.tree, formal.node);
-                        })},
+                        [&](auto &formal) { return formalNode(formal); })},
         {"name", anonymous ? json::Value(nullptr) : json::Value(value.name)},
         {"public", value.explicitPublic},
         {"abstract", value.abstract},

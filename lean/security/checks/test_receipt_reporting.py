@@ -423,6 +423,92 @@ def security_admission(api, case):
         "subject_checked": True, "model_status": "admitted"}
 
 
+@pytest.fixture
+def consumer_case(api, receipt_case, scoped_report, monkeypatch):
+    manifest, records, evidence = scoped_report
+    request, data, _, proof, _ = receipt_case
+    for wire in (request, data["detail"]["claim_data"]["wire_request"], proof["wire_request"]):
+        wire["property"]["name"] = "soundness"
+    proof.update(registered_property={"name": "soundness", "version": 0},
+                 authority={"kind": "canonical", "checked": True},
+                 quantity_kind="scalar", exported_capabilities=[], capability_consumer="soundness@0",
+                 registry_checks={key: True for key in ("lookup", "property_definition", "property_export", "model_export")},
+                 application_coverage={"mode": "fixed-statement", "checked": True})
+    proof["subject"] = {"artifacts_head": "Demo.artifacts", "original_entry": "demo"}
+    proof["admission"] = {"security_subject": True, "associated": True,
+        "association": "typed-certificate", "certificate_checked": True,
+        "subject_checked": True, "model_status": "admitted"}
+    records.by_name["Demo.artifacts"] = {"name": "Demo.artifacts", "module": data["module"],
+        "kind": "definition", "axioms": [], "statement": {"structural": "artifact", "explicit": "artifact"}}
+    digest = api.data_digest(request)
+    evidence["source_claims"]["claims"][0]["request_digest"] = digest
+    evidence["claim_receipts"][0]["request_digest"] = digest
+    environment = {"lean": ["consumer-test-environment"]}
+    monkeypatch.setattr(api, "verified_environment", lambda *_: (environment, []))
+    item = evidence["source_claims"]["claims"][0]
+    requirements = {"format": "zkc.consumer-requirements/0",
+        "context": {"subject": "control", "manifest_sha256": api.sha256(manifest), "checker": environment},
+        "claims": [{"node": deepcopy(item["attachment"]["node"]), "request": deepcopy(request)}]}
+    return manifest, records, evidence, requirements
+
+
+def test_consumer_requirements_have_a_certified_positive_control(api, consumer_case):
+    manifest, records, _, required = consumer_case
+    report = api.build(manifest, records, consumer_requirements=required)
+    assert report["status"] == "certified", report
+    assert report["outcome"] == "established"
+    assert report["consumer_requirements"] == required
+
+
+@pytest.mark.parametrize("change", ["omitted", "weakened", "stage", "subject", "environment", "manifest",
+                                     "duplicate", "empty", "bad-format", "missing-node", "unproved"])
+def test_consumer_requirements_refuse_omission_and_substitution(api, consumer_case, change):
+    manifest, records, evidence, required = consumer_case
+    if change == "omitted":
+        required["claims"].append(deepcopy(required["claims"][0]))
+        required["claims"][-1]["node"]["claim"] = 1
+    elif change == "weakened":
+        required["claims"][0]["request"]["quantity"]["expression"]["value"] = "99"
+    elif change == "stage":
+        required["claims"][0]["request"]["subject"]["stage"] = "executable-bytes"
+    elif change in {"subject", "manifest", "environment"}:
+        key = {"subject": "subject", "manifest": "manifest_sha256", "environment": "checker"}[change]
+        required["context"][key] = "another"
+    elif change == "duplicate":
+        required["claims"].append(deepcopy(required["claims"][0]))
+    elif change == "empty":
+        required["claims"].clear()
+    elif change == "bad-format":
+        required["format"] = "other"
+    elif change == "missing-node":
+        required["claims"][0].pop("node")
+    else:
+        evidence["claim_receipts"][0]["receipt_declaration"] = None
+    report = api.build(manifest, records, consumer_requirements=required)
+    assert report["outcome"] == "unresolved", report
+    assert report["status"] == "open", report
+    assert any("consumer" in reason for reason in report["reasons"]), report
+
+
+def test_omitting_all_provider_claims_still_reports_required_work(api, consumer_case):
+    manifest, records, evidence, required = consumer_case
+    evidence["source_claims"]["claims"] = []
+    evidence["claim_receipts"] = []
+    report = api.build(manifest, records, consumer_requirements=required)
+    assert report["status"] == "open"
+    assert report["outcome"] == "unresolved"
+    assert any("missing" in reason for reason in report["reasons"])
+
+
+@pytest.mark.parametrize("text", ['{"claims": [], "claims": [1]}', '{"value": NaN}', '[]'])
+def test_consumer_requirement_file_rejects_ambiguous_json(tmp_path, text):
+    cli = load("consumer_requirements_cli", "lean/checks/check_records.py")
+    path = tmp_path / "requirements.json"
+    path.write_text(text)
+    with pytest.raises(ValueError):
+        cli.load_requirements(path)
+
+
 def test_manual_extension_admission_has_a_positive_baseline(api, receipt_case):
     security_admission(api, receipt_case)
     assert audit(api, receipt_case)[3] == []

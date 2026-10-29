@@ -3,6 +3,7 @@
 #include "FiniteContracts.h"
 #include "HelperResults.h"
 #include "zkc/Contracts/OperationShapes.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/Support/SaveAndRestore.h"
 #include <algorithm>
 #include <numeric>
@@ -177,7 +178,18 @@ std::optional<Type> BodyChecker::projected(Type type, ArrayRef<unsigned> path,
   return checker.types.projectedType(decl, std::move(type), path, span);
 }
 bool BodyChecker::labelSite(const Statement &source, size_t firstOperation) {
-  if (!source.site)
+  const auto &expression = syntax.expressions[source.expression];
+  auto label = source.site;
+  const bool explicitLabel = bool(label);
+  if (!label && syntax.layoutSyntax && protocol()) {
+    if (source.evaluation == Statement::Evaluation::Ordered &&
+        source.pattern.kind == Pattern::Kind::Name)
+      label = source.pattern.name;
+    else if (expression.kind == Expression::Kind::For &&
+             expression.index.kind == Pattern::Kind::Name)
+      label = expression.index.name;
+  }
+  if (!label)
     return true;
   if (!protocol())
     return fail("source.site", "site labels require protocol mode",
@@ -186,12 +198,12 @@ bool BodyChecker::labelSite(const Statement &source, size_t firstOperation) {
                             source.span))
     return false;
   Operation *selected = nullptr;
-  const auto &expression = syntax.expressions[source.expression];
   for (auto &operation : llvm::drop_begin(body.operations, firstOperation)) {
     bool eligible =
         std::holds_alternative<Exchange>(operation.action) ||
         std::holds_alternative<ServiceQuery>(operation.action) ||
-        std::holds_alternative<ProtocolApplication>(operation.action);
+        std::holds_alternative<ProtocolApplication>(operation.action) ||
+        std::holds_alternative<ProtocolRepeat>(operation.action);
     if (!eligible)
       continue;
     if (selected)
@@ -202,11 +214,15 @@ bool BodyChecker::labelSite(const Statement &source, size_t firstOperation) {
   }
   if (!selected ||
       (!source.exchange && (selected->span.begin != expression.span.begin ||
-                            selected->span.end != expression.span.end)))
-    return fail("source.site",
-                "label must select an outer message, query or protocol call",
-                source.span);
-  selected->site = source.site;
+                            selected->span.end != expression.span.end))) {
+    if (!explicitLabel)
+      return true;
+    return fail(
+        "source.site",
+        "label must select an outer message, query, protocol call or loop",
+        source.span);
+  }
+  selected->site = std::move(label);
   return true;
 }
 bool BodyChecker::statementBody(const Statement &s) {
@@ -322,7 +338,7 @@ bool BodyChecker::statementBody(const Statement &s) {
   }
   if (s.kind == Statement::Kind::Require) {
     if (math())
-      return fail("source.mode", "require needs ordered execution", s.span);
+      return fail("source.mode", "guard requires ordered execution", s.span);
     std::optional<unsigned> variable;
     if (protocol()) {
       auto chosen = placement->owner(s.span);
@@ -619,9 +635,15 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   auto &decl = output.declarations[id.index];
   if (decl.generated && decl.generated->operation)
     return true;
+  if (sources[id.index]->invalidBody)
+    return types.fail("source.dependency", "body depends on malformed source",
+                      decl.span);
   if (depth > work.limits.callDepth)
     return types.fail("source.limit", "helper call depth limit exceeded",
                       decl.span);
+  if (bodyState[id.index] == 3)
+    return types.fail("source.dependency",
+                      "body depends on an invalid declaration", decl.span);
   if (bodyState[id.index] == 1)
     return types.fail("source.cycle", "recursive callable", decl.span);
   if (bodyState[id.index] == 2)
@@ -629,6 +651,10 @@ bool Checker::body(DeclarationId id, unsigned depth) {
            types.fail("source.limit", "helper call depth limit exceeded",
                       decl.span);
   bodyState[id.index] = 1;
+  auto finishState = llvm::scope_exit([&] {
+    if (bodyState[id.index] == 1)
+      bodyState[id.index] = 3;
+  });
   bodyHeights[id.index] = 1;
   if (decl.kind == Declaration::Kind::Protocol && !specifications(decl))
     return false;
@@ -684,6 +710,26 @@ bool Checker::body(DeclarationId id, unsigned depth) {
     }
     return false;
   }
+  // Explicit and inferred sites share the protocol's namespace, including
+  // nested repeats. Reused local variable names need an explicit site override.
+  std::set<std::string> resolvedSites;
+  std::function<bool(const Body &)> validateSites = [&](const Body &body) {
+    for (const auto &operation : body.operations) {
+      if (!types.charge(1, operation.span))
+        return false;
+      if (operation.site && !resolvedSites.insert(*operation.site).second)
+        return types.fail(
+            "source.site",
+            "duplicate explicit or inferred site; add a unique site attribute",
+            operation.span);
+      if (auto *repeat = std::get_if<ProtocolRepeat>(&operation.action))
+        if (!validateSites(*repeat->region))
+          return false;
+    }
+    return true;
+  };
+  if (!validateSites(result))
+    return false;
   HelperResults helperResults(types, output.declarations);
   if (!checkFiniteContracts(types, output.declarations, decl, result,
                             helperResults))

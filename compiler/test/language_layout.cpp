@@ -2,6 +2,7 @@
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/SourceCorrespondence.h"
+#include "zkc/Language/Companions.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Support/Json.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -21,6 +22,42 @@ Expected<CheckedProject> check(StringRef source, Limits limits = {}) {
 } // namespace
 int main() {
   Cases cases;
+  for (StringRef constructor :
+       {"Random", "zkc::prelude::Random", "services::Random"})
+    cases.run(
+        "managed service resolves its installed constructor: " + constructor,
+        [&] {
+          auto project = take(check((R"(use zkc::prelude as services
+domain F = field("bls12-381.fr")
+pub protocol Demo roles(P)(coins: )" +
+                                     constructor + R"(<F> @P) -> F @P:
+    value <- coins.draw()
+    return value
+)")
+                                        .str()));
+          auto declaration =
+              llvm::find_if(project.declarations(), [](const auto &decl) {
+                return decl.qualifiedName == "m::Demo";
+              });
+          require(
+              declaration != project.declarations().end() &&
+                  declaration->inputs.empty() &&
+                  declaration->services.size() == 1,
+              "service constructor did not resolve through its declaration");
+        });
+  cases.run("ordinary type named Random keeps its ordinary meaning", [] {
+    auto project = take(check(R"(type Random = bool
+pub protocol Demo roles(P)(value: Random @P) -> Random @P:
+    return value
+)"));
+    take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
+  });
+  cases.run("static binder shadows implicit managed constructor", [] {
+    take(check(
+        R"(pub protocol Demo<Random: Type> roles(P)(value: Random @P) -> Random @P:
+    return value
+)"));
+  });
   cases.run(
       "spec-free layout protocol reaches independent original comparison", [] {
         auto project =
@@ -217,6 +254,67 @@ pub protocol Demo roles(P)(flag: bool @P) -> bool @P:
 )"));
     take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
   });
+  cases.run("literal protocol loops infer maximum roster and sites", [] {
+    auto project = take(check(R"(domain F = field("bls12-381.fr")
+pub protocol Draw roles(P, V)(coins: Random<F> @P; value: bool @(P, V)) -> bool @(P, V):
+    for round in 0..3:
+        nonce <- coins.draw()
+        received <- send nonce to V
+    return value
+)"));
+    bool found = false;
+    for (const auto &decl : project.declarations())
+      if (decl.qualifiedName == "m::Draw")
+        for (const auto &operation : decl.body->operations)
+          if (auto *repeat = std::get_if<ProtocolRepeat>(&operation.action)) {
+            found = true;
+            require(operation.site == "round" &&
+                        repeat->roles == std::vector<unsigned>({0, 1}) &&
+                        repeat->maximum.closedValue() == 3,
+                    "loop defaults differ from their specified local rules");
+            std::set<std::string> names;
+            for (const auto &nested : repeat->region->operations)
+              if (nested.site)
+                names.insert(*nested.site);
+            require(names == std::set<std::string>({"nonce", "received"}),
+                    "draw or send did not use its binding site");
+          }
+    require(found, "protocol loop was not retained");
+    auto ast = take(inspectWrittenSource(project));
+    require(!StringRef(ast).contains("\"site\":\"round\""),
+            "inferred site became authored syntax");
+    take(prepareOriginal(take(closeNativeRun(project, "m::Draw"))));
+  });
+  cases.run("dynamic protocol loops still require a maximum", [] {
+    refuses(
+        check(
+            R"(pub protocol Demo roles(P)(count: index @P; value: bool @P) -> bool @P:
+    for round in 0..count:
+        guard @P value
+    return value
+)"),
+        "source.bound");
+  });
+  cases.run("default loop roster still requires shared count knowledge", [] {
+    refuses(
+        check(
+            R"(pub protocol Demo roles(P, V)(count: index @P; value: bool @(P, V)) -> bool @(P, V):
+    for round in 0..count max 8:
+        guard @P value
+    return value
+)"),
+        "source.roles");
+  });
+  cases.run("explicit sites override defaults and collisions refuse", [] {
+    auto text = R"(domain F = field("bls12-381.fr")
+pub protocol Draw roles(P)(coins: Random<F> @P) -> F @P:
+    #[site(second)]
+    first <- coins.draw()
+    second <- coins.draw()
+    return second
+)";
+    refuses(check(text), "source.site");
+  });
   cases.run("local loop mutation remains explicit", [] {
     auto project = take(check(R"(local def keep(value: bool) -> bool:
     mut result = value
@@ -259,11 +357,102 @@ pub protocol Demo roles(P)(value: bool @P) -> bool @P:
         take(prepareOriginal(entry));
         refuses(inspectSourceClaims(entry), "source.assurance-unavailable");
         auto written = take(inspectWrittenSource(project));
-        require(StringRef(written).contains("formal_syntax") &&
+        require(StringRef(written).contains("formal.specification") &&
                     StringRef(written).contains("security") &&
                     StringRef(written).contains("secure"),
                 "formal request source was erased");
       });
+  cases.run("formal export preserves authored arguments and clauses", [] {
+    auto project = take(check(R"(ghost def proof(value: bool) -> bool:
+    other(ghost evidence: value)
+protocol Demo roles(P)(value: bool @P) -> bool @P:
+    return value
+spec for Demo:
+    requires (true)
+    ensures result: true
+    reduces Input(value) to Output(value)
+    security: secure(ghost evidence: value)
+)"));
+    auto parsed = take(json::parse(take(inspectWrittenSource(project))));
+    const auto *declarations = parsed.getAsObject()->getArray("declarations");
+    unsigned ghost = 0, ensures = 0, reductions = 0, groups = 0;
+    for (const auto &declaration : *declarations)
+      for (const auto &nodeValue :
+           *declaration.getAsObject()->getArray("nodes")) {
+        const auto &node = *nodeValue.getAsObject();
+        require(!node.get("syntax_kind") && !node.get("tokens"),
+                "parser representation escaped the authored contract");
+        auto kind = node.getString("kind");
+        if (kind == "formal.argument" && node.getBoolean("ghost") == true) {
+          ++ghost;
+          require(node.get("label") && !node.get("label")->getAsNull() &&
+                      node.get("value") && !node.get("value")->getAsNull() &&
+                      node.get("type")->getAsNull(),
+                  "named ghost argument was confused with a parameter type");
+        }
+        if (kind == "formal.ensures")
+          ++ensures;
+        if (kind == "formal.group")
+          ++groups;
+        if (kind == "formal.reduces") {
+          ++reductions;
+          require(node.get("label")->getAsNull() &&
+                      !node.get("residual")->getAsNull(),
+                  "unlabeled reduction lost its relation operands");
+        }
+      }
+    require(ghost == 2 && ensures == 1 && reductions == 1 && groups == 1,
+            "authored formal shapes differ");
+  });
+  cases.run(
+      "declared postconditions remain mandatory without a security request",
+      [] {
+        auto project =
+            take(check(R"(protocol Demo roles(P)(value: bool @P) -> bool @P:
+    return value
+spec for Demo:
+    requires true
+    ensures true
+    ensures named: true
+)"));
+        const auto &obligations =
+            project.pendingSpecifications()[0].obligations;
+        require(
+            obligations.size() == 2 &&
+                obligations[0].kind == PendingObligation::Kind::Postcondition &&
+                obligations[0].ordinal == 0 && !obligations[0].label &&
+                obligations[1].ordinal == 1 && obligations[1].label == "named",
+            "unnamed or unrequested postcondition disappeared");
+        require(
+            obligations[0].companion ==
+                    R"(["zkc.companion/0","m::Demo",["template"],"postcondition",["ordinal","0"]])" &&
+                obligations[1].companion ==
+                    R"(["zkc.companion/0","m::Demo",["template"],"postcondition",["label","named"]])",
+            "companion key differs from shared contract");
+      });
+  cases.run("companion keys distinguish scopes roles and authored labels", [] {
+    auto templateKey =
+        take(companionIdentity("m::Demo", {}, ObligationRole::Request, {}, 0));
+    auto labelKey =
+        take(companionIdentity("m::Demo", {}, ObligationRole::Request, "0", 0));
+    auto instanceKey = take(
+        companionIdentity("m::Demo", "closed", ObligationRole::Request, {}, 0));
+    auto roleKey = take(
+        companionIdentity("m::Demo", {}, ObligationRole::Postcondition, {}, 0));
+    require(std::set<std::string>({templateKey, labelKey, instanceKey, roleKey})
+                    .size() == 4,
+            "distinct lookup domains collided");
+    refuses(companionIdentity("", {}, ObligationRole::Request, {}, 0),
+            "source.companion");
+    refuses(companionIdentity(StringRef("\xff", 1), {}, ObligationRole::Request,
+                              {}, 0),
+            "source.companion");
+    auto limits = Limits{};
+    limits.apiInspectionBytes = 1;
+    refuses(companionIdentity("m::Demo", {}, ObligationRole::Request, {}, 0,
+                              limits),
+            "source.limit");
+  });
   cases.run("owner attachment is unique by resolved identity", [] {
     refuses(check(R"(pub protocol Demo roles(P)(value: bool @P) -> bool @P:
     return value
@@ -546,7 +735,7 @@ local def select(input: bool) -> bool:
         case Missing::None():
             false
 )"),
-            "source.layout-unavailable");
+            "source.name");
   });
   for (const std::vector<SourceBuffer> &sources :
        std::vector<std::vector<SourceBuffer>>{
@@ -643,6 +832,68 @@ spec for Demo:
       } else
         consumeError(result.takeError());
     }
+  });
+  for (StringRef argument : {"ghost value", "ghost input = value"})
+    cases.run("ghost arguments cannot bind runtime inputs: " + argument, [&] {
+      refuses(check((R"(def identity(input: bool) -> bool:
+    input
+pub protocol Demo roles(P)(value: bool @P) -> bool @P:
+    result = identity()" +
+                     argument + ")\n    return result\n")
+                        .str()),
+              "source.assurance-unavailable");
+    });
+  cases.run("oracle custody cannot become ordinary shared data", [] {
+    refuses(
+        check(R"(pub protocol Demo roles(P, V)(value: bool @P -> V) -> bool @V:
+    return value
+)"),
+        "source.oracle-unavailable");
+  });
+  for (StringRef qualifier : {"Choice", "m::Choice"})
+    cases.run("qualified match resolves its nominal enum: " + qualifier, [&] {
+      auto project = take(check((R"(enum Choice:
+    Some(bool)
+    None()
+local def select(input: bool) -> bool:
+    value = Choice::Some(input)
+    return match value:
+        case )" + qualifier + R"(::Some(item):
+            item
+        case Choice::None():
+            false
+pub protocol Demo roles(P)(value: bool @P) -> bool @P:
+    result <- select(value)
+    return result
+)")
+                                    .str()));
+      take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
+    });
+  cases.run("same-spelled constructors from another enum refuse", [] {
+    refuses(check(R"(enum Choice:
+    Some(bool)
+    None()
+enum Other:
+    Some(bool)
+    None()
+local def select(input: bool) -> bool:
+    value = Choice::Some(input)
+    return match value:
+        case Other::Some(item):
+            item
+        case Choice::None():
+            false
+)"),
+            "source.match");
+  });
+  cases.run("power syntax can bind an ordinary library callable", [] {
+    auto project = take(check(R"(def select(left: bool, right: bool) -> bool:
+    left
+operator ^ = select
+pub protocol Demo roles(P)(left: bool @P, right: bool @P) -> bool @P:
+    return left ^ right
+)"));
+    take(prepareOriginal(take(closeNativeRun(project, "m::Demo"))));
   });
   return cases.result();
 }

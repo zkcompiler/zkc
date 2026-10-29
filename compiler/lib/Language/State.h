@@ -29,6 +29,7 @@ struct NameEnvironment {
   std::map<std::string, DeclarationId> modules;
   std::vector<std::map<std::string, SourceBinding>> visible;
 };
+struct AuthoringStorage;
 struct CheckedStorage {
   explicit CheckedStorage(CapturedProject capture)
       : capture(std::move(capture)) {}
@@ -49,6 +50,7 @@ struct CheckedStorage {
   APIRecords api;
   std::vector<LexicalResolution> lexicalResolutions;
   std::shared_ptr<const NameEnvironment> names;
+  std::shared_ptr<const AuthoringStorage> authoring;
   /// Immutable authored callback and effect contracts, independent of mutable
   /// checked metadata.
   std::map<uint32_t, std::shared_ptr<const SyntaxDeclaration>> signatureSources;
@@ -66,11 +68,24 @@ struct ClosedStorage {
   std::optional<HostInvocation::Kind> invocationKind;
   uint64_t work = 0;
 };
+/// Editor facts are frozen separately from a CheckedProject. A declaration may
+/// have a valid header without a checked signature, or a signature without a
+/// checked body. This owner has no compilation or admission API.
+struct AuthoringStorage {
+  std::vector<Declaration> declarations;
+  std::vector<bool> signatures, bodies;
+  std::vector<PendingSpecification> pendingSpecifications;
+  std::vector<std::optional<syntax::Snapshot>> layoutBodies;
+  std::vector<LexicalResolution> lexicalResolutions;
+  APIRecords api;
+  std::shared_ptr<const NameEnvironment> names;
+};
 struct AnalysisStorage {
   std::shared_ptr<const std::vector<SourceBuffer>> sources;
   std::vector<Diagnostic> diagnostics;
   std::vector<std::vector<Token>> tokens;
   std::optional<CheckedProject> checked;
+  std::shared_ptr<const AuthoringStorage> authoring;
 };
 llvm::Error failure(llvm::StringRef code, const llvm::Twine &message,
                     std::optional<Span> span = {},

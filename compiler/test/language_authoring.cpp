@@ -102,6 +102,98 @@ pub protocol Draw roles(P)(coins: Random<F> @P; value: bool @P;
     require(again.format({0}).text == formatted.text,
             "formatting is not idempotent");
   });
+  cases.run("independent bodies survive a neighboring semantic error", [] {
+    StringRef text = R"(def broken(value: bool) -> bool:
+    missing
+pub protocol Good roles(P)(value: bool @P) -> bool @P:
+    result = value
+    return result
+)";
+    CaptureOptions options;
+    options.format = "zkc-layout";
+    auto analysis =
+        analyze(take(capture({{"m", text.str(), "m.zkc"}}, options)));
+    require(!analysis.diagnostics().empty(), "bad body lost its diagnostic");
+    refuses(analysis.checkedProject(), "source.name");
+    Authoring authoring(analysis);
+    auto offset = text.rfind("result");
+    auto hover = authoring.hover({0}, offset);
+    require(hover && StringRef(hover->text).contains("Available at: P"),
+            "independent body lost checked type and role facts");
+    auto definition = authoring.definition({0}, offset);
+    require(definition && definition->begin == text.find("result"),
+            "independent body lost lexical navigation");
+    require(!authoring.hover({0}, text.find("missing")),
+            "failed expression acquired a type");
+    require(authoring.format({0}).complete,
+            "semantic error prevented syntax-preserving formatting");
+  });
+  cases.run("malformed body recovery preserves a later checked body", [] {
+    StringRef text = R"(def broken(value: bool) -> bool:
+    value +
+pub protocol Good roles(P)(value: bool @P) -> bool @P:
+    result = value
+    return result
+)";
+    CaptureOptions options;
+    options.format = "zkc-layout";
+    auto analysis =
+        analyze(take(capture({{"m", text.str(), "m.zkc"}}, options)));
+    require(!analysis.diagnostics().empty(), "malformed body was accepted");
+    auto checked = analysis.checkedProject();
+    require(!checked, "recovery yielded a compilable project");
+    consumeError(checked.takeError());
+    Authoring authoring(analysis);
+    auto hover = authoring.hover({0}, text.rfind("result"));
+    require(hover && StringRef(hover->text).contains("Available at: P"),
+            "neighboring syntax error discarded an independent body");
+    require(!authoring.format({0}).complete,
+            "partial syntax was formatted as a complete file");
+  });
+  cases.run("failed signatures preserve independent signatures only", [] {
+    StringRef text = R"(def broken(value: Unknown) -> bool:
+    true
+def good(value: bool) -> bool:
+    value
+)";
+    CaptureOptions options;
+    options.format = "zkc-layout";
+    auto analysis =
+        analyze(take(capture({{"m", text.str(), "m.zkc"}}, options)));
+    require(!analysis.diagnostics().empty(), "bad signature was accepted");
+    Authoring authoring(analysis);
+    auto good = authoring.hover({0}, text.find("good"));
+    require(good && StringRef(good->text).contains("value: bool"),
+            "independent signature was discarded");
+    auto broken = authoring.hover({0}, text.find("broken"));
+    require(broken && StringRef(broken->text).contains("signature unavailable"),
+            "partially resolved signature was presented as checked");
+    auto candidates = authoring.completion({0}, text.rfind("value"), "good");
+    require(candidates.size() == 1 && candidates[0].name == "good",
+            "partial module lost name completion");
+  });
+  cases.run("failed body dependencies never produce checked caller facts", [] {
+    StringRef text = R"(def broken(value: bool) -> bool:
+    missing
+def caller(value: bool) -> bool:
+    result = broken(value)
+    result
+def independent(value: bool) -> bool:
+    answer = value
+    answer
+)";
+    CaptureOptions options;
+    options.format = "zkc-layout";
+    auto analysis =
+        analyze(take(capture({{"m", text.str(), "m.zkc"}}, options)));
+    require(analysis.diagnostics().size() >= 2, "dependent failure was hidden");
+    Authoring authoring(analysis);
+    require(!authoring.hover({0}, text.rfind("result")),
+            "failed caller acquired body type facts");
+    auto independent = authoring.hover({0}, text.rfind("answer"));
+    require(independent && StringRef(independent->text).contains("bool"),
+            "independent body after failed caller was not analyzed");
+  });
   cases.run("native cancellation never produces checked state", [] {
     CaptureOptions options;
     options.format = "zkc-layout";
@@ -166,7 +258,7 @@ pub protocol Draw roles(P)(coins: Random<F> @P; value: bool @P;
         "value\nspec for Demo:\n    security: secure()\n";
     Authoring authoring(check(text));
     auto hover = authoring.hover({0}, text.find("Demo"));
-    require(hover && StringRef(hover->text).contains("Assurance: unavailable"),
+    require(hover && StringRef(hover->text).contains("Assurance: open"),
             "spec intent was hidden");
   });
   return cases.result();

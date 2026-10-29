@@ -42,6 +42,25 @@ README = LEAN / "README.md"
 SUPPORT = LEAN / "docs/support.md"
 
 
+def load_requirements(path):
+    """Read independently supplied policy without ambiguous JSON meanings."""
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate consumer requirement field: {key}")
+            result[key] = value
+        return result
+
+    def invalid(value):
+        raise ValueError(f"non-finite consumer requirement number: {value}")
+
+    value = json.loads(path.read_text(), object_pairs_hook=unique, parse_constant=invalid)
+    if not isinstance(value, dict):
+        raise ValueError("expected a requirements object")
+    return value
+
+
 def manifests(directory):
     """Subject manifests: TOML files with a name and entries (other TOML files,
     such as normal-form requests, are ignored)."""
@@ -80,6 +99,8 @@ def main():
     parser.add_argument("--manifests", type=Path, help="subject manifests (default: lean/subjects)")
     parser.add_argument("--subject", action="append", help="render only named subjects; skip the complete subject table")
     parser.add_argument("--evidence", type=Path, help="per-subject pipeline evidence directory")
+    parser.add_argument("--requirements", type=Path,
+                        help="independent consumer requirements for exactly one --subject")
     parser.add_argument("--write", action="store_true", help="rewrite the lock and generated regions")
     parser.add_argument("--determinism", action="store_true",
                         help="emit every package twice and require identical output")
@@ -89,6 +110,14 @@ def main():
     args = parser.parse_args()
     if args.subject and args.write:
         parser.error("--write requires the complete subject selection")
+    if args.requirements and (not args.subject or len(args.subject) != 1):
+        parser.error("--requirements requires exactly one --subject")
+    consumer_requirements = None
+    if args.requirements:
+        try:
+            consumer_requirements = load_requirements(args.requirements)
+        except (OSError, ValueError) as error:
+            parser.error(f"cannot read consumer requirements: {error}")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     packages = select_packages(list(dict.fromkeys(args.integration)))
@@ -171,11 +200,14 @@ def main():
     report_directory = output / "reports"
     report_directory.mkdir(exist_ok=True)
     for path in subject_manifests + samples:
-        report = reports.build(path, records, claims, args.evidence, reused_records=args.records)
+        report = reports.build(path, records, claims, args.evidence, reused_records=args.records,
+                               consumer_requirements=consumer_requirements)
         name = ("sample-" if path in samples else "") + report["subject"]
         (report_directory / f"{name}.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
         if path in subject_manifests:
             built.append(report)
+        if args.requirements and report.get("outcome") != "established":
+            failures.append(f"{report['subject']}: consumer requirements remain unresolved")
     rows = reports.render_subjects(built)
     (output / "support-subjects.md").write_text(rows)
     if subject_manifests and "arklib" in packages and args.evidence is not None:

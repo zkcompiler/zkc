@@ -19,11 +19,14 @@ struct SourceCompletion {
   Span definition;
 };
 
-/// Queries over one immutable checked revision. Positions and returned spans
-/// belong only to this project; no method reads files, emits IR or checks Lean.
+/// Queries over one immutable analysis revision. Available signatures and
+/// bodies carry separate validity; partial views cannot be promoted to
+/// CheckedProject. No method reads files, emits IR or checks Lean.
 class Authoring {
 public:
   explicit Authoring(CheckedProject project);
+  explicit Authoring(const Analysis &analysis);
+  bool hasSemanticContext() const;
   std::vector<SourceSymbol> symbols(SourceId) const;
   std::optional<Span> definition(SourceId, uint32_t offset) const;
   std::optional<SourceHover> hover(SourceId, uint32_t offset) const;
@@ -35,7 +38,9 @@ public:
   syntax::FormatResult format(SourceId, source::Cancellation = {}) const;
 
 private:
-  CheckedProject project;
+  std::shared_ptr<const detail::AuthoringStorage> view;
+  void initializeSelections();
+  std::string detail(const Declaration &) const;
   std::map<std::pair<uint32_t, uint32_t>, Span> selections;
   Span selection(const Declaration &) const;
 };

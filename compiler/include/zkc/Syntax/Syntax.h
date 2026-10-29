@@ -146,6 +146,7 @@ struct FormatResult {
   std::string text;
   bool complete;
   std::vector<source::Diagnostic> diagnostics;
+  uint64_t workUsed = 0;
 };
 FormatResult format(const Snapshot &, Budget = {}, source::Cancellation = {});
 /// Ignores trivia and byte coordinates; includes authored token spelling,

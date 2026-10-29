@@ -5,6 +5,9 @@ path, its application interfaces, and the mathematical contracts used to describ
 it. Definitions are normative within their stated parameters and premises.
 Examples are informative. [Status](../status.md) records implemented coverage.
 
+The [shared contract register](contracts.md) records semantic owners, producers,
+consumers, identity domains and cross-subsystem integration gates.
+
 ## Native contracts
 
 | Subject | Contract |

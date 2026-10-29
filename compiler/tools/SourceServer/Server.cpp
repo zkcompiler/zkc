@@ -72,10 +72,7 @@ Server::~Server() {
   {
     std::lock_guard lock(mutex);
     stopping = true;
-    if (running)
-      running->cancellation.cancel();
-    for (auto &[_, job] : active)
-      job->cancellation.cancel();
+    requests.invalidate();
     ready.notify_one();
   }
   worker.join();
@@ -158,7 +155,7 @@ void Server::initialize(const Parameters &parameters, Reply reply) {
 }
 void Server::finish(const std::shared_ptr<Job> &job,
                     Expected<json::Value> result) {
-  if (job->finished) {
+  if (!requests.complete(job)) {
     if (!result)
       consumeError(result.takeError());
     return;
@@ -166,52 +163,36 @@ void Server::finish(const std::shared_ptr<Job> &job,
   if (result && debugString(*result).size() > 8388608)
     result = error("source response byte limit exceeded",
                    lsp::ErrorCode::RequestFailed);
-  job->finished = true;
   if (job->reply)
     job->reply(std::move(result));
   else if (!result)
     consumeError(result.takeError());
-  if (!job->key.empty()) {
-    auto found = active.find(job->key);
-    if (found != active.end() && found->second == job)
-      active.erase(found);
-  }
 }
 void Server::changed() {
-  if (running)
-    running->cancellation.cancel();
-  auto old = active;
-  for (auto &[_, job] : old) {
-    job->cancellation.cancel();
+  for (auto &job : requests.invalidate()) {
     finish(job, error("project changed", lsp::ErrorCode::ContentModified));
   }
-  queue.clear();
   current = std::make_shared<Snapshot>(Snapshot{++generation, {}, {}, {}});
   for (const auto &[_, document] : documents)
     current->documents.push_back(document);
   auto job = std::make_shared<Job>();
   job->method = "diagnostics";
   job->snapshot = current;
-  queue.push_back(job);
+  requests.push(job);
   ready.notify_one();
 }
 void Server::shutdown(const Parameters &, Reply reply) {
   std::lock_guard lock(mutex);
-  if (active.count(input.requestKey))
+  if (requests.contains(input.requestKey))
     return reply(error("duplicate outstanding request ID",
                        lsp::ErrorCode::InvalidRequest));
   if (!initialized || shuttingDown)
     return reply(error("server is not running"));
   shuttingDown = true;
-  if (running)
-    running->cancellation.cancel();
-  auto old = active;
-  for (auto &[_, job] : old) {
-    job->cancellation.cancel();
+  for (auto &job : requests.invalidate()) {
     finish(job,
            error("server shutting down", lsp::ErrorCode::RequestCancelled));
   }
-  queue.clear();
   reply(json::Value(nullptr));
 }
 void Server::synchronizeError(Document &document, StringRef message) {
@@ -436,14 +417,9 @@ void Server::cancel(const Parameters &parameters) {
     key = "s:" + string->str();
   else if (auto integer = id->getAsInteger())
     key = "i:" + std::to_string(*integer);
-  auto found = active.find(key);
-  if (found == active.end())
+  auto job = requests.cancel(key);
+  if (!job)
     return;
-  auto job = found->second;
-  job->cancellation.cancel();
-  auto queued = std::find(queue.begin(), queue.end(), job);
-  if (queued != queue.end())
-    queue.erase(queued);
   finish(job, error("request cancelled", lsp::ErrorCode::RequestCancelled));
 }
 void Server::enqueue(StringRef method, const Parameters &parameters,
@@ -455,10 +431,11 @@ void Server::enqueue(StringRef method, const Parameters &parameters,
   if (shuttingDown)
     return reply(
         error("server is shutting down", lsp::ErrorCode::InvalidRequest));
-  if (active.count(input.requestKey))
+  if (requests.contains(input.requestKey))
     return reply(error("duplicate outstanding request ID",
                        lsp::ErrorCode::InvalidRequest));
-  if (queue.size() >= 32 || active.size() >= 32)
+  if (requests.admission(input.requestKey) ==
+      RequestQueue<Job>::Admission::Full)
     return reply(
         error("source request queue is full", lsp::ErrorCode::RequestFailed));
   if (debugString(parameters.value).size() > 65536)
@@ -476,8 +453,7 @@ void Server::enqueue(StringRef method, const Parameters &parameters,
   job->parameters = parameters;
   job->reply = std::move(reply);
   job->snapshot = current;
-  active.emplace(job->key, job);
-  queue.push_back(job);
+  requests.push(job);
   ready.notify_one();
 }
 void Server::loop() {
@@ -485,26 +461,23 @@ void Server::loop() {
     std::shared_ptr<Job> job;
     {
       std::unique_lock lock(mutex);
-      ready.wait(lock, [&] { return stopping || !queue.empty(); });
+      ready.wait(lock, [&] { return stopping || !requests.empty(); });
       if (stopping) {
-        auto old = active;
-        for (auto &[_, pending] : old)
+        for (auto &pending : requests.invalidate())
           finish(pending,
                  error("connection closed", lsp::ErrorCode::RequestCancelled));
         return;
       }
-      job = queue.front();
-      queue.pop_front();
-      if (job->finished)
+      job = requests.take();
+      if (!job)
         continue;
-      running = job;
     }
     if (job->method == "diagnostics")
       diagnostics(*job);
     else {
       auto answer = query(*job);
       std::lock_guard lock(mutex);
-      if (job->snapshot != current || job->cancellation.cancelled()) {
+      if (!requests.publishable(*job, current)) {
         if (!answer)
           consumeError(answer.takeError());
         finish(job, error("request cancelled or superseded",
@@ -513,7 +486,7 @@ void Server::loop() {
         finish(job, std::move(answer));
     }
     std::lock_guard lock(mutex);
-    running.reset();
+    requests.release(job);
   }
 }
 #define QUERY(Name, Method)                                                    \

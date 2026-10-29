@@ -89,8 +89,24 @@ void visitValues(const Body &body, const Declaration &decl,
 }
 } // namespace
 
-Authoring::Authoring(CheckedProject checked) : project(std::move(checked)) {
-  for (const auto &tree : project.storage->layoutBodies) {
+Authoring::Authoring(CheckedProject checked)
+    : view(checked.storage->authoring) {
+  initializeSelections();
+}
+Authoring::Authoring(const Analysis &analysis)
+    : view(analysis.storage->authoring) {
+  if (!view)
+    view = std::make_shared<detail::AuthoringStorage>();
+  initializeSelections();
+}
+bool Authoring::hasSemanticContext() const { return bool(view->names); }
+std::string Authoring::detail(const Declaration &declaration) const {
+  return view->signatures[declaration.id.index]
+             ? signature(declaration)
+             : declaration.qualifiedName + " (signature unavailable)";
+}
+void Authoring::initializeSelections() {
+  for (const auto &tree : view->layoutBodies) {
     if (!tree)
       continue;
     for (unsigned i = 0; i < tree->nodes().size(); ++i) {
@@ -121,11 +137,11 @@ Span Authoring::selection(const Declaration &decl) const {
 }
 std::vector<SourceSymbol> Authoring::symbols(SourceId source) const {
   std::vector<SourceSymbol> result;
-  for (const auto &decl : project.declarations())
+  for (const auto &decl : view->declarations)
     if (decl.span.source.index == source.index && !decl.generated &&
         !decl.anonymous && decl.parent)
       result.push_back(
-          {decl.name, signature(decl), decl.kind, decl.span, selection(decl)});
+          {decl.name, detail(decl), decl.kind, decl.span, selection(decl)});
   return result;
 }
 std::optional<Span> Authoring::definition(SourceId source,
@@ -137,27 +153,27 @@ std::optional<Span> Authoring::definition(SourceId source,
       target = definition;
     }
   };
-  for (const auto &lexical : project.storage->lexicalResolutions)
+  for (const auto &lexical : view->lexicalResolutions)
     if (contains(lexical.declaration, source, offset)) {
       for (const auto &reference : lexical.references)
         consider(reference.span, reference.definition);
       for (const auto &binding : lexical.bindings)
         consider(binding.definition, binding.definition);
     }
-  for (const auto &reference : project.storage->api.references)
+  for (const auto &reference : view->api.references)
     consider(reference.span,
-             selection(project.declarations()[reference.target.index]));
+             selection(view->declarations[reference.target.index]));
   return target;
 }
 std::optional<SourceHover> Authoring::hover(SourceId source,
                                             uint32_t offset) const {
   std::optional<SourceHover> result;
-  for (const auto &decl : project.declarations()) {
+  for (const auto &decl : view->declarations) {
     if (decl.generated || !contains(decl.span, source, offset))
       continue;
     auto name = selection(decl);
     if (contains(name, source, offset))
-      result = SourceHover{name, signature(decl)};
+      result = SourceHover{name, detail(decl)};
     if (decl.body)
       visitValues(*decl.body, decl, [&](const Value &value, Body::Mode mode) {
         if (contains(value.span, source, offset) &&
@@ -171,7 +187,7 @@ std::optional<SourceHover> Authoring::hover(SourceId source,
                               ">\nOwned by: " + decl.roles[service.owner]};
   }
   if (!result) {
-    for (const auto &lexical : project.storage->lexicalResolutions)
+    for (const auto &lexical : view->lexicalResolutions)
       if (contains(lexical.declaration, source, offset))
         for (const auto &reference : lexical.references)
           if (contains(reference.span, source, offset) &&
@@ -184,22 +200,21 @@ std::optional<SourceHover> Authoring::hover(SourceId source,
   }
   if (!result) {
     const detail::ReferenceRecord *selected = nullptr;
-    for (const auto &reference : project.storage->api.references)
+    for (const auto &reference : view->api.references)
       if (contains(reference.span, source, offset) &&
           (!selected || narrower(reference.span, selected->span)))
         selected = &reference;
     if (selected)
-      result = SourceHover{
-          selected->span,
-          signature(project.declarations()[selected->target.index])};
+      result = SourceHover{selected->span,
+                           detail(view->declarations[selected->target.index])};
   }
   if (result)
-    for (const auto &spec : project.pendingSpecifications())
-      if (contains(project.declarations()[spec.protocol.index].span, source,
+    for (const auto &spec : view->pendingSpecifications)
+      if (contains(view->declarations[spec.protocol.index].span, source,
                    offset)) {
-        if (!StringRef(result->text).contains("Assurance: unavailable"))
+        if (!StringRef(result->text).contains("Assurance: open"))
           result->text +=
-              "\nAssurance: unavailable (spec retained; Lean checking pending)";
+              "\nAssurance: open (spec retained; Lean checking pending)";
         break;
       }
   return result;
@@ -209,23 +224,22 @@ std::vector<SourceCompletion> Authoring::completion(SourceId source,
                                                     StringRef prefix) const {
   std::map<std::string, SourceCompletion> candidates;
   const Declaration *context = nullptr;
-  for (const auto &decl : project.declarations())
+  for (const auto &decl : view->declarations)
     if (!decl.generated && contains(decl.span, source, offset) &&
         (!context || narrower(decl.span, context->span)))
       context = &decl;
-  if (context && project.storage->names) {
+  if (context && view->names) {
     auto owner = (context->kind == Declaration::Kind::Module ||
                   context->kind == Declaration::Kind::Interface)
                      ? std::optional(context->id)
                      : context->parent;
-    for (; owner; owner = project.declarations()[owner->index].parent)
-      for (const auto &[name, binding] :
-           project.storage->names->visible[owner->index]) {
+    for (; owner; owner = view->declarations[owner->index].parent)
+      for (const auto &[name, binding] : view->names->visible[owner->index]) {
         if (!StringRef(name).starts_with(prefix))
           continue;
-        const auto &decl = project.declarations()[binding.target.index];
+        const auto &decl = view->declarations[binding.target.index];
         candidates.emplace(
-            name, SourceCompletion{name, signature(decl), selection(decl)});
+            name, SourceCompletion{name, detail(decl), selection(decl)});
       }
   }
   std::map<std::string, unsigned> depths;
@@ -237,7 +251,7 @@ std::vector<SourceCompletion> Authoring::completion(SourceId source,
                     localTypes.emplace(value.span.begin,
                                        valueText(value, *context, mode));
                 });
-  for (const auto &lexical : project.storage->lexicalResolutions)
+  for (const auto &lexical : view->lexicalResolutions)
     if (contains(lexical.declaration, source, offset))
       for (const auto &binding : lexical.bindings)
         if (contains(binding.visible, source, offset) &&
@@ -263,13 +277,13 @@ std::vector<SourceCompletion> Authoring::completion(SourceId source,
   return result;
 }
 std::optional<syntax::Snapshot> Authoring::syntaxTree(SourceId source) const {
-  return source.index < project.storage->layoutBodies.size()
-             ? project.storage->layoutBodies[source.index]
+  return source.index < view->layoutBodies.size()
+             ? view->layoutBodies[source.index]
              : std::nullopt;
 }
 syntax::FormatResult
 Authoring::format(SourceId source, source::Cancellation cancellation) const {
-  if (auto tree = syntaxTree(source))
+  if (auto tree = syntaxTree(source); tree && !tree->headersOnly())
     return syntax::format(*tree, {}, cancellation);
   return {
       "", false, {{"source.format", "layout syntax is unavailable", {}, {}}}};

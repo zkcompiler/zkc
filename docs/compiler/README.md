@@ -8,6 +8,7 @@ publication.
 | Responsibility | Guide |
 |---|---|
 | Settings, reports, tests and local reuse | [Tooling](tooling.md) |
+| Authored source, partial analysis, catalogs and proof integration | [Frontend architecture](frontend-architecture.md) |
 | Profiles, dialects and lowering | [Pipeline](pipeline.md) |
 | Formation and source-relative comparisons | [Verification](verification.md) |
 | Algebra, polynomials and structured values | [Mathematics and data](mathematics.md) |

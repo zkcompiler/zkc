@@ -109,12 +109,20 @@ Expected<json::Value> Server::query(Job &job) {
         json::Object{{"generation", job.snapshot->generation},
                      {"capture", job.snapshot->capture->identity()},
                      {"native", valid ? "checked" : "invalid"},
-                     {"assurance", requested ? "unavailable"
-                                   : valid   ? "not-requested"
-                                             : "unknown"}});
+                     {"assurance", requested ? json::Value("open")
+                                   : valid   ? json::Value("no-claim")
+                                             : json::Value(nullptr)}});
   }
-  if (!checked) {
+  if (!checked)
     consumeError(checked.takeError());
+  source::SourceId source{UINT32_MAX};
+  for (unsigned i = 0; i < analysis.sources().size(); ++i)
+    if (analysis.sources()[i].diagnosticPath == job.uri)
+      source.index = i;
+  if (source.index == UINT32_MAX)
+    return error("document is outside this capture");
+  language::Authoring authoring(analysis);
+  if (!authoring.hasSemanticContext()) {
     if (job.method == "symbols")
       return json::Value(
           recoveredSymbols(doc->revision, encoding, job.cancellation));
@@ -122,13 +130,6 @@ Expected<json::Value> Server::query(Job &job) {
         "semantic information is unavailable; repair project diagnostics",
         lsp::ErrorCode::RequestFailed);
   }
-  source::SourceId source{UINT32_MAX};
-  for (unsigned i = 0; i < checked->sources().size(); ++i)
-    if (checked->sources()[i].diagnosticPath == job.uri)
-      source.index = i;
-  if (source.index == UINT32_MAX)
-    return error("document is outside this capture");
-  language::Authoring authoring(*checked);
   if (job.method == "symbols") {
     json::Array result;
     for (const auto &symbol : authoring.symbols(source))
@@ -162,7 +163,7 @@ Expected<json::Value> Server::query(Job &job) {
     return error("invalid source position");
   if (job.method == "definition") {
     auto target = authoring.definition(source, *offset);
-    return target ? location(checked->sources(), *target, encoding)
+    return target ? location(analysis.sources(), *target, encoding)
                   : json::Value(nullptr);
   }
   if (job.method == "hover") {
@@ -242,8 +243,7 @@ void Server::diagnostics(Job &job) {
     }
   }
   std::lock_guard lock(mutex);
-  if (job.snapshot != current || job.cancellation.cancelled() || shuttingDown ||
-      stopping)
+  if (!requests.publishable(job, current) || shuttingDown || stopping)
     return;
   for (auto &[uri, items] : diagnostics) {
     auto *doc = document(*job.snapshot, uri);

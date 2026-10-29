@@ -1,6 +1,7 @@
 #ifndef ZKC_SYNTAX_NOTATION_H
 #define ZKC_SYNTAX_NOTATION_H
 
+#include "llvm/ADT/ArrayRef.h"
 #include <string>
 
 namespace zkc::syntax {
@@ -29,6 +30,8 @@ struct NotationDescriptor {
     return !(*this == other);
   }
 };
+/// Shared syntax inventory for parsing, short declarations and validation.
+llvm::ArrayRef<NotationDescriptor> defaultNotations();
 /// Validate the fixed token repertoire and bounded descriptor shape.
 bool validNotationDescriptor(const NotationDescriptor &);
 } // namespace zkc::syntax

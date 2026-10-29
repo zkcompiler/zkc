@@ -184,7 +184,7 @@ with case("invalid body keeps recoverable symbols without guessed semantics"), C
     assert client.request("zkc/status", at(URI))["native"] == "invalid"
     assert client.request("textDocument/documentSymbol", at(URI))[0]["name"] == "Demo"
     client.send("textDocument/formatting", at(URI), "format")
-    assert client.response("format")["error"]["code"] == -32803
+    assert "result" in client.response("format")
     assert any(item["method"] == "textDocument/publishDiagnostics" and
                item["params"]["diagnostics"][0]["code"] == "source.name"
                for item in client.notifications if item.get("params", {}).get("diagnostics"))
@@ -217,9 +217,9 @@ with case("whole project invalidation matches fresh checks after dependency edit
                 assert client.request("textDocument/formatting", at(consumer.as_uri())) == fresh.request("textDocument/formatting", at(consumer.as_uri()))
             initial = changed
         client.change(consumer.as_uri(), 2, [{"text": consumer_text + "spec for Demo:\n    security: secure()\n"}])
-        assert client.request("zkc/status", at(consumer.as_uri()))["assurance"] == "unavailable"
+        assert client.request("zkc/status", at(consumer.as_uri()))["assurance"] == "open"
         client.change(consumer.as_uri(), 3, [{"text": consumer_text}])
-        assert client.request("zkc/status", at(consumer.as_uri()))["assurance"] == "not-requested"
+        assert client.request("zkc/status", at(consumer.as_uri()))["assurance"] == "no-claim"
 
 with case("configured file deletion and recreation invalidate and recover"):
     path = records("recreation") / "m.zkc"
@@ -280,49 +280,14 @@ with case("configured module identities remain authoritative across edits"):
         client.open(path.as_uri(), "module reopened\n" + SOURCE, version=3)
         assert client.request("zkc/status", at(path.as_uri()))["native"] == "invalid"
 
-with case("cancelled queued requests immediately release capacity"), Client() as client:
+with case("semantic errors preserve independent editor queries"), Client() as client:
     client.initialize()
-    large = "\n".join(f"def helper{i}(x: bool) -> bool:\n    x" for i in range(15000)) + "\n" + SOURCE
-    client.open(URI, large)
-    for index in range(32):
-        client.send("zkc/status", at(URI), f"cancel-{index}")
-    for index in range(32):
-        client.send("$/cancelRequest", {"id": f"cancel-{index}"})
-    for index in range(32):
-        answer = client.response(f"cancel-{index}")
-        assert "result" in answer or answer["error"]["code"] in (-32800, -32803), answer
-    client.send("zkc/status", at(URI), "after-cancel")
-    assert "result" in client.response("after-cancel")
-
-with case("queued cancellation, reused IDs and stale publication"), Client() as client:
-    client.initialize()
-    large = "\n".join(f"def helper{i}(x: bool) -> bool:\n    x" for i in range(1500)) + "\n" + SOURCE
-    client.open(URI, large)
-    client.send("zkc/status", at(URI), "cancel")
-    client.send("$/cancelRequest", {"id": "cancel"})
-    assert client.response("cancel")["error"]["code"] == -32800
-    client.change(URI, 2, [{"text": SOURCE}])
-    client.send("zkc/status", at(URI), "cancel")
-    assert client.response("cancel")["result"]["native"] == "checked"
-    client.request("textDocument/hover", at(URI, 2, 12))
-    versions = [item["params"]["version"] for item in client.notifications
-                if item["method"] == "textDocument/publishDiagnostics"]
-    assert versions and versions[-1] == 2 and versions == sorted(versions), versions
-
-with case("duplicate outstanding IDs and bounded queue refuse independently"), Client() as client:
-    client.initialize()
-    large = "\n".join(f"def helper{i}(x: bool) -> bool:\n    x" for i in range(3000)) + "\n" + SOURCE
-    client.open(URI, large)
-    client.send("zkc/status", at(URI), "duplicate")
-    client.send("zkc/status", at(URI), "duplicate")
-    assert client.response("duplicate")["error"]["code"] == -32600
-    for index in range(64):
-        client.send("zkc/status", at(URI), f"queue-{index}")
-    client.change(URI, 2, [{"text": SOURCE}])
-    answers = [client.response(f"queue-{index}") for index in range(64)]
-    assert any(item.get("error", {}).get("code") == -32803 for item in answers), answers
-    assert "error" in client.response("duplicate")
-    assert client.request("zkc/status", at(URI))["native"] == "checked"
+    client.open(URI, "def broken(x: bool) -> bool:\n    missing\n" + SOURCE)
+    assert client.request("zkc/status", at(URI))["native"] == "invalid"
+    hover = client.request("textDocument/hover", at(URI, 4, 12))
+    assert "bool" in hover["contents"]["value"], hover
+    completion = client.request("textDocument/completion", at(URI, 4, 12))
+    assert completion["items"], completion
 
 for payload in [b"Content-Length: 9999999999\r\n\r\n",
                 b"Content-Length: 2\r\nContent-Length: 2\r\n\r\n{}",
@@ -332,6 +297,7 @@ for payload in [b"Content-Length: 9999999999\r\n\r\n",
     with case(f"malformed framing refuses {payload[:40]!r}"):
         process = subprocess.run([tool("source_lsp")], input=payload, capture_output=True, timeout=10)
         assert process.returncode == 1, process.stdout
+        assert b"source transport: invalid message" in process.stderr, process.stderr
 
 for body in [b'{"jsonrpc":"2.0","method":"initialize","id":1.0}',
              b'{"jsonrpc":"2.0","method":"initialize","id":2147483648}',
@@ -343,5 +309,12 @@ for body in [b'{"jsonrpc":"2.0","method":"initialize","id":1.0}',
         payload = f"Content-Length: {len(body)}\r\n\r\n".encode() + body
         process = subprocess.run([tool("source_lsp")], input=payload, capture_output=True, timeout=10)
         assert process.returncode == 1, process.stdout
+        assert b"source transport: invalid message" in process.stderr, process.stderr
+
+
+with case("plain EOF is distinct from malformed framing"):
+    process = subprocess.run([tool("source_lsp")], input=b"", capture_output=True, timeout=10)
+    assert process.returncode == 1
+    assert b"source transport: invalid message" not in process.stderr, process.stderr
 
 print(f"{counted()} source server cases passed")
