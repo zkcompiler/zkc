@@ -32,7 +32,7 @@ The root has exactly these fields:
 | Field | Meaning |
 |---|---|
 | `format` | Exactly `zkc.oracle-realization/0` |
-| `selection` | Normalized caller-requested root selections and query flush policy |
+| `selection` | Normalized caller-requested roots, query order and authentication boundary |
 | `types` | Canonical ordinary logical type spellings, interned in first-use order |
 | `entries` | Oracle-bearing entries in original declaration order |
 | `declarations` | Complete actual declaration order and symbolic reference slots |
@@ -44,7 +44,10 @@ is 32 MiB, JSON nesting is at most 64, the type table has at most 4096 entries,
 and metadata traversal is bounded by one million object/array units. These are
 representation limits, not additional logical oracle validity premises.
 
-The selection is `{flush, roots}`. `flush` is `immediate` or `after-final-draw`.
+The selection is `{order, authentication, roots}`. `order` is `unrestricted` or
+`after-final-draw`; `authentication` is `per-query` or `atomic-blocks`. Query
+ordering and authentication granularity are separate choices. No `flush` alias
+is admitted.
 Each root row is `{entry, path, scheme, grouping, order}` in original declaration
 and constructor order. `grouping` is `individual` or `antipodal-pairs`; `order`
 is `natural` or `bit-reversed`. An empty scheme requests ideal data and requires
@@ -57,7 +60,7 @@ have at most 64 ordinals; at most 100,000 root selectors are admitted. The reade
 normalizes this external request against the original, checks actual bodies
 under that request, and compares the entire record to its rederived encoding.
 The JSON selection is descriptive, never an alternative source of authority.
-A flush choice is part of that comparison; root construction alone establishes
+Both policy choices are part of that comparison; root construction alone establishes
 no query scheduling or batching property. For `after-final-draw`, both emission
 and independent readback check the frozen prepared source: on every participant's
 reached continuation, no random-service query follows that participant's logical
@@ -108,6 +111,7 @@ operations, executable operands, literal values or helper bodies.
 | `result_references` | `{result, role, stores}` mappings from original handle results to support ports |
 | `constructors` | Source-derived construction inventory and per-role store layouts |
 | `occurrences` | Source-derived generated common sites and their purpose/role/path |
+| `query_blocks` | Ordered logical query paths and their physical request groups |
 | `interface` | Complete native input/output type references and role families |
 | `logical_interface` | Original oracle input/output pairings, distinct from native representation leaves |
 | `contracts` | Complete original clause inventory and exact statement selections |
@@ -233,8 +237,59 @@ the appropriate role stores. It advances after every authenticated answer,
 including the last, before finishing the outer query. Thus an invalid later or
 zero-query virtual child retains the prior opening prefix but prevents the outer
 answer. Zero structural leaves perform no opening exchanges. Duplicate and
-unused queries remain separate reached openings. There is no batching in this
-profile, and complete multi-constructor/multi-holder routing remains unfinished.
+unused virtual queries remain separate reached openings. This reached-prefix
+route also handles queries for which the fixed-block proof below is unavailable.
+Multi-holder routing and general virtual batching remain unsupported.
+
+## Checked atomic query blocks
+
+`per-query` retains one logical query per block. `atomic-blocks` admits a local
+block of at most 32 consecutive base-table queries with the same receiver and
+holder. Every intervening non-query operation closes the block: this includes
+service draws, guards, completion, calls, control flow and answer-dependent work.
+A missing proof closes the block and retains the ordinary singleton route.
+
+Before crossing a query-domain check, the planner and reader derive its validity
+from the actual prepared source. The supported evidence is an index literal
+within the exact table extent, or a successful same-owner `index` service query
+with a literal positive bound no larger than that extent. The extent is static
+or the literal actual `rows` operand of a send; a shape upper bound is not an
+extent. Role restrictions, shape forgetting and invariant repeat captures
+preserve the underlying source identity. Loop carries, sequence selections,
+virtual admissibility laws and arbitrary computed indices supply no such proof.
+This restriction preserves the reached request prefix at an invalid query.
+
+Each `query_blocks` row is `{queries, request_groups}`. `queries` lists all
+logical source paths in order, including duplicates. `request_groups` is either
+an equally sized list of physical opening slots, numbered in first-use order,
+or `null` for ideal evaluation and dynamic virtual enumeration. A shared slot
+requires the same actual source anchor and constructor, the same selected layout
+and the same physical leaf. Equal roots or equal Data do not merge anchors.
+The supported sharing proofs use identical position SSA values or literals
+mapped through the checked layout, including antipodal pairs and bit reversal.
+The entire block partition and slot mapping are rederived, not trusted metadata.
+
+A fixed block emits one request exchange and one response exchange. A singleton
+uses the ordinary request/response component directly. Larger packets are
+ordinary nominal Records whose ordered payloads are those components. Scoped
+`exec.variant` and `exec.match` helpers pack and unpack packets, retaining their
+outcomes and charges; proof values do not become mathematical data. The nominal
+packet identity is `["zkc.oracle.query-packet/0", purpose]`, where purpose is
+`opening_request` or `opening_response`. Existing type, variant and codec limits
+apply. An independent reader checks the actual helper bodies and ordered fields.
+
+Every logical query authenticates its selected response against its own
+suspended root, shape, constructor and position. All authentications dominate
+all source answer releases and subsequent continuation work. A failed block
+releases no source answer and reaches no later block. The complete request
+packet is observable even if the first authentication fails: `atomic-blocks`
+selects that observation boundary explicitly, rather than promising equality
+with per-query failure traces. Physical sharing reduces transmitted openings;
+authentication is currently repeated for each logical query. Resource limits
+and native failures remain those of the generated program. This correspondence
+check is not a resource-trace equivalence, simulation theorem or authenticity
+proof. General virtual/FRI batching requires additional checked shape and
+position evidence.
 
 ## Controller metadata
 

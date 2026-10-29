@@ -295,6 +295,7 @@ add_zkc_component(Transforms
   lib/Transforms/OracleRealizationSelection.cpp
   lib/Transforms/OracleQueryExchange.cpp
   lib/Transforms/OracleQueryExchangeVerification.cpp
+  lib/Transforms/OracleQueryBlocks.cpp
   lib/Transforms/OracleSchedule.cpp
   lib/Transforms/OracleObservations.cpp
   lib/Transforms/OracleCommonPlan.cpp

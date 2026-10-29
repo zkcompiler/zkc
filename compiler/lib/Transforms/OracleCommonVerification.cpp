@@ -92,6 +92,51 @@ bool local(const OracleLocalRecipe &recipe, func::FuncOp actual,
       return false;
   return true;
 }
+bool local(const OraclePacketRecipe &recipe, func::FuncOp actual,
+           const SourceExecutionClosure &closure) {
+  if (!actual || actual.getNumArguments() != recipe.inputs.size() + 1 ||
+      actual.getNumResults() != 1 ||
+      !isa<runtime::ScopeType>(actual.getArgument(0).getType()) ||
+      !equal(actual.getArgumentTypes().drop_front(), recipe.inputs))
+    return false;
+  auto outcome = dyn_cast<exec::OutcomeType>(actual.getResultTypes()[0]);
+  if (!outcome || !equal(outcome.getPayload(), recipe.outputs))
+    return false;
+  auto found = closure.bodies.find(actual.getSymName().str());
+  if (found == closure.bodies.end() || found->second.size() != 2)
+    return false;
+  const auto &step = found->second.front();
+  const auto &last = found->second.back();
+  if (!equal(step.inputs, actual.getArguments().drop_front()) ||
+      !equal(ValueRange(step.outputs).getTypes(), recipe.outputs) ||
+      !isa<exec::ReturnOp>(last.operation) || !last.regions.empty() ||
+      !last.outputs.empty() || !equal(last.inputs, step.outputs))
+    return false;
+  if (recipe.pack) {
+    auto pack = dyn_cast<exec::VariantOp>(step.operation);
+    return pack && step.regions.empty() && pack.getAlternative() == "Record" &&
+           pack.getSite() == "packet";
+  }
+  auto match = dyn_cast<exec::MatchOp>(step.operation);
+  if (!match || match.getSite() != "packet" || step.regions.size() != 1 ||
+      match.getAlternatives().size() != 1 ||
+      cast<StringAttr>(match.getAlternatives()[0]).getValue() != "Record")
+    return false;
+  auto fields = step.regions.front();
+  if (!fields || fields.getNumArguments() != recipe.outputs.size() + 1 ||
+      fields.getNumResults() != 1 || !fields->hasAttr("runtime.region") ||
+      !isa<runtime::ScopeType>(fields.getArgument(0).getType()) ||
+      !equal(fields.getArgumentTypes().drop_front(), recipe.outputs) ||
+      fields.getResultTypes()[0] != actual.getResultTypes()[0])
+    return false;
+  auto body = closure.bodies.find(fields.getSymName().str());
+  if (body == closure.bodies.end() || body->second.size() != 1)
+    return false;
+  const auto &finish = body->second.front();
+  return isa<exec::CompleteOp>(finish.operation) && finish.regions.empty() &&
+         finish.outputs.empty() &&
+         equal(finish.inputs, fields.getArguments().drop_front());
+}
 // Every extra declaration is reachable from a checked generated primitive or
 // the realized entry. Original declarations retain their exact body. A spare
 // implementation cannot hide behind an unused symbol in a checked candidate.
@@ -183,7 +228,8 @@ Error checkOracleRealizationModel(
     const OracleVerificationContext &sourceContext,
     const OracleVerificationContext &targetContext,
     ArrayRef<OracleCommonEntryRealization> actualEntries,
-    ArrayRef<OracleRootSelection> selections) {
+    ArrayRef<OracleRootSelection> selections,
+    OracleAuthentication authentication) {
   ModuleOp prepared = sourceContext.getModule(),
            actualModule = targetContext.getModule();
   auto entries = oracleEntries(prepared);
@@ -274,7 +320,7 @@ Error checkOracleRealizationModel(
     }
     auto plan =
         planOracleCommon(prepared, entry, *requirements, realized.controllers,
-                         realized.allocators, realized.merkle);
+                         realized.allocators, realized.merkle, authentication);
     if (!plan)
       return plan.takeError();
     if (realized.inputShapes != plan->inputShapes ||
@@ -294,7 +340,9 @@ Error checkOracleRealizationModel(
       bool checked = std::visit(
           [&](const auto &body) {
             if constexpr (std::is_same_v<std::decay_t<decltype(body)>,
-                                         OracleLocalRecipe>)
+                                         OracleLocalRecipe> ||
+                          std::is_same_v<std::decay_t<decltype(body)>,
+                                         OraclePacketRecipe>)
               return local(body, actual, closure);
             else
               return checkOracleQueryExchange(targetContext, actual, body);

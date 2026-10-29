@@ -222,6 +222,7 @@ def main():
         ROOT / "lib/Transforms/OracleAnchorStorage.h",
         ROOT / "lib/Transforms/OracleLayout.h",
         ROOT / "lib/Transforms/OracleSchedule.h",
+        ROOT / "lib/Transforms/OracleQueryBlocks.h",
         ROOT / "lib/Transforms/OracleMerkle.h",
         ROOT / "lib/Transforms/OracleTableRead.h",
         ROOT / "lib/Transforms/OracleVirtualFunctions.h",

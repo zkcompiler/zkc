@@ -77,3 +77,17 @@ def test_oracle_commitment_roots(toolchain, directory, journal):
     journal.run([
         toolchain.driver("oracle_commitment_roots"), artifacts,
     ], keep="native.txt")
+
+
+def test_oracle_query_batches(toolchain, directory, journal):
+    artifacts = directory / "batches"
+    for mode in (
+        "paired", "individual", "reversed", "invalid-first", "invalid-later", "guard",
+    ):
+        journal.run([
+            toolchain.tool("compiler", "test/zkc-oracle_commitment_roots-test"),
+            artifacts, f"batch-{mode}",
+        ], keep=f"compiler-{mode}.txt", timeout=600)
+    journal.run([
+        toolchain.driver("oracle_commitment_roots"), artifacts, "batches",
+    ], keep="native.txt")

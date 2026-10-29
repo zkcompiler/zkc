@@ -33,7 +33,13 @@ struct OracleLocalRecipe : OracleHelperSignature {
   std::vector<OracleLocalInstruction> instructions;
   std::vector<unsigned> results;
 };
-using OracleCommonLocal = std::variant<OracleLocalRecipe, OracleExchangeRecipe>;
+// Wire packets may carry non-mathematical proof values. Packing and matching
+// therefore retain the existing scoped execution and outcome boundary.
+struct OraclePacketRecipe : OracleHelperSignature {
+  bool pack;
+};
+using OracleCommonLocal =
+    std::variant<OracleLocalRecipe, OracleExchangeRecipe, OraclePacketRecipe>;
 inline const OracleHelperSignature &
 localSignature(const OracleCommonLocal &local) {
   return std::visit(
@@ -48,11 +54,18 @@ struct OracleCommonOccurrence {
   std::string site, purpose, role;
   std::vector<unsigned> sourcePath;
 };
+struct OracleCommonQueryBlock {
+  std::vector<std::vector<unsigned>> queries;
+  // Logical query -> physical request slot for a fixed base-query block.
+  // Null for ideal evaluation or a dynamic virtual controller.
+  std::optional<std::vector<unsigned>> requestGroups;
+};
 struct OracleCommonPlan {
   mlir::DictionaryAttr attributes;
   OracleCommonBlock body;
   std::vector<OracleCommonLocal> locals;
   std::vector<OracleCommonOccurrence> occurrences;
+  std::vector<OracleCommonQueryBlock> queryBlocks;
   std::vector<OracleInputShape> inputShapes;
   std::vector<OracleResultStore> resultStores;
   std::vector<OracleResultReference> resultReferences;
@@ -78,13 +91,15 @@ planOracleCommon(mlir::ModuleOp prepared, llvm::StringRef entry,
                  const OracleCommonRequirements &,
                  llvm::ArrayRef<OracleCommonController>,
                  llvm::ArrayRef<std::vector<mlir::func::FuncOp>> allocators,
-                 llvm::ArrayRef<OracleMerkleFunctions> merkle);
+                 llvm::ArrayRef<OracleMerkleFunctions> merkle,
+                 OracleAuthentication authentication);
 // Internal parsed-model reader. Only the record reader publishes its result.
 class OracleVerificationContext;
 llvm::Error checkOracleRealizationModel(
     const OracleVerificationContext &source,
     const OracleVerificationContext &target,
     llvm::ArrayRef<OracleCommonEntryRealization> entries,
-    llvm::ArrayRef<OracleRootSelection> selections);
+    llvm::ArrayRef<OracleRootSelection> selections,
+    OracleAuthentication authentication);
 } // namespace zkc::protocol
 #endif

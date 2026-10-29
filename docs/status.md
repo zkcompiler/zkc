@@ -511,8 +511,13 @@ before a later random-service query. The requested `after-final-draw` policy is
 now checked for every logical query owner, both during emission and independent
 readback against the frozen source. It includes index and field draws, keeps
 participant continuations separate and uses one bounded analysis budget. This
-permits immediate authentication after the last draw; batching, deferred proofs
-and a simulation theorem remain separate obligations. Private
+permits authentication after the last draw. Authentication granularity is a
+separate requested policy. Checked atomic blocks group consecutive base-table
+queries only when exact source facts prove their domain checks succeed. They
+share duplicate and same-leaf openings for the same actual anchor, retain every
+logical query and authenticate all answers before releasing any source answer.
+Unknown domains and barriers retain singleton blocks. General virtual/FRI
+batching, deferred proofs and a simulation theorem remain separate obligations. Private
 anchor-storage planning retains fresh constructor/instance references, actual
 repeat coordinates and role-specific payloads as ordinary sequences and records.
 Independent readers check generated append allocations and reference-tagged

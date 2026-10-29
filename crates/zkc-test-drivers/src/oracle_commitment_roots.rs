@@ -7,6 +7,7 @@ use zkc_kernels::plonky3::{
     oracle::Shape,
 };
 use zkc_runtime::host::joint::*;
+use zkc_runtime::vm::Value as RuntimeValue;
 
 fn backend(role: &str) -> CpuBackend {
     CpuBackend::new(
@@ -41,6 +42,11 @@ fn main() {
         .nth(1)
         .expect("common root fixtures directory");
     let directory = Path::new(&directory);
+    if std::env::args().nth(2).as_deref() == Some("batches") {
+        let cases = batch_trials(directory);
+        println!("{cases} native query-block, sharing and refusal controls passed");
+        return;
+    }
     let mut cases = 0;
     for input in [false, true] {
         for fixed in [false, true] {
@@ -591,6 +597,240 @@ fn multiple_trials(directory: &Path) -> usize {
                 }
                 cases += 1;
             }
+        }
+    }
+    cases
+}
+
+// Inspect the ordinary packet codec, so the controls observe the actual wire
+// requests rather than trusting the compiler's query-block record.
+#[derive(Default)]
+struct BatchMessages {
+    requests: Vec<Vec<(u64, u64, u64)>>,
+    responses: Vec<usize>,
+    fault: &'static str,
+    injected: bool,
+}
+impl Hooks<CpuBackend> for BatchMessages {
+    fn transfer(
+        &mut self,
+        exchange: Exchange<'_>,
+        bytes: &[u8],
+        limit: usize,
+    ) -> Result<Option<Vec<u8>>, String> {
+        assert!(bytes.len() <= limit);
+        let request = exchange.site.contains("opening_request");
+        let response = exchange.site.contains("opening_response");
+        if !request && !response {
+            return Ok(None);
+        }
+        assert_eq!(
+            (exchange.sender, exchange.receiver),
+            if request { ("V", "P") } else { ("P", "V") }
+        );
+        let decoded = backend("V")
+            .decode_native_value(exchange.ty, bytes)
+            .unwrap();
+        let Value::Variant(outer) = &decoded else {
+            panic!("non-variant packet")
+        };
+        let packet = matches!(outer.payload().first(), Some(Value::Variant(_)));
+        let mut components = if packet {
+            outer.payload().to_vec()
+        } else {
+            vec![decoded.clone()]
+        };
+        if request {
+            self.requests.push(
+                components
+                    .iter()
+                    .map(|component| {
+                        let Value::Variant(value) = component else {
+                            panic!("non-variant request")
+                        };
+                        let [
+                            Value::Index(constructor),
+                            Value::Index(instance),
+                            Value::Index(position),
+                        ] = value.payload()
+                        else {
+                            panic!("bad request")
+                        };
+                        (*constructor, *instance, *position)
+                    })
+                    .collect(),
+            );
+        } else {
+            self.responses.push(components.len());
+        }
+        let inject = !self.injected
+            && match self.fault {
+                "request-position" | "request-instance" | "unknown-constructor" => request,
+                "row" | "proof" => response,
+                "response-swap" => response && packet,
+                "" => false,
+                _ => panic!("unknown fault"),
+            };
+        if !inject {
+            return Ok(None);
+        }
+        self.injected = true;
+        if self.fault == "proof" {
+            let mut changed = bytes.to_vec();
+            *changed.last_mut().unwrap() ^= 1;
+            return Ok(Some(changed));
+        }
+        if self.fault == "response-swap" {
+            let last = components.len() - 1;
+            components.swap(0, last);
+        } else {
+            let ty = components[0].physical_type();
+            let Value::Variant(value) = &components[0] else {
+                unreachable!()
+            };
+            let mut payload = value.payload().to_vec();
+            match self.fault {
+                "request-position" => payload[2] = Value::Index(1),
+                "request-instance" => payload[1] = Value::Index(99),
+                "unknown-constructor" => payload[0] = Value::Index(99),
+                "row" => {
+                    let Value::KoalaBearExt4Vector(row) = &payload[0] else {
+                        panic!("bad row")
+                    };
+                    payload[0] = Value::KoalaBearExt4Vector(vec![scalar(77); row.len()].into());
+                }
+                _ => unreachable!(),
+            }
+            components[0] = Value::Variant(Variant::new(ty, value.alternative(), payload).unwrap());
+        }
+        let changed = if packet {
+            Value::Variant(
+                Variant::new(exchange.ty.clone(), outer.alternative(), components).unwrap(),
+            )
+        } else {
+            components.pop().unwrap()
+        };
+        Ok(Some(backend("V").encode_native_value(&changed).unwrap()))
+    }
+}
+fn batch_trials(directory: &Path) -> usize {
+    let mut cases = 0;
+    for mode in [
+        "paired",
+        "individual",
+        "reversed",
+        "invalid-first",
+        "invalid-later",
+        "guard",
+    ] {
+        let bundle = Bundle::admit(
+            &std::fs::read(directory.join(format!("batch-{mode}.bundle"))).unwrap(),
+            &backend("V"),
+            zkc_cpu::cpu_contracts(),
+            BundleLimits::default(),
+        )
+        .unwrap();
+        for (position, allow, fault) in [
+            (0, true, ""),
+            (7, true, ""),
+            (8, true, ""),
+            (u64::MAX, true, ""),
+            (0, false, ""),
+            (8, false, ""),
+            (0, true, "row"),
+            (0, true, "proof"),
+            (0, true, "response-swap"),
+            (0, true, "request-position"),
+            (0, true, "request-instance"),
+            (0, true, "unknown-constructor"),
+        ] {
+            // Identical data yields equal roots. It must still be impossible to
+            // swap the two constructors' response alternatives.
+            let data = || Value::KoalaBearExt4Vector((0..8).map(scalar).collect::<Vec<_>>().into());
+            let mut messages = BatchMessages {
+                fault,
+                ..Default::default()
+            };
+            let report = run(
+                &bundle,
+                "oracle_roots",
+                vec![
+                    RoleInput {
+                        role: "P".into(),
+                        backend: backend("P"),
+                        values: vec![data(), data()],
+                    },
+                    RoleInput {
+                        role: "V".into(),
+                        backend: backend("V"),
+                        values: vec![Value::Index(position), Value::Bool(allow)],
+                    },
+                ],
+                RunLimits::default(),
+                &mut messages,
+            )
+            .unwrap();
+            let valid = !matches!(mode, "invalid-first" | "invalid-later") || position < 8;
+            let complete = allow && valid && fault.is_empty();
+            assert_eq!(
+                matches!(report.outcome, Outcome::Completed),
+                complete,
+                "{mode}/{position}/{allow}/{fault}: {:?}",
+                report.outcome
+            );
+            let verifier = report.roles.iter().find(|r| r.role == "V").unwrap();
+            if complete {
+                let x = if mode == "invalid-first" { position } else { 0 };
+                let y = if mode == "invalid-later" { position } else { 4 };
+                assert_eq!(verifier.outputs.len(), 5);
+                for (value, expected) in verifier.outputs.iter().zip([x, y, 0, 0, 1]) {
+                    assert!(
+                        matches!(value, Value::KoalaBearExt4Field(actual) if *actual==scalar(expected))
+                    );
+                }
+            } else {
+                assert!(matches!(report.outcome, Outcome::ParticipantStopped { .. }));
+                assert!(verifier.outputs.is_empty());
+            }
+            let a = |position| (0, 0, position);
+            let b = (1, 0, 0);
+            let mut expected = match mode {
+                "paired" | "reversed" => vec![vec![a(0), b]],
+                "individual" => vec![vec![a(0), a(4), b]],
+                "invalid-first" if !valid => vec![],
+                "invalid-first" => vec![vec![a(position)], vec![a(4), b]],
+                "invalid-later" if !valid => vec![vec![a(0)]],
+                "invalid-later" => vec![vec![a(0)], vec![a(position)], vec![a(0), b]],
+                "guard" if !allow => vec![vec![a(0)]],
+                "guard" => vec![vec![a(0)], vec![a(4), b]],
+                _ => unreachable!(),
+            };
+            if fault.is_empty() {
+                if complete {
+                    expected.push(vec![a(1)]);
+                }
+            } else {
+                assert!(messages.injected, "{mode}/{fault} was not injected");
+                let reached = if fault == "response-swap" {
+                    expected.iter().position(|batch| batch.len() > 1).unwrap() + 1
+                } else {
+                    1
+                };
+                expected.truncate(reached);
+            }
+            assert_eq!(
+                messages.requests, expected,
+                "{mode}/{position}/{allow}/{fault}"
+            );
+            let mut expected_responses: Vec<_> = expected.iter().map(Vec::len).collect();
+            if matches!(fault, "request-instance" | "unknown-constructor") {
+                expected_responses.clear();
+            }
+            assert_eq!(messages.responses, expected_responses, "{mode}/{fault}");
+            for (_, native) in &report.backends {
+                assert_eq!(native.active_frames(), 0);
+            }
+            cases += 1;
         }
     }
     cases

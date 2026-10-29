@@ -6,7 +6,8 @@
 namespace zkc::protocol {
 enum class OracleLeafGrouping { Individual, AntipodalPairs };
 enum class OracleLeafOrder { Natural, BitReversed };
-enum class OracleQueryFlush { Immediate, AfterFinalDraw };
+enum class OracleQueryOrder { Unrestricted, AfterFinalDraw };
+enum class OracleAuthentication { PerQuery, AtomicBlocks };
 struct OracleTableRealization {
   // Empty scheme selects ideal tables. Its layout must be the canonical
   // individual/natural choice; Merkle layout has no meaning on ideal data.
@@ -31,8 +32,11 @@ struct OracleRealizationPolicy {
   // AfterFinalDraw requires that no participant makes a random-service query
   // after its own logical oracle query on a reached continuation. This includes
   // every service method and is checked against the frozen prepared source.
-  // Neither this property nor Immediate authorizes batching or delayed proofs.
-  OracleQueryFlush flush = OracleQueryFlush::Immediate;
+  // Ordering alone authorizes neither batching nor delayed authentication.
+  OracleQueryOrder order = OracleQueryOrder::Unrestricted;
+  // Atomic blocks require checked domain facts, preserve barriers and release
+  // no source answer until every selected opening in the block authenticates.
+  OracleAuthentication authentication = OracleAuthentication::PerQuery;
 };
 } // namespace zkc::protocol
 #endif

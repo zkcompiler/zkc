@@ -184,7 +184,7 @@ Error checkOracleFinalDrawSchedule(ModuleOp prepared) {
       if (!summary)
         return summary.takeError();
       if (summary->queryBeforeDraw())
-        return error("oracle-realization-flush-profile");
+        return error("oracle-realization-query-order");
     }
   }
   return Error::success();

@@ -8,8 +8,10 @@ namespace zkc::protocol {
 Expected<std::vector<OracleRootSelection>>
 resolveOracleRealizationSelection(mlir::ModuleOp prepared,
                                   const OracleRealizationPolicy &policy) {
-  if (policy.flush != OracleQueryFlush::Immediate &&
-      policy.flush != OracleQueryFlush::AfterFinalDraw)
+  if ((policy.order != OracleQueryOrder::Unrestricted &&
+       policy.order != OracleQueryOrder::AfterFinalDraw) ||
+      (policy.authentication != OracleAuthentication::PerQuery &&
+       policy.authentication != OracleAuthentication::AtomicBlocks))
     return error("oracle-realization-selection");
   using Key = std::pair<std::string, std::vector<unsigned>>;
   std::map<Key, OracleTableRealization> selected;
@@ -33,7 +35,7 @@ resolveOracleRealizationSelection(mlir::ModuleOp prepared,
   auto entries = oracleEntries(prepared);
   if (!entries)
     return entries.takeError();
-  if (policy.flush == OracleQueryFlush::AfterFinalDraw)
+  if (policy.order == OracleQueryOrder::AfterFinalDraw)
     if (auto e = checkOracleFinalDrawSchedule(prepared))
       return std::move(e);
   std::vector<OracleRootSelection> result;

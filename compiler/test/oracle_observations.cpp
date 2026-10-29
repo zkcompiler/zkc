@@ -1,4 +1,5 @@
 #include "../lib/Transforms/OracleCommonRealization.h"
+#include "../lib/Transforms/OracleQueryBlocks.h"
 #include "../lib/Transforms/OracleSchedule.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
@@ -98,10 +99,10 @@ int main() {
                     .queryBeforeDraw() == bad,
             "reached query/draw order changed");
     OracleRealizationPolicy policy;
-    policy.flush = OracleQueryFlush::AfterFinalDraw;
+    policy.order = OracleQueryOrder::AfterFinalDraw;
     auto selection = resolveOracleRealizationSelection(*module, policy);
     if (bad)
-      refuses(std::move(selection), "oracle-realization-flush-profile");
+      refuses(std::move(selection), "oracle-realization-query-order");
     else
       (void)take(std::move(selection));
   };
@@ -230,20 +231,20 @@ int main() {
                        serviceOwner.str() + "\"],[\"P\",\"V\"]]");
       auto module = parse(text);
       OracleRealizationPolicy policy;
-      policy.flush = OracleQueryFlush::AfterFinalDraw;
+      policy.order = OracleQueryOrder::AfterFinalDraw;
       return resolveOracleRealizationSelection(*module, policy);
     };
     (void)take(selected(query + atP(draw), "P"));
     (void)take(selected(atP(query) + draw, "V"));
     refuses(selected(atP(query) + atP(draw), "P"),
-            "oracle-realization-flush-profile");
+            "oracle-realization-query-order");
     refuses(
         selected(
             atP(query) +
                 R"mlir("protocol.finish_if"(%yes,%no) {owner="V",site="done"} : (i1,i1)->())mlir" +
                 atP(draw),
             "P"),
-        "oracle-realization-flush-profile");
+        "oracle-realization-query-order");
   });
   cases.run("unused virtual query bodies do not create observations", [&] {
     const char *declarations = R"mlir(
@@ -258,7 +259,7 @@ int main() {
 )mlir";
     auto module = parse(source(draw, declarations));
     OracleRealizationPolicy policy;
-    policy.flush = OracleQueryFlush::AfterFinalDraw;
+    policy.order = OracleQueryOrder::AfterFinalDraw;
     (void)take(resolveOracleRealizationSelection(*module, policy));
   });
   cases.run(
@@ -274,7 +275,7 @@ int main() {
           return prepared;
         };
         OracleRealizationPolicy policy;
-        policy.flush = OracleQueryFlush::AfterFinalDraw;
+        policy.order = OracleQueryOrder::AfterFinalDraw;
         auto good = prepare(source(draw + query));
         auto realized = take(emitOracleRealization(*good, policy));
         auto record = take(serializeOracleRealization(*good, realized, policy));
@@ -305,12 +306,12 @@ int main() {
 
         auto bad = prepare(source(query + draw));
         refuses(emitOracleRealization(*bad, policy),
-                "oracle-realization-flush-profile");
+                "oracle-realization-query-order");
         auto immediate = take(emitOracleRealization(*bad));
         auto immediateRecord =
             take(serializeOracleRealization(*bad, immediate));
         auto forged = take(json::parse(immediateRecord));
-        (*forged.getAsObject()->getObject("selection"))["flush"] =
+        (*forged.getAsObject()->getObject("selection"))["order"] =
             "after-final-draw";
         std::string forgedRecord;
         raw_string_ostream(forgedRecord) << forged;
@@ -318,7 +319,7 @@ int main() {
                                               forgedRecord, policy);
         require(bool(failure), "record authorized an invalid source schedule");
         require(namesIdentifier(toString(std::move(failure)),
-                                "oracle-realization-flush-profile"),
+                                "oracle-realization-query-order"),
                 "readback did not rederive the source schedule");
       });
   cases.run("unknown entry roles and mutated source refuse", [&] {
@@ -330,6 +331,76 @@ int main() {
     module->getBody()->clear();
     refuses(analyzeOracleObservations(*module, "example", "V"),
             "oracle-observation-source");
+  });
+  cases.run("query blocks require exact source domain evidence", [&] {
+    for (StringRef mode :
+         {"literal", "outside", "unknown", "sampled", "sampled-wide",
+          "dynamic-literal", "dynamic-bound", "invariant"}) {
+      auto text = source(query);
+      auto replace = [&](StringRef before, StringRef after) {
+        auto at = text.find(before);
+        require(at != std::string::npos, "missing domain fixture slot");
+        text.replace(at, before.size(), after);
+      };
+      replace("random.bls12-381.fr/0", "random.goldilocks.ext2-binomial7/0");
+      for (size_t at; (at = text.find("bls12-381.fr")) != std::string::npos;)
+        text.replace(at, StringRef("bls12-381.fr").size(),
+                     "goldilocks.ext2-binomial7");
+      if (mode == "sampled" || mode == "sampled-wide") {
+        replace(" %answer =", "%sample = \"protocol.query\"(%random,%rows) "
+                              "{owner=\"V\",method=\"index\",site=\"sample\"} "
+                              ": (!R,ui64)->ui64\n %answer =");
+        replace("(%word,%position)", "(%word,%sample)");
+        if (mode == "sampled-wide") {
+          replace(
+              "%sample =",
+              "%wide = \"data.index\"() {value=\"32\"} : ()->ui64\n %sample =");
+          replace("(%random,%rows)", "(%random,%wide)");
+        }
+      } else if (mode == "invariant") {
+        replace(query, loop("%one", R"mlir(
+ %answer = "protocol.oracle_query"(%word,%position) {owner="V",site="read"} : (!H,ui64)->!F
+)mlir"));
+        replace("(%one,%word,%position,%random", "(%one,%word,%zero,%random");
+      } else if (mode != "unknown") {
+        replace("(%word,%position)",
+                mode == "outside" ? "(%word,%rows)" : "(%word,%zero)");
+      }
+      if (mode.starts_with("dynamic-")) {
+        replace(", 16 : ui64", "");
+        replace("shape_bounds={}", "shape_bounds={rows=16:ui64}");
+        if (mode == "dynamic-bound")
+          replace("(%data,%rows)", "(%data,%trips)");
+      }
+      auto module = parse(text);
+      auto prepared = zkc::mathematical::prepareProtocol(*module, false);
+      require(bool(prepared), "domain fixture did not prepare");
+      auto storage = take(planOracleAnchorStorage(
+          *prepared, "example", [](const auto &) -> Expected<std::string> {
+            return std::string(
+                "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0");
+          }));
+      unsigned remaining = 100000, queries = 0;
+      prepared->walk([&](zkc::protocol_ir::OracleQueryOp query) {
+        ++queries;
+        auto fact = take(admitOracleDirectQuery(query, storage, remaining));
+        bool expected = mode == "literal" || mode == "sampled" ||
+                        mode == "dynamic-literal" || mode == "invariant";
+        require(bool(fact) == expected,
+                "incorrect domain evidence for " + mode.str());
+        unsigned exhausted = 0;
+        refuses(admitOracleDirectQuery(query, storage, exhausted),
+                "oracle-query-block-limit");
+      });
+      require(queries == 1, "domain fixture lost its query");
+    }
+  });
+  cases.run("unknown authentication policies refuse", [&] {
+    auto module = parse(source(query));
+    OracleRealizationPolicy policy;
+    policy.authentication = static_cast<OracleAuthentication>(99);
+    refuses(resolveOracleRealizationSelection(*module, policy),
+            "oracle-realization-selection");
   });
   return cases.result();
 }

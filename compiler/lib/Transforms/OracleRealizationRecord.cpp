@@ -374,6 +374,7 @@ struct Codec {
       object.field("result_references", value.resultReferences);
       object.derived("constructors");
       object.derived("occurrences");
+      object.derived("query_blocks");
       object.derived("interface");
       object.derived("logical_interface");
       object.derived("contracts");
@@ -493,13 +494,14 @@ Expected<json::Value> contracts(Codec &codec,
 }
 Expected<json::Object> derived(Codec &codec, ModuleOp prepared,
                                const OracleCommonEntryRealization &entry,
-                               ArrayRef<OracleRootSelection> selections) {
+                               ArrayRef<OracleRootSelection> selections,
+                               OracleAuthentication authentication) {
   auto requirements = oracleRequirements(prepared, entry.entry, selections);
   if (!requirements)
     return requirements.takeError();
   auto plan =
       planOracleCommon(prepared, entry.entry, *requirements, entry.controllers,
-                       entry.allocators, entry.merkle);
+                       entry.allocators, entry.merkle, authentication);
   if (!plan)
     return plan.takeError();
   auto unit = cast<protocol_ir::ProtocolModuleOp>(prepared.getBody()->front());
@@ -567,6 +569,17 @@ Expected<json::Object> derived(Codec &codec, ModuleOp prepared,
                                        {"purpose", item.purpose},
                                        {"role", item.role},
                                        {"path", numbers(item.sourcePath)}});
+  json::Array blocks;
+  for (const auto &block : plan->queryBlocks) {
+    json::Array queries;
+    for (const auto &path : block.queries)
+      queries.push_back(numbers(path));
+    json::Value groups(nullptr);
+    if (block.requestGroups)
+      groups = numbers(*block.requestGroups);
+    blocks.push_back(json::Object{{"queries", std::move(queries)},
+                                  {"request_groups", std::move(groups)}});
+  }
   auto signature = cast<FunctionType>(
       plan->attributes.getAs<TypeAttr>("function_type").getValue());
   json::Array inputs, outputs;
@@ -578,6 +591,7 @@ Expected<json::Object> derived(Codec &codec, ModuleOp prepared,
       {"contracts", std::move(*logicalContracts)},
       {"constructors", std::move(constructors)},
       {"occurrences", std::move(occurrences)},
+      {"query_blocks", std::move(blocks)},
       {"logical_interface",
        json::Object{{"inputs", std::move(logicalInputs)},
                     {"outputs", std::move(logicalOutputs)}}},
@@ -622,7 +636,7 @@ json::Array declarations(ModuleOp candidate) {
 Expected<json::Value> encode(ModuleOp prepared, ModuleOp candidate,
                              ArrayRef<OracleCommonEntryRealization> entries,
                              ArrayRef<OracleRootSelection> selections,
-                             OracleQueryFlush flush) {
+                             const OracleRealizationPolicy &policy) {
   if (!prepared || !candidate ||
       !hasSingleElement(candidate.getBody()->getOperations()) ||
       !isa<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front()))
@@ -635,7 +649,8 @@ Expected<json::Value> encode(ModuleOp prepared, ModuleOp candidate,
   if (!codec.valid)
     return refuse();
   for (auto [node, entry] : zip(*encoded.getAsArray(), entries)) {
-    auto fields = derived(codec, prepared, entry, selections);
+    auto fields =
+        derived(codec, prepared, entry, selections, policy.authentication);
     if (!fields)
       return fields.takeError();
     for (auto &field : *fields)
@@ -665,10 +680,15 @@ Expected<json::Value> encode(ModuleOp prepared, ModuleOp candidate,
   }
   return json::Object{
       {"format", "zkc.oracle-realization/0"},
-      {"selection", json::Object{{"flush", flush == OracleQueryFlush::Immediate
-                                               ? "immediate"
-                                               : "after-final-draw"},
-                                 {"roots", std::move(roots)}}},
+      {"selection",
+       json::Object{{"order", policy.order == OracleQueryOrder::Unrestricted
+                                  ? "unrestricted"
+                                  : "after-final-draw"},
+                    {"authentication",
+                     policy.authentication == OracleAuthentication::PerQuery
+                         ? "per-query"
+                         : "atomic-blocks"},
+                    {"roots", std::move(roots)}}},
       {"types", std::move(types)},
       {"entries", std::move(encoded)},
       {"declarations", declarations(candidate)}};
@@ -682,7 +702,7 @@ serializeOracleRealization(ModuleOp prepared,
   if (!selections)
     return selections.takeError();
   auto record = encode(prepared, actual.module.get(), actual.entries,
-                       *selections, policy.flush);
+                       *selections, policy);
   if (!record)
     return record.takeError();
   std::string text;
@@ -748,11 +768,11 @@ Error checkOracleRealization(ModuleOp prepared, ModuleOp candidate,
   codec.item(*record->get("entries"), entries);
   if (!codec.valid)
     return refuse();
-  if (auto e = checkOracleRealizationModel(*sourceContext, *targetContext,
-                                           entries, *selections))
+  if (auto e =
+          checkOracleRealizationModel(*sourceContext, *targetContext, entries,
+                                      *selections, policy.authentication))
     return e;
-  auto expected =
-      encode(prepared, candidate, entries, *selections, policy.flush);
+  auto expected = encode(prepared, candidate, entries, *selections, policy);
   if (!expected)
     return expected.takeError();
   if (!zkc::equalNaturalJson(*expected, *parsed))

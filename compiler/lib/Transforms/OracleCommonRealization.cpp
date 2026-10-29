@@ -52,6 +52,55 @@ func::FuncOp local(pir::ProtocolModuleOp unit,
   control.returned(outputs);
   return helper;
 }
+func::FuncOp local(pir::ProtocolModuleOp unit,
+                   const OraclePacketRecipe &recipe) {
+  OpBuilder builder(unit.getContext());
+  auto make = [&](StringRef name, TypeRange inputs, TypeRange outputs,
+                  bool region) {
+    builder.setInsertionPointToEnd(&unit.getBody().front());
+    SmallVector<Type> formals{runtime::ScopeType::get(unit.getContext())};
+    append_range(formals, inputs);
+    auto helper = func::FuncOp::create(
+        builder, unit.getLoc(), name,
+        builder.getFunctionType(
+            formals, exec::OutcomeType::get(unit.getContext(),
+                                            SmallVector<Type>(outputs))));
+    helper.setPrivate();
+    helper.setNoInline(true);
+    if (region)
+      helper->setAttr("runtime.region", builder.getUnitAttr());
+    else
+      helper->setAttr("runtime.origin",
+                      builder.getArrayAttr({builder.getStringAttr(name),
+                                            builder.getArrayAttr({})}));
+    builder.setInsertionPointToEnd(helper.addEntryBlock());
+    return helper;
+  };
+  auto helper = make(recipe.name, recipe.inputs, recipe.outputs, false);
+  exec::ScopedExecutionBuilder control(builder, helper);
+  auto inputs = helper.getArguments().drop_front();
+  if (recipe.pack) {
+    control.returned(control.invoke(
+        "exec.variant", recipe.outputs, control.scoped(inputs),
+        {builder.getNamedAttr("alternative", builder.getStringAttr("Record")),
+         builder.getNamedAttr("site", builder.getStringAttr("packet"))}));
+  } else {
+    control.returned(control.match(
+        inputs.front(), {}, recipe.outputs, {"Record"}, "packet",
+        [&](unsigned) {
+          unsigned suffix = 0;
+          std::string name;
+          do {
+            name = recipe.name + "_fields_" + std::to_string(suffix++);
+          } while (SymbolTable::lookupSymbolIn(unit, name));
+          auto fields = make(name, recipe.outputs, recipe.outputs, true);
+          exec::ScopedExecutionBuilder region(builder, fields);
+          region.complete(fields.getArguments().drop_front());
+          return fields;
+        }));
+  }
+  return helper;
+}
 void body(OpBuilder &builder, Location loc, const OracleCommonBlock &plan,
           Block &block) {
   llvm::DenseMap<unsigned, Value> environment;
@@ -136,14 +185,16 @@ emitOracleRealization(ModuleOp prepared,
     }
     auto plan =
         planOracleCommon(prepared, entry, *requirements, item.controllers,
-                         item.allocators, item.merkle);
+                         item.allocators, item.merkle, policy.authentication);
     if (!plan)
       return plan.takeError();
     for (const auto &recipe : plan->locals)
       item.locals.push_back(std::visit(
           [&](const auto &body) -> func::FuncOp {
             if constexpr (std::is_same_v<std::decay_t<decltype(body)>,
-                                         OracleLocalRecipe>)
+                                         OracleLocalRecipe> ||
+                          std::is_same_v<std::decay_t<decltype(body)>,
+                                         OraclePacketRecipe>)
               return local(unit, body);
             else
               return emitOracleQueryExchange(*result.module, body);
