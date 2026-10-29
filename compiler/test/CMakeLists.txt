@@ -46,6 +46,10 @@ add_zkc_test(oracle_table_read Compiler oracle-table-read)
 add_zkc_test(oracle_virtual_functions Compiler oracle-virtual-functions)
 add_zkc_test(oracle_query_capacity Transforms oracle-query-capacity)
 add_zkc_test(oracle_query_controller Compiler oracle-query-controller)
+add_zkc_test(realized_protocol Transforms realized-protocol)
+target_compile_definitions(zkc-realized_protocol-test PRIVATE
+  ZKC_REALIZED_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles")
+mlir_target_link_libraries(zkc-realized_protocol-test PRIVATE MLIRParser)
 add_zkc_test(oracle_common_realization Compiler oracle-common-realization)
 target_compile_definitions(zkc-oracle_common_realization-test PRIVATE
   ZKC_ORACLE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles")

@@ -1,0 +1,139 @@
+#include "../lib/Transforms/OracleCommonRealization.h"
+#include "../lib/Transforms/RealizedProtocol.h"
+#include "mlir/IR/OperationSupport.h"
+#include "mlir/IR/Verifier.h"
+#include "mlir/Parser/Parser.h"
+#include "support/NativeCases.h"
+#include "zkc/Dialect/Registry.h"
+#include "zkc/Dialect/Relation/IR/RelationOps.h"
+#include "zkc/Support/Json.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include <type_traits>
+
+using namespace mlir;
+using namespace llvm;
+using namespace zkc;
+using namespace zkc::mathematical;
+using namespace zkc::test;
+static_assert(!std::is_copy_constructible_v<RealizedProtocol>);
+static_assert(!std::is_default_constructible_v<RealizedProtocol>);
+namespace {
+PreparedProtocol prepare(ModuleOp source) {
+  auto result = PreparedProtocol::prepare(source);
+  require(bool(result), "valid source did not prepare");
+  return std::move(*result);
+}
+void checked(const RealizedProtocol &owner) {
+  auto original = owner.originalSnapshot();
+  auto candidate = owner.candidateSnapshot();
+  require(bool(original) && bool(candidate), "checked edge lost a side");
+  if (auto failure = protocol::checkIdealOracleRealization(
+          *original, *candidate, owner.realizationRecord()))
+    throw std::runtime_error(toString(std::move(failure)));
+}
+void changeRelation(ModuleOp module) {
+  auto unit = cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
+  auto declarations = unit.getBody().front().getOps<relation::DeclareOp>();
+  require(!declarations.empty(), "fixture has no logical relation");
+  (*declarations.begin()).setKey("test/changed-predicate");
+  require(succeeded(verify(module)), "mutation must remain well formed");
+}
+} // namespace
+int main() {
+  DialectRegistry registry;
+  registerDialects(registry);
+  MLIRContext context(registry);
+  context.loadAllAvailableDialects();
+  ScopedDiagnosticHandler silence(&context,
+                                  [](Diagnostic &) { return success(); });
+  auto file = MemoryBuffer::getFile(ZKC_REALIZED_FIXTURES "/common-input.mlir");
+  require(bool(file), "missing common input fixture");
+  auto text = (*file)->getBuffer();
+  auto source = parseSourceString<ModuleOp>(text, &context);
+  require(bool(source), "invalid common input fixture");
+  auto prepared = prepare(*source);
+  auto frozen = prepared.snapshot();
+  auto owner = take(RealizedProtocol::ideal(std::move(prepared)));
+  Cases cases;
+  cases.run(
+      "checked owner retains both sides and serialized interpretation", [&] {
+        checked(owner);
+        auto original = owner.originalSnapshot();
+        require(OperationEquivalence::isEquivalentTo(
+                    *original, *frozen, OperationEquivalence::IgnoreLocations),
+                "realization altered the retained prepared original");
+        auto record = take(json::parse(owner.realizationRecord()));
+        auto entries = record.getAsObject()->getArray("entries");
+        require(
+            entries && entries->size() == 1 &&
+                entries->front().getAsObject()->getObject("contracts") &&
+                entries->front().getAsObject()->getObject("logical_interface"),
+            "owned record lost logical associations");
+      });
+  cases.run("consumed preparation grants no second realization", [&] {
+    refuses(RealizedProtocol::ideal(std::move(prepared)),
+            "oracle-realization-source");
+  });
+  cases.run("candidate snapshot mutation cannot change checked ownership", [&] {
+    auto original = owner.originalSnapshot();
+    auto candidate = owner.candidateSnapshot();
+    changeRelation(*candidate);
+    auto failure = protocol::checkIdealOracleRealization(
+        *original, *candidate, owner.realizationRecord());
+    require(bool(failure), "changed actual predicate retained correspondence");
+    consumeError(std::move(failure));
+    checked(owner);
+  });
+  cases.run(
+      "original and caller mutations cannot rebind the checked edge", [&] {
+        auto original = owner.originalSnapshot();
+        auto candidate = owner.candidateSnapshot();
+        changeRelation(*original);
+        changeRelation(*source);
+        auto failure = protocol::checkIdealOracleRealization(
+            *original, *candidate, owner.realizationRecord());
+        require(bool(failure), "changed original retained correspondence");
+        consumeError(std::move(failure));
+        checked(owner);
+      });
+  cases.run("ordinary modules use an exact identity edge", [&] {
+    auto ordinary = parseSourceString<ModuleOp>(R"mlir(
+module { "protocol.module"() ({
+  "protocol.func"() ({ ^bb0(%value: ui64):
+    "protocol.return"(%value) : (ui64) -> ()
+  }) {sym_name="main",function_type=(ui64)->ui64,roles=["V"],
+      input_roles=[["V"]],output_roles=[["V"]]} : () -> ()
+}) {profile=#protocol.profile<protocol>} : () -> () }
+)mlir",
+                                                &context);
+    require(bool(ordinary), "invalid ordinary fixture");
+    auto identity = take(RealizedProtocol::ideal(prepare(*ordinary)));
+    checked(identity);
+    auto left = identity.originalSnapshot(),
+         right = identity.candidateSnapshot();
+    require(OperationEquivalence::isEquivalentTo(
+                *left, *right, OperationEquivalence::IgnoreLocations),
+            "identity edge altered ordinary source");
+    auto record = take(json::parse(identity.realizationRecord()));
+    require(record.getAsObject()->getArray("entries")->empty(),
+            "identity edge invented an oracle entry");
+  });
+  cases.run("unsupported anchor transport publishes no checked owner", [&] {
+    std::string anchored = text.str();
+    auto position = anchored.find(" relation.declare");
+    require(position != std::string::npos, "fixture has no declaration slot");
+    anchored.insert(position, R"mlir(
+ relation.declare @logical {kind="external",key="test/logical",revision="0",signature=(!D)->i1,purposes=["statement"]}
+)mlir");
+    position = anchored.find("contracts=[");
+    require(position != std::string::npos, "fixture has no contract slot");
+    anchored.insert(position + StringRef("contracts=[").size(), R"mlir(
+ ["input","logical",[@logical,[["anchor","input",1:i64]]],unit,unit],
+)mlir");
+    auto unsupported = parseSourceString<ModuleOp>(anchored, &context);
+    require(bool(unsupported), "logical anchor fixture must be admitted");
+    refuses(RealizedProtocol::ideal(prepare(*unsupported)),
+            "oracle-common-formation");
+  });
+  return cases.result();
+}

@@ -90,6 +90,11 @@ statement/configuration under a maximum; challenge-adaptive shapes require a
 separate extension. Keep logical queries, unique openings, semantic attempts,
 primitive-oracle queries, digest evaluations and permutation work distinct.
 Whole-table transport establishes neither oracle privacy nor extraction.
+Retain one shared anchor interpretation across all clauses and residuals, with
+holder data, receiver representations and role observations kept distinct.
+Native target transport must fix the public root/shape bindings and witness
+scope explicitly; a fresh witness per clause or a renamed relation does not
+preserve the original logical predicate.
 
 Fix the exact statement/root/witness encodings, frame order, occurrence/domain
 binding, final request length, gate/index coordinates and failure/successor

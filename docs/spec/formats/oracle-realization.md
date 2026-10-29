@@ -12,6 +12,14 @@ stores for table oracles. Virtual anchors are never committed. The same
 module-wide reader accounts for every oracle-bearing entry and every preserved
 ordinary declaration. It accepts no compatibility version or alternate schema.
 
+The private checked owner consumes a prepared original and retains that original,
+the actual candidate and the reader-checked serialized record together. Its
+inspection APIs return independent module clones. Mutating an inspected clone
+cannot change the owned edge or confer checked status on the mutation. An empty
+oracle inventory uses the same reader and preserves the ordinary module exactly.
+This ownership boundary does not yet authorize production projection or claim
+publication; the complete logical-contract interpretation remains required.
+
 ## JSON envelope and limits
 
 The root has exactly these fields:

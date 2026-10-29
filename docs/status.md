@@ -544,9 +544,12 @@ within each check; mutations always require a fresh check. Returned oracle resul
 keep their original reference positions and append mapped immutable stores only at
 their receiving roles. Aliases share support stores; nested calls and recurrence
 retain actual anchors and final store snapshots. These private interface maps do
-not enable cross-entry graph import. Retained anchor clauses, Merkle request suspension and ownership of the
-checked transition still need integration before this becomes the production
-stage. The independently checked table-read primitive
+not enable cross-entry graph import. Retained anchor clauses, Merkle request
+suspension and production use of the checked transition still need integration.
+The private realization owner consumes a prepared source, validates the complete
+serialized record against both modules and retains the frozen pair. Inspection
+returns independent clones; changed snapshots do not inherit checked authority.
+Ordinary modules pass through an exact identity edge with an empty oracle inventory. The independently checked table-read primitive
 stops before an out-of-domain read for field, group, index and sequence-backed
 rows. Its generated clients enter the physical pipeline; native controls check
 actual row counts and observable prefixes when a later query fails. Complete source adapters and semantic realization remain pending.
