@@ -116,7 +116,7 @@ def receive_binding (site : String) (sender : Nat) (template : Template)
         Nat.add_lt_add_iff_left, Nat.add_sub_add_left, Nat.add_sub_cancel_left,
         Nat.lt_add_of_pos_right, Nat.zero_lt_succ, Nat.sub_self, Nat.add_assoc,
         Nat.lt_irrefl, Nat.not_lt_zero, Nat.reduceAdd, Nat.reduceLT, Nat.reduceSub,
-        Bool.not_false, Bool.false_eq_true, Ty.isHandle, Payload.ofValue,
+        Bool.not_false, Bool.false_eq_true, Ty.isService, Payload.ofValue,
         DomainAdapter.embedPayload, eq_mp_eq_cast, cast_eq]
   apply Original.Simulation.call
   intro answer

@@ -5,6 +5,9 @@ path, its application interfaces, and the mathematical contracts used to describ
 it. Definitions are normative within their stated parameters and premises.
 Examples are informative. [Status](../status.md) records implemented coverage.
 
+The [cross-component register](contracts.md) records contract owners, producers,
+consumers, registered vocabularies and incomplete connections.
+
 ## Native contracts
 
 | Subject | Contract |

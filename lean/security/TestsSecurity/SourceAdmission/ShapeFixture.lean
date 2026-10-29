@@ -39,8 +39,8 @@ def original : Snapshot := { source config with
   definitions := (source config).definitions ++
     [.function ⟨"shapeFormula", .math, .privateDef, shapeTypes, [.boolean], none, [], none, shapeBlock⟩]
   contracts := [⟨"main", ((source config).contracts.head (by decide +kernel)).clauses ++
-    [⟨.input, "left_shape", ⟨"TableShape", [⟨.input, 0, "V", false⟩, ⟨.input, 3, "V", false⟩]⟩, none, none⟩,
-     ⟨.input, "right_shape", ⟨"TableShape", [⟨.input, 2, "V", false⟩, ⟨.input, 3, "V", false⟩]⟩, none, none⟩]⟩] }
+    [⟨.input, "left_shape", ⟨"TableShape", [⟨.input, 0, "V"⟩, ⟨.input, 3, "V"⟩]⟩, none, none⟩,
+     ⟨.input, "right_shape", ⟨"TableShape", [⟨.input, 2, "V"⟩, ⟨.input, 3, "V"⟩]⟩, none, none⟩]⟩] }
 
 abbrev targetHelper : Helper := ⟨"targetFormula", .math, [], [.boolean]⟩
 def targetBody : Region dialect targetHelper.inputs targetHelper.outputs :=

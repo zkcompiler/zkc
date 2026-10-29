@@ -221,8 +221,8 @@ theorem target_association :
       contract.owner == KoalaBearSumcheckGenerated.RootVerifier.definition.name)).map (·.clauses) =
       some [⟨.target, "sum",
         ⟨(program.snapshot.relations.get ⟨0, by decide⟩).name,
-          [⟨.input, 0, "role00000001", false⟩, ⟨.input, 1, "role00000001", false⟩, ⟨.input, 2, "role00000001", false⟩]⟩,
-        none, some ⟨.output, 0, "role00000001", false⟩⟩]) ∧
+          [⟨.input, 0, "role00000001"⟩, ⟨.input, 1, "role00000001"⟩, ⟨.input, 2, "role00000001"⟩]⟩,
+        none, some ⟨.output, 0, "role00000001"⟩⟩]) ∧
     (program.snapshot.relations.get ⟨0, by decide⟩).formula =
       some KoalaBearSumcheckGenerated.Inputs.helper0Helper.name := by
   constructor <;> kernel_rfl

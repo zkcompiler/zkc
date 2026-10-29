@@ -494,8 +494,8 @@ role availability, kind-owned named dimensions, initially bound shapes through
 recurrence edges and static refinement erasure. Sends carry the exact dimension
 list; input and virtual bounds name every dynamic dimension. Shape maps and
 reads have the same strict independent wire contract. Invalid queries are
-specified to stop at the occurrence against the actual shape; dynamic enforcement
-remains part of the pending realization. Checked preparation remaps oracle roles
+enforced at the occurrence against the actual stored shape by the checked
+realization. Checked preparation remaps oracle roles
 through applications and preserves sends/queries under upstream CSE. Projection
 refuses unresolved oracle events before publishing participants. Holder-only contents and bounded,
 append-only sequences preserve role restrictions, dynamic anchors and ordered
@@ -503,7 +503,10 @@ bounds failures through checked preparation. Virtual query declarations check
 answer-independent position maps, closed total helpers, actual polynomial bounds,
 explicit admissibility references and fresh occurrence anchors. Their generated
 condition templates and ordered query footprints have native export/check
-commands and an independent Lean derivation over the original snapshot. These proposals retain exact occurrences and actual operands; they do
+commands. The independent Lean derivation is supplied for Lean-owned integration,
+with the logical wire reader and recursive handle exclusion. The main Lean
+profile does not yet accept these oracle rows or the new assembly operation.
+These proposals retain exact occurrences and actual operands; they do
 not discharge their predicates. A conservative scheduling analysis reads actual
 prepared bodies and role substitution, separates participant-local stops, and
 summarizes counted repetitions without unrolling. It identifies a possible query
@@ -554,8 +557,8 @@ within each check; mutations always require a fresh check. Returned oracle resul
 keep their original reference positions and append mapped immutable stores only at
 their receiving roles. Aliases share support stores; nested calls and recurrence
 retain actual anchors and final store snapshots. These private interface maps do
-not enable cross-entry graph import. Logical anchor-clause interpretation,
-complete Merkle communication and native proof integration remain pending.
+not enable cross-entry graph import. Logical anchor-clause interpretation and native proof integration remain
+pending; the supported Merkle communication profile is described below.
 The private realization owner consumes a prepared source, validates the complete
 serialized record against both modules and retains the frozen pair. Inspection
 returns independent clones; changed snapshots do not inherit checked authority.
@@ -592,7 +595,8 @@ specifies this capability boundary. Native controls cover input/send queries,
 every valid position, corrupted requests/roots/rows/proofs, duplicate and unused
 openings, equal-typed constructor substitutions, heterogeneous scheme dispatch,
 and trailing zero-query domain failures. Mixed local/remote or multi-holder
-routing, batching and native proof publication remain pending.
+routing, dynamic virtual batching and native proof publication remain pending.
+Fixed base-query blocks retain the checked batching profile described above.
 The private whole-stage reader consumes a version-zero
 [realization record](spec/formats/oracle-realization.md), the prepared original
 and the actual candidate. It reads independently parsed candidates, checks exact
@@ -607,7 +611,8 @@ continuation residuals and selected targets. Those annotations remain on the
 frozen original, not on the candidate's changed signature. Controls distinguish
 logical target changes even when native code is identical, and refuse clauses
 inserted into the native candidate. This does not yet interpret logical anchor
-predicates on native representations. The record is not a production admission token or a Lean simulation.
+predicates on native representations. The record is rechecked at the native publication boundary; possession of its
+bytes grants no authority. It is not a Lean simulation.
 Empty sequence observations need no allocated anchor. Unreachable queries and
 shape views have a complete refusing controller without an invented store;
 indexing still stops at its original occurrence and preserves earlier delivery.

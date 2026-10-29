@@ -48,8 +48,8 @@ theorem target : owner.contract.clauses = [clause] ∧ clause.kind = .target ∧
 /-- The clause reads the bases and points at the verifier's input ports `0` to
 `3`, and the scalars at the prover's input ports `4` and `5`. -/
 theorem selectors : clause.subject.selectors =
-    [⟨.input, 0, "role00000001", false⟩, ⟨.input, 1, "role00000001", false⟩, ⟨.input, 2, "role00000001", false⟩,
-      ⟨.input, 3, "role00000001", false⟩, ⟨.input, 4, "role00000000", false⟩, ⟨.input, 5, "role00000000", false⟩] :=
+    [⟨.input, 0, "role00000001"⟩, ⟨.input, 1, "role00000001"⟩, ⟨.input, 2, "role00000001"⟩,
+      ⟨.input, 3, "role00000001"⟩, ⟨.input, 4, "role00000000"⟩, ⟨.input, 5, "role00000000"⟩] :=
   rfl
 
 set_option smartUnfolding true in

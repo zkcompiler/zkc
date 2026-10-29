@@ -6,7 +6,7 @@ set_option smartUnfolding false
 
 private def digest := "sha256:" ++ String.ofList (List.replicate 64 '0')
 private def clause (name role : String) : ContractClause :=
-  ⟨.target, name, ⟨"R", [⟨.input, 0, "P", false⟩]⟩, none, some ⟨.output, 0, role, false⟩⟩
+  ⟨.target, name, ⟨"R", [⟨.input, 0, "P"⟩]⟩, none, some ⟨.output, 0, role⟩⟩
 private def original (target : String) : Function :=
   ⟨"main", .protocol, .publicDef, [.boolean], [.boolean],
     some ⟨["P", "V"], [["P", "V"]], [["P", "V"]]⟩, [], some (.protocol ⟨"main", []⟩),
@@ -31,11 +31,11 @@ private def rightOwner : ContractBinding right := ⟨⟨0, by decide⟩, ⟨0, b
 private def leftEntry : EntryContractBinding left :=
   ⟨leftOwner, rfl, original "left", List.mem_cons_self, rfl, rfl,
     ⟨0, by decide⟩, rfl, ["P"], 0, [0], "", rfl,
-    ⟨.output, 0, "P", false⟩, rfl, rfl, rfl⟩
+    ⟨.output, 0, "P"⟩, rfl, rfl, rfl⟩
 private def rightEntry : EntryContractBinding right :=
   ⟨rightOwner, rfl, original "right", List.mem_cons_self, rfl, rfl,
     ⟨1, by decide⟩, rfl, ["P"], 0, [0], "", rfl,
-    ⟨.output, 0, "V", false⟩, rfl, rfl, rfl⟩
+    ⟨.output, 0, "V"⟩, rfl, rfl, rfl⟩
 
 example : leftEntry.decision.role = "P" := rfl
 example : rightEntry.decision.role = "V" := rfl
@@ -99,7 +99,7 @@ private def leftSnapshot : Snapshot where
   relations := [⟨"s6h73616d706c651h52", .publicDef, "zkc.language.formula/0", "s6h73616d706c651h52", "2a503e2d2037410a4dd256b9f29dfc9dc0bf2ad85e126cc58b5c183d9ec3f610", [.boolean], [.boolean], ["statement"], some ("zkf_a1f8c00beabfe1b0a1ecc4074476dfa38f42d4e883f20d3a29821f20ee2eace4"), []⟩]
   bindings := []
   definitions := [.function ⟨"s6h73616d706c653h52756e", .protocol, .publicDef, [.boolean], [.boolean], some ⟨["role00000000", "role00000001"], [["role00000000", "role00000001"]], [["role00000000", "role00000001"]]⟩, [], some (.protocol ⟨"sample::Run", []⟩), (.block [.instruction (.statement "s6h73616d706c651h52" ["role00000000"] 0 (some ("left"))) [0] [] [] ""] (.ret [0]))⟩, .function ⟨"zkf_a1f8c00beabfe1b0a1ecc4074476dfa38f42d4e883f20d3a29821f20ee2eace4", .math, .privateDef, [.boolean], [.boolean], none, [], none, (.block [] (.ret [0]))⟩]
-  contracts := [⟨"s6h73616d706c653h52756e", [⟨.target, "left", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000", false⟩]⟩, none, some (⟨.output, 0, "role00000000", false⟩)⟩, ⟨.target, "right", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000", false⟩]⟩, none, some (⟨.output, 0, "role00000001", false⟩)⟩]⟩]
+  contracts := [⟨"s6h73616d706c653h52756e", [⟨.target, "left", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000"⟩]⟩, none, some (⟨.output, 0, "role00000000"⟩)⟩, ⟨.target, "right", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000"⟩]⟩, none, some (⟨.output, 0, "role00000001"⟩)⟩]⟩]
   catalogue := { nominals := [], services := [] }
 
 private def rightSnapshot : Snapshot where
@@ -109,7 +109,7 @@ private def rightSnapshot : Snapshot where
   relations := [⟨"s6h73616d706c651h52", .publicDef, "zkc.language.formula/0", "s6h73616d706c651h52", "2a503e2d2037410a4dd256b9f29dfc9dc0bf2ad85e126cc58b5c183d9ec3f610", [.boolean], [.boolean], ["statement"], some ("zkf_a1f8c00beabfe1b0a1ecc4074476dfa38f42d4e883f20d3a29821f20ee2eace4"), []⟩]
   bindings := []
   definitions := [.function ⟨"s6h73616d706c653h52756e", .protocol, .publicDef, [.boolean], [.boolean], some ⟨["role00000000", "role00000001"], [["role00000000", "role00000001"]], [["role00000000", "role00000001"]]⟩, [], some (.protocol ⟨"sample::Run", []⟩), (.block [.instruction (.statement "s6h73616d706c651h52" ["role00000000"] 0 (some ("right"))) [0] [] [] ""] (.ret [0]))⟩, .function ⟨"zkf_a1f8c00beabfe1b0a1ecc4074476dfa38f42d4e883f20d3a29821f20ee2eace4", .math, .privateDef, [.boolean], [.boolean], none, [], none, (.block [] (.ret [0]))⟩]
-  contracts := [⟨"s6h73616d706c653h52756e", [⟨.target, "left", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000", false⟩]⟩, none, some (⟨.output, 0, "role00000000", false⟩)⟩, ⟨.target, "right", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000", false⟩]⟩, none, some (⟨.output, 0, "role00000001", false⟩)⟩]⟩]
+  contracts := [⟨"s6h73616d706c653h52756e", [⟨.target, "left", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000"⟩]⟩, none, some (⟨.output, 0, "role00000000"⟩)⟩, ⟨.target, "right", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000"⟩]⟩, none, some (⟨.output, 0, "role00000001"⟩)⟩]⟩]
   catalogue := { nominals := [], services := [] }
 
 -- Read each actual export's origin instead of deriving it from the emitted symbol.
@@ -143,11 +143,11 @@ private def rightOwner : ContractBinding right := ⟨⟨0, by decide⟩, ⟨0, b
 private def leftEntry : EntryContractBinding left :=
   ⟨leftOwner, rfl, original "left", List.mem_cons_self, rfl, rfl,
     ⟨0, by decide⟩, rfl, ["role00000000"], 0, [0], "", rfl,
-    ⟨.output, 0, "role00000000", false⟩, rfl, rfl, rfl⟩
+    ⟨.output, 0, "role00000000"⟩, rfl, rfl, rfl⟩
 private def rightEntry : EntryContractBinding right :=
   ⟨rightOwner, rfl, original "right", List.mem_cons_self, rfl, rfl,
     ⟨1, by decide⟩, rfl, ["role00000000"], 0, [0], "", rfl,
-    ⟨.output, 0, "role00000001", false⟩, rfl, rfl, rfl⟩
+    ⟨.output, 0, "role00000001"⟩, rfl, rfl, rfl⟩
 
 example : leftEntry.owner.protocol = rightEntry.owner.protocol := rfl
 example : leftEntry.decision.port = rightEntry.decision.port := rfl

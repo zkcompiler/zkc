@@ -565,22 +565,6 @@ addition by subtraction, the kernel proves that
 [structured bridge](../bridges/structured/README.md#scalar-inlining-pairs)
 regenerates and compares these subjects.
 
-The structured participant model and its sound normalizer also support ordinary
-role assembly. Selection takes only the operand assigned to the observed role;
-other roles' absent components do not suppress it. `Tests.StructuredAssembly`
-covers admission, role assignment, absence, normalization and structural
-projection. The normalizer's assembly theorem applies to the general observation
-and iteration model, including simulation observations. The connection ABI
-excludes services and logical handles recursively from ordinary inputs, outputs,
-messages, observations and visible loop state; an absent role's input or output
-contributes no data slot. `Tests.StructuredOracleFormat` checks direct and nested
-logical-handle inputs, outputs and carried state. The public nominal source
-support check and its local lossless-receive law use the same recursive handle
-exclusion. `TestsSecurity.LosslessOperationRefusal` checks service and oracle
-handles against those laws.
-These results extend the independent model; they do not prove the native
-preparation or projection code, or an oracle realization simulation.
-
 ## Protocol application subjects
 
 The complete Application, ServiceOrder and nested-wrapper snapshots

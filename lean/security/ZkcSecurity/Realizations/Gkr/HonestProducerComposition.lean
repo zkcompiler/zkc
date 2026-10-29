@@ -130,7 +130,7 @@ theorem message (routing : Original.Routing) (replacement : Replacement)
   simp only [constructed, PIR.Process.interpret, Occurrence.actions, PIR.Process.bind]
   rw [Original.fold_action, Original.fold_action]
   simp only [Original.operations, profile, Original.send, Original.receive,
-    producerRoute, validatorRoute, Domain.Payload.ofValue, Ty.isHandle,
+    producerRoute, validatorRoute, Domain.Payload.ofValue, Ty.isService,
     dite_true, Original.record, PIR.Process.bind]
   apply Readback.sendReceive (carriers := uniformCarriers F G) (ty := .field field)
     _ _ _ _ _ _ (.field field value) value (by simp [Domain.Payload.value])
@@ -175,7 +175,7 @@ theorem challenge (routing : Original.Routing) (replacement : Replacement)
       state.frames deliverySite routing.context.validator routing.context.producer = some delivery := deliveryRoute
   simp only [PIR.Process.interpret, Occurrence.actions, PIR.Process.bind,
     Original.fold, PIR.Process.interpretState, Original.operations, profile,
-    Original.send, sent, Domain.Payload.ofValue, Ty.isHandle, dite_true,
+    Original.send, sent, Domain.Payload.ofValue, Ty.isService, dite_true,
     Original.record, PIR.Process.bind, Original.fieldReply]
   apply Readback.observeLeft
   apply Readback.observeRight

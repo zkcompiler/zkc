@@ -380,14 +380,6 @@ def operation (summaries : List DependencySummary) (roster : List String)
     if !(← subset selected scope) then throw "structured-availability-restriction"
     chargeReplay 1
     return [selected]
-  | .assemble ty selected =>
-    if ty.isHandle then throw "structured-assemble-type"
-    validScope roles selected
-    if arguments.length != selected.length then throw "structured-availability-operand"
-    for (owner, supplied) in selected.zip arguments do
-      if !(← subset [owner] supplied) then throw "structured-availability-assembly"
-    chargeReplay (selected.length + 1)
-    return [selected]
   | .draw owner _ _ =>
     owned roles owner arguments
     chargeReplay 2

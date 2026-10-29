@@ -62,11 +62,11 @@ service reference, in original order. -/
 def dataInputs (inputs : List Structured.Ty) (scopes : List (List String)) (role : String) :
     List Nat :=
   ((inputs.zip scopes).zipIdx.filter fun ((ty, scope), _) =>
-    scope.contains role && !ty.isHandle).map (·.2)
+    scope.contains role && !ty.isService).map (·.2)
 
 /-- A data sort excludes services recursively, using the source classifier. -/
 def dataSort? (ty : Structured.Ty) : Option Structured.Ty :=
-  if ty.isHandle then none else some ty
+  if ty.isService then none else some ty
 
 /-- The occurrence context fixed by the policy, the original roster and the
 optional replaced service's contract and typed request. The empty-suite, empty

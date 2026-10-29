@@ -72,7 +72,7 @@ def checkProtocolRoles (active : List Nat) (op : ProtocolOp) : Except String Uni
   let selected := match op with
     | .localCall _ _ owner _ | .guard owner _ | .draw owner .. => [owner]
     | .exchange _ sender receiver _ => [sender, receiver]
-    | .restrict _ roles | .assemble _ roles | .protocolApply _ roles _ => roles
+    | .restrict _ roles | .protocolApply _ roles _ => roles
     | .repeat spec _ => spec.roles
     | _ => []
   checkActiveRoles active selected

@@ -102,7 +102,6 @@ theorem protocolOperationWithOn_interpret {I J : PIR.Signature}
           (qualifyProtocolSite context.applicationPrefix site) value).interpret
           rightActions).bind (fun result => .done (Values.cons result Values.nil))
       simp only [PIR.Process.interpret_bind, actionProcess, PIR.Process.interpret]
-  | assemble => cases callbacks; rfl
   | restrict => cases callbacks; cases args with
     | cons value rest => cases rest; rfl
   | draw =>

@@ -278,7 +278,7 @@ noncomputable def Routed.simulation {routing : Original.Routing}
       simp only [SourceProcess.sourceView, SourceProcess.receive, operations]
       apply Original.Simulation.call
       intro reply
-      simp only [Domain.Payload.ofValue, Ty.isHandle, ↓reduceDIte, Original.record, PIR.Process.bind, PIR.Process.interpret,
+      simp only [Domain.Payload.ofValue, Ty.isService, ↓reduceDIte, Original.record, PIR.Process.bind, PIR.Process.interpret,
         operations, event, key]
       rw [key]
       apply Original.Simulation.call
@@ -288,7 +288,7 @@ noncomputable def Routed.simulation {routing : Original.Routing}
       simpa only [history, List.map_cons, List.map_nil, event, key] using current
   | send frames final site field receiver value origin route key tail ih =>
       simp only [fold_call, Original.operations, profileEq,
-        Original.send, mode, route, Domain.Payload.ofValue, Ty.isHandle, ↓reduceDIte, Original.record,
+        Original.send, mode, route, Domain.Payload.ofValue, Ty.isService, ↓reduceDIte, Original.record,
         PIR.Process.bind, PIR.Process.interpret, Occurrence.erase, CommonAdapter.project,
         SourceProcess.sourceView, SourceProcess.send, Payload.ofValue,
         DomainAdapter.embedPayload, operations, event, key]

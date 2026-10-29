@@ -38,8 +38,8 @@ deriving instance DecidableEq for Value
 /-- Types whose values this construction profile carries. Aggregate transcript
 encoding requires its own construction rule; admitting a source type is not one. -/
 def dataType : Structured.Ty → Bool
-  | .boolean | .index | .field _ | .group _ | .vector _ => true
-  | _ => false
+  | .service _ | .sequence _ | .product .. => false
+  | _ => true
 
 namespace Value
 
@@ -51,7 +51,6 @@ def encode : (ty : Structured.Ty) → Structured.assignment F G ty → Value F G
   | .index, value => .index value
   | .vector domain, values => .vector domain values
   | .service _, handle => .index handle
-  | .indices, _ | .groups _, _ | .oracle _, _ | .oracleSequence .., _
   | .sequence _, _ | .product .., _ => .unsupported
 
 /-- Read an exported value at a structured type; services never decode. -/

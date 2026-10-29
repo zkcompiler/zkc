@@ -116,7 +116,7 @@ theorem round_projection (a b c d e f g h : Domain.Value (uniformCarriers F G))
       Domain.Calculations.fieldSubtract (F := F) (G := G),
       Domain.Calculations.fieldMultiply (F := F) (G := G)]
     unfolding [roundProcess, roundState, RoundState.values, carried, roundInstruction, PIR.Process.interpret, Original.forgetCheckpoints,
-      Structured.Ty.isHandle, Bool.not_false, Bool.not_true]
+      Structured.Ty.isService, Bool.not_false, Bool.not_true]
   congr 1
   funext low
   simp only [PIR.Process.bind]
@@ -135,7 +135,7 @@ theorem round_projection (a b c d e f g h : Domain.Value (uniformCarriers F G))
       Domain.Calculations.fieldConstant (F := F) (G := G),
       Domain.Calculations.fieldSubtract (F := F) (G := G),
       Domain.Calculations.fieldMultiply (F := F) (G := G)]
-    unfolding [PIR.Process.interpret, Original.forgetCheckpoints, Structured.Ty.isHandle,
+    unfolding [PIR.Process.interpret, Original.forgetCheckpoints, Structured.Ty.isService,
       Bool.not_false, Bool.not_true, List.append_assoc, Nat.cast_one, yieldValues]
   all_goals rfl
 

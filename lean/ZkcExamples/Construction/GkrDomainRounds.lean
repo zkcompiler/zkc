@@ -43,7 +43,7 @@ def output_step (outer : Env (F := F) (G := G)) (length : outer.length = 35)
        ProtocolContext.roles, List.getElem?_append, length, List.isEmpty_cons,
        Nat.reduceAdd, Nat.reduceSub, Nat.reduceLT, GkrVerifier.scalar,
        eq_mp_eq_cast, cast_eq, decimalDigit, left_size, right_size,
-       Payload.ofValue, DomainAdapter.embedPayload, Ty.isHandle, Bool.false_eq_true, Bool.not_false,
+       Payload.ofValue, DomainAdapter.embedPayload, Ty.isService, Bool.false_eq_true, Bool.not_false,
        entry_metadata, suite_metadata, List.getD_cons_zero, List.getD_cons_succ, decimal,
        List.map_append, Origin.withoutCoordinates])
     | (fail_if_no_progress erw [GkrDomainHelpers.append (F := F) (G := G)])
@@ -90,7 +90,7 @@ def coefficient_step (outer : Env (F := F) (G := G)) (length : outer.length = 72
        ProtocolContext.roles, List.getElem?_append, length, List.isEmpty_cons,
        Nat.reduceAdd, Nat.reduceSub, Nat.reduceLT, GkrVerifier.scalar,
        eq_mp_eq_cast, cast_eq, decimalDigit, left_size, right_size,
-       Payload.ofValue, DomainAdapter.embedPayload, Ty.isHandle, Bool.false_eq_true, Bool.not_false,
+       Payload.ofValue, DomainAdapter.embedPayload, Ty.isService, Bool.false_eq_true, Bool.not_false,
        entry_metadata, suite_metadata, List.getD_cons_zero, List.getD_cons_succ, decimal,
        List.map_append, Origin.withoutCoordinates])
     | (fail_if_no_progress erw [GkrDomainHelpers.append (F := F) (G := G)])

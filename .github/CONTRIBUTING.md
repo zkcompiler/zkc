@@ -114,6 +114,10 @@ belongs in the pull request body, which is what survives the squash.
   contract to match a missing implementation. Record native coverage in
   [status](../docs/status.md) and theorem scope in
   [formal support](../lean/docs/support.md).
+- **Shared contracts.** Update the [contract register](../docs/spec/contracts.md)
+  when changing a cross-component contract. Name its producer/consumer review
+  and record missing integrations explicitly. The Lean component owns changes
+  under `lean/`; other components supply reviewed patches for it to integrate.
 - **Formats and identities.** Version persisted or exchanged formats and
   cryptographic byte constructions. Before stabilization, keep zkc-owned
   format and construction versions at `0` and update producers, readers and

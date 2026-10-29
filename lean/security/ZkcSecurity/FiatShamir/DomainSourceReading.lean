@@ -235,10 +235,9 @@ theorem reading {A : Type} (routing : Original.Routing) (replacement : Replaceme
   (interpretation routing replacement profile noLocal).reading source state
 
 /-- The source effect condition needed by the public lossless adapter. Service
-queries retain handles; proof receives must exclude capabilities and logical
-oracle handles recursively. -/
+queries retain handles; proof receives must exclude capabilities recursively. -/
 @[expose] def DataOperation : (Occurrence.signature carriers).Op → Prop
-  | .action (.receive ty ..) => ty.isHandle = false
+  | .action (.receive ty ..) => ty.isService = false
   | _ => True
 
 private theorem queryField_data (state : Original.State carriers) (origin : Origin) (field : String) :
@@ -249,7 +248,7 @@ private theorem queryField_data (state : Original.State carriers) (origin : Orig
   · trivial
 
 private theorem receive_data (routing : Original.Routing) (state : Original.State carriers)
-    (ty : Ty) (site : String) (sender : Nat) (data : ty.isHandle = false) :
+    (ty : Ty) (site : String) (sender : Nat) (data : ty.isService = false) :
     OperationSupport NominalDomain.DataOperation (receive routing state ty site sender) := by
   unfold receive
   cases routing.mode with

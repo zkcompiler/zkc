@@ -30,24 +30,11 @@ mutual
     | .cons type rest => type.isService || rest.hasService
 end
 
-mutual
-  /-- Logical handles cannot acquire ordinary Math, message or codec rights
-  through a type added to the wire vocabulary. -/
-  def Ty.isHandle : Ty → Bool
-    | .service _ | .oracle _ | .oracleSequence .. => true
-    | .sequence element => element.isHandle
-    | .product _ _ fields => fields.hasHandle
-    | _ => false
-  def ProductFields.hasHandle : ProductFields → Bool
-    | .nil => false
-    | .cons type rest => type.isHandle || rest.hasHandle
-end
-
 -- Materialize the mutual equations in their defining module. Lazy generation
 -- in independent clients can produce different stored proofs for the same
 -- equation name; declaration provenance must have a single checked owner.
 section
-attribute [local simp] Ty.isService ProductFields.hasService Ty.isHandle ProductFields.hasHandle
+attribute [local simp] Ty.isService ProductFields.hasService
 end
 
 /-- Native preparation identifiers have a stricter bound than helper symbols. -/
@@ -74,8 +61,7 @@ def validTypes (types : List Ty) : Bool := types.length ≤ Limits.listEntries
 sort, and the environment admits that instance. -/
 mutual
   def Catalogue.checkType (exported environment : Catalogue) : Ty → Except String Unit
-    | .boolean | .index | .indices => pure ()
-    | .oracle _ | .oracleSequence .. => throw "structured-oracle-profile"
+    | .boolean | .index => pure ()
     | .field d => do
       discard <| exported.expect d .field
       if !environment.types.contains ("field", d) then throw "structured-type-unadmitted"
@@ -85,22 +71,17 @@ mutual
     | .group g => do
       discard <| exported.expect g .group
       if !environment.types.contains ("group", g) then throw "structured-type-unadmitted"
-    | .groups g => do
-      discard <| exported.expect g .group
-      if !environment.types.contains ("groups", g) then throw "structured-type-unadmitted"
     | .service c => do
       let service ← exported.findService c
       discard <| exported.expect service.sampled .field
       if !(environment.services.map (·.contract)).contains c then throw "structured-type-unadmitted"
     | .sequence element => do
       if element.isService then throw "structured-aggregate-service"
-      if element.isHandle then throw "structured-aggregate-handle"
       exported.checkType environment element
     | .product identity constructor fields => do
       if !validString identity || !validString constructor || fields.toList.length > 512 then
         throw "structured-product"
       if fields.hasService then throw "structured-aggregate-service"
-      if fields.hasHandle then throw "structured-aggregate-handle"
       exported.checkProductFields environment fields
   def Catalogue.checkProductFields (exported environment : Catalogue) :
       ProductFields → Except String Unit
@@ -141,7 +122,6 @@ def Snapshot.storedTypes (snapshot : Snapshot) : List Ty :=
     instructionTypes Limits.instructions (snapshot.definitions.filterMap fun definition =>
       match definition with
       | .function function => let .block instructions _ := function.body; some instructions
-      | .oracle f => let .block instructions _ := f.body; some instructions
       | .finite _ | .collect _ | .realization _ | .map _ => none)
 
 /-- The unit's rows are consistent and are the environment's rows, and every
@@ -164,11 +144,10 @@ def instructionWorkWithin : Nat → List (List Instruction) → Bool
 
 def Snapshot.instructionsWithin (snapshot : Snapshot) (limit : Nat) : Bool :=
   let derivedCount := snapshot.definitions.filterMap (fun definition =>
-    match definition with | .function _ | .oracle _ => none | _ => some ()) |>.length
+    match definition with | .function _ => none | _ => some ()) |>.length
   let work := snapshot.definitions.filterMap fun definition =>
     match definition with
     | .function function => let .block instructions _ := function.body; some instructions
-    | .oracle f => let .block instructions _ := f.body; some instructions
     | .finite _ | .collect _ | .realization _ | .map _ => none
   let domainCount := (snapshot.domains.map (·.constructors.length)).sum
   derivedCount + domainCount ≤ limit && instructionWorkWithin (limit - derivedCount - domainCount) work
@@ -234,13 +213,12 @@ def Definition.headerValid (definition : Definition) : Bool :=
   definition.preconditions.length ≤ 512 &&
   definition.preconditions.all (Bound.valid definition.inputs) &&
   (match definition with
-  | .oracle _ => false
   | .function f =>
     (match f.kind, f.interface with
       | .protocol, some _ => f.visibility == .publicDef && validProtocolIdentifier f.name
       | .math, none | .local, none => true
       | _, _ => false) &&
-    (f.kind == .protocol || !(f.inputs ++ f.outputs).any Ty.isHandle) &&
+    (f.kind == .protocol || !(f.inputs ++ f.outputs).any Ty.isService) &&
     !f.outputs.any Ty.isService &&
     (f.kind != .math || f.visibility == .privateDef) &&
     (f.kind == .math || f.preconditions.isEmpty) &&
@@ -249,14 +227,14 @@ def Definition.headerValid (definition : Definition) : Bool :=
     | .protocol, some value@(.protocol ..) => value.valid
     | .math, none => true
     | _, _ => false)
-  | .finite f => !(f.inputs ++ f.outputs).any Ty.isHandle &&
+  | .finite f => !(f.inputs ++ f.outputs).any Ty.isService &&
     validString f.domain && validString f.step && validString f.predicate true
-  | .collect f => !(f.inputs ++ f.outputs).any Ty.isHandle &&
+  | .collect f => !(f.inputs ++ f.outputs).any Ty.isService &&
     validString f.domain && validString f.body && validString f.predicate true
   | .realization f => validPreparationName f.name && validString f.helper &&
-    !(f.inputs ++ f.outputs).any Ty.isHandle
+    !(f.inputs ++ f.outputs).any Ty.isService
   | .map f => validPreparationName f.name && validString f.helper &&
-    !(f.inputs ++ f.outputs).any Ty.isHandle && f.rowwise.length ≤ 512 &&
+    !(f.inputs ++ f.outputs).any Ty.isService && f.rowwise.length ≤ 512 &&
     f.rowwise.length == f.inputs.length && f.rowwise.any id)
 
 /-- Edges are checked against retained variants before semantic helper lowering. -/
@@ -318,7 +296,7 @@ def resolveFold (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
   let helperKind ← match kind with
     | .math => pure HelperKind.math
     | .local => pure HelperKind.local
-    | .protocol | .oracle => throw "structured-fold-kind"
+    | .protocol => throw "structured-fold-kind"
   let spec : FoldSpec := ⟨domain, state, captures, stepName, predicateName, helperKind⟩
   if argumentTypes != spec.arguments then throw "structured-fold-arguments"
   let step ← lookupDefinition snapshot stepName
@@ -373,17 +351,15 @@ def recordSite (site : String) (required : Bool) : LowerM Unit := do
 In particular, acquiring a bound cannot authorize a Protocol-level read. -/
 def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
   match descriptor with
-  | .oracle _ => false
   | .exec .. => kind == .local
-  | .booleanConstant _ => kind != .oracle
+  | .booleanConstant _ => true
   | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. | .multilinearRestrictPrefix .. |
     .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
     .fieldEmbed .. | .fieldEqual .. | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual |
     .booleanNotEqual | .select .. | .call .. | .fold .. |
-    .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => kind == .math || kind == .protocol
-  | .makeProduct .. | .getProduct .. => kind == .math || kind == .protocol
-  | .boundedAt .. => kind == .math
-  | .protocolApply .. | .protocolRepeat .. | .localCall .. | .guard .. | .restrict .. | .assemble .. | .exchange .. | .draw .. | .statement .. =>
+    .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => kind != .local
+  | .boundedAt .. | .makeProduct .. | .getProduct .. => kind == .math
+  | .protocolApply .. | .protocolRepeat .. | .localCall .. | .guard .. | .restrict .. | .exchange .. | .draw .. | .statement .. =>
     kind == .protocol
   | .apply .. | .branch | .loop | .loopCondition => kind == .local
 
@@ -433,8 +409,7 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     throw (match kind with
       | .local => "structured-local-operation"
       | .math => "structured-math-operation"
-      | .protocol => "structured-protocol-operation"
-      | .oracle => "structured-oracle-profile")
+      | .protocol => "structured-protocol-operation")
   let argumentTypes ← typesAt context operands
   let factOperands := operands.map fun index => identities[index]?.getD index
   let required := match descriptor with
@@ -452,13 +427,12 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     let helperKind ← match expected with
       | .math => pure HelperKind.math
       | .local => pure HelperKind.local
-      | .protocol | .oracle => throw "structured-call-kind"
+      | .protocol => throw "structured-call-kind"
     pure (Op.invoke ⟨name, helperKind, callee.inputs, callee.outputs⟩)
   let catalogue := snapshot.catalogue
   let checkField := fun (d : String) =>
     (catalogue.require d .field "Field" : Except String Unit)
   match descriptor with
-  | .oracle _ => throw "structured-oracle-profile"
   | .exec operation binding parameters =>
     return ← resolvePrimitive snapshot operation binding parameters
   | .indexConstant text => return .indexConstant (← Format.indexDecimal text)
@@ -527,7 +501,7 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     if argumentTypes.length < 2 + results.length then throw "structured-loop-arguments"
     let captures := argumentTypes.drop (2 + results.length)
     return if descriptor == .loop then .loop results captures else .loopCondition results captures
-  | .guard .. | .restrict .. | .assemble .. | .exchange .. | .draw .. | .statement .. =>
+  | .guard .. | .restrict .. | .exchange .. | .draw .. | .statement .. =>
     throw "structured-open-operation"
 
 inductive ExitKind where

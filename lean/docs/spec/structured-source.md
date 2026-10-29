@@ -6,56 +6,6 @@ admission and logical meaning; [formal support](../support.md) records the
 theorems proved about particular imported subjects and how far each claim
 reaches toward native compilation and execution.
 
-## Logical oracle wire extension
-
-A native selected logical statement can bind oracle entry handles using the
-`anchor` selector marker and its exact owned target. The raw statement descriptor
-retains that marker. Current ordinary statement admission does not interpret it
-as a role or admit a handle; realization must first produce ordinary data bindings.
-
-The exact contract selector `["anchor", direction, port]` retains a logical anchor alternative with no role. Its raw
-`ContractSelector` has `anchor = true` and an empty role field. Ordinary contract
-resolution, typed boundary elaboration and component-instantiation admission
-refuse this profile. A wire parse does not authorize reading the participant
-value tuple as anchor data; the oracle-store interpretation is a separate
-semantic obligation.
-
-
-The strict reader recognizes the logical oracle types, twelve descriptors and
-virtual declaration rows specified by the
-[native wire contract](../../../docs/spec/formats/structured-source.md#logical-oracle-vocabulary).
-It retains actual operands, roles, ordered query occurrences, labels, the
-admissibility relation and the entire virtual body. Table kinds derive their
-Data, Query and Answer types and own an ordered list of named dimensions.
-Send dimensions match that list exactly; shape bounds and virtual argument maps
-contain exactly the dynamic dimensions, in kind order. Shape reads name an
-existing dimension. Shape values and capacities are canonical unsigned 64-bit
-decimal strings. Static dimensions use empty maps, without null or positional
-alternatives. Wire recognition alone does not establish that a row
-kind, role assignment, footprint or program is admissible.
-
-`OracleAnchor` records a construction or input occurrence under an
-`InvocationCoordinate`; calls and loop iterations retain their structural
-frames. Equal contents do not identify anchors. These are logical labels,
-without a native provider handle or an assertion that the occurrence was
-reached. The current semantic profile explicitly refuses oracle types,
-operations and declarations. Neither ordinary Math execution nor the Common
-projection admits them. Transcript payloads, executable codecs and ordinary
-message projection exclude logical handles recursively, including inside
-products and sequences; service identity remains a separate predicate. Independent semantic admission, projection soundness
-and realization simulation remain separate work; decoding is not evidence for
-any of those claims.
-
-`OracleObligations` independently derives the generated condition templates and
-virtual footprints in the [native proposal format](../../../docs/spec/formats/structured-source.md#oracle-obligation-proposals).
-It checks the complete source/entry association and every exact row, preserves
-repeated queries and retains nested region coordinates. A query source must refer
-to the declared handle prefix under the row's actual SSA environment. Position
-indices remain references into the original body; a proposal supplies no new
-position evaluator or helper semantics. This is an independent consistency check,
-not admission of logical oracle execution or a proof that any generated condition
-holds. The existing semantic profile continues to refuse oracle execution.
-
 ## Checked subject
 
 `Structured.Snapshot` retains source identity, selected entry, all domains,
@@ -271,17 +221,6 @@ mapped declared input scope, including unused operands, and its result
 footprints are precisely the mapped declared output scopes. Each callee body is
 checked under its own declared inputs.
 
-`assemble` forms a role family from ordered same-typed operands: at a named
-role it selects that operand's component, and elsewhere it is absent. Admission
-requires distinct nonempty role names, availability of each selected component
-and an ordinary data type. Services and logical handles are excluded. Selection
-is not communication or an equality check between roles. Participant meaning,
-component routing and the sound normalizer use this same pointwise rule; an
-absent unselected component cannot suppress a selected one. The normalization
-proof is parametric in observations and iteration laws, and protocol dependency
-linking preserves this operation. Structural projection and discovery retain the
-selected slot without introducing a runtime instruction.
-
 Service values originate only at singly owned formal protocol input ports.
 Draw and protocol forwarding check their exact contract and mapped singleton
 owner through the lexical SSA origin. Equal runtime handles do not identify
@@ -403,9 +342,6 @@ families use the same explicit `F,G` assignment and evaluator.
 `SiteObservations` abstracts only internal marks; arithmetic is pure and shared.
 There is no separate scalar arithmetic or unsupported-sort fallback.
 Selection is interpreted for every admitted type, including products and sequences.
-Nominal product construction and total projection are admitted in Math and
-Protocol calculations. Protocol availability is still checked on the actual
-operands; packing does not grant another role access to a component.
 The Common scalar effect adapter refuses aggregate messages. The nominal
 construction runtime transports data as one exact `Ty` paired with its existing
 `Carriers.Value` and a proof that it contains no service capability. Products and

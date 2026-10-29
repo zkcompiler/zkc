@@ -85,7 +85,7 @@ def validatorBody (handle : Nat) (initial outputs add mul : List F) (layers sele
       change ValidatorFrameReturns _ (.cons (some value) .nil, ⟨[], finalHistory⟩) _
       refine validatorFrameReturns point claim finalHistory value ?_ ?_ ?_
       all_goals simp [validatorInputs, ArtifactBinding.Captures, Original.encodeHelperResult,
-        Domain.encodeValues, Domain.Value.encode, Domain.Payload.ofValue, Ty.isHandle,
+        Domain.encodeValues, Domain.Value.encode, Domain.Payload.ofValue, Ty.isService,
         GkrOriginalOutput.carried, OriginalLayer.validatorCarried, List.append_assoc])
 
 end ZkcSecurity.Realizations.Gkr.Rebound.OriginalCertificates

@@ -95,7 +95,7 @@ def ObservedReceived (context : Context) (ty : Ty) (state : State carriers)
 /-- Generic verifier receive followed by observation, with arbitrary nominal
 peer replies. The receive and observation checkpoints retain the input prefix. -/
 def Simulation.observedReceive (routing : Routing) (state : State carriers)
-    (ty : Ty) (data : ty.isHandle = false) (site : String) (sender : Nat)
+    (ty : Ty) (data : ty.isService = false) (site : String) (sender : Nat)
     (origin : Origin) (mode : routing.mode = .validator)
     (route : routing.message state.frames site sender routing.context.validator = some origin)
     (template : Template) (stateRef pathRef : Nat) (environment : Domain.Environment carriers)

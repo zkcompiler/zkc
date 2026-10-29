@@ -23,14 +23,14 @@ private def caller : Function :=
 private def relation : Relation :=
   ⟨"Equal", .publicDef, "zkc.language.formula/0", "equality", "0", [.boolean, .boolean], [.boolean],
     ["statement", "witness"], some "predicate", []⟩
-private def subject : RelationApplication := ⟨"Equal", [⟨.input, 0, "V", false⟩, ⟨.input, 1, "P", false⟩]⟩
-private def copiedSubject : RelationApplication := ⟨"Equal", [⟨.input, 0, "P", false⟩, ⟨.input, 1, "P", false⟩]⟩
-private def clause : ContractClause := ⟨.target, "claim", subject, none, some ⟨.output, 0, "V", false⟩⟩
-private def copiedClause : ContractClause := ⟨.target, "copiedClaim", copiedSubject, none, some ⟨.output, 0, "V", false⟩⟩
+private def subject : RelationApplication := ⟨"Equal", [⟨.input, 0, "V"⟩, ⟨.input, 1, "P"⟩]⟩
+private def copiedSubject : RelationApplication := ⟨"Equal", [⟨.input, 0, "P"⟩, ⟨.input, 1, "P"⟩]⟩
+private def clause : ContractClause := ⟨.target, "claim", subject, none, some ⟨.output, 0, "V"⟩⟩
+private def copiedClause : ContractClause := ⟨.target, "copiedClaim", copiedSubject, none, some ⟨.output, 0, "V"⟩⟩
 private def residual : RelationApplication :=
-  ⟨"Equal", [⟨.output, 0, "V", false⟩, ⟨.output, 1, "V", false⟩]⟩
+  ⟨"Equal", [⟨.output, 0, "V"⟩, ⟨.output, 1, "V"⟩]⟩
 private def continuation : ContractClause :=
-  ⟨.continuation, "carry", subject, some residual, some ⟨.output, 0, "V", false⟩⟩
+  ⟨.continuation, "carry", subject, some residual, some ⟨.output, 0, "V"⟩⟩
 private def snapshot : Snapshot :=
   ⟨digest, "main", [], [relation], [], [.function root, .function predicate, .function caller],
     [⟨"main", [clause, continuation, copiedClause]⟩, ⟨"caller", []⟩], blsRows, {}⟩
@@ -46,11 +46,11 @@ private def admissionControls : List (String × Bool) := [
     ("nonprotocol-owner", admits { snapshot with contracts := [⟨"predicate", [clause]⟩] } == false),
     ("duplicate-clauses", admits { snapshot with contracts := [⟨"main", [clause, clause]⟩] } == false),
     ("target-without-decision", admits (withClause { clause with decision := none }) == false),
-    ("input-decision", admits (withClause { clause with decision := some ⟨.input, 0, "V", false⟩ }) == false),
-    ("unavailable-decision-role", admits (withClause { clause with decision := some ⟨.output, 0, "P", false⟩ }) == false),
-    ("decision-out-of-range", admits (withClause { clause with decision := some ⟨.output, 2, "V", false⟩ }) == false),
+    ("input-decision", admits (withClause { clause with decision := some ⟨.input, 0, "V"⟩ }) == false),
+    ("unavailable-decision-role", admits (withClause { clause with decision := some ⟨.output, 0, "P"⟩ }) == false),
+    ("decision-out-of-range", admits (withClause { clause with decision := some ⟨.output, 2, "V"⟩ }) == false),
     ("unknown-subject", admits (withClause { clause with subject := ⟨"Missing", subject.selectors⟩ }) == false),
-    ("unknown-selector-role", admits (withClause { clause with subject := ⟨"Equal", [⟨.input, 0, "X", false⟩, ⟨.input, 1, "P", false⟩]⟩ }) == false),
+    ("unknown-selector-role", admits (withClause { clause with subject := ⟨"Equal", [⟨.input, 0, "X"⟩, ⟨.input, 1, "P"⟩]⟩ }) == false),
     ("input-with-decision", admits (withClause { clause with kind := .input }) == false),
     ("output-without-output-selector", admits (withClause { clause with kind := .output }) == false),
     ("continuation-without-residual", admits (withClause { clause with kind := .continuation }) == false),
@@ -86,13 +86,13 @@ private def runDiagnostics : IO Unit := do
     ("name-space", ({clause with name := "two words"}.check snapshot signature).isOk),
     ("name-dot", ({clause with name := "claim.part"}.check snapshot signature).isOk),
     ("name-unicode", ({clause with name := "증명"}.check snapshot signature).isOk),
-    ("port", refusal ((⟨.input, 99, "P", false⟩ : ContractSelector).resolve signature) "structured-contract-port"),
-    ("role-copy", refusal ((⟨.output, 0, "P", false⟩ : ContractSelector).resolve signature) "structured-contract-role"),
-    ("service", refusal ((⟨.input, 0, "P", false⟩ : ContractSelector).resolve
+    ("port", refusal ((⟨.input, 99, "P"⟩ : ContractSelector).resolve signature) "structured-contract-port"),
+    ("role-copy", refusal ((⟨.output, 0, "P"⟩ : ContractSelector).resolve signature) "structured-contract-role"),
+    ("service", refusal ((⟨.input, 0, "P"⟩ : ContractSelector).resolve
       {signature with inputs := [.service scalarServiceContract]}) "structured-contract-service"),
     ("unknown-relation", refusal ((⟨"missing", []⟩ : RelationApplication).check snapshot signature) "structured-contract-relation"),
     ("arguments", refusal ((⟨"Equal", []⟩ : RelationApplication).check snapshot signature) "structured-contract-arguments"),
-    ("selector-limit", refusal ((⟨"Equal", List.replicate 513 ⟨.input, 0, "P", false⟩⟩ : RelationApplication).check snapshot signature) "structured-contract-limit"),
+    ("selector-limit", refusal ((⟨"Equal", List.replicate 513 ⟨.input, 0, "P"⟩⟩ : RelationApplication).check snapshot signature) "structured-contract-limit"),
     ("direction", refusal ({clause with kind := .output}.check snapshot signature) "structured-contract-direction"),
     ("residual", refusal ({clause with kind := .continuation}.check snapshot signature) "structured-contract-residual"),
     ("decision", refusal ({clause with decision := none}.check snapshot signature) "structured-contract-decision"),
@@ -420,7 +420,7 @@ example : ¬ contractMeaning.Residual childContext continuationIndex
   cases read
 
 private theorem accepts : contractMeaning.Accepts {} continuationIndex accountingBoundary :=
-  ⟨⟨.output, 0, "V", false⟩, rfl, rfl⟩
+  ⟨⟨.output, 0, "V"⟩, rfl, rfl⟩
 private theorem residualFalse :
     ¬ contractMeaning.Residual {} continuationIndex accountingBoundary assignments := by
   rintro ⟨application, selected, arguments, read, holds⟩

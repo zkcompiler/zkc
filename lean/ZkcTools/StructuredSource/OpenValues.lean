@@ -26,9 +26,7 @@ mutual
     | .boolean, _ => .error "structured-input-type"
     | .index, json | .service _, json => wireNatural json
     | .field _, json | .group _, json => scalar json
-    | .vector _, json | .groups _, json => do (← Format.array json 4096).mapM scalar
-    | .indices, json => do (← Format.array json 4096).mapM wireNatural
-    | .oracle _, _ | .oracleSequence .., _ => throw "structured-oracle-profile"
+    | .vector _, json => do (← Format.array json 4096).mapM scalar
     | .sequence element, json => do (← Format.array json 4096).mapM (wireInput element)
     | .product _ _ fields, json => do wireProductInput fields (← Format.array json)
 
@@ -51,10 +49,7 @@ mutual
     | .boolean, value => .bool value
     | .index, value | .service _, value => .str (toString value)
     | .field _, value | .group _, value => scalarJson value
-    | .vector _, values | .groups _, values => .arr ((show List Scalar from values).map scalarJson).toArray
-    | .indices, values => .arr (values.map (fun value => .str (toString value))).toArray
-    | .oracle _, value => wireOracleAnchor value
-    | .oracleSequence .., values => .arr (values.map wireOracleAnchor).toArray
+    | .vector _, values => .arr ((show List Scalar from values).map scalarJson).toArray
     | .sequence element, values => .arr (values.map (wireOutput element)).toArray
     | .product _ _ fields, value => .arr (wireProductOutput fields value).toArray
 

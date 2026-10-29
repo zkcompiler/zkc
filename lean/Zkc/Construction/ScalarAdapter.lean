@@ -112,7 +112,7 @@ theorem encode_embed (ty : Structured.Ty) (data : dataType ty = true)
     (value : Structured.assignment F G ty) :
     embedData (Value.encode ty value) = Domain.Value.encode ty value := by
   cases ty <;> simp_all [dataType, Value.encode, embedData, Domain.Value.encode,
-    Domain.Payload.ofValue, Structured.Ty.isHandle]
+    Domain.Payload.ofValue, Structured.Ty.isService]
 
 theorem encodeValues_embed {tys : List Structured.Ty}
     (values : Values (Structured.assignment F G) tys) (data : tys.all dataType = true) :

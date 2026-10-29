@@ -8,9 +8,9 @@ open Zkc.Construction.AuthoredPair
 
 private def digest := "sha256:" ++ String.ofList (List.replicate 64 '0')
 private def target : ContractClause :=
-  ⟨.target, "truth", ⟨"Truth", [⟨.input, 0, "V", false⟩]⟩, none, some ⟨.output, 0, "V", false⟩⟩
+  ⟨.target, "truth", ⟨"Truth", [⟨.input, 0, "V"⟩]⟩, none, some ⟨.output, 0, "V"⟩⟩
 private def inputClause : ContractClause :=
-  ⟨.input, "honest", ⟨"Truth", [⟨.input, 0, "P", false⟩]⟩, none, none⟩
+  ⟨.input, "honest", ⟨"Truth", [⟨.input, 0, "P"⟩]⟩, none, none⟩
 private def original : Snapshot :=
   ⟨digest, "main", [],
     [⟨"Truth", .publicDef, "zkc.language.formula/0", "truth", "0", [.boolean], [.boolean],

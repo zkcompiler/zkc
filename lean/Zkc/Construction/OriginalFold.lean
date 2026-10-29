@@ -104,7 +104,7 @@ def receivePlain (routing : Routing) (state : State carriers) (ty : Structured.T
   match routing.message state.frames site sender receiver with
   | none => .halt .refused
   | some _ =>
-      if ty.isHandle then .halt .refused
+      if ty.isService then .halt .refused
       else .call (.receive ty site site (routing.context.role sender)) fun value => .done (value, state)
 
 /-- Plain sends output the real payload. They never turn it into a transcript

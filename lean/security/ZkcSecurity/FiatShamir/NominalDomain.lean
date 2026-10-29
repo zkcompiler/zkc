@@ -56,7 +56,7 @@ theorem received_wrong_origin (ty : Ty) (expected actual : Origin)
 /-- The unrestricted signature is retained. Only data receives have lossless
 proof representation; sends and queries already retain all their replies. -/
 @[expose] def DataOperation : (signature carriers).Op → Prop
-  | .receive ty _ => ty.isHandle = false
+  | .receive ty _ => ty.isService = false
   | .deliver .. | .query .. => True
 
 mutual
@@ -66,11 +66,10 @@ mutual
     | .boolean => false
     | .index => 0
     | .field _ => 0
-    | .vector _ | .indices | .groups _ => []
+    | .vector _ => []
     | .group _ => 0
     | .service _ => 0
-    | .oracle _ => ⟨⟨0, []⟩, .input 0⟩
-    | .oracleSequence .. | .sequence _ => []
+    | .sequence _ => []
     | .product _ _ fields => modelProduct model fields
   def modelProduct (model : DomainModel) : (fields : ProductFields) → model.toCarriers.ProductValue fields
     | .nil => ()
@@ -88,7 +87,7 @@ theorem losslessOperation (model : DomainModel) (operation : (signature model.to
     | query => cases absorbed
     | receive declared origin =>
       cases absorbed
-      change declared.isHandle = false at data
+      change declared.isService = false at data
       let witness : Domain.Payload model.toCarriers := ⟨declared, data, modelValue model declared⟩
       have sameSort : ty = declared := by
         have recognized := congrArg Option.isSome (decoded witness)
@@ -124,22 +123,22 @@ theorem losslessOperation (model : DomainModel) (operation : (signature model.to
     | query => cases absorbed
     | deliver => exact Subsingleton.elim reply value
 
-/-- A service or logical oracle handle, including one hidden in a recursive
-aggregate, cannot acquire a lossless receive law. The actual decoder has no proof payload for any such typed value. -/
-theorem handleReceive_not_lossless (model : DomainModel) (ty : Ty) (origin : Origin)
-    (handle : ty.isHandle = true) :
+/-- Even a service hidden in a recursive aggregate cannot acquire a lossless
+receive law. The actual decoder has no proof payload for any such typed value. -/
+theorem serviceReceive_not_lossless (model : DomainModel) (ty : Ty) (origin : Origin)
+    (service : ty.isService = true) :
     ¬ Original.LosslessOperation interface (.receive ty origin : Operation model.toCarriers) := by
   intro lossless
   have encoded := (lossless.receive ty (.message origin) (received ty origin) id rfl
     (fun payload => by simpa only [Option.map_id, id_eq] using received_message ty origin payload)).2 (modelValue model ty)
   obtain ⟨payload, impossible⟩ := encoded
-  simp only [Domain.Payload.ofValue, handle, Bool.true_eq_false, ↓reduceDIte, reduceCtorEq] at impossible
+  simp only [Domain.Payload.ofValue, service, Bool.true_eq_false, ↓reduceDIte, reduceCtorEq] at impossible
 
 /-- A global lossless law for the unrestricted nominal signature is false. -/
 theorem not_losslessInterface (model : DomainModel) (origin : Origin) :
     ¬ Original.LosslessInterface (interface (carriers := model.toCarriers)) := by
   intro lossless
-  exact handleReceive_not_lossless model (.service "capability") origin rfl
+  exact serviceReceive_not_lossless model (.service "capability") origin rfl
     ⟨lossless.receive (.receive (.service "capability") origin),
       lossless.query (.receive (.service "capability") origin),
       lossless.send (.receive (.service "capability") origin)⟩

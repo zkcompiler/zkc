@@ -502,12 +502,14 @@ output scopes never erase preceding effects or stops.
 
 These rows describe the original oracle-level subject, before semantic
 realization. The native exporter checks the common protocol formation rules,
-including dormant declarations. The independent Lean wire reader recognizes
-these rows. Lean semantic admission currently refuses logical oracle execution; decoding does not extend its existing participant theorems.
+including dormant declarations. Integration of these rows into the independent
+Lean wire reader is pending under the Lean owner. The existing Lean profile
+refuses logical oracle execution; decoding will not by itself extend its
+participant theorems.
 Component seam derivation also refuses logical oracle instructions when linear
 component analysis is active. An empty proposal set asserts no oracle seam.
-Frontend syntax, generated obligations and deterministic realization remain
-separate implementation work; see [status](../../status.md).
+The [contract register](../contracts.md) distinguishes native realization,
+frontend spelling and the independent formal consumers; see [status](../../status.md).
 
 Kinds retain the library identity and typed arguments:
 
@@ -603,7 +605,8 @@ security.
 condition templates and ordered virtual footprints from the verified original.
 `protocol-check-oracle-obligations ORIGINAL.mlir REPORT.json --symbol=NAME`
 checks the complete report against a fresh derivation. The independent Lean
-`OracleObligations.check` recomputes it from the decoded structured snapshot.
+derivation from the decoded structured snapshot is supplied for Lean-owned
+integration; it is not part of the currently landed reader profile.
 The exact array grammar is:
 
 ```text

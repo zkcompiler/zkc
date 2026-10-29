@@ -49,9 +49,10 @@ what actually landed. The completion criteria below belong inside those units.
 
 | Unit | Required outcome |
 |---|---|
-| Oracle realization and program bytes | Protocol-owned oracle kinds/anchors, virtual dependencies, typed realization records between preparation and projection, independent actual-body comparisons, block-draw and gated-request emission, witness codec slot, written-source AST/elaboration export and an exact version-0 executable byte grammar |
-| STARK compiler support | Consume the realization records for executable queries, authentication, selected transcript/extension fields and gating; exercise the same oracle-level argument under different realizations and layouts |
-| MLIR execution foundation | Measure verification cost; move stage admission to explicit checked owners with audited ingress; replace embedded schema strings with structured types/attributes and generate native contract signatures; preserve external bytes and adopt interfaces only with correct role/effect/outcome laws |
+| Merkle query realization | Land Protocol-owned oracle kinds/anchors, named shapes, typed records between preparation and projection, independent actual-body comparisons, immediate Merkle queries and fixed base-query blocks. The byte grammar and written-source export are already separate foundations. Hand off Lean changes to its owner and publish the shared contract register |
+| Virtual batching and FRI | Complete dynamic virtual query blocks, ordered domain/failure prefixes and the same-subject FRI client. Settle index-map semantics jointly with Lean before admission. Consume runtime-owned quartic Keccak installation; keep native claim publication and its formal realization connection explicit |
+| Catalog and MLIR execution foundation | Start a four-face operation-family probe before implementation. Then measure admission cost, use structured ODS signatures instead of embedded schemas, generate shared declaration faces and preserve independent semantic readers |
+| STARK compiler support | Complete block-draw and gated-request emission, witness codec slot and record consumption; exercise the common frontend FRI/STARK acceptance client under selected transcript/extension fields, realizations and layouts |
 | Represented execution | Canonical logical collection ownership across Data/Algebra, Residue and Codec semantics, private buffer contracts and admitted Arith/Vector/Bufferization lowering; compare native kernels and transparent schedules |
 | Constraints and semantic consumers | One assignment-level owner, source-to-encoding adequacy, lookup/multiset and chronological-memory consumers, exact statement/witness maps and actual commitment/terminal connections |
 
@@ -68,6 +69,19 @@ consumers; those consumers retain their existing owners:
 | Ideal oracle to realized protocol | Original oracle program, deterministic realization record and actual realized candidate | Realization bridge and scheme-specific security interpretation |
 | Emitted bytes to executable meaning | Exact byte grammar, canonical rules, complete layouts and malformed/canonical fixtures | Independent program-byte reader and its executable connection |
 
+The [contract register](spec/contracts.md) owns this inventory and its current
+producer/consumer gaps. Frontend owns source spelling, companions and source-AST
+contracts; Lean is the sole writer of `lean/`. Supply changes to Lean as reviewable
+patches rather than maintaining a second writer. Native Common-source removal
+is paired with Lean retiring its last consumer; it must not leave a redundant
+producer after the structured source route replaces it.
+
+Restricted logical aggregates retain typed field paths, actual handles and role
+components for claim records. They require shared frontend/IR/Lean admission;
+ordinary native data aggregates and codecs continue to exclude oracle handles.
+Companion and declaration-interface proposals must reuse the existing request,
+subject, declaration and assurance pipeline rather than create a parallel one.
+
 Track native implementation completion and formal closure separately. Record
 whether a link is independently interpreted, checked by regeneration, proved,
 or still trusted. Regeneration checks consistency with a producer; it does not
@@ -80,6 +94,46 @@ and propagation of the selected installation through its own choices and
 validation. Common target ingress stays before native resident handles; no
 separately published typed-program view is required. Generated shared files
 are regenerated from the agreed current schema.
+
+### Catalog and MLIR foundation probe
+
+Carry one operation family through four faces before implementing the catalog
+redesign: frontend spelling, typed ODS signature, execution installation
+(Rust registry, VM/kernels and Lean byte table), and a Lean definition with
+reusable laws. FRI index maps are the first candidate. IR owns the native
+contract; Lean owns its interpretation and proofs; frontend and runtime own
+their adapters. The joint decision must fix bounds, unsigned widths, zero-size
+and overflow behavior, and whether a map is total under a checked domain premise.
+An unchecked integer remainder or an overflow flag does not discharge that premise.
+
+Compare a library family over existing operations with a new primitive family.
+Select new primitives only where they preserve useful semantics or remove
+measured duplication. Probe actual frontend emission, ODS verification, native
+execution, byte interpretation and one reused Lean law on honest and invalid
+inputs. Generated signatures may be shared; mathematical laws, admission and
+independent readers remain separately justified. Record missing consumers before
+broad generation or typed-IR migration. No global admission cache or permissive
+index-arithmetic vocabulary is introduced as a shortcut.
+
+The index decision is a dependency of virtual FRI realization; the complete
+foundation migration may proceed in its own substantial PR after the probe.
+
+### Block requests and gating
+
+Construction owns the generated request layout and witness slot; runtime owns
+the kernel and bounded search; Lean owns the primitive-query interpretation.
+Settle fixed-metadata order, final request length, nonoverlapping gate/index
+windows, occurrence coordinates, zero-difficulty elision, verifier rejection
+successor and all speculative/replayed work before installing the operation.
+Publish the agreed byte contract in the repository and test independent byte
+vectors against both compiler and runtime. The current scalar-index transcript
+ABI grants no implicit block/gated capability.
+
+The common acceptance configuration is KoalaBear with its quartic extension
+and Keccak Merkle rows. Runtime supplies that exact row instance. Lean must
+interpret its installed vocabulary and register the realization stage/link
+before an assurance report can claim the full path. All sessions use the same
+frontend FRI/STARK source and report their remaining obligations separately.
 
 ### Completion criteria for the ordered units
 

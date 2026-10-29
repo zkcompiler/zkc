@@ -37,10 +37,10 @@ def ActionCovered (routing : Routing) (frames : Frames) :
               routing.delivery frames site field sender = some (draw, message) ∧
               draw.request = some (.draw field)
           | _ => False
-      | _, _ => ty.isHandle = false ∧
+      | _, _ => ty.isService = false ∧
           ∃ origin, routing.message frames site sender routing.self = some origin
   | @Participant.Action.send _ _ _ _ ty site receiver _ =>
-      ty.isHandle = false ∧
+      ty.isService = false ∧
         ∃ origin, routing.message frames site routing.self receiver = some origin
   | .query site field (.cons handle .nil) =>
       (routing.mode = .validator ∧ ∃ origin,

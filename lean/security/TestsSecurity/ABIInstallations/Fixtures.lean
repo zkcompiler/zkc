@@ -65,9 +65,9 @@ def source (config : Configuration) : Snapshot where
           .instruction .indexEqual [1, 0] [.boolean] [] ""] (.ret [0])⟩] else [])
   contracts := [⟨"main",
     [⟨.target, "claim", ⟨"Target", config.selectors.map fun index =>
-      ⟨.input, index, if config.publicData then "V" else "P", false⟩⟩,
-      none, some ⟨.output, 0, "V", false⟩⟩] ++
-    (if config.constrained then [⟨.input, "one", ⟨"One", [⟨.input, 0, "V", false⟩]⟩, none, none⟩] else [])⟩]
+      ⟨.input, index, if config.publicData then "V" else "P"⟩⟩,
+      none, some ⟨.output, 0, "V"⟩⟩] ++
+    (if config.constrained then [⟨.input, "one", ⟨"One", [⟨.input, 0, "V"⟩]⟩, none, none⟩] else [])⟩]
   catalogue := blsRows
 
 def artifacts (config : Configuration) : AuthoredPair.Artifacts :=

@@ -59,9 +59,6 @@ source binding must account for. For each original operation:
 - marks and retained statements have no action and no exported counterpart;
 - a restriction keeps its operand's slot when the validator is among its roles,
   and is absent otherwise;
-- assembly selects the slot assigned to the validator's mapped role, or is
-  absent when no role selects it. It consumes no instruction or reference; a
-  malformed operand count is refused (`projection-assembly`);
 - a calculation of the carrier vocabulary with an absent operand is absent.
   Otherwise the next instruction must be the same calculation on the references
   that hold its operands, with data results; its result is then held. If the next
@@ -83,9 +80,8 @@ source binding must account for. For each original operation:
   other roles are absent;
 - a guard owned by the validator must be implemented by a guard on the
   reference holding its condition;
-- an exchange must have distinct sender and receiver roles and a recursively
-  handle-free data type, excluding services and logical oracle handles even
-  inside aggregates. A message from the producer to the validator must be implemented by a receive at
+- an exchange must have distinct sender and receiver roles and a recursively service-free data type. A
+  message from the producer to the validator must be implemented by a receive at
   the same qualified site with the same type; the received value is held. A
   message from the validator to the producer must be implemented by the
   observation of the reference holding it as a message the validator sends at

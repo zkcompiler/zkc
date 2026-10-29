@@ -177,7 +177,6 @@ mutual
         if arm != .verifier || receiver == selectedRole then
           modify fun state => { state with view := { state.view with cuts :=             { receive := origin, type := ty, sender, receiver,               honestSource := if arm == .verifier then none else arguments.head?.map (·.address) } ::                 state.view.cuts } }
       | .restrict _ _ => node := { node with tag := "restrict-scope" }
-      | .assemble _ roles => node := { node with tag := "assemble-roles", roleMap := roles }
       | .draw _ _ _ =>
         outgoing := values.map fun value => { value with dependencies := [value.address] }
         node := { node with tag := "draw", results := outgoing.filter fun value =>           allowed arm selectedRole value.scopes }

@@ -27,7 +27,7 @@ route is authenticated against the source; every typed peer reply is covered. -/
 def Simulation.plainReceive (routing : Routing) (state : State carriers)
     (ty : Ty) (site : String) (sender : Nat) (origin : Origin)
     (route : routing.message state.frames site sender routing.self = some origin)
-    (data : ty.isHandle = false) (environment : Domain.Environment carriers) :
+    (data : ty.isService = false) (environment : Domain.Environment carriers) :
     Simulation (Received ty state environment) (fun _ frame => frame = environment)
       (receivePlain routing state ty site sender)
       (Domain.View.receive site site (routing.context.role sender) ty [.data ty] environment) := by

@@ -65,7 +65,7 @@ def formula : FormulaBinding imported application.relation := by bind_contract
 
 theorem target_exact : owner.contract.clauses = [clause] ∧
     clause.name = "equality" ∧ clause.residual = none ∧
-    clause.decision = some ⟨.output, 0, "role00000001", false⟩ := by decide +kernel
+    clause.decision = some ⟨.output, 0, "role00000001"⟩ := by decide +kernel
 
 def retained : RetainedTarget imported artifact.policy [.field "koala-bear", .field "koala-bear"] where
   owner := owner

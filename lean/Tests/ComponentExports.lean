@@ -94,7 +94,7 @@ private def run (snapshot : Snapshot) (text : String) : IO Unit := do
   let witnessSnapshot := { snapshot with relations := snapshot.relations.map fun relation =>
     { relation with purposes := ["witness", "statement"] } }
   let witnessWire : ComponentExport.Export := { exported with proposals := exported.proposals.map fun proposal =>
-    { proposal with slots := proposal.slots.map fun slot => { slot with purpose := "witness", source := .witness ⟨.input, 0, role, false⟩ } } }
+    { proposal with slots := proposal.slots.map fun slot => { slot with purpose := "witness", source := .witness ⟨.input, 0, role⟩ } } }
   test "declared caller witness uses the same assignment store" (ComponentExport.check witnessSnapshot witnessWire).isOk
   test "missing seam" (refuses (ZkcTools.SourceClaims.Components.check snapshot
     (setField wire "seams" (arr [])).compress) "component-seam-association")

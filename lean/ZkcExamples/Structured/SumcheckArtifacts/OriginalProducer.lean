@@ -155,7 +155,7 @@ theorem original_round (payload : UnitPayload)
     Original.fold_bind, Original.fold_actions]
   simp only [SumcheckProverLaws.roundPresent, PIR.Process.interpretState,
     Original.operations, profile, Original.send, Original.receive, routes.mode, routes.low, routes.high,
-    routes.delivery, Original.record, Domain.Payload.ofValue, Ty.isHandle, eq_self, Original.queryField, routes.request,
+    routes.delivery, Original.record, Domain.Payload.ofValue, Ty.isService, eq_self, Original.queryField, routes.request,
     PIR.Process.bind, Original.fold, producer, ↓reduceDIte,
     List.append_assoc, List.cons_append, List.nil_append]
 

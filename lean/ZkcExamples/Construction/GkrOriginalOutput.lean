@@ -125,7 +125,7 @@ theorem source (mode : Domain.Mode) (handle index : Nat) (point : List F)
       show (routing handle .validator).context.validator = 1 from rfl,
       show outputDeliverySite {} = "label_6f75747075745f64656c6976657279_0" from rfl,
       id_eq, routes.message, Domain.Payload.ofValue,
-      Ty.isHandle, ↓reduceDIte, Original.record, PIR.Process.bind, List.append_assoc]
+      Ty.isService, ↓reduceDIte, Original.record, PIR.Process.bind, List.append_assoc]
     rfl
 
 /-- Every typed reply establishes the exact source return, closing frame,

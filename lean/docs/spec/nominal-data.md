@@ -6,7 +6,7 @@ arithmetic and helper semantics for those carriers; choosing a Lean carrier is
 separate from proving field, group, embedding, or sampling laws.
 
 `Construction.Domain.Payload` packages an exact type, a proof that its recursive
-`Ty.isHandle` check is false, and a value at that type. Message eligibility uses
+`Ty.isService` check is false, and a value at that type. Message eligibility uses
 this check. It does not enforce a protocol relation, a length bound, a finite
 sampling universe, or availability of a byte codec. Invalid statements and
 oversized data therefore remain available to the modeled adversary.
@@ -15,16 +15,14 @@ oversized data therefore remain available to the modeled adversary.
 
 `Payload.value` casts only after equality of the complete nominal type.
 `Payload.ofValue_value`, `Payload.value_ofValue`, and the fixed-type injectivity
-laws connect packaging and decoding. Proof witnesses for logical-handle exclusion do
+laws connect packaging and decoding. Proof witnesses for service exclusion do
 not contribute identity. In particular:
 
 - different fields remain distinct when their Lean carriers coincide;
 - vectors and sequences remain distinct, including empty values;
 - product identity, constructor, and ordered field types remain present in
   the descriptor; field naming and use are fixed by the admitted source;
-- a service or logical oracle handle anywhere inside an aggregate excludes the
-  whole value from data. Oracle anchors and bounded handle sequences require
-  their own realization; ordinary codecs cannot transport them.
+- a service anywhere inside an aggregate excludes the whole value from data.
 
 Source admission checks descriptor well-formedness separately. Constructing a
 Lean payload does not itself prove that its descriptor belongs to a selected
@@ -92,8 +90,3 @@ protected root, records preservation theorems where claimed, and otherwise
 re-establishes the property under its new exact model and request. Independent
 kernel replay checks proof validity; model review checks the intended meaning.
 Neither replaces the other.
-
-The scalar security endpoint's typed public-value binding also requires the
-checked policy's handle-free schema. Its injectivity theorem still covers all
-raw values at admitted types, including malformed relation inputs. This does
-not provide native absorption or a byte codec for logical anchors.

@@ -364,7 +364,7 @@ inductive Alignment (routing : Original.Routing) :
       (route : OccurrenceResolution.resolveStatic routing.snapshot routing.context
         (routing.context.message (qualifyProtocolSite context.applicationPrefix site)
           (context.roles peer) routing.self) frames.sites routing.messages = some template)
-      (data : ty.isHandle = false)
+      (data : ty.isService = false)
       (tail : Alignment routing context definitions callees (selection := selection) out role scopes outputs history (frames.rename .there) (receiveLayout layout ty) next rest) :
       Alignment routing context definitions callees (selection := selection) out role scopes outputs history frames layout (.receive ty site peer next)
         (fun model => Domain.View.sequence
@@ -422,7 +422,7 @@ inductive Alignment (routing : Original.Routing) :
       (ty : Ty) (site : String) (peer : Nat)
       {next : Form [] callees (.value ty :: scope) out} {rest : Block}
       (replacement : Replacement) (profile : routing.context.profile = .fiatShamir replacement)
-      (mode : routing.mode = .validator) (data : ty.isHandle = false)
+      (mode : routing.mode = .validator) (data : ty.isService = false)
       {prepared : Layout (.value ty :: scope)} {preparation : Block}
       (preparationProof : CoordinatePrefix (receiveLayout layout ty) prepared preparation)
       (stateRef pathRef : Nat)

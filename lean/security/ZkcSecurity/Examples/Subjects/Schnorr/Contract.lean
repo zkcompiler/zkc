@@ -34,7 +34,7 @@ theorem target : SchnorrProofBinding.clause.kind = .target ∧ SchnorrProofBindi
 /-- The clause reads the base and the point at the verifier's input ports `0`
 and `1`, and the scalar at the prover's input port `2`. -/
 theorem selectors : SchnorrProofBinding.clause.subject.selectors =
-    [⟨.input, 0, "role00000001", false⟩, ⟨.input, 1, "role00000001", false⟩, ⟨.input, 2, "role00000000", false⟩] :=
+    [⟨.input, 0, "role00000001"⟩, ⟨.input, 1, "role00000001"⟩, ⟨.input, 2, "role00000000"⟩] :=
   rfl
 
 set_option smartUnfolding true in

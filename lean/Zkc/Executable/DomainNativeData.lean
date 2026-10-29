@@ -98,7 +98,7 @@ theorem encodeValues_embeds {types : List Structured.Ty}
     apply List.all_eq_true.mpr
     intro ty member
     have allowed := List.all_eq_true.mp eligible ty member
-    cases ty <;> simp_all [dataType, Domain.dataType, Structured.Ty.isHandle]
+    cases ty <;> simp_all [dataType, Domain.dataType, Structured.Ty.isService]
   obtain ⟨encoded, found⟩ := Domain.encodeValues_exists values admitted
   exact ⟨encoded, (DomainAdapter.encodeValues_embed values eligible).trans found, encodeValues_sorts values found⟩
 

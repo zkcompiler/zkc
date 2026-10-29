@@ -56,7 +56,7 @@ theorem read_round (history : Domain.History carriers) (state : State) (same : s
   intro payload low decoded
   have encoded := Domain.Payload.ofValue_value decoded
   have same : payload = .field "scalar" low := by
-    simpa [Domain.Payload.ofValue, Structured.Ty.isHandle] using encoded.symm
+    simpa [Domain.Payload.ofValue, Structured.Ty.isService] using encoded.symm
   subst payload
   apply ReadingTo.observe
   apply ReadingTo.receive (I := Domain.Actions carriers) (.field "scalar") "high" "high" "producer" _
@@ -65,7 +65,7 @@ theorem read_round (history : Domain.History carriers) (state : State) (same : s
   intro payload high decoded
   have encoded := Domain.Payload.ofValue_value decoded
   have same : payload = .field "scalar" high := by
-    simpa [Domain.Payload.ofValue, Structured.Ty.isHandle] using encoded.symm
+    simpa [Domain.Payload.ofValue, Structured.Ty.isService] using encoded.symm
   subst payload
   apply ReadingTo.observe
   change ReadingTo _ _ _ (if low = high then _ else _) (if low = high then _ else _)

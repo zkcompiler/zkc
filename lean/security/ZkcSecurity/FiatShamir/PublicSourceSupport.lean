@@ -16,10 +16,9 @@ open PIR Zkc.Source Zkc.Source.Structured Zkc.Construction
 
 attribute [local implicit_reducible] ProtocolOp.arguments ProtocolOp.results ProtocolOp.regions
 
-/-- Public proof messages carry data; service and logical oracle handles have no
-ordinary proof-message encoding. -/
+/-- Public proof messages carry data, never service capabilities. -/
 def operation : ProtocolOp → Bool
-  | .exchange ty .. => !ty.isHandle
+  | .exchange ty .. => !ty.isService
   | _ => true
 
 /-- The actual stored bodies and all nested callbacks are inspected once. -/
@@ -134,7 +133,7 @@ private theorem operation_support (model : DomainModel) (definitions : List Chec
     cases args with
     | cons value rest =>
       cases rest
-      have data : ty.isHandle = false := by simpa only [operation, Bool.not_eq_true'] using checked
+      have data : ty.isService = false := by simpa only [operation, Bool.not_eq_true'] using checked
       simp only [protocolOperationWithOn, Participant.exchange]
       split
       · cases value with
@@ -145,7 +144,6 @@ private theorem operation_support (model : DomainModel) (definitions : List Chec
         · trivial
   | restrict => cases args with
     | cons value rest => cases rest; trivial
-  | assemble => cases callbacks; trivial
   | draw owner field site =>
     set_option backward.isDefEq.respectTransparency false in
       cases callbacks

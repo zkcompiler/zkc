@@ -35,7 +35,7 @@ theorem target : SumcheckContractBindings.publicClause.kind = .target ∧
 /-- The clause reads the vector and the claim at the verifier's input ports `0`
 and `1`. -/
 theorem selectors : SumcheckContractBindings.publicClause.subject.selectors =
-    [⟨.input, 0, "role00000001", false⟩, ⟨.input, 1, "role00000001", false⟩] :=
+    [⟨.input, 0, "role00000001"⟩, ⟨.input, 1, "role00000001"⟩] :=
   rfl
 
 set_option smartUnfolding true in

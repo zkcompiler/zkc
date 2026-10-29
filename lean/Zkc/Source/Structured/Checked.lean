@@ -13,11 +13,10 @@ namespace Zkc.Source.Structured
 def checkDefinition (snapshot : Snapshot) (domains : List DomainSpec)
     (summaries : IdentitySummaries) (definition : Definition) : Except String CheckedDefinition := do
   let kind ← match definition.kind with
-    | .protocol | .oracle => throw "structured-helper-kind"
+    | .protocol => throw "structured-helper-kind"
     | .math => pure HelperKind.math
     | .local => pure HelperKind.local
   let raw ← match definition with
-    | .oracle _ => throw "structured-oracle-profile"
     | .function f =>
       (lowerBlock snapshot domains summaries f.kind Limits.nesting f.inputs
         (f.preconditions.map fun bound => (bound.index, bound.container)) .function f.body).run' {}

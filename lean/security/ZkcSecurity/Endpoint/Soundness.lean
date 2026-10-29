@@ -206,7 +206,7 @@ def bound : BindingEvidence := evidence.binding
 
 /-- The binding codec of an adaptive claim: the policy-derived initial transcript
 of every policy statement in the bound application context. -/
-abbrev codec : BindingCodec (art.Statement F G) (Event F G) := policyCodec art.publics (FiatShamir.DomainReduction.policyData evidence.compiled.toCompiled) evidence.bound.application
+abbrev codec : BindingCodec (art.Statement F G) (Event F G) := policyCodec art.publics evidence.bound.application
 
 end SoundnessEvidence
 

@@ -93,7 +93,6 @@ def decode (proposals seams : Json) : Except String Export := do
     ← (← Format.array seams 100000).mapM seam⟩
 
 def selectedType (owner : Function) (selector : ContractSelector) : Except String Ty := do
-  if selector.anchor then throw "structured-oracle-profile"
   let interface ← requireSome owner.interface "component-instantiation"
   let (types, scopes) := match selector.direction with
     | .input => (owner.inputs, interface.inputScopes)

@@ -39,10 +39,6 @@ mutual
     | .field domain => carriers.Field domain
     | .vector domain => List (carriers.Field domain)
     | .group domain => carriers.Group domain
-    | .groups domain => List (carriers.Group domain)
-    | .indices => List Nat
-    | .oracle _ => OracleAnchor
-    | .oracleSequence _ _ => List OracleAnchor
     | .service _ => Nat
     | .sequence element => List (carriers.Value element)
     | .product _ _ fields => carriers.ProductValue fields

@@ -64,14 +64,6 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     let [type] := arguments | throw "structured-restrict-signature"
     if type.isService then throw "structured-service-use"
     return .restrict type (← resolveScope interface.roles selected)
-  | .assemble selected =>
-    if !site.isEmpty then throw "structured-pure-site"
-    recordSite site false
-    let [type] := results | throw "structured-assemble-signature"
-    if type.isHandle then throw "structured-assemble-type"
-    let roles ← resolveScope interface.roles selected
-    if arguments != roles.map (fun _ => type) then throw "structured-assemble-signature"
-    return .assemble type roles
   | .draw owner field =>
     recordSite site true
     snapshot.catalogue.require field .field "Field"
@@ -90,7 +82,7 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     recordSite site false
     let some declaration := snapshot.relations.find? (·.name == relation) |
       throw "structured-unknown-relation"
-    if arguments != declaration.inputs || !results.isEmpty || arguments.any Ty.isHandle then
+    if arguments != declaration.inputs || !results.isEmpty || arguments.any Ty.isService then
       throw "structured-statement-signature"
     if selectors.length != operands.length || function.outputs[acceptance]? != some .boolean then
       throw "structured-statement-acceptance"
@@ -100,7 +92,7 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
       if !(inputScopes[input]?.getD []).contains selected then throw "structured-statement-selector"
     let selectedInputs ← (operands.zip selectors).mapM fun (operand, selector) => do
       let some (some input) := origins[operand]? | throw "structured-statement-input"
-      pure (ContractSelector.mk .input input selector false)
+      pure (ContractSelector.mk .input input selector)
     let targets := (snapshot.contracts.filter (·.owner == function.name)).flatMap
       (fun contract => contract.clauses.filter (·.kind == .target))
     let projectionMatches := fun clause : ContractClause =>
@@ -749,7 +741,7 @@ theorem lowerProtocol_statementFree {snapshot : Snapshot} {domains : List Domain
 
 /-- Closed value profile. Group values retain the same explicit F/G assignment;
 service capabilities remain at the open boundary. -/
-def Ty.closedValue (type : Ty) : Bool := !type.isHandle
+def Ty.closedValue (type : Ty) : Bool := !type.isService
 
 def Op.closedValues (op : Op) : Bool := (op.arguments ++ op.results).all Ty.closedValue
 

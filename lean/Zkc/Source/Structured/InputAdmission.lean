@@ -20,9 +20,7 @@ mutual
   def inputRepresentable {carriers : Carriers} : (type : Ty) →
       Component carriers.Value type → Prop
     | .index, some value => value < indexLimit
-    | .vector _, some values | .groups _, some values => values.length < indexLimit
-    | .indices, some values => values.length < indexLimit ∧ ∀ value ∈ values, value < indexLimit
-    | .oracleSequence _ maximum, some values => values.length ≤ maximum
+    | .vector _, some values => values.length < indexLimit
     | .sequence element, some values => values.length < indexLimit ∧
         ∀ value ∈ values, inputRepresentable element (some value)
     | .product _ _ fields, some value => productRepresentable fields value

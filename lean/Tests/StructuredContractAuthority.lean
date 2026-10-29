@@ -10,7 +10,7 @@ private def root : Function :=
   ⟨"main", .protocol, .publicDef, [.vector scalarDomain, .field scalarDomain], [.boolean],
     some ⟨["P", "V"], [["P", "V"], ["P", "V"]], [["V"]]⟩, [], some (.protocol ⟨"main", []⟩),
     .block [.instruction (.booleanConstant true) [] [.boolean] [] ""] (.ret [0])⟩
-private def subject : RelationApplication := ⟨"Initial", [⟨.input, 0, "P", false⟩, ⟨.input, 1, "V", false⟩]⟩
+private def subject : RelationApplication := ⟨"Initial", [⟨.input, 0, "P"⟩, ⟨.input, 1, "V"⟩]⟩
 private def snapshot : Snapshot :=
   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [],
     [⟨"Initial", .publicDef, "opaque", "sum", "0", [.vector scalarDomain, .field scalarDomain],

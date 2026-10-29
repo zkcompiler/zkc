@@ -80,7 +80,7 @@ noncomputable def layer_step (outer : Env (F := F) (G := G)) (length : outer.len
           Origin.message, Origin.query, qualifyProtocolSite, List.getElem?_append, length,
           addFound, mulFound, selectorFound, widthFound, Nat.reduceAdd, Nat.reduceSub, Nat.reduceLT,
           List.isEmpty_cons, List.getD_cons_zero, List.getD_cons_succ, decimal, decimalDigit,
-          Payload.ofValue, DomainAdapter.embedPayload, Ty.isHandle, Bool.not_false, Bool.not_true, Bool.false_eq_true, eq_mp_eq_cast, cast_eq,
+          Payload.ofValue, DomainAdapter.embedPayload, Ty.isService, Bool.not_false, Bool.not_true, Bool.false_eq_true, eq_mp_eq_cast, cast_eq,
           List.map_append, Origin.withoutCoordinates])
       | (fail_if_no_progress erw [guard_decide (F := F) (G := G)])
       | (fail_if_no_progress erw [GkrDomainHelperCalls.tuple40_source (F := F) (G := G)])

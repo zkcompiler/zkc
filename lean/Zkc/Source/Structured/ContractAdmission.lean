@@ -11,7 +11,6 @@ namespace Zkc.Source.Structured
 are never interchangeable. This is a structural check only. -/
 def ContractSelector.resolve (signature : ProtocolSignature) (selector : ContractSelector) :
     Except String Ty := do
-  if selector.anchor then throw "structured-oracle-profile"
   let (types, scopes) := match selector.direction with
     | .input => (signature.inputs, signature.inputScopes)
     | .output => (signature.outputs, signature.outputScopes)
@@ -19,7 +18,7 @@ def ContractSelector.resolve (signature : ProtocolSignature) (selector : Contrac
   let role ← resolveRole signature.roles selector.role
   if !(scopes[selector.port]?.getD []).contains role then
     throw "structured-contract-role"
-  if type.isHandle then throw "structured-contract-service"
+  if type.isService then throw "structured-contract-service"
   return type
 
 def RelationApplication.check (snapshot : Snapshot) (signature : ProtocolSignature)

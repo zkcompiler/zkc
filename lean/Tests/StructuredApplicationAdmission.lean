@@ -96,8 +96,8 @@ private def statementUnit (called : Bool) : Snapshot :=
   let dormant := protocol "dormant" ["P"] [.boolean] [] [["P"]] []
     (.block [.instruction (.protocolApply "main" ["P"]) [0] [.boolean] [] "apply"] (.ret []))
   { unit (if called then [root, dormant] else [root]) with
-    contracts := [⟨"main", [⟨.target, "claim", ⟨"relation", [⟨.input, 0, "P", false⟩]⟩,
-      none, some ⟨.output, 0, "P", false⟩⟩]⟩] ++ (if called then [⟨"dormant", []⟩] else [])
+    contracts := [⟨"main", [⟨.target, "claim", ⟨"relation", [⟨.input, 0, "P"⟩]⟩,
+      none, some ⟨.output, 0, "P"⟩⟩]⟩] ++ (if called then [⟨"dormant", []⟩] else [])
     relations := [⟨"relation", .publicDef, "opaque", "key", "rev",
       [.boolean], [.boolean], ["statement"], none, []⟩] }
 

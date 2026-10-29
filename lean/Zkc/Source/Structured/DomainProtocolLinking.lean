@@ -115,7 +115,7 @@ theorem protocol_region_protocols_congrOn
   | protocolApply signature roles site =>
     simp only [protocolOperationWithOn, agree signature
       (List.mem_flatMap.mpr ⟨_, member, by simp [ProtocolOp.protocols]⟩)]
-  | calculate | localCall | draw | statement | assemble => rfl
+  | calculate | localCall | draw | statement => rfl
   | guard | exchange | restrict =>
     cases args with | cons value rest => cases rest; rfl
   | mark => cases args; rfl

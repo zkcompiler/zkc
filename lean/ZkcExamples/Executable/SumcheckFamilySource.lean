@@ -145,7 +145,7 @@ theorem round_projection (shape : Shape) (occurrences : Occurrences shape) (help
       shape.suite, helpers.append, Domain.Calculations.fieldAdd (F := F) (G := G),
       Domain.Calculations.fieldEqual (F := F) (G := G)]
     unfolding [roundProcess, roundState, roundBody, drawOrigin, ProgramShape.carried, Domain.evaluate, Domain.step,
-      PIR.Process.interpret, Original.forgetCheckpoints, Structured.Ty.isHandle, Bool.not_false, Bool.not_true]
+      PIR.Process.interpret, Original.forgetCheckpoints, Structured.Ty.isService, Bool.not_false, Bool.not_true]
   congr 1
   funext low
   simp only [PIR.Process.bind]
@@ -161,7 +161,7 @@ theorem round_projection (shape : Shape) (occurrences : Occurrences shape) (help
       deliveryResolved, deliveryRequest, Domain.Calculations.fieldConstant (F := F) (G := G),
       Domain.Calculations.fieldSubtract (F := F) (G := G), Domain.Calculations.fieldMultiply (F := F) (G := G),
       Domain.Calculations.fieldAdd (F := F) (G := G)]
-    unfolding [Domain.evaluate, Domain.step, PIR.Process.interpret, Original.forgetCheckpoints, Structured.Ty.isHandle,
+    unfolding [Domain.evaluate, Domain.step, PIR.Process.interpret, Original.forgetCheckpoints, Structured.Ty.isService,
       Bool.not_false, Bool.not_true, List.append_assoc, Nat.cast_one, yieldValues, carriedSorts, drawOrigin]
   all_goals rfl
 

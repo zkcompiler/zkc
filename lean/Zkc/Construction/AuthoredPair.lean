@@ -83,7 +83,7 @@ def selectionValid {original : Snapshot} (selected : Selection original) : Bool 
   original.contracts.any (fun contract => contract.owner == original.entry &&
     contract.clauses.contains selected.target) &&
   selected.target.kind == .target && selected.target.residual == none &&
-  selected.target.decision == some ⟨.output, policy.acceptance, policy.validator, false⟩ &&
+  selected.target.decision == some ⟨.output, policy.acceptance, policy.validator⟩ &&
   roleInputSorts original policy.producer == some (policy.dataPorts p.inputs) &&
   roleOutputSorts original policy.producer == some (policy.dataPorts p.outputs) &&
   (if policy.suite = "" then true else

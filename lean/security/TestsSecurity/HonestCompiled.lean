@@ -76,8 +76,7 @@ instance sampleRaw (event : Event model.toCarriers) : SampleableType (Raw event)
           rcases request with ⟨method, arguments, sort⟩
           cases sort with
           | field domain => change SampleableType Scalar; infer_instance
-          | boolean | index | vector _ | group _ | groups _ | indices | service _
-          | oracle _ | oracleSequence _ _ | sequence _ | product _ _ _ =>
+          | boolean | index | vector _ | group _ | service _ | sequence _ | product _ _ _ =>
               change SampleableType Unit; infer_instance
   | message => exact inferInstanceAs (SampleableType Unit)
   | publicBinding => exact inferInstanceAs (SampleableType Unit)
@@ -105,7 +104,7 @@ theorem accepts_all_tables (answers : QueryImpl (FiatShamir.TranscriptOracle.Dom
     FiatShamir.HonestCompiled.tableOracle, Typed.readTable,
     booleanConstant_calculates, fieldEqual_calculates,
     Domain.Payload.value, Context.replacement?, Context.suite, Context.contract,
-    Context.request, Context.service, Structured.Ty.isHandle, bind, pure,
+    Context.request, Context.service, Structured.Ty.isService, bind, pure,
     Domain.PairExecution.Success, Domain.acceptanceAt]
 theorem perfect : Honest.failure computation (Domain.PairExecution.Success 0) = 0 := by
   classical
@@ -129,8 +128,7 @@ def tableOracle : Oracle Id model.toCarriers Unit := by
           rcases request with ⟨method, arguments, sort⟩
           cases sort with
           | field domain => exact (.returned (0 : Scalar), state)
-          | boolean | index | vector _ | group _ | groups _ | indices | service _
-          | oracle _ | oracleSequence _ _ | sequence _ | product _ _ _ =>
+          | boolean | index | vector _ | group _ | service _ | sequence _ | product _ _ _ =>
               exact (.returned (), state)
   | message => exact (.returned (), state)
   | publicBinding => exact (.returned (), state)

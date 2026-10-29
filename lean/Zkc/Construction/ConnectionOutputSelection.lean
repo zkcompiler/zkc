@@ -105,7 +105,7 @@ theorem roleOutputValues_boolean (role : Nat) {types : List Ty}
   obtain ⟨accepted, selected, actual, actualEncoded, read⟩ :=
     roleOutputValues_at role scopes values output visible encoded
   have same : Domain.Value.data (.boolean accepted) = actual := by
-    simpa [Domain.Value.encode, Domain.Payload.ofValue, Ty.isHandle] using actualEncoded
+    simpa [Domain.Value.encode, Domain.Payload.ofValue, Ty.isService] using actualEncoded
   exact ⟨accepted, selected, same.symm ▸ read⟩
 
 /-- The source-selected Boolean agrees with the artifact's corresponding data

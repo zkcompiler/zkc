@@ -29,7 +29,7 @@ def function (name : String) (kind : Kind) (inputs outputs : List Ty) (body : Bl
     if kind == .protocol then some ⟨["P"], inputs.map (fun _ => ["P"]),
       outputs.map (fun _ => ["P"])⟩ else none, premises,
     match kind with
-    | .math | .oracle => none
+    | .math => none
     | .local => some (.local name [])
     | .protocol => some (.protocol ⟨name, []⟩), body⟩
 

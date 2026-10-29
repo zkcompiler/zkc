@@ -106,7 +106,7 @@ theorem protocolOperation_table_congr {I : PIR.Signature}
     | cons count values =>
       cases callbacks with
       | cons body rest => cases rest; rfl
-  | draw | statement | assemble => rfl
+  | draw | statement => rfl
 
 theorem protocol_region_table_congr {I : PIR.Signature}
     (observations : SiteObservations I)

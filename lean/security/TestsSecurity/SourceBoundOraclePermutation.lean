@@ -24,8 +24,8 @@ def narrower : Request := { reversal with gap := .quarter }
 def model := ringModel Int Int
 
 def application : Side → RelationApplication
-  | .source => ⟨"SourceWord", List.ofFn (fun index : Fin 4 => ⟨.input, index.val, "V", false⟩)⟩
-  | .output => ⟨"OutputWord", List.ofFn (fun index : Fin 4 => ⟨.output, index.val, "V", false⟩)⟩
+  | .source => ⟨"SourceWord", List.ofFn (fun index : Fin 4 => ⟨.input, index.val, "V"⟩)⟩
+  | .output => ⟨"OutputWord", List.ofFn (fun index : Fin 4 => ⟨.output, index.val, "V"⟩)⟩
 
 private def indices : PositionOrder → List Nat
   | .reversal => [3, 2, 1, 0]

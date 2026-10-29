@@ -90,7 +90,7 @@ def inputFields (role : Nat) (artifact : Participant) (order : List Nat) :
       order.length == artifact.inputs.length && decide (order.Perm (List.range order.length)) do
     throw "gkr-connection-input-interface"
   let data := (root.inputs.zip root.inputScopes).zipIdx.filterMap fun ((ty, scope), index) =>
-    if !ty.isHandle && scope.contains role then some index else none
+    if !ty.isService && scope.contains role then some index else none
   unless artifact.inputs.length == data.length + 1 && order.getLast? == some data.length do
     throw "gkr-connection-transcript-position"
   let mut locations := []
@@ -102,8 +102,6 @@ def inputFields (role : Nat) (artifact : Participant) (order : List Nat) :
       locations := locations ++ [".absent"]
     else if ty.isService then
       locations := locations ++ [".capability handle"]
-    else if ty.isHandle then
-      throw "gkr-connection-handle"
     else
       let reference := order.idxOf (data.idxOf index)
       locations := locations ++ [".data " ++ toString reference]

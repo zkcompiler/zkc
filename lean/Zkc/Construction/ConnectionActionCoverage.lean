@@ -17,7 +17,7 @@ variable {carriers : Carriers} {routing : Original.Routing} {frames : Original.F
 
 /-- A plain receive needs its exact source-owned message route. -/
 theorem receivePlain (ty : Ty) (sender : Nat)
-    (profile : routing.context.profile = .plain) (data : ty.isHandle = false)
+    (profile : routing.context.profile = .plain) (data : ty.isService = false)
     (same : frames.map (·.site) = sites)
     (route : OccurrenceResolution.resolveStatic routing.snapshot routing.context
       (routing.context.message site sender routing.self) sites routing.messages = some template) :
@@ -30,7 +30,7 @@ theorem receivePlain (ty : Ty) (sender : Nat)
 
 /-- The validator's FS receive records the same source-owned message. -/
 theorem receiveValidator (ty : Ty) (sender : Nat)
-    (mode : routing.mode = .validator) (data : ty.isHandle = false)
+    (mode : routing.mode = .validator) (data : ty.isService = false)
     (same : frames.map (·.site) = sites)
     (route : OccurrenceResolution.resolveStatic routing.snapshot routing.context
       (routing.context.message site sender routing.self) sites routing.messages = some template) :
@@ -43,7 +43,7 @@ theorem receiveValidator (ty : Ty) (sender : Nat)
 
 /-- Sending remains a data action in either execution profile. -/
 theorem send (ty : Ty) (receiver : Nat) (value : carriers.Value ty)
-    (data : ty.isHandle = false) (same : frames.map (·.site) = sites)
+    (data : ty.isService = false) (same : frames.map (·.site) = sites)
     (route : OccurrenceResolution.resolveStatic routing.snapshot routing.context
       (routing.context.message site routing.self receiver) sites routing.messages = some template) :
     Original.ActionCovered routing frames (.send (ty := ty) site receiver value) :=

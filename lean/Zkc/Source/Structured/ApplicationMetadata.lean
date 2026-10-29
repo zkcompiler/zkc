@@ -43,7 +43,7 @@ def terminatorCost : Terminator → SourceCost
 def instructionCost (instruction : Instruction) : SourceCost :=
   let .instruction descriptor operands results _ site := instruction
   let selectors := match descriptor with
-    | .protocolApply _ roles | .protocolRepeat _ _ roles _ | .restrict roles | .assemble roles => roles.length
+    | .protocolApply _ roles | .protocolRepeat _ _ roles _ | .restrict roles => roles.length
     | _ => 0
   ⟨some descriptor, operands.length + results.length, selectors, site⟩
 
