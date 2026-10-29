@@ -461,7 +461,9 @@ def test_consumer_requirements_have_a_certified_positive_control(api, consumer_c
 
 
 @pytest.mark.parametrize("change", ["omitted", "weakened", "stage", "subject", "environment", "manifest",
-                                     "duplicate", "empty", "bad-format", "missing-node", "unproved"])
+                                     "duplicate", "empty", "bad-format", "missing-node", "unproved",
+                                     "extra-field", "extra-context", "extra-claim", "missing-request",
+                                     "wrong-claims-type", "nonobject-claim"])
 def test_consumer_requirements_refuse_omission_and_substitution(api, consumer_case, change):
     manifest, records, evidence, required = consumer_case
     if change == "omitted":
@@ -482,6 +484,18 @@ def test_consumer_requirements_refuse_omission_and_substitution(api, consumer_ca
         required["format"] = "other"
     elif change == "missing-node":
         required["claims"][0].pop("node")
+    elif change == "extra-field":
+        required["optional"] = True
+    elif change == "extra-context":
+        required["context"]["optional"] = True
+    elif change == "extra-claim":
+        required["claims"][0]["optional"] = True
+    elif change == "missing-request":
+        required["claims"][0].pop("request")
+    elif change == "wrong-claims-type":
+        required["claims"] = {"0": required["claims"][0]}
+    elif change == "nonobject-claim":
+        required["claims"] = ["claim"]
     else:
         evidence["claim_receipts"][0]["receipt_declaration"] = None
     report = api.build(manifest, records, consumer_requirements=required)
