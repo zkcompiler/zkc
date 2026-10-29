@@ -1,6 +1,6 @@
 """Exercise the production Names SDK exports with exact NFC dependency discovery.
 
-Builds only Names and its focused tests. The full installed compiler is checked
+Builds the source/syntax libraries and their focused tests. The full installed compiler is checked
 by the repository's separate installation scope.
 """
 
@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--c-compiler", required=True)
     parser.add_argument("--cxx-compiler", required=True)
     args = parser.parse_args()
+    args.output = args.output.resolve()
     source = Path(__file__).resolve().parents[1] / "names"
     common = [f"-DLLVM_DIR={args.llvm_dir}", f"-Dutf8proc_DIR={args.utf8proc_dir}",
               f"-DCMAKE_C_COMPILER={args.c_compiler}",
@@ -54,7 +55,7 @@ def main():
             if scenario == "available":
                 run("cmake", "--build", build, "--parallel", "4")
                 run("ctest", "--test-dir", build, "--output-on-failure")
-    print("Static/shared Names exports and six dependency refusal scenarios passed")
+    print("Static/shared source/syntax exports and six dependency refusal scenarios passed")
 
 
 if __name__ == "__main__":

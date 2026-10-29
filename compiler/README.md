@@ -83,6 +83,8 @@ arguments or a closed numerical function root.
 | Installed component | Public header roots | Responsibility |
 | --- | --- | --- |
 | `Zkc::Support` | `Support/` | Refusals, JSON, bounded input helpers and diagnostic spans |
+| `Zkc::Source` | `Source/` | Immutable source revisions, byte/position conversion, source names and diagnostics |
+| `Zkc::Syntax` | `Syntax/` | Lossless layout parsing, captured notation environments, recovery and formatting |
 | `Zkc::Contracts` | `Contracts/` | Types, capabilities, operations, named bindings, representations and installed implementations |
 | `Zkc::Relation` | `Relation/` | Pure R1CS/AIR data, normalization, evaluation and matrices |
 | `Zkc::Language` | `Language/` | Immutable `.zkc`/Asset capture, syntax, checking and Entry closure |
@@ -98,9 +100,9 @@ Header paths are relative to `zkc/`. C++ namespaces express semantic subjects;
 The `Tools` package component imports `Zkc::zkc-compile`, `Zkc::zkc-opt` and
 `Zkc::zkc-tblgen`; it has no `Zkc::Tools` library target.
 
-Support, Contracts, Relation and Program use LLVM without MLIR. Contracts and
-Language require the pinned external utf8proc library for NFC validation of
-source origins and source text. Language depends on Contracts
+Support, Source, Syntax, Contracts, Relation and Program use LLVM without MLIR. Contracts and
+Source require the pinned external utf8proc library for NFC validation of
+source origins and source text. Syntax depends on Source. Language depends on Syntax, Contracts
 and Relation and still has no MLIR dependency. Program depends on Contracts.
 IR adds MLIR and depends on Program and Relation. Transforms depends on IR; Translation depends on IR and Language; Compiler depends on Transforms
 and Translation; Driver depends on Compiler. Compiler does not link CLI Driver.

@@ -1,0 +1,33 @@
+// Selected 4.1 design example; individual and composite requests keep exact scopes.
+module examples::goal_composition
+
+use examples::schnorr::Schnorr
+use zkc::security::{all_of, completeness, knowledge, interactive, forking, prover_runs}
+use zkc::security::schnorr::response_difference
+
+domain G1 = group("bls12-381.g1")
+
+spec ComponentInspection for Schnorr<G1>:
+    honest: completeness(target.statement, model = interactive)
+    extract: knowledge(
+        target.statement, model = interactive,
+        guarantee = forking(
+            challenges = |G1::Scalar|, extractor = response_difference, cost = prover_runs(2)
+        )
+    )
+
+spec CombinedInspection for Schnorr<G1>:
+    requested = all_of(
+        completeness(target.statement, model = interactive),
+        knowledge(
+            target.statement, model = interactive,
+            guarantee = forking(
+                challenges = |G1::Scalar|, extractor = response_difference, cost = prover_runs(2)
+            )
+        )
+    )
+    security: requested
+
+// This inline conjunction proves precisely its two authored components.
+// A matching registered adapter is needed to satisfy a separately expected
+// proof_of_knowledge bundle, including that bundle's contract-coverage rules.

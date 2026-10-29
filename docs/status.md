@@ -272,6 +272,16 @@ correspondence.
 
 ## Source and application boundary
 
+The installed `Zkc::Source` and `Zkc::Syntax` components provide the new
+[layout syntax](spec/language/layout-syntax.md) without MLIR or Lean. They retain
+source bytes, parse headers/bodies under supplied notation environments, recover
+incomplete editor buffers and format complete syntax with a reparse check.
+`compiler/test/source_syntax.cpp` covers the selected example corpus, notation,
+positions, mutations and refusal budgets. The source/syntax installed-consumer
+fixture exercises static/shared linkage and Unicode dependency discovery.
+The production checker/CLI still uses its existing syntax entry; syntax support
+alone does not establish execution or formal support for the new forms.
+
 `entry fn` exposes typed application control; `proof` configures independent
 proving and verification. Entry functions statically call numerical helpers,
 other Entries, protocol runs and proof operations. Numerical execution retains

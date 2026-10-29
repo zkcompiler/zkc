@@ -1,4 +1,4 @@
-#include "zkc/Language/Names.h"
+#include "zkc/Source/Names.h"
 #include <algorithm>
 #include <cstring>
 #include <limits>
@@ -6,7 +6,7 @@
 
 using namespace llvm;
 
-namespace zkc::language {
+namespace zkc::source {
 std::string nativeSiteName(StringRef label, uint64_t ordinal) {
   return label.empty() ? "s" + std::to_string(ordinal)
                        : "label_" + encodeNominalIdentity(label);
@@ -247,4 +247,4 @@ std::optional<std::string> encodeSourceSymbol(StringRef qualifiedName,
   }
   return result;
 }
-} // namespace zkc::language
+} // namespace zkc::source

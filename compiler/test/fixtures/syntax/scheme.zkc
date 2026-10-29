@@ -1,0 +1,29 @@
+// Selected 4.1 design example; selecting a construction does not prove byte-level security.
+module examples::scheme
+
+use examples::schnorr::Schnorr
+use lean Project.DeploymentSecurity as goals
+
+domain G1 = group("bls12-381.g1")
+
+scheme NonInteractive = Schnorr<G1>:
+    construction fiat_shamir("merlin3.bls12-381.fr64be/0")
+    security: goals::deployed_identification(
+        target.statement,
+        construction = "merlin3.bls12-381.fr64be/0"
+    )
+
+// The custom export must specify the actual challenge law, encoded-proof model,
+// guarantee and all source/FS/codec/native links. Interactive receipts alone
+// cannot discharge it; an unavailable consumer leaves this request open.
+entry def Prove(
+    public: NonInteractive::Public, witness: NonInteractive::Witness
+) -> NonInteractive::Proof:
+    result <- NonInteractive::prove(public, witness)
+    return result.proof
+
+entry def Check(
+    public: NonInteractive::Public, candidate: NonInteractive::Proof
+) -> NonInteractive::VerifyResult:
+    result <- NonInteractive::verify(public, candidate)
+    return result

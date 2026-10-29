@@ -1,0 +1,19 @@
+// A logical layout; this is not an ordinary native record or codec.
+module examples::logical_claim
+
+#[logical]
+#[linear]
+#[custody(V)]
+pub struct EvaluationClaim<F: Field, N: nat> roles(P, V):
+    pub word: Oracle<table<F, rows = N>> @P -> V
+    pub position: index @V
+    pub value: F @V
+
+pub protocol Check<F: Field, N: nat> roles(P, V)(
+    claim: EvaluationClaim<F, N>
+) -> bool @V:
+    // Public logical views preserve custody; unpack consumes it with authority.
+    position = claim.position
+    (word, _, value) = unpack(claim)
+    answer <- query word at position
+    return answer == value

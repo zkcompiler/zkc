@@ -1,0 +1,337 @@
+[
+  {
+    "name": "annotated-ordered-owner",
+    "source": "local def f(coins: Random<F>) -> F:\n    value: F @V <- coins.draw()\n    return value\n",
+    "accepted": true
+  },
+  {
+    "name": "contextual-oracle-path",
+    "source": "use zkc::oracle\ndef f(domain: nat) -> nat:\n    oracle::rows(domain)\n",
+    "accepted": true
+  },
+  {
+    "name": "nested-static",
+    "source": "def f(x: Vec<Vec<F, 2>, 3>) -> F:\n    g<Vec<F, 2>>(x[0])\n",
+    "accepted": true
+  },
+  {
+    "name": "comparison",
+    "source": "def f(a: nat, b: nat) -> bool:\n    a < b\n",
+    "accepted": true
+  },
+  {
+    "name": "greater",
+    "source": "def f(a: nat, b: nat) -> bool:\n    a > b\n",
+    "accepted": true
+  },
+  {
+    "name": "keyword-prefix",
+    "source": "def requires_value(query: nat) -> nat:\n    query\n",
+    "accepted": true
+  },
+  {
+    "name": "comment-suite",
+    "source": "def f(x: nat) -> nat:\n    // A comment does not form a suite.\n    x\n",
+    "accepted": true
+  },
+  {
+    "name": "formula-parentheses",
+    "source": "spec for P:\n    requires positive: (\n        x > 0\n        and x < 8\n    )\n",
+    "accepted": true
+  },
+  {
+    "name": "multiline-quantifier",
+    "source": "interface I:\n    law refl:\n        (∀ x: nat,\n            x == x)\n",
+    "accepted": true
+  },
+  {
+    "name": "named-argument-order",
+    "source": "def f(x: nat) -> nat:\n    g(second = x, first = 1)\n",
+    "accepted": true
+  },
+  {
+    "name": "section-capture",
+    "source": "section <F: Field>:\n    def f(x: F) -> F:\n        x\n",
+    "accepted": true
+  },
+  {
+    "name": "pattern-tuple",
+    "source": "local def f(x: Pair) -> Pair:\n    (a, b) = unpack(x)\n    return (b, a)\n",
+    "accepted": true
+  },
+  {
+    "name": "conditional",
+    "source": "def f(x: nat) -> nat:\n    if x > 0:\n        x\n    else:\n        0\n",
+    "accepted": true
+  },
+  {
+    "name": "qualified-static",
+    "source": "def f(x: nat) -> nat:\n    M::run<F>(x)\n",
+    "accepted": true
+  },
+  {
+    "name": "comment-delimiter",
+    "source": "def f(x: nat) -> nat:\n    g(\n        x, // ) > ignored\n        1\n    )\n",
+    "accepted": true
+  },
+  {
+    "name": "match",
+    "source": "def f(x: Option<nat>) -> nat:\n    match x:\n        case Some(y):\n            y\n        case None:\n            0\n",
+    "accepted": true
+  },
+  {
+    "name": "protocol-without-spec",
+    "source": "pub protocol Check<F: Field> roles(P, V)(x: F @V) -> bool @V:\n    return x == 0\n",
+    "accepted": true
+  },
+  {
+    "name": "spec-after-protocol",
+    "source": "protocol Check<F: Field> roles(P, V)(x: F @V) -> bool @V:\n    return x == 0\nspec for Check:\n    requires x == 0\n    ensures out\n",
+    "accepted": true
+  },
+  {
+    "name": "spec-before-protocol",
+    "source": "spec for Check:\n    requires x == 0\n    ensures out\nprotocol Check<F: Field> roles(P, V)(x: F @V) -> bool @V:\n    return x == 0\n",
+    "accepted": true
+  },
+  {
+    "name": "anonymous-contract-clauses",
+    "source": "spec for Reduce:\n    requires valid(x)\n    requires bounded(x)\n    ensures valid(out)\n    ensures bounded(out)\n    target Relation(x)\n    reduces Relation(x) to Relation(out)\n",
+    "accepted": true
+  },
+  {
+    "name": "named-contract-clauses",
+    "source": "spec for Reduce:\n    requires input_valid: valid(x)\n    ensures output_valid: valid(out)\n    target statement: Relation(x)\n    reduces step: Relation(x) to Relation(out)\n",
+    "accepted": true
+  },
+  {
+    "name": "anonymous-multiline-formula",
+    "source": "spec for Check:\n    requires (\n        valid(x)\n        and bounded(x)\n    )\n",
+    "accepted": true
+  },
+  {
+    "name": "named-multiline-formula",
+    "source": "spec for Check:\n    requires valid_input:\n        valid(x)\n",
+    "accepted": true
+  },
+  {
+    "name": "interface-protocol-body",
+    "source": "interface Checkable<F: Field>:\n    protocol Check roles(P, V)(x: F @V) -> bool @V\n    spec for Check:\n        ensures out == (x == 0)\nmodule Concrete<F: Field>: Checkable<F>:\n    protocol Check(x):\n        return x == 0\n",
+    "accepted": true
+  },
+  {
+    "name": "generic-file-module",
+    "source": "pub module examples::generic<F: Field> where |F| > 2\npub def zero() -> F:\n    0\n",
+    "accepted": true
+  },
+  {
+    "name": "nested-module",
+    "source": "module Helpers<F: Field>:\n    pub def zero() -> F:\n        0\n",
+    "accepted": true
+  },
+  {
+    "name": "nested-sections",
+    "source": "section <F: Field>:\n    section <N: nat>:\n        pub def zero() -> F:\n            0\n",
+    "accepted": true
+  },
+  {
+    "name": "section-protocol-attachment",
+    "source": "section <F: Field>:\n    protocol Check roles(P, V)(x: F @V) -> bool @V:\n        return x == 0\n    spec for Check:\n        ensures out == (x == 0)\n",
+    "accepted": true
+  },
+  {
+    "name": "shared-input-roles",
+    "source": "protocol Check<F: Field> roles(P, V)(x: F @(P, V)) -> bool @V:\n    return x == 0\n",
+    "accepted": true
+  },
+  {
+    "name": "guard-explicit-owner",
+    "source": "protocol Check<F: Field> roles(P, V)(x: F @(P, V)) -> bool @V:\n    guard @V x == 0\n    return true\n",
+    "accepted": true
+  },
+  {
+    "name": "guard-parenthesized",
+    "source": "protocol Check<F: Field> roles(P, V)(x: F @V) -> bool @V:\n    guard (x == 0)\n    return true\n",
+    "accepted": true
+  },
+  {
+    "name": "send-explicit-sender",
+    "source": "protocol Transfer<F: Field> roles(P, V)(x: F @P) -> F @V:\n    received <- send x from P to V\n    return received\n",
+    "accepted": true
+  },
+  {
+    "name": "send-inferred-sender",
+    "source": "protocol Transfer<F: Field> roles(P, V)(x: F @P) -> F @V:\n    received <- send x to V\n    return received\n",
+    "accepted": true
+  },
+  {
+    "name": "send-pure-payload",
+    "source": "protocol Transfer<F: Field> roles(P, V)(x: F @P) -> F @V:\n    received <- send x + 1 to V\n    return received\n",
+    "accepted": true
+  },
+  {
+    "name": "protocol-effects",
+    "source": "protocol Check<F: Field> roles(P, V)(x: F @V) -> bool @V effects(refuse):\n    guard x == 0\n    return true\n",
+    "accepted": true
+  },
+  {
+    "name": "public-audit-schema",
+    "source": "pub spec Audit<F: Field> for Check<F>:\n    security: goals::complete(target.statement)\n",
+    "accepted": true
+  },
+  {
+    "name": "scheme-inferred-selection",
+    "source": "scheme NonInteractive = Check<F>:\n    construction fiat_shamir(\"suite/0\")\n",
+    "accepted": true
+  },
+  {
+    "name": "scheme-explicit-selection",
+    "source": "pub scheme NonInteractive = Check<F>:\n    construction fiat_shamir(\"suite/0\")\n    prover P\n    verifier V\n    public { g, X }\n    accept out.accepted\n",
+    "accepted": true
+  },
+  {
+    "name": "contextual-surface-names",
+    "source": "def scheme(guard: F) -> F:\n    guard\n",
+    "accepted": true
+  },
+  {
+    "name": "qualified-guard-function",
+    "source": "def f(x: F) -> F:\n    Helpers::guard(x)\n",
+    "accepted": true
+  },
+  {
+    "name": "guard-function-in-binding",
+    "source": "def f(x: F) -> F:\n    value = guard(x)\n    value\n",
+    "accepted": true
+  },
+  {
+    "name": "tab-indent",
+    "source": "def f(x: nat) -> nat:\n\tx\n",
+    "accepted": false
+  },
+  {
+    "name": "two-space-indent",
+    "source": "def f(x: nat) -> nat:\n  x\n",
+    "accepted": false
+  },
+  {
+    "name": "comment-only",
+    "source": "def f(x: nat) -> nat:\n    // no body\n",
+    "accepted": false
+  },
+  {
+    "name": "implicit-continuation",
+    "source": "def f(x: nat) -> nat:\n    x\n        + 1\n",
+    "accepted": false
+  },
+  {
+    "name": "spaced-static",
+    "source": "def f(x: nat) -> nat:\n    g <F>(x)\n",
+    "accepted": false
+  },
+  {
+    "name": "tight-comparison",
+    "source": "def f(a: nat, b: nat) -> bool:\n    a<b\n",
+    "accepted": false
+  },
+  {
+    "name": "unclosed-call",
+    "source": "def f(x: nat) -> nat:\n    g(x\n",
+    "accepted": false
+  },
+  {
+    "name": "chained-comparison",
+    "source": "def f(a: nat, b: nat) -> bool:\n    0 < a < b\n",
+    "accepted": false
+  },
+  {
+    "name": "wrong-delimiter",
+    "source": "def f(x: nat) -> nat:\n    g[x)\n",
+    "accepted": false
+  },
+  {
+    "name": "empty-contract",
+    "source": "spec for P:\n",
+    "accepted": false
+  },
+  {
+    "name": "multiple-lines-formula",
+    "source": "spec for P:\n    requires ok:\n        x > 0\n        x < 8\n",
+    "accepted": false
+  },
+  {
+    "name": "old-spec-signature",
+    "source": "pub spec Check<F: Field> roles(P, V)(x: F @V) -> bool @V:\n    ensures out\n",
+    "accepted": false
+  },
+  {
+    "name": "old-runtime-require",
+    "source": "protocol Check<F: Field> roles(P, V)(x: F @V) -> bool @V:\n    require x == 0\n    return true\n",
+    "accepted": false
+  },
+  {
+    "name": "old-proof-head",
+    "source": "proof NonInteractive = Check<F>:\n    construction fiat_shamir(\"suite/0\")\n",
+    "accepted": false
+  },
+  {
+    "name": "deployment-alias",
+    "source": "deployment NonInteractive = Check<F>:\n    construction fiat_shamir(\"suite/0\")\n",
+    "accepted": false
+  },
+  {
+    "name": "impl-alias",
+    "source": "impl Concrete<F: Field>: Checkable<F>:\n    def check(x):\n        x\n",
+    "accepted": false
+  },
+  {
+    "name": "with-section-alias",
+    "source": "with <F: Field>:\n    def zero() -> F:\n        0\n",
+    "accepted": false
+  },
+  {
+    "name": "target-reduction-alias",
+    "source": "spec for Reduce:\n    target Relation(x) to Relation(out)\n",
+    "accepted": false
+  },
+  {
+    "name": "public-port-shorthand",
+    "source": "protocol Check<F: Field> roles(P, V)(public x: F) -> bool @V:\n    return true\n",
+    "accepted": false
+  },
+  {
+    "name": "private-port-shorthand",
+    "source": "protocol Check<F: Field> roles(P, V)(private x: F) -> bool @V:\n    return true\n",
+    "accepted": false
+  },
+  {
+    "name": "role-at-alias",
+    "source": "protocol Check<F: Field> roles(P, V)(x: F at V) -> bool @V:\n    return true\n",
+    "accepted": false
+  },
+  {
+    "name": "send-without-receiver",
+    "source": "protocol Transfer<F: Field> roles(P, V)(x: F @P) -> F @V:\n    received <- send x\n    return received\n",
+    "accepted": false
+  },
+  {
+    "name": "pub-anonymous-spec",
+    "source": "pub spec for Check:\n    ensures out\n",
+    "accepted": false
+  },
+  {
+    "name": "named-audit-redefines-contract",
+    "source": "spec Audit for Check<F>:\n    requires valid(x)\n",
+    "accepted": false
+  },
+  {
+    "name": "empty-clause-label",
+    "source": "spec for Check:\n    requires: valid(x)\n",
+    "accepted": false
+  },
+  {
+    "name": "empty-scheme",
+    "source": "scheme NonInteractive = Check<F>:\n",
+    "accepted": false
+  }
+]

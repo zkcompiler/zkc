@@ -374,3 +374,15 @@ rejects("structured interpretation belongs to IR", manifest,
 rejects("structured reader cannot import its producer", root / "lib/Analysis/StructuredComputation.cpp",
         lambda text: '#include "zkc/Transforms/StructuredComputation.h"\n' + text,
         "upward include")
+
+for component, source in (("Source", "lib/Source/Source.cpp"),
+                          ("Syntax", "lib/Syntax/Parser.cpp")):
+    rejects(f"{component} cannot load files", root / source,
+            lambda text: '#include <llvm/Support/MemoryBuffer.h>\n' + text,
+            "input loading belongs to Driver")
+    rejects(f"{component} cannot depend on MLIR", root / source,
+            lambda text: '#include <mlir/IR/Operation.h>\n' + text,
+            "includes mlir/IR/Operation.h")
+    rejects(f"{component} cannot depend on checking", root / source,
+            lambda text: '#include "zkc/Language/Project.h"\n' + text,
+            f"Zkc{component}: upward include")
