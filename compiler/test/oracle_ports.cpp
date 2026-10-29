@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Protocol/OraclePorts.h"
 #include "zkc/Transforms/Mathematical.h"
 using namespace mlir;
 using namespace zkc::test;
@@ -89,6 +90,92 @@ int main() {
     auto module = parse(text, context);
     require(failed(verify(*module)), "invalid oracle ports admitted");
   };
+  cases.run("typed oracle interface retains the actual paired leaves", [&] {
+    auto module = parse(source(), context);
+    require(succeeded(verify(*module)), "source formation");
+    auto unit = *module->getOps<ProtocolModuleOp>().begin();
+    auto reader =
+        cast<MathematicalOp>(SymbolTable::lookupSymbolIn(unit, "reader"));
+    SymbolTableCollection symbols;
+    unsigned remaining = 100000;
+    auto layout =
+        zkc::mathematical::readOraclePortLayout(reader, symbols, remaining);
+    require(succeeded(layout) && layout->inputs.size() == 1 &&
+                layout->outputs.size() == 1,
+            "missing input/result pair");
+    for (const auto *pair : {&layout->inputs.front(), &layout->outputs.front()})
+      require(
+          pair->data == 0 && pair->anchor == 1 && pair->holder == "A" &&
+              pair->receivers ==
+                  ArrayAttr::get(&context, {StringAttr::get(&context, "B")}) &&
+              pair->kind ==
+                  cast<OracleHandleType>(
+                      reader.getBody().front().getArgument(1).getType())
+                      .getKind(),
+          "logical pairing differs from admitted ports");
+    remaining = 0;
+    require(failed(zkc::mathematical::readOraclePortLayout(reader, symbols,
+                                                           remaining)),
+            "interface work limit ignored");
+  });
+  cases.run(
+      "logical statement entry layout preserves the component-call refusal",
+      [&] {
+        auto module = parse(R"mlir(
+#K = #protocol.oracle_kind<"table", [ui64,4:ui64]>
+!H = !protocol.oracle<#K>
+!D = !algebra.indices
+module { "protocol.module"() ({
+ relation.declare @claimed {kind="external",key="test/port-statement",revision="0",signature=(!D)->i1,purposes=["statement"]}
+ "protocol.func"() ({
+ ^entry(%data:!D,%anchor:!H):
+  %handle = "protocol.oracle_input"(%data,%anchor) {holder="A",receivers=["B"],shape_bounds={}} : (!D,!H)->!H
+  %accepted = arith.constant true
+  "protocol.statement"(%anchor) {relation=@claimed,selectors=["anchor"],target="valid",acceptance=0:i64} : (!H)->()
+  "protocol.return"(%accepted) : (i1)->()
+ }) {sym_name="reader",function_type=(!D,!H)->i1,roles=["A","B"],input_roles=[["A"],["B"]],output_roles=[["B"]],contracts=[["target","valid",[@claimed,[["anchor","input",1:i64]]],unit,["output",0:i64,"B"]]]} : ()->()
+ "protocol.func"() ({
+ ^entry(%data:!D):
+  %rows = "data.index"() {value="4"} : ()->ui64
+  %handle = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="word",shape_names=["rows"],shape_bounds={}} : (!D,ui64)->!H
+  %parts:2 = "protocol.oracle_components"(%handle) {holder="P",receivers=["V"]} : (!H)->(!D,!H)
+  %accepted = "protocol.apply"(%parts#0,%parts#1) {callee=@reader,roles=["P","V"],site="check"} : (!D,!H)->i1
+  "protocol.return"(%accepted) : (i1)->()
+ }) {sym_name="main",function_type=(!D)->i1,roles=["P","V"],input_roles=[["P"]],output_roles=[["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir",
+                            context);
+        auto unit = *module->getOps<ProtocolModuleOp>().begin();
+        auto reader =
+            cast<MathematicalOp>(SymbolTable::lookupSymbolIn(unit, "reader"));
+        auto anchor = reader.getBody().front().getArgument(1);
+        require(isa<StatementOp>(*anchor.getUsers().begin()),
+                "fixture must put statement before binder in the use list");
+        std::string diagnostics;
+        ScopedDiagnosticHandler capture(&context, [&](Diagnostic &message) {
+          diagnostics += message.str();
+          return success();
+        });
+        require(failed(verify(*module)) &&
+                    diagnostics.find(
+                        "entry statement bindings cannot be applied") !=
+                        std::string::npos,
+                "selected statement entry became an applicable component");
+        auto caller =
+            cast<MathematicalOp>(SymbolTable::lookupSymbolIn(unit, "main"));
+        caller.erase();
+        diagnostics.clear();
+        require(succeeded(verify(*module)),
+                "standalone logical statement entry refused: " + diagnostics);
+        SymbolTableCollection symbols;
+        unsigned remaining = 100000;
+        auto layout =
+            zkc::mathematical::readOraclePortLayout(reader, symbols, remaining);
+        require(succeeded(layout) && layout->inputs.size() == 1 &&
+                    layout->inputs.front().data == 0 &&
+                    layout->inputs.front().anchor == 1,
+                "logical statement changed the input association");
+      });
   cases.run(
       "entry and returned ports retain a paired role family through calls",
       [&] {

@@ -180,6 +180,24 @@ int main(int argc, char **argv) {
         (*entry.getObject("interface"))["output_roles"] =
             json::Array{json::Array{"P"}};
       });
+      auto inputPair = [&](json::Object &value) -> json::Object & {
+        auto &entry = *(*value.getArray("entries"))[0].getAsObject();
+        return *(*entry.getObject("logical_interface")->getArray("inputs"))[0]
+                    .getAsObject();
+      };
+      changed("holder and receiver data ports swapped", [&](auto &value) {
+        auto &pair = inputPair(value);
+        std::swap(*pair.get("data"), *pair.get("anchor"));
+      });
+      changed("logical holder changed",
+              [&](auto &value) { inputPair(value)["holder"] = "V"; });
+      changed("logical receiver changed", [&](auto &value) {
+        inputPair(value)["receivers"] = json::Array{"P"};
+      });
+      changed("logical input association dropped", [&](auto &value) {
+        auto &entry = *(*value.getArray("entries"))[0].getAsObject();
+        (*entry.getObject("logical_interface"))["inputs"] = json::Array{};
+      });
       changed("declaration order", [&](auto &value) {
         auto &declarations = *value.getArray("declarations");
         std::swap(declarations[0], declarations[1]);
@@ -266,6 +284,33 @@ int main(int argc, char **argv) {
       });
     }
     if (mutations && fixture == "common-return") {
+      cases.run(
+          "returned logical pairs use distinct actual holder leaves", [&] {
+            auto record = take(json::parse(
+                take(serializeIdealOracleRealization(*prepared, candidate))));
+            auto &entries = *record.getAsObject()->getArray("entries");
+            auto found = find_if(entries, [](const auto &item) {
+              return item.getAsObject()->getString("entry") == "main";
+            });
+            require(found != entries.end(), "missing main record");
+            auto &outputs = *found->getAsObject()
+                                 ->getObject("logical_interface")
+                                 ->getArray("outputs");
+            require(outputs.size() == 3, "wrong returned logical inventory");
+            for (unsigned i = 0; i < outputs.size(); ++i) {
+              auto &pair = *outputs[i].getAsObject();
+              require(pair.getInteger("data") == 2 * i &&
+                          pair.getInteger("anchor") == 2 * i + 1 &&
+                          pair.getString("holder") == "P",
+                      "logical aliases lost canonical pairing");
+            }
+            (*outputs[0].getAsObject())["data"] = 2;
+            std::string changed;
+            raw_string_ostream(changed) << record;
+            refused(checkIdealOracleRealization(*prepared, *candidate.module,
+                                                changed),
+                    "oracle-realization-record");
+          });
       cases.run("returned aliases share role-specific support stores", [&] {
         require(entry.resultStores == std::vector<OracleResultStore>(
                                           {{0, 1, 7}, {1, 1, 8}, {2, 1, 9}}),

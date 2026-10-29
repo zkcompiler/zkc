@@ -1,3 +1,4 @@
+#include "zkc/Dialect/Protocol/OraclePorts.h"
 #include "OracleAnalysis.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
@@ -109,10 +110,13 @@ LogicalResult paired(Value data, Value anchor, StringAttr holder,
   return success();
 }
 } // namespace
-LogicalResult verifyOracleEntryPorts(protocol_ir::MathematicalOp program,
-                                     unsigned &remaining) {
-  if (failed(program->getName().verifyInvariants(program)) ||
-      !llvm::hasSingleElement(program.getBody()))
+static LogicalResult
+collectOracleEntryPorts(protocol_ir::MathematicalOp program,
+                        unsigned &remaining,
+                        SmallVectorImpl<OraclePortPair> *pairs = nullptr) {
+  if (!program || failed(program->getName().verifyInvariants(program)) ||
+      !llvm::hasSingleElement(program.getBody()) ||
+      program.getBody().front().empty())
     return failure();
   auto &body = program.getBody().front();
   if (body.getArgumentTypes() != program.getFunctionType().getInputs() ||
@@ -161,6 +165,11 @@ LogicalResult verifyOracleEntryPorts(protocol_ir::MathematicalOp program,
             input.getReceivers())
       return refuse(input, "oracle input requires distinct paired entry leaves "
                            "with exact roles");
+    if (pairs)
+      pairs->push_back(
+          {data.getArgNumber(), argument.getArgNumber(),
+           cast<protocol_ir::OracleHandleType>(argument.getType()).getKind(),
+           input.getHolderAttr(), input.getReceivers()});
     bindings.insert(input);
   }
   bool effect = false;
@@ -188,10 +197,16 @@ LogicalResult verifyOracleInputPair(protocol_ir::OracleInputOp input,
   return paired(input.getData(), input.getAnchor(), input.getHolderAttr(),
                 input.getReceivers(), input, symbols, remaining);
 }
-LogicalResult verifyOracleResultPorts(protocol_ir::MathematicalOp program,
-                                      SymbolTableCollection &symbols,
-                                      unsigned &remaining) {
+static LogicalResult
+collectOracleResultPorts(protocol_ir::MathematicalOp program,
+                         SymbolTableCollection &symbols, unsigned &remaining,
+                         SmallVectorImpl<OraclePortPair> *pairs = nullptr) {
+  if (!isa<protocol_ir::MathematicalReturnOp>(program.getBody().front().back()))
+    return refuse(program, "oracle results require the protocol return tuple");
   auto returned = program.getBody().front().back().getOperands();
+  if (returned.getTypes() != program.getFunctionType().getResults() ||
+      returned.size() != program.getOutputRoles().size())
+    return refuse(program, "oracle result tuple differs from its interface");
   llvm::DenseSet<unsigned> dataPorts;
   for (auto [index, value] : llvm::enumerate(returned)) {
     if (!isa<protocol_ir::OracleHandleType>(value.getType()))
@@ -208,6 +223,11 @@ LogicalResult verifyOracleResultPorts(protocol_ir::MathematicalOp program,
           possibleData.contains(stripViews(data, program, remaining)) &&
           singleton(program.getOutputRoles()[dataIndex], actual.holder)) {
         dataPorts.insert(dataIndex);
+        if (pairs)
+          pairs->push_back(
+              {unsigned(dataIndex), unsigned(index),
+               cast<protocol_ir::OracleHandleType>(value.getType()).getKind(),
+               actual.holder, actual.receivers});
         pairedData = true;
         break;
       }
@@ -224,7 +244,8 @@ LogicalResult verifyOracleApplicationPorts(protocol_ir::ApplyOp application,
                                            unsigned &remaining) {
   auto callee = symbols.lookupNearestSymbolFrom<protocol_ir::MathematicalOp>(
       application, application.getCalleeAttr());
-  if (failed(verifyOracleEntryPorts(callee, remaining)))
+  SmallVector<OraclePortPair> inputs;
+  if (failed(collectOracleEntryPorts(callee, remaining, &inputs)))
     return failure();
   auto mapped = [&](Attribute role) {
     size_t index =
@@ -232,26 +253,41 @@ LogicalResult verifyOracleApplicationPorts(protocol_ir::ApplyOp application,
     return index < callee.getRoles().size() ? application.getRoles()[index]
                                             : Attribute();
   };
-  for (BlockArgument argument : callee.getBody().front().getArguments()) {
-    if (!isa<protocol_ir::OracleHandleType>(argument.getType()))
-      continue;
-    auto input = cast<protocol_ir::OracleInputOp>(*argument.getUsers().begin());
-    auto holder = dyn_cast_or_null<StringAttr>(mapped(input.getHolderAttr()));
+  for (const auto &input : inputs) {
+    auto holder = dyn_cast_or_null<StringAttr>(mapped(input.holder));
     SmallVector<Attribute> receivers;
-    for (auto receiver : input.getReceivers()) {
+    for (auto receiver : input.receivers) {
       auto role = mapped(receiver);
       if (!role)
         return refuse(application, "unknown oracle input receiver");
       receivers.push_back(role);
     }
     if (!holder ||
-        failed(paired(application.getOperand(
-                          cast<BlockArgument>(input.getData()).getArgNumber()),
-                      application.getOperand(argument.getArgNumber()), holder,
+        failed(paired(application.getOperand(input.data),
+                      application.getOperand(input.anchor), holder,
                       ArrayAttr::get(application.getContext(), receivers),
                       application, symbols, remaining)))
       return failure();
   }
   return success();
+}
+LogicalResult verifyOracleEntryPorts(protocol_ir::MathematicalOp program,
+                                     unsigned &remaining) {
+  return collectOracleEntryPorts(program, remaining);
+}
+LogicalResult verifyOracleResultPorts(protocol_ir::MathematicalOp program,
+                                      SymbolTableCollection &symbols,
+                                      unsigned &remaining) {
+  return collectOracleResultPorts(program, symbols, remaining);
+}
+FailureOr<OraclePortLayout>
+readOraclePortLayout(protocol_ir::MathematicalOp program,
+                     SymbolTableCollection &symbols, unsigned &remaining) {
+  OraclePortLayout result;
+  if (failed(collectOracleEntryPorts(program, remaining, &result.inputs)) ||
+      failed(collectOracleResultPorts(program, symbols, remaining,
+                                      &result.outputs)))
+    return failure();
+  return result;
 }
 } // namespace zkc::mathematical

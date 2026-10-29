@@ -2,6 +2,7 @@
 #include "OracleVerificationContext.h"
 #include "zkc/Contracts/OracleKinds.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Protocol/OraclePorts.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringSet.h"
@@ -357,6 +358,7 @@ struct Codec {
       object.derived("constructors");
       object.derived("occurrences");
       object.derived("interface");
+      object.derived("logical_interface");
     });
   }
   json::Value type(Type value) {
@@ -395,6 +397,31 @@ Expected<json::Object> derived(Codec &codec, ModuleOp prepared,
                                     entry.controllers, entry.allocators);
   if (!plan)
     return plan.takeError();
+  auto unit = cast<protocol_ir::ProtocolModuleOp>(prepared.getBody()->front());
+  auto program = cast<protocol_ir::MathematicalOp>(
+      SymbolTable::lookupSymbolIn(unit, entry.entry));
+  SymbolTableCollection symbols;
+  unsigned remaining = 100000;
+  auto logical =
+      mathematical::readOraclePortLayout(program, symbols, remaining);
+  if (failed(logical))
+    return refuse();
+  auto pairs = [&](ArrayRef<mathematical::OraclePortPair> layout) {
+    json::Array result;
+    for (const auto &pair : layout) {
+      json::Array receivers;
+      for (Attribute role : pair.receivers)
+        receivers.push_back(cast<StringAttr>(role).getValue());
+      result.push_back(json::Object{{"data", pair.data},
+                                    {"anchor", pair.anchor},
+                                    {"kind", codec.kind(pair.kind)},
+                                    {"holder", pair.holder.getValue()},
+                                    {"receivers", std::move(receivers)}});
+    }
+    return result;
+  };
+  auto logicalInputs = pairs(logical->inputs);
+  auto logicalOutputs = pairs(logical->outputs);
   json::Array constructors;
   for (const auto &item : requirements->storage.constructors) {
     json::Array owners, receivers;
@@ -442,6 +469,9 @@ Expected<json::Object> derived(Codec &codec, ModuleOp prepared,
   return json::Object{
       {"constructors", std::move(constructors)},
       {"occurrences", std::move(occurrences)},
+      {"logical_interface",
+       json::Object{{"inputs", std::move(logicalInputs)},
+                    {"outputs", std::move(logicalOutputs)}}},
       {"interface",
        json::Object{{"inputs", std::move(inputs)},
                     {"outputs", std::move(outputs)},

@@ -53,6 +53,7 @@ operations, executable operands, literal values or helper bodies.
 | `constructors` | Source-derived construction inventory and per-role store layouts |
 | `occurrences` | Source-derived generated common sites and their purpose/role/path |
 | `interface` | Complete native input/output type references and role families |
+| `logical_interface` | Original oracle input/output pairings, distinct from native representation leaves |
 
 Each constructor records `constructor` (`input`, `send` or `virtual`), `path`,
 `kind`, `holder`, ordered `receivers`, `site`, `declaration`, `scheme`,
@@ -67,6 +68,21 @@ An occurrence is `{site, purpose, role, path}`. The interface has `inputs`,
 Original result positions remain fixed. Appended support stores are native
 representation leaves, distinguished from authored results by the result maps.
 They do not establish a general logical-handle codec or cross-entry graph ABI.
+
+The logical interface is `{inputs, outputs}`. Each list follows original anchor
+port order, with rows `{data, anchor, kind, holder, receivers}`. Port numbers
+refer to the original common signature; `kind` uses the kind schema above.
+Input rows bind the exact root data and handle leaves. Result rows choose the
+first unused matching holder-data leaf in result order, under the same component
+view/application and role rules as Protocol admission. Repeated aliases still
+have distinct paired data ports. The original remains the source of authority;
+record rows cannot substitute same-typed holder or receiver components.
+
+This layout records associations, not equality between role components or a
+cryptographic interpretation of a clause. Returned references connect to actual
+support stores through `result_references`; they are not serialized Data values.
+Logical anchor-clause transport still requires its typed interpretation before
+production projection can accept that profile.
 
 ## Controller metadata
 

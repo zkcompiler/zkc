@@ -554,7 +554,9 @@ The private whole-stage reader consumes a version-zero
 [realization record](spec/formats/oracle-realization.md), the prepared original
 and the actual candidate. It reads independently parsed candidates, checks exact
 pure helper recipes, and rederives interfaces, stores and symbolic generation
-slots. The record is not a production admission token or a Lean simulation.
+slots. Logical input/result pairings use Protocol admission's shared typed reader;
+original anchor/data ports, kinds and role families remain distinct from native
+representations and their support stores. The record is not a production admission token or a Lean simulation.
 Empty sequence observations need no allocated anchor. Unreachable queries and
 shape views have a complete refusing controller without an invented store;
 indexing still stops at its original occurrence and preserves earlier delivery.
