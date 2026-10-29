@@ -53,8 +53,8 @@ Error normalizeDomains(E &value, detail::Semantics &types,
 }
 bool sameSelector(const SpecificationSelector &a,
                   const SpecificationSelector &b) {
-  return a.output == b.output && a.port == b.port && a.role == b.role &&
-         a.path == b.path;
+  return a.anchor == b.anchor && a.output == b.output && a.port == b.port &&
+         a.role == b.role && a.path == b.path;
 }
 bool matchesSubject(const SourceClaimBlock &block, const ClosedEntry &entry) {
   if (!block.subject)
@@ -155,10 +155,11 @@ json::Object selector(const SpecificationSelector &value) {
   json::Array path;
   for (auto index : value.path)
     path.push_back(index);
-  return json::Object{{"output", value.output},
-                      {"port", value.port},
-                      {"role", value.role},
-                      {"path", std::move(path)}};
+  return json::Object{
+      {"output", value.output},
+      {"port", value.port},
+      {"role", value.anchor ? json::Value(nullptr) : json::Value(value.role)},
+      {"path", std::move(path)}};
 }
 json::Object sourceNode(const CheckedProject &project, Span span) {
   return json::Object{{"module", project.sources()[span.source.index].module},
@@ -851,7 +852,7 @@ Error checkSourceClaims(const ClosedEntry &entry, StringRef bytes,
   auto canonical = json::parse(*expected);
   if (!canonical)
     return canonical.takeError();
-  if (*actual != *canonical)
+  if (!zkc::equalNaturalJson(*actual, *canonical))
     return detail::failure("source.claim.export",
                            "claim export differs from the checked source");
   return Error::success();

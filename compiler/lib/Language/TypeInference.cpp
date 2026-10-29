@@ -53,6 +53,7 @@ TypeInference::Variable TypeInference::instantiate(const Type &type,
     return fresh(span);
   }
   if (type.symbolic && type.kind != Type::Kind::Associated &&
+      type.kind != Type::Kind::OracleProjection &&
       (type.kind != Type::Kind::Natural ||
        (!type.domain.empty() &&
         type.dimension == cantFail(Natural::atom(type.domain)))))
@@ -60,13 +61,17 @@ TypeInference::Variable TypeInference::instantiate(const Type &type,
       return it->second;
   // Associated types are forward functions, not injective constructors.
   if (!parameters.empty() &&
-      (type.kind == Type::Kind::Associated || !domainSort(type).empty()) &&
+      (type.kind == Type::Kind::Associated ||
+       type.kind == Type::Kind::OracleProjection ||
+       !domainSort(type).empty()) &&
       !type.arguments.empty()) {
     auto base = instantiate(type.arguments.front(), parameters, span, origin,
                             depth + 1);
     auto result = fresh(span);
     nodes[result].origin = origin;
-    auto name = StringRef(type.domain).rsplit("::").second.str();
+    auto name = type.kind == Type::Kind::OracleProjection
+                    ? type.domain
+                    : StringRef(type.domain).rsplit("::").second.str();
     defer([this, base, result, name, span, origin] {
       auto input = get(base, span);
       if (!input)
@@ -169,7 +174,8 @@ bool TypeInference::equal(Variable a, Variable b, Span span, unsigned depth) {
         return formatType(*node.head);
       }
       std::string choices;
-      for (unsigned kind = 0; kind <= unsigned(Type::Kind::Asset); ++kind)
+      for (unsigned kind = 0; kind <= unsigned(Type::Kind::OracleProjection);
+           ++kind)
         if (node.kinds & (uint32_t(1) << kind)) {
           if (!choices.empty())
             choices += " or ";

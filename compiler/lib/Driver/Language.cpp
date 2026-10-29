@@ -172,8 +172,7 @@ int runLanguageCompiler(int argc, char **argv) {
       SmallVector<StringRef> names;
       arg.split(names, ',');
       for (auto name : names) {
-        if (name != "entry" && name != "protocol" && name != "participant" &&
-            name != "exec" && name != "execution" && name != "physical")
+        if (!llvm::is_contained(compilationObservationPhases(), name))
           return refuse(error("source.options", "unknown dump phase"));
         dumps.push_back(name.str());
       }

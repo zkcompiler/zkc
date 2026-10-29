@@ -140,6 +140,24 @@ StringRef syntaxKind(Expression::Kind value) {
     return "map";
   case Expression::Kind::DomainProduct:
     return "domain_product";
+  case Expression::Kind::OracleSequenceEmpty:
+    return "oracle_sequence_empty";
+  case Expression::Kind::OracleSequenceAppend:
+    return "oracle_sequence_append";
+  case Expression::Kind::OracleSequenceAt:
+    return "oracle_sequence_at";
+  case Expression::Kind::OracleSequenceLength:
+    return "oracle_sequence_length";
+  case Expression::Kind::OracleSend:
+    return "oracle_send";
+  case Expression::Kind::OracleQuery:
+    return "oracle_query";
+  case Expression::Kind::OracleContents:
+    return "oracle_contents";
+  case Expression::Kind::OracleRows:
+    return "oracle_rows";
+  case Expression::Kind::OracleForgetRows:
+    return "oracle_forget_rows";
   case Expression::Kind::MethodCall:
     return "method_call";
   case Expression::Kind::FinishIf:
@@ -376,6 +394,11 @@ private:
                                                : json::Value(value.name)},
                         {"roles", strings(value.roles)},
                         {"domain", optionalType(value.domain, "domain")}};
+    if (value.oracleHolder) {
+      result["oracle_holder"] = *value.oracleHolder;
+      result["oracle_maximum"] =
+          optionalType(value.oracleMaximum, "oracle_maximum");
+    }
     if (field)
       result["public"] = value.isPublic;
     if (value.purpose)

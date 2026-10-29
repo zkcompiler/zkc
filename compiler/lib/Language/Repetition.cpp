@@ -79,10 +79,12 @@ bool BodyChecker::repeat(const Expression &expr) {
           "every participant of mutable state must be in the loop roster",
           expr.span);
     if (!use(*state.value, expr.span) ||
-        !nested.addInput(id, state.type, state.roles, expr.span))
+        !nested.addInput(id, state.type, state.roles, expr.span,
+                         body.values[state.value->index].oracleHolder))
       return false;
     operation.carried.push_back(*state.value);
-    results.push_back({state.type, state.roles, expr.span});
+    results.push_back({state.type, state.roles, expr.span,
+                       body.values[state.value->index].oracleHolder});
   }
   for (const auto &p : summary->places) {
     if (states.count(p.binding))
@@ -168,6 +170,10 @@ bool BodyChecker::repeat(const Expression &expr) {
           "source.move",
           "loop state needs a whole successor on every continuing iteration",
           expr.span);
+    if (region->values[state.value->index].oracleHolder !=
+        results[region->results.size()].oracleHolder)
+      return fail("source.oracle-role", "loop successor changes oracle holder",
+                  expr.span);
     if (!nested.use(*state.value, expr.span))
       return false;
     region->results.push_back(*state.value);

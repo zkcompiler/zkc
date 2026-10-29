@@ -105,6 +105,8 @@ struct SyntaxPort {
   bool unnamed = false;
   /// Installed declaration selected by name resolution, never by the parser.
   std::optional<std::string> serviceConstructor;
+  std::optional<std::string> oracleHolder;
+  std::optional<SyntaxType> oracleMaximum;
 };
 struct SyntaxParameter {
   std::string name;
@@ -157,6 +159,15 @@ struct Expression {
     Map,
     DomainProduct,
     MethodCall,
+    OracleSend,
+    OracleQuery,
+    OracleContents,
+    OracleRows,
+    OracleForgetRows,
+    OracleSequenceEmpty,
+    OracleSequenceAppend,
+    OracleSequenceAt,
+    OracleSequenceLength,
     FinishIf,
     NotationCall,
     And,

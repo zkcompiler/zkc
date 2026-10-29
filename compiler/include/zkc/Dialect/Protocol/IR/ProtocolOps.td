@@ -8,6 +8,7 @@ include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "zkc/Dialect/BoundOperations.td"
+include "zkc/Dialect/Protocol/IR/OracleOps.td"
 
 
 def AwaitOp : Op<ProtocolDialect, "receive",
@@ -194,6 +195,19 @@ def RestrictRolesOp : Op<ProtocolDialect, "restrict_roles",
   let assemblyFormat = "$input attr-dict `:` type($input)";
 }
 
+
+// Pointwise assembly of disjoint role components. Operand i supplies only the
+// component at roles[i]; no value is communicated or compared across roles.
+def AssembleRolesOp : Op<ProtocolDialect, "assemble_roles",
+    [Pure, SameOperandsAndResultType,
+     ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp"]>]> {
+  let arguments = (ins Variadic<AnyType>:$inputs, StrArrayAttr:$roles);
+  let results = (outs AnyType:$output);
+  let hasVerifier = 1;
+  let extraClassDeclaration = [{
+    ::mlir::Value getComponent(::llvm::StringRef role);
+  }];
+}
 
 def StatementOp : Op<ProtocolDialect, "statement",
     [MemoryEffects<[MemWrite]>, HasParent<"zkc::protocol_ir::MathematicalOp">,

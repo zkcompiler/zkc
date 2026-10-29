@@ -10,6 +10,15 @@ Compilation::Compilation(Compilation &&) noexcept = default;
 Compilation &Compilation::operator=(Compilation &&) noexcept = default;
 Compilation::~Compilation() = default;
 ModuleOp Compilation::module() const { return *storage->module; }
+std::optional<OracleRealizationSnapshot>
+Compilation::oracleRealizationSnapshot() const {
+  if (!storage || !storage->realization)
+    return std::nullopt;
+  const auto &edge = *storage->realization;
+  return OracleRealizationSnapshot{edge.originalSnapshot(),
+                                   edge.candidateSnapshot(),
+                                   edge.realizationRecord().str()};
+}
 const LinearContractionStats &Compilation::statistics() const {
   return storage->statistics;
 }

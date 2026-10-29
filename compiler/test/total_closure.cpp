@@ -99,6 +99,34 @@ int main() {
     require(summary->depth == 2 && summary->expandedOperations == 4,
             "callee expansion was not charged");
   });
+  cases.run("observation snapshots require owned flat blocks", [&] {
+    auto module = parse(helpers, context);
+    auto other = parse(helpers, context);
+    SymbolTableCollection symbols;
+    auto entry = function(*module, "entry");
+    mathematical::TotalClosure control(*module, symbols, entry);
+    require(succeeded(control.verifyObservations(entry.front())),
+            "owned observation body was refused");
+    mathematical::TotalClosure foreign(*module, symbols, entry);
+    require(
+        failed(foreign.verifyObservations(function(*other, "entry").front())),
+        "foreign observation body entered this symbol table");
+    mathematical::TotalClosure detached(*module, symbols, entry);
+    Block unparented;
+    require(failed(detached.verifyObservations(unparented)),
+            "unparented observation body was accepted");
+    auto nested = parse(R"mlir(module {
+      func.func @entry(%condition:i1) {
+        scf.if %condition { scf.yield }
+        func.return
+      }
+    })mlir",
+                        context);
+    auto nestedEntry = function(*nested, "entry");
+    mathematical::TotalClosure regions(*nested, symbols, nestedEntry);
+    require(failed(regions.verifyObservations(nestedEntry.front())),
+            "nested body bypassed the flat observation closure");
+  });
   cases.run("summaries remain stable across cache growth", [&] {
     auto module = parse(helpers, context);
     auto helper = function(*module, "choose");

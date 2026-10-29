@@ -23,7 +23,8 @@ own admission boundary; it does not acquire source correspondence from its label
 | Boundary | Required comparison | Current implementation |
 |---|---|---|
 | Original to prepared protocol | Application/helper substitutions, folds, action operands, statements, role maps and repeat interfaces; admit every definition before erasure | Separate algorithm, polynomial-recipe and pointwise-map checks, virtual helper/application substitution and bounded mathematical value comparison |
-| Prepared protocol to participants | Role-indexed SSA correspondence, actual receives, action inputs/results, loop captures/yields and outputs | The actual retained prepared object is compared with the actual projected candidate; restrictions are interpreted per role |
+| Prepared logical protocol to realized common protocol | Complete source-derived helper bodies, interfaces, role stores, logical clauses and exact target selections | Joint compilation retains both sides and the independently read oracle realization record; ordinary units use an exact identity edge. Logical-predicate transport and oracle simulation remain separate obligations |
+| Prepared or realized common protocol to participants | Role-indexed SSA correspondence, actual receives, action inputs/results, loop captures/yields and outputs | The actual retained common object is compared with the actual projected candidate; restrictions are interpreted per role |
 | Participant rewrites | Action operands under supported mathematical laws, unchanged ordered effects and custody | Shared transient value comparison for simplification, fixing and elimination; independent Boolean and polynomial laws |
 | Participant to exec | Demand at the consuming action, captures, recipes, result order and partial-call placement | Separate closed recipe/demand validator |
 | Exec to physical | Logical participant data flow/order plus validated representation, implementation and lifetime choices | Fresh checked plans plus a separate reader of every materialized operation, conversion, release position, operand and declaration |
@@ -45,9 +46,12 @@ cannot establish their derivation from a common source.
 
 Preparation and projection have separate postconditions, including when a single
 public pass performs both. The raw-source API first validates expansion; the
-projector compares its actual prepared input. Run compilation retains an
-unsimplified prepared snapshot until final schedule validation. This snapshot is
-invocation-local and is never another editable IR or a serialized certificate.
+projector compares its actual prepared or realized common input. Run compilation
+retains the original-to-realized edge through publication and reads the final
+schedule against an unsimplified snapshot of the native common interface. Its
+inspection API supplies independent clones, not mutable access to the checked
+owner. The record establishes the native structural edge; it neither transports
+logical claims nor certifies later optimization passes.
 
 ### Comparison relations
 

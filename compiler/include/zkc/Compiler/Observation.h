@@ -9,6 +9,9 @@ namespace mlir {
 class PassManager;
 }
 namespace zkc {
+/// Diagnostic phase names shared by capability reporting and dump selection.
+/// These names are not IR profiles or compilation/admission certificates.
+llvm::ArrayRef<llvm::StringRef> compilationObservationPhases();
 /// Optional, invocation-local diagnostic journal. Never an admission
 /// certificate. One synchronous compilation owns each observer; pass callbacks
 /// synchronize locally. No runtime origin or executable field is modified.

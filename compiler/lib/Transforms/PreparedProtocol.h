@@ -12,6 +12,7 @@ struct RealizationTrace;
 // projection consumes the owned prepared subject. Public passes admit their
 // own caller input instead of accepting a claim of prior preparation.
 class PreparedProtocol {
+  friend class RealizedProtocol;
   mlir::OwningOpRef<mlir::ModuleOp> module;
   explicit PreparedProtocol(mlir::OwningOpRef<mlir::ModuleOp> module)
       : module(std::move(module)) {}

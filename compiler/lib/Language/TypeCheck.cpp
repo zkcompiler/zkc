@@ -106,6 +106,9 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
                  toString(result.takeError()), s.span);
       return {};
     }
+    if (result->kind == K::OracleKind &&
+        !types.oracleKind(*result, s.span, &context))
+      return {};
     if (s.kind == S::Builtin && s.name == "sequence" &&
         (!types.requireUsage(arguments.front(), Usage::Copy, s.span, &context,
                              "source.sequence",
@@ -186,6 +189,12 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
                  s.span);
       return {};
     }
+    if (isOracleHandle(*element)) {
+      types.fail("source.oracle-aggregate",
+                 "logical oracle handles require their bounded sequence",
+                 s.span);
+      return {};
+    }
     Type result(K::Array);
     result.arguments = {*element};
     result.dimension = count->dimension;
@@ -199,6 +208,12 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
         return {};
       if (!valueType(*t)) {
         types.fail("source.type", "static term in tuple type", s.span);
+        return {};
+      }
+      if (isOracleHandle(*t)) {
+        types.fail("source.oracle-aggregate",
+                   "logical oracle handles require separate protocol ports",
+                   s.span);
         return {};
       }
       result.arguments.push_back(std::move(*t));

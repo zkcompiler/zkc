@@ -77,6 +77,73 @@ retains its installed backend-failure contract. `stop` uses a native reason:
 `reject`, `abort`, `exhausted`, `incomplete` or `refused`. Target execution limits
 remain independent of source effects and typing.
 
+## Logical oracle actions
+
+Oracle access is a delivery mode with an explicit kind and holder/receiver
+family. With the aliases in [logical oracle types](definitions.md#logical-oracle-types):
+
+```text
+#[site(word)] let h = send P -> V(values) as oracle<FixedTable<F, 16>>;
+#[site(opening)] let answer @V = query h at position;
+let valuesAgain @P = oracle.data(h);
+let height @(P, V) = oracle.rows(h);
+let unsized = oracle.forget_rows(h);
+```
+
+A send evaluates its data at the holder. A sized kind supplies its exact static
+row count. An unsized delivery writes both runtime shape and static maximum:
+`send P -> (V, W)(values) as oracle<Table<F>>(rows = count) max M`.
+The count must be available at the holder and every receiver. Common preparation
+also checks that shape comes from the admitted initial shape environment, rather
+than an answer or challenge. A second shape on a sized kind refuses. The maximum
+is a natural static term, substituted and rechecked at specialization.
+
+`query h at position` is an ordered receiver event. Its owner is constrained by
+`@Role`, the position and the receiver family; an ambiguous owner refuses.
+Repeated positions and unused answers retain separate events and site identities.
+The kind determines the exact Query and Answer types; associated-type inference
+is forward only. Packed product answers use the ordinary total-data carrier and
+are unpacked into the source fields after the event.
+
+`oracle.data(h)` is executable only at the holder. It grants no receiver access
+and is distinct from a relation anchor selector. `oracle.rows(h)` reads immutable
+shape at the handle's participants. `oracle.forget_rows(h)` removes an exact
+row-count refinement while preserving the anchor and role family. These qualified
+operations are language forms; `oracle::name` remains an ordinary library path.
+
+Aliases, protocol arguments/results and loop captures/carries retain the holder
+separately from sorted participant availability. A call or return cannot change
+the holder through role substitution. Assignment cannot change the role family;
+partial role restriction of a logical handle refuses. Oracle handles never pass
+through the ordinary message codec or ordinary data aggregates. Source actions
+elaborate to the [common oracle vocabulary](../ir/protocols.md#logical-oracle-kinds-and-handles);
+semantic realization must eliminate that vocabulary before executable lowering.
+
+### Bounded oracle sequences
+
+```text
+let mut layers = oracle.empty<Table<F>, 4> roles(P, V)();
+layers = oracle.append(layers, oracle.forget_rows(word));
+let selected = oracle.at(layers, round);
+let count @(P, V) = oracle.length(layers);
+```
+
+An empty sequence declares its kind, static capacity and role family, with the
+holder first and one or more distinct receivers afterward. This fixes placement
+before any append, including for zero-trip loops. The empty common value has no
+anchor. Its broader availability does not grant an element or bypass a bounds
+check. Append requires the same kind and exact holder/receiver family. It returns
+an immutable successor and retains a capacity check at every family participant.
+Selection requires its position at every family participant, retains the stopping
+bounds check, and returns the actual selected handle and anchor. It does not pick
+one static source origin. Length is an immutable view at the declared family.
+
+Different fixed row counts can enter one unsized sequence after explicit
+`oracle.forget_rows`. Loop state keeps the same kind, capacity and family while
+its elements and selected anchors change. Append and selection retain ordered
+sites, including unused results. Sequence values are internal protocol values;
+independent root/call ports do not admit anchor-free sequence ingress.
+
 ## Participant meaning
 
 A protocol may supply [scoped computations](definitions.md#scoped-computations)
@@ -420,6 +487,17 @@ Square brackets in the table denote optional syntax. A selector is `in.port` or
 Shared roles may hold different values. Selectors preserve the chosen component,
 field privacy and static bounds. They cannot select internal SSA values, index
 inside a native container, or project an unchecked variant payload.
+
+For an `Oracle<K>` port, the whole-port selector instead denotes the logical
+Data associated with its anchor. It binds a `K::Data` relation formal, without
+an executable read or a participant selector. Both `in.word` and `out.word`
+are supported; an explicit role or product path refuses. The generated common
+selector names the actual anchor leaf, not the paired holder-data leaf.
+An inline relation infers the same associated type. A selected proof target
+retains this logical binding; verifier ownership of an anchor does not make its
+data public. Purpose checks use the data holder, while `public` still lists
+all verifier inputs, including logical oracle inputs. Realization must produce
+the final executable statement and witness layouts.
 
 An inline relation uses explicitly bound formals:
 

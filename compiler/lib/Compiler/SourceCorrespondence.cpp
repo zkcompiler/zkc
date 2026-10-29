@@ -248,7 +248,7 @@ Error checkSourceCorrespondenceExport(const CheckedOriginal &original,
   auto canonical = json::parse(*expected);
   if (!canonical)
     return canonical.takeError();
-  if (*actual != *canonical)
+  if (!zkc::equalNaturalJson(*actual, *canonical))
     return error("source.correspondence.export",
                  "publication differs from the checked source export");
   return Error::success();

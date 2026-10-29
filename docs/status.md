@@ -92,6 +92,11 @@ domain closure, with actual-body preservation checks. Projected local calls
 remain Protocol actions and must match their participant's role. Participant
 mathematical preparation now expands scoped helpers and creates scoped
 calculations with typed mathematical requests and explicit guard outcomes.
+Ordinary role components can be joined by `protocol.assemble_roles`; preparation
+retains exact ordered role/operand selection and projection selects each role's
+own operand without communication. Independent native comparison and the Lean
+structured participant normalizer cover the operation. It excludes service,
+affine and logical oracle values; it adds no claim of agreement between roles.
 The normalization frontier now shares polynomial-generated coefficients across
 those scoped calculation cuts through actual participant ports. Its independent
 reader checks original data prefixes, exact imports, outcome packaging and
@@ -508,6 +513,162 @@ cover call-edge or scoped-extraction correspondence. The artifact
 shares source claims' existing admission association and reports missing source
 matches explicitly; its native publication check is not a Lean proof.
 
+The Protocol dialect registers checked [logical oracle kinds and handle
+carriers](spec/ir/protocols.md#logical-oracle-kinds-and-handles), including sized
+tables and bounded handle sequences. They have no ordinary native codec.
+Common IR formation checks ordered oracle sends/queries, exact kind associations,
+role availability, kind-owned named dimensions, initially bound shapes through
+recurrence edges and static refinement erasure. Sends carry the exact dimension
+list; input and virtual bounds name every dynamic dimension. Shape maps and
+reads have the same strict independent wire contract. Invalid queries are
+enforced at the occurrence against the actual stored shape by the checked
+realization. Checked preparation remaps oracle roles
+through applications and preserves sends/queries under upstream CSE. Projection
+refuses unresolved oracle events before publishing participants. Holder-only contents and bounded,
+append-only sequences preserve role restrictions, dynamic anchors and ordered
+bounds failures through checked preparation. Virtual query declarations check
+answer-independent position maps, closed total helpers, actual polynomial bounds,
+explicit admissibility references and fresh occurrence anchors. Their generated
+condition templates and ordered query footprints have native export/check
+commands. The independent Lean derivation is supplied for Lean-owned integration,
+with the logical wire reader and recursive handle exclusion. The main Lean
+profile does not yet accept these oracle rows or the new assembly operation.
+These proposals retain exact occurrences and actual operands; they do
+not discharge their predicates. A conservative scheduling analysis reads actual
+prepared bodies and role substitution, separates participant-local stops, and
+summarizes counted repetitions without unrolling. It identifies a possible query
+before a later random-service query. The requested `after-final-draw` policy is
+now checked for every logical query owner, both during emission and independent
+readback against the frozen source. It includes index and field draws, keeps
+participant continuations separate and uses one bounded analysis budget. This
+permits authentication after the last draw. Authentication granularity is a
+separate requested policy. Checked atomic blocks group consecutive base-table
+queries only when exact source facts prove their domain checks succeed. They
+share duplicate and same-leaf openings for the same actual anchor, retain every
+logical query and authenticate all answers before releasing any source answer.
+Unknown domains and barriers retain singleton blocks. General virtual/FRI
+batching, deferred proofs and a simulation theorem remain separate obligations. Private
+anchor-storage planning retains fresh constructor/instance references, actual
+repeat coordinates and role-specific payloads as ordinary sequences and records.
+Independent readers check generated append allocations and reference-tagged
+lookups, including actual SSA inputs and outcome propagation. Native controls
+exercise fresh instances, equal payloads, empty tables and invalid references.
+Pure virtual-query lowering emits total position and answer functions; its
+independent reader checks actual helper bodies and every ordered child query,
+including unused answers. Structural query capacity follows prepared SSA,
+loop carries and handle sequences, preserving duplicate queries and zero-trip
+alternatives. Overflow and analysis work limits refuse compilation. The
+private table continuation controller now emits ordinary scoped control over
+actual anchors, with explicit suspension, typed answers and bounded advancement.
+Its independent actual-body reader covers the complete transition closure.
+Exact request counts are derived from actual child anchors at construction and
+stored in the same immutable record. Independent count-body checks preserve
+query multiplicity without evaluating domains or answers. Local evaluation requires custody of every base table; a Merkle receiver has no
+local evaluator. The common-stage realization connects those
+primitives to actual root bindings, deliveries, virtual constructions, bounded
+handle sequences and queries. It threads each role's immutable stores through
+common repeats and checks complete generated SSA, local bodies and declaration
+custody against a source-derived recipe. Root input components remain distinct;
+realization does not assert their equality. Its current integration profile covers
+every prepared entry, including paired oracle results. Each oracle entry owns independent
+stores and checked helpers; ordinary siblings retain their exact bodies. Shared
+virtual declarations leave only after all entries are converted, and the reader
+checks the complete entry and generated-declaration inventories. Named shape views read the actual record.
+Holder contents use a custody-specific controller, so unrelated received commitments
+cannot disable held data or expose another party's data. Base contents return stored
+values; virtual contents materialize at demand through the same ordered query
+controller, under the retained admissibility obligation. Component views preserve the
+actual reference through checked rebindings without fresh allocation or eager
+materialization. Independent readers share one immutable formation/execution view
+within each check; mutations always require a fresh check. Returned oracle results
+keep their original reference positions and append mapped immutable stores only at
+their receiving roles. Aliases share support stores; nested calls and recurrence
+retain actual anchors and final store snapshots. These private interface maps do
+not enable cross-entry graph import. Logical anchor-clause interpretation and native proof integration remain
+pending; the supported Merkle communication profile is described below.
+The private realization owner consumes a prepared source, validates the complete
+serialized record against both modules and retains the frozen pair. Inspection
+returns independent clones; changed snapshots do not inherit checked authority.
+Joint run compilation now consumes this owner before projection and keeps the
+complete edge in the final Compilation. Native scheduling reads the represented
+common interface; proof construction still refuses logical oracle sources.
+Ordinary modules pass through an exact identity edge with an empty oracle inventory. The independently checked table-read primitive
+stops before an out-of-domain read for field, group, index and sequence-backed
+rows. Its generated clients enter the physical pipeline; native controls check
+actual row counts and observable prefixes when a later query fails. Logical
+claim transport and the independent semantic realization bridge remain pending.
+Private Merkle helpers now compile ordinary scoped position mapping, commit
+preparation, opening and guarded answer selection. The independent reader checks
+actual helper bodies, exact field/scheme signatures, grouping, leaf permutation,
+shape and query guards. Native primitive controls cover all four grouping/order
+combinations, KoalaBear quartic Poseidon2 openings, invalid shapes/queries and
+hostile root/row/proof delivery. Common realization now accepts externally
+requested per-root schemes/layouts and uses these helpers for root construction.
+It checks holder Data, delivers only the selected commitment, retains private
+opening state and binds receiver shape to the stored root. Dynamic input roots
+append explicit receiver-owned shape ports; fixed extents need no extra input.
+The record reader rederives these associations under the caller's requested
+policy. Native controls exercise fixed/dynamic input/send roots, independent
+receiver shapes and exact antipodal root bytes. Immediate receiver queries now
+suspend, exchange actual constructor/instance/position requests with one holder, authenticate
+complete rows against the suspended anchor's root and expected shape, then resume
+that exact continuation. The profile admits multiple remote base constructors at
+one holder, including different answer kinds and selected schemes, multiple
+instances and recurrent virtual ancestors. Closed response variants are checked
+against the suspended constructor before authentication. With virtuals, the
+queried handle must already be available at both roles so no future-count message
+is invented. The [record contract](spec/formats/oracle-realization.md#common-opening-communication)
+specifies this capability boundary. Native controls cover input/send queries,
+every valid position, corrupted requests/roots/rows/proofs, duplicate and unused
+openings, equal-typed constructor substitutions, heterogeneous scheme dispatch,
+and trailing zero-query domain failures. Mixed local/remote or multi-holder
+routing, dynamic virtual batching and native proof publication remain pending.
+Fixed base-query blocks retain the checked batching profile described above.
+The private whole-stage reader consumes a version-zero
+[realization record](spec/formats/oracle-realization.md), the prepared original
+and the actual candidate. It reads independently parsed candidates, checks exact
+pure helper recipes, and rederives interfaces, stores and symbolic generation
+slots. Logical input/result pairings use Protocol admission's shared typed reader;
+original anchor/data ports, kinds and role families remain distinct from native
+representations and their support stores. The same Protocol owner supplies typed
+contracts, distinguishing anchor selectors from role components and retaining
+continuation residuals and exact named target selections. The realization record
+rederives the complete clause inventory, including anchor input/output clauses,
+continuation residuals and selected targets. Those annotations remain on the
+frozen original, not on the candidate's changed signature. Controls distinguish
+logical target changes even when native code is identical, and refuse clauses
+inserted into the native candidate. This does not yet interpret logical anchor
+predicates on native representations. The record is rechecked at the native publication boundary; possession of its
+bytes grants no authority. It is not a Lean simulation.
+Empty sequence observations need no allocated anchor. Unreachable queries and
+shape views have a complete refusing controller without an invented store;
+indexing still stops at its original occurrence and preserves earlier delivery.
+Controller roles must belong to the original entry roster. Complete Merkle query
+realization and native proof publication remain pending.
+
+Common oracle ports pair actual holder data and receiver handles through inputs,
+returns and applications, with explicit shapes and independent preparation checks.
+The native [structured exporter](spec/formats/structured-source.md#logical-oracle-vocabulary)
+and independent wire vocabulary retain kinds, paired ports, virtual bodies,
+query order, shapes and sequence bounds. Formal semantic admission still refuses
+the oracle profile; decoding does not extend participant soundness. Native
+anchor contract selectors retain the associated logical data without a
+participant read, including selected logical proof statements. Source whole-port
+selectors infer this association and retain the complete Data schema; executable
+statement projection and formal semantic consumers still refuse the profile. Source
+kind/handle aliases, static kind parameters, forward associated types and closed
+logical layouts are checked, including specialization and ordinary-data boundary
+refusals. Source oracle ports retain their explicit holder, receivers and static
+maximum through paired input, call and return elaboration. The independent
+source interface reader checks logical kind descriptors and actual input pairs;
+source correspondence checks the complete role substitution and result mapping.
+Source send/query/data/rows/refinement actions preserve the explicit holder,
+ordered query events and packed answer layouts through independent comparison.
+Bounded source sequences retain explicit families, persistent loop state and
+dynamic selected anchors. Virtual source spelling remains with the frontend
+redesign. The proposals' semantic interpretation and checked realization remain
+in progress. Formation does not enable execution.
+
 Checked notation inspection is available through
 `inspectNotations` with `NotationInspectionOptions.includePrivate` and
 `includeInstallation`, and `zkc inspect --view=notations` with `--notation-private` and
@@ -643,7 +804,8 @@ execution, framing, failures, capacity and installed consumers. The
 Optional polynomial checks cover `boolean-sum-to-point/0` and relation-pinned
 `r1cs-sum-to-point/0`. [Public-coin analysis](compiler/public-coin.md) checks a
 selected verifier's dependencies against bound public context, challenges and
-receives. Neither establishes a Fiat–Shamir reduction or arbitrary polynomial
+receives. Field and scalar `UniformIndex` requests retain exact methods and
+static domains; atomic block draws remain pending. Neither establishes a Fiat–Shamir reduction or arbitrary polynomial
 or protocol equivalence.
 
 The [transcript-construction bridge](../lean/bridges/construction/README.md)

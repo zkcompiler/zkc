@@ -85,11 +85,18 @@ int main(int argc, char **argv) {
   }
   auto observations = observation.json();
   auto *phases = observations.getAsObject()->getArray("phases");
-  const std::array<llvm::StringRef, 5> expectedPhases = {
-      "entry", "protocol", "participant", "exec", "physical"};
-  if (observedPackage->bytes() != package->bytes() || !phases ||
-      phases->size() != expectedPhases.size())
+  const std::array<llvm::StringRef, 6> expectedPhases = {
+      "entry", "protocol", "realized", "participant", "exec", "physical"};
+  if (observedPackage->bytes() != package->bytes()) {
+    llvm::errs() << "observation changed package bytes\n";
     return 53;
+  }
+  if (!phases || phases->size() != expectedPhases.size()) {
+    llvm::errs() << "expected " << expectedPhases.size()
+                 << " compilation phases, got " << (phases ? phases->size() : 0)
+                 << '\n';
+    return 53;
+  }
   for (size_t i = 0; i < expectedPhases.size(); ++i) {
     const auto *phase = (*phases)[i].getAsObject();
     const auto *unit = phase ? phase->getArray("unit") : nullptr;

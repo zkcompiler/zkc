@@ -70,7 +70,15 @@ the declaration's verified `contracts` attribute, using the existing native
 layout, independently of the selected Entry. The logical source interface is
 an independently checked projection of that inventory. Only a selected proof
 target adds the existing entry statement, which must agree with a retained
-target. Opaque and captured relations emit declarations
+target. Oracle selectors use the kind's complete Data schema and the anchor
+index of the paired common port. In the logical interface their `role` is null
+and `path` is empty; ordinary selectors retain a role name. An oracle schema has
+an exact required `data_schema`, checked recursively against the kind's native
+Data association and against the relation formal's complete logical schema.
+The selected statement follows only the retained input-pair bindings, and its
+anchor operands use the explicit `anchor` selector instead of a role name.
+The common operand type and selected owned contract disambiguate this marker;
+it grants no executable data access. Opaque and captured relations emit declarations
 only. Opaque closure emits every canonical typed static argument, in declaration
 order, in `relation.declare.static_arguments` and the interface relation's
 required `static_arguments` list. Independent comparison reconstructs these

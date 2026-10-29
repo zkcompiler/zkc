@@ -213,8 +213,8 @@ analyze(cancelled, shadow_req, "public-coin-unbound-input")
 assert analyze(cancelled, {**shadow_req, "bound_inputs": [0]})[
     "decision_dependencies"
 ] == [0]
-# UniformIndex is a valid native service method, but this view records field
-# draws only. Refuse rather than mislabel an index anchor as a field draw.
+# Keep the actual scalar request and its full static domain. An index draw is
+# neither a field draw nor an atomic block of several samples.
 index_service = '!protocol.service_ref<"random.koala-bear.ext8-binomial3/0">'
 index_body = f'''%bound = "data.index"() {{value = "8"}} : () -> ui64
 %position = "protocol.query"(%s, %bound) {{method = "index", owner = "Checker", site = "draw"}} : ({index_service}, ui64) -> ui64
@@ -223,7 +223,52 @@ index_body = f'''%bound = "data.index"() {{value = "8"}} : () -> ui64
 '''
 indexed = small(index_body).replace(S, index_service)
 commands.verified(indexed, None)
-analyze(indexed, {**shadow_req, "bound_inputs": [0]}, "public-coin-service")
+index_req = {**shadow_req, "bound_inputs": [0]}
+for upper in (1, 8, 17, (1 << 64) - 1):
+    current = indexed.replace('value = "8"', f'value = "{upper}"')
+    view = checked(f"index_{upper}", current, index_req)
+    request = view["draws"][0]["request"]
+    assert request == {"contract": "random.koala-bear.ext8-binomial3/0",
+                       "method": "index", "arguments": [upper]}
+    assert view["anchors"][2]["type"] == "ui64"
+    assert view["draws"][0]["prefix_length"] == 1
+    for changed_request in ({**request, "method": "draw"},
+                            {**request, "arguments": [upper ^ 1]},
+                            {**request, "arguments": []},
+                            {**request, "contract": "random.bls12-381.fr/0"}):
+        changed_view = copy.deepcopy(view)
+        changed_view["draws"][0]["request"] = changed_request
+        report_path.write_text(json.dumps(changed_view))
+        commands.run([compiler, "protocol-check-public-coin", source_path,
+                      requirement_path, report_path], refuses="public-coin-report")
+    missing = copy.deepcopy(view)
+    del missing["draws"][0]["request"]
+    report_path.write_text(json.dumps(missing))
+    commands.run([compiler, "protocol-check-public-coin", source_path,
+                  requirement_path, report_path], refuses="public-coin-report")
+
+# The index actually contributes to the decision and must be delivered exactly.
+index_dependent = indexed.replace(
+    f'%ok = algebra.field_equal %x, %x : ({F}, {F}) -> i1',
+    '%ok = "data.index_less"(%position, %bound) : (ui64, ui64) -> i1')
+view = analyze(index_dependent, shadow_req)
+assert view["decision_dependencies"] == [2]
+analyze(index_dependent.replace('"protocol.exchange"(%position)',
+                                '"protocol.exchange"(%bound)'),
+        shadow_req, "public-coin-delivery")
+
+# Mixed field/index requests retain two distinct prefix boundaries.
+field = '!algebra.field<"koala-bear.ext8-binomial3">'
+mixed_body = index_body.replace('%ok = algebra.field_equal', f"""%field = "protocol.query"(%s) {{method="draw",owner="Checker",site="field"}} : ({index_service})->{field}
+%field_delivery = "protocol.exchange"(%field) {{sender="Checker",receiver="Prover",site="field_coin"}} : ({field})->{field}
+%ok = algebra.field_equal""")
+mixed = small(mixed_body).replace(S, index_service)
+mixed_req = requirement([0], 1, [("draw", "coin"), ("field", "field_coin")])
+view = analyze(mixed, mixed_req)
+assert [d["prefix_length"] for d in view["draws"]] == [1, 2]
+assert [d["request"]["method"] for d in view["draws"]] == ["index", "draw"]
+assert view["draws"][1]["request"]["arguments"] == []
+
 
 # Exact edge, order, and service failures on otherwise admitted programs.
 changed = (

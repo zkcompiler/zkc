@@ -49,6 +49,37 @@ Expected<Type> domainMember(const Type &base, StringRef member) {
   }
   return result;
 }
+Expected<Type> oracleMember(const Type &kind, StringRef member) {
+  if (kind.kind != K::OracleKind ||
+      (member != "Data" && member != "Query" && member != "Answer"))
+    return error("source.oracle-kind", "unknown oracle association: " + member);
+  auto deferred = [&] {
+    Type result(K::OracleProjection, member.str());
+    result.arguments = {kind};
+    result.symbolic = true;
+    result.assumptions = {true, true};
+    return result;
+  };
+  if (kind.symbolic)
+    return deferred();
+  auto formed = builtinType(oracleConstructor(kind), kind.arguments);
+  if (!formed)
+    return formed.takeError();
+  const auto &row = kind.arguments.front();
+  if (member == "Answer")
+    return row;
+  if (member == "Query")
+    return Type(K::Index);
+  if (row.kind == K::Parameter || row.kind == K::OracleProjection)
+    return deferred();
+  if (row.kind == K::Field)
+    return builtinType("vector", {row});
+  if (row.kind == K::Group)
+    return builtinType("groups", {row});
+  if (row.kind == K::Index)
+    return builtinType("indices", {});
+  return builtinType("sequence", {row});
+}
 bool isNativeData(const Type &type) {
   return type.kind == K::Field || type.kind == K::Group ||
          type.kind == K::Boolean || type.kind == K::Index ||
@@ -67,7 +98,8 @@ bool isSequenceElement(const Type &type) {
   return isNativeData(type) || type.kind == K::Record ||
          type.kind == K::Variant || type.kind == K::Tuple ||
          type.kind == K::Array || type.kind == K::Unit ||
-         type.kind == K::Parameter || type.kind == K::Associated;
+         type.kind == K::Parameter || type.kind == K::Associated ||
+         type.kind == K::OracleProjection;
 }
 bool matchesKernelStaticSort(StringRef contract, const Type &type,
                              StringRef sort) {
@@ -115,6 +147,38 @@ Expected<Type> formalType(StringRef name, ArrayRef<Type> arguments) {
   return result;
 }
 Expected<Type> builtinType(StringRef name, ArrayRef<Type> arguments) {
+  if (name == "oracle.table") {
+    if ((arguments.size() != 1 && arguments.size() != 2) ||
+        isStaticOnly(arguments[0]) || isOracleHandle(arguments[0]) ||
+        arguments[0].kind == K::Formal ||
+        (arguments.size() == 2 && arguments[1].kind != K::Natural))
+      return error(
+          "source.oracle-kind",
+          "table kind needs ordinary row data and optional static rows");
+    Type result(K::OracleKind, "table");
+    result.arguments.assign(arguments.begin(), arguments.end());
+    return result;
+  }
+  if (name == "oracle" || name == "oracle_sequence") {
+    bool sequence = name == "oracle_sequence";
+    if (arguments.size() != (sequence ? 2u : 1u) ||
+        arguments[0].kind != K::OracleKind ||
+        (sequence && arguments[1].kind != K::Natural))
+      return error(
+          "source.oracle-kind",
+          "oracle handle needs a kind; its sequence also needs a maximum");
+    const auto &kind = arguments[0];
+    if (!kind.symbolic) {
+      if (kind.domain != "table")
+        return error("source.oracle-kind", "unknown oracle kind");
+      auto formed = builtinType("oracle.table", kind.arguments);
+      if (!formed)
+        return formed.takeError();
+    }
+    Type result(sequence ? K::OracleSequence : K::Oracle);
+    result.arguments.assign(arguments.begin(), arguments.end());
+    return result;
+  }
   if (name == "bool" && arguments.empty())
     return Type{};
   if (name == "index" && arguments.empty())

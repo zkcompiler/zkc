@@ -58,12 +58,14 @@ std::optional<ServiceId> BodyChecker::service(const Expression &expr) {
 }
 std::optional<ValueId> BodyChecker::input(const Type &type,
                                           std::vector<unsigned> components,
-                                          Span span) {
-  if ((!math() && !checker.types.executableType(type, span)) ||
+                                          Span span,
+                                          std::optional<unsigned> holder) {
+  if ((!math() && !(protocol() ? checker.types.protocolValue(type, span)
+                               : checker.types.executableType(type, span))) ||
       !checker.types.chargeType(type, span))
     return {};
   ValueId value{uint32_t(body.values.size())};
-  body.values.push_back({type, std::move(components), span});
+  body.values.push_back({type, std::move(components), span, holder});
   uses.emplace_back();
   if (plan)
     usageValues.push_back(plan->usage.own(type, span, usageGuard));
@@ -71,8 +73,9 @@ std::optional<ValueId> BodyChecker::input(const Type &type,
   return value;
 }
 bool BodyChecker::addInput(BindingId id, const Type &type,
-                           std::vector<unsigned> components, Span span) {
-  auto value = input(type, components, span);
+                           std::vector<unsigned> components, Span span,
+                           std::optional<unsigned> holder) {
+  auto value = input(type, components, span, holder);
   if (!value)
     return false;
   bindings.emplace(id, BindingState{type, std::move(components), *value, {}});
@@ -81,11 +84,25 @@ bool BodyChecker::addInput(BindingId id, const Type &type,
 std::optional<ValueId> BodyChecker::emit(decltype(Operation::action) action,
                                          const Type &type,
                                          Components components, Span span) {
+  std::optional<unsigned> holder;
+  if (auto *projection = std::get_if<Projection>(&action);
+      projection && projection->path.empty())
+    holder = body.values[projection->input.index].oracleHolder;
+  if (auto *forget = std::get_if<OracleForgetRows>(&action))
+    holder = body.values[forget->input.index].oracleHolder;
+  if (auto *send = std::get_if<OracleSend>(&action))
+    holder = send->holder;
+  if (auto *empty = std::get_if<OracleSequenceEmpty>(&action))
+    holder = empty->holder;
+  if (auto *append = std::get_if<OracleSequenceAppend>(&action))
+    holder = body.values[append->prefix.index].oracleHolder;
+  if (auto *at = std::get_if<OracleSequenceAt>(&action))
+    holder = body.values[at->input.index].oracleHolder;
   auto ids = emitResults(
       std::move(action),
       {{type,
         components.owners.empty() ? components.roles : std::vector<unsigned>{},
-        span}},
+        span, holder}},
       span);
   if (ids && placement) {
     if (!placement->form(components, span))
@@ -102,12 +119,15 @@ BodyChecker::emitResults(decltype(Operation::action) action,
           checker.work.limits.operations, "operation count", span)))
     return {};
   for (const auto &value : results) {
-    if (!math() && !checker.types.executableType(value.type, span))
+    if (!math() &&
+        !(protocol() ? checker.types.protocolValue(value.type, span)
+                     : checker.types.executableType(value.type, span)))
       return {};
     if (!checker.types.chargeType(value.type, span) ||
         !checker.types.charge(value.components.size() + 1, span))
       return {};
-    if (protocol() && !placement && value.components.size() > 1) {
+    if (protocol() && !placement && value.components.size() > 1 &&
+        !isOracleHandle(value.type)) {
       if (!checker.types.admit(value.type, Boundary::Participants, span, &decl))
         return {};
     }
@@ -201,6 +221,10 @@ bool BodyChecker::labelSite(const Statement &source, size_t firstOperation) {
   for (auto &operation : llvm::drop_begin(body.operations, firstOperation)) {
     bool eligible =
         std::holds_alternative<Exchange>(operation.action) ||
+        std::holds_alternative<OracleSend>(operation.action) ||
+        std::holds_alternative<OracleQuery>(operation.action) ||
+        std::holds_alternative<OracleSequenceAppend>(operation.action) ||
+        std::holds_alternative<OracleSequenceAt>(operation.action) ||
         std::holds_alternative<ServiceQuery>(operation.action) ||
         std::holds_alternative<ProtocolApplication>(operation.action) ||
         std::holds_alternative<ProtocolRepeat>(operation.action);
@@ -554,6 +578,10 @@ bool BodyChecker::run(const SyntaxBody &source, std::vector<Port> &outputs,
       outputs.push_back(
           {"result", body.values[value->index].type, {}, source.span});
     const auto &port = outputs[found->second];
+    if (port.oracle &&
+        body.values[value->index].oracleHolder != port.oracle->holder)
+      return fail("source.oracle-role", "returned oracle holder differs",
+                  syntax.expressions[id].span);
     if (isProtocol && !demand(*value, port.roles, syntax.expressions[id].span))
       return false;
     if (!use(*value, syntax.expressions[id].span))
@@ -591,15 +619,15 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
         !types.mathematicalData(p.type, p.span, &decl))
       return false;
     if (result.mode == Body::Mode::Protocol) {
-      if (p.roles.size() > 1 &&
+      if (p.roles.size() > 1 && !isOracleHandle(p.type) &&
           !types.admit(p.type, Boundary::Participants, p.span, &decl))
         return false;
     }
-    if (!check.addInput(sources[decl.id.index]->inputBindings[i], p.type,
-                        result.mode == Body::Mode::Math
-                            ? std::vector<unsigned>{i}
-                            : p.roles,
-                        p.span))
+    if (!check.addInput(
+            sources[decl.id.index]->inputBindings[i], p.type,
+            result.mode == Body::Mode::Math ? std::vector<unsigned>{i}
+                                            : p.roles,
+            p.span, p.oracle ? std::optional(p.oracle->holder) : std::nullopt))
       return false;
   }
   for (unsigned i = 0; i < decl.services.size(); ++i)
@@ -626,6 +654,7 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
         !types.mathematicalData(p.type, p.span, &decl))
       return false;
     if (result.mode == Body::Mode::Protocol && p.roles.size() > 1 &&
+        !isOracleHandle(p.type) &&
         !types.admit(p.type, Boundary::Participants, p.span, &decl))
       return false;
   }

@@ -56,6 +56,7 @@ public:
   std::optional<Type> substitute(const Type &, const Substitution &, Span,
                                  unsigned = 1);
   std::optional<Type> associated(const Type &, llvm::StringRef, Span);
+  bool oracleKind(const Type &, Span, const Declaration * = nullptr);
   /// A derived natural of an asset term. A closed term yields the fact of its
   /// captured asset; a symbolic term yields a projection factor that closure
   /// substitutes and inference never binds.
@@ -109,6 +110,9 @@ public:
   // Checks representation, not permissions: even a zero-length formal array
   // cannot become a runtime Type argument, port, region carrier or local value.
   bool executableType(const Type &, Span, unsigned = 1);
+  /// Logical protocol values are eliminated before native execution.
+  bool protocolValue(const Type &, Span);
+  bool oraclePort(const Port &);
   bool mathematicalData(const Type &, Span, const Declaration * = nullptr,
                         unsigned = 1);
   /// Structural projection only; bounds and access are checked after inference.

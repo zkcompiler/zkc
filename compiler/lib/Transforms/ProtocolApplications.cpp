@@ -64,7 +64,9 @@ LogicalResult expandApplications(protocol_ir::ProtocolModuleOp module,
         if (isa<protocol_ir::ServiceReferenceType>(value.getType()))
           return value;
         auto policy = policies.get(value.getType());
-        if (!policy || !policy->shared)
+        if ((!policy || !policy->shared) &&
+            !isa<protocol_ir::OracleHandleType,
+                 protocol_ir::OracleSequenceType>(value.getType()))
           return value;
         return protocol_ir::RestrictRolesOp::create(
                    builder, call.getLoc(), value.getType(), value, owners)
@@ -117,12 +119,40 @@ LogicalResult expandApplications(protocol_ir::ProtocolModuleOp module,
           } else if (auto exchange = dyn_cast<protocol_ir::ExchangeOp>(copy)) {
             exchange.setSenderAttr(role(exchange.getSenderAttr()));
             exchange.setReceiverAttr(role(exchange.getReceiverAttr()));
+          } else if (auto constructed =
+                         dyn_cast<protocol_ir::OracleVirtualOp>(copy)) {
+            constructed.setHolderAttr(role(constructed.getHolderAttr()));
+            constructed.setReceiversAttr(mapped(constructed.getReceivers()));
+          } else if (auto input = dyn_cast<protocol_ir::OracleInputOp>(copy)) {
+            input.setHolderAttr(role(input.getHolderAttr()));
+            input.setReceiversAttr(mapped(input.getReceivers()));
+          } else if (auto components =
+                         dyn_cast<protocol_ir::OracleComponentsOp>(copy)) {
+            components.setHolderAttr(role(components.getHolderAttr()));
+            components.setReceiversAttr(mapped(components.getReceivers()));
+          } else if (auto send = dyn_cast<protocol_ir::OracleSendOp>(copy)) {
+            send.setSenderAttr(role(send.getSenderAttr()));
+            send.setReceiversAttr(mapped(send.getReceivers()));
+          } else if (auto append =
+                         dyn_cast<protocol_ir::OracleSequenceAppendOp>(copy)) {
+            append.setRolesAttr(mapped(append.getRoles()));
+          } else if (auto at =
+                         dyn_cast<protocol_ir::OracleSequenceAtOp>(copy)) {
+            at.setRolesAttr(mapped(at.getRoles()));
+          } else if (auto contents =
+                         dyn_cast<protocol_ir::OracleContentsOp>(copy)) {
+            contents.setOwnerAttr(role(contents.getOwnerAttr()));
+          } else if (auto query = dyn_cast<protocol_ir::OracleQueryOp>(copy)) {
+            query.setOwnerAttr(role(query.getOwnerAttr()));
           } else if (auto guard = dyn_cast<protocol_ir::GuardOp>(copy)) {
             guard.setOwnerAttr(role(guard.getOwnerAttr()));
           } else if (auto query = dyn_cast<protocol_ir::QueryOp>(copy)) {
             query.setOwnerAttr(role(query.getOwnerAttr()));
           } else if (auto local = dyn_cast<protocol_ir::LocalCallOp>(copy)) {
             local.setRoleAttr(role(local.getRoleAttr()));
+          } else if (auto assembly =
+                         dyn_cast<protocol_ir::AssembleRolesOp>(copy)) {
+            assembly.setRolesAttr(mapped(assembly.getRoles()));
           } else if (auto view = dyn_cast<protocol_ir::RestrictRolesOp>(copy)) {
             view.setRolesAttr(mapped(view.getRoles()));
           } else if (auto start =

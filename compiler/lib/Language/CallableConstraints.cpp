@@ -18,6 +18,9 @@ CallableConstraints instantiateCallable(TypeInference &types,
     case Parameter::Sort::Natural:
       types.requireKinds(value, {T::Natural}, span);
       break;
+    case Parameter::Sort::OracleKind:
+      types.requireKinds(value, {T::OracleKind}, span);
+      break;
     case Parameter::Sort::Module:
       types.requireKinds(value, {T::Module}, span);
       break;

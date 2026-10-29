@@ -6,6 +6,17 @@ use std::{
     path::{Path, PathBuf},
 };
 
+// One CLI vocabulary for selecting dumps and publishing their sidecar files.
+pub(super) const PHASES: &[&str] = &[
+    "entry",
+    "protocol",
+    "realized",
+    "participant",
+    "exec",
+    "execution",
+    "physical",
+];
+
 pub(crate) struct ReportDirectory {
     path: PathBuf,
 }
@@ -45,16 +56,7 @@ impl ReportDirectory {
                     let Some(name) = phase["phase"].as_str().map(str::to_owned) else {
                         continue;
                     };
-                    if ![
-                        "entry",
-                        "protocol",
-                        "participant",
-                        "exec",
-                        "execution",
-                        "physical",
-                    ]
-                    .contains(&name.as_str())
-                    {
+                    if !PHASES.contains(&name.as_str()) {
                         continue;
                     }
                     if let Some(ir) = phase

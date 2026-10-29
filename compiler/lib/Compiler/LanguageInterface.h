@@ -27,6 +27,7 @@ llvm::Error withInterface(
     const CheckedOriginal &, const Limits &,
     llvm::function_ref<llvm::Error(mlir::ModuleOp, const LanguageInterface &)>);
 llvm::json::Value encodeInterfaceSchema(const InterfaceSchema &);
+llvm::json::Value encodeInterfaceOracle(const InterfaceOracle &);
 llvm::Expected<std::shared_ptr<const InterfaceSchema>>
 decodeHostSchema(const llvm::json::Value &, const Limits &);
 llvm::Expected<llvm::json::Value> parseInterface(llvm::StringRef,

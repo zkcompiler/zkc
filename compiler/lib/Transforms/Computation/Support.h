@@ -1,7 +1,8 @@
 #ifndef ZKC_TRANSFORMS_COMPUTATION_SUPPORT_H
 #define ZKC_TRANSFORMS_COMPUTATION_SUPPORT_H
-#include "../MathematicalSupport.h"
+#include "../FiniteVerification.h"
 #include "../NumericalSelection.h"
+#include "zkc/Dialect/Operations.h"
 #include "zkc/Transforms/Computation.h"
 
 namespace zkc::computation {

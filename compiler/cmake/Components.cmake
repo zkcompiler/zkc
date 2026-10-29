@@ -55,6 +55,7 @@ add_zkc_component(Contracts
   lib/Contracts/Domains.cpp
   lib/Contracts/OperationShapes.cpp
   lib/Contracts/NativePolicy.cpp
+  lib/Contracts/OracleKinds.cpp
   lib/Contracts/SourceTerms.cpp
   lib/Contracts/NativeOrigin.cpp
   lib/Contracts/Representations.cpp
@@ -155,6 +156,7 @@ add_zkc_component(Language
   lib/Language/Placement.cpp
   lib/Language/BodyPlacement.cpp
   lib/Language/Expressions.cpp
+  lib/Language/Oracles.cpp
   lib/Language/TypeInference.cpp
   lib/Language/CallableConstraints.cpp
   lib/Language/OperatorInference.cpp
@@ -232,6 +234,12 @@ add_zkc_component(IR
   lib/Dialect/Commitment/IR/CommitmentDialect.cpp
   lib/Dialect/Protocol/IR/ProtocolDialect.cpp
   lib/Dialect/Protocol/IR/Attributes.cpp
+  lib/Dialect/Protocol/IR/OracleKinds.cpp
+  lib/Dialect/Protocol/IR/Oracles.cpp
+  lib/Dialect/Protocol/IR/OracleDefinitions.cpp
+  lib/Dialect/Protocol/IR/OraclePorts.cpp
+  lib/Dialect/Protocol/IR/OracleShapes.cpp
+  lib/Dialect/Protocol/IR/OracleAnalysis.cpp
   lib/Dialect/MathematicalSemantics.cpp
   lib/Dialect/Protocol/NativePolicy.cpp
   lib/Dialect/Protocol/IR/Protocol.cpp
@@ -306,6 +314,32 @@ add_zkc_component(Transforms
   lib/Transforms/FiniteRealizations.cpp
   lib/Transforms/FiniteVerification.cpp
   lib/Transforms/RealizationEmission.cpp
+  lib/Transforms/OracleVerificationContext.cpp
+  lib/Transforms/OracleRealizationSelection.cpp
+  lib/Transforms/OracleQueryExchange.cpp
+  lib/Transforms/OracleQueryExchangeVerification.cpp
+  lib/Transforms/OracleQueryBlocks.cpp
+  lib/Transforms/OracleSchedule.cpp
+  lib/Transforms/OracleObservations.cpp
+  lib/Transforms/OracleCommonPlan.cpp
+  lib/Transforms/OracleCommonRealization.cpp
+  lib/Transforms/RealizedProtocol.cpp
+  lib/Transforms/OracleCommonVerification.cpp
+  lib/Transforms/OracleRealizationRecord.cpp
+  lib/Transforms/OracleQueryCapacity.cpp
+  lib/Transforms/OracleQueryController.cpp
+  lib/Transforms/OracleQueryControllerVerification.cpp
+  lib/Transforms/OracleAnchorStorage.cpp
+  lib/Transforms/OracleAnchorEmission.cpp
+  lib/Transforms/OracleAnchorVerification.cpp
+  lib/Transforms/OracleLayout.cpp
+  lib/Transforms/OracleMerkle.cpp
+  lib/Transforms/OracleMerkleVerification.cpp
+  lib/Transforms/OracleTableRead.cpp
+  lib/Transforms/OracleTableReadVerification.cpp
+  lib/Transforms/OracleVirtualRecipe.cpp
+  lib/Transforms/OracleVirtualFunctions.cpp
+  lib/Transforms/OracleVirtualFunctionVerification.cpp
   lib/Transforms/CollectionRealization.cpp
   lib/Transforms/ComputationEquations.cpp
   lib/Transforms/ComputationSelection.cpp
@@ -335,6 +369,7 @@ add_zkc_component(Transforms
   lib/Target/StorageSchedule.cpp
 )
 add_zkc_component(Compiler
+  lib/Compiler/OracleObligations.cpp
   lib/Compiler/Host.cpp
   lib/Compiler/AssetSharing.cpp
   lib/Compiler/Language.cpp

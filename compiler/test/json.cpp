@@ -55,5 +55,56 @@ int main() {
     if (!again || *again != *parsed)
       return 1;
   }
-  outs() << "natural markers and public JSON carrier controls passed\n";
+  auto exact = [](StringRef text) {
+    return zkc::parseNaturalJson(text, 4096, 16, "json-invalid", "json-limit");
+  };
+  // Compare every pair, including adjacent values above the signed range.
+  // The independently authored decimal spellings define the expected result.
+  for (StringRef left : {"0", "1", "9007199254740992", "9007199254740993",
+                         "9223372036854775807", "9223372036854775808",
+                         "18446744073709551614", "18446744073709551615"}) {
+    for (StringRef right : {"0", "1", "9007199254740992", "9007199254740993",
+                            "9223372036854775807", "9223372036854775808",
+                            "18446744073709551614", "18446744073709551615"}) {
+      auto a = exact(("{\"value\":[" + left + "],\"flag\":true}").str());
+      auto b = exact(("{\"flag\":true,\"value\":[" + right + "]}").str());
+      if (!a || !b) {
+        if (!a)
+          consumeError(a.takeError());
+        if (!b)
+          consumeError(b.takeError());
+        errs() << "unsigned boundary failed parsing\n";
+        return 1;
+      }
+      if (zkc::equalNaturalJson(*a, *b) != (left == right)) {
+        errs() << "inexact unsigned equality: " << left << " vs " << right;
+        return 1;
+      }
+    }
+  }
+  for (StringRef text :
+       {"18446744073709551616", "9999999999999999999999", "1e0", "1.0", "-0",
+        "+1", "01", R"({"x":1,"\u0078":1})"}) {
+    auto parsed = exact(text);
+    if (parsed) {
+      errs() << "lossy/noncanonical natural JSON accepted: " << text;
+      return 1;
+    }
+    consumeError(parsed.takeError());
+  }
+  if (!zkc::equalNaturalJson(json::Value(1), json::Value(uint64_t(1))) ||
+      zkc::equalNaturalJson(json::Value(1.0), json::Value(1)) ||
+      zkc::equalNaturalJson(json::Value(1.0), json::Value(1.0)) ||
+      zkc::equalNaturalJson(json::Value(-1), json::Value(-1)) ||
+      zkc::equalNaturalJson(json::Array{0, 1}, json::Array{1, 0}) ||
+      zkc::equalNaturalJson(json::Array{0}, json::Array{0, 1}) ||
+      zkc::equalNaturalJson(json::Object{{"x", 1}}, json::Object{{"y", 1}}) ||
+      zkc::equalNaturalJson(json::Object{}, json::Object{{"x", 1}}) ||
+      zkc::equalNaturalJson(json::Value(nullptr), json::Value(false)) ||
+      !zkc::equalNaturalJson(json::Value(nullptr), json::Value(nullptr))) {
+    errs() << "exact natural JSON shape controls failed\n";
+    return 1;
+  }
+  outs()
+      << "natural markers, exact unsigned JSON and carrier controls passed\n";
 }

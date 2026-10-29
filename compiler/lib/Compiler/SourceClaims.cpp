@@ -77,7 +77,7 @@ Error checkSourceClaims(const CheckedOriginal &original, StringRef bytes,
        seams = *actualRoot->get("seams");
   (*actualRoot)["proposals"] = *canonicalRoot->get("proposals");
   (*actualRoot)["seams"] = *canonicalRoot->get("seams");
-  if (*actual != *canonical)
+  if (!zkc::equalNaturalJson(*actual, *canonical))
     return error("source.claim.export",
                  "claims differ from the checked original");
   (*actualRoot)["proposals"] = std::move(proposed);
@@ -89,7 +89,7 @@ Error checkSourceClaims(const CheckedOriginal &original, StringRef bytes,
       return snapshot.takeError();
     return checkComponentContracts(*snapshot, *actualRoot);
   }
-  if (*actual != *canonical)
+  if (!zkc::equalNaturalJson(*actual, *canonical))
     return error("source.claim.export",
                  "claims differ from the checked original");
   return Error::success();

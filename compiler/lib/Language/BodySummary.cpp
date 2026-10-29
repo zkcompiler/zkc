@@ -490,8 +490,20 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
               operands = action.operands;
             else if constexpr (std::is_same_v<T, Projection> ||
                                std::is_same_v<T, Consume> ||
-                               std::is_same_v<T, Restriction>)
+                               std::is_same_v<T, Restriction> ||
+                               std::is_same_v<T, OracleContents> ||
+                               std::is_same_v<T, OracleRows> ||
+                               std::is_same_v<T, OracleForgetRows> ||
+                               std::is_same_v<T, OracleSequenceLength>)
               operands = {action.input};
+            else if constexpr (std::is_same_v<T, OracleSend>)
+              operands = {action.data, action.rows};
+            else if constexpr (std::is_same_v<T, OracleQuery>)
+              operands = {action.handle, action.position};
+            else if constexpr (std::is_same_v<T, OracleSequenceAppend>)
+              operands = {action.prefix, action.element};
+            else if constexpr (std::is_same_v<T, OracleSequenceAt>)
+              operands = {action.input, action.position};
             else if constexpr (std::is_same_v<T, Require>)
               operands = {action.condition};
             else if constexpr (std::is_same_v<T, Exchange>)

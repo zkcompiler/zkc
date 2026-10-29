@@ -1,0 +1,360 @@
+#include "OracleCommonPlan.h"
+#include "OracleVerificationContext.h"
+#include "mlir/IR/OperationSupport.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Support/Refusal.h"
+#include "llvm/ADT/StringSet.h"
+using namespace mlir;
+using namespace llvm;
+namespace zkc::protocol {
+namespace {
+namespace pir = protocol_ir;
+Error refuse() { return error("oracle-common-body"); }
+bool block(const OracleCommonBlock &plan, Block &actual) {
+  if (!equal(actual.getArgumentTypes(), plan.types) ||
+      actual.getOperations().size() != plan.instructions.size())
+    return false;
+  llvm::DenseMap<unsigned, Value> values;
+  for (auto [id, value] : zip(plan.arguments, actual.getArguments()))
+    if (!values.try_emplace(id, value).second)
+      return false;
+  for (auto [expected, op] : zip(plan.instructions, actual)) {
+    if (op.getName().getStringRef() != expected.name ||
+        op.getAttrDictionary() != expected.attributes ||
+        !equal(op.getResultTypes(), expected.types) ||
+        op.getNumOperands() != expected.inputs.size() ||
+        op.getNumRegions() != unsigned(bool(expected.region)))
+      return false;
+    for (auto [id, input] : zip(expected.inputs, op.getOperands()))
+      if (!values.contains(id) || values.lookup(id) != input)
+        return false;
+    if (expected.region && (!hasSingleElement(op.getRegion(0)) ||
+                            !block(*expected.region, op.getRegion(0).front())))
+      return false;
+    for (auto [id, value] : zip(expected.outputs, op.getResults()))
+      if (!values.try_emplace(id, value).second)
+        return false;
+  }
+  return true;
+}
+bool local(const OracleLocalRecipe &recipe, func::FuncOp actual,
+           const SourceExecutionClosure &closure) {
+  if (!actual || !actual.isPrivate() || actual->hasAttr("runtime.region") ||
+      actual.getSymName() != recipe.name || actual.getNumResults() != 1 ||
+      actual.getNumArguments() != recipe.inputs.size() + 1 ||
+      !isa<runtime::ScopeType>(actual.getArgument(0).getType()) ||
+      !equal(actual.getArgumentTypes().drop_front(), recipe.inputs))
+    return false;
+  auto outcome = dyn_cast<exec::OutcomeType>(actual.getResultTypes()[0]);
+  if (!outcome || !equal(outcome.getPayload(), recipe.outputs))
+    return false;
+  auto found = closure.bodies.find(actual.getSymName().str());
+  if (found == closure.bodies.end() ||
+      found->second.size() != recipe.instructions.size() + 1)
+    return false;
+  SmallVector<Value> values(actual.getArguments().drop_front());
+  for (auto [i, expected] : enumerate(recipe.instructions)) {
+    const auto &step = found->second[i];
+    auto op = dyn_cast<exec::ApplyOp>(step.operation);
+    if (!op || !step.regions.empty() ||
+        step.inputs.size() != expected.inputs.size() ||
+        !equal(ValueRange(step.outputs).getTypes(), expected.types) ||
+        op.getSite() != "step_" + std::to_string(i) ||
+        op.getParameters().size() != expected.parameters.size())
+      return false;
+    for (auto [id, input] : zip(expected.inputs, step.inputs))
+      if (id >= values.size() || values[id] != input)
+        return false;
+    for (auto [attribute, parameter] :
+         zip(op.getParameters(), expected.parameters))
+      if (cast<StringAttr>(attribute).getValue() != parameter)
+        return false;
+    auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+        op, op.getBindingAttr());
+    if (!binding || binding.getContract() != expected.binding.contract ||
+        binding.getImplementation() != expected.binding.implementation ||
+        binding.getArguments().size() != expected.binding.arguments.size())
+      return false;
+    for (auto [attribute, argument] :
+         zip(binding.getArguments(), expected.binding.arguments))
+      if (cast<StringAttr>(attribute).getValue() != argument)
+        return false;
+    append_range(values, step.outputs);
+  }
+  const auto &last = found->second.back();
+  if (!isa<exec::ReturnOp>(last.operation) || !last.regions.empty() ||
+      last.inputs.size() != recipe.results.size())
+    return false;
+  for (auto [id, input] : zip(recipe.results, last.inputs))
+    if (id >= values.size() || values[id] != input)
+      return false;
+  return true;
+}
+bool local(const OraclePacketRecipe &recipe, func::FuncOp actual,
+           const SourceExecutionClosure &closure) {
+  if (!actual || actual.getNumArguments() != recipe.inputs.size() + 1 ||
+      actual.getNumResults() != 1 ||
+      !isa<runtime::ScopeType>(actual.getArgument(0).getType()) ||
+      !equal(actual.getArgumentTypes().drop_front(), recipe.inputs))
+    return false;
+  auto outcome = dyn_cast<exec::OutcomeType>(actual.getResultTypes()[0]);
+  if (!outcome || !equal(outcome.getPayload(), recipe.outputs))
+    return false;
+  auto found = closure.bodies.find(actual.getSymName().str());
+  if (found == closure.bodies.end() || found->second.size() != 2)
+    return false;
+  const auto &step = found->second.front();
+  const auto &last = found->second.back();
+  if (!equal(step.inputs, actual.getArguments().drop_front()) ||
+      !equal(ValueRange(step.outputs).getTypes(), recipe.outputs) ||
+      !isa<exec::ReturnOp>(last.operation) || !last.regions.empty() ||
+      !last.outputs.empty() || !equal(last.inputs, step.outputs))
+    return false;
+  if (recipe.pack) {
+    auto pack = dyn_cast<exec::VariantOp>(step.operation);
+    return pack && step.regions.empty() && pack.getAlternative() == "Record" &&
+           pack.getSite() == "packet";
+  }
+  auto match = dyn_cast<exec::MatchOp>(step.operation);
+  if (!match || match.getSite() != "packet" || step.regions.size() != 1 ||
+      match.getAlternatives().size() != 1 ||
+      cast<StringAttr>(match.getAlternatives()[0]).getValue() != "Record")
+    return false;
+  auto fields = step.regions.front();
+  if (!fields || fields.getNumArguments() != recipe.outputs.size() + 1 ||
+      fields.getNumResults() != 1 || !fields->hasAttr("runtime.region") ||
+      !isa<runtime::ScopeType>(fields.getArgument(0).getType()) ||
+      !equal(fields.getArgumentTypes().drop_front(), recipe.outputs) ||
+      fields.getResultTypes()[0] != actual.getResultTypes()[0])
+    return false;
+  auto body = closure.bodies.find(fields.getSymName().str());
+  if (body == closure.bodies.end() || body->second.size() != 1)
+    return false;
+  const auto &finish = body->second.front();
+  return isa<exec::CompleteOp>(finish.operation) && finish.regions.empty() &&
+         finish.outputs.empty() &&
+         equal(finish.inputs, fields.getArguments().drop_front());
+}
+// Every extra declaration is reachable from a checked generated primitive or
+// the realized entry. Original declarations retain their exact body. A spare
+// implementation cannot hide behind an unused symbol in a checked candidate.
+bool inventory(pir::ProtocolModuleOp source, pir::ProtocolModuleOp candidate,
+               ArrayRef<std::string> entries, ArrayRef<Operation *> roots) {
+  llvm::StringSet<> original, allowed;
+  for (auto &op : source.getBody().front()) {
+    auto name = SymbolTable::getSymbolName(&op);
+    if (!name)
+      return false;
+    original.insert(name.getValue());
+    if (isa<pir::OracleDefinitionOp>(op)) {
+      if (SymbolTable::lookupSymbolIn(candidate, name))
+        return false;
+      continue;
+    }
+    auto *actual = SymbolTable::lookupSymbolIn(candidate, name);
+    if (!actual || (!is_contained(entries, name.getValue()) &&
+                    !OperationEquivalence::isEquivalentTo(
+                        &op, actual, OperationEquivalence::IgnoreLocations)))
+      return false;
+    allowed.insert(name.getValue());
+  }
+  SmallVector<Operation *> pending(roots.begin(), roots.end());
+  for (const auto &entry : entries)
+    pending.push_back(SymbolTable::lookupSymbolIn(candidate, entry));
+  llvm::DenseSet<Operation *> seen;
+  while (!pending.empty()) {
+    auto *op = pending.pop_back_val();
+    if (!op || !seen.insert(op).second)
+      continue;
+    auto name = SymbolTable::getSymbolName(op);
+    if (!name || op->getParentOp() != candidate)
+      return false;
+    allowed.insert(name.getValue());
+    if (!original.contains(name.getValue()))
+      if (auto function = dyn_cast<func::FuncOp>(op)) {
+        if (!function.isPrivate() ||
+            (function.getNumArguments() &&
+             isa<runtime::ScopeType>(function.getArgument(0).getType()) &&
+             function->getAttrs().size() != 5))
+          return false;
+        if (function.getNumArguments() &&
+            isa<runtime::ScopeType>(function.getArgument(0).getType()) &&
+            !function->hasAttr("runtime.region")) {
+          Builder builder(candidate.getContext());
+          auto expected =
+              builder.getArrayAttr({name, builder.getArrayAttr({})});
+          if (function->getAttr("runtime.origin") != expected)
+            return false;
+        }
+      }
+    bool good = true;
+    op->walk([&](Operation *nested) {
+      for (auto attribute : nested->getAttrs())
+        attribute.getValue().walk([&](SymbolRefAttr symbol) {
+          if (!symbol.getNestedReferences().empty()) {
+            good = false;
+            return;
+          }
+          auto *target =
+              SymbolTable::lookupSymbolIn(candidate, symbol.getRootReference());
+          if (!target) {
+            good = false;
+            return;
+          }
+          auto targetName = SymbolTable::getSymbolName(target).getValue();
+          if (original.contains(targetName))
+            return;
+          if (!isa<func::FuncOp, runtime::BindingOp>(target)) {
+            good = false;
+            return;
+          }
+          pending.push_back(target);
+        });
+    });
+    if (!good)
+      return false;
+  }
+  for (auto &op : candidate.getBody().front()) {
+    auto name = SymbolTable::getSymbolName(&op);
+    if (!name || !allowed.contains(name.getValue()))
+      return false;
+  }
+  return true;
+}
+} // namespace
+Error checkOracleRealizationModel(
+    const OracleVerificationContext &sourceContext,
+    const OracleVerificationContext &targetContext,
+    ArrayRef<OracleCommonEntryRealization> actualEntries,
+    ArrayRef<OracleRootSelection> selections,
+    OracleAuthentication authentication) {
+  ModuleOp prepared = sourceContext.getModule(),
+           actualModule = targetContext.getModule();
+  auto entries = oracleEntries(prepared);
+  if (!entries)
+    return entries.takeError();
+  if (!actualModule || actualModule == prepared ||
+      actualModule.getContext() != prepared.getContext() ||
+      actualModule->getAttrDictionary() != prepared->getAttrDictionary() ||
+      !hasSingleElement(actualModule.getBody()->getOperations()) ||
+      actualEntries.size() != entries->size())
+    return refuse();
+  auto source = sourceContext.getUnit();
+  auto candidate = targetContext.getUnit();
+  if (source->getAttrDictionary() != candidate->getAttrDictionary())
+    return refuse();
+  SmallVector<Operation *> roots;
+  auto root = [&](func::FuncOp function) {
+    if (function)
+      roots.push_back(function);
+  };
+  for (auto [entry, realized] : zip(*entries, actualEntries)) {
+    if (entry != realized.entry)
+      return refuse();
+    auto requirements = oracleRequirements(prepared, entry, selections);
+    if (!requirements)
+      return requirements.takeError();
+    if (realized.controllers.size() != requirements->controllers.size() ||
+        realized.allocators.size() !=
+            requirements->storage.constructors.size() ||
+        realized.merkle.size() != requirements->storage.constructors.size())
+      return refuse();
+    for (auto [expected, item] :
+         zip(requirements->controllers, realized.controllers)) {
+      if (expected.role != item.role || expected.kind != item.kind ||
+          expected.access != item.access)
+        return refuse();
+      if (auto e = checkOracleQueryController(
+              targetContext, sourceContext, requirements->storage, item.role,
+              item.kind, requirements->capacity, item.body, item.access))
+        return e;
+      const auto &body = item.body;
+      root(body.initialize);
+      root(body.advance);
+      root(body.finish);
+      root(body.evaluate);
+      root(body.contents);
+      for (auto helper : body.resume)
+        root(helper);
+      for (auto helper : body.rowCounts)
+        root(helper);
+      for (auto helper : body.leafCounts)
+        root(helper);
+      for (auto helper : body.constructionCounts)
+        root(helper);
+      for (const auto &constructor : body.constructors) {
+        root(constructor.lookup);
+        root(constructor.functions.answer);
+        for (const auto &query : constructor.functions.queries)
+          root(query.position);
+      }
+    }
+    for (auto [ordinal, constructor] :
+         enumerate(requirements->storage.constructors)) {
+      const auto &functions = realized.merkle[ordinal];
+      if (constructor.scheme.empty()) {
+        if (functions.position || functions.commit || functions.open ||
+            functions.authenticate)
+          return refuse();
+      } else {
+        const auto &choice = requirements->realizations[ordinal];
+        if (auto e =
+                checkOracleMerkle(targetContext, functions, constructor.kind,
+                                  choice.scheme, choice.grouping, choice.order))
+          return e;
+        root(functions.position);
+        root(functions.commit);
+        root(functions.open);
+        root(functions.authenticate);
+      }
+      if (realized.allocators[ordinal].size() != constructor.roles.size())
+        return refuse();
+      for (auto [role, helper] : enumerate(realized.allocators[ordinal])) {
+        if (auto e = checkOracleAnchorAllocator(
+                targetContext, helper, requirements->storage, ordinal, role))
+          return e;
+        root(helper);
+      }
+    }
+    auto plan =
+        planOracleCommon(prepared, entry, *requirements, realized.controllers,
+                         realized.allocators, realized.merkle, authentication);
+    if (!plan)
+      return plan.takeError();
+    if (realized.inputShapes != plan->inputShapes ||
+        realized.resultStores != plan->resultStores ||
+        realized.resultReferences != plan->resultReferences)
+      return refuse();
+    auto program = dyn_cast_or_null<pir::MathematicalOp>(
+        SymbolTable::lookupSymbolIn(candidate, entry));
+    if (!program || program->getAttrDictionary() != plan->attributes ||
+        !hasSingleElement(program.getBody()) ||
+        !block(plan->body, program.getBody().front()) ||
+        realized.locals.size() != plan->locals.size())
+      return refuse();
+    const auto &closure = targetContext.getClosure();
+    for (auto [recipe, helper] : zip(plan->locals, realized.locals)) {
+      auto actual = helper;
+      bool checked = std::visit(
+          [&](const auto &body) {
+            if constexpr (std::is_same_v<std::decay_t<decltype(body)>,
+                                         OracleLocalRecipe> ||
+                          std::is_same_v<std::decay_t<decltype(body)>,
+                                         OraclePacketRecipe>)
+              return local(body, actual, closure);
+            else
+              return checkOracleQueryExchange(targetContext, actual, body);
+          },
+          recipe);
+      if (!checked)
+        return refuse();
+      root(helper);
+    }
+  }
+  if (!inventory(source, candidate, *entries, roots))
+    return refuse();
+  return Error::success();
+}
+} // namespace zkc::protocol
