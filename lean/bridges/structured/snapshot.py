@@ -24,6 +24,17 @@ def ty(value, depth=0):
     """Render only the admitted aggregate grammar, retaining nominal identity."""
     if depth >= 64 or not isinstance(value, list) or not value:
         raise ValueError("invalid structured type")
+    if value == ["indices"]:
+        return ".indices"
+    if value[0] == "groups":
+        _, domain = record(value, 2)
+        return f".groups {text(domain)}"
+    if value[0] == "oracle":
+        _, kind = record(value, 2)
+        return f".oracle ({oracle_kind(kind, depth + 1)})"
+    if value[0] == "oracle_sequence":
+        _, kind, maximum = record(value, 3)
+        return f".oracleSequence ({oracle_kind(kind, depth + 1)}) {lean_render.decimal(maximum, 2**64)}"
     if value[0] == "sequence":
         _, element = record(value, 2)
         return f".sequence ({ty(element, depth + 1)})"
@@ -38,10 +49,78 @@ def ty(value, depth=0):
     return lean_render.ty(value)
 
 
+def oracle_kind(value, depth=0):
+    if depth >= 64:
+        raise ValueError("invalid oracle kind depth")
+    tag, arguments = record(value, 2)
+    if tag != "table" or not isinstance(arguments, list) or len(arguments) not in (1, 2):
+        raise ValueError("invalid oracle kind")
+    type_tag, row = record(arguments[0], 2)
+    if type_tag != "type":
+        raise ValueError("invalid oracle row")
+    rows = "none"
+    if len(arguments) == 2:
+        nat_tag, count = record(arguments[1], 2)
+        if nat_tag != "nat":
+            raise ValueError("invalid oracle extent")
+        rows = f"some {lean_render.decimal(count, 2**64)}"
+    return f".table ({ty(row, depth + 1)}) ({rows})"
+
+
+def oracle_shape(kind, value):
+    oracle_kind(kind)
+    expected = ["rows"] if len(kind[1]) == 1 else []
+    pairs = [record(pair, 2) for pair in record(value)]
+    if [pair[0] for pair in pairs] != expected:
+        raise ValueError("invalid named oracle shape")
+    return seq(pairs, lambda pair: f"({text(pair[0])}, {lean_render.decimal(pair[1], 2**64)})", 16)
+
+
+def oracle_descriptor(tag, args):
+    """Render wire data only; no operation receives semantic admission here."""
+    if tag in ("oracle_input", "oracle_send", "oracle_components", "oracle_virtual"):
+        size = {"oracle_input": 4, "oracle_send": 5, "oracle_components": 3, "oracle_virtual": 4}[tag]
+        record(args, size)
+        declaration = text(args[0]) + " " if tag == "oracle_virtual" else ""
+        holder, receivers, kind = args[1:4] if declaration else args[:3]
+        extra = ""
+        if tag == "oracle_send":
+            if args[3] != ["rows"]:
+                raise ValueError("invalid oracle dimensions")
+            extra = f" {seq(args[3], text, 16)} {oracle_shape(kind, args[4])}"
+        elif tag == "oracle_input":
+            extra = " " + oracle_shape(kind, args[3])
+        constructor = tag.removeprefix("oracle_")
+        return (f".oracle (.{constructor} {declaration}{text(holder)} {seq(receivers, text, 16)} "
+                f"({oracle_kind(kind)}){extra})")
+    if tag in ("oracle_query", "oracle_contents"):
+        owner, kind = record(args, 2)
+        owner_text = f"({optional(owner, text)})" if tag == "oracle_query" else text(owner)
+        return f".oracle (.{tag.removeprefix('oracle_')} {owner_text} ({oracle_kind(kind)}))"
+    if tag == "oracle_shape":
+        kind, dimension = record(args, 2)
+        if dimension != "rows":
+            raise ValueError("invalid oracle dimension")
+        return f".oracle (.shape ({oracle_kind(kind)}) {text(dimension)})"
+    if tag == "oracle_forget_shape":
+        source, target = record(args, 2)
+        return f".oracle (.forgetShape ({oracle_kind(source)}) ({oracle_kind(target)}))"
+    names = {"oracle_sequence_empty": "sequenceEmpty", "oracle_sequence_append": "sequenceAppend",
+             "oracle_sequence_at": "sequenceAt", "oracle_sequence_length": "sequenceLength"}
+    if tag in names:
+        record(args, 3 if tag in ("oracle_sequence_append", "oracle_sequence_at") else 2)
+        kind, maximum = args[:2]
+        roles = " " + seq(args[2], text, 16) if len(args) == 3 else ""
+        return f".oracle (.{names[tag]} ({oracle_kind(kind)}) {lean_render.decimal(maximum, 2**64)}{roles})"
+    raise ValueError("unknown oracle descriptor")
+
+
 def descriptor(value):
     if not isinstance(value, list) or not value:
         raise ValueError("invalid descriptor")
     tag, *args = value
+    if tag.startswith("oracle_"):
+        return oracle_descriptor(tag, args)
     if tag in ("index.less", "index.power_of_two"):
         record(args, 0)
         return ".indexLess" if tag == "index.less" else ".indexPowerOfTwo"
@@ -88,9 +167,9 @@ def descriptor(value):
     if tag == "protocol_apply":
         callee, roles = record(args, 2)
         return f".protocolApply {text(callee)} {seq(roles, text)}"
-    if tag == "restrict":
+    if tag in ("restrict", "assemble"):
         record(args, 1)
-        return f".restrict {seq(args[0], text)}"
+        return f".{tag} {seq(args[0], text, 16)}"
     if tag == "statement":
         relation_name, selectors, acceptance, target = record(args, 4)
         return (f".statement {text(relation_name)} {seq(selectors, text)} "
@@ -183,10 +262,15 @@ def relation(value):
 
 
 def contract_selector(value):
+    if isinstance(value, list) and len(value) == 3 and value[0] == "anchor":
+        _, direction, port = value
+        if direction not in ("input", "output"):
+            raise ValueError("invalid anchor selector direction")
+        return f'⟨.{direction}, {nat(port)}, "", true⟩'
     direction, port, role = record(value, 3)
     if direction not in ("input", "output"):
         raise ValueError("invalid contract selector direction")
-    return f"⟨.{direction}, {nat(port)}, {text(role)}⟩"
+    return f"⟨.{direction}, {nat(port)}, {text(role)}, false⟩"
 
 
 def relation_application(value):
@@ -315,6 +399,10 @@ def function_origin(kind, value):
 
 
 def definition(value):
+    if value[0] == "oracle":
+        _, name, inputs, kind, admissibility, shape, maximum, body = record(value, 8)
+        return (f".oracle ⟨{text(name)}, {seq(inputs, ty)}, ({oracle_kind(kind)}), "
+                f"{text(admissibility)}, {oracle_shape(kind, shape)}, {oracle_shape(kind, maximum)}, ({block(body)})⟩")
     if value[0] == "realize":
         _, name, inputs, outputs, helper = record(value, 5)
         return (f".realization ⟨{text(name)}, {seq(inputs, ty)}, {seq(outputs, ty)}, "

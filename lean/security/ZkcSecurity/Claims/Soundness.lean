@@ -91,7 +91,7 @@ def AdaptiveIdeal (subject : Subject F G art .idealMeaning) (model : Model) (err
     model.queries.allows queries → IsTotalQueryBound prover queries →
     Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>
       (fun result => (claimed.1, result)) <$> subject.verify claimed.1
-        ((policyCodec art.publics model.application).encode claimed.1) claimed.2)).run' ∅}[
+        ((policyCodec art.publics (FiatShamir.DomainReduction.policyData subject.compiled.toCompiled) model.application).encode claimed.1) claimed.2)).run' ∅}[
       subject.falseStatement result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2.1] ≤ error queries
 
 def FixedBytes (subject : Subject F G art .executableBytes) (model : Model) (error : Nat → ENNReal) : Prop :=
@@ -106,7 +106,7 @@ def AdaptiveBytes (subject : Subject F G art .executableBytes) (model : Model) (
     model.queries.allows queries → IsTotalQueryBound prover queries →
     Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>
       (fun accepted => (claimed.1, accepted)) <$> subject.validate codec budget binding claimed.1
-        ((policyCodec art.publics model.application).encode claimed.1) claimed.2)).run' ∅}[
+        ((policyCodec art.publics (FiatShamir.DomainReduction.policyData subject.compiled.toCompiled) model.application).encode claimed.1) claimed.2)).run' ∅}[
       subject.falseStatement result.1 ∧ result.2 = true] ≤ error queries
 
 def Ordinary (subject : Subject F G art endpoint) (model : Model) (error : Nat → ENNReal) : Prop :=
@@ -133,7 +133,7 @@ def WeightedAdaptiveIdeal (subject : Subject F G art .idealMeaning) (model : Mod
     WorstCaseCostBound prover ⟨Typed.keyCharge (schedule.charge queries)⟩ cost →
     Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>
       (fun result => (claimed.1, result)) <$> subject.verify claimed.1
-        ((policyCodec art.publics model.application).encode claimed.1) claimed.2)).run' ∅}[
+        ((policyCodec art.publics (FiatShamir.DomainReduction.policyData subject.compiled.toCompiled) model.application).encode claimed.1) claimed.2)).run' ∅}[
       subject.falseStatement result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2.1] ≤
         cost + model.validatorCost.value queries
 
@@ -154,7 +154,7 @@ def WeightedAdaptiveBytes (subject : Subject F G art .executableBytes) (model : 
     WorstCaseCostBound prover ⟨Typed.keyCharge (schedule.charge queries)⟩ cost →
     Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>
       (fun accepted => (claimed.1, accepted)) <$> subject.validate codec budget binding claimed.1
-        ((policyCodec art.publics model.application).encode claimed.1) claimed.2)).run' ∅}[
+        ((policyCodec art.publics (FiatShamir.DomainReduction.policyData subject.compiled.toCompiled) model.application).encode claimed.1) claimed.2)).run' ∅}[
       subject.falseStatement result.1 ∧ result.2 = true] ≤ cost + model.validatorCost.value queries
 
 def WeightedOrdinary (subject : Subject F G art endpoint) (model : Model) (schedule : ChargeSchedule subject) : Prop :=

@@ -1453,3 +1453,20 @@ declaration of `ZkcSecurity` and `TestsSecurity`, enforces the allowed axioms.
 The axiom closures of their theorems are subsets of `propext`,
 `Classical.choice` and `Quot.sound`; the counterexamples that compute with
 inverses in `ZMod 5` use `decide +kernel` on four or twenty-five cases.
+
+### Logical oracle reader and role assembly
+
+The independent structured reader recognizes the twelve logical oracle descriptors,
+table associated types, bounded handle sequences, virtual declarations, named
+shapes and anchor selectors. `OracleObligations` independently derives and compares
+occurrence-bound condition templates and ordered source-query footprints. This
+comparison does not prove the predicates or admit oracle execution. Native export
+fixtures are reader controls, not source or execution correspondence theorems.
+
+Pointwise assembly uses the existing Domain participant interpretation and the
+occurrence-preserving NormalForm soundness theorem. Different role components
+remain different; partial and absent components retain their meanings. Ordinary
+admission and native payloads exclude logical handles recursively. Oracle execution,
+realization correspondence, ideal-to-Merkle simulation, native VM correctness and
+cryptographic reduction remain separate. No realization stage or receipt link is
+registered by this extension.

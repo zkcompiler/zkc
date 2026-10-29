@@ -9,8 +9,11 @@ A contract-changing PR updates its row, enumerations and affected consumers. Its
 review records identify which consumer boundaries were checked and which remain
 open. Each component implements its own reader; shared generation of signatures
 does not replace independent interpretation or admission. The Lean component is
-the sole writer of `lean/`; changes proposed elsewhere are supplied for that
-owner to integrate. Archived `INTERFACE.md` coordination documents are retired
+the sole writer of `lean/`. Native owners specify their formats in this register
+and `docs/spec`; Lean adapts its readers, interpretations and exact-subject
+artifacts against those landed contracts. A native landing may precede that
+formal adaptation; its row must keep the missing consumer explicit. Archived
+`INTERFACE.md` coordination documents are retired
 as interface authorities; this register and its linked specifications replace
 them.
 
@@ -27,9 +30,9 @@ contract change, not the most recent documentation-only registration.
 | `zkc.source-bindings/0` | [Binding proposals](language/source-ast.md#source-binding-proposals) | Frontend / Language | [WrittenSource.cpp](../../compiler/lib/Language/WrittenSource.cpp) → [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp), future Lean elaboration reader | Partial: retained resolutions; no elaboration soundness theorem | None | [#180](https://github.com/zkcompiler/zkc/pull/180) |
 | `zkc.source-instances/0` | [Closed instances](language/source-ast.md#closed-source-instances) | Frontend / Language | [Compiler](../../compiler/lib/Compiler) → [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp), future Lean elaboration reader | Partial: closed instance associations; call-edge proof open | None | [#180](https://github.com/zkcompiler/zkc/pull/180) |
 | `zkc.source-correspondence/0` | [Elaboration associations](language/source-ast.md#checked-source-artifact) | Frontend / Language | [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp) → future Lean correspondence checker | Partial: producer and native association checks; proof open | Proposed source-to-admitted connection | [#180](https://github.com/zkcompiler/zkc/pull/180) |
-| Structured source, version 0 | [Structured source](formats/structured-source.md) | IR / Protocol | [StructuredSource.cpp](../../compiler/lib/Compiler/StructuredSource.cpp) → [Lean structured reader](../../lean/Zkc/Source/Structured) | Partial: native oracle/assemble vocabulary; Lean integration pending | Existing source interpretation; no oracle execution admission | [#177](https://github.com/zkcompiler/zkc/pull/177) |
-| Logical oracle operations and kinds, version 0 | [Protocol oracles](ir/protocols.md#logical-oracle-kinds-and-handles), [wire operations](formats/structured-source.md#logical-oracle-vocabulary) | IR / Protocol | [OracleOps.td](../../compiler/include/zkc/Dialect/Protocol/IR/OracleOps.td), [Protocol formation](../../compiler/lib/Dialect/Protocol/IR/Oracles.cpp) → [realization](../../compiler/lib/Transforms/OracleCommonRealization.cpp), frontend emission, Lean reader | Partial: native table/virtual semantics and realization; full frontend spelling and Lean semantics pending | No new registered claim stage | [#177](https://github.com/zkcompiler/zkc/pull/177) |
-| `zkc.oracle-obligations/0` | [Oracle proposals](formats/structured-source.md#oracle-obligation-proposals) | IR / Protocol | [OracleObligations.cpp](../../compiler/lib/Compiler/OracleObligations.cpp) → native comparison; Lean independent derivation pending integration | Partial: occurrence-bound templates and footprints; no predicate discharge | None | [#177](https://github.com/zkcompiler/zkc/pull/177) |
+| Structured source, version 0 | [Structured source](formats/structured-source.md) | IR / Protocol | [StructuredSource.cpp](../../compiler/lib/Compiler/StructuredSource.cpp) → [Lean structured reader](../../lean/Zkc/Source/Structured) | Partial: exact native/Lean oracle and assembly vocabulary; oracle execution is excluded from the ordinary Lean profile | Existing source interpretation; no oracle execution admission | [#177](https://github.com/zkcompiler/zkc/pull/177) |
+| Logical oracle operations and kinds, version 0 | [Protocol oracles](ir/protocols.md#logical-oracle-kinds-and-handles), [wire operations](formats/structured-source.md#logical-oracle-vocabulary) | IR / Protocol | [OracleOps.td](../../compiler/include/zkc/Dialect/Protocol/IR/OracleOps.td), [Protocol formation](../../compiler/lib/Dialect/Protocol/IR/Oracles.cpp) → [realization](../../compiler/lib/Transforms/OracleCommonRealization.cpp), frontend emission, Lean reader | Partial: native table/virtual semantics and realization, exact Lean wire/shape reading; full frontend spelling and Lean oracle execution pending | No new registered claim stage | [#177](https://github.com/zkcompiler/zkc/pull/177) |
+| `zkc.oracle-obligations/0` | [Oracle proposals](formats/structured-source.md#oracle-obligation-proposals) | IR / Protocol | [OracleObligations.cpp](../../compiler/lib/Compiler/OracleObligations.cpp) → native comparison and Lean independent derivation | Partial: independently checked occurrence-bound templates and footprints; no predicate discharge | None | [#177](https://github.com/zkcompiler/zkc/pull/177) |
 | `zkc.oracle-realization/0` | [Realization record](formats/oracle-realization.md) | IR / Transforms | [OracleRealizationRecord.cpp](../../compiler/lib/Transforms/OracleRealizationRecord.cpp) → [actual-body reader](../../compiler/lib/Transforms/OracleCommonVerification.cpp), future Lean realization reader | Partial: native checked table queries and fixed base-query blocks; Lean simulation open | Realization is a compiler boundary; `realization.correspondence` remains unregistered | [#177](https://github.com/zkcompiler/zkc/pull/177) |
 | Realization selection, C++ API | [Requested policy](formats/oracle-realization.md#json-envelope-and-limits) | IR / Compiler | [RunOptions](../../compiler/include/zkc/Compiler/Run.h) → [selection admission](../../compiler/lib/Transforms/OracleRealizationSelection.cpp) | Partial: explicit C++ policy; frontend/CLI/SDK producer pending | None | [#177](https://github.com/zkcompiler/zkc/pull/177) |
 | `zkc.constructed-participant/0` | [Constructed participants](formats/constructed-participant.md) | IR / Construction | [Compiler](../../compiler/lib/Compiler) → [structured bridge](../../lean/bridges/structured), [Construction](../../lean/Zkc/Construction) | Implemented within admitted profiles | Supplies subjects for `construction.checked`; export alone does not discharge it | [#173](https://github.com/zkcompiler/zkc/pull/173) |
@@ -142,11 +145,15 @@ not pass it.
   source export must preserve source associations through elaboration.
 - IR preserves anchors, holder/receiver custody, named shapes, ordered domain
   failures, virtual dependencies and complete realization records. Fixed base
-  query blocks are implemented; dynamic virtual blocks and FRI index maps are
-  the next delivery unit.
-- Lean integrates the logical wire reader and recursive handle exclusion, then
-  owns oracle execution, realization-stage/link registration, independent record
-  interpretation and the required simulation. Unknown profiles remain refused.
+  query blocks are implemented; dynamic virtual blocks and FRI follow the native
+  MLIR and shared-catalog foundation. IR owns the index vocabulary, application
+  correspondence format and catalog projection schema; Lean interprets their
+  landed specifications independently.
+- Lean reads the exact logical wire vocabulary and independently derives oracle
+  obligation proposals. Recursive handle exclusion keeps these outside ordinary
+  execution and data codecs. Oracle execution, realization-stage/link registration,
+  independent realization-record interpretation and its simulation remain open.
+  Unknown profiles remain refused.
 - Runtime installs quartic Keccak rows and the agreed grinding operation, and
   validates actual request bytes, authority, resource accounting and failure
   successors. An installed signature alone does not prove its implementation.

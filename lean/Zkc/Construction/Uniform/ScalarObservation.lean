@@ -91,7 +91,7 @@ theorem simulation {routing : Original.Routing} {repeated : Bool}
       | action _ allowed support =>
         cases operation with
         | receive ty site sender =>
-          have present : ty.isService = false ∧ ∃ origin,
+          have present : ty.isHandle = false ∧ ∃ origin,
               routing.message frames site sender routing.context.validator = some origin := by
             simpa only [Original.ActionCovered, mode, profile, Original.Routing.self] using covered
           obtain ⟨_, origin, route⟩ := present
@@ -103,7 +103,7 @@ theorem simulation {routing : Original.Routing} {repeated : Bool}
               Occurrence.erase, CommonAdapter.project, SourceProcess.sourceView,
               SourceProcess.receive, operations]
             refine ⟨Original.Simulation.call _ (fun reply => ?_)⟩
-            simp only [Domain.Payload.ofValue, Ty.isService, ↓reduceDIte, Original.record,
+            simp only [Domain.Payload.ofValue, Ty.isHandle, ↓reduceDIte, Original.record,
               PIR.Process.bind, PIR.Process.interpret, operations, event, mapped]
             rw [mapped]
             refine Original.Simulation.call _ (fun ignored => ?_)
@@ -115,7 +115,7 @@ theorem simulation {routing : Original.Routing} {repeated : Bool}
               Occurrence.erase, CommonAdapter.project, SourceProcess.sourceView,
               SourceProcess.receive, operations]
             refine ⟨Original.Simulation.call _ (fun reply => ?_)⟩
-            simp only [Domain.Payload.ofValue, Ty.isService, ↓reduceDIte, Original.record,
+            simp only [Domain.Payload.ofValue, Ty.isHandle, ↓reduceDIte, Original.record,
               PIR.Process.bind, PIR.Process.interpret, operations, event, mapped]
             rw [mapped]
             refine Original.Simulation.call _ (fun ignored => ?_)
@@ -127,7 +127,7 @@ theorem simulation {routing : Original.Routing} {repeated : Bool}
               Occurrence.erase, CommonAdapter.project, SourceProcess.sourceView,
               SourceProcess.receive, operations]
             refine ⟨Original.Simulation.call _ (fun reply => ?_)⟩
-            simp only [Domain.Payload.ofValue, Ty.isService, ↓reduceDIte, Original.record,
+            simp only [Domain.Payload.ofValue, Ty.isHandle, ↓reduceDIte, Original.record,
               PIR.Process.bind, PIR.Process.interpret, operations, event, mapped]
             rw [mapped]
             refine Original.Simulation.call _ (fun ignored => ?_)
@@ -141,7 +141,7 @@ theorem simulation {routing : Original.Routing} {repeated : Bool}
           cases allowed with
           | boolean =>
             simp only [fold_call, Original.operations, profile,
-              Original.send, mode, route, Domain.Payload.ofValue, Ty.isService, ↓reduceDIte,
+              Original.send, mode, route, Domain.Payload.ofValue, Ty.isHandle, ↓reduceDIte,
               Original.record, PIR.Process.bind, PIR.Process.interpret, Occurrence.erase,
               CommonAdapter.project, SourceProcess.sourceView, SourceProcess.send,
               Payload.ofValue, DomainAdapter.embedPayload, operations, event, mapped]
@@ -151,7 +151,7 @@ theorem simulation {routing : Original.Routing} {repeated : Bool}
             simpa only [history, List.map_append, List.map_cons, List.map_nil, event, mapped] using Classical.choice current
           | field name =>
             simp only [fold_call, Original.operations, profile,
-              Original.send, mode, route, Domain.Payload.ofValue, Ty.isService, ↓reduceDIte,
+              Original.send, mode, route, Domain.Payload.ofValue, Ty.isHandle, ↓reduceDIte,
               Original.record, PIR.Process.bind, PIR.Process.interpret, Occurrence.erase,
               CommonAdapter.project, SourceProcess.sourceView, SourceProcess.send,
               Payload.ofValue, DomainAdapter.embedPayload, operations, event, mapped]
@@ -161,7 +161,7 @@ theorem simulation {routing : Original.Routing} {repeated : Bool}
             simpa only [history, List.map_append, List.map_cons, List.map_nil, event, mapped] using Classical.choice current
           | group name =>
             simp only [fold_call, Original.operations, profile,
-              Original.send, mode, route, Domain.Payload.ofValue, Ty.isService, ↓reduceDIte,
+              Original.send, mode, route, Domain.Payload.ofValue, Ty.isHandle, ↓reduceDIte,
               Original.record, PIR.Process.bind, PIR.Process.interpret, Occurrence.erase,
               CommonAdapter.project, SourceProcess.sourceView, SourceProcess.send,
               Payload.ofValue, DomainAdapter.embedPayload, operations, event, mapped]

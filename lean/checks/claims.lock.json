@@ -31,6 +31,12 @@
       "structural": "483ddfc4478794cf",
       "explicit": "366dd12dbb42433d"
     },
+    "Zkc.Construction.ConnectionAdmission.refused": {
+      "package": "main",
+      "module": "Zkc.Construction.ConnectionAdmission",
+      "structural": "c279e877b6107e24",
+      "explicit": "3e23a8a952f40a35"
+    },
     "Zkc.Construction.Domain.Payload.ofValue_value": {
       "package": "main",
       "module": "Zkc.Construction.DomainTranscript",
@@ -48,6 +54,18 @@
       "module": "Zkc.Construction.DomainPublicBinding",
       "structural": "0df83916aba6c60b",
       "explicit": "3ed0ba22e103e2ce"
+    },
+    "Zkc.Construction.SourceConnection.Connected.inputABI_unique": {
+      "package": "main",
+      "module": "Zkc.Construction.SourceConnection",
+      "structural": "ac507f90654207bf",
+      "explicit": "d49ed71c3ce43495"
+    },
+    "Zkc.Construction.SourceConnection.ofRootCertificate": {
+      "package": "main",
+      "module": "Zkc.Construction.ConnectionCertificateAdmission",
+      "structural": "32650d63bdea7c1c",
+      "explicit": "2367b2c96bc793dd"
     },
     "Zkc.Executable.CanonicalNormalization.accepted_sound": {
       "package": "main",
@@ -96,12 +114,6 @@
       "module": "Zkc.Protocols.Sumcheck.Multilinear.Reduction",
       "structural": "71e48dc7c3207e26",
       "explicit": "74ce1d3041b86b57"
-    },
-    "Zkc.Source.Common.Native.Snapshot.check_parts": {
-      "package": "main",
-      "module": "Zkc.Source.Common.Import",
-      "structural": "85f4ead875235976",
-      "explicit": "1715e1d82d0bbace"
     },
     "Zkc.Source.Structured.Imported.exactSubject": {
       "package": "main",
@@ -271,29 +283,77 @@
       "structural": "69a00887ad5d7bc8",
       "explicit": "fdcae734f576b015"
     },
-    "ZkcExamples.Structured.ChaumPedersenNormalForms.verifier_process": {
+    "ZkcExamples.NativePrograms.SchnorrInputs.kernel_admission": {
       "package": "main",
-      "module": "ZkcExamples.Structured.ChaumPedersenNormalForms",
-      "structural": "51a9c78e8c696ac7",
-      "explicit": "71819b6f6657fbc1"
+      "module": "ZkcExamples.NativePrograms.SchnorrInputs",
+      "structural": "814c994c0316518b",
+      "explicit": "43e988e9dd4cd4cf"
     },
-    "ZkcExamples.Structured.GkrRootNormalForms.verifierLayer_process": {
+    "ZkcExamples.NativePrograms.SumcheckInputs.kernel_admission": {
       "package": "main",
-      "module": "ZkcExamples.Structured.GkrRootNormalForms",
-      "structural": "3b158250a39b794d",
-      "explicit": "36e304f58b45f506"
+      "module": "ZkcExamples.NativePrograms.SumcheckInputs",
+      "structural": "487f93e90a56dd43",
+      "explicit": "d1bf06fc33551901"
     },
-    "ZkcExamples.Structured.GkrRootNormalForms.verifier_participant": {
+    "ZkcExamples.Structured.Generated.Connections.SmallSumcheck.producerConnected": {
       "package": "main",
-      "module": "ZkcExamples.Structured.GkrRootNormalForms",
-      "structural": "9da48ee6313ebb9d",
-      "explicit": "779ac2e8400928e4"
+      "module": "ZkcExamples.Structured.Generated.Connections.SmallSumcheck",
+      "structural": "0f3988dfefff32d6",
+      "explicit": "4e2550976f130db4"
     },
-    "ZkcExamples.Structured.GkrRoundsNormalForms.verifierRounds_invoke": {
+    "ZkcExamples.Structured.Generated.Connections.SmallSumcheck.validatorConnected": {
       "package": "main",
-      "module": "ZkcExamples.Structured.GkrRoundsNormalForms",
-      "structural": "2eb060c87b5e3761",
-      "explicit": "59b48b7547b30107"
+      "module": "ZkcExamples.Structured.Generated.Connections.SmallSumcheck",
+      "structural": "c1191af4fea94abb",
+      "explicit": "b33fd18c7dae881d"
+    },
+    "ZkcExamples.Structured.Generated.Connections.TwoSums.producerConnected": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.Generated.Connections.TwoSums",
+      "structural": "d61b834059479e61",
+      "explicit": "3a2f59163d89f946"
+    },
+    "ZkcExamples.Structured.Generated.Connections.TwoSums.validatorConnected": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.Generated.Connections.TwoSums",
+      "structural": "13de995b45601b98",
+      "explicit": "99c6f832c794617d"
+    },
+    "ZkcExamples.Structured.Generated.Presentations.Gkr.Root.verifierLayer_process": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.Generated.Presentations.Gkr",
+      "structural": "4af3e04bb819db30",
+      "explicit": "4f1790e5443c75ac"
+    },
+    "ZkcExamples.Structured.Generated.Presentations.Gkr.Root.verifier_participant": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.Generated.Presentations.Gkr",
+      "structural": "6ab5a5a319550e2f",
+      "explicit": "57981bfb854e66fa"
+    },
+    "ZkcExamples.Structured.Generated.Presentations.Gkr.Rounds.verifierRounds_invocation": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.Generated.Presentations.Gkr",
+      "structural": "6d6f73bb2f8901ff",
+      "explicit": "d28001bb7a8b8e95"
+    },
+    "ZkcExamples.Structured.Generated.Scalar.ChaumPedersen.Root.verifier_process": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.Generated.Scalar.ChaumPedersen",
+      "structural": "d0f7fd9aed83dd39",
+      "explicit": "8e701a6daec19c6a"
+    },
+    "ZkcExamples.Structured.Generated.Scalar.Okamoto.Root.verifier_process": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.Generated.Scalar.Okamoto",
+      "structural": "9c569a0a20c8d2c0",
+      "explicit": "feb56877ea759fc2"
+    },
+    "ZkcExamples.Structured.Generated.Scalar.SchnorrAnd.Root.verifier_process": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.Generated.Scalar.SchnorrAnd",
+      "structural": "1d424b6a78c559b5",
+      "explicit": "52fcd668e9b04744"
     },
     "ZkcExamples.Structured.GkrSourceVerifier.verifier_reads": {
       "package": "main",
@@ -330,18 +390,6 @@
       "module": "ZkcExamples.Structured.OkamotoNormalForms",
       "structural": "2f8899e04deb3a1f",
       "explicit": "c4aadad510592cd9"
-    },
-    "ZkcExamples.Structured.OkamotoNormalForms.verifier_process": {
-      "package": "main",
-      "module": "ZkcExamples.Structured.OkamotoNormalForms",
-      "structural": "e3e19c4bcc69ccb4",
-      "explicit": "0a9db410a499cb11"
-    },
-    "ZkcExamples.Structured.SchnorrAndNormalForms.verifier_process": {
-      "package": "main",
-      "module": "ZkcExamples.Structured.SchnorrAndNormalForms",
-      "structural": "3be7837ae25cb7aa",
-      "explicit": "92137c2b4c8f12db"
     },
     "ZkcExamples.Structured.SchnorrBinding.target_special_soundness": {
       "package": "main",

@@ -59,18 +59,18 @@ noncomputable def proved_binding (application : String) :
   { soundness .idealMeaning .adaptive ⟨application⟩ PUnit.unit with
     hypotheses := [{ identifier := "binding.statement-determination"
                      category := .binding .statementDetermination
-                     claim := Zkc.Transcript.Determined (policyCodec (F := F) (G := G) artifacts.publics application).encode
-                     status := .proved (policyCodec (F := F) (G := G) artifacts.publics application).determined }] }
+                     claim := Zkc.Transcript.Determined (policyCodec (F := F) (G := G) artifacts.publics (by rfl) application).encode
+                     status := .proved (policyCodec (F := F) (G := G) artifacts.publics (by rfl) application).determined }] }
 
 /-- An actual assumption binder in a .proved term must be reported as a premise. -/
 noncomputable def assumed_binding (application : String)
-    (assumption : Zkc.Transcript.Determined (policyCodec (F := F) (G := G) artifacts.publics application).encode) :
+    (assumption : Zkc.Transcript.Determined (policyCodec (F := F) (G := G) artifacts.publics (by rfl) application).encode) :
     SoundnessEvidence (F := F) (G := G) artifacts .idealMeaning .adaptive
       Contract.falseStatement (Regime.exact F) :=
   { proved_binding application with
     hypotheses := [{ identifier := "binding.statement-determination"
                      category := .binding .statementDetermination
-                     claim := Zkc.Transcript.Determined (policyCodec (F := F) (G := G) artifacts.publics application).encode
+                     claim := Zkc.Transcript.Determined (policyCodec (F := F) (G := G) artifacts.publics (by rfl) application).encode
                      status := .proved assumption }] }
 
 /-- Merely having an unused propositional binder does not make a proof assumed. -/
@@ -81,7 +81,7 @@ noncomputable def unused_assumption_binding (application : String) (_assumption 
 
 /-- Fact wraps an actual proposition even though Fact itself is Type-valued. -/
 noncomputable def fact_binding (application : String)
-    [Fact (Zkc.Transcript.Determined (policyCodec (F := F) (G := G) artifacts.publics application).encode)] :
+    [Fact (Zkc.Transcript.Determined (policyCodec (F := F) (G := G) artifacts.publics (by rfl) application).encode)] :
     SoundnessEvidence (F := F) (G := G) artifacts .idealMeaning .adaptive
       Contract.falseStatement (Regime.exact F) :=
   assumed_binding application Fact.out
@@ -95,7 +95,7 @@ noncomputable def inhabited_false_binding (application : String) [Inhabited Fals
 /-- A proof-carrying instance must remain a premise even when its proposition
 is the actual named hypothesis rather than False. -/
 noncomputable def inhabited_proof_binding (application : String)
-    [Inhabited (Zkc.Transcript.Determined (policyCodec (F := F) (G := G) artifacts.publics application).encode)] :
+    [Inhabited (Zkc.Transcript.Determined (policyCodec (F := F) (G := G) artifacts.publics (by rfl) application).encode)] :
     SoundnessEvidence (F := F) (G := G) artifacts .idealMeaning .adaptive
       Contract.falseStatement (Regime.exact F) :=
   assumed_binding application default
@@ -103,7 +103,7 @@ noncomputable def inhabited_proof_binding (application : String)
 /-- Raising a proof into Type does not make it an ordinary model carrier. -/
 noncomputable def lifted_proof_binding (application : String)
     [Inhabited (PLift (Zkc.Transcript.Determined
-      (policyCodec (F := F) (G := G) artifacts.publics application).encode))] :
+      (policyCodec (F := F) (G := G) artifacts.publics (by rfl) application).encode))] :
     SoundnessEvidence (F := F) (G := G) artifacts .idealMeaning .adaptive
       Contract.falseStatement (Regime.exact F) :=
   assumed_binding application (default : PLift _).down

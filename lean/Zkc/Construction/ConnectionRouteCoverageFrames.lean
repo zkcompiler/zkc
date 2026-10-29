@@ -20,7 +20,7 @@ def ReadReturns (model : DomainModel) (role : Nat) (scopes : List (List Nat))
 
 theorem data_of_encode {model : DomainModel} {ty : Ty} {value : model.Value ty}
     {physical : Domain.Value model.toCarriers} (encoded : Domain.Value.encode ty value = some physical) :
-    ty.isService = false := by
+    ty.isHandle = false := by
   unfold Domain.Value.encode Domain.Payload.ofValue at encoded
   split at encoded
   · assumption

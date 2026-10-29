@@ -43,6 +43,7 @@ def Carriers.valueType (carriers : Carriers) (ty : Ty) : String :=
   | .domain model, .field d => paren model ++ ".Field " ++ quoted d
   | .domain model, .vector d => app "List" [paren (paren model ++ ".Field " ++ quoted d)]
   | .domain model, .group d => paren model ++ ".Group " ++ quoted d
+  | _, .indices | _, .groups _ | _, .oracle _ | _, .oracleSequence ..
   | _, .sequence _ | _, .product .. => app carriers.value [tyText ty]
 
 def emptyLabels : (Δ : Scope) → Values (fun _ => Option String) Δ

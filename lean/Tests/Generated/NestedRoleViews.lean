@@ -24,7 +24,7 @@ set_option linter.unusedTactic false
 noncomputable section
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
 
-abbrev program : Program := Tests.Generators.RoleViewControls.nestedProgram
+abbrev program : Program := Tests.StructuredNestedRoleData.program
 abbrev payload := program.payload
 abbrev calleeKeys := Tests.Generated.NestedRoleBindings.calleeKeys
 

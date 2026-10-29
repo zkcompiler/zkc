@@ -33,25 +33,11 @@ structure BoundarySelector (signature : ProtocolSignature) (type : Ty) where
 
 def BoundarySelector.erase {signature : ProtocolSignature} {type : Ty}
     (selector : BoundarySelector signature type) : ContractSelector :=
-  ⟨selector.port.direction, selector.port.index, signature.roles.get selector.role⟩
+  ⟨selector.port.direction, selector.port.index, signature.roles.get selector.role, false⟩
 
 structure BoundaryValuation (Value : Ty → Type) (inputs outputs : List Ty) where
   inputs : Nat → Values (Component Value) inputs
   outputs : Nat → Values (Component Value) outputs
-
-/-- Logical proof labels are separate from operational site names. Retained
-repeat does not change ProtocolContext between iterations. Frames record checked
-tree positions and explicitly chosen indices; they are not execution traces and
-do not establish that a call or iteration was reached. -/
-inductive InvocationFrame where
-  | application (caller : Nat) (position : List Nat)
-  | iteration (owner : Nat) (position : List Nat) (index : Nat)
-  deriving DecidableEq, Repr
-
-structure InvocationCoordinate where
-  root : Nat
-  frames : List InvocationFrame := []
-  deriving DecidableEq, Repr
 
 def BoundarySelector.read {signature : ProtocolSignature} {type : Ty} {Value : Ty → Type}
     (selector : BoundarySelector signature type) (context : ProtocolContext)

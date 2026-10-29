@@ -326,6 +326,7 @@ import Zkc.Source.RegionView
 import Zkc.Source.RoleFamily
 import Zkc.Source.ScalarRegion
 import Zkc.Source.Structure
+import Zkc.Source.Structured.Addresses
 import Zkc.Source.Structured.Admission
 import Zkc.Source.Structured.Algebra
 import Zkc.Source.Structured.ApplicationMetadata
@@ -430,6 +431,7 @@ import Zkc.Source.Structured.OpenAdmission
 import Zkc.Source.Structured.OpenLaws
 import Zkc.Source.Structured.OpenMeaning
 import Zkc.Source.Structured.Operations
+import Zkc.Source.Structured.OracleObligations
 import Zkc.Source.Structured.Origin
 import Zkc.Source.Structured.OutputSelection
 import Zkc.Source.Structured.Participant
@@ -670,6 +672,7 @@ import Tests.StructuredApplicationBounds
 import Tests.StructuredApplicationMetadata
 import Tests.StructuredApplicationSemantics
 import Tests.StructuredApplications
+import Tests.StructuredAssembly
 import Tests.StructuredAssociations
 import Tests.StructuredAvailability
 import Tests.StructuredBindings
@@ -698,12 +701,16 @@ import Tests.StructuredLinking
 import Tests.StructuredMapClients
 import Tests.StructuredMapRestrictions
 import Tests.StructuredMaps
+import Tests.StructuredNestedRoleData
 import Tests.StructuredNormalFormComponents
 import Tests.StructuredNormalForms
 import Tests.StructuredNormalizerSources
 import Tests.StructuredOccurrenceNormalForm
 import Tests.StructuredOpenAdmission
 import Tests.StructuredOpenEvaluation
+import Tests.StructuredOracleAdmission
+import Tests.StructuredOracleFormat
+import Tests.StructuredOracleObligations
 import Tests.StructuredOrigin
 import Tests.StructuredOriginDepth
 import Tests.StructuredOriginFixture

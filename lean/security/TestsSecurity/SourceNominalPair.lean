@@ -5,7 +5,7 @@ public import ZkcSecurity.Source.PairRouting
 @[expose] public section
 
 /-! Honest messages retain nominal products and groups. Host-type equality
-cannot change the message sort, and aggregate service capabilities cannot be
+cannot change the message sort, and aggregate capabilities cannot be
 smuggled through the data rule. The shared fold law retains the full history. -/
 set_option autoImplicit false
 namespace TestsSecurity.SourceNominalPair
@@ -21,7 +21,7 @@ def send (ty : Ty) (value : carriers.Value ty) :
 def receive (ty : Ty) : PIR.Process (Occurrence.signature carriers) (carriers.Value ty) :=
   .call (.action (.receive ty "message" 0)) .done
 
-theorem message (ty : Ty) (data : ty.isService = false) (value : carriers.Value ty) :
+theorem message (ty : Ty) (data : ty.isHandle = false) (value : carriers.Value ty) :
     Pair scope (fun _ received => received = value) (send ty value) (receive ty) := by
   apply Pair.message ty "message" 0 1 value data ⟨rfl, rfl⟩
   exact .done rfl
@@ -45,7 +45,7 @@ private def receivedType {A : Type} : PIR.Process (Occurrence.signature carriers
 private theorem message_boundary {A B : Type} {post : A → B → Prop}
     {left : PIR.Process (Occurrence.signature carriers) A}
     {right : PIR.Process (Occurrence.signature carriers) B} (paired : Pair scope post left right) :
-    ∀ ty, sentType left = some ty → ty.isService = false ∧ receivedType right = some ty := by
+    ∀ ty, sentType left = some ty → ty.isHandle = false ∧ receivedType right = some ty := by
   cases paired <;> simp_all [sentType, receivedType]
 
 /-- Equal host types do not equate nominal group and field messages. -/
@@ -67,8 +67,18 @@ theorem no_capability_packet (handle : Nat) :
   have boundary := message_boundary alleged _ rfl
   cases boundary.1
 
+/-- An empty sequence cannot hide the capability in its element schema. -/
+theorem no_empty_oracle_packet :
+    ¬ Pair scope (fun _ _ => True)
+      (send (carriers := carriers) (.sequence (.oracle (.table (.field "scalar") none))) [])
+      (receive (.sequence (.oracle (.table (.field "scalar") none)))) := by
+  intro alleged
+  have boundary := message_boundary alleged _ rfl
+  cases boundary.1
+
 #print axioms message
 #print axioms distinct_sorts
 #print axioms no_capability_packet
+#print axioms no_empty_oracle_packet
 #print axioms ZkcSecurity.Source.publicFoldLaws
 end TestsSecurity.SourceNominalPair

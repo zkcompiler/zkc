@@ -37,10 +37,10 @@ def ActionCovered (routing : Routing) (frames : Frames) :
               routing.delivery frames site field sender = some (draw, message) ∧
               draw.request = some (.draw field)
           | _ => False
-      | _, _ => ty.isService = false ∧
+      | _, _ => ty.isHandle = false ∧
           ∃ origin, routing.message frames site sender routing.self = some origin
   | @Participant.Action.send _ _ _ _ ty site receiver _ =>
-      ty.isService = false ∧
+      ty.isHandle = false ∧
         ∃ origin, routing.message frames site routing.self receiver = some origin
   | .query site field (.cons handle .nil) =>
       (routing.mode = .validator ∧ ∃ origin,
@@ -120,5 +120,9 @@ theorem RouteCoverage.action_required {routing : Routing} {frames final : Frames
     ActionCovered routing frames operation := by
   cases covered with
   | action _ _ _ present _ => exact present
+
+-- Materialize these equations in their owning module. Lazy copies in consumers
+-- can refer to different private splitters. No global simp rule is installed.
+attribute [local simp] ActionCovered.eq_2
 
 end Zkc.Construction.Original

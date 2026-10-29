@@ -72,14 +72,14 @@ theorem round_fits (shape : Shape) (occurrences : Occurrences shape) (helpers : 
       Domain.Calculations.fieldEqual (F := F) (G := G), lowResolved, highResolved, drawResolved, deliveryResolved,
       firstRequest, secondRequest, deliveryRequest, occurrences.firstSchema, occurrences.secondSchema, shape.suite]
     unfolding [roundPrefix, List.take, Code.instructions, roundCode, roundBody, ProgramShape.carried,
-      Domain.evaluate, Domain.step, PIR.Yields, Structured.Ty.isService, Bool.not_false, Bool.not_true, drawOrigin]
+      Domain.evaluate, Domain.step, PIR.Yields, Structured.Ty.isHandle, Bool.not_false, Bool.not_true, drawOrigin]
   intros ignored low ignored1 ignored2 ignored3 ignored4 ignored5 ignored6 ignored7 ignored8 ignored9 high
     ignored10 ignored11 ignored12 ignored13 ignored14 ignored15 ignored16 ignored17 ignored18 ignored19 ignored20 ignored21 ignored22
   by_cases valid : scalar = low + high
   all_goals simp only [valid, decide_true, decide_false]
   all_goals normalize_artifact_operations [lowResolved, highResolved, drawResolved, deliveryResolved,
       firstRequest, secondRequest, deliveryRequest, shape.suite]
-    unfolding [Domain.evaluate, Domain.step, PIR.Yields, Structured.Ty.isService, Bool.not_false, Bool.not_true, drawOrigin]
+    unfolding [Domain.evaluate, Domain.step, PIR.Yields, Structured.Ty.isHandle, Bool.not_false, Bool.not_true, drawOrigin]
   intro ignored24 ignored25 ignored26 ignored27 ignored28 ignored29 answer
   change F at answer
   intros

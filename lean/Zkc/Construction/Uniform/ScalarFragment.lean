@@ -154,6 +154,7 @@ private theorem operation_support (model : DomainModel) (definitions : List Chec
           · trivial
   | restrict => cases args with
     | cons value rest => cases rest; trivial
+  | assemble => trivial
   | draw owner field site =>
     set_option backward.isDefEq.respectTransparency false in
       cases callbacks

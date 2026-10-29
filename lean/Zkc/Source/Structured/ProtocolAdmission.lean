@@ -55,7 +55,7 @@ theorem Snapshot.mem_protocolFunctions {snapshot : Snapshot} {function : Functio
         cases Option.some.inj selected
         exact ⟨member, kind⟩
       · simp [kind] at selected
-    | finite _ | collect _ | realization _ | map _ => contradiction
+    | oracle _ | finite _ | collect _ | realization _ | map _ => contradiction
   · rintro ⟨member, kind⟩
     exact ⟨.function function, member, by simp [kind]⟩
 

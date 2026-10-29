@@ -137,6 +137,60 @@ example : (RenderedOpen.snapshot.definitions[0]?.bind fun definition =>
     | _ => none) = some {points} := by decide +kernel
 '''
     modules.append(source)
+    # Logical oracle rows are data only. Rendering them does not authorize
+    # ordinary source admission, even when their declaration remains dormant.
+    oracle_kind = ["table", [["type", ["field", "koala-bear"]], ["nat", "16"]]]
+    dynamic_kind = ["table", [["type", ["field", "koala-bear"]]]]
+    oracle_descriptors = [
+        ["oracle_input", "P", ["V"], oracle_kind, []],
+        ["oracle_send", "P", ["V"], oracle_kind, ["rows"], []],
+        ["oracle_query", None, oracle_kind],
+        ["oracle_contents", "P", oracle_kind],
+        ["oracle_components", "P", ["V"], oracle_kind],
+        ["oracle_shape", oracle_kind, "rows"],
+        ["oracle_forget_shape", oracle_kind, dynamic_kind],
+        ["oracle_virtual", "virtual", "P", ["V"], oracle_kind],
+        ["oracle_sequence_empty", dynamic_kind, "4"],
+        ["oracle_sequence_append", dynamic_kind, "4", ["P", "V"]],
+        ["oracle_sequence_at", dynamic_kind, "4", ["P", "V"]],
+        ["oracle_sequence_length", dynamic_kind, "4"],
+    ]
+    oracle_data = copy.deepcopy(data)
+    oracle_data[7] = [["oracle", "virtual", [["oracle", oracle_kind], ["index"]],
+                       oracle_kind, "admissible", [], [],
+                       ["block", [[descriptor, [], [], [], ""] for descriptor in oracle_descriptors],
+                        ["return", []]]]]
+    source = renderer.render(oracle_data, "RenderedOracles").replace("module\n\n", "", 1)
+    source += """
+open Zkc.Source.Structured in
+example : (RenderedOracles.snapshot.definitions[0]?.map fun definition =>
+    (definition.kind, definition.inputs, definition.outputs)) =
+    some (.oracle, [.oracle (.table (.field "koala-bear") (some 16)), .index],
+      [.field "koala-bear"]) := by decide +kernel
+example : (RenderedOracles.snapshot.definitions[0]?.map fun definition =>
+    match definition with
+    | .oracle declaration => declaration.body.storedInstructions.length
+    | _ => 0) = some 12 := by decide +kernel
+example : (Zkc.Source.Structured.check RenderedOracles.snapshot).isOk = false := by decide +kernel
+"""
+    modules.append(source)
+    malformed_oracles = [(renderer.descriptor, descriptor + [None]) for descriptor in oracle_descriptors]
+    malformed_oracles += [
+        (renderer.ty, ["oracle", oracle_kind, "extra"]),
+        (renderer.ty, ["oracle_sequence", oracle_kind, "18446744073709551616"]),
+        (renderer.ty, ["oracle_sequence", oracle_kind, 4]),
+        (renderer.ty, ["oracle", ["unknown", []]]),
+        (renderer.descriptor, ["oracle_send", "P", ["V"], dynamic_kind, ["rows"], []]),
+        (renderer.descriptor, ["oracle_send", "P", ["V"], oracle_kind, ["wrong"], []]),
+        (renderer.descriptor, ["oracle_shape", oracle_kind, "wrong"]),
+        (renderer.definition, oracle_data[7][0] + [None]),
+    ]
+    for render, malformed in malformed_oracles:
+        try:
+            render(malformed)
+        except ValueError:
+            continue
+        raise AssertionError("renderer accepted a malformed logical oracle row")
     # Aggregate names remain escaped data, including inside recursive types.
     # Inspect codepoints and typed components independently in the kernel.
     aggregate_identity = 'query_증명"\\\n'
@@ -209,7 +263,7 @@ example : (RenderedContracts.snapshot.contracts[0]?.bind fun contract =>
          (selector.direction, selector.port, selector.role.toList.map Char.toNat),
        clause.decision)) =
     some (.continuation, {contract_points}, [(.input, 0, {points})],
-      some ⟨.output, 0, "V"⟩) := by rfl
+      some ⟨.output, 0, "V", false⟩) := by rfl
 '''
     modules.append(source)
     # Closed source declarations and static-only relation arguments survive the
@@ -237,7 +291,20 @@ example : (RenderedDeclarations.snapshot.sourceDeclarations.protocols.map fun pr
     [("main", [({contract_points}, .boolean, ["V"], 1, 1)], [])] := by rfl
 '''
     modules.append(source)
+    anchor_data = copy.deepcopy(contract_data)
+    anchor_data[8][0][1][0][2][1] = [["anchor", "input", 0]]
+    source = renderer.render(anchor_data, "RenderedAnchor").replace("module\n\n", "", 1)
+    source += """
+open Zkc.Source.Structured in
+example : (RenderedAnchor.snapshot.contracts[0]?.bind fun owner =>
+  owner.clauses[0]?.map fun clause => clause.subject.selectors) =
+    some [⟨.input, 0, "", true⟩] := by rfl
+"""
+    modules.append(source)
     malformed_contracts = [
+        (renderer.contract_selector, ["anchor", "input", 0, "V"]),
+        (renderer.contract_selector, ["anchor", "other", 0]),
+        (renderer.contract_selector, ["anchor", "input", True]),
         (renderer.contract_selector, ["unknown", 0, "P"]),
         (renderer.contract_selector, ["input", True, "P"]),
         (renderer.contract_selector, ["input", 0, "P", "extra"]),
@@ -484,6 +551,8 @@ example : renderedRepeatHeaders {namespace}.snapshot = {expected} := by decide +
             continue
         raise AssertionError("renderer accepted an invalid or oversized UTF-8 string")
     report = {"status": "pass", "kernel_cases": len(names), "refusal_cases": 3,
+              "oracle_descriptor_cases": len(oracle_descriptors),
+              "oracle_refusal_cases": len(malformed_oracles),
               "missing_origin_refusal_cases": 2,
               "open_metadata_kernel_cases": 3,
               "aggregate_kernel_cases": 2, "aggregate_refusal_cases": len(malformed_aggregates),

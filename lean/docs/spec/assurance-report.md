@@ -19,7 +19,7 @@ separate boundaries, and the report names both.
 |---|---|
 | Subject manifest | `zkc.subject/0`: subject name, Entry selection and generated file paths |
 | Pipeline evidence | `zkc.subject-evidence/0`: artifacts, regenerated module digests, check outcomes, bound source requests and receipt associations |
-| Consumer requirements | Optional independent `zkc.required-requests/0` input: the complete requests the consumer requires, supplied separately from pipeline evidence |
+| Consumer requirements | Optional independent `zkc.consumer-requirements/0` input: exact occurrence/request requirements pinned to the selected manifest and checker environment |
 | Bound source requests | `zkc.bound-source-claims/0` in `source_claims`: every request, digest, attachment, proposed method and source site bindings |
 | Declaration records | `zkc.declarations/0`: actual elaborated declarations, premise telescopes, axiom closures and typed receipt extraction |
 | Mathematical ledger | `lean/checks/claims.toml` and `claims.lock.json`: maintained mathematical results, audited independently of source requests |
@@ -30,47 +30,68 @@ are errors. A name or provenance string never constructs a proposition.
 
 ## Independent consumer requirements
 
-A consumer may supply `--required-requests FILE --subject NAME` to
+A consumer supplies `--requirements FILE --subject NAME` to
 `lean/checks/check_records.py`. The file has exactly this envelope:
 
 ```json
 {
-  "format": "zkc.required-requests/0",
-  "subject": "NAME",
-  "requests": [
-    {"id": "consumer-chosen-label", "request": "<complete Wire.Request object>"}
+  "format": "zkc.consumer-requirements/0",
+  "context": {
+    "subject": "NAME",
+    "manifest_sha256": "<exact selected manifest SHA-256>",
+    "checker": {"...": "<complete independently selected checker environment>"}
+  },
+  "claims": [
+    {
+      "node": {"kind": "source-claim", "owner": "qualified owner", "block": 0, "claim": 0},
+      "request": {"...": "<complete Wire.Request object>"}
+    }
   ]
 }
 ```
 
-The string placeholder in this schematic example must be replaced by the
-complete JSON request object, including the stage, target, model, quantity and
-artifact identities. Identifiers are distinct nonempty strings. Unknown envelope
-or row fields, a different subject, duplicate identifiers and empty request
-objects are refused. Labels do not select meanings. The reporter does not infer
-requirements from the source, from a manifest, or from receipts; doing so would
-hide precisely the omissions this input detects.
+The placeholders stand for complete existing records, not wildcard fields. The
+request includes the exact stage, target, model, quantity and artifact identities.
+The occurrence set is nonempty and unique. Unknown envelope, context or row
+fields, duplicate occurrences, empty request objects, ambiguous JSON members and
+non-finite numbers are refused. The CLI reads at most 4 MiB of UTF-8 input and
+permits at most 64 nested arrays or objects; brackets inside JSON strings do not
+count toward that bound. Oversize, excessively nested or invalid UTF-8 inputs
+are refused before package checks. The report does not infer this independent set
+from pipeline evidence, source claims or receipts: doing so would hide omissions.
 
-The existing Lean receipt audit compares each full request with the selected
-scope's canonical security rows. A certified matching receipt satisfies it.
-Author-defined and generic claims cannot satisfy canonical requirements. A single
-proof may satisfy several consumer labels for the identical request. A different
-stage, quantity or artifact does not match; a digest alone never suffices.
+The existing Lean audit first classifies each receipt under its fixed meaning.
+It then compares each required occurrence and full request with those audited
+rows. The selected subject, current manifest hash and independently verified
+checker environment must equal the consumer's context. A different context,
+missing occurrence or changed request leaves coverage open while valid supplied
+receipts retain their own type-level status. A request digest alone does not
+establish equality. Trials are separate scopes and cannot cover selected work.
 
-`requirements.input` retains the supplied file contents and `requirements.claims`
-contains one row per requirement, in input order: `id`, `request`, `status`,
-`matching_nodes`, `certified_nodes` and `reasons`. A missing request is `open`,
-even if no source claims were emitted. An exact match with only registered but
-undefined meanings is `incomplete`. Every required row must be `certified` for
-the selected aggregate to be certified. Existing receipt rows retain their own
-status, and trials remain separate from consumer coverage. A transport failure
-retains the supplied input under `required_requests` and makes no coverage claim.
+An author or generic receipt may satisfy an explicit authoring requirement.
+This does not grant canonical security authority. A proof can serve two source
+occurrences with the identical request, but both occurrences must actually be
+present. A registered but undefined matching meaning is `incomplete`; an omitted
+request is `open`.
 
-Without an independent input, `requirements` is null; an explicitly empty list
-is retained as such. Neither establishes that the consumer's requirements are
-exhaustive. Certification still rests on the existing kernel audit and stated
-external admissions. This comparison adds no proof of source or native-byte
-correspondence and no new status vocabulary.
+The final audit and assurance report echo the input under `consumer_requirements`.
+`requirements` contains `input`, the independently observed `context`, `status`,
+`outcome` and ordered `claims`. Each claim row retains `node`, `request`, `status`,
+`matching_nodes`, `certified_nodes` and `reasons`. The exchange is bound to the
+fresh invocation's nonce and input digest. Transport failure retains the input
+and makes no coverage claim. Without an independent input both fields are null.
+
+Every required item must be certified before the selected security aggregate
+can be certified. Successful author-only coverage has `requirements.status =
+"certified"` while the security headline remains `no-claim` and `unresolved`.
+The explicit-requirements CLI checks coverage, so that author-only workflow can
+succeed without inventing a security claim. Missing required work keeps even an
+empty provider inventory open. No new status vocabulary or classifier is added.
+
+This comparison proves neither source elaboration nor native-byte correspondence
+and adds no security premise. Certification retains the existing kernel checks
+and external admissions. The supplied requirements describe the consumer's
+chosen scope; the system does not prove that this scope is exhaustive.
 
 ## Pipeline association
 

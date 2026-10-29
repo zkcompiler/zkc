@@ -44,7 +44,7 @@ theorem field_wrong_domain {actual expected : String} (different : actual ≠ ex
 theorem service_refused (contract : String) (value : Value carriers) :
     decode (.service contract) value = none := by
   cases value with
-  | data payload => exact Payload.value_service_refused rfl payload
+  | data payload => exact Payload.value_handle_refused rfl payload
   | transcript => rfl
   | indices => rfl
 
@@ -82,7 +82,7 @@ theorem encodeValues_sorts {tys : List Structured.Ty}
 handles are excluded by the admitted ABI, not by a protocol truth premise. -/
 theorem Value.encode_exists {ty : Structured.Ty} (data : dataType ty = true)
     (input : carriers.Value ty) : ∃ encoded, Value.encode ty input = some encoded := by
-  have admissible : ty.isService = false := by simpa [dataType] using data
+  have admissible : ty.isHandle = false := by simpa [dataType] using data
   exact ⟨.data ⟨ty, admissible, input⟩, by simp [Value.encode, Payload.ofValue, admissible]⟩
 
 theorem encodeValues_exists {tys : List Structured.Ty}

@@ -53,9 +53,11 @@ def chargeReplay (work : Nat) : Analysis Unit := do
   if work > budget.replay then throw "structured-availability-replay-limit"
   set { budget with replay := budget.replay - work }
 
-def noServices (types : List Ty) : Analysis Unit := do
+def noHandles (types : List Ty) : Analysis Unit := do
   if types.any Ty.isService then
     throw "structured-availability-service"
+  if types.any Ty.isHandle then
+    throw "structured-availability-handle"
 
 /-- Charge each membership search and copied prefix before constructing a union.
 Repeated operands preserve set semantics, without identifying unknown values. -/
@@ -144,8 +146,8 @@ def require (footprint : Footprint) : Summarizing Unit := do
 
 def calculation (summaries : List DependencySummary) (op : Op)
     (arguments : List Footprint) : Summarizing (List Footprint) := do
-  noServices op.arguments
-  noServices op.results
+  noHandles op.arguments
+  noHandles op.results
   if !op.isCalculation then throw "structured-availability-math-operation"
   match op with
   | .invoke helper =>
@@ -196,8 +198,8 @@ mutual
     | .letOp (.mark _) _ _ next => localRegion summaries next
     | .letOp op _ bodies next => do
       visit
-      noServices op.arguments
-      noServices op.results
+      noHandles op.arguments
+      noHandles op.results
       for helper in op.helpers do
         reference (← findSummary summaries helper)
       localRegions summaries bodies
@@ -217,8 +219,8 @@ end
 
 def summarize (summaries : List DependencySummary) (definition : CheckedDefinition) :
     Analysis DependencySummary := do
-  noServices definition.inputs
-  noServices definition.outputs
+  noHandles definition.inputs
+  noHandles definition.outputs
   if summaries.any (·.helper.name == definition.name) then
     throw "structured-availability-helper-duplicate"
   chargeDependencies (2 * definition.inputs.length)
@@ -277,8 +279,8 @@ def available (roles : Nat) (arguments : List Footprint) (footprint : Footprint)
 def availableCalculation (summaries : List DependencySummary) (roles : Nat)
     (op : Op) (arguments : List Footprint) (active : List Nat := List.range roles) :
     Analysis (List Footprint) := do
-  noServices op.arguments
-  noServices op.results
+  noHandles op.arguments
+  noHandles op.results
   match op with
   | .invoke helper =>
     let summary ← findSummary summaries helper
@@ -312,7 +314,7 @@ def repeatInputs (roles : Nat) (spec : RepeatSpec) (arguments : List Footprint) 
   if arguments.length != 1 + spec.state.length + spec.captures.length ||
       spec.stateScopes.length != spec.state.length then
     throw "structured-availability-port-scopes"
-  noServices spec.state
+  noHandles spec.state
   let count :: remaining := arguments | throw "structured-availability-operand"
   if !(← subset spec.roles count) then throw "structured-repeat-count-scope"
   for (scope, supplied) in spec.stateScopes.zip (remaining.take spec.state.length) do
@@ -357,8 +359,8 @@ def operation (summaries : List DependencySummary) (roster : List String)
     chargeReplay (signature.outputs.length + 1)
     return signature.outputScopes.map (List.map (fun role => indices[role]?.getD 0))
   | .localCall helper _ owner _ =>
-    noServices helper.inputs
-    noServices helper.outputs
+    noHandles helper.inputs
+    noHandles helper.outputs
     let summary ← findSummary summaries helper
     if summary.depth + 1 > Limits.nesting then throw "structured-availability-depth-limit"
     owned roles owner arguments
@@ -368,24 +370,32 @@ def operation (summaries : List DependencySummary) (roster : List String)
     owned roles owner arguments
     return []
   | .exchange ty sender receiver _ =>
-    noServices [ty]
+    noHandles [ty]
     owned roles sender arguments
     if sender == receiver || receiver >= roles then throw "structured-availability-exchange"
     chargeReplay 3
     return [[sender, receiver]]
   | .restrict ty selected =>
-    noServices [ty]
+    noHandles [ty]
     validScope roles selected
     let [scope] := arguments | throw "structured-availability-operand"
     if !(← subset selected scope) then throw "structured-availability-restriction"
     chargeReplay 1
+    return [selected]
+  | .assemble ty selected =>
+    if ty.isHandle then throw "structured-assemble-type"
+    validScope roles selected
+    if arguments.length != selected.length then throw "structured-availability-operand"
+    for (owner, supplied) in selected.zip arguments do
+      if !(← subset [owner] supplied) then throw "structured-availability-assembly"
+    chargeReplay (selected.length + 1)
     return [selected]
   | .draw owner _ _ =>
     owned roles owner arguments
     chargeReplay 2
     return [[owner]]
   | .statement _ types selectors _ =>
-    noServices types
+    noHandles types
     if selectors.length != arguments.length then throw "structured-availability-statement"
     chargeReplay (selectors.length * (roles + 1))
     for (scope, selector) in arguments.zip selectors do
@@ -432,7 +442,7 @@ def checkRoot (summaries : List DependencySummary) (root : CheckedProtocol) : An
     throw "structured-availability-port-scopes"
   for scope in root.inputScopes do validScope root.roles.length scope
   for scope in root.outputScopes do validScope root.roles.length scope
-  noServices root.outputs
+  noHandles root.outputs
   chargeReplay root.inputScopes.length
   let results ← protocolRegion summaries root.roles root.body (extendEnvironment #[] root.inputScopes)
   if results.length != root.outputScopes.length then throw "structured-availability-port-scopes"

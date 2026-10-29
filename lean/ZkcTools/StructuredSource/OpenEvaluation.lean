@@ -38,15 +38,17 @@ def decodeOpenRequest (roles : List String) (json : Json) : Except String OpenRe
   return ⟨self, ← Structured.Format.array values, ← (← Structured.Format.array replies 4096).mapM decodeScriptReply,
     capacity⟩
 
-def actionRequest (roles : List String) (self : Nat) : OpenAction → Json
-  | .send (ty := type) site receiver value =>
-    .arr #[.str "send", .str site, .str (roles[self]?.getD ""),
-      .str (roles[receiver]?.getD ""), wireType type, wireOutput type value]
-  | .receive type site sender =>
-    .arr #[.str "receive", .str site, .str (roles[sender]?.getD ""),
+def actionRequest (roles : List String) (self : Nat) : OpenAction → Except String Json
+  | .send (ty := type) site receiver value => do
+    if type.isHandle then throw "structured-open-message-handle"
+    return .arr #[.str "send", .str site, .str (roles[self]?.getD ""),
+      .str (roles[receiver]?.getD ""), wireType type, ← wireOutput type value]
+  | .receive type site sender => do
+    if type.isHandle then throw "structured-open-message-handle"
+    return .arr #[.str "receive", .str site, .str (roles[sender]?.getD ""),
       .str (roles[self]?.getD ""), wireType type]
   | .query site field (.cons handle .nil) =>
-    .arr #[.str "draw", .str site, .str (roles[self]?.getD ""),
+    return .arr #[.str "draw", .str site, .str (roles[self]?.getD ""),
       .str ("random." ++ (show String from field) ++ "/0"), .str (toString handle), .str field]
 
 def actionSite : OpenAction → String
@@ -86,16 +88,17 @@ def stopResult (state : ReplayState) (reason : PIR.Stop) : Except String Json :=
   return .arr #[.str "zkc.structured-open-result/0",
     .arr #[.str "stopped", reason, .str state.site], .arr state.records, toJson state.position]
 
-def returnedResult {types : List Ty} (state : ReplayState) (values : OptionalValues types) : Json :=
-  .arr #[.str "zkc.structured-open-result/0",
-    .arr #[.str "returned", .arr (optionalOutputs values).toArray],
+def returnedResult {types : List Ty} (state : ReplayState) (values : OptionalValues types) :
+    Except String Json := do
+  return .arr #[.str "zkc.structured-open-result/0",
+    .arr #[.str "returned", .arr (← optionalOutputs values).toArray],
     .arr state.records, toJson state.position]
 
 /-- Only a matching request and a well-typed value/unit or valid stop consumes a
 reply. Malformed responses produce refused without consuming their position. -/
 def replay (roles : List String) (self : Nat) (action : OpenAction) (state : ReplayState) :
     Except String (PIR.Outcome ((participantInterface Scalar Scalar).Reply action) × ReplayState) := do
-  let request := actionRequest roles self action
+  let request ← actionRequest roles self action
   let state ← record { state with site := actionSite action }
     (.arr #[.str "request", toJson state.position, request])
   let reply :: remaining := state.remaining | return (.stopped .incomplete, state)
@@ -120,7 +123,7 @@ def observe {types : List Ty} (roles : List String) (self : Nat) : Nat →
     PIR.Process (observedInterface Scalar Scalar) (OptionalValues types) →
     ReplayState → Except String Json
   | 0, _, _ => .error "structured-open-capacity"
-  | _ + 1, .done values, state => .ok (returnedResult state values)
+  | _ + 1, .done values, state => returnedResult state values
   | _ + 1, .halt reason, state => stopResult state reason
   | fuel + 1, .call (.mark site) next, state =>
     observe roles self fuel (next ()) { state with site }

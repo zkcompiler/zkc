@@ -633,6 +633,7 @@ import TestsSecurity.MethodNeutralEndpointClients
 import TestsSecurity.NormalizedPropertyAssembly
 import TestsSecurity.Obligations
 import TestsSecurity.OccurrenceReading
+import TestsSecurity.OracleBoundaries
 import TestsSecurity.OraclePermutation
 import TestsSecurity.OriginalEndpointGeneration
 import TestsSecurity.OriginalEndpointRequests

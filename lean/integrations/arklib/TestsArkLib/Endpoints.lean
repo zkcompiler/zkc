@@ -77,8 +77,8 @@ discharged by the codec's proof. -/
 def determination (application : String) : Hypothesis where
   identifier := "binding.statement-determination"
   category := .binding .statementDetermination
-  claim := Zkc.Transcript.Determined (policyCodec (F := F) (G := G) artifacts.publics application).encode
-  status := .proved (policyCodec artifacts.publics application).determined
+  claim := Zkc.Transcript.Determined (policyCodec (F := F) (G := G) artifacts.publics (by rfl) application).encode
+  status := .proved (policyCodec artifacts.publics (by rfl) application).determined
 
 omit [Field F] [Fintype F] [DecidableEq F] [SampleableType F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem determination_discharged (application : String) :

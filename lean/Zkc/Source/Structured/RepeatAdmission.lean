@@ -26,7 +26,7 @@ def resolveRepeatSpec (interface : ProtocolInterface) (arguments results : List 
     throw "structured-protocol-signature"
   let state := (arguments.drop 1).take carried
   let captures := arguments.drop (1 + carried)
-  if results != state || state.any Ty.isService then throw "structured-protocol-signature"
+  if results != state || state.any Ty.isHandle then throw "structured-protocol-signature"
   let roles ← resolveScope interface.roles roles
   let stateScopes ← scopes.mapM (resolveScope interface.roles)
   if stateScopes.length != carried then throw "structured-scope-count"
@@ -72,7 +72,7 @@ def checkProtocolRoles (active : List Nat) (op : ProtocolOp) : Except String Uni
   let selected := match op with
     | .localCall _ _ owner _ | .guard owner _ | .draw owner .. => [owner]
     | .exchange _ sender receiver _ => [sender, receiver]
-    | .restrict _ roles | .protocolApply _ roles _ => roles
+    | .restrict _ roles | .assemble _ roles | .protocolApply _ roles _ => roles
     | .repeat spec _ => spec.roles
     | _ => []
   checkActiveRoles active selected
@@ -127,7 +127,7 @@ theorem resolveRepeatSpec_fields {interface : ProtocolInterface} {arguments resu
     spec.maximum = maximum ∧ maximum ≤ 1048576 ∧ carried < arguments.length ∧
       arguments.head? = some .index ∧ spec.state = (arguments.drop 1).take carried ∧
       spec.captures = arguments.drop (1 + carried) ∧ results = spec.state ∧
-      spec.state.any Ty.isService = false ∧
+      spec.state.any Ty.isHandle = false ∧
       resolveScope interface.roles roles = .ok spec.roles ∧
       scopes.mapM (resolveScope interface.roles) = .ok spec.stateScopes ∧
       spec.stateScopes.length = carried ∧

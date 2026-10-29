@@ -117,3 +117,11 @@ degree bounds, select a witness extractor or justify cryptographic assumptions.
 Unsupported helper shapes or missing component laws remain explicit proof
 obligations. Property and stage support must be established by their consumers,
 not inferred from successful source correspondence alone.
+
+Logical oracle wire recognition supplies no participant execution or connection.
+All ordinary transported payloads and codecs exclude services and logical oracle
+handles recursively, including inside sequences and nominal products. Pointwise
+role assembly is checked through the current Domain normalizer: each role can
+select a different value, with exact absence, surrounding effects and outcomes.
+The same finite connection certificates retain checked internal partial returns,
+complete root returns and route coverage. There is no oracle execution adapter.

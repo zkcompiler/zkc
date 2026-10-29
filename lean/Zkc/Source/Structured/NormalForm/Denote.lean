@@ -320,6 +320,7 @@ def literalValue (model : DomainModel) : (ty : Ty) → Nat → Option (model.Val
   | .vector _, _ => none
   | .group _, _ => none
   | .service _, _ => none
+  | .indices, _ | .groups _, _ | .oracle _, _ | .oracleSequence .., _
   | .sequence _, _ | .product .., _ => none
 
 /-- The arguments a law covers: each argument pinned to an input is that
@@ -528,6 +529,10 @@ def CalleesHold {Γ₀ : List Ty} {I : PIR.Signature} (protocols : ProtocolTable
 theorem noCallees_hold {Γ₀ : List Ty} {I : PIR.Signature} (protocols : ProtocolTable model.Value I)
     (inputs : Values (Component model.Value) Γ₀) : CalleesHold protocols (noCallees model I) inputs :=
   fun callee => callee.elim0
+
+-- Materialize these equations in their owning module. Lazy copies in consumers
+-- can refer to different private splitters. No global simp rule is installed.
+attribute [local simp] Arguments.eval.eq_def lawValues.eq_def
 
 end NormalForm
 end Zkc.Source.Structured

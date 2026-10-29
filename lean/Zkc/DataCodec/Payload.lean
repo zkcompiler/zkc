@@ -15,7 +15,7 @@ open Zkc.Construction.Domain (Payload)
 The surrounding deployment must bind this exact schema and codec selection. -/
 structure PayloadCodec (carriers : Carriers) where
   ty : Ty
-  dataOnly : ty.isService = false
+  dataOnly : ty.isHandle = false
   codec : Codec (carriers.Value ty)
 
 namespace PayloadCodec

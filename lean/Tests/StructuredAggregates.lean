@@ -63,6 +63,24 @@ private def run : IO Unit := do
       ("false last", [product true 7, product false 9], false),
       ("duplicates", [product true 7, product true 7], true)] do
     test label (equals (runClosed values) (arr [.str "returned", arr [arr [.str "bool", .bool expected]]]))
+  let packedProtocol : Snapshot := { snapshot with domains := [], definitions := [
+    .function ⟨"main", .protocol, .publicDef, [.boolean, field], [.boolean],
+      some ⟨["P"], [["P"], ["P"]], [["P"]]⟩, [], some (.protocol ⟨"test::Main", []⟩),
+      .block [.instruction (.makeProduct "value") [0, 1] [query] [] "",
+        .instruction (.getProduct 0) [0] [.boolean] [] ""] (.ret [0])⟩] }
+  test "protocol product admission" (check packedProtocol).isOk
+  for active in [false, true] do
+    test s!"protocol product round trip {active}" (equals
+      (do
+        evaluate (← check packedProtocol)
+          (arr [arr [.str "bool", .bool active], arr [.str "field", .str scalarDomain, .str "7"]]))
+      (arr [.str "returned", arr [arr [.str "bool", .bool active]]]))
+  let hiddenProduct : Snapshot := { packedProtocol with definitions := [
+    .function ⟨"main", .protocol, .publicDef, [.boolean, field], [.boolean],
+      some ⟨["P", "V"], [["P"], ["P"]], [["V"]]⟩, [], some (.protocol ⟨"test::Main", []⟩),
+      .block [.instruction (.makeProduct "value") [0, 1] [query] [] "",
+        .instruction (.getProduct 0) [0] [.boolean] [] ""] (.ret [0])⟩] }
+  test "protocol packing does not grant another role the component" (!(check hiddenProduct).isOk)
   test "missing component" (!(check (changedStep (.getProduct 2) field)).isOk)
   test "wrong component sort" (!(check (changedStep (.getProduct 0) field)).isOk)
   let different : Ty := .product "other" "value" fields
@@ -89,7 +107,7 @@ private def run : IO Unit := do
   test "noncanonical nested field" (refuses (input query (product true scalarModulus))
     "structured-input-field-canonical")
   test "open typed product round trip" (match wireInput query (arr [.bool false, .str "7"]) with
-    | .ok value => wireOutput query value == arr [.bool false, .str "7"] | _ => false)
+    | .ok value => equals (wireOutput query value) (arr [.bool false, .str "7"]) | _ => false)
   let encoded := product false 13
   test "closed typed product round trip" (match input query encoded with
     | .ok value => equals (output query value) encoded | _ => false)

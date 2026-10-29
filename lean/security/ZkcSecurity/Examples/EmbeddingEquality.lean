@@ -165,7 +165,7 @@ theorem compiled_verifier_eq {m : Type → Type} [Monad m] [LawfulMonad m]
         Construction.Domain.interface, Construction.Domain.receivedValue, decoded]
     | some u =>
       have payloadEq := Construction.Domain.Payload.ofValue_value decoded
-      simp only [Construction.Domain.Payload.ofValue, Ty.isService,
+      simp only [Construction.Domain.Payload.ofValue, Ty.isHandle,
         dite_true, Option.some.injEq] at payloadEq
       subst payload
       change (fun (result : PIR.Outcome (Construction.Domain.Result model.toCarriers) × Proof) =>

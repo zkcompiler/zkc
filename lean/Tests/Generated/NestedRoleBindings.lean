@@ -1,6 +1,6 @@
 module
 
-public import Tests.Generators.RoleViewControls
+public import Tests.StructuredNestedRoleData
 public import Zkc.Source.Structured.Bindings.Assembly
 public import Zkc.Source.Structured.NormalForm.Sites
 public import Mathlib.Data.Fintype.Basic
@@ -18,8 +18,8 @@ set_option maxHeartbeats 8000000
 set_option smartUnfolding false
 noncomputable section
 
-abbrev sourceImported := (⟨Tests.Generators.RoleViewControls.nestedProgram, by kernel_rfl⟩ : Imported Tests.Generators.RoleViewControls.nested)
-abbrev program : Program := Tests.Generators.RoleViewControls.nestedProgram
+abbrev sourceImported := (⟨Tests.StructuredNestedRoleData.program, by kernel_rfl⟩ : Imported Tests.StructuredNestedRoleData.snapshot)
+abbrev program : Program := Tests.StructuredNestedRoleData.program
 abbrev payload : UnitPayload := program.payload
 def sourceContracts := program.snapshot.contracts
 

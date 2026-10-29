@@ -496,8 +496,11 @@ def run_emitted_stage_receipts(data):
             missing_stage["detail"]["claim_data"]["receipt"].pop("stage_links", None)
             _, _, _, missing_reasons = reports.audit_receipt(
                 missing_stage, request, wire, registry, data, [])
-            if passed and any("stage obligations were not reconstructed" in reason
-                              for reason in missing_reasons):
+            # The live kernel extraction rejects altered mandatory metadata
+            # before the status policy runs; no supplied observation is trusted.
+            expected = (f"stale or corrupt kernel export for {name}; "
+                        "mandatory kernel observations changed")
+            if passed and any(expected in reason for reason in missing_reasons):
                 rows.append("emitted-interpreted-missing-stage-metadata-" + short)
             else:
                 failures.append(f"missing stage metadata control {name}: {missing_reasons}")

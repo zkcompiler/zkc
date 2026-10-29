@@ -44,7 +44,7 @@ example : meteredStep program context key initial challenge (fun _ _ => 0) 1
     [] (.boolean false :: proof) 0
     (fun _ unread _ => pure (.returned (), unread)) =
       pure (.stopped .refused, .boolean false :: proof) := by
-  simp [meteredStep, Domain.step, Domain.dataType, Structured.Ty.isService,
+  simp [meteredStep, Domain.step, Domain.dataType, Structured.Ty.isHandle,
     Uniform.DomainAdapter.runK, Value.decode]
 
 -- Raw metadata is semantically relevant to Domain, even for an unused pure

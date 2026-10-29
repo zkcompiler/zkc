@@ -37,7 +37,7 @@ inductive Pair (scope : PairScope) (Post : A → B → Prop) :
   | leave (frame : Occurrence.Frame) {left right} : Pair scope Post left right →
       Pair scope Post (.call (.leave frame) (fun _ => left)) (.call (.leave frame) (fun _ => right))
   | message (ty : Ty) (site : String) (producer validator : Nat) (value : carriers.Value ty)
-      (data : ty.isService = false)
+      (data : ty.isHandle = false)
       {left : PIR.Process (Occurrence.signature carriers) A}
       {right : carriers.Value ty → PIR.Process (Occurrence.signature carriers) B} :
       (roles : producer = scope.producer ∧ validator = scope.validator) →
@@ -121,7 +121,7 @@ installation must discharge these local laws for the reached source operations.
 They are not consequences of validator WP success or of marginal distributions. -/
 structure FoldLaws (scope : PairScope) (routingP routingV : Original.Routing) where
   message : ∀ (ty : Ty) site producer validator (value : carriers.Value ty) state,
-    ty.isService = false →
+    ty.isHandle = false →
     producer = scope.producer ∧ validator = scope.validator →
     Original.ActionCovered (carriers := carriers) routingP state.frames (.send (ty := ty) site validator value) →
     Original.ActionCovered (carriers := carriers) routingV state.frames (.receive ty site producer) →

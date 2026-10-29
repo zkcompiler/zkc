@@ -95,7 +95,7 @@ theorem reading {routing : Original.Routing} (mode : routing.mode = .validator)
       change Bridge (interface (F := F) (G := G)) (Post final) history _ (.call (⟨field, .deliver origin value⟩ : (signature F).Op) (fun _ => presentation tail (history ++ [.message origin (.field field value)])))
       rw [fold_call]
       simp only [Original.operations, profileEq, Original.send, mode, route,
-        Domain.Payload.ofValue, Ty.isService, ↓reduceDIte, Original.record, PIR.Process.bind]
+        Domain.Payload.ofValue, Ty.isHandle, ↓reduceDIte, Original.record, PIR.Process.bind]
       exact ⟨ReadingTo.absorbSend (absorb := interface (F := F) (G := G)) (⟨field, .deliver origin value⟩ : (signature F).Op) _ _ () rfl (.observe _ bridge.reading),
         .observe _ bridge.coherent⟩
   | query frames final site field handle origin route key request tail ih =>

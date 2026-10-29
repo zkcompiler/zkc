@@ -5,7 +5,7 @@ public import TestsSecurity.RootConnectionControls
 
 @[expose] public section
 
-/-! Refusals for local lossless authority. Service-bearing receives, lossy
+/-! Refusals for local lossless authority. Handle-bearing receives, lossy
 malformed decoders and an unsupported reply branch cannot gain authority.
 The source/output relation remains the existing complete nominal relation. -/
 set_option autoImplicit false
@@ -21,7 +21,7 @@ example : ¬ Original.LosslessInterface (NominalDomain.interface (carriers := mo
 
 example : ¬ Original.LosslessOperation NominalDomain.interface
     (.receive (.service "random.f/0") origin : NominalDomain.Operation model.toCarriers) :=
-  NominalDomain.serviceReceive_not_lossless model _ origin rfl
+  NominalDomain.handleReceive_not_lossless model _ origin rfl
 
 /-- Recursive products do not hide a service capability. -/
 def nestedService : Ty := .sequence (.product "capability-record" "value"
@@ -29,11 +29,34 @@ def nestedService : Ty := .sequence (.product "capability-record" "value"
 
 example : ¬ Original.LosslessOperation NominalDomain.interface
     (.receive nestedService origin : NominalDomain.Operation model.toCarriers) :=
-  NominalDomain.serviceReceive_not_lossless model _ origin rfl
+  NominalDomain.handleReceive_not_lossless model _ origin rfl
 
 example : SourceSupport.region PublicSourceSupport.operation
     (Region.letOp (.exchange nestedService 0 1 "capability") (.cons .here .nil) .nil
       (.ret (.cons .here .nil)) : Region protocolDialect [nestedService] [nestedService]) = false := rfl
+
+/-- Recognizing a logical oracle sort grants no ordinary proof-message codec. -/
+def logicalOracle : Ty := .oracle (.table (.field "koala-bear") (some 16))
+
+example : ¬ Original.LosslessOperation NominalDomain.interface
+    (.receive logicalOracle origin : NominalDomain.Operation model.toCarriers) :=
+  NominalDomain.handleReceive_not_lossless model _ origin rfl
+
+example : ¬ Original.LosslessOperation NominalDomain.interface
+    (.receive (.sequence logicalOracle) origin : NominalDomain.Operation model.toCarriers) :=
+  NominalDomain.handleReceive_not_lossless model _ origin rfl
+
+/-- A claim-shaped product cannot acquire ordinary data transport for its anchor. -/
+def oracleClaim : Ty := .product "oracle-claim" "claim"
+  (.cons .boolean (.cons logicalOracle .nil))
+
+example : ¬ Original.LosslessOperation NominalDomain.interface
+    (.receive oracleClaim origin : NominalDomain.Operation model.toCarriers) :=
+  NominalDomain.handleReceive_not_lossless model _ origin rfl
+
+example : SourceSupport.region PublicSourceSupport.operation
+    (Region.letOp (.exchange logicalOracle 0 1 "anchor") (.cons .here .nil) .nil
+      (.ret (.cons .here .nil)) : Region protocolDialect [logicalOracle] [logicalOracle]) = false := rfl
 
 /-- Every typed continuation is certified, including a branch that a chosen
 example reply does not visit. No sampled-path assumption supplies authority. -/
@@ -44,7 +67,7 @@ def hiddenService : PIR.Process (NominalDomain.signature model.toCarriers) Unit 
 
 theorem hidden_service_refused : ¬ Original.LosslessOn NominalDomain.interface (hiddenService model origin) := by
   intro supported
-  exact NominalDomain.serviceReceive_not_lossless model _ origin rfl (supported.2 false).1
+  exact NominalDomain.handleReceive_not_lossless model _ origin rfl (supported.2 false).1
 
 abbrev collapsedSignature : PIR.Signature := ⟨Unit, fun _ => Bool⟩
 
@@ -63,7 +86,7 @@ theorem collapsed_receive_refused : ¬ Original.LosslessOperation (collapsedRece
   cases impossible
 
 /-- Wrong-sort decoder equations are refused even with equal host carriers. -/
-theorem wrong_sort_refused (ty foreign : Ty) (data : ty.isService = false) (different : ty ≠ foreign) :
+theorem wrong_sort_refused (ty foreign : Ty) (data : ty.isHandle = false) (different : ty ≠ foreign) :
     ¬ ∃ reply : model.Value foreign → model.Value ty,
       ∀ payload : Domain.Payload model.toCarriers,
         NominalDomain.received ty origin (.message origin payload) = (payload.value foreign).map reply := by
@@ -87,7 +110,7 @@ example (accepted : Bool) (residual : model.Field "f")
   RootConnectionControls.wrong_history model accepted residual before reached changed
 
 #print axioms NominalDomain.losslessOperation
-#print axioms NominalDomain.serviceReceive_not_lossless
+#print axioms NominalDomain.handleReceive_not_lossless
 #print axioms NominalDomain.not_losslessInterface
 #print axioms hidden_service_refused
 #print axioms collapsed_receive_refused

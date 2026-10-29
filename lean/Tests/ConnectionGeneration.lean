@@ -6,6 +6,18 @@ set_option autoImplicit false
 namespace Tests.ConnectionGeneration
 open Lean ZkcTools.ConstructionBindings.Generate
 
+/-- Fixture pairs share the generated input, artifact and view naming scheme.
+These names select declarations; the generated kernel proof checks their meaning. -/
+def pairedSelection (stem : String) : Selection × Output :=
+  let inputs := Name.str `ZkcExamples.Structured.Generated.Bindings (stem ++ "Inputs")
+  let artifacts := Name.str `ZkcExamples.Construction.Generated (stem ++ "Pair")
+  (⟨inputs, inputs ++ `program⟩,
+    ⟨Name.str `ZkcExamples.Structured.Generated.Connections stem, [
+      ⟨.producer, artifacts, artifacts ++ `Producer.participant,
+        Name.str `ZkcExamples.Structured.Generated.Constructed (stem ++ "Producer")⟩,
+      ⟨.validator, artifacts, artifacts ++ `Validator.participant,
+        Name.str `ZkcExamples.Structured.Generated.Constructed (stem ++ "Validator")⟩]⟩)
+
 def selections : List (Selection × Output) := [
   (⟨`ZkcExamples.Construction.EmbeddingEqualityBinding, `ZkcExamples.Construction.EmbeddingEqualityBinding.program⟩,
     ⟨`ZkcExamples.Structured.Generated.Connections.EmbeddingEquality, [
@@ -28,14 +40,6 @@ def selections : List (Selection × Output) := [
       ⟨.validator, `ZkcExamples.Construction.BatchOpeningArtifacts,
         `ZkcExamples.Construction.BatchOpeningArtifacts.Validator.participant,
         `ZkcExamples.Structured.Generated.Constructed.BatchOpeningValidator⟩]⟩),
-  (⟨`ZkcExamples.Construction.SchnorrArtifact, `ZkcExamples.Construction.SchnorrProof.program⟩,
-    ⟨`ZkcExamples.Structured.Generated.Connections.SchnorrRandomized, [
-      ⟨.producer, `ZkcExamples.Construction.Generated.SchnorrRandomizedPair,
-        `ZkcExamples.Construction.Generated.SchnorrRandomizedPair.Producer.participant,
-        `ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedProducer⟩,
-      ⟨.validator, `ZkcExamples.Construction.Generated.SchnorrRandomizedPair,
-        `ZkcExamples.Construction.Generated.SchnorrRandomizedPair.Validator.participant,
-        `ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator⟩]⟩),
   (⟨`ZkcExamples.Construction.SchnorrArtifact, `ZkcExamples.Construction.SchnorrProof.program⟩,
     ⟨`ZkcExamples.Structured.Generated.Connections.Schnorr, [
       ⟨.validator, `ZkcExamples.Construction.SchnorrProofParticipant,
@@ -60,25 +64,11 @@ def selections : List (Selection × Output) := [
     ⟨`ZkcExamples.Structured.Generated.Connections.Guess, [
       ⟨.validator, `ZkcExamples.Construction.GuessProofParticipant,
         `ZkcExamples.Construction.GuessProofParticipant.participant,
-        `ZkcExamples.Structured.Generated.Constructed.GuessValidator⟩]⟩),
-  (⟨`ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs,
-      `ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.program⟩,
-    ⟨`ZkcExamples.Structured.Generated.Connections.SmallSumcheck, [
-      ⟨.producer, `ZkcExamples.Construction.Generated.SmallSumcheckPair,
-        `ZkcExamples.Construction.Generated.SmallSumcheckPair.Producer.participant,
-        `ZkcExamples.Structured.Generated.Constructed.SmallSumcheckProducer⟩,
-      ⟨.validator, `ZkcExamples.Construction.Generated.SmallSumcheckPair,
-        `ZkcExamples.Construction.Generated.SmallSumcheckPair.Validator.participant,
-        `ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator⟩]⟩),
-  (⟨`ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs,
-      `ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.program⟩,
-    ⟨`ZkcExamples.Structured.Generated.Connections.TwoSums, [
-      ⟨.producer, `ZkcExamples.Construction.Generated.TwoSumsPair,
-        `ZkcExamples.Construction.Generated.TwoSumsPair.Producer.participant,
-        `ZkcExamples.Structured.Generated.Constructed.TwoSumsProducer⟩,
-      ⟨.validator, `ZkcExamples.Construction.Generated.TwoSumsPair,
-        `ZkcExamples.Construction.Generated.TwoSumsPair.Validator.participant,
-        `ZkcExamples.Structured.Generated.Constructed.TwoSumsValidator⟩]⟩)]
+        `ZkcExamples.Structured.Generated.Constructed.GuessValidator⟩]⟩)
+] ++ ["SmallSumcheck", "TwoSums", "SchnorrRandomized", "SchnorrAndRandomized",
+  "SchnorrAndAliased", "SequentialSigma", "SampledAbort"].map pairedSelection
+
+#guard (selections.map fun entry => entry.2.moduleName).eraseDups.length == selections.length
 
 -- Context discovery has one source of authority and never inserts a default.
 #guard source ⟨`Source, `Source.program⟩ ⟨`Output, []⟩ == .error "connection-output-empty"

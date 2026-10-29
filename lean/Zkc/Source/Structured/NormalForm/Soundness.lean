@@ -562,6 +562,7 @@ theorem literalTerm_eval (results : LawResults model laws) {Δ : Scope} (binders
   | .vector _, _ => rfl
   | .group _, _ => rfl
   | .service _, _ => rfl
+  | .indices, _ | .groups _, _ | .oracle _, _ | .oracleSequence .., _
   | .sequence _, _ | .product .., _ => rfl
 
 theorem lawComps_eval (results : LawResults model laws) {Δ : Scope} (binders : Binders model Δ)
@@ -1028,6 +1029,14 @@ theorem restrict_rule (ty : Ty) (roles : List Nat) (value : Option (model.Value 
     protocolOperationWithOn model (SiteObservations.silent I) actions tables self (.restrict ty roles) (.cons value .nil) callbacks protocols context iterations =
       .done (.cons (Participant.restrict ((roles.map context.roles).contains self) value) .nil) := rfl
 
+theorem assemble_rule (ty : Ty) (roles : List Nat)
+    (values : Values (Component model.Value) (roles.map (fun _ => ty)))
+    (callbacks : Values (RegionFunction (Component model.Value) I)
+      (ProtocolOp.assemble ty roles).regions) :
+    protocolOperationWithOn model (SiteObservations.silent I)
+      actions tables self (.assemble ty roles) values callbacks protocols context iterations =
+      .done (.cons (assembleComponent (fun role => context.roles role == self) none roles values) .nil) := rfl
+
 theorem draw_rule (owner : Nat) (field site : String)
     (args : Values (Component model.Value) (ProtocolOp.draw owner field site).arguments)
     (callbacks : Values (RegionFunction (Component model.Value) I)
@@ -1254,6 +1263,29 @@ theorem restrict_contains {context : ProtocolContext} {role roster : Nat}
       simp
     · have different := distinct head bounded.1 same
       rw [beq_eq_false_iff_ne.mpr (Ne.symm different), beq_eq_false_iff_ne.mpr (Ne.symm same)]
+
+theorem assemble_eval {context : ProtocolContext} {role roster : Nat}
+    (distinct : RosterDistinct context role roster)
+    (results : LawResults model laws) {Γ : List Ty} {Δ : Scope} {ty : Ty}
+    (env : Values (Comp laws Δ) Γ) (binders : Binders model Δ) :
+    (roles : List Nat) → roles.any (roster ≤ ·) = false →
+    (args : Operands Γ (roles.map (fun _ => ty))) →
+    (assembleComponent (fun owner => owner == role) .absent roles (lookup env args)).eval results binders =
+      assembleComponent (V := Component model.Value)
+        (fun owner => context.roles owner == context.roles role) none roles
+        (Operands.eval (Comps.eval results env binders).get args)
+  | [], _, .nil => rfl
+  | owner :: roles, bounded, .cons arg args => by
+    have bounds : owner < roster ∧ roles.any (roster ≤ ·) = false := by
+      simpa using bounded
+    have comparison : (context.roles owner == context.roles role) = (owner == role) := by
+      by_cases same : owner = role
+      · simp [same]
+      · simp [same, distinct owner bounds.1 same]
+    simp only [assembleComponent, lookup, Operands.eval, comparison]
+    split
+    · simp only [entryAt_eq_get, comps_get_eval]
+    · exact assemble_eval distinct results env binders roles bounds.2 args
 
 theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
     (processes : CalleeProcesses model sig.callees I) (role roster : Nat)
@@ -1513,6 +1545,20 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws)
         simp only [notMember, Bool.false_eq_true, ite_false]
         exact continue_push sig results processes role inputs nextRegion next sound state _ form normalized matched binders inputsEq
           _ rfl
+  | assemble ty roles =>
+    simp only [operation] at normalized
+    split at normalized
+    · cases normalized
+    · rename_i bounded
+      refine (bind_congr_left (assemble_rule model actions tables protocols context _ ty roles _ _) _).trans ?_
+      simp only [PIR.Process.bind]
+      exact continue_push sig results processes role inputs nextRegion next sound state _ form normalized matched binders inputsEq
+        _ (by
+          simp only [Comps.eval]
+          congr 1
+          rw [assemble_eval distinct results state.env binders roles (by simpa using bounded) args]
+          simp only [lookup_eq_eval, comps_eval_operands]
+          rfl)
   | draw owner field site =>
     rcases args with _ | ⟨arg, _ | _⟩
     simp only [operation] at normalized

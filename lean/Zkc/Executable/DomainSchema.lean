@@ -142,7 +142,7 @@ theorem calculate_total (calculation : Calculation) (total : calculation.total =
   have eligible : calculation.op.results.all Domain.dataType = true := by
     cases calculation <;>
       simp_all [Calculation.op, Structured.Op.arguments, Structured.Op.results,
-        Domain.dataType, Structured.Ty.isService]
+        Domain.dataType, Structured.Ty.isHandle]
   obtain ⟨encoded, encodedEq⟩ := Domain.encodeValues_exists results eligible
   refine ⟨encoded, ?_, encodeValues_sorts results encodedEq⟩
   simp only [Domain.calculate, decoded,

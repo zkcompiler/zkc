@@ -76,7 +76,7 @@ theorem context_free (model : DomainModel) {I : PIR.Signature}
   funext args callbacks
   cases op with
   | protocolApply | «repeat» => simp [contextFree] at allowed
-  | calculate | localCall | draw | statement => rfl
+  | calculate | localCall | draw | statement | assemble => rfl
   | guard | exchange | restrict =>
     cases args with | cons value rest => cases rest; rfl
   | mark => cases args; rfl

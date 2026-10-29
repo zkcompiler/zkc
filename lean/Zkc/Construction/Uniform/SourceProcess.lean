@@ -245,7 +245,7 @@ macro "normalize_scalar_connection" " unfolding " "[" definitions:term,* "]" : t
         Zkc.Construction.Context.replacement?, Zkc.Construction.Context.service,
         Zkc.Construction.Context.fiatShamir,
         Zkc.Construction.Payload.ofValue,
-        Zkc.Source.Structured.Ty.isService, Bool.not_false, Bool.not_true,
+        Zkc.Source.Structured.Ty.isHandle, Bool.not_false, Bool.not_true,
         List.append_assoc, List.isEmpty_nil, List.take_nil,
         Zkc.Construction.Domain.Calculations.fieldAdd,
         Zkc.Construction.Domain.Calculations.fieldEqual]

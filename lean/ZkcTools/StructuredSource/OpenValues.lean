@@ -26,9 +26,15 @@ mutual
     | .boolean, _ => .error "structured-input-type"
     | .index, json | .service _, json => wireNatural json
     | .field _, json | .group _, json => scalar json
-    | .vector _, json => do (← Format.array json 4096).mapM scalar
-    | .sequence element, json => do (← Format.array json 4096).mapM (wireInput element)
-    | .product _ _ fields, json => do wireProductInput fields (← Format.array json)
+    | .vector _, json | .groups _, json => do (← Format.array json 4096).mapM scalar
+    | .indices, json => do (← Format.array json 4096).mapM wireNatural
+    | .oracle _, _ | .oracleSequence .., _ => throw "structured-oracle-profile"
+    | .sequence element, json => do
+      if element.isHandle then throw "structured-input-handle"
+      (← Format.array json 4096).mapM (wireInput element)
+    | .product _ _ fields, json => do
+      if fields.hasHandle then throw "structured-input-handle"
+      wireProductInput fields (← Format.array json)
 
   def wireProductInput : (fields : ProductFields) → List Json →
       Except String ((uniformCarriers Scalar Scalar).ProductValue fields)
@@ -37,32 +43,50 @@ mutual
     | _, _ => throw "structured-input-count"
 end
 
+/-- Direct service ports retain their checked ownership discipline. Aggregate
+handles and logical oracle sorts cannot be supplied even as absent ports. -/
+def wireValueAllowed : Ty → Bool
+  | .service _ => true
+  | type => !type.isHandle
+
 def optionalInputs : (types : List Ty) → List Json → Except String (OptionalValues types)
   | [], [] => .ok .nil
-  | _ :: types, .null :: values => return .cons none (← optionalInputs types values)
-  | type :: types, value :: values =>
+  | type :: types, .null :: values => do
+    unless wireValueAllowed type do throw "structured-open-value-type"
+    return .cons none (← optionalInputs types values)
+  | type :: types, value :: values => do
+    unless wireValueAllowed type do throw "structured-open-value-type"
     return .cons (some (← wireInput type value)) (← optionalInputs types values)
   | _, _ => .error "structured-input-count"
 
 mutual
-  def wireOutput : (type : Ty) → OpenValue type → Json
-    | .boolean, value => .bool value
-    | .index, value | .service _, value => .str (toString value)
-    | .field _, value | .group _, value => scalarJson value
-    | .vector _, values => .arr ((show List Scalar from values).map scalarJson).toArray
-    | .sequence element, values => .arr (values.map (wireOutput element)).toArray
-    | .product _ _ fields, value => .arr (wireProductOutput fields value).toArray
+  def wireOutput : (type : Ty) → OpenValue type → Except String Json
+    | .boolean, value => return .bool value
+    | .index, value | .service _, value => return .str (toString value)
+    | .field _, value | .group _, value => return scalarJson value
+    | .vector _, values | .groups _, values =>
+      return .arr ((show List Scalar from values).map scalarJson).toArray
+    | .indices, values => return .arr (values.map (fun value => .str (toString value))).toArray
+    | .oracle _, _ | .oracleSequence .., _ => throw "structured-oracle-profile"
+    | .sequence element, values => do
+      if element.isHandle then throw "structured-input-handle"
+      return .arr (← values.mapM (wireOutput element)).toArray
+    | .product _ _ fields, value => do
+      if fields.hasHandle then throw "structured-input-handle"
+      return .arr (← wireProductOutput fields value).toArray
 
   def wireProductOutput : (fields : ProductFields) →
-      (uniformCarriers Scalar Scalar).ProductValue fields → List Json
-    | .nil, () => []
-    | .cons type rest, (value, values) => wireOutput type value :: wireProductOutput rest values
+      (uniformCarriers Scalar Scalar).ProductValue fields → Except String (List Json)
+    | .nil, () => return []
+    | .cons type rest, (value, values) =>
+      return (← wireOutput type value) :: (← wireProductOutput rest values)
 end
 
-def optionalOutputs {types : List Ty} : OptionalValues types → List Json
-  | .nil => []
-  | .cons (ty := type) value rest =>
-    value.elim .null (wireOutput type) :: optionalOutputs rest
+def optionalOutputs {types : List Ty} : OptionalValues types → Except String (List Json)
+  | .nil => return []
+  | .cons (ty := type) value rest => do
+    unless wireValueAllowed type do throw "structured-open-value-type"
+    return (← value.elim (pure .null) (wireOutput type)) :: (← optionalOutputs rest)
 
 /-- Validate supplied service ports before role masking, including unowned ports.
 Admission already ensures each service port has one resolved owner. -/

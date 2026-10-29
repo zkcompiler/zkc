@@ -25,7 +25,7 @@ def roleOutputSorts (role : Nat) : List (List Nat) → List Structured.Ty → Op
   | scope :: scopes, ty :: types => do
       let rest ← roleOutputSorts role scopes types
       if role ∈ scope then
-        if ty.isService then none else some (.data ty :: rest)
+        if ty.isHandle then none else some (.data ty :: rest)
       else some rest
   | _, _ => none
 
@@ -70,7 +70,7 @@ theorem roleOutputValues_sorts (role : Nat) {scopes : List (List Nat)}
             cases head : Domain.Value.encode ty value with
             | none => simp [roleOutputValues, tail, visible, head] at found
             | some actual =>
-              have data : ty.isService = false := by
+              have data : ty.isHandle = false := by
                 unfold Domain.Value.encode Domain.Payload.ofValue at head
                 split at head
                 · assumption

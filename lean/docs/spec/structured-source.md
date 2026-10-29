@@ -6,6 +6,57 @@ admission and logical meaning; [formal support](../support.md) records the
 theorems proved about particular imported subjects and how far each claim
 reaches toward native compilation and execution.
 
+## Logical oracle wire extension
+
+A native selected logical statement can bind oracle entry handles using the
+`anchor` selector marker and its exact owned target. The raw statement descriptor
+retains that marker. Current ordinary statement admission refuses the anchor marker; it does not resolve it to a participant value.
+
+The exact contract selector `["anchor", direction, port]` retains a logical anchor alternative with no role. Its raw
+`ContractSelector` has `anchor = true` and an empty role field. Ordinary contract
+resolution, typed boundary elaboration and component-instantiation admission
+refuse this profile. A wire parse does not authorize reading the participant
+value tuple as anchor data; the oracle-store interpretation is a separate
+semantic obligation.
+
+
+The strict reader recognizes the logical oracle types, twelve descriptors and
+virtual declaration rows specified by the
+[native wire contract](../../../docs/spec/formats/structured-source.md#logical-oracle-vocabulary).
+It retains actual operands, roles, ordered query occurrences, labels, the
+admissibility relation and the entire virtual body. Table kinds derive their
+Data, Query and Answer types and own an ordered list of named dimensions.
+Send dimensions match that list exactly; shape bounds and virtual argument maps
+contain exactly the dynamic dimensions, in kind order. Shape reads name an
+existing dimension. Shape values and capacities are canonical unsigned 64-bit
+decimal strings. Static dimensions use empty maps, without null or positional
+alternatives. Wire recognition alone does not establish that a row
+kind, role assignment, footprint or program is admissible.
+
+`OracleAnchor` records a construction or input occurrence under an
+`InvocationCoordinate`; calls and loop iterations retain their structural
+frames. Equal contents do not identify anchors. These are logical labels,
+without a native provider handle or an assertion that the occurrence was
+reached. The current semantic profile explicitly refuses oracle types,
+operations and declarations. Ordinary mathematical and participant admission refuse them. Transcript payloads, executable codecs and ordinary
+message projection exclude logical handles recursively, including inside
+products and sequences; service identity remains a separate predicate. Oracle execution interpretation and realization simulation remain separate work; decoding supplies neither.
+
+Bounded value tools refuse logical handle schemas before traversing aggregates,
+including empty values and absent optional ports. Open output and request helpers
+return errors for logical payloads; they provide no wire encoding of anchor
+labels. Direct checked service ports retain their existing ownership discipline.
+
+`OracleObligations` independently derives the generated condition templates and
+virtual footprints in the [native proposal format](../../../docs/spec/formats/structured-source.md#oracle-obligation-proposals).
+It checks the complete source/entry association and every exact row, preserves
+repeated queries and retains nested region coordinates. A query source must refer
+to the declared handle prefix under the row's actual SSA environment. Position
+indices remain references into the original body; a proposal supplies no new
+position evaluator or helper semantics. This is an independent consistency check,
+not admission of logical oracle execution or a proof that any generated condition
+holds. The existing semantic profile continues to refuse oracle execution.
+
 ## Checked subject
 
 `Structured.Snapshot` retains source identity, selected entry, all domains,
@@ -900,10 +951,11 @@ The simulation is relative to the certificate's explicit source input ABI.
 Scope preservation alone does not fix the order of visible public inputs or
 require every visible component to be present. The common generator derives
 source-order data locations and service associations from the source signature.
-An admission consumer must pin that ABI to its source/request selection before
-using the connection as a required source-stage link; it must not existentially
-choose an ABI from proof evidence. The current root interface does not itself
-replace that admission boundary.
+`SourceConnection.Connected` requires equality with `canonicalABI`, which fixes
+the source-order input selection for the actual role and artifact.
+`ConnectionAdmission.Required` selects that ABI and routing from the subject,
+context and mode before accepting a connection proof. A low-level root
+certificate alone does not discharge this independently fixed admission boundary.
 
 `RootCertificate.facts` supplies three consequences of the same certificate:
 the exact source equation before construction, full simulation and reached-action
@@ -1074,3 +1126,21 @@ coverage of every linear port, consistently across each closed source type.
 `EntryContractBinding` separately requires the actual selected root, its unique
 named target statement and the target's exact acceptance output. Component
 association does not supply that binding or prove its relation.
+
+## Pointwise role assembly
+
+`assemble` selects, at each named role, that role's component of its ordered
+operand. Components at different roles may differ. Admission requires a nonempty
+list of distinct known roles, one operand of the exact result type per role,
+availability of that component, no site and an ordinary data type. An unselected
+component cannot suppress the selected component. Outside the selected roles the
+result is absent; a selected absent component stays absent.
+
+`ProtocolOp.assemble`, the Domain participant meaning and NormalForm normalization
+share this rule. Assembly adds no effect or outcome check. The existing
+`normalize_soundOn` and `normalize_occurrence_sound` theorems preserve the full
+process, including surrounding effects and stops, with the same roster premises.
+The current connection route and return machinery consumes that normal form;
+internal checked partial return selection and complete root returns are unchanged.
+Product construction and projection follow the native Math/Protocol profile and
+retain ordinary availability checks. No deleted projection walker is involved.
