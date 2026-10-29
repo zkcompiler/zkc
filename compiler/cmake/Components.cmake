@@ -96,6 +96,7 @@ add_zkc_component(Language
   lib/Language/FormalSource.cpp
   lib/Language/LayoutDeclarations.cpp
   lib/Language/LayoutExpressions.cpp
+  lib/Language/LayoutOracles.cpp
   lib/Language/LayoutBodies.cpp
   lib/Language/LayoutSpecifications.cpp
   lib/Language/Arguments.cpp

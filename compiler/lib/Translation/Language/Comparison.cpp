@@ -1498,6 +1498,20 @@ class Comparator {
             return fail("message receiver restriction differs");
           result.push_back(received->getResult(0));
         }
+      } else if (auto *assembly = std::get_if<RoleAssembly>(&op.action)) {
+        for (unsigned i = 0; i < leaves.size(); ++i) {
+          Values components;
+          for (auto operand : assembly->operands)
+            components.push_back(values[operand.index][i]);
+          auto *actual = next(block, cursor, op.span, "protocol.assemble_roles",
+                              components, 1);
+          if (!actual)
+            return false;
+          if (!attributes(*actual, {"roles"}) ||
+              !roleSet(actual->getAttr("roles"), assembly->roles))
+            return fail("role component assembly differs");
+          result.push_back(actual->getResult(0));
+        }
       } else if (auto *restriction = std::get_if<Restriction>(&op.action)) {
         for (auto input : values[restriction->input.index]) {
           auto *actual =

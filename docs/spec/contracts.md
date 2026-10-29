@@ -17,6 +17,12 @@ formal adaptation; its row must keep the missing consumer explicit. Archived
 as interface authorities; this register and its linked specifications replace
 them.
 
+Frontend owns the checked program and written source associations. IR owns
+the shared catalog, generated registries, lowering the checked program into IR,
+and comparison against the actual emitted IR. Lean owns its interpretation and
+receipt audit. Consumer requirement coverage does not change an independently
+valid receipt's meaning or proof status.
+
 ## Contract inventory
 
 `Implemented` describes the named producer/consumer profile, not all possible
@@ -26,10 +32,10 @@ contract change, not the most recent documentation-only registration.
 
 | Identifier / version | Owning specification | Single owner | Producer → consumer code | Status | Stages or links introduced | Last PR |
 |---|---|---|---|---|---|---|
-| `zkc.source-ast/0` | [Written source](language/source-ast.md) | Frontend / Language | [WrittenSource.cpp](../../compiler/lib/Language/WrittenSource.cpp) → future Lean elaboration reader | Partial: original syntax and stable node paths exported; independent source reader remains open | None; does not discharge `source.correspondence` | [#177](https://github.com/zkcompiler/zkc/pull/177) |
+| `zkc.source-ast/0` | [Written source](language/source-ast.md) | Frontend / Language | [WrittenSource.cpp](../../compiler/lib/Language/WrittenSource.cpp) → future Lean elaboration reader | Partial: both native grammars and neutral formal nodes exported; independent source reader remains open | None; does not discharge `source.correspondence` | [#186](https://github.com/zkcompiler/zkc/pull/186) |
 | `zkc.source-bindings/0` | [Binding proposals](language/source-ast.md#source-binding-proposals) | Frontend / Language | [WrittenSource.cpp](../../compiler/lib/Language/WrittenSource.cpp) → [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp), future Lean elaboration reader | Partial: retained resolutions; no elaboration soundness theorem | None | [#180](https://github.com/zkcompiler/zkc/pull/180) |
 | `zkc.source-instances/0` | [Closed instances](language/source-ast.md#closed-source-instances) | Frontend / Language | [Compiler](../../compiler/lib/Compiler) → [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp), future Lean elaboration reader | Partial: closed instance associations; call-edge proof open | None | [#180](https://github.com/zkcompiler/zkc/pull/180) |
-| `zkc.source-correspondence/0` | [Elaboration associations](language/source-ast.md#checked-source-artifact) | Frontend / Language | [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp) → future Lean correspondence checker | Partial: producer and native association checks; proof open | Proposed source-to-admitted connection | [#180](https://github.com/zkcompiler/zkc/pull/180) |
+| `zkc.source-correspondence/0` | [Checked elaboration](language/elaboration.md) | Frontend / Language | [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp) → future Lean correspondence checker | Partial: producer and native association checks; proof open | Proposed source-to-admitted connection | [#185](https://github.com/zkcompiler/zkc/pull/185) |
 | Structured source, version 0 | [Structured source](formats/structured-source.md) | IR / Protocol | [StructuredSource.cpp](../../compiler/lib/Compiler/StructuredSource.cpp) → [Lean structured reader](../../lean/Zkc/Source/Structured) | Partial: exact native/Lean oracle and assembly vocabulary; oracle execution is excluded from the ordinary Lean profile | Existing source interpretation; no oracle execution admission | [#177](https://github.com/zkcompiler/zkc/pull/177) |
 | Logical oracle operations and kinds, version 0 | [Protocol oracles](ir/protocols.md#logical-oracle-kinds-and-handles), [wire operations](formats/structured-source.md#logical-oracle-vocabulary) | IR / Protocol | [OracleOps.td](../../compiler/include/zkc/Dialect/Protocol/IR/OracleOps.td), [Protocol formation](../../compiler/lib/Dialect/Protocol/IR/Oracles.cpp) → [realization](../../compiler/lib/Transforms/OracleCommonRealization.cpp), frontend emission, Lean reader | Partial: native table/virtual semantics and realization, exact Lean wire/shape reading; full frontend spelling and Lean oracle execution pending | No new registered claim stage | [#177](https://github.com/zkcompiler/zkc/pull/177) |
 | `zkc.oracle-obligations/0` | [Oracle proposals](formats/structured-source.md#oracle-obligation-proposals) | IR / Protocol | [OracleObligations.cpp](../../compiler/lib/Compiler/OracleObligations.cpp) → native comparison and Lean independent derivation | Partial: independently checked occurrence-bound templates and footprints; no predicate discharge | None | [#177](https://github.com/zkcompiler/zkc/pull/177) |
@@ -51,7 +57,8 @@ contract change, not the most recent documentation-only registration.
 | `zkc.declarations/0` | [Assurance pipeline](../../lean/docs/spec/assurance-report.md) | Lean / Claims | [subject bridge](../../lean/bridges/subject.py), [Claims](../../lean/Zkc/Claims) → [record checks](../../lean/checks/check_records.py) and report consumers | Implemented within registered subject profiles | Registered stages and links below | [#182](https://github.com/zkcompiler/zkc/pull/182) |
 | `zkc.assurance-report/0` | [Assurance pipeline](../../lean/docs/spec/assurance-report.md) | Lean / Claims | [subject bridge](../../lean/bridges/subject.py), [Claims](../../lean/Zkc/Claims) → [record checks](../../lean/checks/check_records.py) and report consumers | Implemented within registered subject profiles | Registered stages and links below | [#188](https://github.com/zkcompiler/zkc/pull/188) |
 | `zkc.consumer-requirements/0` | [Independent consumer scope](../../lean/docs/spec/assurance-report.md) | Lean / Claims, with frontend consumer integration | Independent consumer file → [record checks](../../lean/checks/check_records.py), Lean receipt audit → report consumer | Partial: independent occurrence/context input and post-audit coverage; frontend producer integration pending | Adds omission accounting; changes no receipt meaning or stage | [#188](https://github.com/zkcompiler/zkc/pull/188) |
-| Companion / assembly contract; version unassigned | [Planned source connection](../roadmap.md#shared-interfaces-before-implementation), [existing request semantics](language/claims.md) | Frontend / Language | Future frontend module producer → [typed resolver](../../lean/ZkcTools/Companions.lean), [assembly](../../lean/ZkcTools/Companions/Assembly.lean) and existing receipt audit | Partial: typed resolver and assembly implemented; compact companion identity proposed by frontend fits resolver; source/instance producer association remains pending | None; not a second receipt authority | — |
+| `zkc.companion/0` lookup identity and obligation inventory | [Companions](language/companions.md) | Frontend / Language | Authored inventory and generated lookup addresses → [Lean typed resolver](../../lean/ZkcTools/Companions.lean) and [assembly](../../lean/ZkcTools/Companions/Assembly.lean) | Partial: lookup keys, mandatory pending postconditions and Lean typed resolution/assembly implemented; source/instance producer association remains open | None; existing Lean admission remains authority | [#185](https://github.com/zkcompiler/zkc/pull/185) |
+| Layout requests and authored site selection | [Layout syntax](language/layout-syntax.md), [site defaults](language/layout-execution.md) | Frontend / Language | Lossless syntax and native projection → written occurrences and pending obligations | Partial: source association retained; typed request generation and independent checking pending | Selects existing meanings; adds no assurance stage | [#186](https://github.com/zkcompiler/zkc/pull/186) |
 | Retired proposal `zkc.lean-interface/0` | [Shared interfaces plan](../roadmap.md#shared-interfaces-before-implementation) | Frontend / Language | Existing declarations and bound requests → frontend resolution | Retired proposal: extend existing transports; no parallel format is admitted | None | — |
 | Restricted logical aggregates; version unassigned | [Logical aggregate plan](../roadmap.md#shared-interfaces-before-implementation) | IR / Protocol | Future frontend claim views → Protocol formation and Lean reader | Designed: typed field paths and role components; ordinary data/codec boundaries continue to exclude handles | None | — |
 | Application correspondence map; version unassigned | [Correspondence plan](../roadmap.md#shared-interfaces-before-implementation) | IR / Protocol | Future compiler proposal → Lean source connection checker | Designed: shared format and arbitrary relocation proof open | No new trusted link; proposals must be checked | — |
@@ -62,6 +69,14 @@ For designed rows, the linked roadmap is a delivery contract, not a wire
 specification. Their owner supplies a repository specification and code paths
 before a producer and consumer can claim interoperability. A private proposal
 or a branch-local implementation cannot silently register an accepted value.
+
+The layout frontend's explicit role assembly is governed by
+[layout execution](language/layout-execution.md) and the existing
+[IR assembly contract](ir/protocols.md). Frontend owns parsing, checked types and
+placement, and written component order. IR owns lowering, formation, participant
+projection and actual-IR comparison. The source AST retains ordered assembly
+components without an equality premise or a new claim stage. The independent
+Lean source checker must check the same selection.
 
 ## Registered enumerations
 
@@ -83,6 +98,11 @@ not create a second runtime registry or grant every registered mathematical
 operation to every target. The four-face catalog probe in the
 [foundation plan](../roadmap.md#catalog-and-mlir-foundation-probe) must account for
 frontend, ODS, native execution and the Lean installed vocabulary together.
+
+The proposed standalone `zkc.lean-interface/0` is superseded by projections
+of existing Lean declarations, subjects and bound-request formats. The
+[frontend architecture](../compiler/frontend-architecture.md) records the
+source resolution boundary; no second proof pipeline is introduced.
 
 ## Formal assurance boundary
 
@@ -111,6 +131,12 @@ generic receipts may cover explicit authoring requirements without creating a
 canonical security headline. The consumer owns its required set: this check cannot
 prove the set exhaustive.
 
+The [IR-relative assurance scope](../assurance.md#ir-relative-security-claims)
+names frontend elaboration as trusted. Independent source elaboration is a
+stronger assurance target, not a prerequisite for that scope. This changes no
+registered link, stage or receipt rule. In particular, checked connections for
+security-changing construction and realization remain required when claimed.
+
 ## Occurrence identity
 
 These carriers have distinct purposes. Their current names are registered here;
@@ -133,6 +159,27 @@ untrusted proposal consumed by Lean, not proof authority carried on an IR value.
 A relocation changes the checked association even when a display label stays
 unchanged. Digest spellings retain each owning format's exact grammar.
 
+### Required checked edges
+
+An identity always includes its enclosing immutable artifact. Similar printed
+names from different domains are not interchangeable.
+
+| Domain | Anchor | Checked edge to the next domain |
+| --- | --- | --- |
+| Written node | `(capture, installation, owner, path)` in `zkc.source-ast/0` | Elaboration reader validates name resolution, binders, role substitution and lowering against the admitted program. |
+| Authored/inferred site | Declaration instance plus site label and nesting/call route | Native occurrence export selects actual operations. Explicit labels and default names obey one uniqueness rule. |
+| Closed declaration instance | Template plus checked, ordered static substitution under the installation | `zkc.source-instances/0` associates the instance with the structured admitted symbol. Printed symbols alone prove nothing. |
+| Structured row | Exact snapshot/admission plus row | Actual-module reader checks ports, operations, ordering and origin associations. |
+| Native execution origin | Complete `native-origin/0` origin under the selected program | The transcript/observation contract checks exact encoding and reached occurrence; an AST path cannot substitute for its bytes. |
+| Obligation key | Source/instance identity plus semantic role and local key | Companion matching checks the independently fixed Lean type; a key is a lookup address, not a proof digest. |
+| Realization occurrence | Exact original/realized artifacts plus occurrence selection | IR realization reader checks the actual selected operations and ordered expansion; Lean separately proves the realization link. |
+| Bound request | Exact subject, admitted request digest and source attachment | Receipt audit compares the admitted request, dependency scope and required consumer set with receipts. |
+
+Source insertion can change ordinal paths. Renaming a default site changes its
+site identity. A stable explicit label does not preserve a proof across changed
+program semantics: artifact identity and the fixed expected proposition still
+change. No mapping above is inferred from equal spans or string prefixes.
+
 ## Shared oracle-stack acceptance boundary
 
 The common acceptance client is FRI/STARK written in the agreed frontend
@@ -143,6 +190,8 @@ not pass it.
 - Frontend spells all twelve logical operations, restricted logical claim
   aggregates, setup authority and explicit realization selection. Its written
   source export must preserve source associations through elaboration.
+  The current [layout oracle profile](language/oracles.md) projects eleven
+  operations; virtual definitions and restricted logical records remain open.
 - IR preserves anchors, holder/receiver custody, named shapes, ordered domain
   failures, virtual dependencies and complete realization records. Fixed base
   query blocks are implemented; dynamic virtual blocks and FRI follow the native
@@ -162,3 +211,7 @@ Report these four results separately against the same source and configuration.
 The same logical client under ideal, Poseidon2-Merkle and Keccak-Merkle choices
 must retain its protocol meaning; neither matching successful outputs nor a
 single passing implementation establishes cryptographic or resource equivalence.
+
+The runtime owns the SDK source-format cutover. Frontend syntax support does
+not switch production defaults. The source/request connection and host/editor
+consumers must satisfy their owning contracts before that switch.

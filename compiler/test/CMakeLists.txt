@@ -61,6 +61,9 @@ target_compile_definitions(zkc-oracle_common_realization-test PRIVATE
 mlir_target_link_libraries(zkc-oracle_query_capacity-test PRIVATE MLIRParser)
 add_zkc_test(source_correspondence Compiler source-correspondence)
 add_zkc_test(language_authoring Language language-authoring)
+add_zkc_test(language_layout_oracles Compiler language-layout-oracles)
+add_zkc_test(language_role_assembly Compiler language-role-assembly)
+mlir_target_link_libraries(zkc-language_role_assembly-test PRIVATE MLIRParser)
 add_zkc_test(source_requests Source source-requests)
 target_compile_definitions(zkc-source_correspondence-test PRIVATE
   ZKC_CORRESPONDENCE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/source-claims")

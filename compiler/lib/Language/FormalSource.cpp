@@ -261,6 +261,14 @@ class Reader {
       }
       return result;
     }
+    case K::RoleAssembly: {
+      if (auto error = arity(1, 1))
+        return error;
+      auto components = list(children(nodes[0]));
+      if (!components)
+        return components.takeError();
+      return FormalRoleAssembly{std::move(*components)};
+    }
     case K::RoleType: {
       if (auto error = arity(2, 2))
         return error;
@@ -569,6 +577,27 @@ class Reader {
         return projected67.takeError();
       result.receivers = std::move(*projected67);
       return result;
+    }
+    case K::OracleSend: {
+      if (nodes.size() != 2 && nodes.size() != 4)
+        return fail(id, "oracle delivery has an invalid shape");
+      auto values = list(nodes);
+      if (!values)
+        return values.takeError();
+      FormalOracleSend result{(*values)[0], (*values)[1], {}, {}};
+      if (values->size() == 4) {
+        result.rows = (*values)[2];
+        result.maximum = (*values)[3];
+      }
+      return result;
+    }
+    case K::QueryBody: {
+      if (auto error = arity(2, 2))
+        return error;
+      auto values = list(nodes);
+      if (!values)
+        return values.takeError();
+      return FormalQueryBody{(*values)[0], (*values)[1]};
     }
     case K::Query: {
       if (auto error = arity(2, 2))

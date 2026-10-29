@@ -32,10 +32,29 @@ Expected<SyntaxPort> LayoutReader::port(Id id, bool unnamed) {
     if (!projected4)
       return projected4.takeError();
     auto nodes = std::move(*projected4);
-    auto projected5 = roles(nodes[1]);
-    if (!projected5)
-      return projected5.takeError();
-    result.roles = std::move(*projected5);
+    auto roleNodes = children(nodes[1]);
+    bool custody =
+        roleNodes.size() >= 2 && between(roleNodes[0], roleNodes[1]) == "->";
+    if (custody) {
+      auto holder = name(roleNodes.front());
+      if (!holder)
+        return holder.takeError();
+      result.oracleHolder = std::move(*holder);
+      for (auto receiver : roleNodes.drop_front()) {
+        if (kind(receiver) != K::Name)
+          return fail(receiver, "oracle receiver must be a role name",
+                      "source.oracle-port");
+        auto value = name(receiver);
+        if (!value)
+          return value.takeError();
+        result.roles.push_back(std::move(*value));
+      }
+    } else {
+      auto projected = roles(nodes[1]);
+      if (!projected)
+        return projected.takeError();
+      result.roles = std::move(*projected);
+    }
     target = nodes[0];
   }
   auto projected6 = type(target);
@@ -363,7 +382,7 @@ Error LayoutReader::declaration(Id id, SyntaxDeclaration &parent) {
     return Error::success();
   }
   if (!attributes.empty() && kind(id) != K::TypeAlias &&
-      kind(id) != K::Struct && kind(id) != K::Enum)
+      kind(id) != K::Struct && kind(id) != K::Enum && kind(id) != K::Protocol)
     return fail(attributes.front(),
                 "resource attributes must precede a type declaration",
                 "source.resource");
@@ -388,6 +407,7 @@ Error LayoutReader::declaration(Id id, SyntaxDeclaration &parent) {
   SyntaxDeclaration result;
   result.layoutSyntax = true;
   result.span = span(id);
+  result.layoutDeclarationStart = span(id).begin;
   result.explicitPublic = visible(id);
   result.isPublic =
       result.explicitPublic || parent.kind == Declaration::Kind::Interface;
@@ -605,6 +625,12 @@ Error LayoutReader::declaration(Id id, SyntaxDeclaration &parent) {
       return projected61.takeError();
     result.target = std::move(*projected61);
     result.domain = literal.drop_front().drop_back().str();
+  }
+  if (!attributes.empty() && result.kind == D::Protocol) {
+    result.span.begin = span(attributes.front()).begin;
+    if (auto error = oracleShapes(result))
+      return error;
+    attributes.clear();
   }
   if (!attributes.empty()) {
     result.span.begin = span(attributes.front()).begin;

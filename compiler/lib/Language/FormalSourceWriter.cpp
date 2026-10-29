@@ -157,6 +157,11 @@ class Writer {
                              {"participants",
                               edges("participants", form.participants)}});
   }
+  json::Value write(const FormalRoleAssembly &form, source::Span span) {
+    return emit(
+        "formal.role-assembly", span,
+        json::Object{{"components", edges("components", form.components)}});
+  }
   json::Value write(const FormalAvailability &form, source::Span span) {
     return emit("formal.availability", span,
                 json::Object{{"value", edge("value", form.value)},
@@ -282,6 +287,19 @@ class Writer {
         json::Object{{"value", edge("value", form.value)},
                      {"sender", edge("sender", form.sender)},
                      {"receivers", edges("receivers", form.receivers)}});
+  }
+  json::Value write(const FormalOracleSend &form, source::Span span) {
+    return emit("formal.oracle-delivery", span,
+                json::Object{{"delivery", edge("delivery", form.delivery)},
+                             {"kind", edge("kind", form.kind)},
+                             {"rows", edge("rows", form.rows)},
+                             {"maximum", edge("maximum", form.maximum)}});
+  }
+  json::Value write(const FormalQueryBody &form, source::Span span) {
+    return emit(
+        "formal.query-body", span,
+        json::Object{{"parameters", edge("parameters", form.parameters)},
+                     {"body", edge("body", form.body)}});
   }
   json::Value write(const FormalQuery &form, source::Span span) {
     return emit("formal.query", span,

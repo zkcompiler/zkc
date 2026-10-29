@@ -98,6 +98,14 @@ Examples:
 - `[["clause",0],["subject",0]]`: an inline relation in the first clause;
 - `[["spec_block",0],["claim",1]]`: the second claim in the first claim block.
 
+`expr.role_assembly` retains the written role names in `labels` and their
+corresponding expressions in `operands`, both in source order. It does not
+claim equality of components. The neutral formal term constructor
+`formal.role-assembly` retains its ordered `components` argument edges;
+role resolution, type/availability checks and leaf layout belong to checked
+elaboration. An invalid or unsupported expression role suffix never disappears
+from written source, and native elaboration refuses it.
+
 The last mapping is exactly the source-claim address `(owner, block, claim)`.
 Clause names and claim labels are syntax fields and do not replace ordinals.
 A member definition has its own owner. An inline relation or construction
@@ -112,6 +120,12 @@ their single handle operand. An oracle port additionally retains its written
 `oracle_holder` and optional `oracle_maximum` syntax child. Inferred owner,
 paired interface leaves and generated shape constants belong to elaboration,
 not to this AST.
+
+A layout declaration's `oracle_shapes` list retains its preceding shape
+attributes. Each `oracle_shape` node has a `port`, `dimension`, and a static
+`bound` child, under the attribute's source span. A bound written there is not
+invented as an inline `oracle_maximum` port child. Signature checking resolves
+the attachment independently into the checked port's shape metadata.
 
 Sequence expressions have the exact kinds `expr.oracle_sequence_empty`,
 `expr.oracle_sequence_append`, `expr.oracle_sequence_at` and
@@ -205,6 +219,8 @@ edge uses index zero. A literal's `literal` field retains its source spelling
 | `for` | `index`, `lower`, `upper`, `body`, optional `roles`, optional `maximum` |
 | `send` | `value`, optional `sender`, ordered `receivers` |
 | `query` | `handle`, `position` |
+| `oracle-delivery` | `delivery`, `kind`, optional `rows`, optional `maximum` |
+| `query-body` | `parameters`, `body` |
 | `quantifier` | Boolean `existential`, `variable`, `type`, `body` |
 | `lambda` | ordered `parameters`, `body` |
 | `reduction` | `symbol`, ordered `bindings` (`pattern` and `domain` paths), optional `filter`, `body` |

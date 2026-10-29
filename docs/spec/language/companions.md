@@ -112,47 +112,29 @@ manufacture proof authority.
 `lean/checks/check_records.py --subject NAME --requirements PATH` passes an
 independently supplied JSON object into the existing fresh Lean receipt audit.
 The file is not read from a provider's subject manifest and is never synthesized
-from the receipts under inspection. It uses this exact outer shape:
+from the receipts under inspection. Lean's
+[assurance report contract](../../../lean/docs/spec/assurance-report.md) owns
+the exact `zkc.consumer-requirements/0` envelope, admission and coverage result.
+The frontend consumes that contract rather than defining another audit format.
 
-```json
-{
-  "format": "zkc.consumer-requirements/0",
-  "context": {
-    "subject": "consumer-selected subject name",
-    "manifest_sha256": "exact selected manifest SHA-256",
-    "checker": {"...": "complete independently selected checker environment"}
-  },
-  "claims": [
-    {"node": {"kind": "source-claim", "owner": "qualified owner", "block": 0, "claim": 0},
-     "request": {"...": "complete admitted request, including exact subject and stage"}}
-  ]
-}
-```
+A frontend consumer supplies the complete selected subject, manifest and checker
+context, together with exact source occurrences and complete interpreted
+requests. Property names, display labels and request digests alone cannot replace
+those records. It fixes this set independently of the candidate's supplied
+receipts and refreshes it deliberately when changing accepted artifacts.
+Pinning a manifest does not prove its source correspondence or establish that
+the consumer selected every desired property.
 
-The ellipses illustrate complete existing records, not literal wildcard fields.
-The checker object uses the existing assurance-report environment schema. The
-request is the full `zkc.bound-source-claims/0` request object, not a property name
-or digest alone. Its attachment node identifies the required occurrence under
-that context. A consumer copies or authors this policy independently before
-inspecting a candidate's receipts and refreshes it deliberately when changing
-accepted artifacts. Pinning a manifest does not prove its source correspondence.
+Lean classifies receipt validity before comparing requirement coverage. Missing,
+changed, ambiguous or unproved requirements keep coverage open without changing
+a valid supplied receipt's type-level status. Every required item must be
+certified before the selected security aggregate can be certified. Successful
+author-only coverage does not create a security claim; trials cannot cover the
+selected subject. Extra claims retain the ordinary audit rules.
 
-Lean compares exact JSON values and requires a nonempty, unique expected
-occurrence set. Every expected occurrence must appear exactly once with exactly
-that request and obtain a certified receipt from the existing audit. Missing,
-changed, ambiguous or unproved requirements leave the result open. Extra claims
-are still audited under the existing selected-scope rules. An all-empty provider
-inventory cannot downgrade requested work to `no-claim`. A matching requirement
-set alone proves nothing; ordinary registry, subject, dependency, kernel and
-stage checks remain mandatory. Trials are separate scopes and do not discharge
-requirements of the selected subject.
-
-The final audit echoes the requirement object, bound to the fresh invocation's
-nonce and input digest. The report retains it. Transport failure remains a
-transport failure. The CLI returns failure when explicit consumer requirements
-are unresolved. Without this option, an established outcome describes only the
-provider's declared scope; it makes no assertion about unlisted consumer needs.
-Duplicate JSON members and non-finite JSON numbers are refused at file ingress.
-The Lean audit rejects unknown or missing fields in the requirements object,
-its context and each expected-occurrence item. Extending these records requires
-an owning contract and consumer change rather than ignored policy metadata.
+The final report retains the independent requirement input and its separately
+classified coverage. Without that input, an established outcome concerns only
+the provider's declared scope. Frontend tools must display coverage separately
+from receipt validity and must not treat either as proof of the source-to-program
+connection. Unknown fields and invalid ingress data are refused under Lean's
+owning contract; no frontend compatibility reader changes that admission.

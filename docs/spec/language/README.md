@@ -9,6 +9,7 @@ These native contracts define `.zkc` source and its checked translation. The
 | [Source authoring](authoring.md) | Optional source LSP, typed queries, document revisions and cancellation |
 | [Layout syntax](layout-syntax.md) | Immutable source revisions, lossless layout parsing, notation environments, recovery and formatting |
 | [Native layout execution](layout-execution.md) | Development source entry, native checking/execution, pending specifications and projection limits |
+| [Oracle source projection](oracles.md) | Custody, shapes, queries, delivery, sequences and remaining oracle integration gates |
 | [Mathematical notation](notation.md) | Descriptors, fixity, delimiter calls, scope, inspection and bounds |
 | [Definitions and types](definitions.md) | Capture, names, static terms, mathematics, permissions, callables and bounds |
 | [Protocol bodies and relations](protocols.md) | Ordered control, availability, services, composition, repetition, completion and specification clauses |
@@ -17,6 +18,7 @@ These native contracts define `.zkc` source and its checked translation. The
 | [Operation bindings](bindings.md) | Native nominal types, operation applications and physical selection |
 | [Checked elaboration](elaboration.md) | Independent reconstruction of source-to-program meaning |
 | [Companions and requirements](companions.md) | Obligation keys, proof matching and independent expected requests |
+| [Formal associations](formal-associations.md) | Pending-claim field binding and the typed default-reduction contract |
 | [Written source AST](source-ast.md) | Syntax retention, structural addresses and the source-correspondence input |
 | [Translation](translation.md) | MLIR emission, independent source comparison and the immutable checked original |
 

@@ -865,7 +865,7 @@ pub protocol Demo roles(P)(value: bool @P) -> bool @P:
         check(R"(pub protocol Demo roles(P, V)(value: bool @P -> V) -> bool @V:
     return value
 )"),
-        "source.oracle-unavailable");
+        "source.oracle-port");
   });
   for (StringRef qualifier : {"Choice", "m::Choice"})
     cases.run("qualified match resolves its nominal enum: " + qualifier, [&] {

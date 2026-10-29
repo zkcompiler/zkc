@@ -2,6 +2,25 @@
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
+std::optional<Statement::Evaluation>
+BodyChecker::oracleEvaluation(Expression::Kind kind) {
+  using K = Expression::Kind;
+  switch (kind) {
+  case K::OracleSend:
+  case K::OracleQuery:
+  case K::OracleSequenceAppend:
+  case K::OracleSequenceAt:
+    return Statement::Evaluation::Ordered;
+  case K::OracleContents:
+  case K::OracleRows:
+  case K::OracleForgetRows:
+  case K::OracleSequenceEmpty:
+  case K::OracleSequenceLength:
+    return Statement::Evaluation::Pure;
+  default:
+    return {};
+  }
+}
 std::optional<ValueId> BodyChecker::oracle(const Expression &expr,
                                            unsigned depth) {
   using K = Expression::Kind;

@@ -1037,6 +1037,10 @@ class ExpressionInference {
       // Loop bodies have their own statement scopes and no value result.
       constrain(result.type, Type(T::Unit), expr.span);
       break;
+    case K::RoleAssembly:
+      for (unsigned i = 0; i < expr.children.size(); ++i)
+        types.equal(result.type, child(i), expr.span);
+      break;
     case K::OracleSequenceEmpty: {
       std::vector<Type> arguments;
       for (const auto &term : expr.arguments) {

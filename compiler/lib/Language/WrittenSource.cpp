@@ -186,6 +186,8 @@ StringRef syntaxKind(Expression::Kind value) {
     return "oracle_forget_rows";
   case Expression::Kind::MethodCall:
     return "method_call";
+  case Expression::Kind::RoleAssembly:
+    return "role_assembly";
   case Expression::Kind::FinishIf:
     return "finish_if";
   case Expression::Kind::NotationCall:
@@ -754,6 +756,16 @@ private:
                })}});
     }
     json::Object result{
+        {"oracle_shapes",
+         list("oracle_shape", value.oracleShapes,
+              [&](auto &shape) {
+                return emit("oracle_shape", shape.span,
+                            json::Object{{"port", shape.port},
+                                         {"dimension", shape.dimension},
+                                         {"bound", child("bound", 0, [&] {
+                                            return type(shape.bound);
+                                          })}});
+              })},
         {"formal", list("formal", value.formalSyntax,
                         [&](auto &formal) { return formalNode(formal); })},
         {"name", anonymous ? json::Value(nullptr) : json::Value(value.name)},
