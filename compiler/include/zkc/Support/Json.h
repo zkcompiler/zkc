@@ -6,14 +6,21 @@
 
 namespace zkc {
 /// Parse bounded object/array JSON with unique decoded object keys, valid
-/// Unicode strings, and canonical unsigned decimal numeric tokens. LLVM owns
-/// the remaining JSON grammar. Limits are checked before lexical/shape errors;
-/// consumers retain their own schema and numeric range checks. Unlike
+/// Unicode strings, and canonical unsigned 64-bit decimal numeric tokens. LLVM
+/// owns the remaining JSON grammar. Limits are checked before lexical/shape
+/// errors; consumers retain their own schema and numeric range checks. Unlike
 /// parseJson, numbers use LLVM's numeric carrier, not arbitrary-precision
 /// natural markers.
 llvm::Expected<llvm::json::Value>
 parseNaturalJson(llvm::StringRef text, size_t byteLimit, unsigned depthLimit,
                  llvm::StringRef invalidCode, llvm::StringRef limitCode);
+
+/// Exact structural equality for the unsigned-integer JSON profile. Object
+/// order is irrelevant; array order and every integer bit are significant.
+/// Negative or floating numeric carriers do not match, even themselves. Callers
+/// bound the trees through their input readers; this is not schema admission.
+bool equalNaturalJson(const llvm::json::Value &left,
+                      const llvm::json::Value &right);
 
 /// Reject invalid UTF-8 and unpaired surrogate escapes in a quoted JSON token.
 /// The caller still checks JSON string syntax and escapes.

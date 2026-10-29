@@ -847,7 +847,7 @@ Error checkSourceClaims(const ClosedEntry &entry, StringRef bytes,
   auto canonical = json::parse(*expected);
   if (!canonical)
     return canonical.takeError();
-  if (*actual != *canonical)
+  if (!zkc::equalNaturalJson(*actual, *canonical))
     return detail::failure("source.claim.export",
                            "claim export differs from the checked source");
   return Error::success();

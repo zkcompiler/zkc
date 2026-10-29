@@ -590,8 +590,8 @@ public:
             auto bound =
                 query.getInputs().front().getDefiningOp<data::IndexOp>();
             if (!bound || !protocol::parseUniformIndexBound(bound.getValue()))
-              return refuse(op, "index query requires a constant power-of-two "
-                                "bound no greater than 2^63");
+              return refuse(op, "index query requires a positive constant "
+                                "unsigned 64-bit bound");
           }
           BitVector available(count);
           available.set(owner);

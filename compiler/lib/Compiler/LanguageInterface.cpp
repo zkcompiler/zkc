@@ -249,7 +249,7 @@ Error checkInterface(const CheckedOriginal &original, StringRef bytes,
   auto expected = json::parse(original.interfaceJson());
   if (!expected)
     return expected.takeError();
-  if (*actual != *expected)
+  if (!zkc::equalNaturalJson(*actual, *expected))
     return error(
         "source.interface",
         "interface does not match the retained original and selected Entry");

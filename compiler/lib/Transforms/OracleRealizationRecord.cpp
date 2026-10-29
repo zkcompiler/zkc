@@ -700,7 +700,7 @@ Error checkIdealOracleRealization(ModuleOp prepared, ModuleOp candidate,
   auto expected = encode(prepared, candidate, entries);
   if (!expected)
     return expected.takeError();
-  if (*expected != *parsed)
+  if (!zkc::equalNaturalJson(*expected, *parsed))
     return refuse();
   return Error::success();
 }

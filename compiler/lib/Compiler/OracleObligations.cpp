@@ -161,7 +161,7 @@ Error checkOracleObligations(StringRef original, StringRef symbol,
   auto canonical = json::parse(*expected);
   if (!canonical)
     return canonical.takeError();
-  if (*actual != *canonical)
+  if (!zkc::equalNaturalJson(*actual, *canonical))
     return error("oracle-obligations-mismatch");
   return Error::success();
 }
