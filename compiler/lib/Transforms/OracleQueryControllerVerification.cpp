@@ -110,7 +110,7 @@ Error layout(const OracleVerificationContext &targetContext,
       if (auto e = checkOracleVirtualFunctions(targetContext, sourceContext,
                                                original, item.functions))
         return e;
-      std::vector<Type> previous;
+      std::vector<unsigned> previous;
       unsigned queryIndex = 0;
       for (auto query :
            original.getBody().front().getOps<pir::OracleQueryOp>()) {
@@ -121,19 +121,9 @@ Error layout(const OracleVerificationContext &targetContext,
           return refuse();
         const auto &frame = actual.continuations[frameCount];
         if (frame.constructor != constructorCount ||
-            frame.query != queryIndex || frame.previousAnswers != previous)
+            frame.query != queryIndex || frame.previousKinds != previous)
           return refuse();
-        std::vector<std::string> fields(4, "index");
-        for (Type type : previous) {
-          auto bound = encodeBoundType(type, false);
-          if (!bound)
-            return bound.takeError();
-          auto spelling = bound->spelling();
-          if (spelling.size() > metadataRemaining)
-            return refuse();
-          metadataRemaining -= spelling.size();
-          fields.push_back(std::move(spelling));
-        }
+        std::vector<std::string> fields(4 + previous.size(), "index");
         auto descriptor = encodeVariant(
             {json::Array{"zkc.oracle.continuation/0",
                          toHex(storage.entry, true), toHex(role, true),
@@ -148,7 +138,7 @@ Error layout(const OracleVerificationContext &targetContext,
           return arena.takeError();
         if (frame.record != record || frame.sequence != *arena)
           return refuse();
-        previous.push_back(query.getAnswer().getType());
+        previous.push_back(*queryKind);
         ++frameCount;
         ++queryIndex;
       }
@@ -164,7 +154,7 @@ Error layout(const OracleVerificationContext &targetContext,
       actual.rowCounts.size() != kinds.size() ||
       actual.constructionCounts.size() != constructorCount)
     return refuse();
-  std::vector<Type> state(7, index);
+  std::vector<Type> state(Controller::HeaderSize, index);
   append_range(state, answers);
   for (const auto &frame : actual.continuations)
     state.push_back(frame.sequence);
@@ -426,8 +416,10 @@ struct Reader {
   ValueRange stores(ValueRange values) {
     return values.drop_front(model.state.size());
   }
-  unsigned answerSlot(unsigned kind) { return 7 + kind; }
-  unsigned frameSlot(unsigned frame) { return 7 + model.kinds.size() + frame; }
+  unsigned answerSlot(unsigned kind) { return Controller::HeaderSize + kind; }
+  unsigned frameSlot(unsigned frame) {
+    return Controller::HeaderSize + model.kinds.size() + frame;
+  }
   unsigned kindNumber(pir::OracleKindAttr kind) {
     auto reference = cantFail(oracleReferenceType(kind));
     for (auto [i, current] : enumerate(model.kinds))
@@ -464,16 +456,18 @@ struct Reader {
     return inputs;
   }
   void putAnswer(Cursor &c, Values &state, unsigned kind, Value answer) {
-    auto empty = c.empty(model.answers[kind], "answer_empty");
+    auto arena = state[answerSlot(kind)];
+    state[Controller::AnswerIndex] =
+        c.length(model.answers[kind], arena, "answer_index");
     state[answerSlot(kind)] =
-        c.append(model.answers[kind], empty, answer, "answer_value");
+        c.append(model.answers[kind], arena, answer, "answer_value");
     state[Controller::Kind] = c.number(kind, "answer_kind");
     state[Controller::Phase] = c.number(1, "return");
   }
   Value getAnswer(Cursor &c, ValueRange state, unsigned kind) {
-    auto zero = c.number(0, "answer_index");
     return c.at(model.answers[kind], model.kinds[kind].getAnswerType(),
-                state[answerSlot(kind)], zero, "read_answer");
+                state[answerSlot(kind)], state[Controller::AnswerIndex],
+                "read_answer");
   }
   // Remaining body checks are deliberately separate from production emission.
   void child(Cursor &c, Values &values, unsigned constructor, unsigned query,
@@ -536,44 +530,48 @@ struct Reader {
          });
   }
   void returned(func::FuncOp function, unsigned frame) {
-    body(function, allTypes(), model.state, false,
-         [&](Cursor &c, ValueRange inputs) {
-           auto values = state(inputs);
-           const auto &layout = model.continuations[frame];
-           const auto &item = model.constructors[layout.constructor];
-           const auto &query = item.functions.queries[layout.query];
-           auto kind = kindNumber(query.kind);
-           c.equalTo(values[Controller::Kind], kind, "returned_kind");
-           auto saved =
-               c.at(layout.sequence, layout.record, values[frameSlot(frame)],
-                    values[Controller::ContinuationInstance], "load_frame");
-           Types fields(4, index);
-           append_range(fields, layout.previousAnswers);
-           auto record = c.unpack(saved, fields, "frame");
-           auto answer = getAnswer(c, values, kind);
-           Values answers(record.begin() + 4, record.end());
-           answers.push_back(answer);
-           values[Controller::Continuation] = record[0];
-           values[Controller::ContinuationInstance] = record[1];
-           values[Controller::Constructor] =
-               c.number(item.source, "parent_constructor");
-           values[Controller::Instance] = record[2];
-           values[Controller::Position] = record[3];
-           auto parent =
-               load(c, layout.constructor, values[Controller::Constructor],
-                    values[Controller::Instance],
-                    stores(inputs)[layout.constructor]);
-           if (layout.query + 1 == item.functions.queries.size()) {
-             auto inputs = parameters(layout.constructor, parent, record[3]);
-             append_range(inputs, answers);
-             auto result =
-                 c.compute(item.functions.answer, inputs, "virtual_answer");
-             putAnswer(c, values, item.kind, result);
-           } else
-             child(c, values, layout.constructor, layout.query + 1, parent,
-                   answers);
-           c.finish(values);
-         });
+    body(
+        function, allTypes(), model.state, false,
+        [&](Cursor &c, ValueRange inputs) {
+          auto values = state(inputs);
+          const auto &layout = model.continuations[frame];
+          const auto &item = model.constructors[layout.constructor];
+          const auto &query = item.functions.queries[layout.query];
+          auto kind = kindNumber(query.kind);
+          c.equalTo(values[Controller::Kind], kind, "returned_kind");
+          auto saved =
+              c.at(layout.sequence, layout.record, values[frameSlot(frame)],
+                   values[Controller::ContinuationInstance], "load_frame");
+          Types fields(4 + layout.previousKinds.size(), index);
+          auto record = c.unpack(saved, fields, "frame");
+          Values references(record.begin() + 4, record.end());
+          references.push_back(values[Controller::AnswerIndex]);
+          values[Controller::Continuation] = record[0];
+          values[Controller::ContinuationInstance] = record[1];
+          values[Controller::Constructor] =
+              c.number(item.source, "parent_constructor");
+          values[Controller::Instance] = record[2];
+          values[Controller::Position] = record[3];
+          auto parent = load(
+              c, layout.constructor, values[Controller::Constructor],
+              values[Controller::Instance], stores(inputs)[layout.constructor]);
+          if (layout.query + 1 == item.functions.queries.size()) {
+            auto inputs = parameters(layout.constructor, parent, record[3]);
+            for (auto [ordinal, reference] : enumerate(references)) {
+              auto childKind = kindNumber(item.functions.queries[ordinal].kind);
+              inputs.push_back(c.at(model.answers[childKind],
+                                    model.kinds[childKind].getAnswerType(),
+                                    values[answerSlot(childKind)], reference,
+                                    "child_answer_" + std::to_string(ordinal)));
+            }
+            auto result =
+                c.compute(item.functions.answer, inputs, "virtual_answer");
+            putAnswer(c, values, item.kind, result);
+          } else
+            child(c, values, layout.constructor, layout.query + 1, parent,
+                  references);
+          c.finish(values);
+        });
   }
   void dispatch(func::FuncOp function, unsigned selector,
                 ArrayRef<unsigned> cases, TypeRange formals, TypeRange outputs,
@@ -763,9 +761,10 @@ struct Reader {
                c.unpack(inputs[0], TypeRange{index, index}, "root");
            auto zero = c.number(0, "initial");
            Values values{reference[0], reference[1], inputs[1], zero,
-                         zero,         zero,         zero};
+                         zero,         zero,         zero,      zero};
            for (auto [slot, type] :
-                enumerate(ArrayRef<Type>(model.state).drop_front(7)))
+                enumerate(ArrayRef<Type>(model.state)
+                              .drop_front(Controller::HeaderSize)))
              values.push_back(
                  c.empty(type, "empty_state_" + std::to_string(slot)));
            c.finish(values);

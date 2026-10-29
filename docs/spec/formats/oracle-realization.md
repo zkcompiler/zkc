@@ -299,7 +299,7 @@ the body repeats and must agree with the same role and access. The body has:
 - `capacity`: `{leaves, nodes}`, independently derived from the original;
 - `kinds`, `answers`, `state`, `stores`: ordered kind/type inventories;
 - `constructors`: `{source, role, kind, first_continuation, lookup, functions}`;
-- `continuations`: `{constructor, query, record, sequence, previous_answers}`;
+- `continuations`: `{constructor, query, record, sequence, previous_kinds}`;
 - helper slots `leaf_counts`, `row_counts`, `construction_counts`, `initialize`,
   `advance`, `finish`, `resume`, `evaluate` and `contents`.
 
@@ -314,7 +314,16 @@ operations retain their order and attributes, and each query answer remains a
 distinct formal even if unused. Extra arithmetic and alternate helper indirection
 refuse, including implementations that compute an equivalent result. Scoped
 controller bodies separately check ordered domain guards, state transitions,
-continuations and actual anchor reads.
+continuations and actual anchor reads. Answers accumulate in append-only,
+kind-indexed sequences. Each frame stores ordinary indices into those sequences;
+`previous_kinds` is the ordered kind inventory re-derived from preceding source
+queries. The state header retains the most recently produced answer index.
+Returning to a virtual parent reads each child's own index from its kind's arena
+in source query order. The reader checks those actual SSA references, arena
+appends and loads; a record's kind or index claim cannot authorize substitution.
+The current controller still authenticates and evaluates one request at a time.
+Answer references prepare bounded virtual batching without authorizing delayed
+domain checks or changing the current observation policy.
 
 ## Declaration and reference slots
 

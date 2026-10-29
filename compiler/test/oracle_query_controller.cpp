@@ -104,6 +104,15 @@ module { "protocol.module"() ({
    %three =)mlir");
     replace("(%three,%a,%b,%mapped)", "(%three,%a,%zero,%mapped)");
   }
+  // The ordinary case consumes the saved first reference. The duplicate-source
+  // case consumes the second reference, whose position may differ at every
+  // level.
+  if (duplicate) {
+    auto at = text.find("protocol.oracle_yield\"(%answer)");
+    require(at != std::string::npos, "second answer fragment missing");
+    text.replace(at, std::string("protocol.oracle_yield\"(%answer)").size(),
+                 "protocol.oracle_yield\"(%unused)");
+  }
   return text;
 }
 std::string print(Operation *op) {
@@ -486,7 +495,11 @@ module { "protocol.module"() ({
                              "duplicate count operand",
                              "child count identity",
                              "missing count reader",
-                             "missing count recurrence"};
+                             "missing count recurrence",
+                             "previous answer reference",
+                             "ordered child answer reference",
+                             "answer arena append",
+                             "previous answer kind"};
   for (unsigned mutation = 0; mutation < std::size(mutations); ++mutation)
     cases.run(
         "independent controller refusal: " + Twine(mutations[mutation]), [&] {
@@ -590,9 +603,12 @@ module { "protocol.module"() ({
           case 14:
             constant("completed", "2");
             break;
-          case 15:
-            constant("answer_index", "1");
+          case 15: {
+            auto op = cast<exec::ApplyOp>(operation("read_answer"));
+            auto owner = op->getParentOfType<func::FuncOp>();
+            op.getInputsMutable()[1].set(owner.getArgument(1));
             break;
+          }
           case 16: {
             exec::ApplyOp value;
             controller.resume[0].walk([&](exec::ApplyOp op) {
@@ -611,7 +627,7 @@ module { "protocol.module"() ({
             ++controller.constructors[0].source;
             break;
           case 19:
-            controller.continuations.back().previousAnswers.clear();
+            controller.continuations.back().previousKinds.clear();
             break;
           case 20:
             std::swap(controller.constructors.back().functions.queries[0],
@@ -678,6 +694,33 @@ module { "protocol.module"() ({
             break;
           case 32:
             controller.constructionCounts[0] = {};
+            break;
+          case 33: {
+            exec::VariantOp saved;
+            candidate->walk([&](exec::VariantOp op) {
+              if (op.getSite() == "frame_record" && op.getPayload().size() > 4)
+                saved = op;
+            });
+            require(bool(saved), "saved answer reference missing");
+            saved.getPayloadMutable()[4].set(saved.getPayload()[3]);
+            break;
+          }
+          case 34: {
+            auto op = cast<exec::ApplyOp>(operation("child_answer_0"));
+            auto owner = op->getParentOfType<func::FuncOp>();
+            op.getInputsMutable()[1].set(
+                owner.getArgument(1 + OracleQueryController::AnswerIndex));
+            break;
+          }
+          case 35:
+            controller.resume[0].walk([&](exec::ReturnOp op) {
+              op.getValuesMutable()[OracleQueryController::HeaderSize].set(
+                  controller.resume[0].getArgument(
+                      1 + OracleQueryController::HeaderSize));
+            });
+            break;
+          case 36:
+            ++controller.continuations.back().previousKinds[0];
             break;
           }
           require(succeeded(verify(*candidate)),

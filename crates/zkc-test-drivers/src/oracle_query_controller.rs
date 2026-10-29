@@ -64,12 +64,12 @@ impl Reference {
                     (2, instance - 1)
                 };
                 let first = self.query(child, index, position, false)?;
-                if variant == 5 {
-                    self.query(child, index, mapped, false)?;
+                let second = if variant == 5 {
+                    self.query(child, index, mapped, false)?
                 } else {
-                    self.query(1, 0, mapped, false)?;
-                }
-                Some(first)
+                    self.query(1, 0, mapped, false)?
+                };
+                Some(if variant == 5 { second } else { first })
             }
             _ => None,
         }

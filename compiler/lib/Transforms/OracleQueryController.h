@@ -10,7 +10,9 @@ enum class OracleControllerAccess { Available, Holder };
 struct OracleQueryContinuation {
   unsigned constructor, query;
   mlir::Type record, sequence;
-  std::vector<mlir::Type> previousAnswers;
+  // Kind indices derived from the preceding source queries. The record stores
+  // one index into each corresponding typed answer arena, never an answer copy.
+  std::vector<unsigned> previousKinds;
 };
 struct OracleQueryControllerConstructor {
   unsigned source, role, kind, firstContinuation;
@@ -19,7 +21,7 @@ struct OracleQueryControllerConstructor {
 };
 struct OracleQueryController {
   // All state is ordinary SSA data. Stores are immutable captures; frame
-  // arenas and answer slots are carried explicitly across suspension.
+  // arenas and append-only typed answers are carried across suspension.
   enum StateField : unsigned {
     Constructor,
     Instance,
@@ -28,6 +30,7 @@ struct OracleQueryController {
     ContinuationInstance,
     Kind,
     Phase,
+    AnswerIndex,
     HeaderSize
   };
   enum PhaseValue : unsigned { Enter, Return, Request, Completed };

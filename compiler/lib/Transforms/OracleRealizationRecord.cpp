@@ -277,7 +277,7 @@ struct Codec {
       object.field("query", value.query);
       object.field("record", value.record);
       object.field("sequence", value.sequence);
-      object.field("previous_answers", value.previousAnswers);
+      object.field("previous_kinds", value.previousKinds);
     });
   }
   void item(json::Value &node, OracleVirtualQueryFunction &value) {

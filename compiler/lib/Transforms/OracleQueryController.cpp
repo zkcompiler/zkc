@@ -121,22 +121,12 @@ struct Emitter {
                 Controller::HeaderSize >
             512)
           return error("oracle-controller-limit");
-        std::vector<Type> previous;
+        std::vector<unsigned> previous;
         for (auto [ordinal, query] : enumerate(item.functions.queries)) {
           auto childKind = kind(query.kind);
           if (!childKind)
             return childKind.takeError();
-          std::vector<std::string> fields(4, "index");
-          for (Type type : previous) {
-            auto bound = encodeBoundType(type, false);
-            if (!bound)
-              return bound.takeError();
-            auto spelling = bound->spelling();
-            if (spelling.size() > metadataRemaining)
-              return error("oracle-controller-limit");
-            metadataRemaining -= spelling.size();
-            fields.push_back(std::move(spelling));
-          }
+          std::vector<std::string> fields(4 + previous.size(), "index");
           auto spelling = encodeVariant(
               {json::Array{"zkc.oracle.continuation/0",
                            toHex(storage.entry, true), toHex(result.role, true),
@@ -155,7 +145,7 @@ struct Emitter {
           result.continuations.push_back({unsigned(result.constructors.size()),
                                           unsigned(ordinal), record, *arena,
                                           previous});
-          previous.push_back(query.kind.getAnswerType());
+          previous.push_back(*childKind);
         }
       }
       result.stores.push_back(role->sequence);
@@ -340,14 +330,14 @@ struct Emitter {
     return inputs;
   }
   void answer(Control &c, Values &values, unsigned kind, Value value) {
-    auto slot = empty(c, result.answers[kind], "answer_empty");
-    values[answerSlot(kind)] = append(c, slot, value, "answer_value");
+    auto arena = values[answerSlot(kind)];
+    values[Controller::AnswerIndex] = length(c, arena, "answer_index");
+    values[answerSlot(kind)] = append(c, arena, value, "answer_value");
     values[Controller::Kind] = number(c, kind, "answer_kind");
     values[Controller::Phase] = number(c, Controller::Return, "return");
   }
   Value answer(Control &c, ValueRange values, unsigned kind) {
-    auto zero = number(c, 0, "answer_index");
-    return at(c, values[answerSlot(kind)], zero,
+    return at(c, values[answerSlot(kind)], values[Controller::AnswerIndex],
               result.kinds[kind].getAnswerType(), "read_answer");
   }
   void child(Control &c, Values &values, unsigned constructor, unsigned query,
@@ -425,12 +415,10 @@ struct Emitter {
           auto saved = at(c, values[frameSlot(frame)],
                           values[Controller::ContinuationInstance],
                           layout.record, "load_frame");
-          Types fields(4, index);
-          append_range(fields, layout.previousAnswers);
+          Types fields(4 + layout.previousKinds.size(), index);
           auto record = unpack(c, saved, fields, "frame");
-          auto value = answer(c, values, k);
-          Values answers(record.begin() + 4, record.end());
-          answers.push_back(value);
+          Values references(record.begin() + 4, record.end());
+          references.push_back(values[Controller::AnswerIndex]);
           values[Controller::Continuation] = record[0];
           values[Controller::ContinuationInstance] = record[1];
           values[Controller::Constructor] =
@@ -442,14 +430,20 @@ struct Emitter {
               values[Controller::Instance], stores(inputs)[layout.constructor]);
           if (layout.query + 1 == item.functions.queries.size()) {
             auto arguments = parameters(layout.constructor, parent, record[3]);
-            append_range(arguments, answers);
+            for (auto [ordinal, reference] : enumerate(references)) {
+              auto childKind = kindNumber(item.functions.queries[ordinal].kind);
+              arguments.push_back(
+                  at(c, values[answerSlot(childKind)], reference,
+                     result.kinds[childKind].getAnswerType(),
+                     "child_answer_" + std::to_string(ordinal)));
+            }
             auto output = call(c, item.functions.answer, arguments,
                                "virtual_answer", true)
                               .front();
             answer(c, values, item.kind, output);
           } else
             child(c, values, layout.constructor, layout.query + 1, parent,
-                  answers);
+                  references);
           c.returned(values);
         });
   }
@@ -579,7 +573,7 @@ struct Emitter {
                        unpack(c, inputs[0], TypeRange{index, index}, "root");
                    auto zero = number(c, 0, "initial");
                    Values values{reference[0], reference[1], inputs[1], zero,
-                                 zero,         zero,         zero};
+                                 zero,         zero,         zero,      zero};
                    for (auto [slot, type] :
                         enumerate(ArrayRef<Type>(result.state)
                                       .drop_front(Controller::HeaderSize)))
