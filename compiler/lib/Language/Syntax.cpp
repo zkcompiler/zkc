@@ -2621,6 +2621,10 @@ private:
       }
       auto infix = notation(text(), Position::Infix);
       if (!infix) {
+        if (notation(text(), Position::Prefix)) {
+          fail("source.syntax", "prefix notation requires an operand position");
+          return {};
+        }
         if (operatorSymbol(text())) {
           fail("source.notation-visibility",
                "no visible infix or postfix notation for " + text());

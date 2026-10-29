@@ -22,6 +22,23 @@ Expected<CheckedProject> check(StringRef source, Limits limits = {}) {
 } // namespace
 int main() {
   Cases cases;
+  for (StringRef source :
+       {"pub protocol Demo roles(P)() -> bool @P:\n    return false\n",
+        "module Helpers:\n    pub def value() -> bool:\n        false\n",
+        "section <N: nat>:\n    pub def value() -> bool:\n        false\n"})
+    cases.run(
+        "one declaration without a module header retains its body: " + source,
+        [&] {
+          auto written = take(
+              json::parse(take(inspectWrittenSource(take(check(source))))));
+          bool body = false;
+          for (const auto &owner :
+               *written.getAsObject()->getArray("declarations"))
+            for (const auto &node : *owner.getAsObject()->getArray("nodes"))
+              body |= node.getAsObject()->getString("kind") == "expr.boolean" &&
+                      node.getAsObject()->getString("text") == "false";
+          require(body, "file wrapper replaced the actual written body");
+        });
   for (StringRef constructor :
        {"Random", "zkc::prelude::Random", "services::Random"})
     cases.run(

@@ -352,6 +352,9 @@ struct FormalSyntax {
 };
 struct SyntaxDeclaration {
   std::vector<FormalSyntax> formalSyntax;
+  /// Private link to the frozen authored header, assigned before expansion.
+  /// Not serialized and never an artifact or proof identity.
+  std::optional<uint32_t> writtenDeclaration;
   bool layoutSyntax = false;
   bool invalidBody = false;
   /// Authored parameter group, erased before native declaration collection.

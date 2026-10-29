@@ -203,7 +203,8 @@ bool BodyChecker::labelSite(const Statement &source, size_t firstOperation) {
         std::holds_alternative<Exchange>(operation.action) ||
         std::holds_alternative<ServiceQuery>(operation.action) ||
         std::holds_alternative<ProtocolApplication>(operation.action) ||
-        std::holds_alternative<ProtocolRepeat>(operation.action);
+        (syntax.layoutSyntax &&
+         std::holds_alternative<ProtocolRepeat>(operation.action));
     if (!eligible)
       continue;
     if (selected)

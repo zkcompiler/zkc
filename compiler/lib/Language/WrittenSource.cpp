@@ -10,11 +10,28 @@
 using namespace llvm;
 namespace zkc::language::detail {
 Expected<std::shared_ptr<WrittenSources>>
-retainWrittenHeaders(ArrayRef<SyntaxDeclaration> syntax, Work &work) {
+retainWrittenHeaders(MutableArrayRef<SyntaxDeclaration> syntax, Work &work) {
   // Every header node consumes a token. Charge before copying, including the
   // captured and installation source headers, under the checking work ceiling.
   if (auto error = work.charge(work.tokens))
     return std::move(error);
+  uint32_t next = 0;
+  std::function<Error(SyntaxDeclaration &)> identify =
+      [&](SyntaxDeclaration &declaration) -> Error {
+    if (auto error = work.charge(1, declaration.span))
+      return error;
+    if (next == UINT32_MAX)
+      return failure("source.limit", "written declaration count exceeded",
+                     declaration.span);
+    declaration.writtenDeclaration = next++;
+    for (auto &member : declaration.members)
+      if (auto error = identify(member))
+        return error;
+    return Error::success();
+  };
+  for (auto &module : syntax)
+    if (auto error = identify(module))
+      return std::move(error);
   auto result = std::make_shared<WrittenSources>();
   result->modules.assign(syntax.begin(), syntax.end());
   return result;
@@ -27,10 +44,16 @@ Error retainWrittenBodies(WrittenSources &written,
   auto key = [](Span span) {
     return Key(span.source.index, span.begin, span.end);
   };
-  std::map<Key, const SyntaxDeclaration *> parsed;
+  std::map<uint32_t, const SyntaxDeclaration *> parsed;
+  // A file wrapper can share its only declaration's span; grouped construction
+  // handlers also deliberately share spans. Follow the frozen header link,
+  // never a source location or generated name, to recover each authored body.
   for (auto *source : sources)
-    if (!source->generated)
-      parsed.try_emplace(key(source->span), source);
+    if (!source->generated && source->writtenDeclaration &&
+        !source->bodies.empty() &&
+        !parsed.emplace(*source->writtenDeclaration, source).second)
+      return failure("source.syntax", "ambiguous written body ownership",
+                     source->span);
   std::map<Key, const FormalSyntax *> formalSources;
   for (auto *source : sources)
     for (const auto &formal : source->formalSyntax)
@@ -45,7 +68,10 @@ Error retainWrittenBodies(WrittenSources &written,
       formal = *found->second;
     }
     if (source.deferredBody) {
-      auto found = parsed.find(key(source.span));
+      if (!source.writtenDeclaration)
+        return failure("source.syntax", "written declaration was not retained",
+                       source.span);
+      auto found = parsed.find(*source.writtenDeclaration);
       if (found == parsed.end() || found->second->deferredBody)
         return failure("source.syntax", "written body was not retained",
                        source.span);
