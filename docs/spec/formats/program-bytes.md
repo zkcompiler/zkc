@@ -3,7 +3,13 @@
 This page defines the record grammar of `zkc.program/0` for independent readers.
 The [program contract](program.md) supplies admission and execution rules. This
 is the physical executable carrier; it is neither MLIR bytecode nor the
-[structured source export](structured-source.md).
+[structured source export](structured-source.md). Its
+[logical oracle vocabulary](structured-source.md#logical-oracle-vocabulary)
+belongs before semantic realization. Logical anchors, virtual definitions and
+oracle sequences must lower away before physical participant serialization;
+recognizing a source oracle type grants no executable codec. The realization
+record must determine the generated program for a separate correspondence
+check.
 
 ## Bytes and primitive values
 

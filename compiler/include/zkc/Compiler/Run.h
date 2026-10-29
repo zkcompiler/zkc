@@ -4,6 +4,7 @@
 #include "zkc/Compiler/Compilation.h"
 #include "zkc/Target/CpuTarget.h"
 #include "zkc/Transforms/MathematicalSelection.h"
+#include "zkc/Transforms/OracleSelection.h"
 #include <optional>
 #include <string>
 
@@ -26,10 +27,14 @@ struct RunOptions {
   MathematicalSelectionPolicy mathematicalSelection = {};
   CompilationObservation *observations = nullptr;
   target::CpuTarget cpuTarget = {};
+  /// Common oracle representation, before participant and physical selection.
+  protocol::OracleRealizationPolicy oracleRealization = {};
 };
-/// Owns the final physical module, including retained statement/interface
-/// metadata, and a complete zkc.run/0 bundle for the selected entry.
-/// The bundle is supplied execution data, not a source correspondence proof.
+/// Owns the final physical module, the original-to-realized common edge, and a
+/// complete zkc.run/0 bundle for the selected entry. Logical oracle clauses
+/// stay on the retained original; native interfaces describe representation
+/// leaves. The bundle is supplied execution data, not a source correspondence
+/// proof.
 struct CompiledRun {
   Compilation compilation;
   std::string bundle;

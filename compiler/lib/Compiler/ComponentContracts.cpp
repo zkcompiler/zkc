@@ -451,6 +451,11 @@ struct Deriver {
             results[i].emplace(string(role), std::move(flow));
           }
       } else {
+        // Logical oracle routes need anchor-aware seams. Do not classify a new
+        // oracle instruction as a pure value merely because its descriptor is
+        // outside the old effect cases. Export and seam admission are separate.
+        if (tag.starts_with("oracle_"))
+          return refuse("component-seam-oracle");
         if (!array(instruction[3]).empty())
           return refuse("component-seam-control");
         if (tag == "statement")
@@ -654,6 +659,23 @@ struct Deriver {
     return live.empty() || refuse("component-seam-coverage");
   }
   bool run() {
+    // Anchor contracts require the oracle-store interpretation. Refuse them
+    // before any data-only slot traversal; a data ABI cannot resolve an anchor.
+    for (const auto &[name, clauses] : contracts)
+      for (const auto &value : *clauses) {
+        const auto &clause = array(value);
+        for (unsigned side : {2u, 3u}) {
+          if (clause[side].getAsNull())
+            continue;
+          for (const auto &value : array(array(clause[side])[1])) {
+            if (!charge())
+              return false;
+            if (array(value)[0] == J("anchor"))
+              return refuse("component-seam-oracle");
+          }
+        }
+      }
+
     if (linear.empty())
       return true;
     std::map<std::string, J> meanings;
@@ -900,6 +922,8 @@ struct Deriver {
       if (!regions.empty() && tag != "if" && tag != "for" &&
           tag != "for_condition")
         return refuse("component-seam-control");
+      if (tag.starts_with("oracle_"))
+        return refuse("component-seam-oracle");
       if (tag == "draw")
         return refuse("component-seam-sampling");
       if (tag == "exchange")

@@ -55,6 +55,29 @@ arrays retain their element construction policy despite having no fields.
 `permissions` is
 the canonical ordered subset of `Copy`, `Drop`; `Copy` requires `Drop`.
 
+A logical oracle port is a separate schema alternative. It has kind `oracle`,
+no data `leaves`, no fields or alternatives, `custody: false`,
+`constructible: false`, and permissions `["Copy", "Drop"]`. It additionally has
+`oracle: {kind, arguments}`. The closed kind arguments are ordered pairs
+`["type", <canonical logical BoundType>]` and `["nat", <decimal uint64 string>]`.
+The current kind is `table`, with a row type and optional exact row count. These
+are logical descriptors, not native opaque-handle spellings.
+
+An oracle port additionally has `holder` (one source role name) and
+`maximum_rows` (null for a sized kind, otherwise a canonical uint64 string).
+Its `roles` is the union of that holder and the nonempty receiver set; the holder
+cannot be a receiver. Its two `native` indices select holder data first, then the
+receiver anchor. The reader checks the common signature, each leaf's roles,
+kind and bound, and the actual input binding. Source comparison also binds the
+output maximum and complete descriptor to the checked declaration. Ordinary
+schema and port alternatives reject these additional keys.
+
+Oracle schemas cannot occur as aggregate children, ordinary relation-data
+selectors or Host schemas. Realization determines the public commitment and
+witness interface before executable input admission; this source interface does
+not itself grant a data codec. Source names, display text and schema identities
+still require the separate source-correspondence check.
+
 ### Source names and native correspondence
 
 Source names in `entry`, participant rosters, ports, services, clauses, setup

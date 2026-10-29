@@ -53,7 +53,7 @@ prover local behavior. A stopped guard is distinct from a returned `false`.
 }
 ```
 
-Numeric values use unsigned integer tokens; signs, leading zeros, decimal points
+Numeric values use unsigned 64-bit integer tokens; signs, leading zeros, decimal points
 and exponents are refused. Duplicate object keys, including differently escaped
 spellings of the same key, are refused. Unicode escapes must denote scalar
 values; unpaired UTF-16 surrogates are refused. Input/result indices address the
@@ -66,10 +66,18 @@ V-only bound inputs are accepted and explicitly reported as unavailable at P.
 The entry has exactly the two distinct specified roles. Its selected result is
 Boolean and available at V. The designated service is an exclusively V-owned
 installed [random-service](../runtime/services.md) entry port. Every query in the expanded entry uses that
-port and uses `draw`; other methods, including `index`, refuse with
+port and uses `draw` or `index`; other methods refuse with
 `public-coin-service`. Query sites equal the requirement's list in source order;
-ordinary native admission checks each method's signature. There is at least one
-query. This field-draw profile does not describe UniformIndex distributions.
+ordinary native admission checks each method's signature and installed capability.
+An `index` request has one positive unsigned 64-bit bound, defined by an actual
+`data.index` constant. Its value is retained in the request descriptor. Field
+and index requests may interleave. There is at least one query.
+
+The descriptor refers to the existing service contract: field sampling for
+`draw`, or `UniformIndex(N)` for `index`. The analysis does not prove provider
+conformance or a sampling law. It does not introduce an atomic block request or
+identify sequential index draws with a product-law event. Dynamic bounds and
+block draws remain outside this profile.
 
 Every V→P exchange is the unique designated delivery of the pending draw. Its
 operand must be that query's result, optionally through `restrict_roles`.
@@ -96,7 +104,13 @@ static application admission refuses a callee that contains a statement.
   followed by receives and draws in source order.
 - `draws`: query `site`, authored `path`, `prefix_length` into `events`, and the
   matched delivery's `site` and `path`. The prefix excludes this draw and all
-  later events. It is conditional on reaching the query.
+  later events. It is conditional on reaching the query. Every row also has a
+  `request` object with exactly `contract`, `method` and `arguments`. The contract
+  is the selected service identity, the method is `draw` or `index`, and
+  `arguments` is empty for `draw` or the one exact unsigned bound for `index`.
+  These are derived from the source, including for unused answers, and do not
+  grant new binding premises. Checking compares integers exactly, including
+  adjacent values above the signed 64-bit range.
 - `guards`: V guard site/path, current prefix length and dependency anchor
   indices. `decision_dependencies` lists the selected decision's anchors.
 - `statement_inputs`, `bound_non_statement_inputs`, and

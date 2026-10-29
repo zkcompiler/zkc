@@ -15,7 +15,7 @@ std::optional<Semantics::Admission> Semantics::admission(const Type &type,
   }
   using A = Admission;
   using K = Type::Kind;
-  if (isStaticOnly(type) || type.kind == K::Formal)
+  if (isStaticOnly(type) || type.kind == K::Formal || isOracleHandle(type))
     return A::Rejected;
   const auto *decl = typeDeclaration(type);
   if (boundary == Boundary::Construction && decl && decl->generated &&
@@ -27,7 +27,7 @@ std::optional<Semantics::Admission> Semantics::admission(const Type &type,
   if (boundary == Boundary::Construction &&
       (type.kind == K::Associated || (decl && decl->sealed)))
     return A::Rejected;
-  if (type.kind == K::Parameter ||
+  if (type.kind == K::Parameter || type.kind == K::OracleProjection ||
       (type.symbolic && type.arguments.empty() && type.kind != K::Field &&
        type.kind != K::Group))
     return A::Deferred;

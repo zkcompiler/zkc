@@ -1,5 +1,6 @@
 #include "mlir/IR/DialectRegistry.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/Observation.h"
 #include "zkc/Driver/Compiler.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Config/llvm-config.h"
@@ -15,6 +16,9 @@ int main(int argc, char **argv) {
     return 0;
   }
   if (argc == 2 && llvm::StringRef(argv[1]) == "--capabilities") {
+    llvm::json::Array phases;
+    for (auto phase : zkc::compilationObservationPhases())
+      phases.push_back(phase);
     llvm::outs()
         << llvm::json::Value(llvm::json::Object{
                {"format", "zkc.compiler-capabilities/0"},
@@ -24,8 +28,7 @@ int main(int argc, char **argv) {
                {"time_trace", true},
                {"observations", true},
                {"structured_diagnostics", true},
-               {"phases", llvm::json::Array{"entry", "protocol", "participant",
-                                            "exec", "execution", "physical"}},
+               {"phases", std::move(phases)},
                {"settings",
                 llvm::json::Array{"simplify", "release-storage", "finite-bulk",
                                   "fuse-vector-reductions", "fuse-collect-fold",

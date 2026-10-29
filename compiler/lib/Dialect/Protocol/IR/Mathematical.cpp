@@ -1,4 +1,5 @@
 #include "zkc/Dialect/Mathematical.h"
+#include "OracleAnalysis.h"
 #include "ResourceOrigins.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Analysis/TotalClosure.h"
@@ -55,6 +56,17 @@ class Analysis {
                                "availability analysis exceeds 1000000 words");
     remainingAvailabilityWork -= work;
     return success();
+  }
+  std::optional<NativeTypePolicy> commonValuePolicy(Type type) {
+    // Logical handles belong to the pre-realization protocol only. Native
+    // endpoint/type policies continue rejecting them, including in messages.
+    if (isa<protocol_ir::OracleHandleType, protocol_ir::OracleSequenceType>(
+            type))
+      return NativeTypePolicy{false, true, false, false, false, false};
+    return types.get(type);
+  }
+  LogicalResult initialOracleShape(Value root, Operation *use) {
+    return verifyInitialOracleShape(root, program, use, symbols, remaining);
   }
   LogicalResult helper(func::CallOp call, Availability &env) {
     const TotalSummary *summary;
@@ -134,12 +146,12 @@ public:
                                             op->getNumResults())))
         return failure();
       for (auto type : op->getResultTypes())
-        if (!types.get(type))
+        if (!commonValuePolicy(type))
           return refuse(op, "unsupported mathematical data type");
       if (isTotal(op) && failed(verifyTotalTypes(op, types)))
         return failure();
       for (auto input : op->getOperands()) {
-        auto policy = types.get(input.getType());
+        auto policy = commonValuePolicy(input.getType());
         if (policy && policy->affine && !consumed.insert(input).second)
           return refuse(op, "affine component used more than once");
       }
@@ -175,7 +187,7 @@ public:
           auto argument = nested.getArgument(index + 1);
           auto reference =
               isa<protocol_ir::ServiceReferenceType>(input.getType());
-          auto policy = types.get(input.getType());
+          auto policy = commonValuePolicy(input.getType());
           BitVector available = env.values.lookup(input);
           if (index < repeat.getNumResults()) {
             if (reference)
@@ -206,8 +218,26 @@ public:
           ArrayAttr actionRoles;
           if (auto child = dyn_cast<protocol_ir::RepeatOp>(action))
             actionRoles = child.getRoles();
+          else if (auto assembly =
+                       dyn_cast<protocol_ir::AssembleRolesOp>(action))
+            actionRoles = assembly.getRoles();
           else if (auto application = dyn_cast<protocol_ir::ApplyOp>(action))
             actionRoles = application.getRoles();
+          else if (auto append =
+                       dyn_cast<protocol_ir::OracleSequenceAppendOp>(action))
+            actionRoles = append.getRoles();
+          else if (auto at = dyn_cast<protocol_ir::OracleSequenceAtOp>(action))
+            actionRoles = at.getRoles();
+          else if (auto virtualOracle =
+                       dyn_cast<protocol_ir::OracleVirtualOp>(action))
+            actionRoles = virtualOracle.getReceivers();
+          else if (auto input = dyn_cast<protocol_ir::OracleInputOp>(action))
+            actionRoles = input.getReceivers();
+          else if (auto components =
+                       dyn_cast<protocol_ir::OracleComponentsOp>(action))
+            actionRoles = components.getReceivers();
+          else if (auto send = dyn_cast<protocol_ir::OracleSendOp>(action))
+            actionRoles = send.getReceivers();
           else if (auto start =
                        dyn_cast<protocol_ir::ConstructionStartOp>(action))
             actionRoles = start.getRoles();
@@ -217,7 +247,8 @@ public:
                 !subset(required, participants))
               return refuse(&action, "action adds a nonparticipating role");
           }
-          for (StringRef key : {"owner", "sender", "receiver", "role"})
+          for (StringRef key :
+               {"owner", "sender", "receiver", "role", "holder"})
             if (auto owner = action.getAttrOfType<StringAttr>(key)) {
               int r = role(owner);
               if (r < 0 || !participants.test(r))
@@ -234,7 +265,7 @@ public:
           if (!subset(required, env.values.lookup(yielded)))
             return refuse(op,
                           "yield does not preserve the carried role invariant");
-          auto policy = types.get(yielded.getType());
+          auto policy = commonValuePolicy(yielded.getType());
           needsOrigin |= policy && policy->affine;
           env.values[repeat.getResult(index)] = required;
         }
@@ -257,7 +288,9 @@ public:
         continue;
       }
       if (auto application = dyn_cast<zkc::protocol_ir::ApplyOp>(op)) {
-        if (failed(application.verifySymbolUses(symbols)))
+        if (failed(application.verifySymbolUses(symbols)) ||
+            failed(
+                verifyOracleApplicationPorts(application, symbols, remaining)))
           return failure();
         if (!name(application.getSite()) ||
             !sites.insert(application.getSite()).second)
@@ -295,8 +328,21 @@ public:
           return failure();
         continue;
       }
-      if (auto restrict = dyn_cast<zkc::protocol_ir::RestrictRolesOp>(op)) {
-        auto policy = types.get(restrict.getInput().getType());
+      if (auto assembly = dyn_cast<protocol_ir::AssembleRolesOp>(op)) {
+        auto policy = types.get(assembly.getOutput().getType());
+        if (!policy || !policy->shared || !policy->total || policy->affine)
+          return refuse(op, "assembly requires ordinary total shared data");
+        BitVector selected;
+        if (failed(roles(op, assembly.getRoles(), selected)))
+          return failure();
+        for (auto [input, owner] :
+             zip(assembly.getInputs(), assembly.getRoles()))
+          if (!env.values.lookup(input).test(role(owner)))
+            return refuse(op, "assembly requests an unavailable component");
+        env.values[assembly.getOutput()] = std::move(selected);
+      } else if (auto restrict =
+                     dyn_cast<zkc::protocol_ir::RestrictRolesOp>(op)) {
+        auto policy = commonValuePolicy(restrict.getInput().getType());
         if (!policy || !policy->shared)
           return refuse(op, "owner-local values cannot be restricted");
         BitVector selected;
@@ -305,6 +351,89 @@ public:
         if (!subset(selected, env.values.lookup(restrict.getInput())))
           return refuse(op, "restriction requests an unavailable component");
         env.values[restrict.getOutput()] = std::move(selected);
+      } else if (auto forget = dyn_cast<protocol_ir::OracleForgetShapeOp>(op)) {
+        env.values[forget.getOutput()] = env.values.lookup(forget.getInput());
+      } else if (auto input = dyn_cast<protocol_ir::OracleInputOp>(op)) {
+        int holder = role(input.getHolderAttr());
+        BitVector available;
+        if (holder < 0 || failed(roles(op, input.getReceivers(), available)) ||
+            available.test(holder) ||
+            !subset(available, env.values.lookup(input.getAnchor())) ||
+            !env.values.lookup(input.getData()).test(holder))
+          return refuse(
+              op, "oracle input requires its holder and receiver components");
+        available.set(holder);
+        if (failed(verifyOracleInputPair(input, symbols, remaining)))
+          return failure();
+        env.values[input.getHandle()] = std::move(available);
+      } else if (auto components =
+                     dyn_cast<protocol_ir::OracleComponentsOp>(op)) {
+        int holder = role(components.getHolderAttr());
+        BitVector receivers;
+        if (holder < 0 ||
+            failed(roles(op, components.getReceivers(), receivers)) ||
+            receivers.test(holder) ||
+            !subset(receivers, env.values.lookup(components.getHandle())) ||
+            !env.values.lookup(components.getHandle()).test(holder) ||
+            failed(verifyOracleHolder(components.getHandle(),
+                                      components.getHolder(), op, remaining)))
+          return refuse(
+              op,
+              "oracle component view requires its actual holder and receivers");
+        BitVector data(count);
+        data.set(holder);
+        env.values[components.getData()] = std::move(data);
+        env.values[components.getAnchor()] = std::move(receivers);
+      } else if (auto rows = dyn_cast<protocol_ir::OracleShapeOp>(op)) {
+        env.values[rows.getExtent()] = env.values.lookup(rows.getHandle());
+      } else if (auto virtualOracle =
+                     dyn_cast<protocol_ir::OracleVirtualOp>(op)) {
+        auto declaration =
+            symbols.lookupNearestSymbolFrom<protocol_ir::OracleDefinitionOp>(
+                virtualOracle, virtualOracle.getCalleeAttr());
+        int holder = role(virtualOracle.getHolderAttr());
+        BitVector available;
+        if (!declaration || failed(virtualOracle.verifySymbolUses(symbols)) ||
+            holder < 0 ||
+            failed(roles(op, virtualOracle.getReceivers(), available)) ||
+            available.test(holder))
+          return refuse(op, "virtual construction requires its holder and "
+                            "distinct receivers");
+        available.set(holder);
+        for (auto [index, input] : enumerate(virtualOracle.getInputs())) {
+          if (!subset(available, env.values.lookup(input)))
+            return refuse(
+                op, "virtual sources and parameters require every component");
+          if (index < declaration.getNumSources() &&
+              failed(verifyOracleHolder(input, virtualOracle.getHolder(), op,
+                                        remaining)))
+            return failure();
+        }
+        for (auto dimension : declaration.getShapeArguments()) {
+          auto index =
+              cast<IntegerAttr>(dimension.getValue()).getValue().getZExtValue();
+          if (failed(initialOracleShape(virtualOracle.getInputs()[index], op)))
+            return failure();
+        }
+        env.values[virtualOracle.getHandle()] = std::move(available);
+      } else if (auto contents = dyn_cast<protocol_ir::OracleContentsOp>(op)) {
+        int owner = role(contents.getOwnerAttr());
+        if (owner < 0 || !env.values.lookup(contents.getHandle()).test(owner))
+          return refuse(
+              op, "oracle contents require an available holder component");
+        if (failed(verifyOracleHolder(contents.getHandle(), contents.getOwner(),
+                                      op, remaining)))
+          return failure();
+        BitVector available(count);
+        available.set(owner);
+        env.values[contents.getData()] = std::move(available);
+      } else if (auto empty =
+                     dyn_cast<protocol_ir::OracleSequenceEmptyOp>(op)) {
+        env.values[empty.getOutput()] = BitVector(count, true);
+      } else if (auto length =
+                     dyn_cast<protocol_ir::OracleSequenceLengthOp>(op)) {
+        env.values[length.getLength()] =
+            env.values.lookup(length.getSequence());
       } else if (auto statement = dyn_cast<zkc::protocol_ir::StatementOp>(op)) {
         if (depth != 0)
           return refuse(
@@ -322,6 +451,14 @@ public:
         for (auto [input, selector] :
              zip(statement.getInputs(), statement.getSelectors())) {
           auto arg = dyn_cast<BlockArgument>(input);
+          if (isa<protocol_ir::OracleHandleType>(input.getType())) {
+            if (!arg || arg.getOwner() != &program.getBody().front() ||
+                !statement.getTargetAttr() ||
+                selector != StringAttr::get(op->getContext(), "anchor"))
+              return refuse(op, "logical statement anchor requires an owned "
+                                "target and entry handle");
+            continue;
+          }
           int r = role(selector);
           if (!arg || arg.getOwner() != &program.getBody().front() || r < 0 ||
               !env.values.lookup(input).test(r))
@@ -330,13 +467,55 @@ public:
         }
       } else if (isa<zkc::protocol_ir::ExchangeOp, zkc::protocol_ir::GuardOp,
                      zkc::protocol_ir::FinishIfOp, zkc::protocol_ir::QueryOp,
+                     protocol_ir::OracleSendOp, protocol_ir::OracleQueryOp,
+                     protocol_ir::OracleSequenceAppendOp,
+                     protocol_ir::OracleSequenceAtOp,
                      zkc::protocol_ir::LocalCallOp,
                      zkc::protocol_ir::ConstructionStartOp>(op)) {
         auto site = op->getAttrOfType<StringAttr>("site");
         if (!site || !name(site.getValue()) ||
             !sites.insert(site.getValue()).second)
           return refuse(op, "ordered sites must be unique identifiers");
-        if (auto start = dyn_cast<protocol_ir::ConstructionStartOp>(op)) {
+        if (isa<protocol_ir::OracleSequenceAppendOp,
+                protocol_ir::OracleSequenceAtOp>(op)) {
+          BitVector selected;
+          if (failed(
+                  roles(op, op->getAttrOfType<ArrayAttr>("roles"), selected)))
+            return failure();
+          for (Value input : op->getOperands())
+            if (!subset(selected, env.values.lookup(input)))
+              return refuse(op, "oracle sequence operation requires every "
+                                "selected component");
+          env.values[op->getResult(0)] = std::move(selected);
+        } else if (auto send = dyn_cast<protocol_ir::OracleSendOp>(op)) {
+          int sender = role(send.getSenderAttr());
+          BitVector available;
+          if (sender < 0 || failed(roles(op, send.getReceivers(), available)) ||
+              available.test(sender) ||
+              !env.values.lookup(send.getData()).test(sender))
+            return refuse(
+                op,
+                "oracle send requires its holder data and distinct receivers");
+          available.set(sender);
+          for (Value dimension : send.getShape()) {
+            if (!subset(available, env.values.lookup(dimension)))
+              return refuse(op, "oracle shape must be available at the holder "
+                                "and every receiver");
+            if (failed(initialOracleShape(dimension, op)))
+              return failure();
+          }
+          env.values[send.getHandle()] = std::move(available);
+        } else if (auto query = dyn_cast<protocol_ir::OracleQueryOp>(op)) {
+          int owner = role(query.getOwnerAttr());
+          if (owner < 0 || !env.values.lookup(query.getHandle()).test(owner) ||
+              !env.values.lookup(query.getPosition()).test(owner))
+            return refuse(
+                op, "oracle query requires its owner's handle and position");
+          BitVector available(count);
+          available.set(owner);
+          env.values[query.getAnswer()] = std::move(available);
+        } else if (auto start =
+                       dyn_cast<protocol_ir::ConstructionStartOp>(op)) {
           BitVector participants;
           if (start.getRoles().size() != 2 ||
               failed(roles(op, start.getRoles(), participants)))
@@ -411,14 +590,14 @@ public:
             auto bound =
                 query.getInputs().front().getDefiningOp<data::IndexOp>();
             if (!bound || !protocol::parseUniformIndexBound(bound.getValue()))
-              return refuse(op, "index query requires a constant power-of-two "
-                                "bound no greater than 2^63");
+              return refuse(op, "index query requires a positive constant "
+                                "unsigned 64-bit bound");
           }
           BitVector available(count);
           available.set(owner);
           env.values[query.getResult(0)] = std::move(available);
         } else if (auto exchange = dyn_cast<zkc::protocol_ir::ExchangeOp>(op)) {
-          auto policy = types.get(exchange.getInput().getType());
+          auto policy = commonValuePolicy(exchange.getInput().getType());
           if (!policy || !policy->wire)
             return refuse(op, "exchange requires an admitted wire type");
           int sender = role(exchange.getSenderAttr());
@@ -476,7 +655,8 @@ public:
       auto reference =
           dyn_cast<zkc::protocol_ir::ServiceReferenceType>(arg.getType());
       auto policy = types.get(arg.getType());
-      if (!policy && !reference)
+      bool oracle = isa<protocol_ir::OracleHandleType>(arg.getType());
+      if (!policy && !reference && !oracle)
         return refuse(program, "unsupported mathematical input type");
       if (policy && !policy->protocolPort)
         return diagnostics::emit(program.emitOpError(), "variant-boundary");
@@ -485,11 +665,14 @@ public:
         return refuse(program, "unsupported service contract");
       if (failed(roles(program, dyn_cast<ArrayAttr>(attr), env.values[arg])))
         return failure();
-      if ((reference || !policy->shared) && env.values[arg].count() != 1)
+      if ((reference || (policy && !policy->shared)) &&
+          env.values[arg].count() != 1)
         return refuse(program, "owner-local inputs require exactly one owner");
     }
-    if (failed(protocol_ir::verifyContracts(program, symbols)) ||
-        failed(body(block, env)))
+    if (failed(verifyOracleEntryPorts(program, remaining)) ||
+        failed(protocol_ir::verifyContracts(program, symbols)) ||
+        failed(body(block, env)) ||
+        failed(verifyOracleResultPorts(program, symbols, remaining)))
       return failure();
     for (auto [value, attr] :
          zip(block.back().getOperands(), program.getOutputRoles())) {
@@ -499,7 +682,9 @@ public:
       auto policy = types.get(value.getType());
       if (policy && !policy->protocolPort)
         return diagnostics::emit(program.emitOpError(), "variant-boundary");
-      if (!policy || (!policy->shared && exposed.count() != 1))
+      bool oracle = isa<protocol_ir::OracleHandleType>(value.getType());
+      if ((!policy && !oracle) ||
+          (policy && !policy->shared && exposed.count() != 1))
         return refuse(program, "owner-local results require exactly one owner");
       if (!subset(exposed, env.values.lookup(value)))
         return refuse(program, "result exposes an unavailable component");
@@ -543,8 +728,9 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
       // Complete mathematical/scoped admission was performed above.
     } else if (isa<data::DomainOp>(op)) {
       // The descriptor and finite closure were checked before any liveness.
-    } else if (isa<protocol_ir::ConstructionOp, runtime::BindingOp,
-                   mlir::ModuleOp, poly::RecipeOp, poly::RealizeOp>(op)) {
+    } else if (isa<protocol_ir::OracleDefinitionOp, protocol_ir::ConstructionOp,
+                   runtime::BindingOp, mlir::ModuleOp, poly::RecipeOp,
+                   poly::RealizeOp>(op)) {
       // The owning verifiers check every retained declaration, including
       // dormant computation units and polynomial realizations.
     } else if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
@@ -559,7 +745,11 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
           "unclassified declaration in the 'protocol' profile");
     }
   }
-  if (!programs && module.getBody().front().getOps<func::FuncOp>().empty())
+  if (!programs && module.getBody().front().getOps<func::FuncOp>().empty() &&
+      module.getBody()
+          .front()
+          .getOps<protocol_ir::OracleDefinitionOp>()
+          .empty())
     return diagnostics::emit(module.emitOpError(), "mathematical-module",
                              "expected a mathematical definition");
   if (failed(verifyApplications(module)))
@@ -572,6 +762,8 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
   // One cache and work budget cover all mathematical protocols in this unit.
   unsigned remaining = 100000;
   uint64_t remainingAvailabilityWork = 1000000;
+  if (failed(verifyOracleDefinitions(module, helpers, types, remaining)))
+    return failure();
   SmallVector<protocol_ir::RepeatOp> originQueries;
   for (auto program :
        module.getBody().front().getOps<protocol_ir::MathematicalOp>()) {
@@ -626,8 +818,15 @@ LogicalResult
 zkc::protocol_ir::StatementOp::verifySymbolUses(SymbolTableCollection &tables) {
   auto relation = tables.lookupNearestSymbolFrom<zkc::relation::DeclareOp>(
       *this, getRelationAttr());
+  SmallVector<Type> logical;
+  for (Type type : getOperandTypes()) {
+    if (auto anchor = dyn_cast<protocol_ir::OracleHandleType>(type))
+      logical.push_back(anchor.getKind().getDataType());
+    else
+      logical.push_back(type);
+  }
   if (!relation || failed(relation->getName().verifyInvariants(relation)) ||
-      !llvm::equal(relation.getSignature().getInputs(), getOperandTypes()))
+      !llvm::equal(relation.getSignature().getInputs(), logical))
     return diagnostics::emit(emitOpError(), "mathematical-statement",
                              "expected an external relation declaration with "
                              "matching inputs and one bool result");

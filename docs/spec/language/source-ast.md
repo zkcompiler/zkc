@@ -103,6 +103,22 @@ Clause names and claim labels are syntax fields and do not replace ordinals.
 A member definition has its own owner. An inline relation or construction
 handler retains its enclosing owner's structural path.
 
+Oracle delivery is an `expr.oracle_send` with written holder followed by
+receivers in `roles`, the kind and optional maximum in `arguments`, and data
+followed by optional runtime rows in `operands`. An inferred static row count
+is absent. `expr.oracle_query` retains handle and position in authored order.
+`expr.oracle_contents`, `expr.oracle_rows` and `expr.oracle_forget_rows` retain
+their single handle operand. An oracle port additionally retains its written
+`oracle_holder` and optional `oracle_maximum` syntax child. Inferred owner,
+paired interface leaves and generated shape constants belong to elaboration,
+not to this AST.
+
+Sequence expressions have the exact kinds `expr.oracle_sequence_empty`,
+`expr.oracle_sequence_append`, `expr.oracle_sequence_at` and
+`expr.oracle_sequence_length`. Empty retains the written kind/capacity arguments
+and holder-first `roles`; other sequence forms retain ordered operands. No
+selected anchor or inferred length is invented in the written tree.
+
 ## Node families
 
 Kinds have separate namespaces so equal words cannot confuse types, patterns,

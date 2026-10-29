@@ -44,6 +44,12 @@ public:
   mlir::LogicalResult get(mlir::func::FuncOp function,
                           const TotalSummary *&result);
   mlir::LogicalResult get(mlir::func::CallOp call, const TotalSummary *&result);
+  // Validate polynomial observations in one already formed, flat block in this
+  // symbol table against a bounded, helper-expanded private snapshot. Every
+  // helper is checked first;
+  // unknown actual degree bounds refuse. The block's non-helper vocabulary
+  // remains the containing dialect's responsibility.
+  mlir::LogicalResult verifyObservations(mlir::Block &body);
 };
 mlir::LogicalResult verifyTotalClosure(mlir::Operation *owner,
                                        mlir::func::FuncOp entry = {});

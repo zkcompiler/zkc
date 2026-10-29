@@ -298,3 +298,21 @@ LogicalResult zkc::protocol_ir::FinishIfOp::verify() {
         "conditional completion requires each affine continuation in order");
   return success();
 }
+
+LogicalResult zkc::protocol_ir::AssembleRolesOp::verify() {
+  if (getInputs().empty() || getInputs().size() != getRoles().size())
+    return zkc::diagnostics::emit(emitOpError(), "mathematical-formation",
+                                  "assembly requires one operand per role");
+  llvm::StringSet<> seen;
+  for (Attribute role : getRoles())
+    if (!seen.insert(cast<StringAttr>(role).getValue()).second)
+      return zkc::diagnostics::emit(emitOpError(), "mathematical-formation",
+                                    "assembly roles must be distinct");
+  return success();
+}
+Value zkc::protocol_ir::AssembleRolesOp::getComponent(StringRef role) {
+  for (auto [input, owner] : llvm::zip(getInputs(), getRoles()))
+    if (cast<StringAttr>(owner).getValue() == role)
+      return input;
+  return {};
+}

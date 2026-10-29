@@ -12,7 +12,7 @@ the [walkthrough](getting-started.md) compiles and runs a complete example.
 | Run an Entry or integrate an application | [Runtime and Hosts](runtime/README.md) |
 | Inspect builds, profiles or compiler decisions | [Compiler tooling](compiler/tooling.md) |
 | Work on the compiler | [Compiler](compiler/README.md) |
-| Find exact syntax, IR or artifact rules | [Specification](spec/README.md) |
+| Find exact syntax, IR or artifact rules | [Specification](spec/README.md), [shared contract register](spec/contracts.md) |
 | Check implemented capabilities | [Status](status.md) |
 | Assess proofs and tests | [Assurance](assurance.md), [formal models](../lean/docs/README.md) |
 | Build, test or contribute | [Development](development/README.md), [tests](../common/tests/README.md) |

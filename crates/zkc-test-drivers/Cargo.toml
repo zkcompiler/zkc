@@ -252,3 +252,45 @@ name = "execution_cfg"
 path = "src/execution_cfg.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "oracle_queries"
+path = "src/oracle_queries.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "oracle_anchors"
+path = "src/oracle_anchors.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "oracle_query_controller"
+path = "src/oracle_query_controller.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "oracle_virtual_functions"
+path = "src/oracle_virtual_functions.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "oracle_common"
+path = "src/oracle_common.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "oracle_merkle"
+path = "src/oracle_merkle.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "oracle_commitment_roots"
+path = "src/oracle_commitment_roots.rs"
+test = false
+bench = false

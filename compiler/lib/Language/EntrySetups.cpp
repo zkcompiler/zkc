@@ -14,6 +14,12 @@ Error checkSetups(const ClosedEntry &entry, Layouts &layouts, Work &work) {
   unsigned offset = 0;
   for (unsigned port = 0; port < protocol.inputs.size(); ++port) {
     const auto &input = protocol.inputs[port];
+    if (input.oracle) {
+      // Logical components carry no setup authority. Their realized input
+      // interface is checked after semantic realization.
+      offset += 2;
+      continue;
+    }
     auto layout = layouts.get(input.type);
     if (!layout)
       return layout.takeError();

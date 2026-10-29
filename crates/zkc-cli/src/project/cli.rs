@@ -81,17 +81,10 @@ impl Source {
             .value("--dump")
             .map(|s| s.split(',').map(str::to_owned).collect::<Vec<_>>())
             .unwrap_or_default();
-        if dumps.iter().any(|s| {
-            ![
-                "entry",
-                "protocol",
-                "participant",
-                "exec",
-                "execution",
-                "physical",
-            ]
-            .contains(&s.as_str())
-        }) {
+        if dumps
+            .iter()
+            .any(|s| !super::observation::PHASES.contains(&s.as_str()))
+        {
             return Err("source-dump-phase".into());
         }
         if !dumps.is_empty() && !args.has("--report") {

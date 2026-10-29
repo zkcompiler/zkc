@@ -102,6 +102,8 @@ struct SyntaxPort {
   std::optional<SyntaxSelector> binding;
   std::optional<SyntaxScopedSignature> scoped;
   std::optional<SyntaxType> domain;
+  std::optional<std::string> oracleHolder;
+  std::optional<SyntaxType> oracleMaximum;
 };
 struct SyntaxParameter {
   std::string name;
@@ -154,6 +156,15 @@ struct Expression {
     Map,
     DomainProduct,
     MethodCall,
+    OracleSend,
+    OracleQuery,
+    OracleContents,
+    OracleRows,
+    OracleForgetRows,
+    OracleSequenceEmpty,
+    OracleSequenceAppend,
+    OracleSequenceAt,
+    OracleSequenceLength,
     FinishIf,
     NotationCall,
     And,

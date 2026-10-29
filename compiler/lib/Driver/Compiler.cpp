@@ -7,6 +7,7 @@
 #include "zkc/Compiler/CommonSource.h"
 #include "zkc/Compiler/Compilation.h"
 #include "zkc/Compiler/NativeProof.h"
+#include "zkc/Compiler/OracleObligations.h"
 #include "zkc/Compiler/PolynomialReduction.h"
 #include "zkc/Compiler/PublicCoin.h"
 #include "zkc/Compiler/Run.h"
@@ -71,6 +72,9 @@ int zkc::runCompiler(int argc, char **argv,
            "  protocol-export FILE.mlir\n"
            "  protocol-lean FILE.mlir --symbol=NAME\n"
            "  protocol-structured FILE.mlir --symbol=NAME\n"
+           "  protocol-oracle-obligations FILE.mlir --symbol=NAME\n"
+           "  protocol-check-oracle-obligations FILE.mlir REPORT.json "
+           "--symbol=NAME\n"
            "  protocol-bundle FILE.mlir [--entry=NAME] [--no-simplify] "
            "[--release-storage] [--fuse-vector-reductions] "
            "[--fuse-collect-fold] [--no-finite-bulk]\n"
@@ -414,6 +418,33 @@ int zkc::runCompiler(int argc, char **argv,
              << '\n';
     else
       outs() << result->bundle;
+    return 0;
+  }
+  if (mode == "protocol-oracle-obligations" ||
+      mode == "protocol-check-oracle-obligations") {
+    bool check = mode == "protocol-check-oracle-obligations";
+    if (argc != (check ? 5 : 4))
+      return fail(error("unsupported-option"));
+    StringRef symbol = argv[argc - 1];
+    if (!symbol.consume_front("--symbol=") || symbol.empty())
+      return fail(error("unsupported-option"));
+    auto text = readInput(argv[2], 16 * 1024 * 1024);
+    if (!text)
+      return fail(text.takeError());
+    mlir::MLIRContext context(registry);
+    if (check) {
+      auto proposal = readInput(argv[3], 1024 * 1024);
+      if (!proposal)
+        return fail(proposal.takeError());
+      if (auto e = protocol::checkOracleObligations(*text, symbol, *proposal,
+                                                    context))
+        return fail(std::move(e));
+    } else {
+      auto result = protocol::exportOracleObligations(*text, symbol, context);
+      if (!result)
+        return fail(result.takeError());
+      outs() << *result;
+    }
     return 0;
   }
   if (mode == "protocol-export" || mode == "protocol-lean" ||

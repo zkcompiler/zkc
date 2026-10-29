@@ -86,6 +86,12 @@ BodyChecker::application(const Expression &expr) {
       if (!value || !demand(*value, mappedRoles(port), expr.span) ||
           !use(*value, expr.span))
         return {};
+      if (port.oracle && body.values[value->index].oracleHolder !=
+                             mapping[port.oracle->holder]) {
+        fail("source.oracle-role",
+             "oracle argument holder differs from mapped port", expr.span);
+        return {};
+      }
       operands[slot.index] = *value;
     }
   }
@@ -94,7 +100,9 @@ BodyChecker::application(const Expression &expr) {
     auto type = checker.types.substitute(port.type, substitution, expr.span);
     if (!type)
       return {};
-    results.push_back({*type, mappedRoles(port), expr.span});
+    results.push_back({*type, mappedRoles(port), expr.span,
+                       port.oracle ? std::optional(mapping[port.oracle->holder])
+                                   : std::nullopt});
   }
   auto emitted = emitResults(
       ProtocolApplication{callee.id, operands, arguments, mapping, managed},

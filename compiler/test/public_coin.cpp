@@ -389,6 +389,12 @@ int main() {
   require(draw->getString("site") == "draw" &&
               draw->getObject("delivery")->getString("site") == "coin",
           "owned sites");
+  auto *request = draw->getObject("request");
+  require(request &&
+              request->getString("contract") == "random.bls12-381.fr/0" &&
+              request->getString("method") == "draw" &&
+              request->getArray("arguments")->empty(),
+          "request metadata did not outlive its source context");
   mlir::DialectRegistry registry;
   RunOptions options;
   options.publicCoinRequirement = requirement.str();
