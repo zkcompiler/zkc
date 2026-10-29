@@ -26,7 +26,7 @@ AssetBuffer product() {
                          {Node::slot(0), Node::slot(1), Node::mul(0, 1)}, {2}));
   return {"product", "ring-json", zkc::printJson(arena.encode()), "/missing"};
 }
-const char *const source = R"(module sample;
+const char *const sourceText = R"(module sample;
 domain F = field("koala-bear");
 domain Product = ring(asset product);
 type Vector<T: Field> = builtin("vector", T);
@@ -48,7 +48,7 @@ int main() {
   context.loadAllAvailableDialects();
   auto checked = [] {
     auto captured =
-        take(capture({{"sample", source, "sample.zkc"}}, {product()}, {}));
+        take(capture({{"sample", sourceText, "sample.zkc"}}, {product()}, {}));
     auto project = take(analyze(captured).checkedProject());
     return take(prepareOriginal(
         take(zkc::test::closeProtocolDeployment(project, "sample::Demo"))));

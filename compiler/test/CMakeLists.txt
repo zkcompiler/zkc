@@ -607,3 +607,7 @@ add_test(NAME pass-policy COMMAND zkc-pass_policy-test
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite/total-zip.mlir")
 set_tests_properties(pass-policy PROPERTIES LABELS native)
 mlir_target_link_libraries(zkc-pass_policy-test PRIVATE MLIRParser MLIRPass)
+
+add_zkc_test(source_syntax Syntax source-syntax)
+target_compile_definitions(zkc-source_syntax-test PRIVATE
+  ZKC_SYNTAX_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/syntax")

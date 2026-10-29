@@ -1,0 +1,42 @@
+// Selected 4.1 design example; not production-compiled. Goal exports are design interfaces, not installed APIs.
+module examples::schnorr
+
+use zkc::algebra::PrimeOrderGroup
+use zkc::security::{proof_of_knowledge, interactive, forking, prover_runs}
+use zkc::security::schnorr::response_difference
+
+// Both public values belong to the statement. This relation alone does not
+// assert that g is a nonzero generator or establish a hardness assumption.
+pub relation DLog<G: PrimeOrderGroup>(
+    statement g: G, X: G, witness w: G::Scalar
+):
+    X == w ⋅ g
+
+pub protocol Schnorr<G: PrimeOrderGroup> roles(P, V)(
+    g: G @(P, V);
+    X: G @(P, V);
+    w: G::Scalar @P;
+    coins_p: Random<G::Scalar> @P;
+    coins_v: Random<G::Scalar> @V
+) -> bool @V:
+    nonce <- coins_p.draw()
+    commitment_p = nonce ⋅ g
+    commitment_v <- send commitment_p to V
+    #[site(challenge)]
+    challenge_v <- coins_v.draw()
+    challenge_p <- send challenge_v to P
+    response_p = nonce + challenge_p * w
+    response_v <- send response_p to V
+    return response_v ⋅ g == commitment_v + challenge_v ⋅ X
+
+spec for Schnorr:
+    target statement: DLog(g, X, w)
+    security: proof_of_knowledge(
+        target.statement,
+        model = interactive,
+        guarantee = forking(
+            challenges = |G::Scalar|,
+            extractor = response_difference,
+            cost = prover_runs(2)
+        )
+    )

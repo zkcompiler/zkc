@@ -1,0 +1,21 @@
+// Selected 4.1 design example; not production-compiled. No security claim is implied by these declarations.
+module examples::oracles
+
+// Executable protocol without a specification or security request.
+pub protocol Probe<F: Field, M: nat> roles(P, V)(
+    word: Oracle<table<F, rows = M>> @P -> V;
+    index: index @V
+) -> F @V:
+    answer <- query word at index
+    return answer
+
+// Illustrates reached-prefix behavior, not a sampling soundness theorem.
+pub protocol CheckSamples<F: Field, M: nat, Q: nat> roles(P, V)(
+    word: Oracle<table<F, rows = M>> @P -> V;
+    coins: Random<F> @V
+) -> bool @V where 0 < M:
+    for i in 0..Q roles(P, V) max Q:
+        position <- coins.index<M>()
+        answer <- query word at position
+        guard answer == 0
+    return true

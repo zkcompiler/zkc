@@ -7,6 +7,7 @@
 #include "zkc/Language/Assets.h"
 #include "zkc/Language/Notation.h"
 #include "zkc/Language/Types.h"
+#include "zkc/Source/Source.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
@@ -19,9 +20,11 @@
 #include <vector>
 
 namespace zkc::language {
-struct SourceId {
-  uint32_t index;
-};
+using source::Diagnostic;
+using source::SourceBuffer;
+using source::SourceId;
+using source::SourceOrigin;
+using source::Span;
 struct DeclarationId {
   uint32_t index;
 };
@@ -30,15 +33,6 @@ struct ValueId {
 };
 struct ServiceId {
   uint32_t index;
-};
-struct Span {
-  SourceId source;
-  uint32_t begin, end;
-};
-struct Diagnostic {
-  std::string code, message;
-  std::optional<Span> primary;
-  std::vector<Span> related;
 };
 class DiagnosticError : public llvm::ErrorInfo<DiagnosticError> {
 public:
@@ -74,12 +68,6 @@ struct Limits {
 };
 llvm::Error checkLimits(const Limits &);
 
-/// Names and bytes determine identity. diagnosticPath is never opened here.
-enum class SourceOrigin { Captured, Installation };
-struct SourceBuffer {
-  std::string module, text, diagnosticPath;
-  SourceOrigin origin = SourceOrigin::Captured;
-};
 struct CaptureOptions {
   std::string format = "zkc";
   Limits limits;

@@ -1,0 +1,35 @@
+// Two reductions reuse one fixed ghost, with separate actual calls and sites.
+module zkc::sumcheck::composed
+
+use zkc::sumcheck::rounds::Reduce
+use zkc::sumcheck::{Message, Prover, CubeSums, SumClaim}
+use zkc::poly::{MvPoly, vars, fix_prefix}
+use zkc::vector::length
+use lean Application.Sumcheck as goals
+
+pub protocol TwoSums<
+    F: Field, Max: nat, D: nat,
+    M: Message<F, D>, H: Prover<F, D, M, CubeSums<F, D>>
+> roles(P, V)(
+    left: SumClaim<F, D> @V;
+    right: SumClaim<F, D> @V;
+    rounds: index @(P, V);
+    ghost poly: MvPoly<F, D>;
+    left_state: H::State @P;
+    right_state: H::State @P;
+    coins: Random<F> @V
+) -> (left: SumClaim<F, D> @V; right: SumClaim<F, D> @V;
+      left_residual: H::State @P; right_residual: H::State @P):
+    #[site(left_rounds)]
+    a <- Reduce<F, Max, D, M, H>(left, rounds, ghost poly = poly, table = left_state, coins = coins)
+    #[site(right_rounds)]
+    b <- Reduce<F, Max, D, M, H>(right, rounds, ghost poly = poly, table = right_state, coins = coins)
+    return (left = a.claim, right = b.claim,
+            left_residual = a.residual, right_residual = b.residual)
+
+spec for TwoSums:
+    requires (H::represents(left_state, fix_prefix(poly, left.point), vars(poly) - length(left.point))
+            and H::represents(right_state, fix_prefix(poly, right.point), vars(poly) - length(right.point))
+            and length(left.point) + rounds <= vars(poly)
+            and length(right.point) + rounds <= vars(poly) and rounds <= Max)
+    security: goals::two_reductions(poly)

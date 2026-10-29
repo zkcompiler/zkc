@@ -1,0 +1,22 @@
+// A virtual table constructor. The query region is statically nonadaptive.
+module examples::virtual_oracle
+
+pub oracle def Affine<F: Field, N: nat>(
+    left: Oracle<table<F, rows = N>>,
+    right: Oracle<table<F, rows = N>>,
+    alpha: F
+) -> Oracle<table<F, rows = N>>:
+    query(position: index):
+        low <- query left at position
+        high <- query right at position
+        return low + alpha * (high - low)
+
+pub protocol FoldAndRead<F: Field, N: nat> roles(P, V)(
+    left: Oracle<table<F, rows = N>> @P -> V;
+    right: Oracle<table<F, rows = N>> @P -> V;
+    alpha: F @(P, V);
+    position: index @V
+) -> F @V:
+    folded <- Affine(left, right, alpha)
+    answer <- query folded at position
+    return answer

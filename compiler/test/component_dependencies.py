@@ -6,10 +6,12 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPONENTS = ("ZkcSupport", "ZkcContracts", "ZkcLanguage", "ZkcRelation", "ZkcProgram", "ZkcIR", "ZkcTranslation", "ZkcTransforms", "ZkcCompiler", "ZkcDriver")
+COMPONENTS = ("ZkcSupport", "ZkcSource", "ZkcSyntax", "ZkcContracts", "ZkcLanguage", "ZkcRelation", "ZkcProgram", "ZkcIR", "ZkcTranslation", "ZkcTransforms", "ZkcCompiler", "ZkcDriver")
 ALLOWED = {
-    "ZkcLanguage": {"ZkcContracts", "ZkcRelation"},
+    "ZkcLanguage": {"ZkcContracts", "ZkcRelation", "ZkcSyntax"},
     "ZkcSupport": {"LLVMSupport"},
+    "ZkcSource": {"ZkcSupport"},
+    "ZkcSyntax": {"ZkcSource"},
     "ZkcContracts": {"ZkcSupport"},
     "ZkcRelation": {"ZkcContracts"},
     "ZkcProgram": {"ZkcContracts"},
@@ -22,6 +24,8 @@ ALLOWED = {
 HEADER_ROOTS = {
     "ZkcLanguage": ["Language"],
     "ZkcSupport": ["Support"],
+    "ZkcSource": ["Source"],
+    "ZkcSyntax": ["Syntax"],
     "ZkcContracts": ["Contracts"],
     "ZkcRelation": [f"Relation/{name}.h" for name in ("R1CS", "AIR", "AIRPolynomial", "Bundle", "BundlePolynomial", "Matrices")],
     "ZkcProgram": ["Program"],
@@ -130,7 +134,7 @@ def main():
     extra_sources, extra_headers, extra_generated = extra.sources, extra.headers, extra.generated
     extra_includes, extra_libraries, extra_private = extra.includes, extra.libraries, extra.private
     extra_namespaces = {item.split("/")[0] for item in extra_includes}
-    extra_libraries["ZkcLanguage"].add("utf8proc::utf8proc")
+    extra_libraries["ZkcSource"].add("utf8proc::utf8proc")
     extra_libraries["ZkcContracts"].add("utf8proc::utf8proc")
     targets = {}
     owners = {}
@@ -170,6 +174,8 @@ def main():
     }.items():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
     private_headers = {
+        "ZkcSource": set(),
+        "ZkcSyntax": {ROOT / "lib/Syntax/Storage.h"},
         "ZkcLanguage": {ROOT / f"lib/Language/{name}.h" for name in ("Internal", "State", "Semantics", "Checker", "BodyCheck", "Placement", "TypeInference", "Arguments", "CallableConstraints", "OperatorInference", "BindingWitness", "NotationRecords", "BodySummary", "BodyMapping", "FreePlaces", "ScopedWitness", "SignatureWitness", "Effects", "FiniteDomains", "FiniteContracts", "FiniteFormation", "MathematicalFacts", "DataRequirements", "DomainClosure", "DomainWitness", "ValueOrigins", "HelperResults", "ClosureInputs", "UsagePlan", "LexicalRecords", "WrittenSource", "WrittenSourceIndex")},
         "ZkcSupport": {ROOT / "lib/Support/Input.h"},
         "ZkcContracts": {ROOT / "lib/Contracts/RequirementChecks.h"},
@@ -334,7 +340,7 @@ def main():
         dylib = expected - mlir | {"MLIR"} if mlir else expected
         assert links in (expected, dylib) or (name == "ZkcSupport" and links == {"LLVM"}), (name, links)
         permitted = set().union(*(public_headers[d] | private_headers[d] for d in closure(name)))
-        if name in ("ZkcLanguage",):
+        if name in ("ZkcSource", "ZkcSyntax", "ZkcLanguage"):
             permitted.discard(ROOT / "lib/Support/Input.h")
         if "ZkcIR" in closure(name):
             permitted.update(generated)
@@ -353,7 +359,7 @@ def main():
             if path.suffix in (".h", ".hpp", ".def", ".inc"):
                 assert path in permitted, f"{name}: upward header dependency {path}"
             for include in re.findall(r'^\s*#\s*include\s*[<"]([^">]+)[">]', path.read_text(), re.M):
-                if name in ("ZkcLanguage",):
+                if name in ("ZkcSource", "ZkcSyntax", "ZkcLanguage"):
                     assert include not in (
                         "filesystem", "fstream", "cstdio", "stdio.h", "llvm/Support/FileSystem.h",
                         "llvm/Support/MemoryBuffer.h", "llvm/Support/Program.h",

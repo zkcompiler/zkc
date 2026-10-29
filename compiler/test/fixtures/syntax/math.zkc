@@ -1,0 +1,19 @@
+// Selected 4.1 design example; not accepted by the production parser.
+module examples::math
+
+use zkc::vector::Vec
+
+section <F: Field>:
+    pub def mix(left: F, right: F, alpha: F) -> F:
+        left + alpha * (right - left)
+
+    pub def sum<N: nat>(values: Vec<F, N>) -> F:
+        mut total: F = 0
+        for i in 0..N:
+            total := total + values[i]
+        total
+
+    pub relation EqualSum<N: nat>(
+        parameter values: Vec<F, N>, statement claimed: F
+    ):
+        claimed == sum(values)
