@@ -390,9 +390,19 @@ def consumerReasons (input : Json) : Array String := Id.run do
   let required := get input "consumer_requirements"
   if required == .null then return #[]
   let mut reasons := #[]
+  let exactFields := fun (value : Json) (expected : List String) =>
+    match value.getObj? with
+    | .error _ => false
+    | .ok fields =>
+      let names := fields.toArray.map Prod.fst
+      names.size == expected.length && names.all expected.contains
+  if !exactFields required ["format", "context", "claims"] then
+    reasons := reasons.push "consumer requirements have unknown or missing fields"
   if str (get required "format") != "zkc.consumer-requirements/0" then
     reasons := reasons.push "unsupported consumer requirements format"
   let context := get required "context"
+  if !exactFields context ["subject", "manifest_sha256", "checker"] then
+    reasons := reasons.push "consumer requirements context has unknown or missing fields"
   if !has context || context != get input "consumer_context" ||
       !has (get context "checker") || str (get context "manifest_sha256") == "" ||
       str (get context "subject") == "" then
@@ -404,6 +414,8 @@ def consumerReasons (input : Json) : Array String := Id.run do
   if !unique nodes then reasons := reasons.push "duplicate consumer requirement occurrence"
   let supplied := arr (get (get input "source") "claims")
   for item in expected do
+    if !exactFields item ["node", "request"] then
+      reasons := reasons.push "consumer requirement has unknown or missing fields"
     let node := get item "node"
     let request := get item "request"
     if !has node || !has request then

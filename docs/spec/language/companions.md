@@ -153,3 +153,6 @@ transport failure. The CLI returns failure when explicit consumer requirements
 are unresolved. Without this option, an established outcome describes only the
 provider's declared scope; it makes no assertion about unlisted consumer needs.
 Duplicate JSON members and non-finite JSON numbers are refused at file ingress.
+The Lean audit rejects unknown or missing fields in the requirements object,
+its context and each expected-occurrence item. Extending these records requires
+an owning contract and consumer change rather than ignored policy metadata.

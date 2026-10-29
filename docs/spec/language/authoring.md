@@ -33,11 +33,24 @@ Clients report closed-file changes through `workspace/didChangeWatchedFiles`. Th
 
 The server implements initialize/shutdown/exit, open/change/close, cancellation, diagnostics, document symbols, definition, hover, completion and formatting. It defaults to UTF-16 positions and selects UTF-8 when the client advertises support. CRLF and non-BMP characters use the shared checked position conversion.
 
-`language::Authoring` in the installed Language SDK answers the semantic requests over an immutable `CheckedProject`. Definitions come from resolved lexical and declaration references. Local completion respects visibility intervals and shadowing; it suggests names, not a guarantee that an affine value can be used again. Hover exposes native value types and protocol availability. It may report a retained spec as unavailable for assurance. A checked native project is not a verified security claim.
+`language::Authoring` in the installed Language SDK answers semantic requests
+over an immutable analysis view, available independently of `CheckedProject`.
+Definitions come from resolved lexical and declaration references. Local
+completion respects visibility intervals and shadowing; it suggests names, not
+a guarantee that an affine value can be used again. Hover exposes native value
+types and protocol availability. A retained spec remains open for assurance;
+a checked native project is not a verified security claim.
 
 Displayed protocol signatures keep data and random-service parameters in their checked source order, including interleaved categories, matching positional call arguments.
 
-Successful project checking retains each full syntax tree under its exact imported notation environment. Formatting uses that tree and the Syntax formatter's equivalence check. An invalid project still supplies recoverable header symbols, but semantic queries and formatting refuse unavailable information. The service does not guess expression grouping when imports are broken. Rename, whole-project references, proof actions and Lean companion navigation are not implemented.
+Analysis retains syntax under its exact imported notation environment.
+Formatting requires a complete tree and the Syntax formatter's equivalence
+check. A failed body preserves independently valid neighboring signatures and
+bodies. A failed signature preserves valid signatures but prevents global body
+checking. Missing facts are unavailable; they are never inferred from a failed
+project's partial execution metadata. The service does not guess expression
+grouping when imports are broken. Rename, whole-project references, proof
+actions and Lean companion navigation are not implemented.
 
 The diagnostic `zkc/status` request takes `{ "textDocument": { "uri": "..." } }`. Its response contains the project `generation`, exact `capture` identity, `native` (`checked` or `invalid`) and `assurance` (`no-claim`, `open`, or `null` when invalid source prevents classification). These fields describe authoring state; they are not admission receipts or reusable proof identities.
 
