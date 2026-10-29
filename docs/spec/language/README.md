@@ -6,6 +6,7 @@ These native contracts define `.zkc` source and its checked translation. The
 | Chapter | Owns |
 |---|---|
 | [Source text and names](lexical.md) | Exact UTF-8, Unicode identifiers, mathematical tokens and pinned profile |
+| [Source authoring](authoring.md) | Optional source LSP, typed queries, document revisions and cancellation |
 | [Layout syntax](layout-syntax.md) | Immutable source revisions, lossless layout parsing, notation environments, recovery and formatting |
 | [Native layout execution](layout-execution.md) | Development source entry, native checking/execution, pending specifications and projection limits |
 | [Mathematical notation](notation.md) | Descriptors, fixity, delimiter calls, scope, inspection and bounds |

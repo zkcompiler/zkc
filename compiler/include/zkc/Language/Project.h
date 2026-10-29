@@ -802,7 +802,8 @@ llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
 llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
                                         std::vector<AssetBuffer>,
                                         const CaptureOptions &);
-Analysis analyze(const CapturedProject &, const Limits & = {});
+Analysis analyze(const CapturedProject &, const Limits & = {},
+                 source::Cancellation = {});
 /// Select from checked declarations: exact qualified name, unique short name,
 /// or the sole eligible Entry when the selector is empty. An explicit name is
 /// resolved before checking its kind, so filtering cannot hide ambiguity.
@@ -876,12 +877,14 @@ public:
   std::vector<DeclarationId> entries() const;
 
 private:
+  friend class Authoring;
   friend class Layouts;
   friend llvm::Error checkScopedElaboration(const CheckedProject &,
                                             const Limits &);
   explicit CheckedProject(std::shared_ptr<const detail::CheckedStorage>);
   std::shared_ptr<const detail::CheckedStorage> storage;
-  friend Analysis analyze(const CapturedProject &, const Limits &);
+  friend Analysis analyze(const CapturedProject &, const Limits &,
+                          source::Cancellation);
   friend llvm::Expected<std::string>
   inspectNotations(const CheckedProject &, const NotationInspectionOptions &,
                    const Limits &);
@@ -911,7 +914,8 @@ public:
 private:
   explicit Analysis(std::shared_ptr<const detail::AnalysisStorage>);
   std::shared_ptr<const detail::AnalysisStorage> storage;
-  friend Analysis analyze(const CapturedProject &, const Limits &);
+  friend Analysis analyze(const CapturedProject &, const Limits &,
+                          source::Cancellation);
 };
 struct ClosedInvocation;
 class ClosedEntry {

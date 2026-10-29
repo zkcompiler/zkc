@@ -22,7 +22,9 @@ with `cmake --install BUILD --prefix PREFIX` and build `common/tests/consumer` a
 that prefix to check every component and installed public header.
 
 Optional `-DZKC_ENABLE_MLIR_LSP=ON` builds the standard `zkc-lsp` MLIR language
-server with zkc dialects. Source editor support is separate.
+server with zkc dialects. `-DZKC_ENABLE_SOURCE_LSP=ON` builds the separate
+`zkc-source-lsp` for the development layout language; see the
+[source authoring contract](../docs/spec/language/authoring.md).
 
 ## Public commands
 

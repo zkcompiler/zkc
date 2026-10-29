@@ -35,6 +35,7 @@ OPENED = {}
 # What each tool is called, what CMake calls the variable it passes it in, and
 # where under the build directory to look when nothing passed it.
 TOOLS = {
+    "source_lsp": ("zkc-source-lsp", "ZKC_CTEST_SOURCE_LSP", "."),
     "program_codec": ("zkc-program_codec-test", "ZKC_CTEST_PROGRAM_CODEC", "test"),
     "tablegen": ("zkc-tblgen", "ZKC_CTEST_TABLEGEN", "."),
     "compiler": ("zkc-compile", "ZKC_CTEST_COMPILER", "."),

@@ -87,6 +87,10 @@ shared component changes need both linkage checks. Existing outputs can be selec
 
 ## Packages and optional work
 
+The optional [source language server](../spec/language/authoring.md) builds with
+`-DZKC_ENABLE_SOURCE_LSP=ON` and serves the development layout language. It has
+its own `zkc-source-lsp` executable and explicit project input map.
+
 ```sh
 nix build                         # installed CLI with its companion compiler
 nix run . -- --help

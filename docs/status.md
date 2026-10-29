@@ -290,6 +290,15 @@ project/SDK default remains the existing syntax. Shortened implementation
 signatures, complete mathematical control, schemes, formal projections and
 oracle execution remain outside the development execution profile.
 
+The optional [source LSP](spec/language/authoring.md) provides diagnostics,
+symbols, resolved definitions, native type/role hover, visible-name completion
+and checked-syntax formatting. Its single worker uses immutable whole-project
+generations, bounded queues, explicit cancellation and stale-publication guards.
+Imported notation, private bodies and spec additions invalidate the active
+analysis. Invalid projects retain header symbols; semantic features require a
+checked project. Persistent caches, rename, Lean proof actions and production
+language cutover remain open.
+
 `entry fn` exposes typed application control; `proof` configures independent
 proving and verification. Entry functions statically call numerical helpers,
 other Entries, protocol runs and proof operations. Numerical execution retains
@@ -507,7 +516,8 @@ bindings, scopes and occurrences, with private/local data hidden by default and
 installation data opt-in. [Notation limits](spec/language/notation.md#bounds)
 set 4096 descriptor keys per environment including fixed Boolean descriptors,
 64 delimiter holes and 8 MiB output; lowered SDK limits are rechecked on retained
-projects. This does not supply an LSP server or formatter.
+projects. The separate layout authoring service uses retained syntax and typed
+queries; this inspection artifact itself does not authorize source rewriting.
 
 Source Entry originals use checked Func/CF control with explicit Data/Exec
 boundaries. Fallible operations expose return-or-stop outcomes; their independent
@@ -883,8 +893,9 @@ Root build profiles, shared CLI/SDK requests, structured diagnostics, optional
 phase/pass/decision reports, LLVM time traces, feature-gated runtime counts,
 manifest consumer tests and bounded captured-input compilation reuse are
 implemented. The optional MLIR LSP uses the upstream server with installed zkc
-dialects. Source editing, persistent query caching and automatic policy search
-remain separate work. See [tooling](compiler/tooling.md) for supported boundaries.
+dialects. The separate source LSP serves the development layout profile.
+Persistent query caching and automatic policy search remain separate work.
+See [tooling](compiler/tooling.md) for supported boundaries.
 
 The native structured exporter retains protocol template origins as bounded,
 kind-preserving static term trees, shared with source-claim subject arguments.

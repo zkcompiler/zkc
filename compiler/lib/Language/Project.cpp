@@ -144,6 +144,8 @@ void frame(std::string &out, StringRef value) {
   out.append(value.data(), value.size());
 }
 Error Work::charge(uint64_t amount, std::optional<Span> span) {
+  if (cancellation && cancellation->cancelled())
+    return failure("source.cancelled", "source analysis cancelled", span);
   if (amount > limits.work - used)
     return failure("source.limit", "checked work limit exceeded", span);
   used += amount;
@@ -318,7 +320,8 @@ Expected<CheckedProject> Analysis::checkedProject() const {
   return detail::failure("source.unchecked",
                          "analysis did not produce a checked project");
 }
-Analysis analyze(const CapturedProject &capture, const Limits &limits) {
+Analysis analyze(const CapturedProject &capture, const Limits &limits,
+                 source::Cancellation cancellation) {
   auto output = std::make_shared<detail::AnalysisStorage>();
   auto checked = std::make_shared<detail::CheckedStorage>(capture);
   auto sources = std::make_shared<std::vector<SourceBuffer>>(
@@ -329,6 +332,7 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits) {
   checked->sources = sources;
   output->sources = sources;
   detail::Work work{limits};
+  work.cancellation = cancellation;
   auto run = [&]() -> Error {
     if (auto error = checkLimits(limits))
       return error;

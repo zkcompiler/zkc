@@ -71,6 +71,7 @@ add_zkc_component(Syntax
 )
 target_link_libraries(ZkcSyntax PUBLIC ZkcSource)
 add_zkc_component(Language
+  lib/Language/Authoring.cpp
   lib/Language/Diagnostics.cpp
   lib/Language/Inspection.cpp
   lib/Language/WrittenSource.cpp

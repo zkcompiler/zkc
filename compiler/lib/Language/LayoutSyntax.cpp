@@ -1318,7 +1318,9 @@ Expected<SyntaxDeclaration> parseLayoutHeaders(const SourceBuffer &source,
                                                SourceId id,
                                                CheckedStorage &storage,
                                                Work &work) {
-  auto tree = syntax::parseHeaders(source::Revision(source), id, budget(work));
+  auto tree =
+      syntax::parseHeaders(source::Revision(source), id, budget(work),
+                           work.cancellation.value_or(source::Cancellation{}));
   if (auto error = acceptSnapshot(tree, work))
     return std::move(error);
   auto &tokens = storage.tokens[id.index];
@@ -1375,7 +1377,8 @@ Error parseLayoutBodies(SourceId id, ArrayRef<BodyParseScope> scopes,
   }
   auto tree =
       syntax::parseBodies(*storage.layoutHeaders[id.index], std::move(defaults),
-                          std::move(environments), budget(work));
+                          std::move(environments), budget(work),
+                          work.cancellation.value_or(source::Cancellation{}));
   if (auto error = acceptSnapshot(tree, work))
     return error;
   storage.layoutBodies[id.index] = tree;
