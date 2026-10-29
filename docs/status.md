@@ -562,8 +562,16 @@ preparation, opening and guarded answer selection. The independent reader checks
 actual helper bodies, exact field/scheme signatures, grouping, leaf permutation,
 shape and query guards. Native primitive controls cover all four grouping/order
 combinations, KoalaBear quartic Poseidon2 openings, invalid shapes/queries and
-hostile root/row/proof delivery. This is not yet a common Merkle realization,
-batching implementation or native proof deployment path.
+hostile root/row/proof delivery. Common realization now accepts externally
+requested per-root schemes/layouts and uses these helpers for root construction.
+It checks holder Data, delivers only the selected commitment, retains private
+opening state and binds receiver shape to the stored root. Dynamic input roots
+append explicit receiver-owned shape ports; fixed extents need no extra input.
+The record reader rederives these associations under the caller's requested
+policy. Native controls exercise fixed/dynamic input/send roots, independent
+receiver shapes and exact antipodal root bytes. Receiver Merkle queries still
+refuse: common suspension/exchange/authentication, batching and native proof
+publication remain pending.
 The private whole-stage reader consumes a version-zero
 [realization record](spec/formats/oracle-realization.md), the prepared original
 and the actual candidate. It reads independently parsed candidates, checks exact
@@ -582,8 +590,8 @@ predicates on native representations. The record is not a production admission t
 Empty sequence observations need no allocated anchor. Unreachable queries and
 shape views have a complete refusing controller without an invented store;
 indexing still stops at its original occurrence and preserves earlier delivery.
-Controller roles must belong to the original entry roster. Merkle realization and native proof publication remain
-pending.
+Controller roles must belong to the original entry roster. Complete Merkle query
+realization and native proof publication remain pending.
 
 Common oracle ports pair actual holder data and receiver handles through inputs,
 returns and applications, with explicit shapes and independent preparation checks.

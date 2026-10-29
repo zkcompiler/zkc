@@ -348,9 +348,25 @@ struct Codec {
       object.field("stores", value.storePorts);
     });
   }
+  void item(json::Value &node, OracleMerkleFunctions &value) {
+    object(node, [&](Object &object) {
+      object.field("position", value.position);
+      object.field("commit", value.commit);
+      object.field("open", value.open);
+      object.field("authenticate", value.authenticate);
+    });
+  }
+  void item(json::Value &node, OracleInputShape &value) {
+    object(node, [&](Object &object) {
+      object.field("anchor", value.anchor);
+      object.field("port", value.port);
+    });
+  }
   void item(json::Value &node, OracleCommonEntryRealization &value) {
     object(node, [&](Object &object) {
       object.field("entry", value.entry);
+      object.field("merkle", value.merkle);
+      object.field("input_shapes", value.inputShapes);
       object.field("controllers", value.controllers);
       object.field("allocators", value.allocators);
       object.field("locals", value.locals);
@@ -468,12 +484,14 @@ Expected<json::Value> contracts(Codec &codec,
                       {"statements", std::move(statements)}};
 }
 Expected<json::Object> derived(Codec &codec, ModuleOp prepared,
-                               const OracleCommonEntryRealization &entry) {
-  auto requirements = idealOracleRequirements(prepared, entry.entry);
+                               const OracleCommonEntryRealization &entry,
+                               ArrayRef<OracleRootSelection> selections) {
+  auto requirements = oracleRequirements(prepared, entry.entry, selections);
   if (!requirements)
     return requirements.takeError();
-  auto plan = planIdealOracleCommon(prepared, entry.entry, *requirements,
-                                    entry.controllers, entry.allocators);
+  auto plan =
+      planOracleCommon(prepared, entry.entry, *requirements, entry.controllers,
+                       entry.allocators, entry.merkle);
   if (!plan)
     return plan.takeError();
   auto unit = cast<protocol_ir::ProtocolModuleOp>(prepared.getBody()->front());
@@ -594,7 +612,9 @@ json::Array declarations(ModuleOp candidate) {
   return result;
 }
 Expected<json::Value> encode(ModuleOp prepared, ModuleOp candidate,
-                             ArrayRef<OracleCommonEntryRealization> entries) {
+                             ArrayRef<OracleCommonEntryRealization> entries,
+                             ArrayRef<OracleRootSelection> selections,
+                             OracleQueryFlush flush) {
   if (!prepared || !candidate ||
       !hasSingleElement(candidate.getBody()->getOperations()) ||
       !isa<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front()))
@@ -607,7 +627,7 @@ Expected<json::Value> encode(ModuleOp prepared, ModuleOp candidate,
   if (!codec.valid)
     return refuse();
   for (auto [node, entry] : zip(*encoded.getAsArray(), entries)) {
-    auto fields = derived(codec, prepared, entry);
+    auto fields = derived(codec, prepared, entry, selections);
     if (!fields)
       return fields.takeError();
     for (auto &field : *fields)
@@ -622,17 +642,39 @@ Expected<json::Value> encode(ModuleOp prepared, ModuleOp candidate,
       return encoded.takeError();
     types.push_back(encoded->spelling());
   }
-  return json::Object{{"format", "zkc.oracle-realization/0"},
-                      {"mode", "ideal"},
-                      {"types", std::move(types)},
-                      {"entries", std::move(encoded)},
-                      {"declarations", declarations(candidate)}};
+  json::Array roots;
+  for (const auto &selection : selections) {
+    const auto &choice = selection.realization;
+    roots.push_back(json::Object{
+        {"entry", selection.entry},
+        {"path", numbers(selection.path)},
+        {"scheme", choice.scheme},
+        {"grouping", choice.grouping == OracleLeafGrouping::Individual
+                         ? "individual"
+                         : "antipodal-pairs"},
+        {"order", choice.order == OracleLeafOrder::Natural ? "natural"
+                                                           : "bit-reversed"}});
+  }
+  return json::Object{
+      {"format", "zkc.oracle-realization/0"},
+      {"selection", json::Object{{"flush", flush == OracleQueryFlush::Immediate
+                                               ? "immediate"
+                                               : "after-final-draw"},
+                                 {"roots", std::move(roots)}}},
+      {"types", std::move(types)},
+      {"entries", std::move(encoded)},
+      {"declarations", declarations(candidate)}};
 }
 } // namespace
 Expected<std::string>
-serializeIdealOracleRealization(ModuleOp prepared,
-                                const OracleCommonRealization &actual) {
-  auto record = encode(prepared, actual.module.get(), actual.entries);
+serializeOracleRealization(ModuleOp prepared,
+                           const OracleCommonRealization &actual,
+                           const OracleRealizationPolicy &policy) {
+  auto selections = resolveOracleRealizationSelection(prepared, policy);
+  if (!selections)
+    return selections.takeError();
+  auto record = encode(prepared, actual.module.get(), actual.entries,
+                       *selections, policy.flush);
   if (!record)
     return record.takeError();
   std::string text;
@@ -641,8 +683,12 @@ serializeIdealOracleRealization(ModuleOp prepared,
     return error("oracle-realization-record-limit");
   return text;
 }
-Error checkIdealOracleRealization(ModuleOp prepared, ModuleOp candidate,
-                                  StringRef text) {
+Error checkOracleRealization(ModuleOp prepared, ModuleOp candidate,
+                             StringRef text,
+                             const OracleRealizationPolicy &policy) {
+  auto selections = resolveOracleRealizationSelection(prepared, policy);
+  if (!selections)
+    return selections.takeError();
   auto parsed =
       parseNaturalJson(text, byteLimit, 64, "oracle-realization-record",
                        "oracle-realization-record-limit");
@@ -651,7 +697,7 @@ Error checkIdealOracleRealization(ModuleOp prepared, ModuleOp candidate,
   auto *record = parsed->getAsObject();
   if (!record || record->size() != 5 ||
       record->getString("format") != "zkc.oracle-realization/0" ||
-      record->getString("mode") != "ideal" || !record->getArray("types") ||
+      !record->getObject("selection") || !record->getArray("types") ||
       !record->getArray("entries") || !record->getArray("declarations") ||
       !candidate || !hasSingleElement(candidate.getBody()->getOperations()) ||
       !isa<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front()))
@@ -694,10 +740,11 @@ Error checkIdealOracleRealization(ModuleOp prepared, ModuleOp candidate,
   codec.item(*record->get("entries"), entries);
   if (!codec.valid)
     return refuse();
-  if (auto e = checkIdealOracleRealizationModel(*sourceContext, *targetContext,
-                                                entries))
+  if (auto e = checkOracleRealizationModel(*sourceContext, *targetContext,
+                                           entries, *selections))
     return e;
-  auto expected = encode(prepared, candidate, entries);
+  auto expected =
+      encode(prepared, candidate, entries, *selections, policy.flush);
   if (!expected)
     return expected.takeError();
   if (!zkc::equalNaturalJson(*expected, *parsed))

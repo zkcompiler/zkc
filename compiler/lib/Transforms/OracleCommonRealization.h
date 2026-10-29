@@ -1,6 +1,8 @@
 #ifndef ZKC_TRANSFORMS_ORACLECOMMONREALIZATION_H
 #define ZKC_TRANSFORMS_ORACLECOMMONREALIZATION_H
+#include "OracleMerkle.h"
 #include "OracleQueryController.h"
+#include "OracleRealizationSelection.h"
 namespace zkc::protocol {
 struct OracleCommonController {
   std::string role;
@@ -29,8 +31,18 @@ struct OracleResultReference {
            storePorts == other.storePorts;
   }
 };
+// Dynamic root inputs append one explicit shape port per logical anchor. The
+// original input positions remain fixed; no expected shape is read from a root.
+struct OracleInputShape {
+  unsigned anchor, port;
+  bool operator==(const OracleInputShape &other) const {
+    return anchor == other.anchor && port == other.port;
+  }
+};
 struct OracleCommonEntryRealization {
   std::string entry;
+  std::vector<OracleMerkleFunctions> merkle;
+  std::vector<OracleInputShape> inputShapes;
   std::vector<OracleCommonController> controllers;
   std::vector<std::vector<mlir::func::FuncOp>> allocators;
   std::vector<mlir::func::FuncOp> locals;
@@ -42,19 +54,23 @@ struct OracleCommonRealization {
   std::vector<OracleCommonEntryRealization> entries;
 };
 // Private common-stage integration of every oracle-bearing prepared entry.
-// Ordinary siblings retain their exact bodies. This currently realizes ideal
-// tables; unsupported interfaces refuse without changing the original.
-// No checked-stage authority or native publication is granted by emission.
+// Ordinary siblings retain their exact bodies. Requested choices are normalized
+// against actual roots; unsupported interfaces refuse without changing the
+// original. No checked-stage authority or native publication is granted by
+// emission.
 llvm::Expected<OracleCommonRealization>
-emitIdealOracleRealization(mlir::ModuleOp prepared);
+emitOracleRealization(mlir::ModuleOp prepared,
+                      const OracleRealizationPolicy &policy = {});
 // Re-derive layouts, capacities and the common recipe from the frozen original,
 // then read the actual common SSA and every generated helper body. The reader
 // never invokes emission. This is native correspondence, not a Lean simulation.
 llvm::Expected<std::string>
-serializeIdealOracleRealization(mlir::ModuleOp prepared,
-                                const OracleCommonRealization &actual);
-llvm::Error checkIdealOracleRealization(mlir::ModuleOp prepared,
-                                        mlir::ModuleOp candidate,
-                                        llvm::StringRef record);
+serializeOracleRealization(mlir::ModuleOp prepared,
+                           const OracleCommonRealization &actual,
+                           const OracleRealizationPolicy &policy = {});
+llvm::Error checkOracleRealization(mlir::ModuleOp prepared,
+                                   mlir::ModuleOp candidate,
+                                   llvm::StringRef record,
+                                   const OracleRealizationPolicy &policy = {});
 } // namespace zkc::protocol
 #endif

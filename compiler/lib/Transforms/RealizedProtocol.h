@@ -2,6 +2,7 @@
 #define ZKC_TRANSFORMS_REALIZED_PROTOCOL_H
 
 #include "PreparedProtocol.h"
+#include "zkc/Transforms/OracleSelection.h"
 #include "llvm/Support/Error.h"
 #include <string>
 
@@ -25,7 +26,9 @@ class RealizedProtocol {
         record(std::move(record)) {}
 
 public:
-  static llvm::Expected<RealizedProtocol> ideal(PreparedProtocol prepared);
+  static llvm::Expected<RealizedProtocol>
+  realize(PreparedProtocol prepared,
+          const protocol::OracleRealizationPolicy &policy = {});
   // Independent clones cannot mutate the owned checked edge. A moved-from
   // owner has no snapshots. The record view borrows this owner's lifetime.
   mlir::OwningOpRef<mlir::ModuleOp> originalSnapshot() const;

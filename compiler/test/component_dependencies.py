@@ -213,6 +213,7 @@ def main():
         ROOT / "lib/Transforms/RealizationEmission.h",
         ROOT / "lib/Transforms/OracleCommonRealization.h",
         ROOT / "lib/Transforms/OracleCommonPlan.h",
+        ROOT / "lib/Transforms/OracleRealizationSelection.h",
         ROOT / "lib/Transforms/OracleVirtualRecipe.h",
         ROOT / "lib/Transforms/OracleVerificationContext.h",
         ROOT / "lib/Transforms/OracleQueryCapacity.h",

@@ -179,13 +179,14 @@ bool inventory(pir::ProtocolModuleOp source, pir::ProtocolModuleOp candidate,
   return true;
 }
 } // namespace
-Error checkIdealOracleRealizationModel(
+Error checkOracleRealizationModel(
     const OracleVerificationContext &sourceContext,
     const OracleVerificationContext &targetContext,
-    ArrayRef<OracleCommonEntryRealization> actualEntries) {
+    ArrayRef<OracleCommonEntryRealization> actualEntries,
+    ArrayRef<OracleRootSelection> selections) {
   ModuleOp prepared = sourceContext.getModule(),
            actualModule = targetContext.getModule();
-  auto entries = idealOracleEntries(prepared);
+  auto entries = oracleEntries(prepared);
   if (!entries)
     return entries.takeError();
   if (!actualModule || actualModule == prepared ||
@@ -206,11 +207,13 @@ Error checkIdealOracleRealizationModel(
   for (auto [entry, realized] : zip(*entries, actualEntries)) {
     if (entry != realized.entry)
       return refuse();
-    auto requirements = idealOracleRequirements(prepared, entry);
+    auto requirements = oracleRequirements(prepared, entry, selections);
     if (!requirements)
       return requirements.takeError();
     if (realized.controllers.size() != requirements->controllers.size() ||
-        realized.allocators.size() != requirements->storage.constructors.size())
+        realized.allocators.size() !=
+            requirements->storage.constructors.size() ||
+        realized.merkle.size() != requirements->storage.constructors.size())
       return refuse();
     for (auto [expected, item] :
          zip(requirements->controllers, realized.controllers)) {
@@ -244,6 +247,22 @@ Error checkIdealOracleRealizationModel(
     }
     for (auto [ordinal, constructor] :
          enumerate(requirements->storage.constructors)) {
+      const auto &functions = realized.merkle[ordinal];
+      if (constructor.scheme.empty()) {
+        if (functions.position || functions.commit || functions.open ||
+            functions.authenticate)
+          return refuse();
+      } else {
+        const auto &choice = requirements->realizations[ordinal];
+        if (auto e =
+                checkOracleMerkle(targetContext, functions, constructor.kind,
+                                  choice.scheme, choice.grouping, choice.order))
+          return e;
+        root(functions.position);
+        root(functions.commit);
+        root(functions.open);
+        root(functions.authenticate);
+      }
       if (realized.allocators[ordinal].size() != constructor.roles.size())
         return refuse();
       for (auto [role, helper] : enumerate(realized.allocators[ordinal])) {
@@ -254,11 +273,12 @@ Error checkIdealOracleRealizationModel(
       }
     }
     auto plan =
-        planIdealOracleCommon(prepared, entry, *requirements,
-                              realized.controllers, realized.allocators);
+        planOracleCommon(prepared, entry, *requirements, realized.controllers,
+                         realized.allocators, realized.merkle);
     if (!plan)
       return plan.takeError();
-    if (realized.resultStores != plan->resultStores ||
+    if (realized.inputShapes != plan->inputShapes ||
+        realized.resultStores != plan->resultStores ||
         realized.resultReferences != plan->resultReferences)
       return refuse();
     auto program = dyn_cast_or_null<pir::MathematicalOp>(

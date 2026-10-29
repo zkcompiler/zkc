@@ -1,11 +1,10 @@
 #ifndef ZKC_TRANSFORMS_ORACLELAYOUT_H
 #define ZKC_TRANSFORMS_ORACLELAYOUT_H
+#include "zkc/Transforms/OracleSelection.h"
 #include "llvm/Support/Error.h"
 #include <cstdint>
 
 namespace zkc::protocol {
-enum class OracleLeafGrouping { Individual, AntipodalPairs };
-enum class OracleLeafOrder { Natural, BitReversed };
 struct OracleLeafPosition {
   uint64_t leaf;
   unsigned slot;

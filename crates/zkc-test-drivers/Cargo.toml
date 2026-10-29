@@ -288,3 +288,9 @@ name = "oracle_merkle"
 path = "src/oracle_merkle.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "oracle_commitment_roots"
+path = "src/oracle_commitment_roots.rs"
+test = false
+bench = false

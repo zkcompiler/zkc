@@ -49,6 +49,8 @@ struct PlanBuilder {
   const OracleCommonRequirements &requirements;
   ArrayRef<OracleCommonController> controllers;
   ArrayRef<std::vector<func::FuncOp>> allocators;
+  ArrayRef<OracleMerkleFunctions> merkle;
+  std::map<unsigned, unsigned> inputRows;
   Builder builder;
   Type index;
   OracleCommonPlan result;
@@ -66,9 +68,10 @@ struct PlanBuilder {
   explicit PlanBuilder(ModuleOp source, pir::MathematicalOp program,
                        const OracleCommonRequirements &requirements,
                        ArrayRef<OracleCommonController> controllers,
-                       ArrayRef<std::vector<func::FuncOp>> allocators)
+                       ArrayRef<std::vector<func::FuncOp>> allocators,
+                       ArrayRef<OracleMerkleFunctions> merkle)
       : source(source), program(program), requirements(requirements),
-        controllers(controllers), allocators(allocators),
+        controllers(controllers), allocators(allocators), merkle(merkle),
         builder(source.getContext()),
         index(
             IntegerType::get(source.getContext(), 64, IntegerType::Unsigned)) {
@@ -320,6 +323,30 @@ struct PlanBuilder {
     recipe.results = {rows};
     return recipe;
   }
+  Operation *sourceOperation(ArrayRef<unsigned> path) {
+    Block *body = &program.getBody().front();
+    Operation *op = nullptr;
+    for (auto [i, ordinal] : enumerate(path)) {
+      if (ordinal >= body->getOperations().size())
+        return nullptr;
+      op = &*std::next(body->begin(), ordinal);
+      if (i + 1 != path.size()) {
+        auto repeat = dyn_cast<pir::RepeatOp>(op);
+        if (!repeat)
+          return nullptr;
+        body = &repeat.getBody().front();
+      }
+    }
+    return op;
+  }
+  std::optional<unsigned> inputAnchor(Value anchor) {
+    while (auto restricted = anchor.getDefiningOp<pir::RestrictRolesOp>())
+      anchor = restricted.getInput();
+    auto argument = dyn_cast<BlockArgument>(anchor);
+    if (!argument || argument.getOwner() != &program.getBody().front())
+      return {};
+    return argument.getArgNumber();
+  }
   Error construct(OracleCommonBlock &block, Operation &op,
                   ArrayRef<unsigned> path, unsigned ordinal) {
     const auto &construction = requirements.storage.constructors[ordinal];
@@ -337,6 +364,7 @@ struct PlanBuilder {
       delivered[construction.holder] = *data;
     }
     unsigned incoming = 0;
+    IDs committed;
     if (auto input = dyn_cast<pir::OracleInputOp>(op)) {
       auto data = value(input.getData()), anchor = value(input.getAnchor());
       if (!data)
@@ -396,23 +424,49 @@ struct PlanBuilder {
         row = checked->front();
         result.locals.push_back(std::move(*recipe));
       } else {
+        bool authenticated = !construction.scheme.empty();
+        bool holder = role.role == construction.holder;
         DictionaryAttr bounds;
-        bool inferred = isa<pir::OracleInputOp>(op);
+        bool inferred =
+            isa<pir::OracleInputOp>(op) && (!authenticated || holder);
         IDs arguments;
         if (auto input = dyn_cast<pir::OracleInputOp>(op)) {
           bounds = input.getShapeBounds();
-          if (role.role != construction.holder)
+          if (!holder) {
             delivered[role.role] = incoming;
+            if (authenticated) {
+              auto dimension = kind.getShapeDimensions()[0];
+              if (dimension.extent) {
+                auto count = constant(block, *dimension.extent);
+                if (!count)
+                  return count.takeError();
+                arguments.push_back(*count);
+              } else {
+                auto anchor = inputAnchor(input.getAnchor());
+                if (!anchor || !inputRows.count(*anchor))
+                  return error("oracle-common-interface");
+                arguments.push_back(inputRows.at(*anchor));
+              }
+            }
+          }
         } else {
           auto send = cast<pir::OracleSendOp>(op);
           bounds = send.getShapeBounds();
-          if (role.role != construction.holder) {
-            auto exchange =
-                make(block, "protocol.exchange", kind.getDataType(),
-                     {delivered[construction.holder]},
-                     attrs({text("sender", construction.holder),
-                            text("receiver", role.role),
-                            text("site", site(path, "deliver", role.role))}));
+          if (!holder) {
+            if (authenticated && committed.size() != 2)
+              return error("oracle-common-helper");
+            auto commit = merkle[ordinal].commit;
+            Type deliveryType =
+                authenticated
+                    ? cast<exec::OutcomeType>(commit.getResultTypes()[0])
+                          .getPayload()[0]
+                    : kind.getDataType();
+            auto exchange = make(
+                block, "protocol.exchange", deliveryType,
+                {authenticated ? committed[0] : delivered[construction.holder]},
+                attrs({text("sender", construction.holder),
+                       text("receiver", role.role),
+                       text("site", site(path, "deliver", role.role))}));
             if (!exchange)
               return exchange.takeError();
             delivered[role.role] = exchange->front();
@@ -422,8 +476,10 @@ struct PlanBuilder {
             return dimension.takeError();
           arguments.push_back(*dimension);
         }
-        arguments.insert(arguments.begin(), delivered[role.role]);
-        auto recipe = checkShape(kind, bounds, true, inferred);
+        bool data = !authenticated || holder;
+        if (data)
+          arguments.insert(arguments.begin(), delivered[role.role]);
+        auto recipe = checkShape(kind, bounds, data, inferred);
         if (!recipe)
           return recipe.takeError();
         auto checked = call(block, *recipe, role.role, arguments,
@@ -433,6 +489,25 @@ struct PlanBuilder {
         row = checked->front();
         result.locals.push_back(std::move(*recipe));
         payload = {delivered[role.role]};
+        if (authenticated) {
+          if (holder) {
+            auto output = call(block, merkle[ordinal].commit, role.role,
+                               {delivered[role.role], row},
+                               site(path, "commit", role.role));
+            if (!output)
+              return output.takeError();
+            committed = *output;
+            payload.push_back(committed[1]);
+          } else {
+            auto zero = constant(block, 0);
+            if (!zero)
+              return zero.takeError();
+            auto admitted = call(block, merkle[ordinal].position, role.role,
+                                 {row, *zero}, site(path, "layout", role.role));
+            if (!admitted)
+              return admitted.takeError();
+          }
+        }
       }
       append_range(children, *captures);
       auto count = call(
@@ -891,17 +966,65 @@ struct PlanBuilder {
   Expected<OracleCommonPlan> run() {
     Types inputs;
     auto &original = program.getBody().front();
-    for (Value argument : original.getArguments()) {
+    std::map<unsigned, unsigned> selectedInputs;
+    for (auto [ordinal, constructor] :
+         enumerate(requirements.storage.constructors)) {
+      if (constructor.constructor != OracleAnchorConstructor::Kind::Input)
+        continue;
+      auto input = dyn_cast_or_null<pir::OracleInputOp>(
+          sourceOperation(constructor.path));
+      if (!input)
+        return error("oracle-common-interface");
+      auto anchor = inputAnchor(input.getAnchor());
+      if (!anchor)
+        return error("oracle-common-interface");
+      // Protocol admission owns the unique binding of each raw entry anchor.
+      selectedInputs.emplace(*anchor, ordinal);
+    }
+    for (auto [ordinal, argument] : enumerate(original.getArguments())) {
       Type type = argument.getType();
-      if (auto handle = dyn_cast<pir::OracleHandleType>(type))
-        type = handle.getKind().getDataType();
-      else if (logical(type))
+      if (auto handle = dyn_cast<pir::OracleHandleType>(type)) {
+        auto selected = selectedInputs.find(ordinal);
+        if (selected == selectedInputs.end())
+          return error("oracle-common-interface");
+        auto &constructor = requirements.storage.constructors[selected->second];
+        if (constructor.scheme.empty())
+          type = handle.getKind().getDataType();
+        else {
+          auto receiver = find_if(constructor.roles, [&](const auto &role) {
+            return role.role != constructor.holder;
+          });
+          if (receiver == constructor.roles.end())
+            return error("oracle-common-interface");
+          const auto &fields = receiver->fields;
+          auto field = find_if(
+              fields, [](const auto &field) { return field.name == "root"; });
+          if (field == fields.end())
+            return error("oracle-common-interface");
+          type = field->type;
+        }
+      } else if (logical(type))
         return error("oracle-common-interface");
       auto mapped = id();
       values[argument] = mapped;
       result.body.arguments.push_back(mapped);
       result.body.types.push_back(type);
       inputs.push_back(type);
+    }
+    SmallVector<Attribute> inputRoles(program.getInputRoles().begin(),
+                                      program.getInputRoles().end());
+    for (const auto &[anchor, ordinal] : selectedInputs) {
+      const auto &constructor = requirements.storage.constructors[ordinal];
+      if (constructor.scheme.empty() ||
+          constructor.kind.getShapeDimensions()[0].extent)
+        continue;
+      result.inputShapes.push_back({anchor, unsigned(inputs.size())});
+      auto mapped = id();
+      inputRows[anchor] = mapped;
+      result.body.arguments.push_back(mapped);
+      result.body.types.push_back(index);
+      inputs.push_back(index);
+      inputRoles.push_back(program.getInputRoles()[anchor]);
     }
     Types outputs;
     for (Type type : program.getFunctionType().getResults()) {
@@ -959,16 +1082,28 @@ struct PlanBuilder {
     attributes.erase("contracts");
     attributes.set("function_type",
                    TypeAttr::get(builder.getFunctionType(inputs, outputs)));
+    attributes.set("input_roles", builder.getArrayAttr(inputRoles));
     attributes.set("output_roles", builder.getArrayAttr(outputRoles));
     result.attributes = attributes.getDictionary(builder.getContext());
     for (auto [constructor, item] :
          enumerate(requirements.storage.constructors))
       for (auto [role, storage] : enumerate(item.roles)) {
-        auto empty =
-            make(result.body, "data.sequence_empty", storage.sequence, {});
+        // Stores may contain private opening state. Their empty value is an
+        // owner-local allocation, not a total mathematical sequence shared by
+        // all participants. Use the same scoped route for every store layout.
+        auto element = encodeBoundType(storage.record, false);
+        if (!element)
+          return element.takeError();
+        auto recipe = local({}, storage.sequence);
+        recipe.results =
+            apply(recipe, {"sequence.empty", {element->spelling()}, ""},
+                  storage.sequence, {});
+        auto empty = call(result.body, recipe, storage.role, {},
+                          site(item.path, "empty_store", storage.role));
         if (!empty)
           return empty.takeError();
         store[{constructor, role}] = empty->front();
+        result.locals.push_back(std::move(recipe));
       }
     if (auto e = visit(result.body, original, {}, 64))
       return std::move(e);
@@ -976,7 +1111,7 @@ struct PlanBuilder {
   }
 };
 } // namespace
-Expected<std::vector<std::string>> idealOracleEntries(ModuleOp source) {
+Expected<std::vector<std::string>> oracleEntries(ModuleOp source) {
   if (!source || !hasSingleElement(source.getBody()->getOperations()) ||
       failed(verify(source)))
     return refuse();
@@ -997,11 +1132,27 @@ Expected<std::vector<std::string>> idealOracleEntries(ModuleOp source) {
   }
   return entries;
 }
-Expected<OracleCommonRequirements> idealOracleRequirements(ModuleOp source,
-                                                           StringRef entry) {
+Expected<OracleCommonRequirements>
+oracleRequirements(ModuleOp source, StringRef entry,
+                   ArrayRef<OracleRootSelection> selections) {
+  std::map<std::vector<unsigned>, const OracleTableRealization *> selected;
+  for (const auto &item : selections)
+    if (item.entry == entry &&
+        !selected.emplace(item.path, &item.realization).second)
+      return error("oracle-realization-selection");
+  auto selection = [&](const OracleAnchorConstructor &constructor)
+      -> const OracleTableRealization * {
+    auto found = selected.find(constructor.path);
+    return found == selected.end() ? nullptr : found->second;
+  };
   auto storage = planOracleAnchorStorage(
       source, entry,
-      [](const auto &) -> Expected<std::string> { return std::string(); });
+      [&](const OracleAnchorConstructor &constructor) -> Expected<std::string> {
+        auto selected = selection(constructor);
+        if (!selected)
+          return error("oracle-realization-selection");
+        return selected->scheme;
+      });
   if (!storage)
     return storage.takeError();
   auto unit = cast<pir::ProtocolModuleOp>(source.getBody()->front());
@@ -1012,7 +1163,11 @@ Expected<OracleCommonRequirements> idealOracleRequirements(ModuleOp source,
   auto capacity = analyzeOracleQueryCapacity(source, entry);
   if (!capacity)
     return capacity.takeError();
-  OracleCommonRequirements result{std::move(*storage), {1, 1}, {}};
+  OracleCommonRequirements result{std::move(*storage), {}, {1, 1}, {}};
+  for (const auto &constructor : result.storage.constructors) {
+    auto choice = selection(constructor);
+    result.realizations.push_back(choice ? *choice : OracleTableRealization{});
+  }
   for (const auto &map : {&capacity->constructors, &capacity->queries})
     for (const auto &[op, bound] : *map) {
       (void)op;
@@ -1089,11 +1244,14 @@ Expected<OracleCommonRequirements> idealOracleRequirements(ModuleOp source,
   return result;
 }
 Expected<OracleCommonPlan>
-planIdealOracleCommon(ModuleOp source, StringRef entry,
-                      const OracleCommonRequirements &requirements,
-                      ArrayRef<OracleCommonController> controllers,
-                      ArrayRef<std::vector<func::FuncOp>> allocators) {
-  if (allocators.size() != requirements.storage.constructors.size())
+planOracleCommon(ModuleOp source, StringRef entry,
+                 const OracleCommonRequirements &requirements,
+                 ArrayRef<OracleCommonController> controllers,
+                 ArrayRef<std::vector<func::FuncOp>> allocators,
+                 ArrayRef<OracleMerkleFunctions> merkle) {
+  if (allocators.size() != requirements.storage.constructors.size() ||
+      merkle.size() != allocators.size() ||
+      requirements.realizations.size() != allocators.size())
     return error("oracle-common-helper");
   for (auto [i, items] : enumerate(allocators))
     if (items.size() != requirements.storage.constructors[i].roles.size())
@@ -1101,7 +1259,8 @@ planIdealOracleCommon(ModuleOp source, StringRef entry,
   auto unit = cast<pir::ProtocolModuleOp>(source.getBody()->front());
   auto program =
       cast<pir::MathematicalOp>(SymbolTable::lookupSymbolIn(unit, entry));
-  return PlanBuilder(source, program, requirements, controllers, allocators)
+  return PlanBuilder(source, program, requirements, controllers, allocators,
+                     merkle)
       .run();
 }
 } // namespace zkc::protocol

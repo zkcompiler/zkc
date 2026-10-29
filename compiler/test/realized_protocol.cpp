@@ -27,7 +27,7 @@ void checked(const RealizedProtocol &owner) {
   auto original = owner.originalSnapshot();
   auto candidate = owner.candidateSnapshot();
   require(bool(original) && bool(candidate), "checked edge lost a side");
-  if (auto failure = protocol::checkIdealOracleRealization(
+  if (auto failure = protocol::checkOracleRealization(
           *original, *candidate, owner.realizationRecord()))
     throw std::runtime_error(toString(std::move(failure)));
 }
@@ -53,7 +53,7 @@ int main() {
   require(bool(source), "invalid common input fixture");
   auto prepared = prepare(*source);
   auto frozen = prepared.snapshot();
-  auto owner = take(RealizedProtocol::ideal(std::move(prepared)));
+  auto owner = take(RealizedProtocol::realize(std::move(prepared)));
   Cases cases;
   cases.run(
       "checked owner retains both sides and serialized interpretation", [&] {
@@ -71,15 +71,15 @@ int main() {
             "owned record lost logical associations");
       });
   cases.run("consumed preparation grants no second realization", [&] {
-    refuses(RealizedProtocol::ideal(std::move(prepared)),
+    refuses(RealizedProtocol::realize(std::move(prepared)),
             "oracle-realization-source");
   });
   cases.run("candidate snapshot mutation cannot change checked ownership", [&] {
     auto original = owner.originalSnapshot();
     auto candidate = owner.candidateSnapshot();
     changeRelation(*candidate);
-    auto failure = protocol::checkIdealOracleRealization(
-        *original, *candidate, owner.realizationRecord());
+    auto failure = protocol::checkOracleRealization(*original, *candidate,
+                                                    owner.realizationRecord());
     require(bool(failure), "changed actual predicate retained correspondence");
     consumeError(std::move(failure));
     checked(owner);
@@ -90,7 +90,7 @@ int main() {
         auto candidate = owner.candidateSnapshot();
         changeRelation(*original);
         changeRelation(*source);
-        auto failure = protocol::checkIdealOracleRealization(
+        auto failure = protocol::checkOracleRealization(
             *original, *candidate, owner.realizationRecord());
         require(bool(failure), "changed original retained correspondence");
         consumeError(std::move(failure));
@@ -107,7 +107,7 @@ module { "protocol.module"() ({
 )mlir",
                                                 &context);
     require(bool(ordinary), "invalid ordinary fixture");
-    auto identity = take(RealizedProtocol::ideal(prepare(*ordinary)));
+    auto identity = take(RealizedProtocol::realize(prepare(*ordinary)));
     checked(identity);
     auto left = identity.originalSnapshot(),
          right = identity.candidateSnapshot();
@@ -124,7 +124,7 @@ module { "protocol.module"() ({
   auto logical =
       parseSourceString<ModuleOp>((*clausesFile)->getBuffer(), &context);
   require(bool(logical), "logical clause fixture must be admitted");
-  auto clauses = take(RealizedProtocol::ideal(prepare(*logical)));
+  auto clauses = take(RealizedProtocol::realize(prepare(*logical)));
   auto main = [](ModuleOp module) {
     auto unit = cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
     return cast<protocol_ir::MathematicalOp>(
@@ -133,7 +133,7 @@ module { "protocol.module"() ({
   auto rejects = [&](ModuleOp original, ModuleOp candidate, StringRef record,
                      StringRef code) {
     auto failure =
-        protocol::checkIdealOracleRealization(original, candidate, record);
+        protocol::checkOracleRealization(original, candidate, record);
     require(bool(failure), "changed edge retained correspondence");
     require(namesIdentifier(toString(std::move(failure)), code),
             "unexpected correspondence refusal");
@@ -190,7 +190,7 @@ module { "protocol.module"() ({
     (*statements.begin())
         ->setAttr("target", StringAttr::get(&context, "decoy"));
     require(succeeded(verify(*original)), "alternate target must be admitted");
-    auto changed = take(RealizedProtocol::ideal(prepare(*original)));
+    auto changed = take(RealizedProtocol::realize(prepare(*original)));
     checked(changed);
     auto other = changed.candidateSnapshot();
     require(OperationEquivalence::isEquivalentTo(

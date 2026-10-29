@@ -187,8 +187,8 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
     options.observations->decisions(*result->module, preparationTrace);
   if (!preparation || diagnostics.hasErrors())
     return diagnostics.failure();
-  auto realization =
-      mathematical::RealizedProtocol::ideal(std::move(*preparation));
+  auto realization = mathematical::RealizedProtocol::realize(
+      std::move(*preparation), options.oracleRealization);
   if (!realization)
     return diagnostics.failure(realization.takeError());
   result->realization.emplace(std::move(*realization));

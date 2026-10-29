@@ -78,8 +78,12 @@ void body(OpBuilder &builder, Location loc, const OracleCommonBlock &plan,
 }
 } // namespace
 Expected<OracleCommonRealization>
-emitIdealOracleRealization(ModuleOp prepared) {
-  auto entries = idealOracleEntries(prepared);
+emitOracleRealization(ModuleOp prepared,
+                      const OracleRealizationPolicy &policy) {
+  auto selections = resolveOracleRealizationSelection(prepared, policy);
+  if (!selections)
+    return selections.takeError();
+  auto entries = oracleEntries(prepared);
   if (!entries)
     return entries.takeError();
   OracleCommonRealization result;
@@ -91,11 +95,25 @@ emitIdealOracleRealization(ModuleOp prepared) {
   // intact. A sibling's original signature or shared virtual declaration must
   // not disappear while another entry's primitive is being constructed.
   for (const auto &entry : *entries) {
-    auto requirements = idealOracleRequirements(prepared, entry);
+    auto requirements = oracleRequirements(prepared, entry, *selections);
     if (!requirements)
       return requirements.takeError();
     OracleCommonEntryRealization item;
     item.entry = entry;
+    for (auto [ordinal, constructor] :
+         enumerate(requirements->storage.constructors)) {
+      OracleMerkleFunctions functions;
+      if (!constructor.scheme.empty()) {
+        const auto &choice = requirements->realizations[ordinal];
+        auto emitted =
+            emitOracleMerkle(*result.module, constructor.kind, choice.scheme,
+                             choice.grouping, choice.order);
+        if (!emitted)
+          return emitted.takeError();
+        functions = *emitted;
+      }
+      item.merkle.push_back(functions);
+    }
     for (const auto &[role, kind, access] : requirements->controllers) {
       auto controller = emitOracleQueryController(
           *result.module, prepared, requirements->storage, role, kind,
@@ -116,12 +134,14 @@ emitIdealOracleRealization(ModuleOp prepared) {
       }
       item.allocators.push_back(std::move(allocators));
     }
-    auto plan = planIdealOracleCommon(prepared, entry, *requirements,
-                                      item.controllers, item.allocators);
+    auto plan =
+        planOracleCommon(prepared, entry, *requirements, item.controllers,
+                         item.allocators, item.merkle);
     if (!plan)
       return plan.takeError();
     for (const auto &recipe : plan->locals)
       item.locals.push_back(local(unit, recipe));
+    item.inputShapes = plan->inputShapes;
     item.resultStores = plan->resultStores;
     item.resultReferences = plan->resultReferences;
     plans.push_back(std::move(*plan));

@@ -59,3 +59,13 @@ def test_oracle_merkle_layout_and_authentication(toolchain, directory, journal):
         toolchain.tool("compiler", "test/zkc-oracle_merkle-test"), artifacts,
     ], keep="compiler.txt", timeout=600)
     journal.run([toolchain.driver("oracle_merkle"), artifacts], keep="native.txt")
+
+
+def test_oracle_commitment_roots(toolchain, directory, journal):
+    artifacts = directory / "roots"
+    journal.run([
+        toolchain.tool("compiler", "test/zkc-oracle_commitment_roots-test"), artifacts,
+    ], keep="compiler.txt", timeout=600)
+    journal.run([
+        toolchain.driver("oracle_commitment_roots"), artifacts,
+    ], keep="native.txt")

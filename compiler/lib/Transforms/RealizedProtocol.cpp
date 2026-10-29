@@ -5,20 +5,23 @@
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
-Expected<RealizedProtocol> RealizedProtocol::ideal(PreparedProtocol prepared) {
+Expected<RealizedProtocol>
+RealizedProtocol::realize(PreparedProtocol prepared,
+                          const protocol::OracleRealizationPolicy &policy) {
   auto original = std::move(prepared.module);
   if (!original)
     return error("oracle-realization-source");
-  auto actual = protocol::emitIdealOracleRealization(*original);
+  auto actual = protocol::emitOracleRealization(*original, policy);
   if (!actual)
     return actual.takeError();
-  auto record = protocol::serializeIdealOracleRealization(*original, *actual);
+  auto record =
+      protocol::serializeOracleRealization(*original, *actual, policy);
   if (!record)
     return record.takeError();
   // Consume the serialized proposal through the separate reader, including
   // rederived interfaces/contracts, actual common SSA and every helper body.
-  if (auto failure = protocol::checkIdealOracleRealization(
-          *original, *actual->module, *record))
+  if (auto failure = protocol::checkOracleRealization(
+          *original, *actual->module, *record, policy))
     return std::move(failure);
   return RealizedProtocol(std::move(original), std::move(actual->module),
                           std::move(*record));

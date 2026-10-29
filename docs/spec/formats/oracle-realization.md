@@ -2,13 +2,15 @@
 
 `zkc.oracle-realization/0` describes one complete prepared module's oracle
 realization. Its inputs are the immutable prepared original, a separate actual
-common module and the record. The native reader checks all three together.
+common module, the requested realization policy and the record. The native
+reader checks them together; a record cannot authorize its own policy.
 The record is not executable code, a claim of prior admission, a proof of oracle
 simulation, or permission to publish a proof artifact. Joint execution retains
 this checked edge through compilation; logical-contract transport, native proof
-integration and Merkle realization remain separate obligations.
+integration and complete Merkle query realization remain separate obligations.
 
-The current mode is `ideal`. It uses ordinary data, references and immutable
+The policy chooses ideal data or a named Merkle scheme and leaf layout for each
+base input/send occurrence. All choices use ordinary references and immutable
 stores for table oracles. Virtual anchors are never committed. The same
 module-wide reader accounts for every oracle-bearing entry and every preserved
 ordinary declaration. It accepts no compatibility version or alternate schema.
@@ -30,7 +32,7 @@ The root has exactly these fields:
 | Field | Meaning |
 |---|---|
 | `format` | Exactly `zkc.oracle-realization/0` |
-| `mode` | Exactly `ideal` |
+| `selection` | Normalized caller-requested root selections and query flush policy |
 | `types` | Canonical ordinary logical type spellings, interned in first-use order |
 | `entries` | Oracle-bearing entries in original declaration order |
 | `declarations` | Complete actual declaration order and symbolic reference slots |
@@ -41,6 +43,23 @@ or unused interned types, and out-of-range references refuse. The byte ceiling
 is 32 MiB, JSON nesting is at most 64, the type table has at most 4096 entries,
 and metadata traversal is bounded by one million object/array units. These are
 representation limits, not additional logical oracle validity premises.
+
+The selection is `{flush, roots}`. `flush` is `immediate` or `after-final-draw`.
+Each root row is `{entry, path, scheme, grouping, order}` in original declaration
+and constructor order. `grouping` is `individual` or `antipodal-pairs`; `order`
+is `natural` or `bit-reversed`. An empty scheme requests ideal data and requires
+individual/natural layout. Virtual constructions have no selection row.
+
+The caller's absent root inventory explicitly selects ideal data everywhere.
+A present inventory must cover every base input/send occurrence exactly once;
+missing, duplicate and extraneous selectors refuse. Paths must be nonempty and
+have at most 64 ordinals; at most 100,000 root selectors are admitted. The reader
+normalizes this external request against the original, checks actual bodies
+under that request, and compares the entire record to its rederived encoding.
+The JSON selection is descriptive, never an alternative source of authority.
+A flush choice is part of that comparison; root construction alone establishes
+no query scheduling or batching property. Until path-sensitive observation
+checking is integrated, `after-final-draw` refuses query-bearing modules.
 
 A type reference is an unsigned index into `types`. Each spelling must parse,
 decode to an MLIR logical type and encode back exactly. Oracle kinds are objects
@@ -56,6 +75,8 @@ operations, executable operands, literal values or helper bodies.
 | Field | Meaning |
 |---|---|
 | `entry` | Original common function symbol |
+| `merkle` | One `{position, commit, open, authenticate}` helper tuple per constructor; all four null for ideal and virtual constructors |
+| `input_shapes` | `{anchor, port}` mappings from original root inputs to appended native shape inputs |
 | `controllers` | Role/kind/access selections and complete controller metadata |
 | `allocators` | Constructor order, then role order; each cell names its allocation helper |
 | `locals` | Names of source-derived common local recipes, in recipe order |
@@ -72,13 +93,27 @@ Each constructor records `constructor` (`input`, `send` or `virtual`), `path`,
 `maximum_instances` and `roles`. A role layout is `{role, fields, record, store}`;
 its ordered fields are `{name, type}`. Paths are instruction ordinals in the
 prepared entry, descending through repeats; they are not JSON array addresses
-in the written or structured source exports. The scheme is empty in ideal mode
-and always empty for virtual anchors. The original fixes custody and all types.
+in the written or structured source exports. The scheme is empty for ideal
+selections and always empty for virtual anchors. The original fixes custody and all types.
 
 An occurrence is `{site, purpose, role, path}`. The interface has `inputs`,
 `outputs`, `input_roles` and `output_roles`; role lists keep original order.
-Original result positions remain fixed. Appended support stores are native
-representation leaves, distinguished from authored results by the result maps.
+Original input and result positions remain fixed. An ideal root input becomes
+Data. A Merkle root input becomes the selected scheme's commitment type. For a
+dynamic table, one index input is appended per original root port, in ascending
+original-port order, with that port's receiver role family. `input_shapes` binds
+that index to the original anchor; a fixed extent needs no new input. Protocol
+admission requires exactly one binding for each raw root input. Neither a root
+nor holder Data supplies the receiver's expected extent.
+
+A holder checks its own Data and shape, commits it and retains Data plus private
+opening state. A send delivers only the root. A receiver checks its own expected
+shape, including the selected layout's positive power-of-two premise, and stores
+that shape with the root. Input construction does not equate the supplied root
+with a commitment to the holder's Data. Query authentication, when implemented,
+must use that same stored root and expected shape.
+
+Appended support stores are native representation leaves, distinguished from authored results by the result maps.
 They do not establish a general logical-handle codec or cross-entry graph ABI.
 
 The logical interface is `{inputs, outputs}`. Each list follows original anchor

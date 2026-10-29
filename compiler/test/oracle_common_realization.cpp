@@ -21,10 +21,10 @@ using namespace zkc::test;
 namespace pir = protocol_ir;
 namespace {
 Error checkCandidate(ModuleOp prepared, const OracleCommonRealization &actual) {
-  auto record = serializeIdealOracleRealization(prepared, actual);
+  auto record = serializeOracleRealization(prepared, actual);
   if (!record)
     return record.takeError();
-  return checkIdealOracleRealization(prepared, actual.module.get(), *record);
+  return checkOracleRealization(prepared, actual.module.get(), *record);
 }
 void checked(Error error) {
   if (error)
@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
     auto prepared = mathematical::prepareProtocol(*source, false);
     require(bool(prepared), "prepare: " + diagnostics);
     auto frozen = print(*prepared);
-    auto emitted = emitIdealOracleRealization(*prepared);
+    auto emitted = emitOracleRealization(*prepared);
     require(bool(emitted),
             "emission: " +
                 (emitted ? std::string() : toString(emitted.takeError())) +
@@ -113,19 +113,18 @@ int main(int argc, char **argv) {
         cast<pir::MathematicalOp>(SymbolTable::lookupSymbolIn(unit, "main"));
     if (mutations) {
       cases.run(fixture + " independent record and fresh candidate read", [&] {
-        auto record =
-            take(serializeIdealOracleRealization(*prepared, candidate));
+        auto record = take(serializeOracleRealization(*prepared, candidate));
         auto copy = parseSourceString<ModuleOp>(print(*candidate.module),
                                                 ParserConfig(&context, false));
         require(bool(copy), "candidate text did not parse");
-        checked(checkIdealOracleRealization(*prepared, *copy, record));
+        checked(checkOracleRealization(*prepared, *copy, record));
         require(record ==
-                    take(serializeIdealOracleRealization(*prepared, candidate)),
+                    take(serializeOracleRealization(*prepared, candidate)),
                 "record is not deterministic");
       });
     }
     if (mutations && fixture == "common-input") {
-      auto record = take(serializeIdealOracleRealization(*prepared, candidate));
+      auto record = take(serializeOracleRealization(*prepared, candidate));
       auto changed = [&](StringRef name,
                          llvm::function_ref<void(json::Object &)> change) {
         cases.run("record refuses " + name, [&] {
@@ -133,9 +132,8 @@ int main(int argc, char **argv) {
           change(*parsed.getAsObject());
           std::string text;
           raw_string_ostream(text) << parsed;
-          refused(
-              checkIdealOracleRealization(*prepared, *candidate.module, text),
-              "oracle-realization-record");
+          refused(checkOracleRealization(*prepared, *candidate.module, text),
+                  "oracle-realization-record");
         });
       };
       changed("missing contract", [&](auto &value) {
@@ -176,7 +174,8 @@ int main(int argc, char **argv) {
       changed("other version", [&](auto &value) {
         value["format"] = "zkc.oracle-realization/1";
       });
-      changed("other mode", [&](auto &value) { value["mode"] = "merkle"; });
+      changed("unknown envelope field",
+              [&](auto &value) { value["mode"] = "merkle"; });
       changed("unknown entry field", [&](auto &value) {
         (*value.getArray("entries"))[0].getAsObject()->insert({"extra", true});
       });
@@ -242,14 +241,13 @@ int main(int argc, char **argv) {
           types.push_back("ui64");
         std::string text;
         raw_string_ostream(text) << parsed;
-        refused(checkIdealOracleRealization(*prepared, *candidate.module, text),
+        refused(checkOracleRealization(*prepared, *candidate.module, text),
                 "oracle-realization-record-limit");
       });
       cases.run("record refuses duplicate decoded keys", [&] {
         std::string duplicate = record;
-        duplicate.insert(1, "\"mode\":\"ideal\",");
-        refused(checkIdealOracleRealization(*prepared, *candidate.module,
-                                            duplicate),
+        duplicate.insert(1, "\"format\":\"zkc.oracle-realization/0\",");
+        refused(checkOracleRealization(*prepared, *candidate.module, duplicate),
                 "oracle-realization-record");
       });
       cases.run("record binds generated binding names", [&] {
@@ -271,9 +269,8 @@ int main(int argc, char **argv) {
         });
         require(succeeded(verify(*candidate.module)),
                 "renamed binding is malformed");
-        refused(
-            checkIdealOracleRealization(*prepared, *candidate.module, record),
-            "oracle-realization-record");
+        refused(checkOracleRealization(*prepared, *candidate.module, record),
+                "oracle-realization-record");
       });
     }
     if (mutations && fixture == "common-empty") {
@@ -320,7 +317,7 @@ int main(int argc, char **argv) {
       cases.run(
           "returned logical pairs use distinct actual holder leaves", [&] {
             auto record = take(json::parse(
-                take(serializeIdealOracleRealization(*prepared, candidate))));
+                take(serializeOracleRealization(*prepared, candidate))));
             auto &entries = *record.getAsObject()->getArray("entries");
             auto found = find_if(entries, [](const auto &item) {
               return item.getAsObject()->getString("entry") == "main";
@@ -340,9 +337,9 @@ int main(int argc, char **argv) {
             (*outputs[0].getAsObject())["data"] = 2;
             std::string changed;
             raw_string_ostream(changed) << record;
-            refused(checkIdealOracleRealization(*prepared, *candidate.module,
-                                                changed),
-                    "oracle-realization-record");
+            refused(
+                checkOracleRealization(*prepared, *candidate.module, changed),
+                "oracle-realization-record");
           });
       cases.run("returned aliases share role-specific support stores", [&] {
         require(entry.resultStores == std::vector<OracleResultStore>(
@@ -397,9 +394,12 @@ int main(int argc, char **argv) {
         auto original = returned->getOperand(9);
         Value empty;
         for (auto &op : program.getBody().front())
-          if (op.getName().getStringRef() == "data.sequence_empty" &&
-              op.getResult(0).getType() == original.getType())
-            empty = op.getResult(0);
+          if (auto call = dyn_cast<protocol_ir::LocalCallOp>(op);
+              call && call.getNumOperands() == 0 && call.getNumResults() == 1 &&
+              call.getResult(0).getType() == original.getType() &&
+              is_contained(cast<ArrayAttr>(program.getOutputRoles()[9]),
+                           call.getRoleAttr()))
+            empty = call.getResult(0);
         require(bool(empty), "missing initial virtual store");
         auto restore =
             llvm::scope_exit([&] { returned->setOperand(9, original); });
@@ -422,7 +422,7 @@ int main(int argc, char **argv) {
                     candidate.entries[0].allocators[0][0].getSymName() !=
                         "_oracle_allocate_0_0",
                 "authored symbol was reused");
-        auto repeated = emitIdealOracleRealization(*prepared);
+        auto repeated = emitOracleRealization(*prepared);
         require(bool(repeated), "repeat emission failed");
         require(print(*repeated->module) == print(*candidate.module),
                 "emission depends on mutable naming state");
@@ -482,7 +482,7 @@ int main(int argc, char **argv) {
               (isa<pir::MathematicalOp>(op) &&
                SymbolTable::getSymbolName(&op).getValue() != "ordinary"))
             op.erase();
-        auto realized = emitIdealOracleRealization(*plain);
+        auto realized = emitOracleRealization(*plain);
         require(bool(realized), "ordinary emission failed");
         require(realized->entries.empty(), "invented oracle entry");
         checked(checkCandidate(*plain, *realized));
@@ -622,13 +622,14 @@ int main(int argc, char **argv) {
         });
       cases.run(fixture + " changed shape predicate", [&] {
         exec::ApplyOp predicate;
-        entry.locals.front().walk([&](exec::ApplyOp op) {
-          auto binding =
-              SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
-                  op, op.getBindingAttr());
-          if (binding && binding.getContract() == "index.equal" && !predicate)
-            predicate = op;
-        });
+        for (auto helper : entry.locals)
+          helper.walk([&](exec::ApplyOp op) {
+            auto binding =
+                SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+                    op, op.getBindingAttr());
+            if (binding && binding.getContract() == "index.equal" && !predicate)
+              predicate = op;
+          });
         require(bool(predicate), "missing predicate");
         auto first = predicate.getInputs()[0],
              second = predicate.getInputs()[1];
@@ -720,12 +721,12 @@ int main(int argc, char **argv) {
                   diagnostics);
           auto edge = compiled->compilation.oracleRealizationSnapshot();
           require(bool(edge), "production compilation lost realization");
-          checked(checkIdealOracleRealization(*edge->original, *edge->candidate,
-                                              edge->record));
+          checked(checkOracleRealization(*edge->original, *edge->candidate,
+                                         edge->record));
           require(print(*edge->original) == frozen,
                   "production changed the retained logical subject");
-          require(edge->record == take(serializeIdealOracleRealization(
-                                      *prepared, candidate)),
+          require(edge->record ==
+                      take(serializeOracleRealization(*prepared, candidate)),
                   "production record differs from the independently inspected "
                   "edge");
           if (argc > 1) {

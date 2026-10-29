@@ -44,6 +44,7 @@ struct OracleCommonPlan {
   OracleCommonBlock body;
   std::vector<OracleLocalRecipe> locals;
   std::vector<OracleCommonOccurrence> occurrences;
+  std::vector<OracleInputShape> inputShapes;
   std::vector<OracleResultStore> resultStores;
   std::vector<OracleResultReference> resultReferences;
 };
@@ -54,22 +55,27 @@ struct OracleControllerRequirement {
 };
 struct OracleCommonRequirements {
   OracleAnchorStorage storage;
+  std::vector<OracleTableRealization> realizations;
   OracleQuerySize capacity;
   std::vector<OracleControllerRequirement> controllers;
 };
 // Original declaration order determines the complete oracle-entry inventory.
-llvm::Expected<std::vector<std::string>> idealOracleEntries(mlir::ModuleOp);
+llvm::Expected<std::vector<std::string>> oracleEntries(mlir::ModuleOp);
 llvm::Expected<OracleCommonRequirements>
-idealOracleRequirements(mlir::ModuleOp prepared, llvm::StringRef entry);
-llvm::Expected<OracleCommonPlan> planIdealOracleCommon(
-    mlir::ModuleOp prepared, llvm::StringRef entry,
-    const OracleCommonRequirements &, llvm::ArrayRef<OracleCommonController>,
-    llvm::ArrayRef<std::vector<mlir::func::FuncOp>> allocators);
+oracleRequirements(mlir::ModuleOp prepared, llvm::StringRef entry,
+                   llvm::ArrayRef<OracleRootSelection> selections);
+llvm::Expected<OracleCommonPlan>
+planOracleCommon(mlir::ModuleOp prepared, llvm::StringRef entry,
+                 const OracleCommonRequirements &,
+                 llvm::ArrayRef<OracleCommonController>,
+                 llvm::ArrayRef<std::vector<mlir::func::FuncOp>> allocators,
+                 llvm::ArrayRef<OracleMerkleFunctions> merkle);
 // Internal parsed-model reader. Only the record reader publishes its result.
 class OracleVerificationContext;
-llvm::Error checkIdealOracleRealizationModel(
+llvm::Error checkOracleRealizationModel(
     const OracleVerificationContext &source,
     const OracleVerificationContext &target,
-    llvm::ArrayRef<OracleCommonEntryRealization> entries);
+    llvm::ArrayRef<OracleCommonEntryRealization> entries,
+    llvm::ArrayRef<OracleRootSelection> selections);
 } // namespace zkc::protocol
 #endif
