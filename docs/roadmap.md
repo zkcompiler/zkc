@@ -51,6 +51,7 @@ what actually landed. The completion criteria below belong inside those units.
 |---|---|
 | Oracle realization and program bytes | Protocol-owned oracle kinds/anchors, virtual dependencies, typed realization records between preparation and projection, independent actual-body comparisons, block-draw and gated-request emission, witness codec slot, written-source AST/elaboration export and an exact version-0 executable byte grammar |
 | STARK compiler support | Consume the realization records for executable queries, authentication, selected transcript/extension fields and gating; exercise the same oracle-level argument under different realizations and layouts |
+| MLIR execution foundation | Measure verification cost; move stage admission to explicit checked owners with audited ingress; replace embedded schema strings with structured types/attributes and generate native contract signatures; preserve external bytes and adopt interfaces only with correct role/effect/outcome laws |
 | Represented execution | Canonical logical collection ownership across Data/Algebra, Residue and Codec semantics, private buffer contracts and admitted Arith/Vector/Bufferization lowering; compare native kernels and transparent schedules |
 | Constraints and semantic consumers | One assignment-level owner, source-to-encoding adequacy, lookup/multiset and chronological-memory consumers, exact statement/witness maps and actual commitment/terminal connections |
 
@@ -80,7 +81,7 @@ validation. Common target ingress stays before native resident handles; no
 separately published typed-program view is required. Generated shared files
 are regenerated from the agreed current schema.
 
-### Completion criteria for the four units
+### Completion criteria for the ordered units
 
 **Oracle realization.** Settle shape provenance, answer-use dominance, batching
 barriers, dynamic occurrence identity, setup binding and the observation
@@ -98,6 +99,23 @@ multi-block, failed/successful-witness and zero-difficulty cases jointly with
 runtime/formal consumers. A prefix preview must bind the final request length.
 Provide the source export, byte fixtures and realization subjects required by
 the formal connections above, with their actual remaining assumptions.
+
+Application-correspondence proposals retain actual callee boundaries, role maps,
+source paths and argument/result mappings across expansion and projection.
+Offsets/spans are checked compression, not assumed to fit every application.
+Interned identities keep exact readback and unchanged transcript bytes. Proposals
+remain outside semantic bodies, bound to the original and actual candidate, and
+require independent validation before they support a correspondence claim.
+
+**MLIR execution foundation.** Measure admission and schema-conversion cost before
+selecting the refactor. The existing context-owned type cache is not a cache of
+mutable-program admission. Audit all pass/export/consumer ingress before moving
+whole-program checks out of verifiers; mutation invalidates prior analyses.
+Choose typed per-contract operations or one installed-call form after checking
+special verification, effect/outcome rules and printer-sensitive identities.
+Generate from the neutral contract catalog and preserve canonical external
+spellings. This precedes represented execution so new representations do not
+inherit the current string-schema adapter.
 
 **STARK support.** Settle AIR asset ownership before introducing encodings;
 consume one definition throughout the later Constraint migration. Preserve
