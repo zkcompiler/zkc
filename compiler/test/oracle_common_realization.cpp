@@ -226,6 +226,28 @@ int main(int argc, char **argv) {
       });
     }
     if (mutations && fixture == "common-empty") {
+      cases.run("uninhabited handle uses retain a refusing controller", [&] {
+        const auto &selected = candidate.entries[1];
+        require(selected.entry == "at" && selected.controllers.size() == 1 &&
+                    selected.allocators.empty(),
+                "uninhabited entry layout");
+        require(selected.controllers[0].body.constructors.empty() &&
+                    selected.controllers[0].body.stores.empty(),
+                "manufactured anchor or store");
+        exec::RejectOp rejection;
+        unit.walk([&](exec::RejectOp op) {
+          if (!rejection && op.getSite() == "no_constructor")
+            rejection = op;
+        });
+        require(bool(rejection), "missing uninhabited dispatch refusal");
+        auto reason = rejection.getReasonAttr();
+        auto restore =
+            llvm::scope_exit([&] { rejection.setReasonAttr(reason); });
+        rejection.setReason("abort");
+        require(succeeded(verify(*candidate.module)),
+                "changed cause malformed");
+        refused(checkCandidate(*prepared, candidate), "oracle-controller-body");
+      });
       cases.run("empty sequence has no allocated anchor or controller", [&] {
         require(entry.controllers.empty() && entry.allocators.empty() &&
                     entry.locals.empty(),

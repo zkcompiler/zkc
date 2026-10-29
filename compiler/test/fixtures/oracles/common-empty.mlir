@@ -13,6 +13,8 @@ module { "protocol.module"() ({
   %sent = "protocol.exchange"(%marker) {sender="P",receiver="V",site="before_deliver"} : (ui64)->ui64
   %empty = "protocol.oracle_sequence_empty"() : ()->!S
   %never = "protocol.oracle_sequence_at"(%empty,%index) {roles=["V"],site="select"} : (!S,ui64)->!H
+  %rows = "protocol.oracle_shape"(%never) {dimension="rows"} : (!H)->ui64
+  %answer = "protocol.oracle_query"(%never,%index) {owner="V",site="unreachable_query"} : (!H,ui64)->ui64
   "protocol.return"(%sent) : (ui64)->()
  }) {sym_name="at",function_type=(ui64,ui64)->ui64,roles=["P","V"],input_roles=[["P"],["V"]],output_roles=[["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

@@ -544,9 +544,9 @@ within each check; mutations always require a fresh check. Returned oracle resul
 keep their original reference positions and append mapped immutable stores only at
 their receiving roles. Aliases share support stores; nested calls and recurrence
 retain actual anchors and final store snapshots. These private interface maps do
-not enable cross-entry graph import. Retained anchor clauses, Merkle request suspension and the
-complete realization record still need integration before this becomes the
-production stage. The independently checked table-read primitive
+not enable cross-entry graph import. Retained anchor clauses, Merkle request suspension and ownership of the
+checked transition still need integration before this becomes the production
+stage. The independently checked table-read primitive
 stops before an out-of-domain read for field, group, index and sequence-backed
 rows. Its generated clients enter the physical pipeline; native controls check
 actual row counts and observable prefixes when a later query fails. Complete source adapters and semantic realization remain pending.
@@ -555,8 +555,10 @@ The private whole-stage reader consumes a version-zero
 and the actual candidate. It reads independently parsed candidates, checks exact
 pure helper recipes, and rederives interfaces, stores and symbolic generation
 slots. The record is not a production admission token or a Lean simulation.
-Empty sequence observations need no allocated anchor; indexing still stops at
-its original occurrence. Merkle realization and production publication remain
+Empty sequence observations need no allocated anchor. Unreachable queries and
+shape views have a complete refusing controller without an invented store;
+indexing still stops at its original occurrence and preserves earlier delivery.
+Controller roles must belong to the original entry roster. Merkle realization and production publication remain
 pending.
 
 Common oracle ports pair actual holder data and receiver handles through inputs,

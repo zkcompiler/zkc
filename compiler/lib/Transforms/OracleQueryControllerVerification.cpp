@@ -39,6 +39,11 @@ Error layout(const OracleVerificationContext &targetContext,
     return refuse();
   auto *context = targetContext.getModule().getContext();
   auto source = sourceContext.getUnit();
+  auto program = dyn_cast_or_null<pir::MathematicalOp>(
+      SymbolTable::lookupSymbolIn(source, storage.entry));
+  if (!program ||
+      !is_contained(program.getRoles(), StringAttr::get(context, role)))
+    return refuse();
   auto index = IntegerType::get(context, 64, IntegerType::Unsigned);
   std::vector<pir::OracleKindAttr> kinds;
   std::vector<Type> references, answers, stores;
@@ -151,7 +156,7 @@ Error layout(const OracleVerificationContext &targetContext,
       return refuse();
     ++constructorCount;
   }
-  if (!constructorCount || constructorCount != actual.constructors.size() ||
+  if (constructorCount != actual.constructors.size() ||
       frameCount != actual.continuations.size() || actual.kinds != kinds ||
       actual.answers != answers || actual.stores != stores ||
       actual.resume.size() != kinds.size() ||
@@ -362,6 +367,15 @@ struct Reader {
       return loop(lower, upper, state, stores, reader.model.state, true, site,
                   check);
     }
+    void reject(StringRef reason, StringRef site) {
+      auto *step = take("exec.reject", site);
+      if (!reader.valid)
+        return;
+      reader.expect(cast<exec::RejectOp>(step->operation).getReason() ==
+                        reason &&
+                    step->inputs.empty() && step->outputs.empty() &&
+                    step->regions.empty() && offset == steps.size());
+    }
     void finish(ValueRange values, bool region = false) {
       if (!reader.valid)
         return;
@@ -565,6 +579,10 @@ struct Reader {
                 ArrayRef<unsigned> cases, TypeRange formals, TypeRange outputs,
                 llvm::function_ref<void(unsigned, func::FuncOp)> leaf) {
     body(function, formals, outputs, false, [&](Cursor &c, ValueRange inputs) {
+      if (cases.empty()) {
+        c.reject("refused", "no_constructor");
+        return;
+      }
       if (cases.size() == 1) {
         c.equalTo(inputs[selector], cases.front(), "selected");
         func::FuncOp selected;
@@ -884,8 +902,6 @@ struct Reader {
     for (const auto &item : model.constructors)
       if (item.kind == 0)
         cases.push_back(item.source);
-    if (!expect(!cases.empty()))
-      return;
     body(model.contents, arguments, data, false,
          [&](Cursor &c, ValueRange inputs) {
            auto identity =

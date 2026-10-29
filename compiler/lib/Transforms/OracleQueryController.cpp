@@ -161,8 +161,6 @@ struct Emitter {
       result.stores.push_back(role->sequence);
       result.constructors.push_back(std::move(item));
     }
-    if (result.constructors.empty())
-      return error("oracle-controller-layout");
     result.state.assign(Controller::HeaderSize, index);
     append_range(result.state, result.answers);
     for (const auto &frame : result.continuations)
@@ -460,6 +458,10 @@ struct Emitter {
                         TypeRange formals, TypeRange outputs) {
     return function(
         label, formals, outputs, false, [&](Control &c, ValueRange inputs) {
+          if (cases.empty()) {
+            c.reject("refused", "no_constructor");
+            return;
+          }
           if (cases.size() == 1) {
             equal(c, inputs[selector], cases.front().first, "selected");
             c.returned(call(c, cases.front().second, inputs, "case"));
@@ -753,8 +755,6 @@ struct Emitter {
           });
       cases.push_back({item.source, read});
     }
-    if (cases.empty())
-      return error("oracle-controller-custody");
     auto select = dispatch("contents_dispatch", 0, cases, dispatchTypes, data);
     Types inputs{cantFail(oracleReferenceType(root))};
     append_range(inputs, result.stores);
@@ -905,6 +905,11 @@ Expected<OracleQueryController> emitOracleQueryController(
       !capacity.nodes || capacity.leaves > capacity.nodes ||
       capacity.nodes > (1048576 - 1) / 2 || capacity.leaves >= 1048576)
     return error("oracle-controller-capacity");
+  auto program = dyn_cast_or_null<pir::MathematicalOp>(
+      SymbolTable::lookupSymbolIn(source, storage.entry));
+  if (!program || !is_contained(program.getRoles(),
+                                StringAttr::get(prepared.getContext(), role)))
+    return error("oracle-controller-layout");
   Emitter emit(candidate, prepared, storage, role, capacity, access);
   if (auto e = emit.plan(root, work))
     return std::move(e);

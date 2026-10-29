@@ -1034,6 +1034,16 @@ Expected<OracleCommonRequirements> idealOracleRequirements(ModuleOp source,
                        OracleControllerAccess::Available))
         return std::move(e);
   Error failure = Error::success();
+  // A sequence can have no constructing occurrence. Its element still has a
+  // typed use after selection, even though every such execution stops there.
+  // Keep a total lowering recipe without manufacturing an anchor or a store.
+  program.walk([&](pir::OracleSequenceAtOp op) {
+    for (Attribute role : op.getRoles())
+      if (!failure)
+        failure = add(cast<StringAttr>(role).getValue(),
+                      op.getResult().getType().getKind(),
+                      OracleControllerAccess::Available);
+  });
   program.walk([&](pir::OracleContentsOp op) {
     if (!failure)
       failure = add(op.getOwner(), op.getHandle().getType().getKind(),
