@@ -501,10 +501,21 @@ int main(int argc, char **argv) {
                                    policy));
   });
   runCase("query policies never silently fall back", [&] {
-    auto text = source(false, false);
-    text.insert(text.find("  \"protocol.return\""), R"mlir(
-  %answer = "protocol.oracle_query"(%handle,%rows) {owner="V",site="read"} : (!H,ui64)->!algebra.field<"koala-bear.ext4-binomial3">
-)mlir");
+    auto text = source(false, false, true);
+    auto replace = [&](StringRef before, StringRef after) {
+      auto found = text.find(before);
+      require(found != std::string::npos, "missing service fixture slot");
+      text.replace(found, before.size(), after);
+    };
+    replace("module {",
+            "!R = !protocol.service_ref<\"random.bls12-381.fr/0\">\nmodule {");
+    replace("%position:ui64)", "%position:ui64,%random:!R)");
+    replace("function_type=(!D,ui64,ui64)", "function_type=(!D,ui64,ui64,!R)");
+    replace("input_roles=[[\"P\"],[\"P\",\"V\"],[\"V\"]]",
+            "input_roles=[[\"P\"],[\"P\",\"V\"],[\"V\"],[\"V\"]]");
+    replace("%answer = ", "%challenge = \"protocol.query\"(%random) "
+                          "{owner=\"V\",method=\"draw\",site=\"challenge\"} : "
+                          "(!R)->!algebra.field<\"bls12-381.fr\">\n%answer = ");
     auto original = parseSourceString<ModuleOp>(text, &context);
     require(bool(original), "query fixture did not parse");
     auto owner = mathematical::PreparedProtocol::prepare(*original);
@@ -513,9 +524,11 @@ int main(int argc, char **argv) {
     auto roots = take(resolveOracleRealizationSelection(*prepared, {}));
     OracleRealizationPolicy policy;
     policy.flush = OracleQueryFlush::AfterFinalDraw;
-    refuses(emitOracleRealization(*prepared, policy),
-            "oracle-realization-flush-profile");
-    policy.flush = OracleQueryFlush::Immediate;
+    auto ideal = take(emitOracleRealization(*prepared, policy));
+    auto idealRecord =
+        take(serializeOracleRealization(*prepared, ideal, policy));
+    checked(
+        checkOracleRealization(*prepared, *ideal.module, idealRecord, policy));
     for (auto &root : roots)
       root.realization = {scheme.str(), OracleLeafGrouping::AntipodalPairs,
                           OracleLeafOrder::Natural};
@@ -525,6 +538,14 @@ int main(int argc, char **argv) {
         take(serializeOracleRealization(*prepared, candidate, policy));
     checked(
         checkOracleRealization(*prepared, *candidate.module, record, policy));
+    RunOptions options;
+    options.oracleRealization = policy;
+    auto run =
+        take(compileRun(text, "oracle-final-draw.mlir", options, registry));
+    auto edge = run.compilation.oracleRealizationSnapshot();
+    require(bool(edge), "service-bearing compilation lost realization edge");
+    checked(checkOracleRealization(*edge->original, *edge->candidate,
+                                   edge->record, policy));
   });
   require(selectedCase, "no selected root/query test case");
   return cases.result();

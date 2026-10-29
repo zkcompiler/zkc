@@ -5,6 +5,7 @@
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Support/Refusal.h"
+#include "llvm/ADT/DenseSet.h"
 #include <optional>
 using namespace mlir;
 using namespace llvm;
@@ -15,7 +16,7 @@ using Summary = OracleObservationSummary;
 Summary uncertainStop() { return Summary().either(Summary::stop()); }
 struct Analysis {
   StringRef observer;
-  unsigned remaining = 100000;
+  unsigned &remaining;
   Error charge() {
     if (!remaining)
       return error("oracle-observation-limit");
@@ -124,22 +125,68 @@ struct Analysis {
     return result;
   }
 };
-} // namespace
-Expected<OracleObservationSummary>
-analyzeOracleObservations(ModuleOp prepared, StringRef entry,
-                          StringRef observer) {
+Expected<pir::ProtocolModuleOp> admitted(ModuleOp prepared) {
   if (!prepared || failed(verify(prepared)) ||
       !hasSingleElement(prepared.getBody()->getOperations()))
     return error("oracle-observation-source");
   auto module = dyn_cast<pir::ProtocolModuleOp>(prepared.getBody()->front());
   if (!module || module.getProfile() != pir::Profile::Protocol)
     return error("oracle-observation-source");
-  SymbolTable symbols(module);
+  return module;
+}
+} // namespace
+Expected<OracleObservationSummary>
+analyzeOracleObservations(ModuleOp prepared, StringRef entry,
+                          StringRef observer) {
+  auto module = admitted(prepared);
+  if (!module)
+    return module.takeError();
+  SymbolTable symbols(*module);
   auto program = symbols.lookup<pir::MathematicalOp>(entry);
   if (!program ||
       !is_contained(program.getRoles(),
                     StringAttr::get(prepared.getContext(), observer)))
     return error("oracle-observation-interface");
-  return Analysis{observer}.block(program.getBody().front(), 64);
+  unsigned remaining = 100000;
+  return Analysis{observer, remaining}.block(program.getBody().front(), 64);
+}
+Error checkOracleFinalDrawSchedule(ModuleOp prepared) {
+  auto module = admitted(prepared);
+  if (!module)
+    return module.takeError();
+  unsigned remaining = 100000;
+  for (auto program : module->getBody().front().getOps<pir::MathematicalOp>()) {
+    // Virtual declarations cannot draw. Their nested queries inherit the outer
+    // observation; uncalled virtual declarations create no reached event.
+    llvm::DenseSet<StringAttr> observers;
+    Error failure = Error::success();
+    program.walk([&](Operation *op) -> WalkResult {
+      if (!remaining)
+        failure = error("oracle-observation-limit");
+      else if (isa<pir::ApplyOp>(op))
+        failure = error("oracle-observation-preparation");
+      if (failure)
+        return WalkResult::interrupt();
+      --remaining;
+      if (auto query = dyn_cast<pir::OracleQueryOp>(op))
+        observers.insert(query.getOwnerAttr());
+      return WalkResult::advance();
+    });
+    if (failure)
+      return failure;
+    // Declaration order makes refusal precedence independent of hash order.
+    for (Attribute role : program.getRoles()) {
+      auto observer = cast<StringAttr>(role);
+      if (!observers.contains(observer))
+        continue;
+      auto summary = Analysis{observer.getValue(), remaining}.block(
+          program.getBody().front(), 64);
+      if (!summary)
+        return summary.takeError();
+      if (summary->queryBeforeDraw())
+        return error("oracle-realization-flush-profile");
+    }
+  }
+  return Error::success();
 }
 } // namespace zkc::protocol

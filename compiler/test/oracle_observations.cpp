@@ -1,9 +1,11 @@
-#include "../lib/Compiler/OracleSchedule.h"
+#include "../lib/Transforms/OracleCommonRealization.h"
+#include "../lib/Transforms/OracleSchedule.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Transforms/Mathematical.h"
+#include "llvm/Support/JSON.h"
 using namespace llvm;
 using namespace mlir;
 using namespace zkc::protocol;
@@ -71,6 +73,7 @@ int main() {
   DialectRegistry registry;
   zkc::registerDialects(registry);
   MLIRContext context(registry);
+  context.loadAllAvailableDialects();
   std::string diagnostics;
   ScopedDiagnosticHandler capture(&context, [&](Diagnostic &diagnostic) {
     raw_string_ostream stream(diagnostics);
@@ -89,9 +92,21 @@ int main() {
     auto module = parse(text);
     return take(analyzeOracleObservations(*module, "example", observer));
   };
-  auto expects = [&](StringRef body, bool bad) {
-    require(analyzes(source(body)).queryBeforeDraw() == bad,
+  auto expectsText = [&](StringRef text, bool bad) {
+    auto module = parse(text);
+    require(take(analyzeOracleObservations(*module, "example", "V"))
+                    .queryBeforeDraw() == bad,
             "reached query/draw order changed");
+    OracleRealizationPolicy policy;
+    policy.flush = OracleQueryFlush::AfterFinalDraw;
+    auto selection = resolveOracleRealizationSelection(*module, policy);
+    if (bad)
+      refuses(std::move(selection), "oracle-realization-flush-profile");
+    else
+      (void)take(std::move(selection));
+  };
+  auto expects = [&](StringRef body, bool bad) {
+    expectsText(source(body), bad);
   };
   Cases cases;
   cases.run("final-draw order follows the selected observer", [&] {
@@ -186,6 +201,125 @@ int main() {
         require(!take(analyzeOracleObservations(*prepared, "example", "P"))
                      .queryBeforeDraw(),
                 "callee-local role leaked into another observer");
+      });
+  cases.run("the final-draw policy covers index requests", [&] {
+    const std::string index = R"mlir(
+ %challenge = "protocol.query"(%random,%rows) {owner="V",method="index",site="challenge"} : (!R,ui64)->ui64
+)mlir";
+    for (bool bad : {false, true}) {
+      auto text = source(bad ? query + index : index + query);
+      const std::string before = "random.bls12-381.fr/0";
+      text.replace(text.find(before), before.size(),
+                   "random.goldilocks.ext2-binomial7/0");
+      expectsText(text, bad);
+    }
+  });
+  cases.run("each query owner has its own final-draw obligation", [&] {
+    auto atP = [](std::string text) {
+      const std::string before = "owner=\"V\"";
+      text.replace(text.find(before), before.size(), "owner=\"P\"");
+      return text;
+    };
+    auto selected = [&](StringRef body, StringRef serviceOwner) {
+      auto text = source(body);
+      const std::string before =
+          "input_roles=[[\"P\"],[\"V\"],[\"P\",\"V\"],[\"V\"],[\"P\",\"V\"]]";
+      text.replace(text.find(before), before.size(),
+                   "input_roles=[[\"P\"],[\"P\",\"V\"],[\"P\",\"V\"],"
+                   "[\"" +
+                       serviceOwner.str() + "\"],[\"P\",\"V\"]]");
+      auto module = parse(text);
+      OracleRealizationPolicy policy;
+      policy.flush = OracleQueryFlush::AfterFinalDraw;
+      return resolveOracleRealizationSelection(*module, policy);
+    };
+    (void)take(selected(query + atP(draw), "P"));
+    (void)take(selected(atP(query) + draw, "V"));
+    refuses(selected(atP(query) + atP(draw), "P"),
+            "oracle-realization-flush-profile");
+    refuses(
+        selected(
+            atP(query) +
+                R"mlir("protocol.finish_if"(%yes,%no) {owner="V",site="done"} : (i1,i1)->())mlir" +
+                atP(draw),
+            "P"),
+        "oracle-realization-flush-profile");
+  });
+  cases.run("unused virtual query bodies do not create observations", [&] {
+    const char *declarations = R"mlir(
+ relation.declare @identity_ok {kind="external",key="test/identity",revision="0",
+  signature=(!D)->i1,purposes=["witness"]}
+ "protocol.oracle"() ({
+ ^entry(%a:!H,%position:ui64):
+  %answer = "protocol.oracle_query"(%a,%position) {site="child"} : (!H,ui64)->!F
+  "protocol.oracle_yield"(%answer) : (!F)->()
+ }) {sym_name="identity",function_type=(!H,ui64)->!F,kind=#K,
+     shape_arguments={},shape_bounds={},admissibility=@identity_ok} : ()->()
+)mlir";
+    auto module = parse(source(draw, declarations));
+    OracleRealizationPolicy policy;
+    policy.flush = OracleQueryFlush::AfterFinalDraw;
+    (void)take(resolveOracleRealizationSelection(*module, policy));
+  });
+  cases.run(
+      "readback rechecks source ordering under the requested policy", [&] {
+        auto checked = [&](Error failure) {
+          if (failure)
+            throw std::runtime_error(toString(std::move(failure)));
+        };
+        auto prepare = [&](StringRef text) {
+          auto module = parse(text);
+          auto prepared = zkc::mathematical::prepareProtocol(*module, false);
+          require(bool(prepared), "preparation failed: " + diagnostics);
+          return prepared;
+        };
+        OracleRealizationPolicy policy;
+        policy.flush = OracleQueryFlush::AfterFinalDraw;
+        auto good = prepare(source(draw + query));
+        auto realized = take(emitOracleRealization(*good, policy));
+        auto record = take(serializeOracleRealization(*good, realized, policy));
+        std::string candidateText;
+        raw_string_ostream(candidateText) << *realized.module;
+        auto independent = parse(candidateText);
+        checked(checkOracleRealization(*good, *independent, record, policy));
+
+        auto altered = take(json::parse(record));
+        auto *ports = altered.getAsObject()
+                          ->getArray("entries")
+                          ->front()
+                          .getAsObject()
+                          ->getObject("interface")
+                          ->getArray("inputs");
+        require(ports && ports->size() == 5, "wrong input interface");
+        auto *servicePort = (*ports)[3].getAsObject();
+        require(servicePort && servicePort->getString("service") ==
+                                   "random.bls12-381.fr/0",
+                "service input lost its installed identity");
+        (*servicePort)["service"] = "random.bn254.fr/0";
+        std::string alteredRecord;
+        raw_string_ostream(alteredRecord) << altered;
+        auto alteredFailure =
+            checkOracleRealization(*good, *independent, alteredRecord, policy);
+        require(bool(alteredFailure), "substituted service input accepted");
+        consumeError(std::move(alteredFailure));
+
+        auto bad = prepare(source(query + draw));
+        refuses(emitOracleRealization(*bad, policy),
+                "oracle-realization-flush-profile");
+        auto immediate = take(emitOracleRealization(*bad));
+        auto immediateRecord =
+            take(serializeOracleRealization(*bad, immediate));
+        auto forged = take(json::parse(immediateRecord));
+        (*forged.getAsObject()->getObject("selection"))["flush"] =
+            "after-final-draw";
+        std::string forgedRecord;
+        raw_string_ostream(forgedRecord) << forged;
+        auto failure = checkOracleRealization(*bad, *immediate.module,
+                                              forgedRecord, policy);
+        require(bool(failure), "record authorized an invalid source schedule");
+        require(namesIdentifier(toString(std::move(failure)),
+                                "oracle-realization-flush-profile"),
+                "readback did not rederive the source schedule");
       });
   cases.run("unknown entry roles and mutated source refuse", [&] {
     auto module = parse(source(query + draw));

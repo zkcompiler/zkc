@@ -507,7 +507,12 @@ commands and an independent Lean derivation over the original snapshot. These pr
 not discharge their predicates. A conservative scheduling analysis reads actual
 prepared bodies and role substitution, separates participant-local stops, and
 summarizes counted repetitions without unrolling. It identifies a possible query
-before a later draw; it does not authorize batching or prove simulation. Private
+before a later random-service query. The requested `after-final-draw` policy is
+now checked for every logical query owner, both during emission and independent
+readback against the frozen source. It includes index and field draws, keeps
+participant continuations separate and uses one bounded analysis budget. This
+permits immediate authentication after the last draw; batching, deferred proofs
+and a simulation theorem remain separate obligations. Private
 anchor-storage planning retains fresh constructor/instance references, actual
 repeat coordinates and role-specific payloads as ordinary sequences and records.
 Independent readers check generated append allocations and reference-tagged

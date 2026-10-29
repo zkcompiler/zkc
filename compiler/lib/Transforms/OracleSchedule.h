@@ -1,5 +1,5 @@
-#ifndef ZKC_COMPILER_ORACLESCHEDULE_H
-#define ZKC_COMPILER_ORACLESCHEDULE_H
+#ifndef ZKC_TRANSFORMS_ORACLESCHEDULE_H
+#define ZKC_TRANSFORMS_ORACLESCHEDULE_H
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
 #include <array>
@@ -10,8 +10,8 @@ class ModuleOp;
 }
 namespace zkc::protocol {
 /// Abstract observation language for selecting the oracle opening policy.
-/// Tracks whether a challenge draw can follow a query along one reached path,
-/// keeping normal continuation separate from termination. It says nothing
+/// Tracks whether a random-service query can follow an oracle query on one
+/// path, keeping normal continuation separate from termination. It says nothing
 /// about query batching, position totality, authentication or availability.
 class OracleObservationSummary {
 public:
@@ -49,5 +49,10 @@ private:
 llvm::Expected<OracleObservationSummary>
 analyzeOracleObservations(mlir::ModuleOp prepared, llvm::StringRef entry,
                           llvm::StringRef observer);
+/// Check every logical query owner in every prepared common entry. The policy
+/// is participant-relative and includes every random-service method, not just
+/// a designated public-coin service. One shared traversal budget covers all
+/// entries and observers. It authorizes no batching or deferred authentication.
+llvm::Error checkOracleFinalDrawSchedule(mlir::ModuleOp prepared);
 } // namespace zkc::protocol
 #endif

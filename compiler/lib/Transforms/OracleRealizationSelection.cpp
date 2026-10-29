@@ -1,5 +1,6 @@
 #include "OracleRealizationSelection.h"
 #include "OracleCommonPlan.h"
+#include "OracleSchedule.h"
 #include "zkc/Support/Refusal.h"
 #include <map>
 using namespace llvm;
@@ -32,15 +33,9 @@ resolveOracleRealizationSelection(mlir::ModuleOp prepared,
   auto entries = oracleEntries(prepared);
   if (!entries)
     return entries.takeError();
-  // The path-sensitive observation reader must authorize this policy once
-  // common queries are present. Until that integration is available, never
-  // label an unchecked query schedule as post-final-draw.
-  if (policy.flush == OracleQueryFlush::AfterFinalDraw) {
-    bool hasQuery = false;
-    prepared.walk([&](protocol_ir::OracleQueryOp) { hasQuery = true; });
-    if (hasQuery)
-      return error("oracle-realization-flush-profile");
-  }
+  if (policy.flush == OracleQueryFlush::AfterFinalDraw)
+    if (auto e = checkOracleFinalDrawSchedule(prepared))
+      return std::move(e);
   std::vector<OracleRootSelection> result;
   for (const auto &entry : *entries) {
     auto storage = planOracleAnchorStorage(

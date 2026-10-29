@@ -28,8 +28,10 @@ struct OracleRealizationPolicy {
   // inventory must cover every actual input/send occurrence exactly once;
   // unknown, duplicated or uncovered selectors never fall back to ideal.
   std::optional<std::vector<OracleRootSelection>> roots;
-  // Post-final-draw needs the observation reader; query-bearing modules
-  // currently refuse that choice rather than publishing an unchecked schedule.
+  // AfterFinalDraw requires that no participant makes a random-service query
+  // after its own logical oracle query on a reached continuation. This includes
+  // every service method and is checked against the frozen prepared source.
+  // Neither this property nor Immediate authorizes batching or delayed proofs.
   OracleQueryFlush flush = OracleQueryFlush::Immediate;
 };
 } // namespace zkc::protocol

@@ -58,11 +58,35 @@ normalizes this external request against the original, checks actual bodies
 under that request, and compares the entire record to its rederived encoding.
 The JSON selection is descriptive, never an alternative source of authority.
 A flush choice is part of that comparison; root construction alone establishes
-no query scheduling or batching property. Until path-sensitive observation
-checking is integrated, `after-final-draw` refuses query-bearing modules.
+no query scheduling or batching property. For `after-final-draw`, both emission
+and independent readback check the frozen prepared source: on every participant's
+reached continuation, no random-service query follows that participant's logical
+oracle query. Every service method (including `draw` and `index`) counts; there
+is no implicit exemption for a private or undesignated service. This is a
+participant-relative property, not a global ordering of independently running
+participants.
 
-A type reference is an unsigned index into `types`. Each spelling must parse,
-decode to an MLIR logical type and encode back exactly. Oracle kinds are objects
+The analysis distinguishes normal and stopped continuations, resolves actual
+constants and invariant captures, and conservatively joins unknown outcomes
+and loop counts through the checked bound. Another participant's guard or
+completion cannot end this observer's continuation. Applications must already
+be expanded with their role substitutions. A virtual query inherits its outer
+query event; unused virtual declarations do not create events. One cumulative
+100,000-step analysis budget covers all entries and observers, with at most
+64 nested blocks. Unsupported or over-budget analysis refuses the policy.
+
+The property permits the existing immediate authentication at each reached
+query. It authorizes no batching, request hoisting, deferred authentication,
+public-coin claim or simulation theorem. Those require their own checked
+realization obligations. The record cannot override a failed source analysis.
+
+A data type reference is an unsigned index into `types`. Each spelling must parse,
+decode to an MLIR logical type and encode back exactly. Entry `interface.inputs`
+and `interface.outputs` use data type references for data ports and
+`{"service": installed_contract}` for random-service ports. A service identity
+is not a data type, binding operand or native handle. The complete interface,
+including each service's identity and singleton owner, is rederived from the
+actual source signature; a record cannot supply or substitute it. Oracle kinds are objects
 `{kind, arguments}`. An argument is `{kind: "type", value: type_index}` or
 `{kind: "nat", value: unsigned_integer}`. Readers derive and check associated
 Data, query, answer and named shapes through the closed kind contract.

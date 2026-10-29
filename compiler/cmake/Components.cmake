@@ -295,6 +295,8 @@ add_zkc_component(Transforms
   lib/Transforms/OracleRealizationSelection.cpp
   lib/Transforms/OracleQueryExchange.cpp
   lib/Transforms/OracleQueryExchangeVerification.cpp
+  lib/Transforms/OracleSchedule.cpp
+  lib/Transforms/OracleObservations.cpp
   lib/Transforms/OracleCommonPlan.cpp
   lib/Transforms/OracleCommonRealization.cpp
   lib/Transforms/RealizedProtocol.cpp
@@ -343,8 +345,6 @@ add_zkc_component(Transforms
   lib/Target/StorageSchedule.cpp
 )
 add_zkc_component(Compiler
-  lib/Compiler/OracleSchedule.cpp
-  lib/Compiler/OracleObservations.cpp
   lib/Compiler/OracleObligations.cpp
   lib/Compiler/Host.cpp
   lib/Compiler/AssetSharing.cpp

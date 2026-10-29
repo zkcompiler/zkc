@@ -384,6 +384,14 @@ struct Codec {
     item(node, value);
     return node;
   }
+  // Service ports are participant-local capabilities, not logical data or
+  // native binding operands. Keep their installed identity outside the data
+  // type intern table; actual signatures and role ownership are rederived.
+  json::Value port(Type value) {
+    if (auto service = dyn_cast<protocol_ir::ServiceReferenceType>(value))
+      return json::Object{{"service", service.getContract()}};
+    return type(value);
+  }
   json::Value kind(protocol_ir::OracleKindAttr value) {
     json::Value node(nullptr);
     item(node, value);
@@ -563,9 +571,9 @@ Expected<json::Object> derived(Codec &codec, ModuleOp prepared,
       plan->attributes.getAs<TypeAttr>("function_type").getValue());
   json::Array inputs, outputs;
   for (Type value : signature.getInputs())
-    inputs.push_back(codec.type(value));
+    inputs.push_back(codec.port(value));
   for (Type value : signature.getResults())
-    outputs.push_back(codec.type(value));
+    outputs.push_back(codec.port(value));
   return json::Object{
       {"contracts", std::move(*logicalContracts)},
       {"constructors", std::move(constructors)},
