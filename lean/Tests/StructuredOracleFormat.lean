@@ -6,6 +6,8 @@ import Zkc.Construction.Scalar
 import Zkc.Construction.DomainTranscript
 import Zkc.Construction.Projection
 import Zkc.Construction.ConnectionOutputs
+import Zkc.Construction.ConnectionRootInputs
+import Zkc.Construction.ConnectionRepeatSupport
 
 /-! Wire recognition is distinct from semantic admission. New logical sorts
 must not inherit ordinary Math or message rights before the oracle profile. -/
@@ -101,6 +103,16 @@ private def run : IO Unit := do
       ((Zkc.Construction.Original.roleOutputSorts 0 [[0]] [type]).isNone)
     test "source connection retains absent logical-handle outputs"
       (Zkc.Construction.Original.roleOutputSorts 0 [[1]] [type] == some [])
+    test "source connection refuses visible logical-handle inputs"
+      (match Zkc.Construction.ConnectionRootInputs.inputLocations 0 [] [type] [[0]] 0 0 with
+       | .error message => message == "connection-input-not-data"
+       | .ok _ => false)
+    test "source connection retains absent logical-handle inputs"
+      ((Zkc.Construction.ConnectionRootInputs.inputLocations 0 [] [type] [[1]] 0 0).isOk)
+    test "native loop state excludes logical handles"
+      (!(Zkc.Construction.ConnectionFrame.visibleState 0 [[0]] [type]))
+  test "native loop state retains ordinary oracle Data"
+    (Zkc.Construction.ConnectionFrame.visibleState 0 [[0]] [kind.data])
   IO.println s!"structured-oracle-format: {← count.get} controls passed"
 
 #eval run

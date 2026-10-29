@@ -21,6 +21,8 @@ structure Value where
   type : Ty
   scopes : List Nat
   dependencies : List Address
+  /-- When true, `dependencies` is only the visible incoming portion. In
+  particular, it is not a proof that a result was fixed before a challenge. -/
   unknownDependencies : Bool := false
   deriving Repr
 
@@ -182,6 +184,10 @@ mutual
       | .statement .. => node := { node with tag := "statement" }
       | .mark _ => node := { node with tag := "mark" }
       | .protocolApply signature roles _ =>
+        -- A callee can return a fresh draw or an adversarial reply. Static
+        -- incoming operands do not summarize those internal dependencies;
+        -- sibling applications also have distinct occurrence contexts.
+        outgoing := values.map fun value => { value with unknownDependencies := true }
         node := { node with tag := "call", helper := some signature.name, roleMap := roles }
         match fuel with
         | 0 => throw "discovery-call-depth"
@@ -195,6 +201,9 @@ mutual
           let _ ← visitRegion program summaries fuel callee.name callee.roles localRole
             (List.range callee.roles.length) (context ++ [address]) [] calleeInputs callee.raw
       | .repeat spec _ =>
+        -- A symbolic number of callbacks needs an invariant/summary. Do not
+        -- identify their returned state with dependence on the initial state.
+        outgoing := values.map fun value => { value with unknownDependencies := true }
         node := { node with tag := "repeat", roleMap := spec.roles }
         let callbackScopes ← match
             (Availability.repeatInputs roster.length spec (arguments.map (·.scopes))).run {} with
@@ -202,7 +211,8 @@ mutual
           | .error error => throw error
         let _ ← visitCallbacks program summaries fuel definition roster selectedRole spec.roles
           context path 0 callbackScopes bodies
-      if visible then recordNode node
+      if visible then
+        recordNode { node with results := outgoing.filter fun value => allowed arm selectedRole value.scopes }
       visitRegion program summaries fuel definition roster selectedRole active context
         (path ++ [1]) (outgoing ++ environment) next
 

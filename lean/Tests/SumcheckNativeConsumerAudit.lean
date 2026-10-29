@@ -1,4 +1,9 @@
 module
+import all Zkc.Source.Structured.ReferenceLaws
+import all Zkc.Source.Structured.ReferenceLibrary
+import all Zkc.Source.Structured.MultilinearBodies
+import all Zkc.Source.Structured.MultilinearReference
+import all Zkc.Source.Structured.MultilinearAdmissionReference
 -- Load stored private equality proofs for the strict dependency traversal.
 import all Zkc.Source.Structured.RelationChecking
 import all Zkc.Source.Structured.FiniteDomains

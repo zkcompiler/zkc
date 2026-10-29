@@ -355,6 +355,25 @@ theorem form_math_present_closed (definitions : List CheckedDefinition) (helper 
     Evaluation.closed_invoke_componentTablesOn, PIR.Process.bind_assoc]
   rfl
 
+/-- A locally owned kept helper on present operands uses the same closed
+implementation and preserves its stopping behavior. -/
+theorem form_owned_present_closed (definitions : List CheckedDefinition) (owner : Nat) (helper : Helper)
+    (terms : Values (Comp laws Δ) helper.inputs) (arguments : Values model.Value helper.inputs)
+    (next : Form laws callees (.tuple helper.outputs :: Δ) out)
+    (binders : Binders model Δ) (present : Comps.eval results terms binders = arguments.present) :
+    (Form.owned owner helper terms next).denoteOn model actions
+        (definitions.foldl (Evaluation.ComponentTablesOn.extend model (.silent I)) ⟨[], []⟩)
+        results context runs processes binders =
+      ((invoke (definitions.foldl (Evaluation.extendMeaningsOn model SiteObservations.closed) [])
+        helper arguments).interpret (closedLift (I := I))).bind fun values =>
+          next.denoteOn model actions
+            (definitions.foldl (Evaluation.ComponentTablesOn.extend model (.silent I)) ⟨[], []⟩)
+            results context runs processes (.cons values.present binders) := by
+  change (Participant.owned _ _ (invoke _ helper) (Comps.eval results terms binders)).bind _ = _
+  rw [present, Participant.owned_present, Evaluation.closed_invoke_componentTablesOn,
+    PIR.Process.bind_assoc]
+  rfl
+
 end Forms
 
 end Zkc.Construction.ConnectionCalculations

@@ -40,6 +40,19 @@ constructed processes to the finite interpreted codec, preserving false answers,
 stop behavior and unread frames. This is distinct from native ZKCV framing and
 KZG security; baseline acceptance requires separate model review and replay.
 
+The [checked source connection](spec/structured-source.md#checked-source-connections)
+constructs finite typed certificates for both source roles and derives full
+nominal simulation and independent reached-action coverage. The common printer
+checks the actual retained Schnorr, Chaum–Pedersen, Okamoto, SmallSumcheck,
+TwoSums and plain aggregate artifacts; a separate fixture covers two component
+applications under nested symbolic repeats. Source libraries and exact checked
+placements are shared. Distinct physical placements are checked separately.
+Public Fiat–Shamir reading and observation coherence follow from the same root
+certificate under the adapter's profile and no-local-service premises. These
+are correspondence results, not cryptographic property receipts or native
+compiler correctness. The GKR source-library closure is checked; its complete
+new root connection and the old admission-walker retirement remain open.
+
 All results below concern stated mathematical models and exact selected imports.
 They do not certify arbitrary DSL programs or the full native lowering pipeline.
 
@@ -559,8 +572,12 @@ covers admission, role assignment, absence, normalization and structural
 projection. The normalizer's assembly theorem applies to the general observation
 and iteration model, including simulation observations. The connection ABI
 excludes services and logical handles recursively from ordinary inputs, outputs,
-messages and observations; an absent role's output contributes no data slot.
-`Tests.StructuredOracleFormat` checks direct and nested logical-handle outputs.
+messages, observations and visible loop state; an absent role's input or output
+contributes no data slot. `Tests.StructuredOracleFormat` checks direct and nested
+logical-handle inputs, outputs and carried state. The public nominal source
+support check and its local lossless-receive law use the same recursive handle
+exclusion. `TestsSecurity.LosslessOperationRefusal` checks service and oracle
+handles against those laws.
 These results extend the independent model; they do not prove the native
 preparation or projection code, or an oracle realization simulation.
 

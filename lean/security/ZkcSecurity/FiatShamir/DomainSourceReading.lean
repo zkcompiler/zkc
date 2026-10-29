@@ -14,7 +14,7 @@ consumers; this module does not identify them with that endpoint projection.
 -/
 set_option autoImplicit false
 namespace ZkcSecurity.FiatShamir.DomainSourceReading
-open Zkc.Source Zkc.Source.Structured Zkc.Construction Zkc.Transcript
+open PIR Zkc.Source Zkc.Source.Structured Zkc.Construction Zkc.Transcript
 open DomainReduction
 variable {carriers : Carriers}
 
@@ -233,5 +233,81 @@ theorem reading {A : Type} (routing : Original.Routing) (replacement : Replaceme
     Bridge NominalDomain.interface SourceReading.Post state.history
       (Original.fold routing source state) (presentation routing source state) :=
   (interpretation routing replacement profile noLocal).reading source state
+
+/-- The source effect condition needed by the public lossless adapter. Service
+queries retain handles; proof receives must exclude capabilities and logical
+oracle handles recursively. -/
+@[expose] def DataOperation : (Occurrence.signature carriers).Op → Prop
+  | .action (.receive ty ..) => ty.isHandle = false
+  | _ => True
+
+private theorem queryField_data (state : Original.State carriers) (origin : Origin) (field : String) :
+    OperationSupport NominalDomain.DataOperation (queryField state origin field) := by
+  unfold queryField
+  split
+  · exact ⟨trivial, fun _ => trivial⟩
+  · trivial
+
+private theorem receive_data (routing : Original.Routing) (state : Original.State carriers)
+    (ty : Ty) (site : String) (sender : Nat) (data : ty.isHandle = false) :
+    OperationSupport NominalDomain.DataOperation (receive routing state ty site sender) := by
+  unfold receive
+  cases routing.mode with
+  | producer =>
+    dsimp only
+    cases ty <;> try trivial
+    rename_i field
+    dsimp only
+    cases routing.delivery state.frames site field sender with
+    | none => trivial
+    | some origins =>
+      exact (queryField_data state origins.1 field).bind _
+        (fun result => (show OperationSupport NominalDomain.DataOperation
+          (record result.2 origins.2 (.field field result.1)) from ⟨trivial, fun _ => trivial⟩).bind _ (fun _ => trivial))
+  | validator =>
+    dsimp only
+    cases routing.message state.frames site sender routing.context.validator with
+    | none => trivial
+    | some origin =>
+      refine ⟨data, ?_⟩
+      intro value
+      dsimp only
+      cases Domain.Payload.ofValue ty value <;> trivial
+
+/-- Local support laws compose through the existing state interpretation. They
+are independent of routing coverage, histories, returned values and probability. -/
+theorem operations_data (routing : Original.Routing)
+    (operation : (Occurrence.signature carriers).Op) (state : Original.State carriers)
+    (data : DataOperation operation) :
+    OperationSupport NominalDomain.DataOperation (operations routing operation state) := by
+  cases operation with
+  | enter => trivial
+  | leave => simp only [operations]; split <;> trivial
+  | action action =>
+    cases action with
+    | receive ty site sender => exact receive_data routing state ty site sender data
+    | @send ty site receiver value =>
+      simp only [operations, send]
+      cases routing.mode <;> dsimp only
+      all_goals
+        cases routing.message state.frames site _ receiver <;>
+          cases Domain.Payload.ofValue ty value
+        all_goals first | trivial | exact ⟨trivial, fun _ => trivial⟩
+    | query site field arguments =>
+      cases arguments with
+      | cons handle rest =>
+        cases rest
+        change OperationSupport NominalDomain.DataOperation (query routing state site field handle)
+        unfold query
+        cases routing.mode <;> cases routing.draw state.frames site field handle
+        all_goals first | trivial | exact queryField_data state _ field
+
+/-- Every receive in the source support certificate gets its exact nominal
+lossless law; every typed continuation of the actual interpretation is covered. -/
+theorem presentation_lossless (model : DomainModel) (routing : Original.Routing) {A : Type}
+    (source : PIR.Process (Occurrence.signature model.toCarriers) A)
+    (data : OperationSupport DataOperation source) (state : Original.State model.toCarriers) :
+    Original.LosslessOn NominalDomain.interface (presentation routing source state) :=
+  NominalDomain.losslessOn model _ (data.interpretState (operations routing) (operations_data routing) state)
 
 end ZkcSecurity.FiatShamir.DomainSourceReading

@@ -3,6 +3,11 @@ module
 import all Zkc.Source.Structured.RelationChecking
 import all Zkc.Source.Structured.FiniteDomains
 import all Zkc.Source.Structured.CollectionReferenceLaws
+import all Zkc.Source.Structured.ReferenceLaws
+import all Zkc.Source.Structured.ReferenceLibrary
+import all Zkc.Source.Structured.MultilinearBodies
+import all Zkc.Source.Structured.MultilinearReference
+import all Zkc.Source.Structured.MultilinearAdmissionReference
 import all Zkc.Source.Structured.CollectEvaluation
 import all Zkc.Source.Structured.CollectLaws
 import all ZkcExamples.Structured.MultilinearCollectBodies

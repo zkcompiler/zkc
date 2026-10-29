@@ -634,6 +634,18 @@ def entries : List Entry := [
     some `ZkcSecurity.FiatShamir.Original.LosslessInterface,
     "Receive and query reply maps are bijective with representable payloads, and send \
     operations have only the selected reply, permitting full-result presentation transport."⟩,
+  ⟨"wellformed.source-reading-data-operation", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.DomainSourceReading.DataOperation,
+    "A source receive uses a data type with a proof-payload representation; \
+    service queries and other source effects retain their existing semantics."⟩,
+  ⟨"wellformed.nominal-data-operation", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.NominalDomain.DataOperation,
+    "A nominal presentation receives only representable data; deliveries and \
+    queries retain their complete reply types."⟩,
+  ⟨"law.original-lossless-support", .law,
+    some `ZkcSecurity.FiatShamir.Original.LosslessOn,
+    "Every reached presentation operation, under every typed reply, has bijective \
+    receive/query readback and representable payloads; this is not a probability-one claim."⟩,
   ⟨"wellformed.sumcheck-original-validator-routes", .wellFormedness,
     some `ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.Routes,
     "The validator's source message, draw and delivery sites resolve at the given frames \

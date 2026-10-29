@@ -84,7 +84,8 @@ source binding must account for. For each original operation:
 - a guard owned by the validator must be implemented by a guard on the
   reference holding its condition;
 - an exchange must have distinct sender and receiver roles and a recursively
-  handle-free data type (including services and logical oracle handles). A message from the producer to the validator must be implemented by a receive at
+  handle-free data type, excluding services and logical oracle handles even
+  inside aggregates. A message from the producer to the validator must be implemented by a receive at
   the same qualified site with the same type; the received value is held. A
   message from the validator to the producer must be implemented by the
   observation of the reference holding it as a message the validator sends at

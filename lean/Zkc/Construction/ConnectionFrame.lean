@@ -19,6 +19,8 @@ open Zkc.Source Zkc.Source.Structured
 
 inductive Cell (scope : NormalForm.Scope) where
   | data {ty : Ty} (component : NormalForm.Comp [] scope ty)
+  /-- The original Boolean expression and its checked successful-guard alias. -/
+  | guarded (component : NormalForm.Comp [] scope .boolean)
   | history (suite : String)
   | coordinates (values : List (NormalForm.Term [] scope .index))
   | unused
@@ -31,6 +33,10 @@ def Cell.Holds (model : DomainModel) {scope : NormalForm.Scope} (binders : Norma
   | .data (ty := ty) component, physical =>
       ∃ value, component.eval (NormalForm.LawResults.empty model) binders = some value ∧
         Domain.Value.encode ty value = some physical
+  | .guarded component, physical =>
+      (∃ value, component.eval (NormalForm.LawResults.empty model) binders = some value ∧
+        Domain.Value.encode .boolean value = some physical) ∧
+        physical = .data (.boolean true)
   | .history suite, physical => physical = .transcript suite history
   | .coordinates values, physical =>
       physical = .indices (values.map fun term => term.eval (NormalForm.LawResults.empty model) binders)
@@ -67,6 +73,24 @@ theorem Holds.lookup {model : DomainModel} {scope : NormalForm.Scope} {binders :
     | succ reference =>
       simp only [List.getElem?_cons_succ] at checked ⊢
       exact ih checked
+
+/-- Refine one existing physical location, without changing arity or values. -/
+theorem Holds.set {model : DomainModel} {scope : NormalForm.Scope}
+    {binders : NormalForm.Binders model scope} {history : Domain.History model.toCarriers}
+    {layout : Layout scope} {environment : Domain.Environment model.toCarriers}
+    (related : Holds model binders history layout environment) (reference : Nat) (cell : Cell scope)
+    {physical : Domain.Value model.toCarriers} (read : environment[reference]? = some physical)
+    (meaning : Cell.Holds model binders history cell physical) :
+    Holds model binders history (layout.set reference cell) environment := by
+  induction related generalizing reference with
+  | nil => simp at read
+  | cons head tail ih =>
+    cases reference with
+    | zero =>
+      simp only [List.getElem?_cons_zero, Option.some.injEq] at read
+      subst physical
+      exact .cons meaning tail
+    | succ reference => exact .cons head (ih reference (by simpa using read))
 
 /-- A nominal data readback recovers the precise source component. -/
 theorem Holds.data {model : DomainModel} {scope : NormalForm.Scope} {binders : NormalForm.Binders model scope}
@@ -105,6 +129,7 @@ theorem Holds.retireHistory {model : DomainModel} {scope : NormalForm.Scope} {bi
 /-- Binding a reply or helper result changes names, not the existing values. -/
 def Cell.rename {scope target : NormalForm.Scope} (rename : NormalForm.Rename scope target) : Cell scope → Cell target
   | .data component => .data (component.rename rename)
+  | .guarded component => .guarded (component.rename rename)
   | .history suite => .history suite
   | .coordinates values => .coordinates (values.map fun term => term.rename rename)
   | .unused => .unused
@@ -119,6 +144,11 @@ theorem Cell.Holds.rename {model : DomainModel} {scope target : NormalForm.Scope
   | data component =>
     simpa only [Cell.rename, Cell.Holds, NormalForm.comp_eval_rename (NormalForm.LawResults.empty model)
       rename binders next same] using related
+  | guarded component =>
+    constructor
+    · simpa only [Cell.rename, Cell.Holds, NormalForm.comp_eval_rename (NormalForm.LawResults.empty model)
+        rename binders next same] using related.1
+    · exact related.2
   | history => exact related
   | unused => trivial
   | coordinates values =>
@@ -187,6 +217,16 @@ inductive Readback {scope : NormalForm.Scope} (layout : Layout scope) :
       (tail : Readback layout values locations) :
       Readback layout (.cons (.present (.capability service handle)) values)
         (.capability handle :: locations)
+  | guardedOriginal {types : List Ty} {component : NormalForm.Comp [] scope .boolean}
+      {values : Values (NormalForm.Comp [] scope) types} {locations : List Original.Location}
+      (reference : Nat) (checked : layout[reference]? = some (.guarded component))
+      (tail : Readback layout values locations) :
+      Readback layout (.cons component values) (.data reference :: locations)
+  | guardedTrue {types : List Ty} {component : NormalForm.Comp [] scope .boolean}
+      {values : Values (NormalForm.Comp [] scope) types} {locations : List Original.Location}
+      (reference : Nat) (checked : layout[reference]? = some (.guarded component))
+      (tail : Readback layout values locations) :
+      Readback layout (.cons (.present (.bool true)) values) (.data reference :: locations)
   | data {ty : Ty} {types : List Ty} {component : NormalForm.Comp [] scope ty}
       {values : Values (NormalForm.Comp [] scope) types} {locations : List Original.Location}
       (reference : Nat) (checked : layout[reference]? = some (.data component))
@@ -208,9 +248,35 @@ theorem Readback.sound {model : DomainModel} {scope : NormalForm.Scope}
   | nil => trivial
   | absent tail ih => exact ⟨rfl, ih⟩
   | capability tail ih => exact ⟨rfl, ih⟩
+  | guardedOriginal reference checked tail ih =>
+    obtain ⟨physical, read, ⟨value, present, encoded⟩, _⟩ := related.lookup checked
+    refine ⟨⟨value, present, ?_⟩, ih⟩
+    simp only [read, Option.bind_some, Domain.Value.decode_encode encoded]
+  | guardedTrue reference checked tail ih =>
+    obtain ⟨physical, read, _, same⟩ := related.lookup checked
+    refine ⟨⟨true, rfl, ?_⟩, ih⟩
+    simp [read, same, Domain.Value.decode, Domain.Payload.value]
   | data reference checked tail ih =>
     obtain ⟨value, physical, present, encoded, read⟩ := related.data checked
     refine ⟨⟨value, present, ?_⟩, ih⟩
     simp only [read, Option.bind_some, Domain.Value.decode_encode encoded]
+
+/-- A single nominal read uses the same finite aliases as complete outputs.
+Consumers therefore retain successful-guard facts without a separate lookup
+language or an additional evaluator. -/
+theorem Readback.component {model : DomainModel} {scope : NormalForm.Scope}
+    {binders : NormalForm.Binders model scope} {history : Domain.History model.toCarriers}
+    {layout : Layout scope} {environment : Domain.Environment model.toCarriers}
+    {ty : Ty} {component : NormalForm.Comp [] scope ty} {reference : Nat}
+    (certificate : Readback layout (.cons component .nil) [.data reference])
+    (related : Holds model binders history layout environment) :
+    ∃ value physical, component.eval (NormalForm.LawResults.empty model) binders = some value ∧
+      Domain.Value.encode ty value = some physical ∧ environment[reference]? = some physical := by
+  obtain ⟨⟨value, present, decoded⟩, _⟩ := certificate.sound related
+  cases found : environment[reference]? with
+  | none => simp [found] at decoded
+  | some physical =>
+    have read : physical.decode ty = some value := by simpa [found] using decoded
+    exact ⟨value, physical, present, Domain.Value.encode_decode read, rfl⟩
 
 end Zkc.Construction.ConnectionFrame

@@ -126,3 +126,20 @@ def test_separated_boundaries_are_enforced(owner, dependency):
                                        'Zkc.Protocols.Sumcheck.Verifier'])
 def test_generic_security_reuses_actual_vcvio_and_core_providers(dependency):
     assert policy().permitted('ZkcSecurity.Families.Schnorr', dependency)
+
+
+
+def test_generic_elaborators_are_reusable_without_opening_generator_dependencies():
+    audit = policy()
+    subject = 'ZkcExamples.Structured.Generated.Connections.Sample'
+    elaborator = 'ZkcTools.ConstructionBindings.Root'
+    audit.audit_graph({subject: [elaborator], elaborator: ['Zkc.Construction.ConnectionRoot']},
+                      ['ZkcExamples', 'ZkcTools', 'Zkc'])
+    assert audit.POLICY['exceptions'] == []
+    for forbidden in ['ZkcTools.ConstructionBindings.Generate',
+                      'ZkcTools.ConstructionBindings.Analysis', 'ZkcExamples.Structured.Sample']:
+        with pytest.raises(ValueError, match='forbidden dependency'):
+            audit.audit_graph({subject: [elaborator], elaborator: [forbidden]},
+                              ['ZkcExamples', 'ZkcTools'])
+    with pytest.raises(ValueError, match='forbidden dependency'):
+        audit.audit_graph({subject: ['ZkcTools.ConstructionBindings.Generate']}, ['ZkcExamples'])
