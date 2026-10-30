@@ -18,7 +18,7 @@ module {
       %0 = "exec.variant"(%arg0) <{alternative = "left", site = "choice"}> : (!runtime.scope) -> !exec.outcome<(!tag)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!tag)>) -> ()
     ^bb1(%1: !tag):  // pred: ^bb0
-      "exec.match"(%arg0, %1, %arg1, %arg2)[^bb2, ^bb4, ^bb5] <{alternatives = ["left", "right"], site = "match"}> : (!runtime.scope, !tag, !F, !F) -> ()
+      "exec.match"(%arg0, %1, %arg1, %arg2, %arg1, %arg2)[^bb2, ^bb4, ^bb5] <{alternatives = ["left", "right"], site = "match", successor_operand_segments = array<i32: 0, 2, 2 >}> : (!runtime.scope, !tag, !F, !F, !F, !F) -> ()
     ^bb2(%2: !exec.stop):  // 8 preds: ^bb0, ^bb1, ^bb4, ^bb5, ^bb6, ^bb7, ^bb9, ^bb10
       %3 = "exec.failed"(%2) : (!exec.stop) -> !exec.outcome<(!F)>
       return %3 : !exec.outcome<(!F)>

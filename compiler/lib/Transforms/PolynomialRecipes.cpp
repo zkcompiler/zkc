@@ -1,4 +1,5 @@
 #include "CheckedCandidate.h"
+#include "PreparationDialects.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Dialect/Admission.h"
@@ -373,6 +374,7 @@ static LogicalResult realizeRecipes(ModuleOp module) {
   return zkc::admitStage(module);
 }
 LogicalResult expandPolynomialRecipes(ModuleOp module) {
+  loadPreparationDialects(*module.getContext());
   if (failed(zkc::admitStage(module)))
     return failure();
   mathematical::CheckedCandidate candidate(module);

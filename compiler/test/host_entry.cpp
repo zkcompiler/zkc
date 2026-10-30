@@ -816,5 +816,52 @@ int main() {
             "duplicate alternatives accepted or wrong diagnostic: " +
                 diagnostic);
   });
+  cases.run(
+      "Host match reads every successor's source capture association", [] {
+        auto checked = original(R"(module sample;
+      enum Choice { First(bool), Second(bool) }
+      entry fn Demo(x:Choice,y:bool,z:bool)->bool {
+        return match x {First(v)=>{y},Second(v)=>{z}};
+      })");
+        mlir::DialectRegistry registry;
+        registerDialects(registry);
+        mlir::MLIRContext context(registry);
+        auto module =
+            mlir::parseSourceString<mlir::ModuleOp>(checked.bytes(), &context);
+        require(bool(module), "match original did not parse");
+        take(readHostFunctions(*module));
+        data::MatchOp match;
+        module->walk([&](data::MatchOp op) { match = op; });
+        require(match && match.getForwarded()[1].size() == 2,
+                "fixture must carry two common source captures");
+        auto values = match.getForwarded()[1];
+        mlir::Value first = values[0], second = values[1];
+        match.getForwardedMutable()[1].assign({second, first});
+        require(mlir::succeeded(mlir::verify(*module)),
+                "independent edge mutation should remain structurally valid");
+        refuses(readHostFunctions(*module), "source.correspondence");
+      });
+  cases.run("Host admission does not ignore extra dispatch forwarding", [] {
+    auto entry = compiled();
+    mlir::DialectRegistry registry;
+    registerDialects(registry);
+    mlir::MLIRContext context(registry);
+    auto module = mlir::parseSourceString<mlir::ModuleOp>(
+        entry.original().bytes(), &context);
+    require(bool(module), "Host original did not parse");
+    exec::DispatchOp edge;
+    module->walk([&](exec::DispatchOp op) {
+      if (!edge)
+        edge = op;
+    });
+    require(bool(edge), "missing Host outcome dispatch");
+    auto function = edge->getParentOfType<mlir::func::FuncOp>();
+    auto argument = function.getArgument(0);
+    edge.getSuccessorOperands(0).append(mlir::ValueRange{argument});
+    edge.getReturned()->addArgument(argument.getType(), edge.getLoc());
+    require(mlir::succeeded(mlir::verify(*module)),
+            "extra generic forwarding should remain structurally valid");
+    refuses(readHostFunctions(*module), "source.correspondence");
+  });
   return cases.result();
 }

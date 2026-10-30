@@ -107,6 +107,30 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  cases.run("bounded reads do not promise context-free speculation", [&] {
+    auto module = parseSourceString<ModuleOp>(R"mlir(
+!F = !algebra.field<"koala-bear">
+!V = !algebra.field_vector<"koala-bear">
+!M = !algebra.field_matrix<"koala-bear">
+module {
+  func.func @read(%xs: !V, %matrix: !M, %i: ui64, %j: ui64) -> (!F, !F) {
+    %x = "data.bounded_at"(%xs, %i) : (!V, ui64) -> !F
+    %y = "data.bounded_matrix_at"(%matrix, %i, %j) : (!M, ui64, ui64) -> !F
+    return %x, %y : !F, !F
+  }
+})mlir",
+                                              &context);
+    require(bool(module), "local bound-read structure did not form");
+    unsigned reads = 0;
+    module->walk([&](Operation *op) {
+      if (!isa<data::BoundedAtOp, data::BoundedMatrixAtOp>(op))
+        return;
+      ++reads;
+      require(isMemoryEffectFree(op) && !isSpeculatable(op),
+              "bounded read promises speculation without its bound premise");
+    });
+    require(reads == 2, "missing bounded-read coverage");
+  });
   cases.run("constructor effects and speculation", [&] {
     auto module = parseSourceString<ModuleOp>(constructors, &context);
     require(bool(module), "constructor fixture was not admitted");

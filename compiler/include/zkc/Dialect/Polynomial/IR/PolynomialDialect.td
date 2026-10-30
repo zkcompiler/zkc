@@ -6,6 +6,9 @@ include "zkc/Dialect/Base.td"
 def PolynomialDialect : ZKCDialect {
   let name = "poly";
   let cppNamespace = "::zkc::poly";
+  // Verification derives Algebra field types and Data residual-state types.
+  let dependentDialects = ["::zkc::algebra::AlgebraDialect",
+                           "::zkc::data::DataDialect"];
   let useDefaultTypePrinterParser = 1;
 }
 

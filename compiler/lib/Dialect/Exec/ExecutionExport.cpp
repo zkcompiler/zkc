@@ -254,11 +254,4 @@ readSourceExecutionDefinitions(Operation *owner) {
     return error("execution-cfg", "unresolved computations cannot be exported");
   return DefinitionExporter(*view, false).run(owner, true);
 }
-Expected<program::LocalDefinitions>
-readScheduledExecutionDefinitions(Operation *owner) {
-  auto view = readScheduledExecutionClosure(owner);
-  if (!view)
-    return view.takeError();
-  return DefinitionExporter(*view, false).run(owner, true);
-}
 } // namespace zkc::protocol

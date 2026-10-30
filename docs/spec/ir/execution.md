@@ -55,6 +55,34 @@ check before that loop still executes. Sum elimination uses `data.match`, whose
 successor arguments are the selected payload followed by the actual captures;
 it implements MLIR's branch interface with produced and forwarded operands.
 
+### Structural branch interfaces and admitted execution
+
+`exec.dispatch`, `exec.match` and `data.match` store forwarded operands in
+independent successor segments. The inherent `successor_operand_segments`
+dense i32 array gives their lengths in successor order. Dispatch orders returned
+then stopped and defaults to two empty segments. Exec match orders stopped then
+the declared alternatives; Data match orders its declared alternatives. Match
+operations require the explicit inventory even when every segment is empty.
+The segment lengths sum to the trailing operand count, after the outcome,
+scope/input or input operands respectively.
+
+Each destination binds the produced payload followed by that edge's forwarded
+values. The input outcome, variant or logical layout determines the produced
+types and count; the destination's argument list never defines them. Stops
+produce one `!exec.stop`. A BranchOpInterface client may append, erase or replace
+forwarded values on one edge without changing another. Standard dead-argument
+elimination and common-block merging therefore preserve structural formation.
+
+Profile admission imposes additional semantic obligations. Host and native
+source match arms must forward the same ordered source captures. Their outcome
+and stop edges carry only produced values, and the native profile retains its
+explicit scope, transfer and charging structure. Readers inspect every segment
+and refuse an unsupported shape. Generic CFG rewrites are not automatically
+admitted executable rewrites: a candidate must still pass profile admission and
+independent source comparison. Production optimization remains within its
+admitted mathematical regions. This change affects current `/0` native MLIR
+assembly and its fixtures; it does not change `zkc.program/0` bytes.
+
 `!data.value<#data.layout<...>>` retains a typed nominal source layout for
 values not represented by the profile's `i1` and `i64` scalar types. `data.construct`, `data.unpack` and
 `data.project` manipulate these logical values. The native mathematical
@@ -264,8 +292,8 @@ Every referenced callback must have an admitted body, including callbacks of
 empty or dormant requests. These derived views are internal admission data;
 they are neither source declarations nor executable implementations.
 
-Affine fold state requires more than absence of duplicate uses. Program admission
-analyzes the actual admitted callback control view and requires each continuing
+Affine fold state requires more than absence of duplicate uses. Native Exec
+closure admission analyzes the actual admitted callback control view and requires each continuing
 result to retain the root of its corresponding formal state argument. Ordinary
 calls substitute actual arguments. History, sampling and observation contracts
 can preserve roots across primitive successors; matching result types alone

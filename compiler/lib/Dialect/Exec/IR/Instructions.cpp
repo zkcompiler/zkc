@@ -129,10 +129,14 @@ LogicalResult MatchOp::verify() {
   if (getSite().empty() || !variant ||
       getArms().size() != variant.getAlternatives().size() ||
       getAlternatives().size() != getArms().size() ||
-      getStopped()->getNumArguments() != 1 ||
-      !isa<StopType>(getStopped()->getArgument(0).getType()) ||
-      !admitted(getCaptures().getTypes(), {getInput().getType()}))
+      getForwarded().size() != getArms().size() + 1 ||
+      !admitted({getInput().getType()}, {}))
     return refuse(*this, "variant dispatch alternatives or failure edge");
+  SmallVector<Type> stopped{StopType::get(getContext())};
+  llvm::append_range(stopped, getForwarded()[0].getTypes());
+  if (getStopped()->getArgumentTypes() != TypeRange(stopped))
+    return refuse(*this,
+                  "variant failure edge must bind stop and forwarded values");
   for (auto [i, arm] : llvm::enumerate(variant.getAlternatives())) {
     if (cast<StringAttr>(getAlternatives()[i]).getValue() !=
         arm.getLabel().getValue())
@@ -143,7 +147,7 @@ LogicalResult MatchOp::verify() {
       llvm::consumeError(types.takeError());
       return refuse(*this, "variant dispatch payload types");
     }
-    llvm::append_range(*types, getCaptures().getTypes());
+    llvm::append_range(*types, getForwarded()[i + 1].getTypes());
     if (getArms()[i]->getArgumentTypes() != TypeRange(*types))
       return refuse(*this,
                     "variant dispatch must expose exact payload and captures");
@@ -151,11 +155,16 @@ LogicalResult MatchOp::verify() {
   return success();
 }
 SuccessorOperands MatchOp::getSuccessorOperands(unsigned index) {
+  if (index >= getForwarded().size())
+    return SuccessorOperands(MutableOperandRange(*this, getNumOperands(), 0));
   if (index == 0)
-    return SuccessorOperands(1, MutableOperandRange(*this, 0, 0));
-  auto count = getArms()[index - 1]->getNumArguments();
-  return SuccessorOperands(
-      count >= getCaptures().size() ? count - getCaptures().size() : 0,
-      getCapturesMutable());
+    return SuccessorOperands(1, getForwardedMutable()[index]);
+  auto variant =
+      dyn_cast<data::VariantType>(logicalValueType(getInput().getType()));
+  unsigned produced =
+      variant && index <= variant.getAlternatives().size()
+          ? variant.getAlternatives()[index - 1].getPayload().size()
+          : 0;
+  return SuccessorOperands(produced, getForwardedMutable()[index]);
 }
 } // namespace zkc::exec

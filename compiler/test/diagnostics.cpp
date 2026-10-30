@@ -1,10 +1,16 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Interfaces/CatalogType.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
+#include <future>
+#include <thread>
 
 using namespace mlir;
 using namespace llvm;
@@ -43,9 +49,171 @@ Error mixedErrors() {
                                                  "foreign: not a code"),
                                zkc::error("last")));
 }
+
+// All emissions intentionally share one location. Promises order registration,
+// emission and removal outside diagnostic callbacks (which MLIR serializes).
+void checkOverlappingHandlers(bool forwarding) {
+  MLIRContext context;
+  auto location = UnknownLoc::get(&context);
+  unsigned firstCalls = 0, secondCalls = 0, forwarded = 0;
+  bool foreignLimit = false;
+  ScopedDiagnosticHandler observer(&context, [&](Diagnostic &) {
+    ++forwarded;
+    return success();
+  });
+  std::promise<void> firstReady, secondReady, firstEmitted, secondEmitted,
+      firstRemoved;
+  auto secondStarted = secondReady.get_future();
+  auto secondDone = secondEmitted.get_future();
+  std::thread first([&] {
+    {
+      zkc::diagnostics::ScopedThreadDiagnosticHandler capture(
+          &context, [&](Diagnostic &diagnostic) {
+            ++firstCalls;
+            auto codes = zkc::diagnostics::refusals(diagnostic);
+            require(codes.size() == 1 &&
+                        codes[0].code == "mathematical-expansion-limit",
+                    "capture received another invocation's diagnostic");
+            return success();
+          });
+      firstReady.set_value();
+      secondStarted.wait();
+      zkc::diagnostics::emit(emitError(location),
+                             "mathematical-expansion-limit");
+      firstEmitted.set_value();
+      secondDone.wait();
+    }
+    firstRemoved.set_value();
+  });
+  firstReady.get_future().wait();
+  {
+    zkc::diagnostics::ScopedThreadDiagnosticHandler second(
+        &context, [&](Diagnostic &diagnostic) {
+          ++secondCalls;
+          for (auto &code : zkc::diagnostics::refusals(diagnostic))
+            foreignLimit |= code.code == "mathematical-expansion-limit";
+          return forwarding ? failure() : success();
+        });
+    secondReady.set_value();
+    firstEmitted.get_future().wait();
+    zkc::diagnostics::emit(emitError(location), "second-invocation");
+    secondEmitted.set_value();
+    firstRemoved.get_future().wait();
+    // The older scope has gone away while the newer scope is still alive.
+    zkc::diagnostics::emit(emitError(location), "second-invocation-again");
+  }
+  first.join();
+  require(firstCalls == 1 && secondCalls == 2 && !foreignLimit &&
+              forwarded == (forwarding ? 2u : 0u),
+          "overlapping capture, suppression or observation crossed threads");
+  zkc::diagnostics::emit(emitError(location), "after-both-scopes");
+  require(forwarded == (forwarding ? 3u : 1u),
+          "scoped handler was not removed");
+}
+
+struct TypeGate {
+  std::promise<void> entered, resume;
+  bool used = false;
+  unsigned skip = 0;
+};
+thread_local TypeGate *activeTypeGate = nullptr;
+thread_local unsigned typeObservations = 0;
+// A test-owned interface pauses a real binding read while its internal capture
+// is installed. No production hooks or diagnostic-engine locks are involved.
+struct PausingCatalogType
+    : zkc::CatalogTypeInterface::ExternalModel<PausingCatalogType, NoneType> {
+  std::optional<zkc::CatalogTypeApplication> getCatalogApplication(Type) const {
+    ++typeObservations;
+    // The closure reader first verifies its declarations. Count that exact
+    // synchronous preflight below, then pause only inside its later capture.
+    if (activeTypeGate && activeTypeGate->skip) {
+      --activeTypeGate->skip;
+      return zkc::CatalogTypeApplication{"bool", {}};
+    }
+    if (auto *gate = std::exchange(activeTypeGate, nullptr)) {
+      gate->used = true;
+      gate->entered.set_value();
+      gate->resume.get_future().wait();
+      return std::nullopt;
+    }
+    return zkc::CatalogTypeApplication{"bool", {}};
+  }
+};
+
+void checkOverlappingBindingRead(bool closure) {
+  DialectRegistry registry;
+  zkc::registerDialects(registry);
+  MLIRContext context(registry);
+  context.loadAllAvailableDialects();
+  NoneType::attachInterface<PausingCatalogType>(context);
+  context.printOpOnDiagnostic(false);
+  OpBuilder builder(&context);
+  auto location = builder.getUnknownLoc();
+  OwningOpRef<ModuleOp> module(ModuleOp::create(location));
+  builder.setInsertionPointToEnd(module->getBody());
+  auto signature = builder.getFunctionType(
+      {zkc::runtime::ScopeType::get(&context)},
+      {zkc::exec::OutcomeType::get(
+          &context,
+          {zkc::data::SequenceType::get(&context, NoneType::get(&context))})});
+  auto binding = zkc::runtime::BindingOp::create(
+      builder, location, "invalid", "sequence.empty",
+      builder.getArrayAttr({TypeAttr::get(NoneType::get(&context))}), "",
+      signature, ArrayAttr{}, ArrayAttr{});
+  std::vector<zkc::diagnostics::RefusalInfo> observed;
+  ScopedDiagnosticHandler observer(&context, [&](Diagnostic &diagnostic) {
+    auto codes = zkc::diagnostics::refusals(diagnostic);
+    observed.insert(observed.end(), codes.begin(), codes.end());
+    return success();
+  });
+  TypeGate gate;
+  typeObservations = 0;
+  require(succeeded(verify(binding)), "binding overlap preflight failed");
+  gate.skip = closure ? typeObservations : 0;
+  std::string result;
+  std::thread reader([&] {
+    activeTypeGate = &gate;
+    if (closure) {
+      auto read = zkc::protocol::readExecutionClosure(*module, false);
+      require(!read, "invalid native closure accepted");
+      result = toString(read.takeError());
+    } else {
+      auto read = zkc::protocol::readBinding(binding);
+      require(!read, "invalid binding accepted");
+      result = toString(read.takeError());
+    }
+    // Avoid hanging on a failed prerequisite: report a missing pause below.
+    if (activeTypeGate) {
+      activeTypeGate = nullptr;
+      gate.entered.set_value();
+    }
+  });
+  gate.entered.get_future().wait();
+  zkc::diagnostics::emit(emitError(location), "foreign-required-refusal");
+  gate.resume.set_value();
+  reader.join();
+  bool isolated = gate.used && observed.size() == 1 &&
+                  observed[0].code == "foreign-required-refusal" &&
+                  StringRef(result).contains("logical-type-formation") &&
+                  !StringRef(result).contains("foreign-required-refusal");
+  if (!isolated) {
+    errs() << (closure ? "closure" : "binding")
+           << " overlap: paused=" << gate.used << ", result=" << result
+           << ", observed=";
+    for (const auto &refusal : observed)
+      errs() << refusal.code << ' ';
+    errs() << '\n';
+  }
+  require(isolated, "internal binding capture consumed or misclassified a "
+                    "foreign error");
+}
 } // namespace
 
 int main() {
+  checkOverlappingHandlers(false);
+  checkOverlappingHandlers(true);
+  checkOverlappingBindingRead(false);
+  checkOverlappingBindingRead(true);
   DialectRegistry registry;
   zkc::registerDialects(registry);
   MLIRContext context(registry);

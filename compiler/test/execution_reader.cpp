@@ -343,8 +343,9 @@ int main() {
       "    \"exec.dispatch\"(%constructed)[^selected, ^failed] : "
       "(!exec.outcome<(!V)>) -> ()\n"
       "  ^selected(%choice: !V):\n"
-      "    \"exec.match\"(%scope, %choice, %y)[^failed, ^yes, ^no] "
-      "{site=\"choose\", alternatives=[\"left\", \"right\"]} : (!S, !V, !F) -> "
+      "    \"exec.match\"(%scope, %choice, %y, %y)[^failed, ^yes, ^no] "
+      "{site=\"choose\", alternatives=[\"left\", \"right\"], "
+      "successor_operand_segments=array<i32: 0, 1, 1>} : (!S, !V, !F, !F) -> "
       "()\n");
   for (StringRef arm : {"yes", "no"}) {
     matching = change(matching, "^" + arm.str() + ":",
@@ -385,6 +386,23 @@ int main() {
   });
   cases.run("variant frame selection must match actual arm", [&] {
     read(change(matching, "selection=\"left\"", "selection=\"right\""), false);
+  });
+  cases.run("native match admission checks each edge's source captures", [&] {
+    read(change(matching, "(%scope, %choice, %y, %y)[",
+                "(%scope, %choice, %y, %x)["),
+         false);
+  });
+  cases.run("generic dispatch forwarding does not widen native admission", [&] {
+    auto forwarded =
+        change(matching,
+               "\"exec.dispatch\"(%constructed)[^selected, ^failed] : "
+               "(!exec.outcome<(!V)>) -> ()",
+               "\"exec.dispatch\"(%constructed, %y)[^selected, ^failed] "
+               "{successor_operand_segments=array<i32: 1, 0>} : "
+               "(!exec.outcome<(!V)>, !F) -> ()");
+    read(change(forwarded, "^selected(%choice: !V):",
+                "^selected(%choice: !V, %extra: !F):"),
+         false);
   });
   cases.run("physical ports retain the installed representation", [&] {
     auto physical = replaceAll(source, "!algebra.field<\"koala-bear\">",

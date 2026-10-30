@@ -4,7 +4,7 @@
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "zkc/Dialect/Exec/Builders.h"
-#include "zkc/Dialect/Exec/ExecutionModel.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 
@@ -14,6 +14,50 @@ namespace zkc::computation {
 namespace {
 using Values = SmallVector<Value>;
 using mathematical::ScopedCandidate;
+bool chargeComparison(uint64_t amount, uint64_t &remaining,
+                      finite::VerificationResult &outcome) {
+  if (amount > remaining) {
+    outcome = {finite::VerificationStatus::RequiredCapacity,
+               "schedule comparison capacity",
+               CapacityCause{WorkOwner::AlgorithmChecking, amount, remaining}};
+    return false;
+  }
+  remaining -= amount;
+  return true;
+}
+// Bound actual nesting before any recursive MLIR walk or formation check.
+// Native readers allow depth 64 within a definition; the two enclosing module
+// operations account for the additional levels here. Charge all operations,
+// regions, blocks and raw SSA slots, including empty malformed structures.
+bool inspectForComparison(Operation *root, uint64_t &remaining,
+                          finite::VerificationResult &outcome) {
+  SmallVector<std::pair<Operation *, unsigned>> pending{{root, 0}};
+  while (!pending.empty()) {
+    auto [op, depth] = pending.pop_back_val();
+    if (depth > 66 ||
+        !chargeComparison(1 + op->getNumOperands() + op->getNumResults(),
+                          remaining, outcome))
+      return false;
+    for (auto &region : op->getRegions()) {
+      if (!chargeComparison(1, remaining, outcome))
+        return false;
+      for (auto &block : region) {
+        if (!chargeComparison(1 + block.getNumArguments(), remaining, outcome))
+          return false;
+        for (auto &child : block) {
+          // Every pending operation still needs at least one unit. Refuse
+          // before allocating a worklist larger than the remaining allowance.
+          if (pending.size() >= remaining) {
+            chargeComparison(pending.size() + 1, remaining, outcome);
+            return false;
+          }
+          pending.emplace_back(&child, depth + 1);
+        }
+      }
+    }
+  }
+  return true;
+}
 // Consume only the admitted association read from the actual immutable SCF
 // schedule. Mathematical source, optional selection and recipe producers are
 // absent from this transition. Outlined functions retain their exact inventory.
@@ -141,6 +185,110 @@ public:
     return success();
   }
 };
+
+// Compare the two admitted native associations, not an exported byte model or
+// a replay of Consumer. Each reader owns its actual administrative CFG/SCF,
+// custody and closure checks. Here every declaration and semantic step must
+// agree, including unused roots and the identity/order of outlined children.
+// Iterating definitions once avoids expanding shared control bodies again.
+class NativeScheduleComparison {
+  const protocol::SourceExecutionClosure &source, &actual;
+  uint64_t &remaining;
+  finite::VerificationResult &outcome;
+  llvm::DenseMap<Operation *, Operation *> definitions;
+
+  bool charge(uint64_t amount = 1) {
+    return chargeComparison(amount, remaining, outcome);
+  }
+  bool body(func::FuncOp before, func::FuncOp after,
+            ArrayRef<protocol::SourceExecutionStep> expected,
+            ArrayRef<protocol::SourceExecutionStep> observed) {
+    if (expected.size() != observed.size() ||
+        before.getNumArguments() != after.getNumArguments())
+      return false;
+    // Associate data definitions bijectively. Uses must select the same
+    // positional formal or preceding result; equal types alone do not suffice.
+    llvm::DenseMap<Value, Value> values, inverse;
+    auto associate = [&](Value left, Value right) {
+      return charge() && left.getType() == right.getType() &&
+             values.try_emplace(left, right).second &&
+             inverse.try_emplace(right, left).second;
+    };
+    for (auto [left, right] : zip(before.getArguments(), after.getArguments()))
+      if (!associate(left, right))
+        return false;
+    for (auto [left, right] : zip(expected, observed)) {
+      if (!charge() || !left.operation || !right.operation ||
+          left.operation->getName() != right.operation->getName() ||
+          left.operation->getAttrDictionary() !=
+              right.operation->getAttrDictionary() ||
+          left.operation->getOperandTypes() !=
+              right.operation->getOperandTypes() ||
+          left.operation->getResultTypes() !=
+              right.operation->getResultTypes() ||
+          left.inputs.size() != right.inputs.size() ||
+          left.outputs.size() != right.outputs.size() ||
+          left.regions.size() != right.regions.size() ||
+          left.conditional != right.conditional)
+        return false;
+      // Exact native attributes include binding references, typed invocation
+      // parameters, sites, variant labels, Boolean values and stop reasons.
+      for (auto [input, observedInput] : zip(left.inputs, right.inputs))
+        if (!charge() || input.getType() != observedInput.getType() ||
+            values.lookup(input) != observedInput)
+          return false;
+      for (auto [output, observedOutput] : zip(left.outputs, right.outputs))
+        if (!associate(output, observedOutput))
+          return false;
+      for (auto [region, observedRegion] : zip(left.regions, right.regions)) {
+        func::FuncOp expectedRegion = region, actualRegion = observedRegion;
+        if (!charge() || definitions.lookup(expectedRegion.getOperation()) !=
+                             actualRegion.getOperation())
+          return false;
+      }
+    }
+    return true;
+  }
+
+public:
+  NativeScheduleComparison(const protocol::SourceExecutionClosure &source,
+                           const protocol::SourceExecutionClosure &actual,
+                           uint64_t &remaining,
+                           finite::VerificationResult &outcome)
+      : source(source), actual(actual), remaining(remaining), outcome(outcome) {
+  }
+  bool run(protocol_ir::ProtocolModuleOp before,
+           protocol_ir::ProtocolModuleOp after) {
+    if (!source.computations.empty() || !actual.computations.empty() ||
+        source.bodies.size() != actual.bodies.size() ||
+        before.getBody().front().getOperations().size() !=
+            after.getBody().front().getOperations().size())
+      return false;
+    SymbolTable symbols(after);
+    for (auto &definition : before.getBody().front()) {
+      if (!charge())
+        return false;
+      auto *observed =
+          symbols.lookup(SymbolTable::getSymbolName(&definition).getValue());
+      // Includes exact callable types, native binding arguments, selected
+      // implementations, ABI annotations, origin and region markers.
+      if (!observed || observed->getName() != definition.getName() ||
+          observed->getAttrDictionary() != definition.getAttrDictionary())
+        return false;
+      definitions[&definition] = observed;
+    }
+    for (auto function : before.getBody().front().getOps<func::FuncOp>()) {
+      auto observed = cast<func::FuncOp>(definitions.lookup(function));
+      auto expectedBody = source.bodies.find(function.getSymName().str());
+      auto observedBody = actual.bodies.find(observed.getSymName().str());
+      if (expectedBody == source.bodies.end() ||
+          observedBody == actual.bodies.end() ||
+          !body(function, observed, expectedBody->second, observedBody->second))
+        return false;
+    }
+    return true;
+  }
+};
 } // namespace
 
 OwningOpRef<mlir::ModuleOp>
@@ -183,12 +331,9 @@ LogicalResult verifyScheduleLowering(mlir::ModuleOp schedule,
     return finish(false);
   uint64_t standalone = 1000000;
   auto &remaining = shared ? *shared : standalone;
-  if (!chargeCopy(schedule, remaining) || !chargeCopy(candidate, remaining)) {
-    outcome = {finite::VerificationStatus::RequiredCapacity,
-               "schedule checking capacity",
-               CapacityCause{WorkOwner::AlgorithmChecking}};
+  if (!inspectForComparison(schedule, remaining, outcome) ||
+      !inspectForComparison(candidate, remaining, outcome))
     return finish(false);
-  }
   if (failed(verifyScheduledRecipeOutput(schedule)) ||
       failed(verifyRecipeOutput(candidate)))
     return finish(false);
@@ -196,27 +341,20 @@ LogicalResult verifyScheduleLowering(mlir::ModuleOp schedule,
       cast<protocol_ir::ProtocolModuleOp>(schedule.getBody()->front());
   auto after =
       cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
-  SymbolTable symbols(after);
-  if (before.getBody().front().getOperations().size() !=
-      after.getBody().front().getOperations().size())
-    return finish(false);
-  for (auto &definition : before.getBody().front()) {
-    auto *actual =
-        symbols.lookup(SymbolTable::getSymbolName(&definition).getValue());
-    if (!actual || actual->getName() != definition.getName() ||
-        actual->getAttrDictionary() != definition.getAttrDictionary())
-      return finish(false);
-  }
-  auto expected = protocol::readScheduledExecutionDefinitions(before);
+  auto expected = protocol::readScheduledExecutionClosure(before);
   if (!expected) {
     consumeError(expected.takeError());
     return finish(false);
   }
-  if (auto error =
-          protocol::verifySourceExecutionDefinitions(after, *expected)) {
-    consumeError(std::move(error));
+  // Numerical candidates still use source completion (exec.returned). Final
+  // executable publication introduces exec.complete at the owning boundary.
+  // verifyRecipeOutput above separately requires all requests to be resolved.
+  auto actual = protocol::readSourceExecutionClosure(after);
+  if (!actual) {
+    consumeError(actual.takeError());
     return finish(false);
   }
-  return finish(true);
+  return finish(NativeScheduleComparison(*expected, *actual, remaining, outcome)
+                    .run(before, after));
 }
 } // namespace zkc::computation

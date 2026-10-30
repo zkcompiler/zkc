@@ -1,6 +1,7 @@
 #include "NativePlanTypes.h"
 #include "mlir/IR/Builders.h"
 #include "zkc/Dialect/Data/Variant.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
@@ -44,10 +45,11 @@ Expected<Type> defaultPlanType(Type logical) {
   // equations can still select a complete layout. Keep their diagnostics in
   // the returned error so a successful later selection emits no false error.
   std::string detail;
-  ScopedDiagnosticHandler capture(logical.getContext(), [&](Diagnostic &value) {
-    detail += value.str();
-    return success();
-  });
+  zkc::diagnostics::ScopedThreadDiagnosticHandler capture(
+      logical.getContext(), [&](Diagnostic &value) {
+        detail += value.str();
+        return success();
+      });
   auto emit = [&] { return emitError(UnknownLoc::get(logical.getContext())); };
   auto type = defaultPhysicalType(emit, logical);
   if (!type)

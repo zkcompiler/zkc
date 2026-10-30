@@ -16,7 +16,8 @@ mlir::LogicalResult
 formCalculation(mlir::func::FuncOp wrapper, mlir::Operation *sourceOwner,
                 MathematicalSelectionPolicy policy,
                 std::optional<CalculationGuard> guard = std::nullopt);
-// Charge operations and SSA slots before copying a transient closure/body.
+// Iteratively bound nesting and charge operations, regions, blocks and SSA
+// slots before recursively verifying or copying a transient closure/body.
 bool chargeCopy(mlir::Operation *, uint64_t &remaining,
                 std::optional<CapacityCause> *capacity = nullptr);
 // Independent exact comparison of original dependency bodies and domains.

@@ -1068,7 +1068,7 @@ int main() {
                 exchange(call.getOperandsMutable().slice(
                     loop ? 3 : 1, call.getNumOperands() - (loop ? 3 : 1)));
               else if (auto match = dyn_cast<exec::MatchOp>(op))
-                exchange(match.getCapturesMutable());
+                exchange(match.getForwardedMutable()[1]);
             });
             require(succeeded(verify(*actual)),
                     "same-type capture mutation malformed");

@@ -8,6 +8,7 @@
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Mathematical.h"
@@ -110,7 +111,7 @@ class Emitter {
       }
       if (const auto *polynomial = leaf.polynomial()) {
         std::string diagnostics;
-        mlir::ScopedDiagnosticHandler handler(
+        zkc::diagnostics::ScopedThreadDiagnosticHandler handler(
             &context, [&](mlir::Diagnostic &diagnostic) {
               raw_string_ostream stream(diagnostics);
               diagnostic.print(stream);

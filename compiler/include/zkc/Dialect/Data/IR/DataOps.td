@@ -48,12 +48,14 @@ def Data_DomainYieldOp : Op<DataDialect, "domain_yield",
     [Terminator, HasParent<"::zkc::data::DomainOp">]> {
   let arguments = (ins Domain:$input);
 }
-def Data_BoundedAtOp : Op<DataDialect, "bounded_at", [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+// Reads have no memory effects, but their totality depends on contextual bound
+// evidence. Generic speculation cannot move them outside that evidence's scope.
+def Data_BoundedAtOp : Op<DataDialect, "bounded_at", [NoMemoryEffect, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
   let arguments = (ins AnyType:$input, UI64:$index);
   let results = (outs AnyType:$output);
   let hasVerifier = 1;
 }
-def Data_BoundedMatrixAtOp : Op<DataDialect, "bounded_matrix_at", [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+def Data_BoundedMatrixAtOp : Op<DataDialect, "bounded_matrix_at", [NoMemoryEffect, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
   let arguments = (ins FieldMatrix:$input, UI64:$row, UI64:$column);
   let results = (outs AnyType:$output);
   let hasVerifier = 1;
@@ -131,8 +133,9 @@ def Data_ProjectOp : Op<DataDialect, "project"> {
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 def Data_MatchOp : Op<DataDialect, "match", [Terminator,
     DeclareOpInterfaceMethods<BranchOpInterface>]> {
-  let arguments = (ins DataValue:$input, Variadic<AnyType>:$captures,
-                       StrArrayAttr:$alternatives);
+  let arguments = (ins DataValue:$input,
+    VariadicOfVariadic<AnyType, "successor_operand_segments">:$forwarded,
+    DenseI32ArrayAttr:$successor_operand_segments, StrArrayAttr:$alternatives);
   let successors = (successor VariadicSuccessor<AnySuccessor>:$arms);
   let hasVerifier = 1;
 }

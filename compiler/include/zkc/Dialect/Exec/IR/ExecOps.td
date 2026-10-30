@@ -95,7 +95,9 @@ def Exec_VariantOp : Op<ExecDialect, "variant"> {
 def Exec_MatchOp : Op<ExecDialect, "match", [Terminator,
     DeclareOpInterfaceMethods<BranchOpInterface>]> {
   let arguments = (ins RuntimeScope:$scope, AnyType:$input,
-    Variadic<AnyType>:$captures, StrArrayAttr:$alternatives, StrAttr:$site);
+    VariadicOfVariadic<AnyType, "successor_operand_segments">:$forwarded,
+    DenseI32ArrayAttr:$successor_operand_segments,
+    StrArrayAttr:$alternatives, StrAttr:$site);
   let successors = (successor AnySuccessor:$stopped,
                               VariadicSuccessor<AnySuccessor>:$arms);
   let hasVerifier = 1;
@@ -126,7 +128,9 @@ def Exec_FailureOp : Op<ExecDialect, "failed"> {
 }
 def Exec_DispatchOp : Op<ExecDialect, "dispatch", [Terminator,
     DeclareOpInterfaceMethods<BranchOpInterface>]> {
-  let arguments = (ins ExecOutcome:$outcome);
+  let arguments = (ins ExecOutcome:$outcome,
+    VariadicOfVariadic<AnyType, "successor_operand_segments">:$forwarded,
+    DefaultValuedAttr<DenseI32ArrayAttr, "{0, 0}">:$successor_operand_segments);
   let successors = (successor AnySuccessor:$returned, AnySuccessor:$stopped);
   let hasVerifier = 1;
 }

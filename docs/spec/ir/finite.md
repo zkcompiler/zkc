@@ -174,7 +174,11 @@ accepts an `in_bounds` assertion. Their operation verifiers check local attribut
 and types. The enclosing symbol closure establishes semantic bounds after helper
 structure has been verified, including units without a finite computation.
 Verifying an isolated access is therefore not whole-program admission. Private
-helpers may declare parameter relations:
+helpers may declare parameter relations. These reads advertise no memory
+effects, so admitted mathematical expressions may be shared or erased. They
+do not advertise context-free speculation: moving a read outside the scope of
+its bound evidence requires a new derivation, even if its operands dominate.
+Parameter relations have the following form:
 
 ```mlir
 data.preconditions = [#data.index_bound<indexArg, containerArg, axis>,

@@ -11,18 +11,42 @@ using namespace llvm;
 namespace zkc::computation {
 bool chargeCopy(Operation *body, uint64_t &remaining,
                 std::optional<CapacityCause> *capacity) {
-  auto walk = body->walk([&](Operation *op) {
-    uint64_t cost = 1 + op->getNumOperands() + op->getNumResults();
+  if (!body)
+    return false;
+  auto charge = [&](uint64_t cost) {
     if (cost > remaining) {
       if (capacity)
         *capacity =
             CapacityCause{WorkOwner::AlgorithmExpansion, cost, remaining};
-      return WalkResult::interrupt();
+      return false;
     }
     remaining -= cost;
-    return WalkResult::advance();
-  });
-  return !walk.wasInterrupted();
+    return true;
+  };
+  // This preflight can precede recursive verification or cloning. Bound both
+  // nesting and empty structural inventories, not just executable operations.
+  SmallVector<std::pair<Operation *, unsigned>> pending{{body, 0}};
+  while (!pending.empty()) {
+    auto [op, depth] = pending.pop_back_val();
+    if (depth > 128 || !charge(1 + op->getNumOperands() + op->getNumResults()))
+      return false;
+    for (auto &region : op->getRegions()) {
+      if (!charge(1))
+        return false;
+      for (auto &block : region) {
+        if (!charge(1 + block.getNumArguments()))
+          return false;
+        for (auto &child : block) {
+          if (pending.size() >= remaining) {
+            charge(pending.size() + 1);
+            return false;
+          }
+          pending.emplace_back(&child, depth + 1);
+        }
+      }
+    }
+  }
+  return true;
 }
 namespace {
 // This is structural substitution only: no folding, DCE, polynomial rewrite,

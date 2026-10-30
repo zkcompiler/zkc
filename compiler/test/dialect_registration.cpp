@@ -20,6 +20,15 @@ void check(mlir::MLIRContext &context, llvm::StringRef name) {
 } // namespace
 
 int main() {
+  // Loading Polynomial alone must initialize storage used by its verifiers,
+  // even when neither dependency has appeared in parsed input.
+  mlir::MLIRContext minimal;
+  minimal.getOrLoadDialect<zkc::poly::PolynomialDialect>();
+  check<zkc::algebra::AlgebraDialect>(minimal, "algebra");
+  check<zkc::data::DataDialect>(minimal, "data");
+  require(!minimal.getLoadedDialect("runtime"));
+  require(!minimal.getLoadedDialect("exec"));
+
   mlir::DialectRegistry nativeRegistry;
   zkc::registerDialects(nativeRegistry);
   require(!nativeRegistry.getDialectAllocator("table"));
