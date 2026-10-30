@@ -260,6 +260,7 @@ class Driver(Runner):
 
         parts = [f"import {glue_module}", "import Zkc.Construction.Encoding",
                  "import ZkcTools.ConstructionBindings.Admission", "import Tests.ConnectionRefusal",
+                 "open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm",
                  "set_option maxRecDepth 50000", "set_option maxHeartbeats 16000000",
                  "set_option linter.unusedTactic false",
                  strip_header(structured.render(original, "Fresh.Original")),
