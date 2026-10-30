@@ -36,7 +36,14 @@ Runtime admission now interprets that table instead of hand-maintained signature
 history and permission copies; native domain support and physical installation
 remain explicit. Native catalog type observations use MLIR type interfaces and
 typed static arguments. Sequence and fixed-vector formation now inspect native
-structure and catalog permissions, independently of byte-format limits. Native
+structure and catalog permissions, independently of byte-format limits. Represented
+type formation now checks native logical children, all variant alternatives and
+exact installed dense layouts. Callable declarations and scoped execution
+operations use this same structural check, including values built directly by
+C++ clients. Installation patterns carry typed arguments and child layouts;
+native matching no longer serializes the caller's type. Finite-domain formation
+also uses native Copy/Drop permissions. Target availability and byte-publication
+limits remain separate checks. Native
 construction callbacks and logical signature derivation now use these typed
 arguments directly, including complete-Type ports, projections and numerical
 masks. Runtime bindings now store typed static arguments and the actual callable

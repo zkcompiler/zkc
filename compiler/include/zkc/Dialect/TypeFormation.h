@@ -16,6 +16,21 @@ mlir::LogicalResult
 verifyLogicalType(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
                   mlir::Type type,
                   LogicalTypePermissions *permissions = nullptr);
+/// Verify a represented value's exact logical instance and ordered physical
+/// children directly. Does not select defaults, authorize an implementation,
+/// or impose byte-profile limits. Also used before interning the parent.
+mlir::LogicalResult
+verifyRepresentedType(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
+                      mlir::Type logical, llvm::StringRef representation,
+                      llvm::ArrayRef<mlir::Type> children);
+/// Form either a logical value or its exact represented carrier. Callers must
+/// separately enforce uniform stage and their supported operation profile.
+mlir::LogicalResult
+verifyValueType(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
+                mlir::Type type);
+/// Erase only the outer representation. This operation grants no formation,
+/// stage admission or permission to reinterpret a value at runtime.
+mlir::Type logicalValueType(mlir::Type type);
 /// Verify constructor parameters before interning the parent native type.
 /// This avoids recursively constructing a type from its own verifier.
 mlir::LogicalResult verifyLogicalTypeApplication(

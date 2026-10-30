@@ -29,6 +29,8 @@ function(zkc_source_project target manifest)
   target_compile_definitions(${target} PRIVATE ZKC_SOURCE_PROJECT="${output}")
 endfunction()
 
+add_zkc_test(representation_formation IR representation-formation)
+mlir_target_link_libraries(zkc-representation_formation-test PRIVATE MLIRAsmParser)
 add_zkc_test(role_assembly Compiler role-assembly)
 add_zkc_test(algebra_constants IR algebra-constants)
 mlir_target_link_libraries(zkc-algebra_constants-test PRIVATE MLIRParser MLIRTransformUtils MLIRTensorDialect)

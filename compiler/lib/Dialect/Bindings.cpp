@@ -13,6 +13,7 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/TypeAdapters/Support.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
 #include <mutex>
@@ -523,6 +524,8 @@ LogicalResult runtime::BindingOp::verify() {
           (represented ? represented.getLogical() : port) != value)
         return refuse(
             "actual value ports must have one stage and exact catalog erasure");
+      if (failed(verifyValueType([&] { return emitOpError(); }, port)))
+        return failure();
       stage = bool(represented);
     }
   if (protocol::authoringStage(getContract()) ==

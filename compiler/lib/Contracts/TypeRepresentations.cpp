@@ -23,33 +23,43 @@ llvm::Error validateAppliedTypeRepresentations(
                  c == '/';
         }))
       return error("representation-identity");
-    for (auto [pattern, parameter] :
+    for (const auto &[pattern, parameter] :
          llvm::zip(entry.arguments, declaration->parameters)) {
+      const auto &value = pattern.argument;
       switch (parameter.kind) {
-      case StaticKind::Type:
-        if (pattern.kind != TypeArgument::Kind::Type || pattern.maximum ||
-            pattern.minimum || !staticIdentityMatches("Type", pattern.exact))
+      case StaticKind::Type: {
+        if (value.kind != TypeArgument::Kind::Type || !value.type ||
+            !value.domain.empty() || value.natural || pattern.maximum ||
+            pattern.minimum)
+          return error("representation-pattern");
+        auto type = parseBoundType(value.type->spelling(), false);
+        if (!type) {
+          llvm::consumeError(type.takeError());
+          return error("representation-pattern");
+        }
+        if (!(*type == *value.type))
           return error("representation-pattern");
         break;
+      }
       case StaticKind::Domain:
-        if (pattern.kind != TypeArgument::Kind::Domain || pattern.maximum ||
-            pattern.minimum ||
-            !staticIdentityMatches(parameter.sort, pattern.exact))
+        if (value.kind != TypeArgument::Kind::Domain || value.type ||
+            value.natural || pattern.maximum || pattern.minimum ||
+            !staticIdentityMatches(parameter.sort, value.domain))
           return error("representation-pattern");
         break;
       case StaticKind::Nat:
-        if (pattern.kind != TypeArgument::Kind::Nat || !pattern.exact.empty() ||
-            pattern.minimum > pattern.maximum ||
-            !staticIdentityMatches("Nat", std::to_string(pattern.maximum)))
+        if (value.kind != TypeArgument::Kind::Nat || !value.domain.empty() ||
+            value.type || value.natural || pattern.minimum > pattern.maximum ||
+            pattern.maximum > 1048576)
           return error("representation-pattern");
         break;
       }
     }
     std::vector<std::string> arguments;
     for (const auto &pattern : entry.arguments)
-      arguments.push_back(pattern.kind == TypeArgument::Kind::Nat
+      arguments.push_back(pattern.argument.kind == TypeArgument::Kind::Nat
                               ? std::to_string(pattern.minimum)
-                              : pattern.exact.str());
+                              : pattern.argument.spelling());
     auto logical = applyBoundType(entry.constructor, arguments);
     if (!logical) {
       llvm::consumeError(logical.takeError());
@@ -58,12 +68,12 @@ llvm::Error validateAppliedTypeRepresentations(
     auto schemas = logicalChildren(*logical);
     if (!schemas)
       return schemas.takeError();
-    auto child = parseBoundType(entry.childType, true);
+    auto child = parseBoundType(entry.childType.spelling(), true);
     if (!child) {
       llvm::consumeError(child.takeError());
       return error("representation-pattern");
     }
-    if (schemas->size() != 1 ||
+    if (!(*child == entry.childType) || schemas->size() != 1 ||
         !(erasePhysicalType(*child) == schemas->front()))
       return error("representation-pattern");
   }
@@ -75,10 +85,10 @@ llvm::Error validateAppliedTypeRepresentations(
       bool overlaps = llvm::all_of(
           llvm::zip(entry.arguments, other.arguments), [](const auto &pair) {
             const auto &[left, right] = pair;
-            return left.kind == TypeArgument::Kind::Nat
+            return left.argument.kind == TypeArgument::Kind::Nat
                        ? left.minimum <= right.maximum &&
                              right.minimum <= left.maximum
-                       : left.exact == right.exact;
+                       : left.argument == right.argument;
           });
       if (overlaps && entry.representation == other.representation)
         return error("representation-duplicate");
@@ -90,24 +100,38 @@ llvm::Error validateAppliedTypeRepresentations(
 }
 
 llvm::ArrayRef<AppliedTypeRepresentation> appliedTypeRepresentations() {
+  static const BoundType koalaBear{"field", "koala-bear", {}};
+  static const BoundType blsScalar{"field", "bls12-381.fr", {}};
   static const TypeArgumentPattern koalaBearVector[] = {
-      {TypeArgument::Kind::Type, "field:koala-bear", 0},
-      {TypeArgument::Kind::Nat, {}, 1048576}};
+      {TypeArgument::typeArgument(koalaBear)},
+      {TypeArgument::naturalArgument(0), 1048576}};
   static const TypeArgumentPattern fieldArray[] = {
-      {TypeArgument::Kind::Domain, "bls12-381.fr", 0},
-      {TypeArgument::Kind::Nat, {}, 1048576, 0}};
+      {TypeArgument::domainArgument("bls12-381.fr")},
+      {TypeArgument::naturalArgument(0), 1048576}};
   static const TypeArgumentPattern blsVector[] = {
-      {TypeArgument::Kind::Type, "field:bls12-381.fr", 0},
-      {TypeArgument::Kind::Nat, {}, 1048576}};
+      {TypeArgument::typeArgument(blsScalar)},
+      {TypeArgument::naturalArgument(0), 1048576}};
   static const AppliedTypeRepresentation values[] = {
-      {"field_array", fieldArray, "arkworks.field-array/0", true,
-       "field:bls12-381.fr@arkworks.fr/0"},
-      {"field_array", fieldArray, "blst/field-array", false,
-       "field:bls12-381.fr@blst/fr"},
-      {"fixed_vector", blsVector, "blst/fixed-vector", false,
-       "field:bls12-381.fr@blst/fr"},
-      {"fixed_vector", koalaBearVector, "plonky3.fixed-vector/0", true,
-       "field:koala-bear@plonky3.koala-bear/0"}};
+      {"field_array",
+       fieldArray,
+       "arkworks.field-array/0",
+       true,
+       {"field", "bls12-381.fr", "arkworks.fr/0"}},
+      {"field_array",
+       fieldArray,
+       "blst/field-array",
+       false,
+       {"field", "bls12-381.fr", "blst/fr"}},
+      {"fixed_vector",
+       blsVector,
+       "blst/fixed-vector",
+       false,
+       {"field", "bls12-381.fr", "blst/fr"}},
+      {"fixed_vector",
+       koalaBearVector,
+       "plonky3.fixed-vector/0",
+       true,
+       {"field", "koala-bear", "plonky3.koala-bear/0"}}};
   static const bool validated = [] {
     if (auto e = validateAppliedTypeRepresentations(values))
       llvm::report_fatal_error(
@@ -130,7 +154,7 @@ appliedTypeRepresentation(const BoundType &type, llvm::StringRef name) {
     bool matches = true;
     for (auto [pattern, argument] :
          llvm::zip(entry.arguments, type.arguments)) {
-      if (pattern.kind != argument.kind) {
+      if (pattern.argument.kind != argument.kind) {
         matches = false;
         break;
       }
@@ -138,7 +162,7 @@ appliedTypeRepresentation(const BoundType &type, llvm::StringRef name) {
         matches &= pattern.minimum <= argument.natural &&
                    argument.natural <= pattern.maximum;
       else
-        matches &= argument.spelling() == pattern.exact;
+        matches &= argument == pattern.argument;
     }
     if (!matches)
       continue;

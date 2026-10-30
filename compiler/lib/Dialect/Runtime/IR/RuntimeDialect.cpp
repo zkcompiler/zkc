@@ -2,11 +2,11 @@
 #include "mlir/IR/DialectImplementation.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/ResourceUnit.h"
-#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeAttrs.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/TypeAdapters.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "llvm/ADT/TypeSwitch.h"
 using namespace mlir;
 #include "zkc/Dialect/Runtime/IR/runtimeDialect.cpp.inc"
@@ -71,13 +71,13 @@ Type zkc::runtime::RepresentedType::parse(AsmParser &parser) {
   }
   if (parser.parseGreater())
     return {};
-  auto type = get(parser.getContext(), logical, representation, children);
-  auto admitted = zkc::protocol::encodeBoundType(type, true);
-  if (!admitted) {
-    parser.emitError(parser.getNameLoc(), llvm::toString(admitted.takeError()));
-    return {};
-  }
-  return type;
+  return getChecked([&] { return parser.emitError(parser.getNameLoc()); },
+                    parser.getContext(), logical, representation, children);
+}
+LogicalResult zkc::runtime::RepresentedType::verify(
+    llvm::function_ref<InFlightDiagnostic()> emit, Type logical,
+    StringRef representation, ArrayRef<Type> children) {
+  return verifyRepresentedType(emit, logical, representation, children);
 }
 void zkc::runtime::RepresentedType::print(AsmPrinter &printer) const {
   printer << "<" << getLogical() << ", ";

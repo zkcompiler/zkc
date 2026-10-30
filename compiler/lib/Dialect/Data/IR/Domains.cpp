@@ -1,8 +1,7 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Analysis/NativeTypes.h"
-#include "zkc/Contracts/TypeProperties.h"
-#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "llvm/ADT/DenseSet.h"
 using namespace mlir;
 namespace zkc::data {
@@ -49,12 +48,10 @@ LogicalResult DomainType::verify(function_ref<InFlightDiagnostic()> emit,
   if (items.empty() || items.size() > 1024)
     return emit() << "expected between one and 1024 domain items";
   for (auto type : items) {
-    auto bound = protocol::encodeBoundType(type, false);
-    if (!bound) {
-      llvm::consumeError(bound.takeError());
-      return emit() << "domain items must be canonical native data";
-    }
-    if (!protocol::duplicable(*bound) || !protocol::discardable(*bound))
+    LogicalTypePermissions permissions;
+    if (failed(verifyLogicalType(emit, type, &permissions)))
+      return failure();
+    if (!permissions.copy || !permissions.drop)
       return emit() << "domain items must permit Copy and Drop";
   }
   return success();
@@ -68,12 +65,11 @@ LogicalResult DomainOp::verifyRegions() {
       (*this)->getAttrs().size() != 3)
     return refuse(*this, "expected private isolated typed domain declaration");
   for (auto type : signature.getInputs()) {
-    auto bound = protocol::encodeBoundType(type, false);
-    if (!bound) {
-      llvm::consumeError(bound.takeError());
-      return refuse(*this, "domain arguments must have native encoding");
-    }
-    if (!protocol::duplicable(*bound) || !protocol::discardable(*bound))
+    LogicalTypePermissions permissions;
+    if (failed(verifyLogicalType([&] { return emitOpError(); }, type,
+                                 &permissions)))
+      return failure();
+    if (!permissions.copy || !permissions.drop)
       return refuse(*this, "domain arguments must be native Copy/Drop values");
   }
   if (signature.getNumInputs() > 1024 ||

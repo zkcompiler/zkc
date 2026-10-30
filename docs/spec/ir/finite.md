@@ -17,6 +17,9 @@ Domain formation is bounded to 1024 arguments/items, 4096 constructor-body
 operations and constructor depth 64. Static reference closure is bounded to depth
 64 and 100000 visits; dependency analysis uses a separate bounded work budget.
 Exhausting analysis work refuses the input rather than asserting a result.
+Arguments and items must be formed logical types permitting Copy and Drop.
+Formation inspects their native structure and every variant alternative;
+byte publication and target representation remain separate admission checks.
 
 A private `data.domain` symbol has a `function_type` from native arguments
 `A...` to one `!data.domain<I...>`. Its isolated single block has arguments

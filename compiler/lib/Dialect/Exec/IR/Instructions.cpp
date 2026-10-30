@@ -4,6 +4,7 @@
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 
 using namespace mlir;
 namespace zkc::exec {
@@ -19,23 +20,27 @@ bool admitted(TypeRange inputs, TypeRange outputs) {
       if (stage && *stage != represented)
         return false;
       stage = represented;
-      auto bound = protocol::encodeBoundType(type, represented);
-      if (!bound) {
-        llvm::consumeError(bound.takeError());
+      if (failed(verifyValueType(
+              [&] {
+                auto diagnostic = emitError(UnknownLoc::get(type.getContext()));
+                diagnostic.abandon();
+                return diagnostic;
+              },
+              type)))
         return false;
-      }
     }
   return true;
 }
 bool kind(Type type, StringRef expected) {
-  auto bound =
-      protocol::encodeBoundType(type, isa<runtime::RepresentedType>(type));
-  if (!bound) {
-    llvm::consumeError(bound.takeError());
+  if (!admitted({type}, {}))
     return false;
-  }
-  return bound->kind == expected;
+  auto logical = logicalValueType(type);
+  auto interface = dyn_cast<CatalogTypeInterface>(logical);
+  auto application =
+      interface ? interface.getCatalogApplication() : std::nullopt;
+  return application && application->constructor == expected;
 }
+
 } // namespace
 LogicalResult ApplyOp::verifySymbolUses(SymbolTableCollection &symbols) {
   auto *table = SymbolTable::getNearestSymbolTable(*this);

@@ -98,6 +98,23 @@ Recursive Host layouts support standard MLIR attribute aliases. Their printed
 nesting therefore need not grow with source schema depth. Aliases change no
 layout identity, logical depth allowance or parser resource ceiling; native
 formation still inspects the complete expanded structure.
+Logical formation checks typed catalog arguments and all nominal variant
+alternatives. A represented carrier additionally checks its exact logical type,
+representation identity and ordered represented children. Sequence and variant
+layouts retain every child representation; installed dense layouts constrain the
+complete child layout, not just the erased field. The checked represented-type
+constructor and parser use the same native structural verification. Type-only
+execution and finite-domain verifiers do not acquire byte-format limits by
+serializing their ports. Source, operation and target profiles remain separately
+admitted; forming a type does not install executable code or grant a wire codec.
+
+Applied representation patterns and their child layouts are typed installation
+facts. Native formation matches catalog type observations against those facts;
+it neither owns a duplicate representation table nor reparses a caller type.
+Expanded structural depth, occurrence and metadata limits apply even to shared,
+context-uniqued children. The independent program-type reader retains its own
+serialization bounds and exact layout checks.
+
 Canonical public spellings are encoded/decoded at format boundaries once,
 under explicit work limits. Keeping a stable public spelling is not a second
 internal schema or compatibility execution route.

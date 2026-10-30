@@ -39,48 +39,65 @@ void representationPatterns() {
       check(toString(std::move(result)) == expected,
             "unexpected representation refusal");
   };
+  auto domain = [](StringRef name) {
+    return TypeArgumentPattern{TypeArgument::domainArgument(name.str())};
+  };
+  auto type = [](BoundType value) {
+    return TypeArgumentPattern{TypeArgument::typeArgument(std::move(value))};
+  };
+  auto range = [](uint64_t minimum, uint64_t maximum) {
+    return TypeArgumentPattern{TypeArgument::naturalArgument(0), maximum,
+                               minimum};
+  };
   validate(appliedTypeRepresentations());
-  StringRef blsChild = "field:bls12-381.fr@arkworks.fr/0";
-  const TypeArgumentPattern positive[] = {{Kind::Domain, "bls12-381.fr"},
-                                          {Kind::Nat, {}, 4, 1}};
-  const TypeArgumentPattern emptyRange[] = {{Kind::Domain, "bls12-381.fr"},
-                                            {Kind::Nat, {}, 0, 1}};
+  BoundType blsChild{"field", "bls12-381.fr", "arkworks.fr/0"};
+  const TypeArgumentPattern positive[] = {domain("bls12-381.fr"), range(1, 4)};
+  const TypeArgumentPattern emptyRange[] = {domain("bls12-381.fr"),
+                                            range(1, 0)};
   validate({{"field_array", positive, "test.array/0", true, blsChild}});
   validate({{"field_array", emptyRange, "test.array/0", true, blsChild}},
            "representation-pattern");
-  const TypeArgumentPattern later[] = {{Kind::Domain, "bls12-381.fr"},
-                                       {Kind::Nat, {}, 8, 5}};
-  const TypeArgumentPattern overlap[] = {{Kind::Domain, "bls12-381.fr"},
-                                         {Kind::Nat, {}, 8, 4}};
+  const TypeArgumentPattern later[] = {domain("bls12-381.fr"), range(5, 8)};
+  const TypeArgumentPattern overlap[] = {domain("bls12-381.fr"), range(4, 8)};
   validate({{"field_array", positive, "test.array/0", true, blsChild},
             {"field_array", later, "test.array/0", true, blsChild}});
   validate(
       {{"field_array", positive, "test.array/0", true, blsChild},
        {"field_array", overlap, "test.alternative-array/0", true, blsChild}},
       "representation-default");
-  const TypeArgumentPattern arguments[] = {{Kind::Type, "field:koala-bear"},
-                                           {Kind::Nat, {}, 1048576}};
-  AppliedTypeRepresentation row{"fixed_vector", arguments, "test.vector/0",
-                                true, "field:koala-bear@plonky3.koala-bear/0"};
+  BoundType koala{"field", "koala-bear", {}};
+  const TypeArgumentPattern arguments[] = {type(koala), range(0, 1048576)};
+  AppliedTypeRepresentation row{
+      "fixed_vector",
+      arguments,
+      "test.vector/0",
+      true,
+      {"field", "koala-bear", "plonky3.koala-bear/0"}};
   validate({row});
-  for (StringRef child :
-       {"", "field:koala-bear", "bool@arkworks.bool/0",
-        "field:koala-bear@blst/fr", "field:bls12-381.fr@blst/fr",
-        "field:koala-bear@plonky3.koala-bear/0[]"}) {
+  for (BoundType child :
+       {BoundType{}, koala, BoundType{"bool", {}, "arkworks.bool/0"},
+        BoundType{"field", "koala-bear", "blst/fr"},
+        BoundType{"field", "bls12-381.fr", "blst/fr"}}) {
     auto bad = row;
     bad.childType = child;
     validate({bad}, "representation-pattern");
   }
-  // Descriptor identities are opaque. An admitted child is an exact layout
-  // fact, independent of the name chosen for its parent representation.
-  validate({{"field_array", positive, "unrelated.array/0", false,
-             "field:bls12-381.fr@blst/fr"}});
-  for (StringRef constructor : {"missing", "resource_unit", "bool"}) {
-    auto bad = row;
+  auto bad = row;
+  bad.childType.physicalChildren =
+      std::make_shared<const std::vector<BoundType>>();
+  validate({bad}, "representation-pattern");
+  // Descriptor identities are opaque; child layout is an independent fact.
+  validate({{"field_array",
+             positive,
+             "unrelated.array/0",
+             false,
+             {"field", "bls12-381.fr", "blst/fr"}}});
+  for (StringRef constructor : {"missing", "field", "bool", "variant"}) {
+    bad = row;
     bad.constructor = constructor;
     validate({bad}, "representation-constructor");
   }
-  auto bad = row;
+  bad = row;
   bad.arguments = ArrayRef(arguments).take_front(1);
   validate({bad}, "representation-constructor");
   std::string tooLong(257, 'x');
@@ -90,34 +107,31 @@ void representationPatterns() {
     bad.representation = identity;
     validate({bad}, "representation-identity");
   }
-  for (TypeArgumentPattern argument :
-       {TypeArgumentPattern{Kind::Domain, "koala-bear"},
-        TypeArgumentPattern{Kind::Nat, {}, 4},
-        TypeArgumentPattern{Kind::Type, {}},
-        TypeArgumentPattern{Kind::Type, "field:missing"},
-        TypeArgumentPattern{Kind::Type, "fixed_vector<bool,04>"},
-        TypeArgumentPattern{Kind::Type,
-                            "field:koala-bear@plonky3.koala-bear/0"},
-        TypeArgumentPattern{Kind::Type, "field:koala-bear", 1}}) {
+  auto missingType = TypeArgumentPattern{{Kind::Type, {}, {}, 0}};
+  auto rangedType = type(koala);
+  rangedType.maximum = 1;
+  for (auto argument :
+       {domain("koala-bear"), range(0, 4), missingType,
+        type({"field", "missing", {}}),
+        type({"field", "koala-bear", "plonky3.koala-bear/0"}), rangedType}) {
     TypeArgumentPattern malformed[] = {argument, arguments[1]};
     bad = row;
     bad.arguments = malformed;
     validate({bad}, "representation-pattern");
   }
-  for (TypeArgumentPattern argument :
-       {TypeArgumentPattern{Kind::Type, "bool"},
-        TypeArgumentPattern{Kind::Nat, "4", 4},
-        TypeArgumentPattern{Kind::Nat, {}, 1048577},
-        TypeArgumentPattern{Kind::Nat, {}, UINT64_MAX}}) {
+  auto nonzeroNat = range(0, 4);
+  nonzeroNat.argument.natural = 4;
+  auto forgedNat = range(0, 4);
+  forgedNat.argument.domain = "4";
+  for (auto argument : {type({"bool", {}, {}}), nonzeroNat, forgedNat,
+                        range(0, 1048577), range(0, UINT64_MAX)}) {
     TypeArgumentPattern malformed[] = {arguments[0], argument};
     bad = row;
     bad.arguments = malformed;
     validate({bad}, "representation-pattern");
   }
-  // Atomic nominal carriers belong to the catalog. Applied registrations must
-  // not shadow that separate key space, even with a valid Domain identity.
-  for (StringRef domain : {"koala-bear", "bls12-381.g1", "missing", ""}) {
-    TypeArgumentPattern pattern{Kind::Domain, domain};
+  for (StringRef name : {"koala-bear", "bls12-381.g1", "missing", ""}) {
+    auto pattern = domain(name);
     validate({{"field", {pattern}, "test.field/0", true, blsChild}},
              "representation-constructor");
   }
@@ -130,43 +144,44 @@ void representationPatterns() {
   bad = row;
   bad.isDefault = false;
   validate({bad, bad}, "representation-duplicate");
-  TypeArgumentPattern zero[] = {arguments[0], {Kind::Nat, {}, 0}};
+  TypeArgumentPattern zero[] = {arguments[0], range(0, 0)};
   alternative.arguments = zero;
   validate({row, alternative});
   alternative.isDefault = true;
   validate({row, alternative}, "representation-default");
   alternative.representation = row.representation;
   validate({row, alternative}, "representation-duplicate");
-  TypeArgumentPattern distinct[] = {{Kind::Type, "field:bls12-381.fr"},
+  TypeArgumentPattern distinct[] = {type({"field", "bls12-381.fr", {}}),
                                     arguments[1]};
   alternative.arguments = distinct;
   alternative.childType = blsChild;
   validate({row, alternative});
-  distinct[0].exact = "fixed_vector<field:koala-bear,4>";
-  alternative.childType =
-      "fixed_vector<field:koala-bear,4>@plonky3.fixed-vector/0";
+  auto nested = accepts("fixed_vector<field:koala-bear,4>");
+  distinct[0] = type(nested);
+  auto physicalNested = defaultRepresentation(nested);
+  check(bool(physicalNested), "missing nested representation");
+  alternative.childType = *physicalNested;
   validate({row, alternative});
-  // Every selected descriptor requires its own exact physical child, even
-  // when a different provider admits the same logical scalar type.
   for (const auto &entry : appliedTypeRepresentations()) {
     std::vector<std::string> args;
     for (const auto &pattern : entry.arguments)
-      args.push_back(pattern.kind == Kind::Nat ? "4" : pattern.exact.str());
+      args.push_back(pattern.argument.kind == Kind::Nat
+                         ? "4"
+                         : pattern.argument.spelling());
     auto logical = applyBoundType(entry.constructor, args);
     check(bool(logical), "installed dense logical type refused");
-    auto child = parseBoundType(entry.childType, true);
-    check(bool(child), "descriptor child refused");
-    auto physical = physicalType(*logical, entry.representation, {*child});
+    auto physical =
+        physicalType(*logical, entry.representation, {entry.childType});
     check(bool(physical) && physical->physicalChildren &&
-              physical->physicalChildren->front() == *child,
+              physical->physicalChildren->front() == entry.childType,
           "exact descriptor child not preserved");
     for (StringRef wrong :
          {"field:bls12-381.fr@arkworks.fr/0", "field:bls12-381.fr@blst/fr",
           "field:koala-bear@plonky3.koala-bear/0"}) {
-      if (wrong == entry.childType)
-        continue;
       auto other = parseBoundType(wrong, true);
       check(bool(other), "wrong-child fixture is not independently admitted");
+      if (*other == entry.childType)
+        continue;
       auto refused = physicalType(*logical, entry.representation, {*other});
       check(!refused &&
                 toString(refused.takeError()) == "binding-representation",
@@ -174,6 +189,7 @@ void representationPatterns() {
     }
   }
 }
+
 } // namespace
 int main() {
   representationPatterns();

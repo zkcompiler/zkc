@@ -42,6 +42,7 @@ def RepresentedValue : TypeDef<RuntimeDialect, "Represented"> {
     StringRefParameter<"Installed representation">:$representation,
     OptionalArrayRefParameter<"::mlir::Type">:$children);
   let hasCustomAssemblyFormat = 1;
+  let genVerifyDecl = 1;
 }
 def RuntimeQuotientMatrix : TypeDef<RuntimeDialect, "QuotientMatrix"> {
   let mnemonic = "quotient_matrix";

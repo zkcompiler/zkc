@@ -241,13 +241,12 @@ int main() {
     for (const auto &rep : appliedTypeRepresentations()) {
       std::vector<std::string> args;
       for (const auto &arg : rep.arguments)
-        args.push_back(arg.kind == TypeArgument::Kind::Nat
+        args.push_back(arg.argument.kind == TypeArgument::Kind::Nat
                            ? std::to_string(arg.minimum)
-                           : arg.exact.str());
+                           : arg.argument.spelling());
       auto logical = take(applyBoundType(rep.constructor, args));
       auto physical =
-          take(physicalType(logical, rep.representation,
-                            {take(parseBoundType(rep.childType, true))}));
+          take(physicalType(logical, rep.representation, {rep.childType}));
       accept(CpuTarget().checkType(physical));
     }
     for (const auto &impl : installedImplementations().all())

@@ -454,10 +454,7 @@ Expected<BoundType> formPhysicalType(const BoundType &logical,
     const auto *descriptor = appliedTypeRepresentation(logical, representation);
     if (!descriptor)
       return error("binding-representation");
-    auto expected = parseBoundType(descriptor->childType, true);
-    if (!expected)
-      return expected.takeError();
-    if (children.size() != 1 || !(children[0] == *expected))
+    if (children.size() != 1 || !(children[0] == descriptor->childType))
       return error("binding-representation");
   } else if (logical.kind == "resource_unit") {
     if (representation != "logical.resource_unit/0")

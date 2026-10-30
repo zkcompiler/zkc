@@ -187,6 +187,7 @@ def main():
     private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Data/IR/Structure.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Analysis/FiniteCardinality.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Dialect/BindingTypeCache.h")
+    private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Algebra/ParameterSupport.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Exec/ExecutionDefinitions.h")
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/FiniteCardinality.h")
     private_headers["ZkcLanguage"].update(
