@@ -112,7 +112,10 @@ private:
   std::optional<Semantics::CallSignature>
   kernelSignature(const Expression &, std::vector<Type> &,
                   std::vector<std::string> &, std::vector<AssetReference> &);
+  static std::optional<Statement::Evaluation>
+      oracleEvaluation(Expression::Kind);
   std::optional<ValueId> oracle(const Expression &, unsigned);
+  std::optional<ValueId> assembleRoles(const Expression &, unsigned);
   std::optional<ValueId> oracleSequence(const Expression &, unsigned);
   std::optional<ValueId> intrinsic(const Expression &, unsigned);
   std::optional<Semantics::CallSignature>

@@ -117,3 +117,34 @@ def test_unused_communication_is_observable(toolchain, journal, directory):
     child = joint_package(json.loads(package.read_text()))
     assert child["original"].count('"protocol.exchange"') == 4
     run_layout(toolchain, journal, directory, package, pin)
+
+
+@pytest.mark.parametrize("flags", [(), ("--no-simplify",)])
+def test_role_assembly_preserves_different_components(toolchain, journal, directory, flags):
+    source = """pub protocol Schnorr roles(P, V)(
+    left: bool @P; right: bool @V
+) -> bool @(P, V):
+    mut result = @(V = right, P = left)
+    for i in 0..2:
+        result := @(P = result, V = result)
+    return result
+
+entry def Run(inputs: Schnorr::Inputs):
+    results <- Schnorr::run(inputs)
+    return results
+"""
+    package, pin = compile_layout(toolchain, journal, directory, source, flags)
+    child = joint_package(json.loads(package.read_text()))
+    assert child["original"].count('"protocol.assemble_roles"') == 2
+    assert '"protocol.exchange"' not in child["original"]
+    inputs = directory / "assembly-inputs.json"
+    inputs.write_text(json.dumps({"inputs": {"P": {"left": True}, "V": {"right": False}}}))
+    outputs = directory / "assembly-results.json"
+    report = journal.json([
+        toolchain.runtime, "--json", "run", f"--package={package}",
+        f"--sha256={pin}", f"--input={inputs}", f"--results={outputs}",
+    ])
+    assert report["status"] == "executed"
+    assert json.loads(outputs.read_text())["value"] == {
+        "P": {"result": True}, "V": {"result": False},
+    }

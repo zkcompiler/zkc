@@ -82,3 +82,11 @@ they do not prove the general source-elaboration judgment. Until Lean admits a
 fragment and proves its checker sound, `source.correspondence` and applicable
 exporter assumptions remain explicit. Supporting a new grammar does not restart
 this contract or require Lean to interpret the retired native elaborator.
+
+The [IR-relative claim boundary](../../assurance.md#ir-relative-security-claims)
+permits a claim about the exact original IR with frontend elaboration recorded
+as trusted. This independent checker is a strengthening of that claim, not a
+prerequisite for it. A claim of checked correspondence to authored source still
+requires the judgments above. Native validation and complete request reporting
+remain required; this scope distinction changes no checker rule, receipt status
+or security-transforming proof obligation.

@@ -1,4 +1,5 @@
 #include "LayoutReader.h"
+#include "OracleSyntax.h"
 #include "llvm/ADT/ScopeExit.h"
 #include <algorithm>
 using namespace llvm;
@@ -171,9 +172,46 @@ Expected<uint32_t> LayoutReader::expression(Id id, SyntaxDeclaration &decl) {
     if (!projected23)
       return projected23.takeError();
     auto index = std::move(*projected23);
-    decl.expressions[index].roles = std::move(availability);
+    auto &value = decl.expressions[index];
+    if (value.roles || (value.kind != Expression::Kind::Call &&
+                        value.kind != Expression::Kind::OracleSequenceEmpty))
+      return fail(id,
+                  "role mappings require a protocol call or empty oracle "
+                  "sequence; restrict a value on its binding",
+                  "source.roles");
+    value.roles = std::move(availability);
     decl.expressions[index].span = span(id);
     return index;
+  }
+  case K::RoleAssembly: {
+    auto list = parts(id, 1, 1);
+    if (!list)
+      return list.takeError();
+    result.kind = Expression::Kind::RoleAssembly;
+    if (children(list->front()).empty())
+      return fail(id, "role assembly requires at least one component",
+                  "source.roles");
+    for (auto component : children(list->front())) {
+      if (auto error = runtimeArgument(component))
+        return error;
+      if (children(component).size() != 2)
+        return fail(component, "role assembly requires Role = value",
+                    "source.roles");
+      auto pair = parts(component, 2, 2);
+      if (!pair)
+        return pair.takeError();
+      if (kind(pair->front()) != K::Name ||
+          between(pair->front(), pair->back()) != "=")
+        return fail(component, "role assembly requires Role = value",
+                    "source.roles");
+      auto label = name(pair->front());
+      if (!label)
+        return label.takeError();
+      result.labels.push_back(std::move(*label));
+      if (auto error = append(pair->back()))
+        return error;
+    }
+    break;
   }
   case K::Tuple:
   case K::Array:
@@ -435,8 +473,34 @@ Expected<uint32_t> LayoutReader::expression(Id id, SyntaxDeclaration &decl) {
       callee = application[0];
     }
     auto calleeNodes = children(callee);
+    std::optional<std::string> oracle;
     if (kind(callee) == K::Projection && calleeNodes.size() == 2 &&
-        between(calleeNodes[0], calleeNodes[1]) == ".") {
+        kind(calleeNodes[0]) == K::Name &&
+        tree.text(calleeNodes[0]) == "oracle") {
+      auto spelling = name(calleeNodes[1]);
+      if (!spelling)
+        return spelling.takeError();
+      oracle = std::move(*spelling);
+    } else if (kind(callee) == K::Name) {
+      auto spelling = name(callee);
+      if (!spelling)
+        return spelling.takeError();
+      StringRef qualified = *spelling;
+      if (qualified.consume_front("oracle::"))
+        oracle = qualified.str();
+    }
+    if (oracle) {
+      const auto *operation = oracleSyntax(*oracle);
+      if (!operation)
+        return fail(callee, "unknown oracle operation", "source.oracle-action");
+      if (children(call[1]).size() != operation->operands ||
+          result.arguments.size() != operation->parameters ||
+          !result.staticLabels.empty())
+        return fail(id, "oracle operation has incorrect arguments",
+                    "source.oracle-action");
+      result.kind = operation->kind;
+    } else if (kind(callee) == K::Projection && calleeNodes.size() == 2 &&
+               between(calleeNodes[0], calleeNodes[1]) == ".") {
       result.kind = Expression::Kind::MethodCall;
       auto projected69 = name(calleeNodes[1]);
       if (!projected69)
@@ -472,6 +536,9 @@ Expected<uint32_t> LayoutReader::expression(Id id, SyntaxDeclaration &decl) {
         return projected73.takeError();
       auto values = std::move(*projected73);
       if (values.size() == 2) {
+        if (oracle)
+          return fail(arg, "oracle operations use positional operands",
+                      "source.oracle-action");
         auto projected74 = name(values[0]);
         if (!projected74)
           return projected74.takeError();
@@ -482,6 +549,23 @@ Expected<uint32_t> LayoutReader::expression(Id id, SyntaxDeclaration &decl) {
       if (auto error = append(values.back()))
         return error;
     }
+    break;
+  }
+  case K::OracleSend: {
+    auto delivery = oracleSend(id, decl);
+    if (!delivery)
+      return delivery.takeError();
+    result = std::move(*delivery);
+    break;
+  }
+  case K::Query: {
+    auto query = parts(id, 2, 2);
+    if (!query)
+      return query.takeError();
+    result.kind = Expression::Kind::OracleQuery;
+    for (auto part : *query)
+      if (auto error = append(part))
+        return error;
     break;
   }
   case K::Binary:

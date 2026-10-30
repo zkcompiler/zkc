@@ -357,6 +357,12 @@ struct Restriction {
   ValueId input;
   std::vector<unsigned> roles;
 };
+/// Each operand supplies only its named role's component. This neither sends
+/// data nor asserts equality between components.
+struct RoleAssembly {
+  std::vector<ValueId> operands;
+  std::vector<unsigned> roles;
+};
 struct Body;
 struct ProtocolRepeat {
   std::vector<unsigned> roles;
@@ -465,11 +471,11 @@ struct ScopedBinding {
 };
 struct Operation {
   std::variant<MathValue, HelperCall, BulkApplication, Exchange, Restriction,
-               Construct, Projection, LocalPrimitive, Consume, LocalControl,
-               ProtocolApplication, ServiceQuery, Require, ProtocolRepeat,
-               ProtocolCompletion, ScopedInvoke, FiniteApplication,
-               FiniteComputation, HostInvocation, OracleSend, OracleQuery,
-               OracleContents, OracleRows, OracleForgetRows,
+               RoleAssembly, Construct, Projection, LocalPrimitive, Consume,
+               LocalControl, ProtocolApplication, ServiceQuery, Require,
+               ProtocolRepeat, ProtocolCompletion, ScopedInvoke,
+               FiniteApplication, FiniteComputation, HostInvocation, OracleSend,
+               OracleQuery, OracleContents, OracleRows, OracleForgetRows,
                OracleSequenceEmpty, OracleSequenceAppend, OracleSequenceAt,
                OracleSequenceLength>
       action;

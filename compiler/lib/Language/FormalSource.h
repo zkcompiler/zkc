@@ -68,6 +68,9 @@ struct FormalRoles {
 struct FormalAvailability {
   FormalNodeId value, roles;
 };
+struct FormalRoleAssembly {
+  std::vector<FormalNodeId> components;
+};
 struct FormalDeclaration {
   enum class Kind {
     Specification,
@@ -134,6 +137,13 @@ struct FormalSend {
 struct FormalQuery {
   FormalNodeId handle, position;
 };
+struct FormalOracleSend {
+  FormalNodeId delivery, kind;
+  std::optional<FormalNodeId> rows, maximum;
+};
+struct FormalQueryBody {
+  FormalNodeId parameters, body;
+};
 struct FormalQuantifier {
   bool existential;
   FormalNodeId variable, type, body;
@@ -152,14 +162,14 @@ struct FormalAttribute {
   FormalNodeId name;
   std::vector<FormalNodeId> arguments;
 };
-using FormalValue =
-    std::variant<FormalReference, FormalLiteral, FormalHole, FormalSequence,
-                 FormalArgument, FormalApplication, FormalMember,
-                 FormalOperator, FormalRoles, FormalAvailability,
-                 FormalDeclaration, FormalClause, FormalImport, FormalBinding,
-                 FormalReturn, FormalGuard, FormalIf, FormalMatch, FormalCase,
-                 FormalFor, FormalSend, FormalQuery, FormalQuantifier,
-                 FormalLambda, FormalReduction, FormalAttribute>;
+using FormalValue = std::variant<
+    FormalReference, FormalLiteral, FormalHole, FormalSequence, FormalArgument,
+    FormalApplication, FormalMember, FormalOperator, FormalRoles,
+    FormalAvailability, FormalRoleAssembly, FormalDeclaration, FormalClause,
+    FormalImport, FormalBinding, FormalReturn, FormalGuard, FormalIf,
+    FormalMatch, FormalCase, FormalFor, FormalSend, FormalQuery,
+    FormalOracleSend, FormalQueryBody, FormalQuantifier, FormalLambda,
+    FormalReduction, FormalAttribute>;
 struct FormalNode {
   source::Span span;
   FormalValue value;

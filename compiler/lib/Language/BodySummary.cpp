@@ -485,6 +485,7 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
                           std::is_same_v<T, ProtocolApplication> ||
                           std::is_same_v<T, HostInvocation> ||
                           std::is_same_v<T, Construct> ||
+                          std::is_same_v<T, RoleAssembly> ||
                           std::is_same_v<T, LocalPrimitive> ||
                           std::is_same_v<T, LocalControl>)
               operands = action.operands;

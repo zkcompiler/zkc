@@ -22,6 +22,9 @@ The development entry supports:
   and group domains.
 - Mathematical `def`, ordered `local def`, and Host `entry def`; named/static
   arguments, ordinary structural inference, and mathematical final expressions.
+- Oracle custody ports, ordered query and delivery, dynamic shape bounds,
+  holder and shape views, and bounded oracle sequences; see the
+  [oracle source profile](oracles.md) for exact coverage.
 - File and nested modules, ordinary imports, explicitly typed interface members
   and their native conformance, type aliases, associated types, records, enums,
   patterns, and native resource attributes.
@@ -76,6 +79,31 @@ roster order. The default maps equal role names, not declaration position in
 the caller. The substitution must be injective, available in the active roster,
 and compatible with every actual argument. It does not move data or insert sends.
 
+`@(P = delivered, V = sampled)` assembles a value from existing role
+components. Each entry selects its expression's component at that named role.
+The expressions have the same ordinary total shared type and permit `Copy`;
+the nonempty role list has no duplicates and lies within the active roster.
+Each selected component must already be available. Components are evaluated in
+written order. This pure expression neither communicates nor asserts that the
+components are equal. Oracle handles, managed services, custody and owner-local
+carriers are excluded, including inside ordinary aggregates. Generic assembly
+rechecks these data requirements after static substitution.
+
+For example, after `delivered <- send sampled to P`, the sender's `sampled`
+and receiver's `delivered` remain distinct values. An explicit
+`@(P = delivered, V = sampled)` can supply a family-wide parameter. Agreement
+under honest communication belongs to the applicable protocol proof.
+Each ordinary layout leaf lowers to `protocol.assemble_roles`; empty unit
+layouts have no physical leaves. Independent source/IR comparison checks every
+ordered operand/role pair. Participant projection selects the actual component
+and removes assembly before execution.
+
+Expression suffix roles are accepted only for protocol-call substitution and
+the holder/receiver family of `oracle.empty`. A second suffix refuses. To
+restrict an ordinary value's availability, annotate its binding, for example
+`selected: bool @P = shared`. An annotation on a literal, name, tuple, service
+query or oracle view is not silently discarded.
+
 A protocol loop without `roles(...)` uses its active enclosing roster, including
 a surrounding loop's subset. All selected roles must know the count. A missing
 `max` is inferred only from a literal upper bound in `0..N`; a runtime count still
@@ -92,9 +120,9 @@ attribute if bindings repeat in separate scopes. Renaming a default binder
 renames its site and invalidates the corresponding occurrence identity. Explicit
 returns and implicit result expressions cannot carry a site label.
 
-`ghost` actual arguments and holder/receiver arrows on ordinary native ports
-refuse at projection. Neither can silently become ordinary runtime arguments
-or shared availability. Oracle custody is admitted only by the oracle profile.
+`ghost` actual arguments refuse at projection. Holder/receiver arrows on
+ordinary data ports refuse during signature checking. Neither can silently become ordinary runtime arguments
+or shared availability. Oracle custody and actions use the [oracle source profile](oracles.md).
 
 ## Optional specifications
 
@@ -146,8 +174,8 @@ header and body passes. Exhaustion cannot create a checked partial program.
 
 The parser also recognizes forms outside this executable profile. They refuse
 at their semantic boundary, including shortened interface implementation
-binders, ghost runtime ports, schemes, oracle execution, multiple-recipient
-sends, scoped lambdas/reductions, and local notation declarations. Sections
+binders, ghost runtime ports, schemes, virtual oracle definitions, ordinary
+multiple-recipient sends, scoped lambdas/reductions, and local notation declarations. Sections
 currently group declarations; imports and notation belong to their enclosing
 module. A standalone bodyless protocol is rejected.
 

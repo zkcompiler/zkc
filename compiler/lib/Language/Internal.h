@@ -159,6 +159,7 @@ struct Expression {
     Map,
     DomainProduct,
     MethodCall,
+    RoleAssembly,
     OracleSend,
     OracleQuery,
     OracleContents,
@@ -361,6 +362,11 @@ struct FormalSyntax {
   bool isPublic = false;
   std::shared_ptr<const FormalSource> authored;
 };
+struct SyntaxOracleShape {
+  std::string port, dimension;
+  SyntaxType bound;
+  Span span;
+};
 struct SyntaxDeclaration {
   std::vector<FormalSyntax> formalSyntax;
   /// Private link to the frozen authored header, assigned before expansion.
@@ -385,9 +391,13 @@ struct SyntaxDeclaration {
   Span span;
   std::vector<std::string> roles;
   std::vector<SyntaxPort> inputs, outputs, services, scopedInputs, domainInputs;
+  std::vector<SyntaxOracleShape> oracleShapes;
   std::vector<Declaration::InputSlot> inputOrder;
   std::vector<Expression> expressions;
   std::optional<DeferredBody> deferredBody;
+  /// Declaration keyword location used to find a layout body after reparsing.
+  /// The complete authored span may also include preceding attributes.
+  uint32_t layoutDeclarationStart = 0;
   // Root body is kept in the first slot; nested bodies use stable indices.
   std::vector<SyntaxBody> bodies;
   // Resolved lexical identities are private elaboration data, never serialized.

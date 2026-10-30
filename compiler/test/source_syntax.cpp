@@ -116,7 +116,7 @@ void corpus() {
   check(metered.workUsed() > metered.tokens().size() &&
             metered.workUsed() <= Budget{}.work,
         "syntax work is available for project aggregate charging");
-  check(files == 13, "complete accepted example corpus");
+  check(files == 15, "complete accepted example corpus");
 }
 void designCases() {
   auto buffer =
@@ -230,6 +230,14 @@ void grammar() {
         "cancelled parse remains cancelled");
 }
 void formattingCases() {
+  auto assembly =
+      read("protocol Join roles(P,V)(a:bool@P,b:bool@V)->bool@(P,V):\n"
+           "    return @(V=b,P=a)\n");
+  auto assemblyFormat = format(assembly);
+  check(assembly.status() == Status::Complete && assemblyFormat.complete &&
+            equivalent(assembly, read(assemblyFormat.text)) &&
+            assemblyFormat.text.find("@(V = b, P = a)") != std::string::npos,
+        "role assembly formats without changing ordered components");
   auto original = read("protocol Check roles(P,V)(value:bool@P)->bool@V:\n    "
                        "guard@P value\n    return value\n");
   auto formatted = format(original);

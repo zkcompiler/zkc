@@ -49,6 +49,8 @@ class LayoutReader {
   llvm::Expected<std::shared_ptr<const NotationDescriptor>>
   descriptor(Id id, llvm::StringRef symbol, Position position);
   llvm::Expected<uint32_t> expression(Id id, SyntaxDeclaration &decl);
+  llvm::Expected<Expression> oracleSend(Id id, SyntaxDeclaration &decl);
+  llvm::Error oracleShapes(SyntaxDeclaration &decl);
   llvm::Error body(Id id, SyntaxDeclaration &decl, bool region = false);
 
 public:

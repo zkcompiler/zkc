@@ -218,6 +218,31 @@ Expected<SyntaxType> LayoutReader::type(Id id) {
     auto callee = name((*pair)[0]);
     if (!callee)
       return callee.takeError();
+    if (*callee == "builtin" || *callee == "formal") {
+      auto args = children((*pair)[1]);
+      if (args.empty())
+        return fail(id, "type constructor requires an identity string");
+      auto identity = argument(args.front());
+      if (!identity)
+        return identity.takeError();
+      auto spelling = tree.text(*identity);
+      if (kind(*identity) != K::Literal || !spelling.starts_with('"') ||
+          !spelling.ends_with('"'))
+        return fail(*identity, "type constructor requires an identity string");
+      value.kind = *callee == "builtin" ? SyntaxType::Kind::Builtin
+                                        : SyntaxType::Kind::Formal;
+      value.name = spelling.drop_front().drop_back().str();
+      for (auto arg : args.drop_front()) {
+        auto inner = argument(arg);
+        if (!inner)
+          return inner.takeError();
+        auto projected = type(*inner);
+        if (!projected)
+          return projected.takeError();
+        value.arguments.push_back(std::move(*projected));
+      }
+      break;
+    }
     if (*callee != "pow2" || children((*pair)[1]).size() != 1)
       return fail(id, "unsupported static type constructor");
     auto inner = argument(children((*pair)[1])[0]);
@@ -346,7 +371,7 @@ Error LayoutReader::bodies(ArrayRef<BodyParseScope> scopes,
     for (auto &decl : item.module->members) {
       if (!decl.layoutSyntax || !decl.deferredBody)
         continue;
-      auto found = bodies.find(decl.span.begin);
+      auto found = bodies.find(decl.layoutDeclarationStart);
       if (found == bodies.end())
         return failure("source.layout",
                        "authored body disappeared during parsing", decl.span);

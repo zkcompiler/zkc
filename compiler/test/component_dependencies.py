@@ -190,7 +190,7 @@ def main():
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/FiniteCardinality.h")
     private_headers["ZkcLanguage"].update(
         ROOT / f"lib/Language/{name}.h"
-        for name in ("FormalSource", "FormalSourceWriter", "LayoutReader")
+        for name in ("FormalSource", "FormalSourceWriter", "LayoutReader", "OracleSyntax")
     )
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/APIRecords.h")
     private_headers["ZkcTranslation"] = {ROOT / "lib/Translation/Language/Finite.h", ROOT / "lib/Translation/Language/EmissionBudget.h", ROOT / "lib/Translation/Language/DataPreconditions.h"}

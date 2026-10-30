@@ -65,6 +65,11 @@ projection. `use lean Project.Module as formal` retains an import request;
 parsing never evaluates Lean text.
 
 Pure bindings use `=`, ordered actions use `<-`, and updates use `:=`.
+`@(P = left, V = right)` is an explicit role-assembly expression.
+It is syntactically distinct from a suffix role annotation such as
+`call(args) @(P, V)`. Assembly entries are named component selections, not
+an argument list to a user-resolved function. Formation and the absence of an
+implicit equality claim are specified in [layout execution](layout-execution.md).
 `mut` marks a mutable binding. Structured bodies include `for`, `if`, `match`
 and `return`. `if` and `match` may also produce values in expression positions;
 value-producing `if` requires an `else`. Exhaustiveness, typing, effects,

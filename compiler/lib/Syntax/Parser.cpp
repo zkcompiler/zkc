@@ -371,6 +371,9 @@ class Parser {
               "delimited notation has the wrong number of holes");
       expect(descriptor.closing);
       left = make(Kind::Delimited, begin, children);
+    } else if (take("@")) {
+      auto components = list(Kind::Parameters, "(", ")");
+      left = make(Kind::RoleAssembly, begin, {components});
     } else if (at("(")) {
       bool separated = false;
       left = list(Kind::Tuple, "(", ")", false, &separated);
@@ -912,6 +915,22 @@ class Parser {
       children.push_back(name(false));
       while (take(","))
         children.push_back(name(false));
+      if (take("as")) {
+        auto delivery = make(Kind::Send, begin, children);
+        expect("oracle");
+        expect("<");
+        children = {delivery, expression(100)};
+        expect(">");
+        if (take("(")) {
+          expect("rows");
+          expect("=");
+          children.push_back(expression());
+          expect(")");
+          expect("max");
+          children.push_back(expression(100));
+        }
+        return make(Kind::OracleSend, begin, children);
+      }
       return make(Kind::Send, begin, children);
     }
     if (take("query")) {

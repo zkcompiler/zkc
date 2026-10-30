@@ -346,6 +346,10 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   auto fieldList = [&](ArrayRef<SyntaxPort> from, std::vector<TypeField> &to) {
     std::set<std::string> fields;
     for (auto &src : from) {
+      if (!src.roles.empty() || src.oracleHolder)
+        return types.fail(
+            "source.roles",
+            "ordinary fields cannot carry participant annotations", src.span);
       if (!fields.insert(src.name).second)
         return types.fail("source.duplicate", "duplicate field", src.span);
       auto t = type(decl, src.type, depth + 1);
@@ -406,6 +410,11 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     for (bool input : {true, false}) {
       std::set<std::string> names;
       for (auto &src : input ? source.inputs : source.outputs) {
+        if (decl.kind != Declaration::Kind::Protocol &&
+            (!src.roles.empty() || src.oracleHolder))
+          return types.fail("source.roles",
+                            "participant annotations require a protocol port",
+                            src.span);
         if (!names.insert(src.name).second)
           return types.fail("source.duplicate", "duplicate port", src.span);
         if (input && !bindingName(decl, src.name, src.span))
@@ -457,6 +466,14 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
               if (!p.oracle->maximumRows)
                 return false;
             }
+            if (!types.charge(source.oracleShapes.size(), src.span))
+              return false;
+            for (const auto &shape : source.oracleShapes)
+              if (shape.port == src.name) {
+                p.oracle->maximumRows = type(decl, shape.bound, depth + 1);
+                if (!p.oracle->maximumRows)
+                  return false;
+              }
           }
           if (!types.oraclePort(p))
             return false;
@@ -614,6 +631,10 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         !joinEffects(types, *decl.effectAllowance, EffectSummary{}, decl.span))
       return false;
     for (const auto &src : source.services) {
+      if (src.oracleHolder || src.oracleMaximum)
+        return types.fail("source.oracle-port",
+                          "managed services cannot carry oracle custody",
+                          src.span);
       auto *service = src.serviceConstructor
                           ? protocol::sourceService(*src.serviceConstructor)
                           : nullptr;
