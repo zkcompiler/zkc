@@ -97,4 +97,7 @@ Update the package's exhaustive audit imports with
 `python3 lean/checks/audit_imports.py --write`. Run the changed modules and
 focused controls first. Package builds, dependency/axiom audits, statement-lock
 comparison and affected reports provide the landing evidence. Moving a module
-changes lock ownership metadata, never the protected statement or its hash.
+must preserve protected theorem meanings and update their lock ownership
+metadata. A library-root change can also rename inferred instances and change
+a structural statement hash. Prove preservation of the full theorem type
+before refreshing such a hash; an ownership update alone is insufficient.
