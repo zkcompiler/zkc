@@ -215,9 +215,10 @@ int main() {
                        "{callee=@f29,role=\"P\",site=\"dag\"} : (!s)->!s\n",
                        0, definitions, "%out");
     // Seven common visits, thirty declaration entries, five visits for the
-    // identity, twelve per added two-call function and one returned root.
-    query(text, 391, 64, true, false);
-    query(text, 390, 64, false, false);
+    // identity, sixteen per added two-call function and one returned root.
+    // Native SSA charges both port visits and each call substitution.
+    query(text, 507, 64, true, false);
+    query(text, 506, 64, false, false);
   });
   cases.run("common calls without affine results need no callee summary", [&] {
     resource_sources::Source scoped;

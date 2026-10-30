@@ -312,6 +312,17 @@ may consume a parent snapshot only when the inspected facts remain fixed for
 that phase. A cached parent analysis can be stale: its presence does not
 certify current closure admission.
 
+Resource-origin facts are relative to actual data formals, with the borrowed
+scope excluded. Closed-region summaries substitute through explicit captures;
+match payload roots begin unknown. Continuing alternatives must agree on a
+root. A stopped path contributes no returning value, while a zero-trip loop
+retains its initial state even when reached iterations stop. Ordered finite
+state requires the corresponding affine root from every continuing callback
+result. Catalog successor facets constrain these facts jointly; contradictory
+facets yield unknown. One invocation shares work bounds, and cached summaries
+retain their complete nested height. These are native semantic checks over
+immutable SSA, not permission inferred from a signature or a serialized body.
+
 AnalysisManager supplies caching and invalidation mechanics. Analyses must
 explicitly implement dependency invalidation when selective preservation is
 used; requesting another analysis does not register that rule automatically.

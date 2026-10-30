@@ -203,6 +203,7 @@ add_zkc_component(IR
   lib/Dialect/Exec/IR/Instructions.cpp
   lib/Dialect/Exec/Builders.cpp
   lib/Dialect/Exec/Execution.cpp
+  lib/Dialect/Exec/ResourceOrigins.cpp
   lib/Dialect/Exec/ExecutionComparison.cpp
   lib/Dialect/Exec/IR/Computation.cpp
   lib/Dialect/Exec/ControlCursor.cpp
