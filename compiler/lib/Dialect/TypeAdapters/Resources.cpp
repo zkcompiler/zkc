@@ -4,6 +4,17 @@
 using namespace mlir;
 namespace zkc::protocol::type_adapters {
 namespace {
+std::optional<llvm::SmallVector<Attribute>>
+capabilityArguments(Type type, llvm::StringRef constructor) {
+  auto capability = dyn_cast<zkc::runtime::CapabilityType>(type);
+  if (!capability)
+    return std::nullopt;
+  auto identity = capability.getKind();
+  if (!identity.consume_front(constructor) || !identity.consume_front(":"))
+    return std::nullopt;
+  return llvm::SmallVector<Attribute>{
+      StringAttr::get(type.getContext(), identity)};
+}
 Type decodeCapability(MLIRContext *context, const BoundType &type) {
   return loadedType<zkc::runtime::CapabilityType>(context, type.kind + ":" +
                                                                type.identity);

@@ -372,12 +372,15 @@ add_test(NAME native-proof-selection COMMAND zkc-native_proof_selection-test
 add_zkc_test(structural_types Contracts structural-types)
 add_zkc_test(implementation_policy Transforms implementation-policy)
 add_zkc_test(type_adapters IR type-adapters)
+add_zkc_test(catalog_types IR catalog-types)
 add_zkc_test(collection_types IR collection-types)
 mlir_target_link_libraries(zkc-collection_types-test PRIVATE MLIRParser)
 add_zkc_test(type_adapter_ambiguity Contracts type-adapter-ambiguity)
+add_dependencies(zkc-type_adapter_ambiguity-test ZkcIRGen)
 target_sources(zkc-type_adapter_ambiguity-test PRIVATE
   "${PROJECT_SOURCE_DIR}/lib/Dialect/TypeAdapters/Registry.cpp")
-target_include_directories(zkc-type_adapter_ambiguity-test SYSTEM PRIVATE ${MLIR_INCLUDE_DIRS})
+target_include_directories(zkc-type_adapter_ambiguity-test SYSTEM PRIVATE
+  ${MLIR_INCLUDE_DIRS} ${PROJECT_BINARY_DIR}/include)
 mlir_target_link_libraries(zkc-type_adapter_ambiguity-test PRIVATE MLIRIR)
 add_zkc_test(contract_inventory Contracts)
 add_zkc_test(contract_conformance Contracts)

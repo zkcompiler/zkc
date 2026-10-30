@@ -38,7 +38,7 @@ def Logical : ZKC_Type<"test", [TypeParameter, NatParameter]>;
 '''
     direct = 'def Binding : ZKC_DirectBinding<Logical, Native, "Helper", Owner>;\n'
     custom = ('def Binding : ZKC_CustomBinding<Logical, ["::test::NativeType"], '
-              '"decode", "encode", Owner>;\n')
+              '"decode", "encode", "arguments", Owner>;\n')
     fixtures = [
         ("direct", direct, None),
         ("missing", "", "missing native binding decision"),
@@ -69,6 +69,8 @@ def Logical : ZKC_Type<"test", [TypeParameter, NatParameter]>;
          "custom binding requires declared native heads"),
         ("empty callback", custom.replace('"decode"', '""'),
          "custom binding requires decode and encode"),
+        ("empty observation", custom.replace('"arguments"', '""'),
+         "custom binding requires typed argument observation"),
         ("unqualified head", custom.replace('::test::NativeType', 'test::NativeType'),
          "invalid or repeated custom native head"),
         ("repeated head", custom.replace('["::test::NativeType"]',
@@ -78,10 +80,10 @@ def Logical : ZKC_Type<"test", [TypeParameter, NatParameter]>;
          'def Collision : ZKC_DirectBinding<Another, Native, "Helper", Owner>;',
          "duplicate direct native head"),
         ("direct custom overlap", direct + 'def Another : ZKC_Type<"another">; '
-         'def Collision : ZKC_CustomBinding<Another, ["::test::NativeType"], "decode", "encode", Owner>;',
+         'def Collision : ZKC_CustomBinding<Another, ["::test::NativeType"], "decode", "encode", "arguments", Owner>;',
          "direct/custom native head overlap"),
         ("custom sharing", custom + 'def Another : ZKC_Type<"another">; '
-         'def Tagged : ZKC_CustomBinding<Another, ["::test::NativeType"], "decode", "encode", Owner>;', None),
+         'def Tagged : ZKC_CustomBinding<Another, ["::test::NativeType"], "decode", "encode", "arguments", Owner>;', None),
         ("missing special", direct + 'def VariantSyntax : ZKC_SpecialType<"variant">;',
          "missing native binding decision: variant"),
         ("special", direct + 'def VariantSyntax : ZKC_SpecialType<"variant">; '
@@ -114,14 +116,16 @@ def Logical : ZKC_Type<"test", [TypeParameter, NatParameter]>;
     # These assertions use real generated registration and the installed
     # public helper signature vocabulary, not test-only projection metadata.
     source = '''#include "zkc/Dialect/TypeAdapters.h"
+#include "mlir/IR/BuiltinTypes.h"
 namespace test {
-struct NativeType {};
-struct OtherType {};
+using NativeType = mlir::IntegerType;
+using OtherType = mlir::Float32Type;
 struct Helper {
   using Native = NATIVE;
   using Parameters = zkc::protocol::type_adapters::ParameterKinds<KINDS>;
   static mlir::Type decode(mlir::MLIRContext *, const zkc::protocol::BoundType &);
   static std::optional<zkc::protocol::BoundType> encode(mlir::Type, llvm::StringRef);
+  static std::optional<llvm::SmallVector<mlir::Attribute>> arguments(mlir::Type, llvm::StringRef);
 };
 }
 #include "owner.inc"

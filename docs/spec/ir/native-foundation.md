@@ -78,6 +78,37 @@ identities and forms separately, and native containers are not logical type
 constructor declarations. Generated projections share these facts while each
 consumer retains its own installation and interpretation obligations.
 
+## Native logical type observation
+
+`CatalogTypeInterface` exposes the catalog constructor and ordered arguments
+of a native MLIR type through typed getters. Domain and Slot identities use
+`StringAttr`, complete types use `TypeAttr`, and naturals use unsigned 64-bit
+`IntegerAttr`. The observation is transient; the MLIR type remains the sole
+carrier. The catalog defines argument kinds and constructor permissions.
+Shared carriers such as builtin integers can have the interface while returning
+no logical application: only signless `i1` and unsigned `ui64` denote the
+Boolean and Index constructors. A tensor's shape does not identify a nominal
+collection. Nominal variants expose their structural identity and alternatives
+directly rather than inventing a catalog constructor.
+
+The native binding inventory generates external interface models. Owned
+dialects attach their models after registering types, so intrinsic formation
+works in a minimal context. MLIR dialect extensions attach models for builtin
+and contributed carriers in a composed registry. Registration does not load an
+unrequested dialect, replace a native type, or grant an execution profile. Typed observations and
+serialization callbacks are distinct; observations never invoke an encoder.
+Missing or ambiguous constructor observations are refused.
+
+Logical formation checks argument kinds, declared nominal instances and
+constructor permissions through these observations. Copy and drop permission
+propagate through every complete-type argument and every variant alternative,
+including inactive alternatives. A sequence requires both permissions from its
+element. This check does not install a codec or physical representation.
+Structural inspection bounds expanded occurrences, including repeated uniqued
+children, to 200000, depth below 64, and attribute string bytes to 64 MiB.
+Natural type parameters remain bounded by 1048576. Public byte encodings have
+separate bounds: native formation alone never authorizes serialization.
+
 ## Formation, admission and invalidation
 
 Ordinary MLIR verification establishes structural formation, region/operand

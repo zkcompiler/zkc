@@ -6,6 +6,25 @@
 using namespace mlir;
 namespace zkc::protocol::type_adapters {
 namespace {
+std::optional<llvm::SmallVector<Attribute>> sequenceArguments(Type type,
+                                                              llvm::StringRef) {
+  auto sequence = dyn_cast<zkc::data::SequenceType>(type);
+  if (!sequence)
+    return std::nullopt;
+  return llvm::SmallVector<Attribute>{TypeAttr::get(sequence.getElementType())};
+}
+std::optional<llvm::SmallVector<Attribute>> booleanArguments(Type type,
+                                                             llvm::StringRef) {
+  if (!type.isSignlessInteger(1))
+    return std::nullopt;
+  return llvm::SmallVector<Attribute>{};
+}
+std::optional<llvm::SmallVector<Attribute>> indexArguments(Type type,
+                                                           llvm::StringRef) {
+  if (!type.isUnsignedInteger(64))
+    return std::nullopt;
+  return llvm::SmallVector<Attribute>{};
+}
 using Shake128Adapter = NullaryAdapter<zkc::crypto::Shake128StateType>;
 using BytesAdapter = NullaryAdapter<zkc::data::BytesType>;
 Type decodeSequence(MLIRContext *context, const BoundType &type) {

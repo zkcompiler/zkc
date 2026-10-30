@@ -2,6 +2,7 @@
 #include "mlir/IR/DialectImplementation.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeAdapters.h"
 #include "llvm/ADT/TypeSwitch.h"
 using namespace mlir;
 #include "zkc/Dialect/Runtime/IR/runtimeDialect.cpp.inc"
@@ -18,6 +19,7 @@ void zkc::runtime::RuntimeDialect::initialize() {
 #define GET_OP_LIST
 #include "zkc/Dialect/Runtime/IR/runtimeOps.cpp.inc"
       >();
+  zkc::protocol::type_adapters::attachCatalogTypeModels(*this);
 }
 
 Type zkc::runtime::RepresentedType::parse(AsmParser &parser) {

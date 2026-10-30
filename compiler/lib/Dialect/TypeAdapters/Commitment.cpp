@@ -30,18 +30,35 @@ Type decodeObject(MLIRContext *context, const BoundType &type) {
 }
 
 template <bool AllowPCS, bool AllowOracle>
-std::optional<BoundType> encodeObject(Type type, llvm::StringRef constructor) {
+std::optional<llvm::StringRef> objectScheme(Type type,
+                                            llvm::StringRef constructor) {
   if constexpr (AllowPCS)
     if (auto object = dyn_cast<zkc::commitment::PolynomialObjectType>(type))
       if (object.getKind() == constructor &&
           carrierFor(object.getScheme()) == Carrier::PCS)
-        return BoundType{constructor.str(), object.getScheme().str(), {}};
+        return object.getScheme();
   if constexpr (AllowOracle)
     if (auto object = dyn_cast<zkc::commitment::VectorObjectType>(type))
       if (object.getKind() == constructor &&
           carrierFor(object.getScheme()) == Carrier::Oracle)
-        return BoundType{constructor.str(), object.getScheme().str(), {}};
+        return object.getScheme();
   return std::nullopt;
+}
+template <bool AllowPCS, bool AllowOracle>
+std::optional<llvm::SmallVector<Attribute>>
+objectArguments(Type type, llvm::StringRef constructor) {
+  auto scheme = objectScheme<AllowPCS, AllowOracle>(type, constructor);
+  if (!scheme)
+    return std::nullopt;
+  return llvm::SmallVector<Attribute>{
+      StringAttr::get(type.getContext(), *scheme)};
+}
+template <bool AllowPCS, bool AllowOracle>
+std::optional<BoundType> encodeObject(Type type, llvm::StringRef constructor) {
+  auto scheme = objectScheme<AllowPCS, AllowOracle>(type, constructor);
+  if (!scheme)
+    return std::nullopt;
+  return BoundType{constructor.str(), scheme->str(), {}};
 }
 
 } // namespace

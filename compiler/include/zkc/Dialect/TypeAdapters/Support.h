@@ -1,6 +1,7 @@
 #ifndef ZKC_DIALECT_TYPE_ADAPTERS_SUPPORT_H
 #define ZKC_DIALECT_TYPE_ADAPTERS_SUPPORT_H
 
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/TypeSupport.h"
 #include "zkc/Dialect/TypeAdapters.h"
@@ -35,6 +36,15 @@ std::optional<BoundType> encodeDomainType(mlir::Type type,
 // Compact single-domain constructors retain their identity slot. Decoding
 // ignores the admitted outer representation, which decodeBoundType wraps later.
 template <typename T> struct DomainAdapter {
+  static std::optional<llvm::SmallVector<mlir::Attribute>>
+  arguments(mlir::Type type, llvm::StringRef) {
+    auto native = mlir::dyn_cast<T>(type);
+    if (!native)
+      return std::nullopt;
+    return llvm::SmallVector<mlir::Attribute>{
+        mlir::StringAttr::get(type.getContext(), native.getDomain())};
+  }
+
   using Native = T;
   using Parameters = ParameterKinds<ParameterKind::Domain>;
   static mlir::Type decode(mlir::MLIRContext *context, const BoundType &type) {
@@ -54,6 +64,20 @@ template <typename T> struct DomainAdapter {
 template <typename T, mlir::Type (T::*Element)() const,
           uint64_t (T::*Length)() const>
 struct TypeNatAdapter {
+  static std::optional<llvm::SmallVector<mlir::Attribute>>
+  arguments(mlir::Type type, llvm::StringRef) {
+    auto native = mlir::dyn_cast<T>(type);
+    if (!native)
+      return std::nullopt;
+    mlir::Builder builder(type.getContext());
+    return llvm::SmallVector<mlir::Attribute>{
+        mlir::TypeAttr::get((native.*Element)()),
+        builder.getIntegerAttr(
+            mlir::IntegerType::get(type.getContext(), 64,
+                                   mlir::IntegerType::Unsigned),
+            (native.*Length)())};
+  }
+
   using Native = T;
   using Parameters = ParameterKinds<ParameterKind::Type, ParameterKind::Nat>;
   static mlir::Type decode(mlir::MLIRContext *context, const BoundType &type) {
@@ -87,6 +111,14 @@ struct TypeNatAdapter {
 };
 
 template <typename T> struct NullaryAdapter {
+  static std::optional<llvm::SmallVector<mlir::Attribute>>
+  arguments(mlir::Type type, llvm::StringRef) {
+    auto native = mlir::dyn_cast<T>(type);
+    if (!native)
+      return std::nullopt;
+    return llvm::SmallVector<mlir::Attribute>{};
+  }
+
   using Native = T;
   using Parameters = ParameterKinds<>;
   static mlir::Type decode(mlir::MLIRContext *context, const BoundType &type) {
@@ -105,6 +137,20 @@ template <typename T> struct NullaryAdapter {
 template <typename T, llvm::StringRef (T::*Domain)() const,
           uint64_t (T::*Length)() const>
 struct DomainNatAdapter {
+  static std::optional<llvm::SmallVector<mlir::Attribute>>
+  arguments(mlir::Type type, llvm::StringRef) {
+    auto native = mlir::dyn_cast<T>(type);
+    if (!native)
+      return std::nullopt;
+    mlir::Builder builder(type.getContext());
+    return llvm::SmallVector<mlir::Attribute>{
+        builder.getStringAttr((native.*Domain)()),
+        builder.getIntegerAttr(
+            mlir::IntegerType::get(type.getContext(), 64,
+                                   mlir::IntegerType::Unsigned),
+            (native.*Length)())};
+  }
+
   using Native = T;
   using Parameters = ParameterKinds<ParameterKind::Domain, ParameterKind::Nat>;
   static mlir::Type decode(mlir::MLIRContext *context, const BoundType &type) {

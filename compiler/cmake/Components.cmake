@@ -226,6 +226,7 @@ add_zkc_component(IR
   lib/Dialect/Algebra/IR/Mathematical.cpp
   lib/Dialect/Algebra/RingExpression.cpp
   lib/Dialect/Bindings.cpp
+  lib/Dialect/TypeFormation.cpp
   lib/Dialect/MathematicalInterfaces.cpp
   lib/Dialect/LinearContraction.cpp
   lib/Dialect/Algebra/IR/Types.cpp

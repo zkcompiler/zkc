@@ -7,11 +7,17 @@ set(zkc_tablegen_includes ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_BINARY_DIR}/include ${ZKC_CONTRIBUTION_INCLUDES}
   ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
 set(zkc_generated_headers
+  include/zkc/Interfaces/CatalogType.h.inc
   include/zkc/Interfaces/Collection.h.inc
   include/zkc/Interfaces/LinearContraction.h.inc
   include/zkc/Interfaces/Mathematical.h.inc)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect
   ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Interfaces)
+set(LLVM_TARGET_DEFINITIONS include/zkc/Interfaces/CatalogType.td)
+mlir_tablegen(include/zkc/Interfaces/CatalogType.h.inc -gen-type-interface-decls
+    EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Interfaces/CatalogType.cpp.inc -gen-type-interface-defs
+    EXTRA_INCLUDES ${zkc_tablegen_includes})
 set(LLVM_TARGET_DEFINITIONS include/zkc/Interfaces/Collection.td)
 mlir_tablegen(include/zkc/Interfaces/Collection.h.inc -gen-type-interface-decls
     EXTRA_INCLUDES ${zkc_tablegen_includes})

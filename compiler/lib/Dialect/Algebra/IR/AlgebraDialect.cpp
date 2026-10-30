@@ -1,6 +1,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/TypeAdapters.h"
 #include "llvm/ADT/TypeSwitch.h"
 using namespace mlir;
 #include "zkc/Dialect/Algebra/IR/algebraDialect.cpp.inc"
@@ -18,4 +19,5 @@ void zkc::algebra::AlgebraDialect::initialize() {
 #define GET_OP_LIST
 #include "zkc/Dialect/Algebra/IR/algebraOps.cpp.inc"
       >();
+  zkc::protocol::type_adapters::attachCatalogTypeModels(*this);
 }

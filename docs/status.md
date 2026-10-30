@@ -30,7 +30,11 @@ Mathematical operations retain their separate meanings. The built-in catalog
 now has one neutral source and generated C++/ODS and static Rust projections.
 Runtime admission now interprets that table instead of hand-maintained signature,
 history and permission copies; native domain support and physical installation
-remain explicit. Fully typed MLIR invocation arguments remain in progress. The
+remain explicit. Native catalog type observations use MLIR type interfaces and
+typed static arguments. Sequence and fixed-vector formation now inspect native
+structure and catalog permissions, independently of byte-format limits. Other
+legacy inner neutral conversions and fully typed MLIR invocation arguments
+remain in progress. The
 [interface inventory](spec/formats/foundation-interfaces.md) defines the remaining
 source/constructed export, realization-record and application-map
 cutovers. Their replacement emission and complete stage-admission migration

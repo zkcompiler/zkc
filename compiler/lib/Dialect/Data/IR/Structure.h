@@ -17,6 +17,7 @@ verifyStructure(mlir::function_ref<mlir::InFlightDiagnostic()> emit,
     attrs.emplace_back(root, 0);
   for (auto type : leafTypes)
     types.emplace_back(type, 0);
+  mlir::MLIRContext *context = nullptr;
   unsigned remaining = 200000;
   size_t bytes = 0;
   while (!attrs.empty() || !types.empty()) {
@@ -28,6 +29,9 @@ verifyStructure(mlir::function_ref<mlir::InFlightDiagnostic()> emit,
       auto depth = entry.second;
       if (!attr || depth >= 64)
         return emit() << "missing attribute or excessive structural depth";
+      if (context && attr.getContext() != context)
+        return emit() << "metadata crosses MLIR contexts";
+      context = attr.getContext();
       if (auto string = mlir::dyn_cast<mlir::StringAttr>(attr)) {
         bytes += string.getValue().size();
         if (bytes > 64 * 1024 * 1024)
@@ -42,6 +46,9 @@ verifyStructure(mlir::function_ref<mlir::InFlightDiagnostic()> emit,
       auto depth = entry.second;
       if (!type || depth >= 64)
         return emit() << "missing type or excessive structural depth";
+      if (context && type.getContext() != context)
+        return emit() << "metadata crosses MLIR contexts";
+      context = type.getContext();
       type.walkImmediateSubElements(
           [&](mlir::Attribute child) { attrs.emplace_back(child, depth + 1); },
           [&](mlir::Type child) { types.emplace_back(child, depth + 1); });

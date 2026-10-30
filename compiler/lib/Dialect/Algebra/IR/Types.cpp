@@ -1,7 +1,7 @@
 #include "../../DomainVerification.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
-#include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/TypeFormation.h"
 using namespace mlir;
 using namespace llvm;
 namespace zkc {
@@ -13,18 +13,16 @@ zkc::algebra::FieldType::verify(llvm::function_ref<InFlightDiagnostic()> e,
 LogicalResult zkc::algebra::FixedVectorType::verify(
     llvm::function_ref<InFlightDiagnostic()> emit, Type element,
     uint64_t length) {
-  auto logical = protocol::encodeBoundType(element, false);
-  if (!logical) {
-    consumeError(logical.takeError());
-    return emit() << "fixed vector requires an admitted logical element type";
-  }
-  auto type = protocol::applyBoundType(
-      "fixed_vector", {logical->spelling(), std::to_string(length)});
-  if (!type) {
-    consumeError(type.takeError());
-    return emit() << "fixed vector exceeds logical type limits";
-  }
-  return success();
+  if (!element || length > MaximumArrayLength)
+    return emit()
+           << "fixed vector requires a logical element and bounded length";
+  auto *context = element.getContext();
+  return verifyLogicalTypeApplication(
+      emit, context,
+      {"fixed_vector",
+       {TypeAttr::get(element),
+        IntegerAttr::get(IntegerType::get(context, 64, IntegerType::Unsigned),
+                         length)}});
 }
 } // namespace zkc
 

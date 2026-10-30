@@ -1,10 +1,10 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
-#include "zkc/Contracts/TypeProperties.h"
-#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/TypeAdapters.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "llvm/ADT/TypeSwitch.h"
 using namespace mlir;
 #include "zkc/Dialect/Data/IR/dataDialect.cpp.inc"
@@ -27,6 +27,7 @@ void zkc::data::DataDialect::initialize() {
 #define GET_OP_LIST
 #include "zkc/Dialect/Data/IR/dataOps.cpp.inc"
       >();
+  zkc::protocol::type_adapters::attachCatalogTypeModels(*this);
 }
 namespace zkc::data {
 CollectionKind BytesType::getCollectionKind() const {
@@ -53,21 +54,10 @@ LogicalResult refuse(Operation *op, StringRef reason) {
 } // namespace
 LogicalResult SequenceType::verify(function_ref<InFlightDiagnostic()> emit,
                                    Type element) {
-  auto bound = protocol::encodeBoundType(element, false);
-  if (!bound) {
-    llvm::consumeError(bound.takeError());
-    return emit() << "sequence element must have a canonical logical type";
-  }
-  if (!protocol::duplicable(*bound) || !protocol::discardable(*bound))
-    return emit() << "sequence element must be copyable and discardable";
-  protocol::BoundType sequence{
-      "sequence", {}, {}, {protocol::TypeArgument::typeArgument(*bound)}};
-  auto formed = protocol::parseBoundType(sequence.spelling(), false);
-  if (!formed)
-    return emit() << llvm::toString(formed.takeError());
-  if (protocol::decodeBoundType(element.getContext(), *bound) != element)
-    return emit() << "sequence element must use its canonical MLIR type";
-  return success();
+  if (!element)
+    return emit() << "sequence requires a logical element";
+  return verifyLogicalTypeApplication(emit, element.getContext(),
+                                      {"sequence", {TypeAttr::get(element)}});
 }
 LogicalResult SequenceEmptyOp::verify() { return success(); }
 LogicalResult SequenceLengthOp::verify() { return success(); }

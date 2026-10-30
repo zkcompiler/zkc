@@ -128,6 +128,9 @@ bool emitTypeBindings(raw_ostream &os, const RecordKeeper &records) {
         PrintFatalError(record,
                         "custom binding requires decode and encode callbacks");
     }
+    if (custom && record->getValueAsString("cppArguments").trim().empty())
+      PrintFatalError(record,
+                      "custom binding requires typed argument observation");
     bindings.push_back({record, logical, owner, std::move(key), direct});
   };
   for (auto *record : records.getAllDerivedDefinitions("ZKC_TypeBinding"))
@@ -212,6 +215,20 @@ bool emitTypeBindings(raw_ostream &os, const RecordKeeper &records) {
       os << ", " << binding.record->getValueAsString("cppDecode") << ", "
          << binding.record->getValueAsString("cppEncode");
     }
+    if (binding.direct) {
+      auto helper = binding.record->getValueAsString("cppHelper");
+      os << ", " << helper
+         << "::arguments, "
+            "::zkc::protocol::type_adapters::attachCatalogTypeInterfaces<"
+         << nativeHead(binding.record->getValueAsDef("nativeType")) << ">";
+    } else if (binding.record->isSubClassOf("ZKC_CustomBinding")) {
+      os << ", " << binding.record->getValueAsString("cppArguments")
+         << ", ::zkc::protocol::type_adapters::attachCatalogTypeInterfaces<";
+      llvm::interleaveComma(
+          binding.record->getValueAsListOfStrings("nativeHeads"), os);
+      os << ">";
+    } else
+      os << ", nullptr, nullptr";
     os << "},\n";
   }
   os << "  }};\n  return adapters;\n}\n} // namespace "

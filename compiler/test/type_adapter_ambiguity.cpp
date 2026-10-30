@@ -38,17 +38,31 @@ std::optional<BoundType> float32(Type type, llvm::StringRef constructor) {
   return std::nullopt;
 }
 std::optional<BoundType> never(Type, llvm::StringRef) { return std::nullopt; }
+std::optional<llvm::SmallVector<Attribute>> booleanArguments(Type type,
+                                                             llvm::StringRef) {
+  if (!type.isSignlessInteger(1))
+    return std::nullopt;
+  return llvm::SmallVector<Attribute>{};
+}
+std::optional<llvm::SmallVector<Attribute>> floatArguments(Type type,
+                                                           llvm::StringRef) {
+  if (!type.isF32())
+    return std::nullopt;
+  return llvm::SmallVector<Attribute>{};
+}
+
 } // namespace
 
 namespace zkc::protocol::type_adapters {
 llvm::ArrayRef<llvm::ArrayRef<TypeAdapter>> installedAdapters() {
   static constexpr TypeAdapter first[] = {
-      {"bool", noDecode, boolean},
-      {"index", noDecode, index},
-      {"fixed_vector", noDecode, Applied::encode},
-      {"duplicate", noDecode, float32}};
-  static constexpr TypeAdapter second[] = {{"other_bool", noDecode, boolean},
-                                           {"duplicate", noDecode, never}};
+      {"bool", noDecode, boolean, booleanArguments, nullptr},
+      {"index", noDecode, index, nullptr, nullptr},
+      {"fixed_vector", noDecode, Applied::encode, nullptr, nullptr},
+      {"duplicate", noDecode, float32, floatArguments, nullptr}};
+  static constexpr TypeAdapter second[] = {
+      {"other_bool", noDecode, boolean, booleanArguments, nullptr},
+      {"duplicate", noDecode, never, nullptr, nullptr}};
   static const llvm::ArrayRef<TypeAdapter> tables[] = {first, second};
   return tables;
 }
@@ -58,6 +72,15 @@ int main() {
   MLIRContext context;
   Cases cases;
   auto booleanType = IntegerType::get(&context, 1);
+  cases.run("native observation refuses ambiguity and duplicate constructors",
+            [&] {
+              require(!observeCatalogType(booleanType),
+                      "ambiguous observation selected first match");
+              require(!observeCatalogType(Float32Type::get(&context)),
+                      "duplicate constructor acquired a native observation");
+              require(!observeCatalogType(Type{}),
+                      "missing native type acquired an observation");
+            });
   cases.run("custom/custom ambiguity refuses",
             [&] { refuses(encodeLogicalType(booleanType), "binding-type"); });
   cases.run("nested custom/custom ambiguity refuses", [&] {

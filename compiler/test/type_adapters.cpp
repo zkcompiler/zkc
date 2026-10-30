@@ -8,6 +8,7 @@
 #include "zkc/Dialect/Data/Layout.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/TypeAdapters.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/raw_ostream.h"
 #include <future>
@@ -84,6 +85,10 @@ int main() {
     BoundType bound{instance.kind, instance.domain, {}};
     cases.run("logical roundtrip: " + bound.spelling(), [&] {
       roundTrip(context, take(parseBoundType(bound.spelling(), false)), false);
+      auto native = decodeBoundType(&context, bound);
+      auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
+      require(succeeded(verifyLogicalType(emit, native)),
+              "admitted byte type has no native logical formation");
     });
     if (installedDomains().defaultRepresentation(instance.kind,
                                                  instance.domain))
