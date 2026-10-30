@@ -795,7 +795,8 @@ class Comparison {
                      : isa<algebra::SubtractFieldOp>(op) ? "field.sub"
                                                          : "field.mul";
           if (contract == "field.constant")
-            parameters.push_back(op.getAttrOfType<StringAttr>("value"));
+            parameters.push_back(
+                op.getAttrOfType<algebra::FieldLiteralAttr>("value"));
         } else if (isa<data::BoundedAtOp, data::BoundedMatrixAtOp>(op) &&
                    op.getAttrs().empty())
           contract = isa<data::BoundedAtOp>(op) ? "vector.get" : "matrix.get";
@@ -812,9 +813,6 @@ class Comparison {
           auto literal = dyn_cast<algebra::FieldLiteralAttr>(parameters[0]);
           if (literal)
             result = {Meaning::Scalar, terms.literal(literal)};
-          else if (auto text = dyn_cast<StringAttr>(parameters[0]))
-            result = {Meaning::Scalar,
-                      terms.literal(field.getDomain(), text.getValue())};
           else
             return {};
         } else if (!parameters.empty())
@@ -1459,11 +1457,11 @@ class ModuleComparison {
         if (auto field = dyn_cast<algebra::FieldType>(results[0].getType())) {
           Term term = invalidTerm;
           if (contract == "field.constant") {
-            auto literal = op.getAttrOfType<StringAttr>("value");
+            auto literal = op.getAttrOfType<algebra::FieldLiteralAttr>("value");
             auto bound = primitive(op, nullptr, CandidatePorts{}, step.scoped,
                                    fixedBindings);
             if (literal)
-              term = fieldTerms.literal(field.getDomain(), literal.getValue());
+              term = fieldTerms.literal(literal);
             else if (bound && bound->parameters.size() == 1)
               term = fieldTerms.literal(
                   dyn_cast<algebra::FieldLiteralAttr>(bound->parameters[0]));

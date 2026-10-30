@@ -330,7 +330,10 @@ protocol Run roles(P)(n:index@P)->(r:(Fr,bool,index)@P){return work(n);}entry fn
     bool changed = false;
     module->walk([&](mlir::Operation *op) {
       if (!changed && op->getName().getStringRef() == "data.index") {
-        op->setAttr("value", mlir::StringAttr::get(&context, "3"));
+        op->setAttr("value", mlir::IntegerAttr::get(
+                                 mlir::IntegerType::get(
+                                     &context, 64, mlir::IntegerType::Unsigned),
+                                 3));
         changed = true;
       }
     });

@@ -5,6 +5,7 @@
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
@@ -407,8 +408,13 @@ int main(int argc, char **argv) {
   });
   mutate("domain coordinate changed", [&](auto module) {
     mlir::Builder b(&context);
-    first(module, "poly.evaluate_domain")
-        ->setAttr("points", b.getStrArrayAttr({"0", "1", "3"}));
+    mlir::Operation *evaluation = first(module, "poly.evaluate_domain");
+    auto points = evaluation->getAttrOfType<mlir::ArrayAttr>("points");
+    auto field =
+        mlir::cast<zkc::algebra::FieldLiteralAttr>(points[0]).getField();
+    llvm::SmallVector<mlir::Attribute> changed(points.getValue());
+    changed.back() = take(zkc::algebra::makeFieldLiteral(field, APInt(64, 3)));
+    evaluation->setAttr("points", b.getArrayAttr(changed));
   });
   mutate("array index changed", [&](auto module) {
     mlir::Builder b(&context);

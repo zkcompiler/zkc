@@ -44,7 +44,7 @@ The following flat operations are total on their verified types:
 | `data.index_less` | Two `ui64` indices to their strict order comparison |
 | `data.index_power_of_two` | Indices `(n,r)` to `n = 2^r` over naturals; false for every `r >= 64` on the native index domain |
 | `data.dim` on a field vector, axis zero | Field vector to its length as an index |
-| `algebra.constant` | Canonical field literal string to scalar |
+| `algebra.constant` | Typed `#algebra.literal<F, value>` to a scalar in exactly `F` |
 | `algebra.field_subtract` | Two scalars in one field to their difference |
 | `algebra.array_from_elements` | Exactly `N` ordered operands of field `F` to `!algebra.field_array<"F", N>`; empty construction is allowed |
 | `algebra.array_at` | Static array and constant `index` attribute; `0 ≤ index < N` |
@@ -105,12 +105,20 @@ realizations; they do not change the static polynomial type.
 
 ### Formation diagnostics
 
-Invalid `algebra.constant` literals and `algebra.array_at` extraction use
-`mathematical-formation`; this replaces their earlier `polynomial-formation`
-code as finite-data formation moves to Algebra. Polynomial operation and domain
-formation continue to use `polynomial-formation`. Algebra currently reuses the
-installed `field.constant` contract to validate canonical literals; a separate
-domain literal contract is not part of this implementation.
+`algebra.constant` requires a native field-literal attribute and the exact same
+nominal field on its result. A mismatched result uses `mathematical-formation`;
+malformed literal presentations or values use `field-literal`. Static
+`algebra.array_at` extraction uses `mathematical-formation`. Polynomial operation
+and domain formation use `polynomial-formation`. Evaluation and interpolation
+points are ordered native field literals with distinct values and the same field
+as their polynomial. These native operations do not parse decimal strings.
+
+Pure index and field constants implement `ConstantLike`, exact attribute folding,
+and dialect constant materialization. The field attribute implements MLIR's
+`TypedAttr` interface with its nominal field type. These hooks expose immutable
+values to generic MLIR analysis; they do not authorize algebraic reassociation or
+rewrites of reached execution calls. External source and byte literal spellings
+are translated at their respective boundaries.
 
 ## Realization
 

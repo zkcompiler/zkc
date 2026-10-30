@@ -5,7 +5,7 @@ module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%a:!F,%b:!F,%x:!F,%y:!F):
    %difference = algebra.field_subtract %a,%b : (!F,!F)->!F
    %values = "algebra.array_from_elements"(%difference,%b) : (!F,!F)->!A
-   %p = "poly.interpolate"(%values) {points=["0","1"]} : (!A)->!P
+   %p = "poly.interpolate"(%values) {points=[#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>,#algebra.literal<!algebra.field<"bls12-381.fr">, 1 : ui255>]} : (!A)->!P
    %first = "poly.evaluate"(%p,%x) : (!P,!F)->!F
    %condition = algebra.field_equal %first,%a : (!F,!F)->i1
    protocol.guard %condition {site="checkpoint",owner="P"}

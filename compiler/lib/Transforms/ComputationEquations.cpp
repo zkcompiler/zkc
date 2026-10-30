@@ -95,10 +95,10 @@ struct PayloadAnalysis {
   const protocol::ComputationContract *contract(Value value) const {
     return value ? contracts.lookup(value.getDefiningOp()) : nullptr;
   }
-  std::optional<std::string> constant(Value value) const {
+  algebra::FieldLiteralAttr constant(Value value) const {
     auto *facet = contract(value);
     if (!facet || facet->identity != MathematicalIdentity::FieldConstant)
-      return std::nullopt;
+      return {};
     return finite::fieldConstant(value.getDefiningOp());
   }
   // Neutral expressions are followed directly in the admitted SSA. No
@@ -114,10 +114,12 @@ struct PayloadAnalysis {
         break;
       auto left = constant(op->getOperand(0));
       auto right = constant(op->getOperand(1));
-      auto identity = [](std::optional<std::string> value,
+      auto identity = [](algebra::FieldLiteralAttr value,
                          protocol::ScalarIdentity identity) {
-        return (identity == protocol::ScalarIdentity::Zero && value == "0") ||
-               (identity == protocol::ScalarIdentity::One && value == "1");
+        return value && ((identity == protocol::ScalarIdentity::Zero &&
+                          value.getValue().getValue().isZero()) ||
+                         (identity == protocol::ScalarIdentity::One &&
+                          value.getValue().getValue().isOne()));
       };
       if (identity(right, facet->law.rightIdentity))
         value = op->getOperand(0);
@@ -776,7 +778,7 @@ matchNestedContraction(const ComputationView &structure,
     auto constant = finite::fieldConstant(seed.getDefiningOp());
     if (!constant || seed.getType() != field)
       return std::nullopt;
-    selected.seed.constant = *constant;
+    selected.seed.constant = constant;
   }
   // Reuse the inner reduction equation through the actual environment. Extra
   // scalar instructions may establish neutral identities; they must all be

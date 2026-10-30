@@ -17,7 +17,7 @@ module { "protocol.module"() ({
     }
 
 "protocol.func"() ({ ^entry(%a:!g1,%b:!g2,%x:!f,%n:ui64):
- %zero = "algebra.constant"() {value="0"} : ()->!f
+ %zero = "algebra.constant"() {value=#algebra.literal<!f, 0 : ui254>} : ()->!f
  %base = algebra.pairing %a,%b : (!g1,!g2)->!gt
  %term = algebra.group_scale %base,%x : (!gt,!f)->!gt
  %identity = algebra.group_scale %base,%zero : (!gt,!f)->!gt

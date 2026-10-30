@@ -6,6 +6,20 @@
 using namespace llvm;
 using namespace mlir;
 namespace zkc::algebra {
+Expected<FieldLiteralAttr> makeFieldLiteral(FieldType field,
+                                            const APInt &value) {
+  auto presentation = literalPresentation(field);
+  if (!presentation || value.getActiveBits() > presentation->width ||
+      (!presentation->binary &&
+       value.zextOrTrunc(presentation->modulus.getBitWidth())
+           .uge(presentation->modulus)))
+    return zkc::error("field-literal");
+  auto integer =
+      IntegerAttr::get(IntegerType::get(field.getContext(), presentation->width,
+                                        IntegerType::Unsigned),
+                       value.zextOrTrunc(presentation->width));
+  return FieldLiteralAttr::get(field.getContext(), field, integer);
+}
 Expected<FieldLiteralAttr> decodeFieldLiteral(FieldType field, StringRef text) {
   auto presentation = literalPresentation(field);
   if (!presentation || text.empty() || text.size() > 1234)
@@ -26,11 +40,7 @@ Expected<FieldLiteralAttr> decodeFieldLiteral(FieldType field, StringRef text) {
                      : value.zextOrTrunc(presentation->modulus.getBitWidth())
                            .uge(presentation->modulus))))
     return zkc::error("field-literal");
-  auto integer =
-      IntegerAttr::get(IntegerType::get(field.getContext(), presentation->width,
-                                        IntegerType::Unsigned),
-                       value.zextOrTrunc(presentation->width));
-  return FieldLiteralAttr::get(field.getContext(), field, integer);
+  return makeFieldLiteral(field, value);
 }
 Expected<std::string> encodeFieldLiteral(FieldLiteralAttr literal) {
   if (!literal || failed(FieldLiteralAttr::verify(

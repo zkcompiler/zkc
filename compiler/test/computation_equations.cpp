@@ -6,6 +6,7 @@
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/IR.h"
@@ -673,8 +674,10 @@ int main() {
     auto &body = inner.helper->getRegion(0).front();
     OpBuilder builder(&body.back());
     auto field = body.back().getOperand(0).getType();
-    auto zero = algebra::ConstantFieldOp::create(builder, body.back().getLoc(),
-                                                 field, "0");
+    auto zero = algebra::ConstantFieldOp::create(
+        builder, body.back().getLoc(), field,
+        cantFail(algebra::makeFieldLiteral(cast<algebra::FieldType>(field),
+                                           llvm::APInt(1, 0))));
     auto neutral = algebra::FieldAddOp::create(
         builder, body.back().getLoc(), field, body.back().getOperand(0), zero);
     body.back().setOperand(0, neutral);

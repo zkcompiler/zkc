@@ -63,6 +63,18 @@ Expected<APInt> decimal(StringRef text, bool field, StringRef code) {
   return value;
 }
 
+Expected<APInt> fieldLiteral(algebra::ConstantFieldOp op) {
+  auto literal = op.getValue();
+  if (!literal || literal.getField() != op.getResult().getType() ||
+      literal.getField().getDomain() != fieldDomain ||
+      !literal.getValue().getType().isUnsignedInteger(255))
+    return error("structured-reference-unsupported", "field literal identity");
+  auto value = literal.getValue().getValue().zext(512);
+  if (value.uge(modulus()))
+    return error("structured-reference-unsupported", "field literal range");
+  return value;
+}
+
 bool valueType(Type type) {
   if (type.isSignlessInteger(1) || type.isUnsignedInteger(64))
     return true;
@@ -556,8 +568,7 @@ class Admission {
     case Kind::FieldConstant: {
       if (auto failure = attributes(op, {"value"}))
         return failure;
-      auto parsed = decimal(cast<algebra::ConstantFieldOp>(op).getValue(), true,
-                            "structured-reference-unsupported");
+      auto parsed = fieldLiteral(cast<algebra::ConstantFieldOp>(op));
       if (!parsed)
         return parsed.takeError();
       break;
@@ -2069,8 +2080,7 @@ class Reference {
                                  std::get<uint64_t>(args[1]));
       break;
     case Kind::FieldConstant: {
-      auto parsed = decimal(cast<algebra::ConstantFieldOp>(op).getValue(), true,
-                            "structured-reference-unsupported");
+      auto parsed = fieldLiteral(cast<algebra::ConstantFieldOp>(op));
       if (!parsed)
         return parsed.takeError();
       result.values.emplace_back(std::move(*parsed));

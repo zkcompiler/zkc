@@ -307,9 +307,7 @@ class NumericalBodyReader {
       state.addOperands(inputs);
       state.addTypes(ValueRange(step.outputs).getTypes());
       if (contract == "field.constant")
-        state.addAttribute(
-            "value", builder.getStringAttr(cantFail(algebra::encodeFieldLiteral(
-                         cast<algebra::FieldLiteralAttr>(parameters[0])))));
+        state.addAttribute("value", parameters[0]);
       auto *projected = builder.create(state);
       result.sources[projected] = op;
       values.map(step.outputs, projected->getResults());

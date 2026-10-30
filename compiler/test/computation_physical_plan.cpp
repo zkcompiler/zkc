@@ -92,7 +92,7 @@ module @mapped attributes {exec.computation} {
    func.return %sum : !F
  }
  func.func @evaluate(%xs:!V,%a:!F,%b:!F)->!F {
-   %zero = "algebra.constant"() {value="0"} : ()->!F
+   %zero = "algebra.constant"() {value=#algebra.literal<!F, 0 : ui255>} : ()->!F
    %sum = "algebra.finite_fold"(%xs,%zero,%a,%b) {domain=@items,step=@step} : (!V,!F,!F,!F)->!F
    func.return %sum : !F
  }
@@ -269,7 +269,7 @@ std::string finiteSource(bool bulk = true) {
    func.return %s : !F
  }
  func.func private @sum(%xs:!V)->!F {
-   %zero = "algebra.constant"() {value="0"} : ()->!F
+   %zero = "algebra.constant"() {value=#algebra.literal<!F, 0 : ui255>} : ()->!F
    %sum = "algebra.finite_fold"(%xs,%zero) {domain=@items,step=@step} : (!V,!F)->!F
    func.return %sum : !F
  }
@@ -948,7 +948,7 @@ module @difference attributes {exec.computation} {
         at = text.find("   func.return %sum : !F");
         require(at != std::string::npos, "missing sum fixture result");
         text.replace(at, std::string("   func.return %sum : !F").size(), R"(
-   %one = "algebra.constant"() {value="1"} : ()->!F
+   %one = "algebra.constant"() {value=#algebra.literal<!F, 1 : ui255>} : ()->!F
    %product = "algebra.finite_fold"(%xs,%one) {domain=@items,step=@multiply} : (!V,!F)->!F
    %both = "algebra.field_add"(%sum,%product) : (!F,!F)->!F
    func.return %both : !F

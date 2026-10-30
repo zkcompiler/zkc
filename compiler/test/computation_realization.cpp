@@ -1432,7 +1432,11 @@ module {
         OpBuilder builder(&entry.front().back());
         OperationState literal(entry.getLoc(), "algebra.constant");
         literal.addTypes(entry.getArgument(0).getType());
-        literal.addAttribute("value", builder.getStringAttr("123"));
+        literal.addAttribute(
+            "value",
+            take(algebra::makeFieldLiteral(
+                cast<algebra::FieldType>(entry.getArgument(0).getType()),
+                llvm::APInt(64, 123))));
         auto *constantOp = builder.create(literal);
         auto returned = cast<func::ReturnOp>(entry.front().back());
         // Keep the literal live so the total helper simplifier cannot erase it.

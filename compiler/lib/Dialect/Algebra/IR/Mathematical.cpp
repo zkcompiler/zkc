@@ -162,20 +162,14 @@ bool isFieldArray(Type type) {
   return protocol::installedDomains().identitySort(array.getDomain()) ==
          "Field";
 }
-bool isCanonicalFieldLiteral(StringRef domain, StringRef value) {
-  if (auto error =
-          protocol::checkParameters("field.constant", {value.str()}, domain)) {
-    consumeError(std::move(error));
-    return false;
-  }
-  return true;
-}
 LogicalResult ConstantFieldOp::verify() {
-  if (!isCanonicalFieldLiteral(getResult().getType().getDomain(), getValue()))
+  if (getValue().getType() != getResult().getType())
     return diagnostics::emit(emitOpError(), "mathematical-formation",
-                             "expected a canonical field literal");
-  return success();
+                             "literal and result field identities differ");
+  return FieldLiteralAttr::verify([&] { return emitOpError(); },
+                                  getValue().getField(), getValue().getValue());
 }
+OpFoldResult ConstantFieldOp::fold(FoldAdaptor) { return getValue(); }
 LogicalResult ArrayFromElementsOp::verify() {
   auto type = getResult().getType();
   if (!isFieldArray(type) || getElements().size() != type.getLength() ||

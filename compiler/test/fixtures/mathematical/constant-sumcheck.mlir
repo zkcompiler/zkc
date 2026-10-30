@@ -7,7 +7,7 @@
 !state = !data.variant<#data.identity<["atom", "poly.residual.product"]>, [#data.alternative<"state", [!poly.point<"bls12-381.fr">, !poly.multilinear<"bls12-381.fr">, !poly.multilinear<"bls12-381.fr">]>]>
 module { "protocol.module"() ({
  "poly.recipe"() ({ ^slots(%a:!f,%b:!f):
-   %p = "algebra.constant"() {value="7"} : ()->!f
+   %p = "algebra.constant"() {value=#algebra.literal<!f, 7 : ui255>} : ()->!f
    "poly.recipe_yield"(%p) : (!f)->()
  }) {sym_name="product",degree=0:i64} : ()->()
  "poly.realize"() {sym_name="init",recipe=@product,kind="init",function_type=(ui64,!t,!t)->!state} : ()->()
@@ -63,8 +63,8 @@ module { "protocol.module"() ({
      %coeffs = "protocol.local_call"(%state) {callee=@round,role="P",site="round_coefficients"} : (!state)->!a
      %received = protocol.exchange %coeffs {sender="P",receiver="V",site="round_message"} : !a
      %q = "poly.from_coefficients"(%received) : (!a)->!q
-     %zero = "algebra.constant"() {value="0"} : ()->!f
-     %one = "algebra.constant"() {value="1"} : ()->!f
+     %zero = "algebra.constant"() {value=#algebra.literal<!f, 0 : ui255>} : ()->!f
+     %one = "algebra.constant"() {value=#algebra.literal<!f, 1 : ui255>} : ()->!f
      %q0 = "poly.evaluate"(%q,%zero) : (!q,!f)->!f
      %q1 = "poly.evaluate"(%q,%one) : (!q,!f)->!f
      %sum = algebra.field_add %q0,%q1 : (!f,!f)->!f

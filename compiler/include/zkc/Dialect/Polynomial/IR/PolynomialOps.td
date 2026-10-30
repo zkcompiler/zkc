@@ -2,6 +2,7 @@
 #define ZKC_DIALECT_POLYNOMIAL_IR_POLYNOMIALOPS_TD
 
 include "zkc/Dialect/Types.td"
+include "zkc/Dialect/Algebra/IR/AlgebraAttrs.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
@@ -51,11 +52,11 @@ def PolynomialCoefficientsOp : PolynomialMathOp<"coefficients"> {
   let results = (outs FieldArray:$coefficients);
 }
 def EvaluateDomainOp : PolynomialMathOp<"evaluate_domain"> {
-  let arguments = (ins Polynomial:$polynomial, StrArrayAttr:$points);
+  let arguments = (ins Polynomial:$polynomial, AlgebraFieldLiterals:$points);
   let results = (outs FieldArray:$values);
 }
 def InterpolateDomainOp : PolynomialMathOp<"interpolate"> {
-  let arguments = (ins FieldArray:$values, StrArrayAttr:$points);
+  let arguments = (ins FieldArray:$values, AlgebraFieldLiterals:$points);
   let results = (outs Polynomial:$polynomial);
 }
 def FixTableOp : PolynomialMathOp<"fix_table"> {

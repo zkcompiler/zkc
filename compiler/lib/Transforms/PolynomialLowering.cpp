@@ -4,6 +4,7 @@
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
@@ -32,7 +33,7 @@ class Elimination {
   std::map<PointKey, Value> evaluations;
   llvm::DenseMap<Value, SmallVector<Value>> coefficients;
   llvm::DenseMap<std::pair<Value, uint64_t>, Value> elements;
-  std::map<std::pair<const void *, std::string>, Value> constants;
+  llvm::DenseMap<algebra::FieldLiteralAttr, Value> constants;
 
   void refuse(llvm::StringRef detail) {
     if (!failed)
@@ -67,21 +68,29 @@ class Elimination {
     state.addAttributes(attributes);
     return builder.create(state)->getResult(0);
   }
-  Value literal(algebra::FieldType type, llvm::StringRef value) {
-    auto key = std::make_pair(type.getAsOpaquePointer(), value.str());
-    if (auto found = constants.find(key); found != constants.end())
+  Value literal(algebra::FieldLiteralAttr value) {
+    if (!value)
+      return {};
+    if (auto found = constants.find(value); found != constants.end())
       return found->second;
-    if (!algebra::isCanonicalFieldLiteral(type.getDomain(), value)) {
-      refuse(
-          "lowering requires a canonical literal in an installed prime field");
+    auto result =
+        make(algebra::ConstantFieldOp::getOperationName(), value.getField(), {},
+             {builder.getNamedAttr("value", value)});
+    if (result)
+      constants.try_emplace(value, result);
+    return result;
+  }
+  Value literal(algebra::FieldType field, const llvm::APInt &value) {
+    auto attribute = algebra::makeFieldLiteral(field, value);
+    if (!attribute) {
+      llvm::consumeError(attribute.takeError());
+      refuse("lowering requires an exact canonical field value");
       return {};
     }
-    auto result =
-        make(algebra::ConstantFieldOp::getOperationName(), type, {},
-             {builder.getNamedAttr("value", builder.getStringAttr(value))});
-    if (result)
-      constants.emplace(std::move(key), result);
-    return result;
+    return literal(*attribute);
+  }
+  Value literal(algebra::FieldType field, uint64_t value) {
+    return literal(field, llvm::APInt(64, value));
   }
   Value binary(llvm::StringRef name, Value a, Value b) {
     return a && b ? make(name, a.getType(), ValueRange{a, b}) : Value{};
@@ -153,16 +162,11 @@ class Elimination {
       result = add(mul(result, point), value);
     return result;
   }
-  static std::string decimal(const llvm::APInt &value) {
-    llvm::SmallString<128> out;
-    value.toString(out, 10, false);
-    return out.str().str();
-  }
   // Compile-time Lagrange weights. Runtime data remains SSA; no runtime inverse
   // or claim that evaluation on a finite domain determines an arbitrary
   // polynomial.
   SmallVector<Value> interpolate(ArrayRef<Value> values,
-                                 ArrayRef<std::string> points,
+                                 ArrayRef<algebra::FieldLiteralAttr> points,
                                  algebra::FieldType field) {
     if (values.size() != points.size() || points.empty() ||
         points.size() > MaximumDomainLength) {
@@ -199,15 +203,14 @@ class Elimination {
       return result;
     };
     SmallVector<llvm::APInt> xs;
-    for (const auto &point : points) {
-      if (!algebra::isCanonicalFieldLiteral(field.getDomain(), point) ||
-          !llvm::all_of(point, [](char c) { return c >= '0' && c <= '9'; })) {
-        refuse("interpolation requires canonical decimal prime-field points");
+    for (auto point : points) {
+      if (!point || point.getField() != field) {
+        refuse("interpolation point has a different field identity");
         return {};
       }
-      xs.emplace_back(width, point, 10);
+      xs.push_back(point.getValue().getValue().zextOrTrunc(width));
     }
-    SmallVector<Value> result(points.size(), literal(field, "0"));
+    SmallVector<Value> result(points.size(), literal(field, uint64_t(0)));
     for (size_t i = 0; i < xs.size(); ++i) {
       SmallVector<llvm::APInt> basis{one};
       auto denominator = one;
@@ -232,7 +235,7 @@ class Elimination {
         return {};
       auto scale = inverse(denominator);
       for (size_t k = 0; k < basis.size(); ++k) {
-        auto weight = literal(field, decimal(product(basis[k], scale)));
+        auto weight = literal(field, product(basis[k], scale));
         result[k] = add(result[k], mul(weight, values[i]));
         if (!result[k])
           return {};
@@ -265,7 +268,7 @@ class Elimination {
           multiply ? a.size() + b.size() - 1 : std::max(a.size(), b.size());
       if (!charge(length))
         return {};
-      auto zero = literal(scalar(polynomial), "0");
+      auto zero = literal(scalar(polynomial), uint64_t(0));
       result.assign(length, zero);
       if (multiply) {
         if (a.size() > remaining / b.size()) {
@@ -284,9 +287,9 @@ class Elimination {
               add(i < a.size() ? a[i] : zero, i < b.size() ? b[i] : zero);
     } else if (auto interpolation = dyn_cast_or_null<InterpolateDomainOp>(op)) {
       auto values = unpack(interpolation.getValues());
-      SmallVector<std::string> points;
+      SmallVector<algebra::FieldLiteralAttr> points;
       for (auto point : interpolation.getPoints())
-        points.push_back(cast<StringAttr>(point).getValue().str());
+        points.push_back(cast<algebra::FieldLiteralAttr>(point));
       result = interpolate(values, points, scalar(polynomial));
     } else {
       auto found = degrees.bounds.find(polynomial);
@@ -296,11 +299,18 @@ class Elimination {
                "this recipe");
         return {};
       }
-      SmallVector<std::string> points;
+      SmallVector<algebra::FieldLiteralAttr> points;
       SmallVector<Value> values;
       for (uint64_t i = 0; i <= found->second[0]; ++i) {
-        points.push_back(std::to_string(i));
-        auto point = literal(scalar(polynomial), points.back());
+        auto attribute =
+            algebra::makeFieldLiteral(scalar(polynomial), llvm::APInt(64, i));
+        if (!attribute) {
+          llvm::consumeError(attribute.takeError());
+          refuse("generated interpolation point exceeds the field");
+          return {};
+        }
+        points.push_back(*attribute);
+        auto point = literal(*attribute);
         if (!point)
           return {};
         values.push_back(evaluate(polynomial, ValueRange{point}));
@@ -350,7 +360,8 @@ class Elimination {
       if (!charge(size))
         return {};
       auto field = scalar(polynomial);
-      auto zero = literal(field, "0"), one = literal(field, "1");
+      auto zero = literal(field, uint64_t(0)),
+           one = literal(field, uint64_t(1));
       result = zero;
       for (uint64_t assignment = 0; assignment < size; ++assignment) {
         SmallVector<Value> full(point);
@@ -397,13 +408,13 @@ public:
                 .getLength();
         if (!charge(length) || values.empty())
           return failure();
-        values.resize(length, literal(scalar(observed.getPolynomial()), "0"));
+        values.resize(length,
+                      literal(scalar(observed.getPolynomial()), uint64_t(0)));
         result = pack(observed.getCoefficients().getType(), values);
       } else if (auto domain = dyn_cast<EvaluateDomainOp>(observation)) {
         SmallVector<Value> values;
         for (auto point : domain.getPoints()) {
-          auto coordinate = literal(scalar(domain.getPolynomial()),
-                                    cast<StringAttr>(point).getValue());
+          auto coordinate = literal(cast<algebra::FieldLiteralAttr>(point));
           values.push_back(coordinate ? evaluate(domain.getPolynomial(),
                                                  ValueRange{coordinate})
                                       : Value{});

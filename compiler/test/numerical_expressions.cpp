@@ -47,6 +47,28 @@ std::string fieldText(std::string text, StringRef field,
     text.replace(at, original.size(), field.str());
     at += field.size();
   }
+  auto literalWidth = [](StringRef domain) -> unsigned {
+    if (domain == "bls12-381.fr")
+      return 255;
+    if (domain == "bn254.fr")
+      return 254;
+    if (domain == "ristretto255.scalar")
+      return 253;
+    if (domain.starts_with("koala-bear"))
+      return 31;
+    if (domain == "gf2-64.pentanomial-4-3-1")
+      return 64;
+    require(domain == "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
+            "missing fixture field presentation");
+    return 192;
+  };
+  auto oldWidth = " : ui" + std::to_string(literalWidth(original)) + ">";
+  auto newWidth = " : ui" + std::to_string(literalWidth(field)) + ">";
+  at = 0;
+  while ((at = text.find(oldWidth, at)) != std::string::npos) {
+    text.replace(at, oldWidth.size(), newWidth);
+    at += newWidth.size();
+  }
   return text;
 }
 OwningOpRef<ModuleOp> prepareMap(
@@ -684,8 +706,11 @@ int main(int argc, char **argv) {
           auto text = fieldText(foldText.str(), field);
           text = replaceText(
               text, "%t = algebra.field_add %sq,%a : (!F,!F)->!F",
-              "%bits = \"algebra.constant\"() {value=\"0x2\"} : ()->!F\n"
-              "   %t = algebra.field_add %sq,%bits : (!F,!F)->!F");
+              "%bits = \"algebra.constant\"() "
+              "{value=#algebra.literal<!F, 2 : ui" +
+                  std::to_string(field.contains("ext3") ? 192 : 64) +
+                  ">} : ()->!F\n"
+                  "   %t = algebra.field_add %sq,%bits : (!F,!F)->!F");
           auto source = parse(context, text);
           auto candidate = emitFold(*source);
           auto *literal = operation(*candidate, "field.constant");

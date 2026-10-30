@@ -1013,9 +1013,7 @@ public:
         Value seed = nested.seed.input
                          ? captures[*nested.seed.input]
                          : emit("field.constant", {}, field, arguments,
-                                {cantFail(algebra::decodeFieldLiteral(
-                                    cast<algebra::FieldType>(field),
-                                    nested.seed.constant))});
+                                {nested.seed.constant});
         SmallVector<Value> roles{captures[nested.matrix],
                                  captures[nested.vector]};
         SmallVector<Value> operands;

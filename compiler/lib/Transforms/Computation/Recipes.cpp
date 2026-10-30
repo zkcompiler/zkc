@@ -630,9 +630,7 @@ class Recipes {
         auto field = constant.getResult().getType().getDomain().str();
         result =
             emit("field.constant", {field}, {}, constant.getResult().getType(),
-                 {cantFail(algebra::decodeFieldLiteral(
-                     constant.getResult().getType(), constant.getValue()))},
-                 true);
+                 {constant.getValue()}, true);
       } else if (auto at = dyn_cast<algebra::ArrayAtOp>(op)) {
         auto array = at.getArray().getType();
         auto field =

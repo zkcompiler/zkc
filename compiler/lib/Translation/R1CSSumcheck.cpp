@@ -1,6 +1,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Relations.h"
@@ -41,7 +42,11 @@ class R1CSSumcheckBuilder {
     return b.getNamedAttr(key, b.getStringAttr(val));
   }
   Value constant(StringRef literal) {
-    return value<algebra::ConstantFieldOp>(field, {}, {text("value", literal)});
+    return value<algebra::ConstantFieldOp>(
+        field, {},
+        {b.getNamedAttr("value",
+                        cantFail(algebra::decodeFieldLiteral(
+                            cast<algebra::FieldType>(field), literal)))});
   }
   Value at(Value array, unsigned index) {
     return value<algebra::ArrayAtOp>(

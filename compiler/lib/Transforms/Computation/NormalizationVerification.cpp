@@ -3,6 +3,7 @@
 #include "../MathematicalValues.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
@@ -168,7 +169,7 @@ struct NormalizationProvenanceChecker::Implementation {
     using EvaluationKey = std::pair<void *, std::vector<void *>>;
     std::map<EvaluationKey, Value> evaluations;
     llvm::DenseMap<std::pair<Value, uint64_t>, Value> elements;
-    std::map<std::pair<const void *, std::string>, Value> constants;
+    llvm::DenseMap<algebra::FieldLiteralAttr, Value> constants;
     SmallVector<Operation *> generated;
     unsigned depth = 0;
     bool invalid = false;
@@ -207,20 +208,24 @@ struct NormalizationProvenanceChecker::Implementation {
       ++cursor;
       return actual.getResult(0);
     }
-    Value literal(algebra::FieldType type, StringRef value) {
-      if (!check.terms.charge())
+    Value literal(algebra::FieldLiteralAttr value) {
+      if (!value || !check.terms.charge())
         return {};
-      auto key = std::make_pair(type.getAsOpaquePointer(), value.str());
-      if (auto found = constants.find(key); found != constants.end())
+      if (auto found = constants.find(value); found != constants.end())
         return found->second;
-      if (!algebra::isCanonicalFieldLiteral(type.getDomain(), value))
-        return {};
-      auto result = make(
-          "algebra.constant", type, {},
-          {attributes.getNamedAttr("value", attributes.getStringAttr(value))});
+      auto result = make("algebra.constant", value.getField(), {},
+                         {attributes.getNamedAttr("value", value)});
       if (result)
-        constants.emplace(std::move(key), result);
+        constants.try_emplace(value, result);
       return result;
+    }
+    Value literal(algebra::FieldType field, uint64_t value) {
+      auto attribute = algebra::makeFieldLiteral(field, llvm::APInt(64, value));
+      if (!attribute) {
+        llvm::consumeError(attribute.takeError());
+        return {};
+      }
+      return literal(*attribute);
     }
     Value binary(StringRef name, Value a, Value b) {
       return a && b ? make(name, a.getType(), ValueRange{a, b}) : Value{};
@@ -304,7 +309,7 @@ struct NormalizationProvenanceChecker::Implementation {
     // Obtain weights from the existing independent Vandermonde laws. Unique
     // sample anchors prevent equal-valued samples from identifying coordinates.
     // Only numeric weights are extracted; no expected MLIR is ever generated.
-    FailureOr<SmallVector<SmallVector<std::string>>>
+    FailureOr<SmallVector<SmallVector<algebra::FieldLiteralAttr>>>
     weights(algebra::FieldType field, ArrayAttr points) {
       using Term = mathematical::ValueCorrespondence::Term;
       unsigned n = points.size();
@@ -339,7 +344,7 @@ struct NormalizationProvenanceChecker::Implementation {
           packed.name.getValue() != "algebra.array_from_elements" ||
           packed.operands.size() != n)
         return failure();
-      SmallVector<SmallVector<std::string>> result(n);
+      SmallVector<SmallVector<algebra::FieldLiteralAttr>> result(n);
       for (unsigned degree = 0; degree < n; ++degree) {
         result[degree].resize(n);
         Term partial = packed.operands[degree];
@@ -357,13 +362,14 @@ struct NormalizationProvenanceChecker::Implementation {
               product.operands[1] != samples[sample])
             return failure();
           auto weight = terms.expression(product.operands[0]);
-          auto spelling = weight.attributes
-                              ? weight.attributes.getAs<StringAttr>("value")
-                              : StringAttr{};
+          auto spelling =
+              weight.attributes
+                  ? weight.attributes.getAs<algebra::FieldLiteralAttr>("value")
+                  : algebra::FieldLiteralAttr{};
           if (!weight.name || weight.name.getValue() != "algebra.constant" ||
               weight.type != field || !spelling)
             return failure();
-          result[degree][sample] = spelling.getValue().str();
+          result[degree][sample] = spelling;
           partial = sum.operands[0];
         }
       }
@@ -376,12 +382,12 @@ struct NormalizationProvenanceChecker::Implementation {
       auto matrix = weights(field, points);
       if (failed(matrix))
         return {};
-      SmallVector<Value> result(samples.size(), literal(field, "0"));
+      SmallVector<Value> result(samples.size(), literal(field, uint64_t(0)));
       // Consume the supported scalar realization in sample-major order. The
       // weights above were derived independently in coefficient-major order.
       for (unsigned sample = 0; sample < samples.size(); ++sample)
         for (unsigned degree = 0; degree < samples.size(); ++degree) {
-          auto weight = literal(field, (*matrix)[degree][sample]);
+          auto weight = literal((*matrix)[degree][sample]);
           result[degree] =
               add(result[degree], multiply(weight, samples[sample]));
           if (!result[degree])
@@ -415,7 +421,7 @@ struct NormalizationProvenanceChecker::Implementation {
         if (!check.terms.charge(width) ||
             (product && !check.terms.charge(a.size() * b.size())))
           return {};
-        auto zero = literal(scalar(polynomial), "0");
+        auto zero = literal(scalar(polynomial), uint64_t(0));
         if (!zero)
           return {};
         result.assign(width, zero);
@@ -443,9 +449,14 @@ struct NormalizationProvenanceChecker::Implementation {
         SmallVector<Attribute> points;
         SmallVector<Value> samples;
         for (uint64_t i = 0; i <= bound->second[0]; ++i) {
-          auto spelling = std::to_string(i);
-          points.push_back(attributes.getStringAttr(spelling));
-          auto point = literal(scalar(polynomial), spelling);
+          auto attribute =
+              algebra::makeFieldLiteral(scalar(polynomial), llvm::APInt(64, i));
+          if (!attribute) {
+            llvm::consumeError(attribute.takeError());
+            return {};
+          }
+          points.push_back(*attribute);
+          auto point = literal(*attribute);
           if (!point)
             return {};
           auto sample = evaluate(polynomial, {point});
@@ -505,8 +516,8 @@ struct NormalizationProvenanceChecker::Implementation {
             !check.terms.charge(uint64_t(1) << count))
           return {};
         auto field = scalar(polynomial);
-        auto zero = literal(field, "0");
-        auto one = literal(field, "1");
+        auto zero = literal(field, uint64_t(0));
+        auto one = literal(field, uint64_t(1));
         if (!zero || !one)
           return {};
         result = zero;
@@ -651,7 +662,7 @@ struct NormalizationProvenanceChecker::Implementation {
             return false;
           // The supported normalizer materializes the shared zero even if no
           // padding is needed. Read it explicitly, including when unused.
-          auto zero = literal(scalar(observation.getPolynomial()), "0");
+          auto zero = literal(scalar(observation.getPolynomial()), uint64_t(0));
           if (!zero)
             return false;
           entries.resize(width, zero);
@@ -659,8 +670,7 @@ struct NormalizationProvenanceChecker::Implementation {
         } else if (auto domain = dyn_cast<poly::EvaluateDomainOp>(op)) {
           SmallVector<Value> entries;
           for (auto point : domain.getPoints()) {
-            auto coordinate = literal(scalar(domain.getPolynomial()),
-                                      cast<StringAttr>(point).getValue());
+            auto coordinate = literal(cast<algebra::FieldLiteralAttr>(point));
             if (!coordinate)
               return false;
             auto value = evaluate(domain.getPolynomial(), {coordinate});

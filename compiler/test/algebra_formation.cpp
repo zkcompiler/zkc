@@ -67,12 +67,14 @@ int main() {
   check("mixed pairing domain", "pairing", group, g2, gt, false);
   check("target scalar action", "group_scale", gt, other, gt, true);
   check("wrong target scalar", "group_scale", gt, field, gt, false);
-  for (auto value : {"0", "00", "-1"}) {
-    std::string source = "module { func.func @constant() -> " + field.str() +
-                         " { %v = \"algebra.constant\"() {value=\"" + value +
-                         "\"} : () -> " + field.str() +
-                         " func.return %v : " + field.str() + " } }";
-    parse("canonical field literal", source, llvm::StringRef(value) == "0");
+  for (auto literalField : {field, other}) {
+    std::string source =
+        "module { func.func @constant() -> " + field.str() +
+        " { %v = \"algebra.constant\"() {value=#algebra.literal<" +
+        literalField.str() + ", 0 : ui" +
+        (literalField == field ? "255" : "254") + ">} : () -> " + field.str() +
+        " func.return %v : " + field.str() + " } }";
+    parse("exact literal field", source, literalField == field);
   }
   for (auto length : {0, 2}) {
     std::string array = "!algebra.field_array<\"bls12-381.fr\", " +

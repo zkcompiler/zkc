@@ -76,8 +76,8 @@ module { "protocol.module"() ({
      %coeffs = "protocol.local_call"(%state) {callee=@round,role="P",site="round_coefficients"} : (!state)->!a
      %received = protocol.exchange %coeffs {sender="P",receiver="V",site="round_message"} : !a
      %q = "poly.from_coefficients"(%received) : (!a)->!q
-     %zero = "algebra.constant"() {value="0"} : ()->!f
-     %one = "algebra.constant"() {value="1"} : ()->!f
+     %zero = "algebra.constant"() {value=#algebra.literal<!f, 0 : ui255>} : ()->!f
+     %one = "algebra.constant"() {value=#algebra.literal<!f, 1 : ui255>} : ()->!f
      %q0 = "poly.evaluate"(%q,%zero) : (!q,!f)->!f
      %q1 = "poly.evaluate"(%q,%one) : (!q,!f)->!f
      %sum = algebra.field_add %q0,%q1 : (!f,!f)->!f
@@ -107,10 +107,10 @@ module { "protocol.module"() ({
    ^layer(%i:ui64,%pointP:!p,%pointV:!p,%prior:i1,%rng:!rng):
      %tableP = "protocol.local_call"(%pointP) {callee=@equality_table,role="P",site="tableP"} : (!p)->!t
      %tableV = "protocol.local_call"(%pointV) {callee=@equality_table,role="V",site="tableV"} : (!p)->!t
-     %one = "algebra.constant"() {value="1"} : ()->!f
+     %one = "algebra.constant"() {value=#algebra.literal<!f, 1 : ui255>} : ()->!f
      %out:3 = protocol.apply @sumcheck(%i,%tableP,%tableP,%tableV,%tableV,%one,%rng) {roles=["P","V"],site="reduce"} : (ui64,!t,!t,!t,!t,!f,!rng)->(i1,!p,!f)
      %accepted = arith.andi %prior,%out#0 : i1
-     %zero = "algebra.constant"() {value="0"} : ()->!f
+     %zero = "algebra.constant"() {value=#algebra.literal<!f, 0 : ui255>} : ()->!f
      %nextP = "protocol.local_call"(%pointP,%zero) {callee=@append_point,role="P",site="advanceP"} : (!p,!f)->!p
      %nextV = "protocol.local_call"(%pointV,%zero) {callee=@append_point,role="V",site="advanceV"} : (!p,!f)->!p
      "protocol.yield"(%nextP,%nextV,%accepted) : (!p,!p,i1)->()

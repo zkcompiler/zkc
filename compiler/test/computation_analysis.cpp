@@ -735,7 +735,7 @@ module { "protocol.module"() ({
    func.return %out : !F
  }
  func.func private @row(%i:ui64,%m:!M)->!F attributes {data.preconditions=[#data.index_bound<0,1,0>]} {
-   %zero = "algebra.constant"() {value="0"} : ()->!F
+   %zero = "algebra.constant"() {value=#algebra.literal<!F, 0 : ui255>} : ()->!F
    %out = "algebra.finite_fold"(%m,%zero,%i) {domain=@columns,step=@step} : (!M,!F,ui64)->!F
    func.return %out : !F
  }

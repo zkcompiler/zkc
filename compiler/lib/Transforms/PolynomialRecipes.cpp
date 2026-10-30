@@ -70,9 +70,11 @@ class Realizer {
   Value natural(unsigned n) {
     return one("index.constant", {}, index, {builder.getIntegerAttr(index, n)});
   }
-  Value scalar(StringRef n) {
-    return one("field.constant", {}, field,
-               {cantFail(algebra::decodeFieldLiteral(field, n))});
+  Value scalar(algebra::FieldLiteralAttr value) {
+    return one("field.constant", {}, field, {value});
+  }
+  Value scalar(uint64_t value) {
+    return scalar(cantFail(algebra::makeFieldLiteral(field, APInt(64, value))));
   }
   void require(Value value) { (void)emit("control.require", value, {}); }
   Value arity(Value value) { return one("poly.table_arity", value, index); }
@@ -147,7 +149,7 @@ class Realizer {
       vectors.push_back(one("vector.from_table", factor, vector));
     auto length = one("vector.length", vectors.front(), index);
     auto half = one("index.div", {length, natural(2)}, index);
-    auto zero = scalar("0");
+    auto zero = scalar(0);
     unsigned width = *poly::recipeDegree(recipe) + 1;
     SmallVector<Value> seeds(width, zero), captures(vectors);
     captures.push_back(half);
@@ -237,7 +239,7 @@ class Realizer {
     SmallVector<Coefficients> values;
     for (auto factor : tables)
       values.push_back({one("poly.evaluate", {factor, empty}, field)});
-    return {p, expression(recipe, values, scalar("0")).front()};
+    return {p, expression(recipe, values, scalar(0)).front()};
   }
 
 public:
@@ -284,7 +286,7 @@ public:
       SmallVector<Coefficients> values;
       for (auto factor : arguments.drop_front())
         values.push_back({one("poly.evaluate", {factor, arguments[0]}, field)});
-      returned = {expression(recipe, values, scalar("0")).front()};
+      returned = {expression(recipe, values, scalar(0)).front()};
     } else {
       SmallVector<Type> inputs{point};
       inputs.append(recipe.getBody().front().getNumArguments(), table);

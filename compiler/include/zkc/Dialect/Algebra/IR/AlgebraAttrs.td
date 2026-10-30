@@ -2,16 +2,22 @@
 #define ZKC_DIALECT_ALGEBRA_IR_ALGEBRAATTRS_TD
 include "mlir/IR/AttrTypeBase.td"
 include "mlir/IR/EnumAttr.td"
+include "mlir/IR/BuiltinAttributeInterfaces.td"
 include "zkc/Dialect/Algebra/IR/AlgebraDialect.td"
 
-def AlgebraFieldLiteral : AttrDef<AlgebraDialect, "FieldLiteral"> {
+def AlgebraFieldLiteral : AttrDef<AlgebraDialect, "FieldLiteral", [TypedAttrInterface]> {
   let mnemonic = "literal";
   let summary = "a canonical field element in its declared presentation";
   let parameters = (ins "::zkc::algebra::FieldType":$field,
     "::mlir::IntegerAttr":$value);
   let assemblyFormat = "`<` $field `,` $value `>`";
   let genVerifyDecl = 1;
+  let extraClassDeclaration = [{
+    ::mlir::Type getType() const { return getField(); }
+  }];
 }
+def AlgebraFieldLiterals : TypedArrayAttrBase<AlgebraFieldLiteral, "ordered field literals">;
+
 def AlgebraRingNodeKind : I32EnumAttr<"RingNodeKind", "selected Ring graph node", [
   I32EnumAttrCase<"Constant", 0, "constant">,
   I32EnumAttrCase<"Input", 1, "input">,

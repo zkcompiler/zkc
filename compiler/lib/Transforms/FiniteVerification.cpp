@@ -148,7 +148,7 @@ class Reader {
   }
   Value kernel(StringRef contract, ValueRange operands, Type result,
                ArrayRef<std::string> arguments = {},
-               ArrayRef<std::string> parameters = {}) {
+               ArrayRef<Attribute> parameters = {}) {
     auto *op = consume(exec::ApplyOp::getOperationName());
     if (!op)
       return {};
@@ -179,14 +179,14 @@ class Reader {
               {}}},
             false))
       fail();
-    if (!protocol::invocationParametersMatch(
-            contract, binding.getArgumentsAttr(), params, parameters))
+    if (!llvm::equal(params, parameters))
       fail();
     bindings.insert(binding);
     return result ? ports.outputs(op)[0] : Value();
   }
   Value natural(uint64_t n) {
-    return kernel("index.constant", {}, index, {}, {std::to_string(n)});
+    return kernel("index.constant", {}, index, {},
+                  {IntegerAttr::get(index, n)});
   }
   void require(Value condition) {
     if (!condition) {
@@ -205,8 +205,9 @@ class Reader {
       return natural(
           cast<algebra::FieldArrayType>(container.getType()).getLength());
     return kernel(col.length, container, index, col.arguments,
-                  col.matrix ? ArrayRef<std::string>{std::to_string(selected)}
-                             : ArrayRef<std::string>{});
+                  col.matrix
+                      ? ArrayRef<Attribute>{IntegerAttr::get(index, selected)}
+                      : ArrayRef<Attribute>{});
   }
   Operation *control(StringRef name, ValueRange operands, TypeRange results,
                      unsigned regions) {

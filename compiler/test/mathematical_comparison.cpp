@@ -371,8 +371,9 @@ module { "protocol.module"() ({
   for (unsigned i = 0; i < (calls ? 1024u : 2048u); ++i) {
     auto constant = "%c" + std::to_string(i);
     if (total)
-      body += "   " + constant + " = \"algebra.constant\"() {value=\"" +
-              std::to_string(i + 1) + "\"} : ()->!F\n";
+      body += "   " + constant +
+              " = \"algebra.constant\"() {value=#algebra.literal<!F, " +
+              std::to_string(i + 1) + " : ui255>} : ()->!F\n";
     else
       scopedCall("\"exec.apply\"(%scope) "
                  "{binding=@constant,parameters=[#algebra.literal<!F, " +
@@ -597,8 +598,11 @@ int main() {
     SymbolTable symbols(&module->getBody()->front());
     auto helper = symbols.lookup<func::FuncOp>("observe");
     OpBuilder builder(&helper.getBody().front().back());
-    algebra::ConstantFieldOp::create(builder, helper.getLoc(),
-                                     helper.getArgument(0).getType(), "00");
+    algebra::ConstantFieldOp::create(
+        builder, helper.getLoc(), helper.getArgument(0).getType(),
+        algebra::FieldLiteralAttr::get(
+            &context, cast<algebra::FieldType>(helper.getArgument(0).getType()),
+            builder.getI64IntegerAttr(0)));
     require(!compareMap(*module),
             "empty-result helper hid an invalid unused instruction");
   });
@@ -639,8 +643,11 @@ int main() {
     lastCall.setOperand(1, helper.getArgument(1));
     auto &chain = symbols.lookup<func::FuncOp>("chain").getBody().front();
     OpBuilder builder(&chain.back());
-    algebra::ConstantFieldOp::create(builder, module->getLoc(),
-                                     chain.getArgument(0).getType(), "00");
+    algebra::ConstantFieldOp::create(
+        builder, module->getLoc(), chain.getArgument(0).getType(),
+        algebra::FieldLiteralAttr::get(
+            &context, cast<algebra::FieldType>(chain.getArgument(0).getType()),
+            builder.getI64IntegerAttr(0)));
     require(!compareMap(*module, 100000),
             "memoization hid an unused invalid helper instruction");
   });
@@ -696,7 +703,11 @@ int main() {
     auto source = symbols.lookup<func::FuncOp>("formula");
     OpBuilder builder(&source.getBody().front().back());
     algebra::ConstantFieldOp::create(
-        builder, source.getLoc(), source.getFunctionType().getResult(0), "00");
+        builder, source.getLoc(), source.getFunctionType().getResult(0),
+        algebra::FieldLiteralAttr::get(
+            &context,
+            cast<algebra::FieldType>(source.getFunctionType().getResult(0)),
+            builder.getI64IntegerAttr(0)));
     require(!compareMap(*module),
             "unused malformed literal escaped Ring admission");
   });
@@ -785,7 +796,8 @@ int main() {
             : "mapped sum neutral chain beyond the Ring depth limit",
         [&] {
           std::string source =
-              "   %zero = \"algebra.constant\"() {value=\"0\"} : ()->!F\n";
+              "   %zero = \"algebra.constant\"() {value=#algebra.literal<!F, 0 "
+              ": ui255>} : ()->!F\n";
           std::string previous = "%x";
           for (unsigned i = 0; i < steps; ++i) {
             auto name = "%n" + std::to_string(i);
@@ -818,14 +830,19 @@ int main() {
             auto &body = formula.getBody().front();
             OpBuilder builder(&body.back());
             algebra::ConstantFieldOp::create(
-                builder, formula.getLoc(), body.getArgument(0).getType(), "00");
+                builder, formula.getLoc(), body.getArgument(0).getType(),
+                algebra::FieldLiteralAttr::get(
+                    &context,
+                    cast<algebra::FieldType>(body.getArgument(0).getType()),
+                    builder.getI64IntegerAttr(0)));
             require(!compareMap(*module, 100000, true),
                     "neutral normalization hid an unused invalid literal");
           }
         });
   cases.run("neutral normalization preserves nominal source fields", [&] {
     auto text = formulaBodies(
-        "   %zero = \"algebra.constant\"() {value=\"0\"} : ()->!F\n"
+        "   %zero = \"algebra.constant\"() {value=#algebra.literal<!F, 0 : "
+        "ui255>} : ()->!F\n"
         "   %r = \"algebra.field_add\"(%x,%zero) : (!F,!F)->!F\n"
         "   func.return %r : !F\n",
         "   %sum_attempt = \"exec.apply\"(%scope,%x) "

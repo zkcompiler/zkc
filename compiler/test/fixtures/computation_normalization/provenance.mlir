@@ -89,9 +89,9 @@ module { "protocol.module"() ({
    func.return %first,%second,%coeffs : !F,!F,!A
  }
  func.func private @tables(%table:!A,%x:!F)->(!A,!A,!F,!A) {
-   %p = "poly.interpolate"(%table) {points=["0","1"]} : (!A)->!P
+   %p = "poly.interpolate"(%table) {points=[#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>,#algebra.literal<!algebra.field<"bls12-381.fr">, 1 : ui255>]} : (!A)->!P
    %coeffs = "poly.coefficients"(%p) : (!P)->!A
-   %domain = "poly.evaluate_domain"(%p) {points=["2","3"]} : (!P)->!A
+   %domain = "poly.evaluate_domain"(%p) {points=[#algebra.literal<!algebra.field<"bls12-381.fr">, 2 : ui255>,#algebra.literal<!algebra.field<"bls12-381.fr">, 3 : ui255>]} : (!P)->!A
    %m = "poly.mle"(%table) : (!A)->!P
    %fix = "poly.fix"(%m,%x) : (!P,!F)->!poly.polynomial<"bls12-381.fr",0>
    %value = "poly.evaluate"(%fix) : (!poly.polynomial<"bls12-381.fr",0>)->!F

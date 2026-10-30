@@ -60,13 +60,7 @@ const protocol::ComputationContract *semantics(Operation *op) {
     if (auto constant = dyn_cast<algebra::ConstantFieldOp>(op)) {
       if (op->getAttrs().size() != 1 || !constant.getValueAttr())
         return nullptr;
-      auto literal = algebra::decodeFieldLiteral(constant.getResult().getType(),
-                                                 constant.getValue());
-      if (!literal) {
-        consumeError(literal.takeError());
-        return nullptr;
-      }
-      parameters.push_back(*literal);
+      parameters.push_back(constant.getValue());
     } else if (!op->getAttrs().empty())
       return nullptr;
     // The admitted total syntax has explicit logical signature adapters. A
@@ -127,19 +121,13 @@ bool replaceable(Operation *op) {
   auto binding = semanticBinding(op);
   return binding && binding.getImplementation().empty();
 }
-std::optional<std::string> fieldConstant(Operation *op) {
+algebra::FieldLiteralAttr fieldConstant(Operation *op) {
   auto *facet = semantics(op);
   if (!facet || facet->identity != MathematicalIdentity::FieldConstant)
-    return std::nullopt;
+    return {};
   if (auto constant = dyn_cast<algebra::ConstantFieldOp>(op))
-    return constant.getValue().str();
-  auto literal = cast<algebra::FieldLiteralAttr>(
+    return constant.getValue();
+  return cast<algebra::FieldLiteralAttr>(
       op->getAttrOfType<ArrayAttr>("parameters")[0]);
-  auto encoded = algebra::encodeFieldLiteral(literal);
-  if (!encoded) {
-    consumeError(encoded.takeError());
-    return std::nullopt;
-  }
-  return std::move(*encoded);
 }
 } // namespace zkc::finite

@@ -1,6 +1,8 @@
 #ifndef ZKC_TRANSFORMS_COMPUTATIONEQUATIONS_H
 #define ZKC_TRANSFORMS_COMPUTATIONEQUATIONS_H
 
+#include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
+
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Analysis/ComputationWork.h"
 
@@ -80,7 +82,7 @@ matchComputation(const finite::ComputationView &view,
 
 struct ContractionSeed {
   std::optional<unsigned> input;
-  std::string constant;
+  algebra::FieldLiteralAttr constant;
 };
 struct NestedContraction {
   EquationWitness witness;

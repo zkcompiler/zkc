@@ -114,7 +114,7 @@ func.return %r : !F }}''')
 
 
 def instruction_budget_source(constants, extra=False):
-    body = '\n'.join(f'%c{i} = "algebra.constant"() {{value="0"}} : ()->!F' for i in range(constants))
+    body = '\n'.join(f'%c{i} = "algebra.constant"() {{value=#algebra.literal<!F, 0 : ui255>}} : ()->!F' for i in range(constants))
     helper = 'func.func private @formula(%x:!F)->!F {\n' + body + '\nfunc.return %x : !F }'
     body = invocation('exec.compute',['!F'],['!F'],'callee=@formula,site="compute"')
     work = scoped_function('work',['!F'],['!F'],body,['%r'])
@@ -176,7 +176,7 @@ with case('realization-total-profile-keeps-pure-index-and-group-values'):
 
 with case('other-installed-fields-export-with-their-rows'):
     # The map profile lifts any installed field; Lean admits only its own rows.
-    source = mapped.replace('bls12-381.fr', 'koala-bear')
+    source = mapped.replace('bls12-381.fr', 'koala-bear').replace('ui255', 'ui31')
     commands.verified(source)
     nominals, services = export(source)[9]
     assert nominals == [['nominal', 'koala-bear', 'Field', [],
@@ -246,8 +246,8 @@ for label, (original, before, after) in native_negatives.items():
 for label, operation in {
     'equality': '%bad = "algebra.field_equal"(%a,%b) : (!F,!F)->i1',
     'index': '%bad = "data.index"() {value=0 : ui64} : ()->ui64',
-    'other-field': '%bad = "algebra.constant"() {value="1"} : ()->!algebra.field<"bn254.fr">',
-    'other-lean-admitted-field': '%bad = "algebra.constant"() {value="1"} : ()->!algebra.field<"koala-bear">',
+    'other-field': '%bad = "algebra.constant"() {value=#algebra.literal<!algebra.field<"bn254.fr">, 1 : ui254>} : ()->!algebra.field<"bn254.fr">',
+    'other-lean-admitted-field': '%bad = "algebra.constant"() {value=#algebra.literal<!algebra.field<"koala-bear">, 1 : ui31>} : ()->!algebra.field<"koala-bear">',
     'select': '%yes = arith.constant true\n%bad = arith.select %yes,%a,%b : !F',
 }.items():
     with case('dead-collection-formula-' + label):

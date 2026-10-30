@@ -40,8 +40,8 @@ module { "protocol.module"() ({
    func.return %r#0,%r#1 : !F,!F
  }
  func.func private @nonzero_seeds(%xs:!V,%factor:!F,%bias:!F)->(!F,!F) {
-   %first = "algebra.constant"() {value="7"} : ()->!F
-   %second = "algebra.constant"() {value="11"} : ()->!F
+   %first = "algebra.constant"() {value=#algebra.literal<!F, 7 : ui255>} : ()->!F
+   %second = "algebra.constant"() {value=#algebra.literal<!F, 11 : ui255>} : ()->!F
    %ys = "algebra.finite_collect"(%xs,%factor) {domain=@items,body=@body} : (!V,!F)->!V
    %r:2 = "algebra.finite_fold"(%ys,%first,%second,%bias) {domain=@items,step=@step} : (!V,!F,!F,!F)->(!F,!F)
    func.return %r#0,%r#1 : !F,!F

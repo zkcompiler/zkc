@@ -5,6 +5,7 @@
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Builders.h"
 #include "zkc/Analysis/NativeTypes.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/Builders.h"
@@ -948,8 +949,14 @@ class Emitter {
             attrs.push_back(
                 attr("value", builder.getIntegerAttr(
                                   builder.getIntegerType(64, false), value)));
-          } else if (!math->literal.empty())
-            attrs.push_back(text("value", math->literal));
+          } else if (math->identity == MathematicalIdentity::FieldConstant) {
+            auto literal = take(algebra::decodeFieldLiteral(
+                mlir::cast<algebra::FieldType>(outputs.front()),
+                math->literal));
+            if (!literal)
+              return false;
+            attrs.push_back(attr("value", *literal));
+          }
           if (math->identity == MathematicalIdentity::ArrayAt ||
               math->identity == MathematicalIdentity::PolynomialSum) {
             auto value = math->staticArguments[2].dimension.closedValue();
@@ -960,8 +967,22 @@ class Emitter {
           }
           if (math->identity ==
                   MathematicalIdentity::PolynomialEvaluateDomain ||
-              math->identity == MathematicalIdentity::PolynomialInterpolate)
-            attrs.push_back(attr("points", strings(math->parameters)));
+              math->identity == MathematicalIdentity::PolynomialInterpolate) {
+            auto type = outputs.front();
+            auto field = algebra::FieldType::get(
+                &context,
+                mlir::isa<poly::PolynomialType>(type)
+                    ? mlir::cast<poly::PolynomialType>(type).getDomain()
+                    : mlir::cast<algebra::FieldArrayType>(type).getDomain());
+            SmallVector<mlir::Attribute> points;
+            for (const auto &parameter : math->parameters) {
+              auto point = take(algebra::decodeFieldLiteral(field, parameter));
+              if (!point)
+                return false;
+              points.push_back(*point);
+            }
+            attrs.push_back(attr("points", builder.getArrayAttr(points)));
+          }
           actual = make(name, outputs, operands, attrs);
           break;
         }

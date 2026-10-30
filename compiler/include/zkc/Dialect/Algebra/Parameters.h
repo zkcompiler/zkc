@@ -3,6 +3,11 @@
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
 namespace zkc::algebra {
+/// Construct an exact canonical value without parsing or reducing modulo p.
+llvm::Expected<FieldLiteralAttr> makeFieldLiteral(FieldType,
+                                                  const llvm::APInt &);
+/// Whether the exact literal denotes a natural in the prime subfield.
+bool isPrimeSubfieldLiteral(FieldLiteralAttr);
 /// Decode canonical external literals without reduction or identity coercion.
 /// Native consumers inspect FieldLiteralAttr directly, not its byte spelling.
 llvm::Expected<FieldLiteralAttr> decodeFieldLiteral(FieldType, llvm::StringRef);

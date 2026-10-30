@@ -29,3 +29,12 @@ void zkc::algebra::AlgebraDialect::initialize() {
       >();
   zkc::protocol::type_adapters::attachCatalogTypeModels(*this);
 }
+Operation *zkc::algebra::AlgebraDialect::materializeConstant(
+    OpBuilder &builder, Attribute value, Type type, Location location) {
+  auto literal = dyn_cast<FieldLiteralAttr>(value);
+  if (!literal || literal.getType() != type ||
+      failed(FieldLiteralAttr::verify([&] { return emitError(location); },
+                                      literal.getField(), literal.getValue())))
+    return nullptr;
+  return ConstantFieldOp::create(builder, location, type, literal);
+}

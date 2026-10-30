@@ -273,7 +273,7 @@ assert view["draws"][1]["request"]["arguments"] == []
 # Exact edge, order, and service failures on otherwise admitted programs.
 changed = (
     query()
-    + f'%one="algebra.constant"() {{value="1"}} : ()->{F}\n%changed=algebra.field_add %draw,%one : ({F},{F})->{F}\n'
+    + f'%one="algebra.constant"() {{value=#algebra.literal<{F}, 1 : ui255>}} : ()->{F}\n%changed=algebra.field_add %draw,%one : ({F},{F})->{F}\n'
 )
 analyze(
     small(changed + delivery("changed") + receive + compare),

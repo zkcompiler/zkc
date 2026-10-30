@@ -63,8 +63,8 @@ module { "protocol.module"() ({
      %coeffs = "protocol.local_call"(%state) {callee=@round,role="P",site="round_coefficients"} : (!state)->!a
      %received = protocol.exchange %coeffs {sender="P",receiver="V",site="round_message"} : !a
      %q = "poly.from_coefficients"(%received) : (!a)->!q
-     %zero = "algebra.constant"() {value="0"} : ()->!f
-     %one = "algebra.constant"() {value="1"} : ()->!f
+     %zero = "algebra.constant"() {value=#algebra.literal<!f, 0 : ui255>} : ()->!f
+     %one = "algebra.constant"() {value=#algebra.literal<!f, 1 : ui255>} : ()->!f
      %q0 = "poly.evaluate"(%q,%zero) : (!q,!f)->!f
      %q1 = "poly.evaluate"(%q,%one) : (!q,!f)->!f
      %sum = algebra.field_add %q0,%q1 : (!f,!f)->!f

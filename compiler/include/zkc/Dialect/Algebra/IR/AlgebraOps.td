@@ -2,6 +2,7 @@
 #define ZKC_DIALECT_ALGEBRA_IR_ALGEBRAOPS_TD
 
 include "zkc/Dialect/Types.td"
+include "zkc/Dialect/Algebra/IR/AlgebraAttrs.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
@@ -42,10 +43,11 @@ def GroupEqualOp : TotalMathOp<AlgebraDialect, "group_equal", Group, Group, I1, 
 def GroupScaleOp : TotalMathOp<AlgebraDialect, "group_scale", Group, Field, Group, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
 
 def ConstantFieldOp : Op<AlgebraDialect, "constant",
-                        [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
-  let arguments = (ins StrAttr:$value);
+                        [Pure, ConstantLike, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+  let arguments = (ins AlgebraFieldLiteral:$value);
   let results = (outs Field:$result);
   let hasVerifier = 1;
+  let hasFolder = 1;
 }
 def ArrayFromElementsOp : Op<AlgebraDialect, "array_from_elements",
     [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {

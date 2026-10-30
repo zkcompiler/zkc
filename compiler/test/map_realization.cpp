@@ -164,8 +164,9 @@ int main(int argc, char **argv) {
   auto bytes = llvm::MemoryBuffer::getFile(argv[1]);
   require(bool(bytes), "cannot read scoped map fixture");
   // Reuse the shared general collection while preserving this suite's field.
-  auto fixture =
-      replaceText((*bytes)->getBuffer().str(), "bls12-381.fr", "koala-bear");
+  auto fixture = replaceText(
+      replaceText((*bytes)->getBuffer().str(), "bls12-381.fr", "koala-bear"),
+      "ui255", "ui31");
   DialectRegistry registry;
   registerDialects(registry);
   MLIRContext context(registry, MLIRContext::Threading::DISABLED);
@@ -262,7 +263,8 @@ int main(int argc, char **argv) {
   });
   mutation("change retained scalar mathematics", [&](ModuleOp module) {
     function(module, "formula").walk([&](algebra::ConstantFieldOp op) {
-      op->setAttr("value", StringAttr::get(&context, "2"));
+      op.setValueAttr(cantFail(algebra::makeFieldLiteral(
+          op.getResult().getType(), llvm::APInt(2, 2))));
     });
   });
   mutation("move shape admission after arithmetic", [&](ModuleOp module) {
@@ -428,12 +430,14 @@ func.func private @foreign(%a:!algebra.field<"bls12-381.fr">,
                     "   %e = algebra.field_equal %x,%x : (!F,!F)->i1\n   %r =");
       else if (kind == "foreign constant")
         text = edit(text, "   %dead =",
-                    "   %foreign = \"algebra.constant\"() {value=\"2\"} : ()->"
+                    "   %foreign = \"algebra.constant\"() "
+                    "{value=#algebra.literal<!algebra.field<\"bls12-381.fr\">, "
+                    "2 : ui255>} : ()->"
                     "!algebra.field<\"bls12-381.fr\">\n   %dead =");
       else if (kind == "foreign helper result") {
         text = edit(text, " func.func private @formula", R"mlir(
 func.func private @wide()->!algebra.field<"koala-bear.ext8-binomial3"> {
-  %w = "algebra.constant"() {value="3"} : ()->!algebra.field<"koala-bear.ext8-binomial3">
+  %w = "algebra.constant"() {value=#algebra.literal<!algebra.field<"koala-bear.ext8-binomial3">, 3 : ui31>} : ()->!algebra.field<"koala-bear.ext8-binomial3">
   func.return %w : !algebra.field<"koala-bear.ext8-binomial3">
 }
  func.func private @formula)mlir");

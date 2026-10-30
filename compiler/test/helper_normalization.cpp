@@ -387,9 +387,9 @@ int main() {
  }
  func.func private @tables(%a:!F,%b:!F,%x:!F)->(!A,!A,!F) {
    %v = "algebra.array_from_elements"(%a,%b) : (!F,!F)-> !A
-   %p = "poly.interpolate"(%v) {points=["0","1"]} : (!A)->!P
+   %p = "poly.interpolate"(%v) {points=[#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>,#algebra.literal<!algebra.field<"bls12-381.fr">, 1 : ui255>]} : (!A)->!P
    %c = func.call @observe(%p) : (!P)->!A
-   %d = "poly.evaluate_domain"(%p) {points=["2","3"]} : (!P)->!A
+   %d = "poly.evaluate_domain"(%p) {points=[#algebra.literal<!algebra.field<"bls12-381.fr">, 2 : ui255>,#algebra.literal<!algebra.field<"bls12-381.fr">, 3 : ui255>]} : (!P)->!A
    %unused = func.call @observe(%p) : (!P)->!A
    %m = "poly.mle"(%v) : (!A)->!P
    %f = "poly.fix"(%m,%x) : (!P,!F)->!poly.polynomial<"bls12-381.fr",0>

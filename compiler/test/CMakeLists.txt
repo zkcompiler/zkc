@@ -30,6 +30,8 @@ function(zkc_source_project target manifest)
 endfunction()
 
 add_zkc_test(role_assembly Compiler role-assembly)
+add_zkc_test(algebra_constants IR algebra-constants)
+mlir_target_link_libraries(zkc-algebra_constants-test PRIVATE MLIRParser MLIRTransformUtils MLIRTensorDialect)
 add_zkc_test(data_constants IR data-constants)
 mlir_target_link_libraries(zkc-data_constants-test PRIVATE MLIRParser MLIRTransformUtils)
 add_zkc_test(oracle_source Compiler oracle-source)

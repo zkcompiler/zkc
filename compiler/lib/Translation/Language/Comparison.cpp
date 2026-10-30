@@ -6,6 +6,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/OperationShapes.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/ControlCursor.h"
@@ -1107,8 +1108,18 @@ class Comparator {
               !natural(*actual, "value", literal))
             return fail("index literal differs");
         } else if (math->identity == MathematicalIdentity::FieldConstant) {
+          auto field = mlir::dyn_cast<algebra::FieldType>(
+              actual->getResult(0).getType());
+          auto expected =
+              field ? algebra::decodeFieldLiteral(field, math->literal)
+                    : llvm::Expected<algebra::FieldLiteralAttr>(
+                          error("source.correspondence"));
+          if (!expected) {
+            llvm::consumeError(expected.takeError());
+            return fail("invalid checked field literal");
+          }
           if (!attributes(*actual, {"value"}) ||
-              !string(*actual, "value", math->literal))
+              actual->getAttr("value") != *expected)
             return fail("field literal differs");
         } else if (math->identity == MathematicalIdentity::BooleanConstant) {
           auto value = actual->getAttrOfType<mlir::IntegerAttr>("value");
@@ -1135,9 +1146,25 @@ class Comparator {
                        MathematicalIdentity::PolynomialEvaluateDomain ||
                    math->identity ==
                        MathematicalIdentity::PolynomialInterpolate) {
-          if (!attributes(*actual, {"points"}) ||
-              !strings(actual->getAttr("points"), math->parameters))
+          auto type = actual->getResult(0).getType();
+          auto field = algebra::FieldType::get(
+              actual->getContext(),
+              mlir::isa<poly::PolynomialType>(type)
+                  ? mlir::cast<poly::PolynomialType>(type).getDomain()
+                  : mlir::cast<algebra::FieldArrayType>(type).getDomain());
+          auto points = actual->getAttrOfType<mlir::ArrayAttr>("points");
+          if (!attributes(*actual, {"points"}) || !points ||
+              points.size() != math->parameters.size())
             return fail("polynomial domain differs");
+          for (auto [point, parameter] : llvm::zip(points, math->parameters)) {
+            auto expected = algebra::decodeFieldLiteral(field, parameter);
+            if (!expected) {
+              llvm::consumeError(expected.takeError());
+              return fail("invalid checked polynomial point");
+            }
+            if (point != *expected)
+              return fail("polynomial domain differs");
+          }
         } else if (!attributes(*actual, {}))
           return fail("extra mathematical attributes");
         result = Values(actual->getResults());

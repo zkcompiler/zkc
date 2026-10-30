@@ -229,12 +229,12 @@ stopping = '''func.func @stop(%scope:!runtime.scope)->!exec.outcome<> attributes
   func.return %failure : !exec.outcome<>
 }'''
 subset = module(pure, stopping,
-    protocol('child', '''%one = "algebra.constant"() {value="1"} : ()->!F
+    protocol('child', '''%one = "algebra.constant"() {value=#algebra.literal<!F, 1 : ui255>} : ()->!F
       %v = func.call @identity(%one) : (!F)->!F
       "protocol.local_call"() {callee=@stop,role="A",site="stop"} : ()->()''',
              roles=('A',), inputs=()),
     protocol('main', apply(roles=('P',), args='', inputs='') + '''
-      %answer = "algebra.constant"() {value="7"} : ()->!F''', inputs=(),
+      %answer = "algebra.constant"() {value=#algebra.literal<!F, 7 : ui255>} : ()->!F''', inputs=(),
              outputs=(('!F', ('Q',)),), returns=('%answer',)))
 with case('outside-roster-zero-result-child-and-native-projection'):
     snapshot = export(subset)

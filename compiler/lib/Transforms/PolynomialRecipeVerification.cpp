@@ -2,6 +2,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -47,7 +48,7 @@ class RecipeCorrespondence {
     return op;
   }
   Value primitive(StringRef contract, ValueRange operands = {},
-                  ArrayRef<std::string> parameters = {},
+                  ArrayRef<Attribute> parameters = {},
                   std::optional<unsigned> length = {}, bool output = true) {
     Operation *op = take(exec::ApplyOp::getOperationName());
     if (!op)
@@ -65,9 +66,8 @@ class RecipeCorrespondence {
     if (!declaration || declaration.getContract() != contract ||
         !declaration.getImplementation().empty() ||
         !llvm::equal(declaration.getArguments(), arguments) ||
-        !protocol::invocationParametersMatch(
-            contract, declaration.getArgumentsAttr(),
-            op->getAttrOfType<ArrayAttr>("parameters"), parameters) ||
+        op->getAttrOfType<ArrayAttr>("parameters") !=
+            builder.getArrayAttr(parameters) ||
         op->getAttrs().size() != 3 || ports.bodies(op) ||
         ports.outputs(op).size() != unsigned(output) ||
         !llvm::equal(ports.inputs(op), operands)) {
@@ -78,10 +78,18 @@ class RecipeCorrespondence {
     return output ? ports.outputs(op)[0] : Value();
   }
   Value natural(unsigned value) {
-    return primitive("index.constant", {}, {std::to_string(value)});
+    auto *context = recipe.getContext();
+    return primitive(
+        "index.constant", {},
+        {IntegerAttr::get(IntegerType::get(context, 64, IntegerType::Unsigned),
+                          value)});
   }
-  Value scalar(StringRef value) {
-    return primitive("field.constant", {}, {value.str()});
+  Value scalar(algebra::FieldLiteralAttr value) {
+    return primitive("field.constant", {}, {value});
+  }
+  Value scalar(uint64_t value) {
+    auto field = algebra::FieldType::get(recipe.getContext(), domain);
+    return scalar(cantFail(algebra::makeFieldLiteral(field, APInt(64, value))));
   }
   void require(Value predicate) {
     primitive("control.require", {predicate}, {}, {}, false);
@@ -185,7 +193,7 @@ class RecipeCorrespondence {
     Value length = primitive("vector.length", tables.front());
     Value two = natural(2);
     Value half = primitive("index.div", {length, two});
-    Value zero = scalar("0");
+    Value zero = scalar(0);
     // Declared degree is the fixed message ABI, including zero padding.
     unsigned width = recipe->getAttrOfType<IntegerAttr>("degree").getInt() + 1;
     auto *loop = take(exec::RangeOp::getOperationName());
@@ -240,7 +248,7 @@ class RecipeCorrespondence {
     SmallVector<Coefficients> scalars;
     for (Value factor : factors)
       scalars.push_back({primitive("poly.evaluate", {factor, point})});
-    auto terms = expression(scalars, scalar("0"));
+    auto terms = expression(scalars, scalar(0));
     if (terms.size() != 1) {
       valid = false;
       return {};

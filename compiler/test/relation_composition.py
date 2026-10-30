@@ -52,7 +52,7 @@ commands.verified(module(chain), "protocol-application")
 # Count expanded operand storage before cloning wide, otherwise cheap bodies.
 wide = empty_function(
     "wide",
-    f'%zero = "algebra.constant"() {{value="0"}} : () -> {F}\n%a = "algebra.array_from_elements"('
+    f'%zero = "algebra.constant"() {{value=#algebra.literal<{F}, 0 : ui255>}} : () -> {F}\n%a = "algebra.array_from_elements"('
     + ",".join(["%zero"] * 4096)
     + ") : (" + ",".join([F] * 4096) + ') -> !algebra.field_array<"bls12-381.fr", 4096>',
 )
@@ -476,8 +476,9 @@ for name, asset in assets.items():
         for before, after in [
             ('site = "weight_draw0"', 'site = "different_draw"'),
             ("index = 2 : i64", "index = 1 : i64"),
-            ('value = "0"', 'value = "1"'),
+            ('0 : ui255', '1 : ui255'),
         ]:
+            assert before in text, f"missing mutation anchor: {before}"
             bad = text.replace(before, after, 1)
             commands.verified(bad)
             checked(bad, requirements, refuses="r1cs-source-correspondence")

@@ -1,6 +1,8 @@
 #ifndef ZKC_TRANSFORMS_SCOPEDNESTEDCONTRACTION_H
 #define ZKC_TRANSFORMS_SCOPEDNESTEDCONTRACTION_H
 
+#include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
+
 #include "zkc/Analysis/Finite.h"
 
 namespace zkc::nested {
@@ -12,7 +14,7 @@ struct ScopedSource {
   unsigned matrix = 0, vector = 0, axis = 0;
   struct Seed {
     std::optional<unsigned> input;
-    std::string constant;
+    algebra::FieldLiteralAttr constant;
   } seed;
   llvm::SmallVector<unsigned> inputMap;
 };

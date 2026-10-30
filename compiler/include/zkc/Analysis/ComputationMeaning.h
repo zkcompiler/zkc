@@ -3,7 +3,7 @@
 
 #include "mlir/IR/Operation.h"
 #include "zkc/Contracts/Operations.h"
-#include <optional>
+#include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
 
 namespace zkc::finite {
 /// Exact logical meaning, including explicitly constrained implementations.
@@ -12,7 +12,7 @@ namespace zkc::finite {
 const protocol::ComputationContract *semantics(mlir::Operation *operation);
 /// Meaning alone does not authorize rebinding an explicit implementation.
 bool replaceable(mlir::Operation *operation);
-std::optional<std::string> fieldConstant(mlir::Operation *operation);
+algebra::FieldLiteralAttr fieldConstant(mlir::Operation *operation);
 
 } // namespace zkc::finite
 #endif

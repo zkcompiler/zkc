@@ -166,6 +166,11 @@ digests in different formats remain different references. Neither constructing
 this attribute nor passing its shape check authorizes an asset, setup or mutable
 resource. Hexadecimal spelling is an interchange encoding of the digest bytes.
 
+Pure `algebra.constant` uses the same typed field-literal attribute as execution
+parameters. Its fold and materializer preserve the nominal field; ordered
+polynomial domain points also use these attributes. Internal interpolation
+computes native integer values without a text round trip.
+
 Invocation admission derives associated identities and complete type terms from
 the same native catalog scope used for callable signatures. Ordinary natural
 parameters use unsigned 64-bit integer attributes; field literals cannot be

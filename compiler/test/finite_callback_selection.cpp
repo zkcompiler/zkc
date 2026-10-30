@@ -297,7 +297,7 @@ int main() {
         std::string replacement;
         if (body == "uniform")
           replacement = R"mlir(
-   %term = "algebra.constant"() {value="7"} : ()->!F
+   %term = "algebra.constant"() {value=#algebra.literal<!F, 7 : ui255>} : ()->!F
    %r = algebra.field_add %s,%term : (!F,!F)->!F
 )mlir";
         else
@@ -308,8 +308,8 @@ int main() {
 )mlir";
         if (body.starts_with("zero-")) {
           replacement = R"mlir(
-   %zero = "algebra.constant"() {value="0"} : ()->!F
-   %one = "algebra.constant"() {value="1"} : ()->!F
+   %zero = "algebra.constant"() {value=#algebra.literal<!F, 0 : ui255>} : ()->!F
+   %one = "algebra.constant"() {value=#algebra.literal<!F, 1 : ui255>} : ()->!F
 )mlir";
           if (body == "zero-add")
             replacement +=
@@ -339,7 +339,7 @@ int main() {
           auto at = replacement.find("%r =");
           replacement.replace(at, 4, "%combined =");
           replacement += R"mlir(
-   %one = "algebra.constant"() {value="1"} : ()->!F
+   %one = "algebra.constant"() {value=#algebra.literal<!F, 1 : ui255>} : ()->!F
    %r = algebra.field_multiply %combined,%one : (!F,!F)->!F
 )mlir";
         }
@@ -352,6 +352,13 @@ int main() {
         while ((at = text.find("koala-bear", at)) != std::string::npos) {
           text.replace(at, 10, field.str());
           at += field.size();
+        }
+        if (field == "koala-bear") {
+          size_t width = 0;
+          while ((width = text.find("ui255", width)) != std::string::npos) {
+            text.replace(width, 5, "ui31");
+            width += 4;
+          }
         }
         auto source = parseSourceString<ModuleOp>(text, &context);
         require(bool(source) && succeeded(verify(*source)), "source refused");

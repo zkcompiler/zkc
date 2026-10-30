@@ -10,6 +10,7 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Data/Variant.h"
@@ -816,10 +817,12 @@ class Exporter {
     if (auto constant = dyn_cast<algebra::ConstantFieldOp>(op)) {
       if (auto e = attributes(op, {"value"}))
         return std::move(e);
-      return json::Array{
-          "field.constant",
-          cast<algebra::FieldType>(constant.getResult().getType()).getDomain(),
-          constant.getValue()};
+      auto literal = algebra::encodeFieldLiteral(constant.getValue());
+      if (!literal)
+        return literal.takeError();
+      return json::Array{"field.constant",
+                         constant.getResult().getType().getDomain(),
+                         std::move(*literal)};
     }
     StringRef fieldOpcode;
     if (isa<algebra::FieldAddOp>(op))

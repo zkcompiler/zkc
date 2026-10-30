@@ -50,7 +50,7 @@ with case('stable recipe ABI and malformed declarations'):
     commands.source('protocol-bundle', recipe.replace('%p = algebra.field_multiply %a, %b : (!f,!f)->!f', '%p = "algebra.constant"() {wrong="0"} : ()->!f'), refuses='value')
 with case('recipe carrier includes unused scalar expressions'):
     recipe = (FIXTURES / 'iterated-sumcheck.mlir').read_text()
-    inserted = '''   %foreign = "algebra.constant"() {value="2130706432"} : ()->!algebra.field<"koala-bear">
+    inserted = '''   %foreign = "algebra.constant"() {value=#algebra.literal<!algebra.field<"koala-bear">, 2130706432 : ui31>} : ()->!algebra.field<"koala-bear">
    %negated = algebra.field_multiply %foreign, %foreign : (!algebra.field<"koala-bear">,!algebra.field<"koala-bear">)->!algebra.field<"koala-bear">
 '''
     # Dead arithmetic still reaches recipe realization. It must never be
@@ -111,8 +111,8 @@ with case('preparation retains field-array construction from scalar constants'):
     source = '''!f = !algebra.field<"bls12-381.fr">
 module { "protocol.module"() ({
  "protocol.func"() ({
-   %a = "algebra.constant"() {value="1"} : ()->!f
-   %b = "algebra.constant"() {value="2"} : ()->!f
+   %a = "algebra.constant"() {value=#algebra.literal<!f, 1 : ui255>} : ()->!f
+   %b = "algebra.constant"() {value=#algebra.literal<!f, 2 : ui255>} : ()->!f
    %xs = "algebra.array_from_elements"(%a, %b) : (!f, !f)-> !algebra.field_array<"bls12-381.fr", 2>
    "protocol.return"(%xs) : (!algebra.field_array<"bls12-381.fr", 2>)->()
  }) {sym_name="main",function_type=()->!algebra.field_array<"bls12-381.fr", 2>,roles=["P"],input_roles=[],output_roles=[["P"]]} : ()->()

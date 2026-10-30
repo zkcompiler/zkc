@@ -118,15 +118,14 @@ admitLaneFormula(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
     if (result.getType() != field || !finite::replaceable(&op))
       return unsupported();
     if (auto constant = finite::fieldConstant(&op)) {
-      if (auto e = protocol::checkParameters("field.constant", {*constant},
-                                             field.getDomain()))
-        return std::move(e);
       // Ring literals are prime-subfield naturals. Other exact field values
       // enter through typed operands, never by reinterpreting bit patterns.
-      if (!all_of(*constant, [](char c) { return isDigit(c); }))
+      if (!algebra::isPrimeSubfieldLiteral(constant))
         return unsupported();
       meanings[result] = nodes.size();
-      nodes.push_back(ring::Node::literal(field.getDomain().str(), *constant));
+      nodes.push_back(
+          ring::Node::literal(field.getDomain().str(),
+                              cantFail(algebra::encodeFieldLiteral(constant))));
       continue;
     }
     auto *contract = finite::semantics(&op);
@@ -275,10 +274,7 @@ emitVectorLanes(const LaneFormula &admitted, Type vector, Value length,
     }
     LaneInput realized;
     if (auto constant = finite::fieldConstant(&op)) {
-      auto literal = algebra::decodeFieldLiteral(field, *constant);
-      if (!literal)
-        return literal.takeError();
-      realized.value = emit("field.constant", {}, field, {*literal});
+      realized.value = emit("field.constant", {}, field, {constant});
     } else {
       LaneInput left = values.lookup(op.getOperand(0)),
                 right = values.lookup(op.getOperand(1));
@@ -381,7 +377,7 @@ OwningOpRef<func::FuncOp> closeLaneFormula(const LaneFormula &formula,
       continue;
     if (auto literal = finite::fieldConstant(&op)) {
       values[result] =
-          algebra::ConstantFieldOp::create(builder, location, field, *literal);
+          algebra::ConstantFieldOp::create(builder, location, field, literal);
       continue;
     }
     auto *meaning = finite::semantics(&op);

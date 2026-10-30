@@ -10,8 +10,8 @@ func.func private @recipe(%T: !algebra.field_array<"bls12-381.fr", 4>, %U: !alge
 "protocol.func"() ({
 ^entry(%T: !algebra.field_array<"bls12-381.fr", 4>, %U: !algebra.field_array<"bls12-381.fr", 4>, %claim: !algebra.field<"bls12-381.fr">, %random: !protocol.service_ref<"random.bls12-381.fr/0">):
  %f = func.call @recipe(%T, %U) : (!algebra.field_array<"bls12-381.fr", 4>, !algebra.field_array<"bls12-381.fr", 4>) -> !poly.polynomial<"bls12-381.fr", 2>
- %zero = "algebra.constant"() {value="0"} : () -> !algebra.field<"bls12-381.fr">
- %one = "algebra.constant"() {value="1"} : () -> !algebra.field<"bls12-381.fr">
+ %zero = "algebra.constant"() {value=#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>} : () -> !algebra.field<"bls12-381.fr">
+ %one = "algebra.constant"() {value=#algebra.literal<!algebra.field<"bls12-381.fr">, 1 : ui255>} : () -> !algebra.field<"bls12-381.fr">
  %round0 = "poly.sum_suffix"(%f) {count=1:i64} : (!poly.polynomial<"bls12-381.fr", 2>) -> !poly.polynomial<"bls12-381.fr", 1>
  %coefficients0 = "poly.coefficients"(%round0) : (!poly.polynomial<"bls12-381.fr", 1>) -> !algebra.field_array<"bls12-381.fr", 3>
  %received0 = protocol.exchange %coefficients0 {sender="P",receiver="V",site="round0"} : !algebra.field_array<"bls12-381.fr", 3>
