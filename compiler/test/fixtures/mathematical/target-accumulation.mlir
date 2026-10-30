@@ -3,7 +3,7 @@
 !g2 = !algebra.group<"bn254.g2">
 !gt = !algebra.group<"bn254.gt">
 module { "protocol.module"() ({
-"runtime.binding"() {sym_name="field_from_index",contract="field.from_index",arguments=["bn254.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="field_from_index",contract="field.from_index",arguments=["bn254.fr"],implementation="",function_type=(!runtime.scope, ui64) -> !exec.outcome<(!algebra.field<"bn254.fr">)>} : ()->()
 
     func.func @count_scalar(%arg0: !runtime.scope, %arg1: ui64) -> !exec.outcome<(!f)> attributes {no_inline, runtime.origin = ["count_scalar", []]} {
       %0 = "exec.apply"(%arg0, %arg1) <{binding = @field_from_index, parameters = [], site = "scalar"}> : (!runtime.scope, ui64) -> !exec.outcome<(!f)>
@@ -17,7 +17,7 @@ module { "protocol.module"() ({
     }
 
 "protocol.func"() ({ ^entry(%a:!g1,%b:!g2,%x:!f,%n:ui64):
- %zero = "algebra.constant"() {value="0"} : ()->!f
+ %zero = "algebra.constant"() {value=#algebra.literal<!f, 0 : ui254>} : ()->!f
  %base = algebra.pairing %a,%b : (!g1,!g2)->!gt
  %term = algebra.group_scale %base,%x : (!gt,!f)->!gt
  %identity = algebra.group_scale %base,%zero : (!gt,!f)->!gt

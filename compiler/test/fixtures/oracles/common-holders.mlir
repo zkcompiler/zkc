@@ -6,7 +6,7 @@
 module { "protocol.module"() ({
  "protocol.func"() ({
  ^entry(%left:!D,%right:!D,%which:ui64,%position:ui64):
-  %rows = "data.index"() {value="4"} : ()->ui64
+  %rows = "data.index"() {value=4 : ui64} : ()->ui64
   %a = "protocol.oracle_send"(%left,%rows) {shape_names=["rows"],shape_bounds={},sender="Alice",receivers=["V"],site="left"} : (!D,ui64)->!H
   %b = "protocol.oracle_send"(%right,%rows) {shape_names=["rows"],shape_bounds={},sender="Bob",receivers=["V"],site="right"} : (!D,ui64)->!H
   %empty = "protocol.oracle_sequence_empty"() : ()->!S

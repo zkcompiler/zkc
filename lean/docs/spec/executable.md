@@ -362,7 +362,7 @@ gives equality at budget 25 or greater with the exact binding/header test.
 or bad header forces rejection. A budget of 24 can therefore reject after one
 oracle call; a bad header rejects before any call.
 
-`ZkcSecurity.Examples.ExecutableSchnorrFiatShamir` transfers the compiled
+`ZkcSecurityExamples.ExecutableSchnorrFiatShamir` transfers the compiled
 knowledge bound to proof bytes through this canonical verifier. `decoded` maps
 a byte prover to typed proofs, `validate_cases` splits successful canonical
 verification from rejection, and `acceptance_le` transports the probability
@@ -460,7 +460,7 @@ the rounds compose by the fold invariant: the claim is the sum of the table
 restricted at the point. At two rounds the bound is 186 instructions, the
 runtime's measured threshold.
 
-`ZkcArkLib.Examples.ExecutableSumcheckFiatShamir` transfers the compiled
+`ZkcArkLibExamples.ExecutableSumcheckFiatShamir` transfers the compiled
 Sumcheck bounds to provers of proof bytes. `decoded` decodes a byte prover's
 proofs at the receive types of the statement's round count; with
 `Prunes.prEvent_le`, the executable accepts at most as often as the compiled

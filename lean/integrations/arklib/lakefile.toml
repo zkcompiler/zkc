@@ -1,6 +1,6 @@
 name = "zkc_arklib"
 version = "0.0.0"
-defaultTargets = ["ZkcArkLib", "ZkcArkLibTests"]
+defaultTargets = ["ZkcArkLib", "ZkcArkLibExamples", "ZkcArkLibTests"]
 
 [leanOptions]
 autoImplicit = false
@@ -48,4 +48,9 @@ allowNonModules = true
 [[lean_lib]]
 name = "ZkcArkLib"
 globs = ["ZkcArkLib.+"]
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "ZkcArkLibExamples"
+globs = ["ZkcArkLibExamples.+"]
 requiresModuleSystem = true

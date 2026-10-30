@@ -1,5 +1,6 @@
 #ifndef ZKC_CONTRACTS_SERVICES_H
 #define ZKC_CONTRACTS_SERVICES_H
+#include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Domains.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
@@ -62,12 +63,12 @@ inline std::optional<uint64_t> parseUniformIndexBound(llvm::StringRef text) {
     return {};
   return bound;
 }
-// Method signatures as logical type spellings. `draw` returns one element of
-// the service field. `index` takes a UniformIndex bound and returns an index;
-// it exists only where the catalog grants IndexRandomness to that field.
+// Method signatures as typed logical declarations. `draw` returns one element
+// of the service field. `index` takes a UniformIndex bound and returns an
+// index; it exists only where the catalog grants IndexRandomness to that field.
 struct ServiceMethod {
-  std::vector<std::string> inputs;
-  std::string output;
+  std::vector<BoundType> inputs;
+  BoundType output;
 };
 inline std::optional<ServiceMethod> serviceMethod(llvm::StringRef contract,
                                                   llvm::StringRef method) {
@@ -75,10 +76,10 @@ inline std::optional<ServiceMethod> serviceMethod(llvm::StringRef contract,
   if (field.empty())
     return {};
   if (method == "draw")
-    return ServiceMethod{{}, "field:" + field.str()};
+    return ServiceMethod{{}, {"field", field.str(), {}}};
   if (method == "index" &&
       installedDomains().hasFact("IndexRandomness", {field.str()}))
-    return ServiceMethod{{"index"}, "index"};
+    return ServiceMethod{{{"index", {}, {}}}, {"index", {}, {}}};
   return {};
 }
 inline llvm::StringRef nativeChallengeField(llvm::StringRef suite) {

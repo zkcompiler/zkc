@@ -113,7 +113,7 @@ def test_both_prefixes_and_exact_ctest_evidence(driver, tmp_path, profile, reuse
             "-DZKC_CONTRIBUTION_FILES=", f"-DZKC_CONTRIBUTION_FILES={ROOT}/compiler/examples/domain/contribution.cmake"]
     builds = [c for c in calls if c[:2] == ["cmake", "--build"]]
     assert len(builds) == (4 if reuse else 8)
-    assert all(c[-3:] == ["zkc-compile", "zkc-opt", "zkc-tblgen"] for c in builds if "--target" in c)
+    assert all(c[-2:] == ["--target", "zkc-tools"] for c in builds if "--target" in c)
     consumers = [c for c in calls if "-S" in c]
     assert [next(a for a in c if a.startswith("-DEXPECT_ENVELOPE=")) for c in consumers] == [
         "-DEXPECT_ENVELOPE=OFF", "-DEXPECT_ENVELOPE=ON"] * 2

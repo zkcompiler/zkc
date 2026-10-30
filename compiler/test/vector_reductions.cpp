@@ -3,6 +3,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -16,9 +17,9 @@ namespace sf = zkc::test::scopedFinite;
 namespace sc = zkc::test::scopedComputation;
 namespace {
 const std::string declarations = R"mlir(
-"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="length_alias",contract="vector.length",arguments=["koala-bear"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["koala-bear"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
+"runtime.binding"() {sym_name="length_alias",contract="vector.length",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"koala-bear">) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
 "data.domain"() ({^entry(%a:!V,%b:!V,%c:!V):
 %as = "data.domain_elements"(%a) : (!V)->!data.domain<!F>
 %bs = "data.domain_elements"(%b) : (!V)->!data.domain<!F>
@@ -180,7 +181,8 @@ std::string wrapper(StringRef name, StringRef callee, StringRef site,
       name, "%a:!V,%b:!V,%c:!V,%s:!F", "!F",
       body + scopedReturn("%r" + std::to_string(repeated - 1), "!F"), origin);
 }
-std::string chain(unsigned wrappers, unsigned repeated, unsigned width) {
+std::string chain(unsigned wrappers, unsigned repeated, unsigned width,
+                  bool mathematicalRow = true) {
   std::string definitions;
   for (unsigned i = 0; i < wrappers; ++i) {
     auto name = (width ? std::string(width, 'x') : "layer") + std::to_string(i);
@@ -191,7 +193,17 @@ std::string chain(unsigned wrappers, unsigned repeated, unsigned width) {
         "call", i + 1 == wrappers ? repeated : 1,
         width ? std::string(width, 'x') + std::to_string(i) : name);
   }
-  return withDefinitions(fixture(), definitions);
+  auto source = fixture();
+  if (!mathematicalRow) {
+    auto original =
+        declarations.substr(declarations.find("func.func private @row"));
+    auto row =
+        functionText("row", "%a:!F,%b:!F,%c:!F,%xs:!V,%ys:!V,%zs:!V,%s:!F",
+                     "!F", scopedReturn("%a", "!F"));
+    source = edit(source, original,
+                  edit(row, "func.func @row", "func.func private @row"));
+  }
+  return withDefinitions(source, definitions);
 }
 func::FuncOp scopedFunction(ModuleOp module, StringRef name, TypeRange inputs,
                             TypeRange outputs) {
@@ -327,7 +339,7 @@ int main() {
           runtime::BindingOp::create(builder, original->getLoc(), "tail",
                                      scalar ? "field.add" : "vector.add",
                                      builder.getStrArrayAttr({"koala-bear"}),
-                                     "", ArrayAttr{});
+                                     "");
           Value left = helper.getArgument(scalar ? 4 : 1),
                 right = helper.getArgument(scalar ? 4 : 2);
           sc::appendApply(helper, "tail", {left, right}, {left.getType()},
@@ -349,7 +361,8 @@ int main() {
     cases.run(label, [&] {
       auto candidate = sf::clone(*fused);
       change(*candidate);
-      require(succeeded(verify(*candidate)), "mutation must remain admitted");
+      require(succeeded(zkc::admitStage(*candidate)),
+              "mutation must remain admitted");
       refuses([&] { return compare(*retained, *candidate); });
     });
   };
@@ -377,7 +390,7 @@ int main() {
   cases.run("generated invocation may use an exactly equivalent binding", [&] {
     auto candidate = sf::clone(*fused);
     nth(*candidate, "vector.length").setBinding("length_alias");
-    require(succeeded(verify(*candidate)) &&
+    require(succeeded(zkc::admitStage(*candidate)) &&
                 succeeded(compare(*retained, *candidate)),
             "equivalent resolved contract changed generated semantics");
   });
@@ -388,7 +401,7 @@ int main() {
   cases.run("scoped definition order does not alter resolved bodies", [&] {
     auto candidate = sf::clone(*fused);
     function(*candidate, "reduce")->moveAfter(function(*candidate));
-    require(succeeded(verify(*candidate)) &&
+    require(succeeded(zkc::admitStage(*candidate)) &&
                 succeeded(compare(*retained, *candidate)),
             "scoped symbol-table order changed correspondence");
   });
@@ -401,7 +414,7 @@ int main() {
     builder.setInsertionPointToStart(
         &m.getBody()->front().getRegion(0).front());
     runtime::BindingOp::create(builder, m.getLoc(), "extra", "control.require",
-                               builder.getArrayAttr({}), "", ArrayAttr{});
+                               builder.getArrayAttr({}), "");
   });
   cases.run("retained collection capture mutation", [&] {
     auto candidate = sf::clone(*retained);
@@ -421,7 +434,8 @@ int main() {
         take(protocol::algorithmSite({{"reduce", "reduce"}}, "sum", bytes));
     function(*original).walk(
         [&](exec::CollectOp op) { op.setSite(generated); });
-    require(succeeded(verify(*original)), "collision source must be admitted");
+    require(succeeded(zkc::admitStage(*original)),
+            "collision source must be admitted");
     auto candidate = expand(*original);
     require(succeeded(protocol::verifyScopedHelperExpansionPreserved(
                 *original, *candidate)),
@@ -469,7 +483,7 @@ int main() {
   selection("intervening ordered work",
             edit(fixture(), call("reduce", "reduce", "%v", "!V", "%r", "!F"),
                  scopedApply("constant", "intervening", "", "", "%ignored",
-                             "!F", "[\"1\"]") +
+                             "!F", "[#algebra.literal<!F, 1 : ui31>]") +
                      call("reduce", "reduce", "%v", "!V", "%r", "!F")),
             false);
   selection(
@@ -480,7 +494,8 @@ int main() {
       false);
   selection("reducer spelling is not a contract",
             edit(fixture(), scopedApply("sum", "sum", "%v", "!V", "%r", "!F"),
-                 scopedApply("constant", "sum", "", "", "%r", "!F", "[\"1\"]")),
+                 scopedApply("constant", "sum", "", "", "%r", "!F",
+                             "[#algebra.literal<!F, 1 : ui31>]")),
             false);
   cases.run("ordinary preparation retains the original scalar formula", [&] {
     auto candidate = sf::clone(*source);
@@ -680,11 +695,11 @@ int main() {
             "arbitrary computation acquired collection semantics");
   });
   const auto emptyText = withDefinitions(fixture(), R"mlir(
-"runtime.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation=""} : ()->()
-"runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["koala-bear"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field<"koala-bear">, ui64) -> !exec.outcome<(!algebra.field_vector<"koala-bear">)>} : ()->()
 )mlir" + functionText("empty", "%s:!F", "!F",
                       scopedApply("index", "zero", "", "", "%zero", "ui64",
-                                  "[\"0\"]") +
+                                  "[0 : ui64]") +
                           scopedApply("fill", "first", "%s,%zero", "!F,ui64",
                                       "%a", "!V") +
                           scopedApply("fill", "second", "%s,%zero", "!F,ui64",
@@ -845,31 +860,50 @@ int main() {
             "region expansion changed canonical preparation");
   });
 
-  // A retained Collect adds its declaration and callback edges, and Compute
-  // adds the mathematical signature edge. Thus 61 wrappers reach the same
-  // 64-edge carrier bound; the original 63/64-wrapper workloads both exceed it.
-  for (unsigned depth : {61u, 62u, 63u, 64u})
-    cases.run("scoped helper chain with " + Twine(depth) + " wrappers", [&] {
-      bool depthRefusal = false;
-      ScopedDiagnosticHandler quiet(&context, [&](Diagnostic &diagnostic) {
-        depthRefusal |=
-            namesIdentifier(diagnostic.str(), "interactive-call-depth");
-        return success();
-      });
-      auto original = parseSourceString<ModuleOp>(chain(depth, 1, 0), &context);
-      if (depth > 61) {
-        require(!original && depthRefusal,
-                "excess actual callback depth admitted");
-        return;
-      }
-      require(bool(original), "at-boundary source refused");
-      auto unchanged = sf::clone(*original);
-      auto expanded = expand(*original);
-      auto candidate = prepare(*expanded);
-      require(bool(candidate) && succeeded(compare(*expanded, *candidate)) &&
-                  same(*original, *unchanged),
-              "at-boundary expansion or preparation refused");
-    });
+  // Static reference admission counts every ordinary function on a path,
+  // including a mathematical body called by exec.compute. The scoped-only
+  // closure has its own limit. With the row computation, 61 wrappers + work +
+  // row + formula reach 64; without that edge, 62 wrappers reach the same
+  // bound.
+  for (bool mathematicalRow : {false, true})
+    for (unsigned depth : {61u, 62u, 63u, 64u})
+      cases.run(
+          "helper chain with " + Twine(depth) + " wrappers and " +
+              (mathematicalRow ? "mathematical row" : "direct row"),
+          [&] {
+            bool depthRefusal = false;
+            std::string diagnostics;
+            ScopedDiagnosticHandler quiet(
+                &context, [&](Diagnostic &diagnostic) {
+                  diagnostics += diagnostic.str() + "\n";
+                  depthRefusal |=
+                      namesIdentifier(diagnostic.str(), "finite-formation") &&
+                      StringRef(diagnostic.str())
+                          .contains("static closure exceeds analysis limit");
+                  return success();
+                });
+            auto original = parseSourceString<ModuleOp>(
+                chain(depth, 1, 0, mathematicalRow), &context);
+            require(bool(original),
+                    "structural source refused: " + diagnostics);
+            auto admitted = admitStage(*original);
+            if (depth > (mathematicalRow ? 61u : 62u)) {
+              require(failed(admitted) && depthRefusal,
+                      "excess static reference depth admitted: " + diagnostics);
+              return;
+            }
+            require(succeeded(admitted),
+                    "at-boundary source refused: " + diagnostics);
+            auto unchanged = sf::clone(*original);
+            auto expanded = protocol::expandScopedHelpers(*original);
+            require(bool(expanded),
+                    "at-boundary expansion refused: " + diagnostics);
+            auto candidate = prepare(*expanded);
+            require(bool(candidate) &&
+                        succeeded(compare(*expanded, *candidate)) &&
+                        same(*original, *unchanged),
+                    "at-boundary expansion or preparation refused");
+          });
   auto requiredPreparation = [&](ModuleOp original, uint64_t &copy,
                                  uint64_t &bytes,
                                  mathematical::RealizationWork &work,
@@ -1043,8 +1077,10 @@ int main() {
       // The shared scoped map has the same scalar formula and data ABI as
       // the former map fixture; preserve this control's original field.
       auto text = (*bytes)->getBuffer().str();
-      if (name.ends_with("map-declarations.mlir"))
+      if (name.ends_with("map-declarations.mlir")) {
         text = replaceText(text, "bls12-381.fr", "koala-bear");
+        text = replaceText(text, "ui255", "ui31");
+      }
       auto original = parse(text), enabled = sf::clone(*original);
       run(*original, protocol::createPrepareProtocolPass(false));
       run(*enabled,

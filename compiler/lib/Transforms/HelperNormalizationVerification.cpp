@@ -157,7 +157,8 @@ struct HelperNormalizationChecker::Implementation {
             name = data::IndexOp::getOperationName();
             attributes.clear();
             attributes.set("value",
-                           builder.getStringAttr(std::to_string(*extent)));
+                           builder.getIntegerAttr(
+                               builder.getIntegerType(64, false), *extent));
             operands.clear();
           }
         }

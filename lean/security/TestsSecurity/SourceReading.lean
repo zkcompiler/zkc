@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.FiatShamir.DomainSourceReading
+public import ZkcSecurity.Bindings.Transcript.DomainSourceReading
 public import ZkcExamples.Structured.Generated.Connections.TwoSums
 public import Zkc.Source.KernelRfl
 public import Mathlib.Data.ZMod.Basic

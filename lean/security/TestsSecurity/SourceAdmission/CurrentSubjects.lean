@@ -1,7 +1,7 @@
 module
 
-public import ZkcSecurity.Examples.Generated.SmallSumcheck
-public import ZkcSecurity.Examples.Generated.TwoSums
+public import ZkcSecurityExamples.Generated.SmallSumcheck
+public import ZkcSecurityExamples.Generated.TwoSums
 public import TestsSecurity.SourceAdmission.Normalization
 
 @[expose] public section

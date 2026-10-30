@@ -9,10 +9,12 @@
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/StructuredData.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "llvm/ADT/DenseSet.h"
@@ -60,6 +62,18 @@ Expected<APInt> decimal(StringRef text, bool field, StringRef code) {
   APInt value(512, text, 10);
   if (field ? value.uge(modulus()) : value.getActiveBits() > 64)
     return error(code, "value out of range");
+  return value;
+}
+
+Expected<APInt> fieldLiteral(algebra::ConstantFieldOp op) {
+  auto literal = op.getValue();
+  if (!literal || literal.getField() != op.getResult().getType() ||
+      literal.getField().getDomain() != fieldDomain ||
+      !literal.getValue().getType().isUnsignedInteger(255))
+    return error("structured-reference-unsupported", "field literal identity");
+  auto value = literal.getValue().getValue().zext(512);
+  if (value.uge(modulus()))
+    return error("structured-reference-unsupported", "field literal range");
   return value;
 }
 
@@ -353,8 +367,8 @@ class Admission {
   PrimitiveMap primitives;
 
   Error binding(Operation &op) {
-    if (auto failure = attributes(
-            op, {"sym_name", "contract", "arguments", "implementation"}))
+    if (auto failure = attributes(op, {"sym_name", "contract", "arguments",
+                                       "implementation", "function_type"}))
       return failure;
     auto name = op.getAttrOfType<StringAttr>("sym_name");
     auto contract = op.getAttrOfType<StringAttr>("contract");
@@ -412,14 +426,10 @@ class Admission {
     if (parameters.size() != (constant ? 1u : 0u))
       return error("structured-reference-binding", "parameters");
     if (constant) {
-      auto text = dyn_cast<StringAttr>(parameters[0]);
-      if (!text)
+      auto value = dyn_cast<IntegerAttr>(parameters[0]);
+      if (!value || !value.getType().isUnsignedInteger(64))
         return error("structured-reference-binding", "literal type");
-      auto parsed =
-          decimal(text.getValue(), false, "structured-reference-binding");
-      if (!parsed)
-        return parsed.takeError();
-      checked.literal = parsed->getZExtValue();
+      checked.literal = value.getValue().getZExtValue();
     }
     primitives.try_emplace(&op, checked);
     return Error::success();
@@ -537,10 +547,9 @@ class Admission {
                                                  : ArrayRef<StringRef>{}))
         return failure;
       if (constant) {
-        auto parsed = decimal(cast<data::IndexOp>(op).getValue(), false,
-                              "structured-reference-unsupported");
-        if (!parsed)
-          return parsed.takeError();
+        auto value = op.getAttrOfType<IntegerAttr>("value");
+        if (!value || !value.getType().isUnsignedInteger(64))
+          return error("structured-reference-unsupported");
       }
       break;
     }
@@ -561,8 +570,7 @@ class Admission {
     case Kind::FieldConstant: {
       if (auto failure = attributes(op, {"value"}))
         return failure;
-      auto parsed = decimal(cast<algebra::ConstantFieldOp>(op).getValue(), true,
-                            "structured-reference-unsupported");
+      auto parsed = fieldLiteral(cast<algebra::ConstantFieldOp>(op));
       if (!parsed)
         return parsed.takeError();
       break;
@@ -927,14 +935,11 @@ public:
     // Native ownership admission checks their meaning; the observer bounds and
     // parses the carrier without using it to supply values or control flow.
     if (auto attr = unit->getAttr("source_declarations")) {
-      auto text = dyn_cast<StringAttr>(attr);
-      if (!text)
+      auto parsed = exportDeclarationData(attr);
+      if (!parsed) {
+        consumeError(parsed.takeError());
         return error("structured-reference-unsupported", "source declarations");
-      auto parsed = parseNaturalJson(text.getValue(), 16 * 1024 * 1024, 256,
-                                     "structured-reference-unsupported",
-                                     "structured-reference-capacity");
-      if (!parsed)
-        return parsed.takeError();
+      }
       auto rows = parsed->getAsArray();
       if (!rows || rows->size() != 2 || !(*rows)[0].getAsArray() ||
           !(*rows)[1].getAsArray())
@@ -2026,11 +2031,7 @@ class Reference {
     Outcome result;
     switch (code) {
     case Kind::IndexConstant: {
-      auto parsed = decimal(cast<data::IndexOp>(op).getValue(), false,
-                            "structured-reference-unsupported");
-      if (!parsed)
-        return parsed.takeError();
-      result.values.emplace_back(parsed->getZExtValue());
+      result.values.emplace_back(cast<data::IndexOp>(op).getValue());
       break;
     }
     case Kind::IndexLess:
@@ -2078,8 +2079,7 @@ class Reference {
                                  std::get<uint64_t>(args[1]));
       break;
     case Kind::FieldConstant: {
-      auto parsed = decimal(cast<algebra::ConstantFieldOp>(op).getValue(), true,
-                            "structured-reference-unsupported");
+      auto parsed = fieldLiteral(cast<algebra::ConstantFieldOp>(op));
       if (!parsed)
         return parsed.takeError();
       result.values.emplace_back(std::move(*parsed));
@@ -2369,7 +2369,7 @@ int main(int argc, char **argv) {
   registerDialects(registry);
   MLIRContext context(registry);
   auto module = parseSourceString<ModuleOp>(*source, &context);
-  if (!module || failed(verify(*module)))
+  if (!module || failed(admitStage(*module)))
     return fail(error("structured-reference-source"));
   if (!module->getOperation()->getAttrs().empty() ||
       !llvm::hasSingleElement(module->getBody()->getOperations()))

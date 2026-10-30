@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Registry
+public import ZkcSecurity.Claims.Registry
 
 @[expose] public section
 

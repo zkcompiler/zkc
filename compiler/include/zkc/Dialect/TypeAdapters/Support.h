@@ -1,8 +1,10 @@
 #ifndef ZKC_DIALECT_TYPE_ADAPTERS_SUPPORT_H
 #define ZKC_DIALECT_TYPE_ADAPTERS_SUPPORT_H
 
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/TypeSupport.h"
+#include "zkc/Dialect/BindingTypes.h"
 #include "zkc/Dialect/TypeAdapters.h"
 #include <utility>
 
@@ -16,6 +18,29 @@ mlir::Type loadedType(mlir::MLIRContext *context, Args &&...args) {
   auto registered = mlir::AbstractType::lookup(T::name, context);
   if (!registered || registered->get().getTypeID() != T::getTypeID())
     return {};
+  return T::get(context, std::forward<Args>(args)...);
+}
+
+template <typename T, typename... Args>
+using NativeVerification = decltype(T::verify(
+    std::declval<llvm::function_ref<mlir::InFlightDiagnostic()>>(),
+    std::declval<Args>()...));
+
+template <typename T, typename... Args>
+mlir::Type
+loadedCheckedType(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
+                  mlir::MLIRContext *context, Args &&...args) {
+  if (!context || !context->getLoadedDialect(T::dialectName))
+    return {};
+  auto registered = mlir::AbstractType::lookup(T::name, context);
+  if (!registered || registered->get().getTypeID() != T::getTypeID())
+    return {};
+  // TypeDefs without a custom verifier have no generated getChecked overload;
+  // instantiating their inherited template would require private storage here.
+  // Call the generated public verifier when present, then the ordinary builder.
+  if constexpr (llvm::is_detected<NativeVerification, T, Args...>::value)
+    if (mlir::failed(T::verify(emit, args...)))
+      return {};
   return T::get(context, std::forward<Args>(args)...);
 }
 
@@ -35,6 +60,24 @@ std::optional<BoundType> encodeDomainType(mlir::Type type,
 // Compact single-domain constructors retain their identity slot. Decoding
 // ignores the admitted outer representation, which decodeBoundType wraps later.
 template <typename T> struct DomainAdapter {
+  // Called only after complete kind/arity/formation checking.
+  static mlir::Type
+  construct(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
+            mlir::MLIRContext *context, llvm::StringRef,
+            llvm::ArrayRef<mlir::Attribute> arguments) {
+    return loadedCheckedType<T>(
+        emit, context, mlir::cast<mlir::StringAttr>(arguments[0]).getValue());
+  }
+
+  static std::optional<llvm::SmallVector<mlir::Attribute>>
+  arguments(mlir::Type type, llvm::StringRef) {
+    auto native = mlir::dyn_cast<T>(type);
+    if (!native)
+      return std::nullopt;
+    return llvm::SmallVector<mlir::Attribute>{
+        mlir::StringAttr::get(type.getContext(), native.getDomain())};
+  }
+
   using Native = T;
   using Parameters = ParameterKinds<ParameterKind::Domain>;
   static mlir::Type decode(mlir::MLIRContext *context, const BoundType &type) {
@@ -49,11 +92,35 @@ template <typename T> struct DomainAdapter {
 };
 
 // A deliberately small applied helper, with explicit typed getters. Nested
-// decode operates on an already admitted subtree; nested encode retains unique
-// matching. Only the public boundary parses/admit-checks the complete value.
+// decode operates on an already admitted subtree; nested encode uses the sole
+// native export boundary, including unique observation and profile checks.
 template <typename T, mlir::Type (T::*Element)() const,
           uint64_t (T::*Length)() const>
 struct TypeNatAdapter {
+  // Called only after complete kind/arity/formation checking.
+  static mlir::Type
+  construct(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
+            mlir::MLIRContext *context, llvm::StringRef,
+            llvm::ArrayRef<mlir::Attribute> arguments) {
+    return loadedCheckedType<T>(
+        emit, context, mlir::cast<mlir::TypeAttr>(arguments[0]).getValue(),
+        mlir::cast<mlir::IntegerAttr>(arguments[1]).getValue().getZExtValue());
+  }
+
+  static std::optional<llvm::SmallVector<mlir::Attribute>>
+  arguments(mlir::Type type, llvm::StringRef) {
+    auto native = mlir::dyn_cast<T>(type);
+    if (!native || !(native.*Element)())
+      return std::nullopt;
+    mlir::Builder builder(type.getContext());
+    return llvm::SmallVector<mlir::Attribute>{
+        mlir::TypeAttr::get((native.*Element)()),
+        builder.getIntegerAttr(
+            mlir::IntegerType::get(type.getContext(), 64,
+                                   mlir::IntegerType::Unsigned),
+            (native.*Length)())};
+  }
+
   using Native = T;
   using Parameters = ParameterKinds<ParameterKind::Type, ParameterKind::Nat>;
   static mlir::Type decode(mlir::MLIRContext *context, const BoundType &type) {
@@ -73,7 +140,7 @@ struct TypeNatAdapter {
     auto native = mlir::dyn_cast<T>(type);
     if (!native)
       return std::nullopt;
-    auto element = encodeLogicalType((native.*Element)());
+    auto element = encodeBoundType((native.*Element)(), false);
     if (!element) {
       llvm::consumeError(element.takeError());
       return std::nullopt;
@@ -87,6 +154,23 @@ struct TypeNatAdapter {
 };
 
 template <typename T> struct NullaryAdapter {
+  // Called only after complete kind/arity/formation checking.
+  static mlir::Type
+  construct(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
+            mlir::MLIRContext *context, llvm::StringRef,
+            llvm::ArrayRef<mlir::Attribute> arguments) {
+    (void)arguments;
+    return loadedCheckedType<T>(emit, context);
+  }
+
+  static std::optional<llvm::SmallVector<mlir::Attribute>>
+  arguments(mlir::Type type, llvm::StringRef) {
+    auto native = mlir::dyn_cast<T>(type);
+    if (!native)
+      return std::nullopt;
+    return llvm::SmallVector<mlir::Attribute>{};
+  }
+
   using Native = T;
   using Parameters = ParameterKinds<>;
   static mlir::Type decode(mlir::MLIRContext *context, const BoundType &type) {
@@ -105,6 +189,30 @@ template <typename T> struct NullaryAdapter {
 template <typename T, llvm::StringRef (T::*Domain)() const,
           uint64_t (T::*Length)() const>
 struct DomainNatAdapter {
+  // Called only after complete kind/arity/formation checking.
+  static mlir::Type
+  construct(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
+            mlir::MLIRContext *context, llvm::StringRef,
+            llvm::ArrayRef<mlir::Attribute> arguments) {
+    return loadedCheckedType<T>(
+        emit, context, mlir::cast<mlir::StringAttr>(arguments[0]).getValue(),
+        mlir::cast<mlir::IntegerAttr>(arguments[1]).getValue().getZExtValue());
+  }
+
+  static std::optional<llvm::SmallVector<mlir::Attribute>>
+  arguments(mlir::Type type, llvm::StringRef) {
+    auto native = mlir::dyn_cast<T>(type);
+    if (!native)
+      return std::nullopt;
+    mlir::Builder builder(type.getContext());
+    return llvm::SmallVector<mlir::Attribute>{
+        builder.getStringAttr((native.*Domain)()),
+        builder.getIntegerAttr(
+            mlir::IntegerType::get(type.getContext(), 64,
+                                   mlir::IntegerType::Unsigned),
+            (native.*Length)())};
+  }
+
   using Native = T;
   using Parameters = ParameterKinds<ParameterKind::Domain, ParameterKind::Nat>;
   static mlir::Type decode(mlir::MLIRContext *context, const BoundType &type) {

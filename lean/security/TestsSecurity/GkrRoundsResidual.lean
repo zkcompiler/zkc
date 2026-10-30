@@ -1,4 +1,4 @@
-import ZkcSecurity.Examples.Components.GkrRoundsResidual
+import ZkcSecurityExamples.Components.GkrRoundsResidual
 import Zkc.Source.Structured.ReplyScript
 import TestsSecurity.GkrRoundsRealization
 

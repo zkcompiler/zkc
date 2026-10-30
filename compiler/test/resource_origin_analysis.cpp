@@ -20,7 +20,7 @@ std::string source(StringRef body = "", unsigned captures = 0,
     types += ",i1";
     roles += ",[\"P\"]";
   }
-  return "!s = !runtime.capability<\"rng:bls12-381.fr\">\n"
+  return "!s = !runtime.capability<rng, \"bls12-381.fr\">\n"
          "module { \"protocol.module\"() ({" +
          definitions.str() + "\"protocol.func\"() ({ ^entry(%n:ui64,%s:!s" +
          args +
@@ -119,7 +119,7 @@ int main() {
     std::string body;
     for (unsigned i = 0; i < 49998; ++i)
       body += "%unused" + std::to_string(i) +
-              " = \"data.index\"() {value=\"0\"} : ()->ui64\n";
+              " = \"data.index\"() {value=0 : ui64} : ()->ui64\n";
     // Independently valid body shapes. Isolate this query from availability and
     // other formation limits; those have their own end-to-end controls.
     query(source(body), 100000, 64, true, false);
@@ -127,9 +127,9 @@ int main() {
   });
   cases.run("no affine obligation spends no origin work", [&] {
     std::string text = source();
-    auto alias = text.find("!runtime.capability<\"rng:bls12-381.fr\">");
+    auto alias = text.find("!runtime.capability<rng, \"bls12-381.fr\">");
     text.replace(
-        alias, std::string("!runtime.capability<\"rng:bls12-381.fr\">").size(),
+        alias, std::string("!runtime.capability<rng, \"bls12-381.fr\">").size(),
         "i1");
     query(text, 0, 0, true);
   });
@@ -215,9 +215,10 @@ int main() {
                        "{callee=@f29,role=\"P\",site=\"dag\"} : (!s)->!s\n",
                        0, definitions, "%out");
     // Seven common visits, thirty declaration entries, five visits for the
-    // identity, twelve per added two-call function and one returned root.
-    query(text, 391, 64, true, false);
-    query(text, 390, 64, false, false);
+    // identity, sixteen per added two-call function and one returned root.
+    // Native SSA charges both port visits and each call substitution.
+    query(text, 507, 64, true, false);
+    query(text, 506, 64, false, false);
   });
   cases.run("common calls without affine results need no callee summary", [&] {
     resource_sources::Source scoped;
@@ -291,8 +292,8 @@ int main() {
             "origin query bypassed scoped range formation: " + diagnostic);
   });
   cases.run("structured region nesting has its own depth boundary", [&] {
-    // Origin nesting and carrier array depth are independent admission gates.
-    // Test the origin boundary below the carrier ceiling, then its ceiling.
+    // Native source admission does not inherit the byte carrier's JSON array
+    // depth. The consumer's origin nesting remains its independent ceiling.
     for (unsigned depth : {10u, 11u, 29u, 30u}) {
       resource_sources::Source scoped;
       auto outer =
@@ -322,10 +323,8 @@ int main() {
           source("%out = \"protocol.local_call\"(%r,%k0) "
                  "{callee=@nested,role=\"P\",site=\"nested\"} : (!s,i1)->!s\n",
                  1, definitions, "%out");
-      query(text, 100000, depth <= 11 ? 12 : 64, depth == 10 || depth == 29,
-            false,
-            depth == 30 ? "interactive-json-depth"
-                        : "mathematical-analysis-limit");
+      query(text, 100000, depth <= 11 ? 12 : 64, depth != 11, false,
+            "mathematical-analysis-limit");
     }
   });
   cases.run(
@@ -358,8 +357,7 @@ func.func @cycle(%scope:!runtime.scope,%x:!s)->!exec.outcome<(!s)> attributes {n
         mathematical::ResourceOrigins origins(symbols, types);
         require(failed(origins.verify(repeat)),
                 "cycle accepted by isolated analysis");
-        require(diagnostic.find("interactive-call-cycle") !=
-                        std::string::npos &&
+        require(diagnostic.find("execution-call-cycle") != std::string::npos &&
                     diagnostic.find("mathematical-analysis-limit") ==
                         std::string::npos,
                 "cycle hidden by limit diagnostic: " + diagnostic);

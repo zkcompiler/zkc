@@ -2,7 +2,7 @@ module
 
 public import ZkcExamples.Structured.Generated.Presentations.Gkr
 public import ZkcExamples.Structured.GkrSourceGuards
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 
 @[expose] public section
 

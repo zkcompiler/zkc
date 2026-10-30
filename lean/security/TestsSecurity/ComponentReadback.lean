@@ -1,6 +1,6 @@
 module
 
-public meta import ZkcSecurity.Tools.ComponentReadback
+public meta import ZkcSecurityTools.ComponentReadback
 public import Zkc.Construction.DomainCalculations
 
 @[expose] public section

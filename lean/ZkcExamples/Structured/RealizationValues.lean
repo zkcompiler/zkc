@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.RealizationValuesViews
-public import ZkcExamples.Structured.PrimitiveLibrary
+public import Zkc.Protocols.Multilinear.Source.PrimitiveLibrary
 public import Zkc.Source.Structured.RealizationTotality
 
 @[expose] public section

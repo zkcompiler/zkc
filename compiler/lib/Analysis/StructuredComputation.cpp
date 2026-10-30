@@ -160,8 +160,8 @@ OwningOpRef<func::FuncOp> read(ModuleOp candidate, const Signature &sig,
         return {};
       empty = init;
     } else if (auto zero = dyn_cast<algebra::ConstantFieldOp>(op)) {
-      if (zeroField || zero.getValue() != "0" || !attrs(zero, {"value"}) ||
-          zero.getType() != sig.field)
+      if (zeroField || !zero.getValue().getValue().getValue().isZero() ||
+          !attrs(zero, {"value"}) || zero.getType() != sig.field)
         return {};
       zeroField = zero;
     } else if (auto init = dyn_cast<tensor::FromElementsOp>(op)) {

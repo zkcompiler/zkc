@@ -8,7 +8,7 @@ import shutil
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
-CRATES = ('zkc', 'zkc-runtime', 'zkc-cpu', 'zkc-kernels', 'zkc-test-support')
+CRATES = ('zkc', 'zkc-catalog', 'zkc-runtime', 'zkc-cpu', 'zkc-kernels', 'zkc-test-support')
 SOURCE = '''module application;
 entry fn Twice(値:index) { return 値 + 2; }
 entry fn Checked(value:index,valid:bool){require valid;return value+1;}
@@ -63,6 +63,9 @@ def stage(output, sdk_source, prepared):
     for name in CRATES:
         shutil.copytree(sdk_source / 'crates' / name, staged / 'crates' / name)
     shutil.copytree(sdk_source / 'common/unicode', staged / 'common/unicode')
+    (staged / 'common/catalog').mkdir()
+    shutil.copyfile(sdk_source / 'common/catalog/declarations.json',
+                    staged / 'common/catalog/declarations.json')
     for name in ('Cargo.lock', 'rust-toolchain.toml'):
         shutil.copyfile(sdk_source / name, staged / name)
     # Preserve owning manifests and exact pins; select only the installed SDK closure.

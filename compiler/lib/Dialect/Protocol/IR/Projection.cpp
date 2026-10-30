@@ -3,15 +3,16 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
-#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
+#include "zkc/Dialect/Protocol/Services.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
@@ -144,9 +145,10 @@ struct MetadataVerifier {
           inputs.size() == 0 && outputs.size() == 1) {
         auto parameters = op.getAttrOfType<ArrayAttr>("parameters");
         auto value = parameters && parameters.size() == 1
-                         ? dyn_cast<StringAttr>(parameters[0])
-                         : StringAttr();
-        if (!value || !protocol::parseUniformIndexBound(value.getValue()))
+                         ? dyn_cast<IntegerAttr>(parameters[0])
+                         : IntegerAttr();
+        if (!value || !value.getType().isUnsignedInteger(64) ||
+            !protocol::uniformIndexBound(value.getValue().getZExtValue()))
           return refuse(record, "invalid inserted transcript helper");
         bound = outputs[0];
         continue;
@@ -278,13 +280,11 @@ struct MetadataVerifier {
         auto state = dyn_cast<TypeAttr>(item);
         if (!state)
           return refuse(record, "invalid construction state slot");
-        auto logical = protocol::encodeBoundType(state.getValue(), false);
-        if (!logical) {
-          consumeError(logical.takeError());
+        LogicalTypePermissions permissions;
+        if (failed(verifyLogicalType([&] { return record.emitOpError(); },
+                                     state.getValue(), &permissions)))
           return refuse(record, "invalid construction state slot");
-        }
-        if (!hostRoot && (!protocol::duplicable(*logical) ||
-                          !protocol::discardable(*logical)))
+        if (!hostRoot && (!permissions.copy || !permissions.drop))
           return refuse(record,
                         "local construction state requires Copy and Drop");
         stateTypes.push_back(state.getValue());
@@ -294,9 +294,9 @@ struct MetadataVerifier {
             stateTypes.size() == 1
                 ? dyn_cast<runtime::CapabilityType>(stateTypes.front())
                 : runtime::CapabilityType();
-        if (!capability || !capability.getKind().starts_with("transcript:") ||
-            protocol::nativeChallengeField(capability.getKind().drop_front(11))
-                .empty())
+        if (!capability ||
+            capability.getKind() != runtime::CapabilityKind::Transcript ||
+            protocol::nativeChallengeField(capability.getIdentity()).empty())
           return refuse(record, "unsupported constructed transcript type");
       } else if (!programmable) {
         return refuse(record, "local root requires an explicit construction");
@@ -504,8 +504,8 @@ struct MetadataVerifier {
         append_range(inputTypes, stateTypes);
       append_range(resultTypes, stateTypes);
       if (role == codecProducer || role == codecValidator) {
-        auto bytes =
-            protocol::decodeBoundType(builder.getContext(), {"bytes", {}, {}});
+        auto bytes = constructLogicalType([&] { return record.emitOpError(); },
+                                          builder.getContext(), {"bytes", {}});
         if (!bytes)
           return refuse(record, "codec requires an installed Bytes type");
         if (role == codecProducer)
@@ -1153,21 +1153,9 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
                                                  query.getMethod());
                 return method.has_value();
               });
-          auto spelling = [](Type type) {
-            auto logical = protocol::encodeBoundType(type, false);
-            if (!logical) {
-              consumeError(logical.takeError());
-              return std::string();
-            }
-            return logical->spelling();
-          };
-          if (!found || query.getNumOperands() != method->inputs.size() ||
-              query.getNumResults() != 1 ||
-              spelling(query.getResult(0).getType()) != method->output ||
-              any_of(zip(query.getInputs(), method->inputs), [&](auto pair) {
-                return spelling(std::get<0>(pair).getType()) !=
-                       std::get<1>(pair);
-              }))
+          if (!found || !protocol_ir::matchesServiceSignature(
+                            query.getInputs().getTypes(),
+                            query.getResultTypes(), *method))
             return refuse(query, "unsupported managed service query");
         }
       }

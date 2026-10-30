@@ -7,11 +7,17 @@ set(zkc_tablegen_includes ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_BINARY_DIR}/include ${ZKC_CONTRIBUTION_INCLUDES}
   ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
 set(zkc_generated_headers
+  include/zkc/Interfaces/CatalogType.h.inc
   include/zkc/Interfaces/Collection.h.inc
   include/zkc/Interfaces/LinearContraction.h.inc
   include/zkc/Interfaces/Mathematical.h.inc)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect
   ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Interfaces)
+set(LLVM_TARGET_DEFINITIONS include/zkc/Interfaces/CatalogType.td)
+mlir_tablegen(include/zkc/Interfaces/CatalogType.h.inc -gen-type-interface-decls
+    EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Interfaces/CatalogType.cpp.inc -gen-type-interface-defs
+    EXTRA_INCLUDES ${zkc_tablegen_includes})
 set(LLVM_TARGET_DEFINITIONS include/zkc/Interfaces/Collection.td)
 mlir_tablegen(include/zkc/Interfaces/Collection.h.inc -gen-type-interface-decls
     EXTRA_INCLUDES ${zkc_tablegen_includes})
@@ -27,6 +33,25 @@ mlir_tablegen(include/zkc/Interfaces/Mathematical.h.inc -gen-op-interface-decls
     EXTRA_INCLUDES ${zkc_tablegen_includes})
 mlir_tablegen(include/zkc/Interfaces/Mathematical.cpp.inc -gen-op-interface-defs
     EXTRA_INCLUDES ${zkc_tablegen_includes})
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/Runtime/IR)
+set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/Runtime/IR/RuntimeTypes.td)
+list(APPEND zkc_generated_headers include/zkc/Dialect/Runtime/IR/runtimeEnums.h.inc)
+mlir_tablegen(include/zkc/Dialect/Runtime/IR/runtimeEnums.h.inc -gen-enum-decls
+  EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Runtime/IR/runtimeEnums.cpp.inc -gen-enum-defs
+  EXTRA_INCLUDES ${zkc_tablegen_includes})
+set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/Runtime/IR/RuntimeAttrs.td)
+list(APPEND zkc_generated_headers
+  include/zkc/Dialect/Runtime/IR/runtimeAttrs.h.inc
+  include/zkc/Dialect/Runtime/IR/runtimeParameterEnums.h.inc)
+mlir_tablegen(include/zkc/Dialect/Runtime/IR/runtimeAttrs.h.inc -gen-attrdef-decls
+  -attrdefs-dialect=runtime EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Runtime/IR/runtimeAttrs.cpp.inc -gen-attrdef-defs
+  -attrdefs-dialect=runtime EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Runtime/IR/runtimeParameterEnums.h.inc -gen-enum-decls
+  EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Runtime/IR/runtimeParameterEnums.cpp.inc -gen-enum-defs
+  EXTRA_INCLUDES ${zkc_tablegen_includes})
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/Protocol/IR)
 set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/Protocol/IR/ProtocolAttrs.td)
 list(APPEND zkc_generated_headers
@@ -47,6 +72,19 @@ mlir_tablegen(include/zkc/Dialect/Data/IR/dataAttrs.h.inc -gen-attrdef-decls
   -attrdefs-dialect=data EXTRA_INCLUDES ${zkc_tablegen_includes})
 mlir_tablegen(include/zkc/Dialect/Data/IR/dataAttrs.cpp.inc -gen-attrdef-defs
   -attrdefs-dialect=data EXTRA_INCLUDES ${zkc_tablegen_includes})
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/Algebra/IR)
+set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/Algebra/IR/AlgebraAttrs.td)
+list(APPEND zkc_generated_headers
+  include/zkc/Dialect/Algebra/IR/algebraAttrs.h.inc
+  include/zkc/Dialect/Algebra/IR/algebraEnums.h.inc)
+mlir_tablegen(include/zkc/Dialect/Algebra/IR/algebraAttrs.h.inc -gen-attrdef-decls
+  -attrdefs-dialect=algebra EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Algebra/IR/algebraAttrs.cpp.inc -gen-attrdef-defs
+  -attrdefs-dialect=algebra EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Algebra/IR/algebraEnums.h.inc -gen-enum-decls
+  EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Algebra/IR/algebraEnums.cpp.inc -gen-enum-defs
+  EXTRA_INCLUDES ${zkc_tablegen_includes})
 set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/IR.td)
 set(zkc_builtin_headers "// Generated private registration includes.\n")
 set(zkc_builtin_classes "// Generated private registration classes.\n")
@@ -90,7 +128,6 @@ file(CONFIGURE OUTPUT include/zkc/Dialect/BuiltinHeaders.h.inc
   CONTENT "${zkc_builtin_headers}" @ONLY)
 file(CONFIGURE OUTPUT include/zkc/Dialect/BuiltinDialects.inc
   CONTENT "${zkc_builtin_classes}" @ONLY)
-include(cmake/ContractMappings.cmake)
 set(LLVM_TARGET_DEFINITIONS
   ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/Installation.td)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/TypeAdapters)

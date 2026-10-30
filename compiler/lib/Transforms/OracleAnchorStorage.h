@@ -49,6 +49,16 @@ using OracleStorageSelection = llvm::function_ref<llvm::Expected<std::string>(
 llvm::Expected<OracleAnchorStorage>
 planOracleAnchorStorage(mlir::ModuleOp prepared, llvm::StringRef entry,
                         OracleStorageSelection select);
+// Compare the exact native associations while erasing static shape only.
+// Kind dispatch must not derive equality by encoding reference identities.
+inline bool sameOracleReferenceKind(protocol_ir::OracleKindAttr left,
+                                    protocol_ir::OracleKindAttr right) {
+  return left && right && left.getContext() == right.getContext() &&
+         left.getIdentity() == right.getIdentity() &&
+         left.getDataType() == right.getDataType() &&
+         left.getQueryType() == right.getQueryType() &&
+         left.getAnswerType() == right.getAnswerType();
+}
 // Static shape erasure preserves the reference carrier. Shape belongs to the
 // immutable record. No ideal oracle type escapes into the ordinary carrier.
 llvm::Expected<mlir::Type>

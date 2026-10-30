@@ -8,6 +8,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -194,8 +195,8 @@ int main() {
               diagnostic.str().find(formationCode.str()) != std::string::npos;
           return success();
         });
-        require(failed(verify(*candidate)) && code,
-                "structural mutation escaped formation admission");
+        require(failed(zkc::admitStage(*candidate)) && code,
+                "invalid projection or source closure escaped stage admission");
         return;
       }
       require(succeeded(verify(*candidate)),
@@ -364,8 +365,7 @@ int main() {
     auto function = callee(calculations(module)[1]);
     OpBuilder builder(function);
     runtime::BindingOp::create(builder, function.getLoc(), "unused_binding",
-                               "bool.and", builder.getArrayAttr({}), "",
-                               mlir::ArrayAttr{});
+                               "bool.and", builder.getArrayAttr({}), "");
   });
   mutation("generated logical origin", [&](ModuleOp module) {
     auto function = callee(calculations(module)[1]);
@@ -457,8 +457,7 @@ int main() {
     OpBuilder builder(&context);
     builder.setInsertionPointToStart(&unit.getBody().front());
     runtime::BindingOp::create(builder, unit.getLoc(), "authored_and",
-                               "bool.and", builder.getArrayAttr({}), "",
-                               mlir::ArrayAttr{});
+                               "bool.and", builder.getArrayAttr({}), "");
     require(succeeded(verify(*original)), "authored binding lost formation");
     auto candidate = copy(*original);
     run(*candidate, protocol::createLowerMathPass());

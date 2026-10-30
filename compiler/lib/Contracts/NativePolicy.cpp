@@ -106,6 +106,12 @@ std::optional<NativeTypePolicy> nativeTypePolicy(const BoundType &type) {
   bool limited = false;
   return nativeTypePolicy(type, remaining, limited);
 }
+bool logicalRelationAtom(StringRef kind) {
+  return kind == "bool" || kind == "index" || kind == "field" ||
+         kind == "group" || kind == "field_array" || kind == "vector" ||
+         kind == "matrix" || kind == "groups" || kind == "indices" ||
+         kind == "bytes";
+}
 RelationData logicalRelationData(const BoundType &type, TypeParseBudget &budget,
                                  unsigned depth) {
   using R = RelationData;
@@ -142,13 +148,7 @@ RelationData logicalRelationData(const BoundType &type, TypeParseBudget &budget,
     return R::Supported;
   }
   // Copyable keys and private resources are not immutable relation data.
-  return type.kind == "bool" || type.kind == "index" || type.kind == "field" ||
-                 type.kind == "group" || type.kind == "field_array" ||
-                 type.kind == "vector" || type.kind == "matrix" ||
-                 type.kind == "groups" || type.kind == "indices" ||
-                 type.kind == "bytes"
-             ? R::Supported
-             : R::Unsupported;
+  return logicalRelationAtom(type.kind) ? R::Supported : R::Unsupported;
 }
 
 } // namespace zkc::protocol

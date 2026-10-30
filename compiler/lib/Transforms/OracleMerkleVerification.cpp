@@ -1,7 +1,10 @@
+#include "NativeBindingApplication.h"
 #include "OracleMerkle.h"
 #include "OracleVerificationContext.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Refusal.h"
 using namespace mlir;
@@ -62,10 +65,14 @@ struct Reader {
                          binding.getArguments().size() == statics.size() &&
                          op.getParameters().size() == parameters.size()))
         return values;
-      for (auto [actual, expected] : zip(binding.getArguments(), statics))
-        reader.expect(cast<StringAttr>(actual).getValue() == expected);
-      for (auto [actual, expected] : zip(op.getParameters(), parameters))
-        reader.expect(cast<StringAttr>(actual).getValue() == expected);
+      SmallVector<Attribute> arguments;
+      for (const auto &identity : statics)
+        arguments.push_back(StringAttr::get(op.getContext(), identity));
+      reader.expect(matchesNativeBinding(
+          binding, {contract.str(), std::move(arguments), {}}));
+      reader.expect(
+          invocationParametersMatch(contract, binding.getArgumentsAttr(),
+                                    op.getParametersAttr(), parameters));
       return values;
     }
     Value number(uint64_t n, StringRef site) {
@@ -243,30 +250,22 @@ Error checkOracleMerkle(const OracleVerificationContext &context,
           [&]() { return emitError(context.getModule().getLoc()); },
           kind.getIdentity(), kind.getArguments())))
     return refuse();
-  auto signature = resolveLogicalBinding({"oracle.check", {scheme.str()}, ""});
-  if (!signature) {
-    consumeError(signature.takeError());
+  auto signature = resolveLogicalSignature(
+      [&] { return emitError(context.getModule().getLoc()); }, ctx,
+      "oracle.check", {StringAttr::get(ctx, scheme)});
+  auto opening = resolveLogicalSignature(
+      [&] { return emitError(context.getModule().getLoc()); }, ctx,
+      "oracle.open", {StringAttr::get(ctx, scheme)});
+  auto answer = dyn_cast<algebra::FieldType>(kind.getAnswerType());
+  if (!answer || !signature || !opening || signature.getNumInputs() != 6 ||
+      opening.getNumInputs() != 2 || opening.getNumResults() != 2 ||
+      signature.getInput(4) != kind.getDataType() ||
+      opening.getResult(0) != kind.getDataType() ||
+      opening.getResult(1) != signature.getInput(5))
     return refuse();
-  }
-  auto data = encodeBoundType(kind.getDataType(), false);
-  auto answer = encodeBoundType(kind.getAnswerType(), false);
-  if (!data)
-    return data.takeError();
-  if (!answer)
-    return answer.takeError();
-  if (answer->kind != "field" || signature->inputs.size() != 6 ||
-      !(signature->inputs[4] == *data))
-    return refuse();
-  Type root = decodeBoundType(ctx, signature->inputs[0]);
-  Type proof = decodeBoundType(ctx, signature->inputs[5]);
-  auto stateBound = parseBoundType("opening_state:" + scheme.str(), false);
-  if (!stateBound) {
-    consumeError(stateBound.takeError());
-    return refuse();
-  }
-  Type state = decodeBoundType(ctx, *stateBound);
-  if (!root || !proof || !state)
-    return refuse();
+  Type root = signature.getInput(0);
+  Type proof = signature.getInput(5);
+  Type state = opening.getInput(0);
   Reader reader(context);
   auto index = reader.index;
   unsigned width = grouping == OracleLeafGrouping::Individual ? 1 : 2;
@@ -276,8 +275,9 @@ Error checkOracleMerkle(const OracleVerificationContext &context,
                 auto zero = c.number(0, "first_query");
                 auto position = c.call(actual.position, {index, index, index},
                                        {a[1], zero}, "layout");
-                auto count = c.apply("vector.length", index, a[0],
-                                     "actual_rows", {answer->identity})[0];
+                auto count =
+                    c.apply("vector.length", index, a[0], "actual_rows",
+                            {answer.getDomain().str()})[0];
                 c.require(c.binary("index.equal", count, a[1], "exact_rows"),
                           "admit_data");
                 auto w = c.number(width, "width");
@@ -285,11 +285,12 @@ Error checkOracleMerkle(const OracleVerificationContext &context,
                 if (grouping == OracleLeafGrouping::AntipodalPairs)
                   values = c.apply("vector.transpose", kind.getDataType(),
                                    {values, w, position[0]}, "group_rows",
-                                   {answer->identity})[0];
+                                   {answer.getDomain().str()})[0];
                 if (order == OracleLeafOrder::BitReversed)
-                  values = c.apply("vector.bit_reverse_rows",
-                                   kind.getDataType(), {values, w},
-                                   "permute_leaves", {answer->identity})[0];
+                  values =
+                      c.apply("vector.bit_reverse_rows", kind.getDataType(),
+                              {values, w}, "permute_leaves",
+                              {answer.getDomain().str()})[0];
                 c.finish(c.apply("oracle.commit", {root, state}, {values, w},
                                  "commit", {scheme.str()}));
               });
@@ -311,7 +312,8 @@ Error checkOracleMerkle(const OracleVerificationContext &context,
                              "authenticate", {scheme.str()})[0];
         c.require(valid, "admit_opening");
         c.finish(c.apply("vector.get", kind.getAnswerType(),
-                         {a[3], position[2]}, "answer", {answer->identity}));
+                         {a[3], position[2]}, "answer",
+                         {answer.getDomain().str()}));
       });
   return reader.valid ? Error::success() : refuse();
 }

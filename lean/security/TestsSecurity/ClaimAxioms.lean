@@ -1,5 +1,5 @@
 import ZkcSecurity.Claims.Endpoint
-import ZkcSecurity.Claims.Knowledge
+import ZkcSecurity.Claims.Methods.Knowledge
 import ZkcSecurity.Claims.Arithmetic
 import ZkcSecurity.Claims.StageLinks
 import Zkc.Claims.Receipt

@@ -481,6 +481,32 @@ pub struct LogicalType {
     structural: Option<std::sync::Arc<super::StructuralType>>,
 }
 impl LogicalType {
+    pub(super) fn from_structure(structural: std::sync::Arc<super::StructuralType>) -> Self {
+        Self {
+            kind: structural.kind(),
+            identity: Identity::None,
+            resource_domain: None,
+            variant: None,
+            structural: Some(structural),
+        }
+    }
+    pub(super) fn spelling_len(&self) -> usize {
+        if let Some(structure) = &self.structural {
+            return structure.spelling_len();
+        }
+        if let Some(variant) = &self.variant {
+            return variant.spelling().len();
+        }
+        if let Some(slot) = &self.resource_domain {
+            return "resource_unit:".len() + slot.name().len();
+        }
+        self.kind.name().len()
+            + if self.identity == Identity::None {
+                0
+            } else {
+                1 + self.identity.name().len()
+            }
+    }
     pub fn resource_unit(domain: super::ResourceDomain) -> Self {
         Self {
             kind: Type::ResourceUnit,
@@ -790,13 +816,7 @@ impl LogicalType {
         }
         if spelling.contains('<') {
             let structural = super::structural::parse(spelling, depth, budget)?;
-            return Ok(Self {
-                kind: structural.kind(),
-                identity: Identity::None,
-                resource_domain: None,
-                variant: None,
-                structural: Some(structural),
-            });
+            return Ok(Self::from_structure(structural));
         }
         let (kind, identity) = spelling.split_once(':').unwrap_or((spelling, ""));
         if matches!(

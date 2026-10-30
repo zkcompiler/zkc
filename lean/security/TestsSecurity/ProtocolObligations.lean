@@ -1,6 +1,6 @@
 import Zkc.Obligations.TokenRules
-import ZkcSecurity.Algebra.Polynomial
-import ZkcSecurity.Obligations.Derivation
+import ZkcSecurity.Mathematics.Algebra.Polynomial
+import ZkcSecurity.ProgramLogic.Derivation
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Tactic
 

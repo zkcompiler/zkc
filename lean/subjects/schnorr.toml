@@ -28,9 +28,9 @@ facts = "lean/ZkcExamples/Executable/SchnorrProofFacts.lean"
 interactive_data = "lean/ZkcExamples/Structured/SchnorrInteractiveData.lean"
 interactive_export = "lean/bridges/structured/fixtures/schnorr-interactive.json"
 interactive_source = "lean/bridges/structured/fixtures/schnorr-interactive.mlir"
-artifacts = "lean/security/ZkcSecurity/Examples/Subjects/Schnorr/Artifacts.lean"
-lowering = "lean/security/ZkcSecurity/Examples/Subjects/Schnorr/Lowering.lean"
-claims = "lean/security/ZkcSecurity/Examples/Subjects/Schnorr/Claims.lean"
+artifacts = "lean/security/ZkcSecurityExamples/Subjects/Schnorr/Artifacts.lean"
+lowering = "lean/security/ZkcSecurityExamples/Subjects/Schnorr/Lowering.lean"
+claims = "lean/security/ZkcSecurityExamples/Subjects/Schnorr/Claims.lean"
 
 [assumptions]
 requested = ["exporter.structured-denotation", "runtime.program-reader",
@@ -65,7 +65,7 @@ entry = "proof"
 
 [receipt]
 theorem = "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir.knowledge_soundness"
-security_module = "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir"
+security_module = "ZkcSecurityExamples.ExecutableSchnorrFiatShamir"
 chain = [
   "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir.knowledge_soundness",
   "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir.acceptance_le",
@@ -129,10 +129,10 @@ theorem = "honest_verifier_zero_knowledge"
 experiment = "interactive.honest-verifier-view/0"
 premises = ["public key = secret scalar times base", "uniform prover nonce and simulator response",
             "honest challenge fixed independently of nonce", "public one-session transcript and verifier outcome"]
-module = "ZkcSecurity.VCVio.Schnorr"
+module = "ZkcSecurity.Families.Sigma.Schnorr"
 context = "[SampleableType F] "
 consumer = "ZkcSecurity.VCVio.Schnorr.honest_verifier_zero_knowledge"
 
 [lean]
 namespace = "ZkcSecurity.Examples.Subjects.Schnorr"
-imports = ["ZkcSecurity.Examples.Subjects.Schnorr.Registration"]
+imports = ["ZkcSecurityExamples.Subjects.Schnorr.Registration"]

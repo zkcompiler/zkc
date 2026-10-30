@@ -4,6 +4,7 @@
 #include "mlir/Pass/Pass.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/OperationShapes.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecDialect.h"
 #include "zkc/Dialect/detail/Builders.h"
@@ -12,6 +13,7 @@
 #include "zkc/Transforms/LinearContraction.h"
 #include "zkc/Transforms/PassStatistics.h"
 #include "zkc/Transforms/Passes.h"
+#include "zkc/Transforms/PipelineOptions.h"
 #include "zkc/Transforms/Protocol.h"
 #include "llvm/ADT/DenseMap.h"
 
@@ -28,7 +30,7 @@ LogicalResult lowerPhysical(
     *stats = {};
   module.getContext()->getOrLoadDialect<zkc::exec::ExecDialect>();
   module.getContext()->getOrLoadDialect<zkc::runtime::RuntimeDialect>();
-  if (failed(verify(module)))
+  if (failed(zkc::admitStage(module)))
     return failure();
   if (!llvm::hasSingleElement(*module.getBody()))
     return diagnostics::emit(module.emitError(), "interactive-module-count");
@@ -36,9 +38,8 @@ LogicalResult lowerPhysical(
       dyn_cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front());
   if (!root || !zkc::protocol_ir::isExecutableProfile(root.getProfile()))
     return diagnostics::emit(module.emitError(), "interactive-module");
-  // For executable profiles, ProtocolModuleOp::verifyRegions already reads
-  // and admits the execution model. Keep the wrapper/profile checks here
-  // without reconstructing and discarding the same admitted records.
+  // Stage admission reads the complete native closure. The physical crossing
+  // additionally requires an unselected executable subject.
   if (root.getProfile() != zkc::protocol_ir::Profile::Exec)
     return diagnostics::emit(root.emitError(), "interactive-physical-stage");
   return lowerBoundPhysical(module, selections, linearContractions, stats,
@@ -59,6 +60,9 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
     linearContractions = linear;
     releaseStorage = release;
     selection.set(numericalPolicy);
+    targetOption = cpuTarget;
+    bindingSelections = target::printImplementationSelections(selections);
+    portSelections = target::printFunctionPortSelections(functionPorts);
   }
   PhysicalPass(const PhysicalPass &other)
       : PassWrapper(other), selection(*this, other.selection.get()),
@@ -68,6 +72,15 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
   LinearContractionStats *output;
   SmallVector<target::FunctionPortSelection> functionPorts;
   target::CpuTarget cpuTarget;
+  Option<target::CpuTarget> targetOption{
+      *this, "cpu-target", llvm::cl::init(target::CpuTarget{}),
+      llvm::cl::desc("Compiled CPU installation restriction descriptor")};
+  Option<std::string> bindingSelections{
+      *this, "bindings", llvm::cl::init("[]"),
+      llvm::cl::desc("JSON pairs of binding symbol and implementation")};
+  Option<std::string> portSelections{
+      *this, "function-ports", llvm::cl::init("[]"),
+      llvm::cl::desc("JSON function port representation selections")};
   Option<bool> linearContractions{
       *this, "linear-contractions",
       llvm::cl::desc("Select local all-uses depth-one diagonal contractions"),
@@ -91,6 +104,23 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
     registry.insert<zkc::exec::ExecDialect, zkc::runtime::RuntimeDialect>();
     computation::createRealizeComputationsPass()->getDependentDialects(
         registry);
+  }
+  LogicalResult
+  initializeOptions(StringRef options,
+                    llvm::function_ref<LogicalResult(const llvm::Twine &)>
+                        errorHandler) final {
+    if (failed(Pass::initializeOptions(options, errorHandler)))
+      return failure();
+    auto selected = target::parseImplementationSelections(bindingSelections);
+    if (!selected)
+      return errorHandler(llvm::toString(selected.takeError()));
+    auto ports = target::parseFunctionPortSelections(portSelections);
+    if (!ports)
+      return errorHandler(llvm::toString(ports.takeError()));
+    cpuTarget = targetOption;
+    selections = std::move(*selected);
+    functionPorts.assign(ports->begin(), ports->end());
+    return success();
   }
   void runOnOperation() final {
     LinearContractionStats stats;

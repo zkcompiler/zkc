@@ -25,10 +25,10 @@ def main(argv=None):
     generation = Generation(args)
     (generation.directory / "results.json").write_text("[]\n")
     generation.prepare([
-        "ZkcTools.StructuredSource.Root", "ZkcSecurity.Generation.SubjectABI",
-        "ZkcSecurity.Generation.RootCompleteness", "ZkcSecurity.Generation.UniformRoot",
-        "ZkcSecurity.Generation.SigmaCompleteness", "ZkcSecurity.Generation.SigmaCompleteness.Command",
-        "ZkcSecurity.Tools.ClaimConstruction",
+        "ZkcTools.StructuredSource.Root", "ZkcSecurityTools.Generation.SubjectABI",
+        "ZkcSecurityTools.Generation.RootCompleteness", "ZkcSecurityTools.Generation.UniformRoot",
+        "ZkcSecurityTools.Generation.SigmaCompleteness", "ZkcSecurityTools.Generation.SigmaCompleteness.Command",
+        "ZkcSecurityTools.ClaimConstruction",
         "TestsSecurity.ABIInstallations.NoData", "TestsSecurity.ABIInstallations.Ordered",
         "TestsSecurity.RootAssemblyFixture", "TestsSecurity.RootAssemblyGeneration",
     ])

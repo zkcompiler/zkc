@@ -3,9 +3,9 @@
 !M = !algebra.field_matrix<"bls12-381.fr">
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
-    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "matrix.get", implementation = "", sym_name = "get"}> : () -> ()
-    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.add", implementation = "", sym_name = "add"}> : () -> ()
-    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.mul", implementation = "", sym_name = "mul"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "matrix.get", implementation = "", sym_name = "get",function_type=(!runtime.scope, !algebra.field_matrix<"bls12-381.fr">, ui64, ui64) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.add", implementation = "", sym_name = "add",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.mul", implementation = "", sym_name = "mul",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>}> : () -> ()
     "data.domain"() <{function_type = (!M, !V, !V) -> !data.domain<ui64, !F, ui64, !F>, sym_name = "items", sym_visibility = "private"}> ({
     ^bb0(%arg0: !M, %arg1: !V, %arg2: !V):
       %0 = "data.domain_indices"(%arg0) <{axis = 0 : i64}> : (!M) -> !data.domain<ui64>

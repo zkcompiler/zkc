@@ -180,7 +180,8 @@ Exceptions name exact reachable module pairs and remember whether each edge
 was direct. Only the source graph audit checks freshness of the complete list;
 a declaration audit may intentionally select just one client module. -/
 -- BEGIN DEPENDENCY POLICY
-private def dependencyPolicyJson : String := r##"{
+private def dependencyPolicyJson : String := r##"
+{
   "layers": [
     [
       "TestsArkLib",
@@ -207,7 +208,7 @@ private def dependencyPolicyJson : String := r##"{
       "clean-subjects"
     ],
     [
-      "ZkcArkLib.Examples",
+      "ZkcArkLibExamples",
       "optional-subjects"
     ],
     [
@@ -215,16 +216,12 @@ private def dependencyPolicyJson : String := r##"{
       "adapters"
     ],
     [
-      "ZkcSecurity.Generation",
-      "tools"
-    ],
-    [
-      "ZkcSecurity.Realizations",
+      "ZkcSecurityExamples",
       "security-subjects"
     ],
     [
-      "ZkcSecurity.Examples",
-      "security-subjects"
+      "ZkcSecurityTools",
+      "security-tools"
     ],
     [
       "ZkcExamples",
@@ -260,6 +257,10 @@ private def dependencyPolicyJson : String := r##"{
     ],
     [
       "ZkcTools.ConstructionBindings.Alignment",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.TargetPlacement",
       "proof-tools"
     ],
     [
@@ -299,11 +300,35 @@ private def dependencyPolicyJson : String := r##"{
       "proof-tools"
     ],
     [
+      "ZkcTools.StructuredSource.PropertyInstallation",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.CountedShape",
+      "proof-tools"
+    ],
+    [
       "ZkcTools.StructuredSource.Association",
       "proof-tools"
     ],
     [
       "ZkcTools.StructuredSource.Composition",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.ArtifactBindingTactic",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.ProcessViewTactic",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.TransportReduction",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.ScalarConnection",
       "proof-tools"
     ],
     [
@@ -315,12 +340,36 @@ private def dependencyPolicyJson : String := r##"{
       "families"
     ],
     [
+      "ZkcSecurity.Mathematics.Probability",
+      "probability"
+    ],
+    [
+      "ZkcSecurity.Mathematics",
+      "security-mathematics"
+    ],
+    [
+      "ZkcSecurity.ProgramLogic",
+      "security-logic"
+    ],
+    [
       "ZkcSecurity.Families",
       "security-families"
     ],
     [
-      "ZkcSecurity.Probability",
-      "probability"
+      "ZkcSecurity.Transformations",
+      "security-transformations"
+    ],
+    [
+      "ZkcSecurity.Bindings",
+      "security-bindings"
+    ],
+    [
+      "ZkcSecurity.Claims.Methods",
+      "security-methods"
+    ],
+    [
+      "ZkcSecurity.Claims",
+      "security-claims"
     ],
     [
       "ZkcSecurity",
@@ -365,90 +414,34 @@ private def dependencyPolicyJson : String := r##"{
   ],
   "allowed": [
     [
-      "core",
+      "tests",
       [
-        "core",
-        "upstream"
-      ]
-    ],
-    [
-      "probability",
-      [
-        "core",
-        "probability",
-        "upstream"
-      ]
-    ],
-    [
-      "families",
-      [
-        "core",
-        "families",
-        "upstream"
-      ]
-    ],
-    [
-      "security",
-      [
-        "core",
-        "families",
-        "probability",
-        "security",
-        "security-families",
-        "security-upstream",
-        "upstream",
-        "algebra-upstream",
-        "proof-tools"
-      ]
-    ],
-    [
-      "security-families",
-      [
-        "core",
-        "families",
-        "probability",
-        "security",
-        "security-families",
-        "security-upstream",
-        "upstream",
-        "algebra-upstream",
-        "proof-tools"
-      ]
-    ],
-    [
-      "adapters",
-      [
-        "core",
-        "families",
-        "probability",
-        "security",
-        "security-families",
-        "security-upstream",
-        "upstream",
-        "algebra-upstream",
+        "tests",
+        "clean-subjects",
+        "optional-subjects",
         "adapters",
-        "arklib-upstream"
-      ]
-    ],
-    [
-      "clean",
-      [
-        "core",
+        "security-subjects",
+        "security-tools",
+        "subjects",
+        "proof-tools",
+        "tools",
         "families",
+        "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-bindings",
+        "security-methods",
+        "security-claims",
+        "security",
         "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
         "clean-upstream",
         "algebra-upstream",
         "upstream"
-      ]
-    ],
-    [
-      "subjects",
-      [
-        "core",
-        "families",
-        "subjects",
-        "upstream",
-        "proof-tools"
       ]
     ],
     [
@@ -464,42 +457,329 @@ private def dependencyPolicyJson : String := r##"{
       ]
     ],
     [
+      "optional-subjects",
+      [
+        "core",
+        "families",
+        "proof-tools",
+        "upstream",
+        "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-bindings",
+        "security-claims",
+        "security-methods",
+        "security",
+        "security-upstream",
+        "algebra-upstream",
+        "security-tools",
+        "subjects",
+        "security-subjects",
+        "adapters",
+        "optional-subjects",
+        "arklib-upstream"
+      ]
+    ],
+    [
+      "adapters",
+      [
+        "core",
+        "families",
+        "proof-tools",
+        "upstream",
+        "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-bindings",
+        "security-claims",
+        "security-methods",
+        "security",
+        "security-upstream",
+        "algebra-upstream",
+        "security-tools",
+        "adapters",
+        "arklib-upstream"
+      ]
+    ],
+    [
+      "security-subjects",
+      [
+        "core",
+        "families",
+        "proof-tools",
+        "upstream",
+        "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-bindings",
+        "security-claims",
+        "security-methods",
+        "security",
+        "security-upstream",
+        "algebra-upstream",
+        "security-tools",
+        "subjects",
+        "security-subjects",
+        "tools"
+      ]
+    ],
+    [
+      "security-tools",
+      [
+        "core",
+        "families",
+        "proof-tools",
+        "upstream",
+        "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-bindings",
+        "security-claims",
+        "security-methods",
+        "security",
+        "security-upstream",
+        "algebra-upstream",
+        "security-tools",
+        "tools"
+      ]
+    ],
+    [
+      "subjects",
+      [
+        "core",
+        "families",
+        "proof-tools",
+        "upstream",
+        "subjects"
+      ]
+    ],
+    [
+      "proof-tools",
+      [
+        "core",
+        "proof-tools",
+        "upstream"
+      ]
+    ],
+    [
       "tools",
       [
-        "tests",
-        "clean-subjects",
-        "optional-subjects",
-        "adapters",
-        "security-subjects",
-        "subjects",
-        "tools",
-        "families",
-        "security-families",
-        "probability",
-        "security",
-        "clean",
         "core",
-        "arklib-upstream",
-        "security-upstream",
-        "clean-upstream",
-        "algebra-upstream",
+        "families",
+        "proof-tools",
+        "upstream",
+        "tools"
+      ]
+    ],
+    [
+      "families",
+      [
+        "core",
+        "families",
         "upstream",
         "proof-tools"
       ]
     ],
     [
-      "tests",
+      "probability",
+      [
+        "core",
+        "probability",
+        "upstream"
+      ]
+    ],
+    [
+      "security-mathematics",
+      [
+        "core",
+        "families",
+        "proof-tools",
+        "upstream",
+        "probability",
+        "security-mathematics",
+        "security-upstream",
+        "algebra-upstream"
+      ]
+    ],
+    [
+      "security-logic",
+      [
+        "core",
+        "families",
+        "proof-tools",
+        "upstream",
+        "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-transformations",
+        "security-upstream",
+        "algebra-upstream"
+      ]
+    ],
+    [
+      "security-families",
+      [
+        "core",
+        "families",
+        "proof-tools",
+        "upstream",
+        "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-upstream",
+        "algebra-upstream"
+      ]
+    ],
+    [
+      "security-transformations",
+      [
+        "core",
+        "families",
+        "proof-tools",
+        "upstream",
+        "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-claims",
+        "security-upstream",
+        "algebra-upstream"
+      ]
+    ],
+    [
+      "security-bindings",
+      [
+        "core",
+        "families",
+        "proof-tools",
+        "upstream",
+        "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-bindings",
+        "security-claims",
+        "security-methods",
+        "security",
+        "security-upstream",
+        "algebra-upstream",
+        "security-tools"
+      ]
+    ],
+    [
+      "security-methods",
+      [
+        "core",
+        "families",
+        "proof-tools",
+        "upstream",
+        "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-bindings",
+        "security-claims",
+        "security-methods",
+        "security",
+        "security-upstream",
+        "algebra-upstream",
+        "security-tools"
+      ]
+    ],
+    [
+      "security-claims",
+      [
+        "core",
+        "families",
+        "proof-tools",
+        "upstream",
+        "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-bindings",
+        "security-claims",
+        "security-methods",
+        "security",
+        "security-upstream",
+        "algebra-upstream",
+        "security-tools"
+      ]
+    ],
+    [
+      "security",
+      [
+        "core",
+        "families",
+        "proof-tools",
+        "upstream",
+        "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-bindings",
+        "security-claims",
+        "security-methods",
+        "security",
+        "security-upstream",
+        "algebra-upstream",
+        "security-tools"
+      ]
+    ],
+    [
+      "clean",
+      [
+        "core",
+        "families",
+        "clean",
+        "clean-upstream",
+        "algebra-upstream",
+        "upstream"
+      ]
+    ],
+    [
+      "core",
+      [
+        "core",
+        "upstream"
+      ]
+    ],
+    [
+      "arklib-upstream",
       [
         "tests",
         "clean-subjects",
         "optional-subjects",
         "adapters",
         "security-subjects",
+        "security-tools",
         "subjects",
+        "proof-tools",
         "tools",
         "families",
-        "security-families",
         "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-bindings",
+        "security-methods",
+        "security-claims",
         "security",
         "clean",
         "core",
@@ -507,8 +787,7 @@ private def dependencyPolicyJson : String := r##"{
         "security-upstream",
         "clean-upstream",
         "algebra-upstream",
-        "upstream",
-        "proof-tools"
+        "upstream"
       ]
     ],
     [
@@ -519,11 +798,19 @@ private def dependencyPolicyJson : String := r##"{
         "optional-subjects",
         "adapters",
         "security-subjects",
+        "security-tools",
         "subjects",
+        "proof-tools",
         "tools",
         "families",
-        "security-families",
         "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-bindings",
+        "security-methods",
+        "security-claims",
         "security",
         "clean",
         "core",
@@ -542,11 +829,19 @@ private def dependencyPolicyJson : String := r##"{
         "optional-subjects",
         "adapters",
         "security-subjects",
+        "security-tools",
         "subjects",
+        "proof-tools",
         "tools",
         "families",
-        "security-families",
         "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-bindings",
+        "security-methods",
+        "security-claims",
         "security",
         "clean",
         "core",
@@ -565,11 +860,19 @@ private def dependencyPolicyJson : String := r##"{
         "optional-subjects",
         "adapters",
         "security-subjects",
+        "security-tools",
         "subjects",
+        "proof-tools",
         "tools",
         "families",
-        "security-families",
         "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-bindings",
+        "security-methods",
+        "security-claims",
         "security",
         "clean",
         "core",
@@ -588,84 +891,26 @@ private def dependencyPolicyJson : String := r##"{
         "optional-subjects",
         "adapters",
         "security-subjects",
+        "security-tools",
         "subjects",
-        "tools",
-        "families",
-        "security-families",
-        "probability",
-        "security",
-        "clean",
-        "core",
-        "arklib-upstream",
-        "security-upstream",
-        "clean-upstream",
-        "algebra-upstream",
-        "upstream"
-      ]
-    ],
-    [
-      "security-subjects",
-      [
-        "core",
-        "families",
-        "probability",
-        "security",
-        "security-families",
-        "security-upstream",
-        "upstream",
-        "algebra-upstream",
-        "subjects",
-        "security-subjects",
-        "proof-tools"
-      ]
-    ],
-    [
-      "optional-subjects",
-      [
-        "core",
-        "families",
-        "probability",
-        "security",
-        "security-families",
-        "security-upstream",
-        "upstream",
-        "algebra-upstream",
-        "subjects",
-        "security-subjects",
-        "adapters",
-        "optional-subjects",
-        "arklib-upstream",
-        "proof-tools"
-      ]
-    ],
-    [
-      "arklib-upstream",
-      [
-        "tests",
-        "clean-subjects",
-        "optional-subjects",
-        "adapters",
-        "security-subjects",
-        "subjects",
-        "tools",
-        "families",
-        "security-families",
-        "probability",
-        "security",
-        "clean",
-        "core",
-        "arklib-upstream",
-        "security-upstream",
-        "clean-upstream",
-        "algebra-upstream",
-        "upstream"
-      ]
-    ],
-    [
-      "proof-tools",
-      [
-        "core",
         "proof-tools",
+        "tools",
+        "families",
+        "probability",
+        "security-mathematics",
+        "security-logic",
+        "security-families",
+        "security-transformations",
+        "security-bindings",
+        "security-methods",
+        "security-claims",
+        "security",
+        "clean",
+        "core",
+        "arklib-upstream",
+        "security-upstream",
+        "clean-upstream",
+        "algebra-upstream",
         "upstream"
       ]
     ]
@@ -674,16 +919,16 @@ private def dependencyPolicyJson : String := r##"{
     {
       "name": "generic-execution",
       "owners": [
-        "ZkcSecurity.VCVio.Execution"
+        "ZkcSecurity.ProgramLogic.Oracle.Execution"
       ],
       "exact": true,
       "dependencies": [
         "ZkcArkLib",
         "ArkLib",
-        "ZkcSecurity.Examples",
+        "ZkcSecurityExamples",
         "Zkc.Protocols",
         "Zkc.Source",
-        "ZkcArkLib.Examples"
+        "ZkcArkLibExamples"
       ]
     },
     {
@@ -693,9 +938,9 @@ private def dependencyPolicyJson : String := r##"{
       ],
       "exact": false,
       "dependencies": [
-        "ZkcSecurity.Examples",
+        "ZkcSecurityExamples",
         "Zkc.Source",
-        "ZkcArkLib.Examples"
+        "ZkcArkLibExamples"
       ]
     },
     {
@@ -712,7 +957,7 @@ private def dependencyPolicyJson : String := r##"{
     {
       "name": "probability-without-source",
       "owners": [
-        "ZkcSecurity.Probability"
+        "ZkcSecurity.Mathematics.Probability"
       ],
       "exact": false,
       "dependencies": [
@@ -723,27 +968,41 @@ private def dependencyPolicyJson : String := r##"{
     {
       "name": "generic-certificates",
       "owners": [
-        "ZkcSecurity.FiatShamir.Interface",
-        "ZkcSecurity.FiatShamir.Keyed",
-        "ZkcSecurity.FiatShamir.Typed",
-        "ZkcSecurity.FiatShamir.Sampling",
-        "ZkcSecurity.FiatShamir.Decoding",
-        "ZkcSecurity.FiatShamir.Obligations",
-        "ZkcSecurity.FiatShamir.Grinding",
-        "ZkcSecurity.FiatShamir.Laws",
-        "ZkcSecurity.FiatShamir.Lifting",
-        "ZkcSecurity.FiatShamir.Reduction"
+        "ZkcSecurity.ProgramLogic.Transcript.Interface",
+        "ZkcSecurity.ProgramLogic.Transcript.Keyed",
+        "ZkcSecurity.ProgramLogic.Transcript.Typed",
+        "ZkcSecurity.Transformations.FiatShamir.Sampling",
+        "ZkcSecurity.Transformations.FiatShamir.Decoding",
+        "ZkcSecurity.Transformations.FiatShamir.Obligations",
+        "ZkcSecurity.Transformations.FiatShamir.Grinding",
+        "ZkcSecurity.Transformations.FiatShamir.Laws",
+        "ZkcSecurity.ProgramLogic.Transcript.Lifting",
+        "ZkcSecurity.ProgramLogic.Transcript.Reduction"
       ],
       "exact": true,
       "dependencies": [
         "Zkc.Construction",
-        "ZkcSecurity.FiatShamir.Soundness",
-        "ZkcSecurity.FiatShamir.Composition"
+        "ZkcSecurity.Transformations.FiatShamir.Soundness",
+        "ZkcSecurity.ProgramLogic.Transcript.Composition"
+      ]
+    },
+    {
+      "name": "fixed-knowledge-before-method",
+      "owners": [
+        "ZkcSecurity.Claims.Knowledge",
+        "ZkcSecurity.Claims.Subject",
+        "ZkcSecurity.Claims.Extractor",
+        "ZkcSecurity.Bindings.Extraction"
+      ],
+      "exact": false,
+      "dependencies": [
+        "ZkcSecurity.Claims.Methods"
       ]
     }
   ],
   "exceptions": []
-}"##
+}
+"##
 -- END DEPENDENCY POLICY
 
 private structure DependencyGuard where
@@ -834,6 +1093,19 @@ partial def closure (graph : Graph) (pending : List Name)
       if seen.contains name then closure graph rest seen
       else closure graph ((graph[name]?.getD #[]).toList ++ rest) (seen.insert name)
 
+/-- Recover the stored owners of a lazily realized equation in the consumer's
+actual import closure. A merged environment can select a duplicate stored in an
+unrelated test module; that module is not the provenance of this consumer's edge.
+Every reachable stored version remains subject to the ordinary dependency rule. -/
+def importedOwners (env : Environment) (imports : Graph) (consumer dependency : Name) : Array Name := Id.run do
+  let reachable := closure imports (imports[consumer]?.getD #[]).toList
+  let mut owners := #[]
+  for index in [:env.header.moduleData.size] do
+    let owner := env.header.modules[index]!.module
+    if reachable.contains owner && env.header.moduleData[index]!.constNames.contains dependency then
+      owners := owners.push owner
+  return owners
+
 /-- Audit every declaration owned by the selected imported module families.
 Types and proof/definition bodies are inspected separately. The dependency
 closure is conservative at module granularity; axiom collection is Lean's
@@ -851,6 +1123,10 @@ def check (families : List Name) (marker : String := "AUDIT-PASS")
     (exactModules : Bool := false) : CommandElabM Unit := do
   let env ← getEnv
   let mut graph : Graph := {}
+  let mut imports : Graph := {}
+  for index in [:env.header.moduleData.size] do
+    imports := imports.insert env.header.modules[index]!.module
+      (env.header.moduleData[index]!.imports.map (·.module))
   let mut declarations : Nat := 0
   let mut theorems : Nat := 0
   let mut typeReferences : Nat := 0
@@ -893,11 +1169,16 @@ def check (families : List Name) (marker : String := "AUDIT-PASS")
           let dependencyOwner? :=
             if localNames.contains dependency then some owner else moduleOf env dependency
           let some dependencyOwner := dependencyOwner? | continue
-          unless permitted owner dependencyOwner do
-            throwError "forbidden {kind} dependency: {name} in {owner} uses {dependency} from {dependencyOwner}"
-          let edges := graph[owner]?.getD #[]
-          if !edges.contains dependencyOwner then
-            graph := graph.insert owner (edges.push dependencyOwner)
+          let mut owners := #[dependencyOwner]
+          if !permitted owner dependencyOwner && !localNames.contains dependency then
+            let stored := importedOwners env imports owner dependency
+            if !stored.isEmpty then owners := stored
+          for dependencyOwner in owners do
+            unless permitted owner dependencyOwner do
+              throwError "forbidden {kind} dependency: {name} in {owner} uses {dependency} from {dependencyOwner}"
+            let edges := graph[owner]?.getD #[]
+            if !edges.contains dependencyOwner then
+              graph := graph.insert owner (edges.push dependencyOwner)
   for (owner, edges) in graph.toList do
     for dependency in (closure graph edges.toList).toList do
       unless permitted owner dependency do

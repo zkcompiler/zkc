@@ -4,13 +4,26 @@
 #include "NativeCases.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 
 namespace zkc::test::scopedComputation {
 using namespace mlir;
+inline ArrayAttr fixtureParameters(func::FuncOp function, StringRef name,
+                                   ArrayRef<StringRef> parameters) {
+  auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+      function, FlatSymbolRefAttr::get(function.getContext(), name));
+  require(bool(binding), "fixture binding is missing");
+  SmallVector<std::string> expected;
+  for (auto parameter : parameters)
+    expected.push_back(parameter.str());
+  return take(protocol::decodeInvocationParameters(
+      binding.getContract(), binding.getArgumentsAttr(), expected));
+}
 inline func::FuncOp region(OpBuilder &builder, func::FuncOp parent,
                            StringRef name, TypeRange inputs,
                            TypeRange outputs) {
@@ -36,7 +49,9 @@ inline SmallVector<Value> apply(exec::ScopedExecutionBuilder &control,
       "exec.apply", outputs, control.scoped(inputs),
       {builder.getNamedAttr(
            "binding", FlatSymbolRefAttr::get(builder.getContext(), binding)),
-       builder.getNamedAttr("parameters", builder.getStrArrayAttr(parameters)),
+       builder.getNamedAttr(
+           "parameters",
+           fixtureParameters(control.getFunction(), binding, parameters)),
        builder.getNamedAttr("site", builder.getStringAttr(site))});
 }
 inline func::FuncOp computation(func::FuncOp helper, StringRef name) {
@@ -98,7 +113,8 @@ inline void numericalAddition(ModuleOp module) {
   auto *replacement = builder.create(state);
   addition.getOutcome().replaceAllUsesWith(replacement->getResult(0));
   addition.erase();
-  require(succeeded(verify(module)), "numerical source fixture refused");
+  require(succeeded(zkc::admitStage(module)),
+          "numerical source fixture refused");
 }
 inline exec::ReturnOp returned(func::FuncOp function) {
   exec::ReturnOp result;
@@ -153,7 +169,9 @@ inline Operation *appendApply(func::FuncOp helper, StringRef binding,
       "exec.apply", outputs, control.scoped(inputs),
       {builder.getNamedAttr(
            "binding", FlatSymbolRefAttr::get(helper.getContext(), binding)),
-       builder.getNamedAttr("parameters", builder.getStrArrayAttr(parameters)),
+       builder.getNamedAttr(
+           "parameters",
+           fixtureParameters(control.getFunction(), binding, parameters)),
        builder.getNamedAttr("site", builder.getStringAttr(site))},
       first.getStopped());
   auto *call = before->getTerminator()->getPrevNode();

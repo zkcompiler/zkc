@@ -1,5 +1,5 @@
 module { "protocol.module"() ({
-"runtime.binding"() {sym_name="binding_inverse", contract="field.inverse", arguments=["bls12-381.fr"], implementation=""} : () -> ()
+"runtime.binding"() {sym_name="binding_inverse", contract="field.inverse", arguments=["bls12-381.fr"], implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : () -> ()
     func.func @inverse(%arg0: !runtime.scope, %arg1: !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)> attributes {no_inline, runtime.origin = ["inverse", []]} {
       %0 = "exec.apply"(%arg0, %arg1) <{binding = @binding_inverse, parameters = [], site = "inverse"}> : (!runtime.scope, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!algebra.field<"bls12-381.fr">)>) -> ()

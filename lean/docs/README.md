@@ -6,6 +6,7 @@ compiler and runtime. A native export is a connection boundary, not an assertion
 that all native behavior already has a Lean model.
 
 - [Architecture](architecture.md): packages, interfaces and proof composition.
+- [Module ownership](development/module-ownership.md): choosing reusable, tool and application modules, import phases and direct migration.
 - [Typed model transition](semantic-model-transition.md): canonical execution, retained claims and explicit model-change boundaries.
 - [Checked components](spec/components.md): shared process bindings, reference mathematics,
   honest execution, adversarial reductions and canonical receipts.
@@ -52,6 +53,9 @@ that all native behavior already has a Lean model.
   committed opening with its bound for a total straight-line extractor; and the
   bound for verifiers with committed tables, read with roots and openings in
   one random oracle with their hash calls.
+- [Adaptive committed-table security](spec/adaptive-opening-security.md): repeated
+  authenticated reads, the actual first-query checkpoint, and an application
+  error bound in the existing joint oracle experiment.
 - [FRI security](spec/fri-security.md): the verifier of the FRI library's
   low-degree test at the ideal interpretation of its commitments, its
   line-by-line correspondence to the source and ArkLib's FRI analysis, its
@@ -60,6 +64,10 @@ that all native behavior already has a Lean model.
   Fiat–Shamir transfer with one query-block site, and the same verifier with
   words committed by Merkle trees, bounded for acceptance together with a far
   extraction at a verifier checkpoint.
+- [STARK mathematical components](spec/stark-components.md): constraint quotients,
+  uniform batching and OOD bounds, DEEP quotient algebra, and optional proved
+  ArkLib quotienting, affine-line agreement and common-code many-word power
+  proximity adapters.
 - [Executable stage](spec/executable.md): the meaning of the validator program
   the runtime admits, with loops and helper calls, the checked lowering rule from
   the constructed validator with checked normalization of pure total

@@ -16,11 +16,11 @@ original_export = "lean/bridges/structured/fixtures/gkr-source.json"
 data = "lean/ZkcExamples/Structured/GkrSourceData.lean"
 participant = "lean/ZkcExamples/Construction/GkrProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/GkrArtifact.lean"
-claims = "lean/security/ZkcSecurity/Realizations/Gkr/Generated/SubjectSoundnessClaims.lean"
+claims = "lean/security/ZkcSecurityExamples/Gkr/Generated/SubjectSoundnessClaims.lean"
 
 [lean]
 namespace = "ZkcSecurity.Realizations.Gkr.Generated.SubjectSoundnessClaims"
-imports = ["ZkcSecurity.Realizations.Gkr.Generated.SubjectSoundnessRegistration"]
+imports = ["ZkcSecurityExamples.Gkr.Generated.SubjectSoundnessRegistration"]
 library = "ZkcSecurity.Realizations.Gkr.Generated.SubjectSoundnessRegistration.library"
 
 [source_views]

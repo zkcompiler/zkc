@@ -4,6 +4,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Transforms/StructuredComputation.h"
 
@@ -46,7 +47,10 @@ int main() {
                 block->getArgument(formulaKind == "identity" ? 0 : 2);
             if (formulaKind == "constant")
               returned = algebra::ConstantFieldOp::create(
-                  builder, formula.getLoc(), returned.getType(), "42");
+                  builder, formula.getLoc(), returned.getType(),
+                  cantFail(algebra::makeFieldLiteral(
+                      cast<algebra::FieldType>(returned.getType()),
+                      llvm::APInt(64, 42))));
             func::ReturnOp::create(builder, formula.getLoc(), returned);
             auto candidate =
                 proposeStructuredComputation(*block, rowwise, kind);
@@ -180,7 +184,10 @@ int main() {
     });
     if (kind == StructuredResult::Sum) {
       mutation("nonzero empty reduction seed", [&](ModuleOp module) {
-        module.walk([&](algebra::ConstantFieldOp op) { op.setValue("1"); });
+        module.walk([&](algebra::ConstantFieldOp op) {
+          op.setValueAttr(cantFail(algebra::makeFieldLiteral(
+              op.getResult().getType(), llvm::APInt(1, 1))));
+        });
       });
       mutation("reduction omits accumulator", [&](ModuleOp module) {
         module.walk([&](linalg::GenericOp generic) {

@@ -4,6 +4,15 @@
 #include <functional>
 using namespace llvm;
 namespace zkc::protocol {
+StringRef oracleTableCollectionConstructor(StringRef rowConstructor) {
+  if (rowConstructor == "field")
+    return "vector";
+  if (rowConstructor == "group")
+    return "groups";
+  if (rowConstructor == "index")
+    return "indices";
+  return "sequence";
+}
 Expected<OracleKindSignature>
 oracleKindSignature(StringRef identity, ArrayRef<TypeArgument> arguments) {
   auto refuse = [](const Twine &message) {
@@ -43,15 +52,11 @@ oracleKindSignature(StringRef identity, ArrayRef<TypeArgument> arguments) {
     return canonical.takeError();
   if (!(*canonical == row))
     return refuse("oracle table rows require canonical logical data");
-  BoundType data;
-  if (row.kind == "field")
-    data = {"vector", row.identity, {}};
-  else if (row.kind == "group")
-    data = {"groups", row.identity, {}};
-  else if (row.kind == "index")
-    data = {"indices", {}, {}};
-  else
-    data = {"sequence", {}, {}, {TypeArgument::typeArgument(row)}};
+  auto constructor = oracleTableCollectionConstructor(row.kind);
+  BoundType data =
+      constructor == "sequence"
+          ? BoundType{"sequence", {}, {}, {TypeArgument::typeArgument(row)}}
+          : BoundType{constructor.str(), row.identity, {}};
   // The associated collection must fit the complete logical type grammar.
   auto collection = parseBoundType(data.spelling(), false);
   if (!collection)

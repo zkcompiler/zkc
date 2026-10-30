@@ -193,24 +193,30 @@ add_zkc_component(Program
   lib/Program/Encode.cpp
   lib/Program/Structure.cpp
   lib/Program/Admission.cpp
-  lib/Program/ResourceOrigins.cpp
 )
 add_zkc_component(IR
+  lib/Dialect/Admission.cpp
   lib/Dialect/Collection.cpp
   lib/Dialect/Diagnostics.cpp
   lib/Dialect/Crypto/IR/CryptoDialect.cpp
   lib/Dialect/Exec/IR/ExecDialect.cpp
   lib/Dialect/Exec/IR/Instructions.cpp
   lib/Dialect/Exec/Builders.cpp
+  lib/Dialect/Exec/ClosureAdmission.cpp
   lib/Dialect/Exec/Execution.cpp
+  lib/Dialect/Exec/ExecutionExport.cpp
+  lib/Dialect/Exec/ResourceOrigins.cpp
   lib/Dialect/Exec/ExecutionComparison.cpp
   lib/Dialect/Exec/IR/Computation.cpp
   lib/Dialect/Exec/ControlCursor.cpp
   lib/Dialect/Runtime/IR/RuntimeDialect.cpp
+  lib/Dialect/Runtime/IR/Attributes.cpp
+  lib/Dialect/Runtime/Parameters.cpp
   lib/Dialect/Runtime/IR/Scopes.cpp
   lib/Dialect/Runtime/Ownership.cpp
   lib/Dialect/Data/IR/DataDialect.cpp
   lib/Dialect/Data/IR/Logical.cpp
+  lib/Dialect/Data/IR/Layout.cpp
   lib/Dialect/Data/IR/Variant.cpp
   lib/Dialect/Data/IR/Domains.cpp
   lib/Analysis/NativeTypes.cpp
@@ -222,10 +228,16 @@ add_zkc_component(IR
   lib/Analysis/ComputationMeaning.cpp
   lib/Analysis/MathematicalFacts.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
+  lib/Dialect/Algebra/IR/Attributes.cpp
+  lib/Dialect/Algebra/Parameters.cpp
   lib/Dialect/Algebra/IR/Mathematical.cpp
   lib/Dialect/Algebra/RingExpression.cpp
+  lib/Dialect/InvocationParameters.cpp
+  lib/Dialect/StructuredData.cpp
+  lib/Dialect/BindingFormation.cpp
+  lib/Dialect/BindingTypes.cpp
   lib/Dialect/Bindings.cpp
-  lib/Dialect/BoundOperations.cpp
+  lib/Dialect/TypeFormation.cpp
   lib/Dialect/MathematicalInterfaces.cpp
   lib/Dialect/LinearContraction.cpp
   lib/Dialect/Algebra/IR/Types.cpp
@@ -236,6 +248,7 @@ add_zkc_component(IR
   lib/Dialect/Protocol/IR/ProtocolDialect.cpp
   lib/Dialect/Protocol/IR/Attributes.cpp
   lib/Dialect/Protocol/IR/OracleKinds.cpp
+  lib/Dialect/Protocol/Services.cpp
   lib/Dialect/Protocol/IR/Oracles.cpp
   lib/Dialect/Protocol/IR/OracleDefinitions.cpp
   lib/Dialect/Protocol/IR/OraclePorts.cpp
@@ -252,6 +265,7 @@ add_zkc_component(IR
   lib/Dialect/Protocol/IR/Construction.cpp
   lib/Dialect/Protocol/IR/ConstructionResolution.cpp
   lib/Dialect/Protocol/IR/Projection.cpp
+  lib/Dialect/Protocol/ExecutionAdmission.cpp
   lib/Dialect/Protocol/Execution.cpp
   lib/Dialect/Relation/IR/AIR.cpp
   lib/Dialect/Relation/IR/R1CS.cpp
@@ -273,6 +287,8 @@ add_zkc_component(IR
 add_zkc_component(Translation
   lib/Translation/ExecutionEmission.cpp
   lib/Translation/Entry.cpp
+  lib/Translation/Entry/Emission.cpp
+  lib/Translation/Entry/Reader.cpp
   lib/Translation/Language/Emission.cpp
   lib/Translation/Language/DataPreconditions.cpp
   lib/Translation/Language/FiniteEmission.cpp
@@ -285,6 +301,8 @@ add_zkc_component(Translation
   lib/Translation/R1CSSumcheck.cpp
 )
 add_zkc_component(Transforms
+  lib/Transforms/Admission.cpp
+  lib/Transforms/Stages.cpp
   lib/Transforms/PassStatistics.cpp
   lib/Conversion/Bindings.cpp
   lib/Conversion/PhysicalVerification.cpp
@@ -366,6 +384,7 @@ add_zkc_component(Transforms
   lib/Target/Selection.cpp
   lib/Target/Catalog.cpp
   lib/Target/ExecutionPorts.cpp
+  lib/Target/NativePlanTypes.cpp
   lib/Target/PhysicalPlan.cpp
   lib/Target/StorageSchedule.cpp
 )
@@ -385,6 +404,9 @@ add_zkc_component(Compiler
   lib/Compiler/ComponentContracts.cpp
   lib/Compiler/SourceCorrespondence.cpp
   lib/Compiler/Compilation.cpp
+  lib/Compiler/ApplicationMap.cpp
+  lib/Compiler/ApplicationMapData.cpp
+  lib/Compiler/ApplicationMapVerification.cpp
   lib/Compiler/StructuredSource.cpp
   lib/Compiler/ArtifactJson.cpp
   lib/Compiler/RunVerification.cpp
@@ -433,7 +455,7 @@ target_link_libraries(ZkcTranslation PUBLIC ZkcIR ZkcLanguage)
 # Follow MLIR's package linkage too: embedding static MLIR archives alongside
 # its dylib duplicates MLIR definitions and process-global state.
 mlir_target_link_libraries(ZkcIR PUBLIC
-  MLIRIR MLIRControlFlowInterfaces MLIRSideEffectInterfaces
+  MLIRIR MLIRPass MLIRControlFlowInterfaces MLIRSideEffectInterfaces
   MLIRInferTypeOpInterface MLIRFunctionInterfaces MLIRCallInterfaces
   MLIRFuncDialect MLIRArithDialect MLIRSCFDialect MLIRControlFlowDialect
   MLIRLinalgDialect MLIRTensorDialect)

@@ -1,7 +1,7 @@
 module
 
 public import ZkcTools.StructuredSource.Bindings.Callbacks
-public import ZkcExamples.Structured.SumcheckVerifierLaws
+public import Zkc.Protocols.Sumcheck.Source.VerifierLaws
 
 @[expose] public section
 
@@ -43,7 +43,7 @@ def sumcheckCallbacksSource (program : Program) (output : Output) : Except Strin
     "      change some (.cons (point ++ [value]) .nil) = some values at returned\n" ++
     "      exact (append_plain point value).trans (congrArg PIR.Process.done (Option.some.inj returned))\n\n"
   callbacksSource program output {
-    imports := ["ZkcExamples.Structured.SumcheckVerifierHelpers"]
+    imports := ["Zkc.Protocols.Sumcheck.Source.VerifierHelpers"]
     laws := laws
     declarations := text
     lawResult := fun _ position => if position == 0 then some "{0} ++ [{1}]" else none }
@@ -68,7 +68,7 @@ def verifierTemplates : List HelperTemplate := [
 
 def sumcheckSource (program : Program) (output : Output) : Except String String := do
   let mut text := "module\n\npublic import " ++ output.moduleName ++ "Callbacks\n" ++
-    "public import ZkcExamples.Structured.SumcheckVerifierLaws\n\n@[expose] public section\n\n" ++
+    "public import Zkc.Protocols.Sumcheck.Source.VerifierLaws\n\n@[expose] public section\n\n" ++
     "/-! Generated actual-source endpoint template bindings. -/\nnamespace " ++ output.moduleName ++ "Sumcheck\n" ++
     "open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm Zkc.Source.Structured.Bindings\n" ++
     "open ZkcExamples.Structured " ++ output.moduleName ++ " " ++ output.moduleName ++ "Callbacks\n" ++

@@ -3,9 +3,9 @@ module
 public import ZkcExamples.Structured.Generated.Scalar.SumcheckReductionLibrary
 
 public import ZkcExamples.Structured.SumcheckReduceAssociations
-public import ZkcExamples.Structured.SumcheckVerifierBodies
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
-public import ZkcExamples.Structured.SumcheckVerifierPrelude
+public import Zkc.Protocols.Sumcheck.Source.VerifierBodies
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
+public import Zkc.Protocols.Sumcheck.Source.VerifierPrelude
 public import ZkcExamples.Structured.SumcheckReductionNormalForms
 
 @[expose] public section

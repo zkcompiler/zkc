@@ -1,6 +1,6 @@
 use serde_json::json;
 use zkc_runtime::vm::{
-    ArgumentKind, AttributeRule, ErrorCode, Identity, LogicalType, OperationBinding, PhysicalType,
+    AttributeRule, ErrorCode, Identity, Kind, LogicalType, OperationBinding, PhysicalType,
     Representation, Type, TypeArgument,
 };
 use zkc_test_support::variants::{encode_tree, logical};
@@ -18,6 +18,37 @@ fn nested(mut element: String, depth: usize) -> String {
         element = format!("fixed_vector<{element},0>");
     }
     element
+}
+
+#[test]
+fn typed_composition_preserves_limits_and_inactive_payload_permissions() {
+    for leaf in ["bool".to_owned(), logical("Empty", json!([["empty", []]]))] {
+        let mut ty = LogicalType::parse(&leaf).unwrap();
+        for depth in 1..=9 {
+            let textual = LogicalType::parse(&nested(leaf.clone(), depth));
+            let typed = LogicalType::fixed_vector(ty.clone(), 0);
+            assert_eq!(typed.is_ok(), textual.is_ok(), "depth {depth}");
+            match typed {
+                Ok(next) => {
+                    assert_eq!(next, textual.unwrap());
+                    ty = next;
+                }
+                Err(_) => break,
+            }
+        }
+    }
+    let resource = LogicalType::parse(&logical(
+        "Choice",
+        json!([["empty", []], ["resource", ["rng:bls12-381.fr"]],]),
+    ))
+    .unwrap();
+    let empty = LogicalType::fixed_vector(resource, 0).unwrap();
+    assert!(!empty.is_duplicable() && !empty.is_discardable());
+    assert!(LogicalType::sequence(empty).is_err());
+
+    // Nominal text can be large even for a sum with no data payload.
+    let large = LogicalType::parse(&logical(&"X".repeat(3000), json!([["empty", []]]))).unwrap();
+    assert!(LogicalType::fixed_vector(large, 0).is_err());
 }
 
 #[test]
@@ -41,10 +72,7 @@ fn canonical_types_keep_typed_arguments_and_atomic_spellings() {
     assert_eq!(ty.fixed_vector_parts(), Some((&element, 4)));
     let application = ty.structural().unwrap();
     assert_eq!(application.head(), "fixed_vector");
-    assert_eq!(
-        application.parameter_kinds(),
-        &[ArgumentKind::Type, ArgumentKind::Nat]
-    );
+    assert_eq!(application.parameter_kinds(), &[Kind::Type, Kind::Nat]);
     assert_eq!(
         application.arguments(),
         &[TypeArgument::Type(element), TypeArgument::Nat(4)]
@@ -202,11 +230,14 @@ fn shared_depth_and_byte_limits_cover_variant_type_interleaving() {
     let base = logical("X", json!([["empty", []]]));
     let padding = (4096 - base.len() - 16) / 2;
     let at_limit = logical(&"X".repeat(1 + padding), json!([["empty", []]]));
+    let typed_limit = LogicalType::fixed_vector(LogicalType::parse(&at_limit).unwrap(), 0).unwrap();
     let at_limit = format!("fixed_vector<{at_limit},0>");
     assert_eq!(at_limit.len(), 4096);
+    assert_eq!(typed_limit.spelling(), at_limit);
     assert!(LogicalType::parse(&at_limit).is_ok());
     let over = logical(&"X".repeat(2 + padding), json!([["empty", []]]));
     assert!(LogicalType::parse(&format!("fixed_vector<{over},0>")).is_err());
+    assert!(LogicalType::fixed_vector(LogicalType::parse(&over).unwrap(), 0).is_err());
     let large_variant = logical(&"X".repeat(3000), json!([["empty", []]]));
     assert!(large_variant.len() > 4096);
     assert!(LogicalType::parse(&large_variant).is_ok());

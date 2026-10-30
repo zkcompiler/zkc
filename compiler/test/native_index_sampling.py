@@ -49,11 +49,11 @@ entry fn Demo(inputs: Pick::Inputs) { return Pick::run(inputs); }
 
 with case("a static power-of-two domain emits a constant bound and an index query"):
     emitted = language("run-original", PICK, "Demo", name="pick")
-    assert re.search(r'"data.index"\(\) <\{value = "8"\}> : \(\) -> ui64', emitted)
+    assert re.search(r'"data.index"\(\) <\{value = 8 : ui64\}> : \(\) -> ui64', emitted)
     assert 'method = "index"' in emitted and 'method = "draw"' not in emitted
     largest = language("run-original", PICK.replace("index<8>", "index<pow2(63)>"),
                        "Demo", name="pick_largest")
-    assert 'value = "9223372036854775808"' in largest
+    assert 'value = 9223372036854775808 : ui64' in largest
     language("language-check", PICK.replace("index<8>", "index<1>"), "Demo",
              name="pick_single")
 
@@ -112,7 +112,7 @@ with case("the index method is a method call only"):
 FORMED = f'''module {{ "protocol.module"() ({{
   "protocol.func"() ({{
   ^entry(%n: ui64, %r: {SERVICE}):
-    %b = "data.index"() {{value = "8"}} : () -> ui64
+    %b = "data.index"() {{value=8 : ui64}} : () -> ui64
     %x = "protocol.query"(%r, %b) {{method = "index", owner = "V", site = "sample"}} : ({SERVICE}, ui64) -> ui64
     "protocol.return"(%x) : (ui64) -> ()
   }}) {{sym_name = "main", function_type = (ui64, {SERVICE}) -> (ui64), roles = ["V"], input_roles = [["V"], ["V"]], output_roles = [["V"]]}} : () -> ()
@@ -120,12 +120,10 @@ FORMED = f'''module {{ "protocol.module"() ({{
 
 with case("formation admits the smallest and largest domains"):
     for value in ("1", "3", "9223372036854775808", "18446744073709551615"):
-        commands.verified(FORMED.replace('value = "8"', f'value = "{value}"'), None)
+        commands.verified(FORMED.replace('value=8 : ui64', f'value={value} : ui64'), None)
 
 for name, old, new in [
-    ("zero bound", 'value = "8"', 'value = "0"'),
-    ("noncanonical bound", 'value = "8"', 'value = "08"'),
-    ("bound above u64", 'value = "8"', 'value = "18446744073709551616"'),
+    ("zero bound", 'value=8 : ui64', 'value=0 : ui64'),
     ("runtime bound", '"protocol.query"(%r, %b)', '"protocol.query"(%r, %n)'),
     ("service without index randomness", '"random.koala-bear.ext8-binomial3/0"', '"random.bls12-381.fr/0"'),
     ("field result", '(ui64) -> ()', '(!algebra.field<"koala-bear.ext8-binomial3">) -> ()'),
@@ -218,7 +216,7 @@ with case("the explicit policy reconstructs and checks the same candidate"):
     (OUT / "echo.candidate.mlir").write_text(candidate)
     commands.run([compiler, "protocol-check-proof", source, policy, OUT / "echo.candidate.mlir"])
     # Mutate the projected bound, leaving authored queries untouched.
-    constant = re.search(r'"data.index"\(\) <\{[^}]*value = "(32)"', candidate)
+    constant = re.search(r'"data.index"\(\) <\{[^}]*value = (32) : ui64', candidate)
     assert constant, "the projected program retains its static bound"
     start, end = constant.span(1)
     for value, reason in [("64", "native-proof-correspondence"), ("3", "native-proof-correspondence")]:
@@ -246,7 +244,7 @@ def insert(text, before, lines):
 
 
 def extra_query(service, site):
-    return [f'%{site}_bound = "data.index"() <{{value = "32"}}> : () -> ui64',
+    return [f'%{site}_bound = "data.index"() <{{value=32 : ui64}}> : () -> ui64',
             f'%{site} = "protocol.query"({service}, %{site}_bound) <{{method = "index", owner = "role00000001", site = "{site}"}}> : ({SERVICE}, ui64) -> ui64']
 
 

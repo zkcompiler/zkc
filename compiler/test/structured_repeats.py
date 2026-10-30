@@ -105,7 +105,9 @@ header = loop[4]
 with case('unchanged-repeat-full-original-callback-and-independent-received-values'):
     assert loop[0] == ['protocol_repeat', 2, 4, [P, V], [[P], [V]]]
     assert len(loop[3]) == 1 and loop[3][0][2][2][0] == 'yield'
-    assert loop[3][0][0] == [['index'], field, field, ['bool'], ['service', service]]
+    assert loop[3][0][0] == [['apply', 'index', []], ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]],
+                              ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]],
+                              ['apply', 'bool', []], ['service', service]]
     calls = [i for i in instructions(loop[3][0][2]) if i[0][0] == 'protocol_apply']
     [call] = calls
     round_body = next(d[9] for d in repeat_snapshot[7] if d[1] == call[0][1])
@@ -247,12 +249,12 @@ with case('free-ssa-capture-refused-even-at-zero'):
            'structured-source-original', invariant="'protocol.yield' op using value defined outside the region")
 
 with case('full-dormant-callback-and-stopped-suffix-remain-checked'):
-    bad = repeat('%bad = "data.index"() {value="1",foreign=true} : ()->ui64', maximum=0)
+    bad = repeat('%bad = "data.index"() {value=1 : ui64,foreign=true} : ()->ui64', maximum=0)
     source = module(protocol('main', repeat()), protocol('dormant', bad))
     refuse(source)
     source = module(protocol('main', repeat('''%no = "arith.constant"() {value=false} : ()->i1
       "protocol.guard"(%no) {owner="P",site="stop"} : (i1)->()
-      %bad = "data.index"() {value="1",foreign=true} : ()->ui64''')))
+      %bad = "data.index"() {value=1 : ui64,foreign=true} : ()->ui64''')))
     refuse(source)
 
 with case('native-valid-dormant-zero-callback-has-structured-unsupported-operation'):
@@ -387,7 +389,8 @@ for label, path, entry, maximum in [
         # the repeat. Keep the exact public-point/table/Pending output order.
         assert reduction[9][2] == ['return', [5, 2, 3, 4, 0, 1]]
         assert reduction[9][1][-1][0][0] == 'local_call'
-        assert reduction[9][1][-1][2] == [['vector', 'bls12-381.fr'], field]
+        assert reduction[9][1][-1][2] == [['apply', 'vector', [['domain', 'Field', 'bls12-381.fr']]],
+                                              ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]]
         # Admission validates every dormant declaration before optional zero
         # execution. Full symbolic Sumcheck equations are a subsequent package.
         # The composed project's current Entry completes both public sums.
@@ -486,7 +489,7 @@ with case('lexical-wire-nesting-is-separate-from-native-repeat-depth'):
 with case('nested-immutable-service-captures-preserve-entry-origin'):
     body = '''%r = "protocol.repeat"(%n,%x,%first,%second) ({
       ^outer(%i:ui64,%state:!F,%a:!S,%b:!S):
-      %one = "data.index"() {value="1"} : ()->ui64
+      %one = "data.index"() {value=1 : ui64} : ()->ui64
       %y = "protocol.repeat"(%one,%state,%b,%a) ({
         ^inner(%j:ui64,%s:!F,%right:!S,%left:!S):
         %q = "protocol.query"(%left) {owner="P",method="draw",site="q"} : (!S)->!F
@@ -569,7 +572,7 @@ with case('yield-cannot-widen-carried-role-scope'):
     refuse(source)
 
 with case('nested-repeat-roster-cannot-widen-even-for-constant-count'):
-    body = '''%n0 = "data.index"() {value="0"} : ()->ui64
+    body = '''%n0 = "data.index"() {value=0 : ui64} : ()->ui64
       "protocol.repeat"(%n0) ({ ^inner(%j:ui64): "protocol.yield"() : ()->() })
       {site="inner",carried=0:i64,maximum=0:i64,roles=["P","Q"],carried_roles=[]} : (ui64)->()'''
     refuse(module(protocol('main', repeat(body, maximum=0))))
@@ -617,7 +620,7 @@ with case('induction-advances-and-original-count-capture-remains-fixed'):
         assert run(source, [str(n)]) == returned([str(max(0,n-1)), str(n)])
 
 with case('dormant-supported-repeat-is-admitted-with-repeat-free-selected-root'):
-    body = '''%n = "data.index"() {value="0"} : ()->ui64
+    body = '''%n = "data.index"() {value=0 : ui64} : ()->ui64
       "protocol.repeat"(%n) ({ ^round(%i:ui64): "protocol.yield"() : ()->()
       }) {site="loop",roles=["P","Q"],carried=0:i64,maximum=3:i64,carried_roles=[]} : (ui64)->()'''
     source = module(protocol('main', inputs=(), outputs=(), returns=()),

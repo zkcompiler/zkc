@@ -9,6 +9,8 @@
 
 namespace zkc::requirements {
 
+inline constexpr unsigned ScopeTermLimit = 128;
+
 /// Terms are interned in dependency order. A root is a parameter or nominal
 /// identity; a projection retains both its parent and associated member name.
 /// An application has a head in name and ordered arguments (including zero).

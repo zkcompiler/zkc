@@ -1,6 +1,9 @@
+#include "NativeBindingApplication.h"
 #include "OracleQueryExchange.h"
 #include "OracleVerificationContext.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 using namespace mlir;
 using namespace llvm;
@@ -70,10 +73,14 @@ struct Reader {
                          binding.getArguments().size() == statics.size() &&
                          op.getParameters().size() == parameters.size()))
         return values;
-      for (auto [actual, expected] : zip(binding.getArguments(), statics))
-        reader.expect(cast<StringAttr>(actual).getValue() == expected);
-      for (auto [actual, expected] : zip(op.getParameters(), parameters))
-        reader.expect(cast<StringAttr>(actual).getValue() == expected);
+      SmallVector<Attribute> arguments;
+      for (const auto &identity : statics)
+        arguments.push_back(StringAttr::get(op.getContext(), identity));
+      reader.expect(matchesNativeBinding(
+          binding, {contract.str(), std::move(arguments), {}}));
+      reader.expect(
+          invocationParametersMatch(contract, binding.getArgumentsAttr(),
+                                    op.getParametersAttr(), parameters));
       return values;
     }
     Value number(uint64_t value, StringRef site) {

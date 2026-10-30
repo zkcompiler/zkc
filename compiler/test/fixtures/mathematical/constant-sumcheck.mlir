@@ -4,10 +4,10 @@
 !a = !algebra.field_array<"bls12-381.fr", 1>
 !q = !poly.polynomial<"bls12-381.fr", 1>
 !rng = !protocol.service_ref<"random.bls12-381.fr/0">
-!state = !data.variant<"variant:5b227a6b632e76617269616e742f30222c5b22706f6c792e726573696475616c2e70726f64756374222c227374617465222c22706f696e743a626c7331322d3338312e6672222c227461626c653a626c7331322d3338312e6672222c5b2232222c2233222c2233225d2c5b2231222c2234225d2c5b2235225d2c5b2230222c2236225d5d5d">
+!state = !data.variant<#data.identity<["atom", "poly.residual.product"]>, [#data.alternative<"state", [!poly.point<"bls12-381.fr">, !poly.multilinear<"bls12-381.fr">, !poly.multilinear<"bls12-381.fr">]>]>
 module { "protocol.module"() ({
  "poly.recipe"() ({ ^slots(%a:!f,%b:!f):
-   %p = "algebra.constant"() {value="7"} : ()->!f
+   %p = "algebra.constant"() {value=#algebra.literal<!f, 7 : ui255>} : ()->!f
    "poly.recipe_yield"(%p) : (!f)->()
  }) {sym_name="product",degree=0:i64} : ()->()
  "poly.realize"() {sym_name="init",recipe=@product,kind="init",function_type=(ui64,!t,!t)->!state} : ()->()
@@ -15,7 +15,7 @@ module { "protocol.module"() ({
  "poly.realize"() {sym_name="round",recipe=@product,kind="round",function_type=(!state)->!a} : ()->()
  "poly.realize"() {sym_name="finish",recipe=@product,kind="finish",function_type=(!state)->(!p,!f)} : ()->()
  "poly.realize"() {sym_name="evaluate",recipe=@product,kind="evaluate",function_type=(!p,!t,!t)->!f} : ()->()
- "runtime.binding"() {sym_name="arity_kernel",contract="poly.table_arity",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="arity_kernel",contract="poly.table_arity",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">) -> !exec.outcome<(ui64)>} : ()->()
     func.func @table_arity(%arg0: !runtime.scope, %arg1: !t) -> !exec.outcome<(ui64)> attributes {no_inline, runtime.origin = ["table_arity", []]} {
       %0 = "exec.apply"(%arg0, %arg1) <{binding = @arity_kernel, parameters = [], site = "arity"}> : (!runtime.scope, !t) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
@@ -47,8 +47,8 @@ module { "protocol.module"() ({
       return %4 : !exec.outcome<(!p)>
     }
 
- "runtime.binding"() {sym_name="empty",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="append",contract="poly.append_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="empty",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!poly.point<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="append",contract="poly.append_point",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.point<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.point<"bls12-381.fr">)>} : ()->()
 
 
  "protocol.func"() ({ ^entry(%n:ui64,%T:!t,%U:!t,%claim:!f,%coins:!rng):
@@ -63,8 +63,8 @@ module { "protocol.module"() ({
      %coeffs = "protocol.local_call"(%state) {callee=@round,role="P",site="round_coefficients"} : (!state)->!a
      %received = protocol.exchange %coeffs {sender="P",receiver="V",site="round_message"} : !a
      %q = "poly.from_coefficients"(%received) : (!a)->!q
-     %zero = "algebra.constant"() {value="0"} : ()->!f
-     %one = "algebra.constant"() {value="1"} : ()->!f
+     %zero = "algebra.constant"() {value=#algebra.literal<!f, 0 : ui255>} : ()->!f
+     %one = "algebra.constant"() {value=#algebra.literal<!f, 1 : ui255>} : ()->!f
      %q0 = "poly.evaluate"(%q,%zero) : (!q,!f)->!f
      %q1 = "poly.evaluate"(%q,%one) : (!q,!f)->!f
      %sum = algebra.field_add %q0,%q1 : (!f,!f)->!f

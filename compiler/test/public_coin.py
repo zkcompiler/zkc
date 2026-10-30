@@ -216,7 +216,7 @@ assert analyze(cancelled, {**shadow_req, "bound_inputs": [0]})[
 # Keep the actual scalar request and its full static domain. An index draw is
 # neither a field draw nor an atomic block of several samples.
 index_service = '!protocol.service_ref<"random.koala-bear.ext8-binomial3/0">'
-index_body = f'''%bound = "data.index"() {{value = "8"}} : () -> ui64
+index_body = f'''%bound = "data.index"() {{value=8 : ui64}} : () -> ui64
 %position = "protocol.query"(%s, %bound) {{method = "index", owner = "Checker", site = "draw"}} : ({index_service}, ui64) -> ui64
 %delivered = "protocol.exchange"(%position) {{sender = "Checker", receiver = "Prover", site = "coin"}} : (ui64) -> ui64
 %ok = algebra.field_equal %x, %x : ({F}, {F}) -> i1
@@ -225,7 +225,7 @@ indexed = small(index_body).replace(S, index_service)
 commands.verified(indexed, None)
 index_req = {**shadow_req, "bound_inputs": [0]}
 for upper in (1, 8, 17, (1 << 64) - 1):
-    current = indexed.replace('value = "8"', f'value = "{upper}"')
+    current = indexed.replace('value=8 : ui64', f'value={upper} : ui64')
     view = checked(f"index_{upper}", current, index_req)
     request = view["draws"][0]["request"]
     assert request == {"contract": "random.koala-bear.ext8-binomial3/0",
@@ -273,7 +273,7 @@ assert view["draws"][1]["request"]["arguments"] == []
 # Exact edge, order, and service failures on otherwise admitted programs.
 changed = (
     query()
-    + f'%one="algebra.constant"() {{value="1"}} : ()->{F}\n%changed=algebra.field_add %draw,%one : ({F},{F})->{F}\n'
+    + f'%one="algebra.constant"() {{value=#algebra.literal<{F}, 1 : ui255>}} : ()->{F}\n%changed=algebra.field_add %draw,%one : ({F},{F})->{F}\n'
 )
 analyze(
     small(changed + delivery("changed") + receive + compare),

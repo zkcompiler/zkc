@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -86,12 +87,20 @@ int main() {
       diagnostic.print(out);
       return success();
     });
-    require(succeeded(verify(*module)),
+    require(succeeded(zkc::admitStage(*module)),
             "valid virtual oracle refused: " + message);
   };
   auto refused = [&](llvm::StringRef text) {
     auto module = parse(text, context);
-    require(failed(verify(*module)), "invalid virtual oracle admitted");
+    require(succeeded(verify(*module)),
+            "semantic virtual oracle mutation lost structural validity");
+    require(failed(zkc::admitStage(*module)),
+            "invalid virtual oracle admitted");
+  };
+  auto structurallyRefused = [&](llvm::StringRef text) {
+    auto module = parse(text, context);
+    require(failed(verify(*module)),
+            "invalid virtual oracle structure admitted");
   };
   cases.run(
       "virtual anchors may retain earlier iterations without cyclic values",
@@ -102,7 +111,7 @@ int main() {
             "{callee=@select,holder=\"P\",receivers=[\"V\"]} : "
             "(!H,!H,ui64)->!H",
             R"mlir(
-    %trips = "data.index"() {value="3"} : ()->ui64
+    %trips = "data.index"() {value=3 : ui64} : ()->ui64
     %virtual = "protocol.repeat"(%trips,%first,%second,%parameter) ({
       ^bb0(%iteration:ui64,%previous:!H,%other:!H,%argument:ui64):
        %next = "protocol.oracle_virtual"(%previous,%other,%argument) {callee=@select,holder="P",receivers=["V"]} : (!H,!H,ui64)->!H
@@ -130,16 +139,17 @@ int main() {
                         "holder=\"P\",receivers=[\"P\"]"));
         refused(
             replace(source(), "[\"V\"],[\"P\",\"V\"]]", "[\"V\"],[\"V\"]]"));
-        refused(replace(source(), "admissibility=@admissible",
-                        "admissibility=@missing"));
-        refused(replace(source(), "callee=@select", "callee=@admissible"));
-        refused(replace(source(), "signature=(!D,!D,ui64)->i1",
-                        "signature=(!D,!D,!F)->i1"));
-        refused(replace(source(), "{site=\"left\"}",
-                        "{site=\"left\",owner=\"V\"}"));
+        structurallyRefused(replace(source(), "admissibility=@admissible",
+                                    "admissibility=@missing"));
+        structurallyRefused(
+            replace(source(), "callee=@select", "callee=@admissible"));
+        structurallyRefused(replace(source(), "signature=(!D,!D,ui64)->i1",
+                                    "signature=(!D,!D,!F)->i1"));
+        structurallyRefused(replace(source(), "{site=\"left\"}",
+                                    "{site=\"left\",owner=\"V\"}"));
         refused(replace(source(), "site=\"right\"", "site=\"left\""));
-        refused(replace(source(), "{owner=\"V\",site=\"read\"}",
-                        "{site=\"read\"}"));
+        structurallyRefused(replace(source(), "{owner=\"V\",site=\"read\"}",
+                                    "{site=\"read\"}"));
       });
   cases.run(
       "query maps cannot depend on answers including through helpers", [&] {
@@ -170,7 +180,7 @@ int main() {
         for (auto query : queries)
           if (query != first)
             query.getPositionMutable().set(first.getAnswer());
-        require(failed(verify(*module)),
+        require(failed(zkc::admitStage(*module)),
                 "unused invalid query declaration was ignored");
       });
   cases.run("query bodies admit total mathematics and refuse effects", [&] {
@@ -184,26 +194,28 @@ int main() {
     %ok = arith.constant true
     "protocol.guard"(%ok) {owner="V",site="stop"} : (i1)->()
     "protocol.oracle_yield"(%left))mlir");
-    refused(effect);
+    // Protocol guards require a program parent even before stage admission.
+    structurallyRefused(effect);
     refused(replace(source(), "kind=#K,", "kind=#K,unproved=true,"));
   });
-  cases.run("dynamic virtual shapes identify an initially bound parameter",
-            [&] {
-              auto dynamic = replace(source(), ", 16 : ui64", "");
-              dynamic = replace(dynamic, "shape_arguments={}",
-                                "shape_arguments={rows=2:ui64}");
-              for (unsigned i = 0; i < 3; ++i)
-                dynamic = replace(dynamic, "shape_bounds={}",
-                                  "shape_bounds={rows=32:ui64}");
-              accepted(dynamic);
-              refused(replace(dynamic, "shape_arguments={rows=2:ui64}",
-                              "shape_arguments={rows=0:ui64}"));
-              refused(replace(dynamic, "shape_arguments={rows=2:ui64}",
-                              "shape_arguments={rows=3:ui64}"));
-              refused(replace(dynamic, "shape_bounds={rows=32:ui64},", ""));
-              refused(replace(source(), "shape_arguments={}",
-                              "shape_arguments={rows=2:ui64}"));
-            });
+  cases.run(
+      "dynamic virtual shapes identify an initially bound parameter", [&] {
+        auto dynamic = replace(source(), ", 16 : ui64", "");
+        dynamic = replace(dynamic, "shape_arguments={}",
+                          "shape_arguments={rows=2:ui64}");
+        for (unsigned i = 0; i < 3; ++i)
+          dynamic = replace(dynamic, "shape_bounds={}",
+                            "shape_bounds={rows=32:ui64}");
+        accepted(dynamic);
+        structurallyRefused(replace(dynamic, "shape_arguments={rows=2:ui64}",
+                                    "shape_arguments={rows=0:ui64}"));
+        structurallyRefused(replace(dynamic, "shape_arguments={rows=2:ui64}",
+                                    "shape_arguments={rows=3:ui64}"));
+        structurallyRefused(
+            replace(dynamic, "shape_bounds={rows=32:ui64},", ""));
+        structurallyRefused(replace(source(), "shape_arguments={}",
+                                    "shape_arguments={rows=2:ui64}"));
+      });
   cases.run(
       "preparation keeps actual query definitions and fresh virtual anchors",
       [&] {

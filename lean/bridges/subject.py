@@ -62,12 +62,12 @@ from bridges.structured import bodies as printer, snapshot as structured, source
 
 BODIES = ROOT / "lean/bridges/structured/bodies.py"
 SOURCE_VIEWS = ROOT / "lean/bridges/structured/source_views.py"
-# Example-namespace theorems are Entry-specific. Among those a proof reaches, the
+# Theorems owned by concrete example modules are Entry-specific. Among those a proof reaches, the
 # walk lists every equation between processes (`PIR.Process`), whether the kernel
 # checks it by evaluation (`rfl`), and whether its statement names a meaning of a
 # compiled program. Derived artifact/source connections are recorded separately
 # from evaluated original-side normal forms.
-ENTRY_PREFIXES = ["ZkcExamples", "ZkcSecurity.Examples"]
+ENTRY_PREFIXES = ["ZkcExamples", "ZkcSecurityExamples", "ZkcArkLibExamples"]
 COMPILED_MEANINGS = [
     "Zkc.Construction.spec", "Zkc.Construction.specK", "Zkc.Construction.ideal", "Zkc.Construction.idealK",
     "Zkc.Construction.Domain.participant", "Zkc.Construction.Domain.run",
@@ -108,8 +108,8 @@ class Driver(Runner):
         category and statement, read from the selected physical package registry."""
         if package not in self.registry_entries:
             optional = package == "arklib"
-            module = "ZkcArkLib.Registry" if optional else "ZkcSecurity.Registry"
-            table = module + (".reportTable" if optional else ".table")
+            module = "ZkcArkLib.Registry" if optional else "ZkcSecurity.Claims.Registry"
+            table = "ZkcArkLib.Registry.reportTable" if optional else "ZkcSecurity.Registry.table"
             cwd = LEAN / "integrations/arklib" if optional else LEAN / "security"
             result = self.evaluate(
                 self.output / f"Registry-{package}.lean",
@@ -260,6 +260,7 @@ class Driver(Runner):
 
         parts = [f"import {glue_module}", "import Zkc.Construction.Encoding",
                  "import ZkcTools.ConstructionBindings.Admission", "import Tests.ConnectionRefusal",
+                 "open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm",
                  "set_option maxRecDepth 50000", "set_option maxHeartbeats 16000000",
                  "set_option linter.unusedTactic false",
                  strip_header(structured.render(original, "Fresh.Original")),
@@ -1066,7 +1067,12 @@ def processEquations (root : Name) : MetaM (Array (Name × Bool × Bool)) := do
   -- leave the environment. The actual compiled control below must still pass.
   let mut found := #[]
   for name in (← dependencyClosure root).qsort Name.lt do
-    unless [PREFIXES].any (·.isPrefixOf name) do continue
+    let owner := (env.getModuleIdxFor? name).bind fun index =>
+      (env.header.modules[index.toNat]?).map (·.module)
+    -- Ownership, rather than declaration spelling, separates reusable templates
+    -- from closed Entries. Locally declared classification controls have no
+    -- imported owner and belong to this concrete consumer.
+    unless owner.isNone || owner.any (fun module => [PREFIXES].any (·.isPrefixOf module)) do continue
     if let .str _ last := name then
       if last.startsWith "eq_" then continue
     let some (.thmInfo info) := env.find? name | continue

@@ -60,20 +60,25 @@ struct AxisValue {
 
 struct MathematicalFactAnalysis::Impl {
   Operation *root;
+  std::unique_ptr<SymbolClosureAnalysis> ownedSymbols;
+  SymbolClosureAnalysis &symbols;
   struct Helper {
     Block *body = nullptr;
     SmallVector<Value> returned;
   };
   llvm::DenseMap<Operation *, Helper> helpers;
-  explicit Impl(Operation *root) : root(root) {}
+  explicit Impl(Operation *root)
+      : root(root), ownedSymbols(std::make_unique<SymbolClosureAnalysis>(root)),
+        symbols(*ownedSymbols) {}
+  Impl(Operation *root, SymbolClosureAnalysis &symbols)
+      : root(root), symbols(symbols) {}
   bool contains(Operation *op) const {
     return root && op && (root == op || root->isAncestor(op));
   }
   bool contains(Value value) const { return contains(owner(value)); }
   Operation *resolve(Operation *op, StringRef key) {
     auto ref = op->getAttrOfType<FlatSymbolRefAttr>(key);
-    auto *callee =
-        ref ? SymbolTable::lookupNearestSymbolFrom(op, ref) : nullptr;
+    auto *callee = ref ? symbols.lookup(op, ref) : nullptr;
     return contains(callee) ? callee : nullptr;
   }
   const Helper *helper(Operation *op, facts::Work &work) {
@@ -199,11 +204,8 @@ struct MathematicalFactAnalysis::Impl {
           return missing<uint64_t>(work);
         value = *forwarded.value;
       }
-      if (auto index = value.getDefiningOp<data::IndexOp>()) {
-        uint64_t n;
-        if (!index.getValue().getAsInteger(10, n))
-          return {Status::Proven, n};
-      }
+      if (auto index = value.getDefiningOp<data::IndexOp>())
+        return {Status::Proven, index.getValue()};
       // A returned payload of the exact index.constant invocation retains its
       // value. This observes a successful result, not a reached guard or an
       // assumption about arbitrary CFG block arguments. Multiple predecessors
@@ -224,14 +226,13 @@ struct MathematicalFactAnalysis::Impl {
           auto binding =
               dyn_cast_or_null<runtime::BindingOp>(resolve(apply, "binding"));
           auto outcome = cast<exec::OutcomeType>(apply.getOutcome().getType());
-          auto parameter = dyn_cast<StringAttr>(apply.getParameters()[0]);
-          uint64_t n;
+          auto parameter = dyn_cast<IntegerAttr>(apply.getParameters()[0]);
           if (binding && binding.getContract() == "index.constant" &&
               binding.getArguments().empty() &&
               outcome.getPayload().size() == 1 &&
               outcome.getPayload()[0] == value.getType() && parameter &&
-              !parameter.getValue().getAsInteger(10, n))
-            return {Status::Proven, n};
+              parameter.getType().isUnsignedInteger(64))
+            return {Status::Proven, parameter.getValue().getZExtValue()};
         }
       }
       auto *call = value.getDefiningOp();
@@ -492,10 +493,33 @@ struct MathematicalFactAnalysis::Impl {
   };
 };
 
+SymbolClosureAnalysis::SymbolClosureAnalysis(Operation *root)
+    : root(root), symbols(std::make_unique<SymbolTableCollection>()) {}
+Operation *SymbolClosureAnalysis::lookup(Operation *from, SymbolRefAttr name) {
+  if (!root || !from || (from != root && !root->isAncestor(from)))
+    return nullptr;
+  auto *found = symbols->lookupNearestSymbolFrom(from, name);
+  return found && (found == root || root->isAncestor(found)) ? found : nullptr;
+}
+void SymbolClosureAnalysis::clear() {
+  symbols = std::make_unique<SymbolTableCollection>();
+}
 MathematicalFactAnalysis::MathematicalFactAnalysis(Operation *root)
     : impl_(std::make_unique<Impl>(root)) {}
+MathematicalFactAnalysis::MathematicalFactAnalysis(Operation *root,
+                                                   AnalysisManager &manager)
+    : impl_(std::make_unique<Impl>(
+          root, manager.getAnalysis<SymbolClosureAnalysis>())) {}
+bool MathematicalFactAnalysis::isInvalidated(
+    const AnalysisManager::PreservedAnalyses &preserved) {
+  return !preserved.isPreserved<MathematicalFactAnalysis>() ||
+         !preserved.isPreserved<SymbolClosureAnalysis>();
+}
 MathematicalFactAnalysis::~MathematicalFactAnalysis() = default;
-void MathematicalFactAnalysis::clear() { impl_->helpers.clear(); }
+void MathematicalFactAnalysis::clear() {
+  impl_->helpers.clear();
+  impl_->symbols.clear();
+}
 Operation *MathematicalFactAnalysis::getRoot() const { return impl_->root; }
 Operation *MathematicalFactAnalysis::rootFor(Operation *op) {
   Operation *root = nullptr;

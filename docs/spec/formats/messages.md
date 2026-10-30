@@ -260,9 +260,10 @@ the challenge field. For example, a BN254 group frame can be observed under the
 KoalaBear ext8 suite. Type identity, origin and exact canonical framing remain
 bound. This does not install a BN254 challenge suite, change a sampler or claim
 security for an arbitrary protocol using mixed domains. The semantic facets identify
-the observation payload and affine history successor. The dedicated MLIR op is
-`crypto.exec.indexed_transcript_observe_data`; physical selection uses the
-existing bound-kernel path. This adds no source generic wildcard or runner action.
+the observation payload and affine history successor. An `exec.apply` invocation
+references the exact `transcript.native.indexed.observe.data` binding; physical
+selection fixes its implementation and complete represented ports. This adds no
+source generic wildcard or runner action.
 
 After an actual receive and successful canonical decoding, the observer absorbs
 the full frame, including tags and lengths, under the existing origin/value

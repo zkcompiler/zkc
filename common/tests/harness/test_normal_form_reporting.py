@@ -32,7 +32,7 @@ def test_source_selection_owns_every_checked_output_path(case):
     api, manifest, path, evidence, _ = case
     modules = api.attached(manifest)
     assert {module["path"] for module in modules} == set(evidence["generated"])
-    assert len(modules) == 6
+    assert len(modules) == 7
     result, reasons = api.connection(manifest, path, modules, evidence)
     assert result["status"] == "connected"
     assert not reasons

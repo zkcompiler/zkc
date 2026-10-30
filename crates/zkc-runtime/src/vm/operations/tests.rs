@@ -331,9 +331,8 @@ fn duplicate_owners_refuse_assembly() {
 fn alternatives_require_a_logical_owner_after_complete_assembly() {
     static ALTERNATIVE: Contribution = Contribution {
         contracts: &[],
-        resolve: support::field_signature,
+
         select: default_ports,
-        physical_only: false,
         physical_error: "binding-implementation",
         alternatives: &[Alternative {
             timing: TimingRequirement::Unspecified,
@@ -439,10 +438,6 @@ fn contribution_refusals_and_custom_shapes_keep_their_own_errors() {
         };
         assert_eq!(binding.logical_signature().unwrap_err().detail, detail);
     }
-    assert_eq!(
-        Contract::custom("custom").shape().unwrap_err().detail,
-        "contract-shape-missing"
-    );
 }
 
 #[test]
@@ -547,19 +542,19 @@ hash.poseidon2_16 0";
 }
 
 #[test]
-fn history_follows_the_installed_owner_not_the_contract_spelling() {
+fn installation_cannot_invent_a_logical_contract_or_history_facet() {
     static OWNER: Contribution = Contribution {
-        contracts: &[
-            Contract::new("independent.absorb", (&[], &[], AttributeRule::None)).history(),
-            Contract::new("transcript.stateless", (&[], &[], AttributeRule::None)),
-        ],
+        contracts: &[Installation::new("independent.absorb")],
         ..control::CONTRIBUTION
     };
-    let registry = Registry::assemble(&[&OWNER]).unwrap();
-    assert!(registry.observes_history("independent.absorb").unwrap());
-    assert!(!registry.observes_history("transcript.stateless").unwrap());
+    assert_eq!(
+        Registry::assemble(&[&OWNER]).err().unwrap().detail,
+        "undeclared-logical-contract"
+    );
+    let registry = Registry::assemble(&[&hash::CONTRIBUTION, &transcript::CONTRIBUTION]).unwrap();
+    assert!(registry.observes_history("shake128.absorb").unwrap());
+    assert!(!registry.observes_history("hash.keccak256").unwrap());
     assert!(registry.observes_history("transcript.unknown").is_err());
-    assert!(observes_history("transcript.unknown").is_err());
 }
 
 #[test]
@@ -615,4 +610,60 @@ fn multilinear_prefix_restriction_has_exact_vector_ports_and_binding() {
             );
         }
     }
+}
+
+#[test]
+fn physical_erasure_is_declared_without_source_or_installation_authority() {
+    for (contract, arguments, logical) in [
+        (
+            "representation.convert",
+            vec!["field:bls12-381.fr"],
+            "field:bls12-381.fr",
+        ),
+        (
+            "table.relayout",
+            vec!["bls12-381.fr", "arkworks.mle-lsb/0", "arkworks.mle-msb/0"],
+            "table:bls12-381.fr",
+        ),
+    ] {
+        let binding = OperationBinding {
+            contract: contract.into(),
+            arguments: arguments.into_iter().map(String::from).collect(),
+            implementation: String::new(),
+            physical_arguments: vec![],
+        };
+        assert_eq!(
+            zkc_catalog::operation(contract).unwrap().stage,
+            zkc_catalog::Stage::Physical
+        );
+        let signature = declared_logical_signature(&binding).unwrap();
+        assert_eq!(signature.inputs, [LogicalType::parse(logical).unwrap()]);
+        assert_eq!(signature.outputs, signature.inputs);
+        assert_eq!(signature.attributes, AttributeRule::None);
+        assert_eq!(
+            logical_signature(&binding).unwrap_err().detail,
+            "binding-adapter-at-logical-stage"
+        );
+        assert!(
+            binding.signature().is_err(),
+            "erasure installed an implementation"
+        );
+        let malformed = OperationBinding {
+            arguments: vec![],
+            ..binding
+        };
+        assert!(declared_logical_signature(&malformed).is_err());
+    }
+}
+
+#[test]
+fn physical_installation_cannot_invent_a_contract() {
+    static OWNER: Contribution = Contribution {
+        contracts: &[Installation::new("independent.convert")],
+        ..representation::CONTRIBUTION
+    };
+    assert_eq!(
+        Registry::assemble(&[&OWNER]).err().unwrap().detail,
+        "undeclared-logical-contract"
+    );
 }

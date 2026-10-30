@@ -1,7 +1,7 @@
-import ZkcSecurity.Examples.RootProperties.SmallSumcheck.Soundness
-import ZkcSecurity.Examples.RootProperties.TwoSums.Soundness
-import ZkcSecurity.Examples.Generated.SmallSumcheckSoundnessClaims
-import ZkcSecurity.Examples.Generated.TwoSumsSoundnessClaims
+import ZkcSecurityExamples.RootProperties.SmallSumcheck.Soundness
+import ZkcSecurityExamples.RootProperties.TwoSums.Soundness
+import ZkcSecurityExamples.Generated.SmallSumcheckSoundnessClaims
+import ZkcSecurityExamples.Generated.TwoSumsSoundnessClaims
 
 /- Full imports keep theorem bodies available to the dependency audit. -/
 set_option autoImplicit false

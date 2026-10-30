@@ -1,5 +1,5 @@
-import ZkcSecurity.Examples.Generated.SmallSumcheckCompletenessClaims
-import ZkcSecurity.Examples.Generated.TwoSumsCompletenessClaims
+import ZkcSecurityExamples.Generated.SmallSumcheckCompletenessClaims
+import ZkcSecurityExamples.Generated.TwoSumsCompletenessClaims
 
 /-! The actual canonical receipt retains a fixed source correspondence goal.
 Removing its proof opens the same claim; neither property mathematics nor an

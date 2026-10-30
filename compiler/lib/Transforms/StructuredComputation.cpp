@@ -10,6 +10,7 @@
 #include "mlir/Transforms/CSE.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Algebra/RingExpression.h"
 
 using namespace mlir;
@@ -96,8 +97,9 @@ OwningOpRef<ModuleOp> proposeStructuredComputation(Block &formula,
       });
   Value returned = mapped.getResult(0);
   if (result == StructuredResult::Sum) {
-    auto zero =
-        algebra::ConstantFieldOp::create(builder, location, sig->field, "0");
+    auto zero = algebra::ConstantFieldOp::create(
+        builder, location, sig->field,
+        cantFail(algebra::makeFieldLiteral(sig->field, llvm::APInt(1, 0))));
     auto seed = tensor::FromElementsOp::create(
         builder, location, RankedTensorType::get({}, sig->field),
         ValueRange{zero});

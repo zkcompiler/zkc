@@ -59,7 +59,7 @@ void run(ModuleOp module, std::unique_ptr<Pass> pass) {
 }
 constexpr StringLiteral algorithm = R"mlir(module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
-    "runtime.binding"() <{arguments = [], contract = "bool.and", implementation = "", sym_name = "and"}> : () -> ()
+    "runtime.binding"() <{arguments = [], contract = "bool.and", implementation = "", sym_name = "and",function_type=(!runtime.scope, i1, i1) -> !exec.outcome<(i1)>}> : () -> ()
     "protocol.func"() <{function_type = (i1, i1) -> i1, input_roles = [["P"], ["P"]], origin = ["main", []], output_roles = [["P"]], roles = ["P"], sym_name = "main"}> ({
     ^bb0(%arg0: i1, %arg1: i1):
       %0 = "protocol.local_call"(%arg0, %arg1) <{callee = @both, role = "P", site = "call"}> : (i1, i1) -> i1

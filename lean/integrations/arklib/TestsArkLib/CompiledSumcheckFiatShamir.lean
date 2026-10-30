@@ -1,4 +1,4 @@
-import ZkcArkLib.Examples.CompiledSumcheckFiatShamir
+import ZkcArkLibExamples.CompiledSumcheckFiatShamir
 import TestsArkLib.SumcheckFiatShamir
 
 /-! Controls for the Fiat–Shamir theorems of the compiled Sumcheck proof Entry.

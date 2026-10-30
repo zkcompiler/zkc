@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Executable.SumcheckFamilySource
-public meta import Zkc.Construction.ArtifactBindingTactic
+public meta import ZkcTools.ConstructionBindings.ArtifactBindingTactic
 
 @[expose] public section
 

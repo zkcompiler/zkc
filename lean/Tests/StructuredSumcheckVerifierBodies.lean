@@ -1,4 +1,4 @@
-import ZkcExamples.Structured.SumcheckVerifierBodies
+import Zkc.Protocols.Sumcheck.Source.VerifierBodies
 import ZkcExamples.Structured.SumcheckReduceLaws
 import ZkcExamples.Structured.SumcheckSourceLaws
 import ZkcExamples.Structured.SumcheckSourceVerifier

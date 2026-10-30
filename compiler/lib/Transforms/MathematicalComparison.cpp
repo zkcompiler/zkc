@@ -6,9 +6,11 @@
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Algebra/RingExpression.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Collection.h"
 #include "zkc/Support/Refusal.h"
@@ -262,6 +264,16 @@ public:
   Term literal(StringRef field, StringRef value) {
     return insert(ring::Node::literal(field.str(), value.str()));
   }
+  Term literal(algebra::FieldLiteralAttr value) {
+    if (!value)
+      return invalidTerm;
+    auto encoded = algebra::encodeFieldLiteral(value);
+    if (!encoded) {
+      consumeError(encoded.takeError());
+      return invalidTerm;
+    }
+    return literal(value.getField().getDomain(), *encoded);
+  }
   Term binary(ring::Kind kind, Term left, Term right) {
     if (left == invalidTerm || right == invalidTerm)
       return invalidTerm;
@@ -489,7 +501,7 @@ struct SourceBody {
 
 struct Primitive {
   StringRef contract;
-  SmallVector<StringRef> parameters;
+  SmallVector<Attribute> parameters;
   runtime::BindingOp binding;
 };
 // Read the actual operation and independently resolve its installed signature.
@@ -501,7 +513,6 @@ primitive(Operation &op, SymbolTable *symbols,
           const llvm::DenseSet<Operation *> *fixedBindings = nullptr) {
   auto inputs = source ? ValueRange(source->inputs) : ports.inputs(&op);
   auto outputs = source ? ValueRange(source->outputs) : ports.outputs(&op);
-  bool scoped = source || ports.isScoped();
   auto reference = op.getAttrOfType<FlatSymbolRefAttr>("binding");
   auto binding =
       reference
@@ -515,45 +526,24 @@ primitive(Operation &op, SymbolTable *symbols,
       !op.getAttrOfType<StringAttr>("site") || op.getAttrs().size() != 3 ||
       (!source && !ports.contains(&op)) ||
       (source ? !source->regions.empty() : ports.bodies(&op) != 0) ||
-      outputs.size() != 1 ||
-      (scoped ? !isa<exec::ApplyOp>(op)
-              : !protocol::operationSupportsContract(
-                    op.getName().getStringRef(), binding.getContract())))
+      outputs.size() != 1 || !isa<exec::ApplyOp>(op))
     return std::nullopt;
-  auto decoded = protocol::readBinding(binding);
-  if (!decoded) {
-    consumeError(decoded.takeError());
+  auto silent = [&] {
+    auto diagnostic = emitError(op.getLoc());
+    diagnostic.abandon();
+    return diagnostic;
+  };
+  auto signature =
+      resolveLogicalSignature(silent, op.getContext(), binding.getContract(),
+                              binding.getArguments().getValue());
+  if (!signature || !equal(signature.getInputs(), inputs.getTypes()) ||
+      !equal(signature.getResults(), outputs.getTypes()) ||
+      failed(verifyInvocationParameters(silent, binding.getContract(),
+                                        binding.getArgumentsAttr(),
+                                        parameters)))
     return std::nullopt;
-  }
-  auto signature = protocol::resolveBinding(decoded->application, false);
-  if (!signature) {
-    consumeError(signature.takeError());
-    return std::nullopt;
-  }
-  if (signature->inputs.size() != inputs.size() ||
-      signature->outputs.size() != 1)
-    return std::nullopt;
-  for (auto [expected, actual] : zip(signature->inputs, inputs.getTypes()))
-    if (protocol::decodeBoundType(op.getContext(), expected) != actual)
-      return std::nullopt;
-  if (protocol::decodeBoundType(op.getContext(), signature->outputs[0]) !=
-      outputs[0].getType())
-    return std::nullopt;
-  Primitive result{binding.getContract(), {}, binding};
-  for (Attribute parameter : parameters) {
-    auto text = dyn_cast<StringAttr>(parameter);
-    if (!text)
-      return std::nullopt;
-    result.parameters.push_back(text.getValue());
-  }
-  std::vector<std::string> arguments;
-  for (StringRef parameter : result.parameters)
-    arguments.push_back(parameter.str());
-  if (auto error = protocol::checkParameters(decoded->application, arguments)) {
-    consumeError(std::move(error));
-    return std::nullopt;
-  }
-  return result;
+  return Primitive{binding.getContract(),
+                   SmallVector<Attribute>(parameters.getValue()), binding};
 }
 
 bool fieldArithmetic(StringRef contract) {
@@ -798,7 +788,7 @@ class Comparison {
         if (outputs.size() != 1)
           return {};
         StringRef contract;
-        SmallVector<StringRef> parameters;
+        SmallVector<Attribute> parameters;
         if (algebra::isRingOperation(op)) {
           contract = isa<algebra::ConstantFieldOp>(op)   ? "field.constant"
                      : isa<algebra::FieldAddOp>(op)      ? "field.add"
@@ -806,7 +796,7 @@ class Comparison {
                                                          : "field.mul";
           if (contract == "field.constant")
             parameters.push_back(
-                op.getAttrOfType<StringAttr>("value").getValue());
+                op.getAttrOfType<algebra::FieldLiteralAttr>("value"));
         } else if (isa<data::BoundedAtOp, data::BoundedMatrixAtOp>(op) &&
                    op.getAttrs().empty())
           contract = isa<data::BoundedAtOp>(op) ? "vector.get" : "matrix.get";
@@ -820,8 +810,11 @@ class Comparison {
           auto field = dyn_cast<algebra::FieldType>(outputs[0].getType());
           if (!field || parameters.size() != 1 || operands.size())
             return {};
-          result = {Meaning::Scalar,
-                    terms.literal(field.getDomain(), parameters[0])};
+          auto literal = dyn_cast<algebra::FieldLiteralAttr>(parameters[0]);
+          if (literal)
+            result = {Meaning::Scalar, terms.literal(literal)};
+          else
+            return {};
         } else if (!parameters.empty())
           return {};
         else if (fieldArithmetic(contract) && operands.size() == 2)
@@ -1006,71 +999,68 @@ class Comparison {
       if (bound.parameters.size() != 1)
         return {};
       return {Meaning::Scalar,
-              terms.literal(field.getDomain(), bound.parameters[0])};
+              terms.literal(
+                  dyn_cast<algebra::FieldLiteralAttr>(bound.parameters[0]))};
     }
     if (protocol::numericalContract(contract)) {
       if (dimensions.size() != 1 || ports.inputs(&op).size() == 0 ||
           ports.inputs(&op)[0] != rows || bound.parameters.size() != 1)
         return {};
-      auto decoded = protocol::readBinding(bound.binding);
-      if (!decoded) {
-        consumeError(decoded.takeError());
-        return {};
-      }
-      // Signature formation and parameter admission are independently checked
-      // by primitive(); interpret the actual E and positional operands here.
-      const auto &arguments = decoded->application.arguments;
+      // primitive() checks formation. Interpret the actual typed graph and
+      // mask directly, preserving its ordered input inventory and sharing.
+      auto declaration = bound.binding;
+      auto arguments = declaration.getArguments();
       if (arguments.size() != 2)
         return {};
-      const auto &mask = arguments[1];
-      auto expression = protocol::readNumericalExpression(
-          bound.parameters.front(), arguments[0], mask.size());
-      if (!expression) {
-        consumeError(expression.takeError());
-        return {};
-      }
+      auto mask = cast<DenseBoolArrayAttr>(arguments[1]).asArrayRef();
+      auto expression =
+          cast<algebra::RingExpressionAttr>(bound.parameters.front());
       SmallVector<Term> slots;
       for (auto [i, bit] : enumerate(mask)) {
-        Meaning value = bit == '1' ? lane(ports.inputs(&op)[i + 1], 0)
-                                   : scalar(ports.inputs(&op)[i + 1]);
+        Meaning value = bit ? lane(ports.inputs(&op)[i + 1], 0)
+                            : scalar(ports.inputs(&op)[i + 1]);
         // Even unused slots must be aligned with the admitted row domain.
         if (value.term == invalidTerm ||
-            value.kind != (bit == '1' ? Meaning::Lane : Meaning::Scalar))
+            value.kind != (bit ? Meaning::Lane : Meaning::Scalar))
           return {};
         slots.push_back(value.term);
       }
       SmallVector<Term> nodes;
-      for (const auto &node : expression->nodes()) {
+      for (auto node : expression.getNodes()) {
         if (!terms.charge())
           return {};
         Term value = invalidTerm;
-        switch (node.kind) {
-        case ring::Kind::Constant:
-          value = terms.literal(arguments[0], node.constant);
+        auto indices = node.getIndices().asArrayRef();
+        switch (node.getKind()) {
+        case algebra::RingNodeKind::Constant:
+          value = terms.literal(node.getLiteral());
           break;
-        case ring::Kind::Input:
-          value = slots[node.input];
+        case algebra::RingNodeKind::Input:
+          value = slots[indices[0]];
           break;
-        case ring::Kind::Add:
-        case ring::Kind::Mul:
-          value = terms.binary(node.kind, nodes[node.left], nodes[node.right]);
+        case algebra::RingNodeKind::Add:
+        case algebra::RingNodeKind::Multiply:
+          value = terms.binary(node.getKind() == algebra::RingNodeKind::Add
+                                   ? ring::Kind::Add
+                                   : ring::Kind::Mul,
+                               nodes[indices[0]], nodes[indices[1]]);
           break;
-        case ring::Kind::Neg:
-          value = terms.neg(nodes[node.left]);
+        case algebra::RingNodeKind::Negate:
+          value = terms.neg(nodes[indices[0]]);
           break;
-        case ring::Kind::Embed:
+        case algebra::RingNodeKind::Embed:
           return {};
         }
         if (value == invalidTerm)
           return {};
         nodes.push_back(value);
       }
-      Term payload = nodes[expression->outputs().front()];
+      Term payload = nodes[expression.getOutputs().asArrayRef().front()];
       if (contract == "numerical.map")
         return {Meaning::Lane, payload};
       auto combine =
           contract == "numerical.sum" ? ring::Kind::Add : ring::Kind::Mul;
-      return {Meaning::Scalar, aggregate(arguments[0], combine, payload)};
+      return {Meaning::Scalar, aggregate(field.getDomain(), combine, payload)};
     }
     if (!bound.parameters.empty())
       return {};
@@ -1174,14 +1164,21 @@ class Comparison {
       uint64_t cost = 1;
       if (protocol::numericalContract(declaration.getContract())) {
         cost += ports.inputs(at).size() + ports.outputs(at).size();
-        if (auto parameters = at->getAttrOfType<ArrayAttr>("parameters"))
-          for (Attribute parameter : parameters)
-            if (auto text = dyn_cast<StringAttr>(parameter)) {
-              if (text.getValue().size() >
-                      protocol::NumericalLimits::bodyBytes ||
-                  !terms.charge(4 * text.getValue().size()))
-                return failure();
-            }
+        auto parameters = at->getAttrOfType<ArrayAttr>("parameters");
+        auto expression =
+            parameters && parameters.size() == 1
+                ? dyn_cast<algebra::RingExpressionAttr>(parameters[0])
+                : algebra::RingExpressionAttr();
+        if (!expression)
+          return failure();
+        auto bytes = algebra::ringExpressionByteSize(expression);
+        if (!bytes) {
+          consumeError(bytes.takeError());
+          return failure();
+        }
+        if (*bytes > protocol::NumericalLimits::bodyBytes ||
+            !terms.charge(4 * *bytes))
+          return failure();
       }
       if (!terms.charge(cost))
         return failure();
@@ -1460,14 +1457,14 @@ class ModuleComparison {
         if (auto field = dyn_cast<algebra::FieldType>(results[0].getType())) {
           Term term = invalidTerm;
           if (contract == "field.constant") {
-            auto literal = op.getAttrOfType<StringAttr>("value");
+            auto literal = op.getAttrOfType<algebra::FieldLiteralAttr>("value");
             auto bound = primitive(op, nullptr, CandidatePorts{}, step.scoped,
                                    fixedBindings);
             if (literal)
-              term = fieldTerms.literal(field.getDomain(), literal.getValue());
+              term = fieldTerms.literal(literal);
             else if (bound && bound->parameters.size() == 1)
-              term =
-                  fieldTerms.literal(field.getDomain(), bound->parameters[0]);
+              term = fieldTerms.literal(
+                  dyn_cast<algebra::FieldLiteralAttr>(bound->parameters[0]));
           } else if (fieldArithmetic(contract) && operands.size() == 2) {
             unsigned left = values.lookup(operands[0]),
                      right = values.lookup(operands[1]);
@@ -1484,23 +1481,19 @@ class ModuleComparison {
         auto group = dyn_cast<algebra::GroupType>(results[0].getType());
         if (!group)
           return 0;
-        SmallVector<protocol::BoundType> inputs, outputs;
-        for (Value operand : operands) {
-          auto type = protocol::encodeBoundType(operand.getType(), false);
-          if (!type) {
-            consumeError(type.takeError());
-            return 0;
-          }
-          inputs.push_back(*type);
-        }
-        auto type = protocol::encodeBoundType(group, false);
-        if (!type) {
-          consumeError(type.takeError());
+        auto silent = [&] {
+          auto diagnostic = emitError(op.getLoc());
+          diagnostic.abandon();
+          return diagnostic;
+        };
+        auto signature = resolveLogicalSignature(
+            silent, op.getContext(), contract,
+            {StringAttr::get(op.getContext(), group.getDomain())});
+        if (!signature ||
+            !equal(signature.getInputs(), ValueRange(operands).getTypes()) ||
+            !equal(signature.getResults(), ValueRange(results).getTypes()))
           return 0;
-        }
-        outputs.push_back(*type);
-        const auto *facet = protocol::admitComputationContract(
-            {contract.str(), {group.getDomain().str()}, ""}, inputs, outputs);
+        const auto *facet = protocol::computationContract(contract);
         if (!facet ||
             facet->law.algebra != protocol::ComputationAlgebra::GroupModule ||
             !facet->law.total || operands.size() != 2)
@@ -1573,10 +1566,15 @@ public:
     auto group = cast<algebra::GroupType>(computation.signature.getResult(0));
     // Signature resolution establishes the installed group/scalar module,
     // rather than inferring that every nominal group has a scalar action.
-    auto module = protocol::resolveBinding(
-        {"curve.scale", {group.getDomain().str()}, ""}, false);
+    auto module = resolveLogicalSignature(
+        [&] {
+          auto diagnostic = emitError(computation.domain->getLoc());
+          diagnostic.abandon();
+          return diagnostic;
+        },
+        group.getContext(), "curve.scale",
+        {StringAttr::get(group.getContext(), group.getDomain())});
     if (!module) {
-      consumeError(module.takeError());
       return failure();
     }
     llvm::DenseMap<Value, Value> mapping;

@@ -1,8 +1,8 @@
 #ifndef ZKC_TRANSFORMS_COLLECTIONREALIZATION_H
 #define ZKC_TRANSFORMS_COLLECTIONREALIZATION_H
 
+#include "NativeBindingApplication.h"
 #include "mlir/IR/Types.h"
-#include "zkc/Contracts/Binding.h"
 #include <cstdint>
 #include <optional>
 
@@ -14,7 +14,7 @@ struct CollectionRealization {
   mlir::Type element, storage;
   unsigned rank;
   std::optional<uint64_t> staticExtent;
-  std::optional<protocol::BindingApplication> length, get, empty, append, wrap;
+  std::optional<NativeBindingApplication> length, get, empty, append, wrap;
 };
 
 /// Existing finite collection families only. Bytes and FixedVector observation

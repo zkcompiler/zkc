@@ -9,7 +9,6 @@
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
-#include "zkc/Dialect/BoundOperations.h"
 #include "zkc/Dialect/Commitment/IR/CommitmentTypes.h"
 #include "zkc/Interfaces/LinearContraction.h"
 #define GET_OP_CLASSES

@@ -2,6 +2,7 @@
 #include "../CollectionInterpretation.h"
 #include "../FiniteVerification.h"
 #include "../HelperNormalization.h"
+#include "../NativeBindingApplication.h"
 #include "../RealizationSubject.h"
 #include "../ScopedCandidate.h"
 #include "Schedule.h"
@@ -12,9 +13,11 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Collection.h"
@@ -84,8 +87,8 @@ class RecipeReader {
   // the executable primitive; matching its operation name alone is
   // insufficient.
   bool primitive(Operation *op, StringRef contract, ValueRange inputs,
-                 ArrayRef<StringRef> arguments = {},
-                 ArrayRef<StringRef> expectedParameters = {}) {
+                 ArrayRef<Attribute> arguments = {},
+                 ArrayRef<Attribute> expectedParameters = {}) {
     if (!op || !ports.contains(op) || !isa<exec::ApplyOp>(op) ||
         ports.outputs(op).size() != 1 || ports.bodies(op) != 0 ||
         ports.inputs(op) != inputs || !charge(1 + inputs.size()))
@@ -102,14 +105,11 @@ class RecipeReader {
         parameters.size() != expectedParameters.size() ||
         binding.getArguments().size() != arguments.size())
       return false;
-    for (auto [item, expected] : zip(parameters, expectedParameters))
-      if (auto parameter = dyn_cast<StringAttr>(item);
-          !parameter || parameter.getValue() != expected)
-        return false;
-    for (auto [item, expected] : zip(binding.getArguments(), arguments))
-      if (auto argument = dyn_cast<StringAttr>(item);
-          !argument || argument.getValue() != expected)
-        return false;
+    if (!llvm::equal(parameters, expectedParameters))
+      return false;
+    if (!matchesNativeBinding(
+            binding, {contract.str(), SmallVector<Attribute>(arguments), {}}))
+      return false;
     return true;
   }
 
@@ -236,9 +236,15 @@ class RecipeReader {
     return result;
   }
   Value recipe(Operation *source, Operation *&cursor, ValueRange inputs) {
+    auto natural = [&](uint64_t value) {
+      return IntegerAttr::get(
+          IntegerType::get(source->getContext(), 64, IntegerType::Unsigned),
+          value);
+    };
+
     auto take = [&](StringRef contract, ValueRange operands,
-                    ArrayRef<StringRef> arguments = {},
-                    ArrayRef<StringRef> parameters = {}) -> Value {
+                    ArrayRef<Attribute> arguments = {},
+                    ArrayRef<Attribute> parameters = {}) -> Value {
       if (!primitive(cursor, contract, operands, arguments, parameters))
         return {};
       auto value = ports.outputs(cursor)[0];
@@ -250,14 +256,14 @@ class RecipeReader {
     if (isa<poly::ProjectQuotientOp, poly::AddQuotientOp,
             poly::SubtractQuotientOp, poly::MultiplyQuotientOp>(source)) {
       auto ring = cast<poly::QuotientType>(source->getResult(0).getType());
-      const auto modulus = std::to_string(ring.getModulus());
+      const auto modulus = natural(ring.getModulus());
       auto q = take("index.constant", {}, {}, {modulus});
       if (!q)
         return {};
       SmallVector<Value> args(inputs);
       args.push_back(q);
       if (isa<poly::ProjectQuotientOp>(source)) {
-        const auto degree = std::to_string(ring.getDegree());
+        const auto degree = natural(ring.getDegree());
         auto n = take("index.constant", {}, {}, {degree});
         if (!n)
           return {};
@@ -272,27 +278,27 @@ class RecipeReader {
     }
     if (isa<data::BoundedAtOp, data::BoundedMatrixAtOp>(source)) {
       auto col = interpretCollection(inputs[0].getType());
-      SmallVector<StringRef> args;
-      for (auto &arg : col.arguments)
-        args.push_back(arg);
-      return take(col.access, inputs, args);
+      if (!primitive(cursor, col.access, inputs, col.arguments))
+        return {};
+      auto value = ports.outputs(cursor)[0];
+      cursor = ports.next(cursor);
+      return value;
     }
     if (isa<data::SequenceEmptyOp, data::SequenceAppendOp,
             data::SequenceLengthOp>(source)) {
       auto sequence = cast<data::SequenceType>(
           isa<data::SequenceEmptyOp>(source) ? source->getResult(0).getType()
                                              : source->getOperand(0).getType());
-      auto element =
-          protocol::encodeBoundType(sequence.getElementType(), false);
-      if (!element) {
-        consumeError(element.takeError());
+      StringRef contract = isa<data::SequenceEmptyOp>(source) ? "sequence.empty"
+                           : isa<data::SequenceAppendOp>(source)
+                               ? "sequence.append"
+                               : "sequence.length";
+      if (!primitive(cursor, contract, inputs,
+                     {TypeAttr::get(sequence.getElementType())}))
         return {};
-      }
-      auto spelling = element->spelling();
-      return take(isa<data::SequenceEmptyOp>(source)    ? "sequence.empty"
-                  : isa<data::SequenceAppendOp>(source) ? "sequence.append"
-                                                        : "sequence.length",
-                  inputs, {spelling});
+      auto value = ports.outputs(cursor)[0];
+      cursor = ports.next(cursor);
+      return value;
     }
     if (isa<data::PowerOfTwoOp>(source)) {
       // Read each constant and SSA edge independently of recipe production.
@@ -300,10 +306,10 @@ class RecipeReader {
       Value result;
       uint64_t power = 1;
       for (unsigned exponent = 0; exponent < 64; ++exponent) {
-        auto exponentText = std::to_string(exponent);
-        auto powerText = std::to_string(power);
-        auto r = take("index.constant", {}, {}, {exponentText});
-        auto n = take("index.constant", {}, {}, {powerText});
+        auto exponentValue = natural(exponent);
+        auto powerValue = natural(power);
+        auto r = take("index.constant", {}, {}, {exponentValue});
+        auto n = take("index.constant", {}, {}, {powerValue});
         if (!r || !n)
           return {};
         auto equalR = take("index.equal", {inputs[1], r});
@@ -325,27 +331,31 @@ class RecipeReader {
       auto collection = cast<CollectionTypeInterface>(dim.getInput().getType());
       auto axis = dim.getAxisAttr().getInt();
       if (auto extent = collection.getStaticExtent(axis)) {
-        auto length = std::to_string(*extent);
+        auto length = natural(*extent);
         return take("index.constant", {}, {}, {length});
       }
       if (auto field =
               dyn_cast<algebra::FieldType>(collection.getElementType())) {
         if (collection.getRank() == 1)
-          return take("vector.length", inputs, {field.getDomain()});
-        auto coordinate = std::to_string(axis);
-        return take("matrix.dimension", inputs, {field.getDomain()},
+          return take(
+              "vector.length", inputs,
+              {StringAttr::get(source->getContext(), field.getDomain())});
+        auto coordinate = natural(axis);
+        return take("matrix.dimension", inputs,
+                    {StringAttr::get(source->getContext(), field.getDomain())},
                     {coordinate});
       }
       if (auto group =
               dyn_cast<algebra::GroupType>(collection.getElementType()))
-        return take("curve.length", inputs, {group.getDomain()});
+        return take("curve.length", inputs,
+                    {StringAttr::get(source->getContext(), group.getDomain())});
       return take(collection.getCollectionKind() == CollectionKind::Bytes
                       ? "bytes.length"
                       : "indices.length",
                   inputs);
     }
     if (auto constant = dyn_cast<data::IndexOp>(source))
-      return take("index.constant", {}, {}, {constant.getValue()});
+      return take("index.constant", {}, {}, {constant.getValueAttr()});
     if (isa<data::EqualOp, data::LessOp>(source))
       return take(isa<data::EqualOp>(source) ? "index.equal" : "index.less",
                   inputs);
@@ -366,35 +376,23 @@ class RecipeReader {
     }
     if (isa<data::GetOp, data::IsOp>(source)) {
       auto *target = cursor;
-      auto descriptor = protocol::decodeVariant(
-          cast<data::VariantType>(source->getOperand(0).getType())
-              .getDescriptor());
+      auto arms = cast<data::VariantType>(source->getOperand(0).getType())
+                      .getAlternatives();
       auto alternatives = target
                               ? target->getAttrOfType<ArrayAttr>("alternatives")
                               : ArrayAttr();
-      if (!ports.contains(target) || !descriptor || !alternatives ||
+      if (!ports.contains(target) || !alternatives ||
           !isa<exec::MatchOp>(target) || ports.inputs(target) != inputs ||
-          ports.bodies(target) != descriptor->alternatives.size() ||
-          alternatives.size() != descriptor->alternatives.size() ||
+          ports.bodies(target) != arms.size() ||
+          alternatives.size() != arms.size() ||
           ports.outputs(target).size() != 1)
         return {};
-      for (auto [i, arm] : enumerate(descriptor->alternatives)) {
+      for (auto [i, arm] : enumerate(arms)) {
         auto *body = ports.body(target, i);
         auto arguments = ports.arguments(body);
-        if (!body ||
-            alternatives[i] !=
-                StringAttr::get(source->getContext(), arm.label) ||
-            arguments.size() != arm.payload.size())
+        if (!body || alternatives[i] != arm.getLabel() ||
+            TypeRange(arguments) != TypeRange(arm.getPayload()))
           return {};
-        for (auto [argument, spelling] : zip(arguments, arm.payload)) {
-          auto bound = protocol::encodeBoundType(argument.getType(), false);
-          if (!bound) {
-            consumeError(bound.takeError());
-            return {};
-          }
-          if (bound->spelling() != spelling)
-            return {};
-        }
         auto *at = ports.first(body);
         Value expected;
         if (auto get = dyn_cast<data::GetOp>(source)) {
@@ -406,7 +404,7 @@ class RecipeReader {
           if (!isBoolean(at) || ports.outputs(at).size() != 1 ||
               at->getAttrOfType<BoolAttr>("value") !=
                   BoolAttr::get(source->getContext(),
-                                arm.label ==
+                                arm.getLabel().getValue() ==
                                     cast<data::IsOp>(source).getAlternative()))
             return {};
           expected = ports.outputs(at)[0];
@@ -494,20 +492,25 @@ class RecipeReader {
     }
     if (auto constant = dyn_cast<algebra::ConstantFieldOp>(source))
       return take("field.constant", {},
-                  {constant.getResult().getType().getDomain()},
+                  {StringAttr::get(source->getContext(),
+                                   constant.getResult().getType().getDomain())},
                   {constant.getValue()});
     if (auto at = dyn_cast<algebra::ArrayAtOp>(source)) {
       auto array = at.getArray().getType();
-      auto field = cast<algebra::FieldType>(array.getElementType()).getDomain();
-      auto length = std::to_string(array.getLength());
-      auto index = std::to_string(at.getIndexAttr().getInt());
+      auto field = StringAttr::get(
+          source->getContext(),
+          cast<algebra::FieldType>(array.getElementType()).getDomain());
+      auto length = natural(array.getLength());
+      auto index = natural(at.getIndexAttr().getInt());
       return take("field_array.at", inputs, {field, length}, {index});
     }
     if (isa<algebra::ArrayFromElementsOp>(source)) {
       auto array =
           cast<algebra::FieldArrayType>(source->getResult(0).getType());
-      auto field = cast<algebra::FieldType>(array.getElementType()).getDomain();
-      auto length = std::to_string(array.getLength());
+      auto field = StringAttr::get(
+          source->getContext(),
+          cast<algebra::FieldType>(array.getElementType()).getDomain());
+      auto length = natural(array.getLength());
       auto vector = take("vector.empty", {}, {field});
       for (auto element : inputs) {
         if (!vector || !vector.hasOneUse())
@@ -520,16 +523,21 @@ class RecipeReader {
                   {field, length});
     }
     if (auto restrict = dyn_cast<algebra::MultilinearRestrictPrefixOp>(source))
-      return take("multilinear.restrict_prefix", inputs,
-                  {restrict.getResult().getType().getDomain()});
+      return take(
+          "multilinear.restrict_prefix", inputs,
+          {StringAttr::get(source->getContext(),
+                           restrict.getResult().getType().getDomain())});
     if (auto identity = dyn_cast<algebra::GroupIdentityOp>(source))
-      return take("curve.identity", {},
-                  {identity.getResult().getType().getDomain()});
+      return take(
+          "curve.identity", {},
+          {StringAttr::get(source->getContext(),
+                           identity.getResult().getType().getDomain())});
     if (isa<algebra::PairingOp>(source)) {
       auto group = cast<algebra::GroupType>(source->getOperand(0).getType());
       auto field = protocol::installedDomains().associatedIdentity(
           group.getDomain(), "Scalar");
-      return take("pairing.apply", inputs, {field});
+      return take("pairing.apply", inputs,
+                  {StringAttr::get(source->getContext(), field)});
     }
     StringRef contract, domain;
     if (isa<algebra::SubtractFieldOp>(source))
@@ -554,7 +562,8 @@ class RecipeReader {
     if (auto type =
             dyn_cast<algebra::GroupType>(source->getOperand(0).getType()))
       domain = type.getDomain();
-    return take(contract, inputs, {domain});
+    return take(contract, inputs,
+                {StringAttr::get(source->getContext(), domain)});
   }
 
 public:

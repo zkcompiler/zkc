@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
@@ -214,14 +215,7 @@ public:
         if (binding == program.bindings.size())
           return false;
         const auto &expected = program.bindings[binding++];
-        if (b.getSymName() != expected.name ||
-            b.getContract() != expected.application.contract ||
-            b.getImplementation() != expected.application.implementation ||
-            !strings(b.getArguments(), expected.application.arguments) ||
-            (b.getPhysicalArgumentsAttr()
-                 ? !strings(b.getPhysicalArgumentsAttr(),
-                            expected.application.physicalArguments)
-                 : !expected.application.physicalArguments.empty()))
+        if (!bindingMatches(b, expected, true))
           return false;
       } else if (auto fn = dyn_cast<func::FuncOp>(op)) {
         // The independent scoped execution comparator below checks every
@@ -279,7 +273,7 @@ public:
 } // namespace
 Expected<program::Participants> verifyProgramArtifact(Operation *subject,
                                                       StringRef bytes) {
-  if (!subject || failed(verify(subject)))
+  if (!subject || failed(zkc::admitStage(subject)))
     return error("artifact-correspondence-subject");
   if (auto wrapper = dyn_cast<ModuleOp>(subject)) {
     if (!hasSingleElement(*wrapper.getBody()))

@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.MapFirstViews
-public import ZkcExamples.Structured.MapFirstContracts
+public import Zkc.Protocols.Multilinear.Source.MapFirstContracts
 public import Zkc.Source.Structured.Association
 
 @[expose] public section

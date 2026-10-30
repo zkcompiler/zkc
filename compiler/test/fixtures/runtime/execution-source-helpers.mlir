@@ -2,8 +2,8 @@
 !F = !algebra.field<"koala-bear">
 !O = !exec.outcome<(!F)>
 module {
-  "runtime.binding"() {sym_name = "add", contract = "field.add", arguments = ["koala-bear"], implementation = ""} : () -> ()
-  "runtime.binding"() {sym_name = "subtract", contract = "field.sub", arguments = ["koala-bear"], implementation = ""} : () -> ()
+  "runtime.binding"() {sym_name = "add", contract = "field.add", arguments = ["koala-bear"], implementation = "",function_type=(!runtime.scope, !algebra.field<"koala-bear">, !algebra.field<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : () -> ()
+  "runtime.binding"() {sym_name = "subtract", contract = "field.sub", arguments = ["koala-bear"], implementation = "",function_type=(!runtime.scope, !algebra.field<"koala-bear">, !algebra.field<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : () -> ()
   func.func @caller(%scope: !S, %a: !F, %b: !F) -> !O attributes {no_inline, runtime.origin = ["caller", []]} {
     %call = func.call @sum(%scope, %a, %b) {runtime.site = "sum_site"} : (!S, !F, !F) -> !O
     "exec.dispatch"(%call)[^next, ^failed] : (!O) -> ()

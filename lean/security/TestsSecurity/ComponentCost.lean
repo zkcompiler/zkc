@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Tools.ComponentCost
+public import ZkcSecurityTools.ComponentCost
 
 @[expose] public section
 

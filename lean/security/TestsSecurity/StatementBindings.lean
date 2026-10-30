@@ -1,4 +1,4 @@
-import ZkcSecurity.FiatShamir.Binding
+import ZkcSecurity.Transformations.FiatShamir.Binding
 import ZkcTools.DeclarationAudit
 
 /-! Controls for statement bindings: determination transfers from policy statements to model

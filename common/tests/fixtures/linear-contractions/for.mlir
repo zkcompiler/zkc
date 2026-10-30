@@ -4,14 +4,14 @@
 !R = !algebra.group<"ristretto255.group">
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
-    "runtime.binding"() <{arguments = ["ristretto255.group"], contract = "curve.scale_each", implementation = "", sym_name = "map"}> : () -> ()
-    "runtime.binding"() <{arguments = ["ristretto255.group"], contract = "curve.msm", implementation = "", sym_name = "reduce"}> : () -> ()
-    "runtime.binding"() <{arguments = [], contract = "control.require", implementation = "", sym_name = "guard"}> : () -> ()
+    "runtime.binding"() <{arguments = ["ristretto255.group"], contract = "curve.scale_each", implementation = "", sym_name = "map",function_type=(!runtime.scope, !algebra.field_vector<"ristretto255.scalar">, !algebra.group_vector<"ristretto255.group">) -> !exec.outcome<(!algebra.group_vector<"ristretto255.group">)>}> : () -> ()
+    "runtime.binding"() <{arguments = ["ristretto255.group"], contract = "curve.msm", implementation = "", sym_name = "reduce",function_type=(!runtime.scope, !algebra.field_vector<"ristretto255.scalar">, !algebra.group_vector<"ristretto255.group">) -> !exec.outcome<(!algebra.group<"ristretto255.group">)>}> : () -> ()
+    "runtime.binding"() <{arguments = [], contract = "control.require", implementation = "", sym_name = "guard",function_type=(!runtime.scope, i1) -> !exec.outcome<>}> : () -> ()
     func.func @Work(%arg0: !runtime.scope, %arg1: !V, %arg2: !V, %arg3: !V, %arg4: !A, %arg5: i1) -> !exec.outcome<(!R, !R)> attributes {no_inline, runtime.origin = ["Work", []]} {
-      %0 = "exec.apply"(%arg0) <{binding = @constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0) <{binding = @constant, parameters = ["2"], site = "count"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %2 = "exec.apply"(%arg0) <{binding = @constant, parameters = [2 : ui64], site = "count"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb2(%3: !exec.stop):  // 6 preds: ^bb0, ^bb1, ^bb3, ^bb4, ^bb8, ^bb10
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!R, !R)>
@@ -56,7 +56,7 @@ module {
       %30 = "exec.returned"(%28, %29) : (!R, !R) -> !exec.outcome<(!R, !R)>
       return %30 : !exec.outcome<(!R, !R)>
     }
-    "runtime.binding"() <{arguments = [], contract = "index.constant", implementation = "", sym_name = "constant"}> : () -> ()
+    "runtime.binding"() <{arguments = [], contract = "index.constant", implementation = "", sym_name = "constant",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>}> : () -> ()
     func.func private @body_0(%arg0: !runtime.scope, %arg1: ui64, %arg2: !R, %arg3: !R, %arg4: !V, %arg5: !V, %arg6: !V, %arg7: !A, %arg8: i1) -> !exec.outcome<(!R, !R)> attributes {no_inline, runtime.region} {
       %0 = "exec.apply"(%arg0, %arg6, %arg7) <{binding = @map, parameters = [], site = "weighted"}> : (!runtime.scope, !V, !A) -> !exec.outcome<(!A)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!A)>) -> ()

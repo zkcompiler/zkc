@@ -14,6 +14,7 @@
 #include "zkc/Program/Admission.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Translation/Entry.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
 using namespace llvm;
@@ -78,6 +79,93 @@ int main() {
     require(admitted.identity() == entry.original().identity(),
             "canonical re-admission changed identity");
   });
+  cases.run("Host artifacts reconstruct from SSA without body hints", [] {
+    auto entry = compiled();
+    require(!entry.original().bytes().contains("entry.body") &&
+                !entry.original().bytes().contains("entry.signature"),
+            "Host original retained a second body or signature carrier");
+    json::Array functions;
+    {
+      mlir::DialectRegistry registry;
+      registerDialects(registry);
+      mlir::MLIRContext context(registry);
+      auto module = mlir::parseSourceString<mlir::ModuleOp>(
+          entry.original().bytes(), &context);
+      require(bool(module), "native Host roundtrip refused");
+      functions = take(readHostFunctions(*module));
+      auto function = *module->getOps<mlir::func::FuncOp>().begin();
+      auto name = functions.front()
+                      .getAsObject()
+                      ->getObject("signature")
+                      ->getString("symbol");
+      require(name && name->data() != function.getSymName().data(),
+              "exported Host symbol borrows MLIR storage");
+      Limits limited;
+      limited.work = 0;
+      refuses(readHostFunctions(*module, limited), "source.correspondence");
+      function->setAttr("entry.body", mlir::StringAttr::get(&context, "{}"));
+      refuses(readHostFunctions(*module), "source.correspondence");
+    }
+    auto artifact = take(json::parse(entry.bytes()));
+    require(functions == *artifact.getAsObject()->getArray("functions"),
+            "SSA-only reconstruction changed after MLIR context destruction");
+  });
+  cases.run("Host conditional captures are explicit and checked", [] {
+    auto checked = original(R"(module sample;
+      entry fn Demo(go:bool,left:bool,right:bool)->bool {
+        return if go {left} else {right};
+      })");
+    mlir::DialectRegistry registry;
+    registerDialects(registry);
+    mlir::MLIRContext context(registry);
+    auto module =
+        mlir::parseSourceString<mlir::ModuleOp>(checked.bytes(), &context);
+    require(bool(module), "conditional native roundtrip refused");
+    mlir::cf::CondBranchOp branch;
+    module->walk([&](mlir::cf::CondBranchOp op) { branch = op; });
+    require(branch && branch.getTrueDestOperands().size() >= 2 &&
+                branch.getTrueDest()->getNumArguments() ==
+                    branch.getTrueDestOperands().size(),
+            "conditional erased capture ports");
+    take(readHostFunctions(*module));
+    branch.getTrueDestOperandsMutable()[0].set(branch.getTrueDestOperands()[1]);
+    require(mlir::succeeded(mlir::verify(*module)),
+            "capture mutation should retain structural MLIR validity");
+    refuses(readHostFunctions(*module), "source.correspondence");
+    // Matching duplicated captures describe a different, formed Host program.
+    // Its reconstructed artifact is valid, but source correspondence must fail.
+    branch.getFalseDestOperandsMutable()[0].set(
+        branch.getFalseDestOperands()[1]);
+    take(readHostFunctions(*module));
+    refuses(compareHostOriginal(checked.entry(), *module),
+            "source.correspondence");
+  });
+  cases.run("Host zero-state loops and terminal arms retain their structure",
+            [] {
+              for (StringRef source : {
+                       R"(module sample;entry fn Demo(n:index)->bool {
+                  for _ in 0..n {require true;} return true;
+                })",
+                       R"(module sample;
+                  entry fn Check(go:bool)->(){require go;return ();}
+                  entry fn Demo(go:bool,n:index)->bool {
+                    for _ in 0..n {Check(go);} return true;
+                  })",
+                       R"(module sample;
+                  entry fn Next(x:index)->index{return x+1;}
+                  entry fn Demo(seed:index,n:index)->(index,index) {
+                    let mut a=seed;let mut b=seed;
+                    for i in 0..n {a=Next(a);b=b+i+seed;} return(a,b);
+                  })",
+                       R"(module sample;entry fn Demo(go:bool)->bool {
+                  return if go {stop "abort";} else {stop "abort";};
+                })"}) {
+                auto entry = take(compileEntry(original(source)));
+                if (auto failure = checkHostArtifact(
+                        entry.bytes(), entry.original().interface()))
+                  throw std::runtime_error(toString(std::move(failure)));
+              }
+            });
   cases.run("Host numerical selection retains the requested finite policy", [] {
     auto checked = original(R"(module sample;
       domain Fr=field("koala-bear");
@@ -368,25 +456,11 @@ int main() {
       auto module =
           mlir::parseSourceString<mlir::ModuleOp>(checked.bytes(), &context);
       auto function = *module->getOps<mlir::func::FuncOp>().begin();
-      auto body = take(json::parse(
-          function->getAttrOfType<mlir::StringAttr>("entry.body").getValue()));
-      auto &b = *body.getAsObject();
-      auto id =
-          *b.getArray("arguments")->front().getAsObject()->getInteger("id");
-      b.getArray("operations")
-          ->push_back(json::Object{{"op", operation.str()},
-                                   {"operands", json::Array{id}},
-                                   {"results", json::Array{}}});
-      function->setAttr("entry.body",
-                        mlir::StringAttr::get(&context, printJson(body)));
       mlir::OpBuilder builder(&context);
       builder.setInsertionPointToStart(&function.getBody().front());
       mlir::OperationState state(function.getLoc(), "exec." + operation.str());
       state.addTypes(exec::OutcomeType::get(&context, {}));
       state.addOperands(function.getArgument(0));
-      state.addAttribute("descriptor",
-                         builder.getStringAttr(
-                             printJson(json::Object{{"op", operation.str()}})));
       builder.create(state);
       std::string bytes;
       raw_string_ostream stream(bytes);
@@ -620,17 +694,15 @@ int main() {
         instruction =
             R"(%r = "exec.returned"(%x) : (i64) -> !exec.outcome<(i1)>)";
       if (operation == "require")
-        instruction =
-            R"(%r = "exec.require"(%x) {descriptor = "{\22op\22:\22require\22}"} : (i64) -> !exec.outcome<>)";
+        instruction = R"(%r = "exec.require"(%x)  : (i64) -> !exec.outcome<>)";
       if (operation == "drop")
-        instruction =
-            R"(%r = "exec.drop"() {descriptor = "{\22op\22:\22drop\22}"} : () -> !exec.outcome<>)";
+        instruction = R"(%r = "exec.drop"()  : () -> !exec.outcome<>)";
       if (operation == "numeric")
         instruction =
-            R"(%r = "exec.numeric"() {descriptor = "{"} : () -> !exec.outcome<>)";
+            R"(%r = "exec.numeric"() {calculation = ""} : () -> !exec.outcome<>)";
       if (operation == "invoke")
         instruction =
-            R"(%r = "exec.invoke"() {descriptor = "{\22op\22:\22invoke\22,\22deployment\22:\22work\22}"} : () -> !exec.outcome<>)";
+            R"(%r = "exec.invoke"() {deployment = "work"} : () -> !exec.outcome<>)";
       std::string text = "module { func.func @test(%x: i64) {" + instruction +
                          "\nfunc.return } }";
       if (operation == "dispatch")
@@ -642,6 +714,49 @@ int main() {
       auto parsed = mlir::parseSourceString<mlir::ModuleOp>(text, &context);
       require(!parsed && StringRef(diagnostic).contains("execution-formation"),
               "invalid outcome accepted or wrong diagnostic: " + diagnostic);
+    });
+  for (StringRef change : {"alternative", "payload", "projection", "unpack"})
+    cases.run("logical operation refuses changed " + change, [=] {
+      auto checked = original(R"(module sample;
+        struct Pair { pub flag:bool, pub count:index }
+        entry fn Demo(x:bool,n:index)->bool {
+          let pair=Pair{flag:x,count:n};return pair.flag;
+        })");
+      mlir::DialectRegistry registry;
+      registerDialects(registry);
+      mlir::MLIRContext context(registry);
+      context.loadAllAvailableDialects();
+      auto module =
+          mlir::parseSourceString<mlir::ModuleOp>(checked.bytes(), &context);
+      require(bool(module), "logical original did not parse");
+      data::ConstructOp construct;
+      data::ProjectOp project;
+      module->walk([&](data::ConstructOp op) { construct = op; });
+      module->walk([&](data::ProjectOp op) { project = op; });
+      require(construct && project, "missing logical value operations");
+      if (change == "alternative")
+        construct.setAlternative("invented");
+      else if (change == "payload")
+        construct->setOperand(0, construct.getInputs()[1]);
+      else if (change == "projection")
+        project.setPath(llvm::ArrayRef<int64_t>{-1});
+      else {
+        mlir::OpBuilder builder(&context);
+        builder.setInsertionPointAfter(construct);
+        mlir::OperationState state(construct.getLoc(), "data.unpack");
+        state.addOperands(construct.getOutput());
+        state.addTypes(builder.getI1Type());
+        builder.create(state);
+      }
+      std::string diagnostic;
+      mlir::ScopedDiagnosticHandler handler(&context, [&](mlir::Diagnostic &d) {
+        raw_string_ostream stream(diagnostic);
+        d.print(stream);
+        return mlir::success();
+      });
+      require(mlir::failed(mlir::verify(*module)) &&
+                  StringRef(diagnostic).contains("data-value-formation"),
+              "malformed logical operation accepted: " + diagnostic);
     });
   for (StringRef change : {"predicate", "increment", "back-edge"})
     cases.run("Host loop rejects changed " + change, [=] {

@@ -1,4 +1,4 @@
-import ZkcSecurity.FiatShamir.Lifting
+import ZkcSecurity.ProgramLogic.Transcript.Lifting
 import TestsSecurity.Counterexamples.Support
 import Mathlib.Data.ZMod.Basic
 import ZkcTools.DeclarationAudit

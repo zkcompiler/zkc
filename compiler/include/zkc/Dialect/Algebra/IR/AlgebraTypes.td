@@ -70,5 +70,4 @@ def Group : TypeDef<AlgebraDialect, "Group"> {
   let assemblyFormat = "`<` $domain `>`";
 }
 
-
 #endif

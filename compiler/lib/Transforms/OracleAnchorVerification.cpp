@@ -1,8 +1,10 @@
+#include "NativeBindingApplication.h"
 #include "OracleAnchorStorage.h"
 #include "OracleVerificationContext.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Refusal.h"
@@ -36,9 +38,6 @@ Error checkOracleAnchorAllocator(const OracleVerificationContext &context,
   auto reference = oracleReferenceType(layout.kind);
   if (!reference)
     return reference.takeError();
-  auto record = encodeBoundType(storage.record, false);
-  if (!record)
-    return record.takeError();
   SmallVector<Type> arguments{runtime::ScopeType::get(candidate.getContext()),
                               storage.sequence};
   for (const auto &field : storage.fields)
@@ -57,7 +56,7 @@ Error checkOracleAnchorAllocator(const OracleVerificationContext &context,
     auto site = step.operation->getAttrOfType<StringAttr>("site");
     return site && site.getValue() == name && step.regions.empty();
   };
-  auto call = [&](unsigned n, StringRef contract, ArrayRef<std::string> statics,
+  auto call = [&](unsigned n, StringRef contract, ArrayRef<Attribute> statics,
                   ValueRange inputs, Type output, StringRef name,
                   ArrayRef<std::string> parameters = {}) {
     const auto &step = steps[n];
@@ -72,13 +71,11 @@ Error checkOracleAnchorAllocator(const OracleVerificationContext &context,
         binding.getArguments().size() != statics.size() ||
         op.getParameters().size() != parameters.size())
       return false;
-    for (auto [value, expected] : zip(binding.getArguments(), statics))
-      if (dyn_cast<StringAttr>(value).getValue() != expected)
-        return false;
-    for (auto [value, expected] : zip(op.getParameters(), parameters))
-      if (cast<StringAttr>(value).getValue() != expected)
-        return false;
-    return true;
+    if (!matchesNativeBinding(
+            binding, {contract.str(), SmallVector<Attribute>(statics), {}}))
+      return false;
+    return invocationParametersMatch(contract, binding.getArgumentsAttr(),
+                                     op.getParametersAttr(), parameters);
   };
   auto pack = [&](unsigned n, Type type, ValueRange inputs, StringRef name) {
     const auto &step = steps[n];
@@ -91,11 +88,11 @@ Error checkOracleAnchorAllocator(const OracleVerificationContext &context,
       IntegerType::get(candidate.getContext(), 64, IntegerType::Unsigned);
   if (!call(0, "index.constant", {}, {}, index, "constructor",
             {std::to_string(constructor)}) ||
-      !call(1, "sequence.length", {record->spelling()}, actual.getArgument(1),
-            index, "length") ||
+      !call(1, "sequence.length", {TypeAttr::get(storage.record)},
+            actual.getArgument(1), index, "length") ||
       !pack(2, storage.record, actual.getArguments().drop_front(2), "record"))
     return refuse();
-  if (!call(3, "sequence.append", {record->spelling()},
+  if (!call(3, "sequence.append", {TypeAttr::get(storage.record)},
             {actual.getArgument(1), steps[2].outputs[0]}, storage.sequence,
             "append") ||
       !pack(4, *reference, {steps[0].outputs[0], steps[1].outputs[0]},
@@ -133,9 +130,6 @@ Error checkOracleAnchorLookup(const OracleVerificationContext &context,
   auto reference = oracleReferenceType(layout.kind);
   if (!reference)
     return reference.takeError();
-  auto record = encodeBoundType(storage.record, false);
-  if (!record)
-    return record.takeError();
   SmallVector<Type> fields;
   for (const auto &field : storage.fields)
     fields.push_back(field.type);
@@ -187,9 +181,8 @@ Error checkOracleAnchorLookup(const OracleVerificationContext &context,
   auto body = steps(selected, 6);
   if (!body)
     return refuse();
-  auto call = [&](unsigned i, StringRef contract,
-                  ArrayRef<std::string> arguments, TypeRange outputs,
-                  ValueRange inputs, StringRef site,
+  auto call = [&](unsigned i, StringRef contract, ArrayRef<Attribute> arguments,
+                  TypeRange outputs, ValueRange inputs, StringRef site,
                   ArrayRef<std::string> parameters = {}) {
     const auto &step = (*body)[i];
     auto op = dyn_cast<exec::ApplyOp>(step.operation);
@@ -204,13 +197,11 @@ Error checkOracleAnchorLookup(const OracleVerificationContext &context,
         !binding.getImplementation().empty() ||
         binding.getArguments().size() != arguments.size())
       return false;
-    for (auto [value, expected] : zip(binding.getArguments(), arguments))
-      if (cast<StringAttr>(value).getValue() != expected)
-        return false;
-    for (auto [value, expected] : zip(op.getParameters(), parameters))
-      if (cast<StringAttr>(value).getValue() != expected)
-        return false;
-    return true;
+    if (!matchesNativeBinding(
+            binding, {contract.str(), SmallVector<Attribute>(arguments), {}}))
+      return false;
+    return invocationParametersMatch(contract, binding.getArgumentsAttr(),
+                                     op.getParametersAttr(), parameters);
   };
   if (!call(0, "index.constant", {}, index, {}, "constructor",
             {std::to_string(constructor)}))
@@ -219,7 +210,7 @@ Error checkOracleAnchorLookup(const OracleVerificationContext &context,
             {selected.getArgument(1), (*body)[0].outputs[0]}, "belongs_to") ||
       !call(2, "control.require", {}, {}, (*body)[1].outputs,
             "admit_reference") ||
-      !call(3, "sequence.at", {record->spelling()}, storage.record,
+      !call(3, "sequence.at", {TypeAttr::get(storage.record)}, storage.record,
             {selected.getArgument(3), selected.getArgument(2)}, "lookup"))
     return refuse();
   if (!match((*body)[4], "record", (*body)[3].outputs) ||

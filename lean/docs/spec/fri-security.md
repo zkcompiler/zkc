@@ -8,8 +8,8 @@ trees. The model is a transcription of the library verifier, related line by
 line to the source; it makes no claim about the compiled library, its proof
 Entry or native execution. Before [committed words](#committed-words) it reads
 every commitment as the vector it commits to. The modules are
-`ZkcArkLib.Fri.*`, `ZkcArkLib.Examples.FriFiatShamir` and
-`ZkcArkLib.Examples.CommittedFri` in the
+`ZkcArkLib.Fri.*`, `ZkcArkLibExamples.FriFiatShamir` and
+`ZkcArkLibExamples.CommittedFri` in the
 [security integration](../../integrations/arklib/README.md).
 
 ## Subject
@@ -198,7 +198,7 @@ site's error by that factor.
 
 ## Fiat–Shamir transfer
 
-`ZkcArkLib.Examples.FriFiatShamir` presents the verifier after the first
+`ZkcArkLibExamples.FriFiatShamir` presents the verifier after the first
 commitment through a [typed transcript interface](fiat-shamir-security.md#typed-query-sites)
 (`absorb`) and turns the certificate above into a typed certificate
 (`typedCertificate`):
@@ -237,7 +237,7 @@ probability over the raw answer.
 
 ## Committed words
 
-`ZkcArkLib.Examples.CommittedFri` replaces the word events of the transfer by
+`ZkcArkLibExamples.CommittedFri` replaces the word events of the transfer by
 commitments, as a [verifier with committed tables](fiat-shamir-security.md#verifiers-with-committed-tables):
 
 - Verifier: `verifier` receives the root of the next word after the folding

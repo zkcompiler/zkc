@@ -5,6 +5,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Compiler/StructuredSource.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
@@ -113,7 +114,7 @@ int main(int argc, char **argv) {
     }
   });
   for (unsigned mutation = 0; mutation < 5; ++mutation)
-    cases.run(Twine("assembly formation refusal ") + Twine(mutation), [&] {
+    cases.run(Twine("assembly admission refusal ") + Twine(mutation), [&] {
       auto source = parseSourceString<ModuleOp>(fixture, &context);
       protocol_ir::AssembleRolesOp assembly;
       source->walk([&](protocol_ir::AssembleRolesOp op) { assembly = op; });
@@ -133,8 +134,13 @@ int main(int argc, char **argv) {
         code |= namesIdentifier(d.str(), "mathematical-formation");
         return success();
       });
-      require(failed(verify(*source)) && code,
-              "invalid assembly was not refused");
+      // Arity and duplicate roles are local invariants. Availability and the
+      // enclosing role roster belong to complete protocol admission.
+      if (mutation >= 2)
+        require(succeeded(verify(*source)),
+                "role availability mutation lost structural validity");
+      auto admitted = mutation < 2 ? verify(*source) : zkc::admitStage(*source);
+      require(failed(admitted) && code, "invalid assembly was not refused");
     });
   cases.run("changed role-selected return is refused by correspondence", [&] {
     auto original = parseSourceString<ModuleOp>(application, &context);
@@ -178,7 +184,7 @@ int main(int argc, char **argv) {
         code |= namesIdentifier(d.str(), "mathematical-formation");
         return success();
       });
-      require(failed(verify(*module)) && code,
+      require(failed(zkc::admitStage(*module)) && code,
               "non-data assembly passed formation");
     });
   cases.run("assembly cannot reactivate an inactive repeat role", [&] {
@@ -201,7 +207,7 @@ int main(int argc, char **argv) {
       code |= namesIdentifier(d.str(), "mathematical-formation");
       return success();
     });
-    require(failed(verify(*source)) && code,
+    require(failed(zkc::admitStage(*source)) && code,
             "inactive assembly role passed formation");
   });
   cases.run("preparation checks whole role families before projection", [&] {

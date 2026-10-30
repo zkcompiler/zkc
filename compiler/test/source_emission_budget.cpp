@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Translation/Language.h"
@@ -31,7 +32,8 @@ int main() {
     auto entry = take(closeNativeRun(project, "sample::Run"));
     auto text = take(emitOriginal(entry, context));
     auto module = parseSourceString<ModuleOp>(text, &context);
-    require(module && succeeded(verify(*module)), "invalid original fixture");
+    require(module && succeeded(zkc::admitStage(*module)),
+            "invalid original fixture");
     const auto count = operations(*module);
     require(count > 1, "empty source fixture");
     Limits exact;

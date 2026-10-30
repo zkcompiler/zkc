@@ -4,6 +4,7 @@
 #include "ScopedCollectionSum.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
@@ -494,7 +495,7 @@ public:
 LogicalResult
 verifyScopedHelperExpansionPreserved(ModuleOp source, ModuleOp candidate,
                                      std::vector<AlgorithmOrigin> *origins) {
-  if (failed(verify(source)) || failed(verify(candidate)) ||
+  if (failed(zkc::admitStage(source)) || failed(zkc::admitStage(candidate)) ||
       !hasSingleElement(*source.getBody()) ||
       !hasSingleElement(*candidate.getBody()) ||
       source->getAttrDictionary() != candidate->getAttrDictionary())
@@ -526,7 +527,7 @@ LogicalResult verifyScopedFinitePreparation(
   if (outcome)
     *outcome = {mathematical::VerificationObservation::Mismatch,
                 "scoped finite preparation differs"};
-  if (failed(verify(source)) || failed(verify(candidate)) ||
+  if (failed(zkc::admitStage(source)) || failed(zkc::admitStage(candidate)) ||
       !hasSingleElement(*source.getBody()) ||
       !hasSingleElement(*candidate.getBody()) ||
       source->getAttrDictionary() != candidate->getAttrDictionary() ||

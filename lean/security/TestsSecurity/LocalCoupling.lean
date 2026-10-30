@@ -1,5 +1,5 @@
-import ZkcSecurity.VCVio.Coupling
-import ZkcSecurity.VCVio.Execution
+import ZkcSecurity.Mathematics.Oracle.Coupling
+import ZkcSecurity.ProgramLogic.Oracle.Execution
 import Zkc.Source.Structure
 
 /-! Finite controls and two typed Region clients for local execution coupling.

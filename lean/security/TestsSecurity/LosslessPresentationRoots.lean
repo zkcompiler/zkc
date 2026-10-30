@@ -1,7 +1,7 @@
 module
 
-import ZkcSecurity.Examples.RootProperties.SmallSumcheck.Soundness
-import ZkcSecurity.Examples.RootProperties.TwoSums.Soundness
+import ZkcSecurityExamples.RootProperties.SmallSumcheck.Soundness
+import ZkcSecurityExamples.RootProperties.TwoSums.Soundness
 
 /-! Complete Domain returns, source state, incoming histories and unread proof
 suffixes survive the actual generated root's public presentation. -/

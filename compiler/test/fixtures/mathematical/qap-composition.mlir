@@ -9,44 +9,44 @@
 !g2 = !algebra.group<"bn254.g2">
 !gt = !algebra.group<"bn254.gt">
 module { "protocol.module"() ({
-"runtime.binding"() {sym_name="index_constant",contract="index.constant",arguments=[],implementation=""} : ()->()
-"runtime.binding"() {sym_name="field_constant",contract="field.constant",arguments=["bn254.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="sequence_length_2",contract="sequence.length",arguments=["matrix:bn254.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="index_equal",contract="index.equal",arguments=[],implementation=""} : ()->()
-"runtime.binding"() {sym_name="index_add",contract="index.add",arguments=[],implementation=""} : ()->()
-"runtime.binding"() {sym_name="vector_geometric",contract="vector.geometric",arguments=["bn254.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="vector_get",contract="vector.get",arguments=["bn254.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="field_equal",contract="field.equal",arguments=["bn254.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="bool_not",contract="bool.not",arguments=[],implementation=""} : ()->()
-"runtime.binding"() {sym_name="sequence_at_9",contract="sequence.at",arguments=["matrix:bn254.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="matrix_mul_vector",contract="matrix.mul_vector",arguments=["bn254.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="vector_length",contract="vector.length",arguments=["bn254.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="poly_coset_interpolate",contract="poly.coset_interpolate",arguments=["bn254.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="poly_coset_evaluate",contract="poly.coset_evaluate",arguments=["bn254.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="vector_mul",contract="vector.mul",arguments=["bn254.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="vector_equal",contract="vector.equal",arguments=["bn254.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="vector_sub",contract="vector.sub",arguments=["bn254.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="curve_msm_17",contract="curve.msm",arguments=["bn254.g1"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="vector_slice",contract="vector.slice",arguments=["bn254.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="bool_and",contract="bool.and",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="index_constant",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="field_constant",contract="field.constant",arguments=["bn254.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"bn254.fr">)>} : ()->()
+"runtime.binding"() {sym_name="sequence_length_2",contract="sequence.length",arguments=[!algebra.field_matrix<"bn254.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field_matrix<"bn254.fr">>) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="index_equal",contract="index.equal",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>} : ()->()
+"runtime.binding"() {sym_name="index_add",contract="index.add",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="vector_geometric",contract="vector.geometric",arguments=["bn254.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bn254.fr">, ui64) -> !exec.outcome<(!algebra.field_vector<"bn254.fr">)>} : ()->()
+"runtime.binding"() {sym_name="vector_get",contract="vector.get",arguments=["bn254.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bn254.fr">, ui64) -> !exec.outcome<(!algebra.field<"bn254.fr">)>} : ()->()
+"runtime.binding"() {sym_name="field_equal",contract="field.equal",arguments=["bn254.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bn254.fr">, !algebra.field<"bn254.fr">) -> !exec.outcome<(i1)>} : ()->()
+"runtime.binding"() {sym_name="bool_not",contract="bool.not",arguments=[],implementation="",function_type=(!runtime.scope, i1) -> !exec.outcome<(i1)>} : ()->()
+"runtime.binding"() {sym_name="sequence_at_9",contract="sequence.at",arguments=[!algebra.field_matrix<"bn254.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field_matrix<"bn254.fr">>, ui64) -> !exec.outcome<(!algebra.field_matrix<"bn254.fr">)>} : ()->()
+"runtime.binding"() {sym_name="matrix_mul_vector",contract="matrix.mul_vector",arguments=["bn254.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_matrix<"bn254.fr">, !algebra.field_vector<"bn254.fr">) -> !exec.outcome<(!algebra.field_vector<"bn254.fr">)>} : ()->()
+"runtime.binding"() {sym_name="vector_length",contract="vector.length",arguments=["bn254.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bn254.fr">) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="poly_coset_interpolate",contract="poly.coset_interpolate",arguments=["bn254.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bn254.fr">, !algebra.field<"bn254.fr">) -> !exec.outcome<(!poly.univariate<"bn254.fr">)>} : ()->()
+"runtime.binding"() {sym_name="poly_coset_evaluate",contract="poly.coset_evaluate",arguments=["bn254.fr"],implementation="",function_type=(!runtime.scope, !poly.univariate<"bn254.fr">, !algebra.field<"bn254.fr">, ui64) -> !exec.outcome<(!algebra.field_vector<"bn254.fr">)>} : ()->()
+"runtime.binding"() {sym_name="vector_mul",contract="vector.mul",arguments=["bn254.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bn254.fr">, !algebra.field_vector<"bn254.fr">) -> !exec.outcome<(!algebra.field_vector<"bn254.fr">)>} : ()->()
+"runtime.binding"() {sym_name="vector_equal",contract="vector.equal",arguments=["bn254.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bn254.fr">, !algebra.field_vector<"bn254.fr">) -> !exec.outcome<(i1)>} : ()->()
+"runtime.binding"() {sym_name="vector_sub",contract="vector.sub",arguments=["bn254.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bn254.fr">, !algebra.field_vector<"bn254.fr">) -> !exec.outcome<(!algebra.field_vector<"bn254.fr">)>} : ()->()
+"runtime.binding"() {sym_name="curve_msm_17",contract="curve.msm",arguments=["bn254.g1"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bn254.fr">, !algebra.group_vector<"bn254.g1">) -> !exec.outcome<(!algebra.group<"bn254.g1">)>} : ()->()
+"runtime.binding"() {sym_name="vector_slice",contract="vector.slice",arguments=["bn254.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bn254.fr">, ui64, ui64) -> !exec.outcome<(!algebra.field_vector<"bn254.fr">)>} : ()->()
+"runtime.binding"() {sym_name="bool_and",contract="bool.and",arguments=[],implementation="",function_type=(!runtime.scope, i1, i1) -> !exec.outcome<(i1)>} : ()->()
 relation.declare @relation {kind="external",key="example/qap-data",revision="0",signature=(!ms,!v,!v,!gs,!g2,!f,ui64)->i1,purposes=["parameter","statement","witness","parameter","parameter","parameter","parameter"]}
     func.func @numerator(%arg0: !runtime.scope, %arg1: !ms, %arg2: !v, %arg3: !f, %arg4: ui64) -> !exec.outcome<(!v, i1)> attributes {no_inline, runtime.origin = ["numerator", []]} {
-      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["1"], site = "one_index"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %2 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [1 : ui64], site = "one_index"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb2(%3: !exec.stop):  // 69 preds: ^bb0, ^bb1, ^bb3, ^bb4, ^bb5, ^bb6, ^bb7, ^bb8, ^bb10, ^bb11, ^bb12, ^bb13, ^bb14, ^bb16, ^bb17, ^bb19, ^bb20, ^bb21, ^bb22, ^bb23, ^bb25, ^bb26, ^bb27, ^bb28, ^bb29, ^bb31, ^bb32, ^bb34, ^bb35, ^bb36, ^bb37, ^bb39, ^bb40, ^bb41, ^bb42, ^bb43, ^bb45, ^bb46, ^bb48, ^bb49, ^bb50, ^bb51, ^bb52, ^bb53, ^bb55, ^bb56, ^bb57, ^bb58, ^bb59, ^bb61, ^bb62, ^bb64, ^bb65, ^bb66, ^bb67, ^bb68, ^bb69, ^bb71, ^bb72, ^bb73, ^bb74, ^bb75, ^bb77, ^bb78, ^bb80, ^bb81, ^bb82, ^bb83, ^bb84
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!v, i1)>
       return %4 : !exec.outcome<(!v, i1)>
     ^bb3(%5: ui64):  // pred: ^bb1
-      %6 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["2"], site = "two"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %6 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [2 : ui64], site = "two"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%6)[^bb4, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb4(%7: ui64):  // pred: ^bb3
-      %8 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["3"], site = "three"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %8 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [3 : ui64], site = "three"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%8)[^bb5, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb5(%9: ui64):  // pred: ^bb4
-      %10 = "exec.apply"(%arg0) <{binding = @field_constant, parameters = ["1"], site = "one"}> : (!runtime.scope) -> !exec.outcome<(!f)>
+      %10 = "exec.apply"(%arg0) <{binding = @field_constant, parameters = [#algebra.literal<!algebra.field<"bn254.fr">, 1 : ui254>], site = "one"}> : (!runtime.scope) -> !exec.outcome<(!f)>
       "exec.dispatch"(%10)[^bb6, ^bb2] : (!exec.outcome<(!f)>) -> ()
     ^bb6(%11: !f):  // pred: ^bb5
       %12 = "exec.apply"(%arg0, %arg1) <{binding = @sequence_length_2, parameters = [], site = "count"}> : (!runtime.scope, !ms) -> !exec.outcome<(ui64)>
@@ -350,16 +350,16 @@ relation.declare @relation {kind="external",key="example/qap-data",revision="0",
       return %4 : !exec.outcome<(!g)>
     }
     func.func @public_prefix(%arg0: !runtime.scope, %arg1: !v, %arg2: !v) -> !exec.outcome<(i1)> attributes {no_inline, runtime.origin = ["public_prefix", []]} {
-      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["1"], site = "one_index"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %2 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [1 : ui64], site = "one_index"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb2(%3: !exec.stop):  // 9 preds: ^bb0, ^bb1, ^bb3, ^bb4, ^bb5, ^bb6, ^bb7, ^bb8, ^bb9
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(i1)>
       return %4 : !exec.outcome<(i1)>
     ^bb3(%5: ui64):  // pred: ^bb1
-      %6 = "exec.apply"(%arg0) <{binding = @field_constant, parameters = ["1"], site = "one"}> : (!runtime.scope) -> !exec.outcome<(!f)>
+      %6 = "exec.apply"(%arg0) <{binding = @field_constant, parameters = [#algebra.literal<!algebra.field<"bn254.fr">, 1 : ui254>], site = "one"}> : (!runtime.scope) -> !exec.outcome<(!f)>
       "exec.dispatch"(%6)[^bb4, ^bb2] : (!exec.outcome<(!f)>) -> ()
     ^bb4(%7: !f):  // pred: ^bb3
       %8 = "exec.apply"(%arg0, %arg1, %1) <{binding = @vector_get, parameters = [], site = "first"}> : (!runtime.scope, !v, ui64) -> !exec.outcome<(!f)>

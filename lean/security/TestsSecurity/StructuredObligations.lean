@@ -1,5 +1,5 @@
 import Zkc.Source.RegionDerivation
-import ZkcSecurity.Obligations.Derivation
+import ZkcSecurity.ProgramLogic.Derivation
 import Tests.Obligations
 
 /-! One typed structured body connects the source derivation rules to the

@@ -53,7 +53,7 @@ for n in (0, 1, 2):
         with case(name):
             text = (FIXTURES / 'iterated-sumcheck.mlir').read_text()
             text = text.replace('   %count = protocol.exchange %n',
-                                f'   %fixed = "data.index"() {{value="{n}"}} : ()->ui64\n   %count = protocol.exchange %fixed')
+                                f'   %fixed = "data.index"() {{value={n} : ui64}} : ()->ui64\n   %count = protocol.exchange %fixed')
             text = text.replace('(%n,%T,%U)', '(%fixed,%T,%U)')
             src, pol = OUT / (name + '.mlir'), OUT / (name + '.policy')
             src.write_text(text); pol.write_text(json.dumps(policy('sumcheck', suite)))
@@ -82,7 +82,7 @@ with case('distinct field-array shapes retain distinct transcript bindings'):
         text = re.sub(r'!(f|t|p|a|q|state|rng)(?![A-Za-z0-9_.])', lambda m: '!' + prefix + m[1], text)
         text = re.sub(r'@([A-Za-z_][A-Za-z0-9_]*)', lambda m: '@' + prefix + m[1], text)
         text = re.sub(r'sym_name="([^"]+)"', lambda m: 'sym_name="' + prefix + m[1] + '"', text)
-        text = re.sub(r'variant:([0-9a-f]+)', lambda m: 'variant:' + bytes.fromhex(m[1]).replace(b'poly.residual.product', ('poly.residual.' + prefix + 'product').encode()).hex(), text)
+        text = text.replace("poly.residual.product", "poly.residual." + prefix + "product")
         aliases, body = text.split('module { "protocol.module"() ({', 1)
         return aliases, body.rsplit('}) {profile=', 1)[0]
     qa, qb = library('iterated-sumcheck', 'q_')

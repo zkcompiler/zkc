@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Run.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Registry.h"
 #include <filesystem>
 #include <fstream>
@@ -56,7 +57,7 @@ OwningOpRef<ModuleOp> parse(MLIRContext &context, StringRef text) {
   auto result =
       parseSourceString<ModuleOp>(text, ParserConfig(&context, false));
   require(bool(result), "parse: " + diagnostics);
-  require(succeeded(verify(*result)), "formation: " + diagnostics);
+  require(succeeded(zkc::admitStage(*result)), "formation: " + diagnostics);
   return result;
 }
 ProtocolModuleOp unit(ModuleOp module) {

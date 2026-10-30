@@ -1,6 +1,6 @@
 module
 
-import ZkcSecurity.FiatShamir.LosslessPresentationClaims
+import ZkcSecurity.Claims.Methods.LosslessPresentationClaims
 
 set_option autoImplicit false
 namespace TestsSecurity.LosslessPresentation

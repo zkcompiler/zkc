@@ -1,4 +1,4 @@
-import ZkcSecurity.Tools.PairConstruction
+import ZkcSecurityTools.PairConstruction
 import ZkcExamples.Structured.SumcheckContractBindings
 
 set_option maxRecDepth 50000

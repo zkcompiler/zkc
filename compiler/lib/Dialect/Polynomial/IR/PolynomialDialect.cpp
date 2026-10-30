@@ -1,6 +1,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
+#include "zkc/Dialect/TypeAdapters.h"
 #include "llvm/ADT/TypeSwitch.h"
 using namespace mlir;
 #include "zkc/Dialect/Polynomial/IR/polyDialect.cpp.inc"
@@ -18,4 +19,5 @@ void zkc::poly::PolynomialDialect::initialize() {
 #define GET_OP_LIST
 #include "zkc/Dialect/Polynomial/IR/polyOps.cpp.inc"
       >();
+  zkc::protocol::type_adapters::attachCatalogTypeModels(*this);
 }

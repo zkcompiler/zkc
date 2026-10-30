@@ -1,6 +1,7 @@
 #include "ArtifactJson.h"
 #include "Run.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Program/Codec.h"
@@ -253,8 +254,8 @@ public:
 } // namespace
 Error verifyRunBundle(ModuleOp prepared, ModuleOp physical, StringRef bytes,
                       StringRef entry) {
-  if (!prepared || failed(verify(prepared)) || !physical ||
-      failed(verify(physical)))
+  if (!prepared || failed(zkc::admitStage(prepared)) || !physical ||
+      failed(zkc::admitStage(physical)))
     return error("run-correspondence-subject");
   auto parsed = parseArtifactJson(bytes);
   if (!parsed)

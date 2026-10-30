@@ -1,14 +1,20 @@
 # Shared operation contracts
 
-The installed catalog connects exact mathematical contract keys, typed MLIR
-operations and physical implementations. Mathematical meanings belong in the
+The installed catalog connects exact mathematical contract keys, scoped MLIR
+invocations and physical implementations. Mathematical meanings belong in the
 [domain specifications](../spec/README.md); selecting an implementation does not
 change the field, operation or resource contract.
 
-[Neutral declarations](../../compiler/include/zkc/Contracts/Declarations) own
+[Neutral declarations](../../common/catalog/README.md) own
 logical signatures, requirements, static parameter schemas, type permissions and
-installed facets. Language and IR adapters consume those records. Semantic
+installed facets. C++ and Rust data are generated from the authored neutral
+source. Language and IR adapters consume the native projection. Semantic
 validators and backend implementations retain their separate obligations.
+Physical adapters also have catalog erasure signatures and an explicit Physical
+stage. The runtime derives their ports and stage from that catalog rather than
+maintaining separate adapter-erasure callbacks. Installation and actual layout
+conversion checks remain with the physical owner; erasure does not authorize a
+source operation, default implementation, or removal of a reached conversion.
 Ordinary library declarations own public function names and argument names.
 The generated inventory exports types and capabilities; it does not duplicate
 source function APIs or turn installed operations into implicit imports.
@@ -27,8 +33,8 @@ records ownership and consumers; it adds no execution registry or authority.
 
 | Fact or obligation | Existing carrier and lifetime |
 |---|---|
-| Nominal domain, ports and mathematical laws | `OperationContracts`, logical types and admitted `BindingApplication`; stable declaration facts |
-| Representation and fixed implementation | `PhysicalPlan`, selected binding and `BoundSignature`; checked against the actual materialized call |
+| Nominal domain, ports and mathematical laws | `OperationContracts`, native logical types and kinded binding attributes; stable declaration facts |
+| Representation and fixed implementation | `PhysicalPlan`, native binding choices and complete `FunctionType` ports; checked against the actual materialized declaration and call |
 | Binding lifetime | Checked physical schedule and actual `runtime.release_bindings` instructions; block-local uses and discardability, without ownership of shared backing |
 | Immutable dependencies | Source SSA/helper closure and exact static application attributes; compiler analyses expire when either changes |
 | Installed code | `InstalledOperation`; linked against the instance's owned backend, with no captured frame or resource authority |
@@ -36,7 +42,26 @@ records ownership and consumers; it adds no execution registry or authority.
 | Output allowance and retained backing | `Invocation`, VM storage accounting and provider value contracts; aliases retain their backing, fresh output consumes capacity |
 | Setup authorization, capability generation and resource successors | Provider custody checks at use; a handle or cached validation result cannot replace them |
 
-`exec.apply` represents an installed operation, which may have effects or fail.
+Native recipes and physical candidate catalogs carry `NativeBindingApplication`:
+contract and implementation identities, kinded attributes, and the complete
+selected value signature where applicable. Candidate policy supplies preferences;
+installation formation and actual-body checking independently establish whether
+they apply. Storage permissions inspect native types directly. The neutral
+`BindingApplication` and `BoundSignature` remain boundary contracts for program
+bytes and their independent readers; native policy does not serialize into them.
+
+`exec.apply` is the single executable contract invocation. Its `runtime.binding`
+symbol fixes the operation and static specialization; its actual inputs and
+outcome payload carry the logical or represented ports. Symbol-use verification
+requires that declaration in the nearest symbol table and exact agreement
+with its complete executable `function_type`. Native type arguments are types,
+naturals are unsigned integer attributes, and numerical row masks are dense
+Boolean arrays. Callable/call interfaces expose that ABI to standard MLIR
+infrastructure without granting optimization or installation authority. Per-contract executable
+wrapper operations are absent. Total mathematical operations retain separate
+typed identities for algebraic analysis and checked realization.
+
+An installed operation may have effects or fail.
 The runtime's `InstalledOperation` establishes its signature and installation
 facts. Neither grants purity or permits inspecting an operation's implementation
 as if it were source mathematics. PCS, transcript and resource operations retain
@@ -83,10 +108,20 @@ Generated declarations and signature checks do not establish kernel correctness.
 
 ## Signatures, effects and observations
 
+The [catalog schema](../spec/formats/contract-declarations.md) describes one
+complete declaration collection. Its operation scope uses tagged root,
+projection, application and natural terms. Signatures distinguish fixed ports
+from the explicit numerical family; numerical masks select every scalar/vector
+input and the result shape. Resource-unit signatures retain their nominal Slot
+parameter. Native container names `scalar` and `capability` are not logical
+constructor declarations. The retired interpreter-profile bit is absent;
+consumer admission stays separate from catalog membership.
+
 The `zkc.contract-declarations/0` inventory distinguishes constructor-application
 ports from an explicit complete-Type port (`{"term": index}`). The latter is
-restricted to construction-only observation payloads, with exact static-type and
-representation checks. Source admission does not gain arbitrary operations from
+checked as a scoped Type term, without privileges based on TableGen inheritance.
+Consumers separately admit the supported instances, including sequence elements
+and observation payloads, with exact static-type and representation checks. Source admission does not gain arbitrary operations from
 catalog presence; the [structured observer](../spec/formats/messages.md#transcript-observation)
 owns that boundary.
 
@@ -109,9 +144,9 @@ removes one. Neither is licensed by the other's mathematical determinism. No
 facet grants permission to discard failure, resource consumption, logical work
 or a transcript occurrence. Partial operations remain ordered local work.
 
-Polynomial interpretation conversions belong to `poly`: `point_to_vector`,
-`point_from_vector`, `table_to_vector` and `table_from_vector`. Catalog keys such
-as `vector.from_point` retain their declared meanings independently of IR spelling.
+Polynomial interpretation conversions use the exact declared contracts, such
+as `vector.from_point`, through `exec.apply`. Their input and output types retain
+the distinction between evaluation points, tables and field vectors.
 Coordinate order and Boolean-table shape remain domain obligations even when
 representations share storage.
 
@@ -134,8 +169,10 @@ see [resource origins](resource-origins.md).
 
 ## Representation and assurance
 
-Logical contraction interfaces identify operand/result roles after exact type
-and contract checks. They select neither a backend nor storage layout.
+Logical contraction interfaces on `exec.apply` identify data-input and
+outcome-payload roles after exact type and contract checks. Their indices exclude
+the scope operand and outcome wrapper. An absent facet yields no roles. The
+interfaces select neither a backend nor storage layout.
 [Physical planning](representation.md#checked-physical-decisions) separately
 validates installed alternatives, conversions and all actual uses.
 

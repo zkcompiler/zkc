@@ -4,7 +4,10 @@
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/RingSharing.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Algebra/RingExpression.h"
+#include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/StructuredComputation.h"
@@ -115,15 +118,14 @@ admitLaneFormula(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
     if (result.getType() != field || !finite::replaceable(&op))
       return unsupported();
     if (auto constant = finite::fieldConstant(&op)) {
-      if (auto e = protocol::checkParameters("field.constant", {*constant},
-                                             field.getDomain()))
-        return std::move(e);
       // Ring literals are prime-subfield naturals. Other exact field values
       // enter through typed operands, never by reinterpreting bit patterns.
-      if (!all_of(*constant, [](char c) { return isDigit(c); }))
+      if (!algebra::isPrimeSubfieldLiteral(constant))
         return unsupported();
       meanings[result] = nodes.size();
-      nodes.push_back(ring::Node::literal(field.getDomain().str(), *constant));
+      nodes.push_back(
+          ring::Node::literal(field.getDomain().str(),
+                              cantFail(algebra::encodeFieldLiteral(constant))));
       continue;
     }
     auto *contract = finite::semantics(&op);
@@ -271,9 +273,9 @@ emitVectorLanes(const LaneFormula &admitted, Type vector, Value length,
       continue;
     }
     LaneInput realized;
-    if (auto constant = finite::fieldConstant(&op))
-      realized.value = emit("field.constant", {}, field, {*constant});
-    else {
+    if (auto constant = finite::fieldConstant(&op)) {
+      realized.value = emit("field.constant", {}, field, {constant});
+    } else {
       LaneInput left = values.lookup(op.getOperand(0)),
                 right = values.lookup(op.getOperand(1));
       if (!left.value || !right.value)
@@ -375,7 +377,7 @@ OwningOpRef<func::FuncOp> closeLaneFormula(const LaneFormula &formula,
       continue;
     if (auto literal = finite::fieldConstant(&op)) {
       values[result] =
-          algebra::ConstantFieldOp::create(builder, location, field, *literal);
+          algebra::ConstantFieldOp::create(builder, location, field, literal);
       continue;
     }
     auto *meaning = finite::semantics(&op);
@@ -449,13 +451,13 @@ Expected<LaneRealizationResult> emitNumericalLanes(const LaneFormula &formula,
   auto field = dyn_cast<algebra::FieldType>(finite::elementType(vector));
   if (!field || !rows || !rows.getType().isUnsignedInteger(64))
     return unsupported();
-  std::string mask;
+  SmallVector<bool> access;
   SmallVector<Value> operands{rows};
   for (const auto &slot : formula.slots) {
     if (!slot.value ||
         slot.value.getType() != (slot.lanes ? vector : Type(field)))
       return unsupported();
-    mask += slot.lanes ? '1' : '0';
+    access.push_back(slot.lanes);
     operands.push_back(slot.value);
   }
   // An admitted identity map borrows its existing column. Domain guards and
@@ -466,8 +468,14 @@ Expected<LaneRealizationResult> emitNumericalLanes(const LaneFormula &formula,
       formula.slots[root.input].lanes)
     return LaneRealizationResult{
         LaneRealizationStatus::Realized, formula.slots[root.input].value, {}};
-  std::string body = zkc::printJson(formula.expression.encode());
-  if (body.size() > protocol::NumericalLimits::bodyBytes)
+  auto body =
+      algebra::importRingExpression(field.getContext(), formula.expression);
+  if (!body)
+    return body.takeError();
+  auto bytes = algebra::ringExpressionByteSize(*body);
+  if (!bytes)
+    return bytes.takeError();
+  if (*bytes > protocol::NumericalLimits::bodyBytes)
     return capacity("numerical-body-limit");
   // A row-bearing pointwise formula uses the standard tensor profile. A
   // product retains its native aggregate contract but optimizes its map here;
@@ -519,22 +527,39 @@ Expected<LaneRealizationResult> emitNumericalLanes(const LaneFormula &formula,
         actual->front(), actual->front().back().getOperands());
     if (!interpreted)
       return interpreted.takeError();
-    body = zkc::printJson(interpreted->encode());
-    if (body.size() > protocol::NumericalLimits::bodyBytes)
+    body = algebra::importRingExpression(field.getContext(), *interpreted);
+    if (!body)
+      return body.takeError();
+    bytes = algebra::ringExpressionByteSize(*body);
+    if (!bytes)
+      return bytes.takeError();
+    if (*bytes > protocol::NumericalLimits::bodyBytes)
       return capacity("numerical-body-limit");
   }
   StringRef contract = mode == LaneResultMode::Map   ? "numerical.map"
                        : mode == LaneResultMode::Sum ? "numerical.sum"
                                                      : "numerical.product";
-  protocol::BindingApplication binding{
-      contract.str(), {field.getDomain().str(), mask}, ""};
+  NativeBindingApplication binding{
+      contract.str(),
+      {StringAttr::get(field.getContext(), field.getDomain()),
+       DenseBoolArrayAttr::get(field.getContext(), access)},
+      ""};
   // Feasibility is checked before invoking the emitter, including exact
   // field/body/slot agreement. An invalid producer is an error, not fallback.
-  if (auto e = protocol::checkNumericalParameters(binding, {body}))
-    return std::move(e);
+  auto silent = [&] {
+    auto diagnostic = emitError(UnknownLoc::get(field.getContext()));
+    diagnostic.abandon();
+    return diagnostic;
+  };
+  if (failed(verifyInvocationParameters(
+          silent, contract,
+          ArrayAttr::get(field.getContext(), binding.arguments),
+          ArrayAttr::get(field.getContext(), {*body}))))
+    return zkc::error("mathematical-lane-realization",
+                      "invalid numerical parameters");
   Value value =
       emit(binding, operands,
-           mode == LaneResultMode::Map ? vector : Type(field), {body});
+           mode == LaneResultMode::Map ? vector : Type(field), {*body});
   if (!value)
     return zkc::error("mathematical-lane-realization",
                       "emitter returned no value");

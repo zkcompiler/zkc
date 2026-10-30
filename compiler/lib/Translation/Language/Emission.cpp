@@ -5,9 +5,11 @@
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Builders.h"
 #include "zkc/Analysis/NativeTypes.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/Builders.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Printing.h"
@@ -15,6 +17,8 @@
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Relation/Formula.h"
+#include "zkc/Dialect/StructuredData.h"
+#include "zkc/Interfaces/CatalogType.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/Layout.h"
@@ -23,6 +27,7 @@
 #include "zkc/Relation/AIR.h"
 #include "zkc/Relation/R1CS.h"
 #include "zkc/Support/BoundedStream.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Entry.h"
 #include "zkc/Translation/Language.h"
@@ -210,11 +215,24 @@ class Emitter {
     } else if (contract.starts_with("field.") ||
                contract.starts_with("curve.") ||
                contract.starts_with("resource_unit.")) {
-      auto type = take(protocol::encodeBoundType(
-          inputs.empty() ? outputs.front() : inputs.front().getType(), false));
-      if (!type)
+      auto type = inputs.empty() ? outputs.front() : inputs.front().getType();
+      auto observation = mlir::dyn_cast<CatalogTypeInterface>(type);
+      auto application =
+          observation ? observation.getCatalogApplication() : std::nullopt;
+      if (!application || application->arguments.size() != 1)
         return {};
-      arguments.push_back(type->identity);
+      if ((contract.starts_with("field.") &&
+           application->constructor != "field") ||
+          (contract.starts_with("curve.") &&
+           application->constructor != "group") ||
+          (contract.starts_with("resource_unit.") &&
+           application->constructor != "resource_unit"))
+        return {};
+      auto identity =
+          mlir::dyn_cast<mlir::StringAttr>(application->arguments[0]);
+      if (!identity)
+        return {};
+      arguments.push_back(identity.getValue().str());
     }
     const auto key = std::make_pair(contract.str(), arguments);
     auto found = bindings.find(key);
@@ -226,17 +244,33 @@ class Emitter {
       }
       mlir::OpBuilder::InsertionGuard guard(builder);
       builder.setInsertionPointToStart(definitions);
-      if (!make("runtime.binding", {}, {},
-                {text("sym_name", name), text("contract", contract),
-                 attr("arguments", strings(arguments)),
-                 text("implementation", "")}))
+      auto nativeArguments = take(protocol::decodeBindingArguments(
+          &context, {contract.str(), arguments, {}}));
+      if (!nativeArguments)
+        return {};
+      auto signature = zkc::resolveLogicalSignature(
+          [&] { return mlir::emitError(builder.getUnknownLoc()); }, &context,
+          contract, nativeArguments->getValue());
+      if (!signature)
+        return {};
+      if (!make(
+              "runtime.binding", {}, {},
+              {text("sym_name", name), text("contract", contract),
+               attr("arguments", *nativeArguments),
+               attr("function_type",
+                    mlir::TypeAttr::get(executableBindingSignature(signature))),
+               text("implementation", "")}))
         return {};
       found = bindings.emplace(key, std::move(name)).first;
     }
+    auto nativeParameters = take(protocol::decodeInvocationParameters(
+        &context, {contract.str(), arguments, {}}, parameters));
+    if (!nativeParameters)
+      return {};
     return scoped->invoke(
         "exec.apply", outputs, scoped->scoped(inputs),
         {attr("binding", mlir::FlatSymbolRefAttr::get(&context, found->second)),
-         attr("parameters", strings(parameters)), text("site", site)});
+         attr("parameters", *nativeParameters), text("site", site)});
   }
   std::optional<Values> map(const Declaration &helper, ArrayRef<bool> rowwise,
                             mlir::ValueRange inputs, mlir::TypeRange outputs,
@@ -919,13 +953,26 @@ class Emitter {
           SmallVector<mlir::NamedAttribute> attrs;
           if (math->identity == MathematicalIdentity::VectorLength)
             attrs.push_back(attr("axis", builder.getI64IntegerAttr(0)));
-          if (!math->literal.empty())
-            attrs.push_back(text("value", math->literal));
-          else if (math->identity == MathematicalIdentity::IndexConstant)
-            attrs.push_back(text(
-                "value",
-                std::to_string(
-                    math->staticArguments.front().dimension.closedValue())));
+          if (math->identity == MathematicalIdentity::IndexConstant) {
+            uint64_t value;
+            if (math->literal.empty())
+              value = math->staticArguments.front().dimension.closedValue();
+            else if (StringRef(math->literal).getAsInteger(10, value)) {
+              failure =
+                  error("source.emission", "invalid checked index literal");
+              return false;
+            }
+            attrs.push_back(
+                attr("value", builder.getIntegerAttr(
+                                  builder.getIntegerType(64, false), value)));
+          } else if (math->identity == MathematicalIdentity::FieldConstant) {
+            auto literal = take(algebra::decodeFieldLiteral(
+                mlir::cast<algebra::FieldType>(outputs.front()),
+                math->literal));
+            if (!literal)
+              return false;
+            attrs.push_back(attr("value", *literal));
+          }
           if (math->identity == MathematicalIdentity::ArrayAt ||
               math->identity == MathematicalIdentity::PolynomialSum) {
             auto value = math->staticArguments[2].dimension.closedValue();
@@ -936,8 +983,22 @@ class Emitter {
           }
           if (math->identity ==
                   MathematicalIdentity::PolynomialEvaluateDomain ||
-              math->identity == MathematicalIdentity::PolynomialInterpolate)
-            attrs.push_back(attr("points", strings(math->parameters)));
+              math->identity == MathematicalIdentity::PolynomialInterpolate) {
+            auto type = outputs.front();
+            auto field = algebra::FieldType::get(
+                &context,
+                mlir::isa<poly::PolynomialType>(type)
+                    ? mlir::cast<poly::PolynomialType>(type).getDomain()
+                    : mlir::cast<algebra::FieldArrayType>(type).getDomain());
+            SmallVector<mlir::Attribute> points;
+            for (const auto &parameter : math->parameters) {
+              auto point = take(algebra::decodeFieldLiteral(field, parameter));
+              if (!point)
+                return false;
+              points.push_back(*point);
+            }
+            attrs.push_back(attr("points", builder.getArrayAttr(points)));
+          }
           actual = make(name, outputs, operands, attrs);
           break;
         }
@@ -1067,7 +1128,9 @@ class Emitter {
           }
           auto *bound = make(
               "data.index", resultTypes, {},
-              {text("value", std::to_string(query->bound->closedValue()))});
+              {attr("value",
+                    builder.getIntegerAttr(builder.getIntegerType(64, false),
+                                           query->bound->closedValue()))});
           if (!bound)
             return false;
           operands.push_back(bound->getResult(0));
@@ -1648,9 +1711,19 @@ public:
     auto sourceDeclarations = inspectComponentDeclarations(project, limits);
     if (!sourceDeclarations)
       return sourceDeclarations.takeError();
-    if (*sourceDeclarations != "[[],[]]")
-      unit->setAttr("source_declarations",
-                    builder.getStringAttr(*sourceDeclarations));
+    if (*sourceDeclarations != "[[],[]]") {
+      // The neutral frontend stays MLIR-independent. Convert its checked
+      // inspection document once at this boundary; retain structured native
+      // inherent data for all subsequent passes and comparisons.
+      auto data = parseNaturalJson(*sourceDeclarations, limits.interfaceBytes,
+                                   64, "component-declaration", "source.limit");
+      if (!data)
+        return data.takeError();
+      auto retained = importDeclarationData(&context, *data);
+      if (!retained)
+        return retained.takeError();
+      unit->setAttr("source_declarations", *retained);
+    }
     definitions = &unit->getRegion(0).front();
     for (auto &decl : declared) {
       if (!decl.body || !decl.parameters.empty())

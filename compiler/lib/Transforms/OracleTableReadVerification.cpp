@@ -1,5 +1,7 @@
+#include "NativeBindingApplication.h"
 #include "OracleTableRead.h"
 #include "OracleVerificationContext.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -45,9 +47,8 @@ Error checkOracleTableRead(const OracleVerificationContext &context,
   if (found == closure.bodies.end() || found->second.size() != 4)
     return refuse();
   const auto &steps = found->second;
-  auto call = [&](unsigned i, StringRef contract,
-                  ArrayRef<std::string> arguments, ValueRange inputs,
-                  TypeRange outputs, StringRef site) {
+  auto call = [&](unsigned i, StringRef contract, ArrayRef<Attribute> arguments,
+                  ValueRange inputs, TypeRange outputs, StringRef site) {
     const auto &step = steps[i];
     auto op = dyn_cast<exec::ApplyOp>(step.operation);
     if (!op || op.getSite() != site || !step.regions.empty() ||
@@ -61,27 +62,30 @@ Error checkOracleTableRead(const OracleVerificationContext &context,
         !binding.getImplementation().empty() ||
         binding.getArguments().size() != arguments.size())
       return false;
-    for (auto [value, expected] : zip(binding.getArguments(), arguments))
-      if (cast<StringAttr>(value).getValue() != expected)
-        return false;
+    if (!matchesNativeBinding(
+            binding, {contract.str(), SmallVector<Attribute>(arguments), {}}))
+      return false;
     return true;
   };
   if (!call(0, "index.less", {}, {actual.getArgument(3), actual.getArgument(2)},
             IntegerType::get(candidate.getContext(), 1), "domain"))
     return refuse();
-  auto answer = encodeBoundType(kind.getAnswerType(), false);
-  if (!answer)
-    return answer.takeError();
   std::string contract;
-  std::vector<std::string> arguments;
-  if (answer->kind == "field" || answer->kind == "group") {
-    contract = answer->kind == "field" ? "vector.get" : "curve.get";
-    arguments.push_back(answer->identity);
-  } else if (answer->kind == "index")
+  SmallVector<Attribute> arguments;
+  Type answer = kind.getAnswerType();
+  if (auto field = dyn_cast<algebra::FieldType>(answer)) {
+    contract = "vector.get";
+    arguments.push_back(
+        StringAttr::get(candidate.getContext(), field.getDomain()));
+  } else if (auto group = dyn_cast<algebra::GroupType>(answer)) {
+    contract = "curve.get";
+    arguments.push_back(
+        StringAttr::get(candidate.getContext(), group.getDomain()));
+  } else if (answer == index)
     contract = "indices.at";
   else {
     contract = "sequence.at";
-    arguments.push_back(answer->spelling());
+    arguments.push_back(TypeAttr::get(answer));
   }
   if (!call(1, "control.require", {}, steps[0].outputs, {}, "admit") ||
       !call(2, contract, arguments,

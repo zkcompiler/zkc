@@ -1,4 +1,4 @@
-import ZkcSecurity.Generation.Roots.Stages
+import ZkcSecurityExamples.Generation.Roots.Stages
 
 /-! Executable driver; production root configuration owns all selections. -/
 namespace TestsSecurity.GenerateSumcheckSoundness

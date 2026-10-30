@@ -1,5 +1,5 @@
-import ZkcSecurity.Examples.Generated.SmallSumcheckCompletenessClaims
-import ZkcSecurity.Examples.Generated.TwoSumsCompletenessClaims
+import ZkcSecurityExamples.Generated.SmallSumcheckCompletenessClaims
+import ZkcSecurityExamples.Generated.TwoSumsCompletenessClaims
 import TestsSecurity.ClaimClosedData
 
 /-! The real closed requests produce canonical receipts. Wrong theorem, target,

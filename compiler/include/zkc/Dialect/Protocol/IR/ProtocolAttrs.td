@@ -19,13 +19,11 @@ def ProtocolProfile : ProtocolEnum<"Profile", "protocol abstraction profile", [
   I32EnumAttrCase<"Physical", 4, "physical">
 ]>;
 
-
 class ProtocolEnumAttr<ProtocolEnum info, string mnemonic>
     : EnumAttr<ProtocolDialect, info, mnemonic> {
   let assemblyFormat = "`<` $value `>`";
   let genVerifyDecl = 1;
 }
 def ProtocolProfileAttr : ProtocolEnumAttr<ProtocolProfile, "profile">;
-
 
 #endif

@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.FiatShamir.OriginalTransport
+public import ZkcSecurity.Bindings.Transcript.OriginalTransport
 
 @[expose] public section
 

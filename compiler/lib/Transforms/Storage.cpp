@@ -1,6 +1,7 @@
 #include "../Conversion/Storage.h"
 #include "../Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Protocol.h"
@@ -18,7 +19,7 @@ bool physical(ModuleOp module) {
 }
 } // namespace
 LogicalResult verifyStoragePreserved(ModuleOp before, ModuleOp after) {
-  if (failed(verify(before)) || failed(verify(after)))
+  if (failed(zkc::admitStage(before)) || failed(zkc::admitStage(after)))
     return failure();
   if (!physical(before) || !physical(after))
     return diagnostics::emit(after.emitError(), "storage-correspondence-stage");
@@ -30,7 +31,7 @@ LogicalResult verifyStoragePreserved(ModuleOp before, ModuleOp after) {
   return success();
 }
 LogicalResult releaseLocalStorage(ModuleOp module) {
-  if (failed(verify(module)))
+  if (failed(zkc::admitStage(module)))
     return failure();
   if (!physical(module))
     return diagnostics::emit(module.emitError(), "interactive-release-context");
@@ -44,7 +45,7 @@ LogicalResult releaseLocalStorage(ModuleOp module) {
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
   if (auto e = applyStorage(*candidate, *releases))
     return diagnostics::emit(module.emitError(), std::move(e));
-  if (failed(verify(*candidate)))
+  if (failed(zkc::admitStage(*candidate)))
     return failure();
   if (auto e = verifyStorageMaterialization(module, *candidate, *releases))
     return diagnostics::emit(module.emitError(), std::move(e));

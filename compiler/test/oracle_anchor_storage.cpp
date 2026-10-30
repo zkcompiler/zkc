@@ -6,15 +6,16 @@
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Contracts/NativePolicy.h"
-#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Transforms/Mathematical.h"
 #include <filesystem>
 #include <fstream>
@@ -42,9 +43,9 @@ module { "protocol.module"() ({
  "protocol.func"() ({
   ^bb0(%data:!D,%raw:!H,%weight:!F):
    %input = "protocol.oracle_input"(%data,%raw) {holder="P",receivers=["V"],shape_bounds={}} : (!D,!H)->!H
-   %rows = "data.index"() {value="16"} : ()->ui64
+   %rows = "data.index"() {value=16 : ui64} : ()->ui64
    %other = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="word",shape_names=["rows"],shape_bounds={}} : (!D,ui64)->!H
-   %trips = "data.index"() {value="3"} : ()->ui64
+   %trips = "data.index"() {value=3 : ui64} : ()->ui64
    %last = "protocol.repeat"(%trips,%input,%other,%weight) ({
     ^bb0(%i:ui64,%previous:!H,%second:!H,%w:!F):
      %next = "protocol.oracle_virtual"(%previous,%second,%w) {callee=@combine,holder="P",receivers=["V"]} : (!H,!H,!F)->!H
@@ -90,6 +91,50 @@ int main(int argc, char **argv) {
   };
   auto ideal = take(selects(""));
   Cases cases;
+  cases.run(
+      "native store planning preserves rows beyond byte-profile depth", [&] {
+        std::string row = "i1";
+        for (unsigned i = 0; i < 12; ++i)
+          row = "!data.sequence<" + row + ">";
+        auto nativeSource = std::string("!Row = ") + row + R"mlir(
+!Data = !data.sequence<!Row>
+!Handle = !protocol.oracle<#protocol.oracle_kind<"table", [!Row]>>
+module { "protocol.module"() ({
+ "protocol.func"() ({ ^entry(%data:!Data,%rows:ui64):
+  %handle = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="table",shape_names=["rows"],shape_bounds={rows=16:ui64}} : (!Data,ui64)->!Handle
+  "protocol.return"() : ()->()
+ }) {sym_name="main",function_type=(!Data,ui64)->(),roles=["P","V"],input_roles=[["P"],["P","V"]],output_roles=[]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+        auto candidate = parseSourceString<ModuleOp>(nativeSource, &context);
+        require(bool(candidate) && succeeded(verify(*candidate)),
+                "native source refused: " + diagnostics);
+        auto plan = take(planOracleAnchorStorage(
+            *candidate, "main", [](const auto &) -> Expected<std::string> {
+              return std::string();
+            }));
+        require(plan.constructors.size() == 1 &&
+                    plan.constructors[0].roles.size() == 2,
+                "native storage lost its holder/receiver pair");
+        for (const auto &role : plan.constructors[0].roles) {
+          auto sequence = cast<data::SequenceType>(role.sequence);
+          require(sequence.getElementType() == role.record &&
+                      succeeded(verifyLogicalType(
+                          [&] { return emitError(candidate->getLoc()); },
+                          role.sequence)),
+                  "store did not retain its formed native record");
+          auto bytes = encodeBoundType(role.sequence, false);
+          require(!bytes, "native storage widened byte-profile admission");
+          consumeError(bytes.takeError());
+        }
+        // Reference /0 still embeds public type spellings. Planning a native
+        // store grants no serializable reference or executable installation for
+        // this row.
+        auto reference = oracleReferenceType(plan.constructors[0].kind);
+        require(!reference,
+                "native planning widened the reference identity schema");
+        consumeError(reference.takeError());
+      });
   cases.run(
       "fresh constructors survive identical data and recurrent references",
       [&] {
@@ -170,7 +215,7 @@ int main(int argc, char **argv) {
                 "storage is not an ordinary native type");
       }
     auto payload =
-        decodeVariant(cast<data::VariantType>(reference).getDescriptor());
+        decodeVariant(take(encodeBoundType(reference, false)).spelling());
     require(payload && payload->alternatives.size() == 1 &&
                 payload->alternatives[0].payload ==
                     std::vector<std::string>({"index", "index"}),
@@ -254,8 +299,11 @@ int main(int argc, char **argv) {
       "wrong constructor ordinal", [&](func::FuncOp function) {
         function.walk([&](exec::ApplyOp op) {
           if (op.getSite() == "constructor")
-            op.setParametersAttr(
-                ArrayAttr::get(&context, {StringAttr::get(&context, "0")}));
+            op.setParametersAttr(ArrayAttr::get(
+                &context,
+                {IntegerAttr::get(
+                    IntegerType::get(&context, 64, IntegerType::Unsigned),
+                    0)}));
         });
       });
   mutations.emplace_back("swapped constructor and instance",
@@ -376,8 +424,8 @@ int main(int argc, char **argv) {
     builder.setInsertionPointToEnd(body);
     auto empty =
         data::SequenceEmptyOp::create(builder, location, storage.sequence);
-    auto rows = data::IndexOp::create(builder, location, index, "16");
-    auto count = data::IndexOp::create(builder, location, index, "1");
+    auto rows = data::IndexOp::create(builder, location, index, 16);
+    auto count = data::IndexOp::create(builder, location, index, 1);
     auto signature = scopedDataSignature(allocator);
     auto call = protocol_ir::LocalCallOp::create(
         builder, location, signature.getResults(),
@@ -434,7 +482,8 @@ int main(int argc, char **argv) {
       Builder builder(&context);
       if (mutation == 0) {
         auto constant = cast<exec::ApplyOp>(body[0].operation);
-        constant.setParametersAttr(builder.getStrArrayAttr({"1"}));
+        constant.setParametersAttr(builder.getArrayAttr(
+            {builder.getIntegerAttr(builder.getIntegerType(64, false), 1)}));
       }
       if (mutation == 1)
         cast<exec::ApplyOp>(body[1].operation)
@@ -533,7 +582,7 @@ module { "protocol.module"() ({
     for (unsigned i = 0; i < 2; ++i) {
       auto rows =
           data::DimOp::create(builder, loc, index, body->getArgument(i), 0);
-      auto count = data::IndexOp::create(builder, loc, index, "1");
+      auto count = data::IndexOp::create(builder, loc, index, 1);
       auto allocated = protocol_ir::LocalCallOp::create(
           builder, loc, scopedDataSignature(allocator).getResults(),
           ValueRange{store, rows, count, body->getArgument(i)},

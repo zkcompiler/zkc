@@ -5,7 +5,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/ControlCursor.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/Execution.h"
@@ -102,7 +102,8 @@ int main() {
         require(bool(flat), "missing independent flat fixture");
         sourceReturn(flat->lookupSymbol<func::FuncOp>("loop"));
         auto error = protocol::verifySourceExecutionDefinitions(
-            *flat, actual->definitions);
+            *flat,
+            take(protocol::readScheduledExecutionDefinitions(*schedule)));
         require(!error, error ? llvm::toString(std::move(error)) : "");
         auto &step = actual->bodies.at("loop").front();
         require(step.operation == first<exec::RangeOp>(function) &&

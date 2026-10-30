@@ -2,6 +2,8 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
+#include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -163,8 +165,9 @@ int main(int argc, char **argv) {
   auto bytes = llvm::MemoryBuffer::getFile(argv[1]);
   require(bool(bytes), "cannot read scoped map fixture");
   // Reuse the shared general collection while preserving this suite's field.
-  auto fixture =
-      replaceText((*bytes)->getBuffer().str(), "bls12-381.fr", "koala-bear");
+  auto fixture = replaceText(
+      replaceText((*bytes)->getBuffer().str(), "bls12-381.fr", "koala-bear"),
+      "ui255", "ui31");
   DialectRegistry registry;
   registerDialects(registry);
   MLIRContext context(registry, MLIRContext::Threading::DISABLED);
@@ -220,7 +223,7 @@ int main(int argc, char **argv) {
     cases.run(label, [&] {
       auto candidate = sf::clone(*expanded);
       change(*candidate);
-      require(succeeded(verify(*candidate)),
+      require(succeeded(zkc::admitStage(*candidate)),
               "semantic mutation must remain admitted");
       ScopedDiagnosticHandler quiet(&context,
                                     [](Diagnostic &) { return success(); });
@@ -252,11 +255,17 @@ int main(int argc, char **argv) {
   mutation("change a scalar literal", [&](ModuleOp module) {
     nth(module, "field.constant")
         ->setAttr("parameters",
-                  ArrayAttr::get(&context, {StringAttr::get(&context, "2")}));
+                  ArrayAttr::get(&context,
+                                 {take(algebra::decodeFieldLiteral(
+                                     cast<algebra::FieldType>(sc::payload(nth(
+                                         module, "field.constant"))[0]
+                                                                  .getType()),
+                                     "2"))}));
   });
   mutation("change retained scalar mathematics", [&](ModuleOp module) {
     function(module, "formula").walk([&](algebra::ConstantFieldOp op) {
-      op->setAttr("value", StringAttr::get(&context, "2"));
+      op.setValueAttr(cantFail(algebra::makeFieldLiteral(
+          op.getResult().getType(), llvm::APInt(2, 2))));
     });
   });
   mutation("move shape admission after arithmetic", [&](ModuleOp module) {
@@ -277,8 +286,7 @@ int main(int argc, char **argv) {
     builder.setInsertionPointToStart(
         &module.getBody()->front().getRegion(0).front());
     runtime::BindingOp::create(builder, module.getLoc(), "extra", "vector.add",
-                               builder.getStrArrayAttr({"koala-bear"}), "",
-                               ArrayAttr{});
+                               builder.getStrArrayAttr({"koala-bear"}), "");
   });
   mutation("pin a generated vector implementation", [&](ModuleOp module) {
     auto call = nth(module, "vector.add");
@@ -314,10 +322,17 @@ int main(int argc, char **argv) {
         diagnostics += diagnostic.str();
         return success();
       });
-      require(failed(verify(*candidate)) &&
-                  failed(compare(*source, *candidate)),
+      // Type and binding mismatches are structural; unsupported source
+      // attributes are owned by admission of the complete execution closure.
+      auto admitted = change == "scale-types" || change == "binding-field"
+                          ? verify(*candidate)
+                          : zkc::admitStage(*candidate);
+      require(failed(admitted) && failed(compare(*source, *candidate)),
               "malformed candidate escaped actual source admission");
-      require(namesIdentifier(diagnostics, "execution-source-closure"),
+      require(namesIdentifier(diagnostics, change == "scale-types" ||
+                                                   change == "binding-field"
+                                               ? "binding-signature"
+                                               : "execution-source-closure"),
               "unexpected refusal owner: " + diagnostics);
     });
   cases.run(
@@ -420,12 +435,14 @@ func.func private @foreign(%a:!algebra.field<"bls12-381.fr">,
                     "   %e = algebra.field_equal %x,%x : (!F,!F)->i1\n   %r =");
       else if (kind == "foreign constant")
         text = edit(text, "   %dead =",
-                    "   %foreign = \"algebra.constant\"() {value=\"2\"} : ()->"
+                    "   %foreign = \"algebra.constant\"() "
+                    "{value=#algebra.literal<!algebra.field<\"bls12-381.fr\">, "
+                    "2 : ui255>} : ()->"
                     "!algebra.field<\"bls12-381.fr\">\n   %dead =");
       else if (kind == "foreign helper result") {
         text = edit(text, " func.func private @formula", R"mlir(
 func.func private @wide()->!algebra.field<"koala-bear.ext8-binomial3"> {
-  %w = "algebra.constant"() {value="3"} : ()->!algebra.field<"koala-bear.ext8-binomial3">
+  %w = "algebra.constant"() {value=#algebra.literal<!algebra.field<"koala-bear.ext8-binomial3">, 3 : ui31>} : ()->!algebra.field<"koala-bear.ext8-binomial3">
   func.return %w : !algebra.field<"koala-bear.ext8-binomial3">
 }
  func.func private @formula)mlir");
@@ -568,13 +585,18 @@ func.func private @test(%x:!F)->i1 {
               auto applications = sf::applications(*result, "numerical.map");
               auto call = applications.front();
               auto parameters = call->getAttrOfType<ArrayAttr>("parameters");
-              auto wrong = edit(cast<StringAttr>(parameters[0]).getValue(),
-                                "[\"input\",0]", "[\"input\",1]");
+              auto wrong =
+                  edit(take(algebra::encodeRingExpression(
+                           cast<algebra::RingExpressionAttr>(parameters[0]))),
+                       "[\"input\",0]", "[\"input\",1]");
               call->setAttr(
                   "parameters",
-                  ArrayAttr::get(&context, {StringAttr::get(&context, wrong)}));
+                  ArrayAttr::get(
+                      &context,
+                      {take(algebra::importRingExpression(
+                          &context, take(ring::readExpressionText(wrong))))}));
               require(
-                  succeeded(verify(*result)) &&
+                  succeeded(zkc::admitStage(*result)) &&
                       failed(compare(*original, *result, policy)),
                   "capacity fallback concealed an admitted semantic mismatch");
             }
@@ -698,7 +720,7 @@ func.func private @twice(%x:!F)->!F {
                      "map", "%v", type, "%r", type) +
                   scopedReturn("%state,%r", std::string("!S,") + type));
           auto text = R"mlir(
-!S = !runtime.capability<"rng:bls12-381.fr">
+!S = !runtime.capability<rng, "bls12-381.fr">
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
@@ -749,7 +771,7 @@ module { "protocol.module"() ({
     auto original = parse(edit(fixture, " \"protocol.func\"",
                                declarations + " \"protocol.func\""));
     auto scalar = sc::computation(function(*original, "formula"), "scalar");
-    require(succeeded(verify(*original)),
+    require(succeeded(zkc::admitStage(*original)),
             "shared scalar computation malformed");
     auto candidate = prepare(*original);
     require(

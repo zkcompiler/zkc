@@ -1,4 +1,4 @@
-import ZkcSecurity.VCVio.SigmaAndSchnorr
+import ZkcSecurity.Families.Sigma.SigmaAndSchnorr
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.Field.ZMod
 

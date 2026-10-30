@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Domains.KoalaBear
+public import ZkcSecurity.Mathematics.Fields.KoalaBear
 
 /-!
 Independent mathematical clients of the octic domain adapter. These controls

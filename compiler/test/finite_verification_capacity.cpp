@@ -12,6 +12,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Contracts/RingExpression.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
 #include <fstream>
 #include <limits>
@@ -34,7 +35,8 @@ OwningOpRef<ModuleOp> fixture(MLIRContext &context, StringRef name) {
   std::ostringstream text;
   text << input.rdbuf();
   auto module = parseSourceString<ModuleOp>(text.str(), &context);
-  require(bool(module) && succeeded(verify(*module)), "fixture refused");
+  require(bool(module) && succeeded(zkc::admitStage(*module)),
+          "fixture refused");
   // Exercise the finite expression itself as a scoped entry. The complete
   // protocol fixtures also test their surrounding arithmetic elsewhere; this
   // fixture exposes every finite input (including the MSM seed) as a port.
@@ -66,7 +68,8 @@ OwningOpRef<ModuleOp> fixture(MLIRContext &context, StringRef name) {
   for (auto function : llvm::make_early_inc_range(
            owner.getBody().front().getOps<protocol_ir::MathematicalOp>()))
     function.erase();
-  require(succeeded(verify(*module)), "isolated finite source refused");
+  require(succeeded(zkc::admitStage(*module)),
+          "isolated finite source refused");
   return module;
 }
 OwningOpRef<ModuleOp> clone(ModuleOp source) {
@@ -150,7 +153,7 @@ module { module @reductions attributes {exec.computation} {
 } }
 )mlir",
                                             &context);
-  require(bool(result) && succeeded(verify(*result)),
+  require(bool(result) && succeeded(zkc::admitStage(*result)),
           "two-occurrence Kernel fixture did not admit");
   return result;
 }
@@ -180,7 +183,7 @@ module { module @reductions attributes {exec.computation} {
 } }
 )mlir",
                                             &context);
-  require(bool(result) && succeeded(verify(*result)),
+  require(bool(result) && succeeded(zkc::admitStage(*result)),
           "nested Kernel fixture did not admit");
   return result;
 }
@@ -466,7 +469,7 @@ int main() {
       Value left = result.getInputs()[0], right = result.getInputs()[1];
       view.reset();
       result.getInputsMutable().assign(ValueRange{right, left});
-      require(succeeded(verify(*candidate)) &&
+      require(succeeded(zkc::admitStage(*candidate)) &&
                   succeeded(sf::compare(*source, *candidate)),
               "commuted valid candidate was refused");
       uint64_t work = 100000;
@@ -591,7 +594,8 @@ int main() {
                   "field.mul");
     extendProduct(sf::function(*candidate, "work"), ring::Limits::depth,
                   "vector.mul");
-    require(succeeded(verify(*source)) && succeeded(verify(*candidate)),
+    require(succeeded(zkc::admitStage(*source)) &&
+                succeeded(zkc::admitStage(*candidate)),
             "deep equivalent formulas were not admitted");
     uint64_t work = 100000;
     mathematical::ComparisonCapacity capacity;

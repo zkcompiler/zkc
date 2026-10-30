@@ -9,6 +9,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Analysis/NativeTypes.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
@@ -381,7 +382,7 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
       source.print(*trace->ir);
       *trace->ir << "\n";
     }
-    if (failed(verify(source)) || !hasSingleElement(*source.getBody()))
+    if (failed(zkc::admitStage(source)) || !hasSingleElement(*source.getBody()))
       return signalPassFailure();
     auto original =
         dyn_cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
@@ -402,7 +403,7 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
     if (failed(Outliner(unit, symbols, policy.calculationBatching).run(policy)))
       return signalPassFailure();
     unit.setProfile(protocol_ir::Profile::Exec);
-    if (failed(verify(*candidate)) ||
+    if (failed(zkc::admitStage(*candidate)) ||
         failed(verifyProjectionPreserved(*expanded, *candidate, policy)))
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());

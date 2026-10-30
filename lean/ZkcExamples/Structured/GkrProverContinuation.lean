@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.GkrSourceContinuation
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 
 @[expose] public section
 

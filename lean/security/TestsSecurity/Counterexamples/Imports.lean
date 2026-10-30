@@ -1,4 +1,4 @@
-import ZkcSecurity.FiatShamir.Typed
+import ZkcSecurity.ProgramLogic.Transcript.Typed
 import TestsSecurity.Counterexamples.Support
 
 /-! An averaged round-by-round certificate offered at import.

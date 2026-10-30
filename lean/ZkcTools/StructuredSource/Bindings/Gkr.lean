@@ -207,18 +207,34 @@ def gkrHelperAssociations (program : Program) (gate : GateOutput) :
     ("interpolationCallback", interpolationCallbackIndex), ("interpolationRealization", interpolationRealization),
     ("factorRestriction", factorRestriction), ("gateRestriction", gateRestriction)]
 
-def gateSource (program : Program) (output : Output) (gate : GateOutput) : Except String String := do
+/-- Reusable literal templates and collection layouts, independent of the
+closed source module that will supply their membership equations. -/
+def gateTemplatesSource (program : Program) (templates : HelperTemplateOutput)
+    (gate : GateOutput) : Except String String := do
+  let mut text := "module\n\npublic import Zkc.Source.Structured.ProtocolOperations\n\n" ++
+    "@[expose] public section\n\n" ++
+    "/-! Literal GKR helper templates and collection layouts. Exact source selection is a client. -/\n" ++
+    "namespace " ++ templates.namespaceName ++ "\nopen Zkc.Source Zkc.Source.Structured\n" ++
+    "set_option smartUnfolding false\nnoncomputable section\n\n"
+  for (name, index) in (← gkrHelperAssociations program gate) do
+    text := text ++ (← helperTemplateSource program name index)
+  return text ++ "end\nend " ++ templates.namespaceName ++ "\n"
+
+def gateSource (program : Program) (output : Output) (gate : GateOutput) (templates : HelperTemplateOutput) : Except String String := do
   let some value := program.payload.definitions[gate.valueIndex]? | throw "gate-value-index"
   let some quadratic := program.payload.definitions[gate.quadraticIndex]? | throw "gate-quadratic-index"
   let [.field domain] := value.outputs | throw "gate-value-output"
   unless value.inputs == List.replicate 4 (.field domain) &&
       quadratic.inputs == List.replicate 8 (.field domain) && quadratic.outputs == value.outputs do
     throw "gate-helper-signature"
-  let mut text := "module\n\npublic import " ++ output.moduleName ++ "Callbacks\n" ++
+  let mut text := "module\n\npublic import " ++ templates.moduleName ++ "\n" ++
+    "public import " ++ output.moduleName ++ "Callbacks\n" ++
     "\n@[expose] public section\n\n" ++
     "/-! Generated actual-helper gate equations. This is not a full GKR theorem. -/\nnamespace " ++ output.moduleName ++ "Gate\n" ++
     "open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm Zkc.Source.Structured.Bindings\n" ++
-    "open " ++ output.moduleName ++ "\nset_option maxRecDepth 50000\nset_option maxHeartbeats 8000000\n" ++
+    "open " ++ output.moduleName ++ "\n" ++
+    (if templates.namespaceName == output.moduleName ++ "Gate" then "" else "open " ++ templates.namespaceName ++ "\n") ++
+    "set_option maxRecDepth 50000\nset_option maxHeartbeats 8000000\n" ++
     "set_option smartUnfolding false\nnoncomputable section\n" ++
     "variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]\n\n"
   for (name, index) in (← gkrHelperAssociations program gate) do

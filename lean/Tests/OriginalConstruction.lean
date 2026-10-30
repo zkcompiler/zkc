@@ -1,6 +1,6 @@
 import Zkc.Construction.OriginalCorrespondence
 import Zkc.Construction.AuthoredPairProducer
-import Zkc.Construction.ArtifactBindingTactic
+import ZkcTools.ConstructionBindings.ArtifactBindingTactic
 import Zkc.Source.KernelRfl
 import Mathlib.Data.ZMod.Basic
 

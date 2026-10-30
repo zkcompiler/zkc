@@ -1,5 +1,5 @@
 import Zkc.Construction.OriginalCorrespondence
-import ZkcExamples.Structured.OriginalSumcheckLibrary
+import Zkc.Protocols.Sumcheck.Source.Library
 import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckSumcheck
 import ZkcExamples.Structured.Generated.Bindings.TwoSumsSumcheck
 

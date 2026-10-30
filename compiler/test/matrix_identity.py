@@ -7,12 +7,11 @@ import copy
 import hashlib
 import json
 from pathlib import Path
-import re
 import struct
 from cases import case
 from commands import Commands
 from scoped_sources import invocation, scoped_function
-from tools import compiler, records
+from tools import canonical_program, compiler, records
 
 fields = {
     "bls12-381.fr": 52435875175126190479447740508185965837690552500527637822603658699938581184513,
@@ -37,11 +36,11 @@ def digest(field, matrix):
 
 def source(field, parameters):
     call = invocation('exec.apply', ['!M'], ['i1'],
-                      f'binding=@check,parameters={json.dumps(parameters, ensure_ascii=False)},site="check"')
+                      f'binding=@check,parameters=[{", ".join(parameters)}],site="check"')
     check = scoped_function('Check', ['!M'], ['i1'], call, ['%r'])
     return f'''!M = !algebra.field_matrix<"{field}">
 module {{ "protocol.module"() ({{
- "runtime.binding"() {{sym_name="check",contract="matrix.identity_check",arguments=["{field}"],implementation=""}} : ()->()
+ "runtime.binding"() {{sym_name="check",contract="matrix.identity_check",arguments=["{field}"],implementation="",function_type=(!runtime.scope,!M)->!exec.outcome<(i1)>}} : ()->()
  {check}
  "protocol.func"() ({{^entry(%m:!M):
    %ok = "protocol.local_call"(%m) {{callee=@Check,role="P",site="work"}} : (!M)->i1
@@ -49,16 +48,48 @@ module {{ "protocol.module"() ({{
  }}) {{sym_name="main",function_type=(!M)->i1,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]}} : ()->()
 }}) {{profile=#protocol.profile<protocol>}} : ()->() }}'''
 
+
+def asset(digest):
+    values = ", ".join(str(value if value < 128 else value - 256)
+                       for value in bytes.fromhex(digest))
+    return f'#runtime.asset<"zkc.matrix/0", [{values}]>'
+
+
 for field in [*fields, "koala-bear.ext8-binomial3"]:
     expected = digest(field, ["4", "8", [["0", "1", "7"], ["1", "3", "11"]]])
     with case(f"{field} identity binding survives physical selection"):
-        logical = commands.verified(source(field, [expected]))
+        logical = commands.verified(source(field, [asset(expected)]))
         physical = commands.verified(logical, None, "--zkc-project-protocol", "--zkc-lower-math", "--zkc-select-physical")
-        assert expected in commands.source("protocol-export", physical)
+        program = json.loads(commands.source("protocol-export", physical))
+        canonical_program(commands, json.dumps(program))
+        operations = [step for function in program[2] for step in function[4]
+                      if step[0] == 'op']
+        assert len(operations) == 1
+        assert operations[0][3] == [expected]
     for index, bad in enumerate([[], [""], ["0" * 63], ["0" * 65], ["A" * 64], ["g" * 64],
                                  ["é" * 32], ["0" * 63 + " "], [expected, expected]]):
         with case(f"{field} rejects malformed identity parameter {index}"):
-            commands.verified(source(field, bad), "execution-source-closure")
+            # Digest spelling belongs to the byte reader; native attributes
+            # carry the digest bytes and cannot express hex case or padding.
+            malformed = copy.deepcopy(program)
+            operation = next(step for function in malformed[2]
+                             for step in function[4] if step[0] == 'op')
+            operation[3] = bad
+            canonical_program(commands, json.dumps(malformed),
+                              refuses='interactive-kernel-parameters')
+            commands.verified(source(field, [json.dumps(p, ensure_ascii=False) for p in bad]),
+                              "interactive-kernel-parameters")
+
+    for label, parameters, code in [
+        ('missing', [], 'interactive-kernel-parameters'),
+        ('duplicate', [asset(expected), asset(expected)], 'interactive-kernel-parameters'),
+        ('wrong-format', [asset(expected).replace('zkc.matrix/0', 'zkc.other/0')],
+         'interactive-kernel-parameters'),
+        ('short-digest', [asset('00' * 31)], 'asset-reference'),
+        ('long-digest', [asset('00' * 33)], 'asset-reference'),
+    ]:
+        with case(f"{field} rejects native identity {label}"):
+            commands.verified(source(field, parameters), code)
 
 
 def binary(prime, rows, width=32):
@@ -78,10 +109,6 @@ def binary(prime, rows, width=32):
     for kind, data in enumerate([header, terms, labels], 1):
         result += struct.pack("<IQ", kind, len(data)) + data
     return result
-
-
-def hashes(ir):
-    return set(re.findall(r'parameters = \["([0-9a-f]{64})"\]', ir))
 
 
 directory = records()

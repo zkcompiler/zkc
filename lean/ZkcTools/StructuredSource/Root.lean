@@ -101,12 +101,12 @@ def originSource : Zkc.Source.Structured.FunctionOrigin → String
 
 /-- Publish typed aliases and kernel-checked associations with the retained raw
 origin. Alias ordinals and both source/checked positions are generated. -/
-def sourceAliasSource (moduleName sourceModule : String)
+def sourceAliasSource (namespaceName sourceModule : String)
     (snapshot : Zkc.Source.Structured.Snapshot) (helpers : List String) : Except String String := do
   let aliases ← sourceAliases snapshot helpers
   let mut text := "module\n\npublic import " ++ sourceModule ++
     "\npublic import Zkc.Source.KernelRfl\n\n@[expose] public section\n\n/-! Generated exact source-origin aliases. -/\n" ++
-    "namespace " ++ moduleName ++ "\nopen Zkc.Source.Structured\n" ++
+    "namespace " ++ namespaceName ++ "\nopen Zkc.Source.Structured\n" ++
     "set_option maxRecDepth 50000\nset_option maxHeartbeats 16000000\nnoncomputable section\n\n" ++
     "abbrev imported := " ++ sourceModule ++ ".imported\n" ++
     "abbrev original := " ++ sourceModule ++ ".program.snapshot\n\n"
@@ -122,11 +122,13 @@ def sourceAliasSource (moduleName sourceModule : String)
       "    ((original.definitions.filterMap (fun | .function function => some function | _ => none)).find? (fun function => function.name == " ++ name ++ ".name)).bind\n" ++
       "      (fun function => function.origin) = some " ++ originSource alias.origin ++
       " := by kernel_rfl\n\n"
-  return text ++ "end\nend " ++ moduleName ++ "\n"
+  return text ++ "end\nend " ++ namespaceName ++ "\n"
 
 structure FixedSubjectOutput where
   connectionModule : String
   moduleName : String
+  /-- Declaration namespace, independent of the owning import path. -/
+  namespaceName : String := moduleName
   sourceModule : String
   originalExpression : String
   importedExpression : String
@@ -145,10 +147,10 @@ def fixedSubjectSource (output : FixedSubjectOutput) : String :=
   let target := quoted output.targetName
   "module\n\npublic import " ++ output.sourceModule ++ "\npublic import " ++ output.pairModule ++
   "\npublic import " ++ output.modelModule ++ "\npublic import " ++ output.connectionModule ++
-  "\npublic import ZkcSecurity.Tools.PairConstruction\n" ++
-  "public import ZkcSecurity.Claims.SourceChargeSites\n\n" ++
+  "\npublic import ZkcSecurityTools.PairConstruction\n" ++
+  "public import ZkcSecurity.Bindings.Subjects.ChargeSites\n\n" ++
   "@[expose] public section\n\n/-! Generated fixed request data and checked Subject assembly. -/\n" ++
-  "namespace " ++ output.moduleName ++ "\nopen Zkc.Source.Structured\n" ++
+  "namespace " ++ output.namespaceName ++ "\nopen Zkc.Source.Structured\n" ++
   "set_option maxRecDepth 50000\nset_option maxHeartbeats 16000000\nnoncomputable section\n\n" ++
   "abbrev original : Snapshot := " ++ output.originalExpression ++ "\n" ++
   "abbrev imported : Imported original := " ++ output.importedExpression ++ "\n" ++
@@ -169,13 +171,15 @@ def fixedSubjectSource (output : FixedSubjectOutput) : String :=
       quoted label ++
       ").toOption.get (by decide +kernel)") ++ "]\n\n" ++
   "def validatorSubject := subject.validatorSubject validatorSites\n\n" ++
-  "end\nend " ++ output.moduleName ++ "\n"
+  "end\nend " ++ output.namespaceName ++ "\n"
 
 
 /-- A closed request and its selected theorem export. Subject construction and
 canonical meaning stay in their existing owners; no protocol names are matched. -/
 structure FixedCompletenessOutput where
   moduleName : String
+  /-- Declaration namespace, independent of the owning import path. -/
+  namespaceName : String := moduleName
   subjectModule : String
   subjectNamespace : String
   proofModule : String
@@ -190,7 +194,7 @@ def fixedCompletenessSource (output : FixedCompletenessOutput) : String :=
     "module", "",
     "public import " ++ output.subjectModule,
     "public import " ++ output.proofModule,
-    "public import ZkcSecurity.Tools.ClaimConstruction", "",
+    "public import ZkcSecurityTools.ClaimConstruction", "",
     "@[expose] public section", "",
     "/-! Generated fixed compiled-pair request and canonical receipt. The",
     "selected theorem is checked against the meaning before attribution. -/",
@@ -198,7 +202,7 @@ def fixedCompletenessSource (output : FixedCompletenessOutput) : String :=
     "set_option maxRecDepth 20000",
     "set_option maxHeartbeats 8000000",
     "noncomputable section", "",
-    "namespace " ++ output.moduleName,
+    "namespace " ++ output.namespaceName,
     "open Zkc.Claims ZkcSecurity.Claims",
     "open " ++ output.subjectNamespace ++ " (original imported selected)", "",
     "def capabilities := " ++ output.capabilitiesExpression,
@@ -226,13 +230,15 @@ def fixedCompletenessSource (output : FixedCompletenessOutput) : String :=
     "claim_request completeData using library method",
     "  (some (⟨⟨\"fs.honest_completeness\", 0⟩, []⟩ : Wire.Application))", "",
     "#print axioms completeReceipt", "",
-    "end " ++ output.moduleName, ""]
+    "end " ++ output.namespaceName, ""]
 
 /-- Physical registration for a domain subject. The descriptor chooses existing
 exports, not a security proposition, numerical bound, schedule or proof script.
 Those come from the fixed request and registered theorem, checked by Lean. -/
 structure DomainClaimLibraryOutput where
   moduleName : String
+  /-- Declaration namespace, independent of the owning import path. -/
+  namespaceName : String := moduleName
   imports : List String
   subjectExpression : String
   artifactsExpression : String
@@ -249,12 +255,12 @@ def domainClaimLibrarySource (output : DomainClaimLibraryOutput) : String :=
     | some name => "ModelContext.parameter " ++ quoted name ++ " application"
   "\n".intercalate (["module", ""] ++
     output.imports.map ("public import " ++ ·) ++ [
-    "public import ZkcSecurity.Tools.ClaimConstruction", "",
+    "public import ZkcSecurityTools.ClaimConstruction", "",
     "@[expose] public section", "",
     "/-! Generated physical registration. Canonical authority fixes the meaning;",
     "theorem exports are applied without per-request proof wrappers. -/",
     "set_option autoImplicit false", "noncomputable section", "",
-    "namespace " ++ output.moduleName,
+    "namespace " ++ output.namespaceName,
     "open Zkc.Claims ZkcSecurity.Claims", "",
     "abbrev subject := " ++ output.subjectExpression,
     "abbrev capabilities := " ++ output.capabilitiesExpression,
@@ -271,6 +277,6 @@ def domainClaimLibrarySource (output : DomainClaimLibraryOutput) : String :=
     "  theoremNormalization := [" ++ ", ".intercalate (output.theoremNormalization.map ("``" ++ ·)) ++ "]",
     "  theoremMethods := [" ++ ",\n    ".intercalate (output.theoremMethods.map fun (name, version, theoremName) =>
       "(⟨" ++ quoted name ++ ", " ++ toString version ++ "⟩, ``" ++ theoremName ++ ")") ++ "]",
-    "", "end " ++ output.moduleName, ""])
+    "", "end " ++ output.namespaceName, ""])
 
 end ZkcTools.StructuredSource.Root

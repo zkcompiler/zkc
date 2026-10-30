@@ -13,6 +13,7 @@
 #include "support/ScopedFixture.h"
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Contracts/RingExpression.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -31,10 +32,10 @@ const char *laneFixture = R"mlir(
 !V = !algebra.field_vector<"bls12-381.fr">
 !O = !exec.outcome<(!V)>
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="add",contract="vector.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="div",contract="field.inverse",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="vector.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, ui64) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="div",contract="field.inverse",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
  func.func private @formula(%x:!F,%y:!F,%c:!F)->!F {
    %a = "algebra.field_add"(%x,%y) : (!F,!F)->!F
    %b = "algebra.field_add"(%x,%y) : (!F,!F)->!F
@@ -69,6 +70,19 @@ std::string edit(std::string source, StringRef from, StringRef to) {
   auto offset = source.find(from.str());
   require(offset != std::string::npos, "missing fixture edit: " + from);
   source.replace(offset, from.size(), to.str());
+  return source;
+}
+// Fixture rewrites that deliberately choose a different well-formed contract
+// must supply that contract's ABI. Negative tests still mutate ports directly.
+std::string withBindingSignature(std::string source, StringRef name,
+                                 StringRef signature) {
+  auto declaration = source.find("sym_name=\"" + name.str() + "\"");
+  auto begin = source.find("function_type=", declaration);
+  auto end = source.find("} : ()->()", begin);
+  require(declaration != std::string::npos && begin != std::string::npos &&
+              end != std::string::npos,
+          "missing binding fixture signature");
+  source.replace(begin, end - begin, "function_type=" + signature.str());
   return source;
 }
 std::string formulaBodies(StringRef source, StringRef candidate) {
@@ -271,8 +285,7 @@ void replaceScopedPayload(ModuleOp module, Build build,
       OpBuilder::InsertionGuard restore(builder);
       builder.setInsertionPointToStart(&owner->getRegion(0).front());
       runtime::BindingOp::create(builder, module.getLoc(), name, contract,
-                                 builder.getStrArrayAttr({"bls12-381.fr"}), "",
-                                 ArrayAttr{});
+                                 builder.getStrArrayAttr({"bls12-381.fr"}), "");
     }
     return control
         .invoke(
@@ -304,9 +317,9 @@ std::string largeOrderedFold(bool calls, bool total = false,
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
    "data.domain_yield"(%d) : (!data.domain<!F>)->()
@@ -359,11 +372,13 @@ module { "protocol.module"() ({
   for (unsigned i = 0; i < (calls ? 1024u : 2048u); ++i) {
     auto constant = "%c" + std::to_string(i);
     if (total)
-      body += "   " + constant + " = \"algebra.constant\"() {value=\"" +
-              std::to_string(i + 1) + "\"} : ()->!F\n";
+      body += "   " + constant +
+              " = \"algebra.constant\"() {value=#algebra.literal<!F, " +
+              std::to_string(i + 1) + " : ui255>} : ()->!F\n";
     else
-      scopedCall("\"exec.apply\"(%scope) {binding=@constant,parameters=[\"" +
-                     std::to_string(i + 1) + "\"],site=\"c" +
+      scopedCall("\"exec.apply\"(%scope) "
+                 "{binding=@constant,parameters=[#algebra.literal<!F, " +
+                     std::to_string(i + 1) + " : ui255>],site=\"c" +
                      std::to_string(i) +
                      "\"} : (!runtime.scope)->!exec.outcome<(!F)>",
                  constant);
@@ -584,8 +599,11 @@ int main() {
     SymbolTable symbols(&module->getBody()->front());
     auto helper = symbols.lookup<func::FuncOp>("observe");
     OpBuilder builder(&helper.getBody().front().back());
-    algebra::ConstantFieldOp::create(builder, helper.getLoc(),
-                                     helper.getArgument(0).getType(), "00");
+    algebra::ConstantFieldOp::create(
+        builder, helper.getLoc(), helper.getArgument(0).getType(),
+        algebra::FieldLiteralAttr::get(
+            &context, cast<algebra::FieldType>(helper.getArgument(0).getType()),
+            builder.getI64IntegerAttr(0)));
     require(!compareMap(*module),
             "empty-result helper hid an invalid unused instruction");
   });
@@ -626,8 +644,11 @@ int main() {
     lastCall.setOperand(1, helper.getArgument(1));
     auto &chain = symbols.lookup<func::FuncOp>("chain").getBody().front();
     OpBuilder builder(&chain.back());
-    algebra::ConstantFieldOp::create(builder, module->getLoc(),
-                                     chain.getArgument(0).getType(), "00");
+    algebra::ConstantFieldOp::create(
+        builder, module->getLoc(), chain.getArgument(0).getType(),
+        algebra::FieldLiteralAttr::get(
+            &context, cast<algebra::FieldType>(chain.getArgument(0).getType()),
+            builder.getI64IntegerAttr(0)));
     require(!compareMap(*module, 100000),
             "memoization hid an unused invalid helper instruction");
   });
@@ -639,6 +660,8 @@ int main() {
   subtract =
       edit(subtract, "\"exec.apply\"(%scope,%filled,%square) {binding=@add",
            "\"exec.apply\"(%scope,%filled,%square) {binding=@sub");
+  subtract = withBindingSignature(
+      subtract, "sub", "(!runtime.scope,!V,!V)->!exec.outcome<(!V)>");
   map("subtraction has no commutative law", subtract, false);
   map("wrong input slot",
       edit(laneFixture, "(%scope,%y,%x) {binding=@add",
@@ -681,7 +704,11 @@ int main() {
     auto source = symbols.lookup<func::FuncOp>("formula");
     OpBuilder builder(&source.getBody().front().back());
     algebra::ConstantFieldOp::create(
-        builder, source.getLoc(), source.getFunctionType().getResult(0), "00");
+        builder, source.getLoc(), source.getFunctionType().getResult(0),
+        algebra::FieldLiteralAttr::get(
+            &context,
+            cast<algebra::FieldType>(source.getFunctionType().getResult(0)),
+            builder.getI64IntegerAttr(0)));
     require(!compareMap(*module),
             "unused malformed literal escaped Ring admission");
   });
@@ -751,6 +778,8 @@ int main() {
                  "\"exec.dispatch\"(%dot_attempt)[^dot,^failed] : "
                  "(!exec.outcome<(!F)>)->()\n ^dot(%result:!F):\n");
     text = edit(text, "contract=\"vector.mul\"", "contract=\"vector.dot\"");
+    text = withBindingSignature(text, "mul",
+                                "(!runtime.scope,!V,!V)->!exec.outcome<(!F)>");
     text = edit(text, "!O = !exec.outcome<(!V)>", "!O = !exec.outcome<(!F)>");
     text = edit(text, "\"exec.returned\"(%result) : (!V)",
                 "\"exec.returned\"(%result) : (!F)");
@@ -768,7 +797,8 @@ int main() {
             : "mapped sum neutral chain beyond the Ring depth limit",
         [&] {
           std::string source =
-              "   %zero = \"algebra.constant\"() {value=\"0\"} : ()->!F\n";
+              "   %zero = \"algebra.constant\"() {value=#algebra.literal<!F, 0 "
+              ": ui255>} : ()->!F\n";
           std::string previous = "%x";
           for (unsigned i = 0; i < steps; ++i) {
             auto name = "%n" + std::to_string(i);
@@ -787,6 +817,8 @@ int main() {
                       "%done : !O\n");
           text =
               edit(text, "contract=\"vector.mul\"", "contract=\"vector.sum\"");
+          text = withBindingSignature(
+              text, "mul", "(!runtime.scope,!V)->!exec.outcome<(!F)>");
           text = edit(text, "!O = !exec.outcome<(!V)>",
                       "!O = !exec.outcome<(!F)>");
           auto module = parseSourceString<ModuleOp>(text, &context);
@@ -799,14 +831,19 @@ int main() {
             auto &body = formula.getBody().front();
             OpBuilder builder(&body.back());
             algebra::ConstantFieldOp::create(
-                builder, formula.getLoc(), body.getArgument(0).getType(), "00");
+                builder, formula.getLoc(), body.getArgument(0).getType(),
+                algebra::FieldLiteralAttr::get(
+                    &context,
+                    cast<algebra::FieldType>(body.getArgument(0).getType()),
+                    builder.getI64IntegerAttr(0)));
             require(!compareMap(*module, 100000, true),
                     "neutral normalization hid an unused invalid literal");
           }
         });
   cases.run("neutral normalization preserves nominal source fields", [&] {
     auto text = formulaBodies(
-        "   %zero = \"algebra.constant\"() {value=\"0\"} : ()->!F\n"
+        "   %zero = \"algebra.constant\"() {value=#algebra.literal<!F, 0 : "
+        "ui255>} : ()->!F\n"
         "   %r = \"algebra.field_add\"(%x,%zero) : (!F,!F)->!F\n"
         "   func.return %r : !F\n",
         "   %sum_attempt = \"exec.apply\"(%scope,%x) "
@@ -816,6 +853,8 @@ int main() {
         "(!exec.outcome<(!F)>)->()\n ^sum(%result:!F):\n   %done = "
         "\"exec.returned\"(%result) : (!F)->!O\n   func.return %done : !O\n");
     text = edit(text, "contract=\"vector.mul\"", "contract=\"vector.sum\"");
+    text = withBindingSignature(text, "mul",
+                                "(!runtime.scope,!V)->!exec.outcome<(!F)>");
     text = edit(text, "!O = !exec.outcome<(!V)>", "!O = !exec.outcome<(!F)>");
     auto module = parseSourceString<ModuleOp>(text, &context);
     require(bool(module) && compareMap(*module, 100000, true),
@@ -903,16 +942,18 @@ int main() {
       require(!corresponds(*before, *after),
               "selected matrix index mutation was accepted");
     });
-  cases.run("expanded callback fan-out respects program body capacity", [&] {
+  cases.run("expanded callback fan-out respects native closure capacity", [&] {
     auto source = parseSourceString<ModuleOp>(largeOrderedFold(true), &context);
-    require(source && succeeded(verify(*source)),
+    require(source && succeeded(zkc::admitStage(*source)),
             "unexpanded fan-out source refused");
-    // Sixteen 3071-operation callbacks exceed the program's 32768-item body
-    // limit after mandatory helper expansion. The former declaration-only
-    // fixture retained helper calls and never exercised this boundary.
+    // Expanded callbacks together with retained callable bodies exceed the
+    // native closure's aggregate instruction ceiling. This checks actual
+    // control occurrences, independently of the byte format's body limit.
     bool capacity = false;
+    std::string refusal;
     ScopedDiagnosticHandler diagnostics(&context, [&](Diagnostic &diagnostic) {
-      capacity |= diagnostic.str().find("source-limit") != std::string::npos;
+      refusal += diagnostic.str();
+      capacity |= namesIdentifier(diagnostic.str(), "execution-analysis-limit");
       return success();
     });
     mathematical::RealizationWork work;
@@ -920,8 +961,10 @@ int main() {
     std::optional<CapacityCause> cause;
     auto candidate = protocol::prepareScopedFinite(*source, work, copies, bytes,
                                                    cause, {false, false});
-    require(!candidate && capacity && succeeded(verify(*source)),
-            "oversized expanded body was published or changed its source");
+    require(!candidate && capacity && succeeded(zkc::admitStage(*source)),
+            "oversized expanded body was published or changed its source; "
+            "candidate=" +
+                Twine(bool(candidate)) + "; diagnostics=" + refusal);
   });
   for (bool calls : {false, true})
     cases.run(
@@ -1117,7 +1160,8 @@ int main() {
         ValueRange{product->getOperand(0), nested->getResult(0)});
     product->getResult(0).replaceAllUsesWith(zipped->getResult(0));
     product.erase();
-    require(succeeded(verify(*before)), "diagonal domain fixture refused");
+    require(succeeded(zkc::admitStage(*before)),
+            "diagonal domain fixture refused");
     auto after = prepare(*before, {false, false});
     require(corresponds(*before, *after),
             "ordered diagonal traversal was refused");
@@ -1214,7 +1258,7 @@ int main() {
                 });
               });
             }
-            require(succeeded(verify(*before)),
+            require(succeeded(zkc::admitStage(*before)),
                     "dead contraction fixture refused");
             auto after = prepare(*before, {false, false});
             replaceScopedPayload(*after, [&](auto emit, ValueRange args) {

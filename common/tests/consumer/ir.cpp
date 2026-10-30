@@ -2,6 +2,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Analysis/StructuredComputation.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Interfaces/Collection.h"
 int main() {
@@ -31,12 +32,14 @@ module { "protocol.module"() ({
  {sym_name="main",function_type=(i1)->i1,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() })",
                                                         &context);
-  if (!module || mlir::failed(mlir::verify(*module)))
+  if (!module || mlir::failed(zkc::admitStage(*module)))
     return 2;
   module->walk([&](zkc::protocol_ir::MathematicalOp op) {
     op->setAttr("output_roles", mlir::ArrayAttr::get(&context, {}));
   });
   mlir::ScopedDiagnosticHandler expected(
       &context, [](mlir::Diagnostic &) { return mlir::success(); });
-  return mlir::succeeded(mlir::verify(*module)) ? 3 : 0;
+  if (mlir::failed(mlir::verify(*module)))
+    return 7;
+  return mlir::succeeded(zkc::admitStage(*module)) ? 3 : 0;
 }

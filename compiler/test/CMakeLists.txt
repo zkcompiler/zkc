@@ -12,6 +12,9 @@ function(add_zkc_test name component)
   endif()
 endfunction()
 
+add_zkc_test(stage_admission Compiler stage-admission)
+mlir_target_link_libraries(zkc-stage_admission-test PRIVATE MLIRParser MLIRPass MLIRTransforms)
+
 # Source fixtures use the same dependency closure as CLI consumers.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 file(GLOB_RECURSE source_project_manifests CONFIGURE_DEPENDS
@@ -29,7 +32,13 @@ function(zkc_source_project target manifest)
   target_compile_definitions(${target} PRIVATE ZKC_SOURCE_PROJECT="${output}")
 endfunction()
 
+add_zkc_test(representation_formation IR representation-formation)
+mlir_target_link_libraries(zkc-representation_formation-test PRIVATE MLIRAsmParser)
 add_zkc_test(role_assembly Compiler role-assembly)
+add_zkc_test(algebra_constants IR algebra-constants)
+mlir_target_link_libraries(zkc-algebra_constants-test PRIVATE MLIRParser MLIRTransformUtils MLIRTensorDialect)
+add_zkc_test(data_constants IR data-constants)
+mlir_target_link_libraries(zkc-data_constants-test PRIVATE MLIRParser MLIRTransformUtils)
 add_zkc_test(oracle_source Compiler oracle-source)
 add_zkc_test(oracle_ports Transforms oracle-ports)
 mlir_target_link_libraries(zkc-oracle_ports-test PRIVATE MLIRParser)
@@ -37,6 +46,11 @@ add_zkc_test(oracle_virtual Transforms oracle-virtual)
 mlir_target_link_libraries(zkc-oracle_virtual-test PRIVATE MLIRParser)
 add_zkc_test(oracle_protocol Transforms oracle-protocol)
 mlir_target_link_libraries(zkc-oracle_protocol-test PRIVATE MLIRParser MLIRPass MLIRTransforms)
+add_zkc_test(structured_data IR structured-data)
+add_zkc_test(structured_declarations Translation structured-declarations)
+mlir_target_link_libraries(zkc-structured_declarations-test PRIVATE MLIRParser)
+add_zkc_test(service_signatures IR service-signatures)
+mlir_target_link_libraries(zkc-service_signatures-test PRIVATE MLIRAsmParser)
 add_zkc_test(oracle_kinds IR oracle-kinds)
 mlir_target_link_libraries(zkc-oracle_kinds-test PRIVATE MLIRParser)
 add_zkc_test(oracle_realization Transforms oracle-realization)
@@ -352,6 +366,11 @@ add_zkc_test(generic Contracts generic-signatures)
 add_zkc_test(numerical_contracts Program numerical-contracts)
 add_zkc_test(ring_expression Contracts ring-expression)
 add_zkc_test(ring_expression_ir IR ring-expression-ir)
+add_zkc_test(algebra_parameters IR algebra-parameters)
+mlir_target_link_libraries(zkc-algebra_parameters-test PRIVATE MLIRAsmParser)
+add_zkc_test(invocation_parameters IR invocation-parameters)
+add_zkc_test(runtime_parameters IR runtime-parameters)
+mlir_target_link_libraries(zkc-runtime_parameters-test PRIVATE MLIRAsmParser)
 add_zkc_test(ring_sharing Contracts ring-sharing)
 add_zkc_test(ring_conformance Contracts)
 add_zkc_test(relation_bundle_conformance Relation)
@@ -372,12 +391,16 @@ add_test(NAME native-proof-selection COMMAND zkc-native_proof_selection-test
 add_zkc_test(structural_types Contracts structural-types)
 add_zkc_test(implementation_policy Transforms implementation-policy)
 add_zkc_test(type_adapters IR type-adapters)
+add_zkc_test(catalog_types IR catalog-types)
+add_zkc_test(catalog_bindings IR catalog-bindings)
 add_zkc_test(collection_types IR collection-types)
 mlir_target_link_libraries(zkc-collection_types-test PRIVATE MLIRParser)
 add_zkc_test(type_adapter_ambiguity Contracts type-adapter-ambiguity)
+add_dependencies(zkc-type_adapter_ambiguity-test ZkcIRGen)
 target_sources(zkc-type_adapter_ambiguity-test PRIVATE
   "${PROJECT_SOURCE_DIR}/lib/Dialect/TypeAdapters/Registry.cpp")
-target_include_directories(zkc-type_adapter_ambiguity-test SYSTEM PRIVATE ${MLIR_INCLUDE_DIRS})
+target_include_directories(zkc-type_adapter_ambiguity-test SYSTEM PRIVATE
+  ${MLIR_INCLUDE_DIRS} ${PROJECT_BINARY_DIR}/include)
 mlir_target_link_libraries(zkc-type_adapter_ambiguity-test PRIVATE MLIRIR)
 add_zkc_test(contract_inventory Contracts)
 add_zkc_test(contract_conformance Contracts)
@@ -385,19 +408,12 @@ add_test(NAME contract-declarations-generation
   COMMAND ${CMAKE_COMMAND}
     "-DZKC_TABLEGEN=$<TARGET_FILE:zkc-tblgen>"
     "-DZKC_DECLARATION_INCLUDE=${PROJECT_SOURCE_DIR}/include"
+    "-DZKC_DECLARATION_GENERATED_INCLUDE=${PROJECT_BINARY_DIR}/include"
     "-DZKC_DECLARATION_FIXTURES=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/contract_declarations"
     "-DZKC_DECLARATION_TEST_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/contract-declarations-generation"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/contract_declarations_generation.cmake")
 set_tests_properties(contract-declarations-generation PROPERTIES LABELS native)
 add_zkc_test(bindings IR operation-bindings)
-add_zkc_test(contract_mappings Translation operation-contract-mappings)
-add_test(NAME contract-mapping-generation
-  COMMAND ${CMAKE_COMMAND}
-    "-DZKC_TABLEGEN=$<TARGET_FILE:zkc-tblgen>"
-    "-DZKC_TABLEGEN_INCLUDES=${zkc_tablegen_includes}"
-    "-DZKC_MAPPING_TEST_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/contract-mapping-generation"
-    -P "${CMAKE_CURRENT_SOURCE_DIR}/contract_mapping_generation.cmake")
-set_tests_properties(contract-mapping-generation PROPERTIES LABELS native)
 add_zkc_test(relation Relation relation-model)
 add_zkc_test(air Relation air-model)
 add_zkc_test(air_ring_expression Relation air-ring-expression)
@@ -411,7 +427,7 @@ set_tests_properties(clean-air-conformance PROPERTIES LABELS native)
 add_zkc_test(operation_contracts Contracts operation-contracts)
 target_compile_definitions(zkc-operation_contracts-test PRIVATE
   ZKC_HISTORY_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/contracts/history.txt")
-add_zkc_test(linear_interfaces Transforms linear-interfaces)
+add_zkc_test(linear_contracts Transforms linear-contracts)
 add_zkc_test(target_decisions Transforms target-decisions)
 target_link_libraries(zkc-target_decisions-test PRIVATE ZkcTranslation)
 add_zkc_test(domains IR nominal-domains)
@@ -442,6 +458,12 @@ mlir_target_link_libraries(zkc-mathematical_correspondence-test PRIVATE MLIRPars
 add_zkc_test(projection_metadata Transforms projection-metadata)
 target_link_libraries(zkc-projection_metadata-test PRIVATE ZkcTranslation)
 mlir_target_link_libraries(zkc-projection_metadata-test PRIVATE MLIRParser)
+add_zkc_test(native_closure_admission IR native-closure-admission)
+mlir_target_link_libraries(zkc-native_closure_admission-test PRIVATE MLIRParser MLIRAsmParser)
+add_zkc_test(native_resource_origins IR native-resource-origins)
+mlir_target_link_libraries(zkc-native_resource_origins-test PRIVATE MLIRParser MLIRAsmParser)
+target_compile_definitions(zkc-native_resource_origins-test PRIVATE
+  ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
 add_zkc_test(resource_origin_analysis IR resource-origin-analysis)
 add_zkc_test(resource_origin_sources IR)
 mlir_target_link_libraries(zkc-resource_origin_sources-test PRIVATE MLIRAsmParser)
@@ -502,7 +524,6 @@ foreach(script ${zkc_scripts})
   set_tests_properties(${name} PROPERTIES ENVIRONMENT "${zkc_script_environment}")
 endforeach()
 
-mlir_target_link_libraries(zkc-contract_mappings-test PRIVATE MLIRParser)
 mlir_target_link_libraries(zkc-target_decisions-test PRIVATE MLIRParser)
 
 add_zkc_test(program_codec Program)
@@ -543,8 +564,6 @@ target_compile_definitions(zkc-total_verification_capacity-test PRIVATE
   ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
 mlir_target_link_libraries(zkc-total_verification_capacity-test PRIVATE MLIRParser)
 
-add_zkc_test(program_logical_realizations Program program-logical-realizations)
-add_zkc_test(program_resource_origins Program program-resource-origins)
 
 add_zkc_test(computation_realization Transforms computation-realization)
 target_compile_definitions(zkc-computation_realization-test PRIVATE
@@ -625,3 +644,8 @@ mlir_target_link_libraries(zkc-pass_policy-test PRIVATE MLIRParser MLIRPass)
 add_zkc_test(source_syntax Syntax source-syntax)
 target_compile_definitions(zkc-source_syntax-test PRIVATE
   ZKC_SYNTAX_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/syntax")
+
+add_zkc_test(application_map Compiler application-map)
+mlir_target_link_libraries(zkc-application_map-test PRIVATE MLIRParser)
+target_compile_definitions(zkc-application_map-test PRIVATE
+  ZKC_APPLICATION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")

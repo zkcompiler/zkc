@@ -49,9 +49,9 @@ class CodecEmitter {
   FlatSymbolRefAttr binding(StringRef contract) {
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToStart(&module.getBody().front());
-    auto op = runtime::BindingOp::create(builder, module.getLoc(), fresh(),
-                                         contract, builder.getArrayAttr({}), "",
-                                         mlir::ArrayAttr{});
+    auto op =
+        runtime::BindingOp::create(builder, module.getLoc(), fresh(), contract,
+                                   builder.getArrayAttr({}), "");
     symbols.insert(op);
     return FlatSymbolRefAttr::get(op);
   }

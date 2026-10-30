@@ -1,8 +1,8 @@
 #ifndef ZKC_TRANSFORMS_ORACLECOMMONPLAN_H
 #define ZKC_TRANSFORMS_ORACLECOMMONPLAN_H
+#include "NativeBindingApplication.h"
 #include "OracleCommonRealization.h"
 #include "OracleQueryExchange.h"
-#include "zkc/Contracts/Binding.h"
 #include <memory>
 #include <variant>
 namespace zkc::protocol {
@@ -24,8 +24,8 @@ struct OracleCommonBlock {
   std::vector<OracleCommonInstruction> instructions;
 };
 struct OracleLocalInstruction {
-  BindingApplication binding;
-  std::vector<std::string> parameters;
+  NativeBindingApplication binding;
+  std::vector<mlir::Attribute> parameters;
   std::vector<unsigned> inputs, outputs;
   std::vector<mlir::Type> types;
 };

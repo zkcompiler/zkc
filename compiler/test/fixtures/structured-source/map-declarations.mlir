@@ -6,7 +6,7 @@ module { "protocol.module"() ({
    func.return %r : !F
  }
  func.func private @formula(%a:!F,%b:!F,%unused:!F,%s:!F)->!F {
-   %one = "algebra.constant"() {value="1"} : ()->!F
+   %one = "algebra.constant"() {value=#algebra.literal<!F, 1 : ui255>} : ()->!F
    %sq = func.call @square(%a) : (!F)->!F
    %d = "algebra.field_subtract"(%sq,%b) : (!F,!F)->!F
    %t = "algebra.field_add"(%s,%one) : (!F,!F)->!F

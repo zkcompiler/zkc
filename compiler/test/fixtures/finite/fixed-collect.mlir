@@ -9,8 +9,8 @@ module { "protocol.module"() ({
    func.return %value : !F
  }
  "protocol.func"() ({ ^entry(%value:!F):
-   %zero = "data.index"() {value="0"} : ()->ui64
-   %two = "data.index"() {value="2"} : ()->ui64
+   %zero = "data.index"() {value=0 : ui64} : ()->ui64
+   %two = "data.index"() {value=2 : ui64} : ()->ui64
    %r = "algebra.finite_collect"(%zero,%two,%value) {domain=@items,body=@body} : (ui64,ui64,!F)->!A
    "protocol.return"(%r) : (!A)->()
  }) {sym_name="main",function_type=(!F)->!A,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()

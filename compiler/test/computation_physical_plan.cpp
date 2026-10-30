@@ -3,11 +3,13 @@
 #include "../lib/Target/PhysicalPlan.h"
 #include "../lib/Transforms/Computation/Support.h"
 #include "mlir/IR/Verifier.h"
+#include "support/NativeBindings.h"
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
@@ -62,7 +64,7 @@ func.func private @difference(%a:!F,%b:!F)->!F {
   %v = algebra.field_subtract %a,%b : (!F,!F)->!F
   func.return %v : !F
 }
-"runtime.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+"runtime.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
 )mlir",
                        "%table:!T,%other:!T,%a:!F,%b:!F", "%table,%other,%a,%b",
                        "!T,!T,!F,!F", "!T",
@@ -91,7 +93,7 @@ module @mapped attributes {exec.computation} {
    func.return %sum : !F
  }
  func.func @evaluate(%xs:!V,%a:!F,%b:!F)->!F {
-   %zero = "algebra.constant"() {value="0"} : ()->!F
+   %zero = "algebra.constant"() {value=#algebra.literal<!F, 0 : ui255>} : ()->!F
    %sum = "algebra.finite_fold"(%xs,%zero,%a,%b) {domain=@items,step=@step} : (!V,!F,!F,!F)->!F
    func.return %sum : !F
  }
@@ -180,8 +182,8 @@ module @difference attributes {exec.computation} {
    func.return %r : !F
  }
 }
-"runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
-"runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !poly.multilinear<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 )mlir",
                        "%table:!T,%other:!T,%a:!F,%b:!F", "%table,%other,%a,%b",
                        "!T,!T,!F,!F", "!F",
@@ -202,7 +204,7 @@ func.func private @difference(%a:!F,%b:!F)->!F {
   %v = algebra.field_subtract %a,%b : (!F,!F)->!F
   func.return %v : !F
 }
-"runtime.binding"() {sym_name="require",contract="control.require",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="require",contract="control.require",arguments=[],implementation="",function_type=(!runtime.scope, i1) -> !exec.outcome<>} : ()->()
 )mlir",
                        "%a:!F,%b:!F,%enabled:i1", "%a,%b,%enabled", "!F,!F,i1",
                        "!F", scopedReturn("%a", "!F"), 3);
@@ -268,7 +270,7 @@ std::string finiteSource(bool bulk = true) {
    func.return %s : !F
  }
  func.func private @sum(%xs:!V)->!F {
-   %zero = "algebra.constant"() {value="0"} : ()->!F
+   %zero = "algebra.constant"() {value=#algebra.literal<!F, 0 : ui255>} : ()->!F
    %sum = "algebra.finite_fold"(%xs,%zero) {domain=@items,step=@step} : (!V,!F)->!F
    func.return %sum : !F
  }
@@ -327,13 +329,9 @@ void addUnchangedContext(ModuleOp module, unsigned count) {
   OpBuilder builder(module.getContext());
   auto root = owner(module);
   builder.setInsertionPointToEnd(&root.getBody().front());
-  OperationState binding(module.getLoc(),
-                         runtime::BindingOp::getOperationName());
-  binding.addAttribute("sym_name", builder.getStringAttr("context_add"));
-  binding.addAttribute("contract", builder.getStringAttr("field.add"));
-  binding.addAttribute("arguments", builder.getStrArrayAttr({"bls12-381.fr"}));
-  binding.addAttribute("implementation", builder.getStringAttr(""));
-  builder.create(binding);
+  runtime::BindingOp::create(builder, module.getLoc(), "context_add",
+                             "field.add",
+                             builder.getStrArrayAttr({"bls12-381.fr"}), "");
   auto function = func::FuncOp::create(
       builder, module.getLoc(), "unchanged_context",
       builder.getFunctionType({runtime::ScopeType::get(module.getContext())},
@@ -471,24 +469,24 @@ public:
           return result;
         }()) {}
   unsigned queryCount() const { return queries; }
-  Expected<std::vector<std::string>>
-  implementations(const BindingApplication &application) const override {
+  Expected<std::vector<std::string>> implementations(
+      const zkc::NativeBindingApplication &application) const override {
     ++queries;
     if (is_contained(withheldContracts, application.contract))
       return std::vector<std::string>{};
     if (application.contract == "poly.fold" &&
-        application.arguments == std::vector<std::string>{"bls12-381.fr"})
+        hasNativeArguments(application, {"bls12-381.fr"}))
       return std::vector<std::string>{"arkworks-msb/poly.fold",
                                       "arkworks/poly.fold"};
     return installedCandidates().implementations(application);
   }
   std::vector<std::string> diagonalImplementations(
-      const BindingApplication &application) const override {
+      const zkc::NativeBindingApplication &application) const override {
     ++queries;
     return installedCandidates().diagonalImplementations(application);
   }
-  std::vector<BindingApplication>
-  conversions(const BoundType &from, const BoundType &to) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type from, mlir::Type to) const override {
     ++queries;
     return installedCandidates().conversions(from, to);
   }
@@ -496,18 +494,21 @@ public:
 
 class DirectionalCatalog final : public CandidateCatalog {
 public:
-  Expected<std::vector<std::string>>
-  implementations(const BindingApplication &application) const override {
+  Expected<std::vector<std::string>> implementations(
+      const zkc::NativeBindingApplication &application) const override {
     if (application.contract == "poly.product_sum")
       return std::vector<std::string>{"arkworks/poly.product_sum",
                                       "arkworks-msb/poly.product_sum"};
     return installedCandidates().implementations(application);
   }
-  std::vector<BindingApplication>
-  conversions(const BoundType &from, const BoundType &to) const override {
-    auto pinned = take(resolveBinding(
-        {"poly.fold", {"bls12-381.fr"}, "arkworks-msb/poly.fold"}, true));
-    if (from.representation == pinned.outputs[0].representation)
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type from, mlir::Type to) const override {
+    auto pinned = take(resolveNativeApplication(
+        {"poly.fold",
+         {StringAttr::get(from.getContext(), "bls12-381.fr")},
+         "arkworks-msb/poly.fold"}));
+    if (mlir::cast<runtime::RepresentedType>(from).getRepresentation() ==
+        cast<runtime::RepresentedType>(pinned.getResult(0)).getRepresentation())
       return {};
     return installedCandidates().conversions(from, to);
   }
@@ -570,8 +571,7 @@ int main() {
       const auto &sub = bindingFor(checked.choices(), "field.sub");
       const auto &mul = bindingFor(checked.choices(), "field.mul");
       auto backend = identity == "bls12-381.fr" ? "arkworks" : "plonky3";
-      require(sub.binding.application.arguments ==
-                      std::vector<std::string>{identity.str()} &&
+      require(hasNativeArguments(sub.binding.application, {identity}) &&
                   sub.binding.application.implementation ==
                       std::string(backend) + "/field.sub" &&
                   mul.binding.application.implementation ==
@@ -598,8 +598,8 @@ module @difference attributes {exec.computation} {
    func.return %r : !F
  }
 }
-"runtime.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="blst/resident/curve.msm"} : ()->()
-"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="blst/resident/curve.msm",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.group_vector<"bls12-381.g1">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : ()->()
+"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="",function_type=(!runtime.scope, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : ()->()
 )mlir",
                         "%s:!V,%p:!GS,%a:!F,%b:!F", "%s,%p,%a,%b",
                         "!V,!GS,!F,!F", "!G",
@@ -951,7 +951,7 @@ module @difference attributes {exec.computation} {
         at = text.find("   func.return %sum : !F");
         require(at != std::string::npos, "missing sum fixture result");
         text.replace(at, std::string("   func.return %sum : !F").size(), R"(
-   %one = "algebra.constant"() {value="1"} : ()->!F
+   %one = "algebra.constant"() {value=#algebra.literal<!F, 1 : ui255>} : ()->!F
    %product = "algebra.finite_fold"(%xs,%one) {domain=@items,step=@multiply} : (!V,!F)->!F
    %both = "algebra.field_add"(%sum,%product) : (!F,!F)->!F
    func.return %both : !F
@@ -1208,12 +1208,19 @@ module @difference attributes {exec.computation} {
             call->setOperand(call->getNumOperands() - 1, left);
           } else if (mutation == "body") {
             auto parameters = call->getAttrOfType<ArrayAttr>("parameters");
-            auto body = cast<StringAttr>(parameters[0]).getValue().str();
-            auto at = body.find("\"add\"");
-            require(at != std::string::npos,
-                    "native body has no addition to alter");
-            body.replace(at, 5, "\"mul\"");
-            call->setAttr("parameters", builder.getStrArrayAttr({body}));
+            auto graph = cast<algebra::RingExpressionAttr>(parameters[0]);
+            SmallVector<algebra::RingNodeAttr> nodes(graph.getNodes());
+            auto at = llvm::find_if(nodes, [](auto node) {
+              return node.getKind() == algebra::RingNodeKind::Add;
+            });
+            require(at != nodes.end(), "native body has no addition to alter");
+            *at = algebra::RingNodeAttr::get(&context,
+                                             algebra::RingNodeKind::Multiply,
+                                             at->getIndices(), {}, {});
+            call->setAttr(
+                "parameters",
+                builder.getArrayAttr({algebra::RingExpressionAttr::get(
+                    &context, graph.getInputs(), nodes, graph.getOutputs())}));
           } else if (mutation == "seed") {
             auto combine = sf::application(
                 call->getParentOfType<func::FuncOp>(), "field.add");
@@ -1229,10 +1236,12 @@ module @difference attributes {exec.computation} {
             if (mutation == "field")
               arguments[0] = builder.getStringAttr("bn254.fr");
             else {
-              auto mask = cast<StringAttr>(arguments[1]).getValue().str();
+              auto originalMask =
+                  cast<DenseBoolArrayAttr>(arguments[1]).asArrayRef();
+              SmallVector<bool> mask(originalMask.begin(), originalMask.end());
               require(!mask.empty(), "native row mask was empty");
-              mask[0] = mask[0] == '0' ? '1' : '0';
-              arguments[1] = builder.getStringAttr(mask);
+              mask[0] = !mask[0];
+              arguments[1] = builder.getDenseBoolArrayAttr(mask);
             }
             binding->setAttr("arguments", builder.getArrayAttr(arguments));
           }

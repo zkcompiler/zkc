@@ -4,6 +4,7 @@
 
 namespace zkc {
 void registerCompilerPasses() {
+  mlir::registerPass([] { return createAdmitStagePass(); });
   mlir::registerPass([] { return protocol::createPrepareProtocolPass(); });
   mlir::registerPass([] { return protocol::createProjectProtocolPass(); });
   mlir::registerPass([] { return protocol::createLowerMathPass(); });

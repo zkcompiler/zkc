@@ -19,25 +19,26 @@ std::optional<CollectionRealization> collectionRealization(Type type) {
                                {},
                                {}};
   auto application = [](llvm::StringRef contract,
-                        std::vector<std::string> arguments = {}) {
-    return protocol::BindingApplication{contract.str(), std::move(arguments),
-                                        ""};
+                        SmallVector<Attribute> arguments = {}) {
+    return NativeBindingApplication{contract.str(), std::move(arguments), ""};
   };
   switch (collection.getCollectionKind()) {
   case CollectionKind::FieldVector: {
-    auto domain = cast<algebra::FieldType>(result.element).getDomain().str();
-    result.length = application("vector.length", {domain});
-    result.get = application("vector.get", {domain});
-    result.empty = application("vector.empty", {domain});
-    result.append = application("vector.append", {domain});
+    auto domain = cast<algebra::FieldType>(result.element).getDomain();
+    auto argument = StringAttr::get(type.getContext(), domain);
+    result.length = application("vector.length", {argument});
+    result.get = application("vector.get", {argument});
+    result.empty = application("vector.empty", {argument});
+    result.append = application("vector.append", {argument});
     break;
   }
   case CollectionKind::GroupVector: {
-    auto domain = cast<algebra::GroupType>(result.element).getDomain().str();
-    result.length = application("curve.length", {domain});
-    result.get = application("curve.get", {domain});
-    result.empty = application("curve.empty", {domain});
-    result.append = application("curve.append", {domain});
+    auto domain = cast<algebra::GroupType>(result.element).getDomain();
+    auto argument = StringAttr::get(type.getContext(), domain);
+    result.length = application("curve.length", {argument});
+    result.get = application("curve.get", {argument});
+    result.empty = application("curve.empty", {argument});
+    result.append = application("curve.append", {argument});
     break;
   }
   case CollectionKind::Indices:
@@ -47,12 +48,7 @@ std::optional<CollectionRealization> collectionRealization(Type type) {
     result.append = application("indices.append");
     break;
   case CollectionKind::Sequence: {
-    auto element = protocol::encodeBoundType(result.element, false);
-    if (!element) {
-      llvm::consumeError(element.takeError());
-      return std::nullopt;
-    }
-    auto argument = element->spelling();
+    auto argument = TypeAttr::get(result.element);
     result.length = application("sequence.length", {argument});
     result.get = application("sequence.at", {argument});
     result.empty = application("sequence.empty", {argument});
@@ -60,19 +56,23 @@ std::optional<CollectionRealization> collectionRealization(Type type) {
     break;
   }
   case CollectionKind::FieldMatrix: {
-    auto domain = cast<algebra::FieldType>(result.element).getDomain().str();
-    result.length = application("matrix.dimension", {domain});
-    result.get = application("matrix.get", {domain});
+    auto domain = cast<algebra::FieldType>(result.element).getDomain();
+    auto argument = StringAttr::get(type.getContext(), domain);
+    result.length = application("matrix.dimension", {argument});
+    result.get = application("matrix.get", {argument});
     break;
   }
   case CollectionKind::FieldArray: {
-    auto domain = cast<algebra::FieldType>(result.element).getDomain().str();
-    auto extent = std::to_string(*result.staticExtent);
+    auto domain = cast<algebra::FieldType>(result.element).getDomain();
+    auto argument = StringAttr::get(type.getContext(), domain);
+    auto extent = IntegerAttr::get(
+        IntegerType::get(type.getContext(), 64, IntegerType::Unsigned),
+        *result.staticExtent);
     result.storage = algebra::FieldVectorType::get(type.getContext(), domain);
-    result.get = application("field_array.get", {domain, extent});
-    result.empty = application("vector.empty", {domain});
-    result.append = application("vector.append", {domain});
-    result.wrap = application("field_array.from_vector", {domain, extent});
+    result.get = application("field_array.get", {argument, extent});
+    result.empty = application("vector.empty", {argument});
+    result.append = application("vector.append", {argument});
+    result.wrap = application("field_array.from_vector", {argument, extent});
     break;
   }
   case CollectionKind::Bytes:

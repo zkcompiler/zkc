@@ -3,9 +3,9 @@
 !M = !algebra.field_matrix<"bls12-381.fr">
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
-    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.add", implementation = "", sym_name = "add"}> : () -> ()
-    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.mul", implementation = "", sym_name = "mul"}> : () -> ()
-    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.constant", implementation = "", sym_name = "constant"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.add", implementation = "", sym_name = "add",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.mul", implementation = "", sym_name = "mul",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.constant", implementation = "", sym_name = "constant",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>}> : () -> ()
     "data.domain"() <{function_type = (!M, ui64, !V, !V) -> !data.domain<!F, !F, !F>, sym_name = "inner_domain", sym_visibility = "private"}> ({
     ^bb0(%arg0: !M, %arg1: ui64, %arg2: !V, %arg3: !V):
       %0 = "data.domain_matrix_row"(%arg0, %arg1) : (!M, ui64) -> !data.domain<!F>

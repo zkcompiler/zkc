@@ -1,6 +1,6 @@
 import TestsSecurity.CompletenessClaimConstruction
-import ZkcSecurity.Examples.Generated.SmallSumcheckSoundnessClaims
-import ZkcSecurity.Examples.Generated.TwoSumsSoundnessClaims
+import ZkcSecurityExamples.Generated.SmallSumcheckSoundnessClaims
+import ZkcSecurityExamples.Generated.TwoSumsSoundnessClaims
 
 /-! Final clients share one admitted pair and its actual validator projection.
 Adaptive scalar and charged receipts retain the designated application binder.

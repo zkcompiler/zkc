@@ -1,8 +1,10 @@
-#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 
 using namespace mlir;
 namespace zkc::exec {
@@ -18,32 +20,58 @@ bool admitted(TypeRange inputs, TypeRange outputs) {
       if (stage && *stage != represented)
         return false;
       stage = represented;
-      auto bound = protocol::encodeBoundType(type, represented);
-      if (!bound) {
-        llvm::consumeError(bound.takeError());
+      if (failed(verifyValueType(
+              [&] {
+                auto diagnostic = emitError(UnknownLoc::get(type.getContext()));
+                diagnostic.abandon();
+                return diagnostic;
+              },
+              type)))
         return false;
-      }
     }
   return true;
 }
 bool kind(Type type, StringRef expected) {
-  auto bound =
-      protocol::encodeBoundType(type, isa<runtime::RepresentedType>(type));
-  if (!bound) {
-    llvm::consumeError(bound.takeError());
+  if (!admitted({type}, {}))
     return false;
-  }
-  return bound->kind == expected;
+  auto logical = logicalValueType(type);
+  auto interface = dyn_cast<CatalogTypeInterface>(logical);
+  auto application =
+      interface ? interface.getCatalogApplication() : std::nullopt;
+  return application && application->constructor == expected;
 }
+
 } // namespace
+LogicalResult ApplyOp::verifySymbolUses(SymbolTableCollection &symbols) {
+  auto *table = SymbolTable::getNearestSymbolTable(*this);
+  auto declaration = table
+                         ? dyn_cast_or_null<runtime::BindingOp>(
+                               symbols.lookupSymbolIn(table, getBindingAttr()))
+                         : runtime::BindingOp();
+  if (!declaration || !declaration.getContractAttr() ||
+      !declaration.getArgumentsAttr())
+    return diagnostics::emit(emitOpError(), "binding-reference");
+  auto checked = readNativeBinding([&] { return emitOpError(); }, declaration);
+  if (failed(checked))
+    return failure();
+  auto type = executableBindingSignature(checked->valueType);
+  if (getOperandTypes() != TypeRange(type.getInputs()) ||
+      getOperation()->getResultTypes() != TypeRange(type.getResults()))
+    return diagnostics::emit(
+        emitOpError(), "binding-signature",
+        "invocation differs from its callable executable ABI");
+  return verifyInvocationParameters(
+      [&] { return emitOpError(); }, declaration.getContract(),
+      declaration.getArgumentsAttr(), getParametersAttr());
+}
 LogicalResult ApplyOp::verify() {
   if (getSite().empty() ||
       !admitted(getInputs().getTypes(), getOutcome().getType().getPayload()))
     return refuse(*this,
                   "ordered invocation requires one admitted value stage");
-  // Binding resolution, exact ports and parameter formation are independently
-  // checked by the enclosing profile with its explicit logical/physical stage.
-  return success();
+  // Stage admission, installation and reached parameters remain independent.
+  return verifyCallAttributes(*this, getNumOperands(),
+                              getOperation()->getNumResults());
 }
 LogicalResult CompleteOp::verify() {
   if (getValues().getTypes() !=
@@ -94,25 +122,23 @@ LogicalResult VariantOp::verify() {
   return success();
 }
 LogicalResult MatchOp::verify() {
-  auto bound = protocol::encodeBoundType(
-      getInput().getType(),
-      isa<runtime::RepresentedType>(getInput().getType()));
-  if (!bound) {
-    llvm::consumeError(bound.takeError());
-    return refuse(*this, "variant dispatch input type");
-  }
-  auto descriptor = protocol::decodeVariant("variant:" + bound->identity);
-  if (getSite().empty() || bound->kind != "variant" || !descriptor ||
-      getArms().size() != descriptor->alternatives.size() ||
+  Type logical = getInput().getType();
+  if (auto represented = dyn_cast<runtime::RepresentedType>(logical))
+    logical = represented.getLogical();
+  auto variant = dyn_cast<data::VariantType>(logical);
+  if (getSite().empty() || !variant ||
+      getArms().size() != variant.getAlternatives().size() ||
       getAlternatives().size() != getArms().size() ||
       getStopped()->getNumArguments() != 1 ||
       !isa<StopType>(getStopped()->getArgument(0).getType()) ||
       !admitted(getCaptures().getTypes(), {getInput().getType()}))
     return refuse(*this, "variant dispatch alternatives or failure edge");
-  for (auto [i, arm] : llvm::enumerate(descriptor->alternatives)) {
-    if (cast<StringAttr>(getAlternatives()[i]).getValue() != arm.label)
+  for (auto [i, arm] : llvm::enumerate(variant.getAlternatives())) {
+    if (cast<StringAttr>(getAlternatives()[i]).getValue() !=
+        arm.getLabel().getValue())
       return refuse(*this, "variant dispatch must preserve declaration order");
-    auto types = data::variantPayloadTypes(getInput().getType(), arm.label);
+    auto types = data::variantPayloadTypes(getInput().getType(),
+                                           arm.getLabel().getValue());
     if (!types) {
       llvm::consumeError(types.takeError());
       return refuse(*this, "variant dispatch payload types");

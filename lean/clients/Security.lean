@@ -1,10 +1,10 @@
-import ZkcSecurity.Endpoint.Knowledge
-import ZkcSecurity.Families.Schnorr
-import ZkcSecurity.VCVio.SigmaAndSchnorr
+import ZkcSecurity.Claims.Methods.KnowledgeEndpoint
+import ZkcSecurity.Bindings.Sigma.Schnorr
+import ZkcSecurity.Families.Sigma.SigmaAndSchnorr
 import ZkcSecurity.Families.Sumcheck.Common
 import ZkcSecurity.Families.Sumcheck.Committed.Contract
 import ZkcSecurity.Families.Sumcheck.FactorOpening.Security
-import ZkcSecurity.Examples.NativePrograms.FactorHorner
+import ZkcSecurityExamples.NativePrograms.FactorHorner
 
 /-! A standalone consumer of generic security with no ArkLib package. -/
 #check ZkcSecurity.Endpoint.knowledge_soundness

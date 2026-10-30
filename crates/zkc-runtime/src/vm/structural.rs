@@ -10,12 +10,7 @@ pub const TYPE_NODE_LIMIT: usize = 200_000;
 pub const STRUCTURAL_SPELLING_LIMIT: usize = 4096;
 pub const NATURAL_ARGUMENT_LIMIT: u64 = 1_048_576;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ArgumentKind {
-    FieldDomain,
-    Type,
-    Nat,
-}
+use zkc_catalog::Kind;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TypeArgument {
@@ -24,6 +19,13 @@ pub enum TypeArgument {
     Nat(u64),
 }
 impl TypeArgument {
+    fn spelling_len(&self) -> usize {
+        match self {
+            Self::Domain(d) => d.name().len(),
+            Self::Type(t) => t.spelling_len(),
+            Self::Nat(n) => n.checked_ilog10().map_or(1, |n| n as usize + 1),
+        }
+    }
     fn spelling(&self) -> String {
         match self {
             Self::Domain(d) => d.name().into(),
@@ -33,37 +35,17 @@ impl TypeArgument {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct Constructor {
-    name: &'static str,
-    kind: Type,
-    parameters: &'static [ArgumentKind],
-    copy: bool,
-    drop: bool,
+fn constructor(name: &str) -> Result<Type> {
+    match name {
+        "sequence" => Ok(Type::Sequence),
+        "field_array" => Ok(Type::FieldArray),
+        "fixed_vector" => Ok(Type::FixedVector),
+        _ => Err(invalid("uninstalled structural constructor")),
+    }
 }
-static CONSTRUCTORS: &[Constructor] = &[
-    Constructor {
-        name: "sequence",
-        kind: Type::Sequence,
-        parameters: &[ArgumentKind::Type],
-        copy: true,
-        drop: true,
-    },
-    Constructor {
-        name: "field_array",
-        kind: Type::FieldArray,
-        parameters: &[ArgumentKind::FieldDomain, ArgumentKind::Nat],
-        copy: true,
-        drop: true,
-    },
-    Constructor {
-        name: "fixed_vector",
-        kind: Type::FixedVector,
-        parameters: &[ArgumentKind::Type, ArgumentKind::Nat],
-        copy: true,
-        drop: true,
-    },
-];
+fn declaration(kind: Type) -> &'static zkc_catalog::TypeConstructor {
+    zkc_catalog::constructor(kind.name()).expect("installed structural declaration")
+}
 
 fn invalid(detail: &str) -> AdmissionError {
     AdmissionError::new(ErrorCode::Type, detail)
@@ -73,21 +55,27 @@ fn invalid(detail: &str) -> AdmissionError {
 /// field permits a caller to replace the declaration or its permissions.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StructuralType {
-    constructor: &'static Constructor,
+    constructor: Type,
     arguments: Box<[TypeArgument]>,
 }
 impl StructuralType {
+    pub(super) fn spelling_len(&self) -> usize {
+        self.arguments.iter().fold(
+            self.head().len() + 2 + self.arguments.len().saturating_sub(1),
+            |size, arg| size.saturating_add(arg.spelling_len()),
+        )
+    }
     pub fn head(&self) -> &'static str {
-        self.constructor.name
+        self.constructor.name()
     }
     pub fn arguments(&self) -> &[TypeArgument] {
         &self.arguments
     }
-    pub fn parameter_kinds(&self) -> &[ArgumentKind] {
-        self.constructor.parameters
+    pub fn parameter_kinds(&self) -> &[Kind] {
+        declaration(self.constructor).parameters
     }
     pub(super) fn kind(&self) -> Type {
-        self.constructor.kind
+        self.constructor
     }
     pub fn spelling(&self) -> String {
         format!(
@@ -101,14 +89,14 @@ impl StructuralType {
         )
     }
     pub fn is_duplicable(&self) -> bool {
-        self.constructor.copy
+        declaration(self.constructor).copy
             && self.arguments.iter().all(|arg| match arg {
                 TypeArgument::Type(t) => t.is_duplicable(),
                 _ => true,
             })
     }
     pub fn is_discardable(&self) -> bool {
-        self.constructor.drop
+        declaration(self.constructor).drop
             && self.arguments.iter().all(|arg| match arg {
                 TypeArgument::Type(t) => t.is_discardable(),
                 _ => true,
@@ -122,6 +110,38 @@ impl StructuralType {
             })
         })
     }
+}
+
+/// Check composition limits on already admitted immutable children. Every
+/// occurrence counts, including inactive variants and shared subtrees. Text
+/// parsing is a carrier boundary, not an internal constructor implementation.
+fn admit_nested(ty: &LogicalType, depth: usize, budget: &mut ParseBudget) -> Result<()> {
+    budget.node(depth)?;
+    if let Some(structure) = ty.structural() {
+        if depth >= TYPE_DEPTH_LIMIT || structure.spelling_len() > STRUCTURAL_SPELLING_LIMIT {
+            return Err(invalid("logical-type-limit"));
+        }
+        budget.allocate(512 + 256 * structure.arguments.len())?;
+        for argument in &structure.arguments {
+            if let TypeArgument::Type(child) = argument {
+                admit_nested(child, depth + 1, budget)?;
+            } else {
+                budget.node(depth + 1)?;
+            }
+        }
+    } else if let Some(variant) = ty.variant_descriptor() {
+        if depth >= TYPE_DEPTH_LIMIT {
+            return Err(invalid("logical-type-limit"));
+        }
+        budget.allocate(512 + 4 * variant.spelling().len() + 256 * variant.alternatives().len())?;
+        for alternative in variant.alternatives() {
+            budget.allocate(256 * alternative.payload().len())?;
+            for child in alternative.payload() {
+                admit_nested(child, depth + 1, budget)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 struct ParsedType {
@@ -213,7 +233,7 @@ pub(super) fn natural(s: &str) -> Result<u64> {
 
 pub(super) fn arguments(
     values: &[&str],
-    kinds: &[ArgumentKind],
+    kinds: &[Kind],
     depth: usize,
     budget: &mut ParseBudget,
 ) -> Result<Vec<TypeArgument>> {
@@ -225,19 +245,18 @@ pub(super) fn arguments(
         .zip(kinds)
         .map(|(value, kind)| {
             Ok(match kind {
-                ArgumentKind::Type => {
-                    TypeArgument::Type(LogicalType::parse_nested(value, depth, budget)?)
-                }
-                ArgumentKind::Nat => {
+                Kind::Type => TypeArgument::Type(LogicalType::parse_nested(value, depth, budget)?),
+                Kind::Nat => {
                     budget.node(depth)?;
                     TypeArgument::Nat(natural(value)?)
                 }
-                ArgumentKind::FieldDomain => {
+                Kind::Domain("Field") => {
                     budget.node(depth)?;
                     let identity = Identity::parse(value)?;
                     LogicalType::new(Type::Field, identity)?;
                     TypeArgument::Domain(identity)
                 }
+                Kind::Domain(_) => return Err(invalid("uninstalled structural domain sort")),
             })
         })
         .collect()
@@ -260,10 +279,7 @@ pub(super) fn parse(
     let (head, body) = spelling
         .split_once('<')
         .ok_or_else(|| invalid("structural-spelling"))?;
-    let constructor = CONSTRUCTORS
-        .iter()
-        .find(|c| c.name == head)
-        .ok_or_else(|| invalid("uninstalled structural constructor"))?;
+    let constructor = constructor(head)?;
     let body = body
         .strip_suffix('>')
         .ok_or_else(|| invalid("structural-spelling"))?;
@@ -295,8 +311,13 @@ pub(super) fn parse(
     }
     parts.push(&body[start..]);
     budget.allocate(512 + 256 * parts.len())?;
-    let arguments = arguments(&parts, constructor.parameters, depth + 1, budget)?;
-    if constructor.kind == Type::Sequence
+    let arguments = arguments(
+        &parts,
+        declaration(constructor).parameters,
+        depth + 1,
+        budget,
+    )?;
+    if constructor == Type::Sequence
         && !matches!(arguments.as_slice(), [TypeArgument::Type(t)]
             if t.is_duplicable() && t.is_discardable())
     {
@@ -321,38 +342,35 @@ impl LogicalType {
             _ => None,
         }
     }
-    /// Construct through the same bounded canonical admission as carrier input.
+    /// Construct directly from admitted children, checking the complete kind,
+    /// permission, depth, node, spelling-size and descriptor-byte bounds.
     pub fn application(head: &str, arguments: &[TypeArgument]) -> Result<Self> {
-        let constructor = CONSTRUCTORS
-            .iter()
-            .find(|c| c.name == head)
-            .ok_or_else(|| invalid("uninstalled structural constructor"))?;
-        if arguments.len() != constructor.parameters.len() {
+        let constructor = constructor(head)?;
+        if arguments.len() != declaration(constructor).parameters.len() {
             return Err(invalid("structural-arity"));
         }
-        for (argument, kind) in arguments.iter().zip(constructor.parameters) {
+        for (argument, kind) in arguments.iter().zip(declaration(constructor).parameters) {
             match (argument, kind) {
-                (TypeArgument::Type(_), ArgumentKind::Type) => {}
-                (TypeArgument::Nat(n), ArgumentKind::Nat) if *n <= NATURAL_ARGUMENT_LIMIT => {}
-                (TypeArgument::Domain(d), ArgumentKind::FieldDomain) => {
+                (TypeArgument::Type(_), Kind::Type) => {}
+                (TypeArgument::Nat(n), Kind::Nat) if *n <= NATURAL_ARGUMENT_LIMIT => {}
+                (TypeArgument::Domain(d), Kind::Domain("Field")) => {
                     LogicalType::new(Type::Field, *d)?;
                 }
                 _ => return Err(invalid("structural-kind")),
             }
         }
-        let spelling = format!(
-            "{head}<{}>",
-            arguments
-                .iter()
-                .map(TypeArgument::spelling)
-                .collect::<Vec<_>>()
-                .join(",")
-        );
-        let parsed = Self::parse(&spelling)?;
-        if parsed.structural().map(StructuralType::arguments) != Some(arguments) {
-            return Err(invalid("structural-kind"));
+        if constructor == Type::Sequence
+            && !matches!(arguments, [TypeArgument::Type(t)]
+                if t.is_duplicable() && t.is_discardable())
+        {
+            return Err(invalid("sequence-element-permission"));
         }
-        Ok(parsed)
+        let ty = Self::from_structure(Arc::new(StructuralType {
+            constructor,
+            arguments: arguments.into(),
+        }));
+        admit_nested(&ty, 0, &mut ParseBudget::new())?;
+        Ok(ty)
     }
     pub fn field_array(field: Identity, length: u64) -> Result<Self> {
         Self::application(

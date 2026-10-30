@@ -1,6 +1,7 @@
 #ifndef ZKC_TRANSFORMS_LANEREALIZATION_H
 #define ZKC_TRANSFORMS_LANEREALIZATION_H
 
+#include "NativeBindingApplication.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Support/LogicalResult.h"
 #include "zkc/Contracts/Mathematical.h"
@@ -25,9 +26,9 @@ struct LaneInput {
   mlir::Value value;
   bool lanes = false;
 };
-using LaneEmitter =
-    llvm::function_ref<mlir::Value(llvm::StringRef, mlir::ValueRange,
-                                   mlir::Type, llvm::ArrayRef<std::string>)>;
+using LaneEmitter = llvm::function_ref<mlir::Value(
+    llvm::StringRef, mlir::ValueRange, mlir::Type,
+    llvm::ArrayRef<mlir::Attribute>)>;
 
 enum class LaneRealizationStatus { Realized, Unsupported, Capacity };
 struct LaneRealizationResult {
@@ -69,8 +70,8 @@ llvm::Expected<LaneRealizationResult>
 emitVectorLanes(const LaneFormula &, mlir::Type vector, mlir::Value rows,
                 const MathematicalRecipes &, LaneEmitter);
 using NumericalEmitter = llvm::function_ref<mlir::Value(
-    const protocol::BindingApplication &, mlir::ValueRange, mlir::Type,
-    llvm::ArrayRef<std::string>)>;
+    const NativeBindingApplication &, mlir::ValueRange, mlir::Type,
+    llvm::ArrayRef<mlir::Attribute>)>;
 enum class LaneResultMode { Map, Sum, Product };
 /// Row-bearing maps use checked Tensor/Linalg realization; selected sums also
 /// fuse their reduction. Construction charges the supplied shared work budget.

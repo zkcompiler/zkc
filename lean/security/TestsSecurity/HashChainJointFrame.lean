@@ -1,4 +1,4 @@
-import ZkcSecurity.HashChain.JointOpening
+import ZkcSecurity.Transformations.HashChain.JointOpening
 import ZkcTools.DeclarationAudit
 
 /-! Controls for the hash-chain frame of a verifier with committed tables.

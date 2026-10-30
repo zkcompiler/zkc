@@ -1,6 +1,5 @@
 #ifndef ZKC_TRANSFORMS_LINEAR_CONTRACTION_H
 #define ZKC_TRANSFORMS_LINEAR_CONTRACTION_H
-#include "mlir/Interfaces/FunctionInterfaces.h"
 #include "zkc/Interfaces/LinearContraction.h"
 #include "llvm/ADT/SmallVector.h"
 
@@ -26,12 +25,5 @@ struct LinearContractionGroup {
   DiagonalProducerRoles production;
   llvm::SmallVector<LinearContractionUse> uses;
 };
-/// Read-only, same-function all-uses analysis. Groups are atomic. No operation
-/// moves. This reports semantic opportunities without testing backend
-/// availability; Target separately admits installed physical choices.
-/// Nested local regions are visited in source order. Views cannot cross a
-/// block boundary, become a loop carry/capture, or escape the local function.
-llvm::SmallVector<LinearContractionGroup>
-findLinearContractions(mlir::FunctionOpInterface, LinearContractionStats &);
 } // namespace zkc
 #endif

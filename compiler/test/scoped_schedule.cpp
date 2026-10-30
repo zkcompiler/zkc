@@ -2,6 +2,7 @@
 #include "../lib/Transforms/ScopedCandidate.h"
 #include "support/NumericalLoops.h"
 #include "zkc/Dialect/Exec/Builders.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 
 using namespace mlir;
@@ -21,15 +22,14 @@ OwningOpRef<mlir::ModuleOp> expected(MLIRContext &context, bool omit = false,
   auto location = UnknownLoc::get(&context);
   OwningOpRef<mlir::ModuleOp> module(mlir::ModuleOp::create(location));
   OpBuilder builder(module->getBody(), module->getBody()->end());
-  auto root = protocol_ir::ProtocolModuleOp::create(builder, location,
-                                                    protocol_ir::Profile::Exec);
+  auto root = protocol_ir::ProtocolModuleOp::create(
+      builder, location, protocol_ir::Profile::Exec, mlir::ArrayAttr{});
   root.getBody().emplaceBlock();
   builder.setInsertionPointToEnd(&root.getBody().front());
   for (auto [name, contract] :
        {std::pair{"add", "field.add"}, std::pair{"subtract", "field.sub"}})
     runtime::BindingOp::create(builder, location, name, contract,
-                               builder.getStrArrayAttr({"bls12-381.fr"}), "",
-                               ArrayAttr{});
+                               builder.getStrArrayAttr({"bls12-381.fr"}), "");
   auto field = algebra::FieldType::get(&context, "bls12-381.fr");
   auto index = builder.getIntegerType(64, false);
   auto scope = runtime::ScopeType::get(&context);
@@ -110,7 +110,8 @@ int main() {
         auto actual = protocol::readScheduledExecutionClosure(root);
         require(bool(actual), actual ? "" : llvm::toString(actual.takeError()));
         auto error = protocol::verifySourceExecutionDefinitions(
-            owner(*flat), actual->definitions);
+            owner(*flat),
+            take(protocol::readScheduledExecutionDefinitions(root)));
         require(!error, error ? llvm::toString(std::move(error)) : "");
         auto view = mathematical::ScopedCandidate::readSchedule(root);
         require(bool(view), view ? "" : llvm::toString(view.takeError()));

@@ -8,7 +8,7 @@ function(declaration_case name definitions expected_error)
     set(output "${ZKC_DECLARATION_TEST_DIRECTORY}/${name}-${action}.txt")
     file(REMOVE "${output}")
     execute_process(COMMAND "${ZKC_TABLEGEN}" "-${action}"
-      -I "${ZKC_DECLARATION_INCLUDE}" -I "${ZKC_DECLARATION_FIXTURES}"
+      -I "${ZKC_DECLARATION_INCLUDE}" -I "${ZKC_DECLARATION_GENERATED_INCLUDE}" -I "${ZKC_DECLARATION_FIXTURES}"
       "${input}" -o "${output}"
       RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr)
     file(WRITE "${output}.log" "${stdout}${stderr}")
@@ -305,62 +305,116 @@ declaration_case(type-nat-reversed [=[
 include "type_nat.td"
 def Wrong : ZKC_Operation<"fixture.wrong", [ElementType, Length],
     [ZKC_Apply<ArrayType, [Length, ElementType]>], []> {
-  let commonGeneric = 0;
 }
 ]=] "parameter kind or sort mismatch")
-# Complete-Type ports are construction observation inputs, never an untyped
-# escape hatch for common programs or generated result types.
-declaration_case(direct-type-common [=[
+# Complete-Type ports are declaration facts, independent of consumer admission.
+# They retain their scope and kind without privileged TableGen inheritance.
+declaration_case(direct-type-source [=[
 def T : ZKC_Root<"T", TypeParameter>;
-def Bad : ZKC_Operation<"bad.direct", [T], [T], []>;
-]=] "direct Type ports require a scoped construction type")
+def Good : ZKC_Operation<"good.direct", [T], [T], [T]>;
+]=] "")
 declaration_case(direct-type-output [=[
 def T : ZKC_Root<"T", TypeParameter>;
-def Bad : ZKC_Operation<"bad.direct", [T], [], [T]> {
-  let stage = Construction; let commonGeneric = 0;
+def Good : ZKC_Operation<"good.direct", [T], [], [T]> {
+  let stage = Construction;
 }
-]=] "direct Type ports require a scoped construction type")
-declaration_case(direct-type-unobserved [=[
+]=] "")
+declaration_case(direct-type-unscoped [=[
 def T : ZKC_Root<"T", TypeParameter>;
-def Bad : ZKC_Operation<"bad.direct", [T], [T], []> {
-  let stage = Construction; let commonGeneric = 0;
-}
-]=] "complete-type port must be an observation payload")
+def Bad : ZKC_Operation<"bad.direct", [], [T], []>;
+]=] "direct ports require a scoped Type term")
+declaration_case(direct-type-domain [=[
+def Bad : ZKC_Operation<"bad.direct", [F], [F], []>;
+]=] "direct ports require a scoped Type term")
+declaration_case(direct-type-natural [=[
+def N : ZKC_Natural<4>;
+def Bad : ZKC_Operation<"bad.direct", [N], [], [N]>;
+]=] "direct ports require a scoped Type term")
+declaration_case(direct-type-projection [=[
+def ElementMember : ZKC_Member<"Element", FDomain, TypeParameter>;
+def T : ZKC_Project<F, ElementMember>;
+def Good : ZKC_Operation<"good.projected", [F,T], [T], [T]>;
+]=] "")
 declaration_case(direct-type-observation [=[
 def T : ZKC_Root<"T", TypeParameter>;
 def State : ZKC_Type<"transcript", [], Affine, 0, 0>;
 def Good : ZKC_Operation<"good.direct", [T], [ZKC_Apply<State>, T], [ZKC_Apply<State>]> {
-  let stage = Construction; let commonGeneric = 0;
+  let stage = Construction;
   let facets = [ZKC_Observation<0,1,0>, ZKC_History<0,0>];
 }
 ]=] "")
-# Kinded fixture must generate successfully but never become common admission.
+# Kinded fixture preserves explicit stage and never becomes source authority.
 execute_process(COMMAND "${ZKC_TABLEGEN}" -dump-contract-declarations
-  -I "${ZKC_DECLARATION_INCLUDE}" "${ZKC_DECLARATION_FIXTURES}/type_nat.td"
+  -I "${ZKC_DECLARATION_INCLUDE}" -I "${ZKC_DECLARATION_GENERATED_INCLUDE}" "${ZKC_DECLARATION_FIXTURES}/type_nat.td"
   RESULT_VARIABLE result OUTPUT_VARIABLE fixture ERROR_VARIABLE stderr)
 if(NOT result EQUAL 0)
   list(APPEND failures "Type/Nat fixture failed: ${stderr}")
 else()
   string(JSON kind GET "${fixture}" types 0 parameters 0 kind)
   string(JSON natural GET "${fixture}" types 0 parameters 1 kind)
-  string(JSON admitted GET "${fixture}" types 0 commonGeneric)
-  if(NOT kind STREQUAL "Type" OR NOT natural STREQUAL "Nat" OR admitted)
-    list(APPEND failures "Type/Nat fixture acquired common admission")
+  string(JSON stage GET "${fixture}" operations 0 stage)
+  if(NOT kind STREQUAL "Type" OR NOT natural STREQUAL "Nat" OR NOT stage STREQUAL "CompilerGenerated")
+    list(APPEND failures "Type/Nat fixture lost its kind or stage")
   endif()
 endif()
+# Variable signatures are explicit declarations, never an empty-mask fiction.
+declaration_case(numerical-family [=[
+def Good : ZKC_Operation<"numeric.good", [F], [], [], [ZKC_Holds<Field,[F]>]> {
+  let numerical = ZKC_NumericalSignature<F, "map">;
+  let parameters = NumericalExpression; let stage = CompilerGenerated;
+}
+]=] "")
+declaration_case(numerical-missing-family [=[
+def Bad : ZKC_Operation<"numeric.bad", [F], [], []> {
+  let parameters = NumericalExpression;
+}
+]=] "numerical expression requires an explicit signature family")
+declaration_case(numerical-fixed-ports [=[
+def Bad : ZKC_Operation<"numeric.bad", [F], [ZKC_Apply<Element,[F]>], [], [ZKC_Holds<Field,[F]>]> {
+  let numerical = ZKC_NumericalSignature<F, "sum">;
+  let parameters = NumericalExpression; let stage = CompilerGenerated;
+}
+]=] "invalid numerical signature family")
+declaration_case(numerical-wrong-result [=[
+def Bad : ZKC_Operation<"numeric.bad", [F], [], [], [ZKC_Holds<Field,[F]>]> {
+  let numerical = ZKC_NumericalSignature<F, "unknown">;
+  let parameters = NumericalExpression; let stage = CompilerGenerated;
+}
+]=] "invalid numerical signature family")
+declaration_case(numerical-wrong-field [=[
+def Bad : ZKC_Operation<"numeric.bad", [G], [], []> {
+  let numerical = ZKC_NumericalSignature<G, "map">;
+  let parameters = NumericalExpression; let stage = CompilerGenerated;
+}
+]=] "invalid numerical signature family")
+declaration_case(numerical-missing-requirement [=[
+def Bad : ZKC_Operation<"numeric.bad", [F], [], []> {
+  let numerical = ZKC_NumericalSignature<F, "map">;
+  let parameters = NumericalExpression; let stage = CompilerGenerated;
+}
+]=] "numerical family requires its exact Field capability")
+declaration_case(constant-facet-parameter [=[
+def Bad : ZKC_Operation<"constant.bad", [F], [], [ZKC_Apply<Element,[F]>]> {
+  let parameters = NaturalParameter;
+  let facets = [ZKC_DomainValue<ConstantValue, 0, 1>];
+}
+]=] "constant facet outside parameter signature")
+declaration_case(retired-profile [=[
+def Bad : ZKC_Type<"old"> { let commonGeneric = 0; }
+]=] "Value 'commonGeneric' unknown")
 # Byte-for-byte reproducibility of both production generation actions.
 foreach(action gen-contract-declarations dump-contract-declarations)
   execute_process(COMMAND "${ZKC_TABLEGEN}" "-${action}"
-    -I "${ZKC_DECLARATION_INCLUDE}" "${ZKC_DECLARATION_INCLUDE}/zkc/Contracts/Declarations.td"
+    -I "${ZKC_DECLARATION_INCLUDE}" -I "${ZKC_DECLARATION_GENERATED_INCLUDE}" "${ZKC_DECLARATION_INCLUDE}/zkc/Contracts/Declarations.td"
     RESULT_VARIABLE first_result OUTPUT_VARIABLE first ERROR_VARIABLE stderr)
   execute_process(COMMAND "${ZKC_TABLEGEN}" "-${action}"
-    -I "${ZKC_DECLARATION_INCLUDE}" "${ZKC_DECLARATION_INCLUDE}/zkc/Contracts/Declarations.td"
+    -I "${ZKC_DECLARATION_INCLUDE}" -I "${ZKC_DECLARATION_GENERATED_INCLUDE}" "${ZKC_DECLARATION_INCLUDE}/zkc/Contracts/Declarations.td"
     RESULT_VARIABLE second_result OUTPUT_VARIABLE second ERROR_VARIABLE second_stderr)
   if(NOT first_result EQUAL 0 OR NOT second_result EQUAL 0 OR NOT first STREQUAL second)
     list(APPEND failures "nondeterministic ${action}: ${stderr}${second_stderr}")
   endif()
 endforeach()
-execute_process(COMMAND "${ZKC_TABLEGEN}" -I "${ZKC_DECLARATION_INCLUDE}"
+execute_process(COMMAND "${ZKC_TABLEGEN}" -I "${ZKC_DECLARATION_INCLUDE}" -I "${ZKC_DECLARATION_GENERATED_INCLUDE}"
   "${ZKC_DECLARATION_FIXTURES}/minimal.td"
   RESULT_VARIABLE missing_action OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr)
 if(missing_action EQUAL 0)
@@ -369,61 +423,61 @@ endif()
 # Mathematical laws are declaration facets. These are consistency controls,
 # not claims about a provider's implementation of an equation.
 declaration_case(mathematical-field [=[
-include "zkc/Contracts/Declarations/Mathematical.td"
+include "zkc/Contracts/Mathematical.td"
 def Good : ZKC_Operation<"law.add", [F],
   [ZKC_Apply<Element,[F]>, ZKC_Apply<Element,[F]>], [ZKC_Apply<Element,[F]>],
-  [ZKC_Holds<Field,[F]>]> { let facets = [ZKC_Mathematical<MathFieldAdd>]; }
+  [ZKC_Holds<Field,[F]>]> { let facets = [ZKC_Mathematical<CatalogMeaning_FieldAdd>]; }
 ]=] "")
 declaration_case(mathematical-different-root [=[
-include "zkc/Contracts/Declarations/Mathematical.td"
+include "zkc/Contracts/Mathematical.td"
 def H : ZKC_Root<"H", FDomain>;
 def Bad : ZKC_Operation<"law.add", [F,H],
   [ZKC_Apply<Element,[F]>, ZKC_Apply<Element,[H]>], [ZKC_Apply<Element,[F]>],
-  [ZKC_Holds<Field,[F]>]> { let facets = [ZKC_Mathematical<MathFieldAdd>]; }
+  [ZKC_Holds<Field,[F]>]> { let facets = [ZKC_Mathematical<CatalogMeaning_FieldAdd>]; }
 ]=] "mathematical signature nominal ports or associated scalar mismatch")
 declaration_case(mathematical-result-root [=[
-include "zkc/Contracts/Declarations/Mathematical.td"
+include "zkc/Contracts/Mathematical.td"
 def H : ZKC_Root<"H", FDomain>;
 def Bad : ZKC_Operation<"law.add", [F,H],
   [ZKC_Apply<Element,[F]>, ZKC_Apply<Element,[F]>], [ZKC_Apply<Element,[H]>],
-  [ZKC_Holds<Field,[H]>]> { let facets = [ZKC_Mathematical<MathFieldAdd>]; }
+  [ZKC_Holds<Field,[H]>]> { let facets = [ZKC_Mathematical<CatalogMeaning_FieldAdd>]; }
 ]=] "mathematical signature nominal ports or associated scalar mismatch")
 declaration_case(mathematical-capability [=[
-include "zkc/Contracts/Declarations/Mathematical.td"
+include "zkc/Contracts/Mathematical.td"
 def Bad : ZKC_Operation<"law.add", [F],
   [ZKC_Apply<Element,[F]>, ZKC_Apply<Element,[F]>], [ZKC_Apply<Element,[F]>],
-  [ZKC_Holds<Ring,[F]>]> { let facets = [ZKC_Mathematical<MathFieldAdd>]; }
+  [ZKC_Holds<Ring,[F]>]> { let facets = [ZKC_Mathematical<CatalogMeaning_FieldAdd>]; }
 ]=] "mathematical capability on exact nominal domain required")
 declaration_case(mathematical-duplicate [=[
-include "zkc/Contracts/Declarations/Mathematical.td"
+include "zkc/Contracts/Mathematical.td"
 def Bad : ZKC_Operation<"law.add", [F],
   [ZKC_Apply<Element,[F]>, ZKC_Apply<Element,[F]>], [ZKC_Apply<Element,[F]>],
   [ZKC_Holds<Field,[F]>]> {
-  let facets = [ZKC_Mathematical<MathFieldAdd>, ZKC_Mathematical<MathFieldMultiply>];
+  let facets = [ZKC_Mathematical<CatalogMeaning_FieldAdd>, ZKC_Mathematical<CatalogMeaning_FieldMultiply>];
 }
 ]=] "duplicate semantic facet")
 declaration_case(mathematical-associated-scalar [=[
-include "zkc/Contracts/Declarations/Mathematical.td"
+include "zkc/Contracts/Mathematical.td"
 def Action : ZKC_Capability<"ScalarAction", [GDomain]>;
 def Good : ZKC_Operation<"law.scale", [G,GS],
   [ZKC_Apply<GroupElement,[G]>, ZKC_Apply<Element,[GS]>], [ZKC_Apply<GroupElement,[G]>],
-  [ZKC_Holds<Action,[G]>]> { let facets = [ZKC_Mathematical<MathGroupScale>]; }
+  [ZKC_Holds<Action,[G]>]> { let facets = [ZKC_Mathematical<CatalogMeaning_GroupScale>]; }
 ]=] "")
 declaration_case(mathematical-wrong-scalar [=[
-include "zkc/Contracts/Declarations/Mathematical.td"
+include "zkc/Contracts/Mathematical.td"
 def Action : ZKC_Capability<"ScalarAction", [GDomain]>;
 def Bad : ZKC_Operation<"law.scale", [G,F],
   [ZKC_Apply<GroupElement,[G]>, ZKC_Apply<Element,[F]>], [ZKC_Apply<GroupElement,[G]>],
-  [ZKC_Holds<Action,[G]>]> { let facets = [ZKC_Mathematical<MathGroupScale>]; }
+  [ZKC_Holds<Action,[G]>]> { let facets = [ZKC_Mathematical<CatalogMeaning_GroupScale>]; }
 ]=] "mathematical signature nominal ports or associated scalar mismatch")
 declaration_case(mathematical-access-family [=[
-include "zkc/Contracts/Declarations/Mathematical.td"
+include "zkc/Contracts/Mathematical.td"
 def N : ZKC_Root<"N", NatParameter>;
 def Array : ZKC_Type<"field_array", [FDomain,NatParameter], PrivateImmutable>;
 def Index : ZKC_Type<"index">;
 def Bad : ZKC_Operation<"law.access", [F,N],
   [ZKC_Apply<Array,[F,N]>, ZKC_Apply<Index>], [ZKC_Apply<Element,[F]>],
-  [ZKC_Holds<Field,[F]>]> { let facets = [ZKC_Mathematical<MathContainerAt>]; }
+  [ZKC_Holds<Field,[F]>]> { let facets = [ZKC_Mathematical<CatalogMeaning_ContainerAt>]; }
 ]=] "mathematical signature nominal ports or associated scalar mismatch")
 declaration_case(linear-wrong-associated-scalar [=[
 def Action : ZKC_Capability<"ScalarAction", [GDomain]>;
@@ -436,11 +490,20 @@ def Bad : ZKC_Operation<"law.msm", [G,F],
 
 function(recipe_case name definitions expected_error)
   set(input "${ZKC_DECLARATION_TEST_DIRECTORY}/recipe-${name}.td")
-  file(WRITE "${input}" "include \"zkc/Contracts/Declarations.td\"\ninclude \"${ZKC_DECLARATION_INCLUDE}/../lib/Transforms/RecipeSchema.td\"\n${definitions}\n")
+  set(mathematical "")
+  if(ARGC GREATER 3)
+    file(READ "${ZKC_DECLARATION_GENERATED_INCLUDE}/zkc/Contracts/Mathematical.td" mathematical)
+    set(original_mathematical "${mathematical}")
+    string(REGEX REPLACE "def CatalogLaws_FieldAdd[^}]+}" "def CatalogLaws_FieldAdd : ZKC_ScalarLaws<\"FieldRing\", \"FieldBinary\"> {\n${ARGV3}\n}" mathematical "${mathematical}")
+    if(mathematical STREQUAL original_mathematical)
+      message(FATAL_ERROR "recipe mutation did not change the selected law")
+    endif()
+  endif()
+  file(WRITE "${input}" "${mathematical}\ninclude \"zkc/Contracts/Declarations.td\"\ninclude \"${ZKC_DECLARATION_INCLUDE}/../lib/Transforms/RecipeSchema.td\"\n${definitions}\n")
   set(output "${ZKC_DECLARATION_TEST_DIRECTORY}/recipe-${name}.inc")
   file(REMOVE "${output}")
   execute_process(COMMAND "${ZKC_TABLEGEN}" -gen-mathematical-recipes
-    -I "${ZKC_DECLARATION_INCLUDE}" "${input}" -o "${output}"
+    -I "${ZKC_DECLARATION_INCLUDE}" -I "${ZKC_DECLARATION_GENERATED_INCLUDE}" "${input}" -o "${output}"
     RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr)
   if(expected_error STREQUAL "")
     if(NOT result EQUAL 0)
@@ -455,210 +518,190 @@ function(recipe_case name definitions expected_error)
   set(failures "${failures}" PARENT_SCOPE)
 endfunction()
 recipe_case(field-lanes [=[
-def Good : ZKC_LaneRecipe<OpFieldAdd, OpVectorAdd>;
+def Good : ZKC_LaneRecipe<CatalogOperation_field_2eadd, CatalogOperation_vector_2eadd>;
 ]=] "")
 recipe_case(group-permutation [=[
-def Good : ZKC_LaneRecipe<OpCurveScale, OpCurveScaleEach, [1,0]>;
+def Good : ZKC_LaneRecipe<CatalogOperation_curve_2escale, CatalogOperation_curve_2escale_5feach, [1,0]>;
 ]=] "")
 recipe_case(group-wrong-order [=[
-def Bad : ZKC_LaneRecipe<OpCurveScale, OpCurveScaleEach>;
+def Bad : ZKC_LaneRecipe<CatalogOperation_curve_2escale, CatalogOperation_curve_2escale_5feach>;
 ]=] "recipe endpoint input nominal type mismatch")
 recipe_case(wrong-family [=[
-def Bad : ZKC_LaneRecipe<OpFieldAdd, OpFieldAdd>;
+def Bad : ZKC_LaneRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2eadd>;
 ]=] "recipe endpoint input nominal type mismatch")
 recipe_case(wrong-result [=[
-def Bad : ZKC_LaneRecipe<OpFieldMul, OpVectorDot>;
+def Bad : ZKC_LaneRecipe<CatalogOperation_field_2emul, CatalogOperation_vector_2edot>;
 ]=] "recipe endpoint result nominal type mismatch")
 recipe_case(wrong-static-mapping [=[
-def Bad : ZKC_LaneRecipe<OpFieldAdd, OpVectorAdd> { let staticArguments = [1]; }
+def Bad : ZKC_LaneRecipe<CatalogOperation_field_2eadd, CatalogOperation_vector_2eadd> { let staticArguments = [1]; }
 ]=] "recipe requires the source domain root mapping")
 recipe_case(missing-meaning [=[
-def Bad : ZKC_LaneRecipe<OpFieldInverse, OpVectorInverse>;
+def Bad : ZKC_LaneRecipe<CatalogOperation_field_2einverse, CatalogOperation_vector_2einverse>;
 ]=] "recipe source requires mathematical laws")
 recipe_case(missing-endpoint [=[
-def Bad : ZKC_LaneRecipe<OpFieldAdd, MissingEndpoint>;
+def Bad : ZKC_LaneRecipe<CatalogOperation_field_2eadd, MissingEndpoint>;
 ]=] "Variable not defined: 'MissingEndpoint'")
 recipe_case(subtraction-reduction [=[
-def Bad : ZKC_ReductionRecipe<OpFieldSub, OpVectorSum, "Direct", [0]>;
+def Bad : ZKC_ReductionRecipe<CatalogOperation_field_2esub, CatalogOperation_vector_2esum, "Direct", [0]>;
 ]=] "reduction recipe requires associative total combiner and empty identity")
 recipe_case(msm [=[
-def Good : ZKC_ReductionRecipe<OpCurveAdd, OpCurveMsm, "Contraction", [1,0]> {
-  let term = OpCurveScale;
+def Good : ZKC_ReductionRecipe<CatalogOperation_curve_2eadd, CatalogOperation_curve_2emsm, "Contraction", [1,0]> {
+  let term = CatalogOperation_curve_2escale;
 }
 ]=] "")
 recipe_case(msm-wrong-domain [=[
-def Bad : ZKC_ReductionRecipe<OpCurveAdd, OpCurveMsm, "Contraction", [1,0]> {
-  let term = OpCurveScale; let staticSourceOperand = 1;
+def Bad : ZKC_ReductionRecipe<CatalogOperation_curve_2eadd, CatalogOperation_curve_2emsm, "Contraction", [1,0]> {
+  let term = CatalogOperation_curve_2escale; let staticSourceOperand = 1;
 }
 ]=] "recipe static source must supply the nominal root, not an associated scalar")
 recipe_case(matrix-row [=[
-def Good : ZKC_ReductionRecipe<OpFieldAdd, OpMatrixRowDot, "MatrixRow"> {
-  let term = OpFieldMul;
+def Good : ZKC_ReductionRecipe<CatalogOperation_field_2eadd, CatalogOperation_matrix_2erow_5fdot, "MatrixRow"> {
+  let term = CatalogOperation_field_2emul;
 }
 ]=] "")
 recipe_case(matrix-index-arity [=[
-def Bad : ZKC_ReductionRecipe<OpFieldAdd, OpVectorDot, "MatrixRow"> {
-  let term = OpFieldMul;
+def Bad : ZKC_ReductionRecipe<CatalogOperation_field_2eadd, CatalogOperation_vector_2edot, "MatrixRow"> {
+  let term = CatalogOperation_field_2emul;
 }
 ]=] "recipe endpoint arity mismatch")
 
 recipe_case(direct-input-role [=[
-def Bad : ZKC_ReductionRecipe<OpFieldAdd, OpVectorSum, "Direct", [1]>;
+def Bad : ZKC_ReductionRecipe<CatalogOperation_field_2eadd, CatalogOperation_vector_2esum, "Direct", [1]>;
 ]=] "direct reduction has exactly one semantic input role")
 recipe_case(direct-static-role [=[
-def Bad : ZKC_ReductionRecipe<OpFieldAdd, OpVectorSum, "Direct", [0]> {
+def Bad : ZKC_ReductionRecipe<CatalogOperation_field_2eadd, CatalogOperation_vector_2esum, "Direct", [0]> {
   let staticSourceOperand = 1;
 }
 ]=] "direct reduction static source must use its single input")
 recipe_case(matrix-role-order [=[
-def Bad : ZKC_ReductionRecipe<OpFieldAdd, OpMatrixRowDot, "MatrixRow", [1,0]> {
-  let term = OpFieldMul;
+def Bad : ZKC_ReductionRecipe<CatalogOperation_field_2eadd, CatalogOperation_matrix_2erow_5fdot, "MatrixRow", [1,0]> {
+  let term = CatalogOperation_field_2emul;
 }
 ]=] "matrix recipe requires matrix then vector roles")
 
 recipe_case(matrix-contraction-forms [=[
-def Bilinear : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]>;
-def Rows : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixMulVector, "Rows", OpVectorAdd, [0,1], [0], [1]>;
-def Columns : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixTransposeMulVector, "Columns", OpVectorAdd, [0,1], [1], [0]>;
+def Bilinear : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2ebilinear, "Bilinear", CatalogOperation_field_2eadd, [0,1,2], [], [0,1]>;
+def Rows : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2emul_5fvector, "Rows", CatalogOperation_vector_2eadd, [0,1], [0], [1]>;
+def Columns : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2etranspose_5fmul_5fvector, "Columns", CatalogOperation_vector_2eadd, [0,1], [1], [0]>;
 ]=] "")
 recipe_case(matrix-contraction-combiner [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldSub, OpFieldMul,
-    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2esub, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2ebilinear, "Bilinear", CatalogOperation_field_2eadd, [0,1,2], [], [0,1]>;
 ]=] "matrix contraction requires field sum and product meanings")
 recipe_case(matrix-contraction-term [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldAdd,
-    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2eadd,
+    CatalogOperation_matrix_2ebilinear, "Bilinear", CatalogOperation_field_2eadd, [0,1,2], [], [0,1]>;
 ]=] "matrix contraction requires field sum and product meanings")
 recipe_case(matrix-contraction-law-premises [=[
-def RecipeLaws : ZKC_ScalarLaws<"FieldRing", "FieldBinary"> {
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2ebilinear, "Bilinear", CatalogOperation_field_2eadd, [0,1,2], [], [0,1]>;
+]=] "matrix contraction requires total commutative field laws" [=[
   let associative = 1; let commutative = 1;
   let leftIdentity = "Zero"; let rightIdentity = "Zero";
-}
-def RecipeMeaning : ZKC_MathematicalIdentity<"FieldAdd", 0> {
-  let laws = RecipeLaws;
-}
-def RecipeF : ZKC_Root<"F", FieldDomain>;
-def RecipeAdd : ZKC_Operation<"fixture.add", [RecipeF],
-    [ZKC_Apply<TypeField,[RecipeF]>, ZKC_Apply<TypeField,[RecipeF]>],
-    [ZKC_Apply<TypeField,[RecipeF]>], [ZKC_Holds<CapabilityField,[RecipeF]>]> {
-  let facets = [ZKC_Mathematical<RecipeMeaning>];
-}
-def Bad : ZKC_MatrixContractionRecipe<RecipeAdd, OpFieldMul,
-    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]>;
-]=] "matrix contraction requires total commutative field laws")
+]=])
 recipe_case(matrix-contraction-empty-identity [=[
-def RecipeLaws : ZKC_ScalarLaws<"FieldRing", "FieldBinary"> {
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2ebilinear, "Bilinear", CatalogOperation_field_2eadd, [0,1,2], [], [0,1]>;
+]=] "matrix contraction requires additive zero and annihilator" [=[
   let associative = 1; let commutative = 1; let total = 1;
   let leftIdentity = "One"; let rightIdentity = "One";
-}
-def RecipeMeaning : ZKC_MathematicalIdentity<"FieldAdd", 0> {
-  let laws = RecipeLaws;
-}
-def RecipeF : ZKC_Root<"F", FieldDomain>;
-def RecipeAdd : ZKC_Operation<"fixture.add", [RecipeF],
-    [ZKC_Apply<TypeField,[RecipeF]>, ZKC_Apply<TypeField,[RecipeF]>],
-    [ZKC_Apply<TypeField,[RecipeF]>], [ZKC_Holds<CapabilityField,[RecipeF]>]> {
-  let facets = [ZKC_Mathematical<RecipeMeaning>];
-}
-def Bad : ZKC_MatrixContractionRecipe<RecipeAdd, OpFieldMul,
-    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]>;
-]=] "matrix contraction requires additive zero and annihilator")
+]=])
 recipe_case(matrix-contraction-form [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixBilinear, "Unknown", OpFieldAdd, [0,1,2], [], [0,1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2ebilinear, "Unknown", CatalogOperation_field_2eadd, [0,1,2], [], [0,1]>;
 ]=] "unknown matrix contraction form")
 recipe_case(matrix-contraction-permutation [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,1], [], [0,1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2ebilinear, "Bilinear", CatalogOperation_field_2eadd, [0,1,1], [], [0,1]>;
 ]=] "recipe operand mapping must be a permutation")
 recipe_case(matrix-contraction-left-right [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,2,1], [], [0,1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2ebilinear, "Bilinear", CatalogOperation_field_2eadd, [0,2,1], [], [0,1]>;
 ]=] "matrix contraction requires matrix then ordered vector roles")
 recipe_case(matrix-contraction-matrix-role [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixMulVector, "Rows", OpVectorAdd, [1,0], [0], [1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2emul_5fvector, "Rows", CatalogOperation_vector_2eadd, [1,0], [0], [1]>;
 ]=] "matrix contraction requires matrix then ordered vector roles")
 recipe_case(matrix-contraction-operand-arity [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1], [], [0,1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2ebilinear, "Bilinear", CatalogOperation_field_2eadd, [0,1], [], [0,1]>;
 ]=] "matrix contraction operand mapping arity")
 recipe_case(matrix-contraction-row-axis [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixMulVector, "Rows", OpVectorAdd, [0,1], [1], [0]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2emul_5fvector, "Rows", CatalogOperation_vector_2eadd, [0,1], [1], [0]>;
 ]=] "matrix contraction free and reduced axis roles mismatch")
 recipe_case(matrix-contraction-column-axis [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixTransposeMulVector, "Columns", OpVectorAdd, [0,1], [0], [1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2etranspose_5fmul_5fvector, "Columns", CatalogOperation_vector_2eadd, [0,1], [0], [1]>;
 ]=] "matrix contraction free and reduced axis roles mismatch")
 recipe_case(matrix-contraction-bilinear-axes [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [0], [1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2ebilinear, "Bilinear", CatalogOperation_field_2eadd, [0,1,2], [0], [1]>;
 ]=] "matrix contraction free and reduced axis roles mismatch")
 recipe_case(matrix-contraction-wrong-orientation [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixTransposeMulVector, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2etranspose_5fmul_5fvector, "Rows", CatalogOperation_vector_2eadd, [0,1], [0], [1]>;
 ]=] "matrix contraction endpoint does not implement axis roles")
 recipe_case(matrix-contraction-target-arity [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixBilinear, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2ebilinear, "Rows", CatalogOperation_vector_2eadd, [0,1], [0], [1]>;
 ]=] "matrix contraction endpoint arity mismatch")
 recipe_case(matrix-contraction-target-type [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpVectorDot, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_vector_2edot, "Rows", CatalogOperation_vector_2eadd, [0,1], [0], [1]>;
 ]=] "matrix contraction endpoint input nominal type mismatch")
 recipe_case(matrix-contraction-target-result [=[
-def RecipeF : ZKC_Root<"F", FieldDomain>;
+def RecipeF : ZKC_Root<"F", CatalogDomain_Field>;
 def Wrong : ZKC_Operation<"fixture.matrix_result", [RecipeF],
-    [ZKC_Apply<TypeMatrix,[RecipeF]>, ZKC_Apply<TypeVector,[RecipeF]>],
-    [ZKC_Apply<TypeField,[RecipeF]>], [ZKC_Holds<CapabilityField,[RecipeF]>]>;
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    Wrong, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+    [ZKC_Apply<CatalogType_matrix,[RecipeF]>, ZKC_Apply<CatalogType_vector,[RecipeF]>],
+    [ZKC_Apply<CatalogType_field,[RecipeF]>], [ZKC_Holds<CatalogCapability_Field,[RecipeF]>]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    Wrong, "Rows", CatalogOperation_vector_2eadd, [0,1], [0], [1]>;
 ]=] "matrix contraction endpoint result nominal type mismatch")
 recipe_case(matrix-contraction-target-capability [=[
-def RecipeF : ZKC_Root<"F", FieldDomain>;
+def RecipeF : ZKC_Root<"F", CatalogDomain_Field>;
 def Wrong : ZKC_Operation<"fixture.matrix_capability", [RecipeF],
-    [ZKC_Apply<TypeMatrix,[RecipeF]>, ZKC_Apply<TypeVector,[RecipeF]>],
-    [ZKC_Apply<TypeVector,[RecipeF]>]>;
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    Wrong, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+    [ZKC_Apply<CatalogType_matrix,[RecipeF]>, ZKC_Apply<CatalogType_vector,[RecipeF]>],
+    [ZKC_Apply<CatalogType_vector,[RecipeF]>]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    Wrong, "Rows", CatalogOperation_vector_2eadd, [0,1], [0], [1]>;
 ]=] "matrix contraction endpoint requires the source field capability")
 recipe_case(matrix-contraction-target-parameters [=[
-def RecipeF : ZKC_Root<"F", FieldDomain>;
+def RecipeF : ZKC_Root<"F", CatalogDomain_Field>;
 def Wrong : ZKC_Operation<"fixture.matrix_parameters", [RecipeF],
-    [ZKC_Apply<TypeMatrix,[RecipeF]>, ZKC_Apply<TypeVector,[RecipeF]>],
-    [ZKC_Apply<TypeVector,[RecipeF]>], [ZKC_Holds<CapabilityField,[RecipeF]>]> {
+    [ZKC_Apply<CatalogType_matrix,[RecipeF]>, ZKC_Apply<CatalogType_vector,[RecipeF]>],
+    [ZKC_Apply<CatalogType_vector,[RecipeF]>], [ZKC_Holds<CatalogCapability_Field,[RecipeF]>]> {
   let parameters = NaturalParameter;
 }
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    Wrong, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    Wrong, "Rows", CatalogOperation_vector_2eadd, [0,1], [0], [1]>;
 ]=] "recipe endpoint parameters unsupported")
 recipe_case(matrix-contraction-seed-shape [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixMulVector, "Rows", OpFieldAdd, [0,1], [0], [1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2emul_5fvector, "Rows", CatalogOperation_field_2eadd, [0,1], [0], [1]>;
 ]=] "matrix contraction endpoint input nominal type mismatch")
 recipe_case(matrix-contraction-seed-scalar-meaning [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixBilinear, "Bilinear", OpFieldSub, [0,1,2], [], [0,1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2ebilinear, "Bilinear", CatalogOperation_field_2esub, [0,1,2], [], [0,1]>;
 ]=] "matrix contraction seed combiner meaning mismatch")
 recipe_case(matrix-contraction-seed-vector-meaning [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixMulVector, "Rows", OpVectorSub, [0,1], [0], [1]>;
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2emul_5fvector, "Rows", CatalogOperation_vector_2esub, [0,1], [0], [1]>;
 ]=] "matrix contraction seed combiner meaning mismatch")
 recipe_case(matrix-contraction-static-mapping [=[
-def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]> {
+def Bad : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2ebilinear, "Bilinear", CatalogOperation_field_2eadd, [0,1,2], [], [0,1]> {
   let staticArguments = [1];
 }
 ]=] "recipe requires the source domain root mapping")
 recipe_case(matrix-contraction-duplicate [=[
-def A : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixMulVector, "Rows", OpVectorAdd, [0,1], [0], [1]>;
-def B : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
-    OpMatrixMulVector, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+def A : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2emul_5fvector, "Rows", CatalogOperation_vector_2eadd, [0,1], [0], [1]>;
+def B : ZKC_MatrixContractionRecipe<CatalogOperation_field_2eadd, CatalogOperation_field_2emul,
+    CatalogOperation_matrix_2emul_5fvector, "Rows", CatalogOperation_vector_2eadd, [0,1], [0], [1]>;
 ]=] "duplicate matrix contraction recipe meaning")
 
 declaration_case(mathematical-identity-role [=[
@@ -677,6 +720,102 @@ def Bad : ZKC_Operation<"law.action", [F],
   [ZKC_Apply<Element,[F]>, ZKC_Apply<Element,[F]>], [ZKC_Apply<Element,[F]>],
   [ZKC_Holds<Field,[F]>]> { let facets = [ZKC_Mathematical<Meaning>]; }
 ]=] "scalar action law requires ordered group and associated scalar ports")
+
+# Consumer-owned expectations are checked independently of operation formation.
+function(profile_case name definitions expected_error)
+  declaration_case("profile-${name}" "
+class ExpectedMultiply : ZKC_ConsumerOperation<Multiply, [F],
+  [ZKC_Apply<Element,[F]>, ZKC_Apply<Element,[F]>],
+  [ZKC_Apply<Element,[F]>], [ZKC_Holds<Ring,[F]>]>;
+class Selected<list<ZKC_ConsumerOperation> entries> :
+  ZKC_ConsumerProfile<\"example\", [Element], [\"None\"], entries>;
+${definitions}" "${expected_error}")
+  set(failures "${failures}" PARENT_SCOPE)
+endfunction()
+profile_case(valid [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry]>;
+]=] "")
+profile_case(duplicate-membership [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry, Entry]>;
+]=] "duplicate profile membership")
+profile_case(duplicate-profile [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry]>;
+def Other : Selected<[Entry]>;
+]=] "duplicate consumer profile ownership")
+profile_case(unknown-operation [=[
+def Entry : ZKC_ConsumerOperation<Missing, [], [], []>;
+]=] "Variable not defined: 'Missing'")
+profile_case(unowned-entry [=[
+def Entry : ExpectedMultiply;
+]=] "unowned consumer operation")
+profile_case(scope-drift [=[
+def OtherF : ZKC_Root<"Other", FDomain>;
+def Entry : ZKC_ConsumerOperation<Multiply, [OtherF],
+  [ZKC_Apply<Element,[OtherF]>, ZKC_Apply<Element,[OtherF]>],
+  [ZKC_Apply<Element,[OtherF]>], [ZKC_Holds<Ring,[OtherF]>]>;
+def Profile : Selected<[Entry]>;
+]=] "consumer operation scope mismatch")
+profile_case(signature-drift [=[
+def Entry : ExpectedMultiply { let inputs = []; }
+def Profile : Selected<[Entry]>;
+]=] "consumer operation signature mismatch")
+profile_case(requirement-drift [=[
+def Entry : ExpectedMultiply { let requirements = []; }
+def Profile : Selected<[Entry]>;
+]=] "consumer operation requirements mismatch")
+profile_case(validator-drift [=[
+def Entry : ExpectedMultiply { let parameters = NaturalParameter; }
+def Profile : Selected<[Entry]> { let parameterValidators = ["None", "Natural"]; }
+]=] "consumer operation parameters mismatch")
+profile_case(stage-drift [=[
+def Entry : ExpectedMultiply { let stage = Construction; }
+def Profile : Selected<[Entry]>;
+]=] "consumer operation stage mismatch")
+profile_case(unsupported-constructor [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry]> { let typeConstructors = []; }
+]=] "unsupported profile type constructor")
+profile_case(duplicate-constructor [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry]> { let typeConstructors = [Element, Element]; }
+]=] "duplicate profile constructor")
+profile_case(unsupported-validator [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry]> { let parameterValidators = []; }
+]=] "unsupported profile validator")
+profile_case(unknown-validator [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry]> { let parameterValidators = ["Unknown"]; }
+]=] "unsupported profile parameter family")
+profile_case(selected-implementation [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry]> { let implementation = "selected"; }
+]=] "unsupported profile implementation policy")
+profile_case(open-type [=[
+def T : ZKC_Root<"T", TypeParameter>;
+def Op : ZKC_Operation<"example.open", [T], [T], [T]>;
+def Entry : ZKC_ConsumerOperation<Op, [T], [T], [T]>;
+def Profile : Selected<[Entry]>;
+]=] "unsupported profile Type term")
+profile_case(nested-type [=[
+def Container : ZKC_Type<"container", [TypeParameter], PrivateImmutable>;
+def E : ZKC_Apply<Element,[F]>;
+def C : ZKC_Apply<Container,[E]>;
+def Op : ZKC_Operation<"example.nested", [F,E,C], [C], [C]>;
+def Entry : ZKC_ConsumerOperation<Op, [F,E,C], [C], [C]>;
+def Profile : Selected<[Entry]> { let typeConstructors = [Container, Element]; }
+]=] "")
+profile_case(nested-constructor-refusal [=[
+def Container : ZKC_Type<"container", [TypeParameter], PrivateImmutable>;
+def E : ZKC_Apply<Element,[F]>;
+def C : ZKC_Apply<Container,[E]>;
+def Op : ZKC_Operation<"example.nested", [F,E,C], [C], [C]>;
+def Entry : ZKC_ConsumerOperation<Op, [F,E,C], [C], [C]>;
+def Profile : Selected<[Entry]> { let typeConstructors = [Container]; }
+]=] "unsupported profile type constructor")
 
 if(failures)
   list(JOIN failures "\n" diagnostic)

@@ -723,10 +723,8 @@ defaultPhysicalArguments(const BindingApplication &binding) {
         *container, descriptor->denseLayout->container);
     if (!representation)
       return error("binding-representation");
-    auto child = parseBoundType(representation->childType, true);
-    if (!child)
-      return child.takeError();
-    return physicalType(*container, representation->representation, {*child});
+    return physicalType(*container, representation->representation,
+                        {representation->childType});
   }();
   if (!physical)
     return physical.takeError();

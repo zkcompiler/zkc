@@ -1,6 +1,9 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Parser/Parser.h"
+#include "support/NativeCases.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/TypeAdapters.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -31,6 +34,7 @@ template <unsigned Kind> bool refuses() {
   DialectRegistry registry;
   // Deliberately omit the real adapter to exercise hostile and absent models.
   registry.insert<protocol_ir::ProtocolDialect, arith::ArithDialect>();
+  protocol::type_adapters::registerCatalogTypeInterfaces(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   // An external model cannot weaken the closed operation semantics or make
@@ -55,7 +59,12 @@ module {
   }) {profile=#protocol.profile<protocol>} : () -> ()
 })mlir",
                                             &context);
-  if (module ||
+  if (!module) {
+    llvm::errs() << "dependency fixture must remain formed: " << diagnostic
+                 << '\n';
+    return false;
+  }
+  if (succeeded(zkc::admitStage(*module)) ||
       diagnostic.find("mathematical-dependencies") == std::string::npos) {
     llvm::errs() << "malformed dependency model accepted: " << diagnostic
                  << '\n';
@@ -73,6 +82,21 @@ module {
 }
 } // namespace
 int main() {
-  return !(refuses<0>() && refuses<1>() && refuses<2>() && refuses<3>() &&
-           refuses<4>());
+  zkc::test::Cases cases;
+  cases.run("out-of-range dependency", [&] {
+    zkc::test::require(refuses<0>(), "out-of-range model was not refused");
+  });
+  cases.run("duplicate dependency", [&] {
+    zkc::test::require(refuses<1>(), "duplicate model was not refused");
+  });
+  cases.run("missing dependency", [&] {
+    zkc::test::require(refuses<2>(), "incomplete model was not refused");
+  });
+  cases.run("absent mathematical interface", [&] {
+    zkc::test::require(refuses<3>(), "absent model was not refused");
+  });
+  cases.run("reordered dependencies", [&] {
+    zkc::test::require(refuses<4>(), "reordered model was not refused");
+  });
+  return cases.result();
 }

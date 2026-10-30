@@ -88,14 +88,14 @@ def test_executable_facts_import_metadata_and_reference_its_namespace():
 
 @pytest.mark.parametrize("replacement,diagnostic", [
     ("", "executable claims require generated.lowering"),
-    ('lowering = "lean/security/ZkcSecurity/Examples/Subjects/Schnorr/Artifacts.lean"',
+    ('lowering = "lean/security/ZkcSecurityExamples/Subjects/Schnorr/Artifacts.lean"',
      "generated output paths must be distinct"),
 ])
 def test_byte_evidence_has_an_explicit_distinct_destination(tmp_path, replacement, diagnostic):
     loader = manifests()
     subject = loader.load_all(["schnorr"])[0]
     source = subject.path.read_text().replace(
-        'lowering = "lean/security/ZkcSecurity/Examples/Subjects/Schnorr/Lowering.lean"', replacement)
+        'lowering = "lean/security/ZkcSecurityExamples/Subjects/Schnorr/Lowering.lean"', replacement)
     path = tmp_path / "schnorr.toml"
     path.write_text(source)
     with pytest.raises(loader.Refused, match=diagnostic):

@@ -1,11 +1,12 @@
 #include "StorageSchedule.h"
 #include "ExecutionPorts.h"
 #include "PhysicalPlan.h"
-#include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLFunctionalExtras.h"
@@ -37,6 +38,7 @@ class StorageView {
   llvm::DenseMap<Type, Permission> permissions;
   Location *failureLocation;
   size_t remaining = storageWorkLimit;
+  mathematical::NativeTypePolicies nativeTypes;
 
   Error charge(size_t work = 1) {
     if (work > remaining)
@@ -50,11 +52,22 @@ class StorageView {
     auto found = permissions.find(type);
     if (found != permissions.end())
       return found->second;
-    auto encoded = protocol::encodeBoundType(type, true);
-    if (!encoded)
-      return encoded.takeError();
-    Permission result{protocol::discardable(*encoded),
-                      protocol::affine(encoded->spelling())};
+    auto emit = [&] {
+      auto diagnostic = emitError(UnknownLoc::get(type.getContext()));
+      diagnostic.abandon();
+      return diagnostic;
+    };
+    if (!isa<runtime::RepresentedType>(type) ||
+        failed(verifyValueType(emit, type)))
+      return error("storage-schedule-type");
+    auto logical = logicalValueType(type);
+    LogicalTypePermissions properties;
+    if (failed(verifyLogicalType(emit, logical, &properties)))
+      return error("storage-schedule-type");
+    auto policy = nativeTypes.get(logical);
+    if (!policy)
+      return error("storage-schedule-type");
+    Permission result{properties.drop, policy->affine};
     permissions[type] = result;
     return result;
   }
@@ -72,7 +85,8 @@ public:
   std::map<StorageValue, Definition> definitions;
   StorageView(ModuleOp module, ArrayRef<OperationDecision> ports,
               Location *failureLocation)
-      : module(module), ports(ports), failureLocation(failureLocation) {}
+      : module(module), ports(ports), failureLocation(failureLocation),
+        nativeTypes(module) {}
 
   Error initialize() {
     if (!hasSingleElement(*module.getBody()))

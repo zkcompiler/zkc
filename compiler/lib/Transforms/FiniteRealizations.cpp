@@ -13,12 +13,15 @@
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/SymbolTable.h"
 #include "zkc/Analysis/Computation.h"
+#include "zkc/Analysis/MathematicalFacts.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Transforms/Algorithms.h"
@@ -247,8 +250,8 @@ class Realizer {
     }
     return sitePrefix + suffix;
   }
-  Value emit(const protocol::BindingApplication &application, ValueRange inputs,
-             Type output, ArrayRef<std::string> params = {},
+  Value emit(const NativeBindingApplication &application, ValueRange inputs,
+             Type output, ArrayRef<Attribute> params = {},
              StringRef explicitSite = {}) {
     // A fixed envelope covers the invoke/dispatch/success block, binding and
     // operands. Debit before creating any CFG or declaration. Callback copies
@@ -285,9 +288,6 @@ class Realizer {
     if (output)
       outputs.push_back(output);
 
-    SmallVector<Attribute> parameters;
-    for (const auto &parameter : params)
-      parameters.push_back(builder.getStringAttr(parameter));
     auto reference = emitter.binding(builder, loc, application);
     auto &control = scopeControl();
     auto previousLocation = control.getLocation();
@@ -298,17 +298,18 @@ class Realizer {
         "exec.apply", outputs, control.scoped(inputs),
         {builder.getNamedAttr("binding", reference),
          builder.getNamedAttr("site", builder.getStringAttr(occurrence)),
-         builder.getNamedAttr("parameters", builder.getArrayAttr(parameters))});
+         builder.getNamedAttr("parameters", builder.getArrayAttr(params))});
     return output ? values.front() : Value();
   }
   Value emit(StringRef contract, ValueRange inputs, Type output,
-             ArrayRef<std::string> args = {},
-             ArrayRef<std::string> params = {}) {
-    return emit({contract.str(), {args.begin(), args.end()}, ""}, inputs,
-                output, params);
+             ArrayRef<Attribute> args = {}, ArrayRef<Attribute> params = {}) {
+    return emit(NativeBindingApplication{contract.str(),
+                                         SmallVector<Attribute>(args), ""},
+                inputs, output, params);
   }
   Value number(uint64_t n) {
-    return emit("index.constant", {}, index, {}, {std::to_string(n)});
+    return emit("index.constant", {}, index, {},
+                {builder.getIntegerAttr(index, n)});
   }
   Value length(Value input, unsigned axis = 0) {
     if (failedHelper || !input)
@@ -318,8 +319,9 @@ class Realizer {
     if (col->staticExtent)
       return number(*col->staticExtent);
     return emit(*col->length, input, index,
-                col->rank == 2 ? ArrayRef<std::string>{std::to_string(axis)}
-                               : ArrayRef<std::string>{});
+                col->rank == 2
+                    ? ArrayRef<Attribute>{builder.getIntegerAttr(index, axis)}
+                    : ArrayRef<Attribute>{});
   }
   void require(Value condition) { emit("control.require", condition, {}, {}); }
   Control control(ControlKind kind, ValueRange inputs, TypeRange outputs,
@@ -566,8 +568,8 @@ class Realizer {
       inputs[capture.formal] = {entry[capture.input], false};
     for (auto [lookup, container] : equation.lookups)
       inputs[lookup] = {inputs.lookup(container).value, true};
-    SmallVector<std::string> args{
-        cast<algebra::FieldType>(elementType(vector)).getDomain().str()};
+    SmallVector<Attribute> args{builder.getStringAttr(
+        cast<algebra::FieldType>(elementType(vector)).getDomain())};
     auto admitted = mathematical::admitLaneFormula(body, inputs, vector,
                                                    &work.lanes, recipes, output,
                                                    additionalTerms, combine);
@@ -579,8 +581,8 @@ class Realizer {
     if (expressionMode == NumericalExpressionMode::PreferNative) {
       auto result = mathematical::emitNumericalLanes(
           *admitted->formula, vector, sizes.lookup(root), mode,
-          [&](const protocol::BindingApplication &binding, ValueRange operands,
-              Type result, ArrayRef<std::string> parameters) {
+          [&](const NativeBindingApplication &binding, ValueRange operands,
+              Type result, ArrayRef<Attribute> parameters) {
             auto previousLocation = loc;
             if (sumConsumer)
               loc = sumConsumer->getLoc();
@@ -603,7 +605,7 @@ class Realizer {
     return mathematical::emitVectorLanes(
         *admitted->formula, vector, sizes.lookup(root), recipes,
         [&](StringRef contract, ValueRange operands, Type result,
-            ArrayRef<std::string> parameters) {
+            ArrayRef<Attribute> parameters) {
           return emit(contract, operands, result, args, parameters);
         });
   }
@@ -792,7 +794,8 @@ public:
   emitBody(Operation *source, ValueRange entry, bool optimize,
            const CollectFold *pair = nullptr, ValueRange consumerInputs = {},
            Operation *sumConsumer = nullptr, StringRef sumOccurrence = {},
-           Operation *explicitSourceRoot = nullptr) {
+           Operation *explicitSourceRoot = nullptr,
+           MathematicalFactAnalysis *facts = nullptr) {
     composition = pair;
     // The source closure may be separate from the table receiving bindings.
     // Detached helper copies keep resolving through this original owner.
@@ -843,10 +846,18 @@ public:
           ready = bool(normalized);
         }
       }
-      if (ready)
-        selection =
-            mathematical::selectComputation(selectionComputation, {true, false},
-                                            callbackWork.remaining, recipes);
+      if (ready) {
+        // The normalized callback is a different subject. Never use cached
+        // observations of the source for private rewritten bodies.
+        if (facts && !normalized)
+          selection = mathematical::selectComputation(
+              selectionComputation, {true, false}, callbackWork.remaining,
+              *facts, recipes);
+        else
+          selection = mathematical::selectComputation(
+              selectionComputation, {true, false}, callbackWork.remaining,
+              recipes);
+      }
       // A collection and its sole adjacent native sum have a separate policy
       // from ordinary finite bulk lowering. Recognition reads the admitted
       // scalar callback; no candidate or structural pair supplies its equation.
@@ -951,8 +962,8 @@ public:
       const auto &recipe = *selection.matrix;
       auto output = computation.signature.getResult(0);
       auto field = cast<algebra::FieldVectorType>(output).getElementType();
-      SmallVector<std::string> arguments{
-          cast<algebra::FieldType>(field).getDomain().str()};
+      SmallVector<Attribute> arguments{
+          builder.getStringAttr(cast<algebra::FieldType>(field).getDomain())};
       auto root = computation.domain.getBody().front().back().getOperand(0);
       Value size = sizes.lookup(root), zero = number(0);
       Value nonempty = emit("index.less", {zero, size}, boolean);
@@ -1036,9 +1047,11 @@ public:
       auto vector =
           cast<algebra::FieldVectorType>(computation.signature.getResult(0));
       loc = sumConsumer->getLoc();
-      auto result =
-          emit({reduction.recipe->target.str(), {vector.getDomain().str()}, ""},
-               operands, vector.getElementType(), {}, sumOccurrence);
+      auto result = emit(
+          NativeBindingApplication{reduction.recipe->target.str(),
+                                   {builder.getStringAttr(vector.getDomain())},
+                                   ""},
+          operands, vector.getElementType(), {}, sumOccurrence);
       return failedHelper
                  ? FailureOr<SmallVector<Value>>(failure())
                  : FailureOr<SmallVector<Value>>(SmallVector<Value>{result});
@@ -1110,8 +1123,8 @@ public:
       if (result->status == mathematical::LaneRealizationStatus::Realized) {
         Value value = result->value;
         if (reduction) {
-          SmallVector<std::string> args{
-              cast<algebra::FieldType>(resultType).getDomain().str()};
+          SmallVector<Attribute> args{builder.getStringAttr(
+              cast<algebra::FieldType>(resultType).getDomain())};
           if (value.getType() == vector)
             value = emit(reduction->target, value, resultType, args);
           value = emit(reduction->combiner, {initial.front(), value},
@@ -1267,7 +1280,7 @@ FailureOr<SmallVector<Value>> realizeScopedTotalExpression(
     TotalRecipeEmitter callback, mathematical::RealizationWork &work,
     MathematicalSelectionPolicy policy, mathematical::RealizationTrace *trace,
     ScopedEmissionBudget &budget, bool orderedRetry, const CollectFold *pair,
-    ValueRange consumerInputs) {
+    ValueRange consumerInputs, MathematicalFactAnalysis *facts) {
   auto function = control.getFunction();
   auto *owner = SymbolTable::getNearestSymbolTable(function);
   auto occurrence = source->getAttrOfType<StringAttr>("site");
@@ -1283,7 +1296,7 @@ FailureOr<SmallVector<Value>> realizeScopedTotalExpression(
                     &budget, nullptr, nullptr, callback);
   auto result =
       realizer.emitBody(source, inputs, pair ? false : policy.finiteBulk, pair,
-                        consumerInputs, nullptr, {}, sourceRoot);
+                        consumerInputs, nullptr, {}, sourceRoot, facts);
   if (succeeded(result))
     scope.complete();
   return result;

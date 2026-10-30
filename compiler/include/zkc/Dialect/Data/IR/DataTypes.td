@@ -2,14 +2,17 @@
 #define ZKC_DIALECT_DATA_IR_DATATYPES_TD
 include "mlir/IR/AttrTypeBase.td"
 include "zkc/Dialect/Data/IR/DataDialect.td"
+include "zkc/Dialect/Data/IR/DataAttrs.td"
 include "zkc/Interfaces/Collection.td"
 include "zkc/Dialect/TypeBindings.td"
 def VariantSyntax : ZKC_SpecialType<"variant">;
 def Variant : TypeDef<DataDialect, "Variant"> {
   let mnemonic = "variant";
-  let summary = "nominal sum with an exact closed logical payload descriptor";
-  let parameters = (ins StringRefParameter<"Canonical complete logical descriptor">:$descriptor);
-  let assemblyFormat = "`<` $descriptor `>`";
+  let summary = "nominal sum with ordered structural alternatives and payloads";
+  let parameters = (ins "::zkc::data::IdentityAttr":$identity,
+    ArrayRefParameter<"::zkc::data::AlternativeAttr">:$alternatives);
+  let assemblyFormat = "`<` $identity `,` `[` $alternatives `]` `>`";
+  let genVerifyDecl = 1;
 }
 def Bytes : TypeDef<DataDialect, "Bytes",
     [DeclareTypeInterfaceMethods<CollectionTypeInterface>]> {
@@ -35,7 +38,8 @@ def Sequence : TypeDef<DataDialect, "Sequence",
 def DataValue : TypeDef<DataDialect, "Value"> {
   let mnemonic = "value";
   let summary = "nominal source value with an exact logical schema";
-  let parameters = (ins StringRefParameter<"Canonical logical schema">:$schema);
-  let assemblyFormat = "`<` $schema `>`";
+  let parameters = (ins "::zkc::data::LayoutAttr":$layout);
+  let assemblyFormat = "`<` $layout `>`";
+  let genVerifyDecl = 1;
 }
 #endif

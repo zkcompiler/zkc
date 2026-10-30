@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Claims.Registry
-public import ZkcSecurity.Commitment.FiniteRecovery
+public import ZkcSecurity.Transformations.Commitment.FiniteRecovery
 public import VCVio.OracleComp.EvalDist
 
 @[expose] public section

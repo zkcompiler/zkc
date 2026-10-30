@@ -5,6 +5,8 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -36,6 +38,18 @@ fixture(mlir::MLIRContext &context, llvm::StringRef field = "bls12-381.fr",
       position += field.size();
     }
   }
+  // The dormant seeds are native literals too. Specializing the field must
+  // specialize their canonical carrier width before structural parsing.
+  auto literal = take(algebra::decodeFieldLiteral(
+      algebra::FieldType::get(&context, field), "7"));
+  auto width =
+      mlir::cast<mlir::IntegerType>(literal.getValue().getType()).getWidth();
+  std::string carrier = "ui" + std::to_string(width);
+  size_t position = 0;
+  while ((position = text.find("ui255", position)) != std::string::npos) {
+    text.replace(position, 5, carrier);
+    position += carrier.size();
+  }
   if (sequence) {
     auto position = text.find("!V = !algebra.field_vector<");
     auto end = text.find('\n', position);
@@ -44,7 +58,7 @@ fixture(mlir::MLIRContext &context, llvm::StringRef field = "bls12-381.fr",
     text.replace(position, end - position, "!V = !data.sequence<!F>");
   }
   auto result = mlir::parseSourceString<mlir::ModuleOp>(text, &context);
-  require(bool(result) && mlir::succeeded(mlir::verify(*result)),
+  require(bool(result) && mlir::succeeded(zkc::admitStage(*result)),
           "collect-fold fixture refused");
   return result;
 }

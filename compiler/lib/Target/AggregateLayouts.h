@@ -2,7 +2,9 @@
 #define ZKC_TARGET_AGGREGATE_LAYOUTS_H
 
 #include "../Transforms/NumericalSelection.h"
-#include "zkc/Dialect/Bindings.h"
+#include "NativePlanTypes.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/SmallBitVector.h"
 #include <functional>
@@ -20,7 +22,7 @@ public:
 private:
   static constexpr Id NoEvidence = std::numeric_limits<Id>::max();
   struct Node {
-    protocol::BoundType logical;
+    mlir::Type logical;
     Id parent;
     size_t size = 1;
     llvm::SmallVector<Id> children;
@@ -28,7 +30,7 @@ private:
     std::string ordinary;
     Id evidence = NoEvidence;
     llvm::SmallVector<size_t> owners;
-    std::optional<protocol::BoundType> physical;
+    mlir::Type physical;
   };
   llvm::SmallVector<Node, 0> nodes;
   llvm::DenseMap<mlir::Value, Id> values;
@@ -50,24 +52,26 @@ private:
       nodes[id].parent = root(nodes[id].parent);
     return nodes[id].parent;
   }
-  llvm::Expected<Id> create(const protocol::BoundType &logical) {
+  llvm::Expected<Id> create(mlir::Type logical) {
     if (auto e = charge())
       return e;
-    auto schemas = protocol::logicalChildren(logical);
+    auto schemas = planLogicalChildren(logical);
     if (!schemas)
       return schemas.takeError();
     Id id = nodes.size();
     nodes.push_back({logical, id, 1, {}, {}, {}, NoEvidence, {}, {}});
     // A missing complete default is allowed while exact child equations are
     // unresolved. Sequence and variant wrappers have fixed structural layouts.
-    auto ordinary = protocol::defaultRepresentation(logical);
+    auto ordinary = defaultPlanType(logical);
     if (ordinary)
-      nodes[id].representation = ordinary->representation;
+      nodes[id].representation = mlir::cast<runtime::RepresentedType>(*ordinary)
+                                     .getRepresentation()
+                                     .str();
     else {
       llvm::consumeError(ordinary.takeError());
-      if (logical.kind == "sequence")
+      if (planTypeConstructor(logical) == "sequence")
         nodes[id].representation = "logical.sequence/0";
-      else if (logical.kind == "variant")
+      else if (planTypeConstructor(logical) == "variant")
         nodes[id].representation = "logical.variant/0";
     }
     nodes[id].ordinary = nodes[id].representation;
@@ -89,10 +93,7 @@ public:
     auto found = values.find(value);
     if (found != values.end())
       return found->second;
-    auto logical = protocol::encodeBoundType(value.getType(), false);
-    if (!logical)
-      return logical.takeError();
-    auto id = create(*logical);
+    auto id = create(value.getType());
     if (id)
       values[value] = *id;
     return id;
@@ -130,26 +131,31 @@ public:
         return e;
     return llvm::Error::success();
   }
-  llvm::Error pin(Id id, const protocol::BoundType &type, size_t owner) {
+  llvm::Error pin(Id id, mlir::Type type, size_t owner) {
     if (auto e = charge())
       return e;
+    if (auto e = checkPhysicalType(type))
+      return e;
+    auto represented = mlir::cast<runtime::RepresentedType>(type);
     id = root(id);
     auto &node = nodes[id];
-    if (!(node.logical == protocol::erasePhysicalType(type)))
+    if (node.logical != represented.getLogical())
       return error("binding-operation-signature");
-    if (!node.owners.empty() && node.representation != type.representation) {
+    if (!node.owners.empty() &&
+        node.representation != represented.getRepresentation()) {
       auto owners = node.owners;
       owners.push_back(owner);
       conflict(owners);
       return error("binding-no-conversion");
     }
-    node.representation = type.representation;
+    node.representation = represented.getRepresentation().str();
     node.owners.push_back(owner);
-    if (type.physicalChildren)
-      for (auto [child, physical] :
-           llvm::zip(node.children, *type.physicalChildren))
-        if (auto e = pin(child, physical, owner))
-          return e;
+    if (node.children.size() != represented.getChildren().size())
+      return error("binding-representation");
+    for (auto [child, physical] :
+         llvm::zip(node.children, represented.getChildren()))
+      if (auto e = pin(child, physical, owner))
+        return e;
     return llvm::Error::success();
   }
   /// Packing aggregate children requires equality. Packing a leaf may instead
@@ -179,7 +185,7 @@ public:
         return e;
       // A subsequent solve must not reuse a physical tree or soft evidence
       // derived before a new pin, equality, or packing edge was added.
-      nodes[id].physical.reset();
+      nodes[id].physical = {};
       if (root(id) != id)
         continue;
       roots.push_back(id);
@@ -305,22 +311,21 @@ public:
     }
     return llvm::Error::success();
   }
-  llvm::Expected<protocol::BoundType> physical(Id id) {
+  llvm::Expected<mlir::Type> physical(Id id) {
     id = root(id);
     auto &node = nodes[id];
     if (node.physical)
-      return *node.physical;
+      return node.physical;
     if (auto e = charge())
       return e;
-    std::vector<protocol::BoundType> children;
+    llvm::SmallVector<mlir::Type> children;
     for (auto child : node.children) {
       auto type = physical(child);
       if (!type)
         return type.takeError();
       children.push_back(std::move(*type));
     }
-    auto type = protocol::physicalType(node.logical, node.representation,
-                                       std::move(children));
+    auto type = formPhysicalType(node.logical, node.representation, children);
     if (type)
       node.physical = *type;
     return type;

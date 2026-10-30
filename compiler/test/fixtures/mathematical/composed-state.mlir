@@ -3,32 +3,32 @@
 !g = !algebra.group<"bls12-381.g1">
 !fs = !algebra.field_vector<"bls12-381.fr">
 !gs = !algebra.group_vector<"bls12-381.g1">
-!r = !runtime.capability<"rng:bls12-381.fr">
+!r = !runtime.capability<rng, "bls12-381.fr">
 !s = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
-  "runtime.binding"() {sym_name="random_draw",contract="random.draw",arguments=["bls12-381.fr"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="field_constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="field_equal",contract="field.equal",arguments=["bls12-381.fr"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="field_inverse",contract="field.inverse",arguments=["bls12-381.fr"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="bool_not",contract="bool.not",arguments=[],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="vector_scale",contract="vector.scale",arguments=["bls12-381.fr"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="curve_msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="curve_append",contract="curve.append",arguments=["bls12-381.g1"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="vector_append",contract="vector.append",arguments=["bls12-381.fr"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="curve_get",contract="curve.get",arguments=["bls12-381.g1"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="vector_get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="curve_empty",contract="curve.empty",arguments=["bls12-381.g1"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="vector_empty",contract="vector.empty",arguments=["bls12-381.fr"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="vector_split",contract="vector.split",arguments=["bls12-381.fr"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="curve_split",contract="curve.split",arguments=["bls12-381.g1"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="vector_add",contract="vector.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="curve_vector_scale",contract="curve.vector_scale",arguments=["bls12-381.g1"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="curve_vector_add",contract="curve.vector_add",arguments=["bls12-381.g1"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="curve_length",contract="curve.length",arguments=["bls12-381.g1"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="index_equal",contract="index.equal",arguments=[],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="index_constant",contract="index.constant",arguments=[],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="curve_equal",contract="curve.equal",arguments=["bls12-381.g1"],implementation=""} : ()->()
-  "runtime.binding"() {sym_name="bool_and",contract="bool.and",arguments=[],implementation=""} : ()->()
+  "runtime.binding"() {sym_name="random_draw",contract="random.draw",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !runtime.capability<rng, "bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">)>} : ()->()
+  "runtime.binding"() {sym_name="field_constant",contract="field.constant",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+  "runtime.binding"() {sym_name="field_equal",contract="field.equal",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(i1)>} : ()->()
+  "runtime.binding"() {sym_name="field_inverse",contract="field.inverse",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+  "runtime.binding"() {sym_name="bool_not",contract="bool.not",arguments=[],implementation="",function_type=(!runtime.scope, i1) -> !exec.outcome<(i1)>} : ()->()
+  "runtime.binding"() {sym_name="vector_scale",contract="vector.scale",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+  "runtime.binding"() {sym_name="curve_msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.group_vector<"bls12-381.g1">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : ()->()
+  "runtime.binding"() {sym_name="curve_append",contract="curve.append",arguments=["bls12-381.g1"],implementation="",function_type=(!runtime.scope, !algebra.group_vector<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">)>} : ()->()
+  "runtime.binding"() {sym_name="vector_append",contract="vector.append",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+  "runtime.binding"() {sym_name="curve_get",contract="curve.get",arguments=["bls12-381.g1"],implementation="",function_type=(!runtime.scope, !algebra.group_vector<"bls12-381.g1">, ui64) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : ()->()
+  "runtime.binding"() {sym_name="vector_get",contract="vector.get",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+  "runtime.binding"() {sym_name="curve_empty",contract="curve.empty",arguments=["bls12-381.g1"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">)>} : ()->()
+  "runtime.binding"() {sym_name="vector_empty",contract="vector.empty",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+  "runtime.binding"() {sym_name="vector_split",contract="vector.split",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">)>} : ()->()
+  "runtime.binding"() {sym_name="curve_split",contract="curve.split",arguments=["bls12-381.g1"],implementation="",function_type=(!runtime.scope, !algebra.group_vector<"bls12-381.g1">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !algebra.group_vector<"bls12-381.g1">)>} : ()->()
+  "runtime.binding"() {sym_name="vector_add",contract="vector.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+  "runtime.binding"() {sym_name="curve_vector_scale",contract="curve.vector_scale",arguments=["bls12-381.g1"],implementation="",function_type=(!runtime.scope, !algebra.group_vector<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">)>} : ()->()
+  "runtime.binding"() {sym_name="curve_vector_add",contract="curve.vector_add",arguments=["bls12-381.g1"],implementation="",function_type=(!runtime.scope, !algebra.group_vector<"bls12-381.g1">, !algebra.group_vector<"bls12-381.g1">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">)>} : ()->()
+  "runtime.binding"() {sym_name="curve_length",contract="curve.length",arguments=["bls12-381.g1"],implementation="",function_type=(!runtime.scope, !algebra.group_vector<"bls12-381.g1">) -> !exec.outcome<(ui64)>} : ()->()
+  "runtime.binding"() {sym_name="index_equal",contract="index.equal",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>} : ()->()
+  "runtime.binding"() {sym_name="index_constant",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
+  "runtime.binding"() {sym_name="curve_equal",contract="curve.equal",arguments=["bls12-381.g1"],implementation="",function_type=(!runtime.scope, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> !exec.outcome<(i1)>} : ()->()
+  "runtime.binding"() {sym_name="bool_and",contract="bool.and",arguments=[],implementation="",function_type=(!runtime.scope, i1, i1) -> !exec.outcome<(i1)>} : ()->()
     func.func @draw(%arg0: !runtime.scope, %arg1: !r) -> !exec.outcome<(!f, !r)> attributes {no_inline, runtime.origin = ["draw", []]} {
       %0 = "exec.apply"(%arg0, %arg1) <{binding = @random_draw, parameters = [], site = "s"}> : (!runtime.scope, !r) -> !exec.outcome<(!f, !r)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!f, !r)>) -> ()
@@ -40,7 +40,7 @@ module { "protocol.module"() ({
       return %5 : !exec.outcome<(!f, !r)>
     }
     func.func @inverse(%arg0: !runtime.scope, %arg1: !f) -> !exec.outcome<(!f, i1)> attributes {no_inline, runtime.origin = ["inverse", []]} {
-      %0 = "exec.apply"(%arg0) <{binding = @field_constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
+      %0 = "exec.apply"(%arg0) <{binding = @field_constant, parameters = [#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!f)>) -> ()
     ^bb1(%1: !f):  // pred: ^bb0
       %2 = "exec.apply"(%arg0, %arg1, %1) <{binding = @field_equal, parameters = [], site = "empty"}> : (!runtime.scope, !f, !f) -> !exec.outcome<(i1)>
@@ -281,7 +281,7 @@ module { "protocol.module"() ({
       cf.br ^bb8(%25 : i1)
     }
     func.func private @control_2(%arg0: !runtime.scope, %arg1: !gs, %arg2: !gs, %arg3: ui64) -> !exec.outcome<(i1)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
       %2 = "exec.boolean"(%arg0) <{site = "yes", value = true}> : (!runtime.scope) -> !exec.outcome<(i1)>

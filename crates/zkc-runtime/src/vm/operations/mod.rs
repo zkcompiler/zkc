@@ -1,6 +1,7 @@
-//! Finite independently authored runtime installation. Artifact declarations can
-//! select these owners, never install or override them.
+//! Closed runtime interpretation and explicit physical installation. Shared
+//! declarations supply logical facts; artifacts cannot install or override code.
 mod bytes;
+mod catalog;
 mod control;
 mod curve;
 mod encoding;
@@ -28,68 +29,34 @@ use super::{
 };
 use std::{collections::BTreeMap, sync::OnceLock};
 type Result<T> = std::result::Result<T, AdmissionError>;
-type LogicalResolver = fn(&OperationBinding, &Contract) -> Result<OperationSignature<LogicalType>>;
 type PhysicalResolver =
     fn(&OperationBinding, &OperationSignature<LogicalType>, Selection) -> Result<BoundSignature>;
 
-pub(super) struct Contract {
+/// Consumer-profile membership and default/alternative physical owners.
+/// Signature, parameter and facet facts belong exclusively to the catalog.
+pub(super) struct Installation {
     name: &'static str,
     implementations: &'static [&'static str],
-    shape: Option<(&'static [Type], &'static [Type], AttributeRule)>,
     alternatives: bool,
-    history: bool,
 }
-impl Contract {
-    pub(super) const fn new(
-        name: &'static str,
-        shape: (&'static [Type], &'static [Type], AttributeRule),
-    ) -> Self {
+impl Installation {
+    pub(super) const fn new(name: &'static str) -> Self {
         Self {
             name,
             implementations: &[],
-            shape: Some(shape),
             alternatives: false,
-            history: false,
         }
     }
-    pub(super) const fn selectable(
-        name: &'static str,
-        shape: (&'static [Type], &'static [Type], AttributeRule),
-    ) -> Self {
+    pub(super) const fn selectable(name: &'static str) -> Self {
         Self {
             alternatives: true,
-            ..Self::new(name, shape)
-        }
-    }
-    pub(super) const fn custom(name: &'static str) -> Self {
-        Self {
-            name,
-            implementations: &[],
-            shape: None,
-            alternatives: false,
-            history: false,
+            ..Self::new(name)
         }
     }
     /// Exact default owners, independent of domain applicability and alternatives.
     pub(super) const fn implemented_by(mut self, implementations: &'static [&'static str]) -> Self {
         self.implementations = implementations;
         self
-    }
-    /// A transition of protocol-visible observation or sampling history.
-    /// This facet does not imply purity, totality, or a sampling law.
-    pub(super) const fn history(mut self) -> Self {
-        self.history = true;
-        self
-    }
-    fn shape(&self) -> Result<OperationSignature> {
-        let (inputs, outputs, attributes) = self
-            .shape
-            .ok_or_else(|| AdmissionError::new(ErrorCode::Signature, "contract-shape-missing"))?;
-        Ok(OperationSignature {
-            inputs: inputs.to_vec(),
-            outputs: outputs.to_vec(),
-            attributes,
-        })
     }
 }
 
@@ -117,15 +84,13 @@ impl Selection {
 }
 
 pub(super) struct Contribution {
-    pub(super) contracts: &'static [Contract],
-    pub(super) resolve: LogicalResolver,
+    pub(super) contracts: &'static [Installation],
     pub(super) select: PhysicalResolver,
     pub(super) alternatives: &'static [Alternative],
     pub(super) physical_error: &'static str,
-    pub(super) physical_only: bool,
 }
 pub(super) struct Registry {
-    logical: BTreeMap<&'static str, (&'static Contract, &'static Contribution)>,
+    logical: BTreeMap<&'static str, (&'static Installation, &'static Contribution)>,
     physical: BTreeMap<String, PhysicalOwner>,
 }
 enum PhysicalOwner {
@@ -313,18 +278,7 @@ impl Registry {
             }
             return Ok((row.signature.clone(), Some(row.id), row.requirements));
         }
-        let (_, owner) = self.logical.get(binding.contract.as_str()).ok_or_else(|| {
-            AdmissionError::new(ErrorCode::Signature, "uninstalled operation binding")
-        })?;
-        let logical = if owner.physical_only {
-            OperationSignature {
-                inputs: vec![],
-                outputs: vec![],
-                attributes: AttributeRule::None,
-            }
-        } else {
-            logical_signature(binding)?
-        };
+        let logical = declared_logical_signature(binding)?;
         let signature = self.select_physical(binding, &logical, physical)?;
         let timing = match self.physical.get(&binding.implementation) {
             Some(PhysicalOwner::Family(_, Selection::Alternative(row))) => row.timing,
@@ -374,6 +328,12 @@ impl Registry {
         };
         for &contribution in contributions {
             for contract in contribution.contracts {
+                if zkc_catalog::operation(contract.name).is_none() {
+                    return Err(AdmissionError::new(
+                        ErrorCode::Signature,
+                        "undeclared-logical-contract",
+                    ));
+                }
                 if registry
                     .logical
                     .insert(contract.name, (contract, contribution))
@@ -488,20 +448,24 @@ pub(super) fn observes_history(contract: &str) -> Result<bool> {
 pub(super) fn logical_signature(
     binding: &OperationBinding,
 ) -> Result<OperationSignature<LogicalType>> {
-    let registry = installed()?;
-    let (_, owner) = registry
-        .logical
-        .get(binding.contract.as_str())
-        .ok_or_else(|| {
-            AdmissionError::new(ErrorCode::Signature, "uninstalled operation binding")
-        })?;
-    if owner.physical_only {
+    let declaration = declaration(&binding.contract)?;
+    if declaration.stage == zkc_catalog::Stage::Physical {
         return Err(AdmissionError::new(
             ErrorCode::Signature,
             "binding-adapter-at-logical-stage",
         ));
     }
-    declared_logical_signature(binding)
+    catalog::signature(binding)
+}
+
+fn declaration(contract: &str) -> Result<&'static zkc_catalog::Operation> {
+    if !installed()?.logical.contains_key(contract) {
+        return Err(AdmissionError::new(
+            ErrorCode::Signature,
+            "uninstalled operation binding",
+        ));
+    }
+    zkc_catalog::operation(contract).ok_or_else(support::failure)
 }
 
 /// Mathematical erasure used when a trusted owner contributes a physical
@@ -509,32 +473,11 @@ pub(super) fn logical_signature(
 pub(super) fn declared_logical_signature(
     binding: &OperationBinding,
 ) -> Result<OperationSignature<LogicalType>> {
-    let registry = installed()?;
-    let (contract, owner) = registry
-        .logical
-        .get(binding.contract.as_str())
-        .ok_or_else(|| {
-            AdmissionError::new(ErrorCode::Signature, "uninstalled operation binding")
-        })?;
-    (owner.resolve)(binding, contract)
+    declaration(&binding.contract)?;
+    catalog::signature(binding)
 }
 pub(super) fn signature(binding: &OperationBinding) -> Result<BoundSignature> {
-    let registry = installed()?;
-    if registry
-        .logical
-        .get(binding.contract.as_str())
-        .is_some_and(|(_, owner)| owner.physical_only)
-    {
-        return select_signature(
-            binding,
-            &OperationSignature {
-                inputs: vec![],
-                outputs: vec![],
-                attributes: AttributeRule::None,
-            },
-        );
-    }
-    select_signature(binding, &logical_signature(binding)?)
+    select_signature(binding, &declared_logical_signature(binding)?)
 }
 pub(super) fn select_signature(
     binding: &OperationBinding,
@@ -546,7 +489,13 @@ impl Registry {
     fn observes_history(&self, contract: &str) -> Result<bool> {
         self.logical
             .get(contract)
-            .map(|(row, _)| row.history)
+            .map(|_| {
+                zkc_catalog::operation(contract).is_some_and(|row| {
+                    row.facets
+                        .iter()
+                        .any(|facet| matches!(facet, zkc_catalog::Facet::History { .. }))
+                })
+            })
             .ok_or_else(|| {
                 AdmissionError::new(ErrorCode::Signature, "uninstalled operation binding")
             })

@@ -1,6 +1,7 @@
 #include "NativeCodec.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -738,8 +739,8 @@ Error verifyNativeCodec(ModuleOp transcript, ModuleOp encoded,
                         ArrayRef<NativeTranscriptEvent> events,
                         const json::Array &transcriptPlan,
                         const json::Array &codecPlan) {
-  if (!transcript || !encoded || failed(verify(transcript)) ||
-      failed(verify(encoded)))
+  if (!transcript || !encoded || failed(zkc::admitStage(transcript)) ||
+      failed(zkc::admitStage(encoded)))
     return error("native-codec-subject");
   auto source = cast<pir::ProtocolModuleOp>(transcript.getBody()->front());
   auto candidate = cast<pir::ProtocolModuleOp>(encoded.getBody()->front());

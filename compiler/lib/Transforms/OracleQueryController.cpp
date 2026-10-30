@@ -3,11 +3,13 @@
 #include "OracleTableRead.h"
 #include "RealizationEmission.h"
 #include "mlir/IR/Verifier.h"
-#include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
 using namespace mlir;
@@ -46,30 +48,23 @@ struct Emitter {
     result.capacity = capacity;
   }
   Expected<Type> sequence(Type type) {
-    auto encoded = encodeBoundType(type, false);
-    if (!encoded)
-      return encoded.takeError();
-    auto bound = parseBoundType("sequence<" + encoded->spelling() + ">", false);
-    if (!bound)
-      return bound.takeError();
-    auto decoded = decodeBoundType(candidate.getContext(), *bound);
-    if (!decoded)
+    auto result = constructLogicalType([&] { return emitError(loc); },
+                                       candidate.getContext(),
+                                       {"sequence", {TypeAttr::get(type)}});
+    if (!result)
       return error("oracle-controller-layout");
-    return decoded;
+    return result;
   }
   Expected<unsigned> kind(pir::OracleKindAttr kind) {
-    if (!kind || kind.getIdentity() != "table")
+    if (!kind || kind.getContext() != candidate.getContext() ||
+        kind.getIdentity() != "table" ||
+        failed(pir::OracleKindAttr::verify([&] { return emitError(loc); },
+                                           kind.getIdentity(),
+                                           kind.getArguments())))
       return error("oracle-controller-layout");
-    auto reference = oracleReferenceType(kind);
-    if (!reference)
-      return reference.takeError();
-    for (auto [i, existing] : enumerate(result.kinds)) {
-      auto other = oracleReferenceType(existing);
-      if (!other)
-        return other.takeError();
-      if (*other == *reference)
+    for (auto [i, existing] : enumerate(result.kinds))
+      if (sameOracleReferenceKind(existing, kind))
         return i;
-    }
     auto answers = sequence(kind.getAnswerType());
     if (!answers)
       return answers.takeError();
@@ -127,18 +122,29 @@ struct Emitter {
           if (!childKind)
             return childKind.takeError();
           std::vector<std::string> fields(4 + previous.size(), "index");
-          auto spelling = encodeVariant(
-              {json::Array{"zkc.oracle.continuation/0",
-                           toHex(storage.entry, true), toHex(result.role, true),
-                           std::to_string(source), std::to_string(ordinal)},
-               {{"Record", std::move(fields)}}});
+          VariantDescriptor descriptor{
+              json::Array{"zkc.oracle.continuation/0",
+                          toHex(storage.entry, true), toHex(result.role, true),
+                          std::to_string(source), std::to_string(ordinal)},
+              {{"Record", std::move(fields)}}};
+          auto spelling = encodeVariant(descriptor);
           if (!spelling)
             return error("oracle-controller-layout");
           if (spelling->size() > metadataRemaining)
             return error("oracle-controller-limit");
           metadataRemaining -= spelling->size();
-          Type record =
-              data::VariantType::get(candidate.getContext(), *spelling);
+          auto *context = candidate.getContext();
+          auto nominal =
+              data::importVariantIdentity(context, descriptor.nominal);
+          auto arm = data::AlternativeAttr::get(
+              context, builder.getStringAttr("Record"),
+              Types(4 + previous.size(), index));
+          Type record = nominal ? data::VariantType::getChecked(
+                                      loc, context, nominal,
+                                      ArrayRef<data::AlternativeAttr>{arm})
+                                : data::VariantType{};
+          if (!record)
+            return error("oracle-controller-layout");
           auto arena = sequence(record);
           if (!arena)
             return arena.takeError();
@@ -167,9 +173,8 @@ struct Emitter {
     return Error::success();
   }
   unsigned kindNumber(pir::OracleKindAttr value) {
-    auto reference = cantFail(oracleReferenceType(value));
     for (auto [i, kind] : enumerate(result.kinds))
-      if (cantFail(oracleReferenceType(kind)) == reference)
+      if (sameOracleReferenceKind(kind, value))
         return i;
     llvm_unreachable("planned query kind");
   }
@@ -212,24 +217,19 @@ struct Emitter {
   }
   Values apply(Control &control, StringRef contract, TypeRange outputs,
                ValueRange inputs, StringRef site,
-               ArrayRef<std::string> statics = {},
-               ArrayRef<std::string> parameters = {}) {
+               ArrayRef<Attribute> statics = {},
+               ArrayRef<Attribute> parameters = {}) {
     auto binding = bindings.binding(
-        builder, loc,
-        {contract.str(),
-         std::vector<std::string>(statics.begin(), statics.end()), ""});
-    SmallVector<Attribute> attrs;
-    for (const auto &parameter : parameters)
-      attrs.push_back(builder.getStringAttr(parameter));
+        builder, loc, {contract.str(), SmallVector<Attribute>(statics), ""});
     return control.invoke(
         "exec.apply", outputs, control.scoped(inputs),
         {builder.getNamedAttr("binding", binding),
-         builder.getNamedAttr("parameters", builder.getArrayAttr(attrs)),
+         builder.getNamedAttr("parameters", builder.getArrayAttr(parameters)),
          builder.getNamedAttr("site", builder.getStringAttr(site))});
   }
   Value number(Control &c, uint64_t value, StringRef site) {
     return apply(c, "index.constant", index, {}, site, {},
-                 {std::to_string(value)})
+                 {builder.getIntegerAttr(index, value)})
         .front();
   }
   Value compare(Control &c, StringRef contract, Value a, Value b,
@@ -271,9 +271,8 @@ struct Emitter {
           [&](Control &body, ValueRange values) { body.complete(values); });
     });
   }
-  std::string element(Type sequence) {
-    auto bound = cantFail(encodeBoundType(sequence, false));
-    return bound.arguments.front().type->spelling();
+  Attribute element(Type sequence) {
+    return TypeAttr::get(cast<data::SequenceType>(sequence).getElementType());
   }
   Value empty(Control &c, Type sequence, StringRef site) {
     return apply(c, "sequence.empty", sequence, {}, site, {element(sequence)})
@@ -890,7 +889,7 @@ Expected<OracleQueryController> emitOracleQueryController(
       root.getIdentity() != "table" ||
       target.getProfile() != pir::Profile::Protocol ||
       source.getProfile() != pir::Profile::Protocol ||
-      failed(verify(candidate)) || failed(verify(prepared)))
+      failed(zkc::admitStage(candidate)) || failed(zkc::admitStage(prepared)))
     return error("oracle-controller-source");
   // Native range admission is bounded. Refuse generation instead of silently
   // truncating the source's recursive expansion or adding a validity premise.

@@ -1,8 +1,8 @@
 module
 
-public meta import ZkcSecurity.Tools.InputLaws
-public meta import ZkcSecurity.Tools.ComponentCost
-public meta import ZkcSecurity.Tools.ComponentDerivation
+public meta import ZkcSecurityTools.InputLaws
+public meta import ZkcSecurityTools.ComponentCost
+public meta import ZkcSecurityTools.ComponentDerivation
 
 @[expose] public section
 set_option autoImplicit false

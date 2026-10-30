@@ -6,8 +6,8 @@
 !T = !runtime.transfer<(!F)>
 !H = !exec.outcome<(!T)>
 module {
-  "runtime.binding"() {sym_name="add", contract="field.add", arguments=["koala-bear"], implementation=""} : () -> ()
-  "runtime.binding"() {sym_name="multiply", contract="field.mul", arguments=["koala-bear"], implementation=""} : () -> ()
+  "runtime.binding"() {sym_name="add", contract="field.add", arguments=["koala-bear"], implementation="",function_type=(!runtime.scope, !algebra.field<"koala-bear">, !algebra.field<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : () -> ()
+  "runtime.binding"() {sym_name="multiply", contract="field.mul", arguments=["koala-bear"], implementation="",function_type=(!runtime.scope, !algebra.field<"koala-bear">, !algebra.field<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : () -> ()
   func.func private @yes(%scope: !S, %x: !F, %y: !F) -> !R attributes {no_inline, runtime.region} {
     %applied = "exec.apply"(%scope, %x, %y) {binding=@add, parameters=[], site="sum"} : (!S, !F, !F) -> !R
     "exec.dispatch"(%applied)[^success, ^failed] : (!R) -> ()

@@ -6,8 +6,8 @@ import tomllib
 LEAN = Path(__file__).resolve().parents[1]
 PACKAGES = {
     "main": (LEAN, ("Zkc", "ZkcExamples", "ZkcTools", "Tests")),
-    "security": (LEAN / "security", ("ZkcSecurity", "TestsSecurity")),
-    "arklib": (LEAN / "integrations/arklib", ("ZkcArkLib", "TestsArkLib")),
+    "security": (LEAN / "security", ("ZkcSecurity", "ZkcSecurityTools", "ZkcSecurityExamples", "TestsSecurity")),
+    "arklib": (LEAN / "integrations/arklib", ("ZkcArkLib", "ZkcArkLibExamples", "TestsArkLib")),
     "clean": (LEAN / "integrations/clean", ("ZkcClean", "TestsClean", "CleanExamples", "CleanExamplesAudit")),
 }
 NAMES = {"main": "zkc", "security": "zkc_security", "arklib": "zkc_arklib", "clean": "zkc_clean"}
@@ -17,6 +17,21 @@ FORBIDDEN_DEPENDENCIES = {
     'arklib': {'Clean', 'zkc_clean'},
     'clean': {'Arklib', 'zkc_arklib', 'VCVio', 'PolyFun', 'zkc_security'},
 }
+
+def is_owned_module(module):
+    """Whether a module belongs to a maintained package rather than a provider."""
+    root = module.split(".", 1)[0]
+    return any(root in roots for _, roots in PACKAGES.values())
+
+
+def module_package(module):
+    """Resolve a maintained module through the shared ownership inventory."""
+    root = module.split(".", 1)[0]
+    owners = [directory for directory, roots in PACKAGES.values() if root in roots]
+    if len(owners) != 1:
+        raise ValueError(f"module has no unique maintained package: {module}")
+    return owners[0]
+
 
 def selected(integrations):
     result = ["main"]

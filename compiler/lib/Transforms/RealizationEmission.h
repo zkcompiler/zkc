@@ -1,11 +1,12 @@
 #ifndef ZKC_TRANSFORMS_REALIZATIONEMISSION_H
 #define ZKC_TRANSFORMS_REALIZATIONEMISSION_H
 
+#include "NativeBindingApplication.h"
 #include "mlir/IR/Builders.h"
-#include "zkc/Contracts/Binding.h"
+#include "mlir/IR/SymbolTable.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringSet.h"
 #include <map>
-#include <tuple>
 
 namespace zkc::mathematical {
 /// Producer-only allocation in a private candidate. Existing declarations are
@@ -24,15 +25,16 @@ class RealizationEmitter {
   std::string prefix;
   llvm::StringSet<> names;
   unsigned next = 0;
-  using Key = std::tuple<std::string, std::vector<std::string>, std::string>;
-  std::map<Key, std::string> bindings;
+  std::map<std::pair<std::string, std::string>,
+           llvm::DenseMap<mlir::ArrayAttr, std::string>>
+      bindings;
 
 public:
   RealizationEmitter(mlir::Operation *candidate, llvm::StringRef bindingPrefix);
   void reserveNames(mlir::Operation *source);
 
   mlir::FlatSymbolRefAttr binding(mlir::OpBuilder &, mlir::Location,
-                                  const protocol::BindingApplication &);
+                                  const NativeBindingApplication &);
 };
 } // namespace zkc::mathematical
 

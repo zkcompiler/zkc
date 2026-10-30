@@ -5,6 +5,7 @@
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Contracts/SourceTerms.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Registry.h"
@@ -189,8 +190,8 @@ int main() {
             op.setOriginAttr(zkc::protocol_ir::protocolOriginAttr(
                 &context, jsonValue(malformedOrigin)));
           });
-          require(failed(mlir::verify(*candidate)),
-                  "malformed protocol origin passed IR verification");
+          require(failed(zkc::admitStage(*candidate)),
+                  "malformed protocol origin passed stage admission");
         }
         for (
             StringRef changedOrigin :

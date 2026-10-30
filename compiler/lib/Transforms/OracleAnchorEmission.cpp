@@ -24,9 +24,6 @@ emitOracleAnchorAllocator(ModuleOp candidate, const OracleAnchorStorage &plan,
   auto reference = oracleReferenceType(layout.kind);
   if (!reference)
     return reference.takeError();
-  auto record = encodeBoundType(storage.record, false);
-  if (!record)
-    return record.takeError();
   OpBuilder builder(candidate.getContext());
   builder.setInsertionPointToEnd(&unit.getBody().front());
   SmallVector<Type> arguments{runtime::ScopeType::get(candidate.getContext()),
@@ -51,22 +48,18 @@ emitOracleAnchorAllocator(ModuleOp candidate, const OracleAnchorStorage &plan,
   builder.setInsertionPointToEnd(helper.addEntryBlock());
   mathematical::RealizationEmitter bindings(unit, "_oracle_storage_binding_");
   exec::ScopedExecutionBuilder control(builder, helper);
-  auto apply = [&](StringRef contract, ArrayRef<std::string> statics,
-                   Type output, ValueRange inputs, StringRef site,
-                   ArrayRef<std::string> parameters = {}) {
-    auto binding = bindings.binding(
-        builder, helper.getLoc(),
-        {contract.str(),
-         std::vector<std::string>(statics.begin(), statics.end()), ""});
-    SmallVector<Attribute> attrs;
-    for (const auto &parameter : parameters)
-      attrs.push_back(builder.getStringAttr(parameter));
+  auto apply = [&](StringRef contract, ArrayRef<Attribute> statics, Type output,
+                   ValueRange inputs, StringRef site,
+                   ArrayRef<Attribute> parameters = {}) {
+    auto binding =
+        bindings.binding(builder, helper.getLoc(),
+                         {contract.str(), SmallVector<Attribute>(statics), ""});
     return control
-        .invoke(
-            "exec.apply", output, control.scoped(inputs),
-            {builder.getNamedAttr("binding", binding),
-             builder.getNamedAttr("parameters", builder.getArrayAttr(attrs)),
-             builder.getNamedAttr("site", builder.getStringAttr(site))})
+        .invoke("exec.apply", output, control.scoped(inputs),
+                {builder.getNamedAttr("binding", binding),
+                 builder.getNamedAttr("parameters",
+                                      builder.getArrayAttr(parameters)),
+                 builder.getNamedAttr("site", builder.getStringAttr(site))})
         .front();
   };
   auto pack = [&](Type type, ValueRange inputs, StringRef site) {
@@ -80,13 +73,13 @@ emitOracleAnchorAllocator(ModuleOp candidate, const OracleAnchorStorage &plan,
   auto index =
       IntegerType::get(candidate.getContext(), 64, IntegerType::Unsigned);
   auto tag = apply("index.constant", {}, index, {}, "constructor",
-                   {std::to_string(constructor)});
-  auto length = apply("sequence.length", {record->spelling()}, index,
+                   {builder.getIntegerAttr(index, constructor)});
+  auto length = apply("sequence.length", {TypeAttr::get(storage.record)}, index,
                       helper.getArgument(1), "length");
   auto value =
       pack(storage.record, helper.getArguments().drop_front(2), "record");
-  auto next = apply("sequence.append", {record->spelling()}, storage.sequence,
-                    {helper.getArgument(1), value}, "append");
+  auto next = apply("sequence.append", {TypeAttr::get(storage.record)},
+                    storage.sequence, {helper.getArgument(1), value}, "append");
   auto handle = pack(*reference, {tag, length}, "reference");
   control.returned({handle, next});
   return helper;
@@ -108,9 +101,6 @@ Expected<func::FuncOp> emitOracleAnchorLookup(ModuleOp candidate,
   auto reference = oracleReferenceType(layout.kind);
   if (!reference)
     return reference.takeError();
-  auto record = encodeBoundType(storage.record, false);
-  if (!record)
-    return record.takeError();
   OpBuilder builder(candidate.getContext());
   auto loc = candidate.getLoc();
   auto index =
@@ -155,32 +145,29 @@ Expected<func::FuncOp> emitOracleAnchorLookup(ModuleOp candidate,
             "reference", TypeRange{index, index, storage.sequence}, true);
         builder.setInsertionPointToEnd(&selected.getBody().front());
         exec::ScopedExecutionBuilder body(builder, selected);
-        auto apply = [&](StringRef contract, ArrayRef<std::string> arguments,
+        auto apply = [&](StringRef contract, ArrayRef<Attribute> arguments,
                          TypeRange outputs, ValueRange inputs, StringRef site,
-                         ArrayRef<std::string> parameters = {}) {
+                         ArrayRef<Attribute> parameters = {}) {
           auto binding = bindings.binding(
               builder, loc,
-              {contract.str(),
-               std::vector<std::string>(arguments.begin(), arguments.end()),
-               ""});
-          SmallVector<Attribute> attrs;
-          for (const auto &parameter : parameters)
-            attrs.push_back(builder.getStringAttr(parameter));
+              {contract.str(), SmallVector<Attribute>(arguments), ""});
           return body.invoke(
               "exec.apply", outputs, body.scoped(inputs),
               {builder.getNamedAttr("binding", binding),
-               builder.getNamedAttr("parameters", builder.getArrayAttr(attrs)),
+               builder.getNamedAttr("parameters",
+                                    builder.getArrayAttr(parameters)),
                builder.getNamedAttr("site", builder.getStringAttr(site))});
         };
         auto expected = apply("index.constant", {}, index, {}, "constructor",
-                              {std::to_string(constructor)})
+                              {builder.getIntegerAttr(index, constructor)})
                             .front();
         auto matches = apply("index.equal", {}, builder.getI1Type(),
                              {selected.getArgument(1), expected}, "belongs_to")
                            .front();
         apply("control.require", {}, {}, matches, "admit_reference");
         auto value =
-            apply("sequence.at", {record->spelling()}, storage.record,
+            apply("sequence.at", {TypeAttr::get(storage.record)},
+                  storage.record,
                   {selected.getArgument(3), selected.getArgument(2)}, "lookup")
                 .front();
         auto values =

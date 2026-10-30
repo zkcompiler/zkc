@@ -1,154 +1,26 @@
-//! Independently authored oracle operation contracts and physical policy.
+//! Installed oracle operation implementations and physical policy.
 use super::*;
-use Type::*;
 
-pub(super) const CONTRACTS: &[Contract] = &[
-    Contract::new(
-        "oracle.commit",
-        (
-            &[Vector, Index],
-            &[Commitment, OpeningState],
-            AttributeRule::None,
-        ),
-    )
-    .implemented_by(&["plonky3/oracle.commit"]),
-    Contract::new(
-        "oracle.open",
-        (
-            &[OpeningState, Index],
-            &[Vector, Proof],
-            AttributeRule::None,
-        ),
-    )
-    .implemented_by(&["plonky3/oracle.open"]),
-    Contract::new(
-        "oracle.check",
-        (
-            &[Commitment, Index, Index, Index, Vector, Proof],
-            &[Bool],
-            AttributeRule::None,
-        ),
-    )
-    .implemented_by(&["plonky3/oracle.check"]),
-    Contract::new(
-        "oracle.open_many",
-        (
-            &[OpeningState, Indices],
-            &[Vector, Proof],
-            AttributeRule::None,
-        ),
-    )
-    .implemented_by(&["plonky3/oracle.open_many"]),
-    Contract::new(
-        "oracle.check_many",
-        (
-            &[Commitment, Index, Index, Indices, Vector, Proof],
-            &[Bool],
-            AttributeRule::None,
-        ),
-    )
-    .implemented_by(&["plonky3/oracle.check_many"]),
-    Contract::new(
-        "commitments.empty",
-        (&[], &[Commitments], AttributeRule::None),
-    )
-    .implemented_by(&["plonky3/commitments.empty"]),
-    Contract::new(
-        "commitments.append",
-        (
-            &[Commitments, Commitment],
-            &[Commitments],
-            AttributeRule::None,
-        ),
-    )
-    .implemented_by(&["plonky3/commitments.append"]),
-    Contract::new(
-        "commitments.at",
-        (&[Commitments, Index], &[Commitment], AttributeRule::None),
-    )
-    .implemented_by(&["plonky3/commitments.at"]),
-    Contract::new(
-        "commitments.length",
-        (&[Commitments], &[Index], AttributeRule::None),
-    )
-    .implemented_by(&["plonky3/commitments.length"]),
-    Contract::new(
-        "opening_states.empty",
-        (&[], &[OpeningStates], AttributeRule::None),
-    )
-    .implemented_by(&["plonky3/opening_states.empty"]),
-    Contract::new(
-        "opening_states.append",
-        (
-            &[OpeningStates, OpeningState],
-            &[OpeningStates],
-            AttributeRule::None,
-        ),
-    )
-    .implemented_by(&["plonky3/opening_states.append"]),
-    Contract::new(
-        "opening_states.at",
-        (
-            &[OpeningStates, Index],
-            &[OpeningState],
-            AttributeRule::None,
-        ),
-    )
-    .implemented_by(&["plonky3/opening_states.at"]),
-    Contract::new(
-        "opening_states.length",
-        (&[OpeningStates], &[Index], AttributeRule::None),
-    )
-    .implemented_by(&["plonky3/opening_states.length"]),
+pub(super) const CONTRACTS: &[Installation] = &[
+    Installation::new("oracle.commit").implemented_by(&["plonky3/oracle.commit"]),
+    Installation::new("oracle.open").implemented_by(&["plonky3/oracle.open"]),
+    Installation::new("oracle.check").implemented_by(&["plonky3/oracle.check"]),
+    Installation::new("oracle.open_many").implemented_by(&["plonky3/oracle.open_many"]),
+    Installation::new("oracle.check_many").implemented_by(&["plonky3/oracle.check_many"]),
+    Installation::new("commitments.empty").implemented_by(&["plonky3/commitments.empty"]),
+    Installation::new("commitments.append").implemented_by(&["plonky3/commitments.append"]),
+    Installation::new("commitments.at").implemented_by(&["plonky3/commitments.at"]),
+    Installation::new("commitments.length").implemented_by(&["plonky3/commitments.length"]),
+    Installation::new("opening_states.empty").implemented_by(&["plonky3/opening_states.empty"]),
+    Installation::new("opening_states.append").implemented_by(&["plonky3/opening_states.append"]),
+    Installation::new("opening_states.at").implemented_by(&["plonky3/opening_states.at"]),
+    Installation::new("opening_states.length").implemented_by(&["plonky3/opening_states.length"]),
 ];
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
     physical_error: "uninstalled operation binding",
-    physical_only: false,
 
     contracts: CONTRACTS,
-    resolve,
+
     select: default_ports,
 };
-
-pub(super) fn resolve(
-    binding: &OperationBinding,
-    contract: &Contract,
-) -> Result<OperationSignature<LogicalType>> {
-    let fail = || AdmissionError::new(ErrorCode::Signature, "uninstalled operation binding");
-    let shape = contract.shape()?;
-    if binding.arguments.len() != 1 {
-        return Err(fail());
-    }
-    let scheme = Identity::parse(&binding.arguments[0])?;
-    if !scheme.is_row_commitment() {
-        return Err(fail());
-    }
-    // Pruned multi-opening is a capability of the scheme, not of every row
-    // commitment.
-    if matches!(
-        binding.contract.as_str(),
-        "oracle.open_many" | "oracle.check_many"
-    ) && !scheme.has_multi_opening()
-    {
-        return Err(fail());
-    }
-    let make = |kind| {
-        let identity = match kind {
-            Type::Bool | Type::Index | Type::Indices => Identity::None,
-            Type::Vector => scheme.scalar_field().ok_or_else(fail)?,
-            Type::Commitment
-            | Type::OpeningState
-            | Type::Proof
-            | Type::Commitments
-            | Type::OpeningStates => scheme,
-            _ => return Err(fail()),
-        };
-        LogicalType::new(kind, identity)
-    };
-    Ok(OperationSignature {
-        inputs: shape.inputs.into_iter().map(make).collect::<Result<_>>()?,
-        outputs: shape.outputs.into_iter().map(make).collect::<Result<_>>()?,
-        attributes: shape.attributes,
-    })
-}

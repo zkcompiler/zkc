@@ -1,9 +1,12 @@
 #include "../lib/Conversion/Bindings.h"
 #include "../lib/Target/ExecutionPorts.h"
+#include "../lib/Target/NativePlanTypes.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
+#include "support/NativeBindings.h"
 #include "support/NativeCases.h"
 #include "support/ScopedFixture.h"
+#include "support/VariantFixture.h"
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/Observation.h"
@@ -11,10 +14,12 @@
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/TypeRepresentations.h"
 #include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Target/CpuTarget.h"
 #include "zkc/Target/Selection.h"
@@ -84,7 +89,7 @@ std::string boundScale() {
 !G = !algebra.group<"bls12-381.g2">
 )" + scopedFixture(
              R"(
-"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g2"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g2"],implementation="",function_type=(!runtime.scope, !algebra.group<"bls12-381.g2">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g2">)>} : ()->()
 )",
              "%g:!G,%x:!F", "%g,%x", "!G,!F", "!G",
              scopedApply("scale", "scale", "%g,%x", "!G,!F", "%scaled", "!G") +
@@ -96,8 +101,8 @@ std::string tableLayouts() {
 !T = !poly.multilinear<"bls12-381.fr">
 )" + scopedFixture(
              R"(
-"runtime.binding"() {sym_name="msb",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
-"runtime.binding"() {sym_name="dense",contract="poly.fold",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="msb",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="dense",contract="poly.fold",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
 )",
              "%a:!T,%r:!F", "%a,%r", "!T,!F", "!T",
              scopedApply("msb", "first", "%a,%r", "!T,!F", "%x", "!T") +
@@ -131,7 +136,7 @@ unsigned adapterDeclarations(const PhysicalPlan &plan, StringRef contract,
                       implementation &&
                   !binding.declaration,
               "adapter was not synthesized with the expected implementation");
-      take(resolveBinding(binding.binding.application, true));
+      take(resolveNativeApplication(binding.binding.application));
       ++count;
     }
   return count;
@@ -157,12 +162,12 @@ void publishAdapters(ModuleOp module, const PhysicalPlan &plan,
 }
 class WithoutConversions final : public CandidateCatalog {
 public:
-  Expected<std::vector<std::string>>
-  implementations(const BindingApplication &application) const override {
+  Expected<std::vector<std::string>> implementations(
+      const zkc::NativeBindingApplication &application) const override {
     return installedCandidates().implementations(application);
   }
-  std::vector<BindingApplication>
-  conversions(const BoundType &, const BoundType &) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type, mlir::Type) const override {
     return {};
   }
 };
@@ -199,6 +204,10 @@ void reachedDeployment(const CompilationObservation &observations,
 }
 } // namespace
 int main() {
+  DialectRegistry registry;
+  registerDialects(registry);
+  MLIRContext context(registry);
+  context.loadAllAvailableDialects();
   Cases cases;
   const auto small = installation("\"plonky3\"");
   const auto empty = installation("");
@@ -241,13 +250,12 @@ int main() {
     for (const auto &rep : appliedTypeRepresentations()) {
       std::vector<std::string> args;
       for (const auto &arg : rep.arguments)
-        args.push_back(arg.kind == TypeArgument::Kind::Nat
+        args.push_back(arg.argument.kind == TypeArgument::Kind::Nat
                            ? std::to_string(arg.minimum)
-                           : arg.exact.str());
+                           : arg.argument.spelling());
       auto logical = take(applyBoundType(rep.constructor, args));
       auto physical =
-          take(physicalType(logical, rep.representation,
-                            {take(parseBoundType(rep.childType, true))}));
+          take(physicalType(logical, rep.representation, {rep.childType}));
       accept(CpuTarget().checkType(physical));
     }
     for (const auto &impl : installedImplementations().all())
@@ -262,16 +270,23 @@ int main() {
         for (StringRef contract :
              {"control.require", "bool.and", "bool.or", "bool.not",
               "hash.keccak256", "hash.sha256", "bytes.empty", "index.constant"})
-          take(selectImplementation({contract.str(), {}, ""}, {}, empty));
+          take(selectImplementation(
+              nativeRequest(context, {contract.str(), {}, ""}), {}, empty));
         reject(empty.checkType(ordinary("field:koala-bear")));
       });
   cases.run("native external adapters retain their numerical owners", [&] {
-    take(selectImplementation({"external.openvm.init", {}, ""}, {}, small));
-    refuses(selectImplementation({"external.openvm.init", {}, ""}, {}, empty),
+    take(selectImplementation(
+        nativeRequest(context, {"external.openvm.init", {}, ""}), {}, small));
+    refuses(selectImplementation(
+                nativeRequest(context, {"external.openvm.init", {}, ""}), {},
+                empty),
             "cpu-target-unavailable");
-    take(selectImplementation({"external.monero.init", {}, ""}, {},
-                              installation("\"dalek\"")));
-    refuses(selectImplementation({"external.monero.init", {}, ""}, {}, small),
+    take(selectImplementation(
+        nativeRequest(context, {"external.monero.init", {}, ""}), {},
+        installation("\"dalek\"")));
+    refuses(selectImplementation(
+                nativeRequest(context, {"external.monero.init", {}, ""}), {},
+                small),
             "cpu-target-unavailable");
   });
   cases.run("small and binary fields require plonky3", [&] {
@@ -309,13 +324,17 @@ int main() {
     accept(small.checkType(ordinary(*supported)));
   });
   cases.run("default, explicit and special resolver choices obey target", [&] {
-    take(selectImplementation({"field.add", {"koala-bear"}, ""}, {}, small));
-    refuses(
-        selectImplementation({"field.add", {"bls12-381.fr"}, ""}, {}, small),
-        "cpu-target-unavailable");
+    take(selectImplementation(
+        nativeRequest(context, {"field.add", {"koala-bear"}, ""}), {}, small));
     refuses(selectImplementation(
-                {"field.add", {"bls12-381.fr"}, "blst/resident/field.add"}, {},
+                nativeRequest(context, {"field.add", {"bls12-381.fr"}, ""}), {},
                 small),
+            "cpu-target-unavailable");
+    refuses(selectImplementation(
+                nativeRequest(
+                    context,
+                    {"field.add", {"bls12-381.fr"}, "blst/resident/field.add"}),
+                {}, small),
             "cpu-target-unavailable");
     BindingApplication conversion{
         "representation.convert",
@@ -323,19 +342,21 @@ int main() {
         "native/representation.convert",
         {"field:bls12-381.fr@arkworks.fr/0", "field:bls12-381.fr@blst/fr"}};
     take(resolveBinding(conversion, true));
-    take(selectImplementation(conversion, {},
+    take(selectImplementation(nativeRequest(context, conversion), {},
                               installation("\"arkworks\",\"blst\"")));
     for (const auto &subset :
          {small, installation("\"arkworks\""), installation("\"blst\"")})
-      refuses(selectImplementation(conversion, {}, subset),
-              "cpu-target-unavailable");
+      refuses(
+          selectImplementation(nativeRequest(context, conversion), {}, subset),
+          "cpu-target-unavailable");
     BindingApplication relayout{
         "table.relayout",
         {"bls12-381.fr", "arkworks.mle-lsb/0", "arkworks.mle-msb/0"},
         "arkworks/table.relayout"};
     take(resolveBinding(relayout, true));
-    take(selectImplementation(relayout, {}, installation("\"arkworks\"")));
-    refuses(selectImplementation(relayout, {}, small),
+    take(selectImplementation(nativeRequest(context, relayout), {},
+                              installation("\"arkworks\"")));
+    refuses(selectImplementation(nativeRequest(context, relayout), {}, small),
             "cpu-target-unavailable");
   });
   cases.run("field service draw layout is mandatory", [&] {
@@ -344,27 +365,189 @@ int main() {
     reject(small.checkService("random.bn254.fr/0"));
     reject(installation("\"blst\"").checkService("random.bls12-381.fr/0"));
   });
-  cases.run("codec payload owner is independent of transcript challenge owner",
-            [&] {
-              BindingApplication observation{
-                  "transcript.native.indexed.observe.data",
+  cases.run(
+      "codec payload owner is independent of transcript challenge owner", [&] {
+        BindingApplication observation{
+            "transcript.native.indexed.observe.data",
+            {"merlin3.koala-bear.ext8-binomial3.rejection31le/0",
+             "field:koala-bear"},
+            "plonky3/transcript.native.indexed.observe.data"};
+        observation.physicalArguments =
+            take(defaultPhysicalArguments(observation));
+        take(selectImplementation(nativeRequest(context, observation), {},
+                                  small));
+        observation.arguments[1] = "sequence<field:bls12-381.fr>";
+        observation.physicalArguments =
+            take(defaultPhysicalArguments(observation));
+        take(resolveBinding(observation, true));
+        take(selectImplementation(nativeRequest(context, observation), {},
+                                  installation("\"plonky3\",\"arkworks\"")));
+        refuses(selectImplementation(nativeRequest(context, observation), {},
+                                     small),
+                "cpu-target-unavailable");
+      });
+  cases.run(
+      "native and neutral storage checks agree across installed layouts", [&] {
+        MLIRContext context(registry);
+        context.loadAllAvailableDialects();
+        OwningOpRef<ModuleOp> module(
+            ModuleOp::create(UnknownLoc::get(&context)));
+        auto compare = [&](const BoundType &physical) {
+          auto native = nativeType(context, physical);
+          require(take(encodeBoundType(native, true)) == physical,
+                  "structural adapter changed the independent expected layout");
+          for (const auto &target :
+               {empty, small, installation("\"arkworks\""),
+                installation("\"blst\""), installation("\"dalek\""),
+                installation("\"halo2curves\""), CpuTarget()}) {
+            auto neutralResult = target.checkType(physical);
+            auto nativeResult = target.checkType(native);
+            bool neutralRefused = bool(neutralResult),
+                 nativeRefused = bool(nativeResult);
+            consumeError(std::move(neutralResult));
+            consumeError(std::move(nativeResult));
+            require(
+                neutralRefused == nativeRefused,
+                "native storage owner differs from the neutral installation");
+          }
+        };
+        for (const auto &entry : installedDomains().allRepresentations())
+          compare(take(physicalType(
+              take(applyBoundType(entry.kind, entry.domain.empty()
+                                                  ? std::vector<std::string>{}
+                                                  : std::vector{entry.domain})),
+              entry.identity, {})));
+        for (const auto &entry : appliedTypeRepresentations()) {
+          std::vector<std::string> arguments;
+          for (const auto &argument : entry.arguments)
+            arguments.push_back(argument.argument.kind ==
+                                        TypeArgument::Kind::Nat
+                                    ? std::to_string(argument.minimum)
+                                    : argument.argument.spelling());
+          compare(take(
+              physicalType(take(applyBoundType(entry.constructor, arguments)),
+                           entry.representation, {entry.childType})));
+        }
+      });
+  cases.run("native dormant payloads require their own storage provider", [&] {
+    MLIRContext context(registry);
+    context.loadAllAvailableDialects();
+    auto spelling = *encodeVariant(
+        {"CpuDormant",
+         {{"none", {}}, {"hidden", {"sequence<field:bls12-381.fr>"}}}});
+    auto logical = zkc::test::variantType(&context, spelling);
+    auto physical = take(defaultPlanType(logical));
+    reject(small.checkType(physical));
+    accept(installation("\"arkworks\"").checkType(physical));
+    auto represented = cast<runtime::RepresentedType>(physical);
+    auto broken = runtime::RepresentedType::get(
+        &context, logical, represented.getRepresentation(), ArrayRef<Type>{});
+    reject(CpuTarget().checkType(broken), "binding-representation");
+    // CPU contributions cannot declare a new logical domain or a layout law.
+    auto field = algebra::FieldType::get(&context, "forged.field");
+    auto forged = runtime::RepresentedType::get(&context, field, "blst/fr",
+                                                ArrayRef<Type>{});
+    reject(CpuTarget().checkType(forged), "binding-representation");
+  });
+  cases.run(
+      "native formation and CPU availability do not impose the byte profile",
+      [&] {
+        MLIRContext context(registry);
+        context.loadAllAvailableDialects();
+        SmallVector<data::AlternativeAttr> alternatives;
+        for (unsigned i = 0; i < 33; ++i)
+          alternatives.push_back(data::AlternativeAttr::get(
+              &context, StringAttr::get(&context, "arm" + std::to_string(i)),
+              ArrayRef<Type>{IntegerType::get(&context, 1)}));
+        auto logical = data::VariantType::get(
+            &context,
+            data::importVariantIdentity(&context, json::Value("NativeWide")),
+            alternatives);
+        auto physical = take(defaultPlanType(logical));
+        accept(empty.checkType(physical));
+        refuses(encodeBoundType(physical, true), "variant-type");
+      });
+  cases.run(
+      "native bindings retain provider and hidden numerical dependencies", [&] {
+        MLIRContext context(registry);
+        context.loadAllAvailableDialects();
+        OwningOpRef<ModuleOp> module(
+            ModuleOp::create(UnknownLoc::get(&context)));
+        OpBuilder builder(&context);
+        builder.setInsertionPointToEnd(module->getBody());
+        for (const auto &application : std::vector<BindingApplication>{
+                 {"field.add", {"bls12-381.fr"}, "arkworks/field.add"},
+                 {"external.openvm.init", {}, "native/external.openvm.init"},
+                 {"external.monero.init", {}, "native/external.monero.init"},
+                 {"sequence.empty",
+                  {"field:bls12-381.fr"},
+                  "native/sequence.empty"},
+                 {"table.relayout",
+                  {"bls12-381.fr", "arkworks.mle-lsb/0", "arkworks.mle-msb/0"},
+                  "arkworks/table.relayout"},
+                 {"transcript.native.indexed.observe.data",
                   {"merlin3.koala-bear.ext8-binomial3.rejection31le/0",
-                   "field:koala-bear"},
-                  "plonky3/transcript.native.indexed.observe.data"};
-              observation.physicalArguments =
-                  take(defaultPhysicalArguments(observation));
-              take(selectImplementation(observation, {}, small));
-              observation.arguments[1] = "sequence<field:bls12-381.fr>";
-              observation.physicalArguments =
-                  take(defaultPhysicalArguments(observation));
-              take(resolveBinding(observation, true));
-              take(selectImplementation(
-                  observation, {}, installation("\"plonky3\",\"arkworks\"")));
-              refuses(selectImplementation(observation, {}, small),
-                      "cpu-target-unavailable");
-            });
-  DialectRegistry registry;
-  registerDialects(registry);
+                   "sequence<field:bls12-381.fr>"},
+                  "plonky3/transcript.native.indexed.observe.data"}}) {
+          auto declaration =
+              take(importBinding(builder, builder.getUnknownLoc(),
+                                 {"native_check", application}, true));
+          auto binding = readNativeBinding(
+              [&] { return declaration.emitError(); }, declaration, true);
+          require(succeeded(binding), "native declaration formation");
+          auto neutral = take(readBinding(declaration));
+          auto exported = take(resolveBinding(neutral.application, true));
+          auto expectedPorts = take(resolveBinding(application, true));
+          require(neutral.application.contract == application.contract &&
+                      neutral.application.implementation ==
+                          application.implementation &&
+                      exported.inputs == expectedPorts.inputs &&
+                      exported.outputs == expectedPorts.outputs &&
+                      bindingMatches(declaration, neutral, true),
+                  "canonical export changed the selected binding");
+          accept(CpuTarget().checkBinding(*binding));
+          reject(empty.checkBinding(*binding));
+          auto expected = take(resolveBinding(application, true));
+          reject(empty.checkBinding(application, expected));
+          // A formerly admitted view does not shield a mutated declaration.
+          declaration->setAttr(
+              "implementation",
+              builder.getStringAttr("foreign/" + application.contract));
+          reject(CpuTarget().checkBinding(*binding), "binding-declaration");
+          declaration.erase();
+        }
+      });
+  cases.run("native Expected-return layout helpers keep failures silent", [&] {
+    MLIRContext context(registry);
+    context.loadAllAvailableDialects();
+    unsigned diagnostics = 0;
+    ScopedDiagnosticHandler capture(&context, [&](Diagnostic &) {
+      ++diagnostics;
+      return success();
+    });
+    auto field = algebra::FieldType::get(&context, "bls12-381.fr");
+    auto malformed = runtime::RepresentedType::get(
+        &context, field, "foreign/layout", ArrayRef<Type>{});
+    reject(CpuTarget().checkType(malformed), "binding-representation");
+    refuses(formPhysicalType(field, "foreign/layout", {}),
+            "binding-representation");
+    refuses(planLogicalChildren(Float32Type::get(&context)), "binding-type");
+    OwningOpRef<ModuleOp> module(ModuleOp::create(UnknownLoc::get(&context)));
+    require(!decodeBoundType(&context, {"field", "uninstalled", {}}),
+            "boundary import admitted an uninstalled identity");
+    OpBuilder builder(module->getBody(), module->getBody()->end());
+    auto binding = take(importBinding(
+        builder, module->getLoc(),
+        {"invalidated", {"field.add", {"bls12-381.fr"}, "arkworks/field.add"}},
+        true));
+    auto emit = [&] { return binding.emitError(); };
+    auto checked = readNativeBinding(emit, binding, true);
+    require(succeeded(checked), "native binding fixture failed formation");
+    binding.setImplementation("foreign/field.add");
+    reject(CpuTarget().checkBinding(*checked), "binding-declaration");
+    require(diagnostics == 0,
+            "native Expected-return helper leaked diagnostics");
+  });
   cases.run("owned numerical compilation uses the genuine reduced target", [&] {
     RunOptions options;
     options.cpuTarget = small;
@@ -488,11 +671,19 @@ int main() {
         for (const auto &binding : plan.bindings)
           if (binding.purpose == BindingPurpose::Conversion) {
             auto &application = binding.binding.application;
-            require(application.arguments.size() == 3 &&
-                        application.arguments[0] == "bls12-381.fr",
+            require(hasNativeArguments(application, {"bls12-381.fr"}) &&
+                        application.valueType &&
+                        application.valueType.getNumInputs() == 1 &&
+                        application.valueType.getNumResults() == 1,
                     "generated relayout has wrong field or endpoints");
-            directions.emplace(application.arguments[1],
-                               application.arguments[2]);
+            directions.emplace(cast<runtime::RepresentedType>(
+                                   application.valueType.getInput(0))
+                                   .getRepresentation()
+                                   .str(),
+                               cast<runtime::RepresentedType>(
+                                   application.valueType.getResult(0))
+                                   .getRepresentation()
+                                   .str());
           }
         require(directions ==
                     std::set<std::pair<std::string, std::string>>{
@@ -524,7 +715,7 @@ int main() {
         MLIRContext context(registry);
         context.loadAllAvailableDialects();
         auto text = scopedFixture(R"(
-"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g2"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g2"],implementation="",function_type=(!runtime.scope, !algebra.group<"bls12-381.g2">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g2">)>} : ()->()
 )",
                                   "%x:i1", "%x", "i1", "i1",
                                   scopedReturn("%x", "i1"), 1);
@@ -537,8 +728,12 @@ int main() {
         bool changed = false;
         for (auto &binding : plan.bindings)
           if (binding.binding.application.contract == "curve.scale") {
-            binding.binding.application.implementation =
-                "blst/resident/curve.scale";
+            auto &application = binding.binding.application;
+            application.implementation = "blst/resident/curve.scale";
+            // Retain a valid installed signature so the independent target
+            // check, rather than a stale-port mismatch, owns this refusal.
+            application.valueType = {};
+            application.valueType = take(resolveNativeApplication(application));
             changed = true;
           }
         require(changed, "unused source binding disappeared");

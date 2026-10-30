@@ -36,11 +36,8 @@ Expected<std::optional<uint64_t>> literal(Value value, unsigned &remaining) {
   auto source = origin(value, remaining);
   if (!source)
     return source.takeError();
-  if (auto constant = source->getDefiningOp<data::IndexOp>()) {
-    uint64_t result;
-    if (!constant.getValue().getAsInteger(10, result))
-      return std::optional<uint64_t>(result);
-  }
+  if (auto constant = source->getDefiningOp<data::IndexOp>())
+    return std::optional<uint64_t>(constant.getValue());
   return std::optional<uint64_t>();
 }
 Expected<std::vector<unsigned>> path(Operation *operation,

@@ -3,7 +3,6 @@
 include "zkc/Dialect/Data/IR/DataDialect.td"
 include "zkc/Dialect/Types.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-include "zkc/Dialect/BoundOperations.td"
 include "zkc/Interfaces/Mathematical.td"
 include "mlir/IR/SymbolInterfaces.td"
 
@@ -59,20 +58,7 @@ def Data_BoundedMatrixAtOp : Op<DataDialect, "bounded_matrix_at", [Pure, Declare
   let results = (outs AnyType:$output);
   let hasVerifier = 1;
 }
-def EncodingIndexUleb128ExecOp : BoundOp<DataDialect, "exec.encoding_index_uleb128", [OpEncodingIndexUleb128]>;
-def BytesRepeatExecOp : BoundOp<DataDialect, "exec.bytes_repeat", [OpBytesRepeat]>;
-def BytesJoinExecOp : BoundOp<DataDialect, "exec.bytes_join", [OpBytesJoin]>;
-def BytesEmptyExecOp : BoundOp<DataDialect, "exec.bytes_empty", [OpBytesEmpty]>;
-def BytesAppendExecOp : BoundOp<DataDialect, "exec.bytes_append", [OpBytesAppend]>;
-def BytesConcatExecOp : BoundOp<DataDialect, "exec.bytes_concat", [OpBytesConcat]>;
-def BytesSliceExecOp : BoundOp<DataDialect, "exec.bytes_slice", [OpBytesSlice]>;
-def BytesAtExecOp : BoundOp<DataDialect, "exec.bytes_at", [OpBytesAt]>;
-def BytesLengthExecOp : BoundOp<DataDialect, "exec.bytes_length", [OpBytesLength]>;
-def BytesEqualExecOp : BoundOp<DataDialect, "exec.bytes_equal", [OpBytesEqual]>;
-def SequenceEmptyExecOp : BoundOp<DataDialect, "exec.sequence_empty", [OpSequenceEmpty]>;
-def SequenceAppendExecOp : BoundOp<DataDialect, "exec.sequence_append", [OpSequenceAppend]>;
-def SequenceLengthExecOp : BoundOp<DataDialect, "exec.sequence_length", [OpSequenceLength]>;
-def SequenceAtExecOp : BoundOp<DataDialect, "exec.sequence_at", [OpSequenceAt]>;
+
 class DataExpression<string name, list<Trait> traits = []>
     : Op<DataDialect, name, !listconcat([Pure], traits)> {
   let hasVerifier = 1;
@@ -88,9 +74,12 @@ def Data_SequenceLengthOp : DataExpression<"sequence_length"> {
   let arguments = (ins Sequence:$input);
   let results = (outs UI64:$output);
 }
-def Data_IndexOp : DataExpression<"index", [DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
-  let arguments = (ins StrAttr:$value);
+def Data_IndexOp : DataExpression<"index", [ConstantLike,
+    DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+  let arguments = (ins UI64Attr:$value);
   let results = (outs UI64:$output);
+  let hasVerifier = 0;
+  let hasFolder = 1;
 }
 def Data_EqualOp : DataExpression<"index_equal", [DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
   let arguments = (ins UI64:$lhs, UI64:$rhs);
@@ -122,15 +111,23 @@ def Data_DimOp : DataExpression<"dim", [DeclareOpInterfaceMethods<MathematicalOp
                        I64Attr:$axis);
   let results = (outs UI64:$output);
 }
-// Nominal source construction is distinct from the represented Variant carrier.
-// Descriptor/schema correspondence is checked by the source reader.
-class DataLogicalOperation<string name> : Op<DataDialect, name> {
-  let arguments = (ins Variadic<AnyType>:$inputs, StrAttr:$descriptor);
-  let results = (outs Variadic<AnyType>:$outputs);
+// Logical construction retains typed source layout. Formation checks shape;
+// source admission separately establishes construction and projection rights.
+def Data_ConstructOp : Op<DataDialect, "construct"> {
+  let arguments = (ins Variadic<AnyType>:$inputs, StrAttr:$alternative);
+  let results = (outs DataValue:$output);
+  let hasVerifier = 1;
 }
-def Data_ConstructOp : DataLogicalOperation<"construct">;
-def Data_UnpackOp : DataLogicalOperation<"unpack">;
-def Data_ProjectOp : DataLogicalOperation<"project">;
+def Data_UnpackOp : Op<DataDialect, "unpack"> {
+  let arguments = (ins DataValue:$input);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+}
+def Data_ProjectOp : Op<DataDialect, "project"> {
+  let arguments = (ins AnyType:$input, DenseI64ArrayAttr:$path);
+  let results = (outs AnyType:$output);
+  let hasVerifier = 1;
+}
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 def Data_MatchOp : Op<DataDialect, "match", [Terminator,
     DeclareOpInterfaceMethods<BranchOpInterface>]> {

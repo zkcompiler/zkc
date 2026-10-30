@@ -3,7 +3,10 @@
 This register assigns one semantic owner to each shared contract and records its
 producers, consumers and delivery boundary. The linked specifications own the
 exact definitions. Registration is not implementation, semantic admission or a
-proof. Version `0` denotes the current schema, with no compatibility reader.
+proof. The [foundation interface inventory](formats/foundation-interfaces.md)
+lists the upcoming schema changes. All formats remain at version `0`; current
+and designed schemas are distinguished by their stated support, not a version
+bump. No compatibility reader is introduced.
 
 A contract-changing PR updates its row, enumerations and affected consumers. Its
 review records identify which consumer boundaries were checked and which remain
@@ -12,8 +15,9 @@ does not replace independent interpretation or admission. The Lean component is
 the sole writer of `lean/`. Native owners specify their formats in this register
 and `docs/spec`; Lean adapts its readers, interpretations and exact-subject
 artifacts against those landed contracts. A native landing may precede that
-formal adaptation; its row must keep the missing consumer explicit. Archived
-`INTERFACE.md` coordination documents are retired
+formal adaptation; its row must keep the missing consumer explicit. During the
+native foundation, IR publishes shared contracts first; no Lean patch, handoff
+or build is part of the native unit. Archived `INTERFACE.md` coordination documents are retired
 as interface authorities; this register and its linked specifications replace
 them.
 
@@ -24,6 +28,31 @@ receipt audit. Consumer requirement coverage does not change an independently
 valid receipt's meaning or proof status.
 
 ## Contract inventory
+
+### Foundation interfaces
+
+These rows identify the native cutover and independently maintained consumers.
+All use version `0`; the change list defines the replacement schema, with no
+compatibility reader. Native implementation does not establish formal support.
+IR owns the catalog, lowering and
+native contract changes during this unit; frontend owns the checked program.
+The broad migration uses main `abe85f7a7`, which contains the frontend redesign
+and native Common-export retirement. Native interface checks replace cross-session
+review loops for this unit. Formal interpretation is a later independent task.
+
+| Identifier / version | Specification and owner | Producer → consumers | Missing integration |
+|---|---|---|---|
+| `zkc.logical-types/0` | [Logical type data](formats/logical-types.md), IR / Contracts | Typed IR export → native artifact readers, independent semantic readers | Native structured codecs and standalone inventory API; independent semantic interpretation remains separate |
+| `zkc.contract-declarations/0` | [Catalog](formats/contract-declarations.md), IR / Contracts | Neutral declarations → Language, MLIR, Rust and serialized formal-consumer data | One source generates C++/ODS, Rust and fixed consumer profiles; typed invocation/signature/parameter formation and independent runtime admission consume it; no Lean implementation in this unit |
+| `zkc.structured-source/0` | [Cutover](formats/foundation-interfaces.md#structured-source), IR / Protocol | Structured exporter → independent semantic readers | Native producer and maintained native consumers use structured types/bindings/parameters; independent formal reader adaptation remains open |
+| `zkc.constructed-participant/0`, `zkc.constructed-pair/0` | [Cutover](formats/foundation-interfaces.md#constructed-participants), IR / Construction | Actual candidate export → independent construction/projection readers | Native participant/pair producers use closed structured codecs; independent formal reader adaptation remains open |
+| `zkc.oracle-realization/0` | [Cutover](formats/foundation-interfaces.md#realization-and-application-records), IR / Transforms | Realization producer → native actual-body reader, independent interpretation | Native structured type inventory and actual-body reader implemented; independent interpretation unsupported |
+| `zkc.application-map/0` | [Application map](formats/application-map.md), IR / Transforms | Source/candidate association → native comparison, independent correspondence reader | Producer and independent actual-candidate checker implemented for unsimplified preparation; no correspondence theorem or simplified-rewrite profile implied |
+| Outcome, stop, budget meaning | [Native foundation](ir/native-foundation.md#outcomes-observations-and-budgets), IR / Execution | Typed invocation → compiler admission and native VM/providers | Typed route implemented; existing reached schedule, stops and budgets retained |
+| Stage admission and target selection | [Stage pipelines](ir/native-foundation.md#stage-pipelines-and-target-selection), IR / Compiler | Shared stage builder and selected installation → API, textual pipeline, import and publication | Shared stage builders, typed selection and complete native admission; catalog availability does not establish an installed backend |
+| `zkc.program/0` | [Retained byte language](formats/foundation-interfaces.md#executable-byte-language), IR / Program | Compiler → independent C++/Rust readers and other target consumers | Byte meaning unchanged; structural native adapter and independent byte readers retained |
+
+### Current producers and consumers
 
 `Implemented` describes the named producer/consumer profile, not all possible
 consumers. `Partial` names a missing consumer or behavior. `Designed` has no
@@ -36,7 +65,7 @@ contract change, not the most recent documentation-only registration.
 | `zkc.source-bindings/0` | [Binding proposals](language/source-ast.md#source-binding-proposals) | Frontend / Language | [WrittenSource.cpp](../../compiler/lib/Language/WrittenSource.cpp) → [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp), future Lean elaboration reader | Partial: retained resolutions; no elaboration soundness theorem | None | [#180](https://github.com/zkcompiler/zkc/pull/180) |
 | `zkc.source-instances/0` | [Closed instances](language/source-ast.md#closed-source-instances) | Frontend / Language | [Compiler](../../compiler/lib/Compiler) → [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp), future Lean elaboration reader | Partial: closed instance associations; call-edge proof open | None | [#180](https://github.com/zkcompiler/zkc/pull/180) |
 | `zkc.source-correspondence/0` | [Checked elaboration](language/elaboration.md) | Frontend / Language | [SourceCorrespondence.cpp](../../compiler/lib/Compiler/SourceCorrespondence.cpp) → future Lean correspondence checker | Partial: producer and native association checks; proof open | Proposed source-to-admitted connection | [#185](https://github.com/zkcompiler/zkc/pull/185) |
-| Structured source, version 0 | [Structured source](formats/structured-source.md) | IR / Protocol | [StructuredSource.cpp](../../compiler/lib/Compiler/StructuredSource.cpp) → [Lean structured reader](../../lean/Zkc/Source/Structured) | Partial: exact native/Lean oracle and assembly vocabulary; oracle execution is excluded from the ordinary Lean profile | Existing source interpretation; no oracle execution admission | [#177](https://github.com/zkcompiler/zkc/pull/177) |
+| Structured source, version 0 | [Structured source](formats/structured-source.md) | IR / Protocol | [StructuredSource.cpp](../../compiler/lib/Compiler/StructuredSource.cpp) → [Lean structured reader](../../lean/Zkc/Source/Structured) | Partial: native structured type/binding/parameter cutover; independent Lean schema adaptation remains open; oracle execution is outside the ordinary formal profile | Existing source interpretation; no oracle execution admission | [#177](https://github.com/zkcompiler/zkc/pull/177) |
 | Logical oracle operations and kinds, version 0 | [Protocol oracles](ir/protocols.md#logical-oracle-kinds-and-handles), [wire operations](formats/structured-source.md#logical-oracle-vocabulary) | IR / Protocol | [OracleOps.td](../../compiler/include/zkc/Dialect/Protocol/IR/OracleOps.td), [Protocol formation](../../compiler/lib/Dialect/Protocol/IR/Oracles.cpp) → [realization](../../compiler/lib/Transforms/OracleCommonRealization.cpp), frontend emission, Lean reader | Partial: native table/virtual semantics and realization, exact Lean wire/shape reading; full frontend spelling and Lean oracle execution pending | No new registered claim stage | [#177](https://github.com/zkcompiler/zkc/pull/177) |
 | `zkc.oracle-obligations/0` | [Oracle proposals](formats/structured-source.md#oracle-obligation-proposals) | IR / Protocol | [OracleObligations.cpp](../../compiler/lib/Compiler/OracleObligations.cpp) → native comparison and Lean independent derivation | Partial: independently checked occurrence-bound templates and footprints; no predicate discharge | None | [#177](https://github.com/zkcompiler/zkc/pull/177) |
 | `zkc.oracle-realization/0` | [Realization record](formats/oracle-realization.md) | IR / Transforms | [OracleRealizationRecord.cpp](../../compiler/lib/Transforms/OracleRealizationRecord.cpp) → [actual-body reader](../../compiler/lib/Transforms/OracleCommonVerification.cpp), future Lean realization reader | Partial: native checked table queries and fixed base-query blocks; Lean simulation open | Realization is a compiler boundary; `realization.correspondence` remains unregistered | [#177](https://github.com/zkcompiler/zkc/pull/177) |
@@ -46,10 +75,11 @@ contract change, not the most recent documentation-only registration.
 | `zkc.program/0` | [Program bytes](formats/program-bytes.md) | IR / Program | [Encode.cpp](../../compiler/lib/Program/Encode.cpp) → [Decode.cpp](../../compiler/lib/Program/Decode.cpp), [native VM](../../crates/zkc-runtime/src/vm), [Lean renderer](../../lean/bridges/executable/render.py) | Partial: native readers and shared corpus; Lean installed table has a narrower profile | Input to `lowering.interpreted_bytes`; native runtime conformance separate | [#179](https://github.com/zkcompiler/zkc/pull/179) |
 | Retired Common source | [Structured-source replacement](../../lean/docs/spec/structured-source.md) | Former IR / Compiler, Lean / Source | No retained producer or reader | Retired in favor of original structured source and its Domain interpretation | No additional admitted link | [#188](https://github.com/zkcompiler/zkc/pull/188) |
 | `zkc.language-interface/0` | [Language interface](formats/entry.md) | Frontend / Language | [LanguageInterfaceWriter.cpp](../../compiler/lib/Compiler/LanguageInterfaceWriter.cpp) → [native comparison](../../compiler/lib/Compiler/LanguageInterfaceComparison.cpp), [Rust Host](../../crates/zkc/src/entry/interface/raw.rs), [Lean bridges](../../lean/bridges) | Partial: logical oracle alternatives are not executable Host payloads; Host refuses them | None | [#177](https://github.com/zkcompiler/zkc/pull/177) |
+| `zkc.host/0` | [Entry Host](formats/entry.md) | IR / Translation | [Direct native emitter](../../compiler/lib/Translation/Entry/Emission.cpp) → [independent SSA artifact reader](../../compiler/lib/Translation/Entry/Reader.cpp), [Rust Host](../../crates/zkc/src/entry) | Implemented: actual Func/CF ports, layouts and outcomes determine the artifact; no retained body or signature JSON | Native source comparison only | [#187](https://github.com/zkcompiler/zkc/pull/187) |
 | `zkc.run/0` | [Entry](formats/entry.md), [proof](formats/proof.md), [joint execution](runtime/joint.md) | IR / Compiler | [Compiler](../../compiler/lib/Compiler) → [Entry Host](../../crates/zkc/src/entry), [proof Host](../../crates/zkc/src/proof), [joint Host](../../crates/zkc/src/run) | Implemented native carriers; logical oracle proof publication remains open | No new assurance stage | [#177](https://github.com/zkcompiler/zkc/pull/177) |
 | `zkc.entry/0` | [Entry](formats/entry.md), [proof](formats/proof.md), [joint execution](runtime/joint.md) | IR / Compiler | [Compiler](../../compiler/lib/Compiler) → [Entry Host](../../crates/zkc/src/entry), [proof Host](../../crates/zkc/src/proof), [joint Host](../../crates/zkc/src/run) | Implemented native carriers; logical oracle proof publication remains open | No new assurance stage | [#177](https://github.com/zkcompiler/zkc/pull/177) |
 | `zkc.native-proof/0` | [Entry](formats/entry.md), [proof](formats/proof.md), [joint execution](runtime/joint.md) | IR / Compiler | [Compiler](../../compiler/lib/Compiler) → [Entry Host](../../crates/zkc/src/entry), [proof Host](../../crates/zkc/src/proof), [joint Host](../../crates/zkc/src/run) | Implemented native carriers; logical oracle proof publication remains open | No new assurance stage | [#177](https://github.com/zkcompiler/zkc/pull/177) |
-| `zkc.contract-declarations/0` | [Operation contracts](../compiler/operation-contracts.md) | IR / Contracts | [Neutral declarations](../../compiler/include/zkc/Contracts/Declarations) → C++ adapters, [Rust registry](../../crates/zkc-cpu/src/backend/registry.rs), [Lean installed vocabulary](../../lean/Zkc/Executable/Installed.lean) | Partial: C++ generated; Rust/Lean tables independently maintained, with different coverage | None; signatures do not prove kernel laws | [#170](https://github.com/zkcompiler/zkc/pull/170) |
+| `zkc.contract-declarations/0` | [Shared catalog](formats/contract-declarations.md) | IR / Contracts | [Neutral source](../../common/catalog/README.md) → C++/ODS, [Rust metadata](../../crates/zkc-catalog/README.md) and serialized inventory; [Rust admission](../../crates/zkc-runtime/src/vm/operations/mod.rs) interprets declarations with independently owned backend installations | Partial: native and Rust projections consumed; independent formal consumer has not adopted the changed schema | None; signatures do not prove kernel laws | [#187](https://github.com/zkcompiler/zkc/pull/187) |
 | `zkc.source-claims/0` | [Source requests](language/claims.md) | Frontend / Language | [Language SourceClaims.cpp](../../compiler/lib/Language/SourceClaims.cpp), [compiler export](../../compiler/lib/Compiler/SourceClaims.cpp) → [Lean bridges](../../lean/bridges) | Implemented original-grammar requests; new frontend integration pending | Selects an existing stage; introduces none | [#176](https://github.com/zkcompiler/zkc/pull/176) |
 | `zkc.bound-source-claims/0` | [Assurance pipeline](../../lean/docs/spec/assurance-report.md) | Lean / Claims | [subject bridge](../../lean/bridges/subject.py), [Claims](../../lean/Zkc/Claims) → [record checks](../../lean/checks/check_records.py) and report consumers | Implemented within registered subject profiles | Registered stages and links below | [#182](https://github.com/zkcompiler/zkc/pull/182) |
 | `zkc.subject/0` | [Assurance pipeline](../../lean/docs/spec/assurance-report.md) | Lean / Claims | [subject bridge](../../lean/bridges/subject.py), [Claims](../../lean/Zkc/Claims) → [record checks](../../lean/checks/check_records.py) and report consumers | Implemented within registered subject profiles | Registered stages and links below | [#182](https://github.com/zkcompiler/zkc/pull/182) |
@@ -61,7 +91,6 @@ contract change, not the most recent documentation-only registration.
 | Layout requests and authored site selection | [Layout syntax](language/layout-syntax.md), [site defaults](language/layout-execution.md) | Frontend / Language | Lossless syntax and native projection → written occurrences and pending obligations | Partial: source association retained; typed request generation and independent checking pending | Selects existing meanings; adds no assurance stage | [#186](https://github.com/zkcompiler/zkc/pull/186) |
 | Retired proposal `zkc.lean-interface/0` | [Shared interfaces plan](../roadmap.md#shared-interfaces-before-implementation) | Frontend / Language | Existing declarations and bound requests → frontend resolution | Retired proposal: extend existing transports; no parallel format is admitted | None | — |
 | Restricted logical aggregates; version unassigned | [Logical aggregate plan](../roadmap.md#shared-interfaces-before-implementation) | IR / Protocol | Future frontend claim views → Protocol formation and Lean reader | Designed: typed field paths and role components; ordinary data/codec boundaries continue to exclude handles | None | — |
-| Application correspondence map; version unassigned | [Correspondence plan](../roadmap.md#shared-interfaces-before-implementation) | IR / Protocol | Future compiler proposal → Lean source connection checker | Designed: shared format and arbitrary relocation proof open | No new trusted link; proposals must be checked | — |
 | Block/gated request wire; version unassigned | [Block requests and gating](../roadmap.md#block-requests-and-gating), [current transcript bytes](ir/construction.md) | IR / Construction | Future construction emission → runtime kernel and Lean simulation | Designed: request bytes, refusal state and accounting require joint review before installation | No registered gate premise | — |
 | Installed transcript and Merkle suites | [Transcripts](ir/construction.md), [Merkle schemes](domains/oracles.md), [services](runtime/services.md) | Runtime / Providers | [Backend registry](../../crates/zkc-cpu/src/backend/registry.rs) → Contracts selection, native invocation, Lean installed vocabulary | Partial: installed native instances are explicit; flagship quartic Keccak and Lean coverage pending | Kernel interpretation remains explicit | [#174](https://github.com/zkcompiler/zkc/pull/174) |
 
@@ -108,7 +137,7 @@ source resolution boundary; no second proof pipeline is introduced.
 
 The installed infrastructure link families are defined in
 [StageLinks](../../lean/security/ZkcSecurity/Claims/StageLinks.lean),
-[DomainSubject](../../lean/security/ZkcSecurity/Claims/DomainSubject.lean) and
+[DomainSubject](../../lean/security/ZkcSecurity/Bindings/Subjects/Domain.lean) and
 [CanonicalAuthorityPair](../../lean/security/ZkcSecurity/Claims/CanonicalAuthorityPair.lean):
 
 | Family | Link identifiers | Exact obligation selected by |

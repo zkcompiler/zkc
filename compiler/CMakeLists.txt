@@ -45,6 +45,7 @@ list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}" "${LLVM_CMAKE_DIR}")
 include(TableGen)
 include(AddLLVM)
 include(AddMLIR)
+include(cmake/Catalog.cmake)
 include(cmake/ZkcContributions.cmake)
 set(ZKC_CONTRIBUTION_FILES "" CACHE STRING
   "Explicit CMake files declaring additional compiler contributions")
@@ -92,6 +93,15 @@ if(ZKC_ENABLE_MLIR_LSP)
     INSTALL_RPATH_USE_LINK_PATH TRUE INSTALL_RPATH "$ORIGIN/../lib")
   install(TARGETS zkc-lsp RUNTIME DESTINATION bin)
 endif()
+
+# Build every installed executable without pulling in the test graph. Optional
+# language servers participate through the same target as the compiler tools.
+add_custom_target(zkc-tools DEPENDS zkc-compile zkc-opt zkc-tblgen)
+foreach(tool zkc-source-lsp zkc-lsp)
+  if(TARGET ${tool})
+    add_dependencies(zkc-tools ${tool})
+  endif()
+endforeach()
 
 include(CMakePackageConfigHelpers)
 # Keep installed tools usable with the selected external LLVM/MLIR package.

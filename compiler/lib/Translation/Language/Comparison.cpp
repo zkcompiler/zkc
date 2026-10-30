@@ -6,10 +6,13 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/OperationShapes.h"
+#include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/ControlCursor.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/Construction.h"
@@ -19,12 +22,14 @@
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
+#include "zkc/Dialect/StructuredData.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Language/SourceTerms.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Entry.h"
 #include "zkc/Translation/Language.h"
@@ -44,6 +49,11 @@ bool attributes(mlir::Operation &op, ArrayRef<StringRef> names) {
 bool string(mlir::Operation &op, StringRef name, StringRef expected) {
   auto value = op.getAttrOfType<mlir::StringAttr>(name);
   return value && value.getValue() == expected;
+}
+bool natural(mlir::Operation &op, StringRef name, uint64_t expected) {
+  auto value = op.getAttrOfType<mlir::IntegerAttr>(name);
+  return value && value.getType().isUnsignedInteger(64) &&
+         value.getValue().getZExtValue() == expected;
 }
 bool strings(mlir::Attribute attr, ArrayRef<std::string> expected) {
   auto values = mlir::dyn_cast_if_present<mlir::ArrayAttr>(attr);
@@ -712,8 +722,7 @@ class Comparator {
     if (!actual)
       return {};
     if (!attributes(*actual, {"binding", "parameters", "site"}) ||
-        !string(*actual, "site", site) ||
-        !strings(actual->getAttr("parameters"), expected.parameters)) {
+        !string(*actual, "site", site)) {
       if (!failure)
         fail("ordered operation contract, parameters or site differ");
       return {};
@@ -726,6 +735,15 @@ class Comparator {
     }
     auto &binding = *found->second;
     usedBindings.insert(found->first);
+    auto declaration = mlir::dyn_cast<runtime::BindingOp>(binding);
+    if (!declaration ||
+        !protocol::invocationParametersMatch(
+            declaration.getContract(), declaration.getArgumentsAttr(),
+            actual->getAttrOfType<mlir::ArrayAttr>("parameters"),
+            expected.parameters)) {
+      fail("ordered operation parameters differ");
+      return {};
+    }
     std::vector<std::string> args;
     if (expected.bindingArguments) {
       auto roots = take(layouts.kernelArguments(expected.contract,
@@ -743,9 +761,9 @@ class Comparator {
         return {};
       args.push_back(type->identity);
     }
-    if (!string(binding, "contract", expected.contract) ||
-        !strings(binding.getAttr("arguments"), args) ||
-        !string(binding, "implementation", "")) {
+    if (!protocol::bindingMatches(mlir::dyn_cast<runtime::BindingOp>(binding),
+                                  {found->first, {expected.contract, args, {}}},
+                                  false)) {
       fail("ordered binding selection differs");
       return {};
     }
@@ -1084,17 +1102,27 @@ class Comparator {
               !axis.getType().isSignlessInteger(64) || axis.getInt() != 0)
             return fail("vector length axis differs");
         } else if (math->identity == MathematicalIdentity::IndexConstant) {
-          auto literal =
-              math->literal.empty()
-                  ? std::to_string(
-                        math->staticArguments.front().dimension.closedValue())
-                  : math->literal;
+          uint64_t literal;
+          if (math->literal.empty())
+            literal = math->staticArguments.front().dimension.closedValue();
+          else if (StringRef(math->literal).getAsInteger(10, literal))
+            return fail("invalid checked index literal");
           if (!attributes(*actual, {"value"}) ||
-              !string(*actual, "value", literal))
+              !natural(*actual, "value", literal))
             return fail("index literal differs");
         } else if (math->identity == MathematicalIdentity::FieldConstant) {
+          auto field = mlir::dyn_cast<algebra::FieldType>(
+              actual->getResult(0).getType());
+          auto expected =
+              field ? algebra::decodeFieldLiteral(field, math->literal)
+                    : llvm::Expected<algebra::FieldLiteralAttr>(
+                          error("source.correspondence"));
+          if (!expected) {
+            llvm::consumeError(expected.takeError());
+            return fail("invalid checked field literal");
+          }
           if (!attributes(*actual, {"value"}) ||
-              !string(*actual, "value", math->literal))
+              actual->getAttr("value") != *expected)
             return fail("field literal differs");
         } else if (math->identity == MathematicalIdentity::BooleanConstant) {
           auto value = actual->getAttrOfType<mlir::IntegerAttr>("value");
@@ -1121,9 +1149,25 @@ class Comparator {
                        MathematicalIdentity::PolynomialEvaluateDomain ||
                    math->identity ==
                        MathematicalIdentity::PolynomialInterpolate) {
-          if (!attributes(*actual, {"points"}) ||
-              !strings(actual->getAttr("points"), math->parameters))
+          auto type = actual->getResult(0).getType();
+          auto field = algebra::FieldType::get(
+              actual->getContext(),
+              mlir::isa<poly::PolynomialType>(type)
+                  ? mlir::cast<poly::PolynomialType>(type).getDomain()
+                  : mlir::cast<algebra::FieldArrayType>(type).getDomain());
+          auto points = actual->getAttrOfType<mlir::ArrayAttr>("points");
+          if (!attributes(*actual, {"points"}) || !points ||
+              points.size() != math->parameters.size())
             return fail("polynomial domain differs");
+          for (auto [point, parameter] : llvm::zip(points, math->parameters)) {
+            auto expected = algebra::decodeFieldLiteral(field, parameter);
+            if (!expected) {
+              llvm::consumeError(expected.takeError());
+              return fail("invalid checked polynomial point");
+            }
+            if (point != *expected)
+              return fail("polynomial domain differs");
+          }
         } else if (!attributes(*actual, {}))
           return fail("extra mathematical attributes");
         result = Values(actual->getResults());
@@ -1247,8 +1291,7 @@ class Comparator {
           if (!bound)
             return false;
           if (!attributes(*bound, {"value"}) ||
-              !string(*bound, "value",
-                      std::to_string(query->bound->closedValue())) ||
+              !natural(*bound, "value", query->bound->closedValue()) ||
               !types(bound->getResultTypes(), leaves))
             return fail("index query domain differs");
           operands.push_back(bound->getResult(0));
@@ -1825,12 +1868,24 @@ public:
     auto retained = inspectComponentDeclarations(project, limits);
     if (!retained)
       return retained.takeError();
-    auto declarations =
-        native->getAttrOfType<mlir::StringAttr>("source_declarations");
-    if ((*retained == "[[],[]]" && declarations) ||
-        (*retained != "[[],[]]" &&
-         (!declarations || declarations.getValue() != *retained)))
-      return error("source.correspondence", "source declarations differ");
+    auto declarations = native->getAttr("source_declarations");
+    if (*retained == "[[],[]]") {
+      if (declarations)
+        return error("source.correspondence", "source declarations differ");
+    } else {
+      auto expected = parseNaturalJson(*retained, limits.interfaceBytes, 64,
+                                       "component-declaration", "source.limit");
+      if (!expected)
+        return expected.takeError();
+      auto actual = exportDeclarationData(declarations);
+      if (!actual) {
+        consumeError(actual.takeError());
+        return error("source.correspondence",
+                     "source declaration carrier differs");
+      }
+      if (!equalNaturalJson(*actual, *expected))
+        return error("source.correspondence", "source declarations differ");
+    }
     SmallVector<mlir::Operation *> functions;
     std::map<std::string, protocol_ir::ConstructionOp> constructions;
     std::map<std::string, relation::DeclareOp> relations;
@@ -1852,8 +1907,8 @@ public:
           return error("source.correspondence", "duplicate relation symbol");
       } else if (op.getName().getStringRef() == "runtime.binding") {
         auto name = op.getAttrOfType<mlir::StringAttr>("sym_name");
-        if (!attributes(
-                op, {"sym_name", "contract", "arguments", "implementation"}) ||
+        if (!attributes(op, {"sym_name", "contract", "arguments",
+                             "implementation", "function_type"}) ||
             !name || !bindings.emplace(name.getValue().str(), &op).second)
           return error("source.correspondence", "invalid or duplicate binding");
       } else if (op.hasAttr("runtime.region")) {
@@ -2175,7 +2230,7 @@ Expected<Correspondence> compareOriginal(const ClosedEntry &project,
   if (project.project().installationIdentity() != installedCatalogIdentity())
     return error("source.environment",
                  "source was checked against another installed catalog");
-  if (!module || mlir::failed(mlir::verify(module)))
+  if (!module || mlir::failed(zkc::admitStage(module)))
     return error("target.admission",
                  "original failed mathematical IR admission");
   if (project.entry().kind == Declaration::Kind::EntryFunction)
@@ -2189,7 +2244,7 @@ Expected<Correspondence> compareNumericalOriginal(const ClosedEntry &project,
   auto definitions = numericalDefinitions(project, fragment);
   if (!definitions)
     return definitions.takeError();
-  if (!module || mlir::failed(mlir::verify(module)))
+  if (!module || mlir::failed(zkc::admitStage(module)))
     return error("target.admission", "numerical original failed admission");
   return Comparator(project, module, limits, *definitions).run();
 }

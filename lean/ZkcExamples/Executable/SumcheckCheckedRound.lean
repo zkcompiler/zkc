@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Construction.SumcheckSourceConnection
-public import ZkcExamples.Structured.OriginalSumcheckLibrary
+public import Zkc.Protocols.Sumcheck.Source.Library
 public import ZkcExamples.Structured.SumcheckSourceContracts
 public import ZkcExamples.Executable.SumcheckShape
 public import ZkcExamples.Executable.SumcheckMetadata

@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Commitment.FiniteRecovery
+public import ZkcSecurity.Transformations.Commitment.FiniteRecovery
 public import ArkLib.Interaction.Oracle.Security.KnowledgeComposition
 
 @[expose] public section

@@ -1,7 +1,7 @@
 module
 
 public import ZkcArkLib.FiatShamir.Upstream
-public import ZkcSecurity.FiatShamir.Soundness
+public import ZkcSecurity.Transformations.FiatShamir.Soundness
 
 @[expose] public section
 

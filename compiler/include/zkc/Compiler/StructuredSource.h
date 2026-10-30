@@ -32,12 +32,17 @@ struct StructuredSource {
   /// identity. They neither authorize admission nor prove denotation.
   std::vector<StructuredSourceAssociation> associations;
 };
+/// Preparation materializes nested occurrence paths up to 4096 UTF-8 bytes.
+/// This profile changes only site bounds; all other admission and export limits
+/// remain identical. Selecting it is not evidence that preparation is correct.
+enum class StructuredSourceProfile { Original, Prepared };
 /// Verify the whole supplied original, then export the bounded structured
 /// profile without preparation, projection or helper expansion. Associations
 /// address the actual rows of this export, including reconstructed regions.
 /// The digest binds the supplied bytes; it is not a correspondence proof.
-llvm::Expected<StructuredSource>
-exportStructuredSource(llvm::StringRef originalBytes, llvm::StringRef symbol,
-                       mlir::MLIRContext &context);
+llvm::Expected<StructuredSource> exportStructuredSource(
+    llvm::StringRef originalBytes, llvm::StringRef symbol,
+    mlir::MLIRContext &context,
+    StructuredSourceProfile profile = StructuredSourceProfile::Original);
 } // namespace zkc::protocol
 #endif

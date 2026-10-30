@@ -9,7 +9,7 @@ module { "protocol.module"() ({
     "data.domain_yield"(%pairs) : (!data.domain<!F,!F>)->()
   }) {sym_name="pairs",sym_visibility="private",function_type=(!V,!V)->!data.domain<!F,!F>} : ()->()
   func.func private @calculation(%state:!F,%a:!F,%b:!F,%xs:!V,%ys:!V)->!F {
-    %ten = "algebra.constant"() {value="10"} : ()->!F
+    %ten = "algebra.constant"() {value=#algebra.literal<!F, 10 : ui255>} : ()->!F
     %shifted = "algebra.field_multiply"(%state,%ten) : (!F,!F)->!F
     %difference = "algebra.field_subtract"(%a,%b) : (!F,!F)->!F
     %next = "algebra.field_add"(%shifted,%difference) : (!F,!F)->!F

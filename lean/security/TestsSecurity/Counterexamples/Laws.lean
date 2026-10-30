@@ -1,6 +1,6 @@
-import ZkcSecurity.FiatShamir.Obligations
-import ZkcSecurity.FiatShamir.Grinding
-import ZkcSecurity.Examples.CommittedOpening
+import ZkcSecurity.Transformations.FiatShamir.Obligations
+import ZkcSecurity.Transformations.FiatShamir.Grinding
+import ZkcSecurityExamples.CommittedOpening
 import TestsSecurity.Counterexamples.Support
 import Mathlib.Data.ZMod.Basic
 

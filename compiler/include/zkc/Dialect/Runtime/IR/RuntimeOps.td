@@ -2,21 +2,37 @@
 #define ZKC_DIALECT_RUNTIME_IR_RUNTIMEOPS_TD
 include "zkc/Dialect/Runtime/IR/RuntimeTypes.td"
 include "zkc/Dialect/Exec/IR/ExecTypes.td"
-include "zkc/Dialect/BoundOperations.td"
 include "mlir/IR/SymbolInterfaces.td"
+include "mlir/Interfaces/CallInterfaces.td"
 // Static contract and selected installation identity. Runtime owns this
 // declaration in logical and physical profiles; it grants no invocation-time
 // authority, successful admission, timing permission or retained resource.
-def Runtime_BindingOp : Op<RuntimeDialect, "binding", [Symbol]> {
+def Runtime_BindingOp : Op<RuntimeDialect, "binding", [Symbol, CallableOpInterface]> {
   let description = [{
     Declare an installed operation contract and its static selection. A
     Protocol module fixes the stage; a builtin module permits logical or
-    physical formation, with stage and port checking owned by its consumer.
-    This declaration supplies neither installation nor invocation authority.
+    physical declarations. Verification checks exact native ports and selected
+    installation applicability. Consumers additionally check their required
+    stage and actual invocation. This declaration supplies no reached
+    invocation or resource authority.
   }];
   let arguments = (ins SymbolNameAttr:$sym_name, StrAttr:$contract,
     ArrayAttr:$arguments, StrAttr:$implementation,
-    OptionalAttr<ArrayAttr>:$physical_arguments);
+    TypeAttrOf<FunctionType>:$function_type,
+    OptionalAttr<DictArrayAttr>:$arg_attrs,
+    OptionalAttr<DictArrayAttr>:$res_attrs);
+  let builders = [OpBuilder<(ins "::llvm::StringRef":$name,
+    "::llvm::StringRef":$contract, "::mlir::ArrayAttr":$arguments,
+    "::llvm::StringRef":$implementation)>];
+  let extraClassDeclaration = [{
+    ::mlir::Region *getCallableRegion() { return nullptr; }
+    ::llvm::ArrayRef<::mlir::Type> getArgumentTypes() {
+      return getFunctionType().getInputs();
+    }
+    ::llvm::ArrayRef<::mlir::Type> getResultTypes() {
+      return getFunctionType().getResults();
+    }
+  }];
   let hasVerifier = 1;
 }
 // Scope transitions and handoffs are ordered, non-speculatable operations.
@@ -74,6 +90,5 @@ def Runtime_ReleaseBindingsOp : Op<RuntimeDialect, "release_bindings"> {
   let arguments = (ins RuntimeScope:$scope, Variadic<AnyType>:$values);
   let hasVerifier = 1;
 }
-def PrepareQuotientMatrixOp : BoundOp<RuntimeDialect, "prepare_quotient_matrix", [OpQuotientPrepareMatrix]>;
-def QuotientMatvecOp : BoundOp<RuntimeDialect, "quotient_matvec", [OpQuotientMatvec]>;
+
 #endif

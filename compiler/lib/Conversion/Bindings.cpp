@@ -3,6 +3,7 @@
 #include "../Target/PhysicalPlan.h"
 #include "Storage.h"
 #include "mlir/IR/IRMapping.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -26,29 +27,27 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
   auto root =
       cast<zkc::protocol_ir::ProtocolModuleOp>(module.getBody()->front());
   OpBuilder builder(module.getContext());
-  auto strings = [&](ArrayRef<std::string> values) {
-    SmallVector<Attribute> attributes;
-    for (const auto &value : values)
-      attributes.push_back(builder.getStringAttr(value));
-    return builder.getArrayAttr(attributes);
-  };
   for (const auto &decision : plan.bindings) {
     const auto &binding = decision.binding;
     if (decision.purpose == target::BindingPurpose::Original) {
-      auto declaration =
-          cast<zkc::runtime::BindingOp>(work[*decision.declaration]);
+      auto declaration = cast<runtime::BindingOp>(work[*decision.declaration]);
+      declaration.setArgumentsAttr(
+          builder.getArrayAttr(binding.application.arguments));
       declaration.setImplementation(binding.application.implementation);
-      declaration.setPhysicalArgumentsAttr(
-          strings(binding.application.physicalArguments));
+      declaration.setFunctionType(
+          executableBindingSignature(binding.application.valueType));
     } else {
       builder.setInsertionPointToStart(&root.getBody().front());
-      zkc::runtime::BindingOp::create(
+      runtime::BindingOp::create(
           builder, work[decision.location]->getLoc(), binding.name,
-          binding.application.contract, strings(binding.application.arguments),
+          binding.application.contract,
+          builder.getArrayAttr(binding.application.arguments),
           binding.application.implementation,
-          strings(binding.application.physicalArguments));
+          executableBindingSignature(binding.application.valueType),
+          ArrayAttr{}, ArrayAttr{});
     }
   }
+
   // Retain the complete admitted bodies while constructing their replacements.
   // The port index borrows these actual values; no mutation invalidates it.
   OwningOpRef<ModuleOp> retired(ModuleOp::create(module.getLoc()));
@@ -146,8 +145,8 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
           return error("binding-materialization-coordinate");
         inputs.push_back(mapped);
       }
-      auto invoke = [&](const OperationBinding &binding, TypeRange outputs,
-                        ValueRange inputs, StringRef site,
+      auto invoke = [&](const target::NativeBindingChoice &binding,
+                        TypeRange outputs, ValueRange inputs, StringRef site,
                         ArrayAttr parameters) {
         return native.invoke(
             "exec.apply", outputs, native.scoped(inputs),

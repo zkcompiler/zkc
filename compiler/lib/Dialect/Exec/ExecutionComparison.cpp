@@ -1,10 +1,12 @@
+#include "ExecutionAttributes.h"
 #include "ExecutionDefinitions.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/ControlCursor.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/Execution.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
@@ -21,9 +23,7 @@ namespace {
 // Record-directed comparison of actual SSA. Do not reconstruct an expected
 // program with readLocalExecution or replay the emission implementation here.
 bool attrs(Operation *op, ArrayRef<StringRef> names = {}) {
-  return op && llvm::all_of(op->getAttrs(), [&](NamedAttribute attribute) {
-           return llvm::is_contained(names, attribute.getName().getValue());
-         });
+  return exec::detail::hasOnlyExecutionAttributes(op, names);
 }
 bool strings(ArrayAttr actual, ArrayRef<std::string> expected) {
   if (!actual || actual.size() != expected.size())
@@ -113,8 +113,12 @@ public:
     for (auto [actual, port] : zip(outputs, expected.outputs))
       if (!type(actual, port.spelling()))
         return false;
-    return call.getBinding() == record.callee &&
-           strings(call.getParameters(), record.attributes);
+    auto declaration = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+        call, call.getBindingAttr());
+    return declaration && call.getBinding() == record.callee &&
+           invocationParametersMatch(
+               declaration.getContract(), declaration.getArgumentsAttr(),
+               call.getParametersAttr(), record.attributes);
   }
   bool body(func::FuncOp function, const program::Body &expected,
             ArrayRef<std::string> arguments, bool outlined) {
@@ -348,19 +352,12 @@ bool Comparison::run(const program::LocalDefinitions &expected, bool mixed) {
       return false;
     if (auto declaration = dyn_cast<runtime::BindingOp>(op)) {
       if (binding >= 4096 || binding == expected.bindings.size() ||
-          !attrs(declaration, {"sym_name", "contract", "arguments",
-                               "implementation", "physical_arguments"}))
+          !attrs(declaration,
+                 {"sym_name", "contract", "arguments", "implementation",
+                  "function_type", "arg_attrs", "res_attrs"}))
         return false;
       const auto &record = expected.bindings[binding++];
-      const auto &application = record.application;
-      if (declaration.getSymName() != record.name ||
-          declaration.getContract() != application.contract ||
-          declaration.getImplementation() != application.implementation ||
-          !strings(declaration.getArguments(), application.arguments) ||
-          (declaration.getPhysicalArgumentsAttr()
-               ? !strings(declaration.getPhysicalArgumentsAttr(),
-                          application.physicalArguments)
-               : !application.physicalArguments.empty()))
+      if (!bindingMatches(declaration, record, physical))
         return false;
       continue;
     }

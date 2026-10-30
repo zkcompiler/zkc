@@ -262,8 +262,10 @@ public:
         auto resolved = actual(input, value.second);
         auto *constant = producer(resolved);
         auto text = finite::fieldConstant(constant);
-        return (identity == protocol::ScalarIdentity::Zero && text == "0") ||
-               (identity == protocol::ScalarIdentity::One && text == "1");
+        return text && ((identity == protocol::ScalarIdentity::Zero &&
+                         text.getValue().getValue().isZero()) ||
+                        (identity == protocol::ScalarIdentity::One &&
+                         text.getValue().getValue().isOne()));
       };
       if (neutral(inputs[1], meaning->law.rightIdentity))
         value = actual(inputs[0], value.second);
@@ -349,7 +351,7 @@ readScopedSource(const finite::Computation &computation, uint64_t &remaining,
     if (!constant || !finite::replaceable(outerScalar.producer(seed)) ||
         seed.first.getType() != field)
       return std::nullopt;
-    source.seed.constant = *constant;
+    source.seed.constant = constant;
   }
   // Domain inputs are mapped through the nested call to the actual outer
   // helper environment. Zero denotes the enumerated index, i+1 input i.

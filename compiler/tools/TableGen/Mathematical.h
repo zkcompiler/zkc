@@ -5,6 +5,7 @@ class Record;
 class RecordKeeper;
 class raw_ostream;
 } // namespace llvm
+void validateMathematicalDeclarations(const llvm::RecordKeeper &);
 void validateMathematicalFacet(const llvm::Record *, const llvm::Record *);
 void validateLinearFacet(const llvm::Record *, const llvm::Record *);
 void emitMathematicalFacet(llvm::raw_ostream &, const llvm::Record *,

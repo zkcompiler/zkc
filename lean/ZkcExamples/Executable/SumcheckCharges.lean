@@ -9,8 +9,8 @@ public import ZkcExamples.Executable.SumcheckHelpers
 public import ZkcExamples.Executable.SumcheckShape
 public import ZkcExamples.Executable.SumcheckCheckedRound
 public import ZkcExamples.Executable.SumcheckProof
-public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
-public meta import Zkc.Construction.ArtifactBindingTactic
+public import Zkc.Protocols.Sumcheck.Source.DomainHelpers
+public meta import ZkcTools.ConstructionBindings.ArtifactBindingTactic
 
 @[expose] public section
 

@@ -9,6 +9,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/ComputationRecipes.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -96,7 +97,8 @@ OwningOpRef<ModuleOp> fixture(MLIRContext &context, unsigned width = 0,
                               bool callFree = false, unsigned depth = 0) {
   auto result = parseSourceString<ModuleOp>(fixtureText(width, callFree, depth),
                                             &context);
-  require(bool(result) && succeeded(verify(*result)), "fixture refused");
+  require(bool(result) && succeeded(zkc::admitStage(*result)),
+          "fixture refused");
   return result;
 }
 bool same(Operation *left, Operation *right) {
@@ -199,7 +201,8 @@ int main() {
     auto step = helper(*source, "step");
     OpBuilder builder(&step.front().back());
     builder.clone(step.front().front());
-    require(succeeded(verify(*source)), "duplicate-call fixture refused");
+    require(succeeded(zkc::admitStage(*source)),
+            "duplicate-call fixture refused");
     work = 100000;
     size = finite::sizeCallbackPreparation(c, unit(*source), work, outcome);
     require(size && size->work == 31 && !size->arrayProjections &&
@@ -227,7 +230,7 @@ int main() {
  %selected = "algebra.array_at"(%pack) {index=1:i64} : (!algebra.field_array<"koala-bear",2>)->!F
 )mlir");
     auto source = parseSourceString<ModuleOp>(text, &context);
-    require(bool(source) && succeeded(verify(*source)),
+    require(bool(source) && succeeded(zkc::admitStage(*source)),
             "packed helper refused");
     uint64_t work = 100000;
     OptimizationOutcome outcome;
@@ -253,43 +256,54 @@ int main() {
               "DAG multiplicity, saturation or memoized scan bound changed");
     });
   for (bool warm : {false, true})
-    for (unsigned depth : {61u, 62u, 63u})
-      cases.run("linear helper depth " + llvm::Twine(depth) +
-                    (warm ? " memoized" : " fresh"),
-                [&] {
-                  auto text = fixtureText(0, false, depth);
-                  // A linear chain reaches the depth boundary without exceeding
-                  // admitted expansion size. Warm the leaf memo through a
-                  // separate direct call.
-                  size_t start = 0;
-                  while ((start = text.find("%first = func.call", start)) !=
-                         std::string::npos)
-                    text.erase(start, text.find('\n', start) - start + 1);
-                  start = text.find("func.func private @step");
-                  start = text.find('{', start) + 1;
-                  if (warm)
-                    text.insert(
-                        start,
-                        "\n%warm = func.call @multiply(%a,%b) : (!F,!F)->!F\n");
-                  // Formation rejects the over-limit case too. Parse it only
-                  // to exercise this private defensive guard directly.
-                  auto source = parseSourceString<ModuleOp>(
-                      text, ParserConfig(&context, false));
-                  require(bool(source), "linear depth fixture refused");
-                  if (depth < 63)
-                    require(succeeded(verify(*source)),
-                            "in-range helper chain is not admitted");
-                  uint64_t remaining = 100000;
-                  OptimizationOutcome outcome;
-                  auto size = finite::sizeCallbackPreparation(
-                      computationFixture(*source), unit(*source), remaining,
-                      outcome);
-                  require(bool(size) == (depth < 63),
-                          "memoized helper depth boundary changed");
-                  if (!size)
-                    require(outcome.reason == OptimizationReason::Depth,
-                            "depth decline lost its cause");
-                });
+    for (unsigned depth : {60u, 61u, 62u, 63u})
+      cases.run(
+          "linear helper depth " + llvm::Twine(depth) +
+              (warm ? " memoized" : " fresh"),
+          [&] {
+            auto text = fixtureText(0, false, depth);
+            // A linear chain reaches the depth boundary without exceeding
+            // admitted expansion size. Warm the leaf memo through a
+            // separate direct call.
+            size_t start = 0;
+            while ((start = text.find("%first = func.call", start)) !=
+                   std::string::npos)
+              text.erase(start, text.find('\n', start) - start + 1);
+            start = text.find("func.func private @step");
+            start = text.find('{', start) + 1;
+            if (warm)
+              text.insert(
+                  start,
+                  "\n%warm = func.call @multiply(%a,%b) : (!F,!F)->!F\n");
+            // Formation rejects the over-limit case too. Parse it only
+            // to exercise this private defensive guard directly.
+            auto source = parseSourceString<ModuleOp>(
+                text, ParserConfig(&context, false));
+            require(bool(source), "linear depth fixture refused");
+            // The callback-only sizing path is step -> depth helpers ->
+            // multiply. Whole-source admission also counts total, the
+            // function containing the fold, before that callback path.
+            {
+              bool diagnostic = false;
+              ScopedDiagnosticHandler handler(&context, [&](Diagnostic &value) {
+                diagnostic |= namesIdentifier(value.str(), "finite-formation");
+                return success();
+              });
+              require(succeeded(zkc::admitStage(*source)) == (depth < 62),
+                      "whole-source helper path has the wrong bound");
+              require(depth < 62 || diagnostic,
+                      "whole-source depth refusal lost its identifier");
+            }
+            uint64_t remaining = 100000;
+            OptimizationOutcome outcome;
+            auto size = finite::sizeCallbackPreparation(
+                computationFixture(*source), unit(*source), remaining, outcome);
+            require(bool(size) == (depth < 63),
+                    "memoized helper depth boundary changed");
+            if (!size)
+              require(outcome.reason == OptimizationReason::Depth,
+                      "depth decline lost its cause");
+          });
   cases.run("equation allowance stays shared across prepared callbacks", [&] {
     auto source = fixture(context);
     RealizationWork measured;
@@ -501,7 +515,7 @@ int main() {
           mapping.map(total.getArgument(1), step.getArgument(0));
           OpBuilder builder(&step.front().front());
           builder.clone(total.front().front(), mapping);
-          require(succeeded(verify(*source)), "nested source refused");
+          require(succeeded(zkc::admitStage(*source)), "nested source refused");
           CheckedHelperNormalizations helpers(unit(*source));
           require(succeeded(helpers.prepare(step)),
                   "nested realization normalization refused");

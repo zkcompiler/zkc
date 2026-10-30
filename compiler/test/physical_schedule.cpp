@@ -4,6 +4,7 @@
 #include "../lib/Target/PhysicalPlan.h"
 #include "../lib/Target/StorageSchedule.h"
 #include "mlir/IR/Verifier.h"
+#include "support/NativeBindings.h"
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFixture.h"
@@ -207,7 +208,7 @@ OwningOpRef<ModuleOp> materializedCopy(ModuleOp source,
 std::string scalarSource() {
   return scopedFixture(
       R"mlir(
-"runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation="",function_type=(!runtime.scope, i1, i1) -> !exec.outcome<(i1)>} : ()->()
 )mlir",
       "%a:i1,%b:i1,%unused:i1,%other:i1", "%a,%b,%unused,%other", "i1,i1,i1,i1",
       "i1",
@@ -222,7 +223,7 @@ std::string conversionSource() {
 !T = !poly.multilinear<"bls12-381.fr">
 )mlir" + scopedFixture(
              R"mlir(
-"runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+"runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
 )mlir",
              "%a:!T,%b:!T,%r:!F", "%a,%b,%r", "!T,!T,!F", "!T",
              scopedApply("fold", "first", "%a,%r", "!T,!F", "%first", "!T") +
@@ -307,8 +308,8 @@ module { "protocol.module"() ({
 class CountingCatalog final : public CandidateCatalog {
 public:
   mutable unsigned queries = 0;
-  Expected<std::vector<std::string>>
-  implementations(const BindingApplication &application) const override {
+  Expected<std::vector<std::string>> implementations(
+      const zkc::NativeBindingApplication &application) const override {
     ++queries;
     if (application.contract == "poly.fold")
       return std::vector<std::string>{"arkworks-msb/poly.fold",
@@ -316,12 +317,12 @@ public:
     return installedCandidates().implementations(application);
   }
   std::vector<std::string> diagonalImplementations(
-      const BindingApplication &application) const override {
+      const zkc::NativeBindingApplication &application) const override {
     ++queries;
     return installedCandidates().diagonalImplementations(application);
   }
-  std::vector<BindingApplication>
-  conversions(const BoundType &from, const BoundType &to) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type from, mlir::Type to) const override {
     ++queries;
     return installedCandidates().conversions(from, to);
   }
@@ -334,6 +335,25 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+
+  cases.run("storage permissions use native types beyond byte export limits",
+            [&] {
+              std::string type = "i1";
+              for (unsigned depth = 0; depth != 22; ++depth)
+                type = "!data.sequence<" + type + ">";
+              auto source = scopedFixture("", "%data:" + type + ",%keep:i1",
+                                          "%data,%keep", type + ",i1", "i1",
+                                          scopedReturn("%keep", "i1"), 2);
+              auto module = take(executableFixture(source, context));
+              auto proposal = propose(*module);
+              auto checked = check(*module, proposal);
+              auto output = materializedCopy(*module, checked);
+              auto releases = take(proposeStorage(*output));
+              accept(validateStorage(*output, {}, releases));
+              auto helper = first<func::FuncOp>(*output);
+              refuses(encodeBoundType(helper.getArgument(1).getType(), true),
+                      "binding-type-limit");
+            });
 
   for (bool releases : {false, true})
     cases.run(releases ? "physical plan records releases"
@@ -766,7 +786,7 @@ int main() {
           auto text = R"mlir(!F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
 )mlir" + scopedFixture(R"mlir(
-"runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.product_sum"} : ()->()
+"runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.product_sum",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !poly.multilinear<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 )mlir",
                        "%table:!T", "%table", "!T", "!F",
                        scopedApply("product", "product", "%table,%table",
@@ -1052,7 +1072,7 @@ int main() {
         require(printed(*output) == before, "refused metadata changed source");
       });
 
-  cases.run("oversized comparison refuses at shared source admission", [&] {
+  cases.run("oversized comparison refuses at shared native admission", [&] {
     auto module = simultaneousDeathsSource(context);
     auto output =
         materializedCopy(*module, check(*module, propose(*module, false)));
@@ -1074,7 +1094,7 @@ int main() {
     exec::ScopedExecutionBuilder control(builder, function);
     // Every occurrence has its own closed regions and respects the 1024-port
     // bound. The repeated semantic operand/argument work exceeds admission.
-    for (unsigned i = 0; i < 400; ++i)
+    for (unsigned i = 0; i < 300; ++i)
       control.conditional(
           inputs.front(), ValueRange(inputs).drop_front(), inputs[1].getType(),
           "extra" + std::to_string(i), [&](unsigned arm) {
@@ -1099,19 +1119,20 @@ int main() {
       block->replaceAllUsesWith(failure);
       block->erase();
     }
-    // The independent reader now requires admitted ExecutionPorts. This exact
-    // former 400-control workload reaches the shared source bound first; it
-    // must not bypass that boundary to exercise a later private work counter.
+    // The independent reader requires admitted ExecutionPorts. Native SSA
+    // capture inspection consumes one shared allowance; byte-model size no
+    // longer decides native validity. Refusal must precede comparison.
     auto identical = copy(*output);
-    bool sourceLimit = false;
+    std::string admissionRefusals;
     ScopedDiagnosticHandler diagnostic(&context, [&](Diagnostic &message) {
       for (const auto &refusal : diagnostics::refusals(message))
-        sourceLimit |= refusal.code == "source-limit";
+        admissionRefusals += refusal.code + ":" + refusal.detail + ";";
       return success();
     });
     refuses(readStorageReleases(*output, *identical),
             "binding-execution-profile");
-    require(sourceLimit, "oversized comparison refused before its work bound");
+    require(namesIdentifier(admissionRefusals, "execution-analysis-limit"),
+            "oversized comparison refused at: " + admissionRefusals);
   });
 
   cases.run("standalone and planned conversion lifetimes agree", [&] {
@@ -1144,7 +1165,7 @@ int main() {
     });
     reject(materializePhysical(*module, checked),
            "binding-materialization-formation");
-    require(namesIdentifier(admissionRefusals, "interactive-instruction-limit"),
+    require(namesIdentifier(admissionRefusals, "execution-analysis-limit"),
             "candidate refused at: " + admissionRefusals);
     require(printed(*module) == before &&
                 physicalPlanOperations(*module) == identities,

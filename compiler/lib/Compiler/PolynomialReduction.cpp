@@ -3,8 +3,10 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/PassManager.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
@@ -12,6 +14,7 @@
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Passes.h"
+#include "zkc/Transforms/Stages.h"
 #include "zkc/Translation/Relations.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
@@ -262,10 +265,11 @@ std::optional<Ports> ports(pir::MathematicalOp source,
 template <typename Op> Op definition(Value value) {
   return value ? value.getDefiningOp<Op>() : Op{};
 }
-bool constant(Value value, StringRef literal) {
+bool constant(Value value, uint64_t literal) {
   auto op = definition<algebra::ConstantFieldOp>(value);
-  return op && op.getValue() == literal;
+  return op && op.getValue().getValue().getValue() == literal;
 }
+
 bool evaluates(Value value, Value polynomial, Value point) {
   auto op = definition<poly::EvaluatePolynomialOp>(value);
   return op && op.getPolynomial() == polynomial && op.getPoint().size() == 1 &&
@@ -476,8 +480,8 @@ Expected<json::Value> check(pir::ProtocolModuleOp original,
     if (!q || !one || q.getCoefficients() != receive.getOutput() ||
         one.getPolynomial() != q.getPolynomial() ||
         zero.getPoint().size() != 1 || one.getPoint().size() != 1 ||
-        !constant(zero.getPoint().front(), "0") ||
-        !constant(one.getPoint().front(), "1"))
+        !constant(zero.getPoint().front(), 0) ||
+        !constant(one.getPoint().front(), 1))
       return refuse("round guard polynomial");
     if (k == 0 ? eq.getRhs() != previous
                : !evaluates(eq.getRhs(), previous,
@@ -623,7 +627,7 @@ checkPolynomialReductions(ModuleOp original, ModuleOp candidate, StringRef text,
   if (!requirements)
     return requirements.takeError();
   if (original.getContext() != candidate.getContext() ||
-      failed(verify(original)) || failed(verify(candidate)) ||
+      failed(zkc::admitStage(original)) || failed(zkc::admitStage(candidate)) ||
       !hasSingleElement(*original.getBody()) ||
       !hasSingleElement(*candidate.getBody()))
     return error("polynomial-correspondence-module");
@@ -651,8 +655,7 @@ checkPolynomialReductions(ModuleOp original, ModuleOp candidate, StringRef text,
   // cannot make an incorrect authored verifier receive this report.
   OwningOpRef<ModuleOp> projected(cast<ModuleOp>(original->clone()));
   PassManager preparation(original.getContext());
-  preparation.addPass(
-      protocol::createProjectProtocolPass(false, mathematicalSelection));
+  buildProjectionPipeline(preparation, false, mathematicalSelection);
   if (failed(preparation.run(*projected)))
     return error("polynomial-correspondence-source");
   auto expected = cast<pir::ProtocolModuleOp>(projected->getBody()->front());

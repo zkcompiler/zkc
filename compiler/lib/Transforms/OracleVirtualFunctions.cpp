@@ -1,6 +1,7 @@
 #include "OracleVirtualFunctions.h"
 #include "OracleVirtualRecipe.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Support/Refusal.h"
 using namespace mlir;
@@ -16,7 +17,8 @@ emitOracleVirtualFunctions(ModuleOp candidate,
   if (!candidate || !sourceUnit ||
       source.getContext() != candidate.getContext() ||
       sourceUnit.getProfile() != protocol_ir::Profile::Protocol ||
-      failed(verify(sourceUnit)) || failed(verify(candidate)) ||
+      failed(zkc::admitStage(sourceUnit)) ||
+      failed(zkc::admitStage(candidate)) ||
       !hasSingleElement(candidate.getBody()->getOperations()))
     return error("oracle-virtual-functions");
   auto unit =
@@ -97,7 +99,7 @@ emitOracleVirtualFunctions(ModuleOp candidate,
   if (!answer)
     return answer.takeError();
   result.answer = *answer;
-  if (failed(verify(candidate)))
+  if (failed(zkc::admitStage(candidate)))
     return error("oracle-virtual-functions");
   return result;
 }

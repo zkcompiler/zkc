@@ -1,10 +1,13 @@
 #include "OracleCommonPlan.h"
 #include "OracleQueryBlocks.h"
 #include "mlir/IR/Verifier.h"
-#include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
@@ -25,25 +28,31 @@ Expected<Type> converted(Type type) {
     auto element = oracleReferenceType(sequence.getKind());
     if (!element)
       return element.takeError();
-    return Type(data::SequenceType::get(type.getContext(), *element));
+    auto result = constructLogicalType(
+        [&] { return emitError(UnknownLoc::get(type.getContext())); },
+        type.getContext(), {"sequence", {TypeAttr::get(*element)}});
+    if (!result)
+      return error("oracle-common-profile");
+    return result;
   }
   return type;
 }
 bool logical(Type type) {
   return isa<pir::OracleHandleType, pir::OracleSequenceType>(type);
 }
-Expected<BindingApplication> length(pir::OracleKindAttr kind) {
-  auto answer = encodeBoundType(kind.getAnswerType(), false);
-  if (!answer)
-    return answer.takeError();
-  if (answer->kind == "index")
-    return BindingApplication{"indices.length", {}, ""};
-  if (answer->kind == "field" || answer->kind == "group")
-    return BindingApplication{answer->kind == "field" ? "vector.length"
-                                                      : "curve.length",
-                              {answer->identity},
-                              ""};
-  return BindingApplication{"sequence.length", {answer->spelling()}, ""};
+Expected<NativeBindingApplication> length(pir::OracleKindAttr kind) {
+  Type answer = kind.getAnswerType();
+  auto *context = kind.getContext();
+  if (answer == IntegerType::get(context, 64, IntegerType::Unsigned))
+    return NativeBindingApplication{"indices.length", {}, ""};
+  if (auto field = dyn_cast<algebra::FieldType>(answer))
+    return NativeBindingApplication{
+        "vector.length", {StringAttr::get(context, field.getDomain())}, ""};
+  if (auto group = dyn_cast<algebra::GroupType>(answer))
+    return NativeBindingApplication{
+        "curve.length", {StringAttr::get(context, group.getDomain())}, ""};
+  return NativeBindingApplication{
+      "sequence.length", {TypeAttr::get(answer)}, ""};
 }
 struct PlanBuilder {
   ModuleOp source;
@@ -124,7 +133,8 @@ struct PlanBuilder {
   }
   Expected<unsigned> constant(OracleCommonBlock &block, uint64_t value) {
     auto output = make(block, "data.index", index, {},
-                       attrs({text("value", std::to_string(value))}));
+                       attrs({builder.getNamedAttr(
+                           "value", builder.getIntegerAttr(index, value))}));
     if (!output)
       return output.takeError();
     return output->front();
@@ -217,10 +227,9 @@ struct PlanBuilder {
   const OracleQueryController *controller(
       StringRef role, pir::OracleKindAttr kind,
       OracleControllerAccess access = OracleControllerAccess::Available) {
-    auto reference = cantFail(oracleReferenceType(kind));
     for (const auto &item : controllers)
       if (item.role == role && item.access == access &&
-          cantFail(oracleReferenceType(item.kind)) == reference)
+          sameOracleReferenceKind(item.kind, kind))
         return &item.body;
     return nullptr;
   }
@@ -256,9 +265,9 @@ struct PlanBuilder {
     recipe.outputs.assign(outputs.begin(), outputs.end());
     return recipe;
   }
-  IDs apply(OracleLocalRecipe &recipe, BindingApplication binding,
+  IDs apply(OracleLocalRecipe &recipe, NativeBindingApplication binding,
             TypeRange types, ArrayRef<unsigned> inputs,
-            ArrayRef<std::string> parameters = {}) {
+            ArrayRef<Attribute> parameters = {}) {
     unsigned next = recipe.inputs.size();
     for (const auto &instruction : recipe.instructions)
       next += instruction.outputs.size();
@@ -275,7 +284,7 @@ struct PlanBuilder {
   }
   unsigned number(OracleLocalRecipe &recipe, uint64_t n) {
     return apply(recipe, {"index.constant", {}, ""}, index, {},
-                 {std::to_string(n)})
+                 {IntegerAttr::get(index, n)})
         .front();
   }
   void require(OracleLocalRecipe &recipe, unsigned condition) {
@@ -561,9 +570,6 @@ struct PlanBuilder {
     auto element = oracleReferenceType(sequence.getKind());
     if (!element)
       return element.takeError();
-    auto spelling = encodeBoundType(*element, false);
-    if (!spelling)
-      return spelling.takeError();
     Types arguments;
     for (auto type : op.getOperandTypes()) {
       auto convertedType = converted(type);
@@ -572,9 +578,10 @@ struct PlanBuilder {
       arguments.push_back(*convertedType);
     }
     auto recipe = local(arguments, *output);
-    auto length = apply(recipe, {"sequence.length", {spelling->spelling()}, ""},
-                        index, {0})
-                      .front();
+    auto length =
+        apply(recipe, {"sequence.length", {TypeAttr::get(*element)}, ""}, index,
+              {0})
+            .front();
     bool append = isa<pir::OracleSequenceAppendOp>(op);
     unsigned left = append ? length : 1;
     unsigned right = append ? number(recipe, sequence.getMaximum()) : length;
@@ -583,7 +590,7 @@ struct PlanBuilder {
                         .front());
     recipe.results = apply(recipe,
                            {append ? "sequence.append" : "sequence.at",
-                            {spelling->spelling()},
+                            {TypeAttr::get(*element)},
                             ""},
                            *output, {0, 1});
     auto selected = op.getAttrOfType<ArrayAttr>("roles");
@@ -836,19 +843,18 @@ struct PlanBuilder {
     Type type = types.front();
     unsigned value = values.front();
     if (values.size() > 1) {
-      std::vector<std::string> fields;
-      for (Type type : types) {
-        auto bound = encodeBoundType(type, false);
-        if (!bound)
-          return bound.takeError();
-        fields.push_back(bound->spelling());
-      }
-      auto descriptor =
-          encodeVariant({json::Array{"zkc.oracle.query-packet/0", purpose},
-                         {{"Record", fields}}});
-      if (!descriptor)
+      auto *context = builder.getContext();
+      auto identity = data::importVariantIdentity(
+          context, json::Array{"zkc.oracle.query-packet/0", purpose});
+      if (!identity || types.size() > 128)
         return error("oracle-query-block-limit");
-      type = data::VariantType::get(builder.getContext(), *descriptor);
+      auto arm = data::AlternativeAttr::get(
+          context, builder.getStringAttr("Record"), types);
+      type = data::VariantType::getChecked(
+          builder.getUnknownLoc(), context, identity,
+          ArrayRef<data::AlternativeAttr>{arm});
+      if (!type)
+        return error("oracle-query-block-limit");
       OraclePacketRecipe packing;
       static_cast<OracleHelperSignature &>(packing) = local(types, type);
       packing.pack = true;
@@ -1518,13 +1524,10 @@ struct PlanBuilder {
         // Stores may contain private opening state. Their empty value is an
         // owner-local allocation, not a total mathematical sequence shared by
         // all participants. Use the same scoped route for every store layout.
-        auto element = encodeBoundType(storage.record, false);
-        if (!element)
-          return element.takeError();
         auto recipe = local({}, storage.sequence);
-        recipe.results =
-            apply(recipe, {"sequence.empty", {element->spelling()}, ""},
-                  storage.sequence, {});
+        recipe.results = apply(
+            recipe, {"sequence.empty", {TypeAttr::get(storage.record)}, ""},
+            storage.sequence, {});
         auto empty = call(result.body, recipe, storage.role, {},
                           site(item.path, "empty_store", storage.role));
         if (!empty)
@@ -1540,7 +1543,7 @@ struct PlanBuilder {
 } // namespace
 Expected<std::vector<std::string>> oracleEntries(ModuleOp source) {
   if (!source || !hasSingleElement(source.getBody()->getOperations()) ||
-      failed(verify(source)))
+      failed(zkc::admitStage(source)))
     return refuse();
   auto unit = dyn_cast<pir::ProtocolModuleOp>(source.getBody()->front());
   if (!unit || unit.getProfile() != pir::Profile::Protocol)
@@ -1605,12 +1608,9 @@ oracleRequirements(ModuleOp source, StringRef entry,
                  OracleControllerAccess access) -> Error {
     if (kind.getIdentity() != "table")
       return refuse();
-    auto reference = oracleReferenceType(kind);
-    if (!reference)
-      return reference.takeError();
     for (const auto &other : result.controllers)
       if (other.role == role && other.access == access &&
-          cantFail(oracleReferenceType(other.kind)) == *reference)
+          sameOracleReferenceKind(other.kind, kind))
         return Error::success();
     if (result.controllers.size() >= 64)
       return error("oracle-common-limit");

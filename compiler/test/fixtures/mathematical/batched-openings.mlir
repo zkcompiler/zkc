@@ -1,4 +1,4 @@
-!message = !data.variant<"variant:5b227a6b632e76617269616e742f30222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f30222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d">
+!message = !data.variant<#data.identity<["atom", "Opening"]>, [#data.alternative<"none">, #data.alternative<"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>
 !pk = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "prover_key">
 !vk = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "verifier_key">
 !c = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "commitment">
@@ -10,20 +10,20 @@
 !batch = !data.sequence<!message>
 !fs = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["variant:5b227a6b632e76617269616e742f30222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f30222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["variant:5b227a6b632e76617269616e742f30222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f30222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["variant:5b227a6b632e76617269616e742f30222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f30222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="at",contract="sequence.at",arguments=["variant:5b227a6b632e76617269616e742f30222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f30222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="vlength",contract="vector.length",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="point",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="coordinate",contract="poly.append_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="commit",contract="pcs.commit",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="open",contract="pcs.open",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="check",contract="pcs.check",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=[!data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>>)>} : ()->()
+ "runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>],implementation="",function_type=(!runtime.scope, !data.sequence<!data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>>, !data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>) -> !exec.outcome<(!data.sequence<!data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>>)>} : ()->()
+ "runtime.binding"() {sym_name="length",contract="sequence.length",arguments=[!data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>],implementation="",function_type=(!runtime.scope, !data.sequence<!data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>>) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="at",contract="sequence.at",arguments=[!data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>],implementation="",function_type=(!runtime.scope, !data.sequence<!data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>>, ui64) -> !exec.outcome<(!data.variant<<["atom", "Opening"]>, [<"none">, <"some", [!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">]>]>)>} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>} : ()->()
+ "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation="",function_type=(!runtime.scope, i1, i1) -> !exec.outcome<(i1)>} : ()->()
+ "runtime.binding"() {sym_name="vlength",contract="vector.length",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="get",contract="vector.get",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="point",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!poly.point<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="coordinate",contract="poly.append_point",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.point<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.point<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="commit",contract="pcs.commit",arguments=["multilinear.kzg.bls12-381/0"],implementation="",function_type=(!runtime.scope, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "prover_key">, !poly.multilinear<"bls12-381.fr">) -> !exec.outcome<(!commitment.polynomial<"multilinear.kzg.bls12-381/0", "commitment">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "opening_state">)>} : ()->()
+ "runtime.binding"() {sym_name="open",contract="pcs.open",arguments=["multilinear.kzg.bls12-381/0"],implementation="",function_type=(!runtime.scope, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "opening_state">, !poly.point<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">)>} : ()->()
+ "runtime.binding"() {sym_name="check",contract="pcs.check",arguments=["multilinear.kzg.bls12-381/0"],implementation="",function_type=(!runtime.scope, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "verifier_key">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "commitment">, !poly.point<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">) -> !exec.outcome<(i1)>} : ()->()
     func.func @produce(%arg0: !runtime.scope, %arg1: !t, %arg2: !pk, %arg3: !fs) -> !exec.outcome<(!batch)> attributes {no_inline, runtime.origin = ["produce", []]} {
       %0 = "exec.apply"(%arg0, %arg2, %arg1) <{binding = @commit, parameters = [], site = "commit"}> : (!runtime.scope, !pk, !t) -> !exec.outcome<(!c, !o)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!c, !o)>) -> ()
@@ -37,7 +37,7 @@ module { "protocol.module"() ({
       %7 = "exec.apply"(%arg0, %arg3) <{binding = @vlength, parameters = [], site = "count"}> : (!runtime.scope, !fs) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%7)[^bb4, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb4(%8: ui64):  // pred: ^bb3
-      %9 = "exec.apply"(%arg0) <{binding = @constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %9 = "exec.apply"(%arg0) <{binding = @constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%9)[^bb5, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb5(%10: ui64):  // pred: ^bb4
       %11 = "exec.range"(%arg0, %10, %8) <{site = "openings"}> : (!runtime.scope, ui64, ui64) -> !exec.outcome<(i64, i64)>
@@ -150,7 +150,7 @@ module { "protocol.module"() ({
       %0 = "exec.boolean"(%arg0) <{site = "yes", value = true}> : (!runtime.scope) -> !exec.outcome<(i1)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(i1)>) -> ()
     ^bb1(%1: i1):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0) <{binding = @constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %2 = "exec.apply"(%arg0) <{binding = @constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb2(%3: !exec.stop):  // 5 preds: ^bb0, ^bb1, ^bb3, ^bb7, ^bb9
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(i1)>

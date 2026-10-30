@@ -1,4 +1,4 @@
-import ZkcSecurity.FiatShamir.Lifting
+import ZkcSecurity.ProgramLogic.Transcript.Lifting
 
 /-! Controls for law records and the lifting of uniform-sort certificates.
 

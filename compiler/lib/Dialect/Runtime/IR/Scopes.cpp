@@ -1,6 +1,6 @@
-#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 
 using namespace mlir;
 namespace zkc::runtime {
@@ -9,12 +9,13 @@ LogicalResult refuse(Operation *op, StringRef reason) {
   return diagnostics::emit(op->emitOpError(), "execution-formation", reason);
 }
 bool valueType(Type type) {
-  auto bound = protocol::encodeBoundType(type, isa<RepresentedType>(type));
-  if (!bound) {
-    llvm::consumeError(bound.takeError());
-    return false;
-  }
-  return true;
+  return succeeded(verifyValueType(
+      [&] {
+        auto diagnostic = emitError(UnknownLoc::get(type.getContext()));
+        diagnostic.abandon();
+        return diagnostic;
+      },
+      type));
 }
 bool payloadTypes(TypeRange types) {
   std::optional<bool> represented;
@@ -102,13 +103,8 @@ LogicalResult TakeConditionOp::verify() {
   auto payload = getTransfer().getType().getPayload();
   if (payload.empty())
     return refuse(*this, "conditional transfer lacks its Boolean");
-  auto condition = protocol::encodeBoundType(
-      payload.front(), isa<RepresentedType>(payload.front()));
-  if (!condition) {
-    llvm::consumeError(condition.takeError());
-    return refuse(*this, "conditional transfer has an invalid Boolean");
-  }
-  if (condition->kind != "bool")
+  if (!valueType(payload.front()) ||
+      !logicalValueType(payload.front()).isSignlessInteger(1))
     return refuse(*this, "conditional transfer must start with a Boolean");
   auto returned = getOutcome().getType().getPayload();
   if (returned.size() != 2 || !returned.front().isInteger(1))
@@ -122,13 +118,7 @@ LogicalResult IterationOp::verify() {
   auto payload = getOutcome().getType().getPayload();
   if (getSite().empty() || payload.size() != 1 || !payloadTypes(payload))
     return refuse(*this, "iteration requires its native index result");
-  auto bound = protocol::encodeBoundType(payload.front(),
-                                         isa<RepresentedType>(payload.front()));
-  if (!bound) {
-    llvm::consumeError(bound.takeError());
-    return refuse(*this, "iteration index type");
-  }
-  if (bound->kind != "index")
+  if (!logicalValueType(payload.front()).isUnsignedInteger(64))
     return refuse(*this, "iteration requires its native index result");
   return success();
 }

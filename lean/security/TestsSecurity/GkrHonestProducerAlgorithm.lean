@@ -1,4 +1,4 @@
-import ZkcSecurity.Realizations.Gkr.HonestProducerObserved
+import ZkcSecurityExamples.Gkr.HonestProducerObserved
 
 set_option autoImplicit false
 set_option backward.isDefEq.respectTransparency false

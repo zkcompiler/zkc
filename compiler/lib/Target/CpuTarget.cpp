@@ -1,8 +1,13 @@
 #include "zkc/Target/CpuTarget.h"
+#include "NativePlanTypes.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Target/Catalog.h"
 #include "llvm/ADT/STLExtras.h"
 
 using namespace llvm;
@@ -68,8 +73,8 @@ StringRef domainOwner(StringRef domain) {
   return {};
 }
 
-StringRef representationOwner(const BoundType &type) {
-  StringRef rep = type.representation;
+StringRef representationOwner(StringRef kind, StringRef identity,
+                              StringRef rep) {
   const StringRef independent[] = {
       "native.bool/0",      "native.index/0",    "native.indices/0",
       "native.bytes/0",     "native.shake128/0", "native.quotient_matrix/0",
@@ -85,12 +90,14 @@ StringRef representationOwner(const BoundType &type) {
                             "halo2curves-axiom/bn254.g2"};
   if (is_contained(halo, rep))
     return "halo2curves";
+  if (rep == "plonky3.fixed-vector/0")
+    return "plonky3";
   // Ordinary layouts are already independently admitted by Contracts. Their
   // exact nominal storage owner, not the spelling of an implementation or the
   // current canonical preference, determines the required contribution.
-  return domainOwner(type.identity.empty() && type.kind == "field_array"
+  return domainOwner(identity.empty() && kind == "field_array"
                          ? StringRef("bls12-381.fr")
-                         : StringRef(type.identity));
+                         : identity);
 }
 
 Error unavailable(StringRef detail) {
@@ -124,13 +131,18 @@ Expected<CpuTarget> CpuTarget::parse(StringRef text) {
 bool CpuTarget::includes(StringRef provider) const {
   return (providers & providerBit(provider)) != 0;
 }
+std::string CpuTarget::descriptor() const {
+  json::Array names;
+  for (StringRef name : {"arkworks", "blst", "dalek", "halo2curves", "plonky3"})
+    if (includes(name))
+      names.push_back(name);
+  return printJson(json::Object{{"format", "zkc.cpu-target/0"},
+                                {"providers", std::move(names)}});
+}
 
 Error CpuTarget::checkType(const BoundType &type) const {
-  auto owner = representationOwner(type);
-  // Dense fixed vectors have no atomic nominal identity; the admitted child
-  // carries that identity. Their two compiled layouts have different owners.
-  if (type.representation == "plonky3.fixed-vector/0")
-    owner = "plonky3";
+  auto owner =
+      representationOwner(type.kind, type.identity, type.representation);
   if (owner.empty() || (owner != "independent" && !includes(owner)))
     return unavailable(type.spelling());
   if (type.physicalChildren)
@@ -141,14 +153,20 @@ Error CpuTarget::checkType(const BoundType &type) const {
 }
 
 Error CpuTarget::checkImplementation(const BindingApplication &app) const {
+  SmallVector<StringRef> identities(app.arguments.begin(), app.arguments.end());
+  return checkImplementation(app.contract, app.implementation, identities);
+}
+Error CpuTarget::checkImplementation(StringRef contract,
+                                     StringRef implementation,
+                                     ArrayRef<StringRef> identities) const {
   // These are actual compiled handler owner families. Contracts must resolve
   // independently first: matching this table cannot install an operation.
   // The historical Arkworks names of these generic controls are wire identity,
   // not a numerical provider dependency (CPU backend/execute.rs).
   const StringRef controls[] = {"bool.and", "bool.not", "bool.or",
                                 "control.require"};
-  if (is_contained(controls, app.contract) &&
-      app.implementation == "arkworks/" + app.contract)
+  if (is_contained(controls, contract) &&
+      implementation == ("arkworks/" + contract).str())
     return Error::success();
   const std::pair<StringRef, StringRef> families[] = {
       {"arkworks", "arkworks"},
@@ -163,19 +181,17 @@ Error CpuTarget::checkImplementation(const BindingApplication &app) const {
       {"blst/resident", "blst"},
       {"halo2curves-axiom/resident", "halo2curves"}};
   for (auto [family, owner] : families)
-    if (app.implementation == (family + "/" + app.contract).str())
-      return includes(owner) ? Error::success()
-                             : unavailable(app.implementation);
-  if (app.implementation == "native/" + app.contract) {
+    if (implementation == (family + "/" + contract).str())
+      return includes(owner) ? Error::success() : unavailable(implementation);
+  if (implementation == ("native/" + contract).str()) {
     // External transcript adapters have numerical dependencies even at an
     // init/hash call whose entire signature consists of generic indices.
-    if (StringRef(app.contract).starts_with("external.monero."))
-      return includes("dalek") ? Error::success()
-                               : unavailable(app.implementation);
-    if (StringRef(app.contract).starts_with("external.openvm."))
+    if (StringRef(contract).starts_with("external.monero."))
+      return includes("dalek") ? Error::success() : unavailable(implementation);
+    if (StringRef(contract).starts_with("external.openvm."))
       return includes("plonky3") ? Error::success()
-                                 : unavailable(app.implementation);
-    for (const auto &argument : app.arguments) {
+                                 : unavailable(implementation);
+    for (const auto &argument : identities) {
       auto owner = domainOwner(argument);
       if (!owner.empty() && !includes(owner))
         return unavailable(argument);
@@ -184,10 +200,10 @@ Error CpuTarget::checkImplementation(const BindingApplication &app) const {
     // their fully resolved ports below, not granted all numerical domains.
     return Error::success();
   }
-  if (resourceUnitContract(app.contract) &&
-      app.implementation == "logical/" + app.contract)
+  if (resourceUnitContract(contract) &&
+      implementation == ("logical/" + contract).str())
     return Error::success();
-  return unavailable(app.implementation);
+  return unavailable(implementation);
 }
 
 Error CpuTarget::checkBinding(const BindingApplication &app,
@@ -204,18 +220,108 @@ Error CpuTarget::checkBinding(const BindingApplication &app,
   // value from the signature. Static codec endpoints still require their
   // compiled default layout. Type arguments are covered by resolved ports.
   for (const auto &argument : app.arguments)
-    if (const auto *codec = installedDomains().codec(argument)) {
-      auto logical = applyBoundType(
-          codec->kind, codec->domain.empty() ? std::vector<std::string>{}
-                                             : std::vector{codec->domain});
-      if (!logical)
-        return logical.takeError();
-      auto physical = defaultRepresentation(*logical);
-      if (!physical)
-        return physical.takeError();
-      if (auto e = checkType(*physical))
-        return e;
+    if (auto e = checkCodec(argument))
+      return e;
+  return Error::success();
+}
+Error CpuTarget::checkCodec(StringRef identity) const {
+  if (const auto *codec = installedDomains().codec(identity)) {
+    auto logical = applyBoundType(
+        codec->kind, codec->domain.empty() ? std::vector<std::string>{}
+                                           : std::vector{codec->domain});
+    if (!logical)
+      return logical.takeError();
+    auto physical = defaultRepresentation(*logical);
+    if (!physical)
+      return physical.takeError();
+    return checkType(*physical);
+  }
+  return Error::success();
+}
+Error CpuTarget::checkType(mlir::Type type) const {
+  if (auto e = checkPhysicalType(type))
+    return e;
+  // Formation above owns logical and represented validity. This traversal only
+  // checks the CPU's immutable storage-owner facts, shared with neutral users.
+  auto available = [&](auto &&self, mlir::Type value) -> Error {
+    auto represented = mlir::cast<runtime::RepresentedType>(value);
+    auto logical = represented.getLogical();
+    StringRef identity;
+    auto kind = planTypeConstructor(logical);
+    if (auto interface = mlir::dyn_cast<CatalogTypeInterface>(logical)) {
+      auto application = interface.getCatalogApplication();
+      if (application && !application->arguments.empty())
+        if (auto domain =
+                mlir::dyn_cast<mlir::StringAttr>(application->arguments[0]))
+          identity = domain.getValue();
     }
+    auto owner =
+        representationOwner(kind, identity, represented.getRepresentation());
+    if (owner.empty() || (owner != "independent" && !includes(owner)))
+      return unavailable(represented.getRepresentation());
+    for (mlir::Type child : represented.getChildren())
+      if (auto e = self(self, child))
+        return e;
+    return Error::success();
+  };
+  return available(available, type);
+}
+Error CpuTarget::checkBinding(const NativeBinding &binding) const {
+  // Recheck the live declaration; a stale view cannot bypass installation or
+  // stage validation. Native checking never consults the neutral serializer.
+  auto declaration = binding.declaration;
+  if (!declaration)
+    return error("binding-declaration");
+  auto emit = [&] {
+    auto diagnostic = declaration.emitError();
+    diagnostic.abandon();
+    return diagnostic;
+  };
+  auto checked = readNativeBinding(emit, declaration, true);
+  if (mlir::failed(checked))
+    return error("binding-declaration");
+  SmallVector<StringRef> identities;
+  for (mlir::Attribute argument : declaration.getArguments())
+    if (auto identity = mlir::dyn_cast<mlir::StringAttr>(argument))
+      identities.push_back(identity.getValue());
+  if (auto e = checkImplementation(declaration.getContract(),
+                                   declaration.getImplementation(), identities))
+    return e;
+  for (auto types :
+       {checked->valueType.getInputs(), checked->valueType.getResults()})
+    for (mlir::Type type : types)
+      if (auto e = checkType(type))
+        return e;
+  for (StringRef identity : identities)
+    if (auto e = checkCodec(identity))
+      return e;
+  return Error::success();
+}
+
+Error CpuTarget::checkNativeImplementation(
+    const NativeBindingApplication &application) const {
+  SmallVector<StringRef> identities;
+  for (mlir::Attribute argument : application.arguments)
+    if (auto identity = mlir::dyn_cast<mlir::StringAttr>(argument))
+      identities.push_back(identity.getValue());
+  return checkImplementation(application.contract, application.implementation,
+                             identities);
+}
+Error CpuTarget::checkNativeApplication(
+    const NativeBindingApplication &application) const {
+  auto ports = resolveNativeApplication(application);
+  if (!ports)
+    return ports.takeError();
+  if (auto e = checkNativeImplementation(application))
+    return e;
+  for (auto types : {ports->getInputs(), ports->getResults()})
+    for (mlir::Type type : types)
+      if (auto e = checkType(type))
+        return e;
+  for (mlir::Attribute argument : application.arguments)
+    if (auto identity = mlir::dyn_cast<mlir::StringAttr>(argument))
+      if (auto e = checkCodec(identity.getValue()))
+        return e;
   return Error::success();
 }
 
@@ -223,10 +329,7 @@ Error CpuTarget::checkService(StringRef contract) const {
   auto draw = serviceMethod(contract, "draw");
   if (!draw)
     return unavailable(contract);
-  auto logical = parseBoundType(draw->output, false);
-  if (!logical)
-    return logical.takeError();
-  auto physical = defaultRepresentation(*logical);
+  auto physical = defaultRepresentation(draw->output);
   if (!physical)
     return physical.takeError();
   return checkType(*physical);

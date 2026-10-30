@@ -63,6 +63,36 @@ int main() {
     auto &after = manager.getAnalysis<MathematicalFactAnalysis>();
     expectExtent(after, result, 0, work);
   });
+  cases.run("derived facts invalidate when their symbol dependency does", [&] {
+    auto module = parseSourceString<ModuleOp>(program, &context);
+    require(bool(module), "fixture refused");
+    ModuleAnalysisManager storage(*module, nullptr);
+    AnalysisManager manager = storage;
+    auto value =
+        module->lookupSymbol<func::FuncOp>("subject").front().back().getOperand(
+            0);
+    uint64_t remaining = 65536;
+    facts::Work work(remaining);
+    expectExtent(manager.getAnalysis<MathematicalFactAnalysis>(), value, 2,
+                 work);
+    require(manager.getCachedAnalysis<SymbolClosureAnalysis>().has_value(),
+            "fact extraction did not record its dependency");
+    AnalysisManager::PreservedAnalyses both;
+    both.preserve<MathematicalFactAnalysis>();
+    both.preserve<SymbolClosureAnalysis>();
+    manager.invalidate(both);
+    require(manager.getCachedAnalysis<MathematicalFactAnalysis>().has_value(),
+            "unchanged dependencies lost reusable facts");
+    auto helper = module->lookupSymbol<func::FuncOp>("append");
+    helper.front().back().setOperand(0, helper.getArgument(0));
+    AnalysisManager::PreservedAnalyses derivedOnly;
+    derivedOnly.preserve<MathematicalFactAnalysis>();
+    manager.invalidate(derivedOnly);
+    require(!manager.getCachedAnalysis<MathematicalFactAnalysis>(),
+            "preserving a derived result hid its invalidated dependency");
+    expectExtent(manager.getAnalysis<MathematicalFactAnalysis>(), value, 0,
+                 work);
+  });
   cases.run("candidate clone and query work are independent subjects", [&] {
     auto module = parseSourceString<ModuleOp>(program, &context);
     require(bool(module) && succeeded(verify(*module)), "fixture refused");

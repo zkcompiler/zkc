@@ -8,6 +8,7 @@
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Computation.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -43,7 +44,8 @@ void computationFixture(ModuleOp module, StringRef helper, StringRef caller) {
   auto function = SymbolTable(unit(module)).lookup<func::FuncOp>(helper);
   require(bool(function), "missing computation helper");
   sc::computation(function, caller);
-  require(succeeded(verify(module)), "scoped computation fixture refused");
+  require(succeeded(zkc::admitStage(module)),
+          "scoped computation fixture refused");
 }
 OwningOpRef<ModuleOp> prepare(ModuleOp source,
                               MathematicalSelectionPolicy policy = {}) {
@@ -229,7 +231,7 @@ int main() {
    func.return %n : ui64
  }
  func.func private @constant(%v:!algebra.field_array<"bls12-381.fr", 4>)->ui64 {
-   %n = "data.index"() {value="4"} : ()->ui64
+   %n = "data.index"() {value=4 : ui64} : ()->ui64
    func.return %n : ui64
  }
  )"),
@@ -241,7 +243,9 @@ int main() {
     mathematical::HelperNormalizationChecker checker(unit(*source));
     require(succeeded(checker.check(helper, expanded.front())),
             "correct static dimension refused");
-    expanded.front().front().setAttr("value", StringAttr::get(&context, "3"));
+    expanded.front().front().setAttr(
+        "value", IntegerAttr::get(
+                     IntegerType::get(&context, 64, IntegerType::Unsigned), 3));
     require(succeeded(verify(*source)),
             "dimension mutation is not ordinary math");
     ScopedDiagnosticHandler handler(&context,
@@ -385,9 +389,9 @@ int main() {
  }
  func.func private @tables(%a:!F,%b:!F,%x:!F)->(!A,!A,!F) {
    %v = "algebra.array_from_elements"(%a,%b) : (!F,!F)-> !A
-   %p = "poly.interpolate"(%v) {points=["0","1"]} : (!A)->!P
+   %p = "poly.interpolate"(%v) {points=[#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>,#algebra.literal<!algebra.field<"bls12-381.fr">, 1 : ui255>]} : (!A)->!P
    %c = func.call @observe(%p) : (!P)->!A
-   %d = "poly.evaluate_domain"(%p) {points=["2","3"]} : (!P)->!A
+   %d = "poly.evaluate_domain"(%p) {points=[#algebra.literal<!algebra.field<"bls12-381.fr">, 2 : ui255>,#algebra.literal<!algebra.field<"bls12-381.fr">, 3 : ui255>]} : (!P)->!A
    %unused = func.call @observe(%p) : (!P)->!A
    %m = "poly.mle"(%v) : (!A)->!P
    %f = "poly.fix"(%m,%x) : (!P,!F)->!poly.polynomial<"bls12-381.fr",0>
@@ -430,10 +434,16 @@ int main() {
             constant = op;
         require(constant && constant.getParameters() ==
                                 ArrayAttr::get(
-                                    &context, {StringAttr::get(&context, "4")}),
+                                    &context,
+                                    {IntegerAttr::get(
+                                        IntegerType::get(&context, 64,
+                                                         IntegerType::Unsigned),
+                                        4)}),
                 "missing returned static dimension");
-        constant.setParametersAttr(
-            ArrayAttr::get(&context, {StringAttr::get(&context, "3")}));
+        constant.setParametersAttr(ArrayAttr::get(
+            &context,
+            {IntegerAttr::get(
+                IntegerType::get(&context, 64, IntegerType::Unsigned), 3)}));
         require(succeeded(verify(*candidate)),
                 "dimension mutation is not executable");
         ScopedDiagnosticHandler handler(&context,

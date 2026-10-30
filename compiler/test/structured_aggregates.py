@@ -5,7 +5,7 @@ from pathlib import Path
 from cases import case, counted
 from commands import Commands
 from tools import records
-from variant_codec import descriptor
+from variant_types import variant as descriptor
 
 commands = Commands(records())
 source = (Path(__file__).parent / 'fixtures/structured-source/aggregate-fold.mlir').read_text()
@@ -19,15 +19,16 @@ def export(text, refusal=None):
 with case('sequence fold retains exact nominal product and components'):
     snapshot = export(source)
     definitions = {definition[1]: definition for definition in snapshot[7]}
-    query = ['product', '["query","bls12-381.fr"]', 'value',
-             [['bool'], ['field', 'bls12-381.fr']]]
-    sequence = ['sequence', query]
+    query = ['variant', ['tuple', [['atom', 'query'], ['atom', 'bls12-381.fr']]],
+             [['value', [['apply', 'bool', []],
+                         ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]]]]]
+    sequence = ['apply', 'sequence', [['type', query]]]
     assert definitions['main'][4] == [sequence]
     assert snapshot[4] == [['domain', 'queries', [sequence], [['elements', 0]], 0]]
-    assert definitions['step'][4] == [['bool'], query, sequence]
+    assert definitions['step'][4] == [['apply', 'bool', []], query, sequence]
     body = definitions['step'][9][1]
-    assert body[0][:4] == [['product.get', 0], [1], [['bool']], []]
-    assert body[1][:4] == [['product.get', 1], [2], [['field', 'bls12-381.fr']], []]
+    assert body[0][:4] == [['product.get', 0], [1], [['apply', 'bool', []]], []]
+    assert body[1][:4] == [['product.get', 1], [2], [['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]], []]
     assert definitions['make'][9][1][0][:4] == [
         ['product.make', 'value'], [0, 1], [query], []]
 
@@ -38,7 +39,7 @@ with case('same shape different product identity remains distinct'):
     assert changed != source
     snapshot = export(changed)
     definitions = {definition[1]: definition for definition in snapshot[7]}
-    assert definitions['main'][4][0][1][1] == '["other","bls12-381.fr"]'
+    assert definitions['main'][4][0][2][0][1][1] == ['tuple', [['atom', 'other'], ['atom', 'bls12-381.fr']]]
 
 for name, before, after in [
     ('wrong component type', 'index=0:i64', 'index=1:i64'),
@@ -51,7 +52,7 @@ for name, before, after in [
 with case('multi constructor variants require a separate admitted profile'):
     new = descriptor(['query', 'bls12-381.fr'], [('value', ['bool', 'field:bls12-381.fr']), ('none', [])])
     # A valid unused declaration still belongs to whole-unit admission.
-    unused = f'func.func private @unused(%x:!data.variant<{json.dumps(new)}>)->!data.variant<{json.dumps(new)}> {{ return %x : !data.variant<{json.dumps(new)}> }}'
+    unused = f'func.func private @unused(%x:{new})->{new} {{ return %x : {new} }}'
     export(source.replace('  func.func private @make', unused + '\n  func.func private @make'),
            'structured-source-product')
 

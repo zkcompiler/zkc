@@ -1,4 +1,4 @@
-import ZkcSecurity.Realizations.Oracle.AuthenticatedPermutation
+import ZkcSecurity.Bindings.Oracle.AuthenticatedPermutation
 import Mathlib.Data.Fin.Rev
 
 /-! Reuse and refusal clients of the parametric positional permutation adapter.

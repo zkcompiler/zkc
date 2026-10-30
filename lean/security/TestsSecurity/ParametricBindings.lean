@@ -3,9 +3,9 @@ module
 public import Zkc.Source.Structured.Bindings.Template
 public import ZkcExamples.Construction.EmbeddingEqualityBinding
 public import ZkcExamples.Structured.GkrSourceViews
-public import ZkcSecurity.Domains.KoalaBearModel
-public import ZkcSecurity.Examples.EmbeddingEqualityCapabilities
-public import ZkcSecurity.Domains.PrimeField
+public import ZkcSecurity.Bindings.Models.KoalaBearModel
+public import ZkcSecurityExamples.EmbeddingEqualityCapabilities
+public import ZkcSecurity.Bindings.Models.PrimeField
 public import Mathlib.Tactic.FinCases
 
 @[expose] public section

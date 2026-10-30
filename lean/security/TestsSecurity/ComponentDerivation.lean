@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Tools.ComponentDerivation
+public import ZkcSecurityTools.ComponentDerivation
 
 @[expose] public section
 

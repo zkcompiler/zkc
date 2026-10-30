@@ -1,11 +1,10 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
-#include "zkc/Contracts/TypeProperties.h"
-#include "zkc/Contracts/Variant.h"
-#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/TypeAdapters.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "llvm/ADT/TypeSwitch.h"
 using namespace mlir;
 #include "zkc/Dialect/Data/IR/dataDialect.cpp.inc"
@@ -28,6 +27,16 @@ void zkc::data::DataDialect::initialize() {
 #define GET_OP_LIST
 #include "zkc/Dialect/Data/IR/dataOps.cpp.inc"
       >();
+  zkc::protocol::type_adapters::attachCatalogTypeModels(*this);
+}
+Operation *zkc::data::DataDialect::materializeConstant(OpBuilder &builder,
+                                                       Attribute value,
+                                                       Type type,
+                                                       Location location) {
+  auto integer = dyn_cast<IntegerAttr>(value);
+  if (!integer || !type.isUnsignedInteger(64) || integer.getType() != type)
+    return nullptr;
+  return IndexOp::create(builder, location, type, integer);
 }
 namespace zkc::data {
 CollectionKind BytesType::getCollectionKind() const {
@@ -54,21 +63,10 @@ LogicalResult refuse(Operation *op, StringRef reason) {
 } // namespace
 LogicalResult SequenceType::verify(function_ref<InFlightDiagnostic()> emit,
                                    Type element) {
-  auto bound = protocol::encodeBoundType(element, false);
-  if (!bound) {
-    llvm::consumeError(bound.takeError());
-    return emit() << "sequence element must have a canonical logical type";
-  }
-  if (!protocol::duplicable(*bound) || !protocol::discardable(*bound))
-    return emit() << "sequence element must be copyable and discardable";
-  protocol::BoundType sequence{
-      "sequence", {}, {}, {protocol::TypeArgument::typeArgument(*bound)}};
-  auto formed = protocol::parseBoundType(sequence.spelling(), false);
-  if (!formed)
-    return emit() << llvm::toString(formed.takeError());
-  if (protocol::decodeBoundType(element.getContext(), *bound) != element)
-    return emit() << "sequence element must use its canonical MLIR type";
-  return success();
+  if (!element)
+    return emit() << "sequence requires a logical element";
+  return verifyLogicalTypeApplication(emit, element.getContext(),
+                                      {"sequence", {TypeAttr::get(element)}});
 }
 LogicalResult SequenceEmptyOp::verify() { return success(); }
 LogicalResult SequenceLengthOp::verify() { return success(); }
@@ -78,15 +76,7 @@ LogicalResult SequenceAppendOp::verify() {
     return refuse(*this, "sequence element identity");
   return success();
 }
-LogicalResult IndexOp::verify() {
-  uint64_t value;
-  auto text = getValue();
-  if (text.empty() || (text.size() > 1 && text.front() == '0') ||
-      !llvm::all_of(text, [](char c) { return c >= '0' && c <= '9'; }) ||
-      text.getAsInteger(10, value))
-    return refuse(*this, "expected a canonical unsigned 64-bit natural");
-  return success();
-}
+OpFoldResult IndexOp::fold(FoldAdaptor) { return getValueAttr(); }
 std::optional<MathematicalIdentity> IndexOp::getMathematicalIdentity() {
   return MathematicalIdentity::IndexConstant;
 }
@@ -121,50 +111,29 @@ SmallVector<unsigned> DimOp::getOperandDependencies(unsigned result) {
 LogicalResult EqualOp::verify() { return success(); }
 LogicalResult LessOp::verify() { return success(); }
 LogicalResult MakeOp::verify() {
-  auto descriptor =
-      protocol::decodeVariant(getOutput().getType().getDescriptor());
-  if (!descriptor)
-    return refuse(*this, "invalid aggregate descriptor");
-  auto arm = llvm::find_if(descriptor->alternatives, [&](const auto &arm) {
-    return arm.label == getAlternative();
+  auto alternatives = getOutput().getType().getAlternatives();
+  auto arm = llvm::find_if(alternatives, [&](auto arm) {
+    return arm.getLabel().getValue() == getAlternative();
   });
-  if (arm == descriptor->alternatives.end() ||
-      arm->payload.size() != getPayload().size())
-    return refuse(*this, "aggregate alternative or payload arity");
-  for (auto [type, spelling] : llvm::zip(getOperandTypes(), arm->payload)) {
-    auto actual = protocol::encodeBoundType(type, false);
-    if (!actual) {
-      llvm::consumeError(actual.takeError());
-      return refuse(*this, "aggregate payload type");
-    }
-    if (actual->spelling() != spelling)
-      return refuse(*this, "aggregate payload identity");
-  }
+  if (arm == alternatives.end() ||
+      TypeRange(arm->getPayload()) != getOperandTypes())
+    return refuse(*this, "aggregate alternative or payload identity");
   return success();
 }
 LogicalResult GetOp::verify() {
-  auto descriptor =
-      protocol::decodeVariant(getInput().getType().getDescriptor());
+  auto alternatives = getInput().getType().getAlternatives();
   auto index = getIndexAttr().getInt();
-  if (!descriptor || descriptor->alternatives.size() != 1 || index < 0 ||
-      uint64_t(index) >= descriptor->alternatives.front().payload.size())
+  if (alternatives.size() != 1 || index < 0 ||
+      uint64_t(index) >= alternatives.front().getPayload().size())
     return refuse(
         *this, "total projection requires one alternative and a valid field");
-  auto actual = protocol::encodeBoundType(getOutput().getType(), false);
-  if (!actual) {
-    llvm::consumeError(actual.takeError());
-    return refuse(*this, "aggregate result type");
-  }
-  if (actual->spelling() != descriptor->alternatives.front().payload[index])
+  if (getOutput().getType() != alternatives.front().getPayload()[index])
     return refuse(*this, "aggregate field identity");
   return success();
 }
 LogicalResult IsOp::verify() {
-  auto descriptor =
-      protocol::decodeVariant(getInput().getType().getDescriptor());
-  if (!descriptor ||
-      !llvm::any_of(descriptor->alternatives, [&](const auto &arm) {
-        return arm.label == getAlternative();
+  if (!llvm::any_of(getInput().getType().getAlternatives(), [&](auto arm) {
+        return arm.getLabel().getValue() == getAlternative();
       }))
     return refuse(*this, "unknown aggregate alternative");
   return success();

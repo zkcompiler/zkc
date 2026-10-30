@@ -1,5 +1,6 @@
 #include "OracleQueryCapacity.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Support/Refusal.h"
 #include <limits>
@@ -163,7 +164,7 @@ struct Analysis {
 } // namespace
 Expected<OracleQueryCapacity>
 analyzeOracleQueryCapacity(ModuleOp prepared, StringRef entry, uint64_t work) {
-  if (!prepared || failed(verify(prepared)) ||
+  if (!prepared || failed(zkc::admitStage(prepared)) ||
       !hasSingleElement(prepared.getBody()->getOperations()))
     return error("oracle-query-capacity-source");
   auto unit = dyn_cast<pir::ProtocolModuleOp>(prepared.getBody()->front());

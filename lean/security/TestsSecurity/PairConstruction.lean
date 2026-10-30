@@ -1,5 +1,5 @@
-import ZkcSecurity.Examples.Generated.SmallSumcheck
-import ZkcSecurity.Examples.Generated.TwoSums
+import ZkcSecurityExamples.Generated.SmallSumcheck
+import ZkcSecurityExamples.Generated.TwoSums
 
 /-! The production subjects are generated through the shared builder. These
 controls import those same checked declarations instead of copying their

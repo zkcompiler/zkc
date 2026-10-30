@@ -8,10 +8,6 @@ struct NumericalFragment {
   std::string id;
   Declaration definition;
 };
-struct HostPlan {
-  llvm::json::Array functions, signatures;
-  std::vector<NumericalFragment> calculations;
-};
 struct HostAnalysis {
   std::vector<NumericalFragment> calculations;
   llvm::json::Array functions;
@@ -24,7 +20,9 @@ analyzeHostOriginal(const ClosedEntry &, mlir::ModuleOp, const Limits & = {});
 std::string entryDeploymentId(HostInvocation::Kind, llvm::StringRef target,
                               llvm::ArrayRef<Type> arguments);
 llvm::json::Value encodeEntrySchema(const Layout &);
-llvm::Expected<HostPlan> planHost(const ClosedEntry &, const Limits & = {});
+/// Render the checked source signature inventory at the interface boundary.
+llvm::Expected<llvm::json::Array> renderHostSignatures(const ClosedEntry &,
+                                                       const Limits & = {});
 llvm::Expected<std::string>
 emitHostOriginal(const ClosedEntry &, mlir::MLIRContext &, const Limits & = {});
 llvm::Expected<Correspondence>

@@ -1,5 +1,5 @@
 import TestsSecurity.MethodNeutralChargeAssembly
-import ZkcSecurity.Generation.OriginalEndpoint
+import ZkcSecurityTools.Generation.OriginalEndpoint
 import Lean.Elab.Frontend
 
 /-! Exercise the actual common printer and elaborate its declarations in an
@@ -14,7 +14,8 @@ open Zkc.Source Zkc.Source.Structured Zkc.Construction
 
 private def output : OriginalEndpoint.Output where
   moduleName := "GeneratedChargeClient"
-  subjectModule := "ZkcSecurity.Examples.Generated.TwoSums"
+  subjectModule := "ZkcSecurityExamples.Generated.TwoSums"
+  subjectNamespace := "ZkcSecurity.Examples.Generated.TwoSums"
   methodModule := "TestsSecurity.MethodNeutralChargeAssembly"
   sampling := "ZkcSecurity.Domains.PrimeField.rawSampleable blsModulus"
   capabilities := "TestsSecurity.MethodNeutralChargeAssembly.Heterogeneous.capabilities"

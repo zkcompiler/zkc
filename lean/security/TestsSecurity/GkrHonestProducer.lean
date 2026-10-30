@@ -1,6 +1,6 @@
-import ZkcSecurity.Realizations.Gkr.CanonicalReadback
-import ZkcExamples.Structured.SumcheckVerifierHelpers
-import ZkcExamples.Structured.GkrVerifierProcess
+import ZkcSecurityExamples.Gkr.CanonicalReadback
+import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
+import Zkc.Protocols.Gkr.Source.VerifierProcess
 
 set_option autoImplicit false
 set_option backward.isDefEq.respectTransparency false

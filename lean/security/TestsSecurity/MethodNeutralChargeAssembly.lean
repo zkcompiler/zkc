@@ -1,8 +1,8 @@
 import TestsSecurity.DomainCharges
-import ZkcSecurity.Examples.RootProperties.TwoSums.Soundness
+import ZkcSecurityExamples.RootProperties.TwoSums.Soundness
 import ZkcSecurity.Claims.ChargeMonotonicity
-import ZkcSecurity.FiatShamir.DomainViewReading
-import ZkcSecurity.FiatShamir.CostComposition
+import ZkcSecurity.Bindings.Transcript.DomainViewReading
+import ZkcSecurity.ProgramLogic.Transcript.CostComposition
 
 /-! Controls at the charge assembly boundary. The nonuniform client uses the
 whole installed TwoSums binding with deliberately loose prices, not new

@@ -10,6 +10,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
+#include "support/NativeBindings.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
@@ -90,14 +91,13 @@ public:
   explicit WithheldCatalog(std::vector<std::string> withheld)
       : withheld(std::move(withheld)) {}
   llvm::Expected<std::vector<std::string>> implementations(
-      const protocol::BindingApplication &application) const override {
+      const zkc::NativeBindingApplication &application) const override {
     if (llvm::is_contained(withheld, application.contract))
       return std::vector<std::string>{};
     return target::installedCandidates().implementations(application);
   }
-  std::vector<protocol::BindingApplication>
-  conversions(const protocol::BoundType &from,
-              const protocol::BoundType &to) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type from, mlir::Type to) const override {
     return target::installedCandidates().conversions(from, to);
   }
 };
@@ -167,7 +167,7 @@ struct DirectBody {
     OpBuilder builder(context, &insertions);
     builder.setInsertionPointToEnd(module->getBody());
     auto output = protocol_ir::ProtocolModuleOp::create(
-        builder, location, protocol_ir::Profile::Exec);
+        builder, location, protocol_ir::Profile::Exec, mlir::ArrayAttr{});
     output.getBody().emplaceBlock();
     builder.setInsertionPointToEnd(&output.getBody().front());
     SmallVector<Value> unique;
@@ -981,17 +981,16 @@ int main(int argc, char **argv) {
         public:
           explicit ResidentSum(bool adapters) : adapters(adapters) {}
           llvm::Expected<std::vector<std::string>> implementations(
-              const protocol::BindingApplication &application) const override {
+              const zkc::NativeBindingApplication &application) const override {
             if (application.contract == "vector.sum")
               return std::vector<std::string>{"blst/resident/vector.sum"};
             return target::installedCandidates().implementations(application);
           }
-          std::vector<protocol::BindingApplication>
-          conversions(const protocol::BoundType &from,
-                      const protocol::BoundType &to) const override {
+          std::vector<zkc::NativeBindingApplication>
+          conversions(mlir::Type from, mlir::Type to) const override {
             return adapters
                        ? target::installedCandidates().conversions(from, to)
-                       : std::vector<protocol::BindingApplication>{};
+                       : std::vector<zkc::NativeBindingApplication>{};
           }
         };
         auto bytes = llvm::MemoryBuffer::getFile(

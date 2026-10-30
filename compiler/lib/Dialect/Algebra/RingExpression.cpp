@@ -1,5 +1,6 @@
 #include "zkc/Dialect/Algebra/RingExpression.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
 
@@ -13,8 +14,8 @@ bool isRingOperation(Operation &op) {
   if (!field)
     return false;
   if (isa<ConstantFieldOp>(op))
-    return op.getAttrOfType<StringAttr>("value") && op.getAttrs().size() == 1 &&
-           !op.getNumOperands();
+    return op.getAttrOfType<FieldLiteralAttr>("value") &&
+           op.getAttrs().size() == 1 && !op.getNumOperands();
   return isa<FieldAddOp, SubtractFieldOp, FieldMultiplyOp>(op) &&
          op.getAttrs().empty() && op.getNumOperands() == 2 &&
          op.getOperand(0).getType() == field &&
@@ -46,9 +47,15 @@ Expected<ring::Expression> describeRingExpression(Block &block,
       return zkc::error("ring-formula-operation");
     auto field = cast<FieldType>(op.getResult(0).getType());
     if (isa<ConstantFieldOp>(op)) {
-      auto value = op.getAttrOfType<StringAttr>("value");
-      auto node =
-          ring::Node::literal(field.getDomain().str(), value.getValue().str());
+      auto value = op.getAttrOfType<FieldLiteralAttr>("value");
+      if (value.getField() != field)
+        return zkc::error("ring-literal");
+      auto encoded = encodeFieldLiteral(value);
+      if (!encoded) {
+        consumeError(encoded.takeError());
+        return zkc::error("ring-literal");
+      }
+      auto node = ring::Node::literal(field.getDomain().str(), *encoded);
       // Check unused literals too; pruning cannot admit an invalid scalar body.
       auto checked = ring::Expression::create({}, {node}, {0});
       if (!checked)

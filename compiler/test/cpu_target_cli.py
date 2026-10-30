@@ -32,7 +32,7 @@ def service_program(field, index=False):
     service = f'!protocol.service_ref<"random.{field}/0">'
     result = 'ui64' if index else 'i1'
     query = (
-        f'%bound = "data.index"() {{value="4"}} : ()->ui64\n %reply = "protocol.query"(%coins,%bound) '
+        f'%bound = "data.index"() {{value=4 : ui64}} : ()->ui64\n %reply = "protocol.query"(%coins,%bound) '
         f'{{method="index",owner="P",site="sample"}} : ({service},ui64)->ui64'
         if index else ''
     )

@@ -1,7 +1,7 @@
 import ZkcSecurity.Claims.PrivateCompleteness
-import ZkcSecurity.FiatShamir.PrivateReadbackWP
-import ZkcSecurity.FiatShamir.SampledReadbackCompleteness
-import ZkcSecurity.Examples.Generated.Components.SchnorrRandomizedCompleteness
+import ZkcSecurity.Bindings.Transcript.PrivateReadbackWP
+import ZkcSecurity.Claims.Methods.SampledReadbackCompleteness
+import ZkcSecurityExamples.Generated.Components.SchnorrRandomizedCompleteness
 import TestsSecurity.HonestSampling
 
 /-! The actual admitted randomized Schnorr producer now consumes the concrete

@@ -20,7 +20,7 @@ import time
 REPOSITORY = Path(__file__).resolve().parents[3]
 SECURITY = REPOSITORY / "lean/security"
 NAMESPACE = "ZkcSecurity.Examples.Components.KoalaBearSumcheckGenerated"
-MODULE = NAMESPACE.replace(".", "/")
+MODULE = "ZkcSecurityExamples/Components/KoalaBearSumcheckGenerated"
 PRINTER_CACHE: Path | None = None
 
 MODULES = [MODULE + "/" + name + ".lean" for name in
@@ -105,7 +105,7 @@ def export_components(compiler: Path, fixture: Path, output: Path, report: Path)
     wire = decode(result.stdout)["source_claims"]
     source = """module
 
-public import ZkcSecurity.Examples.Components.KoalaBearSumcheckGenerated.Data
+public import ZkcSecurityExamples.Components.KoalaBearSumcheckGenerated.Data
 public import Zkc.Source.Structured.ComponentExport
 public import Init.Data.List.Sort.Lemmas
 -- Kernel association needs the bodies of the JSON accessors.
@@ -235,7 +235,7 @@ def check_candidate(output: Path, report: Path, control: str) -> subprocess.Comp
         target = output / module.removesuffix(".lean")
         run([lean, "-DwarningAsError=true", "-o", str(target) + ".olean", str(output / module)],
             output, report, env=env)
-    relative = "ZkcSecurity/Examples/Components/KoalaBearSumcheckSource.lean"
+    relative = "ZkcSecurityExamples/Components/KoalaBearSumcheckSource.lean"
     source = output / relative
     text = (SECURITY / relative).read_text()
     if control == "helper-body":

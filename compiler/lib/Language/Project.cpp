@@ -950,8 +950,8 @@ std::string installedCatalogIdentity() {
              {StringRef("service"), StringRef(service.contract), method})
           detail::frame(value, field);
         for (const auto &input : signature->inputs)
-          detail::frame(value, input);
-        detail::frame(value, signature->output);
+          detail::frame(value, input.spelling());
+        detail::frame(value, signature->output.spelling());
         rows.push_back(std::move(value));
       }
   std::sort(rows.begin(), rows.end());

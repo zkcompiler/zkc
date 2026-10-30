@@ -13,7 +13,9 @@
    rendering with the generated region of its document when the document has
    one. A report is established only with the pipeline's evidence, so the
    subject rows are compared only by a run given `--evidence`.
-4. Run the negative controls of the ledger check and the report generator.
+4. Run the negative controls of the ledger check and the report generator in
+   complete runs. `--subject` reports retain every live receipt check but omit
+   this global regression suite; the result records that partial test coverage.
 
 Without `--integration`, only the main package is emitted; a ledger row whose
 theorem lives in an unselected package is skipped and counted. `--write`
@@ -77,7 +79,7 @@ def main():
     parser.add_argument("--records", type=Path, help="reuse emitted records from this directory")
     parser.add_argument("--output", type=Path, default=support.evidence.records("records", ""))
     parser.add_argument("--manifests", type=Path, help="subject manifests (default: lean/subjects)")
-    parser.add_argument("--subject", action="append", help="render only named subjects; skip the complete subject table")
+    parser.add_argument("--subject", action="append", help="render only named subjects; skip the complete subject table and global regression controls")
     parser.add_argument("--evidence", type=Path, help="per-subject pipeline evidence directory")
     parser.add_argument("--requirements", type=Path,
                         help="independent consumer requests; requires exactly one --subject")
@@ -208,20 +210,25 @@ def main():
         notes.append(f"no subject manifests under {SUBJECTS.relative_to(ROOT)}; "
                      f"rendered sample reports from {FIXTURES.relative_to(ROOT)}")
 
-    control_rows = controls.run()
-    receipt_rows, receipt_failures = controls.run_emitted_receipts(records)
-    control_rows += receipt_rows
-    failures += receipt_failures
-    if "arklib" in packages:
-        emitted_rows, emitted_failures = controls.run_emitted(records)
-        control_rows += emitted_rows
-        failures += emitted_failures
+    control_rows = []
+    # Subject selection is a focused report run. Receipt validity is still
+    # checked by reports.build above; these are the global regression tests.
+    if not args.subject:
+        control_rows = controls.run()
+        receipt_rows, receipt_failures = controls.run_emitted_receipts(records)
+        control_rows += receipt_rows
+        failures += receipt_failures
+        if "arklib" in packages:
+            emitted_rows, emitted_failures = controls.run_emitted(records)
+            control_rows += emitted_rows
+            failures += emitted_failures
     summary = {
         "status": "fail" if failures else "pass",
         "packages": {package: records.headers[package].get("declarations") for package in packages},
         "ledger": {"rows": len(claims.get("proved", [])), "checked": len(checked), "skipped": len(skipped)},
         "document_names": {"checked": cited_checked, "skipped": cited_skipped},
         "reports": {report["subject"]: report["outcome"] for report in built},
+        "control_coverage": "not-run-subject-selection" if args.subject else "all",
         "controls": control_rows,
         "failures": failures,
         "notes": notes,

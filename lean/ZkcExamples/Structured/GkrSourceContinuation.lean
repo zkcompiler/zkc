@@ -1,10 +1,10 @@
 module
 
 public import ZkcExamples.Structured.GkrSourceAdmission
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 public import ZkcExamples.Structured.Generated.Presentations.Gkr
 public import ZkcExamples.Structured.GkrInputInvocation
-public import ZkcExamples.Structured.SumcheckHelperExpansions
+public import Zkc.Protocols.Sumcheck.Source.HelperExpansions
 
 @[expose] public section
 

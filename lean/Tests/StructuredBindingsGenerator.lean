@@ -81,9 +81,15 @@ def main (args : List String) : IO Unit := do
     IO.FS.writeFile path (← require (source program output))
     IO.FS.writeFile (path.withExtension "callbacks.lean") (← require (if gate then callbacksSource program output else
       Tests.Generators.SumcheckBindings.sumcheckCallbacksSource program output))
-    let template ← require (if gate then do gateSource program output (← gkrGateOutput program) else
+    let templates : HelperTemplateOutput := {
+      moduleName := "Zkc.Protocols.Gkr.Source.RoundHelpers"
+      namespaceName := output.moduleName ++ "Gate" }
+    let template ← require (if gate then do gateSource program output (← gkrGateOutput program) templates else
       Tests.Generators.SumcheckBindings.sumcheckSource program output)
     if gate then
+      let templatePath := System.FilePath.mk directory / (templates.moduleName.replace "." "/" ++ ".lean")
+      IO.FS.createDirAll templatePath.parent.get!
+      IO.FS.writeFile templatePath (← require (do gateTemplatesSource program templates (← gkrGateOutput program)))
       IO.FS.writeFile (path.withExtension "caller.lean") (← require (gkrCallerSource program output))
     IO.FS.writeFile (path.withExtension "template.lean") template
     IO.FS.writeFile (path.withExtension "obligations.json") ((obligationLedger program output).pretty ++ "\n")

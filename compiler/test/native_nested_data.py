@@ -113,7 +113,7 @@ module { "protocol.module"() ({
 # remains an explicit local operation even when its result is unused.
 probe = '''!s = !data.sequence<ui64>
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="at",contract="sequence.at",arguments=["index"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="at",contract="sequence.at",arguments=[ui64],implementation="",function_type=(!runtime.scope, !data.sequence<ui64>, ui64) -> !exec.outcome<(ui64)>} : ()->()
  func.func @checked(%scope:!runtime.scope,%s:!s,%i:ui64)->!exec.outcome<(ui64)> attributes {no_inline,runtime.origin=["checked",[]]} {
    %checked = "exec.apply"(%scope,%s,%i) <{binding=@at,parameters=[],site="at"}> : (!runtime.scope,!s,ui64)->!exec.outcome<(ui64)>
    "exec.dispatch"(%checked)[^success,^stopped] : (!exec.outcome<(ui64)>)->()
@@ -140,15 +140,14 @@ with case("total operations and checked indexing"):
         assert "native/sequence.at" in json.loads(bundle)["candidate"]
         (OUT / f"checked{suffix}.bundle").write_text(bundle)
 with case("affine element rejected at type formation"):
-    commands.verified(probe.replace("!data.sequence<ui64>", '!data.sequence<!runtime.capability<"rng:bls12-381.fr">>'),
+    commands.verified(probe.replace("!data.sequence<ui64>", '!data.sequence<!runtime.capability<rng, "bls12-381.fr">>'),
                       refuses="copyable and discardable")
-with case("complete MLIR sequence type obeys structural depth"):
+with case("native sequence structure and byte publication have separate bounds"):
     element = "ui64"
-    for _ in range(8):
+    for _ in range(12):
         element = f"!data.sequence<{element}>"
     commands.verified(f"module attributes {{data.type = {element}}} {{}}")
-    commands.verified(f"module attributes {{data.type = !data.sequence<{element}>}} {{}}",
-                      refuses="binding-type-limit")
+    # catalog_types.cpp independently checks refusal at byte publication.
 with case("copyable PCS elements do not grant total mathematical operations"):
     source = OUT / "non-total.mlir"
     source.write_text('''!s = !data.sequence<!commitment.polynomial<"multilinear.kzg.bls12-381/0", "prover_key">>

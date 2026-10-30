@@ -1,7 +1,7 @@
 module
 
-import ZkcSecurity.Examples.RootProperties.SmallSumcheck
-import ZkcSecurity.Examples.RootProperties.TwoSums
+import ZkcSecurityExamples.RootProperties.SmallSumcheck
+import ZkcSecurityExamples.RootProperties.TwoSums
 
 /-! Audit the complete original-source path to the two unchanged actual
 canonical subjects. No fixture inputs or conditional root premise remain. -/

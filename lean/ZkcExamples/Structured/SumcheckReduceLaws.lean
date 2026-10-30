@@ -2,7 +2,7 @@ module
 
 public import ZkcExamples.Structured.SumcheckReduceViews
 public import Zkc.Source.Structured.OpenLaws
-public import ZkcExamples.Structured.SumcheckVerifierBodies
+public import Zkc.Protocols.Sumcheck.Source.VerifierBodies
 public import ZkcExamples.Structured.SumcheckMathBindings
 
 @[expose] public section

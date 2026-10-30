@@ -1,6 +1,7 @@
 #include "OracleCommonPlan.h"
 #include "RealizationEmission.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Support/Refusal.h"
@@ -34,14 +35,11 @@ func::FuncOp local(pir::ProtocolModuleOp unit,
     for (unsigned input : instruction.inputs)
       operands.push_back(values[input]);
     auto binding = bindings.binding(builder, loc, instruction.binding);
-    SmallVector<StringRef> parameters;
-    for (const auto &parameter : instruction.parameters)
-      parameters.push_back(parameter);
     auto outputs = control.invoke(
         "exec.apply", instruction.types, control.scoped(operands),
         {builder.getNamedAttr("binding", binding),
          builder.getNamedAttr("parameters",
-                              builder.getStrArrayAttr(parameters)),
+                              builder.getArrayAttr(instruction.parameters)),
          builder.getNamedAttr(
              "site", builder.getStringAttr("step_" + std::to_string(i)))});
     append_range(values, outputs);
@@ -222,7 +220,7 @@ emitOracleRealization(ModuleOp prepared,
   for (auto declaration : llvm::make_early_inc_range(
            unit.getBody().front().getOps<pir::OracleDefinitionOp>()))
     declaration.erase();
-  if (failed(verify(*result.module)))
+  if (failed(zkc::admitStage(*result.module)))
     return error("oracle-common-formation");
   return result;
 }

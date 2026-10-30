@@ -130,7 +130,7 @@ Expected<Signature> instantiate(const Signature &sig,
         if (identity == constant->second && result.scope.sorts[i] == sort)
           found = i;
       if (found == result.scope.terms.size()) {
-        if (found >= 128)
+        if (found >= requirements::ScopeTermLimit)
           return invalid("requirements-limit");
         // Labels do not encode identity. Generate a fresh root label so equal
         // spellings of different kinds, and caller-chosen labels, cannot alias.
@@ -162,7 +162,7 @@ Expected<Signature> instantiate(const Signature &sig,
           break;
         }
       if (found == result.scope.terms.size()) {
-        if (found >= 128)
+        if (found >= requirements::ScopeTermLimit)
           return invalid("requirements-limit");
         result.scope.terms.push_back(
             {term.name, std::nullopt, std::move(mappedArguments)});
@@ -187,7 +187,7 @@ Expected<Signature> instantiate(const Signature &sig,
         break;
       }
     if (found == result.scope.terms.size()) {
-      if (found >= 128)
+      if (found >= requirements::ScopeTermLimit)
         return invalid("requirements-limit");
       result.scope.terms.push_back({term.name, parent});
       result.scope.sorts.push_back(sort);
@@ -229,6 +229,8 @@ Expected<Inference> infer(const Function &function,
   for (const auto &op : operations) {
     if (op.name.empty() || !installed.emplace(op.name, &op).second)
       return invalid("generic-operation-declaration");
+    if (op.numerical)
+      return invalid("generic-signature-family");
     if (auto e = signature(op.signature, constructors))
       return e;
   }

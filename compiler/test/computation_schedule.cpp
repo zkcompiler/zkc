@@ -55,7 +55,7 @@ OwningOpRef<mlir::ModuleOp> consume(mlir::ModuleOp scheduled) {
 }
 OwningOpRef<mlir::ModuleOp> controls(MLIRContext &context) {
   auto result = parseSourceString<mlir::ModuleOp>(R"mlir(
-!tag = !data.variant<"variant:5b227a6b632e76617269616e742f30222c5b2243686f696365222c226c656674222c5b5d2c5b2231222c2232225d2c227269676874222c5b2234222c2232225d2c5b2233222c2235225d2c5b2230222c2236225d5d5d">
+!tag = !data.variant<#data.identity<["atom", "Choice"]>, [#data.alternative<"left">, #data.alternative<"right">]>
 module {
  module @numerical attributes {exec.computation} {
    func.func @evaluate(%condition:i1,%fallback:!tag)->(i1,!tag,i1) {

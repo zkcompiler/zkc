@@ -128,9 +128,11 @@ int main() {
           if (sc::payload(op).front() == value)
             constant = op;
         require(bool(constant), "missing quotient parameter producer");
-        constant->setAttr(
-            "parameters",
-            builder.getStrArrayAttr({mutation == "modulus" ? "19" : "8"}));
+        auto parameter = builder.getIntegerAttr(
+            builder.getIntegerType(64, false), mutation == "modulus" ? 19 : 8);
+        require(constant.getParameters() != builder.getArrayAttr({parameter}),
+                "quotient parameter mutation did not change its value");
+        constant.setParametersAttr(builder.getArrayAttr({parameter}));
       } else if (mutation == "operand") {
         product.getInputsMutable()[0].set(product.getInputs()[1]);
       } else if (mutation == "return") {

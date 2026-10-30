@@ -1,7 +1,7 @@
 module
 
 public import TestsSecurity.SourceReading
-public import ZkcSecurity.FiatShamir.RootConnectionEndpoint
+public import ZkcSecurity.Bindings.Transcript.RootConnectionEndpoint
 public import ZkcTools.ConstructionBindings.Alignment
 public import ZkcTools.ConstructionBindings.Inputs
 

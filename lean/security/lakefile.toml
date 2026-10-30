@@ -1,6 +1,6 @@
 name = "zkc_security"
 version = "0.0.0"
-defaultTargets = ["ZkcSecurity", "ZkcSecurityTests"]
+defaultTargets = ["ZkcSecurity", "ZkcSecurityTools", "ZkcSecurityExamples", "ZkcSecurityTests"]
 
 [leanOptions]
 autoImplicit = false
@@ -39,4 +39,14 @@ allowNonModules = true
 [[lean_lib]]
 name = "ZkcSecurity"
 globs = ["ZkcSecurity.+"]
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "ZkcSecurityTools"
+globs = ["ZkcSecurityTools.+"]
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "ZkcSecurityExamples"
+globs = ["ZkcSecurityExamples.+"]
 requiresModuleSystem = true

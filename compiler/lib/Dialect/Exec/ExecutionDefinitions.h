@@ -13,6 +13,33 @@
 #include "llvm/Support/TimeProfiler.h"
 
 namespace zkc::protocol::detail {
+// Bound actual operation nesting before recursive upstream verification or
+// walking, including for already-parsed, dormant computation units. Region
+// restrictions apply only to scoped execution, not mathematical candidates.
+inline bool executionStructureWithinLimit(mlir::Operation *operation,
+                                          unsigned &remaining,
+                                          bool scoped = false,
+                                          bool scheduled = false) {
+  using namespace mlir;
+  SmallVector<std::pair<Operation *, unsigned>> pending{{operation, 0}};
+  while (!pending.empty()) {
+    auto [nested, depth] = pending.pop_back_val();
+    if (!remaining || depth > 64 ||
+        (scoped && nested != operation && nested->getNumRegions() &&
+         (!scheduled || !isa<scf::WhileOp, scf::ExecuteRegionOp>(nested))))
+      return false;
+    --remaining;
+    for (auto &region : nested->getRegions())
+      for (auto &block : region)
+        for (auto &child : block) {
+          if (pending.size() >= remaining)
+            return false;
+          pending.emplace_back(&child, depth + 1);
+        }
+  }
+  return true;
+}
+
 // Formation shared by the two independent body checks. Do not verify the
 // enclosing operation: its region verifier may be the consumer of this API.
 // Every direct Func is owned, including dormant roots and outlined regions.
@@ -58,23 +85,8 @@ verifyExecutionDefinitionScope(mlir::Operation *scope, bool source = false,
       continue;
     auto function = dyn_cast<func::FuncOp>(op);
     bool scoped = !source || (function && isScopedExecutionFunction(function));
-    SmallVector<std::pair<Operation *, unsigned>> pending{{&op, 0}};
-    while (!pending.empty()) {
-      auto [nested, depth] = pending.pop_back_val();
-      if (!remaining || depth > 64 ||
-          (scoped && nested != &op && nested->getNumRegions() &&
-           (!scheduled || !isa<scf::WhileOp, scf::ExecuteRegionOp>(nested))))
-        return failure();
-      --remaining;
-      for (auto &region : nested->getRegions())
-        for (auto &block : region)
-          for (auto &child : block) {
-            if (pending.size() >= remaining)
-              return failure();
-            pending.emplace_back(&child, depth + 1);
-          }
-    }
-    if (failed(verify(&op)))
+    if (!executionStructureWithinLimit(&op, remaining, scoped, scheduled) ||
+        failed(verify(&op)))
       return failure();
   }
   if (source) {

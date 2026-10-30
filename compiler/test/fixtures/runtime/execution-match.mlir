@@ -1,6 +1,6 @@
 !S = !runtime.scope
 !F = !algebra.field<"koala-bear">
-!V = !data.variant<"variant:5b227a6b632e76617269616e742f30222c5b22457865637574696f6e5061796c6f6164222c22736f6d65222c226669656c643a6b6f616c612d62656172222c5b2232225d2c5b2231222c2233225d2c5b2234225d2c5b2230222c2235225d5d5d">
+!V = !data.variant<#data.identity<["atom", "ExecutionPayload"]>, [#data.alternative<"some", [!algebra.field<"koala-bear">]>]>
 !R = !exec.outcome<(!F)>
 !E = !exec.outcome<(!S)>
 !T = !runtime.transfer<(!F)>

@@ -76,7 +76,7 @@ public:
     queued.clear();
     return result;
   }
-  void release(const Pointer &task) {
+  void release([[maybe_unused]] const Pointer &task) {
     assert(running == task);
     running.reset();
   }

@@ -1,15 +1,14 @@
 #include "zkc/Program/Admission.h"
 #include "EncodingLimits.h"
-#include "ResourceOrigins.h"
 #include "Structure.h"
 #include "zkc/Contracts/Bindings.h"
-#include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Program/Codec.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include <set>
 
@@ -23,8 +22,6 @@ struct Port {
 struct Definition {
   std::vector<Port> inputs, outputs;
   const program::Body *body = nullptr;
-  bool realization = false;
-  program::Names callbacks;
   program::Names arguments;
   std::string instance, role;
   std::map<std::string, std::string> services;
@@ -45,7 +42,6 @@ class Admission {
   std::string problem;
   std::map<std::string, protocol::OperationBinding> bindings;
   bool target = false, physical = false;
-  bool logicalRealizations = false;
   size_t instructions = 0;
   std::map<std::string, Definition> functions, participants;
   std::map<std::string, std::set<std::string>> edges;
@@ -235,10 +231,6 @@ class Admission {
     if (found == functions.end())
       return false;
     bool result = false;
-    for (const auto &callback : found->second.callbacks)
-      result |= callsMatchUnsafe(callback, seen);
-    if (!found->second.body)
-      return result;
     program::walk(*found->second.body, [&](const program::Instruction &i) {
       if (const auto *op = i.get<program::Operation>()) {
         auto binding = bindings.find(op->callee);
@@ -315,25 +307,20 @@ class Admission {
             serviceMethod(def.services.at(query->port), query->method);
         if (!method || query->inputs.size() != method->inputs.size())
           return fail("service-query-signature");
-        auto port = [&](StringRef spelling) -> std::optional<Port> {
-          auto logical = parseBoundType(spelling, false);
-          if (!logical) {
-            consumeError(logical.takeError());
-            return {};
-          }
+        auto port = [&](BoundType logical) -> std::optional<Port> {
           if (physical) {
-            auto selected = defaultRepresentation(*logical);
+            auto selected = defaultRepresentation(logical);
             if (!selected) {
               consumeError(selected.takeError());
               return {};
             }
-            logical = std::move(selected);
+            logical = std::move(*selected);
           }
-          return Port{logical->spelling()};
+          return Port{logical.spelling()};
         };
         std::vector<Port> inputs, expected;
-        for (const auto &spelling : method->inputs) {
-          auto p = port(spelling);
+        for (const auto &type : method->inputs) {
+          auto p = port(type);
           if (!p)
             return fail("service-query-signature");
           expected.push_back(*p);
@@ -399,7 +386,7 @@ class Admission {
             diagonalUses.insert(op->inputs[k]);
           }
       } else if (const auto *call = instruction.get<program::LocalApply>()) {
-        if (!local || (target && (!logicalRealizations || physical)))
+        if (!local || target)
           return fail("algorithm-call-context");
         std::set<std::string> checked;
         if (inMatch && callsMatchUnsafe(call->callee, checked))
@@ -407,8 +394,6 @@ class Admission {
         auto f = functions.find(call->callee);
         if (f == functions.end())
           return fail("algorithm-call-symbol");
-        if (target && !f->second.realization)
-          return fail("algorithm-call-context");
         std::vector<Port> inputs;
         if (!operands(call->inputs, env, inputs, consumed) ||
             inputs != f->second.inputs ||
@@ -434,7 +419,7 @@ class Admission {
         if (local)
           return fail("interactive-instruction");
         auto f = functions.find(call->callee);
-        if (f == functions.end() || f->second.realization)
+        if (f == functions.end())
           return fail("interactive-local-symbol");
         auto expected = f->second.inputs, outputs = f->second.outputs;
         std::vector<Port> inputs;
@@ -681,8 +666,6 @@ class Admission {
   }
   bool bodies(const std::map<std::string, Definition> &defs, bool local) {
     for (const auto &[symbol, d] : defs) {
-      if (d.realization)
-        continue;
       Env env;
       for (size_t i = 0; i < d.inputs.size(); ++i)
         env.emplace(d.arguments[i], d.inputs[i]);
@@ -740,16 +723,6 @@ class Admission {
         return false;
     return true;
   }
-  bool callbackEdges() {
-    for (const auto &[symbol, definition] : functions)
-      for (const auto &callback : definition.callbacks) {
-        auto found = functions.find(callback);
-        if (found == functions.end() || !found->second.body)
-          return fail("local-realization-callback");
-        edges[symbol].insert(callback);
-      }
-    return true;
-  }
   bool check(const program::LocalDefinitions &m) {
     if (!environment(m.bindings))
       return false;
@@ -758,7 +731,7 @@ class Admission {
     for (const auto &f : m.functions)
       if (!declare(f))
         return false;
-    return callbackEdges() && bodies(functions, true) && cycles();
+    return bodies(functions, true) && cycles();
   }
   bool check(const program::Participants &m) {
     target = true;
@@ -773,8 +746,7 @@ class Admission {
     for (const auto &p : m.participants)
       if (!declare(p))
         return false;
-    if (!callbackEdges() || !bodies(functions, true) ||
-        !bodies(participants, false) || !cycles())
+    if (!bodies(functions, true) || !bodies(participants, false) || !cycles())
       return false;
     if (m.entries.empty() && (!m.participants.empty() || m.functions.empty()))
       return fail("interactive-entry");
@@ -800,66 +772,6 @@ class Admission {
     return problem.empty();
   }
 
-  Error seedRealizations(ArrayRef<LocalRealization> realizations) {
-    unsigned typeWork = 200000;
-    bool limited = false;
-    for (const auto &realization : realizations) {
-      if (realization.kind == LocalRealization::Kind::Total
-              ? !realization.callbacks.empty()
-              : (realization.callbacks.empty() ||
-                 realization.callbacks.size() > 2))
-        return error("local-realization-callback");
-      for (const auto &callback : realization.callbacks)
-        if (!name(callback))
-          return error("local-realization-callback");
-      if (!name(realization.name) || !symbols.insert(realization.name).second)
-        return error("local-realization-symbol");
-      if (realization.domainArguments > realization.inputs.size())
-        return error("local-realization-signature");
-      if (realization.kind == LocalRealization::Kind::FiniteFold) {
-        if (realization.outputs.size() >
-                realization.inputs.size() - realization.domainArguments ||
-            !llvm::equal(realization.outputs,
-                         ArrayRef<std::string>(realization.inputs)
-                             .slice(realization.domainArguments,
-                                    realization.outputs.size())))
-          return error("local-realization-signature");
-      } else if (realization.kind == LocalRealization::Kind::FiniteCollect &&
-                 realization.outputs.size() != 1) {
-        return error("local-realization-signature");
-      }
-      Definition d;
-      d.realization = true;
-      d.callbacks = realization.callbacks;
-      for (bool input : {true, false}) {
-        const auto &ports = input ? realization.inputs : realization.outputs;
-        if (ports.size() > 1024)
-          return error("interactive-ports");
-        unsigned position = 0;
-        for (const auto &port : ports) {
-          auto type = parseBoundType(port, false);
-          if (!type)
-            return type.takeError();
-          auto policy = nativeTypePolicy(*type, typeWork, limited);
-          if (limited)
-            return error("local-realization-limit");
-          bool state = realization.kind == LocalRealization::Kind::FiniteFold &&
-                       (!input || (position >= realization.domainArguments &&
-                                   position < realization.domainArguments +
-                                                  realization.outputs.size()));
-          ++position;
-          if (!policy ||
-              (realization.kind == LocalRealization::Kind::Total &&
-               !policy->total) ||
-              (policy->affine && !state))
-            return error("local-realization-signature");
-          (input ? d.inputs : d.outputs).push_back({port});
-        }
-      }
-      functions.emplace(realization.name, std::move(d));
-    }
-    return Error::success();
-  }
   template <typename Root> Error checkRoot(const Root &root) {
     if (detail::excessiveDepth(root))
       return error("interactive-json-depth");
@@ -875,36 +787,6 @@ public:
     physical = selected;
     return run(module);
   }
-  Error nativeLocals(const program::LocalDefinitions &module,
-                     ArrayRef<LocalRealization> realizations) {
-    if (realizations.size() > 4096 ||
-        module.functions.size() + realizations.size() > 4096)
-      return error("interactive-definition-limit");
-    if (auto e = seedRealizations(realizations))
-      return e;
-    if (auto e = run(module))
-      return e;
-    return program::detail::verifyFiniteResourceOrigins(module, realizations);
-  }
-  Error logicalParticipants(const program::Participants &module,
-                            ArrayRef<LocalRealization> realizations) {
-    if (module.stage != program::Participants::Stage::Logical)
-      return error("local-realization-context");
-    const size_t definitionCount = module.functions.size() +
-                                   module.participants.size() +
-                                   realizations.size();
-    if (realizations.size() > 4096 || definitionCount > 4096)
-      return error("interactive-definition-limit");
-    if (auto e = seedRealizations(realizations))
-      return e;
-    logicalRealizations = true;
-    if (auto e = program::detail::checkNativeIRStructure(module, true))
-      return e;
-    if (auto e = checkRoot(module))
-      return e;
-    return program::detail::verifyFiniteResourceOrigins(
-        {module.bindings, module.functions}, realizations);
-  }
   template <typename Root> Error run(const Root &root) {
     if (auto e = program::detail::checkNativeIRStructure(root))
       return e;
@@ -913,9 +795,8 @@ public:
 };
 } // namespace
 
-Error admitNativeLocalDefinitions(const program::LocalDefinitions &value,
-                                  ArrayRef<LocalRealization> realizations) {
-  return Admission().nativeLocals(value, realizations);
+Error admitNativeLocalDefinitions(const program::LocalDefinitions &value) {
+  return Admission().run(value);
 }
 Error admitExecutionDefinitions(const program::LocalDefinitions &value,
                                 bool physical) {
@@ -923,9 +804,5 @@ Error admitExecutionDefinitions(const program::LocalDefinitions &value,
 }
 Error admit(const program::Participants &value) {
   return Admission().run(value);
-}
-Error admit(const program::Participants &value,
-            ArrayRef<LocalRealization> realizations) {
-  return Admission().logicalParticipants(value, realizations);
 }
 } // namespace zkc::protocol

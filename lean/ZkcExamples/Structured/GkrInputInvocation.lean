@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.Generated.Presentations.Gkr
-public import ZkcExamples.Structured.SumcheckHelperLaws
+public import Zkc.Protocols.Sumcheck.Source.HelperLaws
 
 @[expose] public section
 

@@ -1,7 +1,7 @@
-import ZkcSecurity.Examples.Subjects.Schnorr.Registration
-import ZkcSecurity.Examples.Subjects.ChaumPedersen.Registration
-import ZkcSecurity.Examples.Subjects.Okamoto.Registration
-import ZkcSecurity.Examples.Subjects.SchnorrAnd.Registration
+import ZkcSecurityExamples.Subjects.Schnorr.Registration
+import ZkcSecurityExamples.Subjects.ChaumPedersen.Registration
+import ZkcSecurityExamples.Subjects.Okamoto.Registration
+import ZkcSecurityExamples.Subjects.SchnorrAnd.Registration
 import ZkcSecurity.Claims.FiniteRecovery
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.Field.ZMod

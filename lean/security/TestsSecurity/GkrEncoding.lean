@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Realizations.Gkr.Encoding
+public import ZkcSecurity.Bindings.Gkr.Encoding
 
 public section
 namespace TestsSecurity.GkrEncoding
