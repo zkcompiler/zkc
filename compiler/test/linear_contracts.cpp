@@ -181,8 +181,7 @@ void scopedRoles(MLIRContext &ctx) {
   builder.setInsertionPointToEnd(module->getBody());
   for (StringRef contract : {"vector.mul", "vector.dot"})
     runtime::BindingOp::create(builder, loc, contract, contract,
-                               builder.getStrArrayAttr({"koala-bear"}), "",
-                               ArrayAttr{});
+                               builder.getStrArrayAttr({"koala-bear"}), "");
   auto vector = algebra::FieldVectorType::get(&ctx, "koala-bear");
   auto field = algebra::FieldType::get(&ctx, "koala-bear");
   auto scope = runtime::ScopeType::get(&ctx);

@@ -364,8 +364,7 @@ int main() {
     auto function = callee(calculations(module)[1]);
     OpBuilder builder(function);
     runtime::BindingOp::create(builder, function.getLoc(), "unused_binding",
-                               "bool.and", builder.getArrayAttr({}), "",
-                               mlir::ArrayAttr{});
+                               "bool.and", builder.getArrayAttr({}), "");
   });
   mutation("generated logical origin", [&](ModuleOp module) {
     auto function = callee(calculations(module)[1]);
@@ -457,8 +456,7 @@ int main() {
     OpBuilder builder(&context);
     builder.setInsertionPointToStart(&unit.getBody().front());
     runtime::BindingOp::create(builder, unit.getLoc(), "authored_and",
-                               "bool.and", builder.getArrayAttr({}), "",
-                               mlir::ArrayAttr{});
+                               "bool.and", builder.getArrayAttr({}), "");
     require(succeeded(verify(*original)), "authored binding lost formation");
     auto candidate = copy(*original);
     run(*candidate, protocol::createLowerMathPass());

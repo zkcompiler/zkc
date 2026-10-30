@@ -23,19 +23,15 @@ class Realizer {
   protocol_ir::ProtocolModuleOp unit;
   OpBuilder builder;
   llvm::StringSet<> names;
-  std::map<std::pair<std::string, std::vector<std::string>>, std::string>
-      bindings;
+  llvm::DenseMap<std::pair<StringAttr, ArrayAttr>, std::string> bindings;
   unsigned nextName = 0, nextSite = 0;
   exec::ScopedExecutionBuilder *scope = nullptr;
   Location loc;
   algebra::FieldType field;
   Type index, boolean, vector, table, point;
   std::string site() { return "residual_" + std::to_string(nextSite++); }
-  FlatSymbolRefAttr binding(StringRef contract,
-                            ArrayRef<std::string> arguments) {
-    auto key = std::make_pair(
-        contract.str(),
-        std::vector<std::string>(arguments.begin(), arguments.end()));
+  FlatSymbolRefAttr binding(StringRef contract, ArrayAttr arguments) {
+    auto key = std::make_pair(builder.getStringAttr(contract), arguments);
     auto found = bindings.find(key);
     if (found == bindings.end()) {
       std::string name;
@@ -44,13 +40,8 @@ class Realizer {
       } while (!names.insert(name).second);
       OpBuilder::InsertionGuard guard(builder);
       builder.setInsertionPointToStart(&unit.getBody().front());
-      SmallVector<Attribute> args;
-      for (const auto &arg : arguments)
-        args.push_back(builder.getStringAttr(arg));
-      runtime::BindingOp::create(builder, loc, name, contract,
-                                 builder.getArrayAttr(args), "",
-                                 mlir::ArrayAttr{});
-      found = bindings.emplace(std::move(key), name).first;
+      runtime::BindingOp::create(builder, loc, name, contract, arguments, "");
+      found = bindings.try_emplace(std::move(key), name).first;
     }
     return FlatSymbolRefAttr::get(builder.getContext(), found->second);
   }
@@ -58,12 +49,13 @@ class Realizer {
                           TypeRange outputs,
                           ArrayRef<std::string> parameters = {},
                           std::optional<unsigned> length = {}) {
-    SmallVector<std::string> arguments;
+    SmallVector<Attribute> arguments;
     if (!contract.starts_with("index.") && contract != "control.require")
-      arguments.push_back(field.getDomain().str());
+      arguments.push_back(builder.getStringAttr(field.getDomain()));
     if (length)
-      arguments.push_back(std::to_string(*length));
-    auto reference = binding(contract, arguments);
+      arguments.push_back(
+          builder.getIntegerAttr(builder.getIntegerType(64, false), *length));
+    auto reference = binding(contract, builder.getArrayAttr(arguments));
     SmallVector<Attribute> parametersAttrs;
     for (const auto &param : parameters)
       parametersAttrs.push_back(builder.getStringAttr(param));

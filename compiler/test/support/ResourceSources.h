@@ -7,6 +7,7 @@
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -100,9 +101,13 @@ public:
                ArrayRef<StringRef> arguments) {
     OpBuilder::InsertionGuard restore(builder);
     builder.setInsertionPointToEnd(&owner.getBody().front());
-    runtime::BindingOp::create(builder, location, name, contract,
-                               builder.getStrArrayAttr(arguments), "",
-                               ArrayAttr{});
+    protocol::BindingApplication application{contract.str(), {}, {}};
+    for (StringRef argument : arguments)
+      application.arguments.push_back(argument.str());
+    auto native =
+        protocol::decodeBindingArguments(builder.getContext(), application);
+    assert(native && "resource fixture static arguments must be admitted");
+    runtime::BindingOp::create(builder, location, name, contract, *native, "");
   }
   Values invoke(exec::ScopedExecutionBuilder &control, StringRef name,
                 ValueRange inputs, TypeRange outputs, StringRef site,

@@ -270,10 +270,16 @@ unnamed statement supplies no exact selected-target evidence. Component
 application does not turn contracts into entry statements. Its actual body and
 role substitution determine invocation bindings.
 
-Operation bindings are non-callable metadata for `runtime.binding`, retained and
-checked even when unused. The exact represented native attributes are
-`sym_name`, `contract`, `arguments`, and `implementation`; no signature, body,
-visibility, or execution parameters are invented for them. Names match ASCII
+The serialized binding row is contract metadata for a native `runtime.binding`,
+retained and checked even when unused. Native bindings are callable declarations
+with `sym_name`, `contract`, kinded `arguments`, `implementation`, and the required
+`function_type`. The latter contains the exact executable scope/outcome ABI,
+checked against both catalog derivation and every actual invocation. This
+structured export profile reconstructs the signature from the admitted contract
+and domain arguments; it does not duplicate it in the serialized row. Bodies,
+visibility and invocation parameters do not belong to the binding row. The
+profile refuses extra declaration attributes, including call annotations it
+cannot interpret. Names match ASCII
 `[A-Za-z_][A-Za-z0-9_.-]*` and have at most 256 bytes. Index contracts require
 empty domain arguments; vector and field contracts require exactly one
 `Field` identity, whose row the catalogue slot carries. The implementation selector must be the explicit empty

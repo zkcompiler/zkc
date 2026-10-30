@@ -61,9 +61,14 @@ Error checkOracleTableRead(const OracleVerificationContext &context,
         !binding.getImplementation().empty() ||
         binding.getArguments().size() != arguments.size())
       return false;
-    for (auto [value, expected] : zip(binding.getArguments(), arguments))
-      if (cast<StringAttr>(value).getValue() != expected)
-        return false;
+    if (!bindingMatches(
+            binding,
+            {binding.getSymName().str(),
+             {contract.str(),
+              std::vector<std::string>(arguments.begin(), arguments.end()),
+              {}}},
+            false))
+      return false;
     return true;
   };
   if (!call(0, "index.less", {}, {actual.getArgument(3), actual.getArgument(2)},

@@ -16,9 +16,9 @@ namespace sf = zkc::test::scopedFinite;
 namespace sc = zkc::test::scopedComputation;
 namespace {
 const std::string declarations = R"mlir(
-"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="length_alias",contract="vector.length",arguments=["koala-bear"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["koala-bear"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
+"runtime.binding"() {sym_name="length_alias",contract="vector.length",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"koala-bear">) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
 "data.domain"() ({^entry(%a:!V,%b:!V,%c:!V):
 %as = "data.domain_elements"(%a) : (!V)->!data.domain<!F>
 %bs = "data.domain_elements"(%b) : (!V)->!data.domain<!F>
@@ -327,7 +327,7 @@ int main() {
           runtime::BindingOp::create(builder, original->getLoc(), "tail",
                                      scalar ? "field.add" : "vector.add",
                                      builder.getStrArrayAttr({"koala-bear"}),
-                                     "", ArrayAttr{});
+                                     "");
           Value left = helper.getArgument(scalar ? 4 : 1),
                 right = helper.getArgument(scalar ? 4 : 2);
           sc::appendApply(helper, "tail", {left, right}, {left.getType()},
@@ -401,7 +401,7 @@ int main() {
     builder.setInsertionPointToStart(
         &m.getBody()->front().getRegion(0).front());
     runtime::BindingOp::create(builder, m.getLoc(), "extra", "control.require",
-                               builder.getArrayAttr({}), "", ArrayAttr{});
+                               builder.getArrayAttr({}), "");
   });
   cases.run("retained collection capture mutation", [&] {
     auto candidate = sf::clone(*retained);
@@ -680,8 +680,8 @@ int main() {
             "arbitrary computation acquired collection semantics");
   });
   const auto emptyText = withDefinitions(fixture(), R"mlir(
-"runtime.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation=""} : ()->()
-"runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["koala-bear"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field<"koala-bear">, ui64) -> !exec.outcome<(!algebra.field_vector<"koala-bear">)>} : ()->()
 )mlir" + functionText("empty", "%s:!F", "!F",
                       scopedApply("index", "zero", "", "", "%zero", "ui64",
                                   "[\"0\"]") +

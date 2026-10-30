@@ -1,6 +1,6 @@
 module { "protocol.module"() ({
-"runtime.binding"() {sym_name="binding_commit", contract="curve.commit", arguments=["bls12-381.g1"], implementation=""} : () -> ()
-"runtime.binding"() {sym_name="binding_respond", contract="curve.response", arguments=["bls12-381.fr"], implementation=""} : () -> ()
+"runtime.binding"() {sym_name="binding_commit", contract="curve.commit", arguments=["bls12-381.g1"], implementation="",function_type=(!runtime.scope, !algebra.group_vector<"bls12-381.g1">, !runtime.capability<nonce, "bls12-381.fr">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<nonce, "bls12-381.fr">)>} : () -> ()
+"runtime.binding"() {sym_name="binding_respond", contract="curve.response", arguments=["bls12-381.fr"], implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !runtime.capability<nonce, "bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : () -> ()
     func.func @commit(%arg0: !runtime.scope, %arg1: !algebra.group_vector<"bls12-381.g1">, %arg2: !runtime.capability<nonce, "bls12-381.fr">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<nonce, "bls12-381.fr">)> attributes {no_inline, runtime.origin = ["commit", []]} {
       %0 = "exec.apply"(%arg0, %arg1, %arg2) <{binding = @binding_commit, parameters = [], site = "commit"}> : (!runtime.scope, !algebra.group_vector<"bls12-381.g1">, !runtime.capability<nonce, "bls12-381.fr">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<nonce, "bls12-381.fr">)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<nonce, "bls12-381.fr">)>) -> ()

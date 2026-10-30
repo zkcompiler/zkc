@@ -84,7 +84,7 @@ std::string boundScale() {
 !G = !algebra.group<"bls12-381.g2">
 )" + scopedFixture(
              R"(
-"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g2"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g2"],implementation="",function_type=(!runtime.scope, !algebra.group<"bls12-381.g2">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g2">)>} : ()->()
 )",
              "%g:!G,%x:!F", "%g,%x", "!G,!F", "!G",
              scopedApply("scale", "scale", "%g,%x", "!G,!F", "%scaled", "!G") +
@@ -96,8 +96,8 @@ std::string tableLayouts() {
 !T = !poly.multilinear<"bls12-381.fr">
 )" + scopedFixture(
              R"(
-"runtime.binding"() {sym_name="msb",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
-"runtime.binding"() {sym_name="dense",contract="poly.fold",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="msb",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="dense",contract="poly.fold",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
 )",
              "%a:!T,%r:!F", "%a,%r", "!T,!F", "!T",
              scopedApply("msb", "first", "%a,%r", "!T,!F", "%x", "!T") +
@@ -524,7 +524,7 @@ int main() {
         MLIRContext context(registry);
         context.loadAllAvailableDialects();
         auto text = scopedFixture(R"(
-"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g2"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g2"],implementation="",function_type=(!runtime.scope, !algebra.group<"bls12-381.g2">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g2">)>} : ()->()
 )",
                                   "%x:i1", "%x", "i1", "i1",
                                   scopedReturn("%x", "i1"), 1);

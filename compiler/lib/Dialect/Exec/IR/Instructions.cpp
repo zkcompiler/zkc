@@ -44,6 +44,14 @@ LogicalResult ApplyOp::verifySymbolUses(SymbolTableCollection &symbols) {
                          : runtime::BindingOp();
   if (!declaration)
     return diagnostics::emit(emitOpError(), "binding-reference");
+  auto attribute = declaration->getAttrOfType<TypeAttr>("function_type");
+  auto type =
+      attribute ? dyn_cast<FunctionType>(attribute.getValue()) : FunctionType{};
+  if (!type || getOperandTypes() != TypeRange(type.getInputs()) ||
+      getOperation()->getResultTypes() != TypeRange(type.getResults()))
+    return diagnostics::emit(
+        emitOpError(), "binding-signature",
+        "invocation differs from its callable executable ABI");
   return success();
 }
 LogicalResult ApplyOp::verify() {
@@ -51,9 +59,9 @@ LogicalResult ApplyOp::verify() {
       !admitted(getInputs().getTypes(), getOutcome().getType().getPayload()))
     return refuse(*this,
                   "ordered invocation requires one admitted value stage");
-  // Binding resolution, exact ports and parameter formation are independently
-  // checked by the enclosing profile with its explicit logical/physical stage.
-  return success();
+  // Stage admission, installation and reached parameters remain independent.
+  return verifyCallAttributes(*this, getNumOperands(),
+                              getOperation()->getNumResults());
 }
 LogicalResult CompleteOp::verify() {
   if (getValues().getTypes() !=

@@ -200,6 +200,7 @@ public:
 };
 class Writer {
   MLIRContext &context;
+  bool physical;
   OpBuilder builder;
   OwningOpRef<ModuleOp> module;
   unsigned next = 0;
@@ -208,7 +209,7 @@ class Writer {
 public:
   ResultTypes types;
   Writer(MLIRContext &context, bool physical)
-      : context(context), builder(&context),
+      : context(context), physical(physical), builder(&context),
         module(ModuleOp::create(builder.getUnknownLoc())),
         types(context, physical) {}
   func::FuncOp function(StringRef name, TypeRange inputs, TypeRange outputs) {
@@ -245,18 +246,11 @@ public:
     for (const auto &function : model.functions)
       symbols.insert(function.name);
     for (const auto &binding : model.bindings) {
-      const auto &app = binding.application;
       builder.setInsertionPointToEnd(module->getBody());
-      OperationState state(builder.getUnknownLoc(), "runtime.binding");
-      state.addAttribute("sym_name", builder.getStringAttr(binding.name));
-      state.addAttribute("contract", builder.getStringAttr(app.contract));
-      state.addAttribute("arguments", strings(builder, app.arguments));
-      state.addAttribute("implementation",
-                         builder.getStringAttr(app.implementation));
-      if (!app.physicalArguments.empty())
-        state.addAttribute("physical_arguments",
-                           strings(builder, app.physicalArguments));
-      builder.create(state);
+      auto imported =
+          importBinding(builder, builder.getUnknownLoc(), binding, physical);
+      if (!imported)
+        return imported.takeError();
     }
     for (const auto &record : model.functions) {
       program::Names names;

@@ -1,6 +1,6 @@
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="coordinates",contract="indices.empty",arguments=[],implementation=""} : ()->()
-"runtime.binding"() {sym_name="binding_draw", contract="transcript.native.indexed.challenge", arguments=["merlin3.bls12-381.fr64be/0"], implementation=""} : () -> ()
+ "runtime.binding"() {sym_name="coordinates",contract="indices.empty",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.indices)>} : ()->()
+"runtime.binding"() {sym_name="binding_draw", contract="transcript.native.indexed.challenge", arguments=["merlin3.bls12-381.fr64be/0"], implementation="",function_type=(!runtime.scope, !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">, !algebra.indices) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">)>} : () -> ()
     func.func @draw(%arg0: !runtime.scope, %arg1: !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">)> attributes {no_inline, runtime.origin = ["draw", []]} {
       %0 = "exec.apply"(%arg0) <{binding = @coordinates, parameters = [], site = "coordinates"}> : (!runtime.scope) -> !exec.outcome<(!algebra.indices)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!algebra.indices)>) -> ()

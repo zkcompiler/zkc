@@ -3,11 +3,11 @@
 !f = !algebra.field<"bls12-381.fr">
 !rng = !runtime.capability<rng, "bls12-381.fr">
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="length",contract="indices.length",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="at",contract="indices.at",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="length",contract="indices.length",arguments=[],implementation="",function_type=(!runtime.scope, !algebra.indices) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="at",contract="indices.at",arguments=[],implementation="",function_type=(!runtime.scope, !algebra.indices, ui64) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>} : ()->()
+ "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation="",function_type=(!runtime.scope, i1, i1) -> !exec.outcome<(i1)>} : ()->()
     func.func @same(%arg0: !runtime.scope, %arg1: !words, %arg2: !words) -> !exec.outcome<(i1)> attributes {no_inline, runtime.origin = ["same", []]} {
       %0 = "exec.apply"(%arg0, %arg1) <{binding = @length, parameters = [], site = "n"}> : (!runtime.scope, !words) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
@@ -222,11 +222,11 @@ module { "protocol.module"() ({
       return %10 : !exec.outcome<(!words)>
     }
 
- "runtime.binding"() {sym_name="init",contract="external.monero.init",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="update",contract="external.monero.update",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="random",contract="random.draw",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="zero",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="field_equal",contract="field.equal",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="init",contract="external.monero.init",arguments=[],implementation="",function_type=(!runtime.scope, !algebra.indices) -> !exec.outcome<(!algebra.indices)>} : ()->()
+ "runtime.binding"() {sym_name="update",contract="external.monero.update",arguments=[],implementation="",function_type=(!runtime.scope, !algebra.indices, !algebra.indices) -> !exec.outcome<(!algebra.indices, !algebra.indices)>} : ()->()
+ "runtime.binding"() {sym_name="random",contract="random.draw",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !runtime.capability<rng, "bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="zero",contract="field.constant",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="field_equal",contract="field.equal",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(i1)>} : ()->()
 
 
  "protocol.func"() ({ ^entry(%seed:!words,%context:!words,%rng:!rng):

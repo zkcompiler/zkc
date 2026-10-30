@@ -41,7 +41,7 @@ def source(field, parameters):
     check = scoped_function('Check', ['!M'], ['i1'], call, ['%r'])
     return f'''!M = !algebra.field_matrix<"{field}">
 module {{ "protocol.module"() ({{
- "runtime.binding"() {{sym_name="check",contract="matrix.identity_check",arguments=["{field}"],implementation=""}} : ()->()
+ "runtime.binding"() {{sym_name="check",contract="matrix.identity_check",arguments=["{field}"],implementation="",function_type=(!runtime.scope,!M)->!exec.outcome<(i1)>}} : ()->()
  {check}
  "protocol.func"() ({{^entry(%m:!M):
    %ok = "protocol.local_call"(%m) {{callee=@Check,role="P",site="work"}} : (!M)->i1

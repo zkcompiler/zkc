@@ -3,10 +3,11 @@
 include "zkc/Dialect/Runtime/IR/RuntimeTypes.td"
 include "zkc/Dialect/Exec/IR/ExecTypes.td"
 include "mlir/IR/SymbolInterfaces.td"
+include "mlir/Interfaces/CallInterfaces.td"
 // Static contract and selected installation identity. Runtime owns this
 // declaration in logical and physical profiles; it grants no invocation-time
 // authority, successful admission, timing permission or retained resource.
-def Runtime_BindingOp : Op<RuntimeDialect, "binding", [Symbol]> {
+def Runtime_BindingOp : Op<RuntimeDialect, "binding", [Symbol, CallableOpInterface]> {
   let description = [{
     Declare an installed operation contract and its static selection. A
     Protocol module fixes the stage; a builtin module permits logical or
@@ -15,7 +16,21 @@ def Runtime_BindingOp : Op<RuntimeDialect, "binding", [Symbol]> {
   }];
   let arguments = (ins SymbolNameAttr:$sym_name, StrAttr:$contract,
     ArrayAttr:$arguments, StrAttr:$implementation,
-    OptionalAttr<ArrayAttr>:$physical_arguments);
+    TypeAttrOf<FunctionType>:$function_type,
+    OptionalAttr<DictArrayAttr>:$arg_attrs,
+    OptionalAttr<DictArrayAttr>:$res_attrs);
+  let builders = [OpBuilder<(ins "::llvm::StringRef":$name,
+    "::llvm::StringRef":$contract, "::mlir::ArrayAttr":$arguments,
+    "::llvm::StringRef":$implementation)>];
+  let extraClassDeclaration = [{
+    ::mlir::Region *getCallableRegion() { return nullptr; }
+    ::llvm::ArrayRef<::mlir::Type> getArgumentTypes() {
+      return getFunctionType().getInputs();
+    }
+    ::llvm::ArrayRef<::mlir::Type> getResultTypes() {
+      return getFunctionType().getResults();
+    }
+  }];
   let hasVerifier = 1;
 }
 // Scope transitions and handoffs are ordered, non-speculatable operations.

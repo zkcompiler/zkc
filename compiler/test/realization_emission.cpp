@@ -245,7 +245,7 @@ int main() {
       auto pinned = runtime::BindingOp::create(
           builder, sourceUnit.getLoc(), prefix.str() + "0", "field.add",
           builder.getArrayAttr({builder.getStringAttr(field.getDomain())}),
-          "arkworks/field.add", mlir::ArrayAttr{});
+          "arkworks/field.add");
       auto authored = function(builder, sourceUnit, prefix.str() + "1",
                                {field, field}, field);
       exec::ScopedExecutionBuilder authoredBody(builder, authored);
@@ -259,8 +259,8 @@ int main() {
       // Other producer work may add symbols after emitter construction.
       builder.setInsertionPointToStart(&unit.getBody().front());
       runtime::BindingOp::create(builder, unit.getLoc(), prefix.str() + "2",
-                                 "index.constant", builder.getArrayAttr({}), "",
-                                 mlir::ArrayAttr{});
+                                 "index.constant", builder.getArrayAttr({}),
+                                 "");
       auto helper = cast<func::FuncOp>(
           SymbolTable::lookupSymbolIn(unit, prefix.str() + "1"));
       helper.front().back().erase();

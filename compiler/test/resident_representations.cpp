@@ -48,8 +48,8 @@ std::string chain(MLIRContext &context, bool residentInitial = true,
 !G = !algebra.group<"bls12-381.g1">
 )" + scopedFixture(
           R"(
-"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="blst/resident/curve.scale"} : ()->()
-"runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="blst/resident/curve.scale",function_type=(!runtime.scope, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : ()->()
+"runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation="",function_type=(!runtime.scope, i1) -> !exec.outcome<>} : ()->()
 )",
           execution ? "%g:!G,%s:!F,%c:i1,%lo:ui64,%hi:ui64,%allowed:i1,%t:!F"
                     : "%g:!G,%s:!F,%c:i1,%lo:ui64,%hi:ui64",
@@ -216,7 +216,7 @@ std::string variantSource(MLIRContext &context, StringRef descriptor) {
 !G = !algebra.group<"bls12-381.g1">
 )" +
               scopedFixture(R"(
-"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="blst/resident/curve.scale"} : ()->()
+"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="blst/resident/curve.scale",function_type=(!runtime.scope, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : ()->()
 )",
                             "%g:!G,%s:!F", "%g,%s", "!G,!F", "!G",
                             scopedReturn("%g", "!G"), 2);
@@ -635,7 +635,7 @@ module { "protocol.module"() ({
 !G = !algebra.group<"bls12-381.g1">
 !GS = !algebra.group_vector<"bls12-381.g1">
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.group_vector<"bls12-381.g1">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : ()->()
 )",
                    "%s:!V,%g:!GS", "%s,%g", "!V,!GS", "!G", R"(
 %msm_attempt = "exec.apply"(%scope,%s,%g) {binding=@msm,site="msm",parameters=[]} : (!runtime.scope,!V,!GS)->!exec.outcome<(!G)>
@@ -659,9 +659,9 @@ func.return %done : !exec.outcome<(!G)>
     auto source = R"(!F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
-"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=[!algebra.field<"bls12-381.fr">],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!algebra.field<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field<"bls12-381.fr">>, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
 )",
                    "%a:!F,%b:!F", "%a,%b", "!F,!F", "!S", R"(
 %add_attempt = "exec.apply"(%scope,%a,%b) {binding=@add,site="add",parameters=[]} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
@@ -701,9 +701,9 @@ func.return %done : !exec.outcome<(!S)>
     auto source = R"(!F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation="blst/resident/vector.mul"} : ()->()
-"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation="blst/resident/vector.sum"} : ()->()
-"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
+"runtime.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation="blst/resident/vector.mul",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation="blst/resident/vector.sum",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 )",
                    "%a:!V,%b:!V,%x:!F", "%a,%b,%x", "!V,!V,!F", "!F", R"(
 %mul_attempt = "exec.apply"(%scope,%a,%b) {binding=@mul,site="mul",parameters=[]} : (!runtime.scope,!V,!V)->!exec.outcome<(!V)>

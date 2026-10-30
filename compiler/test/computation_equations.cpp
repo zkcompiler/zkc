@@ -549,10 +549,9 @@ int main() {
         OpBuilder builder(helper);
         runtime::BindingOp::create(builder, helper.getLoc(), "index_constant",
                                    "index.constant", builder.getArrayAttr({}),
-                                   "", ArrayAttr{});
+                                   "");
         runtime::BindingOp::create(builder, helper.getLoc(), "index_add",
-                                   "index.add", builder.getArrayAttr({}), "",
-                                   ArrayAttr{});
+                                   "index.add", builder.getArrayAttr({}), "");
         Type index = IntegerType::get(&context, 64, IntegerType::Unsigned);
         auto *maximum = appendApply(helper, "index_constant", {}, index,
                                     "maximum", {"18446744073709551615"});
@@ -637,8 +636,7 @@ int main() {
     auto *tail = rewriter.splitBlock(before, lookup->getIterator());
     OpBuilder builder(helper);
     runtime::BindingOp::create(builder, helper.getLoc(), "fixed_index",
-                               "index.constant", builder.getArrayAttr({}), "",
-                               ArrayAttr{});
+                               "index.constant", builder.getArrayAttr({}), "");
     builder.setInsertionPointToEnd(before);
     exec::ScopedExecutionBuilder control(builder, helper);
     auto index = control.invoke(

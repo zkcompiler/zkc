@@ -62,8 +62,10 @@ def stopped(reason='refused', site='primitive'):
 
 def binding(contract, name='operation', implementation=''):
     arguments = [] if contract.startswith('index.') else ['bls12-381.fr']
+    inputs, outputs = catalogue[contract]
+    signature = '(' + ','.join(['!runtime.scope'] + [ports[p] for p in inputs]) + ') -> !exec.outcome<(' + ','.join(ports[p] for p in outputs) + ')>'
     return ('"runtime.binding"() {sym_name=' + json.dumps(name) + ',contract=' + json.dumps(contract) +
-            ',arguments=' + json.dumps(arguments) + ',implementation=' + json.dumps(implementation) + '} : ()->()')
+            ',arguments=' + json.dumps(arguments) + ',implementation=' + json.dumps(implementation) + ',function_type=' + signature + '} : ()->()')
 
 
 def wrapped(inputs, outputs, body, results, declarations='', after=''):
@@ -177,6 +179,8 @@ with case('unused-supported-bindings-retained-in-order-and-independently-admitte
     assert [b[1] for b in export(source)[6]] == ['unused', 'operation']
     assert run(source, ['1', '2']) == returned(['3'])
     bad = source.replace('contract="vector.split"', 'contract="vector.product"')
+    bad = bad.replace('!exec.outcome<(' + vector + ',' + vector + ')>',
+                      '!exec.outcome<(' + field + ')>')
     export(bad, refusal='structured-source-binding')
     run(bad, ['1', '2'], refusal='structured-reference-binding')
 

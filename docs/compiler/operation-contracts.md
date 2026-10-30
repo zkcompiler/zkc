@@ -45,7 +45,11 @@ records ownership and consumers; it adds no execution registry or authority.
 `exec.apply` is the single executable contract invocation. Its `runtime.binding`
 symbol fixes the operation and static specialization; its actual inputs and
 outcome payload carry the logical or represented ports. Symbol-use verification
-requires that declaration in the nearest symbol table. Per-contract executable
+requires that declaration in the nearest symbol table and exact agreement
+with its complete executable `function_type`. Native type arguments are types,
+naturals are unsigned integer attributes, and numerical row masks are dense
+Boolean arrays. Callable/call interfaces expose that ABI to standard MLIR
+infrastructure without granting optimization or installation authority. Per-contract executable
 wrapper operations are absent. Total mathematical operations retain separate
 typed identities for algebraic analysis and checked realization.
 

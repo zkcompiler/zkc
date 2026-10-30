@@ -1742,8 +1742,8 @@ public:
       } else if (isa<runtime::BindingOp>(op)) {
         if (bindings.size() == 128)
           return error("structured-source-limit");
-        if (auto e = attributes(
-                op, {"sym_name", "contract", "arguments", "implementation"}))
+        if (auto e = attributes(op, {"sym_name", "contract", "arguments",
+                                     "implementation", "function_type"}))
           return std::move(e);
         auto binding = primitiveBinding(&op, used);
         if (!binding)

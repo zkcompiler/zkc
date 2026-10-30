@@ -34,8 +34,13 @@ handle. AOT and a new execution backend are not requirements of this contract.
 `runtime.binding` declares a resolved logical operation and its static
 specialization. It retains its exact contract identity, kinded arguments,
 implementation constraint and resolved signature as inherent structured data.
-Physical selection additionally fixes complete represented ports and the
-selected immutable installation. A declaration cannot install executable code.
+Its required `function_type` is the complete executable ABI, including the
+borrowed scope and one outcome. The mathematical signature is independently
+derived from the catalog; erasing the outer representation of each value port
+must reproduce it exactly. Physical selection is carried by those actual ports;
+there is no native `physical_arguments` attribute. A declaration cannot install
+executable code. Program-byte interchange still represents installation choices
+in its own binding record, reconstructed and checked at that boundary.
 
 The installed invocation is `exec.apply`. Its native signature is:
 
@@ -43,7 +48,17 @@ The installed invocation is `exec.apply`. Its native signature is:
 (runtime.scope, inputs...) -> exec.outcome<(results...)>
 ```
 
-The declaration's resolved logical signature and executable scope/outcome
+`runtime.binding` implements `CallableOpInterface` as a declaration without a
+body. `exec.apply` implements `CallOpInterface`; all its operands, including
+scope, and its one outcome result must exactly match the callable signature.
+These interfaces expose structural call information, without purity, inlining,
+implementation admission, or successful execution guarantees. The standard
+optional `arg_attrs` and `res_attrs` arrays index the actual ABI, including
+scope and outcome; formation requires one dictionary per corresponding port.
+Byte publication refuses nonempty dictionaries until it has an interpretation
+for them, so an annotation is never silently discarded.
+
+The declaration's derived logical signature and stored executable scope/outcome
 signature are distinct projections of the same contract. Native signature
 formation evaluates the catalog's ordered static scope directly. Domain and
 Slot roots are `StringAttr`, Type roots are `TypeAttr`, and Nat roots are

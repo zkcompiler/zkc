@@ -62,8 +62,13 @@ struct Reader {
                          binding.getArguments().size() == statics.size() &&
                          op.getParameters().size() == parameters.size()))
         return values;
-      for (auto [actual, expected] : zip(binding.getArguments(), statics))
-        reader.expect(cast<StringAttr>(actual).getValue() == expected);
+      reader.expect(bindingMatches(
+          binding,
+          {binding.getSymName().str(),
+           {contract.str(),
+            std::vector<std::string>(statics.begin(), statics.end()),
+            {}}},
+          false));
       for (auto [actual, expected] : zip(op.getParameters(), parameters))
         reader.expect(cast<StringAttr>(actual).getValue() == expected);
       return values;

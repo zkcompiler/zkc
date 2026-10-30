@@ -1,11 +1,11 @@
 // Candidate search uses immutable trials and checks the chosen witness on live state.
 !words = !algebra.indices
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="length",contract="indices.length",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="at",contract="indices.at",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="length",contract="indices.length",arguments=[],implementation="",function_type=(!runtime.scope, !algebra.indices) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="at",contract="indices.at",arguments=[],implementation="",function_type=(!runtime.scope, !algebra.indices, ui64) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>} : ()->()
+ "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation="",function_type=(!runtime.scope, i1, i1) -> !exec.outcome<(i1)>} : ()->()
     func.func @same(%arg0: !runtime.scope, %arg1: !words, %arg2: !words) -> !exec.outcome<(i1)> attributes {no_inline, runtime.origin = ["same", []]} {
       %0 = "exec.apply"(%arg0, %arg1) <{binding = @length, parameters = [], site = "n"}> : (!runtime.scope, !words) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
@@ -281,15 +281,15 @@ module { "protocol.module"() ({
       return %7 : !exec.outcome<(ui64, i1)>
     }
 
- "runtime.binding"() {sym_name="binding_init",contract="external.openvm.init",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="binding_init",contract="external.openvm.init",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.indices)>} : ()->()
 
- "runtime.binding"() {sym_name="binding_observe",contract="external.openvm.observe",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="binding_observe",contract="external.openvm.observe",arguments=[],implementation="",function_type=(!runtime.scope, !algebra.indices, !algebra.indices) -> !exec.outcome<(!algebra.indices)>} : ()->()
 
- "runtime.binding"() {sym_name="binding_check",contract="external.openvm.check_witness",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="binding_check",contract="external.openvm.check_witness",arguments=[],implementation="",function_type=(!runtime.scope, !algebra.indices, ui64, ui64) -> !exec.outcome<(!algebra.indices, i1)>} : ()->()
 
- "runtime.binding"() {sym_name="ext",contract="external.openvm.sample_ext",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="bits",contract="external.openvm.sample_bits",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="scalar",contract="external.openvm.sample",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="ext",contract="external.openvm.sample_ext",arguments=[],implementation="",function_type=(!runtime.scope, !algebra.indices) -> !exec.outcome<(!algebra.indices, !algebra.indices)>} : ()->()
+ "runtime.binding"() {sym_name="bits",contract="external.openvm.sample_bits",arguments=[],implementation="",function_type=(!runtime.scope, !algebra.indices, ui64) -> !exec.outcome<(!algebra.indices, ui64)>} : ()->()
+ "runtime.binding"() {sym_name="scalar",contract="external.openvm.sample",arguments=[],implementation="",function_type=(!runtime.scope, !algebra.indices) -> !exec.outcome<(!algebra.indices, ui64)>} : ()->()
 
 
  "protocol.func"() ({ ^entry(%context:!words,%difficulty:ui64,%width:ui64,%candidates:!words):

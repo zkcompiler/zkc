@@ -301,8 +301,13 @@ The profile requires `no_inline` and refuses recursive outlining, unconsumed
 blocks, unknown operations or attributes, and unchecked region definitions.
 
 `runtime.binding` declares the logical operation contract, static arguments and
-selected implementation/physical arguments. Both logical and physical profiles
-use this one declaration. Its name is resolved within the actual symbol table;
+selected implementation. The required `function_type` contains scope, all
+logical or represented value inputs, and one explicit outcome result. Typed
+static arguments follow the [foundation contract](native-foundation.md#typed-declarations-and-reached-invocation).
+The actual represented ports own physical selection; there is no parallel
+native physical-argument attribute. Both logical and physical profiles use this
+one callable declaration. Its name is resolved within the actual symbol table;
+`exec.apply` checks its exact operand and result types against that signature;
 the declaration alone grants no installed authority, timing permission or
 invocation success. Installation still checks the complete potential closure,
 and reached execution checks current operands, policy, custody and allowances.

@@ -1,7 +1,7 @@
 module {
 "protocol.module"() ({
-  "runtime.binding"() {sym_name="add", contract="field.add", arguments=["bls12-381.fr"], implementation=""} : () -> ()
-  "runtime.binding"() {sym_name="require", contract="control.require", arguments=[], implementation=""} : () -> ()
+  "runtime.binding"() {sym_name="add", contract="field.add", arguments=["bls12-381.fr"], implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : () -> ()
+  "runtime.binding"() {sym_name="require", contract="control.require", arguments=[], implementation="",function_type=(!runtime.scope, i1) -> !exec.outcome<>} : () -> ()
     func.func @leaf(%arg0: !runtime.scope, %arg1: !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)> attributes {no_inline, runtime.origin = ["leaf", []]} {
       %0 = "exec.apply"(%arg0, %arg1, %arg1) <{binding = @add, parameters = [], site = "twice"}> : (!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!algebra.field<"bls12-381.fr">)>) -> ()

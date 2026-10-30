@@ -106,10 +106,17 @@ class RecipeReader {
       if (auto parameter = dyn_cast<StringAttr>(item);
           !parameter || parameter.getValue() != expected)
         return false;
-    for (auto [item, expected] : zip(binding.getArguments(), arguments))
-      if (auto argument = dyn_cast<StringAttr>(item);
-          !argument || argument.getValue() != expected)
-        return false;
+    protocol::BindingApplication application{contract.str(), {}, {}};
+    for (StringRef argument : arguments)
+      application.arguments.push_back(argument.str());
+    auto expected =
+        protocol::decodeBindingArguments(op->getContext(), application);
+    if (!expected) {
+      consumeError(expected.takeError());
+      return false;
+    }
+    if (binding.getArgumentsAttr() != *expected)
+      return false;
     return true;
   }
 

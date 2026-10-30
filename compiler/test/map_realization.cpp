@@ -277,8 +277,7 @@ int main(int argc, char **argv) {
     builder.setInsertionPointToStart(
         &module.getBody()->front().getRegion(0).front());
     runtime::BindingOp::create(builder, module.getLoc(), "extra", "vector.add",
-                               builder.getStrArrayAttr({"koala-bear"}), "",
-                               ArrayAttr{});
+                               builder.getStrArrayAttr({"koala-bear"}), "");
   });
   mutation("pin a generated vector implementation", [&](ModuleOp module) {
     auto call = nth(module, "vector.add");
@@ -317,7 +316,10 @@ int main(int argc, char **argv) {
       require(failed(verify(*candidate)) &&
                   failed(compare(*source, *candidate)),
               "malformed candidate escaped actual source admission");
-      require(namesIdentifier(diagnostics, "execution-source-closure"),
+      require(namesIdentifier(diagnostics, change == "scale-types" ||
+                                                   change == "binding-field"
+                                               ? "binding-signature"
+                                               : "execution-source-closure"),
               "unexpected refusal owner: " + diagnostics);
     });
   cases.run(

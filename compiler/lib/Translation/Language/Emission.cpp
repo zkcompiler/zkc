@@ -226,10 +226,22 @@ class Emitter {
       }
       mlir::OpBuilder::InsertionGuard guard(builder);
       builder.setInsertionPointToStart(definitions);
-      if (!make("runtime.binding", {}, {},
-                {text("sym_name", name), text("contract", contract),
-                 attr("arguments", strings(arguments)),
-                 text("implementation", "")}))
+      auto nativeArguments = take(protocol::decodeBindingArguments(
+          &context, {contract.str(), arguments, {}}));
+      if (!nativeArguments)
+        return {};
+      auto signature = zkc::resolveLogicalSignature(
+          [&] { return mlir::emitError(builder.getUnknownLoc()); }, &context,
+          contract, nativeArguments->getValue());
+      if (!signature)
+        return {};
+      if (!make(
+              "runtime.binding", {}, {},
+              {text("sym_name", name), text("contract", contract),
+               attr("arguments", *nativeArguments),
+               attr("function_type",
+                    mlir::TypeAttr::get(executableBindingSignature(signature))),
+               text("implementation", "")}))
         return {};
       found = bindings.emplace(key, std::move(name)).first;
     }

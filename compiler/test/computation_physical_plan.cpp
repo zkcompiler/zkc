@@ -62,7 +62,7 @@ func.func private @difference(%a:!F,%b:!F)->!F {
   %v = algebra.field_subtract %a,%b : (!F,!F)->!F
   func.return %v : !F
 }
-"runtime.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+"runtime.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
 )mlir",
                        "%table:!T,%other:!T,%a:!F,%b:!F", "%table,%other,%a,%b",
                        "!T,!T,!F,!F", "!T",
@@ -180,8 +180,8 @@ module @difference attributes {exec.computation} {
    func.return %r : !F
  }
 }
-"runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
-"runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !poly.multilinear<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 )mlir",
                        "%table:!T,%other:!T,%a:!F,%b:!F", "%table,%other,%a,%b",
                        "!T,!T,!F,!F", "!F",
@@ -202,7 +202,7 @@ func.func private @difference(%a:!F,%b:!F)->!F {
   %v = algebra.field_subtract %a,%b : (!F,!F)->!F
   func.return %v : !F
 }
-"runtime.binding"() {sym_name="require",contract="control.require",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="require",contract="control.require",arguments=[],implementation="",function_type=(!runtime.scope, i1) -> !exec.outcome<>} : ()->()
 )mlir",
                        "%a:!F,%b:!F,%enabled:i1", "%a,%b,%enabled", "!F,!F,i1",
                        "!F", scopedReturn("%a", "!F"), 3);
@@ -327,13 +327,9 @@ void addUnchangedContext(ModuleOp module, unsigned count) {
   OpBuilder builder(module.getContext());
   auto root = owner(module);
   builder.setInsertionPointToEnd(&root.getBody().front());
-  OperationState binding(module.getLoc(),
-                         runtime::BindingOp::getOperationName());
-  binding.addAttribute("sym_name", builder.getStringAttr("context_add"));
-  binding.addAttribute("contract", builder.getStringAttr("field.add"));
-  binding.addAttribute("arguments", builder.getStrArrayAttr({"bls12-381.fr"}));
-  binding.addAttribute("implementation", builder.getStringAttr(""));
-  builder.create(binding);
+  runtime::BindingOp::create(builder, module.getLoc(), "context_add",
+                             "field.add",
+                             builder.getStrArrayAttr({"bls12-381.fr"}), "");
   auto function = func::FuncOp::create(
       builder, module.getLoc(), "unchanged_context",
       builder.getFunctionType({runtime::ScopeType::get(module.getContext())},
@@ -598,8 +594,8 @@ module @difference attributes {exec.computation} {
    func.return %r : !F
  }
 }
-"runtime.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="blst/resident/curve.msm"} : ()->()
-"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="blst/resident/curve.msm",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.group_vector<"bls12-381.g1">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : ()->()
+"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="",function_type=(!runtime.scope, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : ()->()
 )mlir",
                         "%s:!V,%p:!GS,%a:!F,%b:!F", "%s,%p,%a,%b",
                         "!V,!GS,!F,!F", "!G",
@@ -1229,10 +1225,12 @@ module @difference attributes {exec.computation} {
             if (mutation == "field")
               arguments[0] = builder.getStringAttr("bn254.fr");
             else {
-              auto mask = cast<StringAttr>(arguments[1]).getValue().str();
+              auto originalMask =
+                  cast<DenseBoolArrayAttr>(arguments[1]).asArrayRef();
+              SmallVector<bool> mask(originalMask.begin(), originalMask.end());
               require(!mask.empty(), "native row mask was empty");
-              mask[0] = mask[0] == '0' ? '1' : '0';
-              arguments[1] = builder.getStringAttr(mask);
+              mask[0] = !mask[0];
+              arguments[1] = builder.getDenseBoolArrayAttr(mask);
             }
             binding->setAttr("arguments", builder.getArrayAttr(arguments));
           }

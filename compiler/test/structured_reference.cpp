@@ -353,8 +353,8 @@ class Admission {
   PrimitiveMap primitives;
 
   Error binding(Operation &op) {
-    if (auto failure = attributes(
-            op, {"sym_name", "contract", "arguments", "implementation"}))
+    if (auto failure = attributes(op, {"sym_name", "contract", "arguments",
+                                       "implementation", "function_type"}))
       return failure;
     auto name = op.getAttrOfType<StringAttr>("sym_name");
     auto contract = op.getAttrOfType<StringAttr>("contract");

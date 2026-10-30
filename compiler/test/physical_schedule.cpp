@@ -207,7 +207,7 @@ OwningOpRef<ModuleOp> materializedCopy(ModuleOp source,
 std::string scalarSource() {
   return scopedFixture(
       R"mlir(
-"runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation="",function_type=(!runtime.scope, i1, i1) -> !exec.outcome<(i1)>} : ()->()
 )mlir",
       "%a:i1,%b:i1,%unused:i1,%other:i1", "%a,%b,%unused,%other", "i1,i1,i1,i1",
       "i1",
@@ -222,7 +222,7 @@ std::string conversionSource() {
 !T = !poly.multilinear<"bls12-381.fr">
 )mlir" + scopedFixture(
              R"mlir(
-"runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+"runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
 )mlir",
              "%a:!T,%b:!T,%r:!F", "%a,%b,%r", "!T,!T,!F", "!T",
              scopedApply("fold", "first", "%a,%r", "!T,!F", "%first", "!T") +
@@ -766,7 +766,7 @@ int main() {
           auto text = R"mlir(!F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
 )mlir" + scopedFixture(R"mlir(
-"runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.product_sum"} : ()->()
+"runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.product_sum",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !poly.multilinear<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 )mlir",
                        "%table:!T", "%table", "!T", "!F",
                        scopedApply("product", "product", "%table,%table",

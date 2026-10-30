@@ -25,12 +25,13 @@ std::optional<protocol::BindingApplication> semanticBinding(Operation *op) {
       declaration.getContract().str(),
       {},
       declaration.getImplementation().str()};
-  for (auto attr : declaration.getArguments()) {
-    auto value = dyn_cast<StringAttr>(attr);
-    if (!value)
-      return std::nullopt;
-    application.arguments.push_back(value.getValue().str());
+  auto arguments = protocol::encodeBindingArguments(
+      declaration.getContract(), declaration.getArgumentsAttr());
+  if (!arguments) {
+    consumeError(arguments.takeError());
+    return std::nullopt;
   }
+  application.arguments = std::move(*arguments);
   return application;
 }
 } // namespace

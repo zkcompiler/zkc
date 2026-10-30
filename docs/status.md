@@ -39,7 +39,11 @@ typed static arguments. Sequence and fixed-vector formation now inspect native
 structure and catalog permissions, independently of byte-format limits. Native
 construction callbacks and logical signature derivation now use these typed
 arguments directly, including complete-Type ports, projections and numerical
-masks. Runtime binding storage has not yet adopted that derivation. Resource capability
+masks. Runtime bindings now store typed static arguments and the actual callable
+signature, including scope and outcome; calls implement MLIR's call interface
+and check exact agreement with that signature. Physical choices are carried by
+the actual represented ports, with their string encoding confined to the
+program interchange boundary. Resource capability
 types now retain enum kinds and separate identities; native transcript checks
 consume those fields directly. Native type-use policies inspect typed catalog
 arguments and all aggregate alternatives without encoding and reparsing types.

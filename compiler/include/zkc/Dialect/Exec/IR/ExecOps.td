@@ -3,6 +3,7 @@
 include "zkc/Dialect/Exec/IR/ExecTypes.td"
 include "zkc/Dialect/Runtime/IR/RuntimeTypes.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
+include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "zkc/Interfaces/LinearContraction.td"
 // Logical mathematical invocation. The callee has plain mathematical ports;
@@ -39,12 +40,24 @@ def Exec_CollectOp : ExecFinite<"collect", "body">;
 // A reached native instruction uses the active scope. Its outcome includes
 // tick, admission, allocation and output binding, not merely its value result.
 def Exec_ApplyOp : Op<ExecDialect, "apply", [
-    DeclareOpInterfaceMethods<SymbolUserOpInterface>,
+    CallOpInterface, DeclareOpInterfaceMethods<SymbolUserOpInterface>,
     DeclareOpInterfaceMethods<DiagonalProducerInterface>,
     DeclareOpInterfaceMethods<DiagonalContractionInterface>]> {
   let arguments = (ins RuntimeScope:$scope, Variadic<AnyType>:$inputs,
-    FlatSymbolRefAttr:$binding, StrArrayAttr:$parameters, StrAttr:$site);
+    FlatSymbolRefAttr:$binding, StrArrayAttr:$parameters, StrAttr:$site,
+    OptionalAttr<DictArrayAttr>:$arg_attrs,
+    OptionalAttr<DictArrayAttr>:$res_attrs);
   let results = (outs ExecOutcome:$outcome);
+  let extraClassDeclaration = [{
+    ::mlir::CallInterfaceCallable getCallableForCallee() { return getBindingAttr(); }
+    void setCalleeFromCallable(::mlir::CallInterfaceCallable callee) {
+      setBindingAttr(::mlir::cast<::mlir::FlatSymbolRefAttr>(callee.get<::mlir::SymbolRefAttr>()));
+    }
+    ::mlir::Operation::operand_range getArgOperands() { return getOperands(); }
+    ::mlir::MutableOperandRange getArgOperandsMutable() {
+      return ::mlir::MutableOperandRange(*this);
+    }
+  }];
   let hasVerifier = 1;
 }
 def Exec_CompleteOp : Op<ExecDialect, "complete"> {

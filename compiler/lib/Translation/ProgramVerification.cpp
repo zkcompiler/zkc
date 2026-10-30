@@ -214,14 +214,7 @@ public:
         if (binding == program.bindings.size())
           return false;
         const auto &expected = program.bindings[binding++];
-        if (b.getSymName() != expected.name ||
-            b.getContract() != expected.application.contract ||
-            b.getImplementation() != expected.application.implementation ||
-            !strings(b.getArguments(), expected.application.arguments) ||
-            (b.getPhysicalArgumentsAttr()
-                 ? !strings(b.getPhysicalArgumentsAttr(),
-                            expected.application.physicalArguments)
-                 : !expected.application.physicalArguments.empty()))
+        if (!bindingMatches(b, expected, true))
           return false;
       } else if (auto fn = dyn_cast<func::FuncOp>(op)) {
         // The independent scoped execution comparator below checks every

@@ -475,8 +475,7 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
           builder.setInsertionPointToStart(&root.getBody().front());
           runtime::BindingOp::create(builder, location, "fold", "poly.fold",
                                      builder.getStrArrayAttr({"bls12-381.fr"}),
-                                     "arkworks-msb/poly.fold",
-                                     builder.getArrayAttr({}));
+                                     "arkworks-msb/poly.fold");
           auto table =
               parseType("!poly.multilinear<\"bls12-381.fr\">", &context);
           auto field = parseType("!algebra.field<\"bls12-381.fr\">", &context);
@@ -1512,7 +1511,7 @@ protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}
             : "scoped expansion retains 4096 definitions independently",
         [&] {
           auto text = scopedFixture(R"(
-"runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation="",function_type=(!runtime.scope, i1, i1) -> !exec.outcome<(i1)>} : ()->()
 )",
                                     "%x:i1", "%x", "i1", "i1",
                                     scopedReturn("%x", "i1"), 1);

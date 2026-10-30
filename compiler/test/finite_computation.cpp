@@ -33,7 +33,7 @@ const char *source = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : () -> ()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : () -> ()
  "data.domain"() ({
  ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V) -> !data.domain<!F>

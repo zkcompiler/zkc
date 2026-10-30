@@ -413,8 +413,9 @@ public:
       if (isa<zkc::protocol_ir::ProjectionOp, zkc::relation::DeclareOp>(op))
         continue;
       if (isa<zkc::runtime::BindingOp>(op)) {
-        if (!attributes(&op, {"sym_name", "contract", "arguments",
-                              "implementation", "physical_arguments"}))
+        if (!attributes(&op,
+                        {"sym_name", "contract", "arguments", "implementation",
+                         "function_type", "arg_attrs", "res_attrs"}))
           return error("binding-attribute");
         auto binding = readBinding(&op);
         if (!binding)

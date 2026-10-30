@@ -59,7 +59,7 @@ constexpr StringLiteral domain = R"mlir(
 )mlir";
 std::string reductionFixture(bool repeated = false) {
   std::string definitions = R"mlir(
-"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
 func.func private @formula(%a:!F,%b:!F,%unused:!F)->!F {
   %r = algebra.field_multiply %a,%b : (!F,!F)->!F
   func.return %r : !F

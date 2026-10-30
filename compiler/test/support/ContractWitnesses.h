@@ -13,7 +13,9 @@ inline llvm::ArrayRef<generic::Operation> genericWitnessOperations() {
     for (const auto &operation : protocol::executableOperationContracts()) {
       if (operation.numerical ||
           protocol::authoringStage(operation.name) ==
-              protocol::AuthoringStage::CompilerGenerated)
+              protocol::AuthoringStage::CompilerGenerated ||
+          protocol::authoringStage(operation.name) ==
+              protocol::AuthoringStage::Physical)
         continue;
       auto complete = [](const auto &type) { return type.term.has_value(); };
       if (llvm::any_of(operation.signature.inputs, complete) ||

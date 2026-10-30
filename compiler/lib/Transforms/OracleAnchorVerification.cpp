@@ -72,9 +72,14 @@ Error checkOracleAnchorAllocator(const OracleVerificationContext &context,
         binding.getArguments().size() != statics.size() ||
         op.getParameters().size() != parameters.size())
       return false;
-    for (auto [value, expected] : zip(binding.getArguments(), statics))
-      if (dyn_cast<StringAttr>(value).getValue() != expected)
-        return false;
+    if (!bindingMatches(
+            binding,
+            {binding.getSymName().str(),
+             {contract.str(),
+              std::vector<std::string>(statics.begin(), statics.end()),
+              {}}},
+            false))
+      return false;
     for (auto [value, expected] : zip(op.getParameters(), parameters))
       if (cast<StringAttr>(value).getValue() != expected)
         return false;
@@ -204,9 +209,14 @@ Error checkOracleAnchorLookup(const OracleVerificationContext &context,
         !binding.getImplementation().empty() ||
         binding.getArguments().size() != arguments.size())
       return false;
-    for (auto [value, expected] : zip(binding.getArguments(), arguments))
-      if (cast<StringAttr>(value).getValue() != expected)
-        return false;
+    if (!bindingMatches(
+            binding,
+            {binding.getSymName().str(),
+             {contract.str(),
+              std::vector<std::string>(arguments.begin(), arguments.end()),
+              {}}},
+            false))
+      return false;
     for (auto [value, expected] : zip(op.getParameters(), parameters))
       if (cast<StringAttr>(value).getValue() != expected)
         return false;

@@ -170,9 +170,14 @@ class Reader {
       fail();
       return {};
     }
-    for (auto [a, b] : zip(binding.getArguments(), arguments))
-      if (a != StringAttr::get(op->getContext(), b))
-        fail();
+    if (!protocol::bindingMatches(
+            binding,
+            {binding.getSymName().str(),
+             {contract.str(),
+              std::vector<std::string>(arguments.begin(), arguments.end()),
+              {}}},
+            false))
+      fail();
     for (auto [a, b] : zip(params, parameters))
       if (a != StringAttr::get(op->getContext(), b))
         fail();

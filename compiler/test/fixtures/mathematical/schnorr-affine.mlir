@@ -1,10 +1,10 @@
 module {
 "protocol.module"() ({
-"runtime.binding"() {sym_name="empty", contract="curve.empty", arguments=["bls12-381.g1"], implementation=""} : () -> ()
-"runtime.binding"() {sym_name="append", contract="curve.append", arguments=["bls12-381.g1"], implementation=""} : () -> ()
-"runtime.binding"() {sym_name="at", contract="curve.at", arguments=["bls12-381.g1"], implementation=""} : () -> ()
-"runtime.binding"() {sym_name="commit", contract="curve.commit", arguments=["bls12-381.g1"], implementation=""} : () -> ()
-"runtime.binding"() {sym_name="respond", contract="curve.response", arguments=["bls12-381.fr"], implementation=""} : () -> ()
+"runtime.binding"() {sym_name="empty", contract="curve.empty", arguments=["bls12-381.g1"], implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">)>} : () -> ()
+"runtime.binding"() {sym_name="append", contract="curve.append", arguments=["bls12-381.g1"], implementation="",function_type=(!runtime.scope, !algebra.group_vector<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">)>} : () -> ()
+"runtime.binding"() {sym_name="at", contract="curve.at", arguments=["bls12-381.g1"], implementation="",function_type=(!runtime.scope, !algebra.group_vector<"bls12-381.g1">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : () -> ()
+"runtime.binding"() {sym_name="commit", contract="curve.commit", arguments=["bls12-381.g1"], implementation="",function_type=(!runtime.scope, !algebra.group_vector<"bls12-381.g1">, !runtime.capability<nonce, "bls12-381.fr">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<nonce, "bls12-381.fr">)>} : () -> ()
+"runtime.binding"() {sym_name="respond", contract="curve.response", arguments=["bls12-381.fr"], implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !runtime.capability<nonce, "bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : () -> ()
     func.func @nonce_commit(%arg0: !runtime.scope, %arg1: !algebra.group<"bls12-381.g1">, %arg2: !runtime.capability<nonce, "bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">, !runtime.capability<nonce, "bls12-381.fr">)> attributes {no_inline, runtime.origin = ["nonce_commit", []]} {
       %0 = "exec.apply"(%arg0) <{binding = @empty, parameters = [], site = "empty"}> : (!runtime.scope) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!algebra.group_vector<"bls12-381.g1">)>) -> ()

@@ -31,10 +31,10 @@ const char *laneFixture = R"mlir(
 !V = !algebra.field_vector<"bls12-381.fr">
 !O = !exec.outcome<(!V)>
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="add",contract="vector.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="div",contract="field.inverse",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="vector.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, ui64) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="div",contract="field.inverse",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
  func.func private @formula(%x:!F,%y:!F,%c:!F)->!F {
    %a = "algebra.field_add"(%x,%y) : (!F,!F)->!F
    %b = "algebra.field_add"(%x,%y) : (!F,!F)->!F
@@ -69,6 +69,19 @@ std::string edit(std::string source, StringRef from, StringRef to) {
   auto offset = source.find(from.str());
   require(offset != std::string::npos, "missing fixture edit: " + from);
   source.replace(offset, from.size(), to.str());
+  return source;
+}
+// Fixture rewrites that deliberately choose a different well-formed contract
+// must supply that contract's ABI. Negative tests still mutate ports directly.
+std::string withBindingSignature(std::string source, StringRef name,
+                                 StringRef signature) {
+  auto declaration = source.find("sym_name=\"" + name.str() + "\"");
+  auto begin = source.find("function_type=", declaration);
+  auto end = source.find("} : ()->()", begin);
+  require(declaration != std::string::npos && begin != std::string::npos &&
+              end != std::string::npos,
+          "missing binding fixture signature");
+  source.replace(begin, end - begin, "function_type=" + signature.str());
   return source;
 }
 std::string formulaBodies(StringRef source, StringRef candidate) {
@@ -271,8 +284,7 @@ void replaceScopedPayload(ModuleOp module, Build build,
       OpBuilder::InsertionGuard restore(builder);
       builder.setInsertionPointToStart(&owner->getRegion(0).front());
       runtime::BindingOp::create(builder, module.getLoc(), name, contract,
-                                 builder.getStrArrayAttr({"bls12-381.fr"}), "",
-                                 ArrayAttr{});
+                                 builder.getStrArrayAttr({"bls12-381.fr"}), "");
     }
     return control
         .invoke(
@@ -304,9 +316,9 @@ std::string largeOrderedFold(bool calls, bool total = false,
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
    "data.domain_yield"(%d) : (!data.domain<!F>)->()
@@ -639,6 +651,8 @@ int main() {
   subtract =
       edit(subtract, "\"exec.apply\"(%scope,%filled,%square) {binding=@add",
            "\"exec.apply\"(%scope,%filled,%square) {binding=@sub");
+  subtract = withBindingSignature(
+      subtract, "sub", "(!runtime.scope,!V,!V)->!exec.outcome<(!V)>");
   map("subtraction has no commutative law", subtract, false);
   map("wrong input slot",
       edit(laneFixture, "(%scope,%y,%x) {binding=@add",
@@ -751,6 +765,8 @@ int main() {
                  "\"exec.dispatch\"(%dot_attempt)[^dot,^failed] : "
                  "(!exec.outcome<(!F)>)->()\n ^dot(%result:!F):\n");
     text = edit(text, "contract=\"vector.mul\"", "contract=\"vector.dot\"");
+    text = withBindingSignature(text, "mul",
+                                "(!runtime.scope,!V,!V)->!exec.outcome<(!F)>");
     text = edit(text, "!O = !exec.outcome<(!V)>", "!O = !exec.outcome<(!F)>");
     text = edit(text, "\"exec.returned\"(%result) : (!V)",
                 "\"exec.returned\"(%result) : (!F)");
@@ -787,6 +803,8 @@ int main() {
                       "%done : !O\n");
           text =
               edit(text, "contract=\"vector.mul\"", "contract=\"vector.sum\"");
+          text = withBindingSignature(
+              text, "mul", "(!runtime.scope,!V)->!exec.outcome<(!F)>");
           text = edit(text, "!O = !exec.outcome<(!V)>",
                       "!O = !exec.outcome<(!F)>");
           auto module = parseSourceString<ModuleOp>(text, &context);
@@ -816,6 +834,8 @@ int main() {
         "(!exec.outcome<(!F)>)->()\n ^sum(%result:!F):\n   %done = "
         "\"exec.returned\"(%result) : (!F)->!O\n   func.return %done : !O\n");
     text = edit(text, "contract=\"vector.mul\"", "contract=\"vector.sum\"");
+    text = withBindingSignature(text, "mul",
+                                "(!runtime.scope,!V)->!exec.outcome<(!F)>");
     text = edit(text, "!O = !exec.outcome<(!V)>", "!O = !exec.outcome<(!F)>");
     auto module = parseSourceString<ModuleOp>(text, &context);
     require(bool(module) && compareMap(*module, 100000, true),

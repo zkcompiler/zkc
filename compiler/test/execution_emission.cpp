@@ -4,6 +4,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
@@ -240,11 +241,16 @@ int main(int argc, char **argv) {
         refuses(protocol::readLocalExecution(*emitted, false),
                 "binding-conversion");
         auto binding = *emitted->getOps<runtime::BindingOp>().begin();
-        Builder builder(&context);
-        binding.setPhysicalArgumentsAttr(
-            builder.getStrArrayAttr({target, source}));
-        require(succeeded(verify(*emitted)),
-                "reversed endpoints should remain individually well formed");
+        binding.setFunctionType(
+            take(protocol::bindingSignature(&context,
+                                            {"representation.convert",
+                                             {"field:bls12-381.fr"},
+                                             "native/representation.convert",
+                                             {target, source}},
+                                            true)));
+        require(
+            succeeded(binding.verify()) && failed(verify(*emitted)),
+            "formed reversed endpoints must invalidate the actual call ABI");
         auto reread = protocol::readLocalExecution(*emitted, true);
         require(!reread,
                 "reader accepted reversed endpoints after its first read");

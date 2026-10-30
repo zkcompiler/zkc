@@ -513,7 +513,7 @@ int main() {
   });
   cases.run("guards stay ordered and zero-trip control is conservative", [&] {
     auto module = parse(R"mlir(
- "runtime.binding"() {sym_name="require",contract="control.require",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="require",contract="control.require",arguments=[],implementation="",function_type=(!runtime.scope, i1) -> !exec.outcome<>} : ()->()
 )mlir");
     auto unit = cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front());
     OpBuilder builder(&context);

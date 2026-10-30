@@ -273,7 +273,7 @@ int main() {
             builder.setInsertionPoint(helper);
             auto binding = runtime::BindingOp::create(
                 builder, helper.getLoc(), "require", "control.require",
-                builder.getArrayAttr({}), "", ArrayAttr{});
+                builder.getArrayAttr({}), "");
             builder.setInsertionPointToEnd(yes.getParentBlock());
             control.invoke(
                 "exec.apply", {}, control.scoped(yes),

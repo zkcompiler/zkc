@@ -3,6 +3,7 @@
 #include "../Target/PhysicalPlan.h"
 #include "Storage.h"
 #include "mlir/IR/IRMapping.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -26,27 +27,27 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
   auto root =
       cast<zkc::protocol_ir::ProtocolModuleOp>(module.getBody()->front());
   OpBuilder builder(module.getContext());
-  auto strings = [&](ArrayRef<std::string> values) {
-    SmallVector<Attribute> attributes;
-    for (const auto &value : values)
-      attributes.push_back(builder.getStringAttr(value));
-    return builder.getArrayAttr(attributes);
-  };
   for (const auto &decision : plan.bindings) {
     const auto &binding = decision.binding;
     if (decision.purpose == target::BindingPurpose::Original) {
-      auto declaration =
-          cast<zkc::runtime::BindingOp>(work[*decision.declaration]);
+      auto declaration = cast<runtime::BindingOp>(work[*decision.declaration]);
+      auto arguments =
+          decodeBindingArguments(module.getContext(), binding.application);
+      if (!arguments)
+        return arguments.takeError();
+      auto signature =
+          bindingSignature(module.getContext(), binding.application, true);
+      if (!signature)
+        return signature.takeError();
+      declaration.setArgumentsAttr(*arguments);
       declaration.setImplementation(binding.application.implementation);
-      declaration.setPhysicalArgumentsAttr(
-          strings(binding.application.physicalArguments));
+      declaration.setFunctionType(*signature);
     } else {
       builder.setInsertionPointToStart(&root.getBody().front());
-      zkc::runtime::BindingOp::create(
-          builder, work[decision.location]->getLoc(), binding.name,
-          binding.application.contract, strings(binding.application.arguments),
-          binding.application.implementation,
-          strings(binding.application.physicalArguments));
+      auto imported = importBinding(builder, work[decision.location]->getLoc(),
+                                    binding, true);
+      if (!imported)
+        return imported.takeError();
     }
   }
   // Retain the complete admitted bodies while constructing their replacements.

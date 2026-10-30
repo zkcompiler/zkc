@@ -170,9 +170,9 @@ int main() {
     require(bool(source), "collection fixture refused");
     auto square = function(*source, "square");
     OpBuilder builder(square);
-    runtime::BindingOp::create(
-        builder, square.getLoc(), "constant", "field.constant",
-        builder.getStrArrayAttr({"bls12-381.fr"}), "", ArrayAttr());
+    runtime::BindingOp::create(builder, square.getLoc(), "constant",
+                               "field.constant",
+                               builder.getStrArrayAttr({"bls12-381.fr"}), "");
     square.getBody().dropAllReferences();
     square.getBody().getBlocks().clear();
     square.addEntryBlock();
@@ -734,8 +734,7 @@ int main() {
         &context, domain.getFunctionType().getInputs(), {domainType}));
     builder.setInsertionPoint(step);
     runtime::BindingOp::create(builder, step.getLoc(), "get", "curve.get",
-                               builder.getStrArrayAttr({"bls12-381.g1"}), "",
-                               ArrayAttr());
+                               builder.getStrArrayAttr({"bls12-381.g1"}), "");
     SmallVector<Type> inputs(step.getArgumentTypes());
     inputs[2] = index;
     step.setFunctionType(

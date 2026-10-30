@@ -225,7 +225,7 @@ native_negatives = {
     'dropped-computation-argument': (realized, '"exec.compute"(%scope,%a0,%a1,%a2)', '"exec.compute"(%scope,%a0,%a1)'),
     'computation-premise': (realized, '->!V {\n   func.return', '->!V attributes {data.preconditions=[#data.index_bound<1,0,0>]} {\n   func.return'),
     'domain-symbol-collision': (mapped, 'sym_name="rows"', 'sym_name="work"'),
-    'binding-function-collision': (mapped, 'func.func @work', '"runtime.binding"() {sym_name="work",contract="index.add",arguments=[],implementation=""} : ()->()\nfunc.func @work'),
+    'binding-function-collision': (mapped, 'func.func @work', '"runtime.binding"() {sym_name="work",contract="index.add",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>} : ()->()\nfunc.func @work'),
     'computation-symbol-collision': (realized, 'func.func private @value', 'func.func private @work'),
     'map-cycle': (mapped, '%r = "algebra.field_multiply"(%x,%x) : (!F,!F)->!F', '%r = func.call @square(%x) : (!F)->!F'),
     'computation-cycle': (realized, '   func.return %xs', '   %again = func.call @value(%xs,%dimension,%width) : (!V,ui64,ui64)->!V\n   func.return %again'),

@@ -15,7 +15,7 @@ module { "protocol.module"() ({
  "poly.realize"() {sym_name="round",recipe=@product,kind="round",function_type=(!state)->!a} : ()->()
  "poly.realize"() {sym_name="finish",recipe=@product,kind="finish",function_type=(!state)->(!p,!f)} : ()->()
  "poly.realize"() {sym_name="evaluate",recipe=@product,kind="evaluate",function_type=(!p,!t,!t)->!f} : ()->()
- "runtime.binding"() {sym_name="arity_kernel",contract="poly.table_arity",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="arity_kernel",contract="poly.table_arity",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">) -> !exec.outcome<(ui64)>} : ()->()
     func.func @table_arity(%arg0: !runtime.scope, %arg1: !t) -> !exec.outcome<(ui64)> attributes {no_inline, runtime.origin = ["table_arity", []]} {
       %0 = "exec.apply"(%arg0, %arg1) <{binding = @arity_kernel, parameters = [], site = "arity"}> : (!runtime.scope, !t) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
@@ -60,8 +60,8 @@ module { "protocol.module"() ({
       return %6 : !exec.outcome<(!t)>
     }
 
- "runtime.binding"() {sym_name="empty",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="append",contract="poly.append_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="empty",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!poly.point<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="append",contract="poly.append_point",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.point<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.point<"bls12-381.fr">)>} : ()->()
 
 
  "protocol.func"() ({ ^entry(%n:ui64,%T:!t,%U:!t,%TV:!t,%UV:!t,%claim:!f,%coins:!rng):
@@ -96,8 +96,8 @@ module { "protocol.module"() ({
    "protocol.return"(%accepted,%finished#0,%finished#1) : (i1,!p,!f)->()
  }) {sym_name="sumcheck",function_type=(ui64,!t,!t,!t,!t,!f,!rng)->(i1,!p,!f),roles=["P","V"],input_roles=[["P"],["P"],["P"],["V"],["V"],["V"],["V"]],output_roles=[["V"],["P"],["P"]]} : ()->()
 
- "runtime.binding"() {sym_name="weights",contract="poly.equality_weights",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="table",contract="vector.to_table",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="weights",contract="poly.equality_weights",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.point<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="table",contract="vector.to_table",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
 
  "protocol.func"() ({ ^entry(%layers:ui64,%coins:!rng):
    %pP = "protocol.local_call"() {callee=@empty_point,role="P",site="emptyP"} : ()->!p

@@ -929,7 +929,7 @@ module {
       "fixed opaque binding survives and cannot be silently repinned", [&] {
         std::string text = realization.str();
         text.insert(text.find(" func.func private"), R"mlir(
-      "runtime.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+      "runtime.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
     )mlir");
         auto source = parse(text, context);
         auto logical = formExecutable(*source);

@@ -743,9 +743,9 @@ class Comparator {
         return {};
       args.push_back(type->identity);
     }
-    if (!string(binding, "contract", expected.contract) ||
-        !strings(binding.getAttr("arguments"), args) ||
-        !string(binding, "implementation", "")) {
+    if (!protocol::bindingMatches(mlir::dyn_cast<runtime::BindingOp>(binding),
+                                  {found->first, {expected.contract, args, {}}},
+                                  false)) {
       fail("ordered binding selection differs");
       return {};
     }
@@ -1852,8 +1852,8 @@ public:
           return error("source.correspondence", "duplicate relation symbol");
       } else if (op.getName().getStringRef() == "runtime.binding") {
         auto name = op.getAttrOfType<mlir::StringAttr>("sym_name");
-        if (!attributes(
-                op, {"sym_name", "contract", "arguments", "implementation"}) ||
+        if (!attributes(op, {"sym_name", "contract", "arguments",
+                             "implementation", "function_type"}) ||
             !name || !bindings.emplace(name.getValue().str(), &op).second)
           return error("source.correspondence", "invalid or duplicate binding");
       } else if (op.hasAttr("runtime.region")) {

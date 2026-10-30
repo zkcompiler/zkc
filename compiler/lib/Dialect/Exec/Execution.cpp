@@ -955,8 +955,9 @@ Expected<program::LocalDefinitions> Reader::run(bool mixed) {
          ++definitions > 4096))
       return error("execution-cfg", "definition inventory limit");
     if (auto binding = dyn_cast<runtime::BindingOp>(op)) {
-      if (!attributes(binding, {"sym_name", "contract", "arguments",
-                                "implementation", "physical_arguments"}))
+      if (!attributes(binding,
+                      {"sym_name", "contract", "arguments", "implementation",
+                       "function_type", "arg_attrs", "res_attrs"}))
         return error("execution-cfg", "unknown binding attribute");
       auto decoded = readBinding(binding);
       if (!decoded)

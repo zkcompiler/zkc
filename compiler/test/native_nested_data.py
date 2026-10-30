@@ -113,7 +113,7 @@ module { "protocol.module"() ({
 # remains an explicit local operation even when its result is unused.
 probe = '''!s = !data.sequence<ui64>
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="at",contract="sequence.at",arguments=["index"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="at",contract="sequence.at",arguments=[ui64],implementation="",function_type=(!runtime.scope, !data.sequence<ui64>, ui64) -> !exec.outcome<(ui64)>} : ()->()
  func.func @checked(%scope:!runtime.scope,%s:!s,%i:ui64)->!exec.outcome<(ui64)> attributes {no_inline,runtime.origin=["checked",[]]} {
    %checked = "exec.apply"(%scope,%s,%i) <{binding=@at,parameters=[],site="at"}> : (!runtime.scope,!s,ui64)->!exec.outcome<(ui64)>
    "exec.dispatch"(%checked)[^success,^stopped] : (!exec.outcome<(ui64)>)->()

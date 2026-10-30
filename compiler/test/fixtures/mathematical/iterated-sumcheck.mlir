@@ -15,7 +15,7 @@ module { "protocol.module"() ({
  "poly.realize"() {sym_name="round",recipe=@product,kind="round",function_type=(!state)->!a} : ()->()
  "poly.realize"() {sym_name="finish",recipe=@product,kind="finish",function_type=(!state)->(!p,!f)} : ()->()
  "poly.realize"() {sym_name="evaluate",recipe=@product,kind="evaluate",function_type=(!p,!t,!t)->!f} : ()->()
- "runtime.binding"() {sym_name="arity_kernel",contract="poly.table_arity",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="arity_kernel",contract="poly.table_arity",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">) -> !exec.outcome<(ui64)>} : ()->()
     func.func @table_arity(%arg0: !runtime.scope, %arg1: !t) -> !exec.outcome<(ui64)> attributes {no_inline, runtime.origin = ["table_arity", []]} {
       %0 = "exec.apply"(%arg0, %arg1) <{binding = @arity_kernel, parameters = [], site = "arity"}> : (!runtime.scope, !t) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
@@ -47,8 +47,8 @@ module { "protocol.module"() ({
       return %4 : !exec.outcome<(!p)>
     }
 
- "runtime.binding"() {sym_name="empty",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="append",contract="poly.append_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="empty",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!poly.point<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="append",contract="poly.append_point",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.point<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.point<"bls12-381.fr">)>} : ()->()
 
 
  "protocol.func"() ({ ^entry(%n:ui64,%T:!t,%U:!t,%claim:!f,%coins:!rng):

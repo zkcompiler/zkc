@@ -48,7 +48,7 @@ void domainControls(mlir::MLIRContext &context) {
   auto source = parseSourceString<ModuleOp>(R"(
 !T = !envelope.value<!algebra.field<"koala-bear">,4>
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="keep",contract="envelope.keep",arguments=["field:koala-bear","4"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="keep",contract="envelope.keep",arguments=[!algebra.field<"koala-bear">,4:ui64],implementation="",function_type=(!runtime.scope,!T)->!exec.outcome<(!T)>} : ()->()
  func.func @Keep(%scope:!runtime.scope,%x:!T)->!exec.outcome<(!T)> attributes {no_inline,runtime.origin=["Keep",[]]} {
    %attempt = "exec.apply"(%scope,%x) {binding=@keep,site="keep",parameters=[]} : (!runtime.scope,!T)->!exec.outcome<(!T)>
    "exec.dispatch"(%attempt)[^done,^failed] : (!exec.outcome<(!T)>)->()

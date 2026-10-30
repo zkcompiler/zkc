@@ -98,9 +98,12 @@ installed source stage. Catalog presence alone cannot expose construction-only
 transcript operations or establish construction provenance.
 
 In MLIR, `runtime.binding` is a symbol declaration for an ordered native
-operation. Domain-specific executable operations reference it with a `binding`
-symbol attribute, including operations with no operands whose result domain is
-explicitly selected. Pure Algebra/Poly mathematics does not require a Runtime
+operation with a required executable function type. The ordered `exec.apply`
+references it with a `binding` symbol attribute, including operations with no
+mathematical operands whose result domain is explicitly selected. It still has
+an explicit scope input and outcome result. Static type and natural arguments
+are native `TypeAttr` and unsigned 64-bit `IntegerAttr` values; nominal domains
+remain named identities. Pure Algebra/Poly mathematics does not require a Runtime
 binding. The declaration is shared by logical and physical execution profiles;
 it does not establish installation or reached invocation authority. A Protocol
 module fixes the declaration's stage. A `builtin.module` admits a well-formed

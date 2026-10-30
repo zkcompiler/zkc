@@ -197,7 +197,7 @@ int main() {
     auto text = changed(affineFold(), "transcript, \"merlin3.bls12-381.fr64be/0\"",
                         "resource_unit, \"Guard\"");
     text = changed(text, "module {", R"mlir(module {
- "runtime.binding"() {sym_name="create",contract="resource_unit.create",arguments=["Guard"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="create",contract="resource_unit.create",arguments=["Guard"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!runtime.capability<resource_unit, "Guard">)>} : ()->()
 )mlir");
     text = changed(text, R"mlir(   %ok = "exec.returned"(%state) : (!T)->!O
    return %ok : !O)mlir",
@@ -221,7 +221,7 @@ int main() {
     text = changed(text, "!algebra.field_vector<\"koala-bear\">",
                    "!algebra.field_vector<\"bls12-381.fr\">");
     text = changed(text, "module {", R"mlir(module {
- "runtime.binding"() {sym_name="draw",contract="random.draw",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="draw",contract="random.draw",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !runtime.capability<rng, "bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">)>} : ()->()
 )mlir");
     text = changed(text, R"mlir(   %ok = "exec.returned"(%state) : (!T)->!O
    return %ok : !O)mlir",

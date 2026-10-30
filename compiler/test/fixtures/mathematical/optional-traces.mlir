@@ -3,8 +3,8 @@
 !opt = !data.variant<#data.identity<["atom", "OptionalTrace"]>, [#data.alternative<"none">, #data.alternative<"some", [!algebra.field_matrix<"bls12-381.fr">]>]>
 !pair = !data.variant<#data.identity<["atom", "TracePair"]>, [#data.alternative<"pair", [!data.variant<#data.identity<["atom", "OptionalTrace"]>, [#data.alternative<"none">, #data.alternative<"some", [!algebra.field_matrix<"bls12-381.fr">]>]>, !data.variant<#data.identity<["atom", "OptionalTrace"]>, [#data.alternative<"none">, #data.alternative<"some", [!algebra.field_matrix<"bls12-381.fr">]>]>]>]>
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="dimension",contract="matrix.dimension",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="dimension",contract="matrix.dimension",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_matrix<"bls12-381.fr">) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
     func.func @dimensions(%arg0: !runtime.scope, %arg1: !opt) -> !exec.outcome<(ui64, ui64)> attributes {no_inline, runtime.origin = ["dimensions", []]} {
       "exec.match"(%arg0, %arg1)[^bb2, ^bb3, ^bb4] <{alternatives = ["none", "some"], site = "presence"}> : (!runtime.scope, !opt) -> ()
     ^bb1(%0: ui64, %1: ui64):  // 2 preds: ^bb7, ^bb10

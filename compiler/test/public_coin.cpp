@@ -32,8 +32,8 @@ constexpr StringLiteral policyFixture = R"mlir(
 !V = !algebra.field_vector<"bls12-381.fr">
 !S = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
  "data.domain"() ({^entry(%xs:!V):
    %items = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
    "data.domain_yield"(%items) : (!data.domain<!F>)->()

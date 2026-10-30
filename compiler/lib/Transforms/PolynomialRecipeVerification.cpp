@@ -54,11 +54,13 @@ class RecipeCorrespondence {
     auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
     auto declaration = ref ? symbols.lookup<runtime::BindingOp>(ref.getValue())
                            : runtime::BindingOp();
-    SmallVector<std::string> arguments;
+    Builder builder(op->getContext());
+    SmallVector<Attribute> arguments;
     if (!contract.starts_with("index.") && contract != "control.require")
-      arguments.push_back(domain.str());
+      arguments.push_back(builder.getStringAttr(domain));
     if (length)
-      arguments.push_back(std::to_string(*length));
+      arguments.push_back(
+          builder.getIntegerAttr(builder.getIntegerType(64, false), *length));
     auto strings = [](ArrayAttr attrs, ArrayRef<std::string> expected) {
       return attrs && attrs.size() == expected.size() &&
              all_of(zip(attrs, expected), [](auto pair) {
@@ -68,7 +70,7 @@ class RecipeCorrespondence {
     };
     if (!declaration || declaration.getContract() != contract ||
         !declaration.getImplementation().empty() ||
-        !strings(declaration.getArguments(), arguments) ||
+        !llvm::equal(declaration.getArguments(), arguments) ||
         !strings(op->getAttrOfType<ArrayAttr>("parameters"), parameters) ||
         op->getAttrs().size() != 3 || ports.bodies(op) ||
         ports.outputs(op).size() != unsigned(output) ||

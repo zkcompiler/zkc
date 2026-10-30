@@ -70,7 +70,7 @@ vector_physical = commands.verified(vector, None, '--zkc-project-protocol', '--z
 assert 'vector:bls12-381.fr' in commands.source('protocol-export', vector_physical)
 commands.verified(vector.replace('!algebra.field_vector<"bls12-381.fr">', '!algebra.fixed_vector<i1, 2>'), 'exactly one owner')
 # Generate resource-transition variants for execution by mixed_native.rs.
-draw = source.replace('    func.func @leaf', '  "runtime.binding"() {sym_name="draw", contract="random.draw", arguments=["bls12-381.fr"], implementation=""} : () -> ()\n    func.func @leaf', 1)
+draw = source.replace('    func.func @leaf', '  "runtime.binding"() {sym_name="draw", contract="random.draw", arguments=["bls12-381.fr"], implementation="",function_type=(!runtime.scope, !runtime.capability<rng, "bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">)>} : () -> ()\n    func.func @leaf', 1)
 completion = '      %18 = "exec.returned"(%17, %arg2)'
 assert draw.count(completion) == 1
 field = '!algebra.field<"bls12-381.fr">'
@@ -96,7 +96,7 @@ for name in ['mixed-unit', 'mixed-inverse', 'mixed-nonce', 'mixed-transcript']:
 
 # A reusable service root and an affine RNG have different entry/call custody.
 service_draw = draw.replace('^entry(%x:', '^entry(%service: !protocol.service_ref<"random.bls12-381.fr/0">, %x:')
-service_draw = service_draw.replace('function_type=(', 'function_type=(!protocol.service_ref<"random.bls12-381.fr/0">, ', 1)
+service_draw = service_draw.replace('sym_name="main", function_type=(', 'sym_name="main", function_type=(!protocol.service_ref<"random.bls12-381.fr/0">, ', 1)
 service_draw = service_draw.replace('input_roles=[["P"],["P"],["P"]]', 'input_roles=[["P"],["P"],["P"],["P"]]')
 service_draw = service_draw.replace('    %sum =', '    %queried = "protocol.query"(%service) {method="draw", owner="P", site="query"} : (!protocol.service_ref<"random.bls12-381.fr/0">) -> !algebra.field<"bls12-381.fr">\n    %sum =')
 service_draw = service_draw.replace('algebra.field_add %x, %x', 'algebra.field_add %x, %queried')

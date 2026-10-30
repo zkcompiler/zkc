@@ -3,6 +3,7 @@
 #include "Bindings.h"
 #include "Storage.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -30,24 +31,7 @@ class PhysicalCorrespondence {
   bool charge() { return remaining && (--remaining, true); }
   bool binding(runtime::BindingOp op,
                const protocol::OperationBinding &expected) {
-    if (!op || op.getSymName() != expected.name ||
-        op.getContract() != expected.application.contract ||
-        op.getImplementation() != expected.application.implementation ||
-        op.getArguments().size() != expected.application.arguments.size())
-      return false;
-    for (auto [actual, argument] :
-         zip(op.getArguments(), expected.application.arguments))
-      if (cast<StringAttr>(actual).getValue() != argument)
-        return false;
-    auto physical = op.getPhysicalArgumentsAttr();
-    if (!physical ||
-        physical.size() != expected.application.physicalArguments.size())
-      return false;
-    for (auto [actual, argument] :
-         zip(physical, expected.application.physicalArguments))
-      if (cast<StringAttr>(actual).getValue() != argument)
-        return false;
-    return op->getAttrs().size() == 5;
+    return bindingMatches(op, expected, true) && op->getAttrs().size() == 5;
   }
   bool application(Operation *op, const protocol::OperationBinding &binding,
                    ValueRange operands, TypeRange results, Attribute site,
@@ -236,13 +220,19 @@ class PhysicalCorrespondence {
         auto selected = originals.lookup(index);
         if (!selected)
           return false;
-        SmallVector<Attribute> parameters;
-        for (const auto &parameter :
-             selected->binding.application.physicalArguments)
-          parameters.push_back(
-              StringAttr::get(source->getContext(), parameter));
-        attributes.set("physical_arguments",
-                       ArrayAttr::get(source->getContext(), parameters));
+        auto signature = bindingSignature(source->getContext(),
+                                          selected->binding.application, true);
+        auto arguments = decodeBindingArguments(source->getContext(),
+                                                selected->binding.application);
+        if (!signature || !arguments) {
+          if (!signature)
+            consumeError(signature.takeError());
+          if (!arguments)
+            consumeError(arguments.takeError());
+          return false;
+        }
+        attributes.set("function_type", TypeAttr::get(*signature));
+        attributes.set("arguments", *arguments);
         attributes.set(
             "implementation",
             StringAttr::get(source->getContext(),

@@ -13,7 +13,7 @@ namespace sf = zkc::test::scopedFinite;
 namespace sc = zkc::test::scopedComputation;
 namespace {
 const std::string declarations = R"mlir(
-"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
 "data.domain"() ({^entry(%a:!V,%b:!V,%c:!V):
 %as = "data.domain_elements"(%a) : (!V)->!data.domain<!F>
 %bs = "data.domain_elements"(%b) : (!V)->!data.domain<!F>
@@ -278,11 +278,13 @@ int main(int argc, char **argv) {
             scopedApply("sum", "again", "%v", "!V", "%other", "!F") +
                 scopedReturn("%r", "!F"));
       if (variant == 2) {
-        text = replaceText(text, "func.func private @product",
-                           "\"runtime.binding\"() "
-                           "{sym_name=\"length\",contract=\"vector.length\","
-                           "arguments=[\"koala-bear\"],implementation=\"\"} : "
-                           "()->()\nfunc.func private @product");
+        text = replaceText(
+            text, "func.func private @product",
+            "\"runtime.binding\"() "
+            "{sym_name=\"length\",contract=\"vector.length\","
+            "arguments=[\"koala-bear\"],implementation=\"\",function_type=(!"
+            "runtime.scope,!V)->!exec.outcome<(ui64)>} : "
+            "()->()\nfunc.func private @product");
         text = replaceText(
             text, "%sum_attempt =",
             scopedApply("length", "intervening", "%a", "!V", "%n", "ui64") +
@@ -347,7 +349,8 @@ int main(int argc, char **argv) {
         fixture(), "func.func private @product",
         "\"runtime.binding\"() "
         "{sym_name=\"multiply\",contract=\"field.mul\",arguments=[\"koala-"
-        "bear\"],implementation=\"\"} : ()->()\nfunc.func private @product");
+        "bear\"],implementation=\"\",function_type=(!runtime.scope,!F,!F)->!"
+        "exec.outcome<(!F)>} : ()->()\nfunc.func private @product");
     text = replaceText(
         text,
         "\"exec.compute\"(%scope,%a,%b,%c,%s) "

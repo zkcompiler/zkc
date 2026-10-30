@@ -290,7 +290,7 @@ with case('condition-native-type-check-precedes-export-profile'):
     export(source, 'structured-source-original', 'entry')
 
 with case('unused-unsupported-provider-declaration'):
-    binding = '"runtime.binding"() {sym_name="product",contract="vector.product",arguments=["bls12-381.fr"],implementation=""} : ()->()'
+    binding = '"runtime.binding"() {sym_name="product",contract="vector.product",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()'
     export(simple(binding), 'structured-source-binding')
 
 with case('unsupported-collect'):
@@ -341,7 +341,7 @@ with case('field-embedding-retains-nominal-binding-and-ports'):
     base, extension = 'koala-bear', 'koala-bear.ext4-binomial3'
     base_type, extension_type = f'!algebra.field<"{base}">', f'!algebra.field<"{extension}">'
     declarations = f'''
-"runtime.binding"() {{sym_name="embed",contract="field.embed",arguments=["{extension}"],implementation=""}} : ()->()
+"runtime.binding"() {{sym_name="embed",contract="field.embed",arguments=["{extension}"],implementation="",function_type=(!runtime.scope,{base_type})->!exec.outcome<({extension_type})>}} : ()->()
 func.func private @embed_helper(%scope:!runtime.scope,%x:{base_type}) -> !exec.outcome<({extension_type})>
     attributes {{no_inline,runtime.origin=["embed_helper",[]]}} {{
   %r = "exec.apply"(%scope,%x) {{binding=@embed,parameters=[],site="embedding"}} : (!runtime.scope,{base_type})->!exec.outcome<({extension_type})>

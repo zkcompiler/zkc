@@ -778,9 +778,8 @@ class Emitter {
       return found->second;
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToStart(&module.getBody().front());
-    auto operation =
-        runtime::BindingOp::create(builder, module.getLoc(), fresh(), contract,
-                                   parameters, "", mlir::ArrayAttr{});
+    auto operation = runtime::BindingOp::create(
+        builder, module.getLoc(), fresh(), contract, parameters, "");
     symbols.insert(operation);
     auto ref = FlatSymbolRefAttr::get(operation);
     bindings.try_emplace(key, ref);
@@ -881,7 +880,7 @@ class Emitter {
                         : "transcript.native.indexed.challenge";
       SmallVector<Attribute> arguments{builder.getStringAttr(policy.suite)};
       if (!event.query)
-        arguments.push_back(builder.getStringAttr(type->spelling()));
+        arguments.push_back(TypeAttr::get(event.payload));
       auto indices = algebra::IndicesType::get(builder.getContext());
       Value coordinates = kernel(control, binding("indices.empty", {}), {},
                                  {indices}, "coordinates")[0];
@@ -1711,13 +1710,13 @@ class ParticipantExporter {
         declaration->getAttrOfType<StringAttr>("implementation");
     if (!contract || !arguments || !implementation)
       return error("constructed-participant-binding");
+    auto encoded =
+        protocol::encodeBindingArguments(contract.getValue(), arguments);
+    if (!encoded)
+      return encoded.takeError();
     json::Array values;
-    for (Attribute argument : arguments) {
-      auto text = dyn_cast<StringAttr>(argument);
-      if (!text)
-        return error("constructed-participant-binding");
-      values.push_back(text.getValue().str());
-    }
+    for (const auto &argument : *encoded)
+      values.push_back(argument);
     return json::Array{contract.getValue().str(), std::move(values),
                        implementation.getValue().str()};
   }

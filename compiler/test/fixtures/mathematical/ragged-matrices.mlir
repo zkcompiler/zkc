@@ -4,16 +4,16 @@
 !ms = !data.sequence<!m>
 !vs = !data.sequence<!v>
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="at",contract="sequence.at",arguments=["matrix:bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="vector",contract="sequence.at",arguments=["vector:bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["matrix:bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="vlength",contract="sequence.length",arguments=["vector:bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="zero",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="bilinear",contract="matrix.bilinear",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="at",contract="sequence.at",arguments=[!algebra.field_matrix<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field_matrix<"bls12-381.fr">>, ui64) -> !exec.outcome<(!algebra.field_matrix<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="vector",contract="sequence.at",arguments=[!algebra.field_vector<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field_vector<"bls12-381.fr">>, ui64) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="length",contract="sequence.length",arguments=[!algebra.field_matrix<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field_matrix<"bls12-381.fr">>) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="vlength",contract="sequence.length",arguments=[!algebra.field_vector<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field_vector<"bls12-381.fr">>) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>} : ()->()
+ "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation="",function_type=(!runtime.scope, i1, i1) -> !exec.outcome<(i1)>} : ()->()
+ "runtime.binding"() {sym_name="zero",contract="field.constant",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="bilinear",contract="matrix.bilinear",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_matrix<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
     func.func @evaluate(%arg0: !runtime.scope, %arg1: !ms, %arg2: !vs, %arg3: !vs) -> !exec.outcome<(!f, i1)> attributes {no_inline, runtime.origin = ["evaluate", []]} {
       %0 = "exec.apply"(%arg0, %arg1) <{binding = @length, parameters = [], site = "count"}> : (!runtime.scope, !ms) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()

@@ -1,6 +1,7 @@
 #include "OracleCommonPlan.h"
 #include "OracleVerificationContext.h"
 #include "mlir/IR/OperationSupport.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -77,10 +78,9 @@ bool local(const OracleLocalRecipe &recipe, func::FuncOp actual,
         binding.getImplementation() != expected.binding.implementation ||
         binding.getArguments().size() != expected.binding.arguments.size())
       return false;
-    for (auto [attribute, argument] :
-         zip(binding.getArguments(), expected.binding.arguments))
-      if (cast<StringAttr>(attribute).getValue() != argument)
-        return false;
+    if (!bindingMatches(binding, {binding.getSymName().str(), expected.binding},
+                        false))
+      return false;
     append_range(values, step.outputs);
   }
   const auto &last = found->second.back();

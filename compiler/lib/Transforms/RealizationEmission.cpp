@@ -34,12 +34,14 @@ RealizationEmitter::binding(OpBuilder &builder, Location location,
              SymbolTable::lookupSymbolIn(unit, name));
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToStart(&unit->getRegion(0).front());
-    SmallVector<Attribute> arguments;
-    for (const auto &argument : application.arguments)
-      arguments.push_back(builder.getStringAttr(argument));
+    auto arguments =
+        protocol::decodeBindingArguments(builder.getContext(), application);
+    if (!arguments) {
+      emitError(location) << toString(arguments.takeError());
+      return {};
+    }
     runtime::BindingOp::create(builder, location, name, application.contract,
-                               builder.getArrayAttr(arguments),
-                               application.implementation, mlir::ArrayAttr{});
+                               *arguments, application.implementation);
     found = bindings.emplace(std::move(key), name).first;
   }
   return FlatSymbolRefAttr::get(builder.getContext(), found->second);

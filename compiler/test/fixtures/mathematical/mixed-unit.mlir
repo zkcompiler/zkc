@@ -1,6 +1,6 @@
 module { "protocol.module"() ({
-"runtime.binding"() {sym_name="binding_make", contract="resource_unit.create", arguments=["Slot.A"], implementation=""} : () -> ()
-"runtime.binding"() {sym_name="binding_consume", contract="resource_unit.consume", arguments=["Slot.A"], implementation=""} : () -> ()
+"runtime.binding"() {sym_name="binding_make", contract="resource_unit.create", arguments=["Slot.A"], implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!runtime.capability<resource_unit, "Slot.A">)>} : () -> ()
+"runtime.binding"() {sym_name="binding_consume", contract="resource_unit.consume", arguments=["Slot.A"], implementation="",function_type=(!runtime.scope, !runtime.capability<resource_unit, "Slot.A">) -> !exec.outcome<>} : () -> ()
     func.func @make(%arg0: !runtime.scope) -> !exec.outcome<(!runtime.capability<resource_unit, "Slot.A">)> attributes {no_inline, runtime.origin = ["make", []]} {
       %0 = "exec.apply"(%arg0) <{binding = @binding_make, parameters = [], site = "make"}> : (!runtime.scope) -> !exec.outcome<(!runtime.capability<resource_unit, "Slot.A">)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!runtime.capability<resource_unit, "Slot.A">)>) -> ()

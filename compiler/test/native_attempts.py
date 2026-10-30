@@ -72,7 +72,7 @@ for fixture in ['attempt-abandonment', 'attempt-abandonment-silent']:
 
 for i, suite in enumerate(SUITES):
     with case(f'long discarded prefix and shorter completion suite {i}'):
-        helper = '''    "runtime.binding"() <{arguments = [], contract = "index.constant", implementation = "", sym_name = "index"}> : () -> ()
+        helper = '''    "runtime.binding"() <{arguments = [], contract = "index.constant", implementation = "", sym_name = "index",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>}> : () -> ()
     func.func @count(%arg0: !runtime.scope, %arg1: i1) -> !exec.outcome<(ui64)> attributes {no_inline, runtime.origin = ["count", []]} {
       %0 = "exec.test"(%arg0, %arg1) <{site = "count"}> : (!runtime.scope, i1) -> !exec.outcome<(i1)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(i1)>) -> ()

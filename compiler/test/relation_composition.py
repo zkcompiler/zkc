@@ -350,7 +350,7 @@ commands.run(
 
 # A changed supporting local definition must fail correspondence even when
 # every composed participant body is unchanged.
-local = """"runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
+local = """"runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 """ + scoped_function("unused", [], [F], invocation(
     "exec.apply", [], [F], 'binding=@constant,parameters=["0"],site="constant"'), ['%r'])
 local_source = source.replace("func.func private", local + "\nfunc.func private", 1)

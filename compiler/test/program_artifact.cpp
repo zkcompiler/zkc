@@ -53,9 +53,9 @@ constexpr StringLiteral capacityFixture = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="numerical",contract="numerical.sum",arguments=["bls12-381.fr","0"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="msb",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
- "runtime.binding"() {sym_name="dense",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks/poly.fold"} : ()->()
+ "runtime.binding"() {sym_name="numerical",contract="numerical.sum",arguments=["bls12-381.fr", array<i1: false>],implementation="",function_type=(!runtime.scope, ui64, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="msb",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="dense",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks/poly.fold",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
  func.func @work(%scope:!runtime.scope,%table:!T,%rows:ui64,%a:!F)->!exec.outcome<(!T)> attributes {no_inline,runtime.origin=["work",[]]} {
    %result = "exec.returned"(%table) : (!T)->!exec.outcome<(!T)>
    func.return %result : !exec.outcome<(!T)>

@@ -103,7 +103,7 @@ class TranscriptCorrespondence {
     return bind(a.getResults(), b.getResults(), env);
   }
   bool kernel(const protocol::SourceExecutionStep *step, StringRef contract,
-              ArrayRef<std::string> arguments, ValueRange inputs,
+              ArrayRef<Attribute> arguments, ValueRange inputs,
               ArrayRef<std::string> parameters, StringRef site) {
     if (!step || !charge(1 + inputs.size()) || !step->regions.empty())
       return false;
@@ -127,7 +127,7 @@ class TranscriptCorrespondence {
     };
     if (!binding || binding.getContract() != contract ||
         !binding.getImplementation().empty() ||
-        !strings(binding.getArguments(), arguments) ||
+        !llvm::equal(binding.getArguments(), arguments) ||
         !strings(op->getAttrOfType<ArrayAttr>("parameters"), parameters))
       return false;
     bindings.insert(binding.getSymName());
@@ -233,18 +233,14 @@ class TranscriptCorrespondence {
         indices = append->outputs[0];
       }
       operands.push_back(indices);
-      auto logical = protocol::encodeBoundType(event.payload, false);
-      if (!logical) {
-        consumeError(logical.takeError());
-        return false;
-      }
       std::string contract =
           !event.query  ? "transcript.native.indexed.observe.data"
           : event.bound ? "transcript.native.indexed.index"
                         : "transcript.native.indexed.challenge";
-      SmallVector<std::string> parameters{policy.suite};
+      SmallVector<Attribute> parameters{
+          StringAttr::get(function.getContext(), policy.suite)};
       if (!event.query)
-        parameters.push_back(logical->spelling());
+        parameters.push_back(TypeAttr::get(event.payload));
       auto *step = take();
       if (!kernel(step, contract, parameters, operands, {event.origin},
                   "transition"))

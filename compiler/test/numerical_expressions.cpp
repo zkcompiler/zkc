@@ -142,8 +142,8 @@ constexpr StringLiteral scopedFoldText = R"mlir(
 !F = !algebra.field<"koala-bear">
 !V = !algebra.field_vector<"koala-bear">
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field<"koala-bear">, !algebra.field<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field<"koala-bear">, !algebra.field<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
    "data.domain_yield"(%d) : (!data.domain<!F>)->()
@@ -276,8 +276,8 @@ int main(int argc, char **argv) {
       auto *call = operation(*candidate, "numerical.map");
       require(
           call && cast<exec::ApplyOp>(call).getInputs().size() == 5 &&
-              cast<StringAttr>(binding(call).getArguments()[1]).getValue() ==
-                  "1110",
+              binding(call).getArguments()[1] ==
+                  DenseBoolArrayAttr::get(&context, {true, true, true, false}),
           "map did not retain every input slot");
       take(protocol::readNumericalExpression(expression(call), field, 4));
       require(!operation(*candidate, "vector.mul") &&
@@ -565,9 +565,9 @@ int main(int argc, char **argv) {
         auto rows = cast<exec::ApplyOp>(call).getInputs()[0];
         OpBuilder builder(&context);
         builder.setInsertionPointToStart(&unit(*candidate).getBody().front());
-        runtime::BindingOp::create(
-            builder, call->getLoc(), "wrong_extent", "index.constant",
-            builder.getStrArrayAttr({}), "", ArrayAttr{});
+        runtime::BindingOp::create(builder, call->getLoc(), "wrong_extent",
+                                   "index.constant",
+                                   builder.getStrArrayAttr({}), "");
         IRRewriter rewriter(&context);
         auto *before = call->getBlock();
         auto *tail = rewriter.splitBlock(before, call->getIterator());
@@ -751,7 +751,9 @@ int main(int argc, char **argv) {
             replaceText(text, " \"runtime.binding\"()",
                         " \"runtime.binding\"() "
                         "{sym_name=\"dead\",contract=\"field.add\",arguments=["
-                        "\"koala-bear\"],implementation=\"plonky3/field.add\"} "
+                        "\"koala-bear\"],implementation=\"plonky3/"
+                        "field.add\",function_type=(!runtime.scope,!F,!F)->!"
+                        "exec.outcome<(!F)>} "
                         ": ()->()\n \"runtime.binding\"()");
         text = replaceText(text, "   %result = \"exec.returned\"(%r)",
                            "   %dead = \"exec.apply\"(%scope,%x,%x) "
@@ -831,11 +833,11 @@ module { "protocol.module"() ({
               "unused domain factor escaped original admission restrictions");
           if (!variant) {
             auto *call = operation(*candidate, "numerical.sum");
-            require(
-                cast<StringAttr>(binding(call).getArguments()[1]).getValue() ==
-                        "110" &&
-                    compareFold(*source, *candidate),
-                "unused field-vector domain slot or its extent was lost");
+            require(binding(call).getArguments()[1] ==
+                            DenseBoolArrayAttr::get(&context,
+                                                    {true, true, false}) &&
+                        compareFold(*source, *candidate),
+                    "unused field-vector domain slot or its extent was lost");
             auto wrong = copy(*candidate);
             auto *changed = operation(*wrong, "numerical.sum");
             auto entry = cast<func::FuncOp>(changed->getParentOp());

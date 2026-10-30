@@ -28,8 +28,7 @@ OwningOpRef<mlir::ModuleOp> expected(MLIRContext &context, bool omit = false,
   for (auto [name, contract] :
        {std::pair{"add", "field.add"}, std::pair{"subtract", "field.sub"}})
     runtime::BindingOp::create(builder, location, name, contract,
-                               builder.getStrArrayAttr({"bls12-381.fr"}), "",
-                               ArrayAttr{});
+                               builder.getStrArrayAttr({"bls12-381.fr"}), "");
   auto field = algebra::FieldType::get(&context, "bls12-381.fr");
   auto index = builder.getIntegerType(64, false);
   auto scope = runtime::ScopeType::get(&context);

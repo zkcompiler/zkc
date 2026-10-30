@@ -61,7 +61,8 @@ std::string source(StringRef contract, StringRef domain,
          scopedFixture("\"runtime.binding\"() {sym_name=\"work\",contract=\"" +
                            contract.str() + "\",arguments=[\"" + domain.str() +
                            "\"],implementation=\"" + implementation.str() +
-                           "\"} : ()->()",
+                           "\",function_type=(!runtime.scope," + types +
+                           ")->!exec.outcome<(" + output + ")>} : ()->()",
                        arguments, inputs, types, output, body, 2);
 }
 std::string observationSource(MLIRContext &context, bool fixed, bool joined) {
@@ -75,8 +76,8 @@ std::string observationSource(MLIRContext &context, bool fixed, bool joined) {
 )" + scopedFixture(
           R"("runtime.binding"() {sym_name="work",contract="curve.scale",arguments=["bls12-381.g2"],implementation=")" +
               std::string(fixed ? "blst/resident/curve.scale" : "") +
-              R"("} : ()->()
-"runtime.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0","group:bls12-381.g2"],implementation=""} : ()->())",
+              R"(",function_type=(!runtime.scope,!G,!F)->!exec.outcome<(!G)>} : ()->()
+"runtime.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0", !algebra.group<"bls12-381.g2">],implementation="",function_type=(!runtime.scope, !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">, !algebra.group<"bls12-381.g2">, !algebra.indices) -> !exec.outcome<(!runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">)>} : ()->())",
           joined ? "%c:i1,%g:!G,%s:!F,%t:!T,%i:!I" : "%g:!G,%s:!F,%t:!T,%i:!I",
           joined ? "%c,%g,%s,%t,%i" : "%g,%s,%t,%i",
           joined ? "i1,!G,!F,!T,!I" : "!G,!F,!T,!I", "!T",
@@ -158,6 +159,10 @@ void fillDeclarations(ModuleOp module) {
         "arguments",
         ArrayAttr::get(module.getContext(),
                        {StringAttr::get(module.getContext(), "bls12-381.fr")}));
+    binding->setAttr(
+        "function_type",
+        TypeAttr::get(take(bindingSignature(
+            module.getContext(), {"field.add", {"bls12-381.fr"}, ""}, false))));
     root.getBody().front().push_back(binding);
   }
 }
@@ -337,10 +342,10 @@ int main(int argc, char **argv) {
 )" + scopedFixture(
               R"("runtime.binding"() {sym_name="work",contract="curve.scale",arguments=["bls12-381.g2"],implementation=")" +
                   std::string(fixed ? "blst/resident/curve.scale" : "") +
-                  R"("} : ()->()
-"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["group:bls12-381.g2"],implementation="native/sequence.empty"} : ()->()
-"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["group:bls12-381.g2"],implementation="native/sequence.append"} : ()->()
-"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["group:bls12-381.g2"],implementation="native/sequence.length"} : ()->())",
+                  R"(",function_type=(!runtime.scope,!G,!F)->!exec.outcome<(!G)>} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=[!algebra.group<"bls12-381.g2">],implementation="native/sequence.empty",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!algebra.group<"bls12-381.g2">>)>} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!algebra.group<"bls12-381.g2">],implementation="native/sequence.append",function_type=(!runtime.scope, !data.sequence<!algebra.group<"bls12-381.g2">>, !algebra.group<"bls12-381.g2">) -> !exec.outcome<(!data.sequence<!algebra.group<"bls12-381.g2">>)>} : ()->()
+"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=[!algebra.group<"bls12-381.g2">],implementation="native/sequence.length",function_type=(!runtime.scope, !data.sequence<!algebra.group<"bls12-381.g2">>) -> !exec.outcome<(ui64)>} : ()->())",
               "%g:!G,%s:!F", "%g,%s", "!G,!F", "ui64",
               scopedApply("work", "scale", "%g,%s", "!G,!F", "%p", "!G") +
                   scopedApply("empty", "empty", "", "", "%empty", "!S") +

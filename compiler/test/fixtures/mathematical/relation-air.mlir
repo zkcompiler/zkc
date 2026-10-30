@@ -4,17 +4,17 @@
 !trace = !data.sequence<!v>
 !config = !data.variant<#data.identity<["atom", "example/air-data/LinearRecurrence"]>, [#data.alternative<"coefficients", [!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">]>]>
 module { "protocol.module"() ({
-"runtime.binding"() {sym_name="index_constant",contract="index.constant",arguments=[],implementation=""} : ()->()
-"runtime.binding"() {sym_name="sequence_length",contract="sequence.length",arguments=["vector:bls12-381.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="index_less",contract="index.less",arguments=[],implementation=""} : ()->()
-"runtime.binding"() {sym_name="vector_length",contract="vector.length",arguments=["bls12-381.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="index_equal",contract="index.equal",arguments=[],implementation=""} : ()->()
-"runtime.binding"() {sym_name="sequence_at",contract="sequence.at",arguments=["vector:bls12-381.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="vector_get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="field_equal",contract="field.equal",arguments=["bls12-381.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="bool_and",contract="bool.and",arguments=[],implementation=""} : ()->()
-"runtime.binding"() {sym_name="field_mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="field_add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="index_constant",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="sequence_length",contract="sequence.length",arguments=[!algebra.field_vector<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field_vector<"bls12-381.fr">>) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="index_less",contract="index.less",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>} : ()->()
+"runtime.binding"() {sym_name="vector_length",contract="vector.length",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="index_equal",contract="index.equal",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>} : ()->()
+"runtime.binding"() {sym_name="sequence_at",contract="sequence.at",arguments=[!algebra.field_vector<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field_vector<"bls12-381.fr">>, ui64) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="vector_get",contract="vector.get",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, ui64) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="field_equal",contract="field.equal",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(i1)>} : ()->()
+"runtime.binding"() {sym_name="bool_and",contract="bool.and",arguments=[],implementation="",function_type=(!runtime.scope, i1, i1) -> !exec.outcome<(i1)>} : ()->()
+"runtime.binding"() {sym_name="field_mul",contract="field.mul",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="field_add",contract="field.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 relation.declare @relation {kind="external",key="example/air-data",revision="0",signature=(!config,!v,!trace)->i1,purposes=["parameter","statement","witness"]}
     func.func @validate(%arg0: !runtime.scope, %arg1: !config, %arg2: !v, %arg3: !trace) -> !exec.outcome<(i1)> attributes {no_inline, runtime.origin = ["validate", []]} {
       "exec.match"(%arg0, %arg1, %arg2, %arg3)[^bb2, ^bb3] <{alternatives = ["coefficients"], site = "configuration"}> : (!runtime.scope, !config, !v, !trace) -> ()

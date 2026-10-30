@@ -348,19 +348,12 @@ bool Comparison::run(const program::LocalDefinitions &expected, bool mixed) {
       return false;
     if (auto declaration = dyn_cast<runtime::BindingOp>(op)) {
       if (binding >= 4096 || binding == expected.bindings.size() ||
-          !attrs(declaration, {"sym_name", "contract", "arguments",
-                               "implementation", "physical_arguments"}))
+          !attrs(declaration,
+                 {"sym_name", "contract", "arguments", "implementation",
+                  "function_type", "arg_attrs", "res_attrs"}))
         return false;
       const auto &record = expected.bindings[binding++];
-      const auto &application = record.application;
-      if (declaration.getSymName() != record.name ||
-          declaration.getContract() != application.contract ||
-          declaration.getImplementation() != application.implementation ||
-          !strings(declaration.getArguments(), application.arguments) ||
-          (declaration.getPhysicalArgumentsAttr()
-               ? !strings(declaration.getPhysicalArgumentsAttr(),
-                          application.physicalArguments)
-               : !application.physicalArguments.empty()))
+      if (!bindingMatches(declaration, record, physical))
         return false;
       continue;
     }

@@ -2,7 +2,7 @@
 !r = !runtime.capability<rng, "bls12-381.fr">
 !s = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="random",contract="random.draw",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="random",contract="random.draw",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !runtime.capability<rng, "bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">)>} : ()->()
     func.func @draw(%arg0: !runtime.scope, %arg1: !r) -> !exec.outcome<(!f, !r)> attributes {no_inline, runtime.origin = ["draw", []]} {
       %0 = "exec.apply"(%arg0, %arg1) <{binding = @random, parameters = [], site = "sample"}> : (!runtime.scope, !r) -> !exec.outcome<(!f, !r)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!f, !r)>) -> ()
@@ -64,7 +64,7 @@ module { "protocol.module"() ({
       return %4 : !exec.outcome<(!f, !r)>
     }
 
- "runtime.binding"() {sym_name="inverse",contract="field.inverse",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="inverse",contract="field.inverse",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 
  "protocol.func"() ({ ^entry(%a:!f,%b:!f,%rng:!r,%coins:!s):
    %sample:2 = "protocol.local_call"(%rng) {callee=@draw,role="P",site="salt"} : (!r)->(!f,!r)

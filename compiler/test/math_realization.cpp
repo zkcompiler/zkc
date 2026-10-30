@@ -381,8 +381,11 @@ module @restriction attributes {exec.computation} {
       if (changeBinding) {
         auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
             access, access.getBindingAttr());
-        binding->setAttr("arguments",
-                         builder.getStrArrayAttr({"bls12-381.fr", "3"}));
+        binding->setAttr(
+            "arguments",
+            builder.getArrayAttr({builder.getStringAttr("bls12-381.fr"),
+                                  builder.getIntegerAttr(
+                                      builder.getIntegerType(64, false), 3)}));
       } else
         access.setParametersAttr(builder.getStrArrayAttr({"0"}));
       ScopedDiagnosticHandler handler(&context,
@@ -534,9 +537,9 @@ module @restriction attributes {exec.computation} {
   mutation("partial runtime operation inserted", [&](ModuleOp module) {
     auto f = function(module);
     OpBuilder builder(f);
-    runtime::BindingOp::create(
-        builder, f.getLoc(), "partial_inverse", "field.inverse",
-        builder.getStrArrayAttr({"bls12-381.fr"}), "", ArrayAttr{});
+    runtime::BindingOp::create(builder, f.getLoc(), "partial_inverse",
+                               "field.inverse",
+                               builder.getStrArrayAttr({"bls12-381.fr"}), "");
     auto end = scopedComputation::returned(f);
     auto inverse = scopedComputation::appendApply(
         f, "partial_inverse", end.getValues(), end.getValues().getTypes(),
@@ -571,8 +574,7 @@ module @restriction attributes {exec.computation} {
     auto f = function(module);
     OpBuilder builder(f);
     runtime::BindingOp::create(builder, f.getLoc(), "extra", "field.add",
-                               builder.getStrArrayAttr({"bls12-381.fr"}), "",
-                               ArrayAttr{});
+                               builder.getStrArrayAttr({"bls12-381.fr"}), "");
   });
   cases.run("internal signatures never enable ordinary source admission", [&] {
     program::LocalDefinitions empty;

@@ -43,8 +43,8 @@ void reject(Error error, StringRef code) {
 }
 std::string layouts(bool fixed = true) {
   auto text = scopedFixture(R"(
-"runtime.binding"() {sym_name="msb",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
-"runtime.binding"() {sym_name="dense",contract="poly.fold",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="msb",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="dense",contract="poly.fold",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
 )",
                             "%a:!T,%r:!F", "%a,%r", "!T,!F", "!T", R"(
 %first_attempt = "exec.apply"(%scope,%a,%r) {binding=@msb,site="first",parameters=[]} : (!runtime.scope,!T,!F)->!exec.outcome<(!T)>
@@ -71,8 +71,8 @@ func.return %done : !exec.outcome<(!T)>
 }
 std::string contractions(bool group = false, bool escape = false) {
   auto text = scopedFixture(R"(
-"runtime.binding"() {sym_name="map",contract="vector.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="reduce",contract="vector.dot",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="map",contract="vector.mul",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope,!V,!A) -> !exec.outcome<(!A)>} : ()->()
+"runtime.binding"() {sym_name="reduce",contract="vector.dot",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope,!V,!A) -> !exec.outcome<(!R)>} : ()->()
 )",
                             "%w:!V,%f:!V,%v:!A", "%w,%f,%v", "!V,!V,!A",
                             escape ? "!A" : "!R",
@@ -110,7 +110,9 @@ std::string arithmetic(std::string identity = "bls12-381.fr") {
          scopedFixture(
              "\"runtime.binding\"() "
              "{sym_name=\"add\",contract=\"field.add\",arguments=[\"" +
-                 identity + "\"],implementation=\"\"} : ()->()",
+                 identity +
+                 "\"],implementation=\"\",function_type=(!runtime.scope,!F,!F)-"
+                 ">!exec.outcome<(!F)>} : ()->()",
              "%a:!F,%b:!F", "%a,%b", "!F,!F", "!F", R"(
 %add_attempt = "exec.apply"(%scope,%a,%b) {binding=@add,site="add",parameters=[]} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
 "exec.dispatch"(%add_attempt)[^add,^failed] : (!exec.outcome<(!F)>)->()
@@ -124,8 +126,8 @@ std::string orderedCrossings() {
   return R"(!F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.product_sum"} : ()->()
-"runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.product_sum",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !poly.multilinear<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation="",function_type=(!runtime.scope, i1) -> !exec.outcome<>} : ()->()
 )",
                    "%a:!T,%b:!T,%allowed:i1", "%a,%b,%allowed", "!T,!T,i1",
                    "!F", R"(
@@ -147,7 +149,7 @@ std::string nestedLayouts(MLIRContext &context) {
   auto text = R"(!F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+"runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
 )",
                    "%a:!T,%r:!F,%condition:i1", "%a,%r,%condition", "!T,!F,i1",
                    "!T", R"(

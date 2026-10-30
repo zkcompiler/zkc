@@ -2,11 +2,11 @@
 !words = !algebra.indices
 !rounds = !data.sequence<!words>
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="length",contract="indices.length",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="at",contract="indices.at",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="length",contract="indices.length",arguments=[],implementation="",function_type=(!runtime.scope, !algebra.indices) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="at",contract="indices.at",arguments=[],implementation="",function_type=(!runtime.scope, !algebra.indices, ui64) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>} : ()->()
+ "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation="",function_type=(!runtime.scope, i1, i1) -> !exec.outcome<(i1)>} : ()->()
     func.func @same(%arg0: !runtime.scope, %arg1: !words, %arg2: !words) -> !exec.outcome<(i1)> attributes {no_inline, runtime.origin = ["same", []]} {
       %0 = "exec.apply"(%arg0, %arg1) <{binding = @length, parameters = [], site = "n"}> : (!runtime.scope, !words) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
@@ -171,12 +171,12 @@ module { "protocol.module"() ({
       return %7 : !exec.outcome<(!words)>
     }
 
- "runtime.binding"() {sym_name="binding_init",contract="external.monero.init",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="binding_init",contract="external.monero.init",arguments=[],implementation="",function_type=(!runtime.scope, !algebra.indices) -> !exec.outcome<(!algebra.indices)>} : ()->()
 
- "runtime.binding"() {sym_name="binding_update",contract="external.monero.update",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="binding_update",contract="external.monero.update",arguments=[],implementation="",function_type=(!runtime.scope, !algebra.indices, !algebra.indices) -> !exec.outcome<(!algebra.indices, !algebra.indices)>} : ()->()
 
- "runtime.binding"() {sym_name="round_at",contract="sequence.at",arguments=["indices"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="empty",contract="indices.empty",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="round_at",contract="sequence.at",arguments=[!algebra.indices],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.indices>, ui64) -> !exec.outcome<(!algebra.indices)>} : ()->()
+ "runtime.binding"() {sym_name="empty",contract="indices.empty",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.indices)>} : ()->()
 
 
  "protocol.func"() ({ ^entry(%seed:!words,%context:!words,%count:ui64,%rounds:!rounds,%complete:i1):
