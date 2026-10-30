@@ -2,6 +2,7 @@
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 
 using namespace mlir;
@@ -42,7 +43,8 @@ LogicalResult ApplyOp::verifySymbolUses(SymbolTableCollection &symbols) {
                          ? dyn_cast_or_null<runtime::BindingOp>(
                                symbols.lookupSymbolIn(table, getBindingAttr()))
                          : runtime::BindingOp();
-  if (!declaration)
+  if (!declaration || !declaration.getContractAttr() ||
+      !declaration.getArgumentsAttr())
     return diagnostics::emit(emitOpError(), "binding-reference");
   auto attribute = declaration->getAttrOfType<TypeAttr>("function_type");
   auto type =
@@ -52,7 +54,9 @@ LogicalResult ApplyOp::verifySymbolUses(SymbolTableCollection &symbols) {
     return diagnostics::emit(
         emitOpError(), "binding-signature",
         "invocation differs from its callable executable ABI");
-  return success();
+  return verifyInvocationParameters(
+      [&] { return emitOpError(); }, declaration.getContract(),
+      declaration.getArgumentsAttr(), getParametersAttr());
 }
 LogicalResult ApplyOp::verify() {
   if (getSite().empty() ||

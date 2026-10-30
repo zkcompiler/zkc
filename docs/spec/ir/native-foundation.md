@@ -94,6 +94,10 @@ Structured TypeDef/AttrDef and inherent properties carry complete aggregate,
 parameter and execution descriptor information. Generic IR verifiers compare
 formed MLIR types; they do not print them, parse a neutral spelling and compare
 the reconstructed type. Native neutral types remain independent of MLIR.
+Recursive Host layouts support standard MLIR attribute aliases. Their printed
+nesting therefore need not grow with source schema depth. Aliases change no
+layout identity, logical depth allowance or parser resource ceiling; native
+formation still inspects the complete expanded structure.
 Canonical public spellings are encoded/decoded at format boundaries once,
 under explicit work limits. Keeping a stable public spelling is not a second
 internal schema or compatibility execution route.

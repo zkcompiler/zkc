@@ -6,6 +6,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -61,17 +62,12 @@ class RecipeCorrespondence {
     if (length)
       arguments.push_back(
           builder.getIntegerAttr(builder.getIntegerType(64, false), *length));
-    auto strings = [](ArrayAttr attrs, ArrayRef<std::string> expected) {
-      return attrs && attrs.size() == expected.size() &&
-             all_of(zip(attrs, expected), [](auto pair) {
-               auto text = dyn_cast<StringAttr>(std::get<0>(pair));
-               return text && text.getValue() == std::get<1>(pair);
-             });
-    };
     if (!declaration || declaration.getContract() != contract ||
         !declaration.getImplementation().empty() ||
         !llvm::equal(declaration.getArguments(), arguments) ||
-        !strings(op->getAttrOfType<ArrayAttr>("parameters"), parameters) ||
+        !protocol::invocationParametersMatch(
+            contract, declaration.getArgumentsAttr(),
+            op->getAttrOfType<ArrayAttr>("parameters"), parameters) ||
         op->getAttrs().size() != 3 || ports.bodies(op) ||
         ports.outputs(op).size() != unsigned(output) ||
         !llvm::equal(ports.inputs(op), operands)) {

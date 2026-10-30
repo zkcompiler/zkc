@@ -15,6 +15,7 @@
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Operations.h"
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
@@ -560,8 +561,14 @@ class Exporter {
       auto binding = primitiveBinding(symbols.lookup(apply.getBinding()), used);
       if (!binding)
         return binding.takeError();
+      auto parameters = encodeInvocationParameters(apply);
+      if (!parameters)
+        return parameters.takeError();
+      json::Array encoded;
+      for (const auto &parameter : *parameters)
+        encoded.push_back(parameter);
       return json::Array{"exec", apply->getName().getStringRef(), binding->name,
-                         names(apply.getParameters())};
+                         std::move(encoded)};
     }
     if (auto boolean = dyn_cast<exec::BooleanOp>(op))
       return json::Array{"bool.constant", boolean.getValue()};

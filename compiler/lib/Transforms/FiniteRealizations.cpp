@@ -15,10 +15,12 @@
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Transforms/Algorithms.h"
@@ -248,7 +250,7 @@ class Realizer {
     return sitePrefix + suffix;
   }
   Value emit(const protocol::BindingApplication &application, ValueRange inputs,
-             Type output, ArrayRef<std::string> params = {},
+             Type output, ArrayRef<Attribute> params = {},
              StringRef explicitSite = {}) {
     // A fixed envelope covers the invoke/dispatch/success block, binding and
     // operands. Debit before creating any CFG or declaration. Callback copies
@@ -285,9 +287,6 @@ class Realizer {
     if (output)
       outputs.push_back(output);
 
-    SmallVector<Attribute> parameters;
-    for (const auto &parameter : params)
-      parameters.push_back(builder.getStringAttr(parameter));
     auto reference = emitter.binding(builder, loc, application);
     auto &control = scopeControl();
     auto previousLocation = control.getLocation();
@@ -298,17 +297,17 @@ class Realizer {
         "exec.apply", outputs, control.scoped(inputs),
         {builder.getNamedAttr("binding", reference),
          builder.getNamedAttr("site", builder.getStringAttr(occurrence)),
-         builder.getNamedAttr("parameters", builder.getArrayAttr(parameters))});
+         builder.getNamedAttr("parameters", builder.getArrayAttr(params))});
     return output ? values.front() : Value();
   }
   Value emit(StringRef contract, ValueRange inputs, Type output,
-             ArrayRef<std::string> args = {},
-             ArrayRef<std::string> params = {}) {
+             ArrayRef<std::string> args = {}, ArrayRef<Attribute> params = {}) {
     return emit({contract.str(), {args.begin(), args.end()}, ""}, inputs,
                 output, params);
   }
   Value number(uint64_t n) {
-    return emit("index.constant", {}, index, {}, {std::to_string(n)});
+    return emit("index.constant", {}, index, {},
+                {builder.getIntegerAttr(index, n)});
   }
   Value length(Value input, unsigned axis = 0) {
     if (failedHelper || !input)
@@ -318,8 +317,9 @@ class Realizer {
     if (col->staticExtent)
       return number(*col->staticExtent);
     return emit(*col->length, input, index,
-                col->rank == 2 ? ArrayRef<std::string>{std::to_string(axis)}
-                               : ArrayRef<std::string>{});
+                col->rank == 2
+                    ? ArrayRef<Attribute>{builder.getIntegerAttr(index, axis)}
+                    : ArrayRef<Attribute>{});
   }
   void require(Value condition) { emit("control.require", condition, {}, {}); }
   Control control(ControlKind kind, ValueRange inputs, TypeRange outputs,
@@ -580,7 +580,7 @@ class Realizer {
       auto result = mathematical::emitNumericalLanes(
           *admitted->formula, vector, sizes.lookup(root), mode,
           [&](const protocol::BindingApplication &binding, ValueRange operands,
-              Type result, ArrayRef<std::string> parameters) {
+              Type result, ArrayRef<Attribute> parameters) {
             auto previousLocation = loc;
             if (sumConsumer)
               loc = sumConsumer->getLoc();
@@ -603,7 +603,7 @@ class Realizer {
     return mathematical::emitVectorLanes(
         *admitted->formula, vector, sizes.lookup(root), recipes,
         [&](StringRef contract, ValueRange operands, Type result,
-            ArrayRef<std::string> parameters) {
+            ArrayRef<Attribute> parameters) {
           return emit(contract, operands, result, args, parameters);
         });
   }
@@ -1013,7 +1013,9 @@ public:
         Value seed = nested.seed.input
                          ? captures[*nested.seed.input]
                          : emit("field.constant", {}, field, arguments,
-                                {nested.seed.constant});
+                                {cantFail(algebra::decodeFieldLiteral(
+                                    cast<algebra::FieldType>(field),
+                                    nested.seed.constant))});
         SmallVector<Value> roles{captures[nested.matrix],
                                  captures[nested.vector]};
         SmallVector<Value> operands;

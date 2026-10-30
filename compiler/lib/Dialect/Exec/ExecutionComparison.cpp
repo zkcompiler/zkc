@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Exec/ControlCursor.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/Execution.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
@@ -113,8 +114,12 @@ public:
     for (auto [actual, port] : zip(outputs, expected.outputs))
       if (!type(actual, port.spelling()))
         return false;
-    return call.getBinding() == record.callee &&
-           strings(call.getParameters(), record.attributes);
+    auto declaration = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+        call, call.getBindingAttr());
+    return declaration && call.getBinding() == record.callee &&
+           invocationParametersMatch(
+               declaration.getContract(), declaration.getArgumentsAttr(),
+               call.getParametersAttr(), record.attributes);
   }
   bool body(func::FuncOp function, const program::Body &expected,
             ArrayRef<std::string> arguments, bool outlined) {

@@ -352,14 +352,14 @@ commands.run(
 # every composed participant body is unchanged.
 local = """"runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 """ + scoped_function("unused", [], [F], invocation(
-    "exec.apply", [], [F], 'binding=@constant,parameters=["0"],site="constant"'), ['%r'])
+    "exec.apply", [], [F], 'binding=@constant,parameters=[#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>],site="constant"'), ['%r'])
 local_source = source.replace("func.func private", local + "\nfunc.func private", 1)
 # This dependency is retained and verified even when the author does not use it.
 commands.verified(local_source)
 local_candidate = commands.verified(
     local_source, None, "--zkc-project-protocol=simplify=false"
 )
-local_changed = local_candidate.replace('parameters = ["0"]', 'parameters = ["1"]')
+local_changed = local_candidate.replace('0 : ui255', '1 : ui255')
 assert local_changed != local_candidate
 commands.verified(local_changed)
 source_path.write_text(local_source)

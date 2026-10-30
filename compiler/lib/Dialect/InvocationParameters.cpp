@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/Parameters.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/StringExtras.h"
@@ -195,6 +196,27 @@ verifyInvocationParameters(llvm::function_ref<InFlightDiagnostic()> emit,
                                 arguments.getContext());
 }
 namespace protocol {
+Expected<ArrayAttr>
+decodeInvocationParameters(MLIRContext *context,
+                           const BindingApplication &binding,
+                           ArrayRef<std::string> parameters) {
+  auto arguments = decodeBindingArguments(context, binding);
+  if (!arguments)
+    return arguments.takeError();
+  return decodeInvocationParameters(binding.contract, *arguments, parameters);
+}
+Expected<std::vector<std::string>>
+encodeInvocationParameters(exec::ApplyOp call) {
+  auto binding = call && call.getBindingAttr()
+                     ? SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+                           call, call.getBindingAttr())
+                     : runtime::BindingOp{};
+  if (!binding)
+    return zkc::error("binding-reference");
+  return encodeInvocationParameters(binding.getContract(),
+                                    binding.getArgumentsAttr(),
+                                    call.getParametersAttr());
+}
 Expected<ArrayAttr>
 decodeInvocationParameters(StringRef contract, ArrayAttr arguments,
                            ArrayRef<std::string> parameters) {

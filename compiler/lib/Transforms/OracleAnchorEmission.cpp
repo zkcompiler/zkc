@@ -53,20 +53,17 @@ emitOracleAnchorAllocator(ModuleOp candidate, const OracleAnchorStorage &plan,
   exec::ScopedExecutionBuilder control(builder, helper);
   auto apply = [&](StringRef contract, ArrayRef<std::string> statics,
                    Type output, ValueRange inputs, StringRef site,
-                   ArrayRef<std::string> parameters = {}) {
+                   ArrayRef<Attribute> parameters = {}) {
     auto binding = bindings.binding(
         builder, helper.getLoc(),
         {contract.str(),
          std::vector<std::string>(statics.begin(), statics.end()), ""});
-    SmallVector<Attribute> attrs;
-    for (const auto &parameter : parameters)
-      attrs.push_back(builder.getStringAttr(parameter));
     return control
-        .invoke(
-            "exec.apply", output, control.scoped(inputs),
-            {builder.getNamedAttr("binding", binding),
-             builder.getNamedAttr("parameters", builder.getArrayAttr(attrs)),
-             builder.getNamedAttr("site", builder.getStringAttr(site))})
+        .invoke("exec.apply", output, control.scoped(inputs),
+                {builder.getNamedAttr("binding", binding),
+                 builder.getNamedAttr("parameters",
+                                      builder.getArrayAttr(parameters)),
+                 builder.getNamedAttr("site", builder.getStringAttr(site))})
         .front();
   };
   auto pack = [&](Type type, ValueRange inputs, StringRef site) {
@@ -80,7 +77,7 @@ emitOracleAnchorAllocator(ModuleOp candidate, const OracleAnchorStorage &plan,
   auto index =
       IntegerType::get(candidate.getContext(), 64, IntegerType::Unsigned);
   auto tag = apply("index.constant", {}, index, {}, "constructor",
-                   {std::to_string(constructor)});
+                   {builder.getIntegerAttr(index, constructor)});
   auto length = apply("sequence.length", {record->spelling()}, index,
                       helper.getArgument(1), "length");
   auto value =
@@ -157,23 +154,21 @@ Expected<func::FuncOp> emitOracleAnchorLookup(ModuleOp candidate,
         exec::ScopedExecutionBuilder body(builder, selected);
         auto apply = [&](StringRef contract, ArrayRef<std::string> arguments,
                          TypeRange outputs, ValueRange inputs, StringRef site,
-                         ArrayRef<std::string> parameters = {}) {
+                         ArrayRef<Attribute> parameters = {}) {
           auto binding = bindings.binding(
               builder, loc,
               {contract.str(),
                std::vector<std::string>(arguments.begin(), arguments.end()),
                ""});
-          SmallVector<Attribute> attrs;
-          for (const auto &parameter : parameters)
-            attrs.push_back(builder.getStringAttr(parameter));
           return body.invoke(
               "exec.apply", outputs, body.scoped(inputs),
               {builder.getNamedAttr("binding", binding),
-               builder.getNamedAttr("parameters", builder.getArrayAttr(attrs)),
+               builder.getNamedAttr("parameters",
+                                    builder.getArrayAttr(parameters)),
                builder.getNamedAttr("site", builder.getStringAttr(site))});
         };
         auto expected = apply("index.constant", {}, index, {}, "constructor",
-                              {std::to_string(constructor)})
+                              {builder.getIntegerAttr(index, constructor)})
                             .front();
         auto matches = apply("index.equal", {}, builder.getI1Type(),
                              {selected.getArgument(1), expected}, "belongs_to")

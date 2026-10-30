@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/Execution.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
@@ -21,12 +22,6 @@ using Types = SmallVector<Type>;
 using Values = SmallVector<Value>;
 using TypeEnvironment = std::map<std::string, Type>;
 using Environment = std::map<std::string, Value>;
-ArrayAttr strings(Builder &builder, ArrayRef<std::string> values) {
-  SmallVector<Attribute> result;
-  for (const auto &value : values)
-    result.push_back(builder.getStringAttr(value));
-  return builder.getArrayAttr(result);
-}
 
 // Recover result types only after independent program admission. This is a
 // construction aid, not another executable admission or correspondence check.
@@ -34,6 +29,8 @@ class ResultTypes {
   MLIRContext &context;
   bool physical;
   std::map<std::string, Types> bindings;
+  std::map<std::string, std::pair<std::string, ArrayAttr>> bindingParameters;
+  std::map<const program::Instruction *, ArrayAttr> parameters;
   std::map<const program::Instruction *, Types> results;
   bool valid = true;
 
@@ -77,6 +74,14 @@ public:
   }
   bool prepare(const program::LocalDefinitions &model) {
     for (const auto &binding : model.bindings) {
+      auto arguments = decodeBindingArguments(&context, binding.application);
+      if (!arguments) {
+        consumeError(arguments.takeError());
+        return false;
+      }
+      bindingParameters.emplace(
+          binding.name,
+          std::make_pair(binding.application.contract, *arguments));
       auto signature = resolveBinding(binding.application, physical);
       if (!signature) {
         consumeError(signature.takeError());
@@ -98,6 +103,9 @@ public:
   const Types &get(const program::Instruction &instruction) const {
     return results.at(&instruction);
   }
+  ArrayAttr getParameters(const program::Instruction &instruction) const {
+    return parameters.at(&instruction);
+  }
   Types body(const program::Body &body, TypeEnvironment env,
              unsigned depth = 0) {
     if (!valid || depth >= 64) {
@@ -110,6 +118,15 @@ public:
       Types outputs;
       program::Names names;
       if (auto op = instruction.get<program::Operation>()) {
+        const auto &binding = bindingParameters.at(op->callee);
+        auto decoded = decodeInvocationParameters(binding.first, binding.second,
+                                                  op->attributes);
+        if (!decoded) {
+          consumeError(decoded.takeError());
+          valid = false;
+          return {};
+        }
+        parameters.emplace(&instruction, *decoded);
         outputs = bindings.at(op->callee);
         names = op->outputs;
       } else if (auto op = instruction.get<program::BooleanConstant>()) {
@@ -350,8 +367,8 @@ void BodyWriter::run(const program::Body &body) {
                 builder.getNamedAttr(
                     "binding",
                     FlatSymbolRefAttr::get(builder.getContext(), op->callee)),
-                builder.getNamedAttr("parameters",
-                                     strings(builder, op->attributes))}));
+                builder.getNamedAttr(
+                    "parameters", writer.types.getParameters(instruction))}));
     } else if (auto op = instruction.get<program::BooleanConstant>()) {
       bind({op->output},
            execution.invoke("exec.boolean", writer.types.get(instruction),

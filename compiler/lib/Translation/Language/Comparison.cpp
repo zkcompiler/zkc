@@ -10,6 +10,7 @@
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/ControlCursor.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/Construction.h"
@@ -712,8 +713,7 @@ class Comparator {
     if (!actual)
       return {};
     if (!attributes(*actual, {"binding", "parameters", "site"}) ||
-        !string(*actual, "site", site) ||
-        !strings(actual->getAttr("parameters"), expected.parameters)) {
+        !string(*actual, "site", site)) {
       if (!failure)
         fail("ordered operation contract, parameters or site differ");
       return {};
@@ -726,6 +726,15 @@ class Comparator {
     }
     auto &binding = *found->second;
     usedBindings.insert(found->first);
+    auto declaration = mlir::dyn_cast<runtime::BindingOp>(binding);
+    if (!declaration ||
+        !protocol::invocationParametersMatch(
+            declaration.getContract(), declaration.getArgumentsAttr(),
+            actual->getAttrOfType<mlir::ArrayAttr>("parameters"),
+            expected.parameters)) {
+      fail("ordered operation parameters differ");
+      return {};
+    }
     std::vector<std::string> args;
     if (expected.bindingArguments) {
       auto roots = take(layouts.kernelArguments(expected.contract,

@@ -18,7 +18,7 @@ module {
       %6 = "exec.apply"(%arg0, %5, %arg2) <{binding = @commit, parameters = [], site = "commit"}> : (!runtime.scope, !algebra.group_vector<"bls12-381.g1">, !runtime.capability<nonce, "bls12-381.fr">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<nonce, "bls12-381.fr">)>
       "exec.dispatch"(%6)[^bb4, ^bb2] : (!exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<nonce, "bls12-381.fr">)>) -> ()
     ^bb4(%7: !algebra.group_vector<"bls12-381.g1">, %8: !runtime.capability<nonce, "bls12-381.fr">):  // pred: ^bb3
-      %9 = "exec.apply"(%arg0, %7) <{binding = @at, parameters = ["0"], site = "at"}> : (!runtime.scope, !algebra.group_vector<"bls12-381.g1">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>
+      %9 = "exec.apply"(%arg0, %7) <{binding = @at, parameters = [0 : ui64], site = "at"}> : (!runtime.scope, !algebra.group_vector<"bls12-381.g1">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>
       "exec.dispatch"(%9)[^bb5, ^bb2] : (!exec.outcome<(!algebra.group<"bls12-381.g1">)>) -> ()
     ^bb5(%10: !algebra.group<"bls12-381.g1">):  // pred: ^bb4
       %11 = "exec.returned"(%10, %8) : (!algebra.group<"bls12-381.g1">, !runtime.capability<nonce, "bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">, !runtime.capability<nonce, "bls12-381.fr">)>

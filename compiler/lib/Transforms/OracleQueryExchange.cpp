@@ -159,21 +159,18 @@ struct Emitter {
   }
   Values apply(Control &c, StringRef contract, TypeRange outputs,
                ValueRange inputs, StringRef site,
-               ArrayRef<std::string> parameters = {}) {
+               ArrayRef<Attribute> parameters = {}) {
     auto binding =
         bindings.binding(builder, unit.getLoc(), {contract.str(), {}, ""});
-    SmallVector<StringRef> values;
-    for (const auto &parameter : parameters)
-      values.push_back(parameter);
     return c.invoke(
         "exec.apply", outputs, c.scoped(inputs),
         {builder.getNamedAttr("binding", binding),
-         builder.getNamedAttr("parameters", builder.getStrArrayAttr(values)),
+         builder.getNamedAttr("parameters", builder.getArrayAttr(parameters)),
          builder.getNamedAttr("site", builder.getStringAttr(site))});
   }
   Value number(Control &c, unsigned value, StringRef site) {
     return apply(c, "index.constant", index, {}, site,
-                 {std::to_string(value)})[0];
+                 {builder.getIntegerAttr(index, value)})[0];
   }
   Value equal(Control &c, Value actual, unsigned expected, StringRef site) {
     auto constant = number(c, expected, site.str() + "_expected");

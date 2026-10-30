@@ -37,7 +37,7 @@ module { "protocol.module"() ({
       %7 = "exec.apply"(%arg0, %arg3) <{binding = @vlength, parameters = [], site = "count"}> : (!runtime.scope, !fs) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%7)[^bb4, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb4(%8: ui64):  // pred: ^bb3
-      %9 = "exec.apply"(%arg0) <{binding = @constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %9 = "exec.apply"(%arg0) <{binding = @constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%9)[^bb5, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb5(%10: ui64):  // pred: ^bb4
       %11 = "exec.range"(%arg0, %10, %8) <{site = "openings"}> : (!runtime.scope, ui64, ui64) -> !exec.outcome<(i64, i64)>
@@ -150,7 +150,7 @@ module { "protocol.module"() ({
       %0 = "exec.boolean"(%arg0) <{site = "yes", value = true}> : (!runtime.scope) -> !exec.outcome<(i1)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(i1)>) -> ()
     ^bb1(%1: i1):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0) <{binding = @constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %2 = "exec.apply"(%arg0) <{binding = @constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb2(%3: !exec.stop):  // 5 preds: ^bb0, ^bb1, ^bb3, ^bb7, ^bb9
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(i1)>

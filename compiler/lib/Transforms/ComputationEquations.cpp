@@ -95,15 +95,11 @@ struct PayloadAnalysis {
   const protocol::ComputationContract *contract(Value value) const {
     return value ? contracts.lookup(value.getDefiningOp()) : nullptr;
   }
-  std::optional<StringRef> constant(Value value) const {
+  std::optional<std::string> constant(Value value) const {
     auto *facet = contract(value);
     if (!facet || facet->identity != MathematicalIdentity::FieldConstant)
       return std::nullopt;
-    auto *op = value.getDefiningOp();
-    if (auto constant = dyn_cast<algebra::ConstantFieldOp>(op))
-      return constant.getValue();
-    return cast<StringAttr>(op->getAttrOfType<ArrayAttr>("parameters")[0])
-        .getValue();
+    return finite::fieldConstant(value.getDefiningOp());
   }
   // Neutral expressions are followed directly in the admitted SSA. No
   // normalized graph is manufactured and the inventory remains intact.
@@ -118,7 +114,7 @@ struct PayloadAnalysis {
         break;
       auto left = constant(op->getOperand(0));
       auto right = constant(op->getOperand(1));
-      auto identity = [](std::optional<StringRef> value,
+      auto identity = [](std::optional<std::string> value,
                          protocol::ScalarIdentity identity) {
         return (identity == protocol::ScalarIdentity::Zero && value == "0") ||
                (identity == protocol::ScalarIdentity::One && value == "1");

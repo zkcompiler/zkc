@@ -44,7 +44,7 @@ def Exec_ApplyOp : Op<ExecDialect, "apply", [
     DeclareOpInterfaceMethods<DiagonalProducerInterface>,
     DeclareOpInterfaceMethods<DiagonalContractionInterface>]> {
   let arguments = (ins RuntimeScope:$scope, Variadic<AnyType>:$inputs,
-    FlatSymbolRefAttr:$binding, StrArrayAttr:$parameters, StrAttr:$site,
+    FlatSymbolRefAttr:$binding, ArrayAttr:$parameters, StrAttr:$site,
     OptionalAttr<DictArrayAttr>:$arg_attrs,
     OptionalAttr<DictArrayAttr>:$res_attrs);
   let results = (outs ExecOutcome:$outcome);

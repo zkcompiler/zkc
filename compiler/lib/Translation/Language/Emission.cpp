@@ -8,6 +8,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/Builders.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Printing.h"
@@ -245,10 +246,14 @@ class Emitter {
         return {};
       found = bindings.emplace(key, std::move(name)).first;
     }
+    auto nativeParameters = take(protocol::decodeInvocationParameters(
+        &context, {contract.str(), arguments, {}}, parameters));
+    if (!nativeParameters)
+      return {};
     return scoped->invoke(
         "exec.apply", outputs, scoped->scoped(inputs),
         {attr("binding", mlir::FlatSymbolRefAttr::get(&context, found->second)),
-         attr("parameters", strings(parameters)), text("site", site)});
+         attr("parameters", *nativeParameters), text("site", site)});
   }
   std::optional<Values> map(const Declaration &helper, ArrayRef<bool> rowwise,
                             mlir::ValueRange inputs, mlir::TypeRange outputs,

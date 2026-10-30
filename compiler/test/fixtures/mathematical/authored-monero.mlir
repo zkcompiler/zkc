@@ -53,7 +53,7 @@ module { "protocol.module"() ({
       cf.br ^bb8(%25 : i1)
     }
     func.func private @control_0(%arg0: !runtime.scope, %arg1: !words, %arg2: !words, %arg3: ui64) -> !exec.outcome<(i1)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
       %2 = "exec.boolean"(%arg0) <{site = "yes", value = true}> : (!runtime.scope) -> !exec.outcome<(i1)>

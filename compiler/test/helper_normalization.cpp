@@ -430,10 +430,16 @@ int main() {
             constant = op;
         require(constant && constant.getParameters() ==
                                 ArrayAttr::get(
-                                    &context, {StringAttr::get(&context, "4")}),
+                                    &context,
+                                    {IntegerAttr::get(
+                                        IntegerType::get(&context, 64,
+                                                         IntegerType::Unsigned),
+                                        4)}),
                 "missing returned static dimension");
-        constant.setParametersAttr(
-            ArrayAttr::get(&context, {StringAttr::get(&context, "3")}));
+        constant.setParametersAttr(ArrayAttr::get(
+            &context,
+            {IntegerAttr::get(
+                IntegerType::get(&context, 64, IntegerType::Unsigned), 3)}));
         require(succeeded(verify(*candidate)),
                 "dimension mutation is not executable");
         ScopedDiagnosticHandler handler(&context,

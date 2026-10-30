@@ -1,6 +1,7 @@
 #include "CheckedCandidate.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Builders.h"
@@ -47,7 +48,7 @@ class Realizer {
   }
   SmallVector<Value> emit(StringRef contract, ValueRange inputs,
                           TypeRange outputs,
-                          ArrayRef<std::string> parameters = {},
+                          ArrayRef<Attribute> parameters = {},
                           std::optional<unsigned> length = {}) {
     SmallVector<Attribute> arguments;
     if (!contract.starts_with("index.") && contract != "control.require")
@@ -56,25 +57,22 @@ class Realizer {
       arguments.push_back(
           builder.getIntegerAttr(builder.getIntegerType(64, false), *length));
     auto reference = binding(contract, builder.getArrayAttr(arguments));
-    SmallVector<Attribute> parametersAttrs;
-    for (const auto &param : parameters)
-      parametersAttrs.push_back(builder.getStringAttr(param));
     return scope->invoke(
         exec::ApplyOp::getOperationName(), outputs, scope->scoped(inputs),
         {builder.getNamedAttr("binding", reference),
          builder.getNamedAttr("site", builder.getStringAttr(site())),
-         builder.getNamedAttr("parameters",
-                              builder.getArrayAttr(parametersAttrs))});
+         builder.getNamedAttr("parameters", builder.getArrayAttr(parameters))});
   }
   Value one(StringRef contract, ValueRange inputs, Type output,
-            ArrayRef<std::string> params = {}) {
+            ArrayRef<Attribute> params = {}) {
     return emit(contract, inputs, TypeRange{output}, params).front();
   }
   Value natural(unsigned n) {
-    return one("index.constant", {}, index, {std::to_string(n)});
+    return one("index.constant", {}, index, {builder.getIntegerAttr(index, n)});
   }
   Value scalar(StringRef n) {
-    return one("field.constant", {}, field, {n.str()});
+    return one("field.constant", {}, field,
+               {cantFail(algebra::decodeFieldLiteral(field, n))});
   }
   void require(Value value) { (void)emit("control.require", value, {}); }
   Value arity(Value value) { return one("poly.table_arity", value, index); }

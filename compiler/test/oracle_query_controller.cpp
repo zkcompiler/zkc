@@ -528,9 +528,15 @@ module { "protocol.module"() ({
           };
           auto constant = [&](StringRef site, StringRef value) {
             auto op = cast<exec::ApplyOp>(operation(site));
+            uint64_t number;
+            require(!value.getAsInteger(10, number), "invalid index mutation");
             op->setAttr(
                 "parameters",
-                ArrayAttr::get(&context, {StringAttr::get(&context, value)}));
+                ArrayAttr::get(
+                    &context,
+                    {IntegerAttr::get(
+                        IntegerType::get(&context, 64, IntegerType::Unsigned),
+                        number)}));
           };
           auto exchangeInputs = [&](StringRef site) {
             auto op = cast<exec::ApplyOp>(operation(site));
@@ -671,8 +677,10 @@ module { "protocol.module"() ({
                 op->setAttr(
                     "parameters",
                     ArrayAttr::get(&context,
-                                   {StringAttr::get(
-                                       &context, mutation == 27 ? "0" : "1")}));
+                                   {IntegerAttr::get(
+                                       IntegerType::get(&context, 64,
+                                                        IntegerType::Unsigned),
+                                       mutation == 27 ? 0 : 1)}));
             });
             break;
           }

@@ -34,14 +34,11 @@ func::FuncOp local(pir::ProtocolModuleOp unit,
     for (unsigned input : instruction.inputs)
       operands.push_back(values[input]);
     auto binding = bindings.binding(builder, loc, instruction.binding);
-    SmallVector<StringRef> parameters;
-    for (const auto &parameter : instruction.parameters)
-      parameters.push_back(parameter);
     auto outputs = control.invoke(
         "exec.apply", instruction.types, control.scoped(operands),
         {builder.getNamedAttr("binding", binding),
          builder.getNamedAttr("parameters",
-                              builder.getStrArrayAttr(parameters)),
+                              builder.getArrayAttr(instruction.parameters)),
          builder.getNamedAttr(
              "site", builder.getStringAttr("step_" + std::to_string(i)))});
     append_range(values, outputs);

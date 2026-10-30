@@ -55,10 +55,10 @@ module {
       cf.br ^bb1(%33, %34, %35 : ui64, !f, ui64)
     }
     func.func private @control_0(%arg0: !runtime.scope) -> !exec.outcome<(ui64, !f, ui64)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = ["0"], site = "count_1"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = [0 : ui64], site = "count_1"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0) <{binding = @constant, parameters = ["0"], site = "value_2"}> : (!runtime.scope) -> !exec.outcome<(!f)>
+      %2 = "exec.apply"(%arg0) <{binding = @constant, parameters = [#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>], site = "value_2"}> : (!runtime.scope) -> !exec.outcome<(!f)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(!f)>) -> ()
     ^bb2(%3: !exec.stop):  // 2 preds: ^bb0, ^bb1
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(ui64, !f, ui64)>
@@ -77,7 +77,7 @@ module {
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(ui64, !f, ui64)>
       return %4 : !exec.outcome<(ui64, !f, ui64)>
     ^bb3(%5: !f):  // pred: ^bb1
-      %6 = "exec.apply"(%arg0) <{binding = @index, parameters = ["1"], site = "tag_5"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %6 = "exec.apply"(%arg0) <{binding = @index, parameters = [1 : ui64], site = "tag_5"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%6)[^bb4, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb4(%7: ui64):  // pred: ^bb3
       %8 = "exec.complete"(%arg0, %1, %5, %7) : (!runtime.scope, ui64, !f, ui64) -> !exec.outcome<(ui64, !f, ui64)>
@@ -96,7 +96,7 @@ module {
       %6 = "exec.apply"(%arg0, %5, %arg2) <{binding = @multiply, parameters = [], site = "value_8"}> : (!runtime.scope, !f, !f) -> !exec.outcome<(!f)>
       "exec.dispatch"(%6)[^bb4, ^bb2] : (!exec.outcome<(!f)>) -> ()
     ^bb4(%7: !f):  // pred: ^bb3
-      %8 = "exec.apply"(%arg0) <{binding = @index, parameters = ["2"], site = "tag_9"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %8 = "exec.apply"(%arg0) <{binding = @index, parameters = [2 : ui64], site = "tag_9"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%8)[^bb5, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb5(%9: ui64):  // pred: ^bb4
       %10 = "exec.complete"(%arg0, %1, %7, %9) : (!runtime.scope, ui64, !f, ui64) -> !exec.outcome<(ui64, !f, ui64)>

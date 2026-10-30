@@ -75,7 +75,7 @@ module { "protocol.module"() ({
       return %22 : !exec.outcome<(!v, !v)>
     }
     func.func @terminal_values(%arg0: !runtime.scope, %arg1: !v, %arg2: !v) -> !exec.outcome<(!f, !f)> attributes {no_inline, runtime.origin = ["terminal_values", []]} {
-      %0 = "exec.apply"(%arg0, %arg1) <{binding = @length, parameters = ["1"], site = "lengthA"}> : (!runtime.scope, !v) -> !exec.outcome<(i1)>
+      %0 = "exec.apply"(%arg0, %arg1) <{binding = @length, parameters = [1 : ui64], site = "lengthA"}> : (!runtime.scope, !v) -> !exec.outcome<(i1)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(i1)>) -> ()
     ^bb1(%1: i1):  // pred: ^bb0
       %2 = "exec.apply"(%arg0, %1) <{binding = @require, parameters = [], site = "shapeA"}> : (!runtime.scope, i1) -> !exec.outcome<>
@@ -84,16 +84,16 @@ module { "protocol.module"() ({
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!f, !f)>
       return %4 : !exec.outcome<(!f, !f)>
     ^bb3:  // pred: ^bb1
-      %5 = "exec.apply"(%arg0, %arg2) <{binding = @length, parameters = ["1"], site = "lengthB"}> : (!runtime.scope, !v) -> !exec.outcome<(i1)>
+      %5 = "exec.apply"(%arg0, %arg2) <{binding = @length, parameters = [1 : ui64], site = "lengthB"}> : (!runtime.scope, !v) -> !exec.outcome<(i1)>
       "exec.dispatch"(%5)[^bb4, ^bb2] : (!exec.outcome<(i1)>) -> ()
     ^bb4(%6: i1):  // pred: ^bb3
       %7 = "exec.apply"(%arg0, %6) <{binding = @require, parameters = [], site = "shapeB"}> : (!runtime.scope, i1) -> !exec.outcome<>
       "exec.dispatch"(%7)[^bb5, ^bb2] : (!exec.outcome<>) -> ()
     ^bb5:  // pred: ^bb4
-      %8 = "exec.apply"(%arg0, %arg1) <{binding = @at, parameters = ["0"], site = "valueA"}> : (!runtime.scope, !v) -> !exec.outcome<(!f)>
+      %8 = "exec.apply"(%arg0, %arg1) <{binding = @at, parameters = [0 : ui64], site = "valueA"}> : (!runtime.scope, !v) -> !exec.outcome<(!f)>
       "exec.dispatch"(%8)[^bb6, ^bb2] : (!exec.outcome<(!f)>) -> ()
     ^bb6(%9: !f):  // pred: ^bb5
-      %10 = "exec.apply"(%arg0, %arg2) <{binding = @at, parameters = ["0"], site = "valueB"}> : (!runtime.scope, !v) -> !exec.outcome<(!f)>
+      %10 = "exec.apply"(%arg0, %arg2) <{binding = @at, parameters = [0 : ui64], site = "valueB"}> : (!runtime.scope, !v) -> !exec.outcome<(!f)>
       "exec.dispatch"(%10)[^bb7, ^bb2] : (!exec.outcome<(!f)>) -> ()
     ^bb7(%11: !f):  // pred: ^bb6
       %12 = "exec.returned"(%9, %11) : (!f, !f) -> !exec.outcome<(!f, !f)>

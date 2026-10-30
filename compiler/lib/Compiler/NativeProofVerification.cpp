@@ -6,6 +6,7 @@
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
@@ -115,20 +116,12 @@ class TranscriptCorrespondence {
     auto binding =
         reference ? symbols.lookup<runtime::BindingOp>(reference.getValue())
                   : runtime::BindingOp();
-    auto strings = [](ArrayAttr a, ArrayRef<std::string> b) {
-      if (!a || a.size() != b.size())
-        return false;
-      for (auto [x, y] : zip(a, b)) {
-        auto string = dyn_cast<StringAttr>(x);
-        if (!string || string.getValue() != y)
-          return false;
-      }
-      return true;
-    };
     if (!binding || binding.getContract() != contract ||
         !binding.getImplementation().empty() ||
         !llvm::equal(binding.getArguments(), arguments) ||
-        !strings(op->getAttrOfType<ArrayAttr>("parameters"), parameters))
+        !protocol::invocationParametersMatch(
+            contract, binding.getArgumentsAttr(),
+            op->getAttrOfType<ArrayAttr>("parameters"), parameters))
       return false;
     bindings.insert(binding.getSymName());
     return true;

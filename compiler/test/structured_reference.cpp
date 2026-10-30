@@ -412,14 +412,10 @@ class Admission {
     if (parameters.size() != (constant ? 1u : 0u))
       return error("structured-reference-binding", "parameters");
     if (constant) {
-      auto text = dyn_cast<StringAttr>(parameters[0]);
-      if (!text)
+      auto value = dyn_cast<IntegerAttr>(parameters[0]);
+      if (!value || !value.getType().isUnsignedInteger(64))
         return error("structured-reference-binding", "literal type");
-      auto parsed =
-          decimal(text.getValue(), false, "structured-reference-binding");
-      if (!parsed)
-        return parsed.takeError();
-      checked.literal = parsed->getZExtValue();
+      checked.literal = value.getValue().getZExtValue();
     }
     primitives.try_emplace(&op, checked);
     return Error::success();

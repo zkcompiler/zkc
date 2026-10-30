@@ -243,7 +243,7 @@ int main() {
     auto result = realizeLanes(
         computation.helper->getRegion(0).front(), inputs,
         computation.signature.getResult(0), {}, &work, mathematicalRecipes(),
-        [&](StringRef, ValueRange, Type, ArrayRef<std::string>) {
+        [&](StringRef, ValueRange, Type, ArrayRef<Attribute>) {
           ++emitted;
           return Value();
         });

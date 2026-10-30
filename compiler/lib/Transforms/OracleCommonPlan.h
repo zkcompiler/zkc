@@ -25,7 +25,7 @@ struct OracleCommonBlock {
 };
 struct OracleLocalInstruction {
   BindingApplication binding;
-  std::vector<std::string> parameters;
+  std::vector<mlir::Attribute> parameters;
   std::vector<unsigned> inputs, outputs;
   std::vector<mlir::Type> types;
 };

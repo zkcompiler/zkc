@@ -21,19 +21,19 @@ module { "protocol.module"() ({
 "runtime.binding"() {sym_name="vector_equal",contract="vector.equal",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(i1)>} : ()->()
 relation.declare @relation {kind="external",key="example/r1cs-data",revision="0",signature=(!ms,!v,!v)->i1,purposes=["parameter","statement","witness"]}
     func.func @validate(%arg0: !runtime.scope, %arg1: !ms, %arg2: !v, %arg3: !v) -> !exec.outcome<(i1)> attributes {no_inline, runtime.origin = ["validate", []]} {
-      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["1"], site = "one_index"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %2 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [1 : ui64], site = "one_index"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb2(%3: !exec.stop):  // 84 preds: ^bb0, ^bb1, ^bb3, ^bb4, ^bb5, ^bb6, ^bb7, ^bb9, ^bb10, ^bb11, ^bb12, ^bb13, ^bb15, ^bb16, ^bb18, ^bb19, ^bb20, ^bb22, ^bb23, ^bb24, ^bb25, ^bb26, ^bb28, ^bb29, ^bb31, ^bb32, ^bb33, ^bb35, ^bb36, ^bb37, ^bb38, ^bb39, ^bb41, ^bb42, ^bb44, ^bb45, ^bb46, ^bb47, ^bb48, ^bb50, ^bb51, ^bb52, ^bb53, ^bb54, ^bb56, ^bb57, ^bb59, ^bb60, ^bb61, ^bb62, ^bb63, ^bb65, ^bb66, ^bb67, ^bb68, ^bb69, ^bb71, ^bb72, ^bb74, ^bb75, ^bb76, ^bb78, ^bb79, ^bb80, ^bb81, ^bb82, ^bb84, ^bb85, ^bb87, ^bb89, ^bb90, ^bb91, ^bb92, ^bb93, ^bb95, ^bb96, ^bb98, ^bb99, ^bb100, ^bb104, ^bb106, ^bb110, ^bb111, ^bb112
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(i1)>
       return %4 : !exec.outcome<(i1)>
     ^bb3(%5: ui64):  // pred: ^bb1
-      %6 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["2"], site = "two"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %6 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [2 : ui64], site = "two"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%6)[^bb4, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb4(%7: ui64):  // pred: ^bb3
-      %8 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["3"], site = "three"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %8 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [3 : ui64], site = "three"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%8)[^bb5, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb5(%9: ui64):  // pred: ^bb4
       %10 = "exec.apply"(%arg0, %arg1) <{binding = @sequence_length, parameters = [], site = "matrix_count"}> : (!runtime.scope, !ms) -> !exec.outcome<(ui64)>
@@ -112,7 +112,7 @@ relation.declare @relation {kind="external",key="example/r1cs-data",revision="0"
     ^bb30:  // pred: ^bb29
       cf.br ^bb24
     ^bb31(%49: !m):  // pred: ^bb24
-      %50 = "exec.apply"(%arg0, %49) <{binding = @matrix_dimension, parameters = ["1"], site = "acols"}> : (!runtime.scope, !m) -> !exec.outcome<(ui64)>
+      %50 = "exec.apply"(%arg0, %49) <{binding = @matrix_dimension, parameters = [1 : ui64], site = "acols"}> : (!runtime.scope, !m) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%50)[^bb32, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb32(%51: ui64):  // pred: ^bb31
       %52 = "exec.apply"(%arg0, %51, %29) <{binding = @index_equal, parameters = [], site = "awidth"}> : (!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>
@@ -156,7 +156,7 @@ relation.declare @relation {kind="external",key="example/r1cs-data",revision="0"
       %72 = "exec.apply"(%arg0, %arg1, %5) <{binding = @sequence_at, parameters = [], site = "b"}> : (!runtime.scope, !ms, ui64) -> !exec.outcome<(!m)>
       "exec.dispatch"(%72)[^bb46, ^bb2] : (!exec.outcome<(!m)>) -> ()
     ^bb46(%73: !m):  // pred: ^bb45
-      %74 = "exec.apply"(%arg0, %73) <{binding = @matrix_dimension, parameters = ["1"], site = "bcols"}> : (!runtime.scope, !m) -> !exec.outcome<(ui64)>
+      %74 = "exec.apply"(%arg0, %73) <{binding = @matrix_dimension, parameters = [1 : ui64], site = "bcols"}> : (!runtime.scope, !m) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%74)[^bb47, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb47(%75: ui64):  // pred: ^bb46
       %76 = "exec.apply"(%arg0, %75, %29) <{binding = @index_equal, parameters = [], site = "bwidth"}> : (!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>
@@ -200,7 +200,7 @@ relation.declare @relation {kind="external",key="example/r1cs-data",revision="0"
       %96 = "exec.apply"(%arg0, %arg1, %7) <{binding = @sequence_at, parameters = [], site = "c"}> : (!runtime.scope, !ms, ui64) -> !exec.outcome<(!m)>
       "exec.dispatch"(%96)[^bb61, ^bb2] : (!exec.outcome<(!m)>) -> ()
     ^bb61(%97: !m):  // pred: ^bb60
-      %98 = "exec.apply"(%arg0, %97) <{binding = @matrix_dimension, parameters = ["1"], site = "ccols"}> : (!runtime.scope, !m) -> !exec.outcome<(ui64)>
+      %98 = "exec.apply"(%arg0, %97) <{binding = @matrix_dimension, parameters = [1 : ui64], site = "ccols"}> : (!runtime.scope, !m) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%98)[^bb62, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb62(%99: ui64):  // pred: ^bb61
       %100 = "exec.apply"(%arg0, %99, %29) <{binding = @index_equal, parameters = [], site = "cwidth"}> : (!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>
@@ -287,7 +287,7 @@ relation.declare @relation {kind="external",key="example/r1cs-data",revision="0"
       %141 = "runtime.enter_scope"(%arg0) <{kind = "conditional", operandSegmentSizes = array<i32: 1, 0, 0>, selection = "else", site = "cshape"}> : (!runtime.scope) -> !exec.outcome<(!runtime.scope)>
       "exec.dispatch"(%141)[^bb95, ^bb2] : (!exec.outcome<(!runtime.scope)>) -> ()
     ^bb91:  // 2 preds: ^bb94, ^bb97
-      %142 = "exec.apply"(%arg0) <{binding = @field_constant, parameters = ["1"], site = "one"}> : (!runtime.scope) -> !exec.outcome<(!f)>
+      %142 = "exec.apply"(%arg0) <{binding = @field_constant, parameters = [#algebra.literal<!algebra.field<"bls12-381.fr">, 1 : ui255>], site = "one"}> : (!runtime.scope) -> !exec.outcome<(!f)>
       "exec.dispatch"(%142)[^bb98, ^bb2] : (!exec.outcome<(!f)>) -> ()
     ^bb92(%143: !runtime.scope):  // pred: ^bb89
       %144 = call @control_12(%143) : (!runtime.scope) -> !exec.outcome<>
@@ -437,7 +437,7 @@ relation.declare @relation {kind="external",key="example/r1cs-data",revision="0"
       return %2 : !exec.outcome<>
     }
     func.func private @control_14(%arg0: !runtime.scope, %arg1: ui64, %arg2: i1, %arg3: !v, %arg4: !v) -> !exec.outcome<(i1)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["1"], site = "offset"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [1 : ui64], site = "offset"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
       %2 = "exec.apply"(%arg0, %arg1, %1) <{binding = @index_add, parameters = [], site = "column"}> : (!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>

@@ -258,7 +258,7 @@ struct PlanBuilder {
   }
   IDs apply(OracleLocalRecipe &recipe, BindingApplication binding,
             TypeRange types, ArrayRef<unsigned> inputs,
-            ArrayRef<std::string> parameters = {}) {
+            ArrayRef<Attribute> parameters = {}) {
     unsigned next = recipe.inputs.size();
     for (const auto &instruction : recipe.instructions)
       next += instruction.outputs.size();
@@ -275,7 +275,7 @@ struct PlanBuilder {
   }
   unsigned number(OracleLocalRecipe &recipe, uint64_t n) {
     return apply(recipe, {"index.constant", {}, ""}, index, {},
-                 {std::to_string(n)})
+                 {IntegerAttr::get(index, n)})
         .front();
   }
   void require(OracleLocalRecipe &recipe, unsigned condition) {

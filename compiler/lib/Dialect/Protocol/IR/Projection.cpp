@@ -144,9 +144,10 @@ struct MetadataVerifier {
           inputs.size() == 0 && outputs.size() == 1) {
         auto parameters = op.getAttrOfType<ArrayAttr>("parameters");
         auto value = parameters && parameters.size() == 1
-                         ? dyn_cast<StringAttr>(parameters[0])
-                         : StringAttr();
-        if (!value || !protocol::parseUniformIndexBound(value.getValue()))
+                         ? dyn_cast<IntegerAttr>(parameters[0])
+                         : IntegerAttr();
+        if (!value || !value.getType().isUnsignedInteger(64) ||
+            !protocol::uniformIndexBound(value.getValue().getZExtValue()))
           return refuse(record, "invalid inserted transcript helper");
         bound = outputs[0];
         continue;

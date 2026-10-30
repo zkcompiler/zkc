@@ -69,10 +69,10 @@ module { "protocol.module"() ({
       cf.br ^bb11(%31 : !f)
     }
     func.func private @control_0(%arg0: !runtime.scope, %arg1: ui64, %arg2: !ms, %arg3: !vs, %arg4: !vs) -> !exec.outcome<(!f)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @constant, parameters = ["0"], site = "start"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @constant, parameters = [0 : ui64], site = "start"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0) <{binding = @zero, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
+      %2 = "exec.apply"(%arg0) <{binding = @zero, parameters = [#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(!f)>) -> ()
     ^bb2(%3: !exec.stop):  // 5 preds: ^bb0, ^bb1, ^bb3, ^bb7, ^bb9
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!f)>
@@ -137,7 +137,7 @@ module { "protocol.module"() ({
       return %12 : !exec.outcome<(!f)>
     }
     func.func private @control_2(%arg0: !runtime.scope, %arg1: ui64, %arg2: !ms, %arg3: !vs, %arg4: !vs) -> !exec.outcome<(!f)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @zero, parameters = ["0"], site = "mismatch_zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
+      %0 = "exec.apply"(%arg0) <{binding = @zero, parameters = [#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>], site = "mismatch_zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!f)>) -> ()
     ^bb1(%1: !f):  // pred: ^bb0
       %2 = "exec.complete"(%arg0, %1) : (!runtime.scope, !f) -> !exec.outcome<(!f)>

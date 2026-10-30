@@ -12,6 +12,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
@@ -178,9 +179,9 @@ class Reader {
               {}}},
             false))
       fail();
-    for (auto [a, b] : zip(params, parameters))
-      if (a != StringAttr::get(op->getContext(), b))
-        fail();
+    if (!protocol::invocationParametersMatch(
+            contract, binding.getArgumentsAttr(), params, parameters))
+      fail();
     bindings.insert(binding);
     return result ? ports.outputs(op)[0] : Value();
   }

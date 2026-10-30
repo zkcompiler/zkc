@@ -253,8 +253,11 @@ int main(int argc, char **argv) {
       "wrong constructor ordinal", [&](func::FuncOp function) {
         function.walk([&](exec::ApplyOp op) {
           if (op.getSite() == "constructor")
-            op.setParametersAttr(
-                ArrayAttr::get(&context, {StringAttr::get(&context, "0")}));
+            op.setParametersAttr(ArrayAttr::get(
+                &context,
+                {IntegerAttr::get(
+                    IntegerType::get(&context, 64, IntegerType::Unsigned),
+                    0)}));
         });
       });
   mutations.emplace_back("swapped constructor and instance",
@@ -433,7 +436,8 @@ int main(int argc, char **argv) {
       Builder builder(&context);
       if (mutation == 0) {
         auto constant = cast<exec::ApplyOp>(body[0].operation);
-        constant.setParametersAttr(builder.getStrArrayAttr({"1"}));
+        constant.setParametersAttr(builder.getArrayAttr(
+            {builder.getIntegerAttr(builder.getIntegerType(64, false), 1)}));
       }
       if (mutation == 1)
         cast<exec::ApplyOp>(body[1].operation)

@@ -50,11 +50,13 @@ int main() {
   require(bool(file), "missing execution fixture");
   auto source = (*file)->getBuffer().str();
   auto read = [&](const std::string &source, bool expected,
-                  bool physical = false) {
+                  bool physical = false, bool formed = true) {
     diagnostic.clear();
-    auto module = parseSourceString<ModuleOp>(source, &context);
-    require(module && succeeded(verify(*module)),
-            "execution mutation must remain structurally valid: " + diagnostic);
+    auto module =
+        parseSourceString<ModuleOp>(source, ParserConfig(&context, false));
+    require(module && succeeded(verify(*module)) == formed,
+            "execution mutation crossed the wrong formation boundary: " +
+                diagnostic);
     auto result = protocol::readLocalExecution(*module, physical);
     if (expected && !result)
       throw std::runtime_error(llvm::toString(result.takeError()));
@@ -92,8 +94,10 @@ int main() {
                 function.body.back().get<program::Return>(),
             "lost native body or failure semantics");
   });
-  auto reject = [&](StringRef name, StringRef from, StringRef to) {
-    cases.run(name, [&] { read(change(source, from, to), false); });
+  auto reject = [&](StringRef name, StringRef from, StringRef to,
+                    bool formed = true) {
+    cases.run(name,
+              [&] { read(change(source, from, to), false, false, formed); });
   };
   reject("callee body cannot replace metered completion with packaging",
          "\"exec.complete\"(%scope, %sum) : (!S, !F)",
@@ -113,11 +117,12 @@ int main() {
   reject("parent binding cannot select another scope",
          "\"runtime.accept_transfer\"(%scope, %held_yes)",
          "\"runtime.accept_transfer\"(%child_yes, %held_yes)");
-  reject("binding symbol must resolve", "binding=@add", "binding=@absent");
+  reject("binding symbol must resolve", "binding=@add", "binding=@absent",
+         false);
   reject("binding arguments determine actual ports",
-         "arguments=[\"koala-bear\"]", "arguments=[\"bls12-381.fr\"]");
+         "arguments=[\"koala-bear\"]", "arguments=[\"bls12-381.fr\"]", false);
   reject("reached parameter formation remains checked", "parameters=[]",
-         "parameters=[\"unexpected\"]");
+         "parameters=[\"unexpected\"]", false);
   reject("unknown invocation attributes cannot bypass checking", "binding=@add",
          "binding=@add, unchecked=true");
   reject("unconsumed region definitions are refused", "module {",
@@ -316,11 +321,10 @@ int main() {
     read(change(matching, "selection=\"left\"", "selection=\"right\""), false);
   });
   cases.run("physical ports retain the installed representation", [&] {
-    auto physical =
-        change(source, "!F = !algebra.field<\"koala-bear\">",
-               "!F = !runtime.represented<!algebra.field<\"koala-bear\">, "
-               "\"plonky3.koala-bear/0\">\n"
-               "!P = !runtime.represented<i1, \"native.bool/0\">");
+    auto physical = replaceAll(source, "!algebra.field<\"koala-bear\">",
+                               "!runtime.represented<!algebra.field<\"koala-"
+                               "bear\">, \"plonky3.koala-bear/0\">");
+    physical = "!P = !runtime.represented<i1, \"native.bool/0\">\n" + physical;
     physical = change(physical, "%condition: i1", "%condition: !P");
     physical = change(physical, ": (!S, i1) -> !D", ": (!S, !P) -> !D");
     physical = change(physical, "implementation=\"\"",

@@ -54,7 +54,7 @@ module { "protocol.module"() ({
       cf.br ^bb8(%25 : i1)
     }
     func.func private @control_0(%arg0: !runtime.scope, %arg1: !words, %arg2: !words, %arg3: ui64) -> !exec.outcome<(i1)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
       %2 = "exec.boolean"(%arg0) <{site = "yes", value = true}> : (!runtime.scope) -> !exec.outcome<(i1)>
@@ -141,7 +141,7 @@ module { "protocol.module"() ({
       %7 = "exec.apply"(%arg0, %6, %arg2) <{binding = @update, parameters = [], site = "prefix_hash"}> : (!runtime.scope, !words, !words) -> !exec.outcome<(!words, !words)>
       "exec.dispatch"(%7)[^bb4, ^bb2] : (!exec.outcome<(!words, !words)>) -> ()
     ^bb4(%8: !words, %9: !words):  // pred: ^bb3
-      %10 = "exec.apply"(%arg0) <{binding = @zero, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
+      %10 = "exec.apply"(%arg0) <{binding = @zero, parameters = [#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
       "exec.dispatch"(%10)[^bb5, ^bb2] : (!exec.outcome<(!f)>) -> ()
     ^bb5(%11: !f):  // pred: ^bb4
       %12 = "exec.apply"(%arg0, %1, %11) <{binding = @field_equal, parameters = [], site = "decision"}> : (!runtime.scope, !f, !f) -> !exec.outcome<(i1)>

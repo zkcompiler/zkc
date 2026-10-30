@@ -10,6 +10,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -112,11 +113,17 @@ public:
   Values invoke(exec::ScopedExecutionBuilder &control, StringRef name,
                 ValueRange inputs, TypeRange outputs, StringRef site,
                 ArrayRef<StringRef> parameters = {}) {
-    return control.invoke(
-        "exec.apply", outputs, control.scoped(inputs),
-        {symbol("binding", name), text("site", site),
-         builder.getNamedAttr("parameters",
-                              builder.getStrArrayAttr(parameters))});
+    auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+        control.getFunction(), FlatSymbolRefAttr::get(&context, name));
+    require(bool(binding), "fixture binding is missing");
+    SmallVector<std::string> expected;
+    for (auto parameter : parameters)
+      expected.push_back(parameter.str());
+    auto native = take(protocol::decodeInvocationParameters(
+        binding.getContract(), binding.getArgumentsAttr(), expected));
+    return control.invoke("exec.apply", outputs, control.scoped(inputs),
+                          {symbol("binding", name), text("site", site),
+                           builder.getNamedAttr("parameters", native)});
   }
   Values call(exec::ScopedExecutionBuilder &control, StringRef callee,
               ValueRange inputs, TypeRange outputs, StringRef site) {

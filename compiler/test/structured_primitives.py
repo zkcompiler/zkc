@@ -90,7 +90,7 @@ def primitive(contract, parameters=(), drop=False, reverse=False, name='operatio
     ins, outs = catalogue[contract]
     inputs, outputs = [ports[x] for x in ins], [ports[x] for x in outs]
     body = invocation('exec.apply', inputs, outputs,
-        f'binding=@{name},parameters={json.dumps(list(parameters))},site="primitive"')
+        f'binding=@{name},parameters=[{", ".join(str(p) + " : ui64" for p in parameters)}],site="primitive"')
     results = ['%r'] if len(outputs) == 1 else [f'%r{i}' for i in range(len(outputs))]
     return wrapped(inputs, [] if drop else outputs, body,
                    [] if drop else list(reversed(results)) if reverse else results, binding(contract, name))
@@ -224,8 +224,11 @@ for name, bad in [
         reject_native(bad, ['1', '2'])
 
 for literal in ['00', '+1', '-1', '1 ', str(maximum + 1), '9' * 100]:
-    with case('canonical-u64-parameter-' + literal[:24]):
-        reject_native(primitive('index.constant', [literal]), [])
+    with case('byte-spelling-is-not-a-native-parameter-' + literal[:24]):
+        source = primitive('index.constant', [literal])
+        source = source.replace(f'parameters=[{literal} : ui64]',
+                                'parameters=' + json.dumps([literal]))
+        reject_native(source, [])
 
 with case('nominal-domain-profile-on-unused-binding'):
     source = primitive('index.add').replace(binding('index.add'),

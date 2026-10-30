@@ -15,6 +15,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Collection.h"
@@ -102,10 +103,13 @@ class RecipeReader {
         parameters.size() != expectedParameters.size() ||
         binding.getArguments().size() != arguments.size())
       return false;
-    for (auto [item, expected] : zip(parameters, expectedParameters))
-      if (auto parameter = dyn_cast<StringAttr>(item);
-          !parameter || parameter.getValue() != expected)
-        return false;
+    SmallVector<std::string> expectedParameterValues;
+    for (StringRef parameter : expectedParameters)
+      expectedParameterValues.push_back(parameter.str());
+    if (!protocol::invocationParametersMatch(
+            contract, binding.getArgumentsAttr(), parameters,
+            expectedParameterValues))
+      return false;
     protocol::BindingApplication application{contract.str(), {}, {}};
     for (StringRef argument : arguments)
       application.arguments.push_back(argument.str());

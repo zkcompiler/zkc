@@ -6,6 +6,7 @@
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
@@ -232,8 +233,9 @@ struct Reader {
             std::vector<std::string>(statics.begin(), statics.end()),
             {}}},
           false));
-      for (auto [actual, expected] : zip(op.getParameters(), parameters))
-        reader.expect(cast<StringAttr>(actual).getValue() == expected);
+      reader.expect(
+          invocationParametersMatch(contract, binding.getArgumentsAttr(),
+                                    op.getParametersAttr(), parameters));
       return values;
     }
     Value number(uint64_t value, StringRef site) {

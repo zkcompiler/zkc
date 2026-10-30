@@ -7,8 +7,11 @@
 #include "support/NativeCases.h"
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/Runtime/Parameters.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -26,7 +29,8 @@ unsigned removeAbsorption(ModuleOp module, StringRef origin) {
     fn.walk([&](Operation *op) {
       auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
       if (parameters && parameters.size() == 1 &&
-          cast<StringAttr>(parameters[0]).getValue() == origin) {
+          take(protocol::encodeInvocationParameters(
+              cast<exec::ApplyOp>(op)))[0] == origin) {
         helper = fn.getSymName().str();
         binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
             op, op->getAttrOfType<FlatSymbolRefAttr>("binding"));
@@ -227,9 +231,12 @@ int main(int argc, char **argv) {
           SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(op, ref);
       if (binding &&
           binding.getContract() == "transcript.native.indexed.observe.data") {
-        op->setAttr(
-            "parameters",
-            ArrayAttr::get(&context, {StringAttr::get(&context, origin)}));
+        op->setAttr("parameters",
+                    ArrayAttr::get(
+                        &context,
+                        {take(runtime::importNativeOrigin(
+                            &context, take(protocol::decodeNativeOriginTemplate(
+                                          origin))))}));
         changed = true;
       }
     });
@@ -289,9 +296,9 @@ int main(int argc, char **argv) {
         bool delivery = false;
         fn.walk([&](Operation *op) {
           auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
-          delivery |=
-              parameters && parameters.size() == 1 &&
-              cast<StringAttr>(parameters[0]).getValue() == events[2].origin;
+          delivery |= parameters && parameters.size() == 1 &&
+                      take(protocol::encodeInvocationParameters(
+                          cast<exec::ApplyOp>(op)))[0] == events[2].origin;
         });
         if (delivery) {
           call->setOperand(1, alteredValue(call, call.getInputs()[1]));

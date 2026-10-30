@@ -374,8 +374,9 @@ module { "protocol.module"() ({
       body += "   " + constant + " = \"algebra.constant\"() {value=\"" +
               std::to_string(i + 1) + "\"} : ()->!F\n";
     else
-      scopedCall("\"exec.apply\"(%scope) {binding=@constant,parameters=[\"" +
-                     std::to_string(i + 1) + "\"],site=\"c" +
+      scopedCall("\"exec.apply\"(%scope) "
+                 "{binding=@constant,parameters=[#algebra.literal<!F, " +
+                     std::to_string(i + 1) + " : ui255>],site=\"c" +
                      std::to_string(i) +
                      "\"} : (!runtime.scope)->!exec.outcome<(!F)>",
                  constant);

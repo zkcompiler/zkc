@@ -68,10 +68,8 @@ bool local(const OracleLocalRecipe &recipe, func::FuncOp actual,
     for (auto [id, input] : zip(expected.inputs, step.inputs))
       if (id >= values.size() || values[id] != input)
         return false;
-    for (auto [attribute, parameter] :
-         zip(op.getParameters(), expected.parameters))
-      if (cast<StringAttr>(attribute).getValue() != parameter)
-        return false;
+    if (!equal(op.getParameters(), expected.parameters))
+      return false;
     auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
         op, op.getBindingAttr());
     if (!binding || binding.getContract() != expected.binding.contract ||

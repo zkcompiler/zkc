@@ -1595,8 +1595,9 @@ int main(int argc, char **argv) {
     consumeError(std::move(release));
   });
   cases.run("compiled indexed observation preserves selected payload", [&] {
-    auto origin = take(encodeNativeOriginTemplate(
-        "main", {}, {"message", "Round", "response", "response", "P", "V"}));
+    StringRef origin =
+        "#runtime.origin<\"main\", #runtime.message_origin<\"Round\", "
+        "\"response\", \"response\", \"P\", \"V\">>";
     auto source =
         R"(!T = !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
@@ -1607,7 +1608,7 @@ int main(int argc, char **argv) {
 )",
             "%t:!T,%s:!S,%i:!I", "%t,%s,%i", "!T,!S,!I", "!T",
             scopedApply("observe", "observe", "%t,%s,%i", "!T,!S,!I", "%out",
-                        "!T", "[\"" + origin + "\"]") +
+                        "!T", ("[" + origin + "]").str()) +
                 scopedReturn("%out", "!T"),
             3);
     auto module = take(executableFixture(source, context));

@@ -11,6 +11,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Contracts/Numerical.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -94,13 +95,14 @@ runtime::BindingOp binding(Operation *op) {
       SymbolTable::lookupNearestSymbolFrom(op, reference));
 }
 std::string expression(Operation *op) {
-  return cast<StringAttr>(op->getAttrOfType<ArrayAttr>("parameters")[0])
-      .getValue()
-      .str();
+  return take(algebra::encodeRingExpression(cast<algebra::RingExpressionAttr>(
+      op->getAttrOfType<ArrayAttr>("parameters")[0])));
 }
 void expression(Operation *op, StringRef body) {
   OpBuilder builder(op);
-  op->setAttr("parameters", builder.getStrArrayAttr({body}));
+  op->setAttr("parameters",
+              builder.getArrayAttr({take(algebra::importRingExpression(
+                  op->getContext(), take(ring::readExpressionText(body))))}));
 }
 void mutateBody(Operation *op, llvm::function_ref<void(json::Array &)> edit) {
   auto value = take(ring::readExpressionText(expression(op))).encode();
@@ -255,7 +257,7 @@ int main(int argc, char **argv) {
         *admitted.formula, mapped.getArgument(1).getType(),
         payload(operation(*candidate, "vector.length")), LaneResultMode::Map,
         [&](const protocol::BindingApplication &, ValueRange, Type,
-            ArrayRef<std::string>) {
+            ArrayRef<Attribute>) {
           ++emitted;
           return Value();
         },
@@ -513,7 +515,7 @@ int main(int argc, char **argv) {
   });
   for (StringRef mutation :
        {"body", "field", "arity", "output", "wiring", "unused-wiring", "rows",
-        "canonical", "size", "guard", "pin"})
+        "string-carrier", "size", "guard", "pin"})
     cases.run("independent map mutation " + mutation, [&] {
       auto source = parse(context, mapText);
       auto candidate = prepareMap(*source);
@@ -547,15 +549,43 @@ int main(int argc, char **argv) {
             "arguments",
             ArrayAttr::get(&context, {StringAttr::get(&context, "koala-bear"),
                                       StringAttr::get(&context, "1100")}));
-      } else if (mutation == "canonical")
-        expression(call, expression(call) + " ");
+      } else if (mutation == "string-carrier")
+        call->setAttr("parameters",
+                      Builder(&context).getStrArrayAttr({expression(call)}));
       else if (mutation == "pin")
         binding(call)->setAttr(
             "implementation",
             StringAttr::get(&context, "plonky3/numerical.map"));
-      else if (mutation == "size")
-        expression(call, std::string(4097, ' '));
-      else if (mutation == "guard") {
+      else if (mutation == "size") {
+        auto graph = cast<algebra::RingExpressionAttr>(
+            call->getAttrOfType<ArrayAttr>("parameters")[0]);
+        SmallVector<algebra::RingNodeAttr> nodes;
+        for (unsigned i = 0; i < 256; ++i)
+          nodes.push_back(algebra::RingNodeAttr::get(
+              &context, algebra::RingNodeKind::Input,
+              DenseI32ArrayAttr::get(&context, {0}), {}, {}));
+        SmallVector<int32_t> layer;
+        for (unsigned i = 0; i < nodes.size(); ++i)
+          layer.push_back(i);
+        while (layer.size() > 1) {
+          SmallVector<int32_t> next;
+          for (unsigned i = 0; i < layer.size(); i += 2) {
+            next.push_back(nodes.size());
+            nodes.push_back(algebra::RingNodeAttr::get(
+                &context, algebra::RingNodeKind::Add,
+                DenseI32ArrayAttr::get(&context, {layer[i], layer[i + 1]}), {},
+                {}));
+          }
+          layer = std::move(next);
+        }
+        auto oversized = algebra::RingExpressionAttr::get(
+            &context, graph.getInputs(), nodes,
+            DenseI32ArrayAttr::get(&context, layer));
+        require(take(algebra::ringExpressionByteSize(oversized)) > 4096,
+                "size mutation does not exceed the numerical profile");
+        call->setAttr("parameters",
+                      Builder(&context).getArrayAttr({oversized}));
+      } else if (mutation == "guard") {
         auto *guard = operation(*candidate, "control.require");
         require(guard != nullptr, "missing unused-input shape guard");
         sc::omit(guard);
@@ -577,7 +607,9 @@ int main(int argc, char **argv) {
             "exec.apply", rows.getType(), control.scoped({}),
             {builder.getNamedAttr(
                  "binding", FlatSymbolRefAttr::get(&context, "wrong_extent")),
-             builder.getNamedAttr("parameters", builder.getStrArrayAttr({"1"})),
+             builder.getNamedAttr("parameters",
+                                  builder.getArrayAttr({builder.getIntegerAttr(
+                                      builder.getIntegerType(64, false), 1)})),
              builder.getNamedAttr("site",
                                   builder.getStringAttr("wrong_extent"))},
             stop);
@@ -637,7 +669,7 @@ int main(int argc, char **argv) {
             payload(operation(*candidate, "vector.length")),
             LaneResultMode::Map,
             [&](const protocol::BindingApplication &, ValueRange, Type,
-                ArrayRef<std::string>) {
+                ArrayRef<Attribute>) {
               ++emitted;
               return Value();
             }));
@@ -658,9 +690,10 @@ int main(int argc, char **argv) {
           auto candidate = emitFold(*source);
           auto *literal = operation(*candidate, "field.constant");
           require(hasLoop(*candidate) && literal &&
-                      cast<StringAttr>(
+                      cast<algebra::FieldLiteralAttr>(
                           literal->getAttrOfType<ArrayAttr>("parameters")[0])
-                              .getValue() == "0x2" &&
+                              .getValue()
+                              .getValue() == 2 &&
                       !operation(*candidate, "numerical.sum") &&
                       compareFold(*source, *candidate),
                   "valid bit-pattern constant lost its ordered finite path");
@@ -692,13 +725,13 @@ int main(int argc, char **argv) {
                             MathematicalIdentity::FieldAdd};
         formula.slots.assign(1024, LaneInput{total.getArgument(2), false});
         unsigned emitted = 0;
-        auto result = take(
-            emitNumericalLanes(formula, vector, {}, LaneResultMode::Map,
-                               [&](const protocol::BindingApplication &,
-                                   ValueRange, Type, ArrayRef<std::string>) {
-                                 ++emitted;
-                                 return Value();
-                               }));
+        auto result =
+            take(emitNumericalLanes(formula, vector, {}, LaneResultMode::Map,
+                                    [&](const protocol::BindingApplication &,
+                                        ValueRange, Type, ArrayRef<Attribute>) {
+                                      ++emitted;
+                                      return Value();
+                                    }));
         require(result.status == LaneRealizationStatus::Capacity && !emitted,
                 "port capacity emitted an incomplete native call");
         MathematicalSelectionPolicy policy;

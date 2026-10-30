@@ -32,6 +32,9 @@ def LogicalLayoutAlternative : AttrDef<DataDialect, "LayoutAlternative"> {
 }
 def LogicalLayout : AttrDef<DataDialect, "Layout"> {
   let mnemonic = "layout";
+  // Child layouts are shared structurally. Aliases keep their assembly nesting
+  // independent of source schema depth without relaxing parser resource limits.
+  let genMnemonicAlias = 1;
   let summary = "complete source value layout with ordered typed children";
   let parameters = (ins "::mlir::StringAttr":$kind,
     "::mlir::StringAttr":$identity, "::mlir::StringAttr":$displayType,

@@ -387,7 +387,8 @@ module @restriction attributes {exec.computation} {
                                   builder.getIntegerAttr(
                                       builder.getIntegerType(64, false), 3)}));
       } else
-        access.setParametersAttr(builder.getStrArrayAttr({"0"}));
+        access.setParametersAttr(builder.getArrayAttr(
+            {builder.getIntegerAttr(builder.getIntegerType(64, false), 0)}));
       ScopedDiagnosticHandler handler(&context,
                                       [](Diagnostic &) { return success(); });
       require(failed(computation::verifyEntryRecipes(*numerical, *mutated,

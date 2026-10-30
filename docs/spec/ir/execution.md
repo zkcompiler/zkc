@@ -307,8 +307,14 @@ static arguments follow the [foundation contract](native-foundation.md#typed-dec
 The actual represented ports own physical selection; there is no parallel
 native physical-argument attribute. Both logical and physical profiles use this
 one callable declaration. Its name is resolved within the actual symbol table;
-`exec.apply` checks its exact operand and result types against that signature;
-the declaration alone grants no installed authority, timing permission or
+`exec.apply` checks its exact operand and result types against that signature.
+Its `parameters` array contains native attributes: unsigned 64-bit integers,
+nominal field literals, selected Ring graphs, origin records or asset references,
+as required by the catalog contract. Symbol-use verification checks their
+formation in the binding's actual static scope. A string spelling is not a
+native parameter. Encoding and decoding occur at the program interchange
+boundary; mathematical and recipe readers inspect native values directly.
+Neither the declaration nor parameter formation grants installed authority, timing permission or
 invocation success. Installation still checks the complete potential closure,
 and reached execution checks current operands, policy, custody and allowances.
 The Func/CF execution writer, reader and independent comparison share this

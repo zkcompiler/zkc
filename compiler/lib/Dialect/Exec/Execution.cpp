@@ -10,6 +10,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/ControlCursor.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Runtime/Execution.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -63,12 +64,7 @@ bool returned(Operation *op, Value outcome) {
   auto value = dyn_cast_or_null<func::ReturnOp>(op);
   return value && bare(op) && value.getOperands() == ValueRange{outcome};
 }
-program::Names strings(ArrayAttr values) {
-  program::Names result;
-  for (auto value : values)
-    result.push_back(cast<StringAttr>(value).str());
-  return result;
-}
+
 class Reader;
 class BodyReader {
   Reader &reader;
@@ -262,7 +258,7 @@ public:
     }
     return true;
   }
-  bool application(exec::ApplyOp op) {
+  bool application(exec::ApplyOp op, program::Names &parameters) {
     auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
     auto *root = SymbolTable::getNearestSymbolTable(op);
     auto *declaration =
@@ -291,11 +287,12 @@ public:
     if (!ports(op.getInputs().getTypes(), signature.inputs) ||
         !ports(op.getOutcome().getType().getPayload(), signature.outputs))
       return false;
-    if (auto e =
-            checkParameters(binding.application, strings(op.getParameters()))) {
-      consumeError(std::move(e));
+    auto encoded = encodeInvocationParameters(op);
+    if (!encoded) {
+      consumeError(encoded.takeError());
       return fail("invocation parameter formation");
     }
+    parameters = std::move(*encoded);
     return true;
   }
   bool body(func::FuncOp function, ArrayRef<std::string> names,
@@ -792,11 +789,10 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
       program::Operation record;
       if (apply.getScope() != scope ||
           !attributes(apply, {"binding", "parameters", "site"}) ||
-          !reader.application(apply) ||
+          !reader.application(apply, record.attributes) ||
           !names(apply.getInputs(), record.inputs))
         return reader.fail("invalid bound instruction");
       record.callee = apply.getBinding().str();
-      record.attributes = strings(apply.getParameters());
       SmallVector<Value> values;
       if (!dispatch(apply.getOutcome(), values) ||
           !results(values, record.outputs))

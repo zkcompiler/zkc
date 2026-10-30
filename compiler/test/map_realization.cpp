@@ -2,6 +2,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -252,7 +253,12 @@ int main(int argc, char **argv) {
   mutation("change a scalar literal", [&](ModuleOp module) {
     nth(module, "field.constant")
         ->setAttr("parameters",
-                  ArrayAttr::get(&context, {StringAttr::get(&context, "2")}));
+                  ArrayAttr::get(&context,
+                                 {take(algebra::decodeFieldLiteral(
+                                     cast<algebra::FieldType>(sc::payload(nth(
+                                         module, "field.constant"))[0]
+                                                                  .getType()),
+                                     "2"))}));
   });
   mutation("change retained scalar mathematics", [&](ModuleOp module) {
     function(module, "formula").walk([&](algebra::ConstantFieldOp op) {
@@ -570,11 +576,16 @@ func.func private @test(%x:!F)->i1 {
               auto applications = sf::applications(*result, "numerical.map");
               auto call = applications.front();
               auto parameters = call->getAttrOfType<ArrayAttr>("parameters");
-              auto wrong = edit(cast<StringAttr>(parameters[0]).getValue(),
-                                "[\"input\",0]", "[\"input\",1]");
+              auto wrong =
+                  edit(take(algebra::encodeRingExpression(
+                           cast<algebra::RingExpressionAttr>(parameters[0]))),
+                       "[\"input\",0]", "[\"input\",1]");
               call->setAttr(
                   "parameters",
-                  ArrayAttr::get(&context, {StringAttr::get(&context, wrong)}));
+                  ArrayAttr::get(
+                      &context,
+                      {take(algebra::importRingExpression(
+                          &context, take(ring::readExpressionText(wrong))))}));
               require(
                   succeeded(verify(*result)) &&
                       failed(compare(*original, *result, policy)),

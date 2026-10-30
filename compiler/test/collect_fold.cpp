@@ -4,6 +4,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include <utility>
 
@@ -157,7 +158,10 @@ int main() {
         if (sc::payload(call)[0] == value)
           seed = call;
       require(seed && seed.getParameters() ==
-                          Builder(&context).getStrArrayAttr({literal}),
+                          Builder(&context).getArrayAttr(
+                              {take(algebra::decodeFieldLiteral(
+                                  cast<algebra::FieldType>(value.getType()),
+                                  literal))}),
               "nonzero seed value was synthesized, reordered or reset");
     }
   });

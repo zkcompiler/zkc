@@ -420,7 +420,8 @@ int main() {
           auto apply = cast<exec::ApplyOp>(length);
           apply.setBindingAttr(binding);
           apply.getInputsMutable().clear();
-          apply.setParametersAttr(builder.getStrArrayAttr({"1"}));
+          apply.setParametersAttr(builder.getArrayAttr(
+              {builder.getIntegerAttr(builder.getIntegerType(64, false), 1)}));
           require(succeeded(computation::verifyRecipeOutput(*malformed)) &&
                       !compare(*source, *malformed),
                   "broadcast lost its admitted cardinality");

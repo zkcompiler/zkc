@@ -114,7 +114,7 @@ module { "protocol.module"() ({
       cf.br ^bb1(%27, %28 : !f, i1)
     }
     func.func private @control_0(%arg0: !runtime.scope, %arg1: !vk, %arg2: !c, %arg3: !p) -> !exec.outcome<(!f, i1)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
+      %0 = "exec.apply"(%arg0) <{binding = @constant, parameters = [#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!f)>) -> ()
     ^bb1(%1: !f):  // pred: ^bb0
       %2 = "exec.boolean"(%arg0) <{site = "absent", value = false}> : (!runtime.scope) -> !exec.outcome<(i1)>

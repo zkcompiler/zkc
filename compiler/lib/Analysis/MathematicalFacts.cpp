@@ -224,14 +224,13 @@ struct MathematicalFactAnalysis::Impl {
           auto binding =
               dyn_cast_or_null<runtime::BindingOp>(resolve(apply, "binding"));
           auto outcome = cast<exec::OutcomeType>(apply.getOutcome().getType());
-          auto parameter = dyn_cast<StringAttr>(apply.getParameters()[0]);
-          uint64_t n;
+          auto parameter = dyn_cast<IntegerAttr>(apply.getParameters()[0]);
           if (binding && binding.getContract() == "index.constant" &&
               binding.getArguments().empty() &&
               outcome.getPayload().size() == 1 &&
               outcome.getPayload()[0] == value.getType() && parameter &&
-              !parameter.getValue().getAsInteger(10, n))
-            return {Status::Proven, n};
+              parameter.getType().isUnsignedInteger(64))
+            return {Status::Proven, parameter.getValue().getZExtValue()};
         }
       }
       auto *call = value.getDefiningOp();

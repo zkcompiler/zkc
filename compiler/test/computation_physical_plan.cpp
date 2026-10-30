@@ -8,6 +8,7 @@
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
@@ -1204,12 +1205,19 @@ module @difference attributes {exec.computation} {
             call->setOperand(call->getNumOperands() - 1, left);
           } else if (mutation == "body") {
             auto parameters = call->getAttrOfType<ArrayAttr>("parameters");
-            auto body = cast<StringAttr>(parameters[0]).getValue().str();
-            auto at = body.find("\"add\"");
-            require(at != std::string::npos,
-                    "native body has no addition to alter");
-            body.replace(at, 5, "\"mul\"");
-            call->setAttr("parameters", builder.getStrArrayAttr({body}));
+            auto graph = cast<algebra::RingExpressionAttr>(parameters[0]);
+            SmallVector<algebra::RingNodeAttr> nodes(graph.getNodes());
+            auto at = llvm::find_if(nodes, [](auto node) {
+              return node.getKind() == algebra::RingNodeKind::Add;
+            });
+            require(at != nodes.end(), "native body has no addition to alter");
+            *at = algebra::RingNodeAttr::get(&context,
+                                             algebra::RingNodeKind::Multiply,
+                                             at->getIndices(), {}, {});
+            call->setAttr(
+                "parameters",
+                builder.getArrayAttr({algebra::RingExpressionAttr::get(
+                    &context, graph.getInputs(), nodes, graph.getOutputs())}));
           } else if (mutation == "seed") {
             auto combine = sf::application(
                 call->getParentOfType<func::FuncOp>(), "field.add");

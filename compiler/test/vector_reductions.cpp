@@ -469,7 +469,7 @@ int main() {
   selection("intervening ordered work",
             edit(fixture(), call("reduce", "reduce", "%v", "!V", "%r", "!F"),
                  scopedApply("constant", "intervening", "", "", "%ignored",
-                             "!F", "[\"1\"]") +
+                             "!F", "[#algebra.literal<!F, 1 : ui31>]") +
                      call("reduce", "reduce", "%v", "!V", "%r", "!F")),
             false);
   selection(
@@ -480,7 +480,8 @@ int main() {
       false);
   selection("reducer spelling is not a contract",
             edit(fixture(), scopedApply("sum", "sum", "%v", "!V", "%r", "!F"),
-                 scopedApply("constant", "sum", "", "", "%r", "!F", "[\"1\"]")),
+                 scopedApply("constant", "sum", "", "", "%r", "!F",
+                             "[#algebra.literal<!F, 1 : ui31>]")),
             false);
   cases.run("ordinary preparation retains the original scalar formula", [&] {
     auto candidate = sf::clone(*source);
@@ -684,7 +685,7 @@ int main() {
 "runtime.binding"() {sym_name="fill",contract="vector.fill",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field<"koala-bear">, ui64) -> !exec.outcome<(!algebra.field_vector<"koala-bear">)>} : ()->()
 )mlir" + functionText("empty", "%s:!F", "!F",
                       scopedApply("index", "zero", "", "", "%zero", "ui64",
-                                  "[\"0\"]") +
+                                  "[0 : ui64]") +
                           scopedApply("fill", "first", "%s,%zero", "!F,ui64",
                                       "%a", "!V") +
                           scopedApply("fill", "second", "%s,%zero", "!F,ui64",

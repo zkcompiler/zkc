@@ -21,6 +21,7 @@
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/Runtime/Parameters.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -849,7 +850,8 @@ class Emitter {
     if (event.bound)
       operands.push_back(kernel(
           control, binding("index.constant", {}), {}, {event.payload}, "bound",
-          {builder.getStringAttr(std::to_string(*event.bound))})[0]);
+          {builder.getIntegerAttr(builder.getIntegerType(64, false),
+                                  *event.bound)})[0]);
     if (rule) {
       // Preserve the original handler as an ordinary borrowed-scope call.
       // Checked helper substitution consumes its actual control later.
@@ -889,9 +891,15 @@ class Emitter {
                              {coordinates, argument}, {indices},
                              "coordinate_" + std::to_string(i))[0];
       operands.push_back(coordinates);
-      auto values =
-          kernel(control, binding(contract, arguments), operands, outputs,
-                 "transition", {builder.getStringAttr(event.origin)});
+      auto origin = protocol::decodeNativeOriginTemplate(event.origin);
+      if (!origin)
+        return origin.takeError();
+      auto parameter =
+          runtime::importNativeOrigin(builder.getContext(), *origin);
+      if (!parameter)
+        return parameter.takeError();
+      auto values = kernel(control, binding(contract, arguments), operands,
+                           outputs, "transition", {*parameter});
       control.returned(values);
     }
     return FlatSymbolRefAttr::get(function);
@@ -1448,6 +1456,18 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
     allowed = (function && authorized.contains(function)) ||
               (isa<pir::ConstructionOp>(op) && construction &&
                construction->root == protocol::ConstructionPlan::Root::Host);
+    if (auto binding = dyn_cast<runtime::BindingOp>(op)) {
+      auto *effects = protocol::operationContracts(binding.getContract());
+      auto arguments = binding.getArguments();
+      // A declaration exposes its callable ABI without owning a transcript.
+      // Every use still has to occur in an authorized handler below. Merely
+      // declaring a managed operation must not authorize an unselected body.
+      allowed =
+          construction &&
+          construction->root == protocol::ConstructionPlan::Root::Host &&
+          effects && effects->managedHistory && !arguments.empty() &&
+          arguments[0] == StringAttr::get(source.getContext(), policy.suite);
+    }
     for (auto type : op->getOperandTypes())
       checkType(type);
     for (auto type : op->getResultTypes())
@@ -1458,17 +1478,6 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
           checkType(type);
     for (auto attr : op->getAttrs())
       attr.getValue().walk([&](Type type) { checkType(type); });
-    if (auto binding = dyn_cast<runtime::BindingOp>(op)) {
-      if (binding.getContract().starts_with("transcript.")) {
-        auto *effects = protocol::operationContracts(binding.getContract());
-        auto arguments = binding.getArguments();
-        transcript |=
-            !construction ||
-            construction->root != protocol::ConstructionPlan::Root::Host ||
-            !effects || !effects->managedHistory || arguments.empty() ||
-            arguments[0] != StringAttr::get(source.getContext(), policy.suite);
-      }
-    }
   });
   if (transcript)
     return error("native-proof-authored-transcript");

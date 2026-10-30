@@ -15,9 +15,11 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
@@ -246,7 +248,7 @@ class Recipes {
           !protocol::operationContracts("index.constant"))
         return failure();
       auto emit = [&](StringRef name, ValueRange operands, Type result,
-                      ArrayRef<std::string> parameters, bool root) {
+                      ArrayRef<Attribute> parameters, bool root) {
         OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
         state.addOperands(operands);
         state.addTypes(result);
@@ -254,10 +256,7 @@ class Recipes {
             root ? site.getValue().str()
                  : symbols.freshSite(control.getFunction(), site.getValue());
         state.addAttribute("site", rewriter.getStringAttr(occurrence));
-        SmallVector<Attribute> attrs;
-        for (const auto &value : parameters)
-          attrs.push_back(rewriter.getStringAttr(value));
-        state.addAttribute("parameters", rewriter.getArrayAttr(attrs));
+        state.addAttribute("parameters", rewriter.getArrayAttr(parameters));
         state.addAttribute("binding", symbols.get({name.str(), {}, {}},
                                                   op->getLoc(), rewriter));
         return emitState(state).front();
@@ -265,11 +264,13 @@ class Recipes {
       auto index = protocol::decodeBoundType(
           op->getContext(), cantFail(protocol::parseBoundType("index", false)));
       SmallVector<Value> operands(inputs);
-      operands.push_back(emit("index.constant", {}, index,
-                              {std::to_string(type.getModulus())}, false));
+      operands.push_back(
+          emit("index.constant", {}, index,
+               {rewriter.getIntegerAttr(index, type.getModulus())}, false));
       if (project)
-        operands.push_back(emit("index.constant", {}, index,
-                                {std::to_string(type.getDegree())}, false));
+        operands.push_back(
+            emit("index.constant", {}, index,
+                 {rewriter.getIntegerAttr(index, type.getDegree())}, false));
       auto output = algebra::IndicesType::get(op->getContext());
       replace(emit(contract, operands, output, {}, true));
       return success();
@@ -344,7 +345,8 @@ class Recipes {
       for (unsigned exponent = 0; exponent < 64; ++exponent) {
         auto constant = [&](uint64_t value) {
           return emit("index.constant", {}, inputs[0].getType(),
-                      {rewriter.getStringAttr(std::to_string(value))});
+                      {rewriter.getIntegerAttr(
+                          rewriter.getIntegerType(64, false), value)});
         };
         auto r = constant(exponent), n = constant(uint64_t(1) << exponent);
         auto equalR = emit("index.equal", {inputs[1], r}, rewriter.getI1Type());
@@ -365,7 +367,8 @@ class Recipes {
       ValueRange operands = inputs;
       if (auto extent = collection.getStaticExtent(axis)) {
         application.contract = "index.constant";
-        parameters.push_back(rewriter.getStringAttr(std::to_string(*extent)));
+        parameters.push_back(rewriter.getIntegerAttr(
+            rewriter.getIntegerType(64, false), *extent));
         operands = {};
       } else if (auto field = dyn_cast<algebra::FieldType>(
                      collection.getElementType())) {
@@ -373,7 +376,8 @@ class Recipes {
             collection.getRank() == 2 ? "matrix.dimension" : "vector.length";
         application.arguments = {field.getDomain().str()};
         if (collection.getRank() == 2)
-          parameters.push_back(rewriter.getStringAttr(std::to_string(axis)));
+          parameters.push_back(rewriter.getIntegerAttr(
+              rewriter.getIntegerType(64, false), axis));
       } else if (auto group = dyn_cast<algebra::GroupType>(
                      collection.getElementType())) {
         application.contract = "curve.length";
@@ -406,8 +410,13 @@ class Recipes {
       if (!declaration)
         return failure();
       SmallVector<Attribute> parameters;
-      if (auto constant = dyn_cast<data::IndexOp>(op))
-        parameters.push_back(rewriter.getStringAttr(constant.getValue()));
+      if (auto constant = dyn_cast<data::IndexOp>(op)) {
+        uint64_t value;
+        if (constant.getValue().getAsInteger(10, value))
+          return failure();
+        parameters.push_back(
+            rewriter.getIntegerAttr(rewriter.getIntegerType(64, false), value));
+      }
       OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
       state.addOperands(inputs);
       state.addTypes(op->getResultTypes());
@@ -604,7 +613,7 @@ class Recipes {
           return failure();
       auto emit = [&](StringRef contract, ArrayRef<std::string> arguments,
                       ValueRange operands, Type output,
-                      ArrayRef<std::string> parameters, bool last) -> Value {
+                      ArrayRef<Attribute> parameters, bool last) -> Value {
         auto occurrence =
             last ? site.getValue().str()
                  : symbols.freshSite(control.getFunction(), site.getValue());
@@ -616,10 +625,7 @@ class Recipes {
         state.addOperands(operands);
         state.addTypes(output);
         state.addAttribute("site", rewriter.getStringAttr(occurrence));
-        SmallVector<Attribute> attrs;
-        for (const auto &parameter : parameters)
-          attrs.push_back(rewriter.getStringAttr(parameter));
-        state.addAttribute("parameters", rewriter.getArrayAttr(attrs));
+        state.addAttribute("parameters", rewriter.getArrayAttr(parameters));
         state.addAttribute("binding",
                            symbols.get(application, op->getLoc(), rewriter));
         return emitState(state).front();
@@ -629,7 +635,9 @@ class Recipes {
         auto field = constant.getResult().getType().getDomain().str();
         result =
             emit("field.constant", {field}, {}, constant.getResult().getType(),
-                 {constant.getValue().str()}, true);
+                 {cantFail(algebra::decodeFieldLiteral(
+                     constant.getResult().getType(), constant.getValue()))},
+                 true);
       } else if (auto at = dyn_cast<algebra::ArrayAtOp>(op)) {
         auto array = at.getArray().getType();
         auto field =
@@ -637,7 +645,9 @@ class Recipes {
         result =
             emit("field_array.at", {field, std::to_string(array.getLength())},
                  inputs, at.getResult().getType(),
-                 {std::to_string(at.getIndexAttr().getInt())}, true);
+                 {rewriter.getIntegerAttr(rewriter.getIntegerType(64, false),
+                                          at.getIndexAttr().getInt())},
+                 true);
       } else {
         auto array = cast<algebra::FieldArrayType>(op->getResult(0).getType());
         auto field =

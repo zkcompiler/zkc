@@ -36,16 +36,16 @@ module { "protocol.module"() ({
 "runtime.binding"() {sym_name="oracle_check",contract="oracle.check",arguments=["rows.merkle-keccak256.koala-bear.ext8-binomial3/0"],implementation="",function_type=(!runtime.scope, !commitment.vector<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "commitment">, ui64, ui64, ui64, !algebra.field_vector<"koala-bear.ext8-binomial3">, !commitment.vector<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "proof">) -> !exec.outcome<(i1)>} : ()->()
 
     func.func @fold(%arg0: !runtime.scope, %arg1: !bv, %arg2: !e, %arg3: !e, %arg4: ui64) -> !exec.outcome<(!ev)> attributes {no_inline, runtime.origin = ["fold", []]} {
-      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["2"], site = "two"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [2 : ui64], site = "two"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0) <{binding = @field_constant, parameters = ["1"], site = "one"}> : (!runtime.scope) -> !exec.outcome<(!e)>
+      %2 = "exec.apply"(%arg0) <{binding = @field_constant, parameters = [#algebra.literal<!algebra.field<"koala-bear.ext8-binomial3">, 1 : ui31>], site = "one"}> : (!runtime.scope) -> !exec.outcome<(!e)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(!e)>) -> ()
     ^bb2(%3: !exec.stop):  // 19 preds: ^bb0, ^bb1, ^bb3, ^bb4, ^bb5, ^bb6, ^bb8, ^bb9, ^bb10, ^bb11, ^bb12, ^bb14, ^bb15, ^bb17, ^bb18, ^bb19, ^bb20, ^bb21, ^bb22
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!ev)>
       return %4 : !exec.outcome<(!ev)>
     ^bb3(%5: !e):  // pred: ^bb1
-      %6 = "exec.apply"(%arg0) <{binding = @field_constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(!e)>
+      %6 = "exec.apply"(%arg0) <{binding = @field_constant, parameters = [#algebra.literal<!algebra.field<"koala-bear.ext8-binomial3">, 0 : ui31>], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(!e)>
       "exec.dispatch"(%6)[^bb4, ^bb2] : (!exec.outcome<(!e)>) -> ()
     ^bb4(%7: !e):  // pred: ^bb3
       %8 = "exec.apply"(%arg0, %arg1) <{binding = @base_vector_length, parameters = [], site = "size"}> : (!runtime.scope, !bv) -> !exec.outcome<(ui64)>
@@ -119,10 +119,10 @@ module { "protocol.module"() ({
       return %2 : !exec.outcome<>
     }
     func.func @transitions(%arg0: !runtime.scope, %arg1: !bv, %arg2: !b, %arg3: !b, %arg4: ui64) -> !exec.outcome<(i1)> attributes {no_inline, runtime.origin = ["transitions", []]} {
-      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["1"], site = "one"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %2 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [1 : ui64], site = "one"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb2(%3: !exec.stop):  // 20 preds: ^bb0, ^bb1, ^bb3, ^bb4, ^bb5, ^bb7, ^bb8, ^bb9, ^bb10, ^bb11, ^bb13, ^bb14, ^bb16, ^bb17, ^bb18, ^bb19, ^bb20, ^bb21, ^bb22, ^bb23
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(i1)>
@@ -205,7 +205,7 @@ module { "protocol.module"() ({
       return %2 : !exec.outcome<>
     }
     func.func @open_fold(%arg0: !runtime.scope, %arg1: !ev, %arg2: ui64) -> !exec.outcome<(!commitment.vector<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "commitment">, !ev, !commitment.vector<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "proof">)> attributes {no_inline, runtime.origin = ["open_fold", []]} {
-      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["1"], site = "columns"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [1 : ui64], site = "columns"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
       %2 = "exec.apply"(%arg0, %arg1, %1) <{binding = @oracle_commit, parameters = [], site = "tree"}> : (!runtime.scope, !ev, ui64) -> !exec.outcome<(!commitment.vector<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "commitment">, !commitment.vector<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "opening_state">)>
@@ -221,7 +221,7 @@ module { "protocol.module"() ({
       return %10 : !exec.outcome<(!commitment.vector<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "commitment">, !ev, !commitment.vector<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "proof">)>
     }
     func.func @check_opening(%arg0: !runtime.scope, %arg1: !ev, %arg2: !commitment.vector<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "commitment">, %arg3: !ev, %arg4: !commitment.vector<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "proof">, %arg5: ui64, %arg6: ui64) -> !exec.outcome<(i1)> attributes {no_inline, runtime.origin = ["check_opening", []]} {
-      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["1"], site = "one"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [1 : ui64], site = "one"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
       %2 = "exec.apply"(%arg0, %arg1, %arg5, %1) <{binding = @vector_slice, parameters = [], site = "expected"}> : (!runtime.scope, !ev, ui64, ui64) -> !exec.outcome<(!ev)>

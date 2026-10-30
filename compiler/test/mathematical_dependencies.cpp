@@ -1,6 +1,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/TypeAdapters.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -31,6 +32,7 @@ template <unsigned Kind> bool refuses() {
   DialectRegistry registry;
   // Deliberately omit the real adapter to exercise hostile and absent models.
   registry.insert<protocol_ir::ProtocolDialect, arith::ArithDialect>();
+  protocol::type_adapters::registerCatalogTypeInterfaces(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   // An external model cannot weaken the closed operation semantics or make

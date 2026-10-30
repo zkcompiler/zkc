@@ -13,7 +13,7 @@ def fixture(contract, domain, inputs, result, parameters):
     return f'''module {{ "protocol.module"() ({{
     "runtime.binding"() {{sym_name="kernel",contract="{contract}",arguments=["{domain}"],implementation="",function_type=(!runtime.scope,{types})->!exec.outcome<({result})>}} : ()->()
     func.func @Work(%scope:!runtime.scope,{arguments})->!exec.outcome<({result})> attributes {{no_inline,runtime.origin=["Work",[]]}} {{
-      %r = "exec.apply"(%scope,{operands}) <{{binding=@kernel,site="kernel",parameters={json.dumps(parameters)}}}> : (!runtime.scope,{types})->!exec.outcome<({result})>
+      %r = "exec.apply"(%scope,{operands}) <{{binding=@kernel,site="kernel",parameters=[{", ".join(p + " : ui64" for p in parameters)}]}}> : (!runtime.scope,{types})->!exec.outcome<({result})>
       "exec.dispatch"(%r)[^done,^stopped] : (!exec.outcome<({result})>)->()
     ^done(%value:{result}):
       %out = "exec.returned"(%value) : ({result})->!exec.outcome<({result})>
@@ -38,9 +38,9 @@ gather = fixture('vector.gather', 'bls12-381.fr', [vector], vector, ['0', '3'])
 commands.verified(gather)
 physical = commands.verified(gather, None, '--zkc-participant-pipeline')
 assert json.loads(commands.source('protocol-export', physical))[0] == 'zkc.program/0'
-reject(gather.replace('["0", "3"]', '["0", "01"]'), 'execution-cfg: invocation parameter formation')
-reject(gather.replace('["0", "3"]', '["-1"]'), 'execution-cfg: invocation parameter formation')
-reject(gather.replace('["0", "3"]', '["18446744073709551616"]'), 'execution-cfg: invocation parameter formation')
+reject(gather.replace('[0 : ui64, 3 : ui64]', '["0", "01"]'), 'interactive-kernel-parameters')
+reject(gather.replace('[0 : ui64, 3 : ui64]', '["-1"]'), 'interactive-kernel-parameters')
+reject(gather.replace('[0 : ui64, 3 : ui64]', '["18446744073709551616"]'), 'interactive-kernel-parameters')
 for wrong in ('!algebra.field_array<"bls12-381.fr", 4>', '!algebra.field_matrix<"bls12-381.fr">',
               '!algebra.field_vector<"ristretto255.scalar">'):
     reject(gather.replace(vector, wrong), 'binding-signature')
@@ -59,7 +59,7 @@ addition = fixture('field.add', 'bls12-381.fr', [field, field], field, [])
 commands.verified(addition)
 reject(addition.replace('"exec.apply"(%scope,%a0,%a1)', '"exec.apply"(%scope,%a0)')
        .replace(f' : (!runtime.scope,{field},{field})->', f' : (!runtime.scope,{field})->', 1), 'binding-signature')
-reject(addition.replace('parameters=[]', 'parameters=["0"]'), 'execution-cfg: invocation parameter formation')
+reject(addition.replace('parameters=[]', 'parameters=["0"]'), 'interactive-kernel-parameters')
 reject(fixture('field.add', 'bls12-381.fr',
                [field, field], 'i1', []), 'binding-signature')
 extra_result = '\n'.join(

@@ -51,9 +51,13 @@ Closed message-frame membership and byte-publication limits remain separate.
 Native field literals, selected Ring graphs, source origins and asset references
 now have structured attributes and independent boundary checks. Native parameter
 admission resolves the catalog scope directly, including numerical slots and
-byte-sensitive limits. These carriers are implemented; the default execution
-call producers and readers still await their parameter cutover. Other legacy
-inner neutral conversions also remain in progress. The
+byte-sensitive limits. Default execution calls now carry these attributes;
+producers, independent readers, mathematical signature queries and numerical
+comparison inspect them directly. Program and checked-language boundaries
+explicitly decode or encode their external parameter forms. Pure source scalar
+constants and other inner neutral conversions still await migration. Recursive
+Host layouts use MLIR-generated attribute aliases, preserving maximum supported
+source schema depth without increasing the textual parser's nesting limit. The
 [interface inventory](spec/formats/foundation-interfaces.md) defines the remaining
 source/constructed export, realization-record and application-map
 cutovers. Their replacement emission and complete stage-admission migration

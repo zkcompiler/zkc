@@ -110,7 +110,7 @@ for i, suite in enumerate(SUITES):
       cf.br ^bb5(%19 : ui64)
     }
     func.func private @count_arm_0(%arg0: !runtime.scope) -> !exec.outcome<(ui64)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = ["2"], site = "two"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = [2 : ui64], site = "two"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
       %2 = "exec.complete"(%arg0, %1) : (!runtime.scope, ui64) -> !exec.outcome<(ui64)>
@@ -120,7 +120,7 @@ for i, suite in enumerate(SUITES):
       return %4 : !exec.outcome<(ui64)>
     }
     func.func private @count_arm_1(%arg0: !runtime.scope) -> !exec.outcome<(ui64)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = ["1"], site = "one"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = [1 : ui64], site = "one"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
       %2 = "exec.complete"(%arg0, %1) : (!runtime.scope, ui64) -> !exec.outcome<(ui64)>

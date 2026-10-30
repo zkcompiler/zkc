@@ -2,6 +2,7 @@
 #include "OracleVerificationContext.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 using namespace mlir;
 using namespace llvm;
@@ -78,8 +79,9 @@ struct Reader {
             std::vector<std::string>(statics.begin(), statics.end()),
             {}}},
           false));
-      for (auto [actual, expected] : zip(op.getParameters(), parameters))
-        reader.expect(cast<StringAttr>(actual).getValue() == expected);
+      reader.expect(
+          invocationParametersMatch(contract, binding.getArgumentsAttr(),
+                                    op.getParametersAttr(), parameters));
       return values;
     }
     Value number(uint64_t value, StringRef site) {

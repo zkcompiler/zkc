@@ -5,10 +5,12 @@
 #include "mlir/IR/IRMapping.h"
 #include "zkc/Analysis/MathematicalFacts.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
@@ -273,13 +275,7 @@ class NumericalBodyReader {
         llvm::consumeError(decoded.takeError());
         return failure();
       }
-      SmallVector<std::string> parameters;
-      for (Attribute attr : apply.getParameters()) {
-        auto text = dyn_cast<StringAttr>(attr);
-        if (!text)
-          return failure();
-        parameters.push_back(text.getValue().str());
-      }
+      auto parameters = apply.getParameters();
       if (!semantics(op)) {
         // Retain typed dataflow and source identity without assigning a total
         // law to a checked or effectful operation. The uninterpreted call has
@@ -311,7 +307,9 @@ class NumericalBodyReader {
       state.addOperands(inputs);
       state.addTypes(ValueRange(step.outputs).getTypes());
       if (contract == "field.constant")
-        state.addAttribute("value", builder.getStringAttr(parameters.front()));
+        state.addAttribute(
+            "value", builder.getStringAttr(cantFail(algebra::encodeFieldLiteral(
+                         cast<algebra::FieldLiteralAttr>(parameters[0])))));
       auto *projected = builder.create(state);
       result.sources[projected] = op;
       values.map(step.outputs, projected->getResults());

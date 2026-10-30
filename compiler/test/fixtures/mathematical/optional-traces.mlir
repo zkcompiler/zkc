@@ -39,7 +39,7 @@ module { "protocol.module"() ({
       cf.br ^bb1(%20, %21 : ui64, ui64)
     }
     func.func private @control_0(%arg0: !runtime.scope) -> !exec.outcome<(ui64, ui64)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = ["0"], site = "absent"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = [0 : ui64], site = "absent"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
       %2 = "exec.complete"(%arg0, %1, %1) : (!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64, ui64)>
@@ -49,10 +49,10 @@ module { "protocol.module"() ({
       return %4 : !exec.outcome<(ui64, ui64)>
     }
     func.func private @control_1(%arg0: !runtime.scope, %arg1: !m) -> !exec.outcome<(ui64, ui64)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0, %arg1) <{binding = @dimension, parameters = ["0"], site = "height"}> : (!runtime.scope, !m) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0, %arg1) <{binding = @dimension, parameters = [0 : ui64], site = "height"}> : (!runtime.scope, !m) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0, %arg1) <{binding = @dimension, parameters = ["1"], site = "width"}> : (!runtime.scope, !m) -> !exec.outcome<(ui64)>
+      %2 = "exec.apply"(%arg0, %arg1) <{binding = @dimension, parameters = [1 : ui64], site = "width"}> : (!runtime.scope, !m) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb2(%3: !exec.stop):  // 2 preds: ^bb0, ^bb1
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(ui64, ui64)>

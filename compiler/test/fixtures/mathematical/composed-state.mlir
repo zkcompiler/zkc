@@ -40,7 +40,7 @@ module { "protocol.module"() ({
       return %5 : !exec.outcome<(!f, !r)>
     }
     func.func @inverse(%arg0: !runtime.scope, %arg1: !f) -> !exec.outcome<(!f, i1)> attributes {no_inline, runtime.origin = ["inverse", []]} {
-      %0 = "exec.apply"(%arg0) <{binding = @field_constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
+      %0 = "exec.apply"(%arg0) <{binding = @field_constant, parameters = [#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!f)>) -> ()
     ^bb1(%1: !f):  // pred: ^bb0
       %2 = "exec.apply"(%arg0, %arg1, %1) <{binding = @field_equal, parameters = [], site = "empty"}> : (!runtime.scope, !f, !f) -> !exec.outcome<(i1)>
@@ -281,7 +281,7 @@ module { "protocol.module"() ({
       cf.br ^bb8(%25 : i1)
     }
     func.func private @control_2(%arg0: !runtime.scope, %arg1: !gs, %arg2: !gs, %arg3: ui64) -> !exec.outcome<(i1)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
       %2 = "exec.boolean"(%arg0) <{site = "yes", value = true}> : (!runtime.scope) -> !exec.outcome<(i1)>

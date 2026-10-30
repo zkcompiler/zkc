@@ -255,7 +255,7 @@ int main(int argc, char **argv) {
     inputs[body.getArgument(0)] = {vector, true};
     inputs[vector] = {vector, false};
     unsigned emitted = 0;
-    auto emit = [&](StringRef, ValueRange, Type, ArrayRef<std::string>) {
+    auto emit = [&](StringRef, ValueRange, Type, ArrayRef<Attribute>) {
       ++emitted;
       return Value();
     };

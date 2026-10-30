@@ -38,22 +38,22 @@ relation.declare @relation {kind="external",key="example/air-data",revision="0",
       cf.br ^bb1(%14 : i1)
     }
     func.func private @control_0(%arg0: !runtime.scope, %arg1: !f, %arg2: !f, %arg3: !v, %arg4: !trace) -> !exec.outcome<(i1)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [0 : ui64], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["1"], site = "one"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %2 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [1 : ui64], site = "one"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb2(%3: !exec.stop):  // 49 preds: ^bb0, ^bb1, ^bb3, ^bb4, ^bb5, ^bb6, ^bb7, ^bb8, ^bb10, ^bb11, ^bb12, ^bb13, ^bb14, ^bb16, ^bb17, ^bb19, ^bb20, ^bb22, ^bb23, ^bb24, ^bb25, ^bb26, ^bb28, ^bb29, ^bb31, ^bb32, ^bb33, ^bb35, ^bb36, ^bb37, ^bb38, ^bb39, ^bb41, ^bb42, ^bb44, ^bb45, ^bb46, ^bb47, ^bb48, ^bb49, ^bb50, ^bb54, ^bb56, ^bb60, ^bb61, ^bb62, ^bb63, ^bb64, ^bb65
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(i1)>
       return %4 : !exec.outcome<(i1)>
     ^bb3(%5: ui64):  // pred: ^bb1
-      %6 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["2"], site = "two"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %6 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [2 : ui64], site = "two"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%6)[^bb4, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb4(%7: ui64):  // pred: ^bb3
-      %8 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["3"], site = "three"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %8 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [3 : ui64], site = "three"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%8)[^bb5, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb5(%9: ui64):  // pred: ^bb4
-      %10 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["4"], site = "four"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %10 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [4 : ui64], site = "four"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%10)[^bb6, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb6(%11: ui64):  // pred: ^bb5
       %12 = "exec.apply"(%arg0, %arg4) <{binding = @sequence_length, parameters = [], site = "height"}> : (!runtime.scope, !trace) -> !exec.outcome<(ui64)>
@@ -273,16 +273,16 @@ relation.declare @relation {kind="external",key="example/air-data",revision="0",
       return %2 : !exec.outcome<>
     }
     func.func private @control_7(%arg0: !runtime.scope, %arg1: ui64, %arg2: i1, %arg3: !f, %arg4: !f, %arg5: !trace, %arg6: !f, %arg7: !f) -> !exec.outcome<(i1, !f, !f)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["0"], site = "x_column"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [0 : ui64], site = "x_column"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["1"], site = "y_column"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %2 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [1 : ui64], site = "y_column"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb2(%3: !exec.stop):  // 22 preds: ^bb0, ^bb1, ^bb3, ^bb4, ^bb5, ^bb6, ^bb7, ^bb9, ^bb10, ^bb11, ^bb12, ^bb13, ^bb15, ^bb16, ^bb18, ^bb19, ^bb20, ^bb21, ^bb22, ^bb23, ^bb24, ^bb25
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(i1, !f, !f)>
       return %4 : !exec.outcome<(i1, !f, !f)>
     ^bb3(%5: ui64):  // pred: ^bb1
-      %6 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = ["2"], site = "width"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %6 = "exec.apply"(%arg0) <{binding = @index_constant, parameters = [2 : ui64], site = "width"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%6)[^bb4, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb4(%7: ui64):  // pred: ^bb3
       %8 = "exec.apply"(%arg0, %arg5, %arg1) <{binding = @sequence_at, parameters = [], site = "current"}> : (!runtime.scope, !trace, ui64) -> !exec.outcome<(!v)>

@@ -7,11 +7,13 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Finite.h"
@@ -76,16 +78,22 @@ func::FuncOp function(ModuleOp module, StringRef name) {
 Value apply(OpBuilder &builder, exec::ScopedExecutionBuilder &control,
             StringRef binding, ValueRange inputs, Type output, StringRef site,
             ArrayRef<StringRef> parameters = {}, Block *stop = nullptr) {
-  SmallVector<Attribute> values;
+  auto declaration = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+      control.getFunction(),
+      FlatSymbolRefAttr::get(builder.getContext(), binding));
+  require(bool(declaration), "missing fixture binding");
+  SmallVector<std::string> expected;
   for (auto value : parameters)
-    values.push_back(builder.getStringAttr(value));
+    expected.push_back(value.str());
+  auto values = take(protocol::decodeInvocationParameters(
+      declaration.getContract(), declaration.getArgumentsAttr(), expected));
   return control
       .invoke(
           "exec.apply", output, control.scoped(inputs),
           {builder.getNamedAttr("binding", FlatSymbolRefAttr::get(
                                                builder.getContext(), binding)),
            builder.getNamedAttr("site", builder.getStringAttr(site)),
-           builder.getNamedAttr("parameters", builder.getArrayAttr(values))},
+           builder.getNamedAttr("parameters", values)},
           stop)
       .front();
 }
@@ -384,7 +392,11 @@ int main() {
         if (SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
                 op, op.getBindingAttr())
                 .getContract() == "field.constant") {
-          op.setParametersAttr(builder.getStrArrayAttr({"23"}));
+          op.setParametersAttr(
+              builder.getArrayAttr({cantFail(algebra::decodeFieldLiteral(
+                  cast<algebra::FieldType>(
+                      op.getOutcome().getType().getPayload()[0]),
+                  "23"))}));
           changed = true;
         }
       });

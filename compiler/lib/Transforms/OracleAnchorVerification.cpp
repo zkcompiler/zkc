@@ -3,6 +3,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Refusal.h"
@@ -80,10 +81,8 @@ Error checkOracleAnchorAllocator(const OracleVerificationContext &context,
               {}}},
             false))
       return false;
-    for (auto [value, expected] : zip(op.getParameters(), parameters))
-      if (cast<StringAttr>(value).getValue() != expected)
-        return false;
-    return true;
+    return invocationParametersMatch(contract, binding.getArgumentsAttr(),
+                                     op.getParametersAttr(), parameters);
   };
   auto pack = [&](unsigned n, Type type, ValueRange inputs, StringRef name) {
     const auto &step = steps[n];
@@ -217,10 +216,8 @@ Error checkOracleAnchorLookup(const OracleVerificationContext &context,
               {}}},
             false))
       return false;
-    for (auto [value, expected] : zip(op.getParameters(), parameters))
-      if (cast<StringAttr>(value).getValue() != expected)
-        return false;
-    return true;
+    return invocationParametersMatch(contract, binding.getArgumentsAttr(),
+                                     op.getParametersAttr(), parameters);
   };
   if (!call(0, "index.constant", {}, index, {}, "constructor",
             {std::to_string(constructor)}))

@@ -644,7 +644,9 @@ int main() {
         control.getScope(),
         {builder.getNamedAttr("binding",
                               FlatSymbolRefAttr::get(&context, "fixed_index")),
-         builder.getNamedAttr("parameters", builder.getStrArrayAttr({"0"})),
+         builder.getNamedAttr("parameters",
+                              builder.getArrayAttr({builder.getIntegerAttr(
+                                  builder.getIntegerType(64, false), 0)})),
          builder.getNamedAttr("site", builder.getStringAttr("fixed"))},
         failed);
     rewriter.mergeBlocks(tail, builder.getInsertionBlock());
