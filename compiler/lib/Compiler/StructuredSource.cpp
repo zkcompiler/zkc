@@ -444,6 +444,10 @@ class Exporter {
   unsigned instructions = 0;
   UsedIdentities used;
   SourceExecutionClosure execution;
+  // Private declaration identities belong to this wire format, never native
+  // admission. Multiple actual compute occurrences can name one declaration.
+  std::vector<std::pair<std::string, Operation *>> computationOrigins;
+  llvm::DenseMap<Operation *, std::string> computationNames;
   const AsmParserState &parser;
   const SourceMgr &sourceManager;
   std::vector<StructuredSourceAssociation> &associations;
@@ -547,12 +551,40 @@ class Exporter {
     return json::Array{*domain, *step, *predicate};
   }
 
+  Error indexComputations() {
+    SymbolTableCollection tables;
+    llvm::DenseMap<Operation *, std::string> helpers;
+    unsigned next = 0;
+    for (Operation *op : execution.computations) {
+      auto call = dyn_cast<exec::ComputeOp>(op);
+      Operation *helper =
+          call ? call.resolveCallee(tables).getOperation() : nullptr;
+      if (helper) {
+        auto found = helpers.find(helper);
+        if (found != helpers.end()) {
+          computationNames.try_emplace(op, found->second);
+          continue;
+        }
+      }
+      std::string name;
+      do {
+        if (next == 4096)
+          return error("structured-source-limit",
+                       "private computation identities");
+        name = (call ? "_mathematical_admission_" : "_finite_admission_") +
+               std::to_string(next++);
+      } while (symbols.lookup(name));
+      if (helper)
+        helpers.try_emplace(helper, name);
+      computationNames.try_emplace(op, name);
+      computationOrigins.emplace_back(std::move(name), op);
+    }
+    return Error::success();
+  }
   Expected<StringRef> computationName(Operation &op) {
-    for (const auto &[name, origin] : execution.computationOrigins)
-      if (origin == &op ||
-          (isa<exec::ComputeOp>(op) && isa<exec::ComputeOp>(origin) &&
-           op.getAttr("callee") == origin->getAttr("callee")))
-        return StringRef(name);
+    auto found = computationNames.find(&op);
+    if (found != computationNames.end())
+      return StringRef(found->second);
     return error("structured-source-reference", "unassociated computation");
   }
 
@@ -1389,7 +1421,7 @@ class Exporter {
       computationChecked.insert(op);
       return Error::success();
     };
-    for (const auto &[name, origin] : execution.computationOrigins)
+    for (const auto &[name, origin] : computationOrigins)
       if (auto call = dyn_cast<exec::ComputeOp>(origin)) {
         auto *root = symbols.lookup(call.getCallee().getRootReference());
         if (!root)
@@ -1692,6 +1724,8 @@ public:
     if (!admitted)
       return admitted.takeError();
     execution = std::move(*admitted);
+    if (auto e = indexComputations())
+      return std::move(e);
     json::Array domains, relations, bindings, definitions, contracts;
     llvm::StringSet<> symbolsSeen;
     for (Operation &op : unit.getBody().front()) {
@@ -1793,9 +1827,7 @@ public:
         }
       }
     }
-    for (const auto &signature : execution.computations) {
-      const auto &name = signature.name;
-      auto *origin = execution.computationOrigins.at(name);
+    for (const auto &[name, origin] : computationOrigins) {
       if (definitions.size() == 128 || !symbolsSeen.insert(name).second)
         return error("structured-source-limit");
       if (auto e = associate({7, unsigned(definitions.size())}, *origin,

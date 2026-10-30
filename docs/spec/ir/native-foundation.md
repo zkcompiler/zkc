@@ -343,10 +343,13 @@ Participant admission has a separate 65,536-instruction ceiling and one million
 work units across all participants, with at most 64 nested body levels. Its
 combined callable inventory counts actual ordinary functions, domains and
 participants, with a limit of 4,096. Synthetic realization names do not count.
-The byte exporter independently applies its aggregate artifact limits. It
-reserves service identities when naming values and deduplicates aliased loop
-captures. Artifact comparison independently checks every native capture's
-actual value, each formal's uses and the complete distinct capture inventory.
+The byte exporter independently applies its aggregate artifact limits and
+reserves service identities when naming values. It preserves capture binding
+multiplicity: Copy allows duplicate uses but does not erase a formal's owned
+storage charge. The current byte grammar cannot represent distinct capture
+formals bound to the same actual name, so those native shapes refuse at export.
+Artifact comparison checks the complete capture interface, including unused
+formals. Equal returned values alone do not establish resource correspondence.
 
 Resource-origin facts are relative to actual data formals, with the borrowed
 scope excluded. Closed-region summaries substitute through explicit captures;

@@ -170,10 +170,13 @@ Native control admission no longer inherits the Program JSON nesting limit;
 byte export still checks that limit independently. Participant admission now
 checks actual SSA data use, service ingress and representations, instance-scoped
 message schemas and entry targets directly. Exported value names cannot collide
-with service identities; aliased Copy loop captures retain their actual-value
-correspondence through byte export. The scoped reader still constructs unused
-neutral records alongside its native view; retiring that construction and the
-remaining type-spelling conversions is in progress. Structured export
+with service identities. Native Copy capture aliases remain distinct bindings;
+export refuses shapes the current byte grammar cannot represent, preserving
+resource accounting. The scoped reader now returns only actual SSA/control and
+computation occurrences. Byte records are built by an explicit export adapter;
+format-local private computation declarations belong to structured export.
+Native binding installation checks still use neutral declaration conversion;
+their retirement remains in progress. Structured export
 preserves actual SSA binding positions and checked
 control, and the independent Lean reader exercises fresh branches, loops,
 stops, mathematical calls and ordered finite callbacks. Preparation and

@@ -102,7 +102,8 @@ int main() {
         require(bool(flat), "missing independent flat fixture");
         sourceReturn(flat->lookupSymbol<func::FuncOp>("loop"));
         auto error = protocol::verifySourceExecutionDefinitions(
-            *flat, actual->definitions);
+            *flat,
+            take(protocol::readScheduledExecutionDefinitions(*schedule)));
         require(!error, error ? llvm::toString(std::move(error)) : "");
         auto &step = actual->bodies.at("loop").front();
         require(step.operation == first<exec::RangeOp>(function) &&

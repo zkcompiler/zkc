@@ -1544,10 +1544,13 @@ protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}
           auto actual = take(protocol::readSourceExecutionClosure(
               cast<protocol_ir::ProtocolModuleOp>(
                   expanded->getBody()->front())));
-          require(actual.definitions.bindings.size() ==
+          auto expandedOwner =
+              cast<protocol_ir::ProtocolModuleOp>(expanded->getBody()->front());
+          auto bindings =
+              expandedOwner.getBody().front().getOps<runtime::BindingOp>();
+          require(std::distance(bindings.begin(), bindings.end()) ==
                           (bindingInventory ? 4096 : 1) &&
-                      actual.definitions.functions.size() ==
-                          (bindingInventory ? 1 : 4096),
+                      actual.bodies.size() == (bindingInventory ? 1 : 4096),
                   "expansion truncated an inventory");
           add("overflow");
           refuses(protocol::readSourceExecutionClosure(owner),
@@ -1590,7 +1593,16 @@ protocol Run roles(P)(x:bool@P)->(r:bool@P){return work(x);}
     require(bool(expanded), "control outlines consumed callable inventory");
     auto actual = take(protocol::readSourceExecutionClosure(
         cast<protocol_ir::ProtocolModuleOp>(expanded->getBody()->front())));
-    require(actual.definitions.functions.size() == 4096,
+    auto expandedOwner =
+        cast<protocol_ir::ProtocolModuleOp>(expanded->getBody()->front());
+    unsigned expandedRoots = 0;
+    for (auto function :
+         expandedOwner.getBody().front().getOps<func::FuncOp>()) {
+      require(actual.bodies.count(function.getSymName().str()),
+              "native view omitted an actual scoped body");
+      expandedRoots += !function->hasAttr("runtime.region");
+    }
+    require(expandedRoots == 4096,
             "outlined expansion changed callable inventory");
   });
   return cases.result();

@@ -12,11 +12,6 @@ using namespace zkc::test::resource_sources;
 namespace {
 auto analysis(Source &source, uint64_t &work, unsigned depth = 64) {
   auto closure = take(protocol::readSourceExecutionClosure(source.owner));
-  // These fields are still produced by the reader pending its cutover. Native
-  // root analysis must depend only on actual SSA/control, never those copies.
-  closure.definitions = {};
-  closure.computations.clear();
-  closure.computationOrigins.clear();
   return take(exec::ResourceOriginAnalysis::create(
       source.owner, std::move(closure), work, depth));
 }

@@ -206,13 +206,13 @@ LogicalResult verifyScheduleLowering(mlir::ModuleOp schedule,
         actual->getAttrDictionary() != definition.getAttrDictionary())
       return finish(false);
   }
-  auto expected = protocol::readScheduledExecutionClosure(before);
+  auto expected = protocol::readScheduledExecutionDefinitions(before);
   if (!expected) {
     consumeError(expected.takeError());
     return finish(false);
   }
-  if (auto error = protocol::verifySourceExecutionDefinitions(
-          after, expected->definitions)) {
+  if (auto error =
+          protocol::verifySourceExecutionDefinitions(after, *expected)) {
     consumeError(std::move(error));
     return finish(false);
   }

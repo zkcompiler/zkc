@@ -203,16 +203,16 @@ int main() {
             "verified artifact changed on return");
   });
   cases.run(
-      "loop capture aliases preserve exact actual-value correspondence", [&] {
+      "capture multiplicity remains part of artifact correspondence", [&] {
         auto source = parseSourceString<ModuleOp>(R"mlir(
 module { "protocol.module"() ({
   "protocol.participant"() ({ ^entry(%n:ui64, %x:i1, %y:i1):
-    "protocol.loop"(%n,%x,%x,%y) ({ ^body(%i:ui64,%a:i1,%b:i1,%c:i1):
+    "protocol.loop"(%n,%x,%y) ({ ^body(%i:ui64,%a:i1,%b:i1):
       "protocol.send"(%a) {site="a",schema="message",peer="Q"} : (i1)->()
-      "protocol.send"(%b) {site="b",schema="message",peer="Q"} : (i1)->()
+      "protocol.send"(%a) {site="b",schema="message",peer="Q"} : (i1)->()
       "protocol.yield"() : ()->()
     }) {site="loop",carried=0:i64,count="",parameter=false,maximum=8:i64}
-      : (ui64,i1,i1,i1)->()
+      : (ui64,i1,i1)->()
     "protocol.finish"() : ()->()
   }) {sym_name="p",function_type=(ui64,i1,i1)->(),instance="example",role="P"} : ()->()
   "protocol.entry"() {sym_name="main",targets=[["P",@p]]} : ()->()
@@ -222,24 +222,23 @@ module { "protocol.module"() ({
         require(bool(source), "loop fixture parse refused");
         require(succeeded(protocol::lowerPhysical(*source)),
                 "loop physical selection refused");
-        auto actual = readProgram(*source);
-        take(protocol::verifyProgramArtifact(*source, encoded(actual)));
-        auto &loop =
-            *actual.participants.front().body.front().get<program::Loop>();
-        require(loop.captures.size() == 2, "distinct actual capture was lost");
-        auto changed = actual;
-        auto &changedLoop =
-            *changed.participants.front().body.front().get<program::Loop>();
-        changedLoop.body[1].get<program::Send>()->input = loop.captures.back();
-        if (auto error = protocol::admit(changed))
-          throw std::runtime_error(llvm::toString(std::move(error)));
-        refuses(protocol::verifyProgramArtifact(*source, encoded(changed)),
+        auto artifact = readProgram(*source);
+        take(protocol::verifyProgramArtifact(*source, encoded(artifact)));
+        source->walk([&](protocol_ir::ProtocolLoopOp loop) {
+          Value alias = loop.getOperand(1);
+          loop->insertOperands(2, alias);
+          loop.getBody().front().insertArgument(2, alias.getType(),
+                                                loop.getLoc());
+        });
+        require(succeeded(verify(*source)),
+                "native Copy capture alias refused");
+        // Same data, but another formal may carry owned storage and therefore
+        // change a resource failure. The byte artifact cannot drop that
+        // binding.
+        refuses(protocol::verifyProgramArtifact(*source, encoded(artifact)),
                 "artifact-correspondence");
-        loop.captures.pop_back();
-        if (auto error = protocol::admit(actual))
-          throw std::runtime_error(llvm::toString(std::move(error)));
-        refuses(protocol::verifyProgramArtifact(*source, encoded(actual)),
-                "artifact-correspondence");
+        refuses(protocol::readExecutionModel(source->getOperation()),
+                "interactive-loop-capture");
       });
   cases.run("current program shape retains actual arguments", [&] {
     auto artifact = program::encode(original);

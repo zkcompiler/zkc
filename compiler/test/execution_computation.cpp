@@ -178,11 +178,27 @@ int main() {
                   "scoped participant numerical source refused");
           auto closure = take(protocol::readSourceExecutionClosure(
               &module->getBody()->front()));
-          require(closure.bodies.at("work").front().operation == request &&
+          require(closure.computations == SmallVector<Operation *>{request} &&
+                      closure.bodies.at("work").front().operation == request &&
                       !isMemoryEffectFree(request) && !isSpeculatable(request),
                   "participant numerical invocation lost source identity or "
                   "ordered semantics");
         });
+  cases.run("shared mathematical targets retain each actual request", [&] {
+    auto module = parse(participant);
+    auto owner =
+        cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front());
+    auto work = cast<func::FuncOp>(SymbolTable::lookupSymbolIn(owner, "work"));
+    auto copy = cast<func::FuncOp>(work->clone());
+    copy.setSymName("second");
+    owner.getBody().front().push_back(copy);
+    auto closure = take(protocol::readSourceExecutionClosure(owner));
+    require(closure.computations.size() == 2 &&
+                closure.computations[0] != closure.computations[1] &&
+                isa<exec::ComputeOp>(closure.computations[0]) &&
+                isa<exec::ComputeOp>(closure.computations[1]),
+            "distinct actual requests collapsed to one synthetic signature");
+  });
   cases.run("actual source body and ordered adapter interfaces", [&] {
     auto module = accept(source);
     SymbolTableCollection symbols;

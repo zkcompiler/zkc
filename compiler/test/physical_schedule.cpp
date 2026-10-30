@@ -1052,7 +1052,7 @@ int main() {
         require(printed(*output) == before, "refused metadata changed source");
       });
 
-  cases.run("oversized comparison refuses at shared source admission", [&] {
+  cases.run("oversized comparison refuses at shared native admission", [&] {
     auto module = simultaneousDeathsSource(context);
     auto output =
         materializedCopy(*module, check(*module, propose(*module, false)));
@@ -1074,7 +1074,7 @@ int main() {
     exec::ScopedExecutionBuilder control(builder, function);
     // Every occurrence has its own closed regions and respects the 1024-port
     // bound. The repeated semantic operand/argument work exceeds admission.
-    for (unsigned i = 0; i < 400; ++i)
+    for (unsigned i = 0; i < 300; ++i)
       control.conditional(
           inputs.front(), ValueRange(inputs).drop_front(), inputs[1].getType(),
           "extra" + std::to_string(i), [&](unsigned arm) {
@@ -1099,19 +1099,20 @@ int main() {
       block->replaceAllUsesWith(failure);
       block->erase();
     }
-    // The independent reader now requires admitted ExecutionPorts. This exact
-    // former 400-control workload reaches the shared source bound first; it
-    // must not bypass that boundary to exercise a later private work counter.
+    // The independent reader requires admitted ExecutionPorts. Native SSA
+    // capture inspection consumes one shared allowance; byte-model size no
+    // longer decides native validity. Refusal must precede comparison.
     auto identical = copy(*output);
-    bool sourceLimit = false;
+    std::string admissionRefusals;
     ScopedDiagnosticHandler diagnostic(&context, [&](Diagnostic &message) {
       for (const auto &refusal : diagnostics::refusals(message))
-        sourceLimit |= refusal.code == "source-limit";
+        admissionRefusals += refusal.code + ":" + refusal.detail + ";";
       return success();
     });
     refuses(readStorageReleases(*output, *identical),
             "binding-execution-profile");
-    require(sourceLimit, "oversized comparison refused before its work bound");
+    require(namesIdentifier(admissionRefusals, "execution-analysis-limit"),
+            "oversized comparison refused at: " + admissionRefusals);
   });
 
   cases.run("standalone and planned conversion lifetimes agree", [&] {
@@ -1144,7 +1145,7 @@ int main() {
     });
     reject(materializePhysical(*module, checked),
            "binding-materialization-formation");
-    require(namesIdentifier(admissionRefusals, "interactive-instruction-limit"),
+    require(namesIdentifier(admissionRefusals, "execution-analysis-limit"),
             "candidate refused at: " + admissionRefusals);
     require(printed(*module) == before &&
                 physicalPlanOperations(*module) == identities,

@@ -172,18 +172,10 @@ int main() {
                 callback->scope && failed(readCallback(c, CallbackRole::Step)),
             "scoped stop became an empty total returned expression");
     auto closure = take(protocol::readSourceExecutionClosure(unit));
-    auto find = [&](StringRef name) -> const program::Function & {
-      auto found = llvm::find_if(closure.definitions.functions,
-                                 [&](const auto &f) { return f.name == name; });
-      require(found != closure.definitions.functions.end(),
-              "missing scoped callback");
-      return *found;
-    };
-    require(std::holds_alternative<program::Stop>(
-                find("stop").body.front().value) &&
-                std::holds_alternative<program::Return>(
-                    find("empty").body.front().value),
-            "scoped admission confused stopping and empty return");
+    require(
+        isa<exec::RejectOp>(closure.bodies.at("stop").front().operation) &&
+            isa<exec::ReturnOp>(closure.bodies.at("empty").front().operation),
+        "scoped admission confused stopping and empty return");
     c.operation->setAttr("step", FlatSymbolRefAttr::get(&context, "empty"));
     c = describeSymbol("zero");
     auto fresh = readCallbackABI(c, CallbackRole::Step);

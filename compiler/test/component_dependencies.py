@@ -163,6 +163,7 @@ def main():
         "lib/Dialect/Protocol/ExecutionAdmission.cpp": "ZkcIR",
         "lib/Dialect/Exec/ClosureAdmission.cpp": "ZkcIR",
         "lib/Dialect/Exec/Execution.cpp": "ZkcIR",
+        "lib/Dialect/Exec/ExecutionExport.cpp": "ZkcIR",
         "lib/Dialect/Exec/ExecutionComparison.cpp": "ZkcIR",
         "lib/Dialect/Exec/ControlCursor.cpp": "ZkcIR",
         "lib/Transforms/MathematicalPreservation.cpp": "ZkcTransforms",

@@ -195,11 +195,12 @@ The source-closure admission API checks all immediate scoped and mathematical
 definitions, including dormant definitions and selected computation modules.
 Selected modules undergo bounded structural verification before typed inspection
 and mathematical closure admission. It checks declared entry preconditions and
-their discharge at each actual call, then checks logical affine ownership with
-private signatures derived from the admitted mathematical bodies. These
-temporary signatures are not returned as executable declarations or accepted
-from metadata. This admission permits mathematical calls with supported native
-logical ports; formal polynomial/quotient invocation ports still require their
+their discharge at each actual call, then checks logical affine ownership over
+the actual SSA/control association and callback edges. The returned view retains
+actual computation occurrences and never creates synthetic callable signatures
+or a parallel executable model. Structured export owns any private declarations
+needed by its byte grammar. This admission permits mathematical calls with
+supported native logical ports; formal polynomial/quotient invocation ports still require their
 own realization. Ordered finite requests use the additional callback closure
 checks below. Source-equation correspondence,
 candidate comparison and executable extraction remain separate checks.

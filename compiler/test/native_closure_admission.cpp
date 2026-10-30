@@ -66,6 +66,10 @@ int main() {
         });
     control.returned(outputs);
     accepted(source);
+    // The byte grammar currently identifies captures only by actual name.
+    // Export cannot erase a formal and its owned-storage charge.
+    refuses(protocol::readSourceExecutionDefinitions(source.owner),
+            "local-control-capture");
   });
   cases.run("occurrences include dormant nested arms", [] {
     Source source;

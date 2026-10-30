@@ -268,10 +268,10 @@ class ExecutionModelReader {
             initial.emplace_back(n, input);
           } else {
             innerEnv[inner.getArgument(i)] = input;
-            // Native formals may alias a Copy actual. The byte grammar names
-            // captures by the actual value, so export that capture once.
-            if (!is_contained(captures, input))
-              captures.push_back(input);
+            // Preserve binding multiplicity. Even Copy aliases can carry
+            // owned-storage charges; the byte grammar must represent every
+            // formal or refuse, never silently deduplicate them.
+            captures.push_back(input);
           }
         }
         program::LoopCount n{name(op->getOperand(0), env), *loop.getMaximum(),

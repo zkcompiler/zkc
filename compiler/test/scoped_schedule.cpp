@@ -109,7 +109,8 @@ int main() {
         auto actual = protocol::readScheduledExecutionClosure(root);
         require(bool(actual), actual ? "" : llvm::toString(actual.takeError()));
         auto error = protocol::verifySourceExecutionDefinitions(
-            owner(*flat), actual->definitions);
+            owner(*flat),
+            take(protocol::readScheduledExecutionDefinitions(root)));
         require(!error, error ? llvm::toString(std::move(error)) : "");
         auto view = mathematical::ScopedCandidate::readSchedule(root);
         require(bool(view), view ? "" : llvm::toString(view.takeError()));
