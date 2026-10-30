@@ -41,7 +41,7 @@ def Extension : ZKC_Contribution<"example", ["base"], [Extra]>;
                                  "-I", directory.parents[1], "-I", ROOT / "compiler/include",
                                  input_path], text=True, capture_output=True)
         if expected:
-            assert result.returncode and expected in result.stderr, result.stderr
+            assert result.returncode > 0 and expected in result.stderr, result.stderr
             return None
         assert result.returncode == 0, result.stderr
         return json.loads(result.stdout)

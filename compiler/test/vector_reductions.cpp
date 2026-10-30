@@ -181,7 +181,8 @@ std::string wrapper(StringRef name, StringRef callee, StringRef site,
       name, "%a:!V,%b:!V,%c:!V,%s:!F", "!F",
       body + scopedReturn("%r" + std::to_string(repeated - 1), "!F"), origin);
 }
-std::string chain(unsigned wrappers, unsigned repeated, unsigned width) {
+std::string chain(unsigned wrappers, unsigned repeated, unsigned width,
+                  bool mathematicalRow = true) {
   std::string definitions;
   for (unsigned i = 0; i < wrappers; ++i) {
     auto name = (width ? std::string(width, 'x') : "layer") + std::to_string(i);
@@ -192,7 +193,17 @@ std::string chain(unsigned wrappers, unsigned repeated, unsigned width) {
         "call", i + 1 == wrappers ? repeated : 1,
         width ? std::string(width, 'x') + std::to_string(i) : name);
   }
-  return withDefinitions(fixture(), definitions);
+  auto source = fixture();
+  if (!mathematicalRow) {
+    auto original =
+        declarations.substr(declarations.find("func.func private @row"));
+    auto row =
+        functionText("row", "%a:!F,%b:!F,%c:!F,%xs:!V,%ys:!V,%zs:!V,%s:!F",
+                     "!F", scopedReturn("%a", "!F"));
+    source = edit(source, original,
+                  edit(row, "func.func @row", "func.func private @row"));
+  }
+  return withDefinitions(source, definitions);
 }
 func::FuncOp scopedFunction(ModuleOp module, StringRef name, TypeRange inputs,
                             TypeRange outputs) {
@@ -849,32 +860,50 @@ int main() {
             "region expansion changed canonical preparation");
   });
 
-  // Count actual scoped functions: wrappers, work and row. Collect is an
-  // edge to row, not an extra synthetic callable. The mathematical closure of
-  // exec.compute has its own bounded owner. Sixty-two wrappers therefore reach
-  // the native scoped depth of 64; no byte-model declarations affect it.
-  for (unsigned depth : {61u, 62u, 63u, 64u})
-    cases.run("scoped helper chain with " + Twine(depth) + " wrappers", [&] {
-      bool depthRefusal = false;
-      ScopedDiagnosticHandler quiet(&context, [&](Diagnostic &diagnostic) {
-        depthRefusal |=
-            namesIdentifier(diagnostic.str(), "execution-call-depth");
-        return success();
-      });
-      auto original = parseSourceString<ModuleOp>(chain(depth, 1, 0), &context);
-      if (depth > 62) {
-        require(!original && depthRefusal,
-                "excess actual callback depth admitted");
-        return;
-      }
-      require(bool(original), "at-boundary source refused");
-      auto unchanged = sf::clone(*original);
-      auto expanded = expand(*original);
-      auto candidate = prepare(*expanded);
-      require(bool(candidate) && succeeded(compare(*expanded, *candidate)) &&
-                  same(*original, *unchanged),
-              "at-boundary expansion or preparation refused");
-    });
+  // Static reference admission counts every ordinary function on a path,
+  // including a mathematical body called by exec.compute. The scoped-only
+  // closure has its own limit. With the row computation, 61 wrappers + work +
+  // row + formula reach 64; without that edge, 62 wrappers reach the same
+  // bound.
+  for (bool mathematicalRow : {false, true})
+    for (unsigned depth : {61u, 62u, 63u, 64u})
+      cases.run(
+          "helper chain with " + Twine(depth) + " wrappers and " +
+              (mathematicalRow ? "mathematical row" : "direct row"),
+          [&] {
+            bool depthRefusal = false;
+            std::string diagnostics;
+            ScopedDiagnosticHandler quiet(
+                &context, [&](Diagnostic &diagnostic) {
+                  diagnostics += diagnostic.str() + "\n";
+                  depthRefusal |=
+                      namesIdentifier(diagnostic.str(), "finite-formation") &&
+                      StringRef(diagnostic.str())
+                          .contains("static closure exceeds analysis limit");
+                  return success();
+                });
+            auto original = parseSourceString<ModuleOp>(
+                chain(depth, 1, 0, mathematicalRow), &context);
+            require(bool(original),
+                    "structural source refused: " + diagnostics);
+            auto admitted = admitStage(*original);
+            if (depth > (mathematicalRow ? 61u : 62u)) {
+              require(failed(admitted) && depthRefusal,
+                      "excess static reference depth admitted: " + diagnostics);
+              return;
+            }
+            require(succeeded(admitted),
+                    "at-boundary source refused: " + diagnostics);
+            auto unchanged = sf::clone(*original);
+            auto expanded = protocol::expandScopedHelpers(*original);
+            require(bool(expanded),
+                    "at-boundary expansion refused: " + diagnostics);
+            auto candidate = prepare(*expanded);
+            require(bool(candidate) &&
+                        succeeded(compare(*expanded, *candidate)) &&
+                        same(*original, *unchanged),
+                    "at-boundary expansion or preparation refused");
+          });
   auto requiredPreparation = [&](ModuleOp original, uint64_t &copy,
                                  uint64_t &bytes,
                                  mathematical::RealizationWork &work,

@@ -76,6 +76,11 @@ or a natural as an alternative encoding.
 
 Signature formation checks logical type formation and catalog requirements.
 It grants neither message-codec support nor an implementation or stage profile.
+The native `readLogicalBindingSignature` query checks an actual logical
+declaration's complete ABI without resolving its selected provider. Mathematical
+meaning remains identifiable for an unavailable pin, but the pin still forbids
+replacement. Full `readNativeBinding` and stage admission independently require
+that provider to be installed; signature inspection cannot substitute for them.
 A signature may therefore form even when an executable or interchange consumer
 cannot admit it. This distinction also keeps byte-parser bounds out of native
 mathematical port derivation. Scope is borrowed

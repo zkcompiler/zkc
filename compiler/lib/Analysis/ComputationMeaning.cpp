@@ -23,14 +23,14 @@ runtime::BindingOp semanticBinding(Operation *op) {
   if (!declaration || !declaration.getContractAttr() ||
       !declaration.getArgumentsAttr() || !declaration.getImplementationAttr())
     return {};
-  auto checked = readNativeBinding(
+  auto checked = readLogicalBindingSignature(
       [&] {
         auto diagnostic = emitError(op->getLoc());
         diagnostic.abandon();
         return diagnostic;
       },
       declaration);
-  return succeeded(checked) ? checked->declaration : runtime::BindingOp{};
+  return checked ? declaration : runtime::BindingOp{};
 }
 } // namespace
 const protocol::ComputationContract *semantics(Operation *op) {
@@ -43,7 +43,8 @@ const protocol::ComputationContract *semantics(Operation *op) {
       if (!is_contained(ArrayRef<StringRef>{"binding", "parameters", "site"},
                         attribute.getName().getValue()))
         return nullptr;
-    // Preserve the original implementation constraint using native admission;
+    // Inspect the logical signature independently of provider availability.
+    // The original implementation constraint still prohibits replacement;
     // meaning lookup never reconstructs a neutral binding application.
     auto binding = semanticBinding(op);
     if (!binding)

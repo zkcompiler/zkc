@@ -105,6 +105,60 @@ int main() {
                 !local.getLoadedDialect<runtime::RuntimeDialect>(),
             "default selection loaded an absent representation owner");
   });
+#ifdef NDEBUG
+  cases.run(
+      "native requests refuse missing value ports before inspection", [&] {
+        for (bool missingInput : {false, true}) {
+          NativeBindingApplication request;
+          request.contract = "field.add";
+          request.arguments = {domain};
+          request.context = &context;
+          request.valueType =
+              builder.getFunctionType({missingInput ? Type{} : field, field},
+                                      {missingInput ? field : Type{}});
+          codes.clear();
+          require(!resolveInstalledSignature(
+                      emit, &context, request, false,
+                      protocol::installedImplementations()) &&
+                      llvm::is_contained(codes, "binding-signature"),
+                  "missing proposed value port escaped native admission");
+          auto declaration =
+              binding("field.add", {domain}, "", {field, field}, {field});
+          declaration.setFunctionType(
+              executableBindingSignature(request.valueType));
+          codes.clear();
+          require(failed(readNativeBinding(emit, declaration)) &&
+                      llvm::is_contained(codes, "binding-signature"),
+                  "missing actual value port escaped native admission");
+          declaration.erase();
+        }
+      });
+#endif
+  cases.run("logical meaning does not admit or erase a selected provider", [&] {
+    auto declaration = binding("field.add", {domain}, "withheld/field.add",
+                               {field, field}, {field});
+    auto before = declaration.getFunctionType();
+    require(readLogicalBindingSignature(emit, declaration) ==
+                    builder.getFunctionType({field, field}, {field}) &&
+                declaration.getImplementation() == "withheld/field.add" &&
+                declaration.getFunctionType() == before,
+            "signature inspection erased the pin or changed the declaration");
+    refuseInstallation(declaration, "binding-implementation");
+    declaration.setFunctionType(executableBindingSignature(
+        builder.getFunctionType({field, vector}, {field})));
+    codes.clear();
+    require(!readLogicalBindingSignature(emit, declaration) &&
+                llvm::is_contained(codes, "binding-signature"),
+            "logical meaning admitted a mismatched actual port");
+    declaration.setFunctionType(before);
+    auto physical = defaultPhysicalType(emit, field);
+    declaration.setFunctionType(executableBindingSignature(
+        builder.getFunctionType({physical, physical}, {physical})));
+    codes.clear();
+    require(!readLogicalBindingSignature(emit, declaration) &&
+                llvm::is_contained(codes, "binding-stage"),
+            "logical meaning admitted represented ports");
+  });
   cases.run("native provider selection checks all resolved nominal terms", [&] {
     auto declaration = binding("field.add", {domain}, "dalek/field.add",
                                {field, field}, {field});

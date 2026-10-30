@@ -687,15 +687,30 @@ int main() {
                   op.getImplementation() == "arkworks/field.add";
     });
     require(retained, "pinned implementation disappeared");
-    // An unavailable pin is still mathematically identifiable, but ordinary
-    // binding admission rejects it. Analysis is not physical admission.
-    declaration.setImplementation("withheld/field.add");
-    require(finite::semantics(&operation) && !finite::replaceable(&operation),
-            "unavailable provider erased meaning");
-    auto physical = protocol::operationBinding(&operation);
-    require(!physical, "unknown physical implementation gained admission");
-    llvm::consumeError(physical.takeError());
   });
+  for (bool meaning : {true, false})
+    cases.run(meaning ? "unavailable pin retains mathematical meaning"
+                      : "unavailable pin fails ordinary binding admission",
+              [&] {
+                auto module =
+                    parseSourceString<ModuleOp>(fixture("sum"), &context);
+                require(bool(module), "sum refused");
+                auto operation = findKernel(*module, "field.add");
+                auto declaration =
+                    SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+                        operation, operation.getBindingAttr());
+                require(bool(declaration), "missing scalar binding");
+                declaration.setImplementation("withheld/field.add");
+                // Analysis retains logical meaning independently of provider
+                // admission; an unavailable pin still forbids replacement.
+                if (meaning)
+                  require(finite::semantics(operation) &&
+                              !finite::replaceable(operation),
+                          "unavailable provider erased meaning");
+                else
+                  refuses(protocol::operationBinding(operation),
+                          "binding-implementation");
+              });
   cases.run(
       "nested equation recognition preserves implementation constraints", [&] {
         auto module =

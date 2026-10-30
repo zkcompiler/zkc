@@ -54,6 +54,14 @@ mlir::FunctionType executableBindingSignature(mlir::FunctionType values);
 mlir::LogicalResult verifyCallAttributes(mlir::Operation *, unsigned inputs,
                                          unsigned outputs);
 
+/// Inspect a declaration's exact logical signature and executable ABI without
+/// resolving its implementation constraint. Only logical ports are accepted.
+/// This read-only meaning query grants no installation or stage admission and
+/// does not make a pinned operation eligible for replacement.
+mlir::FunctionType
+readLogicalBindingSignature(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
+                            mlir::Operation *);
+
 /// Checked native declaration view. The actual ABI and complete layouts are
 /// admitted against the installed implementation, without exporting native
 /// types. Recheck after mutating the declaration or its enclosing profile.

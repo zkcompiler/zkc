@@ -33,9 +33,10 @@ FunctionType valueSignature(Operation *op) {
   auto type =
       attribute ? dyn_cast<FunctionType>(attribute.getValue()) : FunctionType{};
   if (!type || type.getNumInputs() == 0 ||
-      !isa<runtime::ScopeType>(type.getInput(0)) || type.getNumResults() != 1)
+      !isa_and_nonnull<runtime::ScopeType>(type.getInput(0)) ||
+      type.getNumResults() != 1)
     return {};
-  auto outcome = dyn_cast<exec::OutcomeType>(type.getResult(0));
+  auto outcome = dyn_cast_or_null<exec::OutcomeType>(type.getResult(0));
   return outcome ? FunctionType::get(op->getContext(),
                                      type.getInputs().drop_front(),
                                      outcome.getPayload())
@@ -630,10 +631,11 @@ readNativeBinding(llvm::function_ref<InFlightDiagnostic()> emit, Operation *op,
   return readNativeBinding(emit, op, physical,
                            protocol::installedImplementations());
 }
+namespace {
 FailureOr<NativeBinding>
-readNativeBinding(llvm::function_ref<InFlightDiagnostic()> emit, Operation *op,
-                  std::optional<bool> requestedStage,
-                  const protocol::ImplementationCatalog &catalog) {
+inspectNativeBindingSignature(llvm::function_ref<InFlightDiagnostic()> emit,
+                              Operation *op,
+                              std::optional<bool> requestedStage) {
   Installation check{emit};
   auto declaration = dyn_cast_or_null<runtime::BindingOp>(op);
   if (!declaration || !isa_and_nonnull<protocol_ir::ProtocolModuleOp, ModuleOp>(
@@ -705,6 +707,10 @@ readNativeBinding(llvm::function_ref<InFlightDiagnostic()> emit, Operation *op,
        {std::make_pair(actual.getInputs(), logical.getInputs()),
         std::make_pair(actual.getResults(), logical.getResults())})
     for (auto [port, schema] : zip(ports, schemas)) {
+      if (!port) {
+        (void)check.refuse("binding-signature", "missing native value port");
+        return failure();
+      }
       bool represented = isa<runtime::RepresentedType>(port);
       if (stage && *stage != represented) {
         (void)check.refuse("binding-stage",
@@ -728,24 +734,43 @@ readNativeBinding(llvm::function_ref<InFlightDiagnostic()> emit, Operation *op,
   }
   if (failed(callAttributes(emit, op, actual.getNumInputs() + 1, 1)))
     return failure();
-  auto complete = [&]() -> FailureOr<NativeBinding> {
-    return NativeBinding{declaration, logical, actual, physical};
-  };
-  NativeBindingApplication application{contract.str(),
+  return NativeBinding{declaration, logical, actual, physical};
+}
+} // namespace
+
+FunctionType
+readLogicalBindingSignature(llvm::function_ref<InFlightDiagnostic()> emit,
+                            Operation *op) {
+  auto inspected = inspectNativeBindingSignature(emit, op, false);
+  return succeeded(inspected) ? inspected->logicalType : FunctionType{};
+}
+
+FailureOr<NativeBinding>
+readNativeBinding(llvm::function_ref<InFlightDiagnostic()> emit, Operation *op,
+                  std::optional<bool> requestedStage,
+                  const protocol::ImplementationCatalog &catalog) {
+  auto inspected = inspectNativeBindingSignature(emit, op, requestedStage);
+  if (failed(inspected))
+    return failure();
+  auto declaration = inspected->declaration;
+  auto arguments = declaration.getArguments().getValue();
+  auto actual = inspected->valueType;
+  bool physical = inspected->physical;
+  NativeBindingApplication application{declaration.getContract().str(),
                                        {arguments.begin(), arguments.end()},
-                                       implementation.str(),
+                                       declaration.getImplementation().str(),
                                        actual};
   auto expected = resolveInstalledSignature(emit, op->getContext(), application,
                                             physical, catalog);
   if (!expected)
     return failure();
   if (expected != actual) {
-    (void)check.refuse(
-        "binding-signature",
+    (void)diagnostics::emit(
+        emit(), "binding-signature",
         "actual complete layouts differ from the implementation");
     return failure();
   }
-  return complete();
+  return inspected;
 }
 
 FunctionType resolveInstalledSignature(
@@ -772,7 +797,7 @@ FunctionType resolveInstalledSignature(
          {std::make_pair(actual.getInputs(), logical.getInputs()),
           std::make_pair(actual.getResults(), logical.getResults())})
       for (auto [port, schema] : zip(ports, schemas)) {
-        if (port.getContext() != context ||
+        if (!port || port.getContext() != context ||
             failed(verifyValueType(emit, port)) ||
             isa<runtime::RepresentedType>(port) != physical ||
             logicalValueType(port) != schema) {

@@ -158,7 +158,8 @@ int main(int argc, char **argv) {
                             "mathematical function survived selection");
                 });
               });
-  auto refusal = [&](StringRef label, StringRef text, StringRef code) {
+  auto refusal = [&](StringRef label, StringRef text, StringRef code,
+                     bool semantic = false) {
     cases.run(label, [&] {
       std::string messages;
       ScopedDiagnosticHandler handler(&context, [&](Diagnostic &diagnostic) {
@@ -166,7 +167,12 @@ int main(int argc, char **argv) {
         return success();
       });
       auto module = parseSourceString<ModuleOp>(text, &context);
-      require(!module, "invalid computation admitted");
+      if (semantic) {
+        require(bool(module), "semantic mutation must remain formed");
+        require(failed(zkc::admitStage(*module)),
+                "invalid computation admitted");
+      } else
+        require(!module, "invalid computation formed");
       require(namesIdentifier(messages, code),
               "unexpected refusal: " + messages);
     });
@@ -191,7 +197,7 @@ int main(int argc, char **argv) {
           replace(fixture, "   %r = \"poly.evaluate\"",
                   "   %unused = \"poly.coefficients\"(%q) : (!P)->!A\n   %r "
                   "= \"poly.evaluate\""),
-          "polynomial-formation");
+          "polynomial-formation", true);
   cases.run("non-protocol numerical context", [&] {
     auto module = parseSourceString<ModuleOp>(
         "module { func.func private @empty() {func.return} }", &context);
@@ -218,7 +224,7 @@ int main(int argc, char **argv) {
    func.return %failure:!exec.outcome<(!P)>
  }
     func.func @work)"),
-          "execution-source-closure");
+          "execution-source-closure", true);
   refusal("protocol call cannot bypass scoped computation",
           replace(fixture, "callee=@work", "callee=@polynomial"),
           "interactive-call-type");

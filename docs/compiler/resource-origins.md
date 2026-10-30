@@ -146,8 +146,9 @@ The [native API controls](../../compiler/test/native_resource_origins.cpp)
 exercise actual function ownership, cumulative allowances, cached depth,
 state-successor contracts and exact root joins. The existing
 [Protocol API controls](../../compiler/test/resource_origin_analysis.cpp)
-also cover module verification, per-program queries and demanded-query work
-sharing; their Local fixtures remain tied to the replaced owner until retirement.
+also cover stage admission, per-program queries and demanded-query work
+sharing with native Func/Exec helpers. They no longer depend on synthetic
+Program local definitions.
 
 The [scoped source generator](../../compiler/test/resource_origin_sources.cpp)
 authors the current compiler controls and the fresh runtime fixtures directly

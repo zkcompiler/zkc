@@ -9,6 +9,7 @@
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Program/Codec.h"
+#include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
@@ -33,7 +34,10 @@ template <typename T> T accept(Expected<T> result) {
 }
 template <typename T> void refuse(Expected<T> result, StringRef code) {
   require(!result, "expected refusal");
-  require(toString(result.takeError()) == code, code);
+  handleAllErrors(result.takeError(), [&](const zkc::Refusal &refusal) {
+    require(refusal.code == code, "expected " + code.str() + "; received " +
+                                      refusal.code + ": " + refusal.detail);
+  });
 }
 } // namespace
 int main() {

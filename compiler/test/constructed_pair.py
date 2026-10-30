@@ -60,14 +60,20 @@ for name, project in [("SmallSumcheck", "examples/projects/sumcheck"),
                       if op[0] == "exec.apply" and op[2]
                       and op[2][0] == "transcript.native.indexed.challenge"]
         assert len(challenges) == (2 if name == "TwoSums" else 1)
-        assert all(op[2][1:] == [[policy[5]], ""] for op in challenges)
+        transcript_domain = ['domain', 'Transcript', policy[5]]
+        transcript = ['apply', 'transcript', [transcript_domain]]
+        field = ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]
+        assert all(op[2] == ['transcript.native.indexed.challenge',
+                             [transcript_domain], '',
+                             [transcript, ['apply', 'indices', []]],
+                             [field, transcript]] for op in challenges)
         assert len(producer) == len(validator) == 10
         assert validator[9] == []
         if name == "Schnorr":
             assert producer[9] == [["service_3", policy[2], "3", "3", "random.bls12-381.fr/0"]]
             query = next(op for op in instructions(producer[7]) if op[0] == "protocol.service_query")
             assert query[3] == [] and len(query) == 7 and query[6][1] == []
-            assert query[4] == ['!algebra.field<"bls12-381.fr">']
+            assert query[4] == [field]
         else:
             assert producer[9] == []
         for role, value in [("producer", producer), ("validator", validator), ("pair", pair)]:

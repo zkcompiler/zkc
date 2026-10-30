@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
@@ -202,7 +203,9 @@ int main() {
                 d.str().find("nonparticipating role") != std::string::npos;
             return success();
           });
-          require(!parseSourceString<ModuleOp>(text, &context) && diagnosed,
+          auto module = parseSourceString<ModuleOp>(text, &context);
+          require(bool(module), "repeat participant mutation must form");
+          require(failed(zkc::admitStage(*module)) && diagnosed,
                   "construction start escaped the repeat participant boundary");
         });
   return cases.result();

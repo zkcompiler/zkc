@@ -50,7 +50,8 @@ int main() {
   require(bool(file), "missing execution fixture");
   auto source = (*file)->getBuffer().str();
   auto read = [&](const std::string &source, bool expected,
-                  bool physical = false, bool formed = true) {
+                  bool physical = false, bool formed = true,
+                  StringRef refusal = "execution-cfg") {
     diagnostic.clear();
     auto module =
         parseSourceString<ModuleOp>(source, ParserConfig(&context, false));
@@ -67,8 +68,8 @@ int main() {
           result.takeError(),
           [&](const Refusal &refusal) { code = refusal.code; },
           [&](const llvm::ErrorInfoBase &) {});
-      require(code == "execution-cfg",
-              "reader refusal lost its diagnostic identifier");
+      require(code == refusal,
+              "reader refusal differs: expected " + refusal + ", got " + code);
       return program::LocalDefinitions{};
     }
     return std::move(*result);
@@ -400,7 +401,7 @@ int main() {
     require(model.functions.front().arguments[1].type ==
                 "field:koala-bear@plonky3.koala-bear/0",
             "represented port was erased");
-    read(physical, false, false);
+    read(physical, false, false, true, "binding-stage");
   });
   auto shape = [&](StringRef name, StringRef operation) {
     cases.run(name, [&] {
