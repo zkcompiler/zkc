@@ -62,6 +62,35 @@ inline bool nativeFieldArrayWire(const BoundType &type, bool physical = false) {
 }
 // Complete closed native message grammar. Local copy permission alone is
 // insufficient: keys, setup handles and unsupported leaves stay local.
+// Atomic profile lookup is also used by native MLIR structural inspection.
+// The caller must establish nominal formation; this installs no codec.
+inline bool nativeMessageAtom(llvm::StringRef kind, llvm::StringRef identity) {
+  return (kind == "group" &&
+          (identity == "bn254.gt" || identity == "bls12-381.gt")) ||
+         ((kind == "bool" || kind == "index" || kind == "indices" ||
+           kind == "bytes") &&
+          identity.empty()) ||
+         ((kind == "field" || kind == "vector" || kind == "matrix") &&
+          (identity == "bn254.fr" || identity == "ristretto255.scalar" ||
+           plonky3Field(identity) || identity == "gf2-64.pentanomial-4-3-1" ||
+           identity == "gf2-64.pentanomial-4-3-1.ext3-trinomial1" ||
+           identity == "bls12-381.fr")) ||
+         ((kind == "group" || kind == "groups") &&
+          (identity == "bn254.g1" || identity == "bn254.g2" ||
+           identity == "ristretto255.group" ||
+           identity == "edwards25519.prime" || identity == "bls12-381.g1" ||
+           identity == "bls12-381.g2")) ||
+         ((kind == "commitment" || kind == "proof") &&
+          (identity == "multilinear.kzg.bls12-381/0" ||
+           identity == "rows.merkle-keccak256.koala-bear/0" ||
+           identity == "rows.merkle-keccak256.koala-bear.ext8-binomial3/0" ||
+           identity == "rows.merkle-poseidon2-16.baby-bear/0" ||
+           identity == "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0" ||
+           identity == "rows.merkle-poseidon2-8.goldilocks/0" ||
+           identity == "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0" ||
+           identity == "rows.merkle-poseidon2-16.koala-bear/0" ||
+           identity == "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"));
+}
 inline bool nativeMessageData(const BoundType &type) {
   if (!type.representation.empty()) {
     // The closed installation grants sequence/variant frame families and
@@ -115,43 +144,8 @@ inline bool nativeMessageData(const BoundType &type) {
       }
     return true;
   }
-  return (type.kind == "group" &&
-          (type.identity == "bn254.gt" || type.identity == "bls12-381.gt")) ||
-         nativeFieldArrayWire(type) ||
-         ((type.kind == "bool" || type.kind == "index" ||
-           type.kind == "indices" || type.kind == "bytes") &&
-          type.identity.empty()) ||
-         ((type.kind == "field" || type.kind == "vector" ||
-           type.kind == "matrix") &&
-          (type.identity == "bn254.fr" ||
-           type.identity == "ristretto255.scalar" ||
-           plonky3Field(type.identity) ||
-           type.identity == "gf2-64.pentanomial-4-3-1" ||
-           type.identity == "gf2-64.pentanomial-4-3-1.ext3-trinomial1")) ||
-         ((type.kind == "group" || type.kind == "groups") &&
-          (type.identity == "bn254.g1" || type.identity == "bn254.g2" ||
-           type.identity == "ristretto255.group" ||
-           type.identity == "edwards25519.prime")) ||
-         ((type.kind == "field" || type.kind == "vector" ||
-           type.kind == "matrix") &&
-          type.identity == "bls12-381.fr") ||
-         ((type.kind == "group" || type.kind == "groups") &&
-          (type.identity == "bls12-381.g1" ||
-           type.identity == "bls12-381.g2")) ||
-         ((type.kind == "commitment" || type.kind == "proof") &&
-          (type.identity == "multilinear.kzg.bls12-381/0" ||
-           type.identity == "rows.merkle-keccak256.koala-bear/0" ||
-           type.identity ==
-               "rows.merkle-keccak256.koala-bear.ext8-binomial3/0" ||
-           type.identity == "rows.merkle-poseidon2-16.baby-bear/0" ||
-           type.identity ==
-               "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0" ||
-           type.identity == "rows.merkle-poseidon2-8.goldilocks/0" ||
-           type.identity ==
-               "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0" ||
-           type.identity == "rows.merkle-poseidon2-16.koala-bear/0" ||
-           type.identity ==
-               "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"));
+  return nativeFieldArrayWire(type) ||
+         nativeMessageAtom(type.kind, type.identity);
 }
 // Frames introduced by the structured message profile, including standalone
 // numeric collections. Existing scalar and fixed-array frames keep their IDs.

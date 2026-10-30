@@ -7,6 +7,7 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
@@ -110,6 +111,10 @@ int main() {
       auto type = take(protocol::parseBoundType(*encoded, false));
       require(protocol::nativeMessageData(type) == accepted,
               "inactive leaf changed wire authority");
+      auto policy = mathematical::nativeTypePolicy(
+          protocol::decodeBoundType(&context, type));
+      require(policy && policy->wire == accepted,
+              "native policy lost an inactive message-frame restriction");
       if (accepted)
         require(protocol::duplicable(type.spelling()) &&
                     protocol::discardable(type.spelling()),
@@ -253,6 +258,25 @@ int main() {
                                "arbitrary"))})
       require(!mathematical::nativeTypePolicy(type),
               "unclassified type acquired permission");
+    require(!mathematical::nativeTypePolicy(Type{}),
+            "absent native type acquired permission");
+    auto physical = runtime::RepresentedType::get(
+        &context, algebra::FieldType::get(&context, "koala-bear"),
+        "plonky3.koala-bear/0", ArrayRef<Type>{});
+    require(!mathematical::nativeTypePolicy(physical),
+            "physical carrier acquired logical policy through its payload");
+  });
+  cases.run("native policy does not use byte-format depth admission", [&] {
+    Type type = algebra::FieldType::get(&context, "bls12-381.fr");
+    for (unsigned i = 0; i < 12; ++i)
+      type = data::SequenceType::get(&context, type);
+    auto policy = mathematical::nativeTypePolicy(type);
+    require(policy && policy->total && policy->shared && !policy->affine &&
+                policy->protocolPort && policy->wire && policy->constructible,
+            "native use permission depends on an interchange spelling");
+    auto bytes = protocol::encodeBoundType(type, false);
+    require(!bytes, "native permissions silently enlarged byte publication");
+    consumeError(bytes.takeError());
   });
   cases.run("type argument constructors remain owner-local", [&] {
     for (const auto &constructor : protocol::boundTypeConstructors())
@@ -293,6 +317,33 @@ int main() {
       refused = !types.get(make(i));
     require(refused && limited,
             "distinct complex types escaped the shared budget");
+  });
+  cases.run("native metadata budget is independent of encoded spellings", [&] {
+    OwningOpRef<ModuleOp> anchor(ModuleOp::create(UnknownLoc::get(&context)));
+    mathematical::NativeTypePolicies types(*anchor);
+    Builder builder(&context);
+    auto make = [&](char suffix) {
+      std::string name(512 * 1024, 'x');
+      name.back() = suffix;
+      auto identity = data::IdentityAttr::get(
+          &context, builder.getArrayAttr({builder.getStringAttr("atom"),
+                                          builder.getStringAttr(name)}));
+      auto arm = data::AlternativeAttr::get(
+          &context, builder.getStringAttr("empty"), ArrayRef<Type>{});
+      return data::VariantType::get(&context, identity, {arm});
+    };
+    auto first = make('a');
+    require(bool(types.get(first)), "native metadata was counted as wire text");
+    bool limited = false;
+    ScopedDiagnosticHandler expected(&context, [&](Diagnostic &diagnostic) {
+      for (const auto &refusal : diagnostics::refusals(diagnostic))
+        limited |= refusal.code == "native-type-policy-limit";
+      return success();
+    });
+    require(!types.get(make('b')) && limited,
+            "distinct native identities escaped the shared metadata budget");
+    require(bool(types.get(first)),
+            "cached immutable facts were charged again");
   });
   cases.run("authored local bodies frozen after application expansion", [&] {
     auto source = parseSourceFile<ModuleOp>(ZKC_MIXED_FIXTURE, &context);

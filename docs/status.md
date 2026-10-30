@@ -37,7 +37,9 @@ construction callbacks and logical signature derivation now use these typed
 arguments directly, including complete-Type ports, projections and numerical
 masks. Runtime binding storage has not yet adopted that derivation. Resource capability
 types now retain enum kinds and separate identities; native transcript checks
-consume those fields directly. Other
+consume those fields directly. Native type-use policies inspect typed catalog
+arguments and all aggregate alternatives without encoding and reparsing types.
+Closed message-frame membership and byte-publication limits remain separate. Other
 legacy inner neutral conversions and fully typed MLIR invocation arguments
 remain in progress. The
 [interface inventory](spec/formats/foundation-interfaces.md) defines the remaining

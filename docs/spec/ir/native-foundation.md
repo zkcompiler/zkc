@@ -157,6 +157,15 @@ owned by its codec boundary.
 Natural type parameters remain bounded by 1048576. Public byte encodings have
 separate bounds: native formation alone never authorizes serialization.
 
+Native use policies inspect these same typed observations and every variant
+alternative. Copy permission does not imply a message frame, constructibility
+or protocol-boundary permission. Closed frame membership is checked separately
+from atomic default-codec selection. Native policy analysis bounds expanded
+type/metadata nodes to 200000 and metadata string bytes to 1 MiB across distinct
+queried types; repeated queries may reuse immutable type facts. It neither
+constructs canonical spellings nor uses byte-parser depth as a mathematical
+permission test. Publication still enforces its independent encoding limits.
+
 ## Formation, admission and invalidation
 
 Ordinary MLIR verification establishes structural formation, region/operand
