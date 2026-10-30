@@ -98,6 +98,14 @@ Examples:
 - `[["clause",0],["subject",0]]`: an inline relation in the first clause;
 - `[["spec_block",0],["claim",1]]`: the second claim in the first claim block.
 
+`expr.role_assembly` retains the written role names in `labels` and their
+corresponding expressions in `operands`, both in source order. It does not
+claim equality of components. The neutral formal term constructor
+`formal.role-assembly` retains its ordered `components` argument edges;
+role resolution, type/availability checks and leaf layout belong to checked
+elaboration. An invalid or unsupported expression role suffix never disappears
+from written source, and native elaboration refuses it.
+
 The last mapping is exactly the source-claim address `(owner, block, claim)`.
 Clause names and claim labels are syntax fields and do not replace ordinals.
 A member definition has its own owner. An inline relation or construction
@@ -112,6 +120,12 @@ their single handle operand. An oracle port additionally retains its written
 `oracle_holder` and optional `oracle_maximum` syntax child. Inferred owner,
 paired interface leaves and generated shape constants belong to elaboration,
 not to this AST.
+
+A layout declaration's `oracle_shapes` list retains its preceding shape
+attributes. Each `oracle_shape` node has a `port`, `dimension`, and a static
+`bound` child, under the attribute's source span. A bound written there is not
+invented as an inline `oracle_maximum` port child. Signature checking resolves
+the attachment independently into the checked port's shape metadata.
 
 Sequence expressions have the exact kinds `expr.oracle_sequence_empty`,
 `expr.oracle_sequence_append`, `expr.oracle_sequence_at` and
@@ -155,6 +169,77 @@ written effects. Permission lists retain written order and do not insert the
 `Drop` implied by `Copy`. Field ports carry their written visibility; ordinary
 ports do not carry a visibility field. Bounds and claim domain spellings remain
 unnormalized.
+
+## Layout-source additions
+
+The same version-0 format carries the development layout frontend. A statement's
+`evaluation` is `pure` for `=`/`:=`/ordinary expressions, `ordered` for `<-`, and
+null for an older-syntax statement. A send's `from` is null when omitted;
+`to` remains authored. A single unnamed protocol result has a null port name.
+The internal result binder used by checking is not written source.
+
+`section` contains its written `parameters`, `members` and `formal` occurrences.
+It is embedded in its enclosing declaration's member list through a `section`
+edge. Real enclosed declarations retain their enclosing namespace, with no
+section owner inserted. Its parameter nodes do not contain inferred copies.
+
+Declarations and sections have a `formal` list. Its edges address a frozen
+**authored formal model**, with the same path and span envelope as ordinary
+written nodes. The model has its own typed node references; parser arena indices,
+parser-kind names and token lists are not part of the contract. Semantic names
+remain unresolved. No clause is elaborated or proved by this representation.
+
+Each kind below has the prefix `formal.`. Fields that reference other nodes
+contain paths, and optional references are explicitly null. Repeated fields are
+ordered arrays of paths. Field names are also their edge categories; a singular
+edge uses index zero. A literal's `literal` field retains its source spelling
+(including string quotes). `name`, `symbol` and `notation` are strings.
+
+| Kind | Fields besides `kind`, `path`, `span` |
+| --- | --- |
+| `reference` | `name` |
+| `natural`, `boolean`, `string` | `literal` |
+| `hole` | none |
+| `group`, `tuple`, `array`, `block`, `parameters`, `static_parameters`, `effects`, `constraints`, `result`, `fields` | `elements` |
+| `argument` | optional `label`, `type`, `value`; Boolean `ghost`; `purpose` (`ordinary`, `statement`, `witness`, `parameter`) |
+| `call`, `static`, `index`, `record`, `delimited` | optional `function`, ordered `arguments`, `notation` (empty except delimited notation) |
+| `member` | `base`, `member`, Boolean `qualified` |
+| `prefix`, `postfix`, `infix` | `symbol`, ordered `operands` |
+| `roles` | optional `holder`, ordered `participants` |
+| `availability` | `value`, `roles` |
+| `specification`, `relation`, `ghost_function`, `oracle_function`, `law_declaration` | Boolean `public`; optional `name`, `parameters`, `inputs`, `roles`, `result`, `constraints`, `effects`, `body`, `subject` |
+| `requires`, `ensures`, `target`, `reduces`, `request`, `alias`, `law` | optional `label`, `value`, optional `residual` |
+| `import` | Boolean `public`, Boolean `lean`, `module`, optional `alias`, ordered `members` |
+| `binding` | `pattern`, `value`, optional `type`; Boolean `mutable`, `ordered`, `update` |
+| `return` | `value` |
+| `guard` | `condition`, optional `roles` |
+| `if` | `condition`, `consequent`, optional `alternative` |
+| `match` | `value`, `cases` |
+| `case` | `pattern`, `body` |
+| `for` | `index`, `lower`, `upper`, `body`, optional `roles`, optional `maximum` |
+| `send` | `value`, optional `sender`, ordered `receivers` |
+| `query` | `handle`, `position` |
+| `oracle-delivery` | `delivery`, `kind`, optional `rows`, optional `maximum` |
+| `query-body` | `parameters`, `body` |
+| `quantifier` | Boolean `existential`, `variable`, `type`, `body` |
+| `lambda` | ordered `parameters`, `body` |
+| `reduction` | `symbol`, ordered `bindings` (`pattern` and `domain` paths), optional `filter`, `body` |
+| `attribute` | `name`, ordered `arguments` |
+
+A parameter's colon introduces its `type`; a call or record argument's colon
+introduces a labeled `value`. `ghost` is retained even when a label is absent.
+An ordinary role list has no holder. Custody has a holder and receiver
+participants; it cannot collapse into a shared availability list. `group`
+preserves one parenthesized argument, distinct from tuple construction.
+`reduces` preserves its source relation in `value` and destination in `residual`.
+Clause labels, omitted senders and omitted loop maxima are never synthesized by
+this writer. Spans recover punctuation and trivia from the exact capture.
+
+Spec attachment and clause inventory consume the authored model. The native
+actual-interface comparison independently checks *attachment coverage* against
+captured source headers, using the same syntax implementation. It is not an
+independent formal parser or a proof of source elaboration. General formal
+elaboration and the corresponding source connection remain separate obligations.
 
 ## Limits and assurance
 

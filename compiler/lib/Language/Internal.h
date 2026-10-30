@@ -102,6 +102,9 @@ struct SyntaxPort {
   std::optional<SyntaxSelector> binding;
   std::optional<SyntaxScopedSignature> scoped;
   std::optional<SyntaxType> domain;
+  bool unnamed = false;
+  /// Installed declaration selected by name resolution, never by the parser.
+  std::optional<std::string> serviceConstructor;
   std::optional<std::string> oracleHolder;
   std::optional<SyntaxType> oracleMaximum;
 };
@@ -156,6 +159,7 @@ struct Expression {
     Map,
     DomainProduct,
     MethodCall,
+    RoleAssembly,
     OracleSend,
     OracleQuery,
     OracleContents,
@@ -187,6 +191,8 @@ struct Expression {
   std::vector<SyntaxType> arguments;
   std::vector<ArgumentLabel> staticLabels, callLabels;
   std::vector<std::string> labels;
+  // Authored constructor occurrences for nominal match resolution/navigation.
+  std::vector<Span> constructorSpans;
   /// Kernel parameter positions written as asset terms instead of literals.
   std::map<unsigned, SyntaxType> assetParameters;
   std::optional<std::vector<std::string>> roles;
@@ -226,6 +232,11 @@ struct Statement {
   std::optional<std::string> site;
   uint32_t expression;
   Span span;
+  enum class Evaluation {
+    Legacy,
+    Pure,
+    Ordered
+  } evaluation = Evaluation::Legacy;
 };
 struct SyntaxBody {
   std::vector<SyntaxOperator> operators;
@@ -236,6 +247,8 @@ struct SyntaxBody {
   std::vector<std::pair<std::string, uint32_t>> results;
   bool stopped = false;
   bool returned = false;
+  /// Mathematical final expression; checking still requires a complete result.
+  bool implicitResult = false;
   bool region = false;
   std::string stopReason;
   Span span;
@@ -338,7 +351,31 @@ struct SyntaxSourceClaimBlock {
   SourceClaimBlock value;
   SyntaxType subject;
 };
+struct FormalSource;
+/// Header attachment and frozen authored formal facts. The parser snapshot is
+/// used only while completing bodies; consumers use the grammar-neutral model.
+struct FormalSyntax {
+  syntax::Snapshot tree;
+  syntax::NodeId node;
+  std::optional<SyntaxType> subject;
+  std::string name;
+  bool isPublic = false;
+  std::shared_ptr<const FormalSource> authored;
+};
+struct SyntaxOracleShape {
+  std::string port, dimension;
+  SyntaxType bound;
+  Span span;
+};
 struct SyntaxDeclaration {
+  std::vector<FormalSyntax> formalSyntax;
+  /// Private link to the frozen authored header, assigned before expansion.
+  /// Not serialized and never an artifact or proof identity.
+  std::optional<uint32_t> writtenDeclaration;
+  bool layoutSyntax = false;
+  bool invalidBody = false;
+  /// Authored parameter group, erased before native declaration collection.
+  bool section = false;
   std::optional<std::string> generated;
   Declaration::Kind kind;
   /// A domain declaration's target is its sort word; its domain is the
@@ -354,9 +391,13 @@ struct SyntaxDeclaration {
   Span span;
   std::vector<std::string> roles;
   std::vector<SyntaxPort> inputs, outputs, services, scopedInputs, domainInputs;
+  std::vector<SyntaxOracleShape> oracleShapes;
   std::vector<Declaration::InputSlot> inputOrder;
   std::vector<Expression> expressions;
   std::optional<DeferredBody> deferredBody;
+  /// Declaration keyword location used to find a layout body after reparsing.
+  /// The complete authored span may also include preceding attributes.
+  uint32_t layoutDeclarationStart = 0;
   // Root body is kept in the first slot; nested bodies use stable indices.
   std::vector<SyntaxBody> bodies;
   // Resolved lexical identities are private elaboration data, never serialized.
@@ -424,10 +465,17 @@ struct BodyParseScope {
 };
 llvm::Error parseBodies(const SourceBuffer &, SourceId, llvm::ArrayRef<Token>,
                         llvm::ArrayRef<BodyParseScope>, Work &);
+llvm::Expected<SyntaxDeclaration>
+parseLayoutHeaders(const SourceBuffer &, SourceId, CheckedStorage &, Work &);
+llvm::Error parseLayoutBodies(SourceId, llvm::ArrayRef<BodyParseScope>,
+                              CheckedStorage &, Work &,
+                              std::vector<Diagnostic> *recovery = nullptr);
+llvm::Error expandLayoutSections(std::vector<SyntaxDeclaration> &, Work &);
 NotationEnvironment fixedNotationEnvironment(SourceId);
 llvm::Error resolveNotationSyntax(std::vector<SyntaxOperator> &,
                                   NotationEnvironment &, Work &);
-llvm::Error check(std::vector<SyntaxDeclaration>, CheckedStorage &, Work &);
+llvm::Error check(std::vector<SyntaxDeclaration>, CheckedStorage &, Work &,
+                  AnalysisStorage * = nullptr);
 llvm::Error checkSetups(const ClosedEntry &, Layouts &, Work &);
 llvm::Error checkClosedSourceClaims(const ClosedEntry &, Work &);
 llvm::Error checkCapabilityInstallation();

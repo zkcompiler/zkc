@@ -13,7 +13,37 @@ FormatResult format(const Snapshot &snapshot, Budget budget,
          {}});
     return result;
   }
+  uint64_t remaining = std::min(budget.work, Budget{}.work);
+  auto stop = [&](llvm::StringRef code, llvm::StringRef message) {
+    result.diagnostics.push_back(
+        {code.str(), message.str(), snapshot.span(snapshot.root()), {}});
+  };
+  auto charge = [&](uint64_t amount) {
+    if (cancellation.cancelled()) {
+      stop("syntax.format.cancelled",
+           "formatting was cancelled; source was retained");
+      return false;
+    }
+    if (amount > remaining) {
+      stop("syntax.format.limit",
+           "formatting resource limit exceeded; source was retained");
+      return false;
+    }
+    remaining -= amount;
+    result.workUsed += amount;
+    return true;
+  };
   auto tokens = snapshot.tokens();
+  if (snapshot.revision().text().size() >
+          std::min(budget.bytes, Budget{}.bytes) ||
+      tokens.size() > std::min(budget.tokens, Budget{}.tokens) ||
+      snapshot.nodes().size() > std::min(budget.nodes, Budget{}.nodes)) {
+    stop("syntax.format.limit",
+         "formatting representation limit exceeded; source was retained");
+    return result;
+  }
+  if (!charge(snapshot.revision().text().size() + tokens.size()))
+    return result;
   // Spacing belongs to token boundaries, not text substitutions. Layout,
   // comments and all authored parentheses retain their positions.
   std::vector<int8_t> spaces(tokens.size(), -1);
@@ -28,9 +58,8 @@ FormatResult format(const Snapshot &snapshot, Budget budget,
     if (i < next.size() && next[i] < spaces.size())
       spaces[next[i]] = count;
   };
-  uint64_t work = budget.work;
   for (uint32_t i = 0; i < tokens.size(); ++i) {
-    if (cancellation.cancelled() || !work--)
+    if (!charge(1))
       return result;
     if (tokens[i].trivia() || tokens[i].synthetic())
       continue;
@@ -38,7 +67,10 @@ FormatResult format(const Snapshot &snapshot, Budget budget,
     if (value == "," || value == ";" || value == ":") {
       spaces[i] = 0;
       after(i, 1);
-    } else if (value == "." || value == "::" || value == "@") {
+    } else if (value == "@") {
+      spaces[i] = 1;
+      after(i, 0);
+    } else if (value == "." || value == "::") {
       spaces[i] = 0;
       after(i, 0);
     } else if (value == "(" || value == "[") {
@@ -52,7 +84,7 @@ FormatResult format(const Snapshot &snapshot, Budget budget,
     }
   }
   for (uint32_t i = 0; i < snapshot.nodes().size(); ++i) {
-    if (cancellation.cancelled() || !work--)
+    if (!charge(1))
       return result;
     const auto &node = snapshot.nodes()[i];
     auto children = snapshot.children({i});
@@ -83,7 +115,7 @@ FormatResult format(const Snapshot &snapshot, Budget budget,
   std::optional<Token> previous;
   for (size_t i = 0; i < tokens.size(); ++i) {
     auto token = tokens[i];
-    if (cancellation.cancelled() || !work--)
+    if (!charge(1))
       return result;
     if (token.synthetic())
       continue;
@@ -117,24 +149,61 @@ FormatResult format(const Snapshot &snapshot, Budget budget,
   }
   if (!formatted.empty() && formatted.back() != '\n')
     formatted += '\n';
-  if (formatted.size() > budget.bytes)
+  if (formatted.size() > std::min(budget.bytes, Budget{}.bytes)) {
+    stop("syntax.format.limit",
+         "formatted source exceeds the byte limit; source was retained");
     return result;
+  }
   auto buffer = snapshot.revision().buffer();
   buffer.text = formatted;
+  budget.work = remaining;
   auto headers = parseHeaders(source::Revision(std::move(buffer)),
                               snapshot.sourceId(), budget, cancellation);
+  if (!charge(headers.workUsed()))
+    return result;
+  if (headers.status() != Status::Complete) {
+    if (headers.status() == Status::Cancelled)
+      stop("syntax.format.cancelled",
+           "formatting was cancelled; source was retained");
+    else if (headers.status() == Status::ResourceExhausted)
+      stop("syntax.format.limit",
+           "formatting reparse exceeded its budget; source was retained");
+    else
+      stop("syntax.format.equivalence",
+           "formatted source did not parse; source was retained");
+    return result;
+  }
   Environments environments;
   for (uint32_t i = 0; i < snapshot.nodes().size(); ++i) {
+    if (!charge(1))
+      return result;
     auto owner = snapshot.nodes()[i].environmentOwner;
     if (owner != UINT32_MAX) {
       auto at = offsets.find(owner);
-      if (at == offsets.end())
+      if (at == offsets.end()) {
+        stop("syntax.format.environment",
+             "notation environment has no matching source position; source was "
+             "retained");
         return result;
+      }
       environments.try_emplace(at->second, snapshot.environment({i}));
     }
   }
+  budget.work = remaining;
   auto reparsed = parseBodies(headers, snapshot.environment(snapshot.root()),
                               std::move(environments), budget, cancellation);
+  if (!charge(reparsed.workUsed()))
+    return result;
+  if (reparsed.status() == Status::Cancelled ||
+      reparsed.status() == Status::ResourceExhausted) {
+    stop(reparsed.status() == Status::Cancelled ? "syntax.format.cancelled"
+                                                : "syntax.format.limit",
+         "formatting reparse did not complete; source was retained");
+    return result;
+  }
+  if (!charge(snapshot.tokens().size() + reparsed.tokens().size() +
+              snapshot.nodes().size() + reparsed.nodes().size()))
+    return result;
   if (!equivalent(snapshot, reparsed)) {
     result.diagnostics.push_back(
         {"syntax.format.equivalence",

@@ -46,17 +46,36 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
   }
   using K = Expression::Kind;
   using T = Type::Kind;
+  const auto oracleMode = oracleEvaluation(expr.kind);
+  if (syntax.layoutSyntax) {
+    bool ordered = expr.kind == K::MethodCall ||
+                   oracleMode == Statement::Evaluation::Ordered;
+    if (auto found = inference->callees.find(id);
+        found != inference->callees.end()) {
+      const auto &callee =
+          checker.output.declarations[found->second.declaration.index];
+      ordered |= callee.kind == Declaration::Kind::Local ||
+                 callee.kind == Declaration::Kind::EntryFunction ||
+                 (callee.generated && callee.generated->operation.has_value());
+    }
+    if ((ordered && orderedRoot != id) || (!ordered && orderedRoot == id)) {
+      fail("source.action",
+           ordered
+               ? "ordered action requires the outer '<-' position"
+               : "'<-' requires an ordered action; use '=' for a pure value",
+           expr.span);
+      return {};
+    }
+  }
   std::optional<ValueId> result;
   if (expr.kind == K::FinishIf) {
     fail("source.mode", "protocol action requires a complete let statement",
          expr.span);
     return {};
   }
-  if (expr.kind == K::OracleSend || expr.kind == K::OracleQuery ||
-      expr.kind == K::OracleContents || expr.kind == K::OracleRows ||
-      expr.kind == K::OracleForgetRows || expr.kind == K::OracleSequenceEmpty ||
-      expr.kind == K::OracleSequenceAppend ||
-      expr.kind == K::OracleSequenceAt || expr.kind == K::OracleSequenceLength)
+  if (expr.kind == K::RoleAssembly)
+    result = assembleRoles(expr, depth);
+  else if (oracleMode)
     result = oracle(expr, depth);
   else if (expr.kind == K::And || expr.kind == K::Or) {
     result = boolean(expr, depth);

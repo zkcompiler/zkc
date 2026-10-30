@@ -28,6 +28,8 @@ private:
   std::vector<UsagePlan::Value> usageValues;
   unsigned callDepth;
   uint32_t statement = 0;
+  /// Only the outer expression selected by an authored `<-` may be ordered.
+  std::optional<uint32_t> orderedRoot;
   bool retainExpressionValues = false;
   Placement *placement = nullptr;
   const ExpressionTypes *inference = nullptr;
@@ -110,7 +112,10 @@ private:
   std::optional<Semantics::CallSignature>
   kernelSignature(const Expression &, std::vector<Type> &,
                   std::vector<std::string> &, std::vector<AssetReference> &);
+  static std::optional<Statement::Evaluation>
+      oracleEvaluation(Expression::Kind);
   std::optional<ValueId> oracle(const Expression &, unsigned);
+  std::optional<ValueId> assembleRoles(const Expression &, unsigned);
   std::optional<ValueId> oracleSequence(const Expression &, unsigned);
   std::optional<ValueId> intrinsic(const Expression &, unsigned);
   std::optional<Semantics::CallSignature>

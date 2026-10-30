@@ -4,6 +4,7 @@
 #include "LexicalRecords.h"
 #include "NotationRecords.h"
 #include "zkc/Language/Project.h"
+#include "zkc/Syntax/Syntax.h"
 #include <map>
 #include <set>
 namespace zkc::language::detail {
@@ -28,6 +29,7 @@ struct NameEnvironment {
   std::map<std::string, DeclarationId> modules;
   std::vector<std::map<std::string, SourceBinding>> visible;
 };
+struct AuthoringStorage;
 struct CheckedStorage {
   explicit CheckedStorage(CapturedProject capture)
       : capture(std::move(capture)) {}
@@ -35,7 +37,10 @@ struct CheckedStorage {
   std::vector<Asset> assets;
   std::shared_ptr<const std::vector<SourceBuffer>> sources;
   std::vector<std::vector<Token>> tokens;
+  /// Immutable authored layout trees, retained before semantic elaboration.
+  std::vector<std::optional<syntax::Snapshot>> layoutHeaders, layoutBodies;
   std::vector<Declaration> declarations;
+  std::vector<PendingSpecification> pendingSpecifications;
   std::string installation;
   uint64_t work = 0, declarationCount = 0, operationCount = 0;
   uint64_t notationDescriptors = 0, notationHoles = 0;
@@ -45,6 +50,7 @@ struct CheckedStorage {
   APIRecords api;
   std::vector<LexicalResolution> lexicalResolutions;
   std::shared_ptr<const NameEnvironment> names;
+  std::shared_ptr<const AuthoringStorage> authoring;
   /// Immutable authored callback and effect contracts, independent of mutable
   /// checked metadata.
   std::map<uint32_t, std::shared_ptr<const SyntaxDeclaration>> signatureSources;
@@ -62,11 +68,24 @@ struct ClosedStorage {
   std::optional<HostInvocation::Kind> invocationKind;
   uint64_t work = 0;
 };
+/// Editor facts are frozen separately from a CheckedProject. A declaration may
+/// have a valid header without a checked signature, or a signature without a
+/// checked body. This owner has no compilation or admission API.
+struct AuthoringStorage {
+  std::vector<Declaration> declarations;
+  std::vector<bool> signatures, bodies;
+  std::vector<PendingSpecification> pendingSpecifications;
+  std::vector<std::optional<syntax::Snapshot>> layoutBodies;
+  std::vector<LexicalResolution> lexicalResolutions;
+  APIRecords api;
+  std::shared_ptr<const NameEnvironment> names;
+};
 struct AnalysisStorage {
   std::shared_ptr<const std::vector<SourceBuffer>> sources;
   std::vector<Diagnostic> diagnostics;
   std::vector<std::vector<Token>> tokens;
   std::optional<CheckedProject> checked;
+  std::shared_ptr<const AuthoringStorage> authoring;
 };
 llvm::Error failure(llvm::StringRef code, const llvm::Twine &message,
                     std::optional<Span> span = {},
@@ -84,6 +103,7 @@ struct Work {
   const Limits &limits;
   uint64_t used = 0, tokens = 0, declarations = 0, operations = 0;
   uint64_t notationDescriptors = 0, notationHoles = 0;
+  std::optional<source::Cancellation> cancellation = {};
   llvm::Error charge(uint64_t amount = 1, std::optional<Span> span = {});
   llvm::Error count(uint64_t &counter, uint64_t limit, llvm::StringRef what,
                     std::optional<Span> span = {});

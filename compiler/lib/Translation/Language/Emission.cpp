@@ -1290,6 +1290,18 @@ class Emitter {
             return false;
           result.push_back(received->getResult(0));
         }
+      } else if (auto *assembly = std::get_if<RoleAssembly>(&op.action)) {
+        for (unsigned i = 0; i < resultTypes.size(); ++i) {
+          Values components;
+          for (auto operand : assembly->operands)
+            components.push_back(values[operand.index][i]);
+          auto *actual =
+              make("protocol.assemble_roles", resultTypes[i], components,
+                   {attr("roles", roles(assembly->roles))});
+          if (!actual)
+            return false;
+          result.push_back(actual->getResult(0));
+        }
       } else if (auto *restriction = std::get_if<Restriction>(&op.action)) {
         for (unsigned i = 0; i < resultTypes.size(); ++i) {
           auto *actual = make("protocol.restrict_roles", resultTypes[i],

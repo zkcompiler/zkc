@@ -612,6 +612,9 @@ class SpecializationCheck {
             else if constexpr (std::is_same_v<T, Restriction>)
               return map(action.input).index == value.input.index &&
                      action.roles == value.roles;
+            else if constexpr (std::is_same_v<T, RoleAssembly>)
+              return action.roles == value.roles &&
+                     same(value.operands, mapped(action.operands));
             else if constexpr (std::is_same_v<T, Exchange>)
               return map(action.payload).index == value.payload.index &&
                      action.sender == value.sender &&

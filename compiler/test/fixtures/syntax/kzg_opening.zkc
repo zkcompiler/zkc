@@ -1,0 +1,28 @@
+// Design acceptance slice, parsed/formatted only. Library, setup and deployment
+// admission are not inferred from these names. No security proof is claimed.
+module examples::kzg_opening
+
+use zkc::pcs::{ProverKey, VerifierKey, Polynomial, represents, evaluate}
+use zkc::pcs::Kzg
+
+pub protocol Opening<F: Field> roles(P, V)(
+    pk: ProverKey<F> @P;
+    vk: VerifierKey<F> @V;
+    polynomial: Polynomial<F> @P;
+    point: F @(P, V)
+) -> bool @V:
+    (commitment, state) <- Kzg::commit(pk, polynomial)
+    public_commitment <- send commitment to V
+    (value, proof) <- Kzg::open(state, point)
+    received <- send (value, proof) to V
+    accepted <- Kzg::check(vk, public_commitment, point, received.0, received.1)
+    return accepted
+
+spec for Opening:
+    requires represents(pk, vk)
+    ensures out.result
+
+// The closed deployment must associate pk and vk with one authorized setup
+// slot using typed input selectors. This source is not an oracle-polynomial
+// realization: that additionally needs an installed evaluation kind and its
+// checked lowering. A setup identity never proves the PCS security assumptions.

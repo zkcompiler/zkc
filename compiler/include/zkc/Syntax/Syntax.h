@@ -89,6 +89,7 @@ public:
   source::SourceId sourceId() const;
   Status status() const;
   bool headersOnly() const;
+  uint64_t workUsed() const;
   llvm::ArrayRef<Token> tokens() const;
   llvm::ArrayRef<Node> nodes() const;
   llvm::ArrayRef<source::Diagnostic> diagnostics() const;
@@ -145,6 +146,7 @@ struct FormatResult {
   std::string text;
   bool complete;
   std::vector<source::Diagnostic> diagnostics;
+  uint64_t workUsed = 0;
 };
 FormatResult format(const Snapshot &, Budget = {}, source::Cancellation = {});
 /// Ignores trivia and byte coordinates; includes authored token spelling,

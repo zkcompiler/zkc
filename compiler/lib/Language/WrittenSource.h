@@ -8,7 +8,7 @@ struct WrittenSources {
   std::vector<SyntaxDeclaration> modules;
 };
 llvm::Expected<std::shared_ptr<WrittenSources>>
-retainWrittenHeaders(llvm::ArrayRef<SyntaxDeclaration>, Work &);
+retainWrittenHeaders(llvm::MutableArrayRef<SyntaxDeclaration>, Work &);
 llvm::Error retainWrittenBodies(WrittenSources &,
                                 llvm::ArrayRef<SyntaxDeclaration *>, Work &);
 } // namespace zkc::language::detail

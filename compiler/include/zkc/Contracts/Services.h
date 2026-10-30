@@ -8,6 +8,24 @@
 #include <string>
 #include <vector>
 namespace zkc::protocol {
+// Source constructors name installed declarations, not reserved type spellings.
+// The family selects the logical signature adapter; provider identities below
+// independently select execution and its registered interpretation.
+enum class ServiceFamily { Random };
+struct SourceService {
+  llvm::StringLiteral module, name;
+  ServiceFamily family;
+  unsigned parameters;
+};
+inline constexpr SourceService sourceServices[] = {
+    {"zkc::prelude", "Random", ServiceFamily::Random, 1}};
+inline const SourceService *sourceService(llvm::StringRef qualifiedName) {
+  auto [module, name] = qualifiedName.rsplit("::");
+  for (const auto &service : sourceServices)
+    if (service.module == module && service.name == name)
+      return &service;
+  return nullptr;
+}
 // Installed random-service signatures. Contracts identify distributions;
 // registry references separately authenticate the actual provider root.
 struct RandomService {
