@@ -384,9 +384,6 @@ int main() {
       mlir::OperationState state(function.getLoc(), "exec." + operation.str());
       state.addTypes(exec::OutcomeType::get(&context, {}));
       state.addOperands(function.getArgument(0));
-      state.addAttribute("descriptor",
-                         builder.getStringAttr(
-                             printJson(json::Object{{"op", operation.str()}})));
       builder.create(state);
       std::string bytes;
       raw_string_ostream stream(bytes);
@@ -620,17 +617,15 @@ int main() {
         instruction =
             R"(%r = "exec.returned"(%x) : (i64) -> !exec.outcome<(i1)>)";
       if (operation == "require")
-        instruction =
-            R"(%r = "exec.require"(%x) {descriptor = "{\22op\22:\22require\22}"} : (i64) -> !exec.outcome<>)";
+        instruction = R"(%r = "exec.require"(%x)  : (i64) -> !exec.outcome<>)";
       if (operation == "drop")
-        instruction =
-            R"(%r = "exec.drop"() {descriptor = "{\22op\22:\22drop\22}"} : () -> !exec.outcome<>)";
+        instruction = R"(%r = "exec.drop"()  : () -> !exec.outcome<>)";
       if (operation == "numeric")
         instruction =
-            R"(%r = "exec.numeric"() {descriptor = "{"} : () -> !exec.outcome<>)";
+            R"(%r = "exec.numeric"() {calculation = ""} : () -> !exec.outcome<>)";
       if (operation == "invoke")
         instruction =
-            R"(%r = "exec.invoke"() {descriptor = "{\22op\22:\22invoke\22,\22deployment\22:\22work\22}"} : () -> !exec.outcome<>)";
+            R"(%r = "exec.invoke"() {deployment = "work"} : () -> !exec.outcome<>)";
       std::string text = "module { func.func @test(%x: i64) {" + instruction +
                          "\nfunc.return } }";
       if (operation == "dispatch")
@@ -642,6 +637,49 @@ int main() {
       auto parsed = mlir::parseSourceString<mlir::ModuleOp>(text, &context);
       require(!parsed && StringRef(diagnostic).contains("execution-formation"),
               "invalid outcome accepted or wrong diagnostic: " + diagnostic);
+    });
+  for (StringRef change : {"alternative", "payload", "projection", "unpack"})
+    cases.run("logical operation refuses changed " + change, [=] {
+      auto checked = original(R"(module sample;
+        struct Pair { pub flag:bool, pub count:index }
+        entry fn Demo(x:bool,n:index)->bool {
+          let pair=Pair{flag:x,count:n};return pair.flag;
+        })");
+      mlir::DialectRegistry registry;
+      registerDialects(registry);
+      mlir::MLIRContext context(registry);
+      context.loadAllAvailableDialects();
+      auto module =
+          mlir::parseSourceString<mlir::ModuleOp>(checked.bytes(), &context);
+      require(bool(module), "logical original did not parse");
+      data::ConstructOp construct;
+      data::ProjectOp project;
+      module->walk([&](data::ConstructOp op) { construct = op; });
+      module->walk([&](data::ProjectOp op) { project = op; });
+      require(construct && project, "missing logical value operations");
+      if (change == "alternative")
+        construct.setAlternative("invented");
+      else if (change == "payload")
+        construct->setOperand(0, construct.getInputs()[1]);
+      else if (change == "projection")
+        project.setPath(llvm::ArrayRef<int64_t>{-1});
+      else {
+        mlir::OpBuilder builder(&context);
+        builder.setInsertionPointAfter(construct);
+        mlir::OperationState state(construct.getLoc(), "data.unpack");
+        state.addOperands(construct.getOutput());
+        state.addTypes(builder.getI1Type());
+        builder.create(state);
+      }
+      std::string diagnostic;
+      mlir::ScopedDiagnosticHandler handler(&context, [&](mlir::Diagnostic &d) {
+        raw_string_ostream stream(diagnostic);
+        d.print(stream);
+        return mlir::success();
+      });
+      require(mlir::failed(mlir::verify(*module)) &&
+                  StringRef(diagnostic).contains("data-value-formation"),
+              "malformed logical operation accepted: " + diagnostic);
     });
   for (StringRef change : {"predicate", "increment", "back-edge"})
     cases.run("Host loop rejects changed " + change, [=] {

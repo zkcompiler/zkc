@@ -464,13 +464,18 @@ class Writer {
       auto name = *op.getString("op");
       auto inputs = operands(*op.getArray("operands"), env);
       auto outputs = types(*op.getArray("results"));
-      json::Object descriptor(op);
-      descriptor.erase("operands");
-      descriptor.erase("results");
-      descriptor.erase("regions");
-      auto attr = builder.getNamedAttr(
-          "descriptor",
-          builder.getStringAttr(printJson(json::Object(descriptor))));
+      SmallVector<mlir::NamedAttribute> attrs;
+      for (StringRef key : {"alternative", "calculation", "deployment"})
+        if (auto text = op.getString(key))
+          attrs.push_back(
+              builder.getNamedAttr(key, builder.getStringAttr(*text)));
+      if (auto *path = op.getArray("path")) {
+        SmallVector<int64_t> indices;
+        for (const auto &index : *path)
+          indices.push_back(*index.getAsInteger());
+        attrs.push_back(builder.getNamedAttr(
+            "path", builder.getDenseI64ArrayAttr(indices)));
+      }
       SmallVector<mlir::Value> values;
       if (name == "if") {
         auto *next = block(outputs), *yes = block(), *no = block();
@@ -536,7 +541,7 @@ class Writer {
         branch(failure, stop->getResults());
         return;
       } else if (name == "construct" || name == "unpack" || name == "project") {
-        auto *actual = make("data." + name.str(), outputs, inputs, {attr});
+        auto *actual = make("data." + name.str(), outputs, inputs, attrs);
         append_range(values, actual->getResults());
       } else {
         auto outcome = exec::OutcomeType::get(builder.getContext(), outputs);
@@ -548,7 +553,7 @@ class Writer {
                                                   builder.getContext(),
                                                   *op.getString("callee")))});
         else
-          actual = make("exec." + name.str(), outcome, inputs, {attr});
+          actual = make("exec." + name.str(), outcome, inputs, attrs);
         auto *next = block(outputs);
         make("exec.dispatch", {}, actual->getResults(), {}, {next, failure});
         builder.setInsertionPointToEnd(next);
@@ -799,10 +804,6 @@ class SSAReader {
       if (!step)
         return false;
       SmallVector<mlir::Value> values;
-      json::Object descriptor(*o);
-      descriptor.erase("operands");
-      descriptor.erase("results");
-      descriptor.erase("regions");
       if (name == "if") {
         auto *arms = o->getArray("regions");
         auto *next = takeBlock(*outputTypes), *yes = takeBlock(),
@@ -916,11 +917,29 @@ class SSAReader {
               step->getAttrs().size() != 1)
             return false;
         } else {
-          auto attr = step->getAttrOfType<mlir::StringAttr>("descriptor");
           if (step->getName().getStringRef() !=
-                  (ordinary ? "data." : "exec.") + name.str() ||
-              !attr || attr.getValue() != printJson(json::Object(descriptor)) ||
-              step->getAttrs().size() != 1)
+              (ordinary ? "data." : "exec.") + name.str())
+            return false;
+          if (name == "project") {
+            auto project = mlir::dyn_cast<data::ProjectOp>(step);
+            auto *path = o->getArray("path");
+            if (!project || !path || o->size() != 4 ||
+                step->getAttrs().size() != 1 ||
+                path->size() != project.getPath().size())
+              return false;
+            for (auto [expected, actual] : zip(*path, project.getPath()))
+              if (expected.getAsInteger() != actual)
+                return false;
+          } else if (name == "construct" || name == "numeric" ||
+                     name == "invoke") {
+            StringRef key = name == "construct" ? "alternative"
+                            : name == "numeric" ? "calculation"
+                                                : "deployment";
+            auto attr = step->getAttrOfType<mlir::StringAttr>(key);
+            if (!attr || o->size() != 4 || step->getAttrs().size() != 1 ||
+                o->getString(key) != attr.getValue())
+              return false;
+          } else if (o->size() != 3 || !step->getAttrs().empty())
             return false;
         }
         if (step->getNumRegions() || step->getNumSuccessors() ||

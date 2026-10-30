@@ -122,15 +122,23 @@ def Data_DimOp : DataExpression<"dim", [DeclareOpInterfaceMethods<MathematicalOp
                        I64Attr:$axis);
   let results = (outs UI64:$output);
 }
-// Nominal source construction is distinct from the represented Variant carrier.
-// Descriptor/schema correspondence is checked by the source reader.
-class DataLogicalOperation<string name> : Op<DataDialect, name> {
-  let arguments = (ins Variadic<AnyType>:$inputs, StrAttr:$descriptor);
-  let results = (outs Variadic<AnyType>:$outputs);
+// Logical construction retains typed source layout. Formation checks shape;
+// source admission separately establishes construction and projection rights.
+def Data_ConstructOp : Op<DataDialect, "construct"> {
+  let arguments = (ins Variadic<AnyType>:$inputs, StrAttr:$alternative);
+  let results = (outs DataValue:$output);
+  let hasVerifier = 1;
 }
-def Data_ConstructOp : DataLogicalOperation<"construct">;
-def Data_UnpackOp : DataLogicalOperation<"unpack">;
-def Data_ProjectOp : DataLogicalOperation<"project">;
+def Data_UnpackOp : Op<DataDialect, "unpack"> {
+  let arguments = (ins DataValue:$input);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+}
+def Data_ProjectOp : Op<DataDialect, "project"> {
+  let arguments = (ins AnyType:$input, DenseI64ArrayAttr:$path);
+  let results = (outs AnyType:$output);
+  let hasVerifier = 1;
+}
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 def Data_MatchOp : Op<DataDialect, "match", [Terminator,
     DeclareOpInterfaceMethods<BranchOpInterface>]> {

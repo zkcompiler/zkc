@@ -55,11 +55,22 @@ check before that loop still executes. Sum elimination uses `data.match`, whose
 successor arguments are the selected payload followed by the actual captures;
 it implements MLIR's branch interface with produced and forwarded operands.
 
-`!data.value<schema>` retains nominal source schemas not represented by the
-profile's `i1` and `i64` scalar types. `data.construct`, `data.unpack` and
+`!data.value<#data.layout<...>>` retains a typed nominal source layout for
+values not represented by the profile's `i1` and `i64` scalar types. `data.construct`, `data.unpack` and
 `data.project` manipulate these logical values. The native mathematical
 aggregate carrier and its existing Data operations have their own checked
 representation contract; neither carrier is an alias for the other.
+
+These operations carry inherent data instead of an encoded JSON descriptor.
+`exec.numeric` has a nonempty `calculation` identity and `exec.invoke` a nonempty
+`deployment` identity. Their selected closure and signature remain subject to
+whole-profile admission. `exec.require` and `exec.drop` need no descriptor beyond
+the operation identity, operands and outcome. `data.construct` has an explicit
+alternative name (empty for products); `data.unpack` has none; `data.project`
+uses a dense i64 path of nonnegative field indices. Structural verification
+checks actual child/result types and complete selected payloads. These checks
+do not establish source constructor visibility or projection authority. Unknown
+semantic attributes and the retired descriptor form refuse profile admission.
 
 No Exec operation advertises purity or speculatability. Memory effects alone
 do not describe terminal control, observation order or reached admission.
