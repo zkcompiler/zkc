@@ -253,43 +253,54 @@ int main() {
               "DAG multiplicity, saturation or memoized scan bound changed");
     });
   for (bool warm : {false, true})
-    for (unsigned depth : {61u, 62u, 63u})
-      cases.run("linear helper depth " + llvm::Twine(depth) +
-                    (warm ? " memoized" : " fresh"),
-                [&] {
-                  auto text = fixtureText(0, false, depth);
-                  // A linear chain reaches the depth boundary without exceeding
-                  // admitted expansion size. Warm the leaf memo through a
-                  // separate direct call.
-                  size_t start = 0;
-                  while ((start = text.find("%first = func.call", start)) !=
-                         std::string::npos)
-                    text.erase(start, text.find('\n', start) - start + 1);
-                  start = text.find("func.func private @step");
-                  start = text.find('{', start) + 1;
-                  if (warm)
-                    text.insert(
-                        start,
-                        "\n%warm = func.call @multiply(%a,%b) : (!F,!F)->!F\n");
-                  // Formation rejects the over-limit case too. Parse it only
-                  // to exercise this private defensive guard directly.
-                  auto source = parseSourceString<ModuleOp>(
-                      text, ParserConfig(&context, false));
-                  require(bool(source), "linear depth fixture refused");
-                  if (depth < 63)
-                    require(succeeded(verify(*source)),
-                            "in-range helper chain is not admitted");
-                  uint64_t remaining = 100000;
-                  OptimizationOutcome outcome;
-                  auto size = finite::sizeCallbackPreparation(
-                      computationFixture(*source), unit(*source), remaining,
-                      outcome);
-                  require(bool(size) == (depth < 63),
-                          "memoized helper depth boundary changed");
-                  if (!size)
-                    require(outcome.reason == OptimizationReason::Depth,
-                            "depth decline lost its cause");
-                });
+    for (unsigned depth : {60u, 61u, 62u, 63u})
+      cases.run(
+          "linear helper depth " + llvm::Twine(depth) +
+              (warm ? " memoized" : " fresh"),
+          [&] {
+            auto text = fixtureText(0, false, depth);
+            // A linear chain reaches the depth boundary without exceeding
+            // admitted expansion size. Warm the leaf memo through a
+            // separate direct call.
+            size_t start = 0;
+            while ((start = text.find("%first = func.call", start)) !=
+                   std::string::npos)
+              text.erase(start, text.find('\n', start) - start + 1);
+            start = text.find("func.func private @step");
+            start = text.find('{', start) + 1;
+            if (warm)
+              text.insert(
+                  start,
+                  "\n%warm = func.call @multiply(%a,%b) : (!F,!F)->!F\n");
+            // Formation rejects the over-limit case too. Parse it only
+            // to exercise this private defensive guard directly.
+            auto source = parseSourceString<ModuleOp>(
+                text, ParserConfig(&context, false));
+            require(bool(source), "linear depth fixture refused");
+            // The callback-only sizing path is step -> depth helpers ->
+            // multiply. Whole-source admission also counts total, the
+            // function containing the fold, before that callback path.
+            {
+              bool diagnostic = false;
+              ScopedDiagnosticHandler handler(&context, [&](Diagnostic &value) {
+                diagnostic |= namesIdentifier(value.str(), "finite-formation");
+                return success();
+              });
+              require(succeeded(verify(*source)) == (depth < 62),
+                      "whole-source helper path has the wrong bound");
+              require(depth < 62 || diagnostic,
+                      "whole-source depth refusal lost its identifier");
+            }
+            uint64_t remaining = 100000;
+            OptimizationOutcome outcome;
+            auto size = finite::sizeCallbackPreparation(
+                computationFixture(*source), unit(*source), remaining, outcome);
+            require(bool(size) == (depth < 63),
+                    "memoized helper depth boundary changed");
+            if (!size)
+              require(outcome.reason == OptimizationReason::Depth,
+                      "depth decline lost its cause");
+          });
   cases.run("equation allowance stays shared across prepared callbacks", [&] {
     auto source = fixture(context);
     RealizationWork measured;

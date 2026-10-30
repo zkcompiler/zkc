@@ -108,13 +108,49 @@ int main() {
       auto closure = take(protocol::readSourceExecutionClosure(owner));
       uint64_t work = 100000;
       auto roots = take(exec::ResourceOriginAnalysis::create(
-          owner, std::move(closure), work));
+          owner, std::move(closure), work, 2));
       if (auto failure = roots->verifyFiniteState())
         throw std::runtime_error(toString(std::move(failure)));
-      expect(take(roots->get(cast<func::FuncOp>(
-                 SymbolTable::lookupSymbolIn(owner, "work")))),
-             {{0, 1}, {1, 2}});
+      auto caller =
+          cast<func::FuncOp>(SymbolTable::lookupSymbolIn(owner, "work"));
+      auto summary = take(roots->get(caller));
+      expect(summary, {{0, 1}, {1, 2}});
+      require(summary.depth == 2, "finite callback counted more than once");
+      refuses(roots->get(caller, 2), "mathematical-analysis-limit");
     });
+  cases.run("helper and finite callback edges share the exact depth limit", [] {
+    Source source;
+    auto module = parseSourceFile<ModuleOp>(
+        std::string(ZKC_FINITE_FIXTURES) + "/affine.mlir", &source.context);
+    require(bool(module), "finite native fixture refused");
+    source.owner =
+        cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front());
+    auto original = function(source, "work");
+    auto signature = protocol::scopedDataSignature(original);
+    std::string callee = "work";
+    for (unsigned i = 0; i < 62; ++i) {
+      auto name = "caller" + std::to_string(i);
+      auto wrapper =
+          source.function(name, signature.getInputs(), signature.getResults());
+      exec::ScopedExecutionBuilder body(source.builder, wrapper);
+      body.returned(source.call(body, callee,
+                                wrapper.getArguments().drop_front(),
+                                signature.getResults(), "call"));
+      callee = name;
+    }
+    uint64_t work = 100000;
+    auto roots = analysis(source, work);
+    // Warm a nested callback summary before asking about the complete chain.
+    require(take(roots->get(original)).depth == 2, "wrong folded height");
+    auto summary = take(roots->get(function(source, callee)));
+    expect(summary, {{0, 1}, {1, 2}});
+    require(summary.depth == 64, "mixed callback/call height changed");
+    refuses(roots->get(function(source, callee), 2),
+            "mathematical-analysis-limit");
+    auto fresh = analysis(source, work, 63);
+    refuses(fresh->get(function(source, callee)),
+            "mathematical-analysis-limit");
+  });
   cases.run("finite state refuses exchanged roots in a formed callback", [] {
     Source source;
     auto module = parseSourceFile<ModuleOp>(

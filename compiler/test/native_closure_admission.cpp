@@ -1,7 +1,9 @@
 #include "../lib/Dialect/Exec/ClosureAdmission.h"
+#include "../lib/Dialect/Exec/ExecutionDefinitions.h"
 #include "mlir/IR/Verifier.h"
 #include "support/ResourceSources.h"
 #include "zkc/Dialect/Exec/Execution.h"
+#include "llvm/ADT/ScopeExit.h"
 using namespace mlir;
 using namespace zkc;
 using namespace zkc::test;
@@ -32,6 +34,71 @@ void chain(Source &source, unsigned length) {
 } // namespace
 int main() {
   Cases cases;
+  cases.run("selected computation preflight bounds nesting before recursion",
+            [] {
+              Source source;
+              SmallVector<ModuleOp> units;
+              auto cleanup = llvm::scope_exit([&] {
+                for (auto unit : llvm::reverse(units))
+                  unit.erase();
+              });
+              Block *parent = &source.owner.getBody().front();
+              for (unsigned i = 0; i < 10000; ++i) {
+                auto unit = ModuleOp::create(source.location);
+                parent->push_back(unit);
+                units.push_back(unit);
+                parent = unit.getBody();
+              }
+              units.front()->setAttr("exec.computation",
+                                     source.builder.getUnitAttr());
+              units.front().setSymName("selected");
+              refuses(protocol::readSourceExecutionClosure(source.owner),
+                      "execution-source-closure");
+            });
+  cases.run(
+      "structural preflight has exact depth and cumulative work bounds", [] {
+        Source source;
+        SmallVector<ModuleOp> units;
+        auto cleanup = llvm::scope_exit([&] {
+          for (auto unit : llvm::reverse(units))
+            unit.erase();
+        });
+        Block *parent = &source.owner.getBody().front();
+        for (unsigned i = 0; i < 65; ++i) {
+          auto unit = ModuleOp::create(source.location);
+          parent->push_back(unit);
+          units.push_back(unit);
+          parent = unit.getBody();
+        }
+        unsigned remaining = 65;
+        require(protocol::detail::executionStructureWithinLimit(units.front(),
+                                                                remaining) &&
+                    remaining == 0,
+                "exact structural depth/work boundary refused");
+        require(!protocol::detail::executionStructureWithinLimit(units.back(),
+                                                                 remaining),
+                "structural work allowance replenished");
+        auto extra = ModuleOp::create(source.location);
+        parent->push_back(extra);
+        units.push_back(extra);
+        remaining = 1000;
+        require(!protocol::detail::executionStructureWithinLimit(units.front(),
+                                                                 remaining),
+                "excess structural nesting accepted");
+        extra.erase();
+        units.pop_back();
+        for (unsigned i = 0; i < 100; ++i)
+          units.front().getBody()->push_back(ModuleOp::create(source.location));
+        remaining = 164;
+        require(!protocol::detail::executionStructureWithinLimit(units.front(),
+                                                                 remaining),
+                "wide operation inventory bypassed work bound");
+        remaining = 165;
+        require(protocol::detail::executionStructureWithinLimit(units.front(),
+                                                                remaining) &&
+                    remaining == 0,
+                "exact wide inventory refused");
+      });
   cases.run("scope correctness does not admit affine reuse", [] {
     Source source;
     simple(source, "draw-reuse", true);

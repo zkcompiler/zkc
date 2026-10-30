@@ -287,10 +287,12 @@ struct ResourceOriginAnalysis::Impl {
           return false;
       } else if (isa<FoldOp>(op)) {
         ResourceOriginSummary summary;
-        if (!fold(step, level + 1, summary) ||
+        // fold counts the callback edge from this containing function. It is
+        // not an additional outlined body between the caller and callback.
+        if (!fold(step, level, summary) ||
             !substitute(summary, step.inputs, step.outputs, environment))
           return false;
-        result.depth = std::max(result.depth, summary.depth + 1);
+        result.depth = std::max(result.depth, summary.depth);
       } else if (isa<runtime::ReleaseBindingsOp>(op)) {
         for (auto value : step.inputs)
           environment.erase(value);

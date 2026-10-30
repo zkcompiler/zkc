@@ -37,8 +37,10 @@ same execution contract; the VM separation itself makes no performance claim.
 The [IR ownership design](compiler/ir-design.md) defines the target boundaries.
 The maintained path already has checked Tensor/Linalg computation, separate IR
 interpretation and transformation production, and one Computation owner. The
-next unit replaces the remaining duplicated executable wrappers, string-carried
-schemas and implicit whole-stage verifier work with the
+current foundation unit has removed per-contract executable wrappers and migrated
+most inner schemas to typed structure. It still must retire neutral installation
+conversion and implicit whole-stage verifier work, and complete the shared
+admission/analysis/export services specified by the
 [native MLIR foundation](spec/ir/native-foundation.md).
 
 Each unit below is one substantial pull request: research alternatives and
@@ -125,6 +127,21 @@ wrappers and inner string-schema verification; leave no fallback route. Run
 one broad native validation at this boundary, repeating only after relevant
 changes or unresolved failures. Lean builds and formal pipelines are excluded.
 
+Complete this foundation in dependency order: native binding installation and
+export-adapter separation; explicit read-only admission and shared stage builders;
+owner-scoped analysis lifecycles and final catalog/application exports; then the
+full default-route deletion and validation audit. Exercise fresh-context direct
+APIs, textual and nested pipelines, nondefault policy/target parity, dormant
+invalid bodies, sibling-callee mutation and concurrent pass execution. No cached
+fact or profile marker substitutes for re-admission after mutation.
+
+Widen MLIR transformation features only after those boundaries exist. Use local
+patterns and conversion legality where they describe a real transformation.
+Dataflow, finer effects, Transform/PDL and bufferization enter with a concrete
+consumer and a checked semantic contract, not an API adoption quota. Header/file
+splits follow semantic owners during these cuts rather than creating new library
+targets without a dependency need.
+
 ### Block requests and gating
 
 Construction owns the generated request layout and witness slot; runtime owns
@@ -156,6 +173,15 @@ holder data, receiver representations and role observations kept distinct.
 Native target transport must fix the public root/shape bindings and witness
 scope explicitly; a fresh witness per clause or a renamed relation does not
 preserve the original logical predicate.
+Bind acceptance to the actual authenticated root, setup, domain, query and answer;
+an obligation inventory or ignored verification result is insufficient. Keep the
+present proof-profile refusals until the relevant consumer interprets that link.
+
+The foundation preserves source/application associations and existing occurrence
+encodings. The virtual-batching unit consolidates the derived interaction analysis,
+including multiplicity, dependencies, role views and dynamic coordinates. Recheck
+the candidate schedule rather than persisting another authored protocol graph.
+Physical opening reuse does not remove logical queries, charges or failures.
 
 Fix the exact statement/root/witness encodings, frame order, occurrence/domain
 binding, final request length, gate/index coordinates and failure/successor

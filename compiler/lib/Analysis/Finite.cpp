@@ -11,6 +11,7 @@
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Interfaces/Collection.h"
 #include "llvm/ADT/DenseSet.h"
+#include <memory>
 #include <optional>
 using namespace mlir;
 using namespace llvm;
@@ -692,6 +693,7 @@ LogicalResult verifyDefinitionClosure(Operation *unit,
     return success();
   }
   llvm::DenseMap<Operation *, unsigned> color;
+  llvm::DenseMap<Operation *, unsigned> heights;
   SymbolTableCollection symbols;
   // Count actual IR, including scoped outcome/control operations, with the
   // same structural allowance as execution-closure formation. Semantic helper
@@ -699,15 +701,19 @@ LogicalResult verifyDefinitionClosure(Operation *unit,
   unsigned work = 1000000;
   std::function<LogicalResult(Operation *, unsigned)> visit =
       [&](Operation *definition, unsigned depth) -> LogicalResult {
-    if (depth > 64 || !work)
+    const unsigned ownHeight = isa<func::FuncOp>(definition) ? 1 : 0;
+    if (depth < ownHeight || depth > 64 || !work)
       return refuse(definition, "static closure exceeds analysis limit");
     --work;
     if (color[definition] == 2)
-      return success();
+      return heights.lookup(definition) <= 64 - depth + ownHeight
+                 ? success()
+                 : refuse(definition, "static closure exceeds analysis limit");
     if (color[definition] == 1)
       return refuse(definition, "all static references must be acyclic",
                     "finite-cycle");
     color[definition] = 1;
+    unsigned height = ownHeight;
     auto walked = definition->walk([&](Operation *op) -> WalkResult {
       if (!work) {
         (void)refuse(op, "static closure exceeds analysis limit");
@@ -729,19 +735,22 @@ LogicalResult verifyDefinitionClosure(Operation *unit,
           continue;
         Operation *callee = symbols.lookupNearestSymbolFrom(
             op, op->getAttrOfType<FlatSymbolRefAttr>(edge));
-        if (callee && isa<func::FuncOp>(callee))
+        if (callee && isa<func::FuncOp>(callee)) {
           if (failed(visit(callee, depth + 1)))
             return WalkResult::interrupt();
+          height = std::max(height, heights.lookup(callee) + ownHeight);
+        }
       }
       return WalkResult::advance();
     });
     if (walked.wasInterrupted())
       return failure();
     color[definition] = 2;
+    heights[definition] = height;
     return success();
   };
   for (auto *definition : definitions)
-    if (failed(visit(definition, 0)))
+    if (failed(visit(definition, isa<func::FuncOp>(definition) ? 1 : 0)))
       return failure();
   return success();
 }
@@ -781,7 +790,10 @@ FiniteCollectOp::verifySymbolUses(SymbolTableCollection &symbols) {
 namespace zkc::finite {
 namespace {
 class DependencyAnalysis {
-  llvm::DenseMap<Operation *, Summary> cache;
+  // A step summary remains live while predicate helpers populate this cache.
+  // DenseMap growth moves buckets, so borrow stable pointees, not bucket
+  // values.
+  llvm::DenseMap<Operation *, std::unique_ptr<Summary>> cache;
   llvm::DenseSet<Operation *> active;
   uint64_t remaining = 1000000;
   LogicalResult charge(Operation *op, uint64_t n) {
@@ -802,7 +814,7 @@ class DependencyAnalysis {
 public:
   LogicalResult helper(Operation *op, const Summary *&out) {
     if (auto it = cache.find(op); it != cache.end()) {
-      out = &it->second;
+      out = it->second.get();
       return success();
     }
     if (!active.insert(op).second || active.size() > 64)
@@ -865,7 +877,8 @@ public:
     if (result.results.size() != type.getNumResults())
       return refuse(op, "helper summary result arity");
     active.erase(op);
-    out = &cache.try_emplace(op, std::move(result)).first->second;
+    out = cache.try_emplace(op, std::make_unique<Summary>(std::move(result)))
+              .first->second.get();
     return success();
   }
   LogicalResult computation(Operation *op, Summary &out) {

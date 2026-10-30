@@ -1,3 +1,4 @@
+#include "ExecutionAttributes.h"
 #include "ExecutionDefinitions.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/Verifier.h"
@@ -22,9 +23,7 @@ namespace {
 // Record-directed comparison of actual SSA. Do not reconstruct an expected
 // program with readLocalExecution or replay the emission implementation here.
 bool attrs(Operation *op, ArrayRef<StringRef> names = {}) {
-  return op && llvm::all_of(op->getAttrs(), [&](NamedAttribute attribute) {
-           return llvm::is_contained(names, attribute.getName().getValue());
-         });
+  return exec::detail::hasOnlyExecutionAttributes(op, names);
 }
 bool strings(ArrayAttr actual, ArrayRef<std::string> expected) {
   if (!actual || actual.size() != expected.size())

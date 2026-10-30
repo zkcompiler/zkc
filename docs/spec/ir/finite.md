@@ -14,8 +14,13 @@ known independently.
 ## Domain declarations
 
 Domain formation is bounded to 1024 arguments/items, 4096 constructor-body
-operations and constructor depth 64. Static reference closure is bounded to depth
-64 and 100000 visits; dependency analysis uses a separate bounded work budget.
+operations and constructor depth 64. Static reference closure is bounded to 64
+ordinary functions along a path and 1000000 visits; a containing protocol body
+is not another ordinary function. Cached subtrees retain their height, so root
+order does not change this limit. A finite-containing function and its callback
+each count once. Callback-only preparation has its own 64-function bound, while
+whole-source admission also includes the calling function. Dependency analysis
+uses a separate bounded work budget.
 Exhausting analysis work refuses the input rather than asserting a result.
 Arguments and items must be formed logical types permitting Copy and Drop.
 Formation inspects their native structure and every variant alternative;

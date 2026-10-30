@@ -1,5 +1,6 @@
 #include "zkc/Dialect/Exec/Execution.h"
 #include "ClosureAdmission.h"
+#include "ExecutionAttributes.h"
 #include "ExecutionDefinitions.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
@@ -55,9 +56,7 @@ FunctionType scopedDataSignature(func::FuncOp function) {
 
 namespace {
 bool attributes(Operation *op, ArrayRef<StringRef> allowed) {
-  return llvm::all_of(op->getAttrs(), [&](NamedAttribute attribute) {
-    return llvm::is_contained(allowed, attribute.getName().getValue());
-  });
+  return exec::detail::hasOnlyExecutionAttributes(op, allowed);
 }
 bool bare(Operation *op) { return op && op->getAttrs().empty(); }
 bool returned(Operation *op, Value outcome) {
@@ -792,13 +791,7 @@ readSourceExecutionClosure(Operation *symbolTable) {
       // The enclosing source profile has not verified this nested symbol
       // table. Bound and verify its actual IR before querying typed signatures
       // or mathematical premises, including for dormant selected units.
-      if (unit.walk<WalkOrder::PreOrder>([&](Operation *) {
-                if (!remaining)
-                  return WalkResult::interrupt();
-                --remaining;
-                return WalkResult::advance();
-              })
-              .wasInterrupted() ||
+      if (!detail::executionStructureWithinLimit(unit, remaining) ||
           failed(verify(unit)) ||
           failed(mathematical::verifyComputationUnit(unit)))
         return error("execution-source-closure",

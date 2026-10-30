@@ -57,6 +57,11 @@ optional `arg_attrs` and `res_attrs` arrays index the actual ABI, including
 scope and outcome; formation requires one dictionary per corresponding port.
 Byte publication refuses nonempty dictionaries until it has an interpretation
 for them, so an annotation is never silently discarded.
+ABI-sized empty dictionaries are semantically inert and are accepted by native
+body readers and correspondence checks, including ordinary function calls.
+Wrong dictionary arity fails binding/application formation. Native admission
+also checks ordinary-call dictionary arity, which standard Func formation does
+not enforce.
 
 The declaration's derived logical signature and stored executable scope/outcome
 signature are distinct projections of the same contract. Native signature
@@ -304,6 +309,11 @@ CLI entry points, already-parsed C++ APIs, textual pipelines, imports and
 publication call the same admission service. No public entry may rely on the
 side effect of a previous module verifier or a copied checked annotation.
 The complete mutation-to-publication path rechecks the applicable stage.
+Bound actual structural nesting and cumulative work before recursive verification
+or walking, including selected computation modules and dormant definitions.
+Generic optimization runs only after admission has established the premises of
+the chosen mathematical profile; structural purity alone cannot erase an invalid
+body before admission.
 
 Analyses are owned by the isolated module/symbol scope containing the mutable
 dependencies they inspect. Cross-callable admission runs at that enclosing
@@ -378,6 +388,10 @@ does not refresh a parent snapshot. Reacquire facts after mutation before
 admission or publication; do not reuse references to invalidated analyses.
 Context-uniqued types do not certify a mutable declaration's meaning or
 permission to execute.
+Analysis storage must keep any borrowed summary valid across recursive cache
+population. Depth limits measure actual dependency path height, including cached
+subtrees, independently of root visitation order. A finite callback is one
+dependency edge; traversing the containing operation does not add another edge.
 
 Use ordinary rewrite patterns for local changes and explicit legality plus
 TypeConverter for stage/type conversion. Global projection and realization may
@@ -405,6 +419,8 @@ policy options. The C++ API and registered textual pipeline use that same
 builder. A stage pipeline admits its input and actual output; publication also
 checks the current output. Textual reproduction covers a stage and its explicit
 inputs/options, not retained originals that were never serialized with it.
+Pass and direct API initialization share the complete created-dialect inventory,
+including temporary candidates; registration alone does not imply loading.
 
 Admission's vocabulary check is read-only. Native operation/profile declarations
 provide one legality description for that check and for stage conversion.

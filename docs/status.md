@@ -175,6 +175,13 @@ export refuses shapes the current byte grammar cannot represent, preserving
 resource accounting. The scoped reader now returns only actual SSA/control and
 computation occurrences. Byte records are built by an explicit export adapter;
 format-local private computation declarations belong to structured export.
+Finite dependency summaries retain stable storage across predicate-helper cache
+growth. Finite and scoped resource checks count actual cached path heights and
+each callback edge once. Selected computation closure preflight bounds nesting
+before recursive verification. Native readers and comparison accept ABI-sized
+empty call dictionaries while refusing uninterpreted nonempty annotations.
+Numerical import avoids cascading symbol substitutions when reusing a binding;
+direct realization loads the same dialect dependencies as its pass entry.
 Native binding installation checks still use neutral declaration conversion;
 their retirement remains in progress. Structured export
 preserves actual SSA binding positions and checked

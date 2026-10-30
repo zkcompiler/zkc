@@ -94,6 +94,71 @@ int main() {
                 function.body.back().get<program::Return>(),
             "lost native body or failure semantics");
   });
+  cases.run(
+      "empty standard call dictionaries preserve reading and comparison", [&] {
+        auto expected = read(source, true);
+        auto module = parseSourceString<ModuleOp>(source, &context);
+        require(bool(module), "call annotation fixture refused");
+        Builder builder(&context);
+        module->walk([&](Operation *op) {
+          unsigned inputs, outputs;
+          if (auto function = dyn_cast<func::FuncOp>(op)) {
+            inputs = function.getNumArguments();
+            outputs = function.getFunctionType().getNumResults();
+          } else if (isa<func::CallOp, exec::ApplyOp>(op)) {
+            inputs = op->getNumOperands();
+            outputs = op->getNumResults();
+          } else
+            return;
+          op->setAttr("arg_attrs", builder.getArrayAttr(SmallVector<Attribute>(
+                                       inputs, builder.getDictionaryAttr({}))));
+          op->setAttr("res_attrs",
+                      builder.getArrayAttr(SmallVector<Attribute>(
+                          outputs, builder.getDictionaryAttr({}))));
+        });
+        require(succeeded(verify(*module)),
+                "empty call annotations did not form");
+        take(protocol::readLocalExecution(*module, false));
+        if (auto error =
+                protocol::verifyLocalExecution(*module, expected, false))
+          throw std::runtime_error(llvm::toString(std::move(error)));
+        func::CallOp ordinary;
+        module->walk([&](func::CallOp call) { ordinary = call; });
+        require(ordinary && ordinary.getNumOperands() &&
+                    ordinary.getNumResults(),
+                "missing ordinary call annotation control");
+        for (StringRef name : {"arg_attrs", "res_attrs"}) {
+          auto saved = ordinary->getAttr(name);
+          ordinary->setAttr(name, builder.getArrayAttr({}));
+          // Standard Func checks dictionary types but leaves their arity to
+          // consumers. Native admission must not discard malformed metadata.
+          require(succeeded(verify(*module)),
+                  "ordinary call control did not form");
+          refuses(protocol::readLocalExecution(*module, false),
+                  "execution-cfg");
+          auto error = protocol::verifyLocalExecution(*module, expected, false);
+          require(bool(error) &&
+                      namesIdentifier(llvm::toString(std::move(error)),
+                                      "execution-correspondence"),
+                  "comparison discarded wrong-sized ordinary call metadata");
+          ordinary->setAttr(name, saved);
+        }
+        exec::ApplyOp application;
+        module->walk([&](exec::ApplyOp op) { application = op; });
+        auto dictionaries =
+            llvm::to_vector(application.getArgAttrsAttr().getValue());
+        dictionaries.back() = builder.getDictionaryAttr(
+            {builder.getNamedAttr("test.semantic", builder.getUnitAttr())});
+        application.setArgAttrsAttr(builder.getArrayAttr(dictionaries));
+        require(succeeded(verify(*module)), "nonempty dictionaries must form");
+        refuses(protocol::readLocalExecution(*module, false), "execution-cfg");
+        auto error = protocol::verifyLocalExecution(*module, expected, false);
+        require(bool(error) && namesIdentifier(llvm::toString(std::move(error)),
+                                               "execution-correspondence"),
+                "comparison silently discarded a call annotation");
+        application.setArgAttrsAttr(builder.getArrayAttr({}));
+        require(failed(verify(*module)), "wrong call dictionary arity formed");
+      });
   auto reject = [&](StringRef name, StringRef from, StringRef to,
                     bool formed = true) {
     cases.run(name,

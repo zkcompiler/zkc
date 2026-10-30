@@ -203,6 +203,79 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  cases.run("direct realization loads the same dialects as the pass", [&] {
+    auto original = fixture(context, "finite/total-state.mlir");
+    auto logical = formExecutable(*original, {false, false});
+    std::string text;
+    llvm::raw_string_ostream stream(text);
+    logical->print(stream);
+    for (bool throughPass : {false, true}) {
+      MLIRContext fresh(registry);
+      auto candidate = parse(text, fresh);
+      auto before = copy(*candidate);
+      require(!fresh.getLoadedDialect("scf"),
+              "fixture already loaded the output control dialect");
+      if (throughPass)
+        run(*candidate, computation::createRealizeComputationsPass());
+      else
+        require(succeeded(computation::realizeComputations(*candidate)),
+                "direct API relied on pass-manager dialect loading");
+      require(fresh.getLoadedDialect("scf") &&
+                  succeeded(computation::verifyComputationRealization(
+                      *before, *candidate)),
+              "fresh-context realization lost correspondence");
+    }
+  });
+  for (StringRef collision : {"_numerical_binding_0", "_numerical_import_0"})
+    for (bool reverse : {false, true})
+      cases.run(
+          Twine("numerical import ") + collision +
+              (reverse ? " reversed" : " ordered"),
+          [&] {
+            auto original = parse(realization, context);
+            auto projected = formExecutable(*original);
+            auto logical = closedFixture(*projected);
+            auto first =
+                computationFixture(*logical)->getParentOfType<func::FuncOp>();
+            auto unit = cast<mlir::ModuleOp>(numericalUnit(*logical)->clone());
+            auto entry = mathematical::getComputationEntry(unit);
+            entry.setSymName(collision);
+            SymbolTable table(owner(*logical));
+            auto unitName = table.insert(unit);
+            auto second = cast<func::FuncOp>(first->clone());
+            second.setSymName("second_realized");
+            second->setAttr(
+                "runtime.origin",
+                Builder(&context).getArrayAttr(
+                    {Builder(&context).getStringAttr("second_realized"),
+                     Builder(&context).getArrayAttr({})}));
+            second.walk([&](exec::ComputeOp call) {
+              call.setCalleeAttr(SymbolRefAttr::get(
+                  unitName, {FlatSymbolRefAttr::get(&context, collision)}));
+            });
+            table.insert(second);
+            if (reverse)
+              second->moveBefore(first);
+            require(succeeded(verify(*logical)),
+                    "collision fixture did not form");
+            auto candidate = copy(*logical);
+            require(
+                succeeded(computation::realizeComputations(*candidate)) &&
+                    succeeded(computation::verifyComputationRealization(
+                        *logical, *candidate)),
+                "symbol substitution cascaded through a reused binding name");
+            unsigned bindings = 0;
+            candidate->walk([&](runtime::BindingOp) { ++bindings; });
+            require(bindings == 1,
+                    "identical imported bindings were not reused");
+            SymbolTableCollection symbols;
+            candidate->walk([&](exec::ApplyOp call) {
+              require(isa_and_nonnull<runtime::BindingOp>(
+                          symbols.lookupNearestSymbolFrom(
+                              call, call.getBindingAttr())),
+                      "imported application no longer resolves to its binding");
+            });
+          });
   cases.run(
       "direct computation recipe output retains the immutable source", [&] {
         auto original = parse(demanded, context);
