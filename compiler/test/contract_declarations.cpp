@@ -204,6 +204,9 @@ int main() {
             authoringStage("random.draw") == AuthoringStage::Source &&
             authoringStage("transcript.native.indexed.challenge") ==
                 AuthoringStage::Construction &&
+            authoringStage("representation.convert") ==
+                AuthoringStage::Physical &&
+            authoringStage("table.relayout") == AuthoringStage::Physical &&
             authoringStage("unknown.call") != AuthoringStage::Source,
         "source authoring stage boundary");
   check(sourceTypeFamilies().size() == 3 &&

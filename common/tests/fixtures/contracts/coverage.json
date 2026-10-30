@@ -258,6 +258,10 @@
       "sequence.append",
       "sequence.length",
       "sequence.at"
+    ],
+    "physical": [
+      "representation.convert",
+      "table.relayout"
     ]
   },
   "types": {

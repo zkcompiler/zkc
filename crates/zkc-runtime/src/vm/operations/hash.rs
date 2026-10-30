@@ -11,7 +11,6 @@ pub(super) const CONTRACTS: &[Installation] = &[
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
     physical_error: "uninstalled hash operation binding",
-    adapter: None,
     contracts: CONTRACTS,
 
     select,

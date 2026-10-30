@@ -36,10 +36,4 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
     select,
     alternatives: &[],
     physical_error: "uninstalled operation binding",
-    adapter: Some(|_| {
-        Err(AdmissionError::new(
-            ErrorCode::Signature,
-            "binding-adapter-at-logical-stage",
-        ))
-    }),
 };

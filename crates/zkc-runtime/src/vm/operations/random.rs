@@ -21,7 +21,6 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
     select,
     alternatives: &[],
     physical_error: "uninstalled operation binding",
-    adapter: None,
 };
 
 fn select(

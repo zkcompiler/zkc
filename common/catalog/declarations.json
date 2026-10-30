@@ -12994,6 +12994,87 @@
         ]
       },
       "stage": "Source"
+    },
+    {
+      "facets": [],
+      "name": "representation.convert",
+      "parameters": {
+        "maximum": 0,
+        "minimum": 0,
+        "validator": "None"
+      },
+      "requirements": [],
+      "scope": [
+        {
+          "kind": "root",
+          "name": "T",
+          "parameter": {
+            "kind": "Type",
+            "sort": ""
+          }
+        }
+      ],
+      "signature": {
+        "inputs": [
+          {
+            "term": 0
+          }
+        ],
+        "kind": "fixed",
+        "outputs": [
+          {
+            "term": 0
+          }
+        ]
+      },
+      "stage": "Physical"
+    },
+    {
+      "facets": [],
+      "name": "table.relayout",
+      "parameters": {
+        "maximum": 0,
+        "minimum": 0,
+        "validator": "None"
+      },
+      "requirements": [
+        {
+          "arguments": [
+            0
+          ],
+          "capability": "Field"
+        }
+      ],
+      "scope": [
+        {
+          "kind": "root",
+          "name": "F",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Field"
+          }
+        }
+      ],
+      "signature": {
+        "inputs": [
+          {
+            "arguments": [
+              0
+            ],
+            "constructor": "table"
+          }
+        ],
+        "kind": "fixed",
+        "outputs": [
+          {
+            "arguments": [
+              0
+            ],
+            "constructor": "table"
+          }
+        ]
+      },
+      "stage": "Physical"
     }
   ],
   "rules": [

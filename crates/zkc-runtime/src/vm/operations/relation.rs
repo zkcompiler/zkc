@@ -28,7 +28,6 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
     select,
     alternatives: &[],
     physical_error: "uninstalled operation binding",
-    adapter: None,
 };
 /// Relation views evaluate integer residue coordinates, so no binary field is
 /// implemented, although the logical contract needs only a field.

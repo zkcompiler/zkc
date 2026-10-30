@@ -91,7 +91,6 @@ fn select(
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
     physical_error: "uninstalled value encoding binding",
-    adapter: None,
     contracts: CONTRACTS,
 
     select,

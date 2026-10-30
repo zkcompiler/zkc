@@ -10,6 +10,11 @@ logical signatures, requirements, static parameter schemas, type permissions and
 installed facets. C++ and Rust data are generated from the authored neutral
 source. Language and IR adapters consume the native projection. Semantic
 validators and backend implementations retain their separate obligations.
+Physical adapters also have catalog erasure signatures and an explicit Physical
+stage. The runtime derives their ports and stage from that catalog rather than
+maintaining separate adapter-erasure callbacks. Installation and actual layout
+conversion checks remain with the physical owner; erasure does not authorize a
+source operation, default implementation, or removal of a reached conversion.
 Ordinary library declarations own public function names and argument names.
 The generated inventory exports types and capabilities; it does not duplicate
 source function APIs or turn installed operations into implicit imports.

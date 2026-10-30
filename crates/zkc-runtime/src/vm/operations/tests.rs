@@ -333,7 +333,6 @@ fn alternatives_require_a_logical_owner_after_complete_assembly() {
         contracts: &[],
 
         select: default_ports,
-        adapter: None,
         physical_error: "binding-implementation",
         alternatives: &[Alternative {
             timing: TimingRequirement::Unspecified,
@@ -611,4 +610,60 @@ fn multilinear_prefix_restriction_has_exact_vector_ports_and_binding() {
             );
         }
     }
+}
+
+#[test]
+fn physical_erasure_is_declared_without_source_or_installation_authority() {
+    for (contract, arguments, logical) in [
+        (
+            "representation.convert",
+            vec!["field:bls12-381.fr"],
+            "field:bls12-381.fr",
+        ),
+        (
+            "table.relayout",
+            vec!["bls12-381.fr", "arkworks.mle-lsb/0", "arkworks.mle-msb/0"],
+            "table:bls12-381.fr",
+        ),
+    ] {
+        let binding = OperationBinding {
+            contract: contract.into(),
+            arguments: arguments.into_iter().map(String::from).collect(),
+            implementation: String::new(),
+            physical_arguments: vec![],
+        };
+        assert_eq!(
+            zkc_catalog::operation(contract).unwrap().stage,
+            zkc_catalog::Stage::Physical
+        );
+        let signature = declared_logical_signature(&binding).unwrap();
+        assert_eq!(signature.inputs, [LogicalType::parse(logical).unwrap()]);
+        assert_eq!(signature.outputs, signature.inputs);
+        assert_eq!(signature.attributes, AttributeRule::None);
+        assert_eq!(
+            logical_signature(&binding).unwrap_err().detail,
+            "binding-adapter-at-logical-stage"
+        );
+        assert!(
+            binding.signature().is_err(),
+            "erasure installed an implementation"
+        );
+        let malformed = OperationBinding {
+            arguments: vec![],
+            ..binding
+        };
+        assert!(declared_logical_signature(&malformed).is_err());
+    }
+}
+
+#[test]
+fn physical_installation_cannot_invent_a_contract() {
+    static OWNER: Contribution = Contribution {
+        contracts: &[Installation::new("independent.convert")],
+        ..representation::CONTRIBUTION
+    };
+    assert_eq!(
+        Registry::assemble(&[&OWNER]).err().unwrap().detail,
+        "undeclared-logical-contract"
+    );
 }

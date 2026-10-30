@@ -108,7 +108,14 @@ second mutable compiler IR.
 The declaration catalog has one complete operation collection. Fixed-port
 signatures and the closed numerical signature family are explicit alternatives;
 a dynamic family is never represented by its empty-mask ports. Resource-unit
-signatures carry their nominal Slot root. Consumer profiles select supported
+signatures carry their nominal Slot root. Physical adapter contracts are also
+catalog rows: `representation.convert` has erasure `T -> T`, and
+`table.relayout` has erasure `table[F] -> table[F]`. Their authoring stage is
+`Physical`; deriving these ports grants neither logical-stage admission nor a
+mathematical identity rewrite. Actual represented ports, implementation
+installation and reached conversion behavior remain independent obligations.
+The program/0 codec retains table layout names in its existing byte argument
+positions; these are physical selections, not extra catalog scope roots. Consumer profiles select supported
 identities and forms separately, and native containers are not logical type
 constructor declarations. Generated projections share these facts while each
 consumer retains its own installation and interpretation obligations.

@@ -234,7 +234,18 @@ fn attribute_rule(operation: &Operation, scope: &[Argument]) -> Result<Attribute
 
 pub(super) fn signature(binding: &OperationBinding) -> Result<OperationSignature<LogicalType>> {
     let declaration = zkc_catalog::operation(&binding.contract).ok_or_else(support::failure)?;
-    let mut arguments = binding.arguments.iter();
+    // Program/0 stores table layouts beside the field argument. They are
+    // physical selections, not catalog roots. The physical owner validates
+    // both layouts independently; this projection only derives erasure ports.
+    let static_arguments = if binding.contract == "table.relayout" {
+        let [field, _, _] = binding.arguments.as_slice() else {
+            return Err(support::failure());
+        };
+        std::slice::from_ref(field)
+    } else {
+        binding.arguments.as_slice()
+    };
+    let mut arguments = static_arguments.iter();
     let mut scope = Vec::with_capacity(declaration.scope.len());
     for term in declaration.scope {
         scope.push(match term {

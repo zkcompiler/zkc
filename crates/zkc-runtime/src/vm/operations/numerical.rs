@@ -25,7 +25,6 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
     select: support::select_nominal,
     alternatives: &[],
     physical_error: "uninstalled numerical expression binding",
-    adapter: None,
 };
 
 fn arguments(binding: &OperationBinding) -> Result<(Identity, &str)> {

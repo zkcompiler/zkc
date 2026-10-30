@@ -4,7 +4,6 @@ use super::operations::{Contribution, Installation};
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
     physical_error: "binding-implementation",
-    adapter: None,
     contracts: &[
         Installation::new("sequence.empty").implemented_by(&["native/sequence.empty"]),
         Installation::new("sequence.append").implemented_by(&["native/sequence.append"]),

@@ -1,4 +1,5 @@
 #include "support/NativeCases.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -139,11 +140,26 @@ int main() {
   });
   cases.run("native and neutral signatures agree for installed instances", [&] {
     std::set<std::string> covered;
+    for (StringRef contract : {"representation.convert", "table.relayout"}) {
+      auto table = poly::MultilinearType::get(&context, "bls12-381.fr");
+      auto logical = contract == "table.relayout" ? Type(table) : Type(field);
+      Attribute argument = contract == "table.relayout" ? Attribute(domain)
+                                                        : TypeAttr::get(field);
+      require(protocol::authoringStage(contract) ==
+                      protocol::AuthoringStage::Physical &&
+                  resolve(contract, {argument}) ==
+                      builder.getFunctionType({logical}, {logical}),
+              "physical adapter lost its declared erasure or stage");
+      covered.insert(contract.str());
+    }
     unsigned checked = 0;
     // Sample every installed root identity independently. Neutral resolution is
     // an independent boundary oracle; unsupported codec profiles may refuse
     // there even when mathematical formation succeeds.
     for (const auto &operation : protocol::executableOperationContracts()) {
+      if (protocol::authoringStage(operation.name) ==
+          protocol::AuthoringStage::Physical)
+        continue;
       std::vector<std::vector<std::string>> choices;
       for (auto [i, term] : llvm::enumerate(operation.signature.scope.terms)) {
         if (term.parent || term.arguments ||

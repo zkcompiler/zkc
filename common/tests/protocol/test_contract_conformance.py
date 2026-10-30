@@ -273,6 +273,10 @@ def candidates(inventory):
     for operation in declarations["operations"]:
         name = operation["name"]
         group = dispositions[name]
+        if group == "physical":
+            assert operation["stage"] == "Physical"
+            continue  # Dedicated physical admission/refusal probes below.
+        assert operation["stage"] != "Physical", (name, "missing physical disposition")
         if group == "resource":
             choices = [(["Ticket"], "logical")]
         elif group == "nullary":
@@ -325,7 +329,16 @@ def candidates(inventory):
 
 
 def expected_ports(operation, arguments, inventory):
+    # Program/0 carries table layout selection after the one catalog root.
+    if operation["name"] == "table.relayout":
+        assert len(arguments) == 3
+        arguments = arguments[:1]
     return INVENTORY.instantiate(operation, arguments, inventory[0], inventory[1])
+
+
+def logical_operations(inventory):
+    return {op["name"]: op for op in inventory[0]["operations"]
+            if op["stage"] != "Physical"}
 
 
 @pytest.fixture(scope="module")
@@ -358,15 +371,15 @@ def implementation_arguments(inventory):
     arguments = {}
     for operation, args, _ in candidates(inventory):
         arguments.setdefault(operation["name"], set()).add(tuple(args))
-    # This physical adapter deliberately has no logical declaration. Exercise
-    # both directions, identity transforms and wrong domains independently.
+    # Physical erasure is declared, but source admission remains forbidden.
+    # Exercise both directions, identity transforms and wrong domains.
     tables = {row["representation"] for row in inventory[1]["atomic_representations"]
               if row["kind"] == "table"}
     fields = {row["identity"] for row in inventory[1]["domains"] if row["sort"] == "Field"}
     arguments["table.relayout"] = {(field, source, target)
                                    for field in fields for source in tables for target in tables}
-    # Direct resident adapters have no logical declaration. Probe both admitted
-    # directions and identity/wrong-target refusals for every flat logical port.
+    # Probe both admitted directions and identity/wrong-target refusals for
+    # every flat logical port of the physical conversion contract.
     conversions = set()
     for row in inventory[1]["atomic_representations"]:
         if (row["default"] or row["layout"] or
@@ -523,7 +536,7 @@ def test_declared_signatures(inventory, drivers, directory, physical):
     replies = query(drivers, requests, directory)
     failures = agreements(replies, requests)
     coverage = {name: {consumer: 0 for consumer in drivers}
-                for name in INVENTORY.indexed(inventory[0]["operations"])}
+                for name in logical_operations(inventory)}
     for i, (op, args, _) in enumerate(cases):
         for consumer, results in replies.items():
             response = results[i]
@@ -549,7 +562,7 @@ def test_logical_signatures_without_implementation(inventory, drivers, directory
     replies = query(drivers, requests, directory)
     failures = []
     coverage = {name: {consumer: 0 for consumer in drivers}
-                for name in INVENTORY.indexed(inventory[0]["operations"])}
+                for name in logical_operations(inventory)}
     for i, (op, args, _) in enumerate(cases):
         actual = {consumer: results[i] for consumer, results in replies.items()}
         for consumer, response in actual.items():
@@ -564,6 +577,23 @@ def test_logical_signatures_without_implementation(inventory, drivers, directory
             failures.append({"unexercised_declaration": name, "accepted_counts": counts})
     (directory / "coverage.json").write_text(json.dumps(coverage, indent=2) + "\n")
     finish(directory, failures)
+
+
+def test_physical_declarations_do_not_authorize_logical_invocation(inventory, drivers, directory):
+    physical = {op["name"] for op in inventory[0]["operations"] if op["stage"] == "Physical"}
+    probes = {
+        "representation.convert": (["field:bls12-381.fr"], "native/representation.convert"),
+        "table.relayout": (["bls12-381.fr", "arkworks.mle-lsb/0", "arkworks.mle-msb/0"], "arkworks/table.relayout"),
+    }
+    assert physical == probes.keys(), "every physical declaration needs explicit admission probes"
+    requests = []
+    for name, (arguments, implementation) in probes.items():
+        for selected in ("", implementation):
+            requests.append(binding(name, arguments, selected))
+        requests.append({"facets": name, "arguments": arguments})
+    replies = query(drivers, requests, directory)
+    for consumer, rows in replies.items():
+        assert rows == [{"accepted": False}] * len(requests), (consumer, rows)
 
 
 def test_explicit_semantic_witnesses(drivers, directory):
@@ -693,7 +723,7 @@ def test_unknowns_and_malformed_arguments(drivers, directory):
 @pytest.mark.parametrize("unchanged,divergent", [
     ("cpp", "rust"), ("rust", "cpp"),
 ])
-def test_independent_consumer_signature_drift(inventory, drivers, directory, unchanged, divergent):
+def test_independent_consumer_signature_drift(inventory, drivers, installed_identities, directory, unchanged, divergent):
     # The same installed declaration inventory supplies identical requests to
     # both processes. The flag selects a typed resolver in a conformance tool;
     # no signatures, registrations or expected results are sent on the wire.
@@ -710,6 +740,10 @@ def test_independent_consumer_signature_drift(inventory, drivers, directory, unc
         {"type": "bool"}, {"facets": "field.add", "arguments": ["koala-bear"]},
         binding("field.mul", ["koala-bear"]),
     ]
+    physical_contracts = {op["name"] for op in inventory[0]["operations"]
+                          if op["stage"] == "Physical"}
+    requests += [request for request in implementation_requests(inventory, installed_identities)
+                 if request["contract"] in physical_contracts]
     selected = {name: drivers[name] for name in (unchanged, divergent)}
     baseline_directory = directory / "baseline"
     baseline_directory.mkdir()
@@ -739,8 +773,10 @@ def test_independent_consumer_signature_drift(inventory, drivers, directory, unc
         else:
             assert after == before, (request, before, after)
     assert changed, "the divergent resolver must actually be exercised"
-    assert actual[divergent][-3]["accepted"], "bool must be a valid logical type"
-    assert actual[divergent][-1]["accepted"], "the neighboring operation must still resolve"
+    boolean_control = requests.index({"type": "bool"})
+    neighbor_control = requests.index(binding("field.mul", ["koala-bear"]))
+    assert actual[divergent][boolean_control]["accepted"], "bool must be a valid logical type"
+    assert actual[divergent][neighbor_control]["accepted"], "the neighboring operation must still resolve"
     disagreements = agreements(
         {name: [rows[i] for i in comparable] for name, rows in actual.items()},
         [requests[i] for i in comparable])
@@ -857,7 +893,7 @@ def test_declared_semantic_facets(inventory, drivers, directory):
     dispositions = INVENTORY.dispositions(profile, declarations)
     expected = {operation["name"]: expected_facets(
         operation, dispositions[operation["name"]], declarations, policy)
-        for operation in declarations["operations"]}
+        for operation in logical_operations(inventory).values()}
     fields = set().union(*[set(row) for row in expected.values()])
     assert all(set(names) <= fields and len(names) == len(set(names))
                for names in policy["consumer_fields"].values())

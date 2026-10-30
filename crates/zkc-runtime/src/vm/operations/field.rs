@@ -47,7 +47,6 @@ pub(super) const CONTRACTS: &[Installation] = &[
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
     physical_error: "uninstalled operation binding",
-    adapter: None,
 
     contracts: CONTRACTS,
 

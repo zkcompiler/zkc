@@ -26,8 +26,12 @@ operation collection; interpreter-profile membership is no longer a declaration
 flag. Per-contract executable wrapper operations and their mapping generator
 are removed. Executable contract calls use `exec.apply`; its symbol and semantic
 role interfaces inspect the referenced declaration and actual scoped ports.
-Mathematical operations retain their separate meanings. The built-in catalog
-now has one neutral source and generated C++/ODS and static Rust projections.
+Physical conversion and table-layout adapters now have declared erasure ports
+and Physical authoring stage in the same catalog; the runtime no longer owns
+parallel adapter-erasure callbacks. Independent installation and actual layout
+checks remain in place. Mathematical operations retain their separate meanings.
+The built-in catalog now has one neutral source and generated C++/ODS and static
+Rust projections.
 Runtime admission now interprets that table instead of hand-maintained signature,
 history and permission copies; native domain support and physical installation
 remain explicit. Native catalog type observations use MLIR type interfaces and

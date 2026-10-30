@@ -29,7 +29,6 @@ use super::{
 };
 use std::{collections::BTreeMap, sync::OnceLock};
 type Result<T> = std::result::Result<T, AdmissionError>;
-type AdapterErasure = fn(&OperationBinding) -> Result<OperationSignature<LogicalType>>;
 type PhysicalResolver =
     fn(&OperationBinding, &OperationSignature<LogicalType>, Selection) -> Result<BoundSignature>;
 
@@ -86,8 +85,6 @@ impl Selection {
 
 pub(super) struct Contribution {
     pub(super) contracts: &'static [Installation],
-    /// Physical adapters have an erasure but no logical source-stage operation.
-    pub(super) adapter: Option<AdapterErasure>,
     pub(super) select: PhysicalResolver,
     pub(super) alternatives: &'static [Alternative],
     pub(super) physical_error: &'static str,
@@ -281,18 +278,7 @@ impl Registry {
             }
             return Ok((row.signature.clone(), Some(row.id), row.requirements));
         }
-        let (_, owner) = self.logical.get(binding.contract.as_str()).ok_or_else(|| {
-            AdmissionError::new(ErrorCode::Signature, "uninstalled operation binding")
-        })?;
-        let logical = if owner.adapter.is_some() {
-            OperationSignature {
-                inputs: vec![],
-                outputs: vec![],
-                attributes: AttributeRule::None,
-            }
-        } else {
-            logical_signature(binding)?
-        };
+        let logical = declared_logical_signature(binding)?;
         let signature = self.select_physical(binding, &logical, physical)?;
         let timing = match self.physical.get(&binding.implementation) {
             Some(PhysicalOwner::Family(_, Selection::Alternative(row))) => row.timing,
@@ -342,8 +328,7 @@ impl Registry {
         };
         for &contribution in contributions {
             for contract in contribution.contracts {
-                if contribution.adapter.is_none() && zkc_catalog::operation(contract.name).is_none()
-                {
+                if zkc_catalog::operation(contract.name).is_none() {
                     return Err(AdmissionError::new(
                         ErrorCode::Signature,
                         "undeclared-logical-contract",
@@ -463,20 +448,24 @@ pub(super) fn observes_history(contract: &str) -> Result<bool> {
 pub(super) fn logical_signature(
     binding: &OperationBinding,
 ) -> Result<OperationSignature<LogicalType>> {
-    let registry = installed()?;
-    let (_, owner) = registry
-        .logical
-        .get(binding.contract.as_str())
-        .ok_or_else(|| {
-            AdmissionError::new(ErrorCode::Signature, "uninstalled operation binding")
-        })?;
-    if owner.adapter.is_some() {
+    let declaration = declaration(&binding.contract)?;
+    if declaration.stage == zkc_catalog::Stage::Physical {
         return Err(AdmissionError::new(
             ErrorCode::Signature,
             "binding-adapter-at-logical-stage",
         ));
     }
-    declared_logical_signature(binding)
+    catalog::signature(binding)
+}
+
+fn declaration(contract: &str) -> Result<&'static zkc_catalog::Operation> {
+    if !installed()?.logical.contains_key(contract) {
+        return Err(AdmissionError::new(
+            ErrorCode::Signature,
+            "uninstalled operation binding",
+        ));
+    }
+    zkc_catalog::operation(contract).ok_or_else(support::failure)
 }
 
 /// Mathematical erasure used when a trusted owner contributes a physical
@@ -484,35 +473,11 @@ pub(super) fn logical_signature(
 pub(super) fn declared_logical_signature(
     binding: &OperationBinding,
 ) -> Result<OperationSignature<LogicalType>> {
-    let registry = installed()?;
-    let (_, owner) = registry
-        .logical
-        .get(binding.contract.as_str())
-        .ok_or_else(|| {
-            AdmissionError::new(ErrorCode::Signature, "uninstalled operation binding")
-        })?;
-    match owner.adapter {
-        Some(erase) => erase(binding),
-        None => catalog::signature(binding),
-    }
+    declaration(&binding.contract)?;
+    catalog::signature(binding)
 }
 pub(super) fn signature(binding: &OperationBinding) -> Result<BoundSignature> {
-    let registry = installed()?;
-    if registry
-        .logical
-        .get(binding.contract.as_str())
-        .is_some_and(|(_, owner)| owner.adapter.is_some())
-    {
-        return select_signature(
-            binding,
-            &OperationSignature {
-                inputs: vec![],
-                outputs: vec![],
-                attributes: AttributeRule::None,
-            },
-        );
-    }
-    select_signature(binding, &logical_signature(binding)?)
+    select_signature(binding, &declared_logical_signature(binding)?)
 }
 pub(super) fn select_signature(
     binding: &OperationBinding,
@@ -524,13 +489,12 @@ impl Registry {
     fn observes_history(&self, contract: &str) -> Result<bool> {
         self.logical
             .get(contract)
-            .map(|(_, owner)| {
-                owner.adapter.is_none()
-                    && zkc_catalog::operation(contract).is_some_and(|row| {
-                        row.facets
-                            .iter()
-                            .any(|facet| matches!(facet, zkc_catalog::Facet::History { .. }))
-                    })
+            .map(|_| {
+                zkc_catalog::operation(contract).is_some_and(|row| {
+                    row.facets
+                        .iter()
+                        .any(|facet| matches!(facet, zkc_catalog::Facet::History { .. }))
+                })
             })
             .ok_or_else(|| {
                 AdmissionError::new(ErrorCode::Signature, "uninstalled operation binding")

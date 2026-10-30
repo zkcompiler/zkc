@@ -282,3 +282,17 @@ fn construction_counterparts_require_the_declared_stage() {
     operation(&mut value, "example.derived")["stage"] = json!("Source");
     assert!(check(&value).unwrap_err().contains("counterpart"));
 }
+
+#[test]
+fn physical_adapters_declare_erasure_and_no_mathematical_rewrite_facet() {
+    for name in ["representation.convert", "table.relayout"] {
+        let operation = zkc_catalog::operation(name).unwrap();
+        assert_eq!(operation.stage, zkc_catalog::Stage::Physical);
+        assert!(operation.facets.is_empty());
+        let Signature::Fixed { inputs, outputs } = operation.signature else {
+            panic!("fixed erasure required")
+        };
+        assert_eq!(inputs, outputs);
+        assert_eq!(inputs.len(), 1);
+    }
+}

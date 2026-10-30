@@ -148,9 +148,11 @@ int main() {
     const bool opaqueResource =
         llvm::is_contained(kernel.inputs, "nonce") ||
         kernel.key.starts_with("resource_unit.") ||
+        kernel.key == "representation.convert" ||
         (kernel.key.starts_with("sequence.") && !kernel.inputs.empty());
     require(hasUnclassifiedProviderEffect(kernel.key) == opaqueResource,
-            "entropy/transcript coverage or opaque resource classification");
+            "entropy/transcript coverage or opaque resource classification: " +
+                kernel.key.str());
     if (auto sample = samplingContract(kernel.key)) {
       require(sample->stateInput < kernel.inputs.size() &&
                   sample->stateOutput < kernel.outputs.size() &&
@@ -257,7 +259,7 @@ int main() {
               !hasUnclassifiedProviderEffect("pairing.check"),
           "pairing predicate grants neither acceptance nor replay authority");
   // The shared inventory also covers the installed physical-only adapter.
-  // It has no logical kernel row and must not acquire one through discovery.
+  // Its erasure row must not admit a logical invocation through discovery.
   BindingApplication relayout{
       "table.relayout",
       {"bls12-381.fr", "arkworks.mle-lsb/0", "arkworks.mle-msb/0"},
@@ -267,8 +269,8 @@ int main() {
   auto logicalRelayout = resolveBinding(relayout, false);
   require(!logicalRelayout, "relayout must remain physical-only");
   llvm::consumeError(logicalRelayout.takeError());
-  require(keys.insert(relayout.contract).second,
-          "physical adapter unexpectedly has a logical kernel row");
+  require(keys.count(relayout.contract),
+          "physical adapter is absent from the catalog inventory");
   auto expectedRelayout = expectedHistory.find(relayout.contract);
   require(expectedRelayout != expectedHistory.end() &&
               !expectedRelayout->second &&

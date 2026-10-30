@@ -34,7 +34,6 @@ use super::operations::{Contribution, Installation};
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
     physical_error: "binding-implementation",
-    adapter: None,
 
     contracts: &[
         Installation::new("resource_unit.create").implemented_by(&["logical/resource_unit.create"]),
