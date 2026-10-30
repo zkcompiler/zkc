@@ -91,6 +91,38 @@ proof Proof=Work{prover P;verifier V;public{width,height,expected};accept accept
         oracle='independent expected opened row; portable scalar leaf hashing and SIMD two-lane batching cross-verify exact root/path proof bytes; not an independent root oracle')
 
 
+def quartic_keccak():
+    """Exercise the exact quartic row codec and derived challenge together."""
+    values = [[str(1 + 4*i + j) for j in range(4)] for i in range(8)]
+    source = '''module example;
+use zkc::vector::{Vector};use zkc::vector as v;use zkc::oracle as oracle;use zkc::oracle::{Root,Path};
+domain F=field("koala-bear.ext4-binomial3");
+domain Rows=commitment("rows.merkle-keccak256.koala-bear.ext4-binomial3/0");
+fn check(root:Root<Rows>,width:index,height:index,row:Vector<F>,path:Path<Rows>,
+         expected:Vector<F>,challenge:F,response:Vector<F>)->bool {
+ return oracle::check<Rows>(root,width,height,0,row,path) && v::equal(row,expected)
+   && v::equal(response,v::scale(row,challenge));
+}
+protocol Work roles(P,V)(values:Vector<F>@P,width:index@(P,V),height:index@(P,V),
+                        expected:Vector<F>@(P,V),coins:Random<F>@V)->(accepted:bool@V) {
+ let tree @P=oracle::commit<Rows>(values,width);
+ let root=send P->V(tree.0);
+ let challenge=coins.draw();let received=send V->P(challenge);
+ let opened @P=oracle::open<Rows>(tree.1,0);
+ let response=send P->V(v::scale(opened.0,received));
+ let row=send P->V(opened.0);let path=send P->V(opened.1);
+ let ok @V=check(root,width,height,row,path,expected,challenge,response);
+ return (accepted=ok);
+}
+proof Proof=Work{prover P;verifier V;public{width,height,expected};accept accepted;
+ construction fiat_shamir("hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",coins);}
+'''
+    return Program(source, [{'public': {'width': '2', 'height': '4', 'expected': values[:2]},
+                             'witness': {'values': values}}], entry='example::Proof', proof=True,
+                   dependencies=('core.collections', 'core.primitives.cryptography'),
+                   oracle='every ascending quartic coordinate is nonzero; opened row compared with public expected coordinates; native/browser exact proof agreement; no independent root or security claim')
+
+
 def blst_control(pairing):
     if pairing:
         parameters = 'count:index'
@@ -142,6 +174,7 @@ def catalog(root, setup_material=None):
     threshold = (32768//2-header)//4
     for width, height in [(1, 1), (1, 2), (17, 8), (threshold, 2), (threshold+1, 2)]:
         yield f'keccak-tree-{width}x{height}', lambda w=width, h=height: keccak_tree(w, h), ['plonky3']
+    yield 'quartic-keccak', quartic_keccak, ['plonky3']
     for count in (1, 3, 17):
         yield f'poseidon2-distinct-{count}', lambda n=count: poseidon_distinct(n), ['plonky3']
     for n in (2, 32, 1024):

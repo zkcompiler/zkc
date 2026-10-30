@@ -2247,7 +2247,7 @@ fn private_match_refuses_internal_transcript_observation_and_challenge() {
                                         "effect",
                                         "kernel",
                                         [zkc_test_support::hex(
-                                            &crate::logical::encode_tree(&json!([
+                                            &zkc_format::logical::encode_tree(&json!([
                                                 "zkc.native-origin-template/0",
                                                 "main",
                                                 [],

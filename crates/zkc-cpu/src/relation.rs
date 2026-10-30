@@ -177,7 +177,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         return None;
     };
     if !IMPLEMENTATIONS.contains(&(binding.implementation.as_str(), binding.contract.as_str()))
-        || zkc_runtime::logical::natural_index(table).ok()? > 1_048_576
+        || zkc_format::logical::natural_index(table).ok()? > 1_048_576
     {
         return None;
     }

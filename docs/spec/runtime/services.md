@@ -8,15 +8,16 @@ It defines a native execution contract. The [mathematical source profile](../lan
 
 `!protocol.service_ref<Contract>` is a reference to one managed service root.
 Installed contracts are `random.bls12-381.fr/0`, `random.bn254.fr/0`,
-`random.ristretto255.scalar/0`, `random.koala-bear.ext8-binomial3/0`,
+`random.ristretto255.scalar/0`, `random.koala-bear.ext4-binomial3/0`,
+`random.koala-bear.ext8-binomial3/0`,
 `random.baby-bear.ext4-binomial11/0` and
 `random.goldilocks.ext2-binomial7/0`.
-These six RNG distributions/providers are the complete registered service
+These seven RNG distributions/providers are the complete registered service
 surface. Arbitrary user-defined request/reply families require a future extension.
 Each has method `draw`, no arguments, and one result in its named field under
 that field's default representation. A contract whose field has the catalog
 fact `IndexRandomness` also has method `index`; this holds for the KoalaBear
-octic, BabyBear quartic and Goldilocks quadratic services. The base fields have no installed random
+quartic and octic, BabyBear quartic and Goldilocks quadratic services. The base fields have no installed random
 service. The contract fixes the distribution signature; it does not authenticate
 a root or prove an independence law. A reference is an entry input with exactly one owner. Several inputs may
 refer to the same root. Copying a reference preserves identity and does not copy,

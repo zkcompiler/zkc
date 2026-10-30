@@ -42,7 +42,7 @@ fn derive(
         return None;
     }
     let t = suite(binding)?;
-    // Only the octic suites install the UniformIndex byte sampler.
+    // UniformIndex requires an explicit suite installation.
     if matches!(
         binding.contract.as_str(),
         "transcript.native.indexed.index" | "transcript.index"

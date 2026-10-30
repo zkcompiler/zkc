@@ -1,7 +1,7 @@
 use crate::files::hex;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
-use zkc_runtime::logical;
+use zkc_format::logical;
 fn hash(bytes: &[u8]) -> String {
     hex(&Sha256::digest(bytes))
 }

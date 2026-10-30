@@ -1,5 +1,6 @@
 //! Explicitly retained immutable data. Reuse grants no invocation authority.
-use super::{capacity::Capacity, inputs::Result};
+use super::capacity::Capacity;
+use crate::io::bytes::Result;
 use std::sync::Arc;
 use zkc_cpu::{CpuBackend, Domain, EntryPolicy, SetupRegistry, Value};
 use zkc_runtime::vm::{PhysicalType, Value as RuntimeValue};

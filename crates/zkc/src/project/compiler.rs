@@ -169,7 +169,7 @@ impl Compiler {
     ) -> Result<Invocation> {
         let toolchain = observations.map(|_| self.capabilities()).transpose()?;
         for source in project.paths() {
-            crate::host::io::open_regular(source).map_err(|_| "artifact-io")?;
+            crate::io::open_regular(source).map_err(|_| "artifact-io")?;
         }
         let mut process = Command::new(&self.path);
         process.args([command, "--source-format=zkc"]);
@@ -201,7 +201,7 @@ impl Compiler {
             }
         }
         process.args(&project.flags).args(extra);
-        let captured = crate::host::process::capture(
+        let captured = crate::io::process::capture(
             &mut process,
             directory.path(),
             |elapsed| elapsed >= Duration::from_secs(300),
@@ -209,8 +209,8 @@ impl Compiler {
             true,
         )
         .map_err(|e| match e {
-            crate::host::process::Error::Timeout => "source-compiler-timeout",
-            crate::host::process::Error::OutputLimit => "source-compiler-limit",
+            crate::io::process::Error::Timeout => "source-compiler-timeout",
+            crate::io::process::Error::OutputLimit => "source-compiler-limit",
             _ => "source-compiler-io",
         })?;
         use std::io::Read;
@@ -232,7 +232,7 @@ impl Compiler {
             truncated |= trim_diagnostics(text);
         }
         let mut observation: Option<serde_json::Value> =
-            crate::host::inputs::read_regular(&observation_path, 32 * 1024 * 1024)
+            crate::io::bytes::read_regular(&observation_path, 32 * 1024 * 1024)
                 .ok()
                 .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
                 .filter(|record| {
@@ -247,7 +247,7 @@ impl Compiler {
                 return Err("source-compiler-changed".into());
             }
             observation["toolchain"] = toolchain.unwrap();
-            let trace = crate::host::inputs::read_regular(&trace_path, 8 * 1024 * 1024)
+            let trace = crate::io::bytes::read_regular(&trace_path, 8 * 1024 * 1024)
                 .ok()
                 .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
             observation["time_trace_status"] = serde_json::json!(if trace.is_some() {
@@ -268,7 +268,7 @@ impl Compiler {
         if observations.is_some() && observation.is_none() {
             return Err("source-observation-format".into());
         }
-        let bytes = crate::host::inputs::read_regular(captured.stdout.path(), Package::MAX_BYTES)?;
+        let bytes = crate::io::bytes::read_regular(captured.stdout.path(), Package::MAX_BYTES)?;
         Ok(Invocation {
             bytes,
             diagnostics,
@@ -400,7 +400,7 @@ impl Compiler {
     /// Query the actual selected executable, even outside a project.
     pub fn capabilities(&self) -> Result<serde_json::Value> {
         let directory = tempfile::tempdir().map_err(|_| "source-compiler-io")?;
-        let captured = crate::host::process::capture(
+        let captured = crate::io::process::capture(
             Command::new(&self.path).arg("--capabilities"),
             directory.path(),
             |elapsed| elapsed >= Duration::from_secs(30),
@@ -411,7 +411,7 @@ impl Compiler {
         if !captured.status.success() {
             return Err("source-compiler-capabilities".into());
         }
-        let bytes = crate::host::inputs::read_regular(captured.stdout.path(), 65536)?;
+        let bytes = crate::io::bytes::read_regular(captured.stdout.path(), 65536)?;
         let mut result: serde_json::Value =
             serde_json::from_slice(&bytes).map_err(|_| "source-compiler-capabilities")?;
         if result["format"] != "zkc.compiler-capabilities/0" {
@@ -428,12 +428,17 @@ impl Compiler {
             }
             hash.update(&buffer[..size]);
         }
-        result["binary_sha256"] = serde_json::json!(crate::host::inputs::hex(&hash.finalize()));
+        result["binary_sha256"] = serde_json::json!(crate::io::bytes::hex(&hash.finalize()));
         result["path"] = serde_json::json!(self.path);
-        result["execution_counts"] = serde_json::json!(zkc_runtime::vm::ExecutionCounts::ENABLED);
+        #[cfg(feature = "cpu")]
+        let execution_counts = crate::EXECUTION_COUNTS_ENABLED;
+        #[cfg(not(feature = "cpu"))]
+        let execution_counts = false;
+        result["execution_counts"] = serde_json::json!(execution_counts);
         Ok(result)
     }
 }
+
 /// Sidecars are opt-in and never become part of executable identity.
 #[derive(Clone, Debug, Default)]
 pub struct ObservationRequest {
@@ -464,6 +469,30 @@ struct Invocation {
 mod tests {
     use super::Checked;
     use serde_json::{Value, json};
+
+    #[cfg(unix)]
+    #[test]
+    fn capabilities_report_the_linked_execution_instrumentation() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("compiler");
+        std::fs::write(
+            &path,
+            "#!/bin/sh\nprintf '%s\\n' '{\"format\":\"zkc.compiler-capabilities/0\"}'\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let compiler = super::Compiler::new(path.to_str().unwrap()).unwrap();
+        let capabilities = compiler.capabilities().unwrap();
+        #[cfg(feature = "cpu")]
+        assert_eq!(
+            capabilities["execution_counts"],
+            zkc_runtime::vm::ExecutionCounts::ENABLED
+        );
+        #[cfg(not(feature = "cpu"))]
+        assert_eq!(capabilities["execution_counts"], false);
+    }
 
     #[test]
     fn checked_inventory_is_required_and_preserved_without_weakening_the_envelope() {

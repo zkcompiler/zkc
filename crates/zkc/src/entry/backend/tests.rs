@@ -165,7 +165,7 @@ fn installed() -> (Contracts, Arithmetic) {
     )
 }
 fn digest(value: &str) -> String {
-    crate::host::inputs::hex(&Sha256::digest(value.as_bytes()))
+    crate::io::bytes::hex(&Sha256::digest(value.as_bytes()))
 }
 fn package(ty: &PhysicalType, constructible: bool) -> Package {
     let field = json!({"kind":"field","identity":digest("F"),"type":"F","custody":false,"constructible":constructible,

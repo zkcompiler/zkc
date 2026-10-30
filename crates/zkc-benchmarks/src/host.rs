@@ -171,22 +171,9 @@ pub fn run(
                 .map(|index| {
                     let start = Instant::now();
                     let (public, private) = decode(index)?;
-                    let public = Owner::new(
-                        public,
-                        public_group,
-                        entry.interface(),
-                        ingress,
-                        capacity,
-                        entry.cpu(),
-                    )?;
-                    let private = Owner::new(
-                        private,
-                        witness_group,
-                        entry.interface(),
-                        ingress,
-                        capacity,
-                        entry.cpu(),
-                    )?;
+                    let public = Owner::new(public, public_group, ingress, capacity, entry.cpu())?;
+                    let private =
+                        Owner::new(private, witness_group, ingress, capacity, entry.cpu())?;
                     // Check exact admitted types, binding and aggregate loading
                     // without issuing randomness, a transcript or capabilities.
                     entry

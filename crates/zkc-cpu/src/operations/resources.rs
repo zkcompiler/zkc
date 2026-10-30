@@ -52,24 +52,22 @@ pub(crate) fn apply(
         }
         ("transcript.native.indexed.challenge", [Transcript(t), Indices(indices)]) => {
             p.output(1024, i.max_output_bytes)?;
-            let origin =
-                zkc_runtime::logical::indexed_native_origin(i.attributes, "query", indices)
-                    .map_err(|_| refused("transcript-origin"))?;
+            let origin = zkc_format::logical::indexed_native_origin(i.attributes, "query", indices)
+                .map_err(|_| refused("transcript-origin"))?;
             let (v, t) = r.transcript_challenge_value(i.frame, t, &origin)?;
             Ok(vec![v, Transcript(t)])
         }
         ("transcript.native.indexed.index", [Transcript(t), Index(bound), Indices(indices)]) => {
             p.output(1024, i.max_output_bytes)?;
-            let origin =
-                zkc_runtime::logical::indexed_native_origin(i.attributes, "query", indices)
-                    .map_err(|_| refused("transcript-origin"))?;
+            let origin = zkc_format::logical::indexed_native_origin(i.attributes, "query", indices)
+                .map_err(|_| refused("transcript-origin"))?;
             let (v, t) = r.transcript_index(i.frame, t, &origin, *bound)?;
             Ok(vec![v, Transcript(t)])
         }
         ("transcript.native.indexed.observe.data", [Transcript(t), v, Indices(indices)]) => {
             p.output(512, i.max_output_bytes)?;
             let origin =
-                zkc_runtime::logical::indexed_native_origin(i.attributes, "message", indices)
+                zkc_format::logical::indexed_native_origin(i.attributes, "message", indices)
                     .map_err(|_| refused("transcript-origin"))?;
             let bytes = crate::codec::native::encode(v, p, key).map_err(|e| match e {
                 crate::NativeWireError::Limit => exhausted("native-wire-limit"),

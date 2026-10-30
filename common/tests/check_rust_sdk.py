@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Prepare packages separately; build staged Rust SDK sources and execute tool-free."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -8,7 +9,7 @@ import shutil
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
-CRATES = ('zkc', 'zkc-catalog', 'zkc-runtime', 'zkc-cpu', 'zkc-kernels', 'zkc-test-support')
+CRATES = ('zkc', 'zkc-format', 'zkc-catalog', 'zkc-runtime', 'zkc-cpu', 'zkc-kernels', 'zkc-test-support')
 SOURCE = '''module application;
 entry fn Twice(値:index) { return 値 + 2; }
 entry fn Checked(value:index,valid:bool){require valid;return value+1;}
@@ -88,27 +89,101 @@ version = "0.0.0"
 edition = "2024"
 [workspace]
 [dependencies]
-zkc = { path = "../sdk/crates/zkc", default-features = false }
+zkc = { path = "../sdk/crates/zkc", default-features = false, features = ["cpu"] }
 [[bin]]
 name = "installed-rust-consumer"
+path = "main.rs"
+''')
+    portable = output / 'portable'
+    portable.mkdir()
+    shutil.copyfile(sdk_source / 'common/tests/consumer/rust/portable.rs', portable / 'main.rs')
+    packages = []
+    for path in sorted(prepared.glob('*.zkpkg')):
+        shutil.copyfile(path, portable / path.name)
+        packages.append(f'({json.dumps(path.stem)}, include_bytes!({json.dumps(path.name)}), '
+                        f'&{list(hashlib.sha256(path.read_bytes()).digest())}),')
+    (portable / 'pins.rs').write_text(
+        'const PACKAGES: &[(&str, &[u8], &[u8; 32])] = &[\n' + '\n'.join(packages) + '\n];\n')
+    (portable / 'Cargo.toml').write_text('''[package]
+name = "portable-rust-consumer"
+version = "0.0.0"
+edition = "2024"
+[workspace]
+[dependencies]
+zkc = { path = "../sdk/crates/zkc", default-features = false }
+[features]
+files = ["zkc/files"]
+project = ["zkc/project", "files"]
+[[bin]]
+name = "portable-rust-consumer"
 path = "main.rs"
 ''')
     return consumer
 
 
-def check(output, sdk_source, prepared):
-    consumer = stage(output, sdk_source, prepared)
-    target = output / 'consumer-target'
-    env = dict(os.environ, CARGO_BUILD_JOBS='4', CARGO_INCREMENTAL='0',
-               CARGO_PROFILE_DEV_DEBUG='0', CARGO_PROFILE_TEST_DEBUG='0')
+def normal_build_graph(metadata):
+    """Reach only active normal/build edges from this detached application."""
+    nodes = {node['id']: node for node in metadata['resolve']['nodes']}
+    reached, pending = set(), [metadata['resolve']['root']]
+    while pending:
+        package = pending.pop()
+        if package in reached:
+            continue
+        reached.add(package)
+        for dependency in nodes[package]['deps']:
+            if any(kind['kind'] in (None, 'build') for kind in dependency['dep_kinds']):
+                pending.append(dependency['pkg'])
+    return sorted(({'name': package['name'], 'version': package['version'],
+                    'features': nodes[package['id']]['features']}
+                   for package in metadata['packages'] if package['id'] in reached),
+                  key=lambda package: (package['name'], package['version']))
+
+
+def check_portable(output, target, env, prepared, compiler):
+    consumer = output / 'portable'
     cargo = ['cargo', '--offline']
-    # Metadata resolves this independent graph; normal features must remain isolated.
+    runtime_env = dict(os.environ, PATH='', ZKC_COMPILER_BIN='/unavailable',
+                       ZKC_NATIVE_BIN='/unavailable', ZKC_COMPILER='/unavailable')
+    runtime_env.pop('ZKC_PORTABLE_COMPILER', None)
+    receipts = []
+    for features in ([], ['files'], ['project']):
+        flags = ['--no-default-features']
+        if features:
+            flags += ['--features', ','.join(features)]
+        metadata = json.loads(run([*cargo, 'metadata', '--format-version=1', *flags],
+                                  cwd=consumer, env=env))
+        graph = normal_build_graph(metadata)
+        forbidden = [package['name'] for package in graph
+                     if package['name'] in ('zkc-runtime', 'zkc-cpu', 'zkc-kernels', 'rand')
+                     or package['name'].startswith(('ark', 'plonky', 'p3-'))]
+        assert not forbidden, forbidden
+        assert not any('cpu' in package['features'] for package in graph
+                       if package['name'] == 'zkc'), graph
+        run([*cargo, 'build', '--target-dir', target, '--jobs', '2', *flags], cwd=consumer, env=env)
+        result = run([target / 'debug/portable-rust-consumer'], cwd=consumer, env=runtime_env)
+        if features == ['project'] and compiler:
+            project_env = dict(os.environ, ZKC_PORTABLE_COMPILER=str(compiler),
+                               ZKC_PORTABLE_SOURCE=str(prepared / '数学.zkc'))
+            result += run([target / 'debug/portable-rust-consumer'], cwd=consumer, env=project_env)
+        receipts.append({'features': features, 'normal_build_graph': graph, 'result': result})
+    (output / 'portable-results.json').write_text(json.dumps(receipts, indent=2) + '\n')
+
+
+def check(output, sdk_source, prepared, compiler=None):
+    consumer = stage(output, sdk_source, prepared)
+    target = Path(os.environ.get('CARGO_TARGET_DIR', output / 'consumer-target')).resolve()
+    env = dict(os.environ, CARGO_BUILD_JOBS='2', CARGO_INCREMENTAL='0',
+               CARGO_PROFILE_DEV_DEBUG='0', CARGO_PROFILE_TEST_DEBUG='0')
+    check_portable(output, target, env, prepared, compiler)
+    cargo = ['cargo', '--offline']
     metadata = json.loads(run([*cargo, 'metadata', '--format-version=1'], cwd=consumer, env=env))
-    names = {p['id']: p['name'] for p in metadata['packages']}
-    for node in metadata['resolve']['nodes']:
-        if names[node['id']] in ('zkc', 'zkc-cpu', 'zkc-runtime', 'zkc-kernels'):
-            assert not {'test-utils', 'execution-counts'} & set(node['features']), node
-    run([*cargo, 'build', '--target-dir', target], cwd=consumer, env=env)
+    graph = normal_build_graph(metadata)
+    for package in graph:
+        if package['name'] in ('zkc', 'zkc-cpu', 'zkc-runtime', 'zkc-kernels'):
+            assert not {'test-utils', 'execution-counts'} & set(package['features']), package
+    assert {'zkc-runtime', 'zkc-cpu', 'zkc-kernels'} <= {package['name'] for package in graph}
+    (output / 'cpu-graph.json').write_text(json.dumps(graph, indent=2) + '\n')
+    run([*cargo, 'build', '--target-dir', target, '--jobs', '2'], cwd=consumer, env=env)
     execution = output / 'execution'
     execution.mkdir()
     binary = execution / 'installed-rust-consumer'
@@ -129,6 +204,7 @@ def main():
     prep.add_argument('--compiler', type=Path, required=True)
     prep.add_argument('--output', type=Path, required=True)
     verify = phases.add_parser('check')
+    verify.add_argument('--compiler', type=Path)
     verify.add_argument('--sdk-source', type=Path, default=ROOT)
     verify.add_argument('--prepared', type=Path, required=True)
     verify.add_argument('--output', type=Path, required=True)
@@ -136,7 +212,8 @@ def main():
     if args.phase == 'prepare':
         prepare(args.output.resolve(), args.cli.resolve(), args.compiler.resolve())
     else:
-        check(args.output.resolve(), args.sdk_source.resolve(), args.prepared.resolve())
+        check(args.output.resolve(), args.sdk_source.resolve(), args.prepared.resolve(),
+              args.compiler.resolve() if args.compiler else None)
 
 
 if __name__ == '__main__':

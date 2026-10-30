@@ -54,9 +54,6 @@ pub mod vm;
 /// The structured interpreter for admitted VM programs.
 pub mod interpreter;
 
-/// Canonical construction trees and session-independent logical occurrences.
-pub mod logical;
-
 /// Provider-independent joint/proof drivers and transport contracts.
 pub mod host;
 

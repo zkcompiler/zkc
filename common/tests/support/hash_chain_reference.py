@@ -162,18 +162,22 @@ def native_origin(event):
 
 BLS_SUITE = 'hash-chain.keccak256.bls12-381.fr64be/0'
 OCTIC_SUITE = 'hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0'
+QUARTIC_SUITE = 'hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0'
 VECTOR_ROOT = ['hash-chain-vector', 'source', 'descriptor', 'context', 'public', 'configuration']
 # The canonical BLS12-381 Fr frame of 7 and the octic frame of (7, 0, ..., 0).
 BLS_SEVEN = b'ZKCV\x00\x01' + bytes([7]) + bytes(31)
 OCTIC_SEVEN = b'ZKCV\x00\x1a' + (7).to_bytes(4, 'little') + bytes(28)
+QUARTIC_SEVEN = b'ZKCV\x00\x15' + (7).to_bytes(4, 'little') + bytes(12)
 
 
-def vectors():
+def vectors(instances=None):
     """Known answers for the backend tests: kernel-level events in order."""
     root = encode_tree(VECTOR_ROOT)
     suites = []
-    for suite, contract, wire in [(BLS_SUITE, 'random.bls12-381.fr/0', BLS_SEVEN),
-                                  (OCTIC_SUITE, 'random.koala-bear.ext8-binomial3/0', OCTIC_SEVEN)]:
+    if instances is None:
+        instances = [(BLS_SUITE, 'random.bls12-381.fr/0', BLS_SEVEN, 1),
+                     (OCTIC_SUITE, 'random.koala-bear.ext8-binomial3/0', OCTIC_SEVEN, 8)]
+    for suite, contract, wire, degree in instances:
         message = native_origin(['message', 'Source', 'message', 'Schema', 'P', 'V'])
         query = native_origin(['query', 'Source', 'draw', 'input_0', contract, 'draw', 'V'])
         chain = Chain(suite, root)
@@ -201,7 +205,7 @@ def vectors():
             second = request(b'challenge')
             entry['challenges'] = [str(fr64be(raw)) for raw in (first, second)]
         else:
-            entry['challenge'] = rejection31le(lambda: request(b'challenge'))
+            entry['challenge'] = rejection31le(lambda: request(b'challenge'), degree=degree)
             index = native_origin(['query', 'Source', 'pick', 'input_0', contract, 'index', 'V'])
             entry['index_query'] = index.hex()
             absorb(b'origin', index)

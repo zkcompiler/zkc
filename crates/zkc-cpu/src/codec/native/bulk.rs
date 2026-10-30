@@ -68,6 +68,9 @@ pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
             _ => Option::None,
         };
     }
+    if let Some(domain) = crate::oracle::Domain::from_identity(ty.logical().identity()) {
+        return Some((domain.tag(ty.kind())?, 32, 32));
+    }
     Some(match (ty.kind(), ty.logical().identity()) {
         (Vector, Bls12381Fr) => (66, 32, 32),
         (Vector, Bn254Fr) => (41, 32, 32),
@@ -85,17 +88,13 @@ pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
         (Matrix, Ristretto255Scalar) => (24, 40, 40),
         (Matrix, Binary64) => (75, 16, 16),
         (Matrix, Binary64Ext3) => (78, 32, 32),
-        (Commitment, MerkleKoalaBear) => (33, 32, 32),
-        (Proof, MerkleKoalaBear) => (34, 32, 32),
-        (Commitment, MerkleKoalaBearExt8) => (35, 32, 32),
-        (Proof, MerkleKoalaBearExt8) => (36, 32, 32),
         _ => return Option::None,
     })
 }
 /// Keccak row-oracle paths keep their historical sibling cap; pruned proofs of
 /// the digest-generic schemes are bounded by the element ceiling instead.
 fn capped(tag: u8) -> bool {
-    matches!(tag, 34 | 36)
+    matches!(tag, 34 | 36 | 80)
 }
 fn limit(kind: Type, tag: u8, count: usize, memory: usize, p: &Policy) -> Result<()> {
     if kind == Type::Groups {
@@ -404,12 +403,7 @@ fn decode_value(backend: &CpuBackend, ty: &PhysicalType, bytes: &[u8]) -> Result
             Value::MerkleProof(scheme, copy.into())
         });
     }
-    if matches!(tag, 33..=36) {
-        let d = if matches!(tag, 33 | 34) {
-            crate::oracle::Domain::Base
-        } else {
-            crate::oracle::Domain::Extension
-        };
+    if let Some(d) = crate::oracle::Domain::from_identity(ty.logical().identity()) {
         return if ty.kind() == Type::Commitment {
             Ok(Value::OracleRoot(d, bytes[6..].try_into().unwrap()))
         } else {

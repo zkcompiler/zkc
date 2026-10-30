@@ -75,6 +75,7 @@ judgment.
 | Driver | `compiler/include/zkc/Driver`: command parsing and file I/O; links the Compiler API |
 | Rust VM | [zkc-runtime::vm](../crates/zkc-runtime/src/vm/README.md): admitted code, installed-call contracts, frames and capacity |
 | Rust interpreter | `zkc-runtime::interpreter`: instruction walking, continuations and pending participant actions |
+| Portable formats | [zkc-format](../crates/zkc-format/README.md): canonical logical trees, lazy proof framing and immutable invocation bindings, without execution authority |
 | Rust Host drivers | `zkc-runtime::host::{joint,proof,wire}`: ordered scheduling, proof transport, completion, cancellation and bounded reports |
 | Rust command-line application | [zkc-cli](../crates/zkc-cli/README.md): arguments, presentation, command orchestration and manifest recipes |
 | Rust application Hosts | [zkc](../crates/zkc/README.md): Entry, proof and joint authority, authentication, preparation and publication |
@@ -100,6 +101,11 @@ physical ports, codecs and effectful services. Mathematical kernels receive
 typed operands and explicit computation limits, without VM values, resource
 stores, transcript sessions or Host authority. Independent kernel code and the
 VM do not depend on each other; CPU adapters connect them.
+
+`zkc-format` contains the syntax and immutable byte operations shared by metadata
+consumers and execution. It has no runtime or kernel dependency. Selecting a
+proof frame or parsing a logical tree grants no authority; native admission,
+resource reservations and capability transitions stay with their existing owners.
 
 The reusable drivers live in `zkc-runtime::host`, separately from the VM and
 interpreter, without native or kernel dependencies. `host::wire::WireBackend`

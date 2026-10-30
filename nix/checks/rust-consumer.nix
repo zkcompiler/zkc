@@ -30,7 +30,8 @@ tools.overrideAttrs (old: {
     # Retain Cargo's dependency/toolchain closure and vendor configuration, while
     # compiling a staged SDK and a normal-feature consumer outside the source.
     python3 common/tests/check_rust_sdk.py check --sdk-source="$PWD" \
-      --prepared=${prepared} --output="$TMPDIR/rust-consumer"
+      --prepared=${prepared} --compiler=${compiler}/bin/zkc-compile \
+      --output="$TMPDIR/rust-consumer"
     runHook postCheck
   '';
   installPhase = ''

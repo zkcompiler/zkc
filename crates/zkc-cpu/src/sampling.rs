@@ -20,6 +20,7 @@ pub(crate) fn installed(field: zkc_runtime::vm::Identity) -> bool {
     matches!(
         field,
         zkc_runtime::vm::Identity::KoalaBearExt8
+            | zkc_runtime::vm::Identity::KoalaBearExt4
             | zkc_runtime::vm::Identity::BabyBearExt4
             | zkc_runtime::vm::Identity::GoldilocksExt2
     )
@@ -182,4 +183,45 @@ mod tests {
             assert!(index(&[0; 64], bound).is_err());
         }
     }
+}
+
+#[cfg(test)]
+mod quartic_tests {
+    use super::*;
+    use crate::KoalaBearExt4;
+    use p3_field::{BasedVectorSpace, PrimeField32};
+    #[test]
+    fn quartic_rejection_preserves_exact_word_order_and_bounded_exhaustion() {
+        let mut bytes = [255; 64];
+        for (slot, word) in bytes.as_chunks_mut::<4>().0.iter_mut().zip([
+            2_130_706_433u32,
+            0x8000_0001,
+            0x0403_0201,
+            2_130_706_432,
+            3,
+        ]) {
+            slot.copy_from_slice(&word.to_le_bytes());
+        }
+        let Value::KoalaBearExt4Field(value) =
+            super::value(zkc_runtime::vm::Identity::KoalaBearExt4, || bytes).unwrap()
+        else {
+            panic!("quartic challenge")
+        };
+        assert_eq!(
+            <KoalaBearExt4 as BasedVectorSpace<KoalaBear>>::as_basis_coefficients_slice(&value)
+                .iter()
+                .map(|c| c.as_canonical_u32())
+                .collect::<Vec<_>>(),
+            vec![1, 67_305_985, 2_130_706_432, 3]
+        );
+        let mut calls = 0;
+        let error = super::value(zkc_runtime::vm::Identity::KoalaBearExt4, || {
+            calls += 1;
+            [255; 64]
+        })
+        .unwrap_err();
+        assert_eq!(calls, 16);
+        assert_eq!(error.code, "exhausted:challenge-rejection-limit");
+    }
+    use crate::Value;
 }

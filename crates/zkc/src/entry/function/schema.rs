@@ -26,9 +26,9 @@ impl FunctionSignature {
 /// Only FunctionEntry binds it to the authenticated artifact.
 #[derive(Debug)]
 pub struct FunctionInterface {
-    pub(super) installation: zkc_cpu::CpuInstallation,
     pub(super) document: super::carrier::Interface,
-    types: std::collections::BTreeMap<String, zkc_runtime::vm::LogicalType>,
+    pub(in crate::entry) types:
+        std::collections::BTreeMap<String, crate::entry::interface::syntax::Leaf>,
 }
 impl FunctionInterface {
     /// Static context requirements. This does not import keys or grant authority.
@@ -39,7 +39,7 @@ impl FunctionInterface {
     }
     pub fn read(package: &crate::entry::Package) -> super::Result<Self> {
         use sha2::{Digest, Sha256};
-        let original = crate::host::inputs::hex(&Sha256::digest(package.original().as_bytes()));
+        let original = crate::io::bytes::hex(&Sha256::digest(package.original().as_bytes()));
         let view = Self::from_compiler(package.interface().as_bytes())?;
         super::require(view.document.original == original, "entry-host-identity")?;
         Ok(view)
@@ -59,7 +59,7 @@ impl FunctionInterface {
             "entry-host-stage",
         )?;
         super::require(
-            crate::host::inputs::digest(&document.capture).is_ok()
+            crate::io::bytes::digest(&document.capture).is_ok()
                 && !document.toolchain.is_empty()
                 && document.toolchain.len() <= 256 * 1024
                 && crate::source_names::canonical_name(&document.entry),
@@ -92,14 +92,10 @@ impl FunctionInterface {
             document.functions.len() <= 4096 && symbols.contains(&document.selection.function),
             "entry-host-selection",
         )?;
-        crate::host::inputs::digest(&document.original)
+        crate::io::bytes::digest(&document.original)
             .map_err(|e| super::EntryError::new(super::EntryPhase::Interface, e))?;
         let types = schemas.finish();
-        Ok(Self {
-            document,
-            types,
-            installation: Default::default(),
-        })
+        Ok(Self { document, types })
     }
     pub fn signature(&self) -> &FunctionSignature {
         self.document
@@ -111,9 +107,7 @@ impl FunctionInterface {
     pub fn functions(&self) -> impl Iterator<Item = &FunctionSignature> {
         self.document.functions.iter()
     }
-    pub fn logical_type(&self, s: &str) -> Option<&zkc_runtime::vm::LogicalType> {
-        self.types.get(s)
-    }
+
     pub fn entry(&self) -> &str {
         &self.document.entry
     }
@@ -126,17 +120,24 @@ impl FunctionInterface {
     pub fn capture(&self) -> &str {
         &self.document.capture
     }
+    /// Check source construction and declared message-data permissions. CPU
+    /// preparation independently checks native admission and installed codecs.
     pub fn check_input(&self, s: &Schema) -> super::Result<()> {
-        crate::entry::value::check_import(s)
+        crate::entry::interface::schemas::check_import(s)
             .map_err(|e| super::EntryError::new(super::EntryPhase::Request, e))?;
         super::require(
-            s.leaves.iter().all(|s| {
-                self.types
-                    .get(s)
-                    .is_some_and(|t| t.is_native_message_data())
-            }),
+            s.leaves
+                .iter()
+                .all(|s| self.types.get(s).is_some_and(|t| t.message)),
             "entry-input-codec",
         )
+    }
+    pub fn result_requires_setup(&self) -> bool {
+        self.signature()
+            .result
+            .leaves
+            .iter()
+            .any(|leaf| self.types[leaf].needs_setup)
     }
     pub fn describe(&self) -> Value {
         json!({"kind":"function","entry":self.entry(),"capture":self.capture(),"original":self.original(),"toolchain":self.toolchain(),
@@ -210,47 +211,5 @@ impl DeploymentInterface {
             "parameters": parameters,
             "result": self.result.describe(),
         })
-    }
-}
-
-impl super::FunctionInterface {
-    fn result_types(&self) -> super::Result<Vec<zkc_runtime::vm::PhysicalType>> {
-        self.signature()
-            .result
-            .leaves
-            .iter()
-            .map(|leaf| {
-                let logical = self
-                    .logical_type(leaf)
-                    .ok_or_else(|| super::error("entry-output-codec"))?;
-                zkc_runtime::vm::PhysicalType::default_for(logical.clone())
-                    .map_err(|_| super::error("entry-output-codec"))
-            })
-            .collect()
-    }
-    pub fn check_result_encoding(&self) -> super::Result<()> {
-        self.check_result_encoding_with_installation(&self.installation)
-    }
-    pub fn check_result_encoding_with_installation(
-        &self,
-        installation: &zkc_cpu::CpuInstallation,
-    ) -> super::Result<()> {
-        if self
-            .result_types()?
-            .iter()
-            .all(|ty| installation.supports_wire(ty))
-        {
-            Ok(())
-        } else {
-            Err(super::error("entry-output-codec"))
-        }
-    }
-    pub fn result_requires_setup(&self) -> bool {
-        self.signature()
-            .result
-            .leaves
-            .iter()
-            .filter_map(|leaf| self.logical_type(leaf))
-            .any(|ty| zkc_cpu::requires_setup(ty.clone()))
     }
 }

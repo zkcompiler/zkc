@@ -1,9 +1,13 @@
 //! Checked metadata for an authenticated source package. Reading this interface
 //! checks structure and internal consistency, not MLIR meaning or native code.
+#[cfg(feature = "cpu")]
 mod binding;
 mod origin;
 mod ports;
-pub(in crate::entry) use ports::{InputPort, RolePorts};
+pub(in crate::entry) mod syntax;
+pub(in crate::entry) use ports::InputPort;
+#[cfg(feature = "cpu")]
+pub(in crate::entry) use ports::RolePorts;
 pub(in crate::entry) mod preflight;
 pub(in crate::entry) mod raw;
 pub(in crate::entry) mod schemas;
@@ -13,7 +17,7 @@ mod validate;
 use super::Package;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use zkc_runtime::vm::LogicalType;
+use syntax::Leaf;
 
 type Result<T> = std::result::Result<T, InterfaceError>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -45,7 +49,7 @@ impl std::error::Error for InterfaceError {}
 pub struct Interface {
     pub(in crate::entry) document: raw::Interface,
     pub(in crate::entry) selected: usize,
-    types: BTreeMap<String, LogicalType>,
+    pub(in crate::entry) types: BTreeMap<String, Leaf>,
     ports: ports::Ports,
     pub(in crate::entry) setups: Vec<Setup>,
 }
@@ -54,7 +58,9 @@ pub struct Interface {
 #[derive(Debug)]
 pub struct BoundInterface {
     view: Interface,
+    #[cfg(feature = "cpu")]
     artifact: String,
+    #[cfg(feature = "cpu")]
     options: super::CompileOptions,
 }
 impl std::ops::Deref for BoundInterface {
@@ -65,11 +71,13 @@ impl std::ops::Deref for BoundInterface {
 }
 impl BoundInterface {
     pub fn read(package: &Package) -> Result<Self> {
-        let original = crate::host::inputs::hex(&Sha256::digest(package.original().as_bytes()));
+        let original = crate::io::bytes::hex(&Sha256::digest(package.original().as_bytes()));
         let view = Interface::decode(package.interface().as_bytes(), Some(&original))?;
         Ok(Self {
             view,
-            artifact: crate::host::inputs::hex(package.authenticated_artifact().identity()),
+            #[cfg(feature = "cpu")]
+            artifact: crate::io::bytes::hex(package.authenticated_artifact().identity()),
+            #[cfg(feature = "cpu")]
             options: package.options(),
         })
     }
@@ -162,10 +170,6 @@ impl Interface {
     }
     pub fn is_proof(&self) -> bool {
         self.proof().is_some()
-    }
-    /// Types are admitted once per canonical spelling and shared within the view.
-    pub fn logical_type(&self, spelling: &str) -> Option<&LogicalType> {
-        self.types.get(spelling)
     }
 }
 

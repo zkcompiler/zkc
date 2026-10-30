@@ -20,6 +20,7 @@ pub(crate) fn support(
         if !matches!(
             contract,
             ServiceContract::RandomExtensionField
+                | ServiceContract::RandomKoalaBearExt4
                 | ServiceContract::RandomBabyBearExt4
                 | ServiceContract::RandomGoldilocksExt2
         ) {
@@ -52,6 +53,9 @@ pub(crate) fn support(
         }
         ServiceContract::RandomGoldilocksExt2 => {
             (Identity::GoldilocksExt2, Representation::GoldilocksExt2)
+        }
+        ServiceContract::RandomKoalaBearExt4 => {
+            (Identity::KoalaBearExt4, Representation::KoalaBearExt4)
         }
         ServiceContract::RandomExtensionField => {
             (Identity::KoalaBearExt8, Representation::KoalaBearExt8)
@@ -522,6 +526,7 @@ mod tests {
             ServiceContract::RandomBn254Field,
             ServiceContract::RandomRistrettoField,
             ServiceContract::RandomExtensionField,
+            ServiceContract::RandomKoalaBearExt4,
         ] {
             let registry = registry();
             let root = registry.issue_random_for("Alice", contract, 1).unwrap();
@@ -554,33 +559,37 @@ mod tests {
             assert!(support(contract, "index").is_none());
             assert!(contract.signature("index").is_none());
         }
-        let registry = registry();
-        let root = registry
-            .issue_random_for("Alice", ServiceContract::RandomExtensionField, 2)
-            .unwrap();
-        let lease = registry
-            .acquire("Alice", std::slice::from_ref(&root))
-            .unwrap();
-        for bound in [0, 3, 6, u64::MAX] {
-            assert_eq!(
-                lease.index(&root, bound).unwrap_err().code,
-                "refused:query-bound"
-            );
+        for contract in [
+            ServiceContract::RandomExtensionField,
+            ServiceContract::RandomKoalaBearExt4,
+        ] {
+            assert!(support(contract, "index").is_some());
+            let registry = registry();
+            let root = registry.issue_random_for("Alice", contract, 2).unwrap();
+            let lease = registry
+                .acquire("Alice", std::slice::from_ref(&root))
+                .unwrap();
+            for bound in [0, 3, 6, u64::MAX] {
+                assert_eq!(
+                    lease.index(&root, bound).unwrap_err().code,
+                    "refused:query-bound"
+                );
+            }
+            let untouched = registry.observe(&root).unwrap();
+            assert!(!untouched.poisoned);
+            assert_eq!(untouched.state.unwrap().draw_count, 0);
+            for bound in [1, 1 << 63] {
+                let Value::Index(position) = lease.index(&root, bound).unwrap() else {
+                    panic!("index reply");
+                };
+                assert!(position < bound);
+            }
+            // A consuming failure, unlike a refused request, poisons the root.
+            assert!(lease.index(&root, 8).is_err());
+            let exhausted = registry.observe(&root).unwrap();
+            assert!(exhausted.poisoned);
+            assert_eq!(exhausted.state.unwrap().draw_count, 3);
         }
-        let untouched = registry.observe(&root).unwrap();
-        assert!(!untouched.poisoned);
-        assert_eq!(untouched.state.unwrap().draw_count, 0);
-        for bound in [1, 1 << 63] {
-            let Value::Index(position) = lease.index(&root, bound).unwrap() else {
-                panic!("index reply");
-            };
-            assert!(position < bound);
-        }
-        // A consuming failure, unlike a refused request, poisons the root.
-        assert!(lease.index(&root, 8).is_err());
-        let exhausted = registry.observe(&root).unwrap();
-        assert!(exhausted.poisoned);
-        assert_eq!(exhausted.state.unwrap().draw_count, 3);
     }
     #[test]
     fn aliases_share_successors_distinct_roots_keep_their_own_tapes() {

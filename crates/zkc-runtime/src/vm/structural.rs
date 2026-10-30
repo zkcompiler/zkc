@@ -225,7 +225,7 @@ impl ParseBudget {
 }
 
 pub(super) fn natural(s: &str) -> Result<u64> {
-    crate::logical::natural_index(s)
+    zkc_format::logical::natural_index(s)
         .ok()
         .filter(|n| *n <= NATURAL_ARGUMENT_LIMIT)
         .ok_or_else(|| invalid("structural-natural"))

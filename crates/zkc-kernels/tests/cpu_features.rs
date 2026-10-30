@@ -1,4 +1,4 @@
-//! Audit positive parallel features for default native, inline SDK and browser
+//! Audit positive parallel features for default, serial CPU SDK and browser
 //! consumers. Keep pool-creating curve features off. Resolution only; no build.
 use serde_json::Value;
 use std::{path::Path, process::Command};
@@ -32,12 +32,12 @@ fn consumers_select_only_owned_parallel_features() {
     let manifest = consumer.path().join("Cargo.toml");
     let text = std::fs::read_to_string(&manifest).unwrap().replace(
         &format!("path = {sdk_path}"),
-        &format!("path = {sdk_path}, default-features = false"),
+        &format!("path = {sdk_path}, default-features = false, features = [\"cpu\"]"),
     );
     std::fs::write(&manifest, text).unwrap();
     audit(
         &metadata(&manifest, false, consumer.path()),
-        "inline SDK consumer",
+        "serial CPU SDK consumer",
         false,
     );
     let web_path = serde_json::to_string(&root.join("crates/zkc-web").to_str().unwrap()).unwrap();

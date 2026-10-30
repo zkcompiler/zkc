@@ -2,9 +2,9 @@
 use crate::execution::{Capacity, CpuExecution};
 use crate::host::{
     admission::{Admission, Input, Operand, ResourceInput, entry_values},
-    inputs::*,
     setups::needs_input_setup,
 };
+use crate::io::bytes::*;
 use serde_json::{Value as Json, json};
 use std::collections::BTreeMap;
 use zkc_cpu::{

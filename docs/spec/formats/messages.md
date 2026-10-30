@@ -118,8 +118,8 @@ rows and columns occupy offsets 6 and 10. Each coordinate/count is `u32`.
 | Sparse matrix | BLS 23, BN254 45, Ristretto 24, KoalaBear 25, ext8 30, ext4 28, GF(2^64) 75, GF(2^192) 78 | `18 + n*(8+w)`; each entry is row, column, canonical scalar | `n` elements |
 | Registered residue vector | BabyBear 91, BabyBear quartic 94, Goldilocks 97, Goldilocks quadratic 100 | `10 + n*w`; element widths 4, 16, 8, 16 respectively | `n` elements |
 | Registered residue matrix | BabyBear 92, BabyBear quartic 95, Goldilocks 98, Goldilocks quadratic 101 | `18 + n*(8+w)`; element widths 4, 16, 8, 16 respectively | `n` elements |
-| Merkle root | KoalaBear 33, ext8 35 | 38 | one element |
-| Merkle path | KoalaBear 34, ext8 36 | `10 + 32*n`, at most 24 siblings | `n` elements |
+| Merkle root | KoalaBear 33, ext8 35, ext4 79 | 38 | one element |
+| Merkle path | KoalaBear 34, ext8 36, ext4 80 | `10 + 32*n`, at most 24 siblings | `n` elements |
 | Digest-generic Merkle root | 71 | `6 + w` | one element |
 | Digest-generic Merkle proof | 72 | `10 + w*n` | `n` elements |
 
@@ -252,7 +252,7 @@ existing BLS Merlin/Spongefish suites, Ristretto Merlin
 `merlin3.ristretto255.scalar64le/0`, KoalaBear ext8 Merlin
 `merlin3.koala-bear.ext8-binomial3.rejection31le/0` and the
 [hash-chain suites](../ir/construction.md#native-hash-chain-suites) over BLS12-381
-Fr and the KoalaBear ext8 field. The selected random-service
+Fr and the KoalaBear quartic and octic fields. The selected random-service
 contract and draw result must match the suite's challenge field.
 
 Complete-type observation absorbs bytes, so its payload domain need not equal

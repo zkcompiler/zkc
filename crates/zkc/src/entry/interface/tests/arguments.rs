@@ -11,7 +11,7 @@ fn public_types(interface: &Interface) -> Vec<zkc_runtime::vm::PhysicalType> {
         .flat_map(|p| p.schema.leaves.clone())
         .map(|spelling| {
             zkc_runtime::vm::PhysicalType::default_for(
-                interface.logical_type(&spelling).unwrap().clone(),
+                zkc_runtime::vm::LogicalType::parse(&spelling).unwrap(),
             )
             .unwrap()
         })

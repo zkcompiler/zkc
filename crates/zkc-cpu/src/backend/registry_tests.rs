@@ -1124,6 +1124,7 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
         I::Bls12381Fr,
         I::Bn254Fr,
         I::KoalaBearExt8,
+        I::KoalaBearExt4,
         I::Ristretto255Scalar,
     ] {
         values.push(native.issue_rng_for(field, domain.clone(), 1).unwrap());
@@ -1138,6 +1139,7 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
         I::Spongefish080KeccakFr64Be,
         I::HashChainKeccak256Fr64Be,
         I::HashChainKeccak256KoalaBearExt8,
+        I::HashChainKeccak256KoalaBearExt4,
     ] {
         values.push(
             native

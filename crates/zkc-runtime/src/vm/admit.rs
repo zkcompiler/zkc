@@ -307,17 +307,17 @@ fn attributes(
             Ok(())
         }
         AttributeRule::NativeMessageTemplate
-            if crate::logical::native_origin_template(attrs, "message").is_ok() =>
+            if zkc_format::logical::native_origin_template(attrs, "message").is_ok() =>
         {
             Ok(())
         }
         AttributeRule::NativeChallengeTemplate
-            if crate::logical::native_query_template(attrs, "draw").is_ok() =>
+            if zkc_format::logical::native_query_template(attrs, "draw").is_ok() =>
         {
             Ok(())
         }
         AttributeRule::NativeIndexTemplate
-            if crate::logical::native_query_template(attrs, "index").is_ok() =>
+            if zkc_format::logical::native_query_template(attrs, "index").is_ok() =>
         {
             Ok(())
         }

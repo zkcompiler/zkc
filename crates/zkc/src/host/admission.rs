@@ -1,6 +1,8 @@
 //! Per-bind admission and authenticated immutable import reuse. No global cache.
 mod native;
-use super::inputs::{Result, read_regular};
+use crate::io::bytes::Result;
+#[cfg(feature = "files")]
+use crate::io::bytes::read_regular;
 pub(crate) use native::{check_native_data, check_retained_data};
 use sha2::{Digest, Sha256};
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
@@ -266,8 +268,8 @@ impl<'a> Admission<'a> {
             buffer.bytes
         } else {
             file.read(limit.min(remaining)).map_err(|e| match e {
-                super::io::ReadError::Limit if remaining < limit => "artifact-input-work-limit",
-                super::io::ReadError::Limit => "entry-input-reference-byte-limit",
+                crate::io::ReadError::Limit if remaining < limit => "artifact-input-work-limit",
+                crate::io::ReadError::Limit => "entry-input-reference-byte-limit",
                 _ => "entry-input-reference",
             })?
         };
@@ -413,7 +415,7 @@ impl<'a> Admission<'a> {
                                 KeySource::Path(path) => {
                                     #[cfg(feature = "files")]
                                     {
-                                        let mut file = super::io::open_regular(path)
+                                        let mut file = crate::io::open_regular(path)
                                             .map_err(|_| "artifact-io")?;
                                         super::io::read_shared(&mut file, limit, Some(ledger))
                                     }
@@ -445,9 +447,19 @@ impl<'a> Admission<'a> {
                         &buffer.bytes
                     } else {
                         unshared = match source {
-                            KeySource::Path(path) => read_regular(path, limit),
+                            KeySource::Path(path) => {
+                                #[cfg(feature = "files")]
+                                {
+                                    read_regular(path, limit)
+                                }
+                                #[cfg(not(feature = "files"))]
+                                {
+                                    let _ = path;
+                                    Err::<Vec<u8>, String>("artifact-io".into())
+                                }
+                            }
                             KeySource::File(file) => file.read(limit).map_err(|e| match e {
-                                super::io::ReadError::Limit => "artifact-byte-limit".into(),
+                                crate::io::ReadError::Limit => "artifact-byte-limit".into(),
                                 _ => "entry-input-reference".into(),
                             }),
                         }

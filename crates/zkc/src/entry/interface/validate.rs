@@ -1,12 +1,12 @@
+use super::syntax::{Leaf, service_field, transcript_field};
 use super::{
     InterfaceError as E, Result, hash, identifier, raw::*, require, schemas::Schemas, text,
 };
 use std::collections::{BTreeMap, BTreeSet};
-use zkc_runtime::vm::{LogicalType, ServiceContract, Type};
 
 pub(super) struct Checked {
     pub selected: usize,
-    pub types: BTreeMap<String, LogicalType>,
+    pub types: BTreeMap<String, Leaf>,
     pub setups: Vec<super::Setup>,
 }
 pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
@@ -78,7 +78,7 @@ pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
                     let scalar =
                         matches!(input.schema.kind, Kind::Boolean | Kind::Index | Kind::Field);
                     let vector = input.schema.kind == Kind::Builtin
-                        && schemas.setup_properties(&input.schema.leaves[0])?.0 == Type::Vector;
+                        && schemas.setup_properties(&input.schema.leaves[0])?.0 == "vector";
                     require(input.native.len() == 1 && (scalar || vector), E::Schema)?;
                 }
             }
@@ -118,7 +118,7 @@ pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
                     && service.native as usize == input_count + index,
                 E::Schema,
             )?;
-            ServiceContract::parse(&service.contract).map_err(|_| E::Schema)?;
+            service_field(&service.contract).ok_or(E::Schema)?;
         }
         let mut names = BTreeSet::new();
         for clause in &protocol.clauses {
@@ -344,7 +344,7 @@ fn job(
                 require(&selected.owner == verifier, E::Selection)?;
             }
             if let Some(suite) = suite {
-                LogicalType::parse(&format!("transcript:{suite}")).map_err(|_| E::Selection)?;
+                transcript_field(suite).ok_or(E::Selection)?;
             }
         }
         Construction::FiatShamir {
@@ -353,21 +353,16 @@ fn job(
             format,
         } => {
             require(
-                *format == zkc_runtime::host::wire::ProofFormat::Native && services.len() == 1,
+                *format == zkc_format::proof::ProofFormat::Native && services.len() == 1,
                 E::Selection,
             )?;
             let selected = protocol
                 .services
                 .get(services[0] as usize)
                 .ok_or(E::Selection)?;
-            let ty =
-                LogicalType::parse(&format!("transcript:{suite}")).map_err(|_| E::Selection)?;
-            let contract = ServiceContract::parse(&selected.contract).map_err(|_| E::Selection)?;
-            require(
-                &selected.owner == verifier
-                    && ty.identity().scalar_field() == Some(contract.field()),
-                E::Selection,
-            )?;
+            let ty = transcript_field(suite).ok_or(E::Selection)?;
+            let contract = service_field(&selected.contract).ok_or(E::Selection)?;
+            require(&selected.owner == verifier && ty == contract, E::Selection)?;
         }
     };
     if let Some(target) = target {

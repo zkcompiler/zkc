@@ -3,11 +3,12 @@ use serde_json::{Value as Json, json};
 use zkc_cpu::{
     Bls12381G2, CpuBackend, Domain, EntryPolicy, G1, Policy, Scalar, Value, cpu_contracts,
 };
+use zkc_format::proof::{MAX_PROOF_BYTES, ProofFormat};
 use zkc_runtime::{
     host::{
         joint::*,
         proof,
-        wire::{MAX_PROOF_BYTES, ProofBackend, ProofFormat, WireBackend, WireError},
+        wire::{ProofBackend, WireBackend, WireError},
     },
     interpreter::Runner,
     vm::{

@@ -1,7 +1,11 @@
 //! Ordered proof production and validation under application-supplied contracts.
-use super::wire::{FormatError, ProofBackend, ProofFormat, ProofReader, ProofWriter, WireError};
+use super::wire::{
+    ProofBackend, ProofWriter, WireError, decode_proof_value, encode_proof_value,
+    proof_decoding_bound,
+};
 use crate::interpreter::Runner;
 use crate::vm::{Action, Backend, BackendError, RuntimeError, Stop, Value as RuntimeValue};
+use zkc_format::proof::{FormatError, ProofFormat, ProofReader};
 
 #[derive(Debug)]
 pub enum ArtifactFailure {
@@ -127,9 +131,7 @@ fn write_message<B: ProofBackend>(
     // then release it before the next message. Raw payloads remain borrowed.
     let _live = crate::host::wire::reserve_allocation(ledger, bound)
         .map_err(|_| ArtifactFailure::Format(FormatError::Limit))?;
-    let bytes = format
-        .encode(backend, value)
-        .map_err(ArtifactFailure::Wire)?;
+    let bytes = encode_proof_value(format, backend, value).map_err(ArtifactFailure::Wire)?;
     writer.message(&bytes)?;
     Ok(())
 }
@@ -278,25 +280,28 @@ pub fn validate<B: ProofBackend>(
                     )
                     .map_err(|_| ArtifactFailure::Format(FormatError::Limit))?;
             }
-            let retained =
-                match transport
-                    .format()
-                    .decoding_bound(runner.backend(), &request.ty, bytes)
-                {
-                    Ok(bound) => bound,
-                    Err(WireError::Invalid(reason)) => {
-                        // Measurement rejection is still an accepted Decode completion.
-                        runner.complete_receive(&cut, Err(reason))?;
-                        return Ok(());
-                    }
-                    Err(error) => return Err(ArtifactFailure::Wire(error)),
-                };
+            let retained = match proof_decoding_bound(
+                transport.format(),
+                runner.backend(),
+                &request.ty,
+                bytes,
+            ) {
+                Ok(bound) => bound,
+                Err(WireError::Invalid(reason)) => {
+                    // Measurement rejection is still an accepted Decode completion.
+                    runner.complete_receive(&cut, Err(reason))?;
+                    return Ok(());
+                }
+                Err(error) => return Err(ArtifactFailure::Wire(error)),
+            };
             let _live = crate::host::wire::reserve_allocation(ledger.as_ref(), retained)
                 .map_err(|_| ArtifactFailure::Format(FormatError::Limit))?;
-            let decoded = match transport
-                .format()
-                .decode(runner.backend(), &request.ty, bytes)
-            {
+            let decoded = match decode_proof_value(
+                transport.format(),
+                runner.backend(),
+                &request.ty,
+                bytes,
+            ) {
                 Ok(value) => Ok(value),
                 Err(WireError::Invalid(reason)) => Err(reason),
                 Err(error) => return Err(ArtifactFailure::Wire(error)),

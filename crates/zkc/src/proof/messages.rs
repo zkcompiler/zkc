@@ -1,13 +1,11 @@
 //! Static transcript events and their correspondence to both roles' wire
 //! actions. The Runtime independently checks transcript operands and custody.
 use super::{interface::DeploymentPolicy, wire_codec, wire_type};
-use crate::host::inputs::{Result, array, list, text};
+use crate::io::bytes::{Result, array, list, text};
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
-use zkc_runtime::{
-    logical,
-    vm::{LogicalType, NativeTranscriptEvent, Program, ProgramAction},
-};
+use zkc_format::logical;
+use zkc_runtime::vm::{LogicalType, NativeTranscriptEvent, Program, ProgramAction};
 
 pub(super) struct MessageLayout<'a> {
     pub(super) payload_types: BTreeMap<&'a str, LogicalType>,

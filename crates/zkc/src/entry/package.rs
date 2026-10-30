@@ -6,12 +6,11 @@ const PACKAGE_BYTES: usize = 64 * 1024 * 1024;
 const ORIGINAL_BYTES: usize = 16 * 1024 * 1024;
 pub(super) const INTERFACE_BYTES: usize = 4 * 1024 * 1024;
 const ARTIFACT_BYTES: usize = 16 * 1024 * 1024;
-/// Packaged expression assets share the ring arena's per-item byte bound and
-/// the Host registry's aggregate bound, so a package cannot name more than the
-/// Host can admit.
+/// Fixed bounds of the native package publication contract. Native execution
+/// independently admits each expression asset and its registry capacity.
 pub(super) const ASSET_COUNT: usize = 256;
-const ASSET_BYTES: usize = zkc_runtime::ring::BYTE_LIMIT;
-const ASSETS_BYTES: usize = zkc_cpu::ring::REGISTRY_BYTE_LIMIT;
+const ASSET_BYTES: usize = 8 * 1024 * 1024;
+const ASSETS_BYTES: usize = 32 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, remote = "Self")]
@@ -95,6 +94,7 @@ pub struct Package {
     original: Arc<str>,
     interface: Arc<str>,
     artifact: Arc<str>,
+    #[cfg(feature = "cpu")]
     artifact_identity: [u8; 32],
     options: CompileOptions,
     assets: Arc<[PackagedAsset]>,
@@ -102,10 +102,12 @@ pub struct Package {
 /// A view can only originate from a captured Package. Its borrowed immutable
 /// bytes remain covered by the package pin; its digest is diagnostic identity,
 /// not a second source of authorization. No public raw-byte constructor exists.
+#[cfg(feature = "cpu")]
 pub(crate) struct AuthenticatedArtifact<'a> {
     bytes: &'a [u8],
     identity: [u8; 32],
 }
+#[cfg(feature = "cpu")]
 impl AuthenticatedArtifact<'_> {
     pub(crate) fn bytes(&self) -> &[u8] {
         self.bytes
@@ -166,6 +168,7 @@ impl Package {
             identity,
             original: frame.original.into(),
             interface: frame.interface.into(),
+            #[cfg(feature = "cpu")]
             artifact_identity: Sha256::digest(frame.artifact.as_bytes()).into(),
             artifact: frame.artifact.into(),
             options: frame.options,
@@ -194,6 +197,7 @@ impl Package {
     pub fn artifact(&self) -> &str {
         &self.artifact
     }
+    #[cfg(feature = "cpu")]
     pub(crate) fn authenticated_artifact(&self) -> AuthenticatedArtifact<'_> {
         AuthenticatedArtifact {
             bytes: self.artifact.as_bytes(),
@@ -230,7 +234,7 @@ mod tests {
         capture(value.to_string().as_bytes())
     }
     fn digest(seed: u8) -> String {
-        crate::host::inputs::hex(&Sha256::digest([seed]))
+        crate::io::bytes::hex(&Sha256::digest([seed]))
     }
     #[test]
     fn exact_bytes_and_components_are_retained() {
@@ -393,7 +397,7 @@ mod tests {
     #[test]
     fn asset_count_item_and_aggregate_bytes_are_bounded() {
         let digests: Vec<_> = (0..=ASSET_COUNT as u16)
-            .map(|i| crate::host::inputs::hex(&Sha256::digest(i.to_le_bytes())))
+            .map(|i| crate::io::bytes::hex(&Sha256::digest(i.to_le_bytes())))
             .collect();
         let mut sorted = digests.clone();
         sorted.sort();

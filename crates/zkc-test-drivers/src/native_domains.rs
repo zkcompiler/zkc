@@ -263,7 +263,7 @@ fn main() {
 }
 
 fn check_suite_mutations(envelope: &Json) {
-    use zkc_runtime::logical;
+    use zkc_format::logical;
     let mut changed = envelope.clone();
     let query = changed[2][3]
         .as_array_mut()

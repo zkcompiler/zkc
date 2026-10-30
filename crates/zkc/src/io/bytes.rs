@@ -1,23 +1,18 @@
 //! Bounded ingress shared by construction and application inputs.
 use serde_json::Value as Json;
+#[cfg(all(feature = "files", any(feature = "cpu", feature = "project")))]
 use std::path::Path;
 pub(crate) type Result<T> = std::result::Result<T, String>;
 pub(crate) const INPUT_LIMIT: usize = 16 * 1024 * 1024;
-/// Installed maximum allowance for a managed provider or transcript invocation.
-pub(crate) const RESOURCE_BUDGET_LIMIT: u64 = 1_000_000;
 
+#[cfg(all(feature = "files", any(feature = "cpu", feature = "project")))]
 pub(crate) fn read_regular(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u8>> {
-    #[cfg(not(feature = "files"))]
-    {
-        let _ = (path, limit);
-        Err("artifact-io".into())
-    }
-    #[cfg(feature = "files")]
-    crate::host::io::read_regular(path, limit).map_err(|error| match error {
-        crate::host::io::ReadError::Io(_) => "artifact-io".into(),
-        crate::host::io::ReadError::Limit => "artifact-byte-limit".into(),
+    crate::io::read_regular(path, limit).map_err(|error| match error {
+        crate::io::ReadError::Io(_) => "artifact-io".into(),
+        crate::io::ReadError::Limit => "artifact-byte-limit".into(),
     })
 }
+#[cfg(any(feature = "cpu", test))]
 pub(crate) fn parse(bytes: &[u8], limit: usize) -> Result<Json> {
     if bytes.len() > limit {
         return Err("artifact-byte-limit".into());
@@ -30,14 +25,16 @@ pub(crate) fn parse(bytes: &[u8], limit: usize) -> Result<Json> {
         super::json::Error::Syntax => "artifact-json",
     })?;
     let v = serde_json::from_slice(bytes).map_err(|_| "artifact-json")?;
-    zkc_runtime::logical::tree_size(&v).map_err(|e| e.to_string())?;
+    zkc_format::logical::tree_size(&v).map_err(|e| e.to_string())?;
     Ok(v)
 }
+#[cfg(feature = "cpu")]
 pub(crate) fn list(v: &Json) -> Result<&[Json]> {
     v.as_array()
         .map(Vec::as_slice)
         .ok_or("artifact-array".into())
 }
+#[cfg(feature = "cpu")]
 pub(crate) fn array(v: &Json, n: usize) -> Result<&[Json]> {
     let a = list(v)?;
     if a.len() != n {
@@ -48,8 +45,9 @@ pub(crate) fn array(v: &Json, n: usize) -> Result<&[Json]> {
 pub(crate) fn text(v: &Json) -> Result<&str> {
     v.as_str().ok_or("artifact-string".into())
 }
+#[cfg(any(feature = "cpu", test))]
 pub(crate) fn natural(v: &Json) -> Result<u64> {
-    zkc_runtime::logical::natural_index(text(v)?).map_err(|e| e.to_string())
+    zkc_format::logical::natural_index(text(v)?).map_err(|e| e.to_string())
 }
 pub(crate) fn unhex(v: &Json) -> Result<Vec<u8>> {
     let s = text(v)?;
@@ -89,6 +87,7 @@ pub(crate) fn digest(value: &str) -> Result<[u8; 32]> {
         .try_into()
         .map_err(|_| "host-digest".into())
 }
+#[cfg(feature = "cpu")]
 pub(crate) fn hash(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     hex(&Sha256::digest(bytes))
@@ -127,7 +126,7 @@ mod tests {
 
     #[test]
     fn parser_preserves_generated_trees_and_refuses_malformed_json() {
-        use crate::host::json::corpus;
+        use crate::io::json::corpus;
         for (value, bytes) in corpus::trees() {
             let bytes = bytes.as_slice();
             assert_eq!(parse(bytes, INPUT_LIMIT).unwrap(), value);

@@ -22,6 +22,7 @@ impl Budget {
             nodes: 200_000,
         }
     }
+    #[cfg(feature = "cpu")]
     pub fn remaining_bytes(&self) -> usize {
         self.bytes
     }

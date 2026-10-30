@@ -5,14 +5,14 @@ use crate::entry::{
     RoleInputs, RunEntry, RunRequest, SetupAuthority, Value,
 };
 use crate::execution::InputValue;
-use crate::host::inputs::hash;
+use crate::io::bytes::hash;
 use crate::run::HostLimits;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use zkc_cpu::{KoalaBear, KoalaBearExt8, Value as Native};
+use zkc_format::logical;
 use zkc_runtime::{
-    logical,
     ring::{Expression, Node},
     vm::{Identity, LogicalType, PhysicalType},
 };
@@ -22,7 +22,7 @@ const EXTENSION: &str = "koala-bear.ext8-binomial3";
 const ORIGINAL: &str = "module\n{}";
 
 fn sha(text: &str) -> String {
-    crate::host::inputs::hex(&Sha256::digest(text.as_bytes()))
+    crate::io::bytes::hex(&Sha256::digest(text.as_bytes()))
 }
 fn physical(logical: &str) -> String {
     PhysicalType::default_for(LogicalType::parse(logical).unwrap())

@@ -50,12 +50,19 @@ responses before it can share authentication work.
 
 ## Installed binary Merkle schemes
 
-The Keccak schemes are `rows.merkle-keccak256.koala-bear/0` and
-`rows.merkle-keccak256.koala-bear.ext8-binomial3/0`. Both use Plonky3 0.8.0's
+The Keccak schemes are `rows.merkle-keccak256.koala-bear/0`,
+`rows.merkle-keccak256.koala-bear.ext4-binomial3/0` and
+`rows.merkle-keccak256.koala-bear.ext8-binomial3/0`. They use Plonky3 0.8.0's
 binary single-root tree with Keccak-256, one rectangular matrix and cap height
 zero. Leaf hashing binds a fixed leaf tag, field/basis codec, width, height
 and canonical coordinates. Node hashing uses a distinct tag and two 32-byte
 digests. Missing bottom-layer leaves use upstream zero-digest padding.
+
+The quartic field is `F_p[u]/(u^4 - 3)`, with `p = 2130706433`. Its codec
+`koala-bear.ext4-binomial3.ascending-u32le/0` encodes each element as four
+canonical base coordinates in ascending basis order `(1, u, u^2, u^3)`, each as
+an unsigned 32-bit little-endian word. Coordinates at least `p` are rejected.
+The base, quartic and octic scheme identities and leaf codec tags are distinct.
 
 Non-power-of-two heights are allowed. Checking requires exact row width,
 `index < height` and path length `ceil(log2(height))` before upstream hashing.

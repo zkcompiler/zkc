@@ -63,12 +63,11 @@ fn nominal_admission_and_native_signatures_are_independent() {
     assert_eq!(identity.scalar_field(), Some(identity));
     assert_eq!(identity.group(), None);
     assert_eq!(identity.transcript(), None);
-    // Sampling and transcript suites are not installed for this extension.
-    assert!(
-        !zkc_cpu::domains::TRANSCRIPTS
-            .iter()
-            .any(|t| t.domain.field == identity)
-    );
+    assert!(zkc_cpu::domains::TRANSCRIPTS.iter().any(
+        |t| t.domain.field == identity && t.suite == Identity::HashChainKeccak256KoalaBearExt4
+    ));
+    assert!(LogicalType::new(Type::Rng, identity).is_ok());
+    assert!(KOALA_BEAR_EXT4.physical(Type::Rng).is_some());
     for kind in [
         Type::Field,
         Type::Vector,
@@ -82,7 +81,6 @@ fn nominal_admission_and_native_signatures_are_independent() {
         assert!(ty.spelling().contains(EXT));
     }
     for kind in [
-        Type::Rng,
         Type::Nonce,
         Type::Transcript,
         Type::Table,
@@ -145,6 +143,9 @@ fn nominal_admission_and_native_signatures_are_independent() {
         "matrix.shape_check",
         "encoding.field_le",
         "encoding.fields_from_montgomery_le",
+        "random.draw",
+        "random.vector",
+        "random.index",
     ] {
         let bind = binding(name);
         assert_eq!(
@@ -164,8 +165,6 @@ fn nominal_admission_and_native_signatures_are_independent() {
     assert_eq!(sig.outputs[0].logical().identity(), identity);
     for name in [
         "transcript.challenge",
-        "random.draw",
-        "random.index",
         "hash.poseidon2_16",
         "poly.fold",
         "pcs.open",

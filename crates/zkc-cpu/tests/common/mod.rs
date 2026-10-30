@@ -117,7 +117,7 @@ pub fn transcript_attributes(
         ])
     };
     vec![zkc_test_support::hex(
-        &zkc_runtime::logical::encode_tree(&json!([
+        &zkc_format::logical::encode_tree(&json!([
             "zkc.native-origin-template/0",
             "main",
             [],

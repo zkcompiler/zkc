@@ -94,7 +94,7 @@ impl EntryHost {
             .parameters
             .iter()
             .map(|p| {
-                self.interface.check_input(&p.schema)?;
+                self.interface.check_native_input(&p.schema)?;
                 let value = request
                     .arguments
                     .remove(&p.name)
@@ -602,7 +602,7 @@ impl Execution<'_> {
                     .map_err(|e| self.fail(e))
             }
             (DeploymentKind::Proof { entry, operation }, InvocationBinding::Proof(context)) => {
-                let producer = *operation == super::super::ProofOperation::Prove;
+                let producer = *operation == crate::entry::ProofOperation::Prove;
                 let request = deployment::proof_request(entry, producer, values, context)
                     .map_err(|e| self.fail(e))?;
                 let p = entry.interface().proof().expect("proof");
@@ -625,7 +625,7 @@ impl Execution<'_> {
                 } else {
                     Some(deployment::proof_bytes(&values[1]).map_err(|e| self.fail(e))?)
                 };
-                let proof_limit = zkc_runtime::host::wire::MAX_PROOF_BYTES
+                let proof_limit = zkc_format::proof::MAX_PROOF_BYTES
                     .saturating_sub(self.usage.proof_bytes)
                     .min(
                         self.host

@@ -35,7 +35,7 @@ fn frame(sponge: &mut Keccak, tag: u8, label: &[u8], data: &[u8]) {
 
 // Canonical framing does not authenticate the root's provenance.
 fn check_root(root: &[u8]) -> Result<()> {
-    zkc_runtime::logical::decode_tree(root).map_err(|_| refused("transcript-root"))?;
+    zkc_format::logical::decode_tree(root).map_err(|_| refused("transcript-root"))?;
     Ok(())
 }
 
@@ -55,7 +55,9 @@ impl Transcript {
                 frame(&mut sponge, FIXED, b"suite", suite.name().as_bytes());
                 Self::Spongefish(sponge)
             }
-            Identity::HashChainKeccak256Fr64Be | Identity::HashChainKeccak256KoalaBearExt8 => {
+            Identity::HashChainKeccak256Fr64Be
+            | Identity::HashChainKeccak256KoalaBearExt8
+            | Identity::HashChainKeccak256KoalaBearExt4 => {
                 check_root(root)?;
                 // The binding is the chain's initial input, not a later event.
                 return Ok(Self::HashChain(KeccakChain::bind(suite.name(), root)));
@@ -107,7 +109,7 @@ mod tests {
         )
         .unwrap();
         let root =
-            zkc_runtime::logical::encode_tree(&serde_json::json!(["transcript-fixture"])).unwrap();
+            zkc_format::logical::encode_tree(&serde_json::json!(["transcript-fixture"])).unwrap();
         let samples = [
             Value::Field(Scalar::from(7)),
             Value::Vector(vec![Scalar::from(0), Scalar::from(7)].into()),
@@ -164,10 +166,13 @@ mod tests {
     /// advances the state.
     #[test]
     fn chain_states_and_outputs_match_the_reference_vectors() {
-        let vectors: serde_json::Value = serde_json::from_str(
+        let mut vectors: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(zkc_test_support::source("hash-chain-vectors.json")).unwrap(),
         )
         .unwrap();
+        vectors["suites"].as_array_mut().unwrap().push(
+            serde_json::from_str(include_str!("../tests/common/quartic-hash-chain.json")).unwrap(),
+        );
         let hex = |v: &serde_json::Value| zkc_test_support::unhex(v.as_str().unwrap());
         for vector in vectors["suites"].as_array().unwrap() {
             let suite = Identity::parse(vector["suite"].as_str().unwrap()).unwrap();
@@ -197,7 +202,7 @@ mod tests {
 
     #[test]
     fn short_and_long_requests_use_counter_blocks() {
-        let root = zkc_runtime::logical::encode_tree(&serde_json::json!(["root"])).unwrap();
+        let root = zkc_format::logical::encode_tree(&serde_json::json!(["root"])).unwrap();
         let fresh = || {
             let Transcript::HashChain(chain) =
                 Transcript::new(Identity::HashChainKeccak256Fr64Be, &root).unwrap()
@@ -243,7 +248,7 @@ mod residue_profile_tests {
     #[test]
     fn exact_merlin_bytes_replay_and_separate_new_suites() {
         let root =
-            zkc_runtime::logical::encode_tree(&serde_json::json!(["residue-profile-fixture"]))
+            zkc_format::logical::encode_tree(&serde_json::json!(["residue-profile-fixture"]))
                 .unwrap();
         let mut first = Vec::new();
         for (suite, field) in [

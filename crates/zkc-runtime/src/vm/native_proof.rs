@@ -140,13 +140,13 @@ fn helper<'a>(
     // must name the same distribution as the transition contract.
     let challenge = index || contract == "transcript.native.indexed.challenge";
     let encoded = if challenge {
-        crate::logical::native_query_template(attributes, if index { "index" } else { "draw" })
+        zkc_format::logical::native_query_template(attributes, if index { "index" } else { "draw" })
     } else {
-        crate::logical::native_origin_template(attributes, "message")
+        zkc_format::logical::native_origin_template(attributes, "message")
     }
     .map_err(|_| refuse("native-proof-origin"))?;
     let origin =
-        crate::logical::decode_tree(&encoded).map_err(|_| refuse("native-proof-origin"))?;
+        zkc_format::logical::decode_tree(&encoded).map_err(|_| refuse("native-proof-origin"))?;
     if origin[1].as_str() != Some(entry) || challenge && origin[4][6].as_str() != Some(validator) {
         return Err(refuse("native-proof-origin"));
     }
@@ -223,7 +223,7 @@ fn helper<'a>(
                 let [value] = attributes.as_slice() else {
                     return Err(refuse("native-proof-index-bound"));
                 };
-                let value = crate::logical::uniform_index_bound(value)
+                let value = zkc_format::logical::uniform_index_bound(value)
                     .map_err(|_| refuse("native-proof-index-bound"))?;
                 if !value.is_power_of_two() {
                     return Err(refuse("native-proof-index-bound"));
@@ -348,7 +348,7 @@ fn custom_helper<'a>(
         {
             return Err(refuse("native-proof-construction-coverage"));
         }
-        let bytes = crate::logical::native_origin_template(
+        let bytes = zkc_format::logical::native_origin_template(
             std::slice::from_ref(&event.origin),
             if start {
                 "start"
@@ -360,7 +360,7 @@ fn custom_helper<'a>(
         )
         .map_err(|_| refuse("native-proof-origin"))?;
         let origin =
-            crate::logical::decode_tree(&bytes).map_err(|_| refuse("native-proof-origin"))?;
+            zkc_format::logical::decode_tree(&bytes).map_err(|_| refuse("native-proof-origin"))?;
         if origin[1].as_str() != Some(entry) {
             return Err(refuse("native-proof-origin"));
         }

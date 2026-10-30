@@ -322,7 +322,10 @@ A selected `index` query becomes `transcript.native.indexed.index`:
 ```
 
 It requires the suite fact `IndexTranscript(T)`; the installed suites with that
-fact are `merlin3.koala-bear.ext8-binomial3.rejection31le/0` and
+fact are `merlin3.koala-bear.ext8-binomial3.rejection31le/0`,
+`merlin3.baby-bear.ext4-binomial11.rejection31le/0`,
+`merlin3.goldilocks.ext2-binomial7.rejection64le/0`,
+`hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0` and
 `hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0`. The bound must be
 a power of two from 1 through 2^63; otherwise the transition refuses before
 consuming the state. Otherwise it consumes the state and, in order:
@@ -356,6 +359,7 @@ instance with its own identity rather than a parameter of an existing one.
 | Suite | `H` | Challenge field | Field decoder | `IndexTranscript` |
 |---|---|---|---|---|
 | `hash-chain.keccak256.bls12-381.fr64be/0` | Keccak-256 | `bls12-381.fr` | `fr64be` | no |
+| `hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0` | Keccak-256 | `koala-bear.ext4-binomial3` | `rejection31le` | yes |
 | `hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0` | Keccak-256 | `koala-bear.ext8-binomial3` | `rejection31le` | yes |
 
 Keccak-256 is the original Keccak submission's 256-bit instance (rate 136 bytes,
@@ -413,10 +417,11 @@ The managed source methods use the source label in place of the occurrence.
   distance `r/2^512` of uniform; it is not an exact draw.
 - `rejection31le` reads each 64-byte answer as sixteen little-endian 32-bit
   words, clears the top bit of each and accepts a word below the KoalaBear
-  modulus `p` as the next coordinate, in basis order. It stops when all eight
-  coordinates are accepted, and stops with `exhausted:challenge-rejection-limit`
+  modulus `p` as the next coordinate, in basis order. It stops when the suite's
+  extension degree is filled (four coordinates for quartic, eight for octic),
+  and stops with `exhausted:challenge-rejection-limit`
   after sixteen answers. Rejected words are never reduced modulo `p`. Given
-  uniform answers, an accepted value is exactly uniform on the octic extension.
+  uniform answers, an accepted value is exactly uniform on the named extension.
 - The UniformIndex sampler is the
   [installed power-of-two sampler](../runtime/services.md#uniformindex-realization)
   applied to the `index` answer.

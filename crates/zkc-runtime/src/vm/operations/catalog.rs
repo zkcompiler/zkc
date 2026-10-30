@@ -168,7 +168,10 @@ fn capability(name: &str, args: &[&Argument]) -> bool {
         ("Field", "PairingField") => matches!(identity, Identity::Bn254Fr | Identity::Bls12381Fr),
         ("Field", "IndexRandomness") => matches!(
             identity,
-            Identity::KoalaBearExt8 | Identity::BabyBearExt4 | Identity::GoldilocksExt2
+            Identity::KoalaBearExt8
+                | Identity::KoalaBearExt4
+                | Identity::BabyBearExt4
+                | Identity::GoldilocksExt2
         ),
         ("Group", "Group" | "ScalarAction") => identity.group() == Some(*identity),
         ("Transcript", "Transcript" | "FieldTranscript") => {

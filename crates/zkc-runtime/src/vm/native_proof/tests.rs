@@ -112,7 +112,7 @@ impl Fixture {
         let observe = event(false);
         let query = event(true);
         let mut delivery = event(false);
-        delivery.origin = crate::logical::encode_tree(&json!([
+        delivery.origin = zkc_format::logical::encode_tree(&json!([
             "zkc.native-origin-template/0",
             "main",
             [],
@@ -504,7 +504,7 @@ fn event(query: bool) -> NativeTranscriptEvent {
     } else {
         json!(["message", "Round", "message", "message", "P", "V"])
     };
-    let bytes = crate::logical::encode_tree(&json!([
+    let bytes = zkc_format::logical::encode_tree(&json!([
         "zkc.native-origin-template/0",
         "main",
         [],
@@ -716,7 +716,7 @@ fn custom_child_starts_and_queries_retain_selected_ports() {
     let state = [PhysicalType::parse(BOOL).unwrap()];
     custom_helper(query, &state, &[event(true)], "main", "V").unwrap();
     let mut wrong_query = event(true);
-    let origin = crate::logical::encode_tree(&json!([
+    let origin = zkc_format::logical::encode_tree(&json!([
         "zkc.native-origin-template/0",
         "main",
         [],
@@ -734,7 +734,7 @@ fn custom_child_starts_and_queries_retain_selected_ports() {
     .unwrap();
     wrong_query.origin = origin.iter().map(|b| format!("{b:02x}")).collect();
     assert!(custom_helper(query, &state, &[wrong_query], "main", "V").is_err());
-    let origin = crate::logical::encode_tree(&json!([
+    let origin = zkc_format::logical::encode_tree(&json!([
         "zkc.native-origin-template/0",
         "main",
         [],

@@ -2,7 +2,7 @@
 //! the Host interface to independently admitted participant signatures; they do
 //! not establish source/compiler correspondence or grant setup authority.
 use super::{Port, RoleMap, index, input_kind, wire_codec, wire_type};
-use crate::host::inputs::{Result, array, list, text};
+use crate::io::bytes::{Result, array, list, text};
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
 use zkc_runtime::vm::{ConstructionPlan, LogicalType, PhysicalType, Program, Type};

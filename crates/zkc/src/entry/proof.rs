@@ -62,7 +62,7 @@ impl Default for AttemptOptions {
     fn default() -> Self {
         Self {
             count: 1,
-            proof_bytes: zkc_runtime::host::wire::MAX_PROOF_BYTES,
+            proof_bytes: zkc_format::proof::MAX_PROOF_BYTES,
         }
     }
 }
@@ -238,7 +238,7 @@ impl ProofEntry {
         let completion = proof.completion;
         let scope = if proof.suite.is_some() {
             BindingScope::Transcript
-        } else if proof.format == zkc_runtime::host::wire::ProofFormat::Native {
+        } else if proof.format == zkc_format::proof::ProofFormat::Native {
             BindingScope::HeaderOnly
         } else {
             BindingScope::Authored

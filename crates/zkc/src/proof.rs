@@ -11,7 +11,7 @@ use zkc_runtime::host::proof::{self as driver, ArtifactFailure, ArtifactReport};
 mod entropy;
 mod setups;
 use crate::host::admission::{Admission, Input, Operand, ResourceInput, entry_values};
-use crate::host::inputs::*;
+use crate::io::bytes::*;
 pub use attempts::{AttemptPolicy, AttemptRecord};
 use entropy::Entropy;
 use serde_json::{Value as Json, json};
@@ -22,14 +22,12 @@ use zkc_cpu::{
     Capability, CpuBackend, Domain, EntryPolicy, Policy, Value,
     services::{ServiceReference, ServiceRegistry},
 };
-pub use zkc_runtime::host::wire::MAX_PROOF_BYTES;
-use zkc_runtime::host::wire::ProofFormat;
-use zkc_runtime::{
-    logical,
-    vm::{
-        EntryRole, Identity, LogicalType, NativeProofEntry, PhysicalType, PreparationLimits,
-        PreparationStats, PreparedComputations, Type,
-    },
+use zkc_format::logical;
+pub use zkc_format::proof::MAX_PROOF_BYTES;
+use zkc_format::proof::ProofFormat;
+use zkc_runtime::vm::{
+    EntryRole, Identity, LogicalType, NativeProofEntry, PhysicalType, PreparationLimits,
+    PreparationStats, PreparedComputations, Type,
 };
 
 #[derive(Clone, Debug)]
@@ -141,7 +139,7 @@ fn index(value: &Json) -> Result<usize> {
     Ok(n as usize)
 }
 fn digest(value: &str) -> Result<()> {
-    crate::host::inputs::digest(value)
+    crate::io::bytes::digest(value)
         .map(|_| ())
         .map_err(|_| "native-proof-digest".into())
 }

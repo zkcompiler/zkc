@@ -2,7 +2,7 @@ use super::*;
 use serde_json::{Value, json};
 mod static_arguments;
 fn digest(s: &str) -> String {
-    crate::host::inputs::hex(&Sha256::digest(s.as_bytes()))
+    crate::io::bytes::hex(&Sha256::digest(s.as_bytes()))
 }
 fn schema(kind: &str, ty: &str, leaves: Value) -> Value {
     json!({"kind":kind,"identity":digest(ty),"type":ty,"custody":false,"constructible":true,
@@ -88,8 +88,8 @@ fn complete_metadata_keeps_identity_job_and_leaf_types() {
     assert_eq!(value.original(), digest("original"));
     assert_eq!(value.toolchain(), "test-toolchain");
     assert!(value.is_proof());
-    assert_eq!(value.logical_type("bool").unwrap().spelling(), "bool");
-    assert!(value.logical_type("rng:bls12-381.fr").is_none());
+    assert_eq!(value.types["bool"].head, "bool");
+    assert!(!value.types.contains_key("rng:bls12-381.fr"));
     let mut run = document();
     run["job"] = json!({"kind":"run"});
     assert!(!read(&run).unwrap().is_proof());
@@ -291,6 +291,7 @@ fn conflicting_same_identity_and_unearned_permissions_are_refused() {
     )]);
     let interface = read(&value).unwrap();
     assert!(interface.selected_protocol().inputs[0].schema.constructible);
+    #[cfg(feature = "cpu")]
     assert_eq!(
         super::super::arguments::check_ports(&interface).unwrap_err(),
         "entry-input-codec"
@@ -586,7 +587,7 @@ fn excessive_schema_depth_refuses_on_a_two_mebibyte_stack() {
 fn pcs_schemas_preserve_independent_boundaries() {
     let kzg = "multilinear.kzg.bls12-381/0";
     let rows = "rows.merkle-keccak256.koala-bear/0";
-    for (head, domain, participants, constructible, message) in [
+    for (head, domain, participants, constructible, _message) in [
         ("commitment", kzg, true, true, true),
         ("proof", kzg, true, true, true),
         ("commitments", rows, true, true, false),
@@ -606,11 +607,12 @@ fn pcs_schemas_preserve_independent_boundaries() {
             participants,
             "{head}"
         );
+        #[cfg(feature = "cpu")]
         assert_eq!(
             zkc_runtime::vm::LogicalType::parse(&leaf)
                 .unwrap()
                 .is_native_message_data(),
-            message,
+            _message,
             "{head}"
         );
         if !constructible {
@@ -626,6 +628,7 @@ fn pcs_schemas_preserve_independent_boundaries() {
 }
 
 #[test]
+#[cfg(feature = "cpu")]
 fn input_description_uses_the_execution_admission_check() {
     for (leaf, kind, admitted) in [
         ("field:bls12-381.fr", "field", true),
@@ -686,6 +689,7 @@ fn setup_document() -> Value {
     doc
 }
 #[test]
+#[cfg(feature = "cpu")]
 fn setup_selectors_derive_native_maps_independently() {
     let doc = setup_document();
     let interface = read(&doc).unwrap();
@@ -741,6 +745,7 @@ fn malformed_setup_assignments_are_refused() {
 }
 
 #[test]
+#[cfg(feature = "cpu")]
 fn setup_alias_keys_share_the_pin_and_original_representative() {
     let mut doc = setup_document();
     let mut alias = doc["protocols"][0]["inputs"][0].clone();
@@ -843,6 +848,7 @@ fn completion_selects_a_prover_boolean_native_output() {
 }
 
 #[test]
+#[cfg(feature = "cpu")]
 fn readable_input_groups_share_the_checked_interface_and_require_opt_in_resolution() {
     use crate::entry::inputs::Decoder;
     let interface = read(&document()).unwrap();
@@ -872,8 +878,11 @@ fn readable_input_groups_share_the_checked_interface_and_require_opt_in_resoluti
         assert_eq!(error.path,path);
     }
 }
+#[cfg(feature = "cpu")]
 mod arguments;
+#[cfg(feature = "cpu")]
 mod selected_public;
+#[cfg(feature = "cpu")]
 pub(in crate::entry) mod unicode;
 
 #[test]

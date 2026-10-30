@@ -108,6 +108,7 @@ let
       "common/benchmarks/monero.cpp"
     ];
     sdk.paths = pytest ++ [
+      "common/tests/check_sdk.py"
       "common/tests/consumer/test_discovery.py"
       "compiler/cmake"
     ];

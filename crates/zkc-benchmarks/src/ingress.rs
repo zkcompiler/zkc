@@ -3,11 +3,11 @@ use crate::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use zkc::{
-    entry::{FunctionInterface, Interface, NamedValues, Value, inputs::InputGroup},
+    entry::{NamedValues, Value, inputs::InputGroup},
     execution::{Capacity, CpuExecution, InputValue, PreparedData},
 };
 use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, SetupRegistry};
-use zkc_runtime::vm::{PhysicalType, Value as RuntimeValue};
+use zkc_runtime::vm::{LogicalType, PhysicalType, Value as RuntimeValue};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -18,20 +18,6 @@ pub enum Ingress {
     Prepared,
 }
 
-#[derive(Clone, Copy)]
-enum Types<'a> {
-    Native(&'a Interface),
-    Function(&'a FunctionInterface),
-}
-impl<'a> Types<'a> {
-    fn logical_type(self, name: &str) -> Option<&'a zkc_runtime::vm::LogicalType> {
-        match self {
-            Self::Native(interface) => interface.logical_type(name),
-            Self::Function(interface) => interface.logical_type(name),
-        }
-    }
-}
-
 pub struct Owner {
     values: NamedValues,
     pub retained_payload_bytes: usize,
@@ -40,43 +26,6 @@ impl Owner {
     pub fn new(
         values: NamedValues,
         group: &InputGroup<'_>,
-        interface: &Interface,
-        ingress: Ingress,
-        capacity: Capacity,
-        cpu: &CpuExecution,
-    ) -> Result<Self> {
-        Self::with_types(
-            values,
-            group,
-            Types::Native(interface),
-            ingress,
-            capacity,
-            cpu,
-        )
-    }
-
-    pub fn function(
-        values: NamedValues,
-        group: &InputGroup<'_>,
-        interface: &FunctionInterface,
-        ingress: Ingress,
-        capacity: Capacity,
-        cpu: &CpuExecution,
-    ) -> Result<Self> {
-        Self::with_types(
-            values,
-            group,
-            Types::Function(interface),
-            ingress,
-            capacity,
-            cpu,
-        )
-    }
-
-    fn with_types(
-        values: NamedValues,
-        group: &InputGroup<'_>,
-        interface: Types<'_>,
         ingress: Ingress,
         capacity: Capacity,
         cpu: &CpuExecution,
@@ -87,7 +36,6 @@ impl Owner {
         let description = group.describe();
         let ports = array(&description, "ports")?;
         let mut conversion = Conversion {
-            interface,
             ingress,
             capacity,
             cpu,
@@ -135,7 +83,6 @@ fn field<'a>(fields: &'a [Json], name: &str) -> Result<&'a Json> {
         .ok_or_else(|| format!("benchmark-ingress: missing admitted field {name}").into())
 }
 struct Conversion<'a> {
-    interface: Types<'a>,
     ingress: Ingress,
     capacity: Capacity,
     cpu: &'a CpuExecution,
@@ -158,12 +105,14 @@ impl Conversion<'_> {
                         "benchmark-ingress: leaf requires one admitted physical type".into(),
                     );
                 }
-                let logical = types[0]
+                let spelling = types[0]
                     .as_str()
-                    .and_then(|s| self.interface.logical_type(s))
                     .ok_or("benchmark-ingress: unknown admitted leaf type")?;
+                // Metadata supplies syntax; numerical input conversion independently
+                // forms its native type before the selected codec admits the value.
+                let logical = LogicalType::parse(spelling).map_err(|e| e.to_string())?;
                 // Identical to the public named Decoder's physical codec selection.
-                let ty = PhysicalType::default_for(logical.clone()).map_err(|e| e.to_string())?;
+                let ty = PhysicalType::default_for(logical).map_err(|e| e.to_string())?;
                 let (value, bytes_retained) =
                     convert_wire(bytes, ty, self.ingress, self.capacity, self.cpu)?;
                 self.retained_payload_bytes = self
@@ -363,7 +312,7 @@ mod tests {
     use serde_json::json;
     use sha2::{Digest, Sha256};
     use std::sync::Arc;
-    use zkc::entry::{BoundInterface, Package, inputs::Decoder};
+    use zkc::entry::{BoundInterface, Interface, Package, inputs::Decoder};
 
     fn hex(bytes: &[u8]) -> String {
         bytes.iter().map(|b| format!("{b:02x}")).collect()
@@ -619,7 +568,6 @@ mod tests {
                                 Owner::new(
                                     decode(group, &input),
                                     group,
-                                    &interface,
                                     ingress,
                                     Capacity::default(),
                                     &cpu,
@@ -702,15 +650,7 @@ mod tests {
             let mut values = decode(&plain.input_groups()[0], &json!({"statement":true}));
             let value = values.remove("statement").unwrap();
             values.insert("statement".into(), Value::Associated(Box::new(value)));
-            let owner = Owner::new(
-                values,
-                group,
-                &associated,
-                ingress,
-                Capacity::default(),
-                &cpu,
-            )
-            .unwrap();
+            let owner = Owner::new(values, group, ingress, Capacity::default(), &cpu).unwrap();
             let request = owner.share().unwrap();
             let Value::Associated(value) = &request["statement"] else {
                 panic!("associated")
@@ -751,15 +691,7 @@ mod tests {
                 .unwrap()
                 .decode(group, &input, Some(&mut KeyFile))
                 .unwrap();
-            let owner = Owner::new(
-                values,
-                group,
-                &interface,
-                ingress,
-                Capacity::default(),
-                &cpu,
-            )
-            .unwrap();
+            let owner = Owner::new(values, group, ingress, Capacity::default(), &cpu).unwrap();
             assert_eq!(owner.retained_payload_bytes, 0);
             for _ in 0..2 {
                 let request = owner.share().unwrap();
@@ -782,7 +714,6 @@ mod tests {
             Owner::new(
                 decode(group, &input),
                 group,
-                &interface,
                 Ingress::Json,
                 Capacity::default(),
                 &cpu,
@@ -794,32 +725,12 @@ mod tests {
                 wire_bytes: wire(&zkc_cpu::Value::Bool(true), &cpu).len() - 1,
                 ..Capacity::default()
             };
-            assert!(
-                Owner::new(
-                    decode(group, &input),
-                    group,
-                    &interface,
-                    ingress,
-                    capacity,
-                    &cpu
-                )
-                .is_err()
-            );
+            assert!(Owner::new(decode(group, &input), group, ingress, capacity, &cpu).is_err());
             let capacity = Capacity {
                 value_bytes: 0,
                 ..Capacity::default()
             };
-            assert!(
-                Owner::new(
-                    decode(group, &input),
-                    group,
-                    &interface,
-                    ingress,
-                    capacity,
-                    &cpu
-                )
-                .is_err()
-            );
+            assert!(Owner::new(decode(group, &input), group, ingress, capacity, &cpu).is_err());
         }
         for leaf in [
             "point:bls12-381.fr",
@@ -846,16 +757,9 @@ mod tests {
                     Value::Leaf(InputValue::Wire(Vec::new().into())),
                 )]
                 .into();
-                let error = Owner::new(
-                    values,
-                    group,
-                    &interface,
-                    ingress,
-                    Capacity::default(),
-                    &cpu,
-                )
-                .err()
-                .unwrap();
+                let error = Owner::new(values, group, ingress, Capacity::default(), &cpu)
+                    .err()
+                    .unwrap();
                 assert!(
                     matches!(error, crate::Failure::Failed(message) if message ==
                     "benchmark-ingress: unsupported data conversion (private or setup-dependent type)")
@@ -940,7 +844,6 @@ mod tests {
                     let owner = Owner::new(
                         decode(group, &input),
                         group,
-                        entry.interface(),
                         ingress,
                         limits.capacity,
                         entry.cpu(),

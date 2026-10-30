@@ -14,11 +14,11 @@ pub(super) fn check_ports(interface: &Interface) -> Result<(), String> {
     for i in 0..interface.selected_protocol().inputs.len() {
         let port = interface.input(i);
         if port.key.is_none() {
-            check_input(interface, &port.schema)?;
+            check_input(&port.schema)?;
         }
     }
     for port in &interface.selected_protocol().outputs {
-        value::check_export(&port.schema)?;
+        crate::entry::interface::schemas::check_export(&port.schema)?;
     }
     Ok(())
 }
@@ -41,18 +41,18 @@ pub(super) fn check_host_ports(
     for role in roles {
         for port in interface.input_ports(role) {
             if port.key.is_none() {
-                value::check_export(&port.schema)?;
+                crate::entry::interface::schemas::check_export(&port.schema)?;
             }
         }
         for port in interface.output_ports(role) {
-            value::check_export(&port.schema)?;
+            crate::entry::interface::schemas::check_export(&port.schema)?;
         }
     }
     // Public binding must still have the native owner's canonical codec.
     if operation.is_some() {
         for port in interface.public_ports() {
             if port.key.is_none() {
-                check_input(interface, &port.schema)?;
+                check_input(&port.schema)?;
             }
         }
     }
@@ -70,20 +70,18 @@ pub(super) fn check_proof_ports(
     }];
     for port in interface.public_ports().chain(interface.input_ports(role)) {
         if port.key.is_none() {
-            check_input(interface, &port.schema)?;
+            check_input(&port.schema)?;
         }
     }
     for port in interface.output_ports(role) {
-        value::check_export(&port.schema)?;
+        crate::entry::interface::schemas::check_export(&port.schema)?;
     }
     Ok(())
 }
-pub(super) fn check_input(interface: &Interface, schema: &Schema) -> Result<(), String> {
-    value::check_import(schema)?;
+pub(super) fn check_input(schema: &Schema) -> Result<(), String> {
+    super::interface::schemas::check_import(schema)?;
     if !schema.leaves.iter().all(|leaf| {
-        interface
-            .logical_type(leaf)
-            .is_some_and(|ty| ty.is_native_message_data())
+        zkc_runtime::vm::LogicalType::parse(leaf).is_ok_and(|ty| ty.is_native_message_data())
     }) {
         return Err("entry-input-codec".into());
     }
@@ -97,7 +95,7 @@ pub(super) fn values<'a>(
     let mut inputs = Vec::new();
     for port in ports {
         match port.key {
-            Some(zkc_runtime::vm::Type::VerifierKey) => {
+            Some("verifier_key") => {
                 inputs.push(if let Some(keys) = public_keys {
                     InputValue::Wire(
                         keys.get(&port.native[0])
@@ -109,7 +107,7 @@ pub(super) fn values<'a>(
                     InputValue::VerifierKey
                 });
             }
-            Some(zkc_runtime::vm::Type::ProverKey) => {
+            Some("prover_key") => {
                 let value = values.remove(&port.name).ok_or("entry-input-names")?;
                 let Value::Leaf(
                     value @ (InputValue::ProverKey(_)
@@ -167,7 +165,7 @@ pub(super) fn proof_inputs(
     let mut inputs = Vec::new();
     let mut public_wire_bytes = 0usize;
     for port in interface.input_ports(role) {
-        if port.key == Some(zkc_runtime::vm::Type::VerifierKey) {
+        if port.key == Some("verifier_key") {
             inputs.push(InputValue::VerifierKey);
         } else if let Some((start, len)) = port.public {
             for (input, physical) in public[start..start + len]

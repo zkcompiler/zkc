@@ -343,7 +343,7 @@ struct Named<'a> {
 }
 impl Serialize for Named<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        if self.depth > crate::host::document::MAX_DEPTH {
+        if self.depth > crate::io::document::MAX_DEPTH {
             return Err(S::Error::custom("entry output depth"));
         }
         let mut map = serializer.serialize_map(Some(self.values.len()))?;
@@ -367,7 +367,7 @@ struct Item<'a> {
 }
 impl Serialize for Item<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        if self.depth > crate::host::document::MAX_DEPTH {
+        if self.depth > crate::io::document::MAX_DEPTH {
             return Err(S::Error::custom("entry output depth"));
         }
         match self.value {
@@ -431,7 +431,7 @@ impl Serialize for Item<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::host::inputs::hex;
+    use crate::io::bytes::hex;
     use zkc_cpu::Value as Native;
     use zkc_runtime::vm::Identity;
     #[test]
@@ -574,7 +574,7 @@ mod tests {
         .unwrap();
         let values: serde_json::Value = serde_json::from_slice(&outputs).unwrap();
         let request = values["values"].to_string();
-        assert!(crate::host::document::read(request.as_bytes(), MAX_REQUEST_BYTES).is_ok());
+        assert!(crate::io::document::read(request.as_bytes(), MAX_REQUEST_BYTES).is_ok());
     }
     #[test]
     fn structured_values_roundtrip_and_depth_is_bounded() {
@@ -594,7 +594,7 @@ mod tests {
         let document: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(document["values"]["record"]["index"], u64::MAX.to_string());
         let mut nested = Value::Unit;
-        for _ in 0..crate::host::document::MAX_DEPTH {
+        for _ in 0..crate::io::document::MAX_DEPTH {
             nested = Value::Associated(Box::new(nested));
         }
         assert_eq!(

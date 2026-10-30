@@ -199,7 +199,7 @@ fn execute(
                         .unwrap()
                         .to_str()
                         .ok_or("entry-input-document")?,
-                    zkc::proof::MAX_PROOF_BYTES,
+                    zkc_format::proof::MAX_PROOF_BYTES,
                 )?)
             } else {
                 None

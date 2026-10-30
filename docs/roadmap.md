@@ -340,7 +340,7 @@ checks in the protocol.
 
 ## Extend on demonstrated demand
 
-The current service registry supports six RNG distributions/providers. Arbitrary
+The current service registry supports seven RNG distributions/providers. Arbitrary
 user-defined request/reply families need a separately designed contract and
 implementation when a concrete client requires them.
 

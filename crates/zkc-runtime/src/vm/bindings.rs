@@ -23,6 +23,7 @@ pub enum Identity {
     MultilinearKzgBls12381,
     MerkleKoalaBear,
     MerkleKoalaBearExt8,
+    MerkleKoalaBearExt4,
     MerklePoseidon2KoalaBear,
     MerklePoseidon2KoalaBearExt4,
     MerklePoseidon2BabyBear,
@@ -50,6 +51,7 @@ pub enum Identity {
     Bls12381Gt,
     HashChainKeccak256Fr64Be,
     HashChainKeccak256KoalaBearExt8,
+    HashChainKeccak256KoalaBearExt4,
     Binary64,
     Binary64Ext3,
 }
@@ -184,7 +186,10 @@ impl Identity {
             | Self::MerkleKoalaBearExt8
             | Self::Merlin3KoalaBearExt8
             | Self::HashChainKeccak256KoalaBearExt8 => Some(Self::KoalaBearExt8),
-            Self::KoalaBearExt4 | Self::MerklePoseidon2KoalaBearExt4 => Some(Self::KoalaBearExt4),
+            Self::KoalaBearExt4
+            | Self::MerkleKoalaBearExt4
+            | Self::HashChainKeccak256KoalaBearExt4
+            | Self::MerklePoseidon2KoalaBearExt4 => Some(Self::KoalaBearExt4),
             Self::Binary64 => Some(Self::Binary64),
             Self::Binary64Ext3 => Some(Self::Binary64Ext3),
             Self::BabyBear | Self::MerklePoseidon2BabyBear => Some(Self::BabyBear),
@@ -204,6 +209,7 @@ impl Identity {
             self,
             Self::MerkleKoalaBear
                 | Self::MerkleKoalaBearExt8
+                | Self::MerkleKoalaBearExt4
                 | Self::MerklePoseidon2KoalaBear
                 | Self::MerklePoseidon2KoalaBearExt4
                 | Self::MerklePoseidon2BabyBear
@@ -263,7 +269,8 @@ impl Identity {
             | Self::Merlin3BabyBearExt4
             | Self::Merlin3GoldilocksExt2
             | Self::HashChainKeccak256Fr64Be
-            | Self::HashChainKeccak256KoalaBearExt8 => Some(self),
+            | Self::HashChainKeccak256KoalaBearExt8
+            | Self::HashChainKeccak256KoalaBearExt4 => Some(self),
             _ => None,
         }
     }
@@ -276,6 +283,7 @@ impl Identity {
                 | Self::Merlin3BabyBearExt4
                 | Self::Merlin3GoldilocksExt2
                 | Self::HashChainKeccak256KoalaBearExt8
+                | Self::HashChainKeccak256KoalaBearExt4
         )
     }
     pub fn provider(self) -> Option<&'static str> {
@@ -321,6 +329,7 @@ impl Identity {
             Self::MultilinearKzgBls12381 => "multilinear.kzg.bls12-381/0",
             Self::MerkleKoalaBear => "rows.merkle-keccak256.koala-bear/0",
             Self::MerkleKoalaBearExt8 => "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+            Self::MerkleKoalaBearExt4 => "rows.merkle-keccak256.koala-bear.ext4-binomial3/0",
             Self::MerklePoseidon2KoalaBear => "rows.merkle-poseidon2-16.koala-bear/0",
             Self::MerklePoseidon2KoalaBearExt4 => {
                 "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"
@@ -344,6 +353,9 @@ impl Identity {
             Self::HashChainKeccak256KoalaBearExt8 => {
                 "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"
             }
+            Self::HashChainKeccak256KoalaBearExt4 => {
+                "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"
+            }
         }
     }
     pub fn parse(name: &str) -> Result<Self> {
@@ -358,6 +370,7 @@ impl Identity {
             Self::MultilinearKzgBls12381,
             Self::MerkleKoalaBear,
             Self::MerkleKoalaBearExt8,
+            Self::MerkleKoalaBearExt4,
             Self::MerklePoseidon2KoalaBear,
             Self::MerklePoseidon2KoalaBearExt4,
             Self::MerklePoseidon2BabyBear,
@@ -384,6 +397,7 @@ impl Identity {
             Self::Bls12381Gt,
             Self::HashChainKeccak256Fr64Be,
             Self::HashChainKeccak256KoalaBearExt8,
+            Self::HashChainKeccak256KoalaBearExt4,
             Self::Binary64,
             Self::Binary64Ext3,
         ]
@@ -452,6 +466,8 @@ pub(crate) fn valid_static_argument(name: &str) -> bool {
         Identity::MultilinearKzgBls12381.name()
     } else if nominal == "rows-merkle-keccak256.koala-bear" {
         Identity::MerkleKoalaBear.name()
+    } else if nominal == "rows-merkle-keccak256.koala-bear.ext4-binomial3" {
+        Identity::MerkleKoalaBearExt4.name()
     } else if nominal == "rows-merkle-keccak256.koala-bear.ext8-binomial3" {
         Identity::MerkleKoalaBearExt8.name()
     } else if nominal == "rows-merkle-poseidon2-16.koala-bear" {
@@ -556,6 +572,7 @@ impl LogicalType {
                     | Bls12381Fr
                     | Ristretto255Scalar
                     | KoalaBearExt8
+                    | KoalaBearExt4
                     | BabyBearExt4
                     | GoldilocksExt2
             ),
@@ -586,6 +603,7 @@ impl LogicalType {
                     | Merlin3GoldilocksExt2
                     | HashChainKeccak256Fr64Be
                     | HashChainKeccak256KoalaBearExt8
+                    | HashChainKeccak256KoalaBearExt4
             ),
             Type::Commitments | Type::OpeningStates => identity.is_row_commitment(),
             Type::Commitment | Type::Proof | Type::OpeningState => {
@@ -629,6 +647,9 @@ impl LogicalType {
             Identity::MerklePoseidon2Goldilocks => ".rows-merkle-poseidon2-8.goldilocks".into(),
             Identity::MerklePoseidon2GoldilocksExt2 => {
                 ".rows-merkle-poseidon2-8.goldilocks.ext2-binomial7".into()
+            }
+            Identity::MerkleKoalaBearExt4 => {
+                ".rows-merkle-keccak256.koala-bear.ext4-binomial3".into()
             }
             Identity::MerkleKoalaBearExt8 => {
                 ".rows-merkle-keccak256.koala-bear.ext8-binomial3".into()
@@ -721,6 +742,7 @@ impl LogicalType {
                     Identity::MultilinearKzgBls12381
                         | Identity::MerkleKoalaBear
                         | Identity::MerkleKoalaBearExt8
+                        | Identity::MerkleKoalaBearExt4
                         | Identity::MerklePoseidon2KoalaBear
                         | Identity::MerklePoseidon2KoalaBearExt4
                         | Identity::MerklePoseidon2BabyBear
@@ -1248,14 +1270,16 @@ impl PhysicalType {
             (T::Group, I::Bls12381Gt) => R::Bls12381Gt,
             (T::Rng | T::Nonce | T::Transcript, _) => R::Resource,
             (_, I::MultilinearKzgBls12381) => R::Pcs,
-            (kind, I::MerkleKoalaBear | I::MerkleKoalaBearExt8) => match kind {
-                T::Commitment => R::MerkleRoot,
-                T::Proof => R::MerklePath,
-                T::OpeningState => R::MerkleState,
-                T::Commitments => R::MerkleRoots,
-                T::OpeningStates => R::MerkleStates,
-                _ => return Err(representation_error("unrepresented logical type")),
-            },
+            (kind, I::MerkleKoalaBear | I::MerkleKoalaBearExt8 | I::MerkleKoalaBearExt4) => {
+                match kind {
+                    T::Commitment => R::MerkleRoot,
+                    T::Proof => R::MerklePath,
+                    T::OpeningState => R::MerkleState,
+                    T::Commitments => R::MerkleRoots,
+                    T::OpeningStates => R::MerkleStates,
+                    _ => return Err(representation_error("unrepresented logical type")),
+                }
+            }
             // Digest-generic Merkle schemes: each digest is the scheme's
             // fixed-width byte encoding, whatever its hash.
             (

@@ -23,6 +23,7 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test -f ${sources.compilerTests}/common/tests/fixtures/projects/scoped-computations/main.zkc
   test ! -e ${sources.compilerTests}/common/tests/run.py
   test -f ${sources.rust}/crates/zkc-cli/Cargo.toml
+  test -f ${sources.rust}/crates/zkc-format/src/lib.rs
   test -f ${sources.rust}/crates/zkc-catalog/build.rs
   test -f ${sources.rust}/crates/zkc-catalog/codegen/projection.rs
   test -f ${sources.rust}/crates/zkc-catalog/codegen/validation.rs

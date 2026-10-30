@@ -92,6 +92,7 @@ impl Outputs {
     }
     /// Preserve the identity of an input already opened through a directory
     /// capability. No path lookup can redirect this protection.
+    #[cfg(feature = "cpu")]
     pub(crate) fn protect_metadata(&mut self, metadata: &fs::Metadata) -> Result<()> {
         #[cfg(unix)]
         {
