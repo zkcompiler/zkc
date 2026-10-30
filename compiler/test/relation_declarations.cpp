@@ -170,7 +170,7 @@ relation.declare @predicate {
   for (const auto &type : std::vector<std::string>{
            "i64", "tensor<2x2x" + fieldType + ">", "memref<2xi1>",
            "!algebra.fixed_vector<" + fieldType + ", 3>",
-           "!runtime.capability<\"rng:bls12-381.fr\">",
+           "!runtime.capability<rng, \"bls12-381.fr\">",
            variant("HiddenResource",
                    {{"None", {}}, {"Some", {"rng:bls12-381.fr"}}}),
            variant("HiddenKey",

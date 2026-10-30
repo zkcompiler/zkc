@@ -138,7 +138,7 @@ commands.verified(
 )
 
 # Owner-local affine ports retain single-use custody through an application.
-capability = '!runtime.capability<"resource_unit:Slot.A">'
+capability = '!runtime.capability<resource_unit, "Slot.A">'
 affine = module(f""""protocol.func"() ({{^bb0(%a:{capability}): "protocol.return"(%a) : ({capability})->()}})
 {{sym_name="component",function_type=({capability})->{capability},roles=["A"],input_roles=[["A"]],output_roles=[["A"]]}} : ()->()
 "protocol.func"() ({{^bb0(%a:{capability}):

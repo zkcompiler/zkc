@@ -294,9 +294,9 @@ struct MetadataVerifier {
             stateTypes.size() == 1
                 ? dyn_cast<runtime::CapabilityType>(stateTypes.front())
                 : runtime::CapabilityType();
-        if (!capability || !capability.getKind().starts_with("transcript:") ||
-            protocol::nativeChallengeField(capability.getKind().drop_front(11))
-                .empty())
+        if (!capability ||
+            capability.getKind() != runtime::CapabilityKind::Transcript ||
+            protocol::nativeChallengeField(capability.getIdentity()).empty())
           return refuse(record, "unsupported constructed transcript type");
       } else if (!programmable) {
         return refuse(record, "local root requires an explicit construction");

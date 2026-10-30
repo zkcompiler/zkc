@@ -250,8 +250,7 @@ int main() {
     for (Type type :
          {Type(IntegerType::get(&context, 32)),
           Type(OpaqueType::get(StringAttr::get(&context, "uninstalled"),
-                               "arbitrary")),
-          Type(runtime::CapabilityType::get(&context, "uninstalled:any"))})
+                               "arbitrary"))})
       require(!mathematical::nativeTypePolicy(type),
               "unclassified type acquired permission");
   });

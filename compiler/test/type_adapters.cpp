@@ -6,6 +6,7 @@
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/Layout.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/TypeAdapters.h"
 #include "zkc/Dialect/TypeFormation.h"
@@ -63,6 +64,39 @@ int main() {
   registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
+
+  cases.run("resource carriers store kind and identity separately", [&] {
+    SmallVector<std::string> codes;
+    ScopedDiagnosticHandler diagnostics(&context, [&](Diagnostic &diagnostic) {
+      for (const auto &refusal : zkc::diagnostics::refusals(diagnostic))
+        codes.push_back(refusal.code);
+      return success();
+    });
+    auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
+    using K = runtime::CapabilityKind;
+    for (auto [kind, identity] :
+         {std::pair{K::Random, StringRef("uninstalled")},
+          std::pair{K::Nonce, StringRef("bls12-381.g1")},
+          std::pair{K::Transcript, StringRef("bls12-381.fr")},
+          std::pair{K::ResourceUnit, StringRef("bad:slot")},
+          std::pair{static_cast<K>(255), StringRef("ticket")}}) {
+      codes.clear();
+      require(
+          !runtime::CapabilityType::getChecked(emit, &context, kind, identity),
+          "invalid resource identity acquired a native carrier");
+      require(llvm::is_contained(codes, "capability-type"),
+              "resource formation refusal lost its diagnostic identity");
+    }
+    require(
+        !mlir::parseType("!runtime.capability<\"rng:bls12-381.fr\">", &context),
+        "retired combined resource spelling remained a compatibility route");
+    auto rng =
+        runtime::CapabilityType::get(&context, K::Random, "bls12-381.fr");
+    auto nonce =
+        runtime::CapabilityType::get(&context, K::Nonce, "bls12-381.fr");
+    require(rng != nonce && rng.getIdentity() == nonce.getIdentity(),
+            "equal domain identities erased the resource kind");
+  });
 
   cases.run("unique immutable constructor installation", [&] {
     llvm::StringSet<> constructors;
@@ -161,13 +195,17 @@ int main() {
       {"point:" + field, zkc::poly::PointType::get(&context, field)},
       {"round:" + field, zkc::poly::QuadraticType::get(&context, field)},
       {"rng:" + field,
-       zkc::runtime::CapabilityType::get(&context, "rng:" + field)},
+       zkc::runtime::CapabilityType::get(
+           &context, zkc::runtime::CapabilityKind::Random, field)},
       {"nonce:" + field,
-       zkc::runtime::CapabilityType::get(&context, "nonce:" + field)},
+       zkc::runtime::CapabilityType::get(
+           &context, zkc::runtime::CapabilityKind::Nonce, field)},
       {"transcript:" + transcript,
-       zkc::runtime::CapabilityType::get(&context, "transcript:" + transcript)},
+       zkc::runtime::CapabilityType::get(
+           &context, zkc::runtime::CapabilityKind::Transcript, transcript)},
       {"resource_unit:Guard",
-       zkc::runtime::CapabilityType::get(&context, "resource_unit:Guard")},
+       zkc::runtime::CapabilityType::get(
+           &context, zkc::runtime::CapabilityKind::ResourceUnit, "Guard")},
   };
   for (StringRef kind :
        {"commitment", "proof", "opening_state", "prover_key", "verifier_key"})
@@ -357,8 +395,6 @@ int main() {
        zkc::commitment::VectorObjectType::get(&context, oracle, "prover_key")},
       {"field as PCS object",
        zkc::commitment::PolynomialObjectType::get(&context, field, "field")},
-      {"field as capability",
-       zkc::runtime::CapabilityType::get(&context, "field:" + field)},
       {"signless index", IntegerType::get(&context, 64)},
       {"signed index", IntegerType::get(&context, 64, IntegerType::Signed)},
       {"unsigned boolean",

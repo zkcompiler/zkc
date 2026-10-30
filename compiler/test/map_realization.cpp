@@ -698,7 +698,7 @@ func.func private @twice(%x:!F)->!F {
                      "map", "%v", type, "%r", type) +
                   scopedReturn("%state,%r", std::string("!S,") + type));
           auto text = R"mlir(
-!S = !runtime.capability<"rng:bls12-381.fr">
+!S = !runtime.capability<rng, "bls12-381.fr">
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({

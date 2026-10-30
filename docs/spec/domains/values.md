@@ -401,7 +401,7 @@ Slot selection must preserve exact nominal equality and inequality; truncation
 or an unchecked hash collision assumption does not establish that relation.
 The physical spelling is `resource_unit:D@logical.resource_unit/0`. Its empty
 payload is distinct from runtime bookkeeping for ownership and identity. MLIR
-uses `!runtime.capability<"resource_unit:D">` and the existing physical data wrapper.
+uses `!runtime.capability<resource_unit, "D">` and the existing physical data wrapper.
 No byte wire encoding is installed, including for the empty payload.
 
 The closed logical operations have one static slot argument `D`, no attributes,

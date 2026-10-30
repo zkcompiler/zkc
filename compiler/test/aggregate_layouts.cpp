@@ -1596,7 +1596,7 @@ int main(int argc, char **argv) {
     auto origin = take(encodeNativeOriginTemplate(
         "main", {}, {"message", "Round", "response", "response", "P", "V"}));
     auto source =
-        R"(!T = !runtime.capability<"transcript:merlin3.bls12-381.fr64be/0">
+        R"(!T = !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 !I = !algebra.indices
 )" + scopedFixture(

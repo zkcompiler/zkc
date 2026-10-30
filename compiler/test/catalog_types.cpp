@@ -142,7 +142,8 @@ int main() {
                                     payload)});
   };
   cases.run("all variant payloads contribute permissions", [&] {
-    auto rng = runtime::CapabilityType::get(&context, "rng:bls12-381.fr");
+    auto rng = runtime::CapabilityType::get(
+        &context, zkc::runtime::CapabilityKind::Random, "bls12-381.fr");
     auto resource = data::VariantType::get(
         &context, identity,
         {data::AlternativeAttr::get(&context, builder.getStringAttr("none"),
@@ -154,7 +155,8 @@ int main() {
                 !permissions.copy && !permissions.drop,
             "variant hid an affine child");
     refuse({"sequence", {TypeAttr::get(resource)}});
-    auto unit = runtime::CapabilityType::get(&context, "resource_unit:ticket");
+    auto unit = runtime::CapabilityType::get(
+        &context, zkc::runtime::CapabilityKind::ResourceUnit, "ticket");
     require(succeeded(verifyLogicalType(emit, unit, &permissions)) &&
                 !permissions.copy && permissions.drop,
             "slot permission confused with an installed field domain");

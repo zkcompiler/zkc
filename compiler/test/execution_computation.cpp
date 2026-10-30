@@ -713,7 +713,7 @@ module {
         [&] {
           std::string text = R"mlir(
 !S = !runtime.scope
-!C = !runtime.capability<"resource_unit:Guard">
+!C = !runtime.capability<resource_unit, "Guard">
 !O = !exec.outcome<(!C)>
 module {
   func.func @caller(%scope: !S, %value: !C) -> !O attributes {no_inline, runtime.origin=["caller", []]} {

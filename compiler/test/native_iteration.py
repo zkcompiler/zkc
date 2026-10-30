@@ -60,7 +60,7 @@ with case('recipe carrier includes unused scalar expressions'):
     for options in [(), ('--no-simplify',)]:
         commands.source('protocol-bundle', changed, *options, refuses='polynomial-formation')
 with case('exact affine roots through zero or many iterations'):
-    affine = '''!r = !runtime.capability<"rng:bls12-381.fr">
+    affine = '''!r = !runtime.capability<rng, "bls12-381.fr">
 module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%n:ui64,%a:!r,%b:!r):
    %out:2 = "protocol.repeat"(%n,%a,%b) ({ ^body(%i:ui64,%left:!r,%right:!r):

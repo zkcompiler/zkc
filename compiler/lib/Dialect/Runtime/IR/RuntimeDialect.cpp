@@ -1,11 +1,15 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
+#include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/TypeAdapters.h"
 #include "llvm/ADT/TypeSwitch.h"
 using namespace mlir;
 #include "zkc/Dialect/Runtime/IR/runtimeDialect.cpp.inc"
+#include "zkc/Dialect/Runtime/IR/runtimeEnums.cpp.inc"
 #define GET_TYPEDEF_CLASSES
 #include "zkc/Dialect/Runtime/IR/runtimeTypes.cpp.inc"
 #define GET_OP_CLASSES
@@ -20,6 +24,19 @@ void zkc::runtime::RuntimeDialect::initialize() {
 #include "zkc/Dialect/Runtime/IR/runtimeOps.cpp.inc"
       >();
   zkc::protocol::type_adapters::attachCatalogTypeModels(*this);
+}
+
+LogicalResult zkc::runtime::CapabilityType::verify(
+    llvm::function_ref<InFlightDiagnostic()> emit, CapabilityKind kind,
+    StringRef identity) {
+  if (!symbolizeCapabilityKind(static_cast<uint32_t>(kind)) ||
+      (kind == CapabilityKind::ResourceUnit
+           ? !protocol::resourceUnitDomain(identity)
+           : !protocol::installedDomains().admitsLogicalType(
+                 stringifyCapabilityKind(kind), identity)))
+    return diagnostics::emit(emit(), "capability-type",
+                             "unknown resource kind or nominal identity");
+  return success();
 }
 
 Type zkc::runtime::RepresentedType::parse(AsmParser &parser) {

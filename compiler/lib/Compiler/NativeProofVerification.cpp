@@ -669,7 +669,8 @@ public:
             rules[site] = &rule;
     } else {
       stateTypes.push_back(runtime::CapabilityType::get(
-          candidate.getContext(), "transcript:" + policy.suite));
+          candidate.getContext(), zkc::runtime::CapabilityKind::Transcript,
+          policy.suite));
     }
     for (const auto &invocation : invocations) {
       auto inserted = startRules.emplace(

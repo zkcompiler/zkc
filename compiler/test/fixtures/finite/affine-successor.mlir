@@ -1,6 +1,6 @@
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
-!R = !runtime.capability<"rng:bls12-381.fr">
+!R = !runtime.capability<rng, "bls12-381.fr">
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
     "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "random.draw", implementation = "", sym_name = "random"}> : () -> ()

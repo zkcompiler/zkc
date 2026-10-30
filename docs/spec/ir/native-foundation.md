@@ -143,6 +143,14 @@ including inactive alternatives. A sequence requires both permissions from its
 element. This check does not install a codec or physical representation.
 Structural inspection bounds expanded occurrences, including repeated uniqued
 children, to 200000, depth below 64, and attribute string bytes to 64 MiB.
+Runtime resource types store an explicit `CapabilityKind` enum and a separate
+nominal identity. Randomness, nonce, transcript and resource-slot tags are
+structurally distinct even when identities coincide. Transcript consumers use
+the enum and identity getters; they do not parse a `kind:identity` string.
+Formation refuses unknown enum values and inadmissible identities. The previous
+combined MLIR spelling is removed; the existing neutral byte spelling remains
+owned by its codec boundary.
+
 Natural type parameters remain bounded by 1048576. Public byte encodings have
 separate bounds: native formation alone never authorizes serialization.
 

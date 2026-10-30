@@ -113,9 +113,10 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
   } else {
     if (plan.initializer || nativeChallengeField(plan.suite).empty() ||
         plan.state.size() != 1 ||
-        plan.state.front() !=
-            runtime::CapabilityType::get(record.getContext(),
-                                         "transcript:" + plan.suite))
+        plan.state.front() != runtime::CapabilityType::get(
+                                  record.getContext(),
+                                  zkc::runtime::CapabilityKind::Transcript,
+                                  plan.suite))
       return fail("host root requires the selected managed transcript state");
   }
   auto bytes = decodeBoundType(record.getContext(), {"bytes", {}, {}});

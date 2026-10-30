@@ -111,8 +111,8 @@ int main() {
   cases.run(
       "slot scope derives resource successor without domain installation", [&] {
         auto slot = builder.getStringAttr("ticket");
-        auto type =
-            runtime::CapabilityType::get(&context, "resource_unit:ticket");
+        auto type = runtime::CapabilityType::get(
+            &context, zkc::runtime::CapabilityKind::ResourceUnit, "ticket");
         require(
             resolve("resource_unit.pass", {slot}) ==
                 builder.getFunctionType({type}, {type}),

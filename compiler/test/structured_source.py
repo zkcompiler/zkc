@@ -297,10 +297,10 @@ with case('unsupported-collect'):
     export((fixtures / 'finite/total-collect.mlir').read_text(), 'structured-source-operation')
 
 with case('unsupported-affine-helper-signature'):
-    helper = '''func.func private @resource(%scope:!runtime.scope,%s:!runtime.capability<"rng:bls12-381.fr">)
-        ->!exec.outcome<(!runtime.capability<"rng:bls12-381.fr">)> attributes {no_inline,runtime.origin=["resource",[]]} {
-      %r = "exec.returned"(%s) : (!runtime.capability<"rng:bls12-381.fr">)->!exec.outcome<(!runtime.capability<"rng:bls12-381.fr">)>
-      func.return %r : !exec.outcome<(!runtime.capability<"rng:bls12-381.fr">)>
+    helper = '''func.func private @resource(%scope:!runtime.scope,%s:!runtime.capability<rng, "bls12-381.fr">)
+        ->!exec.outcome<(!runtime.capability<rng, "bls12-381.fr">)> attributes {no_inline,runtime.origin=["resource",[]]} {
+      %r = "exec.returned"(%s) : (!runtime.capability<rng, "bls12-381.fr">)->!exec.outcome<(!runtime.capability<rng, "bls12-381.fr">)>
+      func.return %r : !exec.outcome<(!runtime.capability<rng, "bls12-381.fr">)>
     }'''
     export(simple(helper), 'structured-source-type')
 

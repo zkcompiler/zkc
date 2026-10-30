@@ -130,12 +130,12 @@ int main() {
             "computation-entry"},
            {"affine port",
             "module @unit attributes {exec.computation} {func.func "
-            "@a(%r:!runtime.capability<\"rng:bls12-381.fr\">) {func.return}}",
+            "@a(%r:!runtime.capability<rng, \"bls12-381.fr\">) {func.return}}",
             "computation-entry"},
            {"dormant resource helper",
             "module @unit attributes {exec.computation} {func.func @a() "
             "{func.return} func.func "
-            "private @r(%r:!runtime.capability<\"rng:bls12-381.fr\">) "
+            "private @r(%r:!runtime.capability<rng, \"bls12-381.fr\">) "
             "{func.return}}",
             "mathematical-formation"},
            {"dormant recursive helper",

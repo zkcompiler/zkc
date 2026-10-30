@@ -20,7 +20,7 @@ std::string source(StringRef body = "", unsigned captures = 0,
     types += ",i1";
     roles += ",[\"P\"]";
   }
-  return "!s = !runtime.capability<\"rng:bls12-381.fr\">\n"
+  return "!s = !runtime.capability<rng, \"bls12-381.fr\">\n"
          "module { \"protocol.module\"() ({" +
          definitions.str() + "\"protocol.func\"() ({ ^entry(%n:ui64,%s:!s" +
          args +
@@ -127,9 +127,9 @@ int main() {
   });
   cases.run("no affine obligation spends no origin work", [&] {
     std::string text = source();
-    auto alias = text.find("!runtime.capability<\"rng:bls12-381.fr\">");
+    auto alias = text.find("!runtime.capability<rng, \"bls12-381.fr\">");
     text.replace(
-        alias, std::string("!runtime.capability<\"rng:bls12-381.fr\">").size(),
+        alias, std::string("!runtime.capability<rng, \"bls12-381.fr\">").size(),
         "i1");
     query(text, 0, 0, true);
   });

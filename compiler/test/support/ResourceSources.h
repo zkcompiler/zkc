@@ -43,10 +43,11 @@ public:
     scope = runtime::ScopeType::get(&context);
     index = builder.getIntegerType(64, false);
     boolean = builder.getI1Type();
-    rng = parseType("!runtime.capability<\"rng:bls12-381.fr\">", &context);
-    unit = parseType("!runtime.capability<\"resource_unit:Slot.A\">", &context);
+    rng = parseType("!runtime.capability<rng, \"bls12-381.fr\">", &context);
+    unit =
+        parseType("!runtime.capability<resource_unit, \"Slot.A\">", &context);
     transcript = parseType(
-        "!runtime.capability<\"transcript:merlin3.bls12-381.fr64be/0\">",
+        "!runtime.capability<transcript, \"merlin3.bls12-381.fr64be/0\">",
         &context);
     field = parseType("!algebra.field<\"bls12-381.fr\">", &context);
     tag = data::importVariantType(&context,

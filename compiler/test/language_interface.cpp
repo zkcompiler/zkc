@@ -1008,7 +1008,7 @@ protocol Run roles(P)(v:Choice@P)->(a:Token@P,b:Token@P,x:Choice@P,y:Choice@P) {
   });
   cases.run("managed transcript leaves are not source builtin data", [] {
     const std::string type =
-        "!runtime.capability<\"transcript:merlin3.bls12-381.fr64be/0\">";
+        "!runtime.capability<transcript, \"merlin3.bls12-381.fr64be/0\">";
     auto source =
         compile("module sample;protocol Pass "
                 "roles(P)(x:bool@P)->(r:bool@P){return x;}entry fn "

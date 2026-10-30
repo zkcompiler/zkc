@@ -168,7 +168,7 @@ int main() {
   auto affineFold = [&] {
     auto text = changed(
         collect, "!O = !exec.outcome<(!V)>",
-        "!T = !runtime.capability<\"transcript:merlin3.bls12-381.fr64be/0\">\n"
+        "!T = !runtime.capability<transcript, \"merlin3.bls12-381.fr64be/0\">\n"
         "!O = !exec.outcome<(!T)>");
     text = changed(text,
                    "@body(%scope:!S,%item:!F,%domain:!V)->!exec.outcome<(!F)>",
@@ -194,8 +194,8 @@ int main() {
                        "execution-cfg");
   });
   cases.run("scoped finite callback cannot replace an affine root", [&] {
-    auto text = changed(affineFold(), "transcript:merlin3.bls12-381.fr64be/0",
-                        "resource_unit:Guard");
+    auto text = changed(affineFold(), "transcript, \"merlin3.bls12-381.fr64be/0\"",
+                        "resource_unit, \"Guard\"");
     text = changed(text, "module {", R"mlir(module {
  "runtime.binding"() {sym_name="create",contract="resource_unit.create",arguments=["Guard"],implementation=""} : ()->()
 )mlir");
@@ -214,8 +214,8 @@ int main() {
     refuseAdmission(*module, "mathematical-formation");
   });
   cases.run("scoped finite callback retains a sampling successor root", [&] {
-    auto text = changed(affineFold(), "transcript:merlin3.bls12-381.fr64be/0",
-                        "rng:bls12-381.fr");
+    auto text = changed(affineFold(), "transcript, \"merlin3.bls12-381.fr64be/0\"",
+                        "rng, \"bls12-381.fr\"");
     text = changed(text, "!algebra.field<\"koala-bear\">",
                    "!algebra.field<\"bls12-381.fr\">");
     text = changed(text, "!algebra.field_vector<\"koala-bear\">",

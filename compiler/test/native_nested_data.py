@@ -140,15 +140,14 @@ with case("total operations and checked indexing"):
         assert "native/sequence.at" in json.loads(bundle)["candidate"]
         (OUT / f"checked{suffix}.bundle").write_text(bundle)
 with case("affine element rejected at type formation"):
-    commands.verified(probe.replace("!data.sequence<ui64>", '!data.sequence<!runtime.capability<"rng:bls12-381.fr">>'),
+    commands.verified(probe.replace("!data.sequence<ui64>", '!data.sequence<!runtime.capability<rng, "bls12-381.fr">>'),
                       refuses="copyable and discardable")
-with case("complete MLIR sequence type obeys structural depth"):
+with case("native sequence structure and byte publication have separate bounds"):
     element = "ui64"
-    for _ in range(8):
+    for _ in range(12):
         element = f"!data.sequence<{element}>"
     commands.verified(f"module attributes {{data.type = {element}}} {{}}")
-    commands.verified(f"module attributes {{data.type = !data.sequence<{element}>}} {{}}",
-                      refuses="binding-type-limit")
+    # catalog_types.cpp independently checks refusal at byte publication.
 with case("copyable PCS elements do not grant total mathematical operations"):
     source = OUT / "non-total.mlir"
     source.write_text('''!s = !data.sequence<!commitment.polynomial<"multilinear.kzg.bls12-381/0", "prover_key">>
