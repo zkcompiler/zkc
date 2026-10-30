@@ -1,4 +1,5 @@
 #include "zkc/Dialect/Exec/Execution.h"
+#include "ClosureAdmission.h"
 #include "ExecutionDefinitions.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
@@ -1014,17 +1015,13 @@ Expected<program::LocalDefinitions> Reader::run(bool mixed) {
     if ((!source || isScopedExecutionFunction(function)) &&
         !visited.contains(function))
       return error("execution-cfg", "unchecked region definition");
-  if (source) {
-    if (mathematicalCalls && result.functions.empty())
-      return result;
-    llvm::TimeTraceScope admissionTiming("zkc.execution-native-admission");
-    if (auto e = admitNativeLocalDefinitions(result, mathematicalSignatures))
-      return std::move(e);
-    return result;
-  }
   llvm::TimeTraceScope admissionTiming("zkc.execution-native-admission");
-  if (auto e = admitExecutionDefinitions(result, physical))
+  SourceExecutionClosure view;
+  view.bodies = sourceBodies;
+  uint64_t allowance = remaining;
+  if (auto e = detail::verifyClosureUses(module, view, physical, allowance))
     return std::move(e);
+  remaining = allowance;
   return result;
 }
 } // namespace
@@ -1032,13 +1029,23 @@ Expected<program::LocalDefinitions> readLocalExecution(ModuleOp module,
                                                        bool physical) {
   if (!module || failed(verify(module)) || !module->getAttrs().empty())
     return error("execution-cfg", "expected a verified local execution module");
-  return Reader(module, physical).run();
+  auto result = Reader(module, physical).run();
+  if (!result)
+    return result.takeError();
+  if (auto e = admitExecutionDefinitions(*result, physical))
+    return std::move(e);
+  return result;
 }
 Expected<program::LocalDefinitions>
 readExecutionDefinitions(Operation *symbolTable, bool physical) {
   if (failed(detail::verifyExecutionDefinitionScope(symbolTable)))
     return error("execution-cfg", "invalid execution definition scope");
-  return Reader(symbolTable, physical).run(/*mixed=*/true);
+  auto result = Reader(symbolTable, physical).run(/*mixed=*/true);
+  if (!result)
+    return result.takeError();
+  if (auto e = admitExecutionDefinitions(*result, physical))
+    return std::move(e);
+  return result;
 }
 Expected<SourceExecutionClosure>
 readScheduledExecutionClosure(Operation *symbolTable) {
@@ -1074,8 +1081,13 @@ readSourceExecutionDefinitions(Operation *symbolTable) {
   if (failed(detail::verifyExecutionDefinitionScope(symbolTable,
                                                     /*source=*/true)))
     return error("execution-cfg", "invalid source execution definition scope");
-  return Reader(symbolTable, /*physical=*/false, /*source=*/true)
-      .run(/*mixed=*/true);
+  auto result = Reader(symbolTable, /*physical=*/false, /*source=*/true)
+                    .run(/*mixed=*/true);
+  if (!result)
+    return result.takeError();
+  if (auto e = admitNativeLocalDefinitions(*result, {}))
+    return std::move(e);
+  return result;
 }
 Expected<SourceExecutionClosure>
 readSourceExecutionClosure(Operation *symbolTable) {

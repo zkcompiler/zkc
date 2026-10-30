@@ -44,8 +44,9 @@ readSourceExecutionDefinitions(mlir::Operation *symbolTable);
 /// In addition to ordinary helpers, permits typed exec.compute and ordered
 /// exec.fold/collect with supported native logical ports, after checking actual
 /// mathematical bodies, domains, callbacks and call premises. Reuses logical
-/// affine/resource admission with transient derived signatures and actual
-/// finite callback edges; no model or source declaration is returned.
+/// affine/resource admission over actual native SSA, closed control captures
+/// and finite callback edges. No declaration is admitted from a synthetic
+/// mathematical signature.
 /// Checks every immediate scoped/math definition and selected computation unit,
 /// including dormant ones. Other declarations belong to the enclosing profile.
 /// Ordered affine fold state additionally requires preservation of each exact

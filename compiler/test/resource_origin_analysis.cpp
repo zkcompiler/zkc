@@ -292,8 +292,8 @@ int main() {
             "origin query bypassed scoped range formation: " + diagnostic);
   });
   cases.run("structured region nesting has its own depth boundary", [&] {
-    // Origin nesting and carrier array depth are independent admission gates.
-    // Test the origin boundary below the carrier ceiling, then its ceiling.
+    // Native source admission does not inherit the byte carrier's JSON array
+    // depth. The consumer's origin nesting remains its independent ceiling.
     for (unsigned depth : {10u, 11u, 29u, 30u}) {
       resource_sources::Source scoped;
       auto outer =
@@ -323,10 +323,8 @@ int main() {
           source("%out = \"protocol.local_call\"(%r,%k0) "
                  "{callee=@nested,role=\"P\",site=\"nested\"} : (!s,i1)->!s\n",
                  1, definitions, "%out");
-      query(text, 100000, depth <= 11 ? 12 : 64, depth == 10 || depth == 29,
-            false,
-            depth == 30 ? "interactive-json-depth"
-                        : "mathematical-analysis-limit");
+      query(text, 100000, depth <= 11 ? 12 : 64, depth != 11, false,
+            "mathematical-analysis-limit");
     }
   });
   cases.run(
@@ -359,8 +357,7 @@ func.func @cycle(%scope:!runtime.scope,%x:!s)->!exec.outcome<(!s)> attributes {n
         mathematical::ResourceOrigins origins(symbols, types);
         require(failed(origins.verify(repeat)),
                 "cycle accepted by isolated analysis");
-        require(diagnostic.find("interactive-call-cycle") !=
-                        std::string::npos &&
+        require(diagnostic.find("execution-call-cycle") != std::string::npos &&
                     diagnostic.find("mathematical-analysis-limit") ==
                         std::string::npos,
                 "cycle hidden by limit diagnostic: " + diagnostic);

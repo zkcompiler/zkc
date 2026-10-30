@@ -312,6 +312,24 @@ may consume a parent snapshot only when the inspected facts remain fixed for
 that phase. A cached parent analysis can be stale: its presence does not
 certify current closure admission.
 
+Scoped data admission is distinct from scope/transfer ownership. It consumes
+actual SSA data operands according to their native Copy/Drop permissions.
+Mutually exclusive arms each receive their own formals; duplicate Copy captures
+remain distinct ports. Iteration invariants require Copy, while carried state
+may be affine. Explicit physical storage release invalidates even a Copy value.
+Every potential arm and dormant callable remains checked. Ordered history
+transitions are forbidden inside variant matches, including transitions reached
+through helpers or finite callbacks.
+
+The closed scoped call/control graph includes actual outlined functions and
+finite step/predicate callbacks. It is acyclic and bounded to 64 functions along
+one path, including the root. Cached summaries retain subtree height rather
+than only visitation. Expanded control occurrences share a 65,536-instruction
+ceiling; signatures have at most 1,024 data ports. Graph, occurrence and data-use
+work share the reader's remaining allowance. Byte encodings impose their own
+size and JSON-depth constraints at export; they do not define native control
+nesting or affine validity.
+
 Resource-origin facts are relative to actual data formals, with the borrowed
 scope excluded. Closed-region summaries substitute through explicit captures;
 match payload roots begin unknown. Continuing alternatives must agree on a

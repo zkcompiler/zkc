@@ -202,6 +202,7 @@ add_zkc_component(IR
   lib/Dialect/Exec/IR/ExecDialect.cpp
   lib/Dialect/Exec/IR/Instructions.cpp
   lib/Dialect/Exec/Builders.cpp
+  lib/Dialect/Exec/ClosureAdmission.cpp
   lib/Dialect/Exec/Execution.cpp
   lib/Dialect/Exec/ResourceOrigins.cpp
   lib/Dialect/Exec/ExecutionComparison.cpp

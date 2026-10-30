@@ -452,6 +452,8 @@ mlir_target_link_libraries(zkc-mathematical_correspondence-test PRIVATE MLIRPars
 add_zkc_test(projection_metadata Transforms projection-metadata)
 target_link_libraries(zkc-projection_metadata-test PRIVATE ZkcTranslation)
 mlir_target_link_libraries(zkc-projection_metadata-test PRIVATE MLIRParser)
+add_zkc_test(native_closure_admission IR native-closure-admission)
+mlir_target_link_libraries(zkc-native_closure_admission-test PRIVATE MLIRParser MLIRAsmParser)
 add_zkc_test(native_resource_origins IR native-resource-origins)
 mlir_target_link_libraries(zkc-native_resource_origins-test PRIVATE MLIRParser MLIRAsmParser)
 target_compile_definitions(zkc-native_resource_origins-test PRIVATE

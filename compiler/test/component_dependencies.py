@@ -160,6 +160,7 @@ def main():
         "lib/Dialect/Algebra/IR/Mathematical.cpp": "ZkcIR",
         "lib/Analysis/StructuredComputation.cpp": "ZkcIR",
         "lib/Dialect/Protocol/IR/Protocol.cpp": "ZkcIR",
+        "lib/Dialect/Exec/ClosureAdmission.cpp": "ZkcIR",
         "lib/Dialect/Exec/Execution.cpp": "ZkcIR",
         "lib/Dialect/Exec/ExecutionComparison.cpp": "ZkcIR",
         "lib/Dialect/Exec/ControlCursor.cpp": "ZkcIR",
@@ -189,6 +190,7 @@ def main():
     private_headers["ZkcIR"].add(ROOT / "lib/Dialect/BindingTypeCache.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Algebra/ParameterSupport.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Exec/ExecutionDefinitions.h")
+    private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Exec/ClosureAdmission.h")
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/FiniteCardinality.h")
     private_headers["ZkcLanguage"].update(
         ROOT / f"lib/Language/{name}.h"

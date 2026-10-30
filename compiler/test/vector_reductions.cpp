@@ -846,19 +846,20 @@ int main() {
             "region expansion changed canonical preparation");
   });
 
-  // A retained Collect adds its declaration and callback edges, and Compute
-  // adds the mathematical signature edge. Thus 61 wrappers reach the same
-  // 64-edge carrier bound; the original 63/64-wrapper workloads both exceed it.
+  // Count actual scoped functions: wrappers, work and row. Collect is an
+  // edge to row, not an extra synthetic callable. The mathematical closure of
+  // exec.compute has its own bounded owner. Sixty-two wrappers therefore reach
+  // the native scoped depth of 64; no byte-model declarations affect it.
   for (unsigned depth : {61u, 62u, 63u, 64u})
     cases.run("scoped helper chain with " + Twine(depth) + " wrappers", [&] {
       bool depthRefusal = false;
       ScopedDiagnosticHandler quiet(&context, [&](Diagnostic &diagnostic) {
         depthRefusal |=
-            namesIdentifier(diagnostic.str(), "interactive-call-depth");
+            namesIdentifier(diagnostic.str(), "execution-call-depth");
         return success();
       });
       auto original = parseSourceString<ModuleOp>(chain(depth, 1, 0), &context);
-      if (depth > 61) {
+      if (depth > 62) {
         require(!original && depthRefusal,
                 "excess actual callback depth admitted");
         return;
@@ -1044,8 +1045,10 @@ int main() {
       // The shared scoped map has the same scalar formula and data ABI as
       // the former map fixture; preserve this control's original field.
       auto text = (*bytes)->getBuffer().str();
-      if (name.ends_with("map-declarations.mlir"))
+      if (name.ends_with("map-declarations.mlir")) {
         text = replaceText(text, "bls12-381.fr", "koala-bear");
+        text = replaceText(text, "ui255", "ui31");
+      }
       auto original = parse(text), enabled = sf::clone(*original);
       run(*original, protocol::createPrepareProtocolPass(false));
       run(*enabled,

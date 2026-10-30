@@ -163,8 +163,14 @@ emission and independent comparison now use this scoped profile. Protocol
 repeat analysis now reads exact continuing affine roots from actual native
 SSA, closed control captures and catalog successor facts. Its summaries preserve
 zero-trip behavior, distinguish stopped paths from unknown results, and share
-work/depth bounds across calls. Source closure admission still reconstructs a
-Program view for other checks; removing that dependency remains in progress. Structured export preserves actual SSA binding positions and checked
+work/depth bounds across calls. Scoped closure admission now checks affine data
+use, actual helper/finite callback cycles, match history and exact finite state
+roots directly from this view. Scope ownership remains a separate check.
+Native control admission no longer inherits the Program JSON nesting limit;
+byte export still checks that limit independently. The reader still constructs
+neutral records for export and participant admission still consumes them;
+retiring those remaining dependencies is in progress. Structured export
+preserves actual SSA binding positions and checked
 control, and the independent Lean reader exercises fresh branches, loops,
 stops, mathematical calls and ordered finite callbacks. Preparation and
 participant projection retain the complete scoped/mathematical helper and

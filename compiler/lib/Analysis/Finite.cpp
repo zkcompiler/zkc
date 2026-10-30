@@ -593,24 +593,17 @@ LogicalResult verifyReferences(Operation *op, SymbolTableCollection &symbols) {
        (failed(readCallback(c, role)) ||
         (c.predicate && failed(readCallback(c, CallbackRole::Predicate))))))
     return refuse(op, "expected defined private helper with exact finite ABI");
-  auto native = [&](Type type) {
-    auto bound = protocol::encodeBoundType(type, false);
-    if (!bound) {
-      consumeError(bound.takeError());
-      return false;
-    }
-    return true;
-  };
   mathematical::NativeTypePolicies policies(op);
   for (auto [i, type] : enumerate(inputs)) {
     auto p = policies.get(type);
     bool state = i >= c.arguments && i < c.arguments + c.states;
-    if (!native(type) || !p || (c.total && !p->total) || (!state && p->affine))
+    if (mathematical::isFormalType(type) || !p || (c.total && !p->total) ||
+        (!state && p->affine))
       return refuse(op, "finite input type/capture policy");
   }
   for (Type type : c.signature.getResults()) {
     auto p = policies.get(type);
-    if (!native(type) || !p || (c.total && !p->total) ||
+    if (mathematical::isFormalType(type) || !p || (c.total && !p->total) ||
         (c.collect && p->affine))
       return refuse(op, "finite result policy");
   }

@@ -941,16 +941,18 @@ int main() {
       require(!corresponds(*before, *after),
               "selected matrix index mutation was accepted");
     });
-  cases.run("expanded callback fan-out respects program body capacity", [&] {
+  cases.run("expanded callback fan-out respects native closure capacity", [&] {
     auto source = parseSourceString<ModuleOp>(largeOrderedFold(true), &context);
     require(source && succeeded(verify(*source)),
             "unexpanded fan-out source refused");
-    // Sixteen 3071-operation callbacks exceed the program's 32768-item body
-    // limit after mandatory helper expansion. The former declaration-only
-    // fixture retained helper calls and never exercised this boundary.
+    // Expanded callbacks together with retained callable bodies exceed the
+    // native closure's aggregate instruction ceiling. This checks actual
+    // control occurrences, independently of the byte format's body limit.
     bool capacity = false;
+    std::string refusal;
     ScopedDiagnosticHandler diagnostics(&context, [&](Diagnostic &diagnostic) {
-      capacity |= diagnostic.str().find("source-limit") != std::string::npos;
+      refusal += diagnostic.str();
+      capacity |= namesIdentifier(diagnostic.str(), "execution-analysis-limit");
       return success();
     });
     mathematical::RealizationWork work;
@@ -959,7 +961,9 @@ int main() {
     auto candidate = protocol::prepareScopedFinite(*source, work, copies, bytes,
                                                    cause, {false, false});
     require(!candidate && capacity && succeeded(verify(*source)),
-            "oversized expanded body was published or changed its source");
+            "oversized expanded body was published or changed its source; "
+            "candidate=" +
+                Twine(bool(candidate)) + "; diagnostics=" + refusal);
   });
   for (bool calls : {false, true})
     cases.run(
