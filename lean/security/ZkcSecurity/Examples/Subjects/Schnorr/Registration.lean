@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.Examples.Subjects.Schnorr.Endpoints
 public import ZkcSecurity.Tools.ClaimConstruction
+public import ZkcSecurity.Claims.Methods.Knowledge
 public import ZkcExamples.Structured.SchnorrBinding
 
 @[expose] public section

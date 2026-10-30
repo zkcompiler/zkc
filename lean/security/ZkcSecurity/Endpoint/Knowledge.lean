@@ -2,7 +2,7 @@ module
 
 public import ZkcSecurity.VCVio.UniformChallenge
 public import ZkcSecurity.Endpoint.Soundness
-public import ZkcSecurity.Endpoint.Sigma
+public import ZkcSecurity.Transformations.FiatShamir.Knowledge
 public import ZkcSecurity.VCVio.Pruning
 
 @[expose] public section
@@ -13,7 +13,7 @@ open scoped ZkcSecurity.VCVio.UniformChallenge
 
 Fixed-statement knowledge soundness of a compiled Proof Entry whose verifier is
 the Fiat–Shamir transform of a Sigma protocol, through the generic Sigma bridge
-(`ZkcSecurity.Endpoint.Sigma`). Knowledge claims are not stage relations: their
+(`ZkcSecurity.Transformations.FiatShamir.Knowledge`). Knowledge claims are not stage relations: their
 conclusion is an extraction probability, not a bad-event bound, so they keep
 their own endpoint. Adaptive knowledge soundness is a separate property and is
 not stated here.
@@ -180,10 +180,6 @@ theorem KnowledgeEvidence.knowledge [DecidableEq Commit] [SampleableType F] [Fin
 
 section Typed
 
-/-- A prover of typed proofs for a fixed statement, with uniform coins and the
-transcript oracle on every history. -/
-abbrev TypedProver (F G Stmt : Type) := Stmt → History F G → OracleComp (Sigma.HistorySpec F G) (Proof F G)
-
 namespace KnowledgeEvidence
 variable (evidence : KnowledgeEvidence art endpoint Stmt Wit Commit PrvState Resp holds)
 
@@ -267,10 +263,6 @@ theorem knowledge_soundness [DecidableEq Commit] [SampleableType F] [Fintype F] 
 end Typed
 
 section Bytes
-
-/-- A prover of proof bytes for a fixed statement, with uniform coins and the
-transcript oracle on every history. -/
-abbrev BytesProver (F G Stmt : Type) := Stmt → History F G → OracleComp (Sigma.HistorySpec F G) (List UInt8)
 
 namespace KnowledgeEvidence
 variable (evidence : KnowledgeEvidence art .executableBytes Stmt Wit Commit PrvState Resp holds)

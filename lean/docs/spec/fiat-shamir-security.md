@@ -1900,7 +1900,8 @@ pruning. The loss is the prover's pathwise weighted budget plus the original
 validator's charge, the supremum over statements for adaptive statements.
 
 Fixed-statement knowledge soundness goes through the generic Sigma bridge
-(`ZkcSecurity.Endpoint.Sigma`). A one-challenge transcript shape gives the
+(`ZkcSecurity.Transformations.FiatShamir.Knowledge`), over the operational
+interfaces in `Transformations.FiatShamir.Transcript`. A one-challenge transcript shape gives the
 commitment's message events in order (any number, zero included), the
 challenge occurrence, and checked encoders and decoders of commitments and typed
 proofs. Routing sends a history that ends in a commitment's events and the

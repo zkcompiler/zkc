@@ -1,8 +1,9 @@
 module
 
-public import ZkcSecurity.Claims.DomainModel
+public import ZkcSecurity.Bindings.Models.Capabilities
 public import Zkc.Source.Structured.CatalogueJustification
 public import Mathlib.Data.ZMod.Basic
+public import Mathlib.Algebra.Field.ZMod
 
 @[expose] public section
 

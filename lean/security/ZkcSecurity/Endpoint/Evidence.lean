@@ -139,6 +139,11 @@ attribute [instance] Regime.sampleable
 /-- Exactly uniform field challenges: the oracle answers field elements. -/
 def Regime.exact (F : Type) [SampleableType F] : Regime F := ⟨F, inferInstance, id⟩
 
+/-- The challenge function of a regime: the oracle's answer at the absorbed
+history, decoded. -/
+abbrev Regime.challenge {F G : Type} (regime : Regime F) : History F G → OracleComp (Oracle F G regime.Answer) F :=
+  decodedQuery regime.decode
+
 /-- A policy statement the application claim counts as false. -/
 def ApplicationFalse {Statement : Type} (claim : Statement → Prop) (statement : Statement) : Prop :=
   claim statement
@@ -218,6 +223,47 @@ def LoweringRequirement (art : Artifacts) (c : Compiled art) (F G : Type) [Field
     [AddCommGroup G] [Module F G] [DecidableEq G] : Semantics → Type
   | .idealMeaning => PUnit
   | .executableBytes => LoweringEvidence art c F G
+
+section Bytes
+variable {art : Artifacts}
+variable {c : Compiled art}
+
+namespace LoweringEvidence
+variable (lowering : LoweringEvidence art c F G)
+
+/-- The typed proof that proof bytes decode to, after the framing header, at the
+executable validator's receive types for a statement. -/
+def decoded (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Payload F G))
+    (statement : art.Statement F G) (bytes : List UInt8) : Proof F G :=
+  Zkc.Executable.decodeProof codec (Zkc.Executable.Plan.types (encodeValues statement) lowering.lowered.plan)
+    (bytes.drop 40)
+
+/-- Host validation of proof bytes for a statement: the framing header must name
+the expected binding, then the executable validator runs under the checked
+context, at an instruction budget, on the statement's published values and the
+initial transcript, and accepts at the selected output with the whole proof
+read. -/
+def validate {m : Type → Type} [Monad m] (challenge : History F G → m F)
+    (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
+    (binding : List UInt8) (statement : art.Statement F G) (initial : History F G) (bytes : List UInt8) :
+    m Bool :=
+  Zkc.Executable.validate Zkc.Executable.installed lowering.validator c.context challenge codec budget binding
+    c.position (encodeValues statement) initial bytes
+
+/-- Host validation prunes, by rejections, the complete acceptance of the
+compiled verifier on the decoded proof, at every budget and with every framing
+header. -/
+theorem prunes {m : Type → Type} [Monad m] [LawfulMonad m] (challenge : History F G → m F)
+    (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
+    (binding : List UInt8) (statement : art.Statement F G) (initial : History F G) (bytes : List UInt8) :
+    Zkc.Executable.Prunes (fun accepted => accepted = false)
+      (lowering.validate challenge codec budget binding statement initial bytes)
+      (verdict <$> c.verifier challenge statement initial (lowering.decoded codec statement bytes)) := by
+  exact lowering.pruning challenge codec budget binding statement initial bytes
+
+end LoweringEvidence
+
+end Bytes
 
 /-- The family evidence of ordinary soundness: a charged certificate over the
 transcript interface of the checked context with the regime's decoding, whose

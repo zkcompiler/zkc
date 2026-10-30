@@ -137,7 +137,8 @@ a first-query observation also distinguishes reversed read order. Registration
 controls check that the straight-line profile and response-difference forking
 cannot be selected as each other's meaning. This supplies separately registered
 extraction for this typed model. The property is separate from registered
-response-difference forking in `Claims.Extractor` and from KZG evaluation binding.
+response-difference forking in `Bindings.Extraction.Profile`, registered by
+`Claims.Extractor`, and from KZG evaluation binding.
 It assumes access to both immutable cells and establishes only this finite oracle
 relation. It does not
 supply a KZG extractor, an extraction cost calculus, a new canonical claim wire

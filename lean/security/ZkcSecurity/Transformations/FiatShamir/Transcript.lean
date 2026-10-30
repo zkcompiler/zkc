@@ -1,63 +1,24 @@
 module
 
 public import ZkcSecurity.VCVio.UniformChallenge
-public import ZkcSecurity.FiatShamir.Soundness
-public import ZkcSecurity.Oracle.Encoding
+public import Zkc.Construction.FiatShamir
 public import VCVio.CryptoFoundations.FiatShamir.Sigma.KnowledgeExtraction
-public import VCVio.OracleComp.SimSemantics.StateT.StateProjection
-public import VCVio.OracleComp.SimSemantics.QueryImpl.Compose
 public import VCVio.OracleComp.QueryTracking.QueryBound.Simulation
 
 @[expose] public section
 
 open scoped ZkcSecurity.VCVio.UniformChallenge
 
-/-! # The generic Sigma bridge
-
-Knowledge soundness of a verifier that asks one transcript challenge, from
-VCVio's replay extraction for the Fiat–Shamir transform of a Sigma protocol.
-
-A one-challenge transcript shape (`Shape`) describes how the verifier absorbs a
-proof: the commitment's message events, in their order (any number, zero
-included; a Chaum–Pedersen or AND proof sends two commitments before the
-challenge), and
-the challenge occurrence; how a commitment and a response are delivered as a
-typed proof (`Shape.proof`, commitments then responses), and how a typed proof
-is read back (`Shape.read`). The encoders and decoders are checked: reading the
-events of a commitment gives it back, and events that read as a commitment are
-its events, so the shape determines where in a history a challenge key ends.
-
-A verifier corresponds to a Sigma protocol at a statement and an initial
-transcript (`Corresponds`) when, on every commitment and response, it asks the
-transcript oracle once, at the initial transcript followed by the commitment's
-events and the challenge occurrence, and returns the protocol's verification of
-the answer.
-
-Routing (`Shape.route`) sends every history to a key of VCVio's transform: a
-history that ends in a commitment's events and the challenge occurrence goes to
-its prior history and the commitment, any other history, malformed and empty
-ones included, to itself and a fixed commitment, on a separate branch. It is
-injective on all histories (`Shape.route_injective`), so the routed cache seen
-on histories is the history cache (`Shape.run_eq`): the experiment in which the
-prover queries a lazily sampled oracle on all typed histories and the verifier
-then checks its output is exactly VCVio's knowledge verification run of the
-routed prover (`Shape.reduce`). Routing issues one VCVio oracle query per
-history query and nothing else (`Shape.reduce_bound`), so the prover's budget
-transports. `Shape.knowledge_soundness` then applies VCVio's replay extractor
-(`FiatShamir.knowledgeExtractor_success`) under special soundness.
-
-The challenges are exactly uniform field elements (the registered model
-`model.exact-uniform-challenges`), answered by one lazily sampled oracle on
-typed histories (`historyOracle`, `model.history-oracle`) shared by the prover's
-queries and final verification. The statement is fixed before the prover runs.
--/
+/-! Transcript shapes, routing and the shared history-oracle experiment.
+These interfaces fix prover access and cached execution independently of
+knowledge endpoint evidence. Sigma correspondence and replay bounds are proved
+in `Transformations.FiatShamir.Knowledge`. -/
 
 set_option autoImplicit false
 
 namespace ZkcSecurity.Endpoint.Sigma
 open OracleComp OracleSpec
 open Zkc.Construction
-open ZkcSecurity.Oracle.Encoding (view view_cacheQuery)
 
 /-- A one-challenge transcript shape: the commitment's message events and the
 challenge occurrence, with checked encoders and decoders of commitments and
@@ -265,106 +226,20 @@ theorem reduce_bound {Stmt : Type} [DecidableEq Commit] (prover : Prover F G Stm
         simp
     | inr history => exact absurd rfl notOracle
 
-section Run
-variable {Stmt Wit PrvState : Type} {rel : Stmt → Wit → Bool}
-
-/-- Routed, a corresponding verifier is VCVio's Fiat–Shamir verifier, with the
-initial transcript as the context message. -/
-theorem route_verify [DecidableEq Commit] (sigma : SigmaProtocol Stmt Wit Commit PrvState F Resp rel)
-    (generable : GenerableRelation Stmt Wit rel) (statement : Stmt) (initial : History F G)
-    {verify : Commit × Resp → OracleComp (HistorySpec F G) Bool}
-    (corresponds : Corresponds shape sigma statement initial verify) (proof : Commit × Resp) :
-    simulateQ shape.routeQueries (verify proof) =
-      (_root_.FiatShamir (m := OracleComp (KeySpec F G Commit)) sigma generable
-        (History F G ⊕ History F G)).verify statement (.inl initial) proof := by
-  rw [corresponds]
-  rcases proof with ⟨commitment, response⟩
-  simp only [simulateQ_bind, shape.route_challenge (shape.route_append initial commitment), simulateQ_pure]
-  simp [_root_.FiatShamir, HasQuery.query, map_eq_bind_pure_comp]
-
-/-- The knowledge experiment of a corresponding verifier is exactly VCVio's
-knowledge verification run of the routed prover: the routed cache restricted to
-histories is the history cache. -/
-theorem run_eq [DecidableEq Commit] (sigma : SigmaProtocol Stmt Wit Commit PrvState F Resp rel)
-    (generable : GenerableRelation Stmt Wit rel) (prover : Prover F G Stmt Commit Resp) (statement : Stmt)
-    (initial : History F G) {verify : Commit × Resp → OracleComp (HistorySpec F G) Bool}
-    (corresponds : Corresponds shape sigma statement initial verify) :
-    run prover verify statement initial =
-      _root_.FiatShamir.knowledgeVerifyRun sigma generable (History F G ⊕ History F G)
-        (shape.reduce prover) statement (.inl initial) := by
-  unfold run _root_.FiatShamir.knowledgeVerifyRun
-  have routed : (do
-      let proof ← shape.reduce prover statement (.inl initial)
-      (_root_.FiatShamir sigma generable (History F G ⊕ History F G)).verify statement (.inl initial) proof) =
-      simulateQ shape.routeQueries (do
-        let proof ← prover statement initial
-        verify proof) := by
-    simp only [simulateQ_bind, reduce, Sum.elim_inl, id, shape.route_verify sigma generable statement initial
-      corresponds]
-  rw [routed, ← QueryImpl.simulateQ_compose]
-  symm
-  have projected := run'_simulateQ_eq_of_query_map_eq
-    ((_root_.FiatShamir.Fork.unifForward (History F G ⊕ History F G) Commit F +
-      _root_.FiatShamir.Fork.roImpl (History F G ⊕ History F G) Commit F) ∘ₛ shape.routeQueries)
-    (forwardUniform (F := F) (G := G) + historyOracle (F := F) (G := G))
-    (fun state : _root_.FiatShamir.Fork.SimState (History F G ⊕ History F G) Commit F =>
-      view shape.route state.1) ?step
-    (do
-      let proof ← prover statement initial
-      verify proof) (∅, [])
-  · simpa using projected
-  · intro query state
-    obtain ⟨cache, log⟩ := state
-    cases query with
-    | inl n =>
-        rw [QueryImpl.apply_compose, routeQueries_inl,
-          QueryImpl.simulateQ_add_liftM_query_left, _root_.FiatShamir.Fork.unifForward_run]
-        simp [forwardUniform]
-    | inr history =>
-        rw [QueryImpl.apply_compose, routeQueries_inr, QueryImpl.simulateQ_add_liftM_query_right]
-        cases hit : cache (shape.route history) with
-        | some answer =>
-            have viewed : view shape.route cache history = some answer := hit
-            rw [_root_.FiatShamir.Fork.roImpl_run_some _ _ _ _ _ hit, QueryImpl.add_apply_inr,
-              historyOracle, QueryImpl.withCaching_run_some _ viewed]
-            simp
-        | none =>
-            have viewed : view shape.route cache history = none := hit
-            rw [_root_.FiatShamir.Fork.roImpl_run_none _ _ _ _ hit, QueryImpl.add_apply_inr,
-              historyOracle, QueryImpl.withCaching_run_none _ viewed]
-            simp [map_eq_bind_pure_comp, view_cacheQuery shape.route shape.route_injective]
-
-/-- **Knowledge soundness through the Sigma bridge.** For a specially sound Sigma
-protocol and a verifier that corresponds to it at a fixed statement and initial
-transcript, every prover whose transcript-oracle queries number at most `budget`
-on every path is accepted with probability `accepting` such that VCVio's replay
-extractor, run on the routed prover, finds a witness of the protocol's relation
-with probability at least `accepting * (accepting / (budget + 1) - 1 / |F|)`.
-Subtraction is truncated in `ENNReal`. -/
-theorem knowledge_soundness [DecidableEq Commit] [SampleableType F] [Fintype F] [Inhabited F]
-    [SampleableType Wit] (sigma : SigmaProtocol Stmt Wit Commit PrvState F Resp rel)
-    (generable : GenerableRelation Stmt Wit rel) (sound : sigma.SpeciallySound)
-    (prover : Prover F G Stmt Commit Resp) (statement : Stmt) (initial : History F G)
-    {verify : Commit × Resp → OracleComp (HistorySpec F G) Bool}
-    (corresponds : Corresponds shape sigma statement initial verify) (budget : Nat)
-    (bounded : IsQueryBoundP (prover statement initial) (· matches .inr _) budget) :
-    let accepting := acceptance prover verify statement initial
-    accepting * (accepting / (budget + 1 : ENNReal) - _root_.FiatShamir.challengeSpaceInv F) ≤
-      Pr{let witness ← _root_.FiatShamir.knowledgeExtractor sigma generable (History F G ⊕ History F G)
-          (shape.reduce prover) (.inl initial) budget statement}[rel statement witness = true] := by
-  have upstream := _root_.FiatShamir.knowledgeExtractor_success sigma generable (History F G ⊕ History F G)
-    sound (shape.reduce prover) statement (.inl initial) budget
-    (shape.reduce_bound prover statement initial budget bounded)
-  have same : acceptance prover verify statement initial =
-      _root_.FiatShamir.knowledgeAcceptance sigma generable (History F G ⊕ History F G)
-        (shape.reduce prover) statement (.inl initial) := by
-    unfold acceptance _root_.FiatShamir.knowledgeAcceptance
-    rw [shape.run_eq sigma generable prover statement initial corresponds]
-  simp only [same]
-  exact upstream
-
-end Run
-
 end Shape
 
 end ZkcSecurity.Endpoint.Sigma
+
+namespace ZkcSecurity.Endpoint
+open OracleComp
+open Zkc.Construction
+
+/-- A prover of typed proofs for a fixed statement, with uniform coins and the
+transcript oracle on every history. -/
+abbrev TypedProver (F G Stmt : Type) := Stmt → History F G → OracleComp (Sigma.HistorySpec F G) (Proof F G)
+
+/-- A prover of proof bytes for a fixed statement, with uniform coins and the
+transcript oracle on every history. -/
+abbrev BytesProver (F G Stmt : Type) := Stmt → History F G → OracleComp (Sigma.HistorySpec F G) (List UInt8)
+
+end ZkcSecurity.Endpoint

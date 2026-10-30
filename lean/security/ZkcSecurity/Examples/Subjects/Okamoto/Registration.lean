@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.Examples.Subjects.Okamoto.Endpoints
 public import ZkcSecurity.Tools.ClaimConstruction
+public import ZkcSecurity.Claims.Methods.Knowledge
 
 @[expose] public section
 

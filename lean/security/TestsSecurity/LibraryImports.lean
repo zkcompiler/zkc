@@ -1,5 +1,8 @@
 -- Maintained by audit_imports.py; all library, test and example modules are audit inputs; tooling is separate.
 import ZkcSecurity.Algebra.Polynomial
+import ZkcSecurity.Bindings.Extraction.Layout
+import ZkcSecurity.Bindings.Extraction.Profile
+import ZkcSecurity.Bindings.Models.Capabilities
 import ZkcSecurity.Claims.Admission
 import ZkcSecurity.Claims.Arithmetic
 import ZkcSecurity.Claims.AuthoredPair
@@ -19,6 +22,7 @@ import ZkcSecurity.Claims.Extractor
 import ZkcSecurity.Claims.FiniteRecovery
 import ZkcSecurity.Claims.HonestModel
 import ZkcSecurity.Claims.Knowledge
+import ZkcSecurity.Claims.Methods.Knowledge
 import ZkcSecurity.Claims.Model
 import ZkcSecurity.Claims.PairValidator
 import ZkcSecurity.Claims.Parameters
@@ -61,9 +65,7 @@ import ZkcSecurity.Endpoint.DomainCompiled
 import ZkcSecurity.Endpoint.DomainExecutionProjection
 import ZkcSecurity.Endpoint.DomainSafety
 import ZkcSecurity.Endpoint.Evidence
-import ZkcSecurity.Endpoint.Extraction
 import ZkcSecurity.Endpoint.Knowledge
-import ZkcSecurity.Endpoint.Sigma
 import ZkcSecurity.Endpoint.Soundness
 import ZkcSecurity.Examples.CausalSumcheck.UniformService
 import ZkcSecurity.Examples.ChaumPedersenSigma
@@ -510,6 +512,9 @@ import ZkcSecurity.Tools.SourceProperties
 import ZkcSecurity.Tools.SubjectABI
 import ZkcSecurity.Tools.TableCapacity
 import ZkcSecurity.Tools.TargetEvaluation
+import ZkcSecurity.Transformations.FiatShamir.Knowledge
+import ZkcSecurity.Transformations.FiatShamir.Replay
+import ZkcSecurity.Transformations.FiatShamir.Transcript
 import ZkcSecurity.VCVio.Composition
 import ZkcSecurity.VCVio.Coupling
 import ZkcSecurity.VCVio.Deferral
@@ -625,6 +630,7 @@ import TestsSecurity.InputLaws
 import TestsSecurity.InterfaceAxioms
 import TestsSecurity.InterleavedReadback
 import TestsSecurity.JointSimulation
+import TestsSecurity.KnowledgeInterfaces
 import TestsSecurity.KoalaBearDomain
 import TestsSecurity.KoalaBearModel
 import TestsSecurity.KoalaBearSumcheck
