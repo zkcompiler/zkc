@@ -28,5 +28,5 @@ pub math fn multiply<Q: nat, N: nat>(left: Element<Q,N>, right: Element<Q,N>) ->
 }
 
 pub operator + = add;
-pub operator - = subtract;
+pub operator infixl(65) - = subtract;
 pub operator * = multiply;

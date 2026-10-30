@@ -36,8 +36,7 @@ BodyChecker::sourcePlace(uint32_t id, unsigned depth, bool optional) {
       type->kind != Type::Kind::Array) {
     if (!optional)
       fail("source.place",
-           "projection requires a named place; bind the indexed value with let "
-           "first",
+           "projection requires a named place; bind the indexed value first",
            expr.span);
     return {};
   }
@@ -169,6 +168,30 @@ BodyChecker::restrictRoles(ValueId value, ArrayRef<unsigned> roles, Span span) {
     return {};
   std::vector<unsigned> selected(roles.begin(), roles.end());
   return emit(Restriction{value, selected}, before.type, selected, span);
+}
+std::optional<ValueId> BodyChecker::assembleRoles(const Expression &expr,
+                                                  unsigned depth) {
+  if (!protocol()) {
+    fail("source.mode", "role assembly requires protocol mode", expr.span);
+    return {};
+  }
+  auto type = inferredType(uint32_t(&expr - syntax.expressions.data()));
+  if (!type || !checker.types.sharedData(*type, expr.span, &decl))
+    return {};
+  auto family = checker.roles(decl, expr.labels, expr.span);
+  if (!family || !active(*family, expr.span))
+    return {};
+  RoleAssembly assembly;
+  for (unsigned i = 0; i < expr.children.size(); ++i) {
+    auto role = checker.roles(decl, {expr.labels[i]}, expr.span);
+    auto value = expression(expr.children[i], *type, depth + 1);
+    if (!role || !value || !demand(*value, *role, expr.span) ||
+        !use(*value, expr.span))
+      return {};
+    assembly.operands.push_back(*value);
+    assembly.roles.push_back(role->front());
+  }
+  return emit(std::move(assembly), *type, *family, expr.span);
 }
 bool BodyChecker::assign(BindingId id, ValueId value, Span span) {
   auto &state = bindings.at(id);

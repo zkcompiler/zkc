@@ -345,6 +345,50 @@ bool Semantics::mathematicalData(const Type &type, Span span,
   }
   return true;
 }
+bool Semantics::sharedData(const Type &type, Span span,
+                           const Declaration *scope, unsigned depth) {
+  if (depth > work.limits.typeDepth || !charge(1, span))
+    return diagnostic ? false
+                      : fail("source.limit", "shared data type depth", span);
+  if (depth == 1 &&
+      (!executableType(type, span) ||
+       !requireUsage(type, Usage::Copy, span, scope, "source.permission",
+                     "role assembly requires Copy")))
+    return false;
+  using K = Type::Kind;
+  std::vector<Type> children;
+  if (type.kind == K::Builtin) {
+    auto policy = protocol::nativeTypeConstructorPolicy(type.domain);
+    if (!policy || !policy->total || !policy->shared)
+      return fail("source.roles",
+                  "role assembly requires ordinary total shared data", span);
+    for (const auto &argument : type.arguments)
+      if (!isStaticOnly(argument))
+        children.push_back(argument);
+  } else if (type.kind == K::Tuple || type.kind == K::Array)
+    children = type.arguments;
+  else if (type.kind == K::Record || type.kind == K::Associated) {
+    // Abstract associated data is checked again after module substitution.
+    if (type.kind == K::Associated && symbolic(type))
+      return true;
+    auto fields = this->fields(type, span, depth + 1);
+    if (!fields)
+      return false;
+    for (const auto &field : *fields)
+      children.push_back(field.type);
+  } else if (type.kind == K::Variant) {
+    auto alternatives = this->alternatives(type, span, depth + 1);
+    if (!alternatives)
+      return false;
+    for (const auto &alternative : *alternatives)
+      for (const auto &field : alternative.fields)
+        children.push_back(field.type);
+  }
+  for (const auto &child : children)
+    if (!sharedData(child, span, scope, depth + 1))
+      return false;
+  return true;
+}
 bool Semantics::withinModule(DeclarationId context, DeclarationId owner) const {
   for (auto id = std::optional(context); id;
        id = declarations[id->index].parent)

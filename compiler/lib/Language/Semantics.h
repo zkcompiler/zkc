@@ -112,6 +112,8 @@ public:
   bool executableType(const Type &, Span, unsigned = 1);
   /// Logical protocol values are eliminated before native execution.
   bool protocolValue(const Type &, Span);
+  /// Ordinary total shared data, excluding custody and owner-local carriers.
+  bool sharedData(const Type &, Span, const Declaration *, unsigned = 1);
   bool oraclePort(const Port &);
   bool mathematicalData(const Type &, Span, const Declaration * = nullptr,
                         unsigned = 1);

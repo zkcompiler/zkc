@@ -1,4 +1,5 @@
 #include "WrittenSource.h"
+#include "FormalSourceWriter.h"
 #include "WrittenSourceIndex.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Support/BoundedStream.h"
@@ -9,11 +10,28 @@
 using namespace llvm;
 namespace zkc::language::detail {
 Expected<std::shared_ptr<WrittenSources>>
-retainWrittenHeaders(ArrayRef<SyntaxDeclaration> syntax, Work &work) {
+retainWrittenHeaders(MutableArrayRef<SyntaxDeclaration> syntax, Work &work) {
   // Every header node consumes a token. Charge before copying, including the
   // captured and installation source headers, under the checking work ceiling.
   if (auto error = work.charge(work.tokens))
     return std::move(error);
+  uint32_t next = 0;
+  std::function<Error(SyntaxDeclaration &)> identify =
+      [&](SyntaxDeclaration &declaration) -> Error {
+    if (auto error = work.charge(1, declaration.span))
+      return error;
+    if (next == UINT32_MAX)
+      return failure("source.limit", "written declaration count exceeded",
+                     declaration.span);
+    declaration.writtenDeclaration = next++;
+    for (auto &member : declaration.members)
+      if (auto error = identify(member))
+        return error;
+    return Error::success();
+  };
+  for (auto &module : syntax)
+    if (auto error = identify(module))
+      return std::move(error);
   auto result = std::make_shared<WrittenSources>();
   result->modules.assign(syntax.begin(), syntax.end());
   return result;
@@ -26,10 +44,16 @@ Error retainWrittenBodies(WrittenSources &written,
   auto key = [](Span span) {
     return Key(span.source.index, span.begin, span.end);
   };
-  std::map<Key, const SyntaxDeclaration *> parsed;
+  std::map<uint32_t, const SyntaxDeclaration *> parsed;
+  // A file wrapper can share its only declaration's span; grouped construction
+  // handlers also deliberately share spans. Follow the frozen header link,
+  // never a source location or generated name, to recover each authored body.
   for (auto *source : sources)
-    if (!source->generated)
-      parsed.try_emplace(key(source->span), source);
+    if (!source->generated && source->writtenDeclaration &&
+        !source->bodies.empty() &&
+        !parsed.emplace(*source->writtenDeclaration, source).second)
+      return failure("source.syntax", "ambiguous written body ownership",
+                     source->span);
   std::map<Key, const FormalSyntax *> formalSources;
   for (auto *source : sources)
     for (const auto &formal : source->formalSyntax)
@@ -44,7 +68,10 @@ Error retainWrittenBodies(WrittenSources &written,
       formal = *found->second;
     }
     if (source.deferredBody) {
-      auto found = parsed.find(key(source.span));
+      if (!source.writtenDeclaration)
+        return failure("source.syntax", "written declaration was not retained",
+                       source.span);
+      auto found = parsed.find(*source.writtenDeclaration);
       if (found == parsed.end() || found->second->deferredBody)
         return failure("source.syntax", "written body was not retained",
                        source.span);
@@ -159,6 +186,8 @@ StringRef syntaxKind(Expression::Kind value) {
     return "oracle_forget_rows";
   case Expression::Kind::MethodCall:
     return "method_call";
+  case Expression::Kind::RoleAssembly:
+    return "role_assembly";
   case Expression::Kind::FinishIf:
     return "finish_if";
   case Expression::Kind::NotationCall:
@@ -670,35 +699,23 @@ private:
     }
     return emit("requirement", value.span, std::move(result));
   }
-  json::Value formalNode(const syntax::Snapshot &tree, syntax::NodeId id) {
-    json::Array children, tokens;
-    const auto &node = tree.node(id);
-    unsigned cursor = node.firstToken;
-    auto appendTokens = [&](unsigned end) {
-      for (; cursor < end && !error; ++cursor) {
-        auto token = tree.tokens()[cursor];
-        if (token.synthetic() || token.trivia())
-          continue;
-        auto text = tree.text(token);
-        if (auto failure = work.charge(text.size() + 1, tree.span(id))) {
-          error = std::move(failure);
-          return;
-        }
-        tokens.push_back(json::Object{
-            {"text", text}, {"begin", token.begin}, {"end", token.end}});
-      }
-    };
-    for (auto nested : tree.children(id)) {
-      appendTokens(tree.node(nested).firstToken);
-      children.push_back(child("child", children.size(),
-                               [&] { return formalNode(tree, nested); }));
-      cursor = tree.node(nested).lastToken;
+  json::Value formalNode(const FormalSyntax &formal) {
+    if (!formal.authored) {
+      if (!error)
+        error =
+            failure("source.formal-syntax", "formal source was not projected",
+                    formal.tree.span(formal.node));
+      return nullptr;
     }
-    appendTokens(node.lastToken);
-    return emit("formal_syntax", tree.span(id),
-                json::Object{{"syntax_kind", syntax::spelling(node.kind)},
-                             {"children", std::move(children)},
-                             {"tokens", std::move(tokens)}});
+    return writeFormalSource(
+        *formal.authored,
+        [&](StringRef kind, Span span, json::Object fields) {
+          return emit(kind, span, std::move(fields));
+        },
+        [&](StringRef field, unsigned index,
+            std::function<json::Value()> write) {
+          return child(field, index, std::move(write));
+        });
   }
   json::Value declarationNode(const SyntaxDeclaration &value, StringRef owner,
                               bool anonymous = false) {
@@ -735,14 +752,22 @@ private:
                     })},
               {"members", std::move(members)},
               {"formal", list("formal", value.formalSyntax, [&](auto &formal) {
-                 return formalNode(formal.tree, formal.node);
+                 return formalNode(formal);
                })}});
     }
     json::Object result{
+        {"oracle_shapes",
+         list("oracle_shape", value.oracleShapes,
+              [&](auto &shape) {
+                return emit("oracle_shape", shape.span,
+                            json::Object{{"port", shape.port},
+                                         {"dimension", shape.dimension},
+                                         {"bound", child("bound", 0, [&] {
+                                            return type(shape.bound);
+                                          })}});
+              })},
         {"formal", list("formal", value.formalSyntax,
-                        [&](auto &formal) {
-                          return formalNode(formal.tree, formal.node);
-                        })},
+                        [&](auto &formal) { return formalNode(formal); })},
         {"name", anonymous ? json::Value(nullptr) : json::Value(value.name)},
         {"public", value.explicitPublic},
         {"abstract", value.abstract},

@@ -1,8 +1,9 @@
 #include "Checker.h"
+#include "FormalSource.h"
+#include "zkc/Language/Companions.h"
 
 using namespace llvm;
 namespace zkc::language::detail {
-using K = syntax::Kind;
 
 bool Checker::layoutSpecifications() {
   std::map<unsigned, Span> owners;
@@ -34,34 +35,84 @@ bool Checker::layoutSpecifications() {
           !names.emplace(moduleId.index, formal.name).second)
         return types.fail("source.spec.name",
                           "duplicate named spec in this module", span);
+      if (!formal.authored) {
+        if (recoveryDiagnostics && !recoveryDiagnostics->empty())
+          continue;
+        return types.fail("source.formal-syntax",
+                          "spec source was not projected", span);
+      }
+      const auto &authored = *formal.authored;
+      const auto &declaration = std::get<FormalDeclaration>(
+          authored.nodes[authored.root.index].value);
+      if (!declaration.body)
+        return types.fail("source.formal-syntax", "spec has no body", span);
+      const auto &body = std::get<FormalSequence>(
+          authored.nodes[declaration.body->index].value);
       std::set<std::pair<unsigned, std::string>> labels;
-      for (auto child : tree.children(formal.node))
-        if (tree.node(child).kind == K::Suite)
-          for (auto clause : tree.children(child)) {
-            auto kind = tree.node(clause).kind;
-            bool contract = kind == K::Requires || kind == K::Ensures ||
-                            kind == K::Target || kind == K::Reduces;
-            if (contract && !owner)
-              return types.fail("source.spec.audit",
-                                "consumer specs may request goals but cannot "
-                                "change a protocol contract",
-                                tree.span(clause));
-            // Explicit labels have separate clause, alias and request
-            // namespaces.
-            auto parts = tree.children(clause);
-            if (parts.size() == (kind == K::Reduces ? 3u : 2u) &&
-                tree.node(parts.front()).kind == K::Name) {
-              unsigned space = contract ? 0 : kind == K::Request ? 1 : 2;
-              auto label = tree.text(parts.front()).str();
-              if (!labels.emplace(space, label).second)
-                return types.fail(
-                    "source.spec.label",
-                    "duplicate explicit label in this spec namespace",
-                    tree.span(parts.front()));
-            }
+      std::vector<PendingObligation> obligations;
+      unsigned postconditions = 0, requests = 0;
+      for (auto clauseId : body.elements) {
+        const auto &node = authored.nodes[clauseId.index];
+        const auto *clause = std::get_if<FormalClause>(&node.value);
+        if (!clause)
+          continue;
+        using C = FormalClause::Kind;
+        bool contract = clause->kind == C::Requires ||
+                        clause->kind == C::Ensures ||
+                        clause->kind == C::Target || clause->kind == C::Reduces;
+        if (contract && !owner)
+          return types.fail("source.spec.audit",
+                            "consumer specs may request goals but cannot "
+                            "change a protocol contract",
+                            node.span);
+        if (clause->label) {
+          const auto &labelNode = authored.nodes[clause->label->index];
+          const auto *label = std::get_if<FormalReference>(&labelNode.value);
+          if (!label)
+            return types.fail("source.spec.label", "spec label must be a name",
+                              labelNode.span);
+          unsigned space = contract ? 0 : clause->kind == C::Request ? 1 : 2;
+          if (!labels.emplace(space, label->name).second)
+            return types.fail("source.spec.label",
+                              "duplicate explicit label in this spec namespace",
+                              labelNode.span);
+        }
+        if (clause->kind == C::Ensures || clause->kind == C::Request) {
+          if (!types.charge(1, node.span))
+            return false;
+          bool postcondition = clause->kind == C::Ensures;
+          PendingObligation obligation{
+              postcondition ? PendingObligation::Kind::Postcondition
+                            : PendingObligation::Kind::Request,
+              {},
+              postcondition ? postconditions++ : requests++,
+              node.span,
+              {}};
+          if (clause->label)
+            obligation.label = std::get<FormalReference>(
+                                   authored.nodes[clause->label->index].value)
+                                   .name;
+          if (owner || !formal.name.empty()) {
+            auto identityOwner =
+                owner ? protocol.qualifiedName
+                      : module.qualifiedName + "::" + formal.name;
+            auto identity = companionIdentity(
+                identityOwner, {},
+                postcondition ? ObligationRole::Postcondition
+                              : ObligationRole::Request,
+                obligation.label ? std::optional<StringRef>(*obligation.label)
+                                 : std::nullopt,
+                obligation.ordinal, work.limits);
+            if (!identity)
+              return types.accept(identity.takeError());
+            obligation.companion = std::move(*identity);
           }
-      output.pendingSpecifications.push_back(
-          {moduleId, *target, formal.name, owner, formal.isPublic, span});
+          obligations.push_back(std::move(obligation));
+        }
+      }
+      output.pendingSpecifications.push_back({moduleId, *target, formal.name,
+                                              owner, formal.isPublic, span,
+                                              std::move(obligations)});
     }
   }
   return true;

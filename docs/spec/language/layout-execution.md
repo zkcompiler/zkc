@@ -22,6 +22,9 @@ The development entry supports:
   and group domains.
 - Mathematical `def`, ordered `local def`, and Host `entry def`; named/static
   arguments, ordinary structural inference, and mathematical final expressions.
+- Oracle custody ports, ordered query and delivery, dynamic shape bounds,
+  holder and shape views, and bounded oracle sequences; see the
+  [oracle source profile](oracles.md) for exact coverage.
 - File and nested modules, ordinary imports, explicitly typed interface members
   and their native conformance, type aliases, associated types, records, enums,
   patterns, and native resource attributes.
@@ -37,7 +40,7 @@ The development entry supports:
   not select a parse.
 - Pure bindings and mutable updates, ordered calls, reached guards,
   single-recipient sends, local branches/matches/loops, and bounded protocol
-  repetition with explicit roles and a maximum.
+  repetition with checked participants and a bounded maximum.
 
 The maintained [Schnorr source](../../../compiler/test/fixtures/layout/schnorr.zkc)
 exercises the real compiler and Rust Host through
@@ -67,10 +70,59 @@ scopes retain distinct bindings. Existing native permission, constructor,
 ingress and codec rules still apply: a new spelling does not grant external
 construction authority for an affine or opaque associated value.
 
-Native match arms use bare alternative names, checked against the scrutinee's
-resolved variant. Qualified arm patterns currently refuse; their qualifiers
-cannot be discarded. A `site` attribute must select a checked protocol action.
-Explicit returns and implicit result expressions cannot carry such a label.
+Native match arms use bare alternatives or qualified constructors. A qualifier
+must resolve to the scrutinee's nominal variant; a different enum with the same
+alternative spelling refuses. Imported module aliases use ordinary resolution.
+
+`Callee(args) @(CallerP, CallerV)` substitutes roles in the callee's declared
+roster order. The default maps equal role names, not declaration position in
+the caller. The substitution must be injective, available in the active roster,
+and compatible with every actual argument. It does not move data or insert sends.
+
+`@(P = delivered, V = sampled)` assembles a value from existing role
+components. Each entry selects its expression's component at that named role.
+The expressions have the same ordinary total shared type and permit `Copy`;
+the nonempty role list has no duplicates and lies within the active roster.
+Each selected component must already be available. Components are evaluated in
+written order. This pure expression neither communicates nor asserts that the
+components are equal. Oracle handles, managed services, custody and owner-local
+carriers are excluded, including inside ordinary aggregates. Generic assembly
+rechecks these data requirements after static substitution.
+
+For example, after `delivered <- send sampled to P`, the sender's `sampled`
+and receiver's `delivered` remain distinct values. An explicit
+`@(P = delivered, V = sampled)` can supply a family-wide parameter. Agreement
+under honest communication belongs to the applicable protocol proof.
+Each ordinary layout leaf lowers to `protocol.assemble_roles`; empty unit
+layouts have no physical leaves. Independent source/IR comparison checks every
+ordered operand/role pair. Participant projection selects the actual component
+and removes assembly before execution.
+
+Expression suffix roles are accepted only for protocol-call substitution and
+the holder/receiver family of `oracle.empty`. A second suffix refuses. To
+restrict an ordinary value's availability, annotate its binding, for example
+`selected: bool @P = shared`. An annotation on a literal, name, tuple, service
+query or oracle view is not silently discarded.
+
+A protocol loop without `roles(...)` uses its active enclosing roster, including
+a surrounding loop's subset. All selected roles must know the count. A missing
+`max` is inferred only from a literal upper bound in `0..N`; a runtime count still
+requires an explicit static maximum. The bound and count checks remain at the
+same occurrence. No inferred participant or maximum is inserted into written AST
+fields.
+
+An ordered action with a single named result defaults its site to that binding
+name. A protocol loop defaults its site to its index binder. A `site` attribute
+overrides the default and must select one outer message, query, protocol call or
+loop. Local computation does not acquire a protocol site. Explicit and inferred
+sites must be unique in the protocol, including nested loops; use an explicit
+attribute if bindings repeat in separate scopes. Renaming a default binder
+renames its site and invalidates the corresponding occurrence identity. Explicit
+returns and implicit result expressions cannot carry a site label.
+
+`ghost` actual arguments refuse at projection. Holder/receiver arrows on
+ordinary data ports refuse during signature checking. Neither can silently become ordinary runtime arguments
+or shared availability. Oracle custody and actions use the [oracle source profile](oracles.md).
 
 ## Optional specifications
 
@@ -92,8 +144,11 @@ facts. Execution does not start a Lean worker to resolve them.
 `CheckedProject::pendingSpecifications()` exposes source occurrences and their
 resolved protocol declaration, distinguishing owner specs from audits. This is
 attachment information, not a typed proposition. `language-check` reports
-`assurance.status` as `not-requested` when no layout spec exists, otherwise
-`unavailable`, with the pending specifications. Native `status: checked` refers
+`assurance.status` as `no-claim` when no layout spec exists, otherwise
+`open`, with `outcome: unresolved` and the pending specifications. Each declared
+postcondition and each request is an open obligation, including unlabeled clauses
+and postconditions not mentioned by a security request. The inventory retains
+its source span and [companion key](companions.md). Native `status: checked` refers
 to native checking. Requesting `--source-claims` with a retained layout spec
 refuses with `source.assurance-unavailable`; it cannot return an empty claim
 export that hides the request. Typed catalogues, generated obligations,
@@ -119,8 +174,8 @@ header and body passes. Exhaustion cannot create a checked partial program.
 
 The parser also recognizes forms outside this executable profile. They refuse
 at their semantic boundary, including shortened interface implementation
-binders, ghost runtime ports, schemes, oracle execution, multiple-recipient
-sends, scoped lambdas/reductions, and local notation declarations. Sections
+binders, ghost runtime ports, schemes, virtual oracle definitions, ordinary
+multiple-recipient sends, scoped lambdas/reductions, and local notation declarations. Sections
 currently group declarations; imports and notation belong to their enclosing
 module. A standalone bodyless protocol is rejected.
 

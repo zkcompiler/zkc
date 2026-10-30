@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "llvm/Support/SaveAndRestore.h"
 using namespace llvm;
 namespace zkc::language::detail {
 namespace {
@@ -57,7 +58,7 @@ public:
     if (!checker.types.charge(1, syntax.span))
       return false;
     checker.output.lexicalResolutions.push_back(
-        {syntax.span, std::move(references)});
+        {syntax.span, std::move(references), std::move(authoringBindings)});
     syntax.resolved = true;
     return true;
   }
@@ -71,6 +72,9 @@ private:
   unsigned scope = 0;
   std::optional<uint32_t> currentBody;
   std::vector<LexicalReference> references;
+  std::vector<LexicalBinding> authoringBindings;
+  std::optional<Span> bindingScope;
+  uint32_t visibleAfter = 0;
   std::map<std::pair<Declaration::InputSlot::Kind, unsigned>, unsigned>
       inputOrigins;
   void inputOrigin(BindingId binding, Declaration::InputSlot::Kind kind,
@@ -90,8 +94,8 @@ private:
            Span span) {
     if (!checker.types.charge(1, span))
       return false;
-    references.push_back(
-        {access, node, syntax.bindings[binding.index].written});
+    references.push_back({access, node, syntax.bindings[binding.index].written,
+                          span, syntax.bindings[binding.index].span});
     return true;
   }
   bool fail(StringRef code, const Twine &message, Span span) {
@@ -137,6 +141,10 @@ private:
     }
     BindingId id{uint32_t(syntax.bindings.size())};
     syntax.bindings.push_back({name.str(), span, mut, service, false, scope});
+    auto visible = bindingScope.value_or(
+        currentBody ? syntax.bodies[*currentBody].span : syntax.span);
+    visible.begin = std::max(visible.begin, visibleAfter);
+    authoringBindings.push_back({name.str(), span, visible, scope});
     undo.emplace_back(name.str(),
                       prior == names.end()
                           ? std::nullopt
@@ -261,6 +269,10 @@ private:
         return false;
     }
     for (unsigned i = 0; i < expr.regions.size(); ++i) {
+      SaveAndRestore regionScope(
+          bindingScope, std::optional(syntax.bodies[expr.regions[i]].span));
+      SaveAndRestore visibility(visibleAfter,
+                                syntax.bodies[expr.regions[i]].span.begin);
       auto mark = undo.size();
       ++scope;
       std::set<std::string> seen;
@@ -287,6 +299,8 @@ private:
     return true;
   }
   bool body(uint32_t id, unsigned depth) {
+    SaveAndRestore regionScope(bindingScope, std::optional<Span>{});
+    SaveAndRestore visibility(visibleAfter, uint32_t(0));
     auto &b = syntax.bodies[id];
     if (!bounded(depth, b.span))
       return false;
@@ -326,6 +340,7 @@ private:
                       "domain aliases require one immutable unannotated name",
                       s.span);
         std::set<std::string> seen;
+        SaveAndRestore bindingVisibility(visibleAfter, s.span.end);
         if (!pattern(s.pattern, s.mutableBinding, service, seen, depth))
           return false;
         if (domain)

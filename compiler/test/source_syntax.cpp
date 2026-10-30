@@ -116,7 +116,7 @@ void corpus() {
   check(metered.workUsed() > metered.tokens().size() &&
             metered.workUsed() <= Budget{}.work,
         "syntax work is available for project aggregate charging");
-  check(files == 13, "complete accepted example corpus");
+  check(files == 15, "complete accepted example corpus");
 }
 void designCases() {
   auto buffer =
@@ -228,6 +228,47 @@ void grammar() {
       parse(source::Revision({"m", "module m\n", ""}), {}, {}, cancellation);
   check(cancelled.status() == Status::Cancelled,
         "cancelled parse remains cancelled");
+}
+void formattingCases() {
+  auto assembly =
+      read("protocol Join roles(P,V)(a:bool@P,b:bool@V)->bool@(P,V):\n"
+           "    return @(V=b,P=a)\n");
+  auto assemblyFormat = format(assembly);
+  check(assembly.status() == Status::Complete && assemblyFormat.complete &&
+            equivalent(assembly, read(assemblyFormat.text)) &&
+            assemblyFormat.text.find("@(V = b, P = a)") != std::string::npos,
+        "role assembly formats without changing ordered components");
+  auto original = read("protocol Check roles(P,V)(value:bool@P)->bool@V:\n    "
+                       "guard@P value\n    return value\n");
+  auto formatted = format(original);
+  check(formatted.complete &&
+            formatted.text ==
+                "protocol Check roles(P, V)(value: bool @P) -> bool @V:\n    "
+                "guard @P value\n    return value\n",
+        "role annotations and guards have canonical spacing");
+  check(formatted.workUsed > original.workUsed(),
+        "formatting meters output and full reparsing together");
+  for (uint64_t work :
+       {uint64_t(0), formatted.workUsed / 2, formatted.workUsed - 1}) {
+    Budget budget;
+    budget.work = work;
+    auto refused = format(original, budget);
+    check(!refused.complete && refused.text == original.revision().text() &&
+              !refused.diagnostics.empty() &&
+              refused.diagnostics[0].code == "syntax.format.limit" &&
+              refused.workUsed <= work,
+          "formatter exhaustion retains source and the precise reason");
+  }
+  Budget exact;
+  exact.work = formatted.workUsed;
+  check(format(original, exact).complete,
+        "complete formatter work receipt is sufficient");
+  source::Cancellation cancelled;
+  cancelled.cancel();
+  auto result = format(original, {}, cancelled);
+  check(!result.complete && result.text == original.revision().text() &&
+            result.diagnostics[0].code == "syntax.format.cancelled",
+        "formatter cancellation is not an equivalence error");
 }
 void notationCases() {
   using P = NotationDescriptor::Position;
@@ -399,11 +440,25 @@ void mutations() {
 }
 } // namespace
 int main() {
+  for (auto spelling : {"(x)", "(x,)", "(x;)"}) {
+    auto tree =
+        read((Twine("spec for Demo:\n    ensures ") + spelling + "\n").str());
+    unsigned groups = 0, tuples = 0;
+    for (const auto &node : tree.nodes()) {
+      groups += node.kind == Kind::Group;
+      tuples += node.kind == Kind::Tuple;
+    }
+    bool grouping = StringRef(spelling) == "(x)";
+    check(tree.status() == Status::Complete && groups == unsigned(grouping) &&
+              tuples == unsigned(!grouping),
+          "one-element tuple retains its authored separator");
+  }
   positions();
   corpus();
   designCases();
   grammar();
   notationCases();
+  formattingCases();
   descriptorDeclarations();
   controlExpressions();
   formatCases();

@@ -3,6 +3,17 @@
 #include <algorithm>
 
 namespace zkc::syntax {
+llvm::ArrayRef<NotationDescriptor> defaultNotations() {
+  using P = NotationDescriptor::Position;
+  using A = NotationDescriptor::Association;
+  static const NotationDescriptor fixed[] = {
+#define OPERATOR(position, association, symbol, precedence, arity)             \
+  {P::position, A::association, symbol, "", precedence, arity},
+#include "zkc/Syntax/Operators.def"
+#undef OPERATOR
+  };
+  return fixed;
+}
 bool validNotationDescriptor(const NotationDescriptor &n) {
   using P = NotationDescriptor::Position;
   using A = NotationDescriptor::Association;
@@ -15,6 +26,9 @@ bool validNotationDescriptor(const NotationDescriptor &n) {
   if (n.position == P::Index)
     return n.symbol == "[]" && n.closing == "]" && n.precedence == 100 &&
            n.arity >= 2;
+  for (const auto &fixed : defaultNotations())
+    if (fixed.symbol == n.symbol && fixed.position == n.position)
+      return fixed == n;
   auto scalar = source::decodeSourceScalar(n.symbol, 0);
   if (n.position == P::Delimited) {
     auto close = source::decodeSourceScalar(n.closing, 0);
@@ -36,15 +50,8 @@ bool validNotationDescriptor(const NotationDescriptor &n) {
            n.symbol != "∏" && n.symbol != "∈" && n.symbol != "∀" &&
            n.symbol != "∃";
   // ASCII syntax is fixed even when a library binds its callable meaning.
-  static const NotationDescriptor fixed[] = {
-      {P::Infix, A::Left, "||", "", 10, 2},
-      {P::Infix, A::Left, "&&", "", 20, 2},
-      {P::Infix, A::None, "==", "", 50, 2},
-      {P::Infix, A::Left, "+", "", 65, 2},
-      {P::Infix, A::Left, "-", "", 65, 2},
-      {P::Infix, A::Left, "*", "", 70, 2},
-      {P::Prefix, A::None, "!", "", 75, 1}};
-  return std::find(std::begin(fixed), std::end(fixed), n) != std::end(fixed);
+  auto fixed = defaultNotations();
+  return std::find(fixed.begin(), fixed.end(), n) != fixed.end();
 }
 llvm::StringRef spelling(Kind kind) {
   switch (kind) {

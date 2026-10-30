@@ -1,3 +1,4 @@
+#include "zkc/Language/Authoring.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Inspection.h"
@@ -7,6 +8,25 @@
 #include "zkc/Support/Json.h"
 #include "llvm/Support/raw_ostream.h"
 int main() {
+  zkc::language::CaptureOptions layoutOptions;
+  layoutOptions.format = "zkc-layout";
+  auto layoutCapture = zkc::language::capture(
+      {{"layout",
+        "pub protocol Echo roles(P)(x: bool @P) -> bool @P:\n    return x\n",
+        "layout.zkc"}},
+      layoutOptions);
+  if (!layoutCapture) {
+    llvm::errs() << llvm::toString(layoutCapture.takeError());
+    return 24;
+  }
+  auto layoutProject = zkc::language::analyze(*layoutCapture).checkedProject();
+  if (!layoutProject) {
+    llvm::errs() << llvm::toString(layoutProject.takeError());
+    return 25;
+  }
+  zkc::language::Authoring authoring(*layoutProject);
+  if (authoring.symbols({0}).size() != 1 || !authoring.format({0}).complete)
+    return 26;
   auto commitment =
       zkc::language::domainType("Commitment", "multilinear.kzg.bls12-381/0");
   auto field = zkc::language::domainMember(commitment, "ValueField");

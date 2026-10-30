@@ -139,9 +139,18 @@ int main(int argc, char **argv) {
   cases.run("invalid query primitive selections refuse", [&] {
     auto candidate = fresh(context);
     refuses(emitOracleTableRead(*candidate, {}), "oracle-table-read");
-    auto bad = protocol_ir::OracleKindAttr::get(&context, "unsupported",
-                                                ArrayAttr::get(&context, {}));
-    refuses(emitOracleTableRead(*candidate, bad), "oracle-table-read");
+    ScopedDiagnosticHandler silence(&context,
+                                    [](Diagnostic &) { return success(); });
+    auto bad = protocol_ir::OracleKindAttr::getChecked(
+        [&] { return emitError(UnknownLoc::get(&context)); }, &context,
+        StringRef("unsupported"), ArrayAttr::get(&context, {}));
+    require(!bad, "unsupported oracle kind passed checked construction");
+    MLIRContext other(registry);
+    other.loadAllAvailableDialects();
+    auto foreign = protocol_ir::OracleKindAttr::get(
+        &other, "table",
+        ArrayAttr::get(&other, {TypeAttr::get(IntegerType::get(&other, 1))}));
+    refuses(emitOracleTableRead(*candidate, foreign), "oracle-table-read");
   });
   return cases.result();
 }

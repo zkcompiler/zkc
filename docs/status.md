@@ -290,10 +290,30 @@ name/type/role/resource/effect checking, specialization, actual IR comparison an
 the Rust Host. The maintained new-syntax Schnorr fixture executes valid and
 invalid witnesses, extra unused random draws and reached guards. Optional specs
 retain their authored source and resolved protocol attachment, with assurance
-reported as unavailable; native checking does not prove them. The ordinary
+reported as open and unresolved; every declared postcondition and request remains
+in the required obligation inventory. Native checking does not prove them. The ordinary
 project/SDK default remains the existing syntax. Shortened implementation
-signatures, complete mathematical control, schemes, formal projections and
-oracle execution remain outside the development execution profile.
+signatures, complete mathematical control, schemes and typed formal projections
+remain outside the development execution profile. The integrated
+[oracle projection](spec/language/oracles.md) supports custody ports, shape
+attributes, ordered delivery/query, holder/shape views and bounded sequences
+through checked original comparison. Oracle calls and returns also use the
+existing checked component ABI. Virtual definitions and restricted logical
+records still need their typed source integration. The FRI-layer and KZG
+syntax fixtures exercise design coverage and formatting, not execution or
+full FRI/STARK acceptance.
+
+The optional [source LSP](spec/language/authoring.md) provides diagnostics,
+symbols, resolved definitions, native type/role hover, visible-name completion
+and checked-syntax formatting. Its single worker uses immutable whole-project
+generations, bounded queues, explicit cancellation and stale-publication guards.
+Imported notation, private bodies and spec additions invalidate the active
+analysis. Invalid projects retain recovered syntax and independently valid
+semantic facts. Body failures preserve valid neighboring bodies; signature
+failures currently prevent global body checking but preserve valid signatures.
+Only an error-free project yields executable `CheckedProject`. Persistent
+caches, rename, Lean proof actions and production
+language cutover remain open.
 
 `entry fn` exposes typed application control; `proof` configures independent
 proving and verification. Entry functions statically call numerical helpers,
@@ -655,6 +675,10 @@ source interface reader checks logical kind descriptors and actual input pairs;
 source correspondence checks the complete role substitution and result mapping.
 Source send/query/data/rows/refinement actions preserve the explicit holder,
 ordered query events and packed answer layouts through independent comparison.
+Layout role assembly explicitly selects existing components of ordinary shared
+data. It lowers to the IR-owned assembly operation and participates in actual
+source comparison, role substitution and participant projection. Unsupported
+expression role suffixes refuse instead of being ignored.
 Bounded source sequences retain explicit families, persistent loop state and
 dynamic selected anchors. Virtual source spelling remains with the frontend
 redesign. The proposals' semantic interpretation and checked realization remain
@@ -668,7 +692,8 @@ bindings, scopes and occurrences, with private/local data hidden by default and
 installation data opt-in. [Notation limits](spec/language/notation.md#bounds)
 set 4096 descriptor keys per environment including fixed Boolean descriptors,
 64 delimiter holes and 8 MiB output; lowered SDK limits are rechecked on retained
-projects. This does not supply an LSP server or formatter.
+projects. The separate layout authoring service uses retained syntax and typed
+queries; this inspection artifact itself does not authorize source rewriting.
 
 Source Entry originals use checked Func/CF control with explicit Data/Exec
 boundaries. Fallible operations expose return-or-stop outcomes; their independent
@@ -1053,8 +1078,9 @@ Root build profiles, shared CLI/SDK requests, structured diagnostics, optional
 phase/pass/decision reports, LLVM time traces, feature-gated runtime counts,
 manifest consumer tests and bounded captured-input compilation reuse are
 implemented. The optional MLIR LSP uses the upstream server with installed zkc
-dialects. Source editing, persistent query caching and automatic policy search
-remain separate work. See [tooling](compiler/tooling.md) for supported boundaries.
+dialects. The separate source LSP serves the development layout profile.
+Persistent query caching and automatic policy search remain separate work.
+See [tooling](compiler/tooling.md) for supported boundaries.
 
 The native structured exporter retains protocol template origins as bounded,
 kind-preserving static term trees, shared with source-claim subject arguments.

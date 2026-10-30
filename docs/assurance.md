@@ -23,6 +23,25 @@ native-evaluation axioms as well as `sorryAx`. Finite native/Lean execution
 comparisons are separate evidence and do not enter those theorem statements.
 Declaration counts do not measure model adequacy or implementation coverage.
 
+## IR-relative security claims
+
+A security claim may start from the exact original IR, with frontend elaboration
+from authored source named as a trusted translation. Rendering program bytes into
+Lean data is a separate named trust boundary when that representation is used.
+Neither boundary is discharged by matching names, native tests or successful
+export. An independent source-elaboration checker and a proved byte reader
+strengthen these claims, but are not prerequisites for stating the IR-relative
+claim under its explicit assumptions.
+
+Security-changing steps remain checked boundaries. A claim crossing a
+Fiat–Shamir construction or commitment realization requires the applicable Lean
+connection and security obligations; declaring the deterministic translations
+trusted cannot replace those proofs. Unsupported steps and missing required
+links remain open under the existing receipt rules. Each result names its actual
+endpoint: an ideal IR interpretation, a realized compiled verifier or interpreted
+executable bytes. It must not silently extend that endpoint to authored source
+or native execution.
+
 ## Contract boundaries
 
 | Claim | Owning definition | Additional native obligation |

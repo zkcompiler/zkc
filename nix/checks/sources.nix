@@ -56,7 +56,8 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test ! -e ${sources.lean}/lean/integrations
   test -f ${sources.lean}/lean/checks/DeclarationRecords.lean
   test ! -e ${sources.lean}/lean/checks/check_records.py
-  test -f ${sources.lean}/lean/ZkcTools/CommonSource.lean
+  test -f ${sources.lean}/lean/ZkcTools/StructuredSource.lean
+  test ! -e ${sources.lean}/lean/ZkcTools/CommonSource.lean
   test -f ${sources.lean}/lean/ZkcExamples/NativePrograms/CustomProperty.lean
   test -f ${sources.leanChecks}/common/tests/fixtures/clean/air-control.json
   test -f ${sources.security}/lean/security/lake-manifest.json

@@ -357,6 +357,12 @@ struct Restriction {
   ValueId input;
   std::vector<unsigned> roles;
 };
+/// Each operand supplies only its named role's component. This neither sends
+/// data nor asserts equality between components.
+struct RoleAssembly {
+  std::vector<ValueId> operands;
+  std::vector<unsigned> roles;
+};
 struct Body;
 struct ProtocolRepeat {
   std::vector<unsigned> roles;
@@ -465,11 +471,11 @@ struct ScopedBinding {
 };
 struct Operation {
   std::variant<MathValue, HelperCall, BulkApplication, Exchange, Restriction,
-               Construct, Projection, LocalPrimitive, Consume, LocalControl,
-               ProtocolApplication, ServiceQuery, Require, ProtocolRepeat,
-               ProtocolCompletion, ScopedInvoke, FiniteApplication,
-               FiniteComputation, HostInvocation, OracleSend, OracleQuery,
-               OracleContents, OracleRows, OracleForgetRows,
+               RoleAssembly, Construct, Projection, LocalPrimitive, Consume,
+               LocalControl, ProtocolApplication, ServiceQuery, Require,
+               ProtocolRepeat, ProtocolCompletion, ScopedInvoke,
+               FiniteApplication, FiniteComputation, HostInvocation, OracleSend,
+               OracleQuery, OracleContents, OracleRows, OracleForgetRows,
                OracleSequenceEmpty, OracleSequenceAppend, OracleSequenceAt,
                OracleSequenceLength>
       action;
@@ -828,11 +834,19 @@ struct Declaration {
 /// Native resolution of an authored spec's protocol owner. Terms, static
 /// arguments and requests remain unelaborated until formal integration.
 /// Neither owner attachment nor this record establishes any proposition.
+struct PendingObligation {
+  enum class Kind { Postcondition, Request } kind;
+  std::optional<std::string> label;
+  unsigned ordinal;
+  Span span;
+  std::optional<std::string> companion;
+};
 struct PendingSpecification {
   DeclarationId module, protocol;
   std::string name;
   bool owner = false, isPublic = false;
   Span span;
+  std::vector<PendingObligation> obligations;
 };
 
 namespace detail {
@@ -840,6 +854,7 @@ struct CaptureStorage;
 struct CheckedStorage;
 struct ClosedStorage;
 struct AnalysisStorage;
+struct AuthoringStorage;
 } // namespace detail
 class CapturedProject;
 class CheckedProject;
@@ -851,7 +866,8 @@ llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
 llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
                                         std::vector<AssetBuffer>,
                                         const CaptureOptions &);
-Analysis analyze(const CapturedProject &, const Limits & = {});
+Analysis analyze(const CapturedProject &, const Limits & = {},
+                 source::Cancellation = {});
 /// Select from checked declarations: exact qualified name, unique short name,
 /// or the sole eligible Entry when the selector is empty. An explicit name is
 /// resolved before checking its kind, so filtering cannot hide ambiguity.
@@ -925,12 +941,14 @@ public:
   std::vector<DeclarationId> entries() const;
 
 private:
+  friend class Authoring;
   friend class Layouts;
   friend llvm::Error checkScopedElaboration(const CheckedProject &,
                                             const Limits &);
   explicit CheckedProject(std::shared_ptr<const detail::CheckedStorage>);
   std::shared_ptr<const detail::CheckedStorage> storage;
-  friend Analysis analyze(const CapturedProject &, const Limits &);
+  friend Analysis analyze(const CapturedProject &, const Limits &,
+                          source::Cancellation);
   friend llvm::Expected<std::string>
   inspectNotations(const CheckedProject &, const NotationInspectionOptions &,
                    const Limits &);
@@ -958,9 +976,11 @@ public:
   llvm::Expected<CheckedProject> checkedProject() const;
 
 private:
+  friend class Authoring;
   explicit Analysis(std::shared_ptr<const detail::AnalysisStorage>);
   std::shared_ptr<const detail::AnalysisStorage> storage;
-  friend Analysis analyze(const CapturedProject &, const Limits &);
+  friend Analysis analyze(const CapturedProject &, const Limits &,
+                          source::Cancellation);
 };
 struct ClosedInvocation;
 class ClosedEntry {

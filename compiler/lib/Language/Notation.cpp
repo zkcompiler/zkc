@@ -60,24 +60,11 @@ Error insertNotation(NotationEnvironment &environment,
 } // namespace
 NotationEnvironment fixedNotationEnvironment(SourceId sourceId) {
   NotationEnvironment result;
-  auto add = [&](StringRef symbol, Position position, unsigned precedence,
-                 Association association, unsigned arity) {
-    auto descriptor = std::make_shared<NotationDescriptor>();
-    descriptor->symbol = symbol.str();
-    descriptor->position = position;
-    descriptor->precedence = precedence;
-    descriptor->association = association;
-    descriptor->arity = arity;
+  for (const auto &fixed : syntax::defaultNotations()) {
+    auto descriptor = std::make_shared<const NotationDescriptor>(fixed);
     result.emplace(descriptor->key(),
                    NotationSyntax{descriptor, Span{sourceId, 0, 0}});
-  };
-  add("||", Position::Infix, 10, Association::Left, 2);
-  add("&&", Position::Infix, 20, Association::Left, 2);
-  add("==", Position::Infix, 50, Association::None, 2);
-  add("+", Position::Infix, 65, Association::Left, 2);
-  add("-", Position::Infix, 65, Association::Left, 2);
-  add("*", Position::Infix, 70, Association::Left, 2);
-  add("!", Position::Prefix, 75, Association::None, 1);
+  }
   return result;
 }
 Error resolveNotationSyntax(std::vector<SyntaxOperator> &bindings,

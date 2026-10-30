@@ -221,6 +221,7 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
                 static_assert(std::is_same_v<Action, MathValue> ||
                                   std::is_same_v<Action, Exchange> ||
                                   std::is_same_v<Action, Restriction> ||
+                                  std::is_same_v<Action, RoleAssembly> ||
                                   std::is_same_v<Action, Construct> ||
                                   std::is_same_v<Action, Projection> ||
                                   std::is_same_v<Action, Consume> ||
