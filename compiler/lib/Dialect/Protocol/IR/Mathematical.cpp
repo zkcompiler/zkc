@@ -589,7 +589,7 @@ public:
           if (query.getMethod() == "index") {
             auto bound =
                 query.getInputs().front().getDefiningOp<data::IndexOp>();
-            if (!bound || !protocol::parseUniformIndexBound(bound.getValue()))
+            if (!bound || !protocol::uniformIndexBound(bound.getValue()))
               return refuse(op, "index query requires a positive constant "
                                 "unsigned 64-bit bound");
           }

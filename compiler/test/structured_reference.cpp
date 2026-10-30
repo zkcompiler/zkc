@@ -533,10 +533,9 @@ class Admission {
                                                  : ArrayRef<StringRef>{}))
         return failure;
       if (constant) {
-        auto parsed = decimal(cast<data::IndexOp>(op).getValue(), false,
-                              "structured-reference-unsupported");
-        if (!parsed)
-          return parsed.takeError();
+        auto value = op.getAttrOfType<IntegerAttr>("value");
+        if (!value || !value.getType().isUnsignedInteger(64))
+          return error("structured-reference-unsupported");
       }
       break;
     }
@@ -2022,11 +2021,7 @@ class Reference {
     Outcome result;
     switch (code) {
     case Kind::IndexConstant: {
-      auto parsed = decimal(cast<data::IndexOp>(op).getValue(), false,
-                            "structured-reference-unsupported");
-      if (!parsed)
-        return parsed.takeError();
-      result.values.emplace_back(parsed->getZExtValue());
+      result.values.emplace_back(cast<data::IndexOp>(op).getValue());
       break;
     }
     case Kind::IndexLess:

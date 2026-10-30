@@ -53,7 +53,7 @@ for n in (0, 1, 2):
         with case(name):
             text = (FIXTURES / 'iterated-sumcheck.mlir').read_text()
             text = text.replace('   %count = protocol.exchange %n',
-                                f'   %fixed = "data.index"() {{value="{n}"}} : ()->ui64\n   %count = protocol.exchange %fixed')
+                                f'   %fixed = "data.index"() {{value={n} : ui64}} : ()->ui64\n   %count = protocol.exchange %fixed')
             text = text.replace('(%n,%T,%U)', '(%fixed,%T,%U)')
             src, pol = OUT / (name + '.mlir'), OUT / (name + '.policy')
             src.write_text(text); pol.write_text(json.dumps(policy('sumcheck', suite)))

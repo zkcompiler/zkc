@@ -251,7 +251,7 @@ module { "protocol.module"() ({
  }) {sym_name="reader",function_type=(!D,!H)->i1,roles=["A","B"],input_roles=[["A"],["B"]],output_roles=[["B"]],contracts=[["target","valid",[@claimed,[["anchor","input",1:i64]]],unit,["output",0:i64,"B"]]]} : ()->()
  "protocol.func"() ({
  ^entry(%data:!D):
-  %rows = "data.index"() {value="4"} : ()->ui64
+  %rows = "data.index"() {value=4 : ui64} : ()->ui64
   %handle = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="word",shape_names=["rows"],shape_bounds={}} : (!D,ui64)->!H
   %parts:2 = "protocol.oracle_components"(%handle) {holder="P",receivers=["V"]} : (!H)->(!D,!H)
   %accepted = "protocol.apply"(%parts#0,%parts#1) {callee=@reader,roles=["P","V"],site="check"} : (!D,!H)->i1

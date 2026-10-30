@@ -36,7 +36,7 @@ module { "protocol.module"() ({
   ^bb0(%a:!H,%b:!B,%mapped:ui64,%position:ui64):
 )mlir";
   text += noQueries ? R"mlir(
-   %answer = "data.index"() {value="9"} : ()->ui64
+   %answer = "data.index"() {value=9 : ui64} : ()->ui64
 )mlir"
                     : R"mlir(
    %answer = "protocol.oracle_query"(%a,%position) {site="left"} : (!H,ui64)->ui64
@@ -48,12 +48,12 @@ module { "protocol.module"() ({
      shape_arguments={},shape_bounds={},admissibility=@admissible} : ()->()
  "protocol.func"() ({
   ^bb0(%left:!D,%right:!BD,%mapped:ui64,%position:ui64):
-   %rows = "data.index"() {value="4"} : ()->ui64
+   %rows = "data.index"() {value=4 : ui64} : ()->ui64
    %a = "protocol.oracle_send"(%left,%rows) {shape_names=["rows"],shape_bounds={},
      sender="P",receivers=["V"],site="left"} : (!D,ui64)->!H
    %b = "protocol.oracle_send"(%right,%rows) {shape_names=["rows"],shape_bounds={},
      sender="P",receivers=["V"],site="right"} : (!BD,ui64)->!B
-   %three = "data.index"() {value="3"} : ()->ui64
+   %three = "data.index"() {value=3 : ui64} : ()->ui64
    %last = "protocol.repeat"(%three,%a,%b,%mapped) ({
     ^bb0(%iteration:ui64,%previous:!H,%other:!B,%map:ui64):
      %next = "protocol.oracle_virtual"(%previous,%other,%map) {callee=@combine,holder="P",receivers=["V"]} : (!H,!B,ui64)->!H
@@ -93,7 +93,7 @@ module { "protocol.module"() ({
  relation.declare @empty_admissible {kind="external",key="test/zero",revision="0",
   signature=()->i1,purposes=[]}
  "protocol.oracle"() ({ ^bb0(%position:ui64):
-   %answer = "data.index"() {value="9"} : ()->ui64
+   %answer = "data.index"() {value=9 : ui64} : ()->ui64
    "protocol.oracle_yield"(%answer) : (ui64)->()
  }) {sym_name="zero",function_type=(ui64)->ui64,kind=#K,
      shape_arguments={},shape_bounds={},admissibility=@empty_admissible} : ()->()
@@ -241,10 +241,9 @@ std::string client(ModuleOp candidate, const OracleAnchorStorage &plan,
   }
   Value previous = references[0];
   for (unsigned i = 0; i < 3; ++i) {
-    auto iteration =
-        data::IndexOp::create(builder, loc, index, std::to_string(i));
+    auto iteration = data::IndexOp::create(builder, loc, index, i);
     Value rows = prefixCheck
-                     ? Value(data::IndexOp::create(builder, loc, index, "4"))
+                     ? Value(data::IndexOp::create(builder, loc, index, 4))
                      : body->getArgument(2);
     SmallVector<Value> counted{previous, references[1]};
     append_range(counted, stores);
@@ -381,7 +380,7 @@ int main(int argc, char **argv) {
 !H = !protocol.oracle<#K>
 module { "protocol.module"() ({
  "protocol.func"() ({ ^bb0(%data:!D,%position:ui64):
-  %rows = "data.index"() {value="4"} : ()->ui64
+  %rows = "data.index"() {value=4 : ui64} : ()->ui64
   %a = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="clear"} : (!D,ui64)->!H
   %b = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="merkle"} : (!D,ui64)->!H
   %answer = "protocol.oracle_query"(%b,%position) {owner="V",site="query"} : (!H,ui64)->!F
@@ -428,7 +427,7 @@ module { "protocol.module"() ({
 !H = !protocol.oracle<#K>
 module { "protocol.module"() ({
  "protocol.func"() ({ ^bb0(%left:!D,%right:!D,%position:ui64):
-  %rows = "data.index"() {value="4"} : ()->ui64
+  %rows = "data.index"() {value=4 : ui64} : ()->ui64
   %a = "protocol.oracle_send"(%left,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="held"} : (!D,ui64)->!H
   %b = "protocol.oracle_send"(%right,%rows) {shape_names=["rows"],shape_bounds={},sender="Q",receivers=["P"],site="received"} : (!D,ui64)->!H
   %answer = "protocol.oracle_query"(%b,%position) {owner="P",site="query"} : (!H,ui64)->!F

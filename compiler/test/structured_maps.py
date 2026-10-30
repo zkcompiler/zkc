@@ -165,7 +165,7 @@ with case('nested-zero-and-multiple-result-math-calls'):
 
 with case('realization-total-profile-keeps-pure-index-and-group-values'):
     source = realized.replace('   func.return %xs',
-        '   %max = "data.index"() {value="' + maximum + '"} : ()->ui64\n'
+        '   %max = "data.index"() {value=' + maximum + ' : ui64} : ()->ui64\n'
         '   %unused = "data.index_equal"(%max,%dimension) : (ui64,ui64)->i1\n'
         '   func.return %xs')
     export(source)
@@ -245,7 +245,7 @@ for label, (original, before, after) in native_negatives.items():
 # recognizer. All actual operations still belong to admission, even if unused.
 for label, operation in {
     'equality': '%bad = "algebra.field_equal"(%a,%b) : (!F,!F)->i1',
-    'index': '%bad = "data.index"() {value="0"} : ()->ui64',
+    'index': '%bad = "data.index"() {value=0 : ui64} : ()->ui64',
     'other-field': '%bad = "algebra.constant"() {value="1"} : ()->!algebra.field<"bn254.fr">',
     'other-lean-admitted-field': '%bad = "algebra.constant"() {value="1"} : ()->!algebra.field<"koala-bear">',
     'select': '%yes = arith.constant true\n%bad = arith.select %yes,%a,%b : !F',

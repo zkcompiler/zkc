@@ -787,7 +787,7 @@ class Exporter {
         return std::move(e);
       if (constant)
         return json::Array{"index.constant",
-                           cast<data::IndexOp>(op).getValue()};
+                           std::to_string(cast<data::IndexOp>(op).getValue())};
       return json::Array{isa<data::EqualOp>(op)  ? "index.equal"
                          : isa<data::LessOp>(op) ? "index.less"
                                                  : "index.power_of_two"};

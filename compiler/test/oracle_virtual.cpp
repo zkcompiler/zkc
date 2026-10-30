@@ -102,7 +102,7 @@ int main() {
             "{callee=@select,holder=\"P\",receivers=[\"V\"]} : "
             "(!H,!H,ui64)->!H",
             R"mlir(
-    %trips = "data.index"() {value="3"} : ()->ui64
+    %trips = "data.index"() {value=3 : ui64} : ()->ui64
     %virtual = "protocol.repeat"(%trips,%first,%second,%parameter) ({
       ^bb0(%iteration:ui64,%previous:!H,%other:!H,%argument:ui64):
        %next = "protocol.oracle_virtual"(%previous,%other,%argument) {callee=@select,holder="P",receivers=["V"]} : (!H,!H,ui64)->!H

@@ -124,7 +124,8 @@ struct PlanBuilder {
   }
   Expected<unsigned> constant(OracleCommonBlock &block, uint64_t value) {
     auto output = make(block, "data.index", index, {},
-                       attrs({text("value", std::to_string(value))}));
+                       attrs({builder.getNamedAttr(
+                           "value", builder.getIntegerAttr(index, value))}));
     if (!output)
       return output.takeError();
     return output->front();

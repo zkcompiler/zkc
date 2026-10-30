@@ -106,7 +106,7 @@ int main() {
             "func.func private @" + name.str() + "(%s:!S,%flag:i1)->!S {\n";
         for (unsigned i = 0; i < unused; ++i)
           declarations += "%unused" + std::to_string(i) +
-                          " = \"data.index\"() {value=\"0\"} : ()->ui64\n";
+                          " = \"data.index\"() {value=0 : ui64} : ()->ui64\n";
         if (name == "make")
           declarations += "%empty = \"data.sequence_empty\"() : ()->!S\n"
                           "%next = \"data.sequence_append\"(%empty,%flag)"
@@ -147,7 +147,7 @@ int main() {
   cases.run("public queries preserve their caller's consumed depth", [&] {
     auto module = parse(R"mlir(
  func.func private @subject(%xs:!A)->ui64 {
-   %i = "data.index"() {value="0"} : ()->ui64
+   %i = "data.index"() {value=0 : ui64} : ()->ui64
    func.return %i : ui64
  }
 )mlir");
@@ -437,7 +437,7 @@ int main() {
    %empty = "data.sequence_empty"() : ()->!S
    %one = "data.sequence_append"(%empty,%flag) : (!S,i1)->!S
    %two = "data.sequence_append"(%one,%flag) : (!S,i1)->!S
-   %zero = "data.index"() {value="0"} : ()->ui64
+   %zero = "data.index"() {value=0 : ui64} : ()->ui64
    %all = "algebra.finite_collect"(%two) {domain=@items,body=@body} : (!S)->!S
    %some = "algebra.finite_collect"(%two) {domain=@items,body=@body,predicate=@predicate} : (!S)->!S
    %none = "algebra.finite_collect"(%empty) {domain=@items,body=@body,predicate=@predicate} : (!S)->!S

@@ -27,7 +27,7 @@ The admitted operations are:
 ```mlir
 %x = "protocol.query"(%rng) {method="draw", owner="Alice", site="challenge"}
   : (!protocol.service_ref<"random.bls12-381.fr/0">) -> !algebra.field<"bls12-381.fr">
-%n = "data.index"() {value="32"} : () -> ui64
+%n = "data.index"() {value=32 : ui64} : () -> ui64
 %i = "protocol.query"(%octic, %n) {method="index", owner="Alice", site="position"}
   : (!protocol.service_ref<"random.koala-bear.ext8-binomial3/0">, ui64) -> ui64
 ```

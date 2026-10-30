@@ -502,9 +502,9 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
         if (index) {
           auto constant =
               query.getInputs().front().getDefiningOp<data::IndexOp>();
-          if (!constant ||
-              !(bound = protocol::parseUniformIndexBound(constant.getValue())))
+          if (!constant || !protocol::uniformIndexBound(constant.getValue()))
             return error("native-proof-draw-selection");
+          bound = constant.getValue();
         }
         if (auto e = append(query, true, query.getResult(0).getType(), sequence,
                             bound))

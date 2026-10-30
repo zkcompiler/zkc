@@ -183,7 +183,7 @@ int main() {
             func.return %v : !F
           }
           func.func @entry(%xs:!A) -> !F {
-            %i = "data.index"() {value="INDEX"} : ()->ui64
+            %i = "data.index"() {value=INDEX : ui64} : ()->ui64
             %v = func.call @at(%xs,%i) : (!A,ui64)->!F
             func.return %v : !F
           }

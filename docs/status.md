@@ -54,8 +54,10 @@ admission resolves the catalog scope directly, including numerical slots and
 byte-sensitive limits. Default execution calls now carry these attributes;
 producers, independent readers, mathematical signature queries and numerical
 comparison inspect them directly. Program and checked-language boundaries
-explicitly decode or encode their external parameter forms. Pure source scalar
-constants and other inner neutral conversions still await migration. Recursive
+explicitly decode or encode their external parameter forms. Pure source index
+constants use exact `ui64` attributes and standard MLIR constant folding and
+materialization. Pure field constants and other inner neutral conversions still
+await migration. Recursive
 Host layouts use MLIR-generated attribute aliases, preserving maximum supported
 source schema depth without increasing the textual parser's nesting limit. The
 [interface inventory](spec/formats/foundation-interfaces.md) defines the remaining

@@ -74,7 +74,7 @@ module { "protocol.module"() ({
    %complete = arith.xori %iszero,%yes : i1
    %prepared:2 = "protocol.local_call"(%iszero,%sample#0,%sample#1) {callee=@prepare,role="P",site="prepare"} : (i1,!f,!r)->(!f,!r)
    %salt = protocol.exchange %prepared#0 {sender="P",receiver="V",site="salt_message"} : !f
-   %n = "data.index"() {value="2"} : ()->ui64
+   %n = "data.index"() {value=2 : ui64} : ()->ui64
    %fold:2 = "protocol.repeat"(%n,%a,%a,%b,%coins) ({
    ^round(%i:ui64,%left:!f,%right:!f,%step:!f,%random:!s):
      %message = protocol.exchange %left {sender="P",receiver="V",site="coefficient"} : !f

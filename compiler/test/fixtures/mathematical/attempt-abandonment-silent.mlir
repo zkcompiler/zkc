@@ -74,10 +74,10 @@ module { "protocol.module"() ({
    %complete = arith.xori %iszero,%yes : i1
    %prepared:2 = "protocol.local_call"(%iszero,%sample#0,%sample#1) {callee=@prepare,role="P",site="prepare"} : (i1,!f,!r)->(!f,!r)
    %salt = protocol.exchange %prepared#0 {sender="P",receiver="V",site="salt_message"} : !f
-   %bound = "data.index"() {value="2"} : ()->ui64
+   %bound = "data.index"() {value=2 : ui64} : ()->ui64
    %carried = "protocol.repeat"(%bound,%prepared#1,%iszero,%complete) ({
    ^outer(%i:ui64,%outer_rng:!r,%abandon:i1,%done:i1):
-     %one = "data.index"() {value="1"} : ()->ui64
+     %one = "data.index"() {value=1 : ui64} : ()->ui64
      %inside = "protocol.repeat"(%one,%outer_rng,%abandon,%done) ({
      ^inner(%j:ui64,%r:!r,%stop:i1,%result:i1):
        %next = "protocol.finish_if"(%stop,%result,%r) {owner="P",site="abandon"} : (i1,i1,!r)->!r
@@ -85,7 +85,7 @@ module { "protocol.module"() ({
      }) {site="inner",carried=1:i64,maximum=1:i64,roles=["P"],carried_roles=[["P"]]} : (ui64,!r,i1,i1)->!r
      "protocol.yield"(%inside) : (!r)->()
    }) {site="outer",carried=1:i64,maximum=2:i64,roles=["P"],carried_roles=[["P"]]} : (ui64,!r,i1,i1)->!r
-   %n = "data.index"() {value="2"} : ()->ui64
+   %n = "data.index"() {value=2 : ui64} : ()->ui64
    %fold:2 = "protocol.repeat"(%n,%a,%a,%b,%coins) ({
    ^round(%i:ui64,%left:!f,%right:!f,%step:!f,%random:!s):
      %message = protocol.exchange %left {sender="P",receiver="V",site="coefficient"} : !f

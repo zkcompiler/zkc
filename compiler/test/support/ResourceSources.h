@@ -644,7 +644,9 @@ inline void execution(Source &s, StringRef mode) {
   auto *child =
       s.protocol("child", {s.rng, s.transcript, s.boolean, s.index, s.index},
                  {s.rng, s.transcript});
-  auto one = s.operation("data.index", {}, s.index, {s.text("value", "1")})
+  auto one = s.operation("data.index", {}, s.index,
+                         {s.builder.getNamedAttr(
+                             "value", s.builder.getIntegerAttr(s.index, 1))})
                  ->getResult(0);
   auto result = s.repeat(
       one, child->getArguments().take_front(2),

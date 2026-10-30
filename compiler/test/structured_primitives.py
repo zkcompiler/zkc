@@ -249,7 +249,7 @@ with case('scoped-invocations-and-pure-computations-remain-distinct'):
     protocol = base.replace('"protocol.local_call"(%a0,%a1) {callee=@work,role="P",site="call"}',
                             '"exec.apply"(%a0,%a1) {binding=@operation,parameters=[],site="call"}')
     reject_native(protocol, ['1', '2'])
-    pure = base.replace('%value_attempt =', '%unscoped = "data.index"() {value="0"} : ()->ui64\n%value_attempt =')
+    pure = base.replace('%value_attempt =', '%unscoped = "data.index"() {value=0 : ui64} : ()->ui64\n%value_attempt =')
     reject_native(pure, ['1', '2'])
 
 with case('primitive-sites-and-split-full-result-abi'):

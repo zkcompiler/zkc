@@ -281,7 +281,11 @@ int main() {
       auto *position = query.getPosition().getDefiningOp();
       if (!changed && position &&
           position->getName().getStringRef() == "data.index") {
-        position->setAttr("value", mlir::StringAttr::get(&context, "1"));
+        position->setAttr(
+            "value", mlir::IntegerAttr::get(
+                         mlir::IntegerType::get(&context, 64,
+                                                mlir::IntegerType::Unsigned),
+                         1));
         changed = true;
       }
     });

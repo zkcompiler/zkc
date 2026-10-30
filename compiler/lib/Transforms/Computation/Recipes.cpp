@@ -410,13 +410,8 @@ class Recipes {
       if (!declaration)
         return failure();
       SmallVector<Attribute> parameters;
-      if (auto constant = dyn_cast<data::IndexOp>(op)) {
-        uint64_t value;
-        if (constant.getValue().getAsInteger(10, value))
-          return failure();
-        parameters.push_back(
-            rewriter.getIntegerAttr(rewriter.getIntegerType(64, false), value));
-      }
+      if (auto constant = dyn_cast<data::IndexOp>(op))
+        parameters.push_back(constant.getValueAttr());
       OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
       state.addOperands(inputs);
       state.addTypes(op->getResultTypes());

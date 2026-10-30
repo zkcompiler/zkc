@@ -356,7 +356,8 @@ class RecipeReader {
                   inputs);
     }
     if (auto constant = dyn_cast<data::IndexOp>(source))
-      return take("index.constant", {}, {}, {constant.getValue()});
+      return take("index.constant", {}, {},
+                  {std::to_string(constant.getValue())});
     if (isa<data::EqualOp, data::LessOp>(source))
       return take(isa<data::EqualOp>(source) ? "index.equal" : "index.less",
                   inputs);

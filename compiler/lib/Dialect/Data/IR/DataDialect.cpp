@@ -29,6 +29,15 @@ void zkc::data::DataDialect::initialize() {
       >();
   zkc::protocol::type_adapters::attachCatalogTypeModels(*this);
 }
+Operation *zkc::data::DataDialect::materializeConstant(OpBuilder &builder,
+                                                       Attribute value,
+                                                       Type type,
+                                                       Location location) {
+  auto integer = dyn_cast<IntegerAttr>(value);
+  if (!integer || !type.isUnsignedInteger(64) || integer.getType() != type)
+    return nullptr;
+  return IndexOp::create(builder, location, type, integer);
+}
 namespace zkc::data {
 CollectionKind BytesType::getCollectionKind() const {
   return CollectionKind::Bytes;
@@ -67,15 +76,7 @@ LogicalResult SequenceAppendOp::verify() {
     return refuse(*this, "sequence element identity");
   return success();
 }
-LogicalResult IndexOp::verify() {
-  uint64_t value;
-  auto text = getValue();
-  if (text.empty() || (text.size() > 1 && text.front() == '0') ||
-      !llvm::all_of(text, [](char c) { return c >= '0' && c <= '9'; }) ||
-      text.getAsInteger(10, value))
-    return refuse(*this, "expected a canonical unsigned 64-bit natural");
-  return success();
-}
+OpFoldResult IndexOp::fold(FoldAdaptor) { return getValueAttr(); }
 std::optional<MathematicalIdentity> IndexOp::getMathematicalIdentity() {
   return MathematicalIdentity::IndexConstant;
 }

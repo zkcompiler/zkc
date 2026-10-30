@@ -341,12 +341,9 @@ public:
           // combine several sequential samples into one compound event.
           auto constant =
               query.getInputs().front().getDefiningOp<data::IndexOp>();
-          auto domain =
-              constant ? protocol::parseUniformIndexBound(constant.getValue())
-                       : std::nullopt;
-          if (!domain)
+          if (!constant || !protocol::uniformIndexBound(constant.getValue()))
             return error("public-coin-service");
-          arguments.push_back(*domain);
+          arguments.push_back(constant.getValue());
         }
         if (pending || nextDraw >= r.draws.size() ||
             query.getSite() != r.draws[nextDraw].first)

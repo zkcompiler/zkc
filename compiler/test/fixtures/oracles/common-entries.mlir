@@ -12,7 +12,7 @@ module { "protocol.module"() ({
  }) {sym_name="view",function_type=(!H,ui64)->ui64,kind=#K,shape_arguments={},shape_bounds={},admissibility=@admissible} : ()->()
  "protocol.func"() ({
  ^entry(%data:!D,%position:ui64):
-  %rows = "data.index"() {value="4"} : ()->ui64
+  %rows = "data.index"() {value=4 : ui64} : ()->ui64
   %base = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="base"} : (!D,ui64)->!H
   %virtual = "protocol.oracle_virtual"(%base) {callee=@view,holder="P",receivers=["V"]} : (!H)->!H
   %answer = "protocol.oracle_query"(%virtual,%position) {owner="V",site="query"} : (!H,ui64)->ui64
@@ -20,7 +20,7 @@ module { "protocol.module"() ({
  }) {sym_name="main",function_type=(!D,ui64)->ui64,roles=["P","V"],input_roles=[["P"],["V"]],output_roles=[["V"]]} : ()->()
  "protocol.func"() ({
  ^entry(%data:!D,%position:ui64):
-  %rows = "data.index"() {value="4"} : ()->ui64
+  %rows = "data.index"() {value=4 : ui64} : ()->ui64
   %base = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="base"} : (!D,ui64)->!H
   %virtual = "protocol.oracle_virtual"(%base) {callee=@view,holder="P",receivers=["V"]} : (!H)->!H
   %answer = "protocol.oracle_query"(%virtual,%position) {owner="V",site="query"} : (!H,ui64)->ui64

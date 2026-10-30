@@ -41,11 +41,6 @@ struct Analysis {
           continue;
         }
       }
-      if (auto index = value.getDefiningOp<data::IndexOp>()) {
-        uint64_t number;
-        if (!index.getValue().getAsInteger(10, number))
-          return std::optional<uint64_t>(number);
-      }
       Attribute attr;
       if (matchPattern(value, m_Constant(&attr)))
         if (auto integer = dyn_cast<IntegerAttr>(attr))

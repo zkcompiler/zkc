@@ -24,10 +24,10 @@ module { "protocol.module"() ({
          R"mlir(
  "protocol.func"() ({
   ^bb0(%data:!D,%position:ui64,%trips:ui64,%random:!R,%condition:i1):
-   %rows = "data.index"() {value="16"} : ()->ui64
-   %zero = "data.index"() {value="0"} : ()->ui64
-   %one = "data.index"() {value="1"} : ()->ui64
-   %two = "data.index"() {value="2"} : ()->ui64
+   %rows = "data.index"() {value=16 : ui64} : ()->ui64
+   %zero = "data.index"() {value=0 : ui64} : ()->ui64
+   %one = "data.index"() {value=1 : ui64} : ()->ui64
+   %two = "data.index"() {value=2 : ui64} : ()->ui64
    %yes = arith.constant true
    %no = arith.constant false
    %word = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="word"} : (!D,ui64)->!H
@@ -352,9 +352,8 @@ int main() {
                               ": (!R,ui64)->ui64\n %answer =");
         replace("(%word,%position)", "(%word,%sample)");
         if (mode == "sampled-wide") {
-          replace(
-              "%sample =",
-              "%wide = \"data.index\"() {value=\"32\"} : ()->ui64\n %sample =");
+          replace("%sample =", "%wide = \"data.index\"() {value=32 : ui64} : "
+                               "()->ui64\n %sample =");
           replace("(%random,%rows)", "(%random,%wide)");
         }
       } else if (mode == "invariant") {

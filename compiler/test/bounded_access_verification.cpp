@@ -152,8 +152,8 @@ constexpr StringLiteral directFixture = R"mlir(
 module { "protocol.module"() ({
  func.func private @identity(%xs:!A)->!A { func.return %xs : !A }
  func.func private @index()->ui64 {
-   %zero = "data.index"() {value="0"} : ()->ui64
-   %other = "data.index"() {value="4"} : ()->ui64
+   %zero = "data.index"() {value=0 : ui64} : ()->ui64
+   %other = "data.index"() {value=4 : ui64} : ()->ui64
    func.return %zero : ui64
  }
  "protocol.func"() ({ ^entry(%xs:!A):
@@ -244,7 +244,7 @@ int main() {
                 "access is not in a participant body");
         auto index = lookup->getOperand(1).getDefiningOp<data::IndexOp>();
         require(bool(index), "projection did not expand index helper");
-        index.setValue("4");
+        index.setValue(4);
         refusesBound(*module);
       });
   cases.run("execution profile still excludes bounded mathematics", [&] {
@@ -275,14 +275,14 @@ int main() {
 !A = !algebra.field_array<"bls12-381.fr",4>
 module {
  func.func private @read(%xs:!A)->!F {
-   %index = "data.index"() {value="0"} : ()->ui64
+   %index = "data.index"() {value=0 : ui64} : ()->ui64
    %value = "data.bounded_at"(%xs,%index) : (!A,ui64)->!F
    func.return %value : !F
  }
 })mlir");
     require(succeeded(finite::verifyClosure(*module)),
             "positive explicit closure check failed");
-    access(*module)->getOperand(1).getDefiningOp<data::IndexOp>().setValue("4");
+    access(*module)->getOperand(1).getDefiningOp<data::IndexOp>().setValue(4);
     require(succeeded(verify(access(*module))) && succeeded(verify(*module)),
             "generic verification unexpectedly performed closure admission");
     refuses(

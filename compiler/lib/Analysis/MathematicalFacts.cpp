@@ -199,11 +199,8 @@ struct MathematicalFactAnalysis::Impl {
           return missing<uint64_t>(work);
         value = *forwarded.value;
       }
-      if (auto index = value.getDefiningOp<data::IndexOp>()) {
-        uint64_t n;
-        if (!index.getValue().getAsInteger(10, n))
-          return {Status::Proven, n};
-      }
+      if (auto index = value.getDefiningOp<data::IndexOp>())
+        return {Status::Proven, index.getValue()};
       // A returned payload of the exact index.constant invocation retains its
       // value. This observes a successful result, not a reached guard or an
       // assumption about arbitrary CFG block arguments. Multiple predecessors

@@ -192,7 +192,7 @@ int main() {
           text.replace(
               text.find("BODY"), 4,
               operand
-                  ? R"mlir(%x = "data.index"() {value="0"} : ()->ui64
+                  ? R"mlir(%x = "data.index"() {value=0 : ui64} : ()->ui64
                      "protocol.construction_start"(%x) {roles=["P","V"],site="start"} : (ui64)->())mlir"
                   : R"mlir("protocol.construction_start"() {roles=["P","V"],site="start"} : ()->())mlir");
           bool diagnosed = false;

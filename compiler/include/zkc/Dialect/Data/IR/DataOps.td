@@ -74,9 +74,12 @@ def Data_SequenceLengthOp : DataExpression<"sequence_length"> {
   let arguments = (ins Sequence:$input);
   let results = (outs UI64:$output);
 }
-def Data_IndexOp : DataExpression<"index", [DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
-  let arguments = (ins StrAttr:$value);
+def Data_IndexOp : DataExpression<"index", [ConstantLike,
+    DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+  let arguments = (ins UI64Attr:$value);
   let results = (outs UI64:$output);
+  let hasVerifier = 0;
+  let hasFolder = 1;
 }
 def Data_EqualOp : DataExpression<"index_equal", [DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
   let arguments = (ins UI64:$lhs, UI64:$rhs);

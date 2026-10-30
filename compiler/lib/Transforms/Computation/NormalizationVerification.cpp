@@ -774,7 +774,7 @@ struct NormalizationProvenanceChecker::Implementation {
       if (auto found = dimensions.find(&op); found != dimensions.end()) {
         auto index = dyn_cast<data::IndexOp>(actual);
         if (!index || actual.getResultTypes() != op.getResultTypes() ||
-            index.getValue() != std::to_string(found->second))
+            index.getValue() != found->second)
           return refuse(source, "static dimension constant differs");
       } else {
         if (!sameShape(op, actual))

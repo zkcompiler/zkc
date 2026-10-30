@@ -104,6 +104,14 @@ internal schema or compatibility execution route.
 
 ### Field literals and selected Ring parameters
 
+The pure `data.index` operation carries an unsigned 64-bit `IntegerAttr` and
+returns `ui64`. It implements `ConstantLike` and folds to that exact attribute;
+the Data dialect materializes only matching `ui64` attributes. This supports
+standard constant queries without adopting `arith.constant`'s signless integer
+contract. Generic folding does not authorize movement of reached executable
+invocations or alter their charges. External decimal spellings belong to source
+and format adapters, not the native constant's formation rule.
+
 `algebra.literal` retains its nominal `algebra.field` type and an unsigned
 integer attribute. The integer width is the declared binary presentation width,
 or the bit width of the modulus minus one for a natural literal. Naturals are

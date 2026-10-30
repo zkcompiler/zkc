@@ -14,7 +14,7 @@ namespace {
 std::string source(uint64_t maximum, StringRef operands = "%previous,%other",
                    bool empty = false) {
   std::string query = empty ? R"mlir(
-    %answer = "data.index"() {value="0"} : ()->ui64
+    %answer = "data.index"() {value=0 : ui64} : ()->ui64
 )mlir"
                             : R"mlir(
     %answer = "protocol.oracle_query"(%a,%position) {site="first"} : (!H,ui64)->ui64
@@ -36,7 +36,7 @@ module { "protocol.module"() ({
      shape_arguments={},shape_bounds={},admissibility=@admissible} : ()->()
  "protocol.func"() ({
   ^bb0(%data:!D,%count:ui64,%position:ui64):
-   %rows = "data.index"() {value="2"} : ()->ui64
+   %rows = "data.index"() {value=2 : ui64} : ()->ui64
    %first = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},
      sender="P",receivers=["V"],site="data"} : (!D,ui64)->!H
    %last = "protocol.repeat"(%count,%first,%first) ({
@@ -137,7 +137,7 @@ int main() {
     auto text = replace(
         source(3),
         R"mlir(     %next = "protocol.oracle_virtual"(%previous,%other) {callee=@combine,holder="P",receivers=["V"]} : (!H,!H)->!H)mlir",
-        R"mlir(     %two = "data.index"() {value="2"} : ()->ui64
+        R"mlir(     %two = "data.index"() {value=2 : ui64} : ()->ui64
      %next = "protocol.repeat"(%two,%previous,%other) ({
       ^bb0(%j:ui64,%prior:!H,%fixed:!H):
        %created = "protocol.oracle_virtual"(%prior,%fixed) {callee=@combine,holder="P",receivers=["V"]} : (!H,!H)->!H

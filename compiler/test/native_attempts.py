@@ -131,7 +131,7 @@ for i, suite in enumerate(SUITES):
     }
 '''
         source = fold.replace(' "protocol.func"', helper + ' "protocol.func"', 1)
-        source = source.replace('%n = "data.index"() {value="2"} : ()->ui64',
+        source = source.replace('%n = "data.index"() {value=2 : ui64} : ()->ui64',
                                 '%n = "protocol.local_call"(%iszero) {callee=@count,role="P",site="count"} : (i1)->ui64\n'
                                 '   %received_count = protocol.exchange %n {sender="P",receiver="V",site="count_message"} : ui64')
         source = source.replace('"protocol.repeat"(%n,', '"protocol.repeat"(%received_count,')

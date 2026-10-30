@@ -100,7 +100,7 @@ module { "protocol.module"() ({
      shape_arguments={},shape_bounds={},admissibility=@combine_ok} : ()->()
  "protocol.func"() ({
  ^entry(%data:!D,%constant:!F,%mapped:ui64,%position:ui64,%trips:ui64):
-  %rows = "data.index"() {value="8"} : ()->ui64
+  %rows = "data.index"() {value=8 : ui64} : ()->ui64
   %a = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},
     sender="P",receivers=["V"],site="word"} : (!D,ui64)->!H
   %empty = "protocol.oracle_virtual"(%a,%constant) {callee=@empty,holder="P",receivers=["V"]} : (!H,!F)->!H
@@ -662,8 +662,8 @@ int main(int argc, char **argv) {
       }
       auto invalid = parseSourceString<ModuleOp>(print(*prepared), &context);
       invalid->walk([&](data::IndexOp index) {
-        if (index.getValue() == "0")
-          index.setValue("8");
+        if (index.getValue() == 0)
+          index.setValue(8);
       });
       require(succeeded(verify(*invalid)),
               "domain mutation must preserve formation");

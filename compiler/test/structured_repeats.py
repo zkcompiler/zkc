@@ -247,12 +247,12 @@ with case('free-ssa-capture-refused-even-at-zero'):
            'structured-source-original', invariant="'protocol.yield' op using value defined outside the region")
 
 with case('full-dormant-callback-and-stopped-suffix-remain-checked'):
-    bad = repeat('%bad = "data.index"() {value="1",foreign=true} : ()->ui64', maximum=0)
+    bad = repeat('%bad = "data.index"() {value=1 : ui64,foreign=true} : ()->ui64', maximum=0)
     source = module(protocol('main', repeat()), protocol('dormant', bad))
     refuse(source)
     source = module(protocol('main', repeat('''%no = "arith.constant"() {value=false} : ()->i1
       "protocol.guard"(%no) {owner="P",site="stop"} : (i1)->()
-      %bad = "data.index"() {value="1",foreign=true} : ()->ui64''')))
+      %bad = "data.index"() {value=1 : ui64,foreign=true} : ()->ui64''')))
     refuse(source)
 
 with case('native-valid-dormant-zero-callback-has-structured-unsupported-operation'):
@@ -486,7 +486,7 @@ with case('lexical-wire-nesting-is-separate-from-native-repeat-depth'):
 with case('nested-immutable-service-captures-preserve-entry-origin'):
     body = '''%r = "protocol.repeat"(%n,%x,%first,%second) ({
       ^outer(%i:ui64,%state:!F,%a:!S,%b:!S):
-      %one = "data.index"() {value="1"} : ()->ui64
+      %one = "data.index"() {value=1 : ui64} : ()->ui64
       %y = "protocol.repeat"(%one,%state,%b,%a) ({
         ^inner(%j:ui64,%s:!F,%right:!S,%left:!S):
         %q = "protocol.query"(%left) {owner="P",method="draw",site="q"} : (!S)->!F
@@ -569,7 +569,7 @@ with case('yield-cannot-widen-carried-role-scope'):
     refuse(source)
 
 with case('nested-repeat-roster-cannot-widen-even-for-constant-count'):
-    body = '''%n0 = "data.index"() {value="0"} : ()->ui64
+    body = '''%n0 = "data.index"() {value=0 : ui64} : ()->ui64
       "protocol.repeat"(%n0) ({ ^inner(%j:ui64): "protocol.yield"() : ()->() })
       {site="inner",carried=0:i64,maximum=0:i64,roles=["P","Q"],carried_roles=[]} : (ui64)->()'''
     refuse(module(protocol('main', repeat(body, maximum=0))))
@@ -617,7 +617,7 @@ with case('induction-advances-and-original-count-capture-remains-fixed'):
         assert run(source, [str(n)]) == returned([str(max(0,n-1)), str(n)])
 
 with case('dormant-supported-repeat-is-admitted-with-repeat-free-selected-root'):
-    body = '''%n = "data.index"() {value="0"} : ()->ui64
+    body = '''%n = "data.index"() {value=0 : ui64} : ()->ui64
       "protocol.repeat"(%n) ({ ^round(%i:ui64): "protocol.yield"() : ()->()
       }) {site="loop",roles=["P","Q"],carried=0:i64,maximum=3:i64,carried_roles=[]} : (ui64)->()'''
     source = module(protocol('main', inputs=(), outputs=(), returns=()),

@@ -936,13 +936,20 @@ class Emitter {
           SmallVector<mlir::NamedAttribute> attrs;
           if (math->identity == MathematicalIdentity::VectorLength)
             attrs.push_back(attr("axis", builder.getI64IntegerAttr(0)));
-          if (!math->literal.empty())
+          if (math->identity == MathematicalIdentity::IndexConstant) {
+            uint64_t value;
+            if (math->literal.empty())
+              value = math->staticArguments.front().dimension.closedValue();
+            else if (StringRef(math->literal).getAsInteger(10, value)) {
+              failure =
+                  error("source.emission", "invalid checked index literal");
+              return false;
+            }
+            attrs.push_back(
+                attr("value", builder.getIntegerAttr(
+                                  builder.getIntegerType(64, false), value)));
+          } else if (!math->literal.empty())
             attrs.push_back(text("value", math->literal));
-          else if (math->identity == MathematicalIdentity::IndexConstant)
-            attrs.push_back(text(
-                "value",
-                std::to_string(
-                    math->staticArguments.front().dimension.closedValue())));
           if (math->identity == MathematicalIdentity::ArrayAt ||
               math->identity == MathematicalIdentity::PolynomialSum) {
             auto value = math->staticArguments[2].dimension.closedValue();
@@ -1084,7 +1091,9 @@ class Emitter {
           }
           auto *bound = make(
               "data.index", resultTypes, {},
-              {text("value", std::to_string(query->bound->closedValue()))});
+              {attr("value",
+                    builder.getIntegerAttr(builder.getIntegerType(64, false),
+                                           query->bound->closedValue()))});
           if (!bound)
             return false;
           operands.push_back(bound->getResult(0));

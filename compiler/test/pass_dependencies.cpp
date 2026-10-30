@@ -8,6 +8,7 @@
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Operations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeAdapters.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 
@@ -24,6 +25,7 @@ void withSource(StringRef source,
   DialectRegistry registry;
   registry.insert<protocol_ir::ProtocolDialect, InputDialects...>();
   registerMathematicalInterfaces(registry);
+  protocol::type_adapters::registerCatalogTypeInterfaces(registry);
   MLIRContext context(registry);
   auto module = parseSourceString<ModuleOp>(source, &context);
   require(bool(module), "supported dependency fixture did not parse");
@@ -109,8 +111,8 @@ module { "protocol.module"() ({
     return %failed : !exec.outcome<(i1)>
   }
   "protocol.func"() ({ ^entry(%init: i1):
-    %zero = "data.index"() {value="0"} : () -> ui64
-    %two = "data.index"() {value="2"} : () -> ui64
+    %zero = "data.index"() {value=0 : ui64} : () -> ui64
+    %two = "data.index"() {value=2 : ui64} : () -> ui64
     %r = "protocol.local_call"(%zero, %two, %init)
         {callee=@work, role="P", site="work"} : (ui64, ui64, i1) -> i1
     "protocol.return"(%r) : (i1) -> ()
@@ -180,8 +182,8 @@ module { "protocol.module"() ({
     func.return %value : !F
   }
   "protocol.func"() ({ ^entry(%value: !F):
-    %zero = "data.index"() {value="0"} : () -> ui64
-    %two = "data.index"() {value="2"} : () -> ui64
+    %zero = "data.index"() {value=0 : ui64} : () -> ui64
+    %two = "data.index"() {value=2 : ui64} : () -> ui64
     %r = "algebra.finite_collect"(%zero, %two, %value)
         {domain=@items, body=@body} : (ui64, ui64, !F) -> !A
     "protocol.return"(%r) : (!A) -> ()

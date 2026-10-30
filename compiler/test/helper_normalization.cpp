@@ -229,7 +229,7 @@ int main() {
    func.return %n : ui64
  }
  func.func private @constant(%v:!algebra.field_array<"bls12-381.fr", 4>)->ui64 {
-   %n = "data.index"() {value="4"} : ()->ui64
+   %n = "data.index"() {value=4 : ui64} : ()->ui64
    func.return %n : ui64
  }
  )"),
@@ -241,7 +241,9 @@ int main() {
     mathematical::HelperNormalizationChecker checker(unit(*source));
     require(succeeded(checker.check(helper, expanded.front())),
             "correct static dimension refused");
-    expanded.front().front().setAttr("value", StringAttr::get(&context, "3"));
+    expanded.front().front().setAttr(
+        "value", IntegerAttr::get(
+                     IntegerType::get(&context, 64, IntegerType::Unsigned), 3));
     require(succeeded(verify(*source)),
             "dimension mutation is not ordinary math");
     ScopedDiagnosticHandler handler(&context,

@@ -491,7 +491,7 @@ int main(int argc, char **argv) {
   cases.run("descriptor arbitrary expression refused", [&] {
     auto invalid = replace(
         source, "   %d =",
-        "   %bad = \"data.index\"() {value=\"0\"} : () -> ui64\n   %d =");
+        "   %bad = \"data.index\"() {value=0 : ui64} : () -> ui64\n   %d =");
     require(!parseSourceString<ModuleOp>(invalid, &context),
             "descriptor evaluated arbitrary expression");
   });
@@ -824,8 +824,9 @@ int main(int argc, char **argv) {
               context, "finite-bound");
   });
   cases.run("shifted index does not inherit bound", [&] {
-    auto text = replace(fixture("total-state"), "   %v =",
-                        R"mlir(   %one = "data.index"() {value="1"} : ()->ui64
+    auto text =
+        replace(fixture("total-state"), "   %v =",
+                R"mlir(   %one = "data.index"() {value=1 : ui64} : ()->ui64
    %isSmall = "data.index_less"(%i,%one) : (ui64,ui64)->i1
    %shifted = arith.select %isSmall,%one,%i : ui64
    %v =)mlir");
@@ -907,7 +908,7 @@ int main(int argc, char **argv) {
  }
  func.func private @read()->i1 {
    %s = func.call @relay() : ()->!data.sequence<i1>
-   %i = "data.index"() {value="0"} : ()->ui64
+   %i = "data.index"() {value=0 : ui64} : ()->ui64
    %b = "data.bounded_at"(%s,%i) : (!data.sequence<i1>,ui64)->i1
    func.return %b : i1
  }

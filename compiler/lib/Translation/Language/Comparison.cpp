@@ -46,6 +46,11 @@ bool string(mlir::Operation &op, StringRef name, StringRef expected) {
   auto value = op.getAttrOfType<mlir::StringAttr>(name);
   return value && value.getValue() == expected;
 }
+bool natural(mlir::Operation &op, StringRef name, uint64_t expected) {
+  auto value = op.getAttrOfType<mlir::IntegerAttr>(name);
+  return value && value.getType().isUnsignedInteger(64) &&
+         value.getValue().getZExtValue() == expected;
+}
 bool strings(mlir::Attribute attr, ArrayRef<std::string> expected) {
   auto values = mlir::dyn_cast_if_present<mlir::ArrayAttr>(attr);
   if (!values || values.size() != expected.size())
@@ -1093,13 +1098,13 @@ class Comparator {
               !axis.getType().isSignlessInteger(64) || axis.getInt() != 0)
             return fail("vector length axis differs");
         } else if (math->identity == MathematicalIdentity::IndexConstant) {
-          auto literal =
-              math->literal.empty()
-                  ? std::to_string(
-                        math->staticArguments.front().dimension.closedValue())
-                  : math->literal;
+          uint64_t literal;
+          if (math->literal.empty())
+            literal = math->staticArguments.front().dimension.closedValue();
+          else if (StringRef(math->literal).getAsInteger(10, literal))
+            return fail("invalid checked index literal");
           if (!attributes(*actual, {"value"}) ||
-              !string(*actual, "value", literal))
+              !natural(*actual, "value", literal))
             return fail("index literal differs");
         } else if (math->identity == MathematicalIdentity::FieldConstant) {
           if (!attributes(*actual, {"value"}) ||
@@ -1256,8 +1261,7 @@ class Comparator {
           if (!bound)
             return false;
           if (!attributes(*bound, {"value"}) ||
-              !string(*bound, "value",
-                      std::to_string(query->bound->closedValue())) ||
+              !natural(*bound, "value", query->bound->closedValue()) ||
               !types(bound->getResultTypes(), leaves))
             return fail("index query domain differs");
           operands.push_back(bound->getResult(0));

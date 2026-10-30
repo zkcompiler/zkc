@@ -119,7 +119,7 @@ int main() {
     std::string body;
     for (unsigned i = 0; i < 49998; ++i)
       body += "%unused" + std::to_string(i) +
-              " = \"data.index\"() {value=\"0\"} : ()->ui64\n";
+              " = \"data.index\"() {value=0 : ui64} : ()->ui64\n";
     // Independently valid body shapes. Isolate this query from availability and
     // other formation limits; those have their own end-to-end controls.
     query(source(body), 100000, 64, true, false);

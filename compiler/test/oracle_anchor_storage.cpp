@@ -42,9 +42,9 @@ module { "protocol.module"() ({
  "protocol.func"() ({
   ^bb0(%data:!D,%raw:!H,%weight:!F):
    %input = "protocol.oracle_input"(%data,%raw) {holder="P",receivers=["V"],shape_bounds={}} : (!D,!H)->!H
-   %rows = "data.index"() {value="16"} : ()->ui64
+   %rows = "data.index"() {value=16 : ui64} : ()->ui64
    %other = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="word",shape_names=["rows"],shape_bounds={}} : (!D,ui64)->!H
-   %trips = "data.index"() {value="3"} : ()->ui64
+   %trips = "data.index"() {value=3 : ui64} : ()->ui64
    %last = "protocol.repeat"(%trips,%input,%other,%weight) ({
     ^bb0(%i:ui64,%previous:!H,%second:!H,%w:!F):
      %next = "protocol.oracle_virtual"(%previous,%second,%w) {callee=@combine,holder="P",receivers=["V"]} : (!H,!H,!F)->!H
@@ -378,8 +378,8 @@ int main(int argc, char **argv) {
     builder.setInsertionPointToEnd(body);
     auto empty =
         data::SequenceEmptyOp::create(builder, location, storage.sequence);
-    auto rows = data::IndexOp::create(builder, location, index, "16");
-    auto count = data::IndexOp::create(builder, location, index, "1");
+    auto rows = data::IndexOp::create(builder, location, index, 16);
+    auto count = data::IndexOp::create(builder, location, index, 1);
     auto signature = scopedDataSignature(allocator);
     auto call = protocol_ir::LocalCallOp::create(
         builder, location, signature.getResults(),
@@ -536,7 +536,7 @@ module { "protocol.module"() ({
     for (unsigned i = 0; i < 2; ++i) {
       auto rows =
           data::DimOp::create(builder, loc, index, body->getArgument(i), 0);
-      auto count = data::IndexOp::create(builder, loc, index, "1");
+      auto count = data::IndexOp::create(builder, loc, index, 1);
       auto allocated = protocol_ir::LocalCallOp::create(
           builder, loc, scopedDataSignature(allocator).getResults(),
           ValueRange{store, rows, count, body->getArgument(i)},
