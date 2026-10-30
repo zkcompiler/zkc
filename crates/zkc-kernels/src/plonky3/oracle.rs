@@ -5,6 +5,7 @@
 //! receives the expected shape from its caller, never from the opening proof.
 //! Authentication says nothing about degree, relation satisfaction or hiding.
 
+use super::KoalaBearExt4;
 use p3_commit::{BatchOpeningRef, Mmcs};
 use p3_field::{ExtensionField, PrimeField32, extension::BinomialExtensionField};
 use p3_keccak::Keccak256Hash;
@@ -40,6 +41,7 @@ fn leaf_message_bytes<E: Element>(header: usize, width: usize) -> Option<usize> 
 mod sealed {
     pub trait Sealed {}
     impl Sealed for p3_koala_bear::KoalaBear {}
+    impl Sealed for super::KoalaBearExt4 {}
     impl Sealed for super::Octic {}
 }
 /// The leaf codec fixes the field, defining polynomial and ordered basis.
@@ -51,6 +53,9 @@ pub trait Element:
 }
 impl Element for KoalaBear {
     const CODEC: &'static str = "koala-bear.canonical-u32le/0";
+}
+impl Element for KoalaBearExt4 {
+    const CODEC: &'static str = "koala-bear.ext4-binomial3.ascending-u32le/0";
 }
 impl Element for Octic {
     const CODEC: &'static str = "koala-bear.ext8-binomial3.ascending-u32le/0";
@@ -368,6 +373,7 @@ mod tests {
     #[test]
     fn base_and_extension_authentication() {
         exercise::<KoalaBear>();
+        exercise::<KoalaBearExt4>();
         exercise::<Octic>();
     }
     #[test]
@@ -427,6 +433,7 @@ mod tests {
     #[test]
     fn batch_hashes_preserve_canonical_leaf_and_node_bytes() {
         batch_digests::<KoalaBear>();
+        batch_digests::<KoalaBearExt4>();
         batch_digests::<Octic>();
         for count in [0, 1, 2, 3, HASH_LANES + 1, 2 * HASH_LANES + 1] {
             let pairs: Vec<_> = (0..count)
@@ -494,6 +501,7 @@ mod tests {
             .unwrap()
             .execute(|| {
                 scalar_tree_agreement::<KoalaBear>();
+                scalar_tree_agreement::<KoalaBearExt4>();
                 scalar_tree_agreement::<Octic>();
             });
     }
@@ -511,3 +519,6 @@ mod tests {
         NodeHash.compress_many(&[], &mut [[0; 32]; 1]);
     }
 }
+
+#[cfg(test)]
+mod quartic_tests;

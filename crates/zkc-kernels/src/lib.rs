@@ -17,4 +17,5 @@ pub mod matrix;
 pub mod numerical;
 pub mod plonky3;
 pub mod polynomial;
+pub mod transcript;
 pub mod vector;

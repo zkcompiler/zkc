@@ -4,32 +4,17 @@
 #[cfg(test)]
 use crate::{KoalaBear, KoalaBearExt8};
 use crate::{Result, exhausted, refused};
+#[cfg(test)]
 use p3_field::PrimeCharacteristicRing;
 
 pub(crate) fn residue<E: zkc_kernels::plonky3::residue::Residue>(
-    mut block: impl FnMut() -> [u8; 64],
+    block: impl FnMut() -> [u8; 64],
 ) -> Result<E> {
-    use p3_field::PrimeField64;
-    use zkc_kernels::plonky3::residue::PrimeWord;
-    let mut coordinates = [E::Base::ZERO; 8];
-    let mut count = 0;
-    for _ in 0..16 {
-        let bytes = block();
-        for word in bytes.chunks_exact(E::Base::WORD_BYTES) {
-            let mut input = [0; 8];
-            input[..word.len()].copy_from_slice(word);
-            let candidate = u64::from_le_bytes(input) & E::Base::CANDIDATE_MASK;
-            if candidate < E::Base::ORDER_U64 {
-                coordinates[count] = E::Base::from_u64(candidate);
-                count += 1;
-                if count == E::DIMENSION {
-                    return E::from_basis_coefficients_slice(&coordinates[..count])
-                        .ok_or_else(|| refused("challenge-coordinates"));
-                }
-            }
-        }
-    }
-    Err(exhausted("challenge-rejection-limit"))
+    use zkc_kernels::plonky3::sampling::{self, Error};
+    sampling::residue(block).map_err(|error| match error {
+        Error::Coordinates => refused("challenge-coordinates"),
+        Error::Exhausted => exhausted("challenge-rejection-limit"),
+    })
 }
 pub(crate) fn installed(field: zkc_runtime::vm::Identity) -> bool {
     matches!(
