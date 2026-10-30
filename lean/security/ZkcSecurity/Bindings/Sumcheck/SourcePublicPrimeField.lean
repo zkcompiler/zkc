@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurityExamples.Sumcheck.SourcePublicInstallations
+public import ZkcSecurity.Bindings.Source.PublicProperties
 public import ZkcSecurity.Bindings.Sumcheck.Table.TableComponentPrimeField
 
 @[expose] public section

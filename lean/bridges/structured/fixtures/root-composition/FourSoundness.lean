@@ -1,7 +1,7 @@
 module
 
 public import TestsSecurity.RootComposition.FourEndpoints
-public import ZkcSecurityExamples.Sumcheck.SourcePublicPrimeField
+public import ZkcSecurity.Bindings.Sumcheck.SourcePublicPrimeField
 public import ZkcSecurity.Bindings.Source.RootPublic
 public import ZkcSecurity.Claims.Methods.RootConnectionLossless
 public import ZkcSecurity.Claims.CompiledSoundness
@@ -19,6 +19,7 @@ noncomputable section
 namespace TestsSecurity.RootComposition.Four.Endpoints.Soundness
 open Zkc.Source Zkc.Source.Structured Zkc.Construction Zkc.Transcript ZkcExamples.Structured
 open ZkcSecurity.FiatShamir ZkcSecurity.Source ZkcSecurity.Families.Sumcheck
+open ZkcSecurity.Realizations.Sumcheck
 open ZkcSecurity ZkcSecurity.Claims ZkcSecurity.Obligations ZkcSecurity.Domains.PrimeField
 open TestsSecurity.RootComposition.Four.Endpoints
 open ZkcSecurity.Examples.Generated.FourSums

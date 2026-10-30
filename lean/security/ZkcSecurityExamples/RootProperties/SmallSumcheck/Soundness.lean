@@ -1,7 +1,8 @@
 module
 
 public import ZkcSecurityExamples.RootProperties.SmallSumcheck
-public import ZkcSecurityExamples.Sumcheck.SourcePublicPrimeField
+public import ZkcSecurity.Bindings.Sumcheck.SourcePublicPrimeField
+public import ZkcSecurityExamples.Sumcheck.SourcePublicInstallations
 public import ZkcSecurity.Bindings.Source.RootPublic
 public import ZkcSecurity.Claims.Methods.RootConnectionLossless
 public import ZkcSecurity.Claims.CompiledSoundness

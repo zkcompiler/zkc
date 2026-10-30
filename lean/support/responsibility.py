@@ -65,6 +65,13 @@ def classify(value, policy=POLICY):
             "families": ("family-packages", ("M", "S"), "family mathematics; reuse context determines the edit category"),
             "security-families": ("family-packages", ("M", "S"), "security family mathematics; reuse context determines the edit category"),
             "security": ("general-methods", ("S",), "shared security contracts and methods"),
+            "security-mathematics": ("general-methods", ("S",), "shared mathematical infrastructure"),
+            "security-logic": ("general-methods", ("S",), "shared quantitative program logic"),
+            "security-transformations": ("general-methods", ("S",), "shared security transformations"),
+            "security-bindings": (None, ("M", "S"), "reusable representation or installation law; declaration review required"),
+            "security-methods": ("general-methods", ("S",), "proof methods for fixed claim meanings"),
+            "security-claims": ("language-and-compiler", ("X",), "fixed claim interpretation and receipt infrastructure"),
+            "security-tools": ("support-infrastructure", ("X",), "security proof construction and generation infrastructure"),
             "adapters": (None, ("M", "S"), "adapter may supply family mathematics or general transport"),
             "subjects": (None, ("M", "I"), "subject mixes mathematics and instantiation; declaration review required"),
             "security-subjects": (None, ("M", "I"), "subject mixes mathematics and instantiation; declaration review required"),
@@ -75,11 +82,7 @@ def classify(value, policy=POLICY):
             "tools": ("support-infrastructure", ("X",), "generation and audit infrastructure"),
             "proof-tools": ("support-infrastructure", ("X",), "proof elaboration infrastructure; emitted terms are checked against the semantic foundation"),
         }
-        if any(module == prefix or module.startswith(prefix + ".")
-               for prefix in ("ZkcSecurity.Endpoint", "ZkcSecurity.Claims")):
-            result = ("language-and-compiler", ("X",), "fixed claim interpretation and endpoint infrastructure")
-        else:
-            result = rules.get(owner, (None, (), "Lean module has no reviewed responsibility rule"))
+        result = rules.get(owner, (None, (), "Lean module has no reviewed responsibility rule"))
         return Responsibility(*result, module=module, dependency_layer=owner)
     if parts[0] == "compiler":
         return Responsibility("language-and-compiler", ("X",),

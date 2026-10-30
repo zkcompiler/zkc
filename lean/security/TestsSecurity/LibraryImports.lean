@@ -74,6 +74,7 @@ import ZkcSecurity.Bindings.Sumcheck.SourcePairIteration
 import ZkcSecurity.Bindings.Sumcheck.SourcePairReduction
 import ZkcSecurity.Bindings.Sumcheck.SourcePairRound
 import ZkcSecurity.Bindings.Sumcheck.SourceProducerReduction
+import ZkcSecurity.Bindings.Sumcheck.SourcePublicPrimeField
 import ZkcSecurity.Bindings.Sumcheck.SourceReduction
 import ZkcSecurity.Bindings.Sumcheck.SourceRound
 import ZkcSecurity.Bindings.Sumcheck.Table.CompiledRound
@@ -704,7 +705,6 @@ import ZkcSecurityExamples.Sumcheck.SourceLossless
 import ZkcSecurityExamples.Sumcheck.SourcePairInstallations
 import ZkcSecurityExamples.Sumcheck.SourceProducerRoot
 import ZkcSecurityExamples.Sumcheck.SourcePublicInstallations
-import ZkcSecurityExamples.Sumcheck.SourcePublicPrimeField
 import ZkcSecurityExamples.Sumcheck.SourceRootBounds
 import ZkcSecurityExamples.Sumcheck.SourceRootCost
 import ZkcSecurityExamples.Sumcheck.SourceRootProperties

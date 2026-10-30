@@ -75,18 +75,18 @@ def test_hard_guard_applies_through_an_otherwise_allowed_layer():
 
 
 @pytest.mark.parametrize('uniform', ['Zkc.Construction.FiatShamir',
-                                   'ZkcSecurity.FiatShamir.Soundness',
-                                   'ZkcSecurity.FiatShamir.Composition'])
+                                   'ZkcSecurity.Transformations.FiatShamir.Soundness',
+                                   'ZkcSecurity.ProgramLogic.Transcript.Composition'])
 def test_generic_certificates_refuse_transitive_uniform_dependencies(uniform):
-    graph = {'ZkcSecurity.FiatShamir.Reduction': ['ZkcSecurity.FiatShamir.Intermediate'],
-             'ZkcSecurity.FiatShamir.Intermediate': [uniform]}
+    graph = {'ZkcSecurity.ProgramLogic.Transcript.Reduction': ['ZkcSecurity.ProgramLogic.Transcript.Intermediate'],
+             'ZkcSecurity.ProgramLogic.Transcript.Intermediate': [uniform]}
     with pytest.raises(ValueError, match='generic-certificates'):
         policy().audit_graph(graph, ['ZkcSecurity'])
 
 
 def test_uniform_adapter_may_consume_generic_certificates():
-    graph = {'ZkcSecurity.FiatShamir.Composition': [
-        'ZkcSecurity.FiatShamir.Soundness', 'ZkcSecurity.FiatShamir.Reduction']}
+    graph = {'ZkcSecurity.ProgramLogic.Transcript.Composition': [
+        'ZkcSecurity.Transformations.FiatShamir.Soundness', 'ZkcSecurity.ProgramLogic.Transcript.Reduction']}
     policy().audit_graph(graph, ['ZkcSecurity'])
 
 
@@ -111,10 +111,10 @@ def test_policy_refuses_ambiguous_or_unjustified_rows(tmp_path, defect):
 
 
 @pytest.mark.parametrize('owner,dependency', [
-    ('Zkc.Source.Client', 'ZkcSecurity.Endpoint.Knowledge'),
-    ('ZkcSecurity.FiatShamir.Client', 'ArkLib.ProofSystem.Sumcheck.Domain'),
+    ('Zkc.Source.Client', 'ZkcSecurity.Claims.Methods.KnowledgeEndpoint'),
+    ('ZkcSecurity.Transformations.FiatShamir.Client', 'ArkLib.ProofSystem.Sumcheck.Domain'),
     ('ZkcSecurity.Families.Client', 'ZkcArkLib.FiatShamir.Upstream'),
-    ('ZkcSecurity.HashChain.Client', 'ZkcSecurity.Examples.Subjects.Schnorr.Evidence'),
+    ('ZkcSecurity.Transformations.HashChain.Client', 'ZkcSecurityExamples.Subjects.Schnorr.Evidence'),
     ('ZkcArkLib.Sumcheck.Multilinear.Causal.Client', 'Zkc.Source.Structure'),
 ])
 def test_separated_boundaries_are_enforced(owner, dependency):
@@ -125,7 +125,7 @@ def test_separated_boundaries_are_enforced(owner, dependency):
 @pytest.mark.parametrize('dependency', ['VCVio.Schemes.Schnorr.SigmaProtocol', 'VCVio.CryptoFoundations',
                                        'Zkc.Protocols.Sumcheck.Verifier'])
 def test_generic_security_reuses_actual_vcvio_and_core_providers(dependency):
-    assert policy().permitted('ZkcSecurity.Families.Schnorr', dependency)
+    assert policy().permitted('ZkcSecurity.Families.Sigma.Schnorr', dependency)
 
 
 
@@ -146,9 +146,9 @@ def test_generic_elaborators_are_reusable_without_opening_generator_dependencies
 
 
 @pytest.mark.parametrize('owner', [
-    'ZkcSecurity.Source.Client',
+    'ZkcSecurity.Bindings.Source.Client',
     'ZkcSecurity.Families.Sumcheck.Client',
-    'ZkcArkLib.Examples.Subjects.Guess.Client',
+    'ZkcArkLibExamples.Subjects.Guess.Client',
 ])
 @pytest.mark.parametrize('elaborator', [
     'ZkcTools.StructuredSource.InferReferenceInstallation',
@@ -160,7 +160,7 @@ def test_security_clients_share_restricted_checked_elaborators(owner, elaborator
     graph = {owner: [elaborator], elaborator: ['Zkc.Source.Structured.NormalizedRoot']}
     audit.audit_graph(graph, ['ZkcSecurity', 'ZkcArkLib', 'ZkcTools', 'Zkc'])
     for forbidden in ['ZkcTools.StructuredSource.Bindings', 'ZkcExamples.Structured.Sample',
-                      'ZkcSecurity.Examples.Subjects.Sample']:
+                      'ZkcSecurityExamples.Subjects.Sample']:
         with pytest.raises(ValueError, match='forbidden dependency'):
             audit.audit_graph({owner: [elaborator], elaborator: [forbidden]},
                               ['ZkcSecurity', 'ZkcArkLib', 'ZkcTools'])
@@ -169,8 +169,8 @@ def test_security_clients_share_restricted_checked_elaborators(owner, elaborator
 def test_source_realization_owns_concrete_programs_not_family_mathematics():
     audit = policy()
     source = 'ZkcExamples.Structured.SumcheckSourceSelections'
-    realization = 'ZkcSecurity.Realizations.Sumcheck.SourceFamilySelections'
-    family = 'ZkcSecurity.Families.Sumcheck.TableComponent'
+    realization = 'ZkcSecurityExamples.Sumcheck.SourceFamilySelections'
+    family = 'ZkcSecurity.Families.Sumcheck.Contract'
     audit.audit_graph({realization: [source, family]}, ['ZkcSecurity', 'ZkcExamples'])
     for dependency in [source, realization]:
         with pytest.raises(ValueError, match='security-families-to-'):

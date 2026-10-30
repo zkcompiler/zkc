@@ -248,7 +248,8 @@ def test_security_registry_does_not_import_the_optional_integration(driver_modul
     driver.output.mkdir()
     assert set(driver.registry()) == {"generic"}
     source = (driver.output / "Registry-security.lean").read_text()
-    assert "import ZkcSecurity.Registry" in source
+    assert "import ZkcSecurity.Claims.Registry" in source
+    assert "in ZkcSecurity.Registry.table" in source
     assert "ZkcArkLib" not in source
     assert all("arklib" not in cwd for _, cwd in calls)
     assert set(driver.registry("arklib")) == {"optional"}

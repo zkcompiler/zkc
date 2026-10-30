@@ -112,11 +112,11 @@ def test_provider_equality_keeps_binder_annotations(capture):
     emit("VisibilityClient", success=False)
 
 
-@pytest.mark.parametrize("package,module,table,endpoints", [
-    ("security", "ZkcSecurity.Registry", "table", "endpoints"),
-    ("integrations/arklib", "ZkcArkLib.Registry", "reportTable", "reportEndpoints"),
+@pytest.mark.parametrize("package,module,namespace,table,endpoints", [
+    ("security", "ZkcSecurity.Claims.Registry", "ZkcSecurity.Registry", "table", "endpoints"),
+    ("integrations/arklib", "ZkcArkLib.Registry", "ZkcArkLib.Registry", "reportTable", "reportEndpoints"),
 ])
-def test_native_registry_capture_matches_interpreted(package, module, table, endpoints, tmp_path):
+def test_native_registry_capture_matches_interpreted(package, module, namespace, table, endpoints, tmp_path):
     directory = LEAN / package
     if not shutil.which("lake") or not directory.joinpath(
             ".lake/build/lib/lean", *module.split(".")).with_suffix(".olean").is_file():
@@ -124,8 +124,8 @@ def test_native_registry_capture_matches_interpreted(package, module, table, end
     outputs = []
     for mode, command in [("native", [native_tool()]), ("interpreted", ["lean", "--run", str(EMITTER)])]:
         output = tmp_path / f"{mode}.jsonl"
-        subprocess.run(["lake", "env", *command, "--registry", module + "." + table,
-                        "--endpoints", module + "." + endpoints, str(output),
+        subprocess.run(["lake", "env", *command, "--registry", namespace + "." + table,
+                        "--endpoints", namespace + "." + endpoints, str(output),
                         module.replace(".", "/") + ".lean"], cwd=directory,
                        check=True, capture_output=True, text=True)
         outputs.append(output.read_bytes())
