@@ -1,0 +1,611 @@
+[
+  {
+    "edge": 1,
+    "owner": "ZkcSecurity.Realizations.Gkr.Canonical",
+    "dependency": "ZkcExamples.Construction.Generated.GkrPair",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Construction.Generated.GkrPair"
+  },
+  {
+    "edge": 2,
+    "owner": "ZkcSecurity.Realizations.Gkr.Canonical",
+    "dependency": "ZkcExamples.Structured.Generated.Connections.Gkr",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.Generated.Connections.Gkr"
+  },
+  {
+    "edge": 3,
+    "owner": "ZkcSecurity.Realizations.Gkr.Canonical",
+    "dependency": "ZkcExamples.Structured.GkrSourceViews",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.GkrSourceViews"
+  },
+  {
+    "edge": 4,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalConnection",
+    "dependency": "ZkcExamples.Structured.Generated.Connections.Gkr",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.Generated.Connections.Gkr"
+  },
+  {
+    "edge": 5,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalInstallation",
+    "dependency": "ZkcExamples.Structured.Generated.Connections.Gkr",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.Generated.Connections.Gkr"
+  },
+  {
+    "edge": 6,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalReading",
+    "dependency": "ZkcExamples.Structured.Generated.Connections.Gkr",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.Generated.Connections.Gkr"
+  },
+  {
+    "edge": 7,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalVerifier",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 8,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalVerifierCoefficients",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 9,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalVerifierCoefficients",
+    "dependency": "ZkcExamples.Structured.GkrVerifierProcess",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Gkr.Source.VerifierProcess"
+  },
+  {
+    "edge": 10,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalVerifierCoefficients",
+    "dependency": "ZkcExamples.Structured.GkrLayerReading",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.GkrLayerReading"
+  },
+  {
+    "edge": 11,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalVerifierLayer",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 12,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalVerifierLayer",
+    "dependency": "ZkcExamples.Structured.GkrVerifierProcess",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Gkr.Source.VerifierProcess"
+  },
+  {
+    "edge": 13,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalVerifierLayer",
+    "dependency": "ZkcExamples.Structured.GkrLayerReading",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.GkrLayerReading"
+  },
+  {
+    "edge": 14,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalVerifierOutput",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 15,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalVerifierOutput",
+    "dependency": "ZkcExamples.Structured.GkrVerifierProcess",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Gkr.Source.VerifierProcess"
+  },
+  {
+    "edge": 16,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalVerifierOutput",
+    "dependency": "ZkcExamples.Structured.GkrSourceVerifier",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.GkrSourceVerifier"
+  },
+  {
+    "edge": 17,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalVerifierRounds",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 18,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalVerifierRounds",
+    "dependency": "ZkcExamples.Structured.GkrVerifierProcess",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Gkr.Source.VerifierProcess"
+  },
+  {
+    "edge": 19,
+    "owner": "ZkcSecurity.Realizations.Gkr.CanonicalVerifierRounds",
+    "dependency": "ZkcExamples.Structured.GkrRoundsReading",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.GkrRoundsReading"
+  },
+  {
+    "edge": 20,
+    "owner": "ZkcSecurity.Realizations.Gkr.Circuit",
+    "dependency": "ZkcSecurity.Examples.Components.GkrRoundsLayout",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "ZkcSecurity.Bindings.Gkr.RoundsLayout"
+  },
+  {
+    "edge": 21,
+    "owner": "ZkcSecurity.Realizations.Gkr.Combination",
+    "dependency": "ZkcExamples.Structured.GkrVerifierProcess",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Gkr.Source.VerifierProcess"
+  },
+  {
+    "edge": 22,
+    "owner": "ZkcSecurity.Realizations.Gkr.Generated.Subject",
+    "dependency": "ZkcExamples.Construction.Generated.GkrPair",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Construction.Generated.GkrPair"
+  },
+  {
+    "edge": 23,
+    "owner": "ZkcSecurity.Realizations.Gkr.Generated.Subject",
+    "dependency": "ZkcExamples.Structured.Generated.Connections.Gkr",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.Generated.Connections.Gkr"
+  },
+  {
+    "edge": 24,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestCircuit",
+    "dependency": "ZkcSecurity.Examples.Components.GkrRoundsHelpers",
+    "classification": "mixed module split; exact subject edge retained",
+    "dependency_after_extraction": "ZkcSecurity.Examples.Components.GkrRoundsHelpers"
+  },
+  {
+    "edge": 25,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestCircuit",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 26,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestHelpers",
+    "dependency": "ZkcExamples.Structured.GkrSourceLaws",
+    "classification": "mixed module split; exact subject edge retained",
+    "dependency_after_extraction": "ZkcExamples.Structured.GkrSourceLaws"
+  },
+  {
+    "edge": 27,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestHelpers",
+    "dependency": "ZkcSecurity.Examples.Components.GkrRoundsLayout",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "ZkcSecurity.Bindings.Gkr.RoundsLayout"
+  },
+  {
+    "edge": 28,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestHelpersLayout",
+    "dependency": "ZkcSecurity.Examples.Components.GkrRoundsRealization",
+    "classification": "mixed module split; exact subject edge retained",
+    "dependency_after_extraction": "ZkcSecurity.Examples.Components.GkrRoundsRealization"
+  },
+  {
+    "edge": 29,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestHelpersRounds",
+    "dependency": "ZkcSecurity.Examples.Components.GkrRoundsRealization",
+    "classification": "mixed module split; exact subject edge retained",
+    "dependency_after_extraction": "ZkcSecurity.Examples.Components.GkrRoundsRealization"
+  },
+  {
+    "edge": 30,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestHelpersRounds",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 31,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestPackets",
+    "dependency": "ZkcExamples.Structured.GkrVerifierProcess",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Gkr.Source.VerifierProcess"
+  },
+  {
+    "edge": 32,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestPackets",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 33,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestPackets",
+    "dependency": "ZkcExamples.Structured.Generated.Presentations.Gkr",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.Generated.Presentations.Gkr"
+  },
+  {
+    "edge": 34,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerAlgorithm",
+    "dependency": "ZkcExamples.Structured.GkrVerifierProcess",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Gkr.Source.VerifierProcess"
+  },
+  {
+    "edge": 35,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerAlgorithm",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 36,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerCurrent",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 37,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerCurrentLayer",
+    "dependency": "ZkcExamples.Structured.GkrVerifierProcess",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Gkr.Source.VerifierProcess"
+  },
+  {
+    "edge": 38,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerCurrentLayer",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 39,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerPacketAlgorithm",
+    "dependency": "ZkcExamples.Structured.GkrVerifierProcess",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Gkr.Source.VerifierProcess"
+  },
+  {
+    "edge": 40,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerPacketAlgorithm",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 41,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerPacketAlgorithm",
+    "dependency": "ZkcExamples.Structured.Generated.Presentations.Gkr",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.Generated.Presentations.Gkr"
+  },
+  {
+    "edge": 42,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerPackets",
+    "dependency": "ZkcExamples.Structured.GkrVerifierProcess",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Gkr.Source.VerifierProcess"
+  },
+  {
+    "edge": 43,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerPackets",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 44,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerRoundAlgorithm",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 45,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerRoundAlgorithm",
+    "dependency": "ZkcExamples.Structured.GkrVerifierProcess",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Gkr.Source.VerifierProcess"
+  },
+  {
+    "edge": 46,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerRoundAlgorithm",
+    "dependency": "ZkcExamples.Structured.GkrSourceLaws",
+    "classification": "mixed module split; exact subject edge retained",
+    "dependency_after_extraction": "ZkcExamples.Structured.GkrSourceLaws"
+  },
+  {
+    "edge": 47,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerRoundAlgorithm",
+    "dependency": "ZkcExamples.Structured.Generated.Presentations.Gkr",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.Generated.Presentations.Gkr"
+  },
+  {
+    "edge": 48,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerRounds",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 49,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerSource",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 50,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestProducerSource",
+    "dependency": "ZkcExamples.Structured.GkrProverContinuation",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.GkrProverContinuation"
+  },
+  {
+    "edge": 51,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestRound",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 52,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestRound",
+    "dependency": "ZkcExamples.Structured.GkrVerifierProcess",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Gkr.Source.VerifierProcess"
+  },
+  {
+    "edge": 53,
+    "owner": "ZkcSecurity.Realizations.Gkr.HonestRound",
+    "dependency": "ZkcExamples.Structured.Generated.Presentations.Gkr",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.Generated.Presentations.Gkr"
+  },
+  {
+    "edge": 54,
+    "owner": "ZkcSecurity.Realizations.Gkr.LayoutVariant",
+    "dependency": "ZkcExamples.Construction.Generated.GkrPair",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Construction.Generated.GkrPair"
+  },
+  {
+    "edge": 55,
+    "owner": "ZkcSecurity.Realizations.Gkr.LayoutVariant",
+    "dependency": "ZkcExamples.Construction.GkrSourceRouting",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Construction.GkrSourceRouting"
+  },
+  {
+    "edge": 56,
+    "owner": "ZkcSecurity.Realizations.Gkr.OccurrenceVerifier",
+    "dependency": "ZkcExamples.Structured.SumcheckVerifierHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.VerifierHelpers"
+  },
+  {
+    "edge": 57,
+    "owner": "ZkcSecurity.Realizations.Gkr.OccurrenceVerifier",
+    "dependency": "ZkcExamples.Structured.GkrSourceContinuation",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.GkrSourceContinuation"
+  },
+  {
+    "edge": 58,
+    "owner": "ZkcSecurity.Realizations.Gkr.ProducerHelpers",
+    "dependency": "ZkcExamples.Structured.GkrSourceLaws",
+    "classification": "mixed module split; exact subject edge retained",
+    "dependency_after_extraction": "ZkcExamples.Structured.GkrSourceLaws"
+  },
+  {
+    "edge": 59,
+    "owner": "ZkcSecurity.Realizations.Gkr.ProducerHelpers",
+    "dependency": "ZkcExamples.Structured.Generated.Presentations.Gkr",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.Generated.Presentations.Gkr"
+  },
+  {
+    "edge": 60,
+    "owner": "ZkcSecurity.Realizations.Gkr.Rounds",
+    "dependency": "ZkcExamples.Structured.GkrVerifierProcess",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Gkr.Source.VerifierProcess"
+  },
+  {
+    "edge": 61,
+    "owner": "ZkcSecurity.Realizations.Gkr.SourceAdmission",
+    "dependency": "ZkcExamples.Structured.GkrSourceAdmission",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.GkrSourceAdmission"
+  },
+  {
+    "edge": 62,
+    "owner": "ZkcSecurity.Realizations.Sumcheck.DomainHelpers",
+    "dependency": "ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.DomainHelpers"
+  },
+  {
+    "edge": 63,
+    "owner": "ZkcSecurity.Realizations.Sumcheck.OriginalComponent",
+    "dependency": "ZkcExamples.Structured.OriginalSumcheckLibrary",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.Library"
+  },
+  {
+    "edge": 64,
+    "owner": "ZkcSecurity.Realizations.Sumcheck.OriginalRawSource",
+    "dependency": "ZkcExamples.Structured.OriginalSumcheckChecks",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.Checks"
+  },
+  {
+    "edge": 65,
+    "owner": "ZkcSecurity.Realizations.Sumcheck.OriginalRawSource",
+    "dependency": "ZkcExamples.Structured.OriginalSumcheckReduce",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.Reduce"
+  },
+  {
+    "edge": 66,
+    "owner": "ZkcSecurity.Realizations.Sumcheck.OriginalSecurity",
+    "dependency": "ZkcExamples.Structured.OriginalSumcheckReduce",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.Reduce"
+  },
+  {
+    "edge": 67,
+    "owner": "ZkcSecurity.Realizations.Sumcheck.ReadbackHelpers",
+    "dependency": "ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.DomainHelpers"
+  },
+  {
+    "edge": 68,
+    "owner": "ZkcSecurity.Realizations.Sumcheck.SourceFamilySelections",
+    "dependency": "ZkcExamples.Structured.SumcheckSourceSelections",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.SumcheckSourceSelections"
+  },
+  {
+    "edge": 69,
+    "owner": "ZkcSecurity.Realizations.Sumcheck.SourceProducerReduction",
+    "dependency": "ZkcExamples.Structured.SumcheckSourceSelections",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.SumcheckSourceSelections"
+  },
+  {
+    "edge": 70,
+    "owner": "ZkcSecurity.Realizations.Sumcheck.SourceReduction",
+    "dependency": "ZkcExamples.Structured.SumcheckSourceSelections",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.SumcheckSourceSelections"
+  },
+  {
+    "edge": 71,
+    "owner": "ZkcSecurity.Realizations.Sumcheck.SourceRound",
+    "dependency": "ZkcExamples.Structured.SumcheckReferenceInstallation",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.ReferenceInstallation"
+  },
+  {
+    "edge": 72,
+    "owner": "ZkcSecurity.Realizations.Sumcheck.ValidatorHelpers",
+    "dependency": "ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.DomainHelpers"
+  },
+  {
+    "edge": 73,
+    "owner": "ZkcSecurity.Generation.OriginalRootCatalogue",
+    "dependency": "ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs"
+  },
+  {
+    "edge": 74,
+    "owner": "ZkcSecurity.Generation.OriginalRootCatalogue",
+    "dependency": "ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs"
+  },
+  {
+    "edge": 75,
+    "owner": "ZkcSecurity.Generation.Roots.Catalogue",
+    "dependency": "ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs"
+  },
+  {
+    "edge": 76,
+    "owner": "ZkcSecurity.Generation.Roots.Catalogue",
+    "dependency": "ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs"
+  },
+  {
+    "edge": 77,
+    "owner": "ZkcSecurity.Generation.Roots.Catalogue",
+    "dependency": "ZkcExamples.Construction.Generated.SmallSumcheckPair",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Construction.Generated.SmallSumcheckPair"
+  },
+  {
+    "edge": 78,
+    "owner": "ZkcSecurity.Generation.Roots.Catalogue",
+    "dependency": "ZkcExamples.Construction.Generated.TwoSumsPair",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcExamples.Construction.Generated.TwoSumsPair"
+  },
+  {
+    "edge": 79,
+    "owner": "ZkcSecurity.Generation.Roots.SubjectImports",
+    "dependency": "ZkcSecurity.Examples.Generated.SmallSumcheck",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcSecurity.Examples.Generated.SmallSumcheck"
+  },
+  {
+    "edge": 80,
+    "owner": "ZkcSecurity.Generation.Roots.SubjectImports",
+    "dependency": "ZkcSecurity.Examples.Generated.TwoSums",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcSecurity.Examples.Generated.TwoSums"
+  },
+  {
+    "edge": 81,
+    "owner": "ZkcSecurity.Generation.SumcheckAccounts",
+    "dependency": "ZkcSecurity.Examples.RootProperties.SmallSumcheck.Soundness",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcSecurity.Examples.RootProperties.SmallSumcheck.Soundness"
+  },
+  {
+    "edge": 82,
+    "owner": "ZkcSecurity.Generation.SumcheckAccounts",
+    "dependency": "ZkcSecurity.Examples.RootProperties.TwoSums.Soundness",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcSecurity.Examples.RootProperties.TwoSums.Soundness"
+  },
+  {
+    "edge": 83,
+    "owner": "ZkcSecurity.Generation.SumcheckSourceHelpers",
+    "dependency": "ZkcExamples.Structured.OriginalSumcheckChecks",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.Checks"
+  },
+  {
+    "edge": 84,
+    "owner": "ZkcSecurity.Generation.TableMembership",
+    "dependency": "ZkcSecurity.Examples.TableMembership.Subject",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcSecurity.Examples.TableMembership.Subject"
+  },
+  {
+    "edge": 85,
+    "owner": "ZkcSecurity.Generation.TableMembership",
+    "dependency": "ZkcSecurity.Examples.TableMembership.Subject",
+    "classification": "exact subject client",
+    "dependency_after_extraction": "ZkcSecurity.Examples.TableMembership.Subject"
+  },
+  {
+    "edge": 86,
+    "owner": "ZkcTools.StructuredSource.Methods.SumcheckRoot",
+    "dependency": "ZkcExamples.Structured.SumcheckPendingBodies",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.PendingBodies"
+  },
+  {
+    "edge": 87,
+    "owner": "ZkcTools.StructuredSource.Methods.SumcheckRoot",
+    "dependency": "ZkcExamples.Structured.SumcheckHelperBodies",
+    "classification": "reusable interface extracted",
+    "dependency_after_extraction": "Zkc.Protocols.Sumcheck.Source.HelperBodies"
+  }
+]

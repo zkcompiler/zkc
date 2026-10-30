@@ -1,8 +1,8 @@
 module
 
 public import ZkcSecurity.Realizations.Gkr.CanonicalVerifierRounds
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
-public import ZkcExamples.Structured.GkrVerifierProcess
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
+public import Zkc.Protocols.Gkr.Source.VerifierProcess
 public import ZkcSecurity.Realizations.Gkr.CanonicalVerifierCoefficients
 public import ZkcSecurity.Realizations.Gkr.HonestProducerCurrentLayer
 public import ZkcExamples.Structured.GkrLayerReading

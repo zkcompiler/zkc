@@ -1,8 +1,8 @@
 module
 
-public import ZkcSecurity.Realizations.Gkr.Rounds
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
-public import ZkcExamples.Structured.GkrVerifierProcess
+public import ZkcSecurity.Bindings.Gkr.Rounds
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
+public import Zkc.Protocols.Gkr.Source.VerifierProcess
 public import Zkc.Semantics.Yields
 public import ZkcExamples.Structured.GkrSourceLaws
 public import ZkcExamples.Structured.Generated.Presentations.Gkr

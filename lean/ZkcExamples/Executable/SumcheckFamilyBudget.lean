@@ -6,7 +6,7 @@ public import Zkc.Executable.DomainFitsRules
 public import Zkc.Executable.DomainSuccess
 public import ZkcExamples.Executable.SumcheckShape
 public meta import Mathlib.Tactic.Ring
-public meta import Zkc.Construction.ArtifactBindingTactic
+public meta import ZkcTools.ConstructionBindings.ArtifactBindingTactic
 
 @[expose] public section
 

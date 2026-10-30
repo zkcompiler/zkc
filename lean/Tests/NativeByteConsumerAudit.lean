@@ -4,7 +4,7 @@ import all Zkc.Source.Structured.RelationChecking
 import all Tests.NativeByteConsumers
 import all Zkc.Algebra.RingExpression.Basic
 import all Zkc.Construction.ArtifactBinding
-import all Zkc.Construction.ArtifactBindingTactic
+import all ZkcTools.ConstructionBindings.ArtifactBindingTactic
 import all Zkc.Construction.AuthoredPair
 import all Zkc.Construction.AuthoredPairProducer
 import all Zkc.Construction.Binding
@@ -36,7 +36,7 @@ import all Zkc.Construction.ScalarVerifier
 import all Zkc.Construction.SourceDelivery
 import all Zkc.Construction.SourceOccurrences
 import all Zkc.Construction.Structured
-import all Zkc.Construction.TransportReduction
+import all ZkcTools.ConstructionBindings.TransportReduction
 import all Zkc.Construction.Uniform.DomainExecution
 import all Zkc.Construction.Uniform.DomainHandler
 import all Zkc.Construction.Uniform.DomainProperties

@@ -1,8 +1,8 @@
 module
 
 public import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
-public import ZkcExamples.Structured.OriginalSumcheckReduce
-public import ZkcExamples.Structured.OriginalSumcheckCalls
+public import Zkc.Protocols.Sumcheck.Source.Reduce
+public import Zkc.Protocols.Sumcheck.Source.Calls
 
 @[expose] public section
 

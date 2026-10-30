@@ -18,7 +18,7 @@ import Zkc.Specification
 import Zkc.Source.Region
 import Zkc.Protocols.Sumcheck.Multilinear
 import ZkcExamples.Structured.MapContractInstances
-import ZkcExamples.Structured.SumcheckHelperBridge
+import Zkc.Protocols.Sumcheck.Source.HelperBridge
 import ZkcExamples.Structured.SumcheckSourceContracts
 import ZkcExamples.Structured.SumcheckReduceContracts
 

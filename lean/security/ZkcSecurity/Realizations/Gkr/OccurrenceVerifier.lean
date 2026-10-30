@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Realizations.Gkr.HonestProducerSource
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 public import ZkcExamples.Structured.GkrSourceContinuation
 
 public meta import ZkcTools.StructuredSource.Composition

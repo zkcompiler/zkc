@@ -1,5 +1,5 @@
 import ZkcSecurity.Realizations.Gkr.HonestHelpersSource
-import ZkcExamples.Structured.GkrVerifierProcess
+import Zkc.Protocols.Gkr.Source.VerifierProcess
 import ZkcSecurity.Realizations.Gkr.HonestRound
 import ZkcSecurity.Realizations.Gkr.HonestPackets
 import ZkcSecurity.Examples.Components.GkrFiniteCircuit

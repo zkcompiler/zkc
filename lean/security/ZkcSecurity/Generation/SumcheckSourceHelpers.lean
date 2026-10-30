@@ -1,7 +1,7 @@
 module
 
 public import ZkcTools.StructuredSource.Presentation
-public import ZkcExamples.Structured.OriginalSumcheckChecks
+public import Zkc.Protocols.Sumcheck.Source.Checks
 
 @[expose] public section
 

@@ -1,6 +1,7 @@
 module
 
-public import ZkcSecurity.Families.Sumcheck.TableComponentReadbackTactics
+public import ZkcSecurity.FiatShamir.HonestReadbackLoops
+public import ZkcSecurity.Families.Sumcheck.TableComponentReadbackLoop
 
 @[expose] public section
 

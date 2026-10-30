@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
-public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
+public import Zkc.Protocols.Sumcheck.Source.DomainHelpers
 public import Zkc.Source.Structured.BodyBindings
 public import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs
 public import ZkcExamples.Structured.OriginalSumcheckTerminal

@@ -1,13 +1,13 @@
 module
 
 public import ZkcSecurity.Realizations.Gkr.HonestProducerRoundAlgorithm
-public import ZkcExamples.Structured.GkrVerifierProcess
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Protocols.Gkr.Source.VerifierProcess
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 public import ZkcSecurity.Realizations.Gkr.HonestProducerPacketAlgorithm
 public import Zkc.Polynomial.Multilinear.CoefficientRows
 public import Zkc.Polynomial.Multilinear.LineCoefficients
-public import ZkcSecurity.Realizations.Gkr.Circuit
-public import ZkcSecurity.Realizations.Gkr.Encoding
+public import ZkcSecurity.Bindings.Gkr.Circuit
+public import ZkcSecurity.Bindings.Gkr.Encoding
 public import Zkc.Source.TypedABI
 
 @[expose] public section

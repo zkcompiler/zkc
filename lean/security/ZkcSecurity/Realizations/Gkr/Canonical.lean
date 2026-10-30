@@ -2,8 +2,8 @@ module
 
 public import ZkcExamples.Construction.Generated.GkrPair
 public import ZkcExamples.Structured.Generated.Connections.Gkr
-public import ZkcSecurity.Realizations.Gkr.RootEncoding
-public import ZkcSecurity.Realizations.Gkr.Relations
+public import ZkcSecurity.Bindings.Gkr.RootEncoding
+public import ZkcSecurity.Bindings.Gkr.Relations
 public import ZkcExamples.Structured.GkrSourceViews
 public import ZkcSecurity.Tools.PairConstruction
 public import ZkcSecurity.Claims.PairValidator

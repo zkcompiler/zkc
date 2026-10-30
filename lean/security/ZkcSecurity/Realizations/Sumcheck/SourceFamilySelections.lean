@@ -9,6 +9,18 @@ public import ZkcExamples.Structured.SumcheckSourceSelections
 two retained program selections; the family itself has no source enumeration. -/
 set_option autoImplicit false
 noncomputable section
+namespace ZkcSecurity.Realizations.Sumcheck.SourceProducerReduction
+open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
+variable (model : DomainModel)
+theorem actual_bodies (selection : SumcheckSourceSelections.Selection) :
+    Bodies model (SumcheckSourceSelections.source selection).payload.definitions :=
+  ⟨(SumcheckReductionReference.actual_bodies model selection).width,
+    (SumcheckReductionReference.actual_bodies model selection).dimension,
+    (SumcheckSourceSelections.roundBodies selection).less,
+    (SumcheckSourceSelections.wrappers model selection).empty⟩
+
+end ZkcSecurity.Realizations.Sumcheck.SourceProducerReduction
+
 namespace ZkcSecurity.Realizations.Sumcheck.SourceFamilySelections
 open ZkcSecurity.Families.Sumcheck ZkcSecurity.Realizations.Sumcheck
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured SumcheckSourceSelections

@@ -1,4 +1,4 @@
-import Zkc.Construction.ArtifactBindingTactic
+import ZkcTools.ConstructionBindings.ArtifactBindingTactic
 
 /-! Generic proof-search controls: branching, all replies, checkpoints and
 refusal of unequal stops and returns. No protocol-specific rule is used. -/

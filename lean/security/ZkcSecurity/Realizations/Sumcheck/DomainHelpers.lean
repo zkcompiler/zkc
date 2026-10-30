@@ -1,6 +1,6 @@
 module
 
-public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
+public import Zkc.Protocols.Sumcheck.Source.DomainHelpers
 public import ZkcSecurity.Families.Sumcheck.TableComponentReadbackRound
 public import ZkcSecurity.Families.Sumcheck.TableComponentPrefix
 

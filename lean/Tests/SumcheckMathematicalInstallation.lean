@@ -1,5 +1,5 @@
 import Tests.MultilinearReferences
-import ZkcExamples.Structured.SumcheckReferenceInstallation
+import Zkc.Protocols.Sumcheck.Source.ReferenceInstallation
 import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckCallbacks
 import ZkcExamples.Structured.Generated.Bindings.TwoSumsCallbacks
 

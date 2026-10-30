@@ -3,7 +3,7 @@ module
 public import ZkcSecurity.FiatShamir.Composition
 public import ZkcSecurity.FiatShamir.Reduction
 public import ZkcArkLib.Gkr.Layer
-public import ZkcExamples.Structured.GkrVerifierProcess
+public import Zkc.Protocols.Gkr.Source.VerifierProcess
 
 @[expose] public section
 

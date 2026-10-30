@@ -1,8 +1,8 @@
 module
 
 public import ZkcSecurity.Realizations.Gkr.HonestProducerRounds
-public import ZkcExamples.Structured.GkrVerifierProcess
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Protocols.Gkr.Source.VerifierProcess
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 public import ZkcSecurity.Realizations.Gkr.HonestProducerPacketAlgorithm
 public import ZkcSecurity.Realizations.Gkr.HonestHelpersSource
 public import ZkcSecurity.Realizations.Gkr.HonestLineSource

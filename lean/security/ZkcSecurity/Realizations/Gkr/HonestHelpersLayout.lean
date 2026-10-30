@@ -1,5 +1,6 @@
 module
 
+public import ZkcSecurity.Bindings.Gkr.LayoutReadback
 public import ZkcSecurity.Realizations.Gkr.HonestHelpers
 public import ZkcSecurity.Examples.Components.GkrRoundsRealization
 
@@ -17,18 +18,6 @@ open ZkcSecurity.Examples.Components
 
 variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
-
-omit [Field F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-/-- The flat encoding is determined by the decoded mathematical table. -/
-theorem encode_of_decodes {n : Nat} (xs : List F) (table : Table F n)
-    (decoded : ofList? n xs = some table) : GkrRoundsLayout.encode table = xs := by
-  apply List.ext_getElem
-  · simp only [GkrRoundsLayout.encode, List.length_ofFn, ofList?_length xs table decoded]
-  · intro i hi hj
-    have bound : i < 2 ^ n := by simpa [GkrRoundsLayout.encode] using hi
-    have entry := ofList?_entry xs table decoded ⟨i, bound⟩
-    simp only [List.getElem?_eq_getElem hj] at entry
-    simpa only [GkrRoundsLayout.encode, List.getElem_ofFn] using (Option.some.inj entry).symm
 
 /-- Arbitrary raw representations, off-cube points, and every payload field.
 The source's u64 capacity and shape admission remain visible. -/

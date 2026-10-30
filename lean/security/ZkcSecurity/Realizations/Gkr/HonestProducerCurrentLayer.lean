@@ -1,8 +1,8 @@
 module
 
 public import ZkcSecurity.Realizations.Gkr.HonestProducerSource
-public import ZkcExamples.Structured.GkrVerifierProcess
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Protocols.Gkr.Source.VerifierProcess
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 
 @[expose] public section
 set_option autoImplicit false

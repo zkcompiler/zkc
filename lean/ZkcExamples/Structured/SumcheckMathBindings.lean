@@ -1,7 +1,7 @@
 module
 
-public import ZkcExamples.Structured.MultilinearCollectBodies
-public import ZkcExamples.Structured.MultilinearPrefixBodies
+public import Zkc.Protocols.Multilinear.Source.CollectBodies
+public import Zkc.Protocols.Multilinear.Source.PrefixBodies
 
 @[expose] public section
 

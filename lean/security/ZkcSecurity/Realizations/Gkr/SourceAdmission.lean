@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Realizations.Gkr.RootEncoding
+public import ZkcSecurity.Bindings.Gkr.RootEncoding
 public import ZkcExamples.Structured.GkrSourceAdmission
 
 @[expose] public section

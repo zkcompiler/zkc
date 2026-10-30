@@ -2,7 +2,7 @@ module
 
 public import ZkcExamples.Structured.Generated.Bindings.TwoSums
 public import Zkc.Source.Structured.Bindings.Selection
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 
 @[expose] public section
 

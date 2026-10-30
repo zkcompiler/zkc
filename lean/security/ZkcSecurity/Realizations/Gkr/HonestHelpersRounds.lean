@@ -2,7 +2,7 @@ module
 
 public import ZkcSecurity.Realizations.Gkr.HonestHelpersLayout
 public import ZkcSecurity.Examples.Components.GkrRoundsRealization
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 
 @[expose] public section
 

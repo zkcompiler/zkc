@@ -1,7 +1,8 @@
 module
 
+public import Zkc.Protocols.Sumcheck.Source.ReferenceInstallation
+
 public import ZkcSecurity.Realizations.Sumcheck.SourceHonestIteration
-public import ZkcExamples.Structured.SumcheckSourceSelections
 public import Zkc.Obligations.FrameComposition
 
 @[expose] public section

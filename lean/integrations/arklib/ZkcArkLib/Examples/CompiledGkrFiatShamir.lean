@@ -1,7 +1,7 @@
 module
 
 public import ZkcArkLib.Examples.GkrFiatShamir
-public import ZkcExamples.Structured.GkrVerifierProcess
+public import Zkc.Protocols.Gkr.Source.VerifierProcess
 public import ZkcExamples.Construction.GkrProof
 public import ZkcExamples.Structured.GkrSourceVerifier
 

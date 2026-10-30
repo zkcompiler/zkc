@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.GkrSourceLaws
-public import ZkcSecurity.Examples.Components.GkrRoundsLayout
+public import ZkcSecurity.Bindings.Gkr.RoundsLayout
 
 @[expose] public section
 

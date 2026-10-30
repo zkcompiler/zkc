@@ -1,6 +1,7 @@
 module
 
-public import ZkcExamples.Structured.SumcheckSourceSelections
+public import Zkc.Protocols.Sumcheck.Source.PreludeNormalForms
+public import Zkc.Protocols.Sumcheck.Source.ReferenceInstallation
 
 @[expose] public section
 
@@ -42,12 +43,6 @@ structure Bodies (definitions : List CheckedDefinition) : Prop where
     (Multilinear.less model field MultilinearSourceBindings.sumcheck).body
   empty : BodyIn definitions SumcheckHelperBodies.emptyHelper (emptyVector model field "s0").body
 
-theorem actual_bodies (selection : SumcheckSourceSelections.Selection) :
-    Bodies model (SumcheckSourceSelections.source selection).payload.definitions :=
-  ⟨(SumcheckReductionReference.actual_bodies model selection).width,
-    (SumcheckReductionReference.actual_bodies model selection).dimension,
-    (SumcheckSourceSelections.roundBodies selection).less,
-    (SumcheckSourceSelections.wrappers model selection).empty⟩
 
 theorem laws (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
     (bodies : Bodies model definitions) (entries : List (model.Field field)) (count rounds : Nat)

@@ -1,6 +1,6 @@
 module
 public import ZkcSecurity.Realizations.Gkr.HonestProducerCurrentLayer
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 public import Zkc.Source.Structured.OccurrenceYields
 public meta import ZkcTools.StructuredSource.Composition
 

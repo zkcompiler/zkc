@@ -1,5 +1,5 @@
 import Zkc.Source.Structured.OpenMeaning
-import ZkcExamples.Structured.SumcheckVerifierProcess
+import Zkc.Protocols.Sumcheck.Source.VerifierProcess
 import Mathlib.Data.ZMod.Basic
 
 /-! Deterministic typed handlers shared by source controls. Reply scripts are

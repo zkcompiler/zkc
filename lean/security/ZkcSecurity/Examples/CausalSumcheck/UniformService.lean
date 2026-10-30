@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.VCVio.StructuredUniform
-public import ZkcExamples.Structured.SumcheckVerifierProcess
+public import Zkc.Protocols.Sumcheck.Source.VerifierProcess
 
 @[expose] public section
 

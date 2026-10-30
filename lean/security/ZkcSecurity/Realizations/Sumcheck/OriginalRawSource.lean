@@ -1,8 +1,8 @@
 module
 
 public import ZkcSecurity.Realizations.Sumcheck.OriginalComponent
-public import ZkcExamples.Structured.OriginalSumcheckChecks
-public import ZkcExamples.Structured.OriginalSumcheckReduce
+public import Zkc.Protocols.Sumcheck.Source.Checks
+public import Zkc.Protocols.Sumcheck.Source.Reduce
 
 @[expose] public section
 

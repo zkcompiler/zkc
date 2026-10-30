@@ -1,8 +1,8 @@
 module
 
-public import ZkcSecurity.Realizations.Gkr.HonestCircuitMath
+public import ZkcSecurity.Bindings.Gkr.CircuitEncodingLaws
 public import ZkcSecurity.Examples.Components.GkrRoundsHelpers
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 
 @[expose] public section
 

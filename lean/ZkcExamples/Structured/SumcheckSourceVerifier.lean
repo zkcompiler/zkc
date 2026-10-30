@@ -4,10 +4,10 @@ public import ZkcExamples.Structured.Generated.Scalar.SumcheckSourceLibrary
 
 public import ZkcExamples.Structured.SumcheckSourceAssociations
 public import ZkcExamples.Structured.SumcheckSourceNormalForms
-public import ZkcExamples.Structured.SumcheckVerifierBodies
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
-public import ZkcExamples.Structured.SumcheckVerifierPrelude
-public import ZkcExamples.Structured.SumcheckVerifierProcess
+public import Zkc.Protocols.Sumcheck.Source.VerifierBodies
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
+public import Zkc.Protocols.Sumcheck.Source.VerifierPrelude
+public import Zkc.Protocols.Sumcheck.Source.VerifierProcess
 public import ZkcExamples.Structured.SumcheckVerifierTerminal
 public import Zkc.Semantics.Boundary
 public import Zkc.Source.Structured.ContractComposition

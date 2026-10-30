@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Realizations.Gkr.HonestHelpersRounds
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 public import ZkcSecurity.Realizations.Gkr.HonestProducerRoundAlgorithm
 public import Zkc.Source.Structured.Occurrence
 

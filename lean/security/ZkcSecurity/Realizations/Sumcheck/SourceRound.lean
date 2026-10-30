@@ -1,6 +1,6 @@
 module
 
-public import ZkcExamples.Structured.SumcheckReferenceInstallation
+public import Zkc.Protocols.Sumcheck.Source.ReferenceInstallation
 public import ZkcSecurity.Families.Sumcheck.TableComponent
 public import ZkcSecurity.Families.Sumcheck.Round
 public import Zkc.Obligations.NormalizedComponent

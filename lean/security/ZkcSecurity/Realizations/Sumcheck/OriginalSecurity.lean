@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Realizations.Sumcheck.OriginalComponent
-public import ZkcExamples.Structured.OriginalSumcheckReduce
+public import Zkc.Protocols.Sumcheck.Source.Reduce
 public import ZkcSecurity.FiatShamir.OriginalTransport
 public import ZkcSecurity.FiatShamir.DomainViewReading
 public import ZkcSecurity.Families.Sumcheck.TableComponentNominal

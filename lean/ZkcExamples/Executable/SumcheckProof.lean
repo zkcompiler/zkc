@@ -7,7 +7,7 @@ public import Zkc.Executable.DomainNativeByteTransport
 public import Zkc.Executable.DomainNormalizationSoundness
 public import Zkc.Executable.DomainVerifierTransport
 public import ZkcExamples.Construction.SumcheckProof
-public meta import Zkc.Construction.ArtifactBindingTactic
+public meta import ZkcTools.ConstructionBindings.ArtifactBindingTactic
 
 @[expose] public section
 

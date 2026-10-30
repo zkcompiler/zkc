@@ -1,8 +1,8 @@
 module
 
 meta import Lean.Elab.Command
-public import ZkcExamples.Structured.GkrVerifierProcess
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Protocols.Gkr.Source.VerifierProcess
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 meta import Lean.Meta.Eqns
 
 public import ZkcExamples.Structured.Generated.Presentations.Gkr

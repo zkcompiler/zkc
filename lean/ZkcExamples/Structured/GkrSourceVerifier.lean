@@ -1,8 +1,8 @@
 module
 
 public import ZkcExamples.Structured.GkrSourceContinuation
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
-public import ZkcExamples.Structured.GkrVerifierProcess
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
+public import Zkc.Protocols.Gkr.Source.VerifierProcess
 public import ZkcExamples.Structured.GkrLayerReading
 
 @[expose] public section

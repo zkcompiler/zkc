@@ -1,8 +1,8 @@
 module
 
 public import ZkcExamples.Structured.SumcheckSourceAssociations
-public import ZkcExamples.Structured.SumcheckHelperBridge
-public import ZkcExamples.Structured.SumcheckUnitContracts
+public import Zkc.Protocols.Sumcheck.Source.HelperBridge
+public import Zkc.Protocols.Sumcheck.Source.UnitContracts
 
 @[expose] public section
 namespace ZkcExamples.Structured.SumcheckSourceContracts

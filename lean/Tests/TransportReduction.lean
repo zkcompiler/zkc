@@ -1,4 +1,4 @@
-import Zkc.Construction.TransportReduction
+import ZkcTools.ConstructionBindings.TransportReduction
 
 open Zkc.Construction
 

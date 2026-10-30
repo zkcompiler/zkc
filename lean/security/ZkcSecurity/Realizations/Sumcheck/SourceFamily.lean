@@ -1,5 +1,7 @@
 module
 
+public import Zkc.Source.Structured.MultilinearAdmissionInstallation
+
 public import Zkc.Source.Structured.Template
 public import ZkcSecurity.Realizations.Sumcheck.SourcePairReduction
 public meta import ZkcTools.StructuredSource.Association

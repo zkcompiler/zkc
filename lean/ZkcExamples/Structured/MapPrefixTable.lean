@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.MapPrefixAssociations
-public import ZkcExamples.Structured.MapProjectionContracts
+public import Zkc.Protocols.Multilinear.Source.MapProjectionContracts
 
 @[expose] public section
 

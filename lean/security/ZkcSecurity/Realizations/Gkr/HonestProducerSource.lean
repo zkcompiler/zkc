@@ -1,10 +1,10 @@
 module
 
 public import ZkcSecurity.Realizations.Gkr.HonestProducerAlgorithm
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 public import ZkcSecurity.Realizations.Gkr.HonestProducerPackets
 public import ZkcSecurity.Realizations.Gkr.HonestCircuitSource
-public import ZkcSecurity.Realizations.Gkr.Encoding
+public import ZkcSecurity.Bindings.Gkr.Encoding
 public import ZkcExamples.Structured.GkrProverContinuation
 public import Zkc.Source.TypedABI
 public import Zkc.Source.Structured.OccurrencePresentation

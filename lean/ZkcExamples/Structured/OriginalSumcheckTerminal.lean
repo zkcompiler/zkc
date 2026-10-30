@@ -1,6 +1,6 @@
 module
 
-public import ZkcExamples.Structured.OriginalSumcheckChecks
+public import Zkc.Protocols.Sumcheck.Source.Checks
 public import ZkcExamples.Structured.OriginalSumcheckRoots
 
 @[expose] public section

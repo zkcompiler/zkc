@@ -6,9 +6,9 @@ public import ZkcSecurity.FiatShamir.SampledCompiled
 public import ZkcSecurity.Claims.SubjectABI
 public import Zkc.Construction.TargetElaboration
 public meta import ZkcSecurity.Tools.InputLaws
-public meta import Zkc.Construction.ProcessViewTactic
+public meta import ZkcTools.ConstructionBindings.ProcessViewTactic
 public meta import Lean.Elab.Tactic
-public meta import Zkc.Construction.TransportReduction
+public meta import ZkcTools.ConstructionBindings.TransportReduction
 public meta import Mathlib.Tactic.Linter.UnusedTactic
 public meta import Batteries.Linter.UnreachableTactic
 

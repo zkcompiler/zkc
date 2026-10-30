@@ -2,7 +2,7 @@ module
 
 public import Zkc.Source.Structured.UnitViews
 public import ZkcExamples.Structured.MapFirstData
-public import ZkcExamples.Structured.MapFirstBodies
+public import Zkc.Protocols.Multilinear.Source.MapFirstBodies
 public import Zkc.Source.Structured.ClosedProjection
 
 @[expose] public section

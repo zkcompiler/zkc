@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckCallbacks
-public import ZkcExamples.Structured.SumcheckVerifierLaws
+public import Zkc.Protocols.Sumcheck.Source.VerifierLaws
 
 @[expose] public section
 

@@ -1,10 +1,10 @@
 module
 
-public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
+public import Zkc.Protocols.Sumcheck.Source.DomainHelpers
 
 public import ZkcExamples.Structured.Generated.Mathematics.TwoSums
-public import ZkcExamples.Structured.SumcheckUnitContracts
-public import ZkcExamples.Structured.MapPrefixContracts
+public import Zkc.Protocols.Sumcheck.Source.UnitContracts
+public import Zkc.Protocols.Multilinear.Source.MapPrefixContracts
 public import Zkc.Source.Structured.BodyBindings
 public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
 public import ZkcExamples.Structured.OriginalSumcheckTerminal

@@ -1,6 +1,6 @@
 module
 
-public import ZkcExamples.Structured.OriginalSumcheckLibrary
+public import Zkc.Protocols.Sumcheck.Source.Library
 public import ZkcSecurity.Families.Sumcheck.TableComponentPrefix
 
 @[expose] public section

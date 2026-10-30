@@ -2,7 +2,7 @@ module
 
 public import ZkcSecurity.Examples.CausalSumcheck.UniformService
 public import ZkcArkLib.Sumcheck.Multilinear.Causal
-public import ZkcExamples.Structured.SumcheckVerifierProcess
+public import Zkc.Protocols.Sumcheck.Source.VerifierProcess
 
 @[expose] public section
 
