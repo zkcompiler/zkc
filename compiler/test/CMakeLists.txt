@@ -385,6 +385,7 @@ add_test(NAME contract-declarations-generation
   COMMAND ${CMAKE_COMMAND}
     "-DZKC_TABLEGEN=$<TARGET_FILE:zkc-tblgen>"
     "-DZKC_DECLARATION_INCLUDE=${PROJECT_SOURCE_DIR}/include"
+    "-DZKC_DECLARATION_GENERATED_INCLUDE=${PROJECT_BINARY_DIR}/include"
     "-DZKC_DECLARATION_FIXTURES=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/contract_declarations"
     "-DZKC_DECLARATION_TEST_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/contract-declarations-generation"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/contract_declarations_generation.cmake")

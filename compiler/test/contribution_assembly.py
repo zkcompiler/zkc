@@ -393,7 +393,8 @@ def main():
         source = args.work / "input.td"
         source.write_text(text)
         result = subprocess.run(
-            [str(args.tblgen), "-dump-contract-declarations", "-I", str(args.include), str(source)],
+            [str(args.tblgen), "-dump-contract-declarations", "-I", str(args.include),
+             "-I", str(args.tblgen.parent / "include"), str(source)],
             text=True, capture_output=True, check=False,
         )
         if expected:
@@ -460,9 +461,9 @@ def Second : ZKC_Contribution<"second", ["base"], SecondRecords>;
     inventory(prefix.replace(
         '  include "zkc/Contracts/Declarations.td"\n',
         '  include "zkc/Contracts/Declarations.td"\n'
-        '  def Twin : ZKC_Operation<"twin.empty", [], [], []> { int ordinal = 161; }\n'),
-        "duplicate base ZKC_Operation ordinal 161: OpCurveIdentity, Twin")
-    inventory(prefix + first.replace("int ordinal = 900", "int ordinal = 161"))
+        '  def Twin : ZKC_Operation<"twin.empty", [], [], []> { int ordinal = 0; }\n'),
+        "duplicate base ZKC_Operation ordinal 0: CatalogOperation_field_5farray_2eat, Twin")
+    inventory(prefix + first.replace("int ordinal = 900", "int ordinal = 0"))
     cross = '''defset list<ZKC_Declaration> CrossRecords = {
 def CrossOp : ZKC_Operation<"cross.identity", [], [ZKC_Apply<ExtraType>], [ZKC_Apply<ExtraType>]>;
 }

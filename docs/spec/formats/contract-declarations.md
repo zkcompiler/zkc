@@ -14,6 +14,16 @@ same declarations. The neutral serialized inventory is also the data face for
 a later formal consumer; generation creates no files under `lean/` and assigns
 no theorem or semantic function to a catalog row.
 
+The built-in contribution is authored in the [shared source](../../../common/catalog/README.md),
+independent of C++ or Rust syntax. Compiler configuration projects ordinary
+TableGen records; the native generator validates them before producing C++ and
+MLIR inputs. Cargo independently validates the same source and projects static
+typed Rust metadata. Neither build invokes the other language's compiler.
+Generated files stay in build outputs. A projection may select consumer data;
+it must not silently discard a malformed declaration or grant a privilege from
+an authoring-class name. Native contribution assembly remains explicit and
+does not install a runtime implementation by adding a declaration.
+
 ## Inventory
 
 The root has exactly `format`, `sorts`, `types`, `operations`, `members`, `rules`,

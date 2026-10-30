@@ -45,6 +45,7 @@ list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}" "${LLVM_CMAKE_DIR}")
 include(TableGen)
 include(AddLLVM)
 include(AddMLIR)
+include(cmake/Catalog.cmake)
 include(cmake/ZkcContributions.cmake)
 set(ZKC_CONTRIBUTION_FILES "" CACHE STRING
   "Explicit CMake files declaring additional compiler contributions")

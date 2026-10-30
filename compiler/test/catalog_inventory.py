@@ -11,6 +11,7 @@ def main():
     generator = tool("tablegen")
     root = Path(__file__).resolve().parents[1] / "include"
     result = subprocess.run([generator, "--dump-contract-declarations", "-I", root,
+                             "-I", generator.parent / "include",
                              root / "zkc/Contracts/Declarations.td"],
                             text=True, capture_output=True, check=True)
     catalog = json.loads(result.stdout)

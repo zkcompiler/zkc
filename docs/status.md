@@ -26,8 +26,10 @@ operation collection; interpreter-profile membership is no longer a declaration
 flag. Per-contract executable wrapper operations and their mapping generator
 are removed. Executable contract calls use `exec.apply`; its symbol and semantic
 role interfaces inspect the referenced declaration and actual scoped ports.
-Mathematical operations retain their separate meanings. Rust catalog generation
-and fully typed invocation arguments remain pending. The
+Mathematical operations retain their separate meanings. The built-in catalog
+now has one neutral source and generated C++/ODS and static Rust projections.
+Migrating runtime admission to that Rust table and fully typed invocation
+arguments remains in progress. The
 [interface inventory](spec/formats/foundation-interfaces.md) defines the remaining
 source/constructed export, realization-record and application-map
 cutovers. Their replacement emission and complete stage-admission migration

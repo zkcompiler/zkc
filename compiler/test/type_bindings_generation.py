@@ -26,7 +26,7 @@ def main():
     tblgen = tool("tablegen")
     settings = json.loads((tblgen.parent / "generation-settings.json").read_text())
     args = SimpleNamespace(tblgen=str(tblgen), **settings)
-    include = ["-I", args.source_include]
+    include = ["-I", args.source_include, "-I", args.generated_include]
     for path in args.dependency_include:
         include += ["-I", path]
     prelude = '''include "zkc/Dialect/TypeBindings.td"

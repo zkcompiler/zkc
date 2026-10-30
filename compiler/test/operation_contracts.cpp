@@ -240,10 +240,14 @@ int main() {
        {"opening_state", "opening_states", "prover_key", "verifier_key"})
     require(!serializable(kind) && discardable(kind) && duplicable(kind),
             "immutable local custody confused with transport");
-  for (const auto *kind : {"rng", "nonce", "transcript", "capability:custom"})
+  for (const auto *kind : {"rng", "nonce", "transcript"})
     require(affine(kind) && !serializable(kind) && !discardable(kind) &&
                 !duplicable(kind),
             "provider token acquired immutable custody permissions");
+  for (const auto *kind : {"scalar:custom", "capability:custom"})
+    require(!hasTypeProperties(kind) && !serializable(kind) &&
+                !discardable(kind) && !duplicable(kind),
+            "native container spelling acquired logical permissions");
   require(
       samplingContract("random.vector") && !isConstructionDraw("random.vector"),
       "private vector sampling confused with public challenge construction");

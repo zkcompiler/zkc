@@ -13,10 +13,10 @@ def EnvelopeKeep : ZKC_Operation<"envelope.keep", [EnvelopeElement, EnvelopeLeng
 def EnvelopeOther : ZKC_Root<"Other", NatParameter>;
 def EnvelopePair : ZKC_Operation<"envelope.pair",
     [EnvelopeElement, EnvelopeLength, EnvelopeOther],
-    [ZKC_Apply<TypeFixedVector, [EnvelopeElement, EnvelopeLength]>,
-     ZKC_Apply<TypeFixedVector, [EnvelopeElement, EnvelopeOther]>],
-    [ZKC_Apply<TypeFixedVector, [EnvelopeElement, EnvelopeLength]>,
-     ZKC_Apply<TypeFixedVector, [EnvelopeElement, EnvelopeOther]>]>;
+    [ZKC_Apply<CatalogType_fixed_5fvector, [EnvelopeElement, EnvelopeLength]>,
+     ZKC_Apply<CatalogType_fixed_5fvector, [EnvelopeElement, EnvelopeOther]>],
+    [ZKC_Apply<CatalogType_fixed_5fvector, [EnvelopeElement, EnvelopeLength]>,
+     ZKC_Apply<CatalogType_fixed_5fvector, [EnvelopeElement, EnvelopeOther]>]>;
 def EnvelopeSort : ZKC_Sort<"EnvelopeDomain">;
 def EnvelopeDomain : ZKC_Domain<EnvelopeSort>;
 def EnvelopeCapability : ZKC_Capability<"EnvelopeCapability", [EnvelopeDomain]>;

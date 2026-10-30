@@ -5,9 +5,10 @@ invocations and physical implementations. Mathematical meanings belong in the
 [domain specifications](../spec/README.md); selecting an implementation does not
 change the field, operation or resource contract.
 
-[Neutral declarations](../../compiler/include/zkc/Contracts/Declarations) own
+[Neutral declarations](../../common/catalog/README.md) own
 logical signatures, requirements, static parameter schemas, type permissions and
-installed facets. Language and IR adapters consume those records. Semantic
+installed facets. C++ and Rust data are generated from the authored neutral
+source. Language and IR adapters consume the native projection. Semantic
 validators and backend implementations retain their separate obligations.
 Ordinary library declarations own public function names and argument names.
 The generated inventory exports types and capabilities; it does not duplicate
