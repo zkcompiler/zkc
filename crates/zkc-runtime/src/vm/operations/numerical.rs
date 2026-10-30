@@ -5,27 +5,27 @@ use crate::ring::{Expression, Node};
 
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     contracts: &[
-        Contract::custom("numerical.map").implemented_by(&[
+        Installation::new("numerical.map").implemented_by(&[
             "arkworks/numerical.map",
             "dalek/numerical.map",
             "plonky3/numerical.map",
         ]),
-        Contract::custom("numerical.sum").implemented_by(&[
+        Installation::new("numerical.sum").implemented_by(&[
             "arkworks/numerical.sum",
             "dalek/numerical.sum",
             "plonky3/numerical.sum",
         ]),
-        Contract::custom("numerical.product").implemented_by(&[
+        Installation::new("numerical.product").implemented_by(&[
             "arkworks/numerical.product",
             "dalek/numerical.product",
             "plonky3/numerical.product",
         ]),
     ],
-    resolve,
+
     select: support::select_nominal,
     alternatives: &[],
     physical_error: "uninstalled numerical expression binding",
-    physical_only: false,
+    adapter: None,
 };
 
 fn arguments(binding: &OperationBinding) -> Result<(Identity, &str)> {
@@ -42,7 +42,10 @@ fn arguments(binding: &OperationBinding) -> Result<(Identity, &str)> {
     Ok((field, mask))
 }
 
-fn resolve(binding: &OperationBinding, _: &Contract) -> Result<OperationSignature<LogicalType>> {
+pub(super) fn signature(
+    binding: &OperationBinding,
+    result: zkc_catalog::NumericalResult,
+) -> Result<OperationSignature<LogicalType>> {
     let (field, mask) = arguments(binding)?;
     let mut inputs = Vec::with_capacity(mask.len() + 1);
     inputs.push(LogicalType::new(Type::Index, Identity::None)?);
@@ -56,10 +59,9 @@ fn resolve(binding: &OperationBinding, _: &Contract) -> Result<OperationSignatur
             field,
         )?);
     }
-    let output = match binding.contract.as_str() {
-        "numerical.map" => Type::Vector,
-        "numerical.sum" | "numerical.product" => Type::Field,
-        _ => return Err(support::failure()),
+    let output = match result {
+        zkc_catalog::NumericalResult::Map => Type::Vector,
+        zkc_catalog::NumericalResult::Sum | zkc_catalog::NumericalResult::Product => Type::Field,
     };
     Ok(OperationSignature {
         inputs,

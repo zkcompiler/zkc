@@ -30,6 +30,7 @@ def run(command, data=None):
 def inventory(toolchain):
     declarations = json.loads(run([
         toolchain.tool("compiler", "zkc-tblgen"), "--dump-contract-declarations",
+        "-I", toolchain.directories["compiler"] / "include",
         "-I", ROOT / "compiler/include", ROOT / "compiler/include/zkc/Contracts/Declarations.td"]))
     assert declarations["format"] == "zkc.contract-declarations/0"
     operation_fields = {"name", "scope", "stage", "parameters",
@@ -692,7 +693,7 @@ def test_unknowns_and_malformed_arguments(drivers, directory):
 @pytest.mark.parametrize("unchanged,divergent", [
     ("cpp", "rust"), ("rust", "cpp"),
 ])
-def test_independently_authored_signature_drift(inventory, drivers, directory, unchanged, divergent):
+def test_independent_consumer_signature_drift(inventory, drivers, directory, unchanged, divergent):
     # The same installed declaration inventory supplies identical requests to
     # both processes. The flag selects a typed resolver in a conformance tool;
     # no signatures, registrations or expected results are sent on the wire.

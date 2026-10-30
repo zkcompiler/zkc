@@ -32,10 +32,11 @@ pub use services::{ServiceContract, ServicePort, ServiceSignature, ServiceSuppor
 mod variant;
 pub use resource_unit::ResourceDomain;
 pub use structural::{
-    ArgumentKind, NATURAL_ARGUMENT_LIMIT, STRUCTURAL_SPELLING_LIMIT, StructuralType,
-    TYPE_DEPTH_LIMIT, TYPE_NODE_LIMIT, TypeArgument,
+    NATURAL_ARGUMENT_LIMIT, STRUCTURAL_SPELLING_LIMIT, StructuralType, TYPE_DEPTH_LIMIT,
+    TYPE_NODE_LIMIT, TypeArgument,
 };
 pub use variant::{VariantAlternative, VariantDescriptor};
+pub use zkc_catalog::Kind;
 pub(crate) mod code;
 mod decode;
 mod model;

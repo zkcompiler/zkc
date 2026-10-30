@@ -5,7 +5,8 @@ The crate has no runtime dependencies and does not depend on MLIR or an executio
 backend. Its build script independently validates and projects the source using
 Rust build dependencies only. Generated files stay in Cargo's output directory.
 
-The table is declaration data. Consumers still check actual arguments, profile
+Runtime admission interprets the table's kinded scopes, signatures, requirements,
+parameter rules, history facets and type permissions. Consumers still check actual arguments, profile
 admission, domain capabilities, installation and effects. Mathematical facets
 state obligations; they are neither implementation evidence nor generated proofs.
 

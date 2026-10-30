@@ -1,66 +1,17 @@
 //! Logical fixed-length public field-array contracts. This layer selects no cryptographic code.
-use super::{
-    AdmissionError, ArgumentKind, AttributeRule, ErrorCode, Identity, LogicalType,
-    OperationBinding, OperationSignature, Type, TypeArgument,
-};
 
-const PARAMETERS: &[ArgumentKind] = &[ArgumentKind::FieldDomain, ArgumentKind::Nat];
-pub(super) fn signature(
-    binding: &OperationBinding,
-) -> Result<OperationSignature<LogicalType>, AdmissionError> {
-    let values: Vec<_> = binding.arguments.iter().map(String::as_str).collect();
-    let args = super::structural::arguments(
-        &values,
-        PARAMETERS,
-        0,
-        &mut super::structural::ParseBudget::new(),
-    )?;
-    let [TypeArgument::Domain(field), TypeArgument::Nat(length)] = args.as_slice() else {
-        return Err(AdmissionError::new(
-            ErrorCode::Signature,
-            "field-array-arguments",
-        ));
-    };
-    let scalar = LogicalType::new(Type::Field, *field)?;
-    let vector = LogicalType::new(Type::Vector, *field)?;
-    let fixed = LogicalType::field_array(*field, *length)?;
-    let (inputs, outputs) = match binding.contract.as_str() {
-        "field_array.from_vector" => (vec![vector], vec![fixed]),
-        "field_array.at" => (vec![fixed], vec![scalar]),
-        "field_array.get" => (
-            vec![fixed, LogicalType::new(Type::Index, Identity::None)?],
-            vec![scalar],
-        ),
-        _ => {
-            return Err(AdmissionError::new(
-                ErrorCode::Signature,
-                "uninstalled operation binding",
-            ));
-        }
-    };
-    Ok(OperationSignature {
-        inputs,
-        outputs,
-        attributes: if binding.contract == "field_array.at" {
-            AttributeRule::Unsigned64
-        } else {
-            AttributeRule::None
-        },
-    })
-}
-
-use super::operations::{Contract, Contribution};
+use super::operations::{Contribution, Installation};
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
     physical_error: "binding-implementation",
-    physical_only: false,
+    adapter: None,
 
     contracts: &[
-        Contract::custom("field_array.from_vector")
+        Installation::new("field_array.from_vector")
             .implemented_by(&["arkworks/field_array.from_vector"]),
-        Contract::custom("field_array.at").implemented_by(&["arkworks/field_array.at"]),
-        Contract::custom("field_array.get").implemented_by(&["arkworks/field_array.get"]),
+        Installation::new("field_array.at").implemented_by(&["arkworks/field_array.at"]),
+        Installation::new("field_array.get").implemented_by(&["arkworks/field_array.get"]),
     ],
-    resolve: |binding, _| signature(binding),
+
     select: super::operations::default_ports,
 };

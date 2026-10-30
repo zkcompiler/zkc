@@ -331,9 +331,9 @@ fn duplicate_owners_refuse_assembly() {
 fn alternatives_require_a_logical_owner_after_complete_assembly() {
     static ALTERNATIVE: Contribution = Contribution {
         contracts: &[],
-        resolve: support::field_signature,
+
         select: default_ports,
-        physical_only: false,
+        adapter: None,
         physical_error: "binding-implementation",
         alternatives: &[Alternative {
             timing: TimingRequirement::Unspecified,
@@ -439,10 +439,6 @@ fn contribution_refusals_and_custom_shapes_keep_their_own_errors() {
         };
         assert_eq!(binding.logical_signature().unwrap_err().detail, detail);
     }
-    assert_eq!(
-        Contract::custom("custom").shape().unwrap_err().detail,
-        "contract-shape-missing"
-    );
 }
 
 #[test]
@@ -547,19 +543,19 @@ hash.poseidon2_16 0";
 }
 
 #[test]
-fn history_follows_the_installed_owner_not_the_contract_spelling() {
+fn installation_cannot_invent_a_logical_contract_or_history_facet() {
     static OWNER: Contribution = Contribution {
-        contracts: &[
-            Contract::new("independent.absorb", (&[], &[], AttributeRule::None)).history(),
-            Contract::new("transcript.stateless", (&[], &[], AttributeRule::None)),
-        ],
+        contracts: &[Installation::new("independent.absorb")],
         ..control::CONTRIBUTION
     };
-    let registry = Registry::assemble(&[&OWNER]).unwrap();
-    assert!(registry.observes_history("independent.absorb").unwrap());
-    assert!(!registry.observes_history("transcript.stateless").unwrap());
+    assert_eq!(
+        Registry::assemble(&[&OWNER]).err().unwrap().detail,
+        "undeclared-logical-contract"
+    );
+    let registry = Registry::assemble(&[&hash::CONTRIBUTION, &transcript::CONTRIBUTION]).unwrap();
+    assert!(registry.observes_history("shake128.absorb").unwrap());
+    assert!(!registry.observes_history("hash.keccak256").unwrap());
     assert!(registry.observes_history("transcript.unknown").is_err());
-    assert!(observes_history("transcript.unknown").is_err());
 }
 
 #[test]

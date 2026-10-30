@@ -28,8 +28,9 @@ are removed. Executable contract calls use `exec.apply`; its symbol and semantic
 role interfaces inspect the referenced declaration and actual scoped ports.
 Mathematical operations retain their separate meanings. The built-in catalog
 now has one neutral source and generated C++/ODS and static Rust projections.
-Migrating runtime admission to that Rust table and fully typed invocation
-arguments remains in progress. The
+Runtime admission now interprets that table instead of hand-maintained signature,
+history and permission copies; native domain support and physical installation
+remain explicit. Fully typed MLIR invocation arguments remain in progress. The
 [interface inventory](spec/formats/foundation-interfaces.md) defines the remaining
 source/constructed export, realization-record and application-map
 cutovers. Their replacement emission and complete stage-admission migration
@@ -354,7 +355,7 @@ dependencies, preserve capture identity, and report selected-edge provenance in
 Batch coset extension is installed on BN254 Fr and the registered residue
 fields. It constructs one private column-major output and retains non-base
 shifts; shrinking checks each column's actual normalized degree. Compiler,
-runtime admission and native signatures independently declare the operation.
+runtime admission and native signatures independently check the shared declaration.
 The single-word domain analysis does not yet transfer flattened batch facts.
 Batched coefficient evaluation is installed on the same fields. It shares
 one ordered output domain and constructs one private column-major vector;

@@ -1,58 +1,21 @@
 //! Independently installed byte-data operations.
 use super::*;
-use Type::*;
-pub(super) const CONTRACTS: &[Contract] = &[
-    Contract::new(
-        "bytes.repeat",
-        (&[Index, Index], &[Bytes], AttributeRule::None),
-    )
-    .implemented_by(&["native/bytes.repeat"]),
-    Contract::custom("bytes.join").implemented_by(&["native/bytes.join"]),
-    Contract::new("bytes.empty", (&[], &[Bytes], AttributeRule::None))
-        .implemented_by(&["native/bytes.empty"]),
-    Contract::new(
-        "bytes.append",
-        (&[Bytes, Index], &[Bytes], AttributeRule::None),
-    )
-    .implemented_by(&["native/bytes.append"]),
-    Contract::new(
-        "bytes.concat",
-        (&[Bytes, Bytes], &[Bytes], AttributeRule::None),
-    )
-    .implemented_by(&["native/bytes.concat"]),
-    Contract::new(
-        "bytes.slice",
-        (&[Bytes, Index, Index], &[Bytes], AttributeRule::None),
-    )
-    .implemented_by(&["native/bytes.slice"]),
-    Contract::new("bytes.at", (&[Bytes, Index], &[Index], AttributeRule::None))
-        .implemented_by(&["native/bytes.at"]),
-    Contract::new("bytes.length", (&[Bytes], &[Index], AttributeRule::None))
-        .implemented_by(&["native/bytes.length"]),
-    Contract::new(
-        "bytes.equal",
-        (&[Bytes, Bytes], &[Bool], AttributeRule::None),
-    )
-    .implemented_by(&["native/bytes.equal"]),
+pub(super) const CONTRACTS: &[Installation] = &[
+    Installation::new("bytes.repeat").implemented_by(&["native/bytes.repeat"]),
+    Installation::new("bytes.join").implemented_by(&["native/bytes.join"]),
+    Installation::new("bytes.empty").implemented_by(&["native/bytes.empty"]),
+    Installation::new("bytes.append").implemented_by(&["native/bytes.append"]),
+    Installation::new("bytes.concat").implemented_by(&["native/bytes.concat"]),
+    Installation::new("bytes.slice").implemented_by(&["native/bytes.slice"]),
+    Installation::new("bytes.at").implemented_by(&["native/bytes.at"]),
+    Installation::new("bytes.length").implemented_by(&["native/bytes.length"]),
+    Installation::new("bytes.equal").implemented_by(&["native/bytes.equal"]),
 ];
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
     physical_error: "uninstalled byte operation binding",
-    physical_only: false,
+    adapter: None,
     contracts: CONTRACTS,
-    resolve: |binding, contract| {
-        if binding.contract != "bytes.join" {
-            return index::resolve(binding, contract);
-        }
-        if !binding.arguments.is_empty() {
-            return Err(support::failure());
-        }
-        let bytes = LogicalType::new(Bytes, Identity::None)?;
-        Ok(OperationSignature {
-            inputs: vec![LogicalType::sequence(bytes.clone())?],
-            outputs: vec![bytes],
-            attributes: AttributeRule::None,
-        })
-    },
+
     select: default_ports,
 };

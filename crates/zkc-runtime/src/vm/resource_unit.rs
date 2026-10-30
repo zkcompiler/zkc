@@ -29,46 +29,19 @@ impl ResourceDomain {
     }
 }
 
-use super::operations::{Contract, Contribution};
-use super::{AttributeRule, LogicalType, OperationBinding, OperationSignature};
-fn signature(
-    binding: &OperationBinding,
-    _: &Contract,
-) -> Result<OperationSignature<LogicalType>, AdmissionError> {
-    if binding.arguments.len() != 1 {
-        return Err(AdmissionError::new(
-            ErrorCode::Signature,
-            "binding-resource-unit-domain",
-        ));
-    }
-    let domain = ResourceDomain::parse(&binding.arguments[0])
-        .map_err(|_| AdmissionError::new(ErrorCode::Type, "binding-resource-unit-domain"))?;
-    let ty = LogicalType::resource_unit(domain);
-    Ok(OperationSignature {
-        inputs: if binding.contract == "resource_unit.create" {
-            vec![]
-        } else {
-            vec![ty.clone()]
-        },
-        outputs: if binding.contract == "resource_unit.consume" {
-            vec![]
-        } else {
-            vec![ty]
-        },
-        attributes: AttributeRule::None,
-    })
-}
+use super::operations::{Contribution, Installation};
+
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
     physical_error: "binding-implementation",
-    physical_only: false,
+    adapter: None,
 
     contracts: &[
-        Contract::custom("resource_unit.create").implemented_by(&["logical/resource_unit.create"]),
-        Contract::custom("resource_unit.pass").implemented_by(&["logical/resource_unit.pass"]),
-        Contract::custom("resource_unit.consume")
+        Installation::new("resource_unit.create").implemented_by(&["logical/resource_unit.create"]),
+        Installation::new("resource_unit.pass").implemented_by(&["logical/resource_unit.pass"]),
+        Installation::new("resource_unit.consume")
             .implemented_by(&["logical/resource_unit.consume"]),
     ],
-    resolve: signature,
+
     select: super::operations::default_ports,
 };

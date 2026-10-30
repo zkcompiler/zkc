@@ -6,103 +6,29 @@ use super::*;
 
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     contracts: &[
-        Contract::new(
-            "relation.table_rows",
-            (
-                &[Type::Vector, Type::Vector, Type::Vector, Type::Index],
-                &[Type::Vector],
-                AttributeRule::AssetIdentity,
-            ),
-        )
-        .implemented_by(&["plonky3/relation.table_rows"]),
-        Contract::new(
-            "relation.table_shape",
-            (
-                &[Type::Index],
-                &[Type::Index; 7],
-                AttributeRule::AssetIdentity,
-            ),
-        )
-        .implemented_by(&["plonky3/relation.table_shape"]),
-        Contract::new(
-            "relation.table_input",
-            (
-                &[Type::Index, Type::Index],
-                &[Type::Index; 3],
-                AttributeRule::AssetIdentity,
-            ),
-        )
-        .implemented_by(&["plonky3/relation.table_input"]),
-        Contract::new(
-            "relation.table_scope",
-            (
-                &[Type::Index, Type::Index],
-                &[Type::Index; 2],
-                AttributeRule::AssetIdentity,
-            ),
-        )
-        .implemented_by(&["plonky3/relation.table_scope"]),
-        Contract::new(
-            "relation.table_point",
-            (
-                &[Type::Vector],
-                &[Type::Vector],
-                AttributeRule::AssetIdentity,
-            ),
-        )
-        .implemented_by(&["plonky3/relation.table_point"]),
-        Contract::new(
-            "relation.table_points",
-            (
-                &[Type::Vector, Type::Index],
-                &[Type::Vector],
-                AttributeRule::AssetIdentity,
-            ),
-        )
-        .implemented_by(&["plonky3/relation.table_points"]),
-        Contract::new(
-            "relation.table_widths",
-            (&[], &[Type::Index; 3], AttributeRule::AssetIdentity),
-        )
-        .implemented_by(&["plonky3/relation.table_widths"]),
-        Contract::new(
-            "relation.table_policy",
-            (&[], &[Type::Index; 5], AttributeRule::AssetIdentity),
-        )
-        .implemented_by(&["plonky3/relation.table_policy"]),
-        Contract::new(
-            "relation.table_interactions",
-            (
-                &[Type::Index],
-                &[Type::Index; 2],
-                AttributeRule::AssetIdentity,
-            ),
-        )
-        .implemented_by(&["plonky3/relation.table_interactions"]),
-        Contract::new(
-            "relation.table_interaction",
-            (
-                &[Type::Index, Type::Index],
-                &[Type::Index; 12],
-                AttributeRule::AssetIdentity,
-            ),
-        )
-        .implemented_by(&["plonky3/relation.table_interaction"]),
-        Contract::new(
-            "relation.table_record_points",
-            (
-                &[Type::Vector, Type::Index],
-                &[Type::Vector],
-                AttributeRule::AssetIdentity,
-            ),
-        )
-        .implemented_by(&["plonky3/relation.table_record_points"]),
+        Installation::new("relation.table_rows").implemented_by(&["plonky3/relation.table_rows"]),
+        Installation::new("relation.table_shape").implemented_by(&["plonky3/relation.table_shape"]),
+        Installation::new("relation.table_input").implemented_by(&["plonky3/relation.table_input"]),
+        Installation::new("relation.table_scope").implemented_by(&["plonky3/relation.table_scope"]),
+        Installation::new("relation.table_point").implemented_by(&["plonky3/relation.table_point"]),
+        Installation::new("relation.table_points")
+            .implemented_by(&["plonky3/relation.table_points"]),
+        Installation::new("relation.table_widths")
+            .implemented_by(&["plonky3/relation.table_widths"]),
+        Installation::new("relation.table_policy")
+            .implemented_by(&["plonky3/relation.table_policy"]),
+        Installation::new("relation.table_interactions")
+            .implemented_by(&["plonky3/relation.table_interactions"]),
+        Installation::new("relation.table_interaction")
+            .implemented_by(&["plonky3/relation.table_interaction"]),
+        Installation::new("relation.table_record_points")
+            .implemented_by(&["plonky3/relation.table_record_points"]),
     ],
-    resolve,
+
     select,
     alternatives: &[],
     physical_error: "uninstalled operation binding",
-    physical_only: false,
+    adapter: None,
 };
 /// Relation views evaluate integer residue coordinates, so no binary field is
 /// implemented, although the logical contract needs only a field.
@@ -115,21 +41,4 @@ fn select(
         return Err(support::failure());
     }
     support::select_nominal(binding, logical, selection)
-}
-fn resolve(
-    binding: &OperationBinding,
-    contract: &Contract,
-) -> Result<OperationSignature<LogicalType>> {
-    let [field, table] = binding.arguments.as_slice() else {
-        return Err(support::failure());
-    };
-    let field = Identity::parse(field)?;
-    if field.scalar_field() != Some(field)
-        || !crate::logical::natural_index(table).is_ok_and(|n| n <= 1_048_576)
-    {
-        return Err(support::failure());
-    }
-    support::instantiate(contract.shape()?, field, |kind| {
-        support::field_type(kind, field)
-    })
 }
