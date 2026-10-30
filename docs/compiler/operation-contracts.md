@@ -83,10 +83,20 @@ Generated declarations and signature checks do not establish kernel correctness.
 
 ## Signatures, effects and observations
 
+The [catalog schema](../spec/formats/contract-declarations.md) describes one
+complete declaration collection. Its operation scope uses tagged root,
+projection, application and natural terms. Signatures distinguish fixed ports
+from the explicit numerical family; numerical masks select every scalar/vector
+input and the result shape. Resource-unit signatures retain their nominal Slot
+parameter. Native container names `scalar` and `capability` are not logical
+constructor declarations. The retired interpreter-profile bit is absent;
+consumer admission stays separate from catalog membership.
+
 The `zkc.contract-declarations/0` inventory distinguishes constructor-application
 ports from an explicit complete-Type port (`{"term": index}`). The latter is
-restricted to construction-only observation payloads, with exact static-type and
-representation checks. Source admission does not gain arbitrary operations from
+restricted to the admitted construction operations, including sequence
+elements and observation payloads, with exact static-type and representation
+checks. Source admission does not gain arbitrary operations from
 catalog presence; the [structured observer](../spec/formats/messages.md#transcript-observation)
 owns that boundary.
 

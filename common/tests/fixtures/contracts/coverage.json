@@ -294,10 +294,6 @@
     "nominal_resource": [
       "resource_unit"
     ],
-    "outside_common_carrier": [
-      "scalar",
-      "capability"
-    ],
     "native_structural": [
       "field_array",
       "sequence"

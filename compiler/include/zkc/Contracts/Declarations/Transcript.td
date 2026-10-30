@@ -29,7 +29,6 @@ def OpIndexedTranscriptObserveData : ZKC_Operation<"transcript.native.indexed.ob
      ZKC_Apply<TypeIndices, []>],
     [ZKC_Apply<TypeTranscript, [IndexedDataTranscript]>],
     [ZKC_Holds<CapabilityTranscript, [IndexedDataTranscript]>]> {
-  let commonGeneric = 0;
   let stage = Construction;
   let parameters = NativeOrigin;
   let facets = [ZKC_Observation<0, 1, 0>, ZKC_History<0, 0>];

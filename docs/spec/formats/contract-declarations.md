@@ -52,7 +52,10 @@ Custody is `PublicValue`, `PrivateImmutable` or `Affine`. Permissions are
 Booleans with the existing type contract: affine types are not copyable;
 ordinary immutable values are copyable and droppable. Transport, codec
 availability and authorization remain separate facts. The retired
-`commonGeneric` interpreter-profile field is absent.
+`commonGeneric` interpreter-profile field is absent. Native container names
+`scalar` and `capability` are not logical constructors and have no catalog
+rows. Actual logical fields, randomness, transcripts and resource slots retain
+their own constructor identities.
 
 An operation's scope is an ordered list of exact tagged terms:
 
@@ -80,7 +83,8 @@ is an explicit closed family, rather than a hidden generic-verifier exception:
 `product`. Its static actuals are the scope roots followed by one Boolean mask.
 Inputs are a u64 row count followed by one field vector for each true mask bit
 and one field scalar for each false bit, in mask order. The output is one field
-vector for `map`, otherwise one field scalar. The mask has at most 1,023 bits.
+vector for `map`, otherwise one field scalar. This closed family has exactly one Field root and its Field requirement; it
+has no fixed-port approximation. The mask has at most 1,023 bits.
 The numerical expression independently checks that complete positional ABI.
 
 Facets preserve the installed closed vocabulary. Every facet is an object with
@@ -142,7 +146,12 @@ Argument = ["domain", sort, identity] | ["type", Type]
 
 `Type` here is the [logical type tree](logical-types.md), not a catalog Type
 declaration record. Domain identities retain their declared sort and nominal
-identity. The mask case is restricted to the compiler-generated numerical
+identity. The `Slot` sort names a compiler-generated resource slot, not an
+algebraic domain or a global installation. Its identity is 1–128 ASCII
+characters, starts with a letter, and continues with letters, digits, `_`, `-`
+or `.`. `resource_unit` has one Slot parameter, and its create/pass/consume
+contracts share that explicit root. The existing byte spelling is unchanged.
+Closed slot formation grants no setup, construction or source authority. The mask case is restricted to the compiler-generated numerical
 family's positional signature; it is neither a natural nor a nominal domain.
 Its complete input/output signature is derived from the mask and field and
 must agree in every generated projection. No generic extension may introduce
@@ -201,7 +210,11 @@ constructor parameters, 1,024 operation scope terms, 1,024 ports per side,
 1,024 facets and requirements per operation and 100,000 declaration records.
 Serialized data is at most 64 MiB with JSON depth 64. Existing stricter
 domain/expression/origin limits still apply. Generation must fail for an
-unrepresentable contribution rather than emit a partial projection.
+unrepresentable contribution rather than emit a partial projection. These are
+declaration-data bounds, not automatic increases to an interpreter or proof
+search budget. The native requirement-certificate profile retains its separate
+128-term bound and expanded-work checks; a larger declaration does not bypass
+that profile.
 
 ## Consumer profile ownership
 

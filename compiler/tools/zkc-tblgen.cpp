@@ -136,8 +136,7 @@ bool sameEnvelope(const Record *left, const Record *right) {
   const auto *rp = right->getValueAsDef("parameters");
   return name(left->getValueAsDef("stage")) ==
              name(right->getValueAsDef("stage")) &&
-         left->getValueAsBit("commonGeneric") ==
-             right->getValueAsBit("commonGeneric") &&
+         left->getValueInit("numerical") == right->getValueInit("numerical") &&
          name(lp) == name(rp) &&
          lp->getValueAsInt("minimum") == rp->getValueAsInt("minimum") &&
          lp->getValueAsInt("maximum") == rp->getValueAsInt("maximum");

@@ -15,7 +15,7 @@ def indexed(records):
 
 def roots(operation):
     return [term for term in operation["scope"]
-            if "parent" not in term and "arguments" not in term and "constant" not in term]
+            if term["kind"] == "root"]
 
 
 def instantiate(operation, arguments, declarations, catalog):
@@ -35,18 +35,29 @@ def instantiate(operation, arguments, declarations, catalog):
         return f"{constructor}<{','.join(args)}>"
 
     for term in operation["scope"]:
-        if "constant" in term:
-            values.append(str(term["constant"]))
-        elif "parent" in term:
-            values.append(domains[values[term["parent"]]]["associated"][term["name"]])
-        elif "arguments" in term:
-            values.append(spelling(term["name"], [values[i] for i in term["arguments"]]))
+        if term["kind"] == "natural":
+            values.append(term["value"])
+        elif term["kind"] == "project":
+            values.append(domains[values[term["parent"]]]["associated"][term["member"]])
+        elif term["kind"] == "apply":
+            values.append(spelling(term["constructor"], [values[i] for i in term["arguments"]]))
         else:
             values.append(next(supplied))
+    signature = operation["signature"]
+    if signature["kind"] == "numerical":
+        field = values[signature["fieldTerm"]]
+        mask = next(supplied)
+        assert all(bit in "01" for bit in mask) and len(mask) <= 1023
+        assert next(supplied, None) is None, "excess closed arguments"
+        return {
+            "inputs": ["index"] + [f"{'vector' if bit == '1' else 'field'}:{field}" for bit in mask],
+            "outputs": [f"{'vector' if signature['result'] == 'map' else 'field'}:{field}"],
+        }
+    assert signature["kind"] == "fixed"
     assert next(supplied, None) is None, "excess closed arguments"
     return {
         direction: [values[port["term"]] if "term" in port else spelling(port["constructor"], [values[i] for i in port["arguments"]])
-                    for port in operation[direction]]
+                    for port in operation["signature"][direction]]
         for direction in ("inputs", "outputs")
     }
 

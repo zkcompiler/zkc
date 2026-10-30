@@ -94,10 +94,8 @@ llvm::Error checkBindingDeclaration(llvm::StringRef name,
 /// Static library declarations use the same operation contracts. Bodies are
 /// checked before any nominal domain or implementation is selected.
 llvm::ArrayRef<generic::TypeConstructor> boundTypeConstructors();
-llvm::ArrayRef<generic::Operation> boundOperationContracts();
-/// Construction bindings and compiler consumers with owned signatures are not
-/// common generic operations. Their owning resolver checks closed applications.
-llvm::ArrayRef<generic::Operation> nonGenericOperationContracts();
+/// All declarations, including explicit variable-signature families. Presence
+/// does not select a consumer profile or grant source authoring.
 llvm::ArrayRef<generic::Operation> executableOperationContracts();
 llvm::ArrayRef<requirements::Implication> boundCapabilityRules();
 llvm::StringRef installedIdentitySort(llvm::StringRef identity);

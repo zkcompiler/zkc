@@ -92,22 +92,7 @@ def TypeVerifierKey : ZKC_Type<"verifier_key", [CommitmentDomain], PrivateImmuta
 def TypeOpeningState : ZKC_Type<"opening_state", [CommitmentDomain], PrivateImmutable, 1, 1> {
   int ordinal = 21;
 }
-def TypeScalar : ZKC_Type<"scalar", [], PublicValue, 1, 1> {
-  let commonGeneric = 0;
-  int ordinal = 22;
-  let nativeLocal = 0;
-  let participants = 0;
-  let constructible = 0;
-}
-def TypeCapability : ZKC_Type<"capability", [], Affine, 0, 0> {
-  let commonGeneric = 0;
-  int ordinal = 23;
-  let nativeLocal = 0;
-  let participants = 0;
-  let constructible = 0;
-}
-def TypeResourceUnit : ZKC_Type<"resource_unit", [], Affine, 0, 1> {
-  let commonGeneric = 0;
+def TypeResourceUnit : ZKC_Type<"resource_unit", [SlotDomain], Affine, 0, 1> {
   int ordinal = 24;
 }
 def ExportTypeField : ZKC_TypeExport<"zkc::algebra", "Element", TypeField>;

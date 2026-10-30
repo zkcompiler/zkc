@@ -5,9 +5,16 @@
 
 using namespace llvm;
 namespace zkc::protocol {
+namespace {
+const generic::Operation *numericalDeclaration(StringRef contract) {
+  for (const auto &operation : executableOperationContracts())
+    if (operation.name == contract && operation.numerical)
+      return &operation;
+  return nullptr;
+}
+} // namespace
 bool numericalContract(StringRef contract) {
-  return contract == "numerical.map" || contract == "numerical.sum" ||
-         contract == "numerical.product";
+  return numericalDeclaration(contract) != nullptr;
 }
 Error checkNumericalArguments(const BindingApplication &binding) {
   if (!numericalContract(binding.contract))
@@ -27,11 +34,14 @@ resolveNumericalSignature(const BindingApplication &binding) {
   if (auto e = checkNumericalArguments(binding))
     return e;
   const auto &field = binding.arguments[0];
+  const auto &family = *numericalDeclaration(binding.contract)->numerical;
   BoundOperation result{{BoundType{"index", "", ""}}, {}};
   for (char bit : binding.arguments[1])
     result.inputs.push_back({bit == '1' ? "vector" : "field", field, ""});
   result.outputs.push_back(
-      {binding.contract == "numerical.map" ? "vector" : "field", field, ""});
+      {family.result == generic::NumericalSignature::Result::Map ? "vector"
+                                                                 : "field",
+       field, ""});
   return result;
 }
 Expected<ring::Expression>

@@ -1,4 +1,6 @@
 // Existing nominal parameter vocabulary. Formation remains in C++ admission.
+def SlotSort : ZKC_Sort<"Slot">;
+def SlotDomain : ZKC_Domain<SlotSort>;
 def FieldSort : ZKC_Sort<"Field">;
 def FieldDomain : ZKC_Domain<FieldSort>;
 def GroupSort : ZKC_Sort<"Group">;

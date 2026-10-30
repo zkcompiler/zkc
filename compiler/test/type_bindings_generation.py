@@ -42,7 +42,7 @@ def Logical : ZKC_Type<"test", [TypeParameter, NatParameter]>;
     fixtures = [
         ("direct", direct, None),
         ("missing", "", "missing native binding decision"),
-        ("non-common missing", direct + 'def Hidden : ZKC_Type<"hidden"> { let commonGeneric = 0; }',
+        ("unavailable missing", direct + 'def Hidden : ZKC_Type<"hidden"> { let nativeLocal = 0; }',
          "missing native binding decision: hidden"),
         ("duplicate", direct + 'def Duplicate : ZKC_UnavailableBinding<Logical, "reason">;',
          "duplicate native binding decision"),

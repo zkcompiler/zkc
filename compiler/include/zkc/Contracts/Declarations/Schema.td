@@ -52,8 +52,6 @@ class ZKC_Type<string value, list<ZKC_Parameter> ps = [],
   ZKC_Custody custody = c;
   bit copy = copyable;
   bit drop = droppable;
-  // False records describe existing special carriers or generation-only types.
-  bit commonGeneric = 1;
   // Native profile facts, separate from source usage and concrete codecs.
   bit nativeLocal = 1;
   bit mathematical = 0;
@@ -176,6 +174,11 @@ class ZKC_DomainValue<ZKC_ValueRule r, int out = 0, int operand = 0, int other =
   int input = operand;
   int otherInput = other;
 }
+// A closed signature family; its mask is a positional Boolean sequence.
+class ZKC_NumericalSignature<ZKC_Term domain, string value> : ZKC_Declaration {
+  ZKC_Term fieldTerm = domain;
+  string result = value;
+}
 class ZKC_Operation<string value, list<ZKC_Term> terms,
                     list<ZKC_Term> ins, list<ZKC_Term> outs,
                     list<ZKC_Holds> needs = []> : ZKC_Declaration {
@@ -183,6 +186,7 @@ class ZKC_Operation<string value, list<ZKC_Term> terms,
   list<ZKC_Term> scope = terms;
   list<ZKC_Term> inputs = ins;
   list<ZKC_Term> outputs = outs;
+  ZKC_NumericalSignature numerical = ?;
   list<ZKC_Holds> requirements = needs;
   ZKC_Stage stage = Source;
   ZKC_Parameters parameters = NoParameters;
@@ -190,7 +194,6 @@ class ZKC_Operation<string value, list<ZKC_Term> terms,
   ZKC_Term parameterField = ?;
   list<ZKC_Facet> facets = [];
   ZKC_Operation derivedCounterpart = ?;
-  bit commonGeneric = 1;
 }
 class ZKC_TypeFamily<string value> : ZKC_TypeHead<value>;
 class ZKC_TypeFamilyCase<ZKC_TypeFamily f, ZKC_Type element, ZKC_Type result> : ZKC_Declaration {

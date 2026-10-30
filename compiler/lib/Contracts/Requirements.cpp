@@ -203,8 +203,8 @@ Error checkFormation(ArrayRef<Term> terms, ArrayRef<Predicate> assumptions,
                      ArrayRef<Implication> implications,
                      ArrayRef<Predicate> goals) {
   // These bounds make worst-case closure and certificate size predictable.
-  if (terms.size() > 128 || assumptions.size() > 1024 || goals.size() > 1024 ||
-      implications.size() > 128)
+  if (terms.size() > ScopeTermLimit || assumptions.size() > 1024 ||
+      goals.size() > 1024 || implications.size() > 128)
     return invalid("requirements-limit");
   std::set<std::tuple<std::optional<unsigned>, std::string,
                       std::optional<std::vector<unsigned>>>>

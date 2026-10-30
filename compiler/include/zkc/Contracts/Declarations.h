@@ -28,7 +28,6 @@ struct AssociatedMemberDeclaration {
 struct TypeDeclaration {
   std::string name;
   std::vector<StaticParameter> parameters;
-  bool common;
   bool nativeLocal, mathematical, participants, constructible, message;
 };
 llvm::ArrayRef<TypeDeclaration> typeDeclarations();

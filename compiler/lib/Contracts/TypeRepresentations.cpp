@@ -10,8 +10,7 @@ llvm::Error validateAppliedTypeRepresentations(
     llvm::ArrayRef<AppliedTypeRepresentation> representations) {
   for (const auto &entry : representations) {
     const auto *declaration = typeDeclaration(entry.constructor);
-    if (!declaration || !declaration->common ||
-        declaration->parameters.empty() ||
+    if (!declaration || declaration->parameters.empty() ||
         (declaration->parameters.size() == 1 &&
          declaration->parameters.front().kind == StaticKind::Domain) ||
         entry.arguments.size() != declaration->parameters.size())

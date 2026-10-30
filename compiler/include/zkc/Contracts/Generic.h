@@ -57,10 +57,19 @@ struct Signature {
   std::vector<requirements::Predicate> requirements;
 };
 
+struct NumericalSignature {
+  enum class Result { Map, Sum, Product };
+  unsigned fieldTerm;
+  Result result;
+};
+
 /// Installed logical signatures; selecting a physical implementation is later.
+/// Numerical families use signature.scope/requirements and this explicit
+/// family, never a partial fixed-port approximation.
 struct Operation {
   std::string name;
   Signature signature;
+  std::optional<NumericalSignature> numerical = {};
 };
 
 struct Call {

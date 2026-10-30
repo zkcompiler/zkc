@@ -59,7 +59,7 @@ void defaultIs(StringRef contract, std::vector<std::string> arguments,
 }
 
 const zkc::generic::Scope &scopeFor(StringRef contract) {
-  for (const auto &operation : boundOperationContracts())
+  for (const auto &operation : executableOperationContracts())
     if (operation.name == contract)
       return operation.signature.scope;
   errs() << "missing logical contract " << contract << '\n';

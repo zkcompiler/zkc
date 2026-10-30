@@ -70,6 +70,14 @@ program definitions remain useful at independent byte admission and comparison
 boundaries; the catalog remains immutable declaration data. Neither becomes a
 second mutable compiler IR.
 
+The declaration catalog has one complete operation collection. Fixed-port
+signatures and the closed numerical signature family are explicit alternatives;
+a dynamic family is never represented by its empty-mask ports. Resource-unit
+signatures carry their nominal Slot root. Consumer profiles select supported
+identities and forms separately, and native containers are not logical type
+constructor declarations. Generated projections share these facts while each
+consumer retains its own installation and interpretation obligations.
+
 ## Formation, admission and invalidation
 
 Ordinary MLIR verification establishes structural formation, region/operand

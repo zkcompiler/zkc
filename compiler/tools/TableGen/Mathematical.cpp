@@ -172,8 +172,7 @@ void emitMathematicalFacet(raw_ostream &os, const Record *op,
   os << "};\n";
 }
 
-bool emitMathematicalDeclarations(raw_ostream &os,
-                                  const RecordKeeper &records) {
+void validateMathematicalDeclarations(const RecordKeeper &records) {
   DeclarationOrder order(records);
   auto identities = order.sort("ZKC_MathematicalIdentity");
   auto intrinsics = order.sort("ZKC_MathematicalIntrinsic");
@@ -202,6 +201,14 @@ bool emitMathematicalDeclarations(raw_ostream &os,
                                              "Field", "Group", "Quotient"},
                          intrinsic->getValueAsString("domainKind")),
         intrinsic, "invalid mathematical intrinsic");
+}
+
+bool emitMathematicalDeclarations(raw_ostream &os,
+                                  const RecordKeeper &records) {
+  validateMathematicalDeclarations(records);
+  DeclarationOrder order(records);
+  auto identities = order.sort("ZKC_MathematicalIdentity");
+  auto intrinsics = order.sort("ZKC_MathematicalIntrinsic");
   os << "// Generated from neutral mathematical declarations. Do not edit.\n"
         "#ifdef ZKC_MATHEMATICAL_IDENTITIES\n"
         "enum class MathematicalIdentity {\n";

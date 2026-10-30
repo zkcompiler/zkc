@@ -305,7 +305,6 @@ declaration_case(type-nat-reversed [=[
 include "type_nat.td"
 def Wrong : ZKC_Operation<"fixture.wrong", [ElementType, Length],
     [ZKC_Apply<ArrayType, [Length, ElementType]>], []> {
-  let commonGeneric = 0;
 }
 ]=] "parameter kind or sort mismatch")
 # Complete-Type ports are construction observation inputs, never an untyped
@@ -317,24 +316,24 @@ def Bad : ZKC_Operation<"bad.direct", [T], [T], []>;
 declaration_case(direct-type-output [=[
 def T : ZKC_Root<"T", TypeParameter>;
 def Bad : ZKC_Operation<"bad.direct", [T], [], [T]> {
-  let stage = Construction; let commonGeneric = 0;
+  let stage = Construction;
 }
 ]=] "direct Type ports require a scoped construction type")
 declaration_case(direct-type-unobserved [=[
 def T : ZKC_Root<"T", TypeParameter>;
 def Bad : ZKC_Operation<"bad.direct", [T], [T], []> {
-  let stage = Construction; let commonGeneric = 0;
+  let stage = Construction;
 }
 ]=] "complete-type port must be an observation payload")
 declaration_case(direct-type-observation [=[
 def T : ZKC_Root<"T", TypeParameter>;
 def State : ZKC_Type<"transcript", [], Affine, 0, 0>;
 def Good : ZKC_Operation<"good.direct", [T], [ZKC_Apply<State>, T], [ZKC_Apply<State>]> {
-  let stage = Construction; let commonGeneric = 0;
+  let stage = Construction;
   let facets = [ZKC_Observation<0,1,0>, ZKC_History<0,0>];
 }
 ]=] "")
-# Kinded fixture must generate successfully but never become common admission.
+# Kinded fixture preserves explicit stage and never becomes source authority.
 execute_process(COMMAND "${ZKC_TABLEGEN}" -dump-contract-declarations
   -I "${ZKC_DECLARATION_INCLUDE}" "${ZKC_DECLARATION_FIXTURES}/type_nat.td"
   RESULT_VARIABLE result OUTPUT_VARIABLE fixture ERROR_VARIABLE stderr)
@@ -343,11 +342,56 @@ if(NOT result EQUAL 0)
 else()
   string(JSON kind GET "${fixture}" types 0 parameters 0 kind)
   string(JSON natural GET "${fixture}" types 0 parameters 1 kind)
-  string(JSON admitted GET "${fixture}" types 0 commonGeneric)
-  if(NOT kind STREQUAL "Type" OR NOT natural STREQUAL "Nat" OR admitted)
-    list(APPEND failures "Type/Nat fixture acquired common admission")
+  string(JSON stage GET "${fixture}" operations 0 stage)
+  if(NOT kind STREQUAL "Type" OR NOT natural STREQUAL "Nat" OR NOT stage STREQUAL "CompilerGenerated")
+    list(APPEND failures "Type/Nat fixture lost its kind or stage")
   endif()
 endif()
+# Variable signatures are explicit declarations, never an empty-mask fiction.
+declaration_case(numerical-family [=[
+def Good : ZKC_Operation<"numeric.good", [F], [], [], [ZKC_Holds<Field,[F]>]> {
+  let numerical = ZKC_NumericalSignature<F, "map">;
+  let parameters = NumericalExpression; let stage = CompilerGenerated;
+}
+]=] "")
+declaration_case(numerical-missing-family [=[
+def Bad : ZKC_Operation<"numeric.bad", [F], [], []> {
+  let parameters = NumericalExpression;
+}
+]=] "numerical expression requires an explicit signature family")
+declaration_case(numerical-fixed-ports [=[
+def Bad : ZKC_Operation<"numeric.bad", [F], [ZKC_Apply<Element,[F]>], [], [ZKC_Holds<Field,[F]>]> {
+  let numerical = ZKC_NumericalSignature<F, "sum">;
+  let parameters = NumericalExpression; let stage = CompilerGenerated;
+}
+]=] "invalid numerical signature family")
+declaration_case(numerical-wrong-result [=[
+def Bad : ZKC_Operation<"numeric.bad", [F], [], [], [ZKC_Holds<Field,[F]>]> {
+  let numerical = ZKC_NumericalSignature<F, "unknown">;
+  let parameters = NumericalExpression; let stage = CompilerGenerated;
+}
+]=] "invalid numerical signature family")
+declaration_case(numerical-wrong-field [=[
+def Bad : ZKC_Operation<"numeric.bad", [G], [], []> {
+  let numerical = ZKC_NumericalSignature<G, "map">;
+  let parameters = NumericalExpression; let stage = CompilerGenerated;
+}
+]=] "invalid numerical signature family")
+declaration_case(numerical-missing-requirement [=[
+def Bad : ZKC_Operation<"numeric.bad", [F], [], []> {
+  let numerical = ZKC_NumericalSignature<F, "map">;
+  let parameters = NumericalExpression; let stage = CompilerGenerated;
+}
+]=] "numerical family requires its exact Field capability")
+declaration_case(constant-facet-parameter [=[
+def Bad : ZKC_Operation<"constant.bad", [F], [], [ZKC_Apply<Element,[F]>]> {
+  let parameters = NaturalParameter;
+  let facets = [ZKC_DomainValue<ConstantValue, 0, 1>];
+}
+]=] "constant facet outside parameter signature")
+declaration_case(retired-profile [=[
+def Bad : ZKC_Type<"old"> { let commonGeneric = 0; }
+]=] "Value 'commonGeneric' unknown")
 # Byte-for-byte reproducibility of both production generation actions.
 foreach(action gen-contract-declarations dump-contract-declarations)
   execute_process(COMMAND "${ZKC_TABLEGEN}" "-${action}"
@@ -436,7 +480,12 @@ def Bad : ZKC_Operation<"law.msm", [G,F],
 
 function(recipe_case name definitions expected_error)
   set(input "${ZKC_DECLARATION_TEST_DIRECTORY}/recipe-${name}.td")
-  file(WRITE "${input}" "include \"zkc/Contracts/Declarations.td\"\ninclude \"${ZKC_DECLARATION_INCLUDE}/../lib/Transforms/RecipeSchema.td\"\n${definitions}\n")
+  set(mathematical "")
+  if(ARGC GREATER 3)
+    file(READ "${ZKC_DECLARATION_INCLUDE}/zkc/Contracts/Declarations/Mathematical.td" mathematical)
+    string(REGEX REPLACE "def FieldAddLaws[^}]+}" "def FieldAddLaws : ZKC_ScalarLaws<\"FieldRing\", \"FieldBinary\"> {\n${ARGV3}\n}" mathematical "${mathematical}")
+  endif()
+  file(WRITE "${input}" "${mathematical}\ninclude \"zkc/Contracts/Declarations.td\"\ninclude \"${ZKC_DECLARATION_INCLUDE}/../lib/Transforms/RecipeSchema.td\"\n${definitions}\n")
   set(output "${ZKC_DECLARATION_TEST_DIRECTORY}/recipe-${name}.inc")
   file(REMOVE "${output}")
   execute_process(COMMAND "${ZKC_TABLEGEN}" -gen-mathematical-recipes
@@ -533,39 +582,19 @@ def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldAdd,
     OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]>;
 ]=] "matrix contraction requires field sum and product meanings")
 recipe_case(matrix-contraction-law-premises [=[
-def RecipeLaws : ZKC_ScalarLaws<"FieldRing", "FieldBinary"> {
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]>;
+]=] "matrix contraction requires total commutative field laws" [=[
   let associative = 1; let commutative = 1;
   let leftIdentity = "Zero"; let rightIdentity = "Zero";
-}
-def RecipeMeaning : ZKC_MathematicalIdentity<"FieldAdd", 0> {
-  let laws = RecipeLaws;
-}
-def RecipeF : ZKC_Root<"F", FieldDomain>;
-def RecipeAdd : ZKC_Operation<"fixture.add", [RecipeF],
-    [ZKC_Apply<TypeField,[RecipeF]>, ZKC_Apply<TypeField,[RecipeF]>],
-    [ZKC_Apply<TypeField,[RecipeF]>], [ZKC_Holds<CapabilityField,[RecipeF]>]> {
-  let facets = [ZKC_Mathematical<RecipeMeaning>];
-}
-def Bad : ZKC_MatrixContractionRecipe<RecipeAdd, OpFieldMul,
-    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]>;
-]=] "matrix contraction requires total commutative field laws")
+]=])
 recipe_case(matrix-contraction-empty-identity [=[
-def RecipeLaws : ZKC_ScalarLaws<"FieldRing", "FieldBinary"> {
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]>;
+]=] "matrix contraction requires additive zero and annihilator" [=[
   let associative = 1; let commutative = 1; let total = 1;
   let leftIdentity = "One"; let rightIdentity = "One";
-}
-def RecipeMeaning : ZKC_MathematicalIdentity<"FieldAdd", 0> {
-  let laws = RecipeLaws;
-}
-def RecipeF : ZKC_Root<"F", FieldDomain>;
-def RecipeAdd : ZKC_Operation<"fixture.add", [RecipeF],
-    [ZKC_Apply<TypeField,[RecipeF]>, ZKC_Apply<TypeField,[RecipeF]>],
-    [ZKC_Apply<TypeField,[RecipeF]>], [ZKC_Holds<CapabilityField,[RecipeF]>]> {
-  let facets = [ZKC_Mathematical<RecipeMeaning>];
-}
-def Bad : ZKC_MatrixContractionRecipe<RecipeAdd, OpFieldMul,
-    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]>;
-]=] "matrix contraction requires additive zero and annihilator")
+]=])
 recipe_case(matrix-contraction-form [=[
 def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
     OpMatrixBilinear, "Unknown", OpFieldAdd, [0,1,2], [], [0,1]>;

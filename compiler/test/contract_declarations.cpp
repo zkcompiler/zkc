@@ -1,3 +1,4 @@
+#include "support/ContractWitnesses.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/OperationShapes.h"
@@ -57,7 +58,7 @@ int main() {
   // expectations emitted by the declaration generator.
   check(std::set<std::string>(domainSorts().begin(), domainSorts().end()) ==
             std::set<std::string>{"Field", "Group", "Commitment", "Transcript",
-                                  "Codec"},
+                                  "Codec", "Slot"},
         "installed domain sorts");
   generic::Signature codecPromise;
   codecPromise.scope.sorts = {"Codec", "Field"};
@@ -265,7 +266,7 @@ int main() {
         "source History admission changed");
   check(duplicable("indices") && discardable("indices"),
         "external snapshots stopped being copyable values");
-  for (auto t : {"rng", "nonce", "transcript", "capability"})
+  for (auto t : {"rng", "nonce", "transcript"})
     check(!duplicable(t) && !discardable(t) && custody(t) == Custody::Affine,
           "linear provider permissions changed");
   check(!duplicable("resource_unit") && discardable("resource_unit"),
@@ -325,8 +326,36 @@ int main() {
   refusal(checkParameters("transcript.native.indexed.challenge", {"a", "b"}),
           "interactive-kernel-parameters");
 
+  check(!typeDeclaration("scalar") && !typeDeclaration("capability"),
+        "native containers must not acquire logical declarations");
+  for (StringRef operation : {"resource_unit.create", "resource_unit.pass",
+                              "resource_unit.consume"}) {
+    const auto &resource = signature(operation);
+    check(resource.scope.sorts == std::vector<std::string>{"Slot"},
+          "resource slot missing from declaration");
+    for (const auto &port : resource.inputs)
+      check(type(port, "resource_unit", {0}), "resource input loses slot");
+    for (const auto &port : resource.outputs)
+      check(type(port, "resource_unit", {0}), "resource output loses slot");
+    success(checkStaticVocabulary(resource), "resource static vocabulary");
+  }
+  check(staticIdentityMatches("Slot", "Guard") &&
+            !staticIdentityMatches("Slot", "0Guard") &&
+            !staticIdentityMatches("Field", "Guard"),
+        "slot formation must preserve its own sort");
+  for (const auto &operation : executableOperationContracts())
+    if (operation.numerical) {
+      check(operation.signature.inputs.empty() &&
+                operation.signature.outputs.empty(),
+            "numerical family exposed a partial fixed signature");
+      generic::Function function;
+      refusal(generic::infer(function, boundTypeConstructors(), {operation})
+                  .takeError(),
+              "generic-signature-family");
+    }
+
   // The generated structures must also satisfy the independent C++ checker.
-  for (const auto &op : boundOperationContracts()) {
+  for (const auto &op : zkc::test::genericWitnessOperations()) {
     success(checkStaticVocabulary(op.signature), op.name);
     check(parameterContract(op.name) != nullptr, "operation declaration lost");
     generic::Function function;
@@ -343,9 +372,9 @@ int main() {
     function.body.push_back(std::move(call));
     for (unsigned i = 0; i < op.signature.outputs.size(); ++i)
       function.returns.push_back(op.signature.inputs.size() + i);
-    auto checked =
-        generic::check(function, boundTypeConstructors(),
-                       boundOperationContracts(), boundCapabilityRules());
+    auto checked = generic::check(function, boundTypeConstructors(),
+                                  zkc::test::genericWitnessOperations(),
+                                  boundCapabilityRules());
     if (!checked)
       success(checked.takeError(), op.name);
   }

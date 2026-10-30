@@ -51,6 +51,8 @@ bool staticIdentityMatches(StringRef sort, StringRef identity) {
            all_of(identity, [](char c) { return isDigit(c); }) &&
            !identity.getAsInteger(10, value) && value <= 1048576;
   }
+  if (sort == "Slot")
+    return resourceUnitDomain(identity);
   return !sort.empty() && installedIdentitySort(identity) == sort;
 }
 StringRef associatedIdentity(StringRef identity, StringRef key) {
@@ -137,7 +139,7 @@ Error checkStaticVocabulary(const generic::Signature &signature) {
 Expected<std::vector<std::string>>
 resolveStaticArguments(const generic::Scope &scope,
                        ArrayRef<std::string> arguments) {
-  if (scope.terms.size() != scope.sorts.size() || scope.terms.size() > 128)
+  if (scope.terms.size() != scope.sorts.size() || scope.terms.size() > 1024)
     return error("binding-static-scope");
   std::vector<std::string> selected;
   size_t next = 0;

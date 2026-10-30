@@ -29,7 +29,7 @@ class MappingTestVariant<ZKC_Operation original>
   let parameters = original.parameters;
   let parameterField = original.parameterField;
   let facets = original.facets;
-  let commonGeneric = original.commonGeneric;
+  let numerical = original.numerical;
 }
 ]=])
 set(failures "")

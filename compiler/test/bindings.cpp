@@ -1,6 +1,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
+#include "support/ContractWitnesses.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/IR.h"
@@ -264,7 +265,7 @@ int main() {
 
   // Every installed polymorphic operation signature is itself well formed and
   // sufficient for a body invoking exactly that operation.
-  for (const auto &op : boundOperationContracts()) {
+  for (const auto &op : zkc::test::genericWitnessOperations()) {
     generic::Function body;
     body.signature = op.signature;
     generic::Call call{"site", op.name, {}, {}};
@@ -278,7 +279,8 @@ int main() {
       body.returns.push_back(op.signature.inputs.size() + i);
     body.body.push_back(std::move(call));
     accept(generic::check(body, boundTypeConstructors(),
-                          boundOperationContracts(), boundCapabilityRules()));
+                          zkc::test::genericWitnessOperations(),
+                          boundCapabilityRules()));
   }
   program::LocalDefinitions module;
   module.bindings.push_back(

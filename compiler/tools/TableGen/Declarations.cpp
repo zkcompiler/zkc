@@ -99,6 +99,9 @@ struct Model {
         familyCases(order.sort("ZKC_TypeFamilyCase")),
         associatedTypes(order.sort("ZKC_AssociatedType")),
         capabilityExports(order.sort("ZKC_CapabilityExport")) {
+    if (records.getAllDerivedDefinitions("ZKC_Declaration").size() > 100000)
+      PrintFatalError("declaration record limit");
+    validateMathematicalDeclarations(records);
     validate();
   }
   void validate();
@@ -190,10 +193,8 @@ void Model::validate() {
             "duplicate source family case");
     auto ep = element->getValueAsListOfDefs("parameters");
     auto rp = result->getValueAsListOfDefs("parameters");
-    require(element->getValueAsBit("commonGeneric") &&
-                result->getValueAsBit("commonGeneric") && ep.size() == 1 &&
-                rp.size() == 1 && sameParameter(ep[0], rp[0]),
-            r, "source family parameter mismatch");
+    require(ep.size() == 1 && rp.size() == 1 && sameParameter(ep[0], rp[0]), r,
+            "source family parameter mismatch");
   }
   for (const auto *f : families)
     require(!name(f).empty() && any_of(familyCases,
@@ -208,8 +209,7 @@ void Model::validate() {
     auto member = r->getValueAsString("member");
     auto *t = r->getValueAsDef("constructor");
     auto ps = t->getValueAsListOfDefs("parameters");
-    require(kind == "Domain" && identifier(member) &&
-                t->getValueAsBit("commonGeneric") && ps.size() == 1 &&
+    require(kind == "Domain" && identifier(member) && ps.size() == 1 &&
                 sameParameter(ps[0], owner),
             r, "associated source type parameter mismatch");
     require(associatedKeys.emplace(sort.str(), member.str()).second, r,
@@ -228,10 +228,8 @@ void Model::validate() {
   for (const auto *r : typeExports) {
     checkExport(r);
     auto *t = r->getValueAsDef("type");
-    require(
-        t->isSubClassOf("ZKC_TypeFamily") ||
-            (t->isSubClassOf("ZKC_Type") && t->getValueAsBit("commonGeneric")),
-        r, "source export requires an admitted type");
+    require(t->isSubClassOf("ZKC_TypeFamily") || t->isSubClassOf("ZKC_Type"), r,
+            "source export requires an admitted type");
   }
   for (const auto *r : capabilityExports) {
     checkExport(r);
@@ -248,7 +246,7 @@ void Model::validateOperation(const Record *op) {
               stage == "CompilerGenerated" || stage == "Physical",
           op, "unknown authoring stage");
   auto scope = op->getValueAsListOfDefs("scope");
-  require(scope.size() <= 128, op, "static scope limit");
+  require(scope.size() <= 1024, op, "static scope limit");
   std::set<const Record *> available;
   std::set<std::string> roots;
   std::set<std::string> derived;
@@ -269,9 +267,6 @@ void Model::validateOperation(const Record *op) {
       for (const auto *arg : args)
         key += ":" + std::to_string(llvm::find(scope, arg) - scope.begin());
       require(derived.insert(key).second, op, "duplicate scoped application");
-      if (op->getValueAsBit("commonGeneric"))
-        require(head->getValueAsBit("commonGeneric"), op,
-                "common application uses unsupported constructor");
     } else if (term->isSubClassOf("ZKC_Natural")) {
       require(parameter(p).first == "Nat" && !optionalDef(term, "parent") &&
                   !optionalDef(term, "member"),
@@ -310,11 +305,36 @@ void Model::validateOperation(const Record *op) {
     for (const auto *arg : args)
       require(available.count(arg), op, "unscoped typed reference");
   };
+  for (auto field : {"inputs", "outputs", "requirements", "facets"})
+    require(op->getValueAsListOfDefs(field).size() <= 1024, op,
+            "operation declaration limit");
+  if (auto *family = optionalDef(op, "numerical")) {
+    auto *field = family->getValueAsDef("fieldTerm");
+    const auto result = family->getValueAsString("result");
+    auto [kind, sort] = parameter(field->getValueAsDef("parameter"));
+    require(scope.size() == 1 && scope[0] == field &&
+                field->isSubClassOf("ZKC_Root") && kind == "Domain" &&
+                sort == "Field" && stage == "CompilerGenerated" &&
+                name(op->getValueAsDef("parameters")) ==
+                    "NumericalExpression" &&
+                (result == "map" || result == "sum" || result == "product") &&
+                op->getValueAsListOfDefs("inputs").empty() &&
+                op->getValueAsListOfDefs("outputs").empty() &&
+                op->getValueAsListOfDefs("facets").empty(),
+            op, "invalid numerical signature family");
+    auto needs = op->getValueAsListOfDefs("requirements");
+    require(needs.size() == 1 &&
+                name(needs[0]->getValueAsDef("capability")) == "Field" &&
+                needs[0]->getValueAsListOfDefs("arguments") == Records{field},
+            op, "numerical family requires its exact Field capability");
+  } else {
+    require(name(op->getValueAsDef("parameters")) != "NumericalExpression", op,
+            "numerical expression requires an explicit signature family");
+  }
   for (auto port : {"inputs", "outputs"}) {
     for (const auto *app : op->getValueAsListOfDefs(port)) {
       if (!app->isSubClassOf("ZKC_Apply")) {
         require(stage == "Construction" &&
-                    !op->getValueAsBit("commonGeneric") &&
                     (StringRef(port) == "inputs" ||
                      op->isSubClassOf("SequenceOperation")) &&
                     available.count(app) && app->isSubClassOf("ZKC_Root") &&
@@ -327,9 +347,6 @@ void Model::validateOperation(const Record *op) {
       auto *constructor = app->getValueAsDef("constructor");
       validateParameters(op, constructor->getValueAsListOfDefs("parameters"),
                          args);
-      if (op->getValueAsBit("commonGeneric"))
-        require(constructor->getValueAsBit("commonGeneric"), op,
-                "common operation uses unsupported constructor");
     }
   }
   auto inputs = op->getValueAsListOfDefs("inputs");
@@ -494,7 +511,14 @@ void Model::validateFacets(const Record *op) {
       require(rule == "Constant" || rule == "Length" || rule == "Multiply" ||
                   rule == "Divide",
               op, "unknown domain value rule");
-      if (rule != "Constant")
+      if (rule == "Constant") {
+        auto index = r->getValueAsInt("input");
+        require(
+            index >= 0 &&
+                index <
+                    op->getValueAsDef("parameters")->getValueAsInt("minimum"),
+            op, "constant facet outside parameter signature");
+      } else
         port(r, "input", false);
       if (rule == "Multiply" || rule == "Divide")
         port(r, "otherInput", false);
@@ -673,7 +697,7 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
       emitParameter(p);
       os << ",";
     }
-    os << "}, " << boolean(type->getValueAsBit("commonGeneric"));
+    os << "}";
     for (auto fact : {"nativeLocal", "mathematical", "participants",
                       "constructible", "message"})
       os << ", " << boolean(type->getValueAsBit(fact));
@@ -698,8 +722,6 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
   os << "llvm::ArrayRef<generic::TypeConstructor> boundTypeConstructors() {\n"
         "static const std::vector<generic::TypeConstructor> values = {\n";
   for (const auto *t : m.types) {
-    if (!t->getValueAsBit("commonGeneric"))
-      continue;
     std::vector<StringRef> sorts;
     for (const auto *p : t->getValueAsListOfDefs("parameters")) {
       auto [kind, sort] = parameter(p);
@@ -736,59 +758,63 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
          << quote(result.second) << ";\n";
   }
   os << "return {}; }\n";
-  for (bool construction : {false, true}) {
-    os << "llvm::ArrayRef<generic::Operation> "
-       << (construction ? "nonGenericOperationContracts"
-                        : "boundOperationContracts")
-       << "() {\nstatic const std::vector<generic::Operation> values = {\n";
-    for (const auto *op : m.operations) {
-      if (construction ? op->getValueAsBit("commonGeneric")
-                       : !op->getValueAsBit("commonGeneric"))
-        continue;
-      auto scope = op->getValueAsListOfDefs("scope");
-      os << "{" << quote(name(op)) << ", {{{";
-      for (const auto *t : scope) {
-        os << "{" << quote(name(t)) << ", ";
-        auto *parent = optionalDef(t, "parent");
-        os << (parent ? std::to_string(termIndex(scope, parent))
-                      : "std::nullopt")
-           << ", ";
-        if (t->isSubClassOf("ZKC_Apply"))
-          os << "std::vector<unsigned>" << arguments(scope, t);
-        else
-          os << "std::nullopt";
-        os << "},";
-      }
-      std::vector<StringRef> sorts;
-      for (const auto *t : scope) {
-        auto [kind, sort] = parameter(t->getValueAsDef("parameter"));
-        sorts.push_back(kind == "Domain" ? sort : kind);
-      }
-      os << "}, " << strings(sorts) << ", {";
-      for (auto [i, t] : enumerate(scope))
-        if (t->isSubClassOf("ZKC_Natural"))
-          os << "{" << i << ", " << quote(number(t, "number")) << "},";
-      os << "}}, ";
-      for (auto field : {"inputs", "outputs"}) {
-        os << "{";
-        for (const auto *app : op->getValueAsListOfDefs(field)) {
-          if (app->isSubClassOf("ZKC_Apply"))
-            os << "{" << quote(name(app->getValueAsDef("constructor"))) << ", "
-               << arguments(scope, app) << "},";
-          else
-            os << "{\"\", {}, " << termIndex(scope, app) << "},";
-        }
-        os << "}, ";
-      }
-      os << "{";
-      for (const auto *r : op->getValueAsListOfDefs("requirements"))
-        os << "requirements::Predicate::holds("
-           << quote(name(r->getValueAsDef("capability"))) << ", "
-           << arguments(scope, r) << "),";
-      os << "}}},\n";
+  os << "llvm::ArrayRef<generic::Operation> executableOperationContracts() {\n"
+        "static const std::vector<generic::Operation> values = {\n";
+  for (const auto *op : m.operations) {
+    auto scope = op->getValueAsListOfDefs("scope");
+    os << "{" << quote(name(op)) << ", {{{";
+    for (const auto *t : scope) {
+      os << "{" << quote(name(t)) << ", ";
+      auto *parent = optionalDef(t, "parent");
+      os << (parent ? std::to_string(termIndex(scope, parent)) : "std::nullopt")
+         << ", ";
+      if (t->isSubClassOf("ZKC_Apply"))
+        os << "std::vector<unsigned>" << arguments(scope, t);
+      else
+        os << "std::nullopt";
+      os << "},";
     }
-    os << "}; return values; }\n";
+    std::vector<StringRef> sorts;
+    for (const auto *t : scope) {
+      auto [kind, sort] = parameter(t->getValueAsDef("parameter"));
+      sorts.push_back(kind == "Domain" ? sort : kind);
+    }
+    os << "}, " << strings(sorts) << ", {";
+    for (auto [i, t] : enumerate(scope))
+      if (t->isSubClassOf("ZKC_Natural"))
+        os << "{" << i << ", " << quote(number(t, "number")) << "},";
+    os << "}}, ";
+    for (auto field : {"inputs", "outputs"}) {
+      os << "{";
+      for (const auto *app : op->getValueAsListOfDefs(field)) {
+        if (app->isSubClassOf("ZKC_Apply"))
+          os << "{" << quote(name(app->getValueAsDef("constructor"))) << ", "
+             << arguments(scope, app) << "},";
+        else
+          os << "{\"\", {}, " << termIndex(scope, app) << "},";
+      }
+      os << "}, ";
+    }
+    os << "{";
+    for (const auto *r : op->getValueAsListOfDefs("requirements"))
+      os << "requirements::Predicate::holds("
+         << quote(name(r->getValueAsDef("capability"))) << ", "
+         << arguments(scope, r) << "),";
+    os << "}}, ";
+    if (auto *family = optionalDef(op, "numerical")) {
+      auto result = family->getValueAsString("result");
+      os << "generic::NumericalSignature{"
+         << termIndex(scope, family->getValueAsDef("fieldTerm"))
+         << ", generic::NumericalSignature::Result::"
+         << (result == "map"   ? "Map"
+             : result == "sum" ? "Sum"
+                               : "Product")
+         << "}";
+    } else
+      os << "std::nullopt";
+    os << "},\n";
   }
+  os << "}; return values; }\n";
   os << "llvm::ArrayRef<OperationShape> operationShapes() {\nstatic const "
         "std::vector<OperationShape> "
         "values = {\n";
@@ -868,6 +894,91 @@ json::Array parametersJSON(const Record *r) {
     result.push_back(parameterJSON(p));
   return result;
 }
+json::Object scopeTermJSON(const Record *term, ArrayRef<const Record *> scope) {
+  if (term->isSubClassOf("ZKC_Apply")) {
+    json::Array args;
+    for (const auto *argument : term->getValueAsListOfDefs("arguments"))
+      args.push_back(termIndex(scope, argument));
+    return json::Object{
+        {"kind", "apply"},
+        {"constructor", name(term->getValueAsDef("constructor"))},
+        {"arguments", std::move(args)}};
+  }
+  if (term->isSubClassOf("ZKC_Natural"))
+    return json::Object{{"kind", "natural"}, {"value", number(term, "number")}};
+  if (auto *parent = optionalDef(term, "parent"))
+    return json::Object{{"kind", "project"},
+                        {"member", name(term->getValueAsDef("member"))},
+                        {"parent", termIndex(scope, parent)}};
+  return json::Object{
+      {"kind", "root"},
+      {"name", name(term)},
+      {"parameter", parameterJSON(term->getValueAsDef("parameter"))}};
+}
+json::Array applicationsJSON(const Record *op, StringRef field) {
+  auto scope = op->getValueAsListOfDefs("scope");
+  json::Array result;
+  for (const auto *app : op->getValueAsListOfDefs(field)) {
+    if (field != "requirements" && !app->isSubClassOf("ZKC_Apply")) {
+      result.push_back(json::Object{{"term", termIndex(scope, app)}});
+      continue;
+    }
+    json::Array args;
+    for (const auto *term : app->getValueAsListOfDefs("arguments"))
+      args.push_back(termIndex(scope, term));
+    auto key = field == "requirements" ? "capability" : "constructor";
+    result.push_back(json::Object{{key, name(app->getValueAsDef(key))},
+                                  {"arguments", std::move(args)}});
+  }
+  return result;
+}
+json::Object facetJSON(const Record *facet) {
+  const auto kind = facetKind(facet);
+  json::Object result{{"kind", kind}};
+  auto integer = [&](StringRef field) {
+    result[field] = facet->getValueAsInt(field);
+  };
+  auto optionalPort = [&](StringRef field) {
+    auto value = facet->getValueAsInt(field);
+    result[field] = value < 0 ? json::Value(nullptr) : json::Value(value);
+  };
+  if (kind == "Mathematical")
+    result["identity"] = name(facet->getValueAsDef("identity"));
+  else if (kind == "History" || kind == "Observation" || kind == "Sampling") {
+    integer("stateInput");
+    integer("stateOutput");
+    if (kind == "Observation")
+      integer("payloadInput");
+    if (kind == "Sampling") {
+      result["provider"] = name(facet->getValueAsDef("provider"));
+      result["domain"] = name(facet->getValueAsDef("domain"));
+      integer("valueOutput");
+      optionalPort("boundInput");
+    }
+  } else if (kind == "Diagonal" || kind == "Contraction") {
+    integer(kind == "Diagonal" ? "factorsInput" : "coefficientsInput");
+    integer("valuesInput");
+    if (kind == "Diagonal")
+      integer("resultOutput");
+  } else if (kind == "Coset") {
+    integer("shiftInput");
+    integer("sizeInput");
+    result["sizeIsLength"] = facet->getValueAsBit("sizeIsLength");
+    result["foldedOutput"] = facet->getValueAsBit("foldedOutput");
+    optionalPort("vectorOutput");
+  } else if (kind == "DomainValue") {
+    const auto rule = name(facet->getValueAsDef("rule"));
+    result["rule"] = rule;
+    integer("output");
+    if (rule == "Constant")
+      result["parameter"] = facet->getValueAsInt("input");
+    else
+      integer("input");
+    if (rule == "Multiply" || rule == "Divide")
+      integer("otherInput");
+  }
+  return result;
+}
 json::Object inventory(const Model &m) {
   json::Object result{{"format", "zkc.contract-declarations/0"}};
   json::Array sorts;
@@ -875,7 +986,7 @@ json::Object inventory(const Model &m) {
     sorts.push_back(name(sort));
   result["sorts"] = std::move(sorts);
   json::Array types, ops, members, rules, capabilities, exports, families,
-      associatedTypes;
+      associatedTypes, meanings, intrinsics;
   for (const auto *t : m.types)
     types.push_back(
         json::Object{{"name", name(t)},
@@ -883,7 +994,6 @@ json::Object inventory(const Model &m) {
                      {"copy", t->getValueAsBit("copy")},
                      {"drop", t->getValueAsBit("drop")},
                      {"custody", name(t->getValueAsDef("custody"))},
-                     {"commonGeneric", t->getValueAsBit("commonGeneric")},
                      {"nativeLocal", t->getValueAsBit("nativeLocal")},
                      {"mathematical", t->getValueAsBit("mathematical")},
                      {"participants", t->getValueAsBit("participants")},
@@ -903,69 +1013,38 @@ json::Object inventory(const Model &m) {
   for (const auto *op : m.operations) {
     auto scope = op->getValueAsListOfDefs("scope");
     json::Array terms, facets;
-    for (const auto *t : scope) {
-      json::Object term{
-          {"name", name(t)},
-          {"parameter", parameterJSON(t->getValueAsDef("parameter"))}};
-      if (const auto *parent = optionalDef(t, "parent"))
-        term["parent"] = termIndex(scope, parent);
-      if (t->isSubClassOf("ZKC_Apply")) {
-        json::Array args;
-        for (const auto *a : t->getValueAsListOfDefs("arguments"))
-          args.push_back(termIndex(scope, a));
-        term["arguments"] = std::move(args);
-      }
-      if (t->isSubClassOf("ZKC_Natural"))
-        term["constant"] = number(t, "number");
-      terms.push_back(std::move(term));
-    }
-    auto *p = op->getValueAsDef("parameters");
+    for (const auto *term : scope)
+      terms.push_back(scopeTermJSON(term, scope));
+    const auto *p = op->getValueAsDef("parameters");
+    const auto maximum = p->getValueAsInt("maximum");
     json::Object object{
         {"name", name(op)},
         {"scope", std::move(terms)},
         {"stage", name(op->getValueAsDef("stage"))},
-        {"commonGeneric", op->getValueAsBit("commonGeneric")},
-        {"parameters", json::Object{{"validator", name(p)},
-                                    {"minimum", p->getValueAsInt("minimum")},
-                                    {"maximum", p->getValueAsInt("maximum")}}}};
+        {"parameters",
+         json::Object{{"validator", name(p)},
+                      {"minimum", p->getValueAsInt("minimum")},
+                      {"maximum", maximum < 0 ? json::Value(nullptr)
+                                              : json::Value(maximum)}}},
+        {"requirements", applicationsJSON(op, "requirements")}};
     if (auto *field = optionalDef(op, "parameterField"))
       object["parameters"].getAsObject()->try_emplace("fieldTerm",
                                                       termIndex(scope, field));
     if (!p->getValueAsString("assetFormat").empty())
       object["parameters"].getAsObject()->try_emplace(
           "assetFormat", p->getValueAsString("assetFormat"));
-    for (auto field : {"inputs", "outputs", "requirements"}) {
-      json::Array apps;
-      for (const auto *a : op->getValueAsListOfDefs(field)) {
-        if (StringRef(field) != "requirements" &&
-            !a->isSubClassOf("ZKC_Apply")) {
-          apps.push_back(json::Object{{"term", termIndex(scope, a)}});
-          continue;
-        }
-        json::Array args;
-        for (const auto *t : a->getValueAsListOfDefs("arguments"))
-          args.push_back(termIndex(scope, t));
-        auto key =
-            StringRef(field) == "requirements" ? "capability" : "constructor";
-        apps.push_back(json::Object{{key, name(a->getValueAsDef(key))},
-                                    {"arguments", std::move(args)}});
-      }
-      object[field] = std::move(apps);
-    }
-    for (const auto *f : op->getValueAsListOfDefs("facets")) {
-      json::Object facet{{"kind", facetKind(f)}};
-      for (const auto &v : f->getValues()) {
-        if (v.isTemplateArg())
-          continue;
-        if (auto *n = dyn_cast<IntInit>(v.getValue()))
-          facet[v.getName()] = n->getValue();
-        else if (auto *b = dyn_cast<BitInit>(v.getValue()))
-          facet[v.getName()] = b->getValue();
-        else if (auto *d = dyn_cast<DefInit>(v.getValue()))
-          facet[v.getName()] = name(d->getDef());
-      }
-      facets.push_back(std::move(facet));
-    }
+    if (auto *family = optionalDef(op, "numerical"))
+      object["signature"] = json::Object{
+          {"kind", "numerical"},
+          {"fieldTerm", termIndex(scope, family->getValueAsDef("fieldTerm"))},
+          {"result", family->getValueAsString("result")}};
+    else
+      object["signature"] =
+          json::Object{{"kind", "fixed"},
+                       {"inputs", applicationsJSON(op, "inputs")},
+                       {"outputs", applicationsJSON(op, "outputs")}};
+    for (const auto *facet : op->getValueAsListOfDefs("facets"))
+      facets.push_back(facetJSON(facet));
     object["facets"] = std::move(facets);
     if (auto *counterpart = optionalDef(op, "derivedCounterpart"))
       object["derivedCounterpart"] = name(counterpart);
@@ -991,6 +1070,28 @@ json::Object inventory(const Model &m) {
         json::Object{{"module", r->getValueAsString("module")},
                      {"name", name(r)},
                      {"predicate", name(r->getValueAsDef("capability"))}});
+  for (const auto *identity : m.order.sort("ZKC_MathematicalIdentity")) {
+    json::Value laws = nullptr;
+    if (const auto *l = optionalDef(identity, "laws")) {
+      json::Object fields;
+      for (auto key : {"algebra", "signature", "leftIdentity", "rightIdentity",
+                       "annihilator", "access"})
+        fields[key] = l->getValueAsString(key);
+      for (auto key : {"associative", "commutative", "total", "scalarAction"})
+        fields[key] = l->getValueAsBit(key);
+      laws = std::move(fields);
+    }
+    meanings.push_back(
+        json::Object{{"name", name(identity)}, {"laws", std::move(laws)}});
+  }
+  for (const auto *intrinsic : m.order.sort("ZKC_MathematicalIntrinsic"))
+    intrinsics.push_back(
+        json::Object{{"name", name(intrinsic)},
+                     {"identity", name(intrinsic->getValueAsDef("identity"))},
+                     {"domainKind", intrinsic->getValueAsString("domainKind")},
+                     {"naturals", intrinsic->getValueAsInt("naturals")},
+                     {"domainPoints", intrinsic->getValueAsBit("domainPoints")},
+                     {"scalar", intrinsic->getValueAsBit("scalar")}});
   result["types"] = std::move(types);
   result["operations"] = std::move(ops);
   result["members"] = std::move(members);
@@ -999,6 +1100,8 @@ json::Object inventory(const Model &m) {
   result["exports"] = std::move(exports);
   result["families"] = std::move(families);
   result["associatedTypes"] = std::move(associatedTypes);
+  result["mathematicalIdentities"] = std::move(meanings);
+  result["mathematicalIntrinsics"] = std::move(intrinsics);
   return result;
 }
 } // namespace

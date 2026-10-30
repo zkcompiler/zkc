@@ -32,8 +32,8 @@ def inventory(toolchain):
         toolchain.tool("compiler", "zkc-tblgen"), "--dump-contract-declarations",
         "-I", ROOT / "compiler/include", ROOT / "compiler/include/zkc/Contracts/Declarations.td"]))
     assert declarations["format"] == "zkc.contract-declarations/0"
-    operation_fields = {"name", "scope", "stage", "commonGeneric", "parameters",
-                        "inputs", "outputs", "requirements", "facets"}
+    operation_fields = {"name", "scope", "stage", "parameters",
+                        "signature", "requirements", "facets"}
     for operation in declarations["operations"]:
         assert operation_fields <= operation.keys()
         assert operation.keys() <= operation_fields | {"derivedCounterpart"}
@@ -156,7 +156,8 @@ def test_atomic_formation_and_properties(inventory, drivers, directory):
     candidates = pairs | {(kind, domain["identity"])
                           for kind in profile["types"]["atomic"]
                           for domain in catalog["domains"]}
-    candidates |= {(kind, "") for kind in profile["types"]["outside_common_carrier"]}
+    # Native container names are not logical constructor declarations.
+    candidates |= {("scalar", ""), ("capability", "")}
     candidates = sorted(candidates)
     requests = [{"type": kind + (":" + domain if domain else "")} for kind, domain in candidates]
     replies = query(drivers, requests, directory)
@@ -323,18 +324,6 @@ def candidates(inventory):
 
 
 def expected_ports(operation, arguments, inventory):
-    # Numerical calls own their positional signature outside generic terms.
-    if operation["name"] in ("numerical.map", "numerical.sum", "numerical.product"):
-        field, mask = arguments
-        return {
-            "inputs": ["index"] + [f"{'vector' if bit == '1' else 'field'}:{field}" for bit in mask],
-            "outputs": [f"{'vector' if operation['name'] == 'numerical.map' else 'field'}:{field}"],
-        }
-    # resource_unit is an explicitly documented non-generic core carrier. Its
-    # nominal slot is not represented by the generated generic scope.
-    if operation["name"].startswith("resource_unit."):
-        return {direction: ["resource_unit:" + arguments[0] for _ in operation[direction]]
-                for direction in ("inputs", "outputs")}
     return INVENTORY.instantiate(operation, arguments, inventory[0], inventory[1])
 
 
@@ -842,7 +831,7 @@ def expected_facets(operation, group, declarations, policy):
     if group == "sequence":
         # The declaration's open Type root has no copy bound. This is a
         # conservative declaration facet, independent of closed admission.
-        result["unclassifiedProviderEffect"] = bool(operation["inputs"])
+        result["unclassifiedProviderEffect"] = bool(operation["signature"]["inputs"])
         return result
     # Current covered declarations have no open or affine nested Type terms.
     # Verify that restriction before using input-head custody as the expected
@@ -850,12 +839,12 @@ def expected_facets(operation, group, declarations, policy):
     assert not any(root["parameter"]["kind"] == "Type" for root in INVENTORY.roots(operation)), (
         operation["name"], "review instantiated provider-effect classification for Type roots")
     types = INVENTORY.indexed(declarations["types"])
-    assert all("arguments" in term and types[term["name"]]["copy"]
-               for term in operation["scope"] if term["parameter"]["kind"] == "Type"), (
+    assert all("arguments" in term and types[term["constructor"]]["copy"]
+               for term in operation["scope"] if term["kind"] == "apply"), (
         operation["name"], "review provider-effect expectations for affine nested Type terms")
     result["unclassifiedProviderEffect"] = not (result["sampling"] or result["observation"]) and (
         group == "resource" or any(types[port["constructor"]]["custody"] == "Affine"
-                                   for port in operation["inputs"]))
+                                   for port in operation["signature"].get("inputs", [])))
     return result
 
 

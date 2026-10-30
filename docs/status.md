@@ -10,7 +10,7 @@ Links identify maintained checks, not a claim that they ran for this revision.
 
 Artifacts use one current schema with exact tags, record shapes and unknown-field
 validation. Existing tools currently use the versions below. The foundation's
-specified replacement schemas are not yet implemented; their tags remain `/0`.
+specified replacement schemas are being implemented; their tags remain `/0`.
 Specification owners define the
 accepted contents; the [maintenance policy](development/maintenance.md#format-versions)
 defines when versions change.
@@ -18,10 +18,15 @@ defines when versions change.
 The [native foundation](spec/ir/native-foundation.md) is being implemented on
 the landed frontend and Common-export-retirement base. Native aggregate types
 now retain structural identities, alternatives and payload types; Host values
-retain typed layouts with named fields and native leaves. The
+retain typed layouts with named fields and native leaves. Host operations carry
+named fields instead of JSON operation descriptors. The neutral declaration
+inventory now publishes the complete tagged catalog, including numerical
+signature families and nominal resource slots. Its C++ consumers use one
+operation collection; interpreter-profile membership is no longer a declaration
+flag. Rust catalog generation and typed invocation remain pending. The
 [interface inventory](spec/formats/foundation-interfaces.md) defines the remaining
-catalog, source/constructed export, realization-record and application-map
-cutovers. Replacement shared-schema emission, execution-wrapper retirement and
+source/constructed export, realization-record and application-map
+cutovers. Their replacement emission, execution-wrapper retirement and
 complete stage-admission migration remain in progress. Current and designed
 schemas share development version `0`. Lean work and validation are outside
 this native unit; native structure does not claim a formal interpretation.

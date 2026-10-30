@@ -8,7 +8,6 @@ def SequenceValue : ZKC_Apply<TypeSequence, [SequenceElement]>;
 class SequenceOperation<string name, list<ZKC_Term> inputs, list<ZKC_Term> outputs>
     : ZKC_Operation<name, [SequenceElement], inputs, outputs> {
   let stage = Construction;
-  let commonGeneric = 0;
 }
 def OpSequenceEmpty : SequenceOperation<"sequence.empty",
     [], [SequenceValue]>;
