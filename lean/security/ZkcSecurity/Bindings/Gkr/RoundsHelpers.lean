@@ -2,7 +2,7 @@ module
 
 public import Zkc.Protocols.Gkr.Source.RoundHelpers
 public import Zkc.Protocols.AlgebraicRounds.Gate
-public import Zkc.Source.Structured.MapEvaluation
+public import Zkc.Source.Structured.MapShapeLaws
 public import Zkc.Source.Structured.CollectionReferenceLaws
 public import Zkc.Source.TypedABI
 public import ZkcSecurity.Bindings.Gkr.RoundsLayout
@@ -41,7 +41,8 @@ theorem values_domain (v0 v1 v2 v3 : List F) :
   simp only [gateValuesLeftCollection, DomainSpec.admit, DomainBody.admit, DomainNode.admit,
     Collection.values, Collection.type, Collection.element, TypedABI.get_cons_there, Values.get, Operands.eval]
   rw [list_map_range v0 0, list_map_range v1 0, list_map_range v2 0, list_map_range v3 0]
-  simp only [Evaluation.mapShape, Evaluation.mapShapeRemaining]
+  simp only [Evaluation.mapShape_cons,
+    Evaluation.mapShapeRemaining_cons, Evaluation.mapShapeRemaining_nil]
   all_goals by_cases small0 : v0.length < indexLimit <;> simp_all only [Finite.continueWith, ↓reduceIte, eq_comm]
   all_goals by_cases small1 : v1.length < indexLimit <;> simp_all only [zipDomainRows_ranges, Values.append, ↓reduceIte]
   all_goals by_cases same1 : v1.length = v0.length <;> simp_all only [↓reduceIte, eq_comm]
@@ -63,7 +64,8 @@ theorem quadratics_domain (v0 v1 v2 v3 v4 v5 v6 v7 : List F) :
   simp only [gateQuadraticsCollection, DomainSpec.admit, DomainBody.admit, DomainNode.admit,
     Collection.values, Collection.type, Collection.element, TypedABI.get_cons_there, Values.get, Operands.eval]
   rw [list_map_range v0 0, list_map_range v1 0, list_map_range v2 0, list_map_range v3 0, list_map_range v4 0, list_map_range v5 0, list_map_range v6 0, list_map_range v7 0]
-  simp only [Evaluation.mapShape, Evaluation.mapShapeRemaining]
+  simp only [Evaluation.mapShape_cons,
+    Evaluation.mapShapeRemaining_cons, Evaluation.mapShapeRemaining_nil]
   all_goals by_cases small0 : v0.length < indexLimit <;> simp_all (maxSteps := 1000000) only [Finite.continueWith, ↓reduceIte, eq_comm]
   all_goals by_cases small1 : v1.length < indexLimit <;> simp_all (maxSteps := 1000000) only [zipDomainRows_ranges, Values.append, ↓reduceIte]
   all_goals by_cases same1 : v1.length = v0.length <;> simp_all (maxSteps := 1000000) only [↓reduceIte, eq_comm]

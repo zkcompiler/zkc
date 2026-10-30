@@ -449,6 +449,7 @@ import Zkc.Source.Structured.LogicalTransport
 import Zkc.Source.Structured.LoopPresentation
 import Zkc.Source.Structured.MapEvaluation
 import Zkc.Source.Structured.MapLaws
+import Zkc.Source.Structured.MapShapeLaws
 import Zkc.Source.Structured.MathematicsAliases
 import Zkc.Source.Structured.Meaning
 import Zkc.Source.Structured.ModelAdmission
