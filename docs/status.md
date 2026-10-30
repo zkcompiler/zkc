@@ -19,7 +19,13 @@ The [native foundation](spec/ir/native-foundation.md) is being implemented on
 the landed frontend and Common-export-retirement base. Native aggregate types
 now retain structural identities, alternatives and payload types; Host values
 retain typed layouts with named fields and native leaves. Host operations carry
-named fields instead of JSON operation descriptors. The neutral declaration
+named fields instead of JSON operation descriptors. Checked Entry bodies now
+emit directly to Func/CF and explicit Exec outcomes. The Host artifact reader
+reconstructs schemas, captures and control from actual SSA; `HostPlan`,
+`entry.body` and `entry.signature` are removed. Only parameter names remain as
+source signature metadata. Source comparison derives its expected artifact
+independently, and reconstructed JSON owns its data beyond the MLIR context.
+The neutral declaration
 inventory now publishes the complete tagged catalog, including numerical
 signature families and nominal resource slots. Its C++ consumers use one
 operation collection; interpreter-profile membership is no longer a declaration

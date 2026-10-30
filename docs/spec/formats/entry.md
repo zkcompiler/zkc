@@ -371,6 +371,14 @@ The retained original uses standard `func` and `cf` control with explicit
 Data. Every fallible call exposes a returned payload or terminal stop;
 `exec.dispatch` propagates the stop through the actual CFG. The independent
 reader checks the complete graph, actual operands and continuation arguments.
+The compiler emits this original directly from the checked source. Functions
+retain only ordered parameter names in `entry.parameters`; actual native ports
+determine their schemas. Conditional and loop region captures are explicit block
+arguments, including unused and repeated captures. Native reconstruction derives
+the artifact from those operands, operations and control edges. It does not read
+a stored body or signature document. The closed Host profile checks every block,
+the exact unsigned loop condition and latch, and all stop/continuation edges;
+arbitrary CFG restructuring requires a separately admitted reader profile.
 The executable Host stop has no ordinary results and bypasses the suffix.
 Operation argument/result signatures, complete variant coverage, region captures
 and loop-carried values must agree; a reference cannot select a structurally

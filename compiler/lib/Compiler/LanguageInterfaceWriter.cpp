@@ -19,9 +19,9 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
                      StringRef original, StringRef toolchain,
                      const Limits &limits) {
   if (entry.entry().kind == Declaration::Kind::EntryFunction) {
-    auto plan = planHost(entry, limits);
-    if (!plan)
-      return plan.takeError();
+    auto signatures = renderHostSignatures(entry, limits);
+    if (!signatures)
+      return signatures.takeError();
     auto value = json::Object{
         {"format", "zkc.language-interface/0"},
         {"capture", entry.project().capture().identity().str()},
@@ -30,7 +30,7 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
         {"entry", entry.name()},
         {"selection",
          json::Object{{"kind", "function"}, {"function", entry.root().symbol}}},
-        {"functions", std::move(plan->signatures)},
+        {"functions", std::move(*signatures)},
         {"protocols", json::Array{}},
         {"relations", json::Array{}},
         {"setups", json::Array{}}};

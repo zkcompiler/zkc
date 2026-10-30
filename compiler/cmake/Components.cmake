@@ -281,6 +281,8 @@ add_zkc_component(IR
 add_zkc_component(Translation
   lib/Translation/ExecutionEmission.cpp
   lib/Translation/Entry.cpp
+  lib/Translation/Entry/Emission.cpp
+  lib/Translation/Entry/Reader.cpp
   lib/Translation/Language/Emission.cpp
   lib/Translation/Language/DataPreconditions.cpp
   lib/Translation/Language/FiniteEmission.cpp

@@ -98,6 +98,12 @@ Recursive Host layouts support standard MLIR attribute aliases. Their printed
 nesting therefore need not grow with source schema depth. Aliases change no
 layout identity, logical depth allowance or parser resource ceiling; native
 formation still inspects the complete expanded structure.
+Host emission lowers checked source directly to Func/CF, Data operations and
+Exec outcomes. Explicit region arguments retain captures; ordinary native ports
+and layouts retain schemas. Function metadata supplies only parameter names.
+Independent artifact reconstruction reads actual SSA and checks the complete
+closed control profile, without a body-shaped annotation or duplicate signature
+document. Expected source rendering belongs only to boundary comparison.
 Logical formation checks typed catalog arguments and all nominal variant
 alternatives. A represented carrier additionally checks its exact logical type,
 representation identity and ordered represented children. Sequence and variant
