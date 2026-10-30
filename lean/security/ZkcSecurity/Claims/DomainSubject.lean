@@ -3,7 +3,7 @@ module
 public import ZkcSecurity.Endpoint.DomainCompiled
 public import Zkc.Construction.RetainedTarget
 public import Zkc.Source.Structured.DomainContract
-public import ZkcSecurity.Claims.Model
+public import Zkc.Claims.Registry
 
 @[expose] public section
 
