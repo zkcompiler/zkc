@@ -19,9 +19,9 @@ participant = "lean/ZkcExamples/Construction/SumcheckProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/SumcheckArtifact.lean"
 program = "lean/ZkcExamples/Executable/SumcheckProofProgramData.lean"
 facts = "lean/ZkcExamples/Executable/SumcheckProofFacts.lean"
-artifacts = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Artifacts.lean"
-lowering = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Lowering.lean"
-claims = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Claims.lean"
+artifacts = "lean/integrations/arklib/ZkcArkLibExamples/Subjects/Sumcheck/Artifacts.lean"
+lowering = "lean/integrations/arklib/ZkcArkLibExamples/Subjects/Sumcheck/Lowering.lean"
+claims = "lean/integrations/arklib/ZkcArkLibExamples/Subjects/Sumcheck/Claims.lean"
 
 [source_views]
 selections = ["SumcheckSource", "SumcheckReduction", "SumcheckRepacked"]
@@ -60,7 +60,7 @@ inputs = "values"
 
 [receipt]
 theorem = "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.adaptive_soundness"
-security_module = "ZkcArkLib.Examples.ExecutableSumcheckFiatShamir"
+security_module = "ZkcArkLibExamples.ExecutableSumcheckFiatShamir"
 chain = [
   "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.adaptive_soundness",
   "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.reduced_soundness",
@@ -105,4 +105,4 @@ used = [
 
 [lean]
 namespace = "ZkcSecurity.Examples.Subjects.Sumcheck"
-imports = ["ZkcArkLib.Examples.Subjects.Sumcheck.Registration"]
+imports = ["ZkcArkLibExamples.Subjects.Sumcheck.Registration"]

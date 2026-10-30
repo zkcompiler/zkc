@@ -1,6 +1,7 @@
-import ZkcSecurity.Obligations.HonestComposition
+import ZkcSecurity.ProgramLogic.HonestComposition
 import Zkc.Semantics.MonadExecution
 import VCVio.OracleComp.Constructions.SampleableType.Measure
+import VCVio.OracleComp.EvalDist.Sum
 import TestsSecurity.PrivateProducerWP
 
 /-! Controls over actual PIR executions and the existing `OptionT ProbComp`

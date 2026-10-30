@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.FiatShamir.DomainReduction
+public import ZkcSecurity.Bindings.Transcript.DomainReduction
 
 @[expose] public section
 

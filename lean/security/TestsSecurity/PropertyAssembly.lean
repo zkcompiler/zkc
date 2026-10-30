@@ -1,5 +1,5 @@
-import ZkcSecurity.Tools.ComponentDerivation
-import ZkcSecurity.Obligations.RepeatedComponent
+import ZkcSecurityTools.ComponentDerivation
+import ZkcSecurity.ProgramLogic.RepeatedComponent
 import Tests.Obligations
 import TestsSecurity.Obligations
 set_option autoImplicit false

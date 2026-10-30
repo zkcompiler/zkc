@@ -1,5 +1,5 @@
-import ZkcSecurity.VCVio.UniformChallenge
-import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
+import ZkcSecurity.Mathematics.Oracle.UniformChallenge
+import ZkcSecurityExamples.CompiledSchnorrFiatShamir
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.Field.ZMod
 

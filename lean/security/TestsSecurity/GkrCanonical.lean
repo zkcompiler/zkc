@@ -1,6 +1,6 @@
-import ZkcSecurity.Realizations.Gkr.Canonical
+import ZkcSecurityExamples.Gkr.Canonical
 import TestsSecurity.GkrRootEncoding
-import ZkcSecurity.Realizations.Gkr.CanonicalReadback
+import ZkcSecurityExamples.Gkr.CanonicalReadback
 import Zkc.Construction.DomainProducer
 
 set_option autoImplicit false

@@ -8,7 +8,7 @@ subject is adding physical configuration and typed Lean exports, with no
 Python edit. `lean/bridges/pipeline/manifest.py` loads and validates them.
 
 The composed-Sumcheck manifest route has been retired. The same source project
-is the `TwoSums` selection in `ZkcSecurity.Generation.Roots.Catalogue`; its
+is the `TwoSums` selection in `ZkcSecurityExamples.Generation.Roots.Catalogue`; its
 generated subject, soundness requests and completeness receipt are checked by
 `python3 lean/checks/check_subject_roots.py --exports DIRECTORY`. Use that root's
 exact requests and receipts, rather than the former manifest's unresolved
@@ -56,7 +56,7 @@ root.
 | `source_views` | `selections` | Lean source-view catalogue selections; every output is regenerated, rebuilt and included in report freshness |
 | `lean` | `namespace`, `imports` | generated declaration namespace and maintained Lean registration imports; physical configuration only |
 | `lean` | `library` | optional qualified `ClaimConstruction.Library` declaration; defaults to `Registration.library` in the generated namespace |
-| `assumptions` | `requested` | identifiers of the assumption registry (`ZkcSecurity.Registry`) the author expects; the driver refuses others |
+| `assumptions` | `requested` | identifiers of the assumption registry (`ZkcSecurity.Claims.Registry`) the author expects; the driver refuses others |
 | `mutations` | `kinds` | generic mutation kinds the driver applies (see below) |
 | `executable` | `threshold` | `"derived"`: the acceptance threshold comes from the Lean charge |
 | `executable` | `public`, `witness` | runtime inputs; default `<project>/inputs/<Entry>/{public,witness}.json` |

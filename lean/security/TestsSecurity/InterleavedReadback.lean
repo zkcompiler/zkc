@@ -1,5 +1,5 @@
-import ZkcSecurity.Examples.Components.SequentialSigma
-import ZkcSecurity.Domains.PrimeField
+import ZkcSecurityExamples.Components.SequentialSigma
+import ZkcSecurity.Bindings.Models.PrimeField
 import Mathlib.Algebra.Field.ZMod
 import TestsSecurity.SampledReadback
 

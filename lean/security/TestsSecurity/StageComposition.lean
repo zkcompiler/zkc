@@ -1,5 +1,5 @@
-import ZkcSecurity.Stage.Joint
-import ZkcSecurity.Commitment.Opening
+import ZkcSecurity.Transformations.Stages.Joint
+import ZkcSecurity.Transformations.Commitment.Opening
 import ZkcTools.DeclarationAudit
 
 /-! Composition of stage relations: a control where the transported budget matters, and the

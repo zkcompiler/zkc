@@ -1086,14 +1086,18 @@ def test_production_report_consumes_final_lean_scope_status(security_kernel_reco
 def source_kernel_records():
     """Audit real pair and heterogeneous-domain receipts, not mock metadata."""
     root = Path(__file__).resolve().parents[3] / "lean"
-    modules = ["ZkcSecurity.Examples.Generated.SmallSumcheckCompletenessClaims",
-               "ZkcSecurity.Examples.EmbeddingEqualityClient"]
+    subjects = [
+        ("ZkcSecurityExamples.Generated.SmallSumcheckCompletenessClaims",
+         "ZkcSecurity.Examples.Generated.SmallSumcheckCompletenessClaims", "complete"),
+        ("ZkcSecurityExamples.EmbeddingEqualityClient",
+         "ZkcSecurity.Examples.EmbeddingEqualityClient", "ideal"),
+    ]
+    modules = [module for module, _, _ in subjects]
     subprocess.run(["lake", "build", *["+" + name for name in modules]], cwd=root / "security",
                    check=True, capture_output=True, text=True)
-    names = [(modules[0], "completeData"), (modules[0], "completeReceipt"),
-             (modules[1], "idealData"), (modules[1], "idealReceipt")]
     payload = {"format": "zkc.receipt-audit-input/0", "operation": "extract",
-               "records": [{"name": module + "." + name, "module": module} for module, name in names]}
+               "records": [{"name": namespace + "." + prefix + suffix, "module": module}
+                           for module, namespace, prefix in subjects for suffix in ("Data", "Receipt")]}
     result = subprocess.run(["lake", "env", str(root / ".lake/build/bin/declaration-records"),
                              "--receipt-status"], cwd=root / "security", input=json.dumps(payload) + "\n",
                             check=True, capture_output=True, text=True)
@@ -1103,18 +1107,18 @@ def source_kernel_records():
     return declarations.Records({"security": exported["headers"][0]}, exported["records"])
 
 
-@pytest.mark.parametrize("module,prefix,expected_links", [
+@pytest.mark.parametrize("namespace,prefix,expected_links", [
     ("ZkcSecurity.Examples.Generated.SmallSumcheckCompletenessClaims", "complete",
      {"pair.checked", "pair.source", "construction.checked", "pair.occurrences",
       "pair.producer_connection", "pair.validator_connection"}),
     ("ZkcSecurity.Examples.EmbeddingEqualityClient", "ideal",
      {"construction.checked", "construction.source_connection"}),
 ])
-def test_all_source_subject_shapes_keep_their_actual_stage_links(source_kernel_records, module, prefix, expected_links):
+def test_all_source_subject_shapes_keep_their_actual_stage_links(source_kernel_records, namespace, prefix, expected_links):
     api = load("source_shape_receipt_cli", "lean/checks/check_records.py").reports
     records = source_kernel_records
-    request = records.get(module + "." + prefix + "Data")
-    receipt = records.get(module + "." + prefix + "Receipt")
+    request = records.get(namespace + "." + prefix + "Data")
+    receipt = records.get(namespace + "." + prefix + "Receipt")
     _, _, discharged, reasons = api.audit_receipt(receipt, request,
         request["detail"]["claim_data"]["wire_request"], api.Registry([], []), records)
     assert reasons == [], reasons

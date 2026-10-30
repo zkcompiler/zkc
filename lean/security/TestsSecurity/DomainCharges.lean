@@ -1,5 +1,5 @@
-import ZkcSecurity.Examples.Generated.SmallSumcheck
-import ZkcSecurity.Examples.Generated.TwoSums
+import ZkcSecurityExamples.Generated.SmallSumcheck
+import ZkcSecurityExamples.Generated.TwoSums
 import ZkcSecurity.Claims.DomainSoundness
 
 /-! Charge admission and classification at actual generated source occurrences.

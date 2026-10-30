@@ -192,7 +192,7 @@ example : TestsSecurity.ABIInstallations.Constrained.subject.HonestInput (inputs
     elimination = next(line for line in root.splitlines() if " := data_surjective values" in line)
     zero = r'''
 module
-public import ZkcSecurity.Tools.SubjectABI
+public import ZkcSecurityTools.SubjectABI
 public import TestsSecurity.ABIInstallations.Fixtures
 @[expose] public section
 noncomputable section

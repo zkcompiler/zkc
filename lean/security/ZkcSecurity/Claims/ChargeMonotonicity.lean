@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.FiatShamir.Interface
+public import ZkcSecurity.ProgramLogic.Transcript.Interface
 
 @[expose] public section
 

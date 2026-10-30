@@ -1,5 +1,5 @@
 import Tests.SumcheckSourceProperties
-import ZkcSecurity.Realizations.Sumcheck.SourceLossless
+import ZkcSecurityExamples.Sumcheck.SourceLossless
 
 set_option autoImplicit false
 noncomputable section

@@ -1,4 +1,4 @@
-import ZkcSecurity.FiatShamir.Roles
+import ZkcSecurity.Transformations.FiatShamir.Roles
 import VCVio.OracleComp.QueryTracking.RandomOracle.EagerTable
 
 /-! Support for the counterexamples.

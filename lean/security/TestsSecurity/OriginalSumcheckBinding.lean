@@ -1,7 +1,7 @@
 module
 
 import ZkcExamples.Structured.OriginalSumcheckTerminal
-import ZkcSecurity.Realizations.Sumcheck.OriginalRawSource
+import ZkcSecurity.Bindings.Sumcheck.OriginalRawSource
 
 /-! Controls for original Reduce admission, optional ABI and call identity.
 These use the actual source body and helpers, with arbitrary field inputs. -/

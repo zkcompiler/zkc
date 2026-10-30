@@ -3,8 +3,8 @@ module
 public import ZkcExamples.Structured.Generated.Scalar.SumcheckSourceLibrary
 
 public import ZkcExamples.Structured.SumcheckSourceViews
-public import ZkcExamples.Structured.SumcheckPreludeNormalForms
-public import ZkcExamples.Structured.NormalFormSteps
+public import Zkc.Protocols.Sumcheck.Source.PreludeNormalForms
+public import Zkc.Source.Structured.NormalForm.Steps
 public import Zkc.Source.Structured.NormalForm.Presentation
 
 @[expose] public section

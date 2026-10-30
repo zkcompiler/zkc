@@ -1,7 +1,7 @@
 module
 
 public import Mathlib.LinearAlgebra.Lagrange
-public import ZkcSecurity.Algebra.Polynomial
+public import ZkcSecurity.Mathematics.Algebra.Polynomial
 
 @[expose] public section
 

@@ -1,7 +1,7 @@
 module
 
 public import TestsSecurity.RootConnectionFixture
-public import ZkcSecurity.FiatShamir.RootConnectionExecution
+public import ZkcSecurity.Bindings.Transcript.RootConnectionExecution
 
 @[expose] public section
 

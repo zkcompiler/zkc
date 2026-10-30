@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Realizations.Gkr.RootEncoding
+public import ZkcSecurity.Bindings.Gkr.RootEncoding
 public import Mathlib.Data.Rat.Defs
 
 @[expose] public section

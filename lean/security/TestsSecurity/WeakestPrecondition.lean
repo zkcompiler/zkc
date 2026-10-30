@@ -1,6 +1,6 @@
 module
 
-import ZkcSecurity.Obligations.WeakestPrecondition
+import ZkcSecurity.ProgramLogic.WeakestPrecondition
 
 @[expose] section
 

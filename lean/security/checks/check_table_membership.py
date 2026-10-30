@@ -18,7 +18,7 @@ import time
 
 
 PACKAGE = Path(__file__).resolve().parents[1]
-PREFIX = "ZkcSecurity.Examples.TableMembership."
+PREFIX = "ZkcSecurityExamples.TableMembership."
 
 
 def inherit_objects(source: Path, target: Path) -> None:
@@ -88,7 +88,7 @@ def main() -> None:
         record()
 
     compile_module(PREFIX + "Subject")
-    compile_module("ZkcSecurity.Generation.TableMembership")
+    compile_module("ZkcSecurityExamples.Generation.TableMembership")
     run("generate", ["lean", "--run", "checks/RunTableMembershipABI.lean", str(sources)])
     emitted = [PREFIX + suffix for suffix in ("ABI", "Endpoint")]
     before = {module: (sources / Path(*module.split("."))).with_suffix(".lean").read_bytes()

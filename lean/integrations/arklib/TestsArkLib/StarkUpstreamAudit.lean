@@ -2,7 +2,7 @@ import ArkLib.ProofSystem.Stir.OutOfDomSmpl
 import ArkLib.ProofSystem.Stir.Quotienting
 import ArkLib.ProofSystem.Stir.Combine
 import ArkLib.Data.CodingTheory.ProximityGap.CapacityBounds.Powers
-import ZkcSecurity.Algebra.Polynomial
+import ZkcSecurity.Mathematics.Algebra.Polynomial
 import ZkcTools.DeclarationAudit
 
 /-! Transitive dependency audit of the pinned STIR reuse candidates. The general

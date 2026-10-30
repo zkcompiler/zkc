@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.FiatShamir.PublicSourceSupport
+public import ZkcSecurity.Bindings.Transcript.PublicSourceSupport
 public import TestsSecurity.RootConnectionControls
 
 @[expose] public section

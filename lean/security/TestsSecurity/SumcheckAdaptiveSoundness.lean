@@ -1,5 +1,5 @@
-import ZkcSecurity.Examples.Generated.Components.SmallSumcheckSoundness
-import ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness
+import ZkcSecurityExamples.Generated.Components.SmallSumcheckSoundness
+import ZkcSecurityExamples.Generated.Components.TwoSumsSoundness
 import ZkcSecurity.Claims.CompiledSoundness
 import TestsSecurity.DomainCharges
 

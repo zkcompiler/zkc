@@ -1,8 +1,8 @@
 import ZkcSecurity.Claims.Resolution
 import ZkcSecurity.Claims.Arithmetic
 import Zkc.Claims.Receipt
-import ZkcArkLib.Examples.Subjects.Sumcheck.Evidence
-import ZkcArkLib.Examples.Subjects.Sumcheck.Lowering
+import ZkcArkLibExamples.Subjects.Sumcheck.Evidence
+import ZkcArkLibExamples.Subjects.Sumcheck.Lowering
 
 /-! The actual Sumcheck source-shaped scalar requests, at both interpreted
 stages, retain symbolic Q and a universally bound application context. -/

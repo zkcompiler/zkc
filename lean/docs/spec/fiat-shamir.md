@@ -265,7 +265,7 @@ Chaum–Pedersen, two-proof AND and Okamoto proof Entries have fixed-statement
 knowledge soundness as applications of the registered knowledge endpoint
 ([endpoints](fiat-shamir-security.md#endpoints-over-artifact-indexed-evidence)).
 
-`ZkcSecurity.Examples.CompiledSchnorrFiatShamir` answers every challenge with
+`ZkcSecurityExamples.CompiledSchnorrFiatShamir` answers every challenge with
 one lazily sampled random oracle on histories, which the prover may query at any
 history. `verify_eq` shows that the compiled verifier asks one challenge, at its
 initialized transcript followed by the commitment message and the challenge
@@ -294,7 +294,7 @@ the authored one retained by the Proof Entry's export
 (`SchnorrProofBinding.Relation`, the retained formula's process; it equals the
 Interactive import's relation, `relation_iff_interactive`). The experiment's
 initial history is the binding of the checked public values
-(`initial_binds_public`). `ZkcSecurity.Examples.StructuredSchnorrFiatShamir`
+(`initial_binds_public`). `ZkcSecurityExamples.StructuredSchnorrFiatShamir`
 states the same bound for the transform of the imported interactive verifier's
 Sigma instance.
 

@@ -1,6 +1,6 @@
-import ZkcSecurity.VCVio.UniformChallenge
-import ZkcSecurity.Examples.SchnorrAndSigma
-import ZkcSecurity.Examples.ChaumPedersenSigma
+import ZkcSecurity.Mathematics.Oracle.UniformChallenge
+import ZkcSecurityExamples.SchnorrAndSigma
+import ZkcSecurityExamples.ChaumPedersenSigma
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.Field.ZMod
 

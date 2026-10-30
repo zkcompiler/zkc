@@ -1,6 +1,6 @@
 schema = "zkc.component-roots/0"
 # Root-specific source and theorem selections. Structural assembly is generic.
-model_module = "ZkcSecurity.Domains.PrimeField"
+model_module = "ZkcSecurity.Bindings.Models.PrimeField"
 model = "ZkcSecurity.Domains.PrimeField.blsScalarModel"
 registry = "Zkc.Source.Structured.OpaqueRegistry.empty"
 sampling = "ZkcSecurity.Domains.PrimeField.rawSampleable blsModulus"
@@ -39,7 +39,7 @@ entry = "example::Proof"
 modules = {}
 target = "equality"
 method = "direct"
-proof_module = "ZkcSecurity.Examples.SampledAbort"
+proof_module = "ZkcSecurityExamples.SampledAbort"
 proof_name = "ZkcSecurity.Examples.SampledAbort.compiled_ideal_complete"
 error_bound = "1 / (Fintype.card (ZMod blsModulus) : ENNReal)"
 error_expression = '.binary .div (.natural 1) (.application "cardinality" none [(none, .reference "bls12-381.fr")])'

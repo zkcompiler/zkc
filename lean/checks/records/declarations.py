@@ -23,8 +23,8 @@ PACKAGES = {
                     "ZkcTools/JsonSupport.lean", "ZkcTools/ProofAccount.lean",
                     "ZkcTools/StructuredSource",
                     "ZkcTools/ConstructionBindings"]),
-    "security": (LEAN / "security", ["ZkcSecurity", "TestsSecurity"]),
-    "arklib": (LEAN / "integrations/arklib", ["ZkcArkLib", "TestsArkLib"]),
+    "security": (LEAN / "security", ["ZkcSecurity", "ZkcSecurityTools", "ZkcSecurityExamples", "TestsSecurity"]),
+    "arklib": (LEAN / "integrations/arklib", ["ZkcArkLib", "ZkcArkLibExamples", "TestsArkLib"]),
     "clean": (LEAN / "integrations/clean", ["ZkcClean", "TestsClean", "CleanExamples"]),
 }
 # The registry tables the emitter evaluates where the package defines them.

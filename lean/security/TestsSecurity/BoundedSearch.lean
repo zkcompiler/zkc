@@ -1,4 +1,4 @@
-import ZkcSecurity.FiatShamir.BoundedSearch
+import ZkcSecurity.Transformations.FiatShamir.BoundedSearch
 
 /-! Honest finite search is a probabilistic computation, not an assumption that
 repeated cached nonces are independent. These controls exercise empty search,

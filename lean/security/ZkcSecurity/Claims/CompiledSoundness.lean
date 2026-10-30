@@ -1,9 +1,9 @@
 module
 
 public import ZkcSecurity.Claims.DomainSoundness
-public import ZkcSecurity.FiatShamir.DomainAdaptive
-public import ZkcSecurity.FiatShamir.DomainBinding
-public import ZkcSecurity.Obligations.Derivation
+public import ZkcSecurity.Bindings.Transcript.DomainAdaptive
+public import ZkcSecurity.Bindings.Transcript.DomainBinding
+public import ZkcSecurity.ProgramLogic.Derivation
 
 @[expose] public section
 noncomputable section

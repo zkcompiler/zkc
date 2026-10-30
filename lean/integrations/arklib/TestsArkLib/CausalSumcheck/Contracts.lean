@@ -1,6 +1,6 @@
 module
 
-public import ZkcArkLib.Examples.CausalSumcheck.Terminal
+public import ZkcArkLibExamples.CausalSumcheck.Terminal
 public import TestsArkLib.CausalSumcheck.Handlers
 
 @[expose] public section

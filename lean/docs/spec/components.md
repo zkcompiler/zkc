@@ -28,14 +28,15 @@ flowchart TD
 | `Zkc.Source.Structured` | Typed admission, source identity, complete helper and protocol bodies, normal forms and their soundness |
 | `Zkc.Construction` | Constructed participant/pair admission, nominal values, execution, views and source-occurrence correspondence |
 | `Zkc.Obligations` | Yes/No promises, contexts, frames and structural derivations without a probability dependency |
-| `ZkcSecurity.Obligations` | Actual-distribution escape laws and interpretation into the existing reduction engine |
-| `ZkcSecurity.Algebra` | Shared algebraic probability lemmas independent of a protocol family |
-| `ZkcSecurity.Source` | Composition and installation of properties on occurrence-preserving source processes |
+| `ZkcSecurity.ProgramLogic` | Actual-distribution escape laws and interpretation into the existing reduction engine |
+| `ZkcSecurity.Mathematics.Algebra` | Shared algebraic probability lemmas independent of a protocol family |
+| `ZkcSecurity.Bindings.Source` | Composition and installation of properties on occurrence-preserving source processes |
 | `ZkcSecurity.Families` | Mathematical reference/message laws and reusable family consumers |
-| `ZkcSecurity.Realizations` | Checked laws for concrete source implementations, under the subject-level dependency boundary |
-| `ZkcSecurity.Examples` | Exact source-body instances, selected subjects and root proof applications |
+| `ZkcSecurity.Bindings` | Reusable source-template, representation and actual-subject interfaces |
+| `ZkcSecurityExamples` | Exact exported artifacts, root selections and application proofs |
+| `ZkcSecurityExamples` | Exact source-body instances, selected subjects and root proof applications |
 | `ZkcSecurity.Claims` | Request-owned models and canonical meanings, stage links and receipt admission |
-| `ZkcTools`, `ZkcSecurity.Generation` and test generators | Candidate search and ordinary Lean source emission; their output must be checked |
+| `ZkcTools`, `ZkcSecurityTools.Generation` and test generators | Candidate search and ordinary Lean source emission; their output must be checked |
 
 The dependency audit rejects reusable family code importing source-specific
 examples. A family can require a typed helper-law record; an example supplies
@@ -138,7 +139,7 @@ lean/security/checks/check_derivation_accounts.py` emits a separate discharge
 account from the actual SmallSumcheck and TwoSums charged receipts.
 `ZkcTools.ProofAccount` inspects applications in checked declaration bodies;
 the method defines its checkpoints once in
-`ZkcSecurity.Generation.SumcheckAccounts`. Initialization, preservation, exit,
+`ZkcSecurityExamples.Generation.SumcheckAccounts`. Initialization, preservation, exit,
 frame and terminal rows retain their selected proof terms, inferred types,
 complete local telescopes, dependency paths and source occurrences. Root
 applications bind actual schedules, raw inputs, claims and round counts;
@@ -356,7 +357,7 @@ probability bound refers to the actual sampling distribution. Uniform
 finite-field root counting is one instance, not an assumption for every
 challenge kind.
 
-`ZkcSecurity.Algebra.Polynomial` owns the general univariate root and
+`ZkcSecurity.Mathematics.Algebra.Polynomial` owns the general univariate root and
 agreement bounds. Sumcheck consumes those lemmas alongside its reference and
 message laws. Other algebraic protocols can use the same probability library
 without importing Sumcheck's reference semantics.
@@ -508,7 +509,7 @@ leaf proves a different stage's claim and remains supported until its stage
 transport and claim-preservation obligations are discharged.
 
 Common root assembly is owned by `ZkcTools.StructuredSource.Root` and
-`ZkcSecurity.Generation.RootCompleteness`. It emits the source-indexed subject,
+`ZkcSecurityTools.Generation.RootCompleteness`. It emits the source-indexed subject,
 actual ABI elimination, pair correspondence obligation and canonical endpoint;
 the installed proof method supplies the mathematical obligations and their
 proofs. `Generation.UniformRoot` is an opt-in presentation for a uniform scalar
@@ -566,7 +567,7 @@ Use `--check` with a detached output directory to compare regenerated sources
 and check the emitted proofs.
 
 Reusable laws for the installed table implementation live in
-`ZkcSecurity.Realizations.Sumcheck`. `DomainHelpers.Bodies` checks exact source
+`ZkcSecurity.Bindings.Sumcheck`. `DomainHelpers.Bodies` checks exact source
 bodies and dependencies; `ReadbackHelpers` and `ValidatorHelpers` give honest
 and arbitrary-input terminal laws for that implementation. Roots reuse these
 laws by proving body membership, rather than reproving arithmetic or selecting

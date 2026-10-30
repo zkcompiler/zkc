@@ -24,7 +24,7 @@ admitted dependency of general upstream combination, which these adapters avoid.
 `FiatShamir.Realization` and the dependent clients remain here.
 `Examples.Subjects.Guess` and `Examples.Subjects.Sumcheck` keep their artifact,
 contract, evidence and claim files together. `ZkcArkLib.Registry` registers
-optional schemas; record readers combine it with `ZkcSecurity.Registry` and
+optional schemas; record readers combine it with `ZkcSecurity.Claims.Registry` and
 reject collisions. Generic security does not depend on this package.
 
 From the repository root:

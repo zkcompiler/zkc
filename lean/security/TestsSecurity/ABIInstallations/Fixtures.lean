@@ -1,9 +1,9 @@
 module
 
 public import Zkc.Source.Structured.UnitViews
-public import ZkcSecurity.Tools.PairConstruction
-public import ZkcSecurity.Claims.SubjectABI
-public import ZkcSecurity.Domains.PrimeField
+public import ZkcSecurityTools.PairConstruction
+public import ZkcSecurity.Bindings.Subjects.ABI
+public import ZkcSecurity.Bindings.Models.PrimeField
 
 @[expose] public section
 noncomputable section

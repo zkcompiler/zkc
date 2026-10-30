@@ -1,10 +1,10 @@
 module
 
-public import ZkcSecurity.Source.PublicProperties
-public import ZkcSecurity.Source.LoopContracts
+public import ZkcSecurity.Bindings.Source.PublicProperties
+public import ZkcSecurity.Bindings.Source.LoopContracts
 public import ZkcSecurity.Families.Sumcheck.Round
 public import Zkc.Obligations.ClaimRelation
-public meta import ZkcSecurity.Tools.SourceProperties.Builder
+public meta import ZkcSecurityTools.SourceProperties.Builder
 
 @[expose] public section
 

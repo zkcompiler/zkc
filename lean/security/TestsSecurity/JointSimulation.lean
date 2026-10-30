@@ -1,5 +1,5 @@
 import TestsSecurity.StageComposition
-import ZkcSecurity.Commitment.Repeats
+import ZkcSecurity.Transformations.Commitment.Repeats
 import ZkcTools.DeclarationAudit
 
 /-! A constructed frame: a tagged provider for the joint oracle, composed with the committed

@@ -1,5 +1,5 @@
-import ZkcSecurity.Examples.Generated.FourSumsSoundnessClaims
-import ZkcSecurity.Examples.Generated.FourSumsCompletenessClaims
+import ZkcSecurityExamples.Generated.FourSumsSoundnessClaims
+import ZkcSecurityExamples.Generated.FourSumsCompletenessClaims
 
 /-! Exact source requests and independent proof-dependency checks. Loading this
 as a non-module audit makes private theorem bodies available to the traversal. -/

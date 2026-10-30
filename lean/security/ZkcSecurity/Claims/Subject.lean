@@ -2,6 +2,7 @@ module
 
 public import Zkc.Claims.Registry
 public import ZkcSecurity.Claims.Extractor
+public import ZkcSecurity.Bindings.Participants.Evidence
 
 @[expose] public section
 

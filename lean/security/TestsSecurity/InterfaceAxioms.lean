@@ -1,11 +1,11 @@
-import ZkcSecurity.Stage.Joint
-import ZkcSecurity.HashChain.Instance
-import ZkcSecurity.HashChain.Bytes
-import ZkcSecurity.FiatShamir.Budget
-import ZkcSecurity.FiatShamir.Reduction
-import ZkcSecurity.FiatShamir.Binding
-import ZkcSecurity.Commitment.HistoryKeys
-import ZkcSecurity.Commitment.Repeats
+import ZkcSecurity.Transformations.Stages.Joint
+import ZkcSecurity.Transformations.HashChain.Instance
+import ZkcSecurity.Transformations.HashChain.Bytes
+import ZkcSecurity.ProgramLogic.Transcript.Budget
+import ZkcSecurity.ProgramLogic.Transcript.Reduction
+import ZkcSecurity.Transformations.FiatShamir.Binding
+import ZkcSecurity.Transformations.Commitment.HistoryKeys
+import ZkcSecurity.Transformations.Commitment.Repeats
 import ZkcTools.DeclarationAudit
 
 /-! Axiom closures and dependency rules of the shared interfaces: the core transcript interface
@@ -16,10 +16,10 @@ declaration of these modules passes the declaration audit. -/
 
 run_cmd do
   ZkcTools.DeclarationAudit.check
-    [`Zkc.Transcript, `ZkcSecurity.FiatShamir.Interface, `ZkcSecurity.FiatShamir.Typed,
-     `ZkcSecurity.FiatShamir.Keyed, `ZkcSecurity.FiatShamir.Reduction,
-     `ZkcSecurity.FiatShamir.Budget, `ZkcSecurity.FiatShamir.Lifting,
-     `ZkcSecurity.FiatShamir.Binding, `ZkcSecurity.Stage, `ZkcSecurity.Oracle,
-     `ZkcSecurity.VCVio.Pruning, `ZkcSecurity.VCVio.Memo, `ZkcSecurity.Commitment,
-     `ZkcSecurity.HashChain]
+    [`Zkc.Transcript, `ZkcSecurity.ProgramLogic.Transcript.Interface, `ZkcSecurity.ProgramLogic.Transcript.Typed,
+     `ZkcSecurity.ProgramLogic.Transcript.Keyed, `ZkcSecurity.ProgramLogic.Transcript.Reduction,
+     `ZkcSecurity.ProgramLogic.Transcript.Budget, `ZkcSecurity.ProgramLogic.Transcript.Lifting,
+     `ZkcSecurity.Transformations.FiatShamir.Binding, `ZkcSecurity.Transformations.Stages, `ZkcSecurity.ProgramLogic.Games, `ZkcSecurity.Mathematics.Oracle, `ZkcSecurity.Transformations.Oracle,
+     `ZkcSecurity.Mathematics.Oracle.Pruning, `ZkcSecurity.Mathematics.Oracle.Memo, `ZkcSecurity.Transformations.Commitment,
+     `ZkcSecurity.Transformations.HashChain]
     "SHARED-INTERFACES-AUDIT-PASS"

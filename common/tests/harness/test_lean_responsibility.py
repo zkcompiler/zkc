@@ -16,9 +16,9 @@ def classifier():
 
 
 @pytest.mark.parametrize("path, layer", [
-    ("lean/integrations/arklib/ZkcSecurity/Examples/Subjects/Sumcheck/Evidence.lean", "security-subjects"),
-    ("lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Evidence.lean", "optional-subjects"),
-    ("lean/security/ZkcSecurity/Examples/Subjects/Schnorr/Evidence.lean", "security-subjects"),
+    ("lean/security/ZkcSecurityExamples/Subjects/Sumcheck/Evidence.lean", "security-subjects"),
+    ("lean/integrations/arklib/ZkcArkLibExamples/Subjects/Sumcheck/Evidence.lean", "optional-subjects"),
+    ("lean/security/ZkcSecurityExamples/Subjects/Schnorr/Evidence.lean", "security-subjects"),
 ])
 def test_subject_location_does_not_decide_mathematics_or_glue(path, layer):
     row = classifier().classify(path)
@@ -42,8 +42,8 @@ def test_unreviewed_integration_remains_unclassified():
 
 
 def test_package_move_does_not_change_logical_responsibility():
-    old = classifier().classify("lean/integrations/arklib/ZkcSecurity/Stage/Relation.lean")
-    new = classifier().classify("lean/security/ZkcSecurity/Stage/Relation.lean")
+    old = classifier().classify("lean/integrations/arklib/ZkcSecurity/Transformations/Stage/Relation.lean")
+    new = classifier().classify("lean/security/ZkcSecurity/Transformations/Stage/Relation.lean")
     assert old == new
 
 
@@ -70,8 +70,23 @@ def test_deleted_path_can_still_be_classified():
 
 
 def test_family_investment_is_not_silently_counted_as_instantiation():
-    row = classifier().classify("lean/integrations/arklib/ZkcSecurity/Families/Schnorr.lean")
+    row = classifier().classify("lean/security/ZkcSecurity/Families/Sigma/Schnorr.lean")
     assert row.edit_candidates == ("M", "S")
+    assert "I" not in row.edit_candidates
+
+
+@pytest.mark.parametrize("path,candidates", [
+    ("ZkcSecurity/Mathematics/Fields/KoalaBear.lean", ("S",)),
+    ("ZkcSecurity/ProgramLogic/Transcript/Reduction.lean", ("S",)),
+    ("ZkcSecurity/Transformations/FiatShamir/Soundness.lean", ("S",)),
+    ("ZkcSecurity/Bindings/Sumcheck/SourceFamilyRoots.lean", ("M", "S")),
+    ("ZkcSecurity/Claims/Methods/Knowledge.lean", ("S",)),
+    ("ZkcSecurity/Claims/Knowledge.lean", ("X",)),
+    ("ZkcSecurityTools/ClaimConstruction.lean", ("X",)),
+])
+def test_shared_security_work_has_no_per_subject_instantiation_credit(path, candidates):
+    row = classifier().classify("lean/security/" + path)
+    assert row.edit_candidates == candidates
     assert "I" not in row.edit_candidates
 
 

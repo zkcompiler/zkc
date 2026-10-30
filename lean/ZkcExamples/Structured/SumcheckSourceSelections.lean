@@ -2,7 +2,7 @@ module
 
 public import Zkc.Source.Structured.SumReferenceInstallation
 public import Zkc.Source.Structured.MultilinearAdmissionInstallation
-public import ZkcExamples.Structured.SumcheckReferenceInstallation
+public import Zkc.Protocols.Sumcheck.Source.ReferenceInstallation
 public import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs
 public import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
 public meta import ZkcTools.StructuredSource.ReferenceInstallation

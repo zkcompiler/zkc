@@ -2,7 +2,7 @@ import ZkcTools.StructuredSource.ReferenceLaws
 import Zkc.Source.Structured.ReferenceLibrary
 import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs
 import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
-import ZkcExamples.Structured.SumcheckHelperBodies
+import Zkc.Protocols.Sumcheck.Source.HelperBodies
 
 /-! The same mathematical law installs into two actual imported helper tables.
 No per-instance lookup, closed-body, ABI-decoding or source equation is authored.

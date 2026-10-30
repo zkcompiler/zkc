@@ -1,0 +1,402 @@
+module
+
+public import Zkc.Protocols.Sumcheck.Source.VerifierBodies
+public import Zkc.Protocols.Sumcheck.Source.RoundLaws
+public import Zkc.Source.Structured.NormalForm.Steps
+public import Zkc.Source.DenotationLaws
+public import Zkc.Source.Structured.NormalForm.Presentation
+
+@[expose] public section
+
+/-! Mathematical presentations under explicit checked helper-body laws.
+The participant normalizer constructs each form directly from the typed body.
+These library laws retain their optional-input and complete-return statements;
+source-facing role/invocation views are generated separately by RoleViews.
+No family traversal or printer template supplies the source interpretation. -/
+namespace ZkcExamples.Structured.SumcheckRoundNormalForms
+open Zkc.Source Zkc.Source.Structured SumcheckVerifierHelpers PrimitiveLibrary
+
+/-! Action sites of the body, qualified by the application prefix. -/
+abbrev round0Site (ctx : ProtocolContext) : String :=
+  qualifyProtocolSite ctx.applicationPrefix "label_726f756e64_0"
+abbrev round1Site (ctx : ProtocolContext) : String :=
+  qualifyProtocolSite ctx.applicationPrefix "label_726f756e64_1"
+abbrev challengeSite (ctx : ProtocolContext) : String :=
+  qualifyProtocolSite ctx.applicationPrefix "label_6368616c6c656e6765"
+abbrev deliverySite (ctx : ProtocolContext) : String :=
+  qualifyProtocolSite ctx.applicationPrefix "label_64656c6976657279_0"
+
+variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
+  [DecidableEq F] [DecidableEq G]
+
+private abbrev one {ty : Ty} (value : Option (assignment F G ty)) :
+    Values (Component (assignment F G)) [ty] := .cons value .nil
+
+/-- The typed body's process at one participant, with this unit's tables. -/
+def roundFn (U : UnitPayload) (ctx : ProtocolContext) (self : Nat) :
+    RegionFunction (Component (assignment F G)) (participantInterface F G)
+      ([.index, .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .service "random.bls12-381.fr/0"], [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) :=
+  fun args => SumcheckVerifierBodies.roundBody.denote
+    (participantMeaningWith (.silent _) (participantActions F G) (plainHelpers U) self (U.plainProtocolTable F G) ctx) args.get
+
+/-- The verifier's components of the carried state; the other slots are absent. -/
+def verifierState (point : Option (List F)) (claim : Option F) :
+    Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
+  .cons none (.cons none (.cons none (.cons none (.cons point (.cons claim .nil)))))
+
+/-- The positions of the carried state the verifier presents. -/
+def verifierFinish : Values (fun (_ : Ty) => NormalForm.Carried) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
+  .cons .absent (.cons .absent (.cons .absent (.cons .absent (.cons .optional (.cons .optional .nil)))))
+
+omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+/-- Masking the carried state to its declared scopes keeps the verifier's components. -/
+theorem verifierState_masked (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 1)
+    (point : Option (List F)) (claim : Option F) :
+    maskValues self (ctx.mapScopes [[0], [0], [0], [0], [1], [1]]) (verifierState (F := F) (G := G) point claim) =
+      verifierState point claim := by
+  subst self
+  exact NormalForm.maskValues_embed (Value := assignment F G) ctx 1 verifierFinish _ rfl
+    (.cons point (.cons claim .nil))
+
+/-! Positions of the verifier's carried slots in the repeat state, in the mathematical state. -/
+abbrev verifierPointPosition : Nat := 4
+abbrev verifierPointSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) (.vector "bls12-381.fr") :=
+  (.there (.there (.there (.there .here))))
+abbrev verifierClaimPosition : Nat := 5
+abbrev verifierClaimSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) (.field "bls12-381.fr") :=
+  (.there (.there (.there (.there (.there .here)))))
+
+/-- The verifier's normal form of one body run: its ordered actions, the values it
+computes, guards as conditionals and missing inputs as stops. -/
+def verifierProcess (ctx : ProtocolContext) (service : Option Nat) (point : Option (List F)) (claim : Option F) :
+    PIR.Process (participantInterface F G) ((Option (List F)) × (Option F)) :=
+  .call (.receive (.field scalarDomain) (round0Site ctx) (ctx.roles 0)) fun (round0 : F) =>
+  .call (.receive (.field scalarDomain) (round1Site ctx) (ctx.roles 0)) fun (round1 : F) =>
+  match claim with
+  | none =>
+    .halt .incomplete
+  | some claim =>
+    if claim = round0 + round1 then
+      match service with
+      | none =>
+        .halt .incomplete
+      | some service =>
+        .call (.query (challengeSite ctx) scalarDomain (.cons service .nil)) fun (challenge : F) =>
+        .call (.send (ty := .field scalarDomain) (deliverySite ctx) (ctx.roles 0) challenge) fun _ =>
+        match point with
+        | none =>
+          .halt .incomplete
+        | some point =>
+          .done (some (point ++ [challenge]), some (((1 - challenge) * round0) + (challenge * round1)))
+    else
+      .halt .reject
+
+/-- The verifier's laws as the normalizer reads them, keyed by helper. -/
+def verifierSignature : NormalForm.Signature :=
+  ⟨[⟨SumcheckHelperBodies.appendHelper, .returns [], [.free, .free]⟩], false, false, [], []⟩
+
+/-- The results the verifier's laws present, of the mathematical helper laws. -/
+def verifierResults : NormalForm.LawResults (ringModel F G) verifierSignature.laws :=
+  ⟨fun entry => match entry with
+    | ⟨0, _⟩ => fun (args : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"]) =>
+      (.cons ((args.get .here) ++ [(args.get (.there .here))]) .nil : Values (assignment F G) [.vector "bls12-381.fr"])
+    | ⟨_ + 1, outside⟩ => absurd outside (by simp [verifierSignature])⟩
+
+/-- The verifier's inputs as the normalizer reads them. -/
+def verifierPattern : NormalForm.InputPattern [.index, .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .service "random.bls12-381.fr/0"] :=
+  .cons .present (.cons .absent (.cons .absent (.cons .absent (.cons .absent (.cons .optional (.cons .optional (.cons .optional .nil)))))))
+
+/-- The existing typed normalizer supplies the complete form. -/
+noncomputable def verifierForm : NormalForm.Form verifierSignature.laws verifierSignature.callees verifierPattern.scope [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
+  (NormalForm.normalize verifierSignature SumcheckVerifierBodies.roundBody 1 2 verifierPattern).toOption.get (by kernel_rfl)
+
+theorem verifier_normalized :
+    NormalForm.normalize verifierSignature SumcheckVerifierBodies.roundBody 1 2 verifierPattern = .ok verifierForm := by
+  kernel_rfl
+
+theorem verifier_lawsMatch : verifierForm.CallsMatch := by
+  kernel_rfl
+
+theorem verifier_finishes : verifierForm.finishes verifierFinish = true := by
+  kernel_rfl
+
+theorem verifier_environment (index : Nat) (point : Option (List F)) (claim : Option F) (service : Option Nat) :
+    verifierPattern.environment (ringModel F G) (.cons index (.cons point (.cons claim (.cons service .nil)))) =
+      (.cons (some index)
+      ((verifierState point claim).append (.cons service .nil)) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .service "random.bls12-381.fr/0"]) := by
+  kernel_rfl
+
+/-- The form's presented process is the readable process. -/
+theorem verifier_presentation (U : UnitPayload) (ctx : ProtocolContext)
+    (index : Nat) (point : Option (List F)) (claim : Option F) (service : Option Nat) :
+    verifierForm.denoteWith (ringModel F G) (plainHelpers (F := F) (G := G) U).toOn verifierResults ctx
+        (NormalForm.Runs.uniform (plainHelpers (F := F) (G := G) U) (U.plainProtocolTable F G) ctx (ctx.roles 1))
+        (NormalForm.noCallees _)
+        (NormalForm.finishLeaf (ringModel F G) verifierResults verifierFinish) (.cons index (.cons point (.cons claim (.cons service .nil)))) =
+      verifierProcess ctx service point claim := by
+  kernel_rfl
+
+theorem verifier_embedding (result : ((Option (List F)) × (Option F))) :
+    NormalForm.embed (assignment F G) verifierFinish (NormalForm.Tuple.toValues result) =
+      verifierState result.1 result.2 := by
+  kernel_rfl
+
+/-- The verifier's laws hold at its inputs, by the admitted helpers' laws. -/
+theorem verifier_laws (U : UnitPayload) (bodies : SumcheckVerifierHelpers.Bodies U.definitions) (index : Nat) (service : Option Nat) (point : Option (List F)) (claim : Option F) :
+    NormalForm.LawsHold (plainHelpers (F := F) (G := G) U).toOn verifierResults
+      (.cons (some index)
+      ((verifierState point claim).append (.cons service .nil)) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .service "random.bls12-381.fr/0"]) :=
+  fun entry => match entry with
+  | ⟨0, _⟩ => fun args pinned => match args, pinned with
+    | .cons a0 (.cons a1 .nil), ⟨_, _, _⟩ => fun values found => by
+      obtain rfl : values = (.cons (a0 ++ [a1]) .nil : Values (assignment F G) [.vector "bls12-381.fr"]) :=
+        Option.some.inj (found.symm.trans (by kernel_rfl))
+      show invoke (plainHelpers (F := F) (G := G) U).closed SumcheckHelperBodies.appendHelper _ = .done (.cons (a0 ++ [a1]) .nil : Values (assignment F G) [.vector "bls12-381.fr"])
+      exact append_plain U bodies a0 a1
+  | ⟨_ + 1, outside⟩ => absurd outside (by simp [verifierSignature])
+
+/-- The process equation of `verifierProcess`, an instance of the normalizer's soundness. -/
+theorem verifier_process (U : UnitPayload) (bodies : SumcheckVerifierHelpers.Bodies U.definitions)
+    (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 1)
+    (separate : ctx.roles 0 ≠ self)
+    (index : Nat) (service : Option Nat) (point : Option (List F)) (claim : Option F) :
+    roundFn (F := F) (G := G) U ctx self (.cons (some index)
+      ((verifierState point claim).append (.cons service .nil))) =
+      (verifierProcess ctx service point claim).bind (fun result => .done (verifierState result.1 result.2)) := by
+  subst self
+  exact (NormalForm.callback_sound_uniform verifierSignature SumcheckVerifierBodies.roundBody 1 2 verifierPattern
+    verifierFinish verifierForm verifier_normalized verifier_lawsMatch verifier_finishes ctx (.ofSeparate separate (by decide))
+    (plainHelpers (F := F) (G := G) U) (U.plainProtocolTable F G) verifierResults (NormalForm.noCallees _) (.cons index (.cons point (.cons claim (.cons service .nil)))) _
+    (verifier_environment index point claim service) (verifier_laws U bodies index service point claim) (NormalForm.noCallees_hold _ _)).trans
+    (congrArg₂ PIR.Process.bind (verifier_presentation U ctx index point claim service)
+      (funext fun result => congrArg PIR.Process.done (verifier_embedding result)))
+
+/-- The prover's components of the carried state; the other slots are absent. -/
+def proverState (entries : List F) (dimension width : Nat) (point : List F) :
+    Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
+  .cons (some entries) (.cons (some dimension) (.cons (some width) (.cons (some point) (.cons none (.cons none .nil)))))
+
+/-- The positions of the carried state the prover presents. -/
+def proverFinish : Values (fun (_ : Ty) => NormalForm.Carried) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
+  .cons .present (.cons .present (.cons .present (.cons .present (.cons .absent (.cons .absent .nil)))))
+
+omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+/-- Masking the carried state to its declared scopes keeps the prover's components. -/
+theorem proverState_masked (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 0)
+    (entries : List F) (dimension width : Nat) (point : List F) :
+    maskValues self (ctx.mapScopes [[0], [0], [0], [0], [1], [1]]) (proverState (F := F) (G := G) entries dimension width point) =
+      proverState entries dimension width point := by
+  subst self
+  exact NormalForm.maskValues_embed (Value := assignment F G) ctx 0 proverFinish _ rfl
+    (.cons entries (.cons dimension (.cons width (.cons point .nil))))
+
+/-! Positions of the prover's carried slots in the repeat state, in the mathematical state. -/
+abbrev proverEntriesPosition : Nat := 0
+abbrev proverEntriesSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) (.vector "bls12-381.fr") :=
+  .here
+abbrev proverDimensionPosition : Nat := 1
+abbrev proverDimensionSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) .index :=
+  (.there .here)
+abbrev proverWidthPosition : Nat := 2
+abbrev proverWidthSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) .index :=
+  (.there (.there .here))
+abbrev proverPointPosition : Nat := 3
+abbrev proverPointSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) (.vector "bls12-381.fr") :=
+  (.there (.there (.there .here)))
+
+/-- The prover's normal form of one body run: its ordered actions, the values it
+computes, guards as conditionals and missing inputs as stops. -/
+def proverProcess (ctx : ProtocolContext) (entries : List F) (dimension width : Nat) (point : List F) :
+    PIR.Process (participantInterface F G) ((List F) × Nat × Nat × (List F)) :=
+  .call (.send (ty := .field scalarDomain) (round0Site ctx) (ctx.roles 1) ((entries.take (entries.length / 2)).sum)) fun _ =>
+  .call (.send (ty := .field scalarDomain) (round1Site ctx) (ctx.roles 1) ((entries.drop (entries.length / 2)).sum)) fun _ =>
+  .call (.receive (.field scalarDomain) (deliverySite ctx) (ctx.roles 1)) fun (delivery : F) =>
+  .done (Zkc.Polynomial.Multilinear.restrictValues entries delivery, dimension - 1, width, point ++ [delivery])
+
+/-- The prover's laws as the normalizer reads them, keyed by helper. -/
+def proverSignature : NormalForm.Signature :=
+  ⟨[⟨SumcheckHelperBodies.sumsHelper, .returns [], [.input 1, .input 2, .input 3]⟩, ⟨MapFirstBodies.firstHelper, .returns [.result, .result, .argument 2], [.input 1, .input 2, .input 3, .free]⟩, ⟨SumcheckHelperBodies.appendHelper, .returns [], [.input 4, .free]⟩], false, false, [], []⟩
+
+/-- The results the prover's laws present, of the mathematical helper laws. -/
+def proverResults : NormalForm.LawResults (ringModel F G) proverSignature.laws :=
+  ⟨fun entry => match entry with
+    | ⟨0, _⟩ => fun (args : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]) =>
+      (.cons (((args.get .here).take ((args.get .here).length / 2)).sum) (.cons (((args.get .here).drop ((args.get .here).length / 2)).sum) .nil) : Values (assignment F G) [.field "bls12-381.fr", .field "bls12-381.fr"])
+    | ⟨1, _⟩ => fun (args : Values (assignment F G) [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr"]) =>
+      (.cons (Zkc.Polynomial.Multilinear.restrictValues (args.get .here) (args.get (.there (.there (.there .here))))) (.cons ((args.get (.there .here)) - 1) (.cons (args.get (.there (.there .here))) .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index])
+    | ⟨2, _⟩ => fun (args : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"]) =>
+      (.cons ((args.get .here) ++ [(args.get (.there .here))]) .nil : Values (assignment F G) [.vector "bls12-381.fr"])
+    | ⟨_ + 3, outside⟩ => absurd outside (by simp [proverSignature])⟩
+
+/-- The prover's inputs as the normalizer reads them. -/
+def proverPattern : NormalForm.InputPattern [.index, .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .service "random.bls12-381.fr/0"] :=
+  .cons .present (.cons .present (.cons .present (.cons .present (.cons .present (.cons .absent (.cons .absent (.cons .optional .nil)))))))
+
+/-- The existing typed normalizer supplies the complete form. -/
+noncomputable def proverForm : NormalForm.Form proverSignature.laws proverSignature.callees proverPattern.scope [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
+  (NormalForm.normalize proverSignature SumcheckVerifierBodies.roundBody 0 2 proverPattern).toOption.get (by kernel_rfl)
+
+theorem prover_normalized :
+    NormalForm.normalize proverSignature SumcheckVerifierBodies.roundBody 0 2 proverPattern = .ok proverForm := by
+  kernel_rfl
+
+theorem prover_lawsMatch : proverForm.CallsMatch := by
+  kernel_rfl
+
+theorem prover_finishes : proverForm.finishes proverFinish = true := by
+  kernel_rfl
+
+theorem prover_environment (index : Nat) (entries : List F) (dimension width : Nat) (point : List F) (service : Option Nat) :
+    proverPattern.environment (ringModel F G) (.cons index (.cons entries (.cons dimension (.cons width (.cons point (.cons service .nil)))))) =
+      (.cons (some index)
+      ((proverState entries dimension width point).append (.cons service .nil)) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .service "random.bls12-381.fr/0"]) := by
+  kernel_rfl
+
+/-- The form's presented process is the readable process. -/
+theorem prover_presentation (U : UnitPayload) (ctx : ProtocolContext)
+    (index : Nat) (entries : List F) (dimension width : Nat) (point : List F) (service : Option Nat) :
+    proverForm.denoteWith (ringModel F G) (plainHelpers (F := F) (G := G) U).toOn proverResults ctx
+        (NormalForm.Runs.uniform (plainHelpers (F := F) (G := G) U) (U.plainProtocolTable F G) ctx (ctx.roles 0))
+        (NormalForm.noCallees _)
+        (NormalForm.finishLeaf (ringModel F G) proverResults proverFinish) (.cons index (.cons entries (.cons dimension (.cons width (.cons point (.cons service .nil)))))) =
+      proverProcess ctx entries dimension width point := by
+  kernel_rfl
+
+theorem prover_embedding (result : ((List F) × Nat × Nat × (List F))) :
+    NormalForm.embed (assignment F G) proverFinish (NormalForm.Tuple.toValues result) =
+      proverState result.1 result.2.1 result.2.2.1 result.2.2.2 := by
+  kernel_rfl
+
+/-- The prover's laws hold at its inputs, by the admitted helpers' laws. -/
+theorem prover_laws (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies U.definitions) (index : Nat) (service : Option Nat) (entries : List F) (dimension width : Nat) (point : List F) (shape : HasShape entries dimension width) (bound : entries.length < indexLimit) (positive : 0 < dimension):
+    NormalForm.LawsHold (plainHelpers (F := F) (G := G) U).toOn proverResults
+      (.cons (some index)
+      ((proverState entries dimension width point).append (.cons service .nil)) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .service "random.bls12-381.fr/0"]) :=
+  fun entry => match entry with
+  | ⟨0, _⟩ => fun args pinned => match args, pinned with
+    | .cons a0 (.cons a1 (.cons a2 .nil)), ⟨p0, p1, p2, _⟩ => fun values found => by
+      obtain rfl : values = (.cons ((a0.take (a0.length / 2)).sum) (.cons ((a0.drop (a0.length / 2)).sum) .nil) : Values (assignment F G) [.field "bls12-381.fr", .field "bls12-381.fr"]) :=
+        Option.some.inj (found.symm.trans (by kernel_rfl))
+      rw [← (Option.some.inj p0 : entries = a0), ← (Option.some.inj p1 : dimension = a1), ← (Option.some.inj p2 : width = a2)]
+      show invoke (plainHelpers (F := F) (G := G) U).closed SumcheckHelperBodies.sumsHelper _ = .done (.cons ((entries.take (entries.length / 2)).sum) (.cons ((entries.drop (entries.length / 2)).sum) .nil) : Values (assignment F G) [.field "bls12-381.fr", .field "bls12-381.fr"])
+      exact SumcheckProverLaws.sums_present U bodies entries dimension width shape positive
+  | ⟨1, _⟩ => fun args pinned => match args, pinned with
+    | .cons a0 (.cons a1 (.cons a2 (.cons a3 .nil))), ⟨p0, p1, p2, _, _⟩ => fun values found => by
+      obtain rfl : values = (.cons (Zkc.Polynomial.Multilinear.restrictValues a0 a3) (.cons (a1 - 1) (.cons a2 .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]) :=
+        Option.some.inj (found.symm.trans (by kernel_rfl))
+      rw [← (Option.some.inj p0 : entries = a0), ← (Option.some.inj p1 : dimension = a1), ← (Option.some.inj p2 : width = a2)]
+      show invoke (plainHelpers (F := F) (G := G) U).closed MapFirstBodies.firstHelper _ = .done (.cons (Zkc.Polynomial.Multilinear.restrictValues entries a3) (.cons (dimension - 1) (.cons width .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index])
+      exact SumcheckProverLaws.first_present U bodies entries dimension width a3 shape bound positive
+  | ⟨2, _⟩ => fun args pinned => match args, pinned with
+    | .cons a0 (.cons a1 .nil), ⟨p0, _, _⟩ => fun values found => by
+      obtain rfl : values = (.cons (a0 ++ [a1]) .nil : Values (assignment F G) [.vector "bls12-381.fr"]) :=
+        Option.some.inj (found.symm.trans (by kernel_rfl))
+      rw [← (Option.some.inj p0 : point = a0)]
+      show invoke (plainHelpers (F := F) (G := G) U).closed SumcheckHelperBodies.appendHelper _ = .done (.cons (point ++ [a1]) .nil : Values (assignment F G) [.vector "bls12-381.fr"])
+      exact append_plain U ⟨bodies.empty, bodies.append, bodies.width, bodies.«variables», bodies.values⟩ point a1
+  | ⟨_ + 3, outside⟩ => absurd outside (by simp [proverSignature])
+
+/-- The process equation of `proverProcess`, an instance of the normalizer's soundness. -/
+theorem prover_process (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies U.definitions)
+    (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 0)
+    (separate : ctx.roles 1 ≠ self)
+    (index : Nat) (service : Option Nat) (entries : List F) (dimension width : Nat) (point : List F) (shape : HasShape entries dimension width) (bound : entries.length < indexLimit) (positive : 0 < dimension) :
+    roundFn (F := F) (G := G) U ctx self (.cons (some index)
+      ((proverState entries dimension width point).append (.cons service .nil))) =
+      (proverProcess ctx entries dimension width point).bind (fun result => .done (proverState result.1 result.2.1 result.2.2.1 result.2.2.2)) := by
+  subst self
+  exact (NormalForm.callback_sound_uniform proverSignature SumcheckVerifierBodies.roundBody 0 2 proverPattern
+    proverFinish proverForm prover_normalized prover_lawsMatch prover_finishes ctx (.ofSeparate separate (by decide))
+    (plainHelpers (F := F) (G := G) U) (U.plainProtocolTable F G) proverResults (NormalForm.noCallees _) (.cons index (.cons entries (.cons dimension (.cons width (.cons point (.cons service .nil)))))) _
+    (prover_environment index entries dimension width point service) (prover_laws U bodies index service entries dimension width point shape bound positive) (NormalForm.noCallees_hold _ _)).trans
+    (congrArg₂ PIR.Process.bind (prover_presentation U ctx index entries dimension width point service)
+      (funext fun result => congrArg PIR.Process.done (prover_embedding result)))
+
+/-- The proverEmpty's normal form of one body run: its ordered actions, the values it
+computes, guards as conditionals and missing inputs as stops. -/
+def proverEmptyProcess :
+    PIR.Process (participantInterface F G) ((List F) × Nat × Nat × (List F)) :=
+  .halt .reject
+
+/-- The positions of the carried state the proverEmpty presents. -/
+def proverEmptyFinish : Values (fun (_ : Ty) => NormalForm.Carried) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
+  .cons .present (.cons .present (.cons .present (.cons .present (.cons .absent (.cons .absent .nil)))))
+
+/-- The proverEmpty's laws as the normalizer reads them, keyed by helper. -/
+def proverEmptySignature : NormalForm.Signature :=
+  ⟨[⟨SumcheckHelperBodies.sumsHelper, .stops .reject, [.input 1, .input 2, .input 3]⟩], false, false, [], []⟩
+
+/-- The results the proverEmpty's laws present, of the mathematical helper laws. -/
+def proverEmptyResults : NormalForm.LawResults (ringModel F G) proverEmptySignature.laws :=
+  ⟨fun entry => match entry with
+    | ⟨0, _⟩ => fun (args : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]) =>
+      (.cons 0 (.cons 0 .nil) : Values (assignment F G) [.field "bls12-381.fr", .field "bls12-381.fr"])
+    | ⟨_ + 1, outside⟩ => absurd outside (by simp [proverEmptySignature])⟩
+
+/-- The proverEmpty's inputs as the normalizer reads them. -/
+def proverEmptyPattern : NormalForm.InputPattern [.index, .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .service "random.bls12-381.fr/0"] :=
+  .cons .present (.cons .present (.cons (.index 0) (.cons .present (.cons .present (.cons .absent (.cons .absent (.cons .optional .nil)))))))
+
+/-- The existing typed normalizer supplies the complete form. -/
+noncomputable def proverEmptyForm : NormalForm.Form proverEmptySignature.laws proverEmptySignature.callees proverEmptyPattern.scope [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
+  (NormalForm.normalize proverEmptySignature SumcheckVerifierBodies.roundBody 0 1 proverEmptyPattern).toOption.get (by kernel_rfl)
+
+theorem proverEmpty_normalized :
+    NormalForm.normalize proverEmptySignature SumcheckVerifierBodies.roundBody 0 1 proverEmptyPattern = .ok proverEmptyForm := by
+  kernel_rfl
+
+theorem proverEmpty_lawsMatch : proverEmptyForm.CallsMatch := by
+  kernel_rfl
+
+theorem proverEmpty_finishes : proverEmptyForm.finishes proverEmptyFinish = true := by
+  kernel_rfl
+
+theorem proverEmpty_environment (index : Nat) (entries : List F) (width : Nat) (point : List F) (service : Option Nat) :
+    proverEmptyPattern.environment (ringModel F G) (.cons index (.cons entries (.cons width (.cons point (.cons service .nil))))) =
+      (.cons (some index)
+      ((proverState entries 0 width point).append (.cons service .nil)) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .service "random.bls12-381.fr/0"]) := by
+  kernel_rfl
+
+/-- The form's presented process is the readable process. -/
+theorem proverEmpty_presentation (U : UnitPayload) (ctx : ProtocolContext)
+    (index : Nat) (entries : List F) (width : Nat) (point : List F) (service : Option Nat) :
+    proverEmptyForm.denoteWith (ringModel F G) (plainHelpers (F := F) (G := G) U).toOn proverEmptyResults ctx
+        (NormalForm.Runs.uniform (plainHelpers (F := F) (G := G) U) (U.plainProtocolTable F G) ctx (ctx.roles 0))
+        (NormalForm.noCallees _)
+        (NormalForm.finishLeaf (ringModel F G) proverEmptyResults proverEmptyFinish) (.cons index (.cons entries (.cons width (.cons point (.cons service .nil))))) =
+      proverEmptyProcess := by
+  kernel_rfl
+
+theorem proverEmpty_embedding (result : ((List F) × Nat × Nat × (List F))) :
+    NormalForm.embed (assignment F G) proverEmptyFinish (NormalForm.Tuple.toValues result) =
+      proverState result.1 result.2.1 result.2.2.1 result.2.2.2 := by
+  kernel_rfl
+
+/-- The proverEmpty's laws hold at its inputs, by the admitted helpers' laws. -/
+theorem proverEmpty_laws (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies U.definitions) (index : Nat) (service : Option Nat) (entries : List F) (width : Nat) (point : List F) :
+    NormalForm.LawsHold (plainHelpers (F := F) (G := G) U).toOn proverEmptyResults
+      (.cons (some index)
+      ((proverState entries 0 width point).append (.cons service .nil)) : Values (Component (assignment F G)) [.index, .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .service "random.bls12-381.fr/0"]) :=
+  fun entry => match entry with
+  | ⟨0, _⟩ => fun args pinned => match args, pinned with
+    | .cons a0 (.cons a1 (.cons a2 .nil)), ⟨p0, p1, p2, _⟩ => by
+      rw [← (Option.some.inj p0 : entries = a0), ← (Option.some.inj p1 : 0 = a1), ← (Option.some.inj p2 : width = a2)]
+      exact SumcheckProverLaws.sums_zero U bodies entries width
+  | ⟨_ + 1, outside⟩ => absurd outside (by simp [proverEmptySignature])
+
+/-- The process equation of `proverEmptyProcess`, an instance of the normalizer's soundness. -/
+theorem prover_empty_process (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies U.definitions)
+    (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 0)
+    (index : Nat) (service : Option Nat) (entries : List F) (width : Nat) (point : List F) :
+    roundFn (F := F) (G := G) U ctx self (.cons (some index)
+      ((proverState entries 0 width point).append (.cons service .nil))) =
+      (proverEmptyProcess).bind (fun result => .done (proverState result.1 result.2.1 result.2.2.1 result.2.2.2)) := by
+  subst self
+  exact (NormalForm.callback_sound_uniform proverEmptySignature SumcheckVerifierBodies.roundBody 0 1 proverEmptyPattern
+    proverEmptyFinish proverEmptyForm proverEmpty_normalized proverEmpty_lawsMatch proverEmpty_finishes ctx (NormalForm.RosterDistinct.only ctx)
+    (plainHelpers (F := F) (G := G) U) (U.plainProtocolTable F G) proverEmptyResults (NormalForm.noCallees _) (.cons index (.cons entries (.cons width (.cons point (.cons service .nil))))) _
+    (proverEmpty_environment index entries width point service) (proverEmpty_laws U bodies index service entries width point) (NormalForm.noCallees_hold _ _)).trans
+    (congrArg₂ PIR.Process.bind (proverEmpty_presentation U ctx index entries width point service)
+      (funext fun result => congrArg PIR.Process.done (proverEmpty_embedding result)))
+
+end ZkcExamples.Structured.SumcheckRoundNormalForms

@@ -1,4 +1,4 @@
-import ZkcSecurity.VCVio.Composition
+import ZkcSecurity.ProgramLogic.Oracle.Composition
 import ZkcTools.DeclarationAudit
 
 /-! Controls for acceptance composition at a call boundary. -/
@@ -140,5 +140,5 @@ end TestsSecurity.CallComposition
 
 run_cmd do
   ZkcTools.DeclarationAudit.check
-    [`ZkcSecurity.VCVio.Composition]
+    [`ZkcSecurity.ProgramLogic.Oracle.Composition]
     "CALL-PROBABILITY-LIBRARY-AUDIT-PASS" (exactModules := true)

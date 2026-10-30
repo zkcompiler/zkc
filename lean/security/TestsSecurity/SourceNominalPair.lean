@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Source.PairRouting
+public import ZkcSecurity.Bindings.Source.PairRouting
 
 @[expose] public section
 

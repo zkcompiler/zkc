@@ -15,8 +15,8 @@ data = "lean/ZkcExamples/Construction/GuessProofData.lean"
 bodies = "lean/ZkcExamples/Construction/GuessProofBodies.lean"
 participant = "lean/ZkcExamples/Construction/GuessProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/GuessArtifact.lean"
-artifacts = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Guess/Artifacts.lean"
-claims = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Guess/Claims.lean"
+artifacts = "lean/integrations/arklib/ZkcArkLibExamples/Subjects/Guess/Artifacts.lean"
+claims = "lean/integrations/arklib/ZkcArkLibExamples/Subjects/Guess/Claims.lean"
 
 [assumptions]
 requested = ["exporter.structured-denotation", "model.history-oracle", "exporter.checked-candidate",
@@ -40,4 +40,4 @@ entry = "proof"
 
 [lean]
 namespace = "ZkcSecurity.Examples.Subjects.Guess"
-imports = ["ZkcArkLib.Examples.Subjects.Guess.Registration"]
+imports = ["ZkcArkLibExamples.Subjects.Guess.Registration"]

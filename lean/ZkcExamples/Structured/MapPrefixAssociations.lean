@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.MapPrefixViews
-public import ZkcExamples.Structured.MapPrefixContracts
+public import Zkc.Protocols.Multilinear.Source.MapPrefixContracts
 public import Zkc.Source.Structured.Association
 
 @[expose] public section

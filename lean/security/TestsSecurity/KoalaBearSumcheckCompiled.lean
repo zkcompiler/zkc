@@ -1,7 +1,7 @@
 module
 
-public import ZkcSecurity.Examples.Components.KoalaBearSumcheckCompiledChallenge
-public import ZkcSecurity.Examples.Components.KoalaBearSumcheckGenerated.Components
+public import ZkcSecurityExamples.Components.KoalaBearSumcheckCompiledChallenge
+public import ZkcSecurityExamples.Components.KoalaBearSumcheckGenerated.Components
 
 @[expose] public section
 

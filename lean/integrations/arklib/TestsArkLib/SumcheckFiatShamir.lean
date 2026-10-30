@@ -1,4 +1,4 @@
-import ZkcArkLib.Examples.SumcheckFiatShamir
+import ZkcArkLibExamples.SumcheckFiatShamir
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.Field.ZMod
 

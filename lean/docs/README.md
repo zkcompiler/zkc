@@ -6,6 +6,7 @@ compiler and runtime. A native export is a connection boundary, not an assertion
 that all native behavior already has a Lean model.
 
 - [Architecture](architecture.md): packages, interfaces and proof composition.
+- [Module ownership](development/module-ownership.md): choosing reusable, tool and application modules, import phases and direct migration.
 - [Typed model transition](semantic-model-transition.md): canonical execution, retained claims and explicit model-change boundaries.
 - [Checked components](spec/components.md): shared process bindings, reference mathematics,
   honest execution, adversarial reductions and canonical receipts.

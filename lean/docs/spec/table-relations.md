@@ -82,7 +82,7 @@ No empty-schedule premise is used as a soundness proof. Inactive query values re
 These are nominal constructed-model theorems, without a selected codec/native
 execution realization or a new baseline acceptance.
 
-`ZkcSecurity.Examples.TableMembership.Subject` fixes that same admitted pair,
+`ZkcSecurityExamples.TableMembership.Subject` fixes that same admitted pair,
 `selected_rows` clause and catalogue-compatible prime field `ZMod 2130706433`.
 The shared `Generation.SubjectABI` emits the full source input tuple, exact
 plain participant frames and a separate semantic initial public history. That

@@ -1,5 +1,5 @@
-import ZkcSecurity.Examples.RootProperties.SmallSumcheck.Soundness
-import ZkcSecurity.Examples.RootProperties.TwoSums.Soundness
+import ZkcSecurityExamples.RootProperties.SmallSumcheck.Soundness
+import ZkcSecurityExamples.RootProperties.TwoSums.Soundness
 import TestsSecurity.DomainCharges
 import TestsSecurity.SumcheckSourceAdmissionControls
 

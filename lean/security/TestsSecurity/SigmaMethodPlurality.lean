@@ -1,6 +1,6 @@
 import ZkcSecurity.Families.Sigma.ResponseDifference
-import ZkcSecurity.Examples.Subjects.Schnorr.Claims
-import ZkcSecurity.Examples.Subjects.SchnorrAnd.Claims
+import ZkcSecurityExamples.Subjects.Schnorr.Claims
+import ZkcSecurityExamples.Subjects.SchnorrAnd.Claims
 import Mathlib.Data.ZMod.Basic
 
 /-! Two substantive algebraic methods for the same actual source request:

@@ -1,4 +1,4 @@
-import ZkcSecurity.Obligations.Derivation
+import ZkcSecurity.ProgramLogic.Derivation
 import Tests.Obligations
 
 set_option autoImplicit false

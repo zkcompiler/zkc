@@ -1,7 +1,7 @@
 module
 
-import ZkcSecurity.Generation.Roots.Stages
-meta import ZkcSecurity.Generation.Roots.Stages
+import ZkcSecurityExamples.Generation.Roots.Stages
+meta import ZkcSecurityExamples.Generation.Roots.Stages
 
 /-! Production metadata, refusal and naming controls. No proof choice is
 owned by this test; the one production catalogue supplies every selection. -/
@@ -22,7 +22,7 @@ run_cmd do
   let roots ← evaluateSelections
   for root in roots do
     let metadata ← Lean.Elab.Command.liftTermElabM do
-      let subject := Lean.mkIdent ((root.subjectModule ++ ".subject").toName)
+      let subject := Lean.mkIdent ((root.subjectNamespace ++ ".subject").toName)
       let expression ← Lean.Elab.Term.elabTerm (← `(SubjectABI.metadata $subject)) none
       Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
       let reduced ← Lean.Meta.withTransparency .all <| Lean.Meta.reduce (← Lean.instantiateMVars expression)
@@ -49,9 +49,12 @@ run_cmd do
     let renamed := { root with name := "RenamedEndpoint" }
     let .ok renamedSource := OriginalEndpoint.soundnessSource metadata validator (soundnessOutput renamed)
       | Lean.throwError "root naming changed generation applicability"
-    let renamedExpected := (generated.replace root.subjectModule renamed.subjectModule).replace
-      (root.componentModule "Soundness") (renamed.componentModule "Soundness")
-    unless renamedExpected.replace root.securityModule renamed.securityModule == renamedSource do
+    let renamedExpected := (((((generated.replace root.subjectModule renamed.subjectModule).replace
+      root.subjectNamespace renamed.subjectNamespace).replace
+      (root.componentModule "Soundness") (renamed.componentModule "Soundness")).replace
+      (root.componentNamespace "Soundness") (renamed.componentNamespace "Soundness")).replace
+      root.securityModule renamed.securityModule).replace root.securityNamespace renamed.securityNamespace
+    unless renamedExpected == renamedSource do
       Lean.throwError "root name changes behavior rather than output naming"
   unless stageSources.length == roots.length * 6 do
     Lean.throwError "production output inventory differs"

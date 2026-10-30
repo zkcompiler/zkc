@@ -1,7 +1,7 @@
 module
 
-public import ZkcSecurity.Source.LoopContracts
-public meta import ZkcSecurity.Tools.SourceProperties.Assembly
+public import ZkcSecurity.Bindings.Source.LoopContracts
+public meta import ZkcSecurityTools.SourceProperties.Assembly
 
 public section
 set_option autoImplicit false

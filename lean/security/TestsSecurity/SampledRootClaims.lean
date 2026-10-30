@@ -1,8 +1,8 @@
-import ZkcSecurity.Examples.Generated.SchnorrRandomizedCompletenessClaims
-import ZkcSecurity.Examples.Generated.SchnorrAndRandomizedCompletenessClaims
-import ZkcSecurity.Examples.Generated.SchnorrAndAliasedCompletenessClaims
-import ZkcSecurity.Examples.Generated.SampledAbortCompletenessClaims
-import ZkcSecurity.Examples.Generated.SequentialSigmaCompletenessClaims
+import ZkcSecurityExamples.Generated.SchnorrRandomizedCompletenessClaims
+import ZkcSecurityExamples.Generated.SchnorrAndRandomizedCompletenessClaims
+import ZkcSecurityExamples.Generated.SchnorrAndAliasedCompletenessClaims
+import ZkcSecurityExamples.Generated.SampledAbortCompletenessClaims
+import ZkcSecurityExamples.Generated.SequentialSigmaCompletenessClaims
 
 /-! The actual admitted sampled roots use one canonical receipt path. Changing
 only the aborting source's error to zero must resolve its meaning successfully

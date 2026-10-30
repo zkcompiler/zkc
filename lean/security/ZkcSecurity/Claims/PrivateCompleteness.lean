@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Claims.Completeness
-public import ZkcSecurity.FiatShamir.PrivatePairWP
+public import ZkcSecurity.Bindings.Transcript.PrivatePairWP
 
 @[expose] public section
 

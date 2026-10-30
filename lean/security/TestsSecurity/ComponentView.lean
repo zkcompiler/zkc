@@ -1,7 +1,7 @@
 module
 
-public import ZkcSecurity.FiatShamir.DomainComposition
-public meta import ZkcSecurity.Tools.ComponentView
+public import ZkcSecurity.Bindings.Transcript.DomainComposition
+public meta import ZkcSecurityTools.ComponentView
 
 @[expose] public section
 set_option autoImplicit false

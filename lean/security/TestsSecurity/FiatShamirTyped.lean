@@ -1,4 +1,4 @@
-import ZkcSecurity.FiatShamir.Roles
+import ZkcSecurity.Transformations.FiatShamir.Roles
 import Mathlib.Data.ZMod.Basic
 
 /-! Controls for the Fiat–Shamir theorems over typed query sites.

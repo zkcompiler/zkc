@@ -17,8 +17,8 @@ data = "lean/ZkcExamples/Construction/ChaumPedersenProofData.lean"
 bodies = "lean/ZkcExamples/Construction/ChaumPedersenProofBodies.lean"
 participant = "lean/ZkcExamples/Construction/ChaumPedersenProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/ChaumPedersenArtifact.lean"
-artifacts = "lean/security/ZkcSecurity/Examples/Subjects/ChaumPedersen/Artifacts.lean"
-claims = "lean/security/ZkcSecurity/Examples/Subjects/ChaumPedersen/Claims.lean"
+artifacts = "lean/security/ZkcSecurityExamples/Subjects/ChaumPedersen/Artifacts.lean"
+claims = "lean/security/ZkcSecurityExamples/Subjects/ChaumPedersen/Claims.lean"
 interactive_data = "lean/ZkcExamples/Structured/ChaumPedersenData.lean"
 interactive_bodies = "lean/ZkcExamples/Structured/ChaumPedersenBodies.lean"
 interactive_views = "lean/ZkcExamples/Structured/ChaumPedersenViews.lean"
@@ -51,4 +51,4 @@ interactive_entry = "interactive"
 
 [lean]
 namespace = "ZkcSecurity.Examples.Subjects.ChaumPedersen"
-imports = ["ZkcSecurity.Examples.Subjects.ChaumPedersen.Registration"]
+imports = ["ZkcSecurityExamples.Subjects.ChaumPedersen.Registration"]

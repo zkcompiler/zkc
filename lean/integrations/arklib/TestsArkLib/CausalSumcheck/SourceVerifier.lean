@@ -1,6 +1,6 @@
-import ZkcArkLib.Examples.CausalSumcheck.Iteration
+import ZkcArkLibExamples.CausalSumcheck.Iteration
 import Mathlib.Algebra.Field.ZMod
-import ZkcArkLib.Examples.CausalSumcheck.SourceVerifier
+import ZkcArkLibExamples.CausalSumcheck.SourceVerifier
 
 /-! Non-vacuity controls on the complete admitted Source and Reduction roots. -/
 namespace TestsSecurity.CausalSumcheck.SourceVerifier

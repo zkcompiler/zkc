@@ -40,7 +40,7 @@ Security uses `EvalDistEq` (`=ᵈ`) for equality of laws and `Pr{...}[...]` for
 native event probabilities. These compare every output event, independently of
 an arbitrarily chosen measurable structure. Distribution transport uses the
 upstream bind/map/coupling laws directly, without SPMF compatibility aliases. A scoped
-`ZkcSecurity.VCVio.UniformChallenge` instance selects the uniform law only when
+`ZkcSecurity.Mathematics.Oracle.UniformChallenge` instance selects the uniform law only when
 explicitly opened; sum oracles inherit their component laws. Merely importing
 the module does not choose a challenge distribution.
 

@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.Generated.Scalar.SumcheckRepacked
-public import ZkcExamples.Structured.SumcheckPendingLaws
+public import Zkc.Protocols.Sumcheck.Source.PendingLaws
 
 @[expose] public section
 

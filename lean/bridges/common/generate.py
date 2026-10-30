@@ -80,7 +80,7 @@ def main():
                 positive = not stem.endswith(('earlychallenge', 'wrongresidual', 'wrongpoint'))
                 relative = Path('ZkcExamples/NativePrograms') / (client + '.lean')
                 if family == 'factor-openings':
-                    relative = Path('security/ZkcSecurity/Examples/NativePrograms') / (client + '.lean')
+                    relative = Path('security/ZkcSecurityExamples/NativePrograms') / (client + '.lean')
                 install(relative, render_client(data, request, client, positive=positive))
             print(stem, flush=True)
     print(json.dumps({'status': 'pass', 'mode': 'check' if args.check else 'write',

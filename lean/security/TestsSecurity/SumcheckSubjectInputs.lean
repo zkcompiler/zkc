@@ -1,7 +1,7 @@
 module
 
-public import ZkcSecurity.Examples.Components.SmallSumcheckFormula
-public import ZkcSecurity.Examples.Components.TwoSumsFormula
+public import ZkcSecurityExamples.Components.SmallSumcheckFormula
+public import ZkcSecurityExamples.Components.TwoSumsFormula
 
 @[expose] public section
 

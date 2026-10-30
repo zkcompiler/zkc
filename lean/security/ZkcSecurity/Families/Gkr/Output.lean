@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Families.Gkr.Combination
-public import ZkcSecurity.Algebra.Polynomial
+public import ZkcSecurity.Mathematics.Algebra.Polynomial
 
 public section
 

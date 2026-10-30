@@ -2,7 +2,7 @@ import ZkcSecurity.Claims.Resolution
 import ZkcSecurity.Claims.Endpoint
 import ZkcSecurity.Claims.Arithmetic
 import Zkc.Claims.Receipt
-import ZkcArkLib.Examples.Subjects.Guess.Evidence
+import ZkcArkLibExamples.Subjects.Guess.Evidence
 
 /-! The actual guessing artifacts instantiate scalar and exactly charged
 requests through the same endpoint implications. Imported language is fixed by

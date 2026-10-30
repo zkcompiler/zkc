@@ -2,7 +2,7 @@ module
 
 import ZkcExamples.Structured.GkrLayerReading
 import ZkcExamples.Structured.GkrProverContinuation
-import ZkcSecurity.Realizations.Gkr.CanonicalSource
+import ZkcSecurityExamples.Gkr.CanonicalSource
 
 set_option maxRecDepth 50000
 set_option maxHeartbeats 16000000

@@ -1,7 +1,7 @@
-import ZkcSecurity.Realizations.Gkr.HonestCircuitSource
-import ZkcSecurity.Realizations.Gkr.HonestLineSource
+import ZkcSecurityExamples.Gkr.HonestCircuitSource
+import ZkcSecurityExamples.Gkr.HonestLineSource
 import TestsSecurity.GkrHonestLineMath
-import ZkcSecurity.Examples.Components.GkrFiniteCircuit
+import ZkcSecurityExamples.Components.GkrFiniteCircuit
 
 set_option autoImplicit false
 set_option backward.isDefEq.respectTransparency false

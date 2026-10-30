@@ -2,7 +2,7 @@ module
 
 public import Zkc.Source.Structured.Linking
 public import Zkc.Source.RegionDerivation
-public import ZkcExamples.Structured.MapFirstBodies
+public import Zkc.Protocols.Multilinear.Source.MapFirstBodies
 
 @[expose] public section
 

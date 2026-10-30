@@ -29,24 +29,44 @@ def uniqueHelper (program : Program) (kind : HelperKind) (inputs outputs : List 
     | throw "helper-association-ambiguous-or-missing"
   pure (definition, index)
 
-/-- Print complete bodies with the ordinary body-view theorem. The table and
-observations are Lean expressions in the surrounding module; their equality
-to the admitted source fold must still typecheck. -/
-def helperAssociationSource (program : Program) (name : String) (index : Nat)
-    (table observations : String) : Except String String := do
+/-- The import identity and declaration namespace of reusable helper templates. -/
+structure HelperTemplateOutput where
+  moduleName : String
+  namespaceName : String
+
+/-- Print a source-template body without selecting a closed payload. -/
+def helperTemplateSource (program : Program) (name : String) (index : Nat) : Except String String := do
   let some definition := program.payload.definitions[index]? | throw "helper-association-index"
-  let mut text := "abbrev " ++ name ++ "Definition : CheckedDefinition := payload.definitions.get ⟨" ++
-    toString index ++ ", by decide +kernel⟩\n" ++
-    "abbrev " ++ name ++ "Helper : Helper := " ++ helperText definition.helper ++ "\n" ++
+  let mut text := "abbrev " ++ name ++ "Helper : Helper := " ++ helperText definition.helper ++ "\n" ++
     "def " ++ name ++ "Body : Region dialect " ++ name ++ "Helper.inputs " ++ name ++
-    "Helper.outputs :=\n  " ++ helperRegionText definition.body ++ "\n" ++
+    "Helper.outputs :=\n  " ++ helperRegionText definition.body ++ "\n"
+  if let [.collect spec] := definition.raw.operations then
+    text := text ++ "abbrev " ++ name ++ "Collection : CollectSpec :=\n  " ++ collectText spec ++ "\n"
+  pure (text ++ "\n")
+
+/-- Associate an imported template with the actual checked helper table.
+The emitted equality checks the complete signature, body and operand order. -/
+def helperAssociationText (program : Program) (name : String) (index : Nat)
+    (table observations template : String) : Except String String := do
+  let some definition := program.payload.definitions[index]? | throw "helper-association-index"
+  pure ("abbrev " ++ name ++ "Definition : CheckedDefinition := payload.definitions.get ⟨" ++
+    toString index ++ ", by decide +kernel⟩\n" ++ template ++
     "theorem " ++ name ++ "_closed (args : Values (assignment F G) " ++ name ++ "Helper.inputs) :\n" ++
     "    invoke " ++ paren table ++ " " ++ name ++ "Helper args =\n" ++
     "      " ++ name ++ "Body.denote (Evaluation.meaning " ++ paren observations ++ " " ++ paren table ++ ") args.get :=\n" ++
     "  Evaluation.definitions_invoke_body_view_as " ++ paren observations ++ " payload.definitions payload.linked\n" ++
     "    " ++ name ++ "Definition (List.get_mem _ _) " ++ helperText definition.helper ++ " rfl " ++
-    name ++ "Body rfl args\n\n"
-  if let [.collect spec] := definition.raw.operations then
-    text := text ++ "abbrev " ++ name ++ "Collection : CollectSpec :=\n  " ++ collectText spec ++ "\n\n"
-  pure text
+    name ++ "Body rfl args\n\n")
+/-- A closed application imports its template from the reusable owner. -/
+def helperAssociationSource (program : Program) (name : String) (index : Nat)
+    (table observations : String) : Except String String :=
+  helperAssociationText program name index table observations ""
+
+/-- A source view that owns its literal template prints both the template and
+its checked association. Both forms share the same association printer. -/
+def helperTemplateAssociationSource (program : Program) (name : String) (index : Nat)
+    (table observations : String) : Except String String := do
+  let template ← helperTemplateSource program name index
+  helperAssociationText program name index table observations (template.dropEnd 1).toString
+
 end ZkcTools.StructuredSource.Bindings

@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Claims.HonestModel
-public import ZkcSecurity.FiatShamir.SampledCompiled
+public import ZkcSecurity.Bindings.Transcript.SampledCompiled
 
 @[expose] public section
 

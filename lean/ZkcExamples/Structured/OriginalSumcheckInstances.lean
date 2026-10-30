@@ -1,6 +1,6 @@
 module
 
-public import ZkcExamples.Structured.OriginalSumcheckReduce
+public import Zkc.Protocols.Sumcheck.Source.Reduce
 public import ZkcExamples.Structured.Generated.Original.SmallSumcheck
 public import ZkcExamples.Structured.Generated.Original.TwoSums
 public import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckSumcheck
