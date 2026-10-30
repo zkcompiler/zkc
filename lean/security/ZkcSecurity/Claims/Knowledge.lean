@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.VCVio.UniformChallenge
+public import ZkcSecurity.Mathematics.Oracle.UniformChallenge
 public import ZkcSecurity.Claims.Soundness
 
 @[expose] public section

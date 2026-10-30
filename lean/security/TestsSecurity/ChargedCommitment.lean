@@ -1,4 +1,4 @@
-import ZkcSecurity.Commitment.Opening
+import ZkcSecurity.Transformations.Commitment.Opening
 import ZkcTools.DeclarationAudit
 
 /-! A verifier with a committed table through the charged bridge, with an ideal charge that reads

@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Claims.Soundness
-public import ZkcSecurity.Endpoint.Soundness
+public import ZkcSecurity.Claims.Methods.Soundness
 public import ZkcSecurity.Claims.EndpointHypotheses
 public import ZkcSecurity.Claims.ChargeMonotonicity
 

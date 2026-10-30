@@ -1,5 +1,5 @@
-import ZkcSecurity.Generation.SubjectABI
-import ZkcSecurity.Generation.SigmaCompleteness
+import ZkcSecurityTools.Generation.SubjectABI
+import ZkcSecurityTools.Generation.SigmaCompleteness
 import TestsSecurity.ABIInstallations.Ordered
 import TestsSecurity.ABIInstallations.Permuted
 import TestsSecurity.ABIInstallations.Repeated
@@ -7,8 +7,8 @@ import TestsSecurity.ABIInstallations.Heterogeneous
 import TestsSecurity.ABIInstallations.WitnessOnly
 import TestsSecurity.ABIInstallations.NoData
 import TestsSecurity.ABIInstallations.ConstrainedLaws
-import ZkcSecurity.Examples.Generated.SchnorrRandomized
-import ZkcSecurity.Examples.Generated.SmallSumcheck
+import ZkcSecurityExamples.Generated.SchnorrRandomized
+import ZkcSecurityExamples.Generated.SmallSumcheck
 
 /-! Exercise the actual printers on admitted subjects. The focused Python
 runner compiles these outputs and their independent semantic controls. -/
@@ -64,18 +64,18 @@ run_cmd do
     if label == "Constrained" then
       let lawsModule := "TestsSecurity.ABIInstallations.ConstrainedLaws"
       sources := sources ++ [(modulePrefix ++ "MissingNonvacuity", ← require <| SigmaCompleteness.source
-        { input with output.moduleName := modulePrefix ++ "MissingNonvacuity" })]
+        { input with output.moduleName := modulePrefix ++ "MissingNonvacuity", output.namespaceName := modulePrefix ++ "MissingNonvacuity" })]
       sources := sources ++ [(modulePrefix ++ "WrongNonvacuity", ← require <| SigmaCompleteness.source
-        { input with output.moduleName := modulePrefix ++ "WrongNonvacuity", nonvacuityLaw := some "True.intro" })]
+        { input with output.moduleName := modulePrefix ++ "WrongNonvacuity", output.namespaceName := modulePrefix ++ "WrongNonvacuity", nonvacuityLaw := some "True.intro" })]
       sources := sources ++ [(modulePrefix ++ "Completeness", ← require <| SigmaCompleteness.source
         { input with imports := [lawsModule], nonvacuityLaw := some (lawsModule ++ ".nonvacuous") })]
       sources := sources ++ [(modulePrefix ++ "CrossedNonvacuity", ← require <| SigmaCompleteness.source
-        { input with output.moduleName := modulePrefix ++ "CrossedNonvacuity"
+        { input with output.moduleName := modulePrefix ++ "CrossedNonvacuity", output.namespaceName := modulePrefix ++ "CrossedNonvacuity"
                      imports := ["ABIInstallationClients.NoDataCompleteness"]
                      nonvacuityLaw := some "ABIInstallationClients.NoDataCompleteness.nonvacuous" })]
       sources := sources ++ [(modulePrefix ++ "InterpretedCompleteness", ← require <| SigmaCompleteness.source
-        { input with output.moduleName := modulePrefix ++ "InterpretedCompleteness"
-                     output.abiModule := modulePrefix ++ "InterpretedABI"
+        { input with output.moduleName := modulePrefix ++ "InterpretedCompleteness", output.namespaceName := modulePrefix ++ "InterpretedCompleteness"
+                     output.abiModule := modulePrefix ++ "InterpretedABI", output.abiNamespace := modulePrefix ++ "InterpretedABI"
                      imports := [lawsModule], nonvacuityLaw := some (lawsModule ++ ".nonvacuous") })]
       for (suffix, law) in [("InterpretedABI", ".condition_iff"), ("WrongClauseABI", ".condition_iff"),
           ("MissingClauseABI", ".missingLaw")] do
@@ -104,11 +104,12 @@ run_cmd do
         imports := [], description := "Empty source elimination control."
         nonvacuityLaw := "nonvacuous", body := "  rfl\n" })]
   for label in ["SchnorrRandomized", "SmallSumcheck"] do
-    let subjectModule := "ZkcSecurity.Examples.Generated." ++ label
-    let subject := Lean.mkIdent ((subjectModule ++ ".subject").toName)
+    let subjectModule := "ZkcSecurityExamples.Generated." ++ label
+    let subjectNamespace := "ZkcSecurity.Examples.Generated." ++ label
+    let subject := Lean.mkIdent ((subjectNamespace ++ ".subject").toName)
     let metadata ← evaluate SubjectABI.Metadata ``SubjectABI.Metadata (← `(SubjectABI.metadata $subject))
     let name := "ABIInstallationClients.Existing" ++ label ++ "ABI"
-    sources := sources ++ [(name, ← require <| SubjectABI.source metadata { moduleName := name, subjectModule })]
+    sources := sources ++ [(name, ← require <| SubjectABI.source metadata { moduleName := name, subjectModule, subjectNamespace })]
   let name := Lean.mkIdent `generatedSources
   Lean.Elab.Command.elabCommand (← `(def $name : List (String × String) := $(Lean.quote sources)))
 

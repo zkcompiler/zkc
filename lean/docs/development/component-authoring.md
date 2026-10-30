@@ -66,7 +66,7 @@ connecting the source to its compiled participant.
 
 Mathematical family laws live under `ZkcSecurity.Families`. Adapters that read
 particular source templates, layouts or exported programs live under
-`ZkcSecurity.Realizations`, even when that adapter is reusable across several
+`ZkcSecurity.Bindings`, even when that adapter is reusable across several
 programs in one family. For example, the Sumcheck source adapters reuse its table
 mathematics without making the mathematical family import concrete programs.
 Restricted proof elaborators may be shared by these layers; source emitters and

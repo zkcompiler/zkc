@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Claims.DomainSubject
+public import ZkcSecurity.Bindings.Subjects.Domain
 public import ZkcSecurity.Claims.Resolution
 public import ZkcSecurity.Bindings.Models.Capabilities
 

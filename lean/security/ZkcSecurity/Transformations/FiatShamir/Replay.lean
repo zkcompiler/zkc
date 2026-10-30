@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.VCVio.UniformChallenge
+public import ZkcSecurity.Mathematics.Oracle.UniformChallenge
 public import VCVio.CryptoFoundations.FiatShamir.Sigma.Reductions
 
 @[expose] public section

@@ -1,8 +1,8 @@
 module
 
-public import ZkcSecurity.FiatShamir.DomainAdaptive
-public import ZkcSecurity.FiatShamir.DomainBinding
-public import ZkcSecurity.FiatShamir.DomainUniform
+public import ZkcSecurity.Bindings.Transcript.DomainAdaptive
+public import ZkcSecurity.Bindings.Transcript.DomainBinding
+public import ZkcSecurity.Bindings.Transcript.DomainUniform
 public import TestsSecurity.DomainReduction
 
 @[expose] public section

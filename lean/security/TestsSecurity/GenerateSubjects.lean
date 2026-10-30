@@ -1,4 +1,4 @@
-import ZkcSecurity.Generation.Roots.Subjects
+import ZkcSecurityExamples.Generation.Roots.Subjects
 
 /-! Executable driver; production root configuration owns all selections. -/
 namespace TestsSecurity.GenerateSubjects

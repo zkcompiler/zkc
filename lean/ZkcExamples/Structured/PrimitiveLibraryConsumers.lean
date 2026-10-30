@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Protocols.Multilinear.Source.PrimitiveLibrary
+public import ZkcExamples.Structured.PrimitiveExpansions
 
 @[expose] public section
 

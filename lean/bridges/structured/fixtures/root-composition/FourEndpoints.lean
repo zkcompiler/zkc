@@ -2,9 +2,9 @@ module
 
 public import TestsSecurity.RootComposition.FourProperties
 public import TestsSecurity.RootComposition.FourFormula
-public import ZkcSecurity.Source.Installation
-public import ZkcSecurity.FiatShamir.RootConnectionEndpoint
-public import ZkcSecurity.FiatShamir.HonestReadbackCompleteness
+public import ZkcSecurity.Bindings.Source.Installation
+public import ZkcSecurity.Bindings.Transcript.RootConnectionEndpoint
+public import ZkcSecurity.Claims.Methods.HonestReadbackCompleteness
 
 @[expose] public section
 set_option autoImplicit false

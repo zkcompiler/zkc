@@ -1,4 +1,4 @@
-import ZkcSecurity.Realizations.Gkr.HonestLineSource
+import ZkcSecurityExamples.Gkr.HonestLineSource
 import TestsSecurity.GkrHonestLineMath
 
 set_option autoImplicit false

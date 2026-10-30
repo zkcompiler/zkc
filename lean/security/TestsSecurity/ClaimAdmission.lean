@@ -1,5 +1,5 @@
 import ZkcSecurity.Claims.Resolution
-import ZkcSecurity.Examples.Subjects.Schnorr.Artifacts
+import ZkcSecurityExamples.Subjects.Schnorr.Artifacts
 
 /-! Admission controls use the actual admitted catalogue. No dictionary can
 install a numeric meaning for an unknown spelling or fabricate a cardinality.

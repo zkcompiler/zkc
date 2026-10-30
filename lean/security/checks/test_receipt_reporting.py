@@ -1086,8 +1086,8 @@ def test_production_report_consumes_final_lean_scope_status(security_kernel_reco
 def source_kernel_records():
     """Audit real pair and heterogeneous-domain receipts, not mock metadata."""
     root = Path(__file__).resolve().parents[3] / "lean"
-    modules = ["ZkcSecurity.Examples.Generated.SmallSumcheckCompletenessClaims",
-               "ZkcSecurity.Examples.EmbeddingEqualityClient"]
+    modules = ["ZkcSecurityExamples.Generated.SmallSumcheckCompletenessClaims",
+               "ZkcSecurityExamples.EmbeddingEqualityClient"]
     subprocess.run(["lake", "build", *["+" + name for name in modules]], cwd=root / "security",
                    check=True, capture_output=True, text=True)
     names = [(modules[0], "completeData"), (modules[0], "completeReceipt"),
@@ -1104,10 +1104,10 @@ def source_kernel_records():
 
 
 @pytest.mark.parametrize("module,prefix,expected_links", [
-    ("ZkcSecurity.Examples.Generated.SmallSumcheckCompletenessClaims", "complete",
+    ("ZkcSecurityExamples.Generated.SmallSumcheckCompletenessClaims", "complete",
      {"pair.checked", "pair.source", "construction.checked", "pair.occurrences",
       "pair.producer_connection", "pair.validator_connection"}),
-    ("ZkcSecurity.Examples.EmbeddingEqualityClient", "ideal",
+    ("ZkcSecurityExamples.EmbeddingEqualityClient", "ideal",
      {"construction.checked", "construction.source_connection"}),
 ])
 def test_all_source_subject_shapes_keep_their_actual_stage_links(source_kernel_records, module, prefix, expected_links):

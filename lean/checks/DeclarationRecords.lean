@@ -253,7 +253,7 @@ def premiseJson (premise : Premise) : Json :=
 /-- Module roots of this repository's packages. The walk for registered
 constants descends only through declarations of these modules. -/
 def repositoryRoots : List Name :=
-  [`Zkc, `ZkcExamples, `ZkcTools, `ZkcSecurity, `ZkcArkLib, `ZkcClean, `Tests, `TestsSecurity, `TestsArkLib, `TestsClean]
+  [`Zkc, `ZkcExamples, `ZkcTools, `ZkcSecurity, `ZkcSecurityTools, `ZkcSecurityExamples, `ZkcArkLib, `ZkcArkLibExamples, `ZkcClean, `Tests, `TestsSecurity, `TestsArkLib, `TestsClean]
 
 /-- The registered constants a declaration reaches through the types and
 bodies of repository declarations, itself included. Upstream declarations are

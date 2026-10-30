@@ -29,7 +29,11 @@ def check(root, output, with_arklib=False, lake="lake", with_security=False):
     results = {}
     clients = [('main', 'Main.lean', root, 'zkc')]
     if with_security or with_arklib:
-        clients.append(('security', 'Security.lean', root / 'security', 'zkc_security'))
+        clients.extend([
+            ('security', 'Security.lean', root / 'security', 'zkc_security'),
+            ('security-theory', 'SecurityTheory.lean', root / 'security', 'zkc_security'),
+            ('security-tools', 'SecurityTools.lean', root / 'security', 'zkc_security'),
+        ])
     if with_arklib:
         integration = root / 'integrations/arklib'
         clients.extend([

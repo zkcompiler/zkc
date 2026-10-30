@@ -21,7 +21,8 @@ class HeaderParser:
             cwd=root, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
         self.cache = {}
 
-    def imports(self, source, path="<input>"):
+    def details(self, source, path="<input>"):
+        """Retain visibility and phase from Lean's parsed Import records."""
         if source not in self.cache:
             self.process.stdin.write(json.dumps({"source": source, "path": str(path)}) + "\n")
             self.process.stdin.flush()
@@ -31,8 +32,11 @@ class HeaderParser:
             result = json.loads(line)
             if "error" in result:
                 raise ValueError(f"invalid Lean header: {path}: {result['error']}")
-            self.cache[source] = result["imports"]
+            self.cache[source] = result["import_details"]
         return self.cache[source]
+
+    def imports(self, source, path="<input>"):
+        return [entry["module"] for entry in self.details(source, path)]
 
     def __enter__(self):
         return self

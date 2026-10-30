@@ -292,16 +292,20 @@ import all Zkc.Protocols.Multilinear.Source.MapProjectionContracts
 import all Zkc.Protocols.Multilinear.Source.MapSourceExpansions
 import all Zkc.Source.Structured.NormalForm.Steps
 import all ZkcExamples.Structured.PrimitiveExpansions
+import all Zkc.Protocols.Multilinear.Source.PrimitiveExpansions
 import all ZkcExamples.Structured.PrimitiveHalvesData
 import all ZkcExamples.Structured.PrimitiveHalvesViews
+import all Zkc.Protocols.Multilinear.Source.PrimitiveHalvesBodies
 import all Zkc.Protocols.Multilinear.Source.PrimitiveLibrary
 import all Zkc.Protocols.Multilinear.Source.PrimitiveRows
 import all ZkcExamples.Structured.PrimitiveSequenceData
 import all ZkcExamples.Structured.PrimitiveSequenceViews
 import all ZkcExamples.Structured.PrimitiveShapeData
 import all ZkcExamples.Structured.PrimitiveShapeViews
+import all Zkc.Protocols.Multilinear.Source.PrimitiveShapeBodies
 import all ZkcExamples.Structured.PrimitiveTableData
 import all ZkcExamples.Structured.PrimitiveTableViews
+import all Zkc.Protocols.Multilinear.Source.PrimitiveTableBodies
 import all Zkc.Protocols.Sumcheck.Source.HelperBodies
 import all Zkc.Protocols.Sumcheck.Source.HelperBridge
 import all Zkc.Protocols.Sumcheck.Source.HelperExpansions
@@ -326,6 +330,7 @@ import all Zkc.Protocols.Sumcheck.Source.VerifierLaws
 import all Zkc.Protocols.Sumcheck.Source.VerifierPrelude
 import all Zkc.Protocols.Sumcheck.Source.VerifierProcess
 import all ZkcExamples.Structured.SumcheckVerifierTerminal
+import all Zkc.Protocols.Sumcheck.Source.VerifierTerminal
 import all Zkc.Construction.ConnectionActionCoverage
 import all Zkc.Construction.ConnectionActionSupport
 import all Zkc.Construction.ConnectionActions
@@ -402,6 +407,7 @@ import all Zkc.Construction.Uniform.ScalarSourceCost
 import all Zkc.Construction.Uniform.ScalarSupport
 import all Zkc.Construction.Uniform.ScalarSupportProposer
 import all Zkc.Construction.Uniform.SourceProcess
+import all ZkcTools.ConstructionBindings.ScalarConnection
 import all Zkc.Semantics.OperationSupport
 import all Zkc.Source.OperationSupport
 import all Zkc.Source.Structured.BodyBindings

@@ -7,8 +7,8 @@ import TestsSecurity.GeneratedRootConnections
 import TestsSecurity.RootConnectionControls
 import ZkcTools.ConstructionBindings.Analysis
 meta import ZkcTools.ConstructionBindings.Analysis
-import ZkcSecurity.Generation.Roots.Catalogue
-meta import ZkcSecurity.Generation.Roots.Catalogue
+import ZkcSecurityExamples.Generation.Roots.Catalogue
+meta import ZkcSecurityExamples.Generation.Roots.Catalogue
 meta import Zkc.Construction.ConnectionInstallation
 
 /-! Replacement for the retired method-specific generator test. Exact typed

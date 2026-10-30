@@ -108,7 +108,7 @@ source resolution boundary; no second proof pipeline is introduced.
 
 The installed infrastructure link families are defined in
 [StageLinks](../../lean/security/ZkcSecurity/Claims/StageLinks.lean),
-[DomainSubject](../../lean/security/ZkcSecurity/Claims/DomainSubject.lean) and
+[DomainSubject](../../lean/security/ZkcSecurity/Bindings/Subjects/Domain.lean) and
 [CanonicalAuthorityPair](../../lean/security/ZkcSecurity/Claims/CanonicalAuthorityPair.lean):
 
 | Family | Link identifiers | Exact obligation selected by |

@@ -1,6 +1,6 @@
 module
 
-import ZkcSecurity.Realizations.Gkr.SourceValidator
+import ZkcSecurityExamples.Gkr.SourceValidator
 import TestsSecurity.GkrRootEncoding
 
 set_option maxRecDepth 50000

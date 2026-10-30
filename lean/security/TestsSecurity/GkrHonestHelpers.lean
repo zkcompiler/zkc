@@ -1,8 +1,8 @@
-import ZkcSecurity.Realizations.Gkr.HonestHelpersSource
+import ZkcSecurityExamples.Gkr.HonestHelpersSource
 import Zkc.Protocols.Gkr.Source.VerifierProcess
-import ZkcSecurity.Realizations.Gkr.HonestRound
-import ZkcSecurity.Realizations.Gkr.HonestPackets
-import ZkcSecurity.Examples.Components.GkrFiniteCircuit
+import ZkcSecurityExamples.Gkr.HonestRound
+import ZkcSecurityExamples.Gkr.HonestPackets
+import ZkcSecurityExamples.Components.GkrFiniteCircuit
 
 set_option autoImplicit false
 set_option backward.isDefEq.respectTransparency false

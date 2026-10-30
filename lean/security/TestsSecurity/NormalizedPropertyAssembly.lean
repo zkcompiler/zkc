@@ -1,4 +1,4 @@
-import ZkcSecurity.Tools.ComponentDerivation
+import ZkcSecurityTools.ComponentDerivation
 import Zkc.Obligations.NormalizedComponent
 import Zkc.Obligations.Assembly
 import Tests.StructuredOccurrenceNormalForm

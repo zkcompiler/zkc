@@ -1,8 +1,8 @@
 module
 
-public import ZkcSecurity.Source.PublicProperties
-public import ZkcSecurity.Source.LoopContracts
-public meta import ZkcSecurity.Tools.SourceProperties.Loops
+public import ZkcSecurity.Bindings.Source.PublicProperties
+public import ZkcSecurity.Bindings.Source.LoopContracts
+public meta import ZkcSecurityTools.SourceProperties.Loops
 
 @[expose] public section
 

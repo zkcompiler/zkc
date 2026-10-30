@@ -1,7 +1,7 @@
-import ZkcSecurity.Examples.Generated.SmallSumcheckSoundnessClaims
-import ZkcSecurity.Examples.Generated.TwoSumsSoundnessClaims
-import ZkcSecurity.Examples.Generated.SmallSumcheckCompletenessClaims
-import ZkcSecurity.Examples.Generated.TwoSumsCompletenessClaims
+import ZkcSecurityExamples.Generated.SmallSumcheckSoundnessClaims
+import ZkcSecurityExamples.Generated.TwoSumsSoundnessClaims
+import ZkcSecurityExamples.Generated.SmallSumcheckCompletenessClaims
+import ZkcSecurityExamples.Generated.TwoSumsCompletenessClaims
 
 /-! This non-module audit loads private theorem bodies transitively.
 Exact retained requests, using the actual registered receipt proofs. The

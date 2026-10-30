@@ -65,7 +65,7 @@ can justify its requested bound.
 
 ## Request-fixed straight-line oracle recovery
 
-`ZkcSecurity.Commitment.FiniteRecovery` fixes an immutable two-cell oracle with
+`ZkcSecurity.Transformations.Commitment.FiniteRecovery` fixes an immutable two-cell oracle with
 query type `Fin 2`. A request contains the expected sum. Its relation requires
 the recovered ordered pair to have that sum. The extraction program is defined
 by the request API: query cell zero, query cell one, return both values. Evidence
@@ -154,7 +154,7 @@ pattern.
 
 ## Private producer and concrete verifier WP
 
-`ZkcSecurity.FiatShamir.PrivatePairWP` extends the empty-private-service WP
+`ZkcSecurity.Bindings.Transcript.PrivatePairWP` extends the empty-private-service WP
 consumer to a producer with fresh private sampling. Fixing a public ROM answer
 table leaves the producer computation probabilistic. `producerWP` quantifies
 over every supported actual producer execution: the producer must return, and

@@ -1,9 +1,9 @@
 module
 
 public import TestsSecurity.RootComposition.FourEndpoints
-public import ZkcSecurity.Realizations.Sumcheck.SourcePublicPrimeField
-public import ZkcSecurity.Source.RootPublic
-public import ZkcSecurity.FiatShamir.RootConnectionLossless
+public import ZkcSecurityExamples.Sumcheck.SourcePublicPrimeField
+public import ZkcSecurity.Bindings.Source.RootPublic
+public import ZkcSecurity.Claims.Methods.RootConnectionLossless
 public import ZkcSecurity.Claims.CompiledSoundness
 
 @[expose] public section

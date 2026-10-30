@@ -1,8 +1,8 @@
 module
 
-public import ZkcSecurity.VCVio.UniformChallenge
+public import ZkcSecurity.Mathematics.Oracle.UniformChallenge
 public import ZkcSecurity.Claims.Knowledge
-public import ZkcSecurity.Endpoint.Knowledge
+public import ZkcSecurity.Claims.Methods.KnowledgeEndpoint
 
 @[expose] public section
 

@@ -1,6 +1,6 @@
 import ZkcSecurity.Claims.Resolution
 import ZkcSecurity.Claims.Endpoint
-import ZkcSecurity.Examples.Subjects.Schnorr.Registration
+import ZkcSecurityExamples.Subjects.Schnorr.Registration
 import Zkc.Claims.Receipt
 
 /-! Real compiled Schnorr artifacts instantiate the request-fixed replay model.

@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.VCVio.UniformChallenge
+public import ZkcSecurity.Mathematics.Oracle.UniformChallenge
 public import Zkc.Construction.FiatShamir
 public import VCVio.CryptoFoundations.FiatShamir.Sigma.KnowledgeExtraction
 public import VCVio.OracleComp.QueryTracking.QueryBound.Simulation

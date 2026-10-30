@@ -2,7 +2,7 @@ module
 
 public import Zkc.Claims.Registry
 public import ZkcSecurity.Bindings.Extraction.Profile
-public import ZkcSecurity.Endpoint.Contract
+public import ZkcSecurity.Bindings.Participants.Contract
 
 @[expose] public section
 

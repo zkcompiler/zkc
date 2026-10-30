@@ -1,7 +1,7 @@
 module
 
-public import ZkcSecurity.Realizations.Gkr.SourceValidator
-public import ZkcSecurity.Examples.Components.GkrFiniteCircuit
+public import ZkcSecurityExamples.Gkr.SourceValidator
+public import ZkcSecurityExamples.Components.GkrFiniteCircuit
 
 public section
 

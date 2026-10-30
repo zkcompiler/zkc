@@ -1,7 +1,7 @@
 import Tests.SumcheckMathematicalInstallation
-import ZkcSecurity.Realizations.Sumcheck.SourceRound
-import ZkcSecurity.Families.Sumcheck.TableComponentNominal
-import ZkcSecurity.Tools.ComponentDerivation
+import ZkcSecurity.Bindings.Sumcheck.SourceRound
+import ZkcSecurity.Bindings.Sumcheck.Table.TableComponentNominal
+import ZkcSecurityTools.ComponentDerivation
 
 set_option autoImplicit false
 noncomputable section

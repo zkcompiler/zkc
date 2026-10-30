@@ -1,4 +1,4 @@
-import ZkcSecurity.Realizations.Gkr.CanonicalReadback
+import ZkcSecurityExamples.Gkr.CanonicalReadback
 import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 import Zkc.Protocols.Gkr.Source.VerifierProcess
 

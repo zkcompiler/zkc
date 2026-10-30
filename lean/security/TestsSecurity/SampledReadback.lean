@@ -1,4 +1,4 @@
-import ZkcSecurity.FiatShamir.HonestSampledReadback
+import ZkcSecurity.Bindings.Transcript.HonestSampledReadback
 
 /-! Narrow controls for private-prefix readback. These use actual Domain
 effects and handlers; source admission and generated-client receipts belong

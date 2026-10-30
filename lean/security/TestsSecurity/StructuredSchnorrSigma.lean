@@ -1,4 +1,4 @@
-import ZkcSecurity.Examples.StructuredSchnorrSigma
+import ZkcSecurityExamples.StructuredSchnorrSigma
 
 set_option smartUnfolding false
 

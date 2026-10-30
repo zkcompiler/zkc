@@ -1,6 +1,6 @@
 module
 
-public meta import ZkcSecurity.Tools.ClaimConstruction
+public meta import ZkcSecurityTools.ClaimConstruction
 
 @[expose] public section
 

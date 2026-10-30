@@ -16,8 +16,8 @@ data = "lean/ZkcExamples/Construction/OkamotoProofData.lean"
 bodies = "lean/ZkcExamples/Construction/OkamotoProofBodies.lean"
 participant = "lean/ZkcExamples/Construction/OkamotoProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/OkamotoArtifact.lean"
-artifacts = "lean/security/ZkcSecurity/Examples/Subjects/Okamoto/Artifacts.lean"
-claims = "lean/security/ZkcSecurity/Examples/Subjects/Okamoto/Claims.lean"
+artifacts = "lean/security/ZkcSecurityExamples/Subjects/Okamoto/Artifacts.lean"
+claims = "lean/security/ZkcSecurityExamples/Subjects/Okamoto/Claims.lean"
 
 [assumptions]
 requested = ["exporter.structured-denotation", "exporter.checked-candidate",
@@ -39,4 +39,4 @@ model_imports = ["ZkcExamples.Construction.OkamotoProofModel"]
 
 [lean]
 namespace = "ZkcSecurity.Examples.Subjects.Okamoto"
-imports = ["ZkcSecurity.Examples.Subjects.Okamoto.Registration"]
+imports = ["ZkcSecurityExamples.Subjects.Okamoto.Registration"]

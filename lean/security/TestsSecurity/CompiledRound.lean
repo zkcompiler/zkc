@@ -1,7 +1,7 @@
 module
 
-public import ZkcSecurity.Families.Sumcheck.CompiledRound
-public import ZkcSecurity.Examples.Components.SmallSumcheckHelpers
+public import ZkcSecurity.Bindings.Sumcheck.Table.CompiledRound
+public import ZkcSecurityExamples.Components.SmallSumcheckHelpers
 public import TestsSecurity.DomainSourceBridge
 
 @[expose] public section

@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Endpoint.Compiled
+public import ZkcSecurity.Bindings.Participants.Compiled
 public import ZkcSecurity.Bindings.Extraction.Layout
 public import ZkcSecurity.Transformations.FiatShamir.Transcript
 public import ZkcSecurity.Transformations.FiatShamir.Replay

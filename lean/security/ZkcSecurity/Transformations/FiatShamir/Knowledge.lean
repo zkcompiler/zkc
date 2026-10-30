@@ -2,7 +2,7 @@ module
 
 public import ZkcSecurity.Transformations.FiatShamir.Transcript
 public import ZkcSecurity.Transformations.FiatShamir.Replay
-public import ZkcSecurity.Oracle.Encoding
+public import ZkcSecurity.Mathematics.Oracle.Encoding
 public import VCVio.OracleComp.SimSemantics.StateT.StateProjection
 public import VCVio.OracleComp.SimSemantics.QueryImpl.Compose
 

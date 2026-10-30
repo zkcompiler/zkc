@@ -1,8 +1,8 @@
 import ZkcSecurity.Claims.Canonical
 import ZkcSecurity.Claims.Endpoint
-import ZkcSecurity.Examples.Subjects.Schnorr.Registration
-import ZkcSecurity.Examples.Subjects.ChaumPedersen.Contract
-import ZkcSecurity.Registry
+import ZkcSecurityExamples.Subjects.Schnorr.Registration
+import ZkcSecurityExamples.Subjects.ChaumPedersen.Contract
+import ZkcSecurity.Claims.Registry
 import Zkc.Claims.Receipt
 
 /-! Actual request/receipt controls for interpreted-stage assurance reporting.

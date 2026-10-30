@@ -153,7 +153,7 @@ class ComponentRootDescriptors(unittest.TestCase):
 
             generation.printer = printer
             generation.prove(root, config)
-            endpoint = "ZkcSecurity.Examples.Generated.Components.ExampleCompleteness"
+            endpoint = "ZkcSecurityExamples.Generated.Components.ExampleCompleteness"
             generation.retain.assert_called_once_with(endpoint, "fresh checked printer output")
             generation.compile.assert_called_once_with("Example.Proof")
             generation.receipt(root, config)

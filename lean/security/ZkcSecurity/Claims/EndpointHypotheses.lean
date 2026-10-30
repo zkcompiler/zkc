@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Endpoint.Evidence
+public import ZkcSecurity.Bindings.Participants.Evidence
 
 @[expose] public section
 

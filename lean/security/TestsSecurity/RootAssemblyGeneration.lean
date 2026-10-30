@@ -1,4 +1,4 @@
-import ZkcSecurity.Generation.SigmaCompleteness
+import ZkcSecurityTools.Generation.SigmaCompleteness
 import TestsSecurity.RootAssemblyFixture
 import TestsSecurity.ABIInstallations.Ordered
 
@@ -57,14 +57,14 @@ run_cmd do
       modulePrefix ++ "Readback.compiled_ideal_complete\nend " ++ law ++ "\n"),
     (selection.moduleName, RootCompleteness.directSource selection law (law ++ ".quantitative") sampling),
     (modulePrefix ++ "WrongBound", RootCompleteness.directSource
-      { selection with moduleName := modulePrefix ++ "WrongBound", error := .zero }
+      { selection with moduleName := modulePrefix ++ "WrongBound", namespaceName := modulePrefix ++ "WrongBound", error := .zero }
       law (law ++ ".quantitative") sampling),
     (modulePrefix ++ "WrongSubject", RootCompleteness.directSource
-      { selection with moduleName := modulePrefix ++ "WrongSubject", subjectModule := "TestsSecurity.ABIInstallations.Ordered" }
+      { selection with moduleName := modulePrefix ++ "WrongSubject", namespaceName := modulePrefix ++ "WrongSubject", subjectModule := "TestsSecurity.ABIInstallations.Ordered", subjectNamespace := "TestsSecurity.ABIInstallations.Ordered" }
       law (law ++ ".quantitative") "ZkcSecurity.Domains.PrimeField.rawSampleable 5")]
   let receipt := RootCompleteness.claimsOutput selection request
   sources := sources ++ [(receipt.moduleName, RootCompleteness.claimsSource selection request)]
-  let wrongReceipt := { receipt with moduleName := modulePrefix ++ "WrongQuantity", errorExpression := ".natural 0" }
+  let wrongReceipt := { receipt with moduleName := modulePrefix ++ "WrongQuantity", namespaceName := modulePrefix ++ "WrongQuantity", errorExpression := ".natural 0" }
   let checkedWrongReceipt := (ZkcTools.StructuredSource.Root.fixedCompletenessSource wrongReceipt).replace
     ("#print axioms completeReceipt")
     ("run_cmd do\n  let env ← Lean.getEnv\n" ++

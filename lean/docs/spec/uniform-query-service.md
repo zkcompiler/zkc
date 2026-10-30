@@ -1,6 +1,6 @@
 # Uniform queries for structured participants
 
-`ZkcSecurity.VCVio.StructuredUniform` defines a concrete optional
+`ZkcSecurity.ProgramLogic.Oracle.StructuredUniform` defines a concrete optional
 `ProbComp` handler at the structured participant boundary. It uses
 `PIR.MonadHandler`, `PIR.Execution` and `VCVio.Execution.freshQuery`; generic
 execution semantics are independent of this source interface. This is a
@@ -54,8 +54,8 @@ Sampling does not invent a logging event; such an event belongs to a callback.
 
 ## General-count process transport
 
-`ZkcArkLib.Examples.CausalSumcheck.Iteration` imports the shared module
-`ZkcExamples.Structured.SumcheckVerifierProcess` and its
+`ZkcArkLibExamples.CausalSumcheck.Iteration` imports the shared module
+`Zkc.Protocols.Sumcheck.Source.VerifierProcess` and its
 `SumcheckVerifierLaws.roundPresent` definition. It constructs a `Causal.Strategy` from the
 two actual qualified receives and the actual send. HIGH receives LOW's updated
 state and returns its own reply. The guard precedes service preparation and

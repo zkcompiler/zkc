@@ -1,9 +1,9 @@
 module
 
-public import ZkcSecurity.Examples.Components.SmallSumcheckFormula
-public import ZkcSecurity.Examples.Components.TwoSumsFormula
-public import ZkcSecurity.Claims.SubjectABI
-public meta import ZkcSecurity.Tools.TargetEvaluation
+public import ZkcSecurityExamples.Components.SmallSumcheckFormula
+public import ZkcSecurityExamples.Components.TwoSumsFormula
+public import ZkcSecurity.Bindings.Subjects.ABI
+public meta import ZkcSecurityTools.TargetEvaluation
 
 @[expose] public section
 noncomputable section

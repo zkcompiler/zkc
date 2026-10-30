@@ -1,6 +1,6 @@
 import ZkcSecurity.Claims.Completeness
-import ZkcSecurity.FiatShamir.HonestReadbackCompleteness
-import ZkcSecurity.Examples.RootProperties.SmallSumcheck
+import ZkcSecurity.Claims.Methods.HonestReadbackCompleteness
+import ZkcSecurityExamples.RootProperties.SmallSumcheck
 
 /-! Exact-run WP controls. The cache handler uses VCVio's actual `withCaching`,
 with an additional counter and ordered events. The final test re-establishes

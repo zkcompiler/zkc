@@ -61,7 +61,7 @@ def librarySource (program : Program) (name : String) : Except String String := 
   for (localName, helper, body) in pendingPatterns do
     let [(_, index)] := program.payload.definitions.zipIdx.filter (fun (definition, _) => definition.helper == helper)
       | throw "scalar-library-helper-selection"
-    text := text ++ (← helperAssociationSource program localName index
+    text := text ++ (← helperTemplateAssociationSource program localName index
       "(plainHelpers (F := F) (G := G) payload).closed" "(.silent _)")
     text := text ++ "theorem " ++ localName ++ "_pattern : " ++ localName ++ "Body = " ++ body ++ " := by kernel_rfl\n\n" ++
       "theorem " ++ localName ++ "_body : BodyIn payload.definitions SumcheckPendingBodies." ++ localName ++ "Helper " ++ body ++ " :=\n  ⟨" ++ localName ++ "Definition, List.get_mem _ _, rfl, by kernel_rfl⟩\n\n"

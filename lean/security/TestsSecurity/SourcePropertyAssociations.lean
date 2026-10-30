@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Realizations.Sumcheck.SourceRootReference
+public import ZkcSecurityExamples.Sumcheck.SourceRootReference
 public meta import ZkcTools.StructuredSource.Association
 
 @[expose] public section

@@ -158,7 +158,7 @@ reply-dependent branch and terminal stop; it introduces no additional evaluator.
 The monad laws preserve the whole tree. They neither select a handler nor supply
 probability, adversary, resource or cryptographic assumptions.
 
-The optional `ZkcSecurity.VCVio.Execution` module supplies full-distribution
+The optional `ZkcSecurity.ProgramLogic.Oracle.Execution` module supplies full-distribution
 and reachable-prefix composition for this same `runM`/`followM`, including
 value-returning trusted work and conservative Boolean checker laws. It compares
 complete output records, not reply marginals. Its support transfer relies on

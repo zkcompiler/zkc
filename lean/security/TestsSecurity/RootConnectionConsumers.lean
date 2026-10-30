@@ -1,7 +1,7 @@
 module
 
 public import TestsSecurity.RootConnectionPublicDraw
-public import ZkcSecurity.FiatShamir.RootConnectionSampledReadback
+public import ZkcSecurity.Bindings.Transcript.RootConnectionSampledReadback
 
 @[expose] public section
 

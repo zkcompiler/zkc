@@ -28,6 +28,7 @@ from bridges.pipeline import evidence, source_claims  # noqa: E402
 from bridges.structured import snapshot  # noqa: E402
 from bridges.structured.generate_component_roots import Generation  # noqa: E402
 from support.lean_headers import HeaderParser  # noqa: E402
+from support.packages import is_owned_module  # noqa: E402
 
 
 def export_metadata(rows: list[tuple[str, str, str, str]]) -> str:
@@ -53,7 +54,7 @@ def freeze_dependencies(generation: Generation) -> None:
     unlink a dependency between two commands. External package caches are reused.
     Only symlinked artifacts in our private overlay are replaced.
     """
-    pending = ["ZkcSecurity.Generation.Roots.Stages", "ZkcSecurity.Generation.Roots.Subjects",
+    pending = ["ZkcSecurityExamples.Generation.Roots.Stages", "ZkcSecurityExamples.Generation.Roots.Subjects",
                "TestsSecurity.GenerateRootControls", "ZkcSecurity.Claims.CanonicalAuthorityPair"]
     seen = set()
     # Lean owns the grammar, including `public meta import` and `import all`.
@@ -61,7 +62,7 @@ def freeze_dependencies(generation: Generation) -> None:
     # pointing at another process's mutable cache.
     with HeaderParser(lean=generation.lean, root=LEAN) as headers:
         for module in pending:
-            if module in seen:
+            if module in seen or not is_owned_module(module):
                 continue
             source = generation.module_path(module)
             if not source.is_file():
@@ -76,7 +77,7 @@ def freeze_dependencies(generation: Generation) -> None:
                     os.replace(temporary, cached)
 
 
-def source_request_module(subject_module: str, directory: Path) -> tuple[str, str]:
+def source_request_module(subject_module: str, subject_namespace: str, directory: Path) -> tuple[str, str]:
     """Print the actual compiled-stage source requests through the common renderer.
 
     Stage selection chooses this root's interface, not a property or theorem.
@@ -104,7 +105,8 @@ def source_request_module(subject_module: str, directory: Path) -> tuple[str, st
         doc="Generated exact source requests. Regenerate with "
             "`lean/checks/check_subject_roots.py --exports DIRECTORY --write`. "
             "The common data renderer emits no property or proof wrapper.")
-    return module, header + evidence.request_commands(module, bound, registration + ".library")
+    return module, header + evidence.request_commands(subject_namespace + "SoundnessClaims", bound,
+        subject_namespace + "SoundnessRegistration.library")
 
 
 def main() -> None:
@@ -120,15 +122,15 @@ def main() -> None:
     options.output, options.check = options.records, not options.write
     generation = Generation(options)
     freeze_dependencies(generation)
-    for module in ["ZkcTools.StructuredSource.Root", "ZkcSecurity.Generation.Roots.Catalogue",
-                   "ZkcSecurity.Generation.Roots.ExportMetadata"]:
+    for module in ["ZkcTools.StructuredSource.Root", "ZkcSecurityExamples.Generation.Roots.Catalogue",
+                   "ZkcSecurityExamples.Generation.Roots.ExportMetadata"]:
         generation.compile(module)
-    manifest = json.loads(generation.printer("RootManifest", '''import ZkcSecurity.Generation.Roots.Catalogue
+    manifest = json.loads(generation.printer("RootManifest", '''import ZkcSecurityExamples.Generation.Roots.Catalogue
 
 def main : IO Unit := IO.println ZkcSecurity.Generation.Roots.catalogueManifest
 '''))
     retained_rows = json.loads(generation.printer("RetainedRootExports", '''import Lean
-import ZkcSecurity.Generation.Roots.ExportMetadata
+import ZkcSecurityExamples.Generation.Roots.ExportMetadata
 
 def main : IO Unit := IO.println (Lean.Json.arr
   (ZkcSecurity.Generation.Roots.exportDigests.map fun (name, original, producer, validator) =>
@@ -169,12 +171,12 @@ def main : IO Unit := IO.println (Lean.Json.arr
             path = generation.directory / (module + ".lean")
             path.write_text(text)
             generation.compile(module, path)
-    metadata_path = generation.module_path("ZkcSecurity.Generation.Roots.ExportMetadata")
+    metadata_path = generation.module_path("ZkcSecurityExamples.Generation.Roots.ExportMetadata")
     if options.write:
         metadata_path.write_text(export_metadata(metadata))
     elif metadata_path.read_text() != export_metadata(metadata):
         raise AssertionError("stale generated export metadata")
-    for module in ["ZkcSecurity.Generation.Roots.ExportMetadata", "ZkcSecurity.Generation.Roots.Subjects",
+    for module in ["ZkcSecurityExamples.Generation.Roots.ExportMetadata", "ZkcSecurityExamples.Generation.Roots.Subjects",
                    "TestsSecurity.GenerateSubjects"]:
         generation.compile(module)
 
@@ -194,17 +196,17 @@ def main : IO Unit := TestsSecurity.GenerateSubjects.main [{json.dumps(str(regen
     subject_paths = sorted(regenerated.rglob("*.lean"))
     expected_subjects = {row["subjectModule"] for row in manifest}
     expected_subjects.update(row["aliasesModule"] for row in manifest)
-    expected_subjects.add("ZkcSecurity.Generation.Roots.SubjectImports")
+    expected_subjects.add("ZkcSecurityExamples.Generation.Roots.SubjectImports")
     actual_subjects = {".".join(path.relative_to(regenerated).with_suffix("").parts) for path in subject_paths}
     if actual_subjects != expected_subjects:
         raise AssertionError("production subject output inventory differs from catalogue")
-    generated = ["ZkcSecurity.Generation.Roots.ExportMetadata"]
+    generated = ["ZkcSecurityExamples.Generation.Roots.ExportMetadata"]
     for path in subject_paths:
         module = ".".join(path.relative_to(regenerated).with_suffix("").parts)
         generation.retain(module, path.read_text())
         generated.append(module)
-    generation.compile("ZkcSecurity.Generation.Roots.Stages")
-    generation.printer("GenerateRootStages", f'''import ZkcSecurity.Generation.Roots.Stages
+    generation.compile("ZkcSecurityExamples.Generation.Roots.Stages")
+    generation.printer("GenerateRootStages", f'''import ZkcSecurityExamples.Generation.Roots.Stages
 
 def main : IO Unit := ZkcSecurity.Generation.Roots.writeSources {json.dumps(str(regenerated))}
   (ZkcSecurity.Generation.Roots.stageSources.map fun (_, name, source) => (name, source))
@@ -246,19 +248,19 @@ def main : IO Unit := ZkcSecurity.Generation.Roots.writeSources {json.dumps(str(
     generation.compile("TestsSecurity.GenerateRootControls")
 
     for row in manifest:
-        module, source = source_request_module(row["subjectModule"], options.exports / row["name"])
+        module, source = source_request_module(row["subjectModule"], row["subjectNamespace"], options.exports / row["name"])
         generation.retain(module, source)
         generated.append(module)
 
     preservation = ["import ZkcSecurity.Claims.CanonicalAuthorityPair"]
     for row in manifest:
         module = "RootBaseline" + row["name"]
-        text = (baseline / (row["name"] + ".lean")).read_text().replace(row["subjectModule"], module)
+        text = (baseline / (row["name"] + ".lean")).read_text().replace(row["subjectNamespace"], module)
         path = generation.directory / (module + ".lean")
         path.write_text(text)
         generation.compile(module, path)
-        selected = row["subjectModule"]
-        preservation += [f"import {selected}", f"import {module}", ""]
+        selected = row["subjectNamespace"]
+        preservation += [f"import {row['subjectModule']}", f"import {module}", ""]
         for field in ["subject.reference", "subject.targetReference", "subject.acceptance",
                       "validatorSubject.reference",
                       "validatorSubject.targetReference", "validatorSubject.acceptance"]:

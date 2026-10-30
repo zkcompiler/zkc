@@ -1,6 +1,6 @@
-import ZkcSecurity.Realizations.Gkr.SourceValidator
-import ZkcSecurity.Realizations.Gkr.CanonicalReadback
-import ZkcSecurity.Realizations.Gkr.ProducerHelpers
+import ZkcSecurityExamples.Gkr.SourceValidator
+import ZkcSecurityExamples.Gkr.CanonicalReadback
+import ZkcSecurityExamples.Gkr.ProducerHelpers
 import TestsSecurity.GkrComponentContracts
 import ZkcTools.DeclarationAudit
 
@@ -10,8 +10,8 @@ the package's global import or audit inventories. -/
 
 run_cmd do
   ZkcTools.DeclarationAudit.check
-    [`ZkcSecurity.Families.Gkr, `ZkcSecurity.Realizations.Gkr,
-      `ZkcSecurity.Source, `TestsSecurity.GkrComponentContracts]
+    [`ZkcSecurity.Families.Gkr, `ZkcSecurity.Bindings.Gkr, `ZkcSecurityExamples.Gkr,
+      `ZkcSecurity.Bindings.Source, `TestsSecurity.GkrComponentContracts]
     "GKR-COMPONENTS-AUDIT-PASS"
 
 #print axioms ZkcSecurity.Realizations.Gkr.SourceValidator.rejected

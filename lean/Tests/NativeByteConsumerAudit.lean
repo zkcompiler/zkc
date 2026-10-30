@@ -41,6 +41,7 @@ import all Zkc.Construction.Uniform.DomainExecution
 import all Zkc.Construction.Uniform.DomainHandler
 import all Zkc.Construction.Uniform.DomainProperties
 import all Zkc.Construction.Uniform.SourceProcess
+import all ZkcTools.ConstructionBindings.ScalarConnection
 import all Zkc.Executable.ByteParticipantTransport
 import all Zkc.Executable.Code
 import all Zkc.Executable.Decoding

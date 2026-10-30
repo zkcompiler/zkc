@@ -1,6 +1,6 @@
 module
 
-import ZkcSecurity.FiatShamir.LosslessPresentation
+import ZkcSecurity.Bindings.Transcript.LosslessPresentation
 
 set_option autoImplicit false
 namespace TestsSecurity.LosslessPresentationRefusal

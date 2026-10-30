@@ -1,6 +1,6 @@
 module
 
-import ZkcSecurity.FiatShamir.LosslessPresentationClaims
+import ZkcSecurity.Claims.Methods.LosslessPresentationClaims
 import Zkc.Construction.OriginalExecution
 
 set_option autoImplicit false

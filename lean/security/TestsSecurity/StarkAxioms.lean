@@ -55,14 +55,14 @@ direct upstream roots appearing in types or bodies. -/
 #print axioms prEvent_bind_le_prEvent_add_of_support
 
 run_cmd ZkcTools.DeclarationAudit.check [`ZkcSecurity.Families.Stark] "STARK-SECURITY-AXIOMS-PASS"
-run_cmd ZkcTools.DeclarationAudit.checkBoundary [`ZkcSecurity.Families.Stark] [`Mathlib, `CompPoly, `VCVio, `ZkcSecurity.Algebra.Polynomial] [] "STARK-SECURITY-BOUNDARY-PASS"
+run_cmd ZkcTools.DeclarationAudit.checkBoundary [`ZkcSecurity.Families.Stark] [`Mathlib, `CompPoly, `VCVio, `ZkcSecurity.Mathematics.Algebra.Polynomial] [] "STARK-SECURITY-BOUNDARY-PASS"
 
 -- Print, as well as check, every computed upstream root's transitive closure.
 open Lean Elab Command in
 run_cmd do
   let env ← getEnv
   let mut roots : Std.HashSet Name := {}
-  let upstream := [`Mathlib, `CompPoly, `VCVio, `ZkcSecurity.Algebra.Polynomial]
+  let upstream := [`Mathlib, `CompPoly, `VCVio, `ZkcSecurity.Mathematics.Algebra.Polynomial]
   for index in [:env.header.moduleData.size] do
     unless (`ZkcSecurity.Families.Stark).isPrefixOf env.header.modules[index]!.module do continue
     for info in env.header.moduleData[index]!.constants do

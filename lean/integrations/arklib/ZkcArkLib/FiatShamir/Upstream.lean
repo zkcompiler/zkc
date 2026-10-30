@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.FiatShamir.Lifting
+public import ZkcSecurity.ProgramLogic.Transcript.Lifting
 public import ArkLib.OracleReduction.Security.RoundByRound
 public import ArkLib.OracleReduction.Security.CoordinateWiseSpecialSoundness.Guarded
 

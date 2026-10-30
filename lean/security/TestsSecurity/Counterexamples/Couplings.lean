@@ -1,4 +1,4 @@
-import ZkcSecurity.FiatShamir.Obligations
+import ZkcSecurity.Transformations.FiatShamir.Obligations
 import TestsSecurity.Counterexamples.Support
 
 /-! Counterexamples for couplings and construction identity.

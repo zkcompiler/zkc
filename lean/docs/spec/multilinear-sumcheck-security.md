@@ -219,7 +219,7 @@ incorrect vector length, without a freshness or false-claim premise.
 
 ## Local distribution and computed-value contracts
 
-`ZkcSecurity.VCVio.Execution` owns reusable probability laws over PIR
+`ZkcSecurity.ProgramLogic.Oracle.Execution` owns reusable probability laws over PIR
 execution. `SameDist` compares full distributions with every output set
 measurable, including outcome, private state and event order. Its equivalence
 and bind laws preserve arbitrary measured suffix observations. `Reaches`

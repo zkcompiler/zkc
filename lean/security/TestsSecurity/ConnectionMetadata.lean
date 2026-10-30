@@ -2,8 +2,8 @@ module
 
 import Tests.ConstructionBindingsAnalysis
 meta import Tests.ConstructionBindingsAnalysis
-import ZkcSecurity.Generation.Roots.Catalogue
-meta import ZkcSecurity.Generation.Roots.Catalogue
+import ZkcSecurityExamples.Generation.Roots.Catalogue
+meta import ZkcSecurityExamples.Generation.Roots.Catalogue
 
 /-! Static accounting proposals remain separate from semantic connections.
 The production selections exercise all retained source/SSA refusal controls. -/

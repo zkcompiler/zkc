@@ -18,6 +18,7 @@ sys.path.insert(0, str(LEAN))
 from bridges.structured.generate_component_roots import Generation  # noqa: E402
 from support.evidence import records  # noqa: E402
 from support.lean_headers import HeaderParser  # noqa: E402
+from support.packages import is_owned_module  # noqa: E402
 
 
 def digest(path):
@@ -36,9 +37,10 @@ def inputs(generation, entry):
                 continue
             sources[path] = digest(path)
             for module in parser.imports(path.read_text(), path):
-                source = generation.module_path(module)
-                if source.is_file():
-                    pending.append(source)
+                if is_owned_module(module):
+                    source = generation.module_path(module)
+                    if source.is_file():
+                        pending.append(source)
                 # Pin external objects too, without treating their source as
                 # project-owned or traversing a second package's source tree.
                 for suffix in (".olean", ".olean.private", ".ir"):
@@ -71,7 +73,7 @@ def main():
     destination = generation.directory / "validation.json"
     try:
         for module in ("ZkcTools.ProofAccount", "Tests.ProofAccount",
-                       "ZkcSecurity.Generation.SumcheckAccounts"):
+                       "ZkcSecurityExamples.Generation.SumcheckAccounts"):
             generation.compile(module)
         sources, objects = inputs(generation, entry)
         output = generation.directory / "accounts.json"

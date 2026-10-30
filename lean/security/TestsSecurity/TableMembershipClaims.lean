@@ -1,4 +1,4 @@
-import ZkcSecurity.Examples.TableMembership.Claims
+import ZkcSecurityExamples.TableMembership.Claims
 
 /-! Actual aggregate ABI, fixed canonical meanings and refusal controls.
 Generic nominal decoding and source/export admission controls remain with their

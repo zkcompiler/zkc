@@ -1,7 +1,7 @@
 module
 
 public import ZkcArkLib.Sumcheck.Multilinear.Causal
-public import ZkcArkLib.Examples.CausalSumcheck.ExactRound
+public import ZkcArkLibExamples.CausalSumcheck.ExactRound
 
 @[expose] public section
 

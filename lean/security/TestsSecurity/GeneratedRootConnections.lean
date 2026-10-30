@@ -2,7 +2,7 @@ module
 
 public import ZkcExamples.Structured.Generated.Connections.SmallSumcheck
 public import ZkcExamples.Structured.Generated.Connections.TwoSums
-public import ZkcSecurity.FiatShamir.RootConnectionEndpoint
+public import ZkcSecurity.Bindings.Transcript.RootConnectionEndpoint
 
 @[expose] public section
 

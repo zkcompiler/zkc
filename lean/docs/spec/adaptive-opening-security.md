@@ -1,8 +1,8 @@
 # Adaptive committed-table application security
 
 This independent formal model is owned by
-[`Commitment.Application`](../../security/ZkcSecurity/Commitment/Application.lean)
-and [`Commitment.AdaptiveOpening`](../../security/ZkcSecurity/Commitment/AdaptiveOpening.lean).
+[`Commitment.Application`](../../security/ZkcSecurity/Transformations/Commitment/Application.lean)
+and [`Commitment.AdaptiveOpening`](../../security/ZkcSecurity/Transformations/Commitment/AdaptiveOpening.lean).
 It specializes the existing committed-opening bridge and hashed-leaf Merkle
 extractor. It does not define a second commitment or execution framework.
 

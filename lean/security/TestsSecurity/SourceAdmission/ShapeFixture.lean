@@ -1,7 +1,7 @@
 module
 
 public import TestsSecurity.ABIInstallations.Fixtures
-public import ZkcSecurity.Tools.SourceInputClauses
+public import ZkcSecurityTools.SourceInputClauses
 
 @[expose] public section
 noncomputable section

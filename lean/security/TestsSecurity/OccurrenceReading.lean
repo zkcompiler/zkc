@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.FiatShamir.OccurrenceReading
+public import ZkcSecurity.Bindings.Transcript.OccurrenceReading
 public import ZkcExamples.Construction.ComposedSumcheckProof
 
 @[expose] public section

@@ -1,4 +1,4 @@
-import ZkcSecurity.Commitment.AdaptiveOpening
+import ZkcSecurity.Transformations.Commitment.AdaptiveOpening
 
 /-! Focused theorem controls for the application-event interpretation and adaptive client.
 The small digest below is a deterministic execution fixture, not a secure parameter choice. -/

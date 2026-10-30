@@ -21,8 +21,8 @@ run_cmd do
   for imported in environment.header.modules do
     if [
         `ZkcSecurity.Claims.Methods.Knowledge,
-        `ZkcSecurity.Endpoint.Knowledge,
-        `ZkcSecurity.Endpoint.Soundness,
+        `ZkcSecurity.Claims.Methods.KnowledgeEndpoint,
+        `ZkcSecurity.Claims.Methods.Soundness,
         `ZkcSecurity.Transformations.FiatShamir.Knowledge].contains imported.module then
       throwError "fixed knowledge meaning imports a method module: {imported.module}"
   for name in [

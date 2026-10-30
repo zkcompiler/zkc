@@ -1,4 +1,4 @@
-import ZkcSecurity.Examples.EmbeddingEqualitySoundness
+import ZkcSecurityExamples.EmbeddingEqualitySoundness
 import Zkc.Construction.DomainExecutionLaws
 import ZkcTools.ConstructionBindings.Admission
 

@@ -1,5 +1,5 @@
-import ZkcSecurity.Examples.Subjects.Schnorr.Claims
-import ZkcArkLib.Examples.Subjects.Guess.Claims
+import ZkcSecurityExamples.Subjects.Schnorr.Claims
+import ZkcArkLibExamples.Subjects.Guess.Claims
 
 /-! Emitted declarations for the assurance report's premise audit.
 

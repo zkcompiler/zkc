@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Realizations.Sumcheck.SourceFamilySelections
+public import ZkcSecurityExamples.Sumcheck.SourceFamilySelections
 public meta import ZkcTools.StructuredSource.PropertyInstallation
 
 @[expose] public section

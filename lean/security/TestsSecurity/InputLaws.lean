@@ -1,7 +1,7 @@
 module
 
-public meta import ZkcSecurity.Tools.InputLaws
-public meta import ZkcSecurity.Tools.TableCapacity
+public meta import ZkcSecurityTools.InputLaws
+public meta import ZkcSecurityTools.TableCapacity
 public import Zkc.Source.Structured.Algebra
 
 @[expose] public section
