@@ -330,6 +330,24 @@ work share the reader's remaining allowance. Byte encodings impose their own
 size and JSON-depth constraints at export; they do not define native control
 nesting or affine validity.
 
+Executable participant admission likewise reads actual SSA, scoped callee
+signatures, service declarations, message schemas and entry targets. A service
+port retains its declared ingress position among data and service inputs; its
+identity is independent of SSA names or names invented at export. Selected
+service data ports must have the installed service's exact representation.
+Message schema types agree within each protocol instance. Conditional completion
+consumes each affine result and introduces its continuing value explicitly.
+Loop invariants require Copy and can give distinct formals the same actual.
+
+Participant admission has a separate 65,536-instruction ceiling and one million
+work units across all participants, with at most 64 nested body levels. Its
+combined callable inventory counts actual ordinary functions, domains and
+participants, with a limit of 4,096. Synthetic realization names do not count.
+The byte exporter independently applies its aggregate artifact limits. It
+reserves service identities when naming values and deduplicates aliased loop
+captures. Artifact comparison independently checks every native capture's
+actual value, each formal's uses and the complete distinct capture inventory.
+
 Resource-origin facts are relative to actual data formals, with the borrowed
 scope excluded. Closed-region summaries substitute through explicit captures;
 match payload roots begin unknown. Continuing alternatives must agree on a

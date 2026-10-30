@@ -106,14 +106,29 @@ class ArtifactCorrespondence {
         return false;
     return true;
   }
-  bool captures(ValueRange arguments, ArrayRef<std::string> names,
-                Environment &environment) {
-    if (arguments.size() != names.size())
+  bool captures(ValueRange actuals, ValueRange formals,
+                ArrayRef<std::string> names, const Environment &outer,
+                Environment &inner) {
+    if (actuals.size() != formals.size())
       return false;
-    for (auto [argument, name] : zip(arguments, names))
-      if (!charge() || !environment.bind(argument, name, true))
+    llvm::StringSet<> seen;
+    unsigned next = 0;
+    for (auto [actual, formal] : zip(actuals, formals)) {
+      if (!charge())
         return false;
-    return true;
+      auto found = outer.values.find(actual);
+      if (found == outer.values.end())
+        return false;
+      // Native Copy captures can alias. Bytes bind each captured actual once;
+      // every native formal must still correspond to that exact outer value.
+      StringRef name = found->second;
+      if (seen.insert(name).second &&
+          (next == names.size() || names[next++] != name))
+        return false;
+      if (!inner.bind(formal, name, true))
+        return false;
+    }
+    return next == names.size();
   }
   bool body(Block &block, const program::Body &instructions,
             Environment environment, unsigned depth = 0) {
@@ -173,8 +188,7 @@ class ArtifactCorrespondence {
                                 {r->count.value}))
           return false;
         auto &region = loop.getBody().front();
-        if (region.getNumArguments() !=
-            offset + r->carried.size() + r->captures.size())
+        if (region.getNumArguments() != op.getNumOperands())
           return false;
         Environment inner;
         if (offset && !inner.bind(region.getArgument(0), r->count.induction))
@@ -185,10 +199,9 @@ class ArtifactCorrespondence {
               !inner.bind(region.getArgument(offset + i), carried.first))
             return false;
         unsigned start = offset + r->carried.size();
-        if (!environment.inputs(op.getOperands().drop_front(start),
-                                r->captures) ||
-            !captures(region.getArguments().drop_front(start), r->captures,
-                      inner) ||
+        if (!captures(op.getOperands().drop_front(start),
+                      region.getArguments().drop_front(start), r->captures,
+                      environment, inner) ||
             !body(region, r->body, std::move(inner), depth + 1) ||
             !outputs(r->outputs))
           return false;

@@ -10,6 +10,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Protocol/Execution.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Program/Codec.h"
@@ -79,7 +80,11 @@ OwningOpRef<ModuleOp> capacitySource(MLIRContext &context, StringRef body) {
   builder.setInsertionPointToEnd(function.addEntryBlock());
   exec::ScopedExecutionBuilder control(builder, function);
   auto empty = builder.getArrayAttr({});
-  auto parameters = builder.getStrArrayAttr({body});
+  auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+      function, builder.getStringAttr("numerical"));
+  require(bool(binding), "capacity fixture lost its binding");
+  auto parameters = take(protocol::decodeInvocationParameters(
+      binding.getContract(), binding.getArgumentsAttr(), {body.str()}));
   auto emit = [&](StringRef binding, ValueRange inputs, Type result,
                   StringRef site, ArrayAttr attributes) {
     return control
@@ -109,10 +114,18 @@ OwningOpRef<ModuleOp> capacitySource(MLIRContext &context, StringRef body) {
 
 void replaceSourceBodies(ModuleOp module, StringRef body, size_t count) {
   size_t seen = 0;
-  auto parameters = OpBuilder(module.getContext()).getStrArrayAttr({body});
+  ArrayAttr parameters;
   module.walk([&](exec::ApplyOp op) {
-    if (sf::contract(op) == "numerical.sum" && seen++ < count)
+    if (sf::contract(op) == "numerical.sum" && seen++ < count) {
+      if (!parameters) {
+        auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+            op, op.getBindingAttr());
+        require(bool(binding), "capacity invocation lost its binding");
+        parameters = take(protocol::decodeInvocationParameters(
+            binding.getContract(), binding.getArgumentsAttr(), {body.str()}));
+      }
       op.setParametersAttr(parameters);
+    }
   });
   require(seen == capacityCalls && count <= seen,
           "capacity source lost numerical calls");
@@ -189,6 +202,45 @@ int main() {
     require(program::encode(checked) == program::encode(original),
             "verified artifact changed on return");
   });
+  cases.run(
+      "loop capture aliases preserve exact actual-value correspondence", [&] {
+        auto source = parseSourceString<ModuleOp>(R"mlir(
+module { "protocol.module"() ({
+  "protocol.participant"() ({ ^entry(%n:ui64, %x:i1, %y:i1):
+    "protocol.loop"(%n,%x,%x,%y) ({ ^body(%i:ui64,%a:i1,%b:i1,%c:i1):
+      "protocol.send"(%a) {site="a",schema="message",peer="Q"} : (i1)->()
+      "protocol.send"(%b) {site="b",schema="message",peer="Q"} : (i1)->()
+      "protocol.yield"() : ()->()
+    }) {site="loop",carried=0:i64,count="",parameter=false,maximum=8:i64}
+      : (ui64,i1,i1,i1)->()
+    "protocol.finish"() : ()->()
+  }) {sym_name="p",function_type=(ui64,i1,i1)->(),instance="example",role="P"} : ()->()
+  "protocol.entry"() {sym_name="main",targets=[["P",@p]]} : ()->()
+}) {profile=#protocol.profile<exec>} : ()->() }
+)mlir",
+                                                  &context);
+        require(bool(source), "loop fixture parse refused");
+        require(succeeded(protocol::lowerPhysical(*source)),
+                "loop physical selection refused");
+        auto actual = readProgram(*source);
+        take(protocol::verifyProgramArtifact(*source, encoded(actual)));
+        auto &loop =
+            *actual.participants.front().body.front().get<program::Loop>();
+        require(loop.captures.size() == 2, "distinct actual capture was lost");
+        auto changed = actual;
+        auto &changedLoop =
+            *changed.participants.front().body.front().get<program::Loop>();
+        changedLoop.body[1].get<program::Send>()->input = loop.captures.back();
+        if (auto error = protocol::admit(changed))
+          throw std::runtime_error(llvm::toString(std::move(error)));
+        refuses(protocol::verifyProgramArtifact(*source, encoded(changed)),
+                "artifact-correspondence");
+        loop.captures.pop_back();
+        if (auto error = protocol::admit(actual))
+          throw std::runtime_error(llvm::toString(std::move(error)));
+        refuses(protocol::verifyProgramArtifact(*source, encoded(actual)),
+                "artifact-correspondence");
+      });
   cases.run("current program shape retains actual arguments", [&] {
     auto artifact = program::encode(original);
     auto &root = *artifact.getAsArray();

@@ -1,22 +1,18 @@
 #include "zkc/Dialect/Protocol/Execution.h"
-#include "../Verification.h"
-#include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Bindings.h"
-#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Services.h"
-#include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
-#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Bindings.h"
-#include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
-#include "zkc/Dialect/Relation/IR/Assets.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/StringSet.h"
 
 using namespace llvm;
 using namespace mlir;
@@ -28,7 +24,7 @@ class ExecutionModelReader {
   bool physical;
   std::string problem;
   unsigned next = 0;
-  SmallVector<LocalRealization> computations;
+  llvm::StringSet<> reserved;
 
   using Env = llvm::DenseMap<mlir::Value, std::string>;
   void fail(StringRef why) {
@@ -42,23 +38,6 @@ class ExecutionModelReader {
         return false;
       }
     return true;
-  }
-  program::Names strings(ArrayAttr attrs,
-                         StringRef code = "interactive-attribute") {
-    if (!attrs) {
-      fail(code);
-      return {};
-    }
-    program::Names out;
-    for (auto a : attrs) {
-      auto s = dyn_cast<StringAttr>(a);
-      if (!s) {
-        fail(code);
-        return {};
-      }
-      out.push_back(s.getValue().str());
-    }
-    return out;
   }
   protocol::Assignments pairs(ArrayAttr attrs, bool symbols = false) {
     if (!attrs) {
@@ -80,7 +59,13 @@ class ExecutionModelReader {
     }
     return out;
   }
-  std::string fresh() { return "v" + std::to_string(next++); }
+  std::string fresh() {
+    std::string name;
+    do {
+      name = "v" + std::to_string(next++);
+    } while (reserved.contains(name));
+    return name;
+  }
   std::string type(Type t) {
     auto value = encodeBoundType(t, physical);
     if (!value) {
@@ -283,7 +268,10 @@ class ExecutionModelReader {
             initial.emplace_back(n, input);
           } else {
             innerEnv[inner.getArgument(i)] = input;
-            captures.push_back(input);
+            // Native formals may alias a Copy actual. The byte grammar names
+            // captures by the actual value, so export that capture once.
+            if (!is_contained(captures, input))
+              captures.push_back(input);
           }
         }
         program::LoopCount n{name(op->getOperand(0), env), *loop.getMaximum(),
@@ -316,6 +304,18 @@ class ExecutionModelReader {
       return {};
     }
     Env env;
+    // Artifact-local value names have no authority over service identities.
+    // Reserve the latter before choosing names for actual SSA data arguments.
+    if (auto ports = op->getAttrOfType<ArrayAttr>("service_ports")) {
+      if (ports.size() > 1024) {
+        fail("interactive-port-limit");
+        return {};
+      }
+      for (auto item : ports)
+        if (auto row = dyn_cast<ArrayAttr>(item); row && !row.empty())
+          if (auto name = dyn_cast<StringAttr>(row[0]))
+            reserved.insert(name.getValue());
+    }
     program::Participant projected;
     if (op->getRegion(0).front().getArgumentTypes() != ft.getInputs()) {
       fail("interactive-block-arguments");
@@ -363,7 +363,7 @@ public:
         profile(root->getAttrOfType<zkc::protocol_ir::ProfileAttr>("profile")),
         physical(profile &&
                  profile.getValue() == zkc::protocol_ir::Profile::Physical) {}
-  Expected<program::Participants> run(bool allowComputations = false) {
+  Expected<program::Participants> run() {
     if (!isa<zkc::protocol_ir::ProtocolModuleOp>(root) ||
         !attributes(root, {"profile", "source_declarations"}) || !profile ||
         !zkc::protocol_ir::isExecutableProfile(profile.getValue()) ||
@@ -375,35 +375,20 @@ public:
     program::Participants participants;
     participants.stage = physical ? program::Participants::Stage::Physical
                                   : program::Participants::Stage::Logical;
-    {
-      if (allowComputations && !physical) {
-        auto closure = readSourceExecutionClosure(root);
-        if (!closure)
-          return closure.takeError();
-        participants.functions = std::move(closure->definitions.functions);
-        append_range(computations, closure->computations);
-      } else {
-        auto definitions = readExecutionDefinitions(root, physical);
-        if (!definitions)
-          return definitions.takeError();
-        participants.functions = std::move(definitions->functions);
-      }
-    }
+    auto definitions = readExecutionDefinitions(root, physical);
+    if (!definitions)
+      return definitions.takeError();
+    participants.functions = std::move(definitions->functions);
     for (auto &op : root->getRegion(0).front()) {
       if (isa<func::FuncOp, data::DomainOp>(op)) {
-        // The complete source closure checks every mathematical/domain
-        // declaration. Publication accepts only the resolved native profile.
-        if (isa<data::DomainOp>(op) && (!allowComputations || physical))
+        // Publication accepts only the fully realized executable profile.
+        if (isa<data::DomainOp>(op))
           return error("execution-unresolved-domain");
         continue;
       }
       if (isa<mlir::ModuleOp>(op)) {
-        // Stage admission already checked the computation closure. Only
-        // internal logical admission may retain it; publication must realize it
-        // first.
-        if (!allowComputations || physical)
-          return error("computation-profile");
-        continue;
+        // Computation units belong to pre-publication native admission.
+        return error("computation-profile");
       }
       if (isa<zkc::protocol_ir::ProjectionOp, zkc::relation::DeclareOp>(op))
         continue;
@@ -433,8 +418,7 @@ public:
     }
     if (!problem.empty())
       return error(problem);
-    if (auto e = computations.empty() ? admit(participants)
-                                      : admit(participants, computations))
+    if (auto e = admit(participants))
       return e;
     return participants;
   }
@@ -457,12 +441,5 @@ Expected<program::Participants> readExecutionModel(Operation *root) {
     root = &module.getBody()->front();
   }
   return ExecutionModelReader(root).run();
-}
-LogicalResult verifyModule(Operation *root) {
-  // Region verification already checked all nested operation invariants.
-  auto v = ExecutionModelReader(root).run(/*allowComputations=*/true);
-  if (!v)
-    return diagnostics::emit(root->emitOpError(), v.takeError());
-  return success();
 }
 } // namespace zkc::protocol

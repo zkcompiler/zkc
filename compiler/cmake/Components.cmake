@@ -262,6 +262,7 @@ add_zkc_component(IR
   lib/Dialect/Protocol/IR/Construction.cpp
   lib/Dialect/Protocol/IR/ConstructionResolution.cpp
   lib/Dialect/Protocol/IR/Projection.cpp
+  lib/Dialect/Protocol/ExecutionAdmission.cpp
   lib/Dialect/Protocol/Execution.cpp
   lib/Dialect/Relation/IR/AIR.cpp
   lib/Dialect/Relation/IR/R1CS.cpp

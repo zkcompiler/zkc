@@ -167,9 +167,13 @@ work/depth bounds across calls. Scoped closure admission now checks affine data
 use, actual helper/finite callback cycles, match history and exact finite state
 roots directly from this view. Scope ownership remains a separate check.
 Native control admission no longer inherits the Program JSON nesting limit;
-byte export still checks that limit independently. The reader still constructs
-neutral records for export and participant admission still consumes them;
-retiring those remaining dependencies is in progress. Structured export
+byte export still checks that limit independently. Participant admission now
+checks actual SSA data use, service ingress and representations, instance-scoped
+message schemas and entry targets directly. Exported value names cannot collide
+with service identities; aliased Copy loop captures retain their actual-value
+correspondence through byte export. The scoped reader still constructs unused
+neutral records alongside its native view; retiring that construction and the
+remaining type-spelling conversions is in progress. Structured export
 preserves actual SSA binding positions and checked
 control, and the independent Lean reader exercises fresh branches, loops,
 stops, mathematical calls and ordered finite callbacks. Preparation and

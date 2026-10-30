@@ -160,6 +160,7 @@ def main():
         "lib/Dialect/Algebra/IR/Mathematical.cpp": "ZkcIR",
         "lib/Analysis/StructuredComputation.cpp": "ZkcIR",
         "lib/Dialect/Protocol/IR/Protocol.cpp": "ZkcIR",
+        "lib/Dialect/Protocol/ExecutionAdmission.cpp": "ZkcIR",
         "lib/Dialect/Exec/ClosureAdmission.cpp": "ZkcIR",
         "lib/Dialect/Exec/Execution.cpp": "ZkcIR",
         "lib/Dialect/Exec/ExecutionComparison.cpp": "ZkcIR",
