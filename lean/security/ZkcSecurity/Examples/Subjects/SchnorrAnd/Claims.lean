@@ -1,13 +1,12 @@
 module
 
 public import ZkcSecurity.Tools.ClaimConstruction
-public import ZkcSecurity.Examples.Subjects.SchnorrAnd.Endpoints
 public import ZkcSecurity.Examples.Subjects.SchnorrAnd.Registration
 public meta import ZkcSecurity.Examples.Subjects.SchnorrAnd.Registration
 
 @[expose] public section
 
-/-! Generated source requests and typed receipts. Regenerate with `lean/bridges/subject.py --write`. Maintained Endpoints are independent regression clients, never source claim authority. -/
+/-! Generated source requests and typed receipts. Regenerate with `lean/bridges/subject.py --write`. Typed library exports fix the subject and registry; source requests select the property and method. -/
 
 namespace ZkcSecurity.Examples.Subjects.SchnorrAnd
 open Zkc.Claims ZkcSecurity.Tools.ClaimConstruction

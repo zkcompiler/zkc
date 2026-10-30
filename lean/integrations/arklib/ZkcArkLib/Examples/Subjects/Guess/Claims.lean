@@ -1,13 +1,12 @@
 module
 
 public import ZkcSecurity.Tools.ClaimConstruction
-public import ZkcArkLib.Examples.Subjects.Guess.Endpoints
 public import ZkcArkLib.Examples.Subjects.Guess.Registration
 public meta import ZkcArkLib.Examples.Subjects.Guess.Registration
 
 @[expose] public section
 
-/-! Generated source requests and typed receipts. Regenerate with `lean/bridges/subject.py --write`. Maintained Endpoints are independent regression clients, never source claim authority. -/
+/-! Generated source requests and typed receipts. Regenerate with `lean/bridges/subject.py --write`. Typed library exports fix the subject and registry; source requests select the property and method. -/
 
 namespace ZkcSecurity.Examples.Subjects.Guess
 open Zkc.Claims ZkcSecurity.Tools.ClaimConstruction
