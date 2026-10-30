@@ -15,8 +15,11 @@ Neutral declarations own operation identities, kinded static parameters,
 signatures, capabilities and implementation requirements. IR owns their MLIR
 projection, lowering, application associations and stage admission.
 
-Protocol, Relation, Algebra, Poly, Data and cryptographic operations retain
-their mathematical and protocol meaning until the last responsible consumer.
+Protocol, Relation, Algebra, Poly and Data retain their mathematical and protocol
+meaning until the last responsible consumer. Crypto and Commitment currently
+own types and attributes, with installed actions reached through Exec. A future
+scheme operation needs a consumer that requires its distinct semantics; an empty
+operation inventory is not a reason to manufacture operations or merge owners.
 Func/SCF/CF provide ordinary functions and control. Tensor/Linalg provide
 structured computations with admitted scalar meanings. Their use does not grant
 vectorization, bufferization or protocol-motion laws implicitly.
@@ -197,6 +200,52 @@ use structured algorithms. Every route validates the actual produced candidate;
 conversion success alone establishes no source correspondence. Unresolved
 conversion casts, unknown executable forms and unsupported semantic attributes
 refuse before publication.
+
+Catalog laws state mathematical obligations. They do not automatically authorize
+canonicalization, operand sorting or a commutative trait on every checked path.
+A transformation must stay within the comparison relation of each required
+checker on its crossing, as well as its observation and budget contract. A
+reader that recognizes algebraic rearrangement does not enlarge a different
+reader's structural relation. Extending a checked relation is a separate change;
+until then its unsupported rewrites refuse that profile. This does not prohibit
+a separately admitted optimization profile or require every consumer to support
+the same equivalences.
+
+## Stage pipelines and target selection
+
+Stage objects own retained originals and checked source/candidate associations.
+Those originals do not become mutable attributes solely to fit a whole compile
+into one pass pipeline. Each stage uses one shared pipeline builder with explicit
+policy options. The C++ API and registered textual pipeline use that same
+builder. A stage pipeline admits its input and actual output; publication also
+checks the current output. Textual reproduction covers a stage and its explicit
+inputs/options, not retained originals that were never serialized with it.
+
+Admission's vocabulary check is read-only. Native operation/profile declarations
+provide one legality description for that check and for stage conversion.
+Neutral catalog facets provide contract availability; they do not enumerate
+MLIR operation names or grant an entire standard dialect. Dynamic legality
+checks operand types and semantic attributes where needed. Every nested and
+dormant definition is inspected. Conversion success, including a conversion
+that folds operations, cannot serve as a read-only admission check.
+Pass instrumentation observes execution; an admission pass or direct service
+reports failure through the normal failure channel.
+
+Physical ingress records the selected target installation and its restrictions
+as typed IR data on the owning compilation scope. Caller configuration may
+select this data, but hidden defaults cannot override an explicit selection on
+another entry route. Selection states intent: independent installation checks
+must still cover every actual represented port, selected implementation and
+required service, including unused declarations and inactive aggregate arms.
+Catalog availability is not evidence that a backend was compiled or installed.
+
+Target policy is separate from mathematical operation semantics and from the
+program-byte language. Record it with the compilation subject and check it at
+publication; it is not a new field silently inserted into `zkc.program/0` or
+authority for an independent runtime reader. Common target ingress continues
+to refuse native resident representations before the target branch. The
+foundation implements the existing native installation; device hierarchies,
+per-role placement and new executable formats need their own concrete consumers.
 
 ## Outcomes, observations and budgets
 

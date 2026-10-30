@@ -49,6 +49,7 @@ review loops for this unit. Formal interpretation is a later independent task.
 | `zkc.oracle-realization/0` | [Cutover](formats/foundation-interfaces.md#realization-and-application-records), IR / Transforms | Realization producer → native actual-body reader, independent interpretation | Native producer/reader pending; independent interpretation unsupported |
 | `zkc.application-map/0` | [Application map](formats/application-map.md), IR / Transforms | Source/candidate association → native comparison, independent correspondence reader | Producer and comparison pending; no correspondence theorem implied |
 | Outcome, stop, budget meaning | [Native foundation](ir/native-foundation.md#outcomes-observations-and-budgets), IR / Execution | Typed invocation → compiler admission and native VM/providers | Existing reached schedule retained; typed-route implementation pending |
+| Stage admission and target selection | [Stage pipelines](ir/native-foundation.md#stage-pipelines-and-target-selection), IR / Compiler | Shared stage builder and selected installation → API, textual pipeline, import and publication | Shared builder, typed selection and complete ingress migration pending; catalog availability does not establish an installed backend |
 | `zkc.program/0` | [Retained byte language](formats/foundation-interfaces.md#executable-byte-language), IR / Program | Compiler → independent C++/Rust readers and other target consumers | Byte meaning unchanged; new internal encoder adapter pending |
 
 ### Current producers and consumers
