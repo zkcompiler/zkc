@@ -4,6 +4,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
@@ -84,6 +85,102 @@ int main() {
     return c;
   };
   Cases cases;
+  for (unsigned count : {8u, 80u, 256u})
+    cases.run(
+        "predicate cache growth retains fold and collect summaries " +
+            std::to_string(count),
+        [&] {
+          std::string text = source, helpers, calls;
+          for (unsigned i = 0; i < count; ++i) {
+            auto name = "predicate_helper" + std::to_string(i);
+            helpers += " func.func private @" + name +
+                       "(%x:ui64)->i1 {\n"
+                       "  %v = \"data.index_equal\"(%x,%x) : (ui64,ui64)->i1\n"
+                       "  func.return %v : i1\n }\n";
+            calls += "   %" +
+                     (i + 1 == count ? std::string("yes")
+                                     : "unused" + std::to_string(i)) +
+                     " = func.call @" + name + "(%y) : (ui64)->i1\n";
+          }
+          text.insert(text.find(" func.func private @step"), helpers);
+          auto at = text.find("   %yes = arith.constant true");
+          text.replace(at, std::string("   %yes = arith.constant true").size(),
+                       calls);
+          auto selected = parseSourceString<ModuleOp>(text, &context);
+          require(bool(selected), "filtered growth fixture did not form");
+          auto *owner = &selected->getBody()->front();
+          for (StringRef name : {"fold", "collect"}) {
+            auto function =
+                cast<func::FuncOp>(SymbolTable::lookupSymbolIn(owner, name));
+            Summary summary;
+            require(succeeded(summarize(&function.front().front(), summary)),
+                    "filtered growth summary refused");
+            llvm::BitVector expected(function.getNumArguments(), true);
+            if (name == "fold") {
+              require(
+                  summary.results.size() == 2 && summary.results[0] == expected,
+                  "fold step dependencies lost after predicate cache growth");
+              expected.reset(2);
+              require(summary.results[1] == expected,
+                      "wrong second state dependencies");
+            } else {
+              expected.reset(2);
+              require(summary.results.size() == 1 &&
+                          summary.results[0] == expected,
+                      "collect dependencies lost after predicate cache growth");
+            }
+            require(llvm::any_of(summary.formation,
+                                 [&](const auto &bits) {
+                                   return bits.test(function.getNumArguments() -
+                                                    1);
+                                 }),
+                    "predicate formation dependency disappeared");
+          }
+        });
+  for (unsigned length : {64u, 65u})
+    for (bool reverse : {false, true})
+      cases.run(
+          "finite static path height " + std::to_string(length) +
+              (reverse ? " root first" : " leaf first"),
+          [&] {
+            auto selected = parseSourceString<ModuleOp>(source, &context);
+            require(bool(selected), "finite graph fixture refused");
+            auto *owner = &selected->getBody()->front();
+            OpBuilder builder(&context);
+            SmallVector<Operation *> definitions;
+            for (unsigned i = 0; i < length; ++i) {
+              builder.setInsertionPointToEnd(&owner->getRegion(0).front());
+              auto type = builder.getIntegerType(64, false);
+              auto function = func::FuncOp::create(
+                  builder, owner->getLoc(), "chain" + std::to_string(i),
+                  builder.getFunctionType({type}, {type}));
+              function.setPrivate();
+              builder.setInsertionPointToEnd(function.addEntryBlock());
+              Value value = function.getArgument(0);
+              if (i)
+                value = func::CallOp::create(builder, owner->getLoc(),
+                                             "chain" + std::to_string(i - 1),
+                                             TypeRange{type}, ValueRange{value})
+                            .getResult(0);
+              func::ReturnOp::create(builder, owner->getLoc(), value);
+              definitions.push_back(function);
+            }
+            if (reverse)
+              std::reverse(definitions.begin(), definitions.end());
+            // An independent finite root activates the finite reference
+            // checker.
+            definitions.push_back(SymbolTable::lookupSymbolIn(owner, "fold"));
+            bool diagnostic = false;
+            ScopedDiagnosticHandler handler(&context, [&](Diagnostic &value) {
+              diagnostic |= namesIdentifier(value.str(), "finite-formation");
+              return success();
+            });
+            require(succeeded(verifyDefinitionClosure(owner, definitions)) ==
+                        (length == 64),
+                    "finite closure height depends on root visitation order");
+            require(length == 64 || diagnostic,
+                    "closure depth refusal lost its identifier");
+          });
   cases.run("same-typed positions and normal result order", [&] {
     auto c = describeSymbol("fold");
     auto callback = readCallback(c, CallbackRole::Step);
@@ -172,18 +269,10 @@ int main() {
                 callback->scope && failed(readCallback(c, CallbackRole::Step)),
             "scoped stop became an empty total returned expression");
     auto closure = take(protocol::readSourceExecutionClosure(unit));
-    auto find = [&](StringRef name) -> const program::Function & {
-      auto found = llvm::find_if(closure.definitions.functions,
-                                 [&](const auto &f) { return f.name == name; });
-      require(found != closure.definitions.functions.end(),
-              "missing scoped callback");
-      return *found;
-    };
-    require(std::holds_alternative<program::Stop>(
-                find("stop").body.front().value) &&
-                std::holds_alternative<program::Return>(
-                    find("empty").body.front().value),
-            "scoped admission confused stopping and empty return");
+    require(
+        isa<exec::RejectOp>(closure.bodies.at("stop").front().operation) &&
+            isa<exec::ReturnOp>(closure.bodies.at("empty").front().operation),
+        "scoped admission confused stopping and empty return");
     c.operation->setAttr("step", FlatSymbolRefAttr::get(&context, "empty"));
     c = describeSymbol("zero");
     auto fresh = readCallbackABI(c, CallbackRole::Step);
@@ -191,7 +280,7 @@ int main() {
                 fresh->symbol != callback->symbol &&
                 failed(readCallback(c, CallbackRole::Step)),
             "reread retained stale helper or granted a total expression");
-    require(succeeded(mlir::verify(*module)),
+    require(succeeded(zkc::admitStage(*module)),
             "replacement did not remain admitted");
   });
   cases.run("ABI inspection does not weaken finite body admission", [&] {

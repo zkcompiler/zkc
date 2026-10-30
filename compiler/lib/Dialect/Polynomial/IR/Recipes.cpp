@@ -1,8 +1,8 @@
-#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Algebra/RingExpression.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
@@ -84,13 +84,15 @@ Type residualStateType(RecipeOp recipe) {
   auto &body = recipe.getBody().front();
   auto field =
       cast<algebra::FieldType>(body.getArgument(0).getType()).getDomain();
-  std::vector<std::string> payload{"point:" + field.str()};
-  payload.resize(1 + body.getNumArguments(), "table:" + field.str());
-  auto descriptor = protocol::encodeVariant(
-      {"poly.residual." + recipe.getSymName().str(), {{"state", payload}}});
-  return descriptor
-             ? Type(data::VariantType::get(recipe.getContext(), *descriptor))
-             : Type{};
+  auto *context = recipe.getContext();
+  SmallVector<Type> payload{PointType::get(context, field)};
+  payload.resize(1 + body.getNumArguments(),
+                 MultilinearType::get(context, field));
+  auto identity = data::importVariantIdentity(
+      context, "poly.residual." + recipe.getSymName().str());
+  auto arm = data::AlternativeAttr::get(
+      context, StringAttr::get(context, "state"), payload);
+  return data::VariantType::get(context, identity, {arm});
 }
 FailureOr<FunctionType> realizationType(RealizeOp realization) {
   auto reference = realization->getAttrOfType<FlatSymbolRefAttr>("recipe");

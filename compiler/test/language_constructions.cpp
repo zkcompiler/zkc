@@ -6,6 +6,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/NativeProof.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/Execution.h"
@@ -911,7 +912,7 @@ construction Base<N:nat> for First<N>{base authored;}
               });
               require(changed == 2, "both actual codec arms were exchanged");
             }
-            require(mlir::succeeded(mlir::verify(*candidate)),
+            require(mlir::succeeded(zkc::admitStage(*candidate)),
                     "changed conditional remains admitted");
           } else if (mutation == "provider")
             transport[0] = "different-provider";

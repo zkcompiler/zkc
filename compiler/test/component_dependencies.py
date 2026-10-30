@@ -19,7 +19,7 @@ ALLOWED = {
     "ZkcCompiler": {"ZkcTransforms", "ZkcTranslation", "MLIRParser"},
     "ZkcDriver": {"ZkcCompiler", "MLIRParser"},
     "ZkcTranslation": {"ZkcIR", "ZkcLanguage"},
-    "ZkcIR": {"ZkcProgram", "ZkcRelation", "MLIRIR", "MLIRControlFlowInterfaces", "MLIRSideEffectInterfaces", "MLIRInferTypeOpInterface", "MLIRFuncDialect", "MLIRSCFDialect", "MLIRFunctionInterfaces", "MLIRCallInterfaces", "MLIRArithDialect"},
+    "ZkcIR": {"ZkcProgram", "ZkcRelation", "MLIRIR", "MLIRPass", "MLIRControlFlowInterfaces", "MLIRSideEffectInterfaces", "MLIRInferTypeOpInterface", "MLIRFuncDialect", "MLIRSCFDialect", "MLIRFunctionInterfaces", "MLIRCallInterfaces", "MLIRArithDialect"},
 }
 HEADER_ROOTS = {
     "ZkcLanguage": ["Language"],
@@ -31,7 +31,7 @@ HEADER_ROOTS = {
     "ZkcProgram": ["Program"],
     "ZkcTransforms": ["Transforms", "Target"],
     "ZkcCompiler": [f"Compiler/{name}.h" for name in (
-        "Compilation", "Diagnostics", "Observation", "Host", "Language", "LanguageInterface", "AssetSharing", "StructuredSource", "OracleObligations",
+        "Compilation", "Diagnostics", "Observation", "Host", "Language", "LanguageInterface", "AssetSharing", "StructuredSource", "ApplicationMap", "OracleObligations",
         "LanguagePackage", "LanguageInspection", "SourceClaims", "SourceCorrespondence", "NativeProof", "Run",
         "PolynomialReduction", "PublicCoin", "Passes", "Pipelines")],
     "ZkcDriver": ["Driver"],
@@ -160,7 +160,10 @@ def main():
         "lib/Dialect/Algebra/IR/Mathematical.cpp": "ZkcIR",
         "lib/Analysis/StructuredComputation.cpp": "ZkcIR",
         "lib/Dialect/Protocol/IR/Protocol.cpp": "ZkcIR",
+        "lib/Dialect/Protocol/ExecutionAdmission.cpp": "ZkcIR",
+        "lib/Dialect/Exec/ClosureAdmission.cpp": "ZkcIR",
         "lib/Dialect/Exec/Execution.cpp": "ZkcIR",
+        "lib/Dialect/Exec/ExecutionExport.cpp": "ZkcIR",
         "lib/Dialect/Exec/ExecutionComparison.cpp": "ZkcIR",
         "lib/Dialect/Exec/ControlCursor.cpp": "ZkcIR",
         "lib/Transforms/MathematicalPreservation.cpp": "ZkcTransforms",
@@ -171,6 +174,10 @@ def main():
         "lib/Transforms/Computation/Verification.cpp": "ZkcTransforms",
         "lib/Transforms/Computation/ScopedSchedule.cpp": "ZkcTransforms",
         "lib/Transforms/CollectFold.cpp": "ZkcTransforms",
+        "lib/Target/Catalog.cpp": "ZkcTransforms",
+        "lib/Target/NativePlanTypes.cpp": "ZkcTransforms",
+        "lib/Conversion/PhysicalVerification.cpp": "ZkcTransforms",
+        "lib/Dialect/Bindings.cpp": "ZkcIR",
     }.items():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
     private_headers = {
@@ -180,13 +187,16 @@ def main():
         "ZkcSupport": {ROOT / "lib/Support/Input.h"},
         "ZkcContracts": {ROOT / "lib/Contracts/RequirementChecks.h"},
         "ZkcRelation": {ROOT / "lib/Relation/Field.h", ROOT / "lib/Relation/BundleInternal.h"},
-        "ZkcProgram": {ROOT / "lib/Program/EncodingLimits.h", ROOT / "lib/Program/Structure.h", ROOT / "lib/Program/ResourceOrigins.h"},
+        "ZkcProgram": {ROOT / "lib/Program/EncodingLimits.h", ROOT / "lib/Program/Structure.h"},
         "ZkcIR": {ROOT / "lib/Dialect/Protocol/IR/ResourceOrigins.h",
         ROOT / "lib/Dialect/Protocol/IR/OracleAnalysis.h", ROOT / "lib/Dialect/Verification.h", ROOT / "lib/Dialect/DomainVerification.h"},
     }
+    private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Data/IR/Structure.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Analysis/FiniteCardinality.h")
-    private_headers["ZkcIR"].add(ROOT / "lib/Dialect/BindingTypeCache.h")
+    private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Algebra/ParameterSupport.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Exec/ExecutionDefinitions.h")
+    private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Exec/ExecutionAttributes.h")
+    private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Exec/ClosureAdmission.h")
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/FiniteCardinality.h")
     private_headers["ZkcLanguage"].update(
         ROOT / f"lib/Language/{name}.h"
@@ -194,10 +204,11 @@ def main():
     )
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/APIRecords.h")
     private_headers["ZkcTranslation"] = {ROOT / "lib/Translation/Language/Finite.h", ROOT / "lib/Translation/Language/EmissionBudget.h", ROOT / "lib/Translation/Language/DataPreconditions.h"}
+    private_headers["ZkcTranslation"].add(ROOT / "lib/Translation/Entry/Native.h")
     private_headers["ZkcIR"].update((ROOT / "lib/Dialect/TypeAdapters").rglob("*.h"))
     private_headers["ZkcTransforms"] = {
         ROOT / "lib/Conversion/Bindings.h", ROOT / "lib/Target/PhysicalPlan.h",
-        ROOT / "lib/Target/AggregateLayouts.h", ROOT / "lib/Target/ExecutionPorts.h",
+        ROOT / "lib/Target/AggregateLayouts.h", ROOT / "lib/Target/NativePlanTypes.h", ROOT / "lib/Target/ExecutionPorts.h",
         ROOT / "lib/Conversion/Storage.h", ROOT / "lib/Target/StorageSchedule.h",
         ROOT / "lib/Transforms/MathematicalSupport.h",
         ROOT / "lib/Transforms/MathematicalPreservation.h",
@@ -220,6 +231,7 @@ def main():
         ROOT / "lib/Transforms/MathematicalPassOptions.h",
         ROOT / "lib/Transforms/CollectionInterpretation.h",
         ROOT / "lib/Transforms/CollectionRealization.h",
+        ROOT / "lib/Transforms/NativeBindingApplication.h",
         ROOT / "lib/Transforms/RealizationEmission.h",
         ROOT / "lib/Transforms/OracleCommonRealization.h",
         ROOT / "lib/Transforms/OracleCommonPlan.h",
@@ -254,6 +266,7 @@ def main():
         ROOT / "lib/Compiler/ComponentContracts.h",
         ROOT / "lib/Compiler/SourceArtifacts.h",
         ROOT / "lib/Compiler/Run.h", ROOT / "lib/Compiler/ArtifactJson.h",
+        ROOT / "lib/Compiler/ApplicationMapData.h",
         ROOT / "lib/Compiler/LanguageInterface.h",
         ROOT / "lib/Compiler/LanguagePackageReader.h",
         ROOT / "lib/Compiler/NativeDeployment.h",
@@ -373,7 +386,9 @@ def main():
                 if name not in ("ZkcCompiler", "ZkcDriver"):
                     assert not include.startswith("mlir/Parser/"), f"{name}: parsing belongs to Compiler or Driver: {path}"
                 if name == "ZkcIR":
-                    assert not include.startswith(("mlir/Pass/", "mlir/Transforms/")), f"{name}: transformation dependency {include}"
+                    # Owner-scoped facts use MLIR analysis lifetime/invalidation,
+                    # without depending on transformation passes.
+                    assert include == "mlir/Pass/AnalysisManager.h" or not include.startswith(("mlir/Pass/", "mlir/Transforms/")), f"{name}: transformation dependency {include}"
                 elif "ZkcIR" not in closure(name):
                     assert not include.startswith("mlir/"), f"{name}: {path} includes {include}"
                 if include == "MathematicalRecipes.inc":
@@ -435,7 +450,9 @@ def main():
                    "MathematicalComparison",
                    "HelperNormalizationVerification",
                    "ScopedAlgorithmVerification", "PolynomialRecipeVerification",
-                   "Computation/RecipeVerification", "Computation/ScopedVerification"):
+                   "Computation/RecipeVerification", "Computation/ScopedVerification",
+                   "../Compiler/ApplicationMapVerification",
+                   "../Conversion/PhysicalVerification"):
         pending = [ROOT / f"lib/Transforms/{reader}.cpp"]
         visited = set()
         while pending:

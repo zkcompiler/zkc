@@ -2,6 +2,7 @@
 #include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
@@ -177,7 +178,7 @@ Error detail::withInterface(
   mlir::ScopedDiagnosticHandler handler(
       &context, [](mlir::Diagnostic &) { return mlir::success(); });
   auto module = mlir::parseSourceString<mlir::ModuleOp>(original, &context);
-  if (!module)
+  if (!module || mlir::failed(zkc::admitStage(*module)))
     return error("target.admission",
                  "original failed mathematical IR admission");
   uint64_t remaining = limits.work;

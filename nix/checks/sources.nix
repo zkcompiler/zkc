@@ -8,6 +8,8 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   set -x
   test -f ${sources.compiler}/compiler/CMakeLists.txt
   test -f ${sources.compiler}/common/unicode/generate.py
+  test -f ${sources.compiler}/common/catalog/generate.py
+  test -f ${sources.compiler}/common/catalog/declarations.json
   test ! -e ${sources.compiler}/compiler/test
   test ! -e ${sources.compiler}/common/tests
   test ! -e ${sources.compiler}/lean
@@ -21,6 +23,11 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test -f ${sources.compilerTests}/common/tests/fixtures/projects/scoped-computations/main.zkc
   test ! -e ${sources.compilerTests}/common/tests/run.py
   test -f ${sources.rust}/crates/zkc-cli/Cargo.toml
+  test -f ${sources.rust}/crates/zkc-catalog/build.rs
+  test -f ${sources.rust}/crates/zkc-catalog/codegen/projection.rs
+  test -f ${sources.rust}/crates/zkc-catalog/codegen/validation.rs
+  test -f ${sources.rust}/common/catalog/declarations.json
+  test ! -e ${sources.rust}/common/catalog/generate.py
   test -f ${sources.rustConsumer}/common/tests/check_rust_sdk.py
   test -f ${sources.rustConsumer}/common/tests/consumer/rust/main.rs
   test -f ${sources.rustConsumer}/common/unicode/manifest.json

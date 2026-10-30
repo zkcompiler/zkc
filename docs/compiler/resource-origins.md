@@ -1,6 +1,6 @@
 # Exact resource origins through local control
 
-Scoped helpers use the shared [Program resource-origin analysis](../../compiler/lib/Program/ResourceOrigins.cpp)
+Scoped helpers use the shared [native execution resource-origin analysis](../../compiler/lib/Dialect/Exec/ResourceOrigins.cpp)
 through the [Protocol analysis adapter](../../compiler/lib/Dialect/Protocol/IR/ResourceOrigins.cpp). The [capability map](../status.md#foundation-capability-map) owns
 current coverage and the [structured iteration profile](../spec/ir/iteration.md)
 owns the carried-root invariant.
@@ -76,29 +76,27 @@ The Protocol adapter resolves the actual scoped Func definition, checks its
 borrowed Scope and Outcome signature against the logical call ports, and reads
 the complete source execution closure. The scoped reader validates the actual
 CFG, transfer dispatch and closed region associations before exposing the
-internal Program view. Administrative ports do not imply resource-successor
+borrowed native SSA view. Administrative ports do not imply resource-successor
 laws. Calls retain their placement rules: ordinary `func.call` composes scoped
 helpers; `protocol.local_call` belongs in common protocol control.
 
-The [Program API](../../compiler/include/zkc/Program/ResourceOrigins.h) admits
-and owns this immutable snapshot. It analyzes logical calls, conditionals,
-capture-only matches and range loops, together with installed state-successor
-contracts. An affine finite fold additionally requires its callback to preserve
-each carried state root. This internal analysis view does not replace the MLIR
-source or establish correspondence with an executable candidate.
+The [native API](../../compiler/include/zkc/Dialect/Exec/ResourceOrigins.h)
+uses that admitted association over the immutable actual IR. It analyzes
+ordinary calls, conditionals, capture-only matches and range loops, together
+with installed state-successor contracts. An affine finite fold additionally
+requires its actual callback to preserve each carried state root. Synthetic
+Program realizations and serialized type spellings do not participate in native
+admission or origin analysis. The neutral Program adapters remain responsible
+for byte export and independent source/candidate comparison.
 
-Program summaries are keyed by function name within that owned closure; the
-Protocol adapter associates them with the resolved MLIR definition. Each summary
-stores formal input indices, not caller-specific roots. Calls substitute actual
-arguments. The cache and the caller-owned cumulative allowance live for one
-analysis invocation. Current application attributes do not specialize root
-contracts; a future contract-changing parameter would require an instantiated
-key. Active calls detect recursion. Cached summaries retain their complete
-nested depth, so a shallow query cannot bypass a later deeper query's bound.
-
-The replaced native Local analysis still has separate API controls while its
-consumers are being retired. Its SSA/region implementation is not the default
-scoped helper path.
+Native summaries are keyed by actual function identity within that owner.
+Each summary stores formal input indices, not caller-specific roots. Calls
+substitute actual arguments. The cache and the caller-owned cumulative allowance
+live for one analysis invocation; the owner must remain immutable throughout.
+Current application attributes do not specialize root contracts; a future
+contract-changing parameter would require an instantiated key. Active calls
+detect recursion. Cached summaries retain their complete nested depth, so a
+shallow query cannot bypass a later deeper query's bound.
 
 Module formation first checks every original body and collects affine repeat
 obligations. A separate origin phase then shares one cache and budget over those
@@ -116,9 +114,9 @@ levels. A demanded repeat body starts at level one. Sequential operations and
 successor chains spend work, not nesting depth. Existing formation, expansion,
 projection and runtime limits remain independent and can refuse first.
 
-The Protocol adapter and Program analysis share a cumulative allowance. The
-adapter charges common SSA operations, ports, region mappings and installed
-successor equations. The Program analysis charges declaration indexing,
+The Protocol adapter and native execution analysis share a cumulative allowance.
+The adapter charges common SSA operations, ports, region mappings and installed
+successor equations. The native analysis charges declaration indexing,
 callable queries and signatures, visited instructions, port substitutions,
 control captures and results, installed successor equations, and returned
 summary facts. Charges precede associated analysis storage growth. A cache hit
@@ -144,12 +142,13 @@ identity/control inside and outside repeats, static applications, standalone
 swaps/replacements, conflicting branches, unknown aggregate payload roots,
 per-slot loop evidence, local stopping and cross-role stop counterexamples.
 They retain private-match history and affine-reuse refusals.
-The [Program API controls](../../compiler/test/program_resource_origins.cpp)
-exercise owned snapshots, cumulative allowances, cached depth, state-successor
-contracts and exact root joins. The existing
+The [native API controls](../../compiler/test/native_resource_origins.cpp)
+exercise actual function ownership, cumulative allowances, cached depth,
+state-successor contracts and exact root joins. The existing
 [Protocol API controls](../../compiler/test/resource_origin_analysis.cpp)
-also cover module verification, per-program queries and demanded-query work
-sharing; their Local fixtures remain tied to the replaced owner until retirement.
+also cover stage admission, per-program queries and demanded-query work
+sharing with native Func/Exec helpers. They no longer depend on synthetic
+Program local definitions.
 
 The [scoped source generator](../../compiler/test/resource_origin_sources.cpp)
 authors the current compiler controls and the fresh runtime fixtures directly

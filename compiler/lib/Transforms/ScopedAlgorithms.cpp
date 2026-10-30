@@ -8,6 +8,7 @@
 #include "ScopedSubstitution.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Builders.h"
@@ -590,7 +591,7 @@ public:
 
 OwningOpRef<ModuleOp>
 expandScopedHelpers(ModuleOp source, std::vector<AlgorithmOrigin> *origins) {
-  if (failed(verify(source)) || !hasSingleElement(*source.getBody()))
+  if (failed(zkc::admitStage(source)) || !hasSingleElement(*source.getBody()))
     return {};
   auto owner =
       dyn_cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
@@ -604,12 +605,12 @@ expandScopedHelpers(ModuleOp source, std::vector<AlgorithmOrigin> *origins) {
   OwningOpRef<ModuleOp> candidate(ModuleOp::create(source.getLoc()));
   candidate->getOperation()->setAttrs(source->getAttrs());
   OpBuilder builder(candidate->getBodyRegion());
-  auto target = protocol_ir::ProtocolModuleOp::create(builder, owner.getLoc(),
-                                                      owner.getProfileAttr());
+  auto target = protocol_ir::ProtocolModuleOp::create(
+      builder, owner.getLoc(), owner.getProfileAttr(), mlir::ArrayAttr{});
   target->setAttrs(owner->getAttrs());
   target.getBody().push_back(new Block);
   if (failed(ScopedExpander(*closure, owner, target).run(owner)) ||
-      failed(verify(*candidate)) ||
+      failed(zkc::admitStage(*candidate)) ||
       failed(verifyScopedHelperExpansionPreserved(source, *candidate, origins)))
     return {};
   return candidate;
@@ -653,8 +654,8 @@ OwningOpRef<ModuleOp> substituteNumericalBodies(
   OwningOpRef<ModuleOp> candidate(ModuleOp::create(source.getLoc()));
   candidate->getOperation()->setAttrs(source->getAttrs());
   OpBuilder builder(candidate->getBodyRegion());
-  auto target = protocol_ir::ProtocolModuleOp::create(builder, owner.getLoc(),
-                                                      owner.getProfileAttr());
+  auto target = protocol_ir::ProtocolModuleOp::create(
+      builder, owner.getLoc(), owner.getProfileAttr(), mlir::ArrayAttr{});
   target->setAttrs(owner->getAttrs());
   target.getBody().push_back(new Block);
   if (failed(ScopedExpander(*closure, owner, target, &replacements, &selection,
@@ -677,7 +678,7 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
   llvm::TimeTraceScope timing("zkc.finite-preparation");
   mathematical::RealizationScope scope(trace, "scoped-finite-preparation",
                                        source, policy, &work);
-  if (failed(verify(source)) || !hasSingleElement(*source.getBody()))
+  if (failed(zkc::admitStage(source)) || !hasSingleElement(*source.getBody()))
     return {};
   auto owner =
       dyn_cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
@@ -725,7 +726,7 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
       candidate->getOperation()->setAttrs(source->getAttrs());
       OpBuilder builder(candidate->getBodyRegion());
       auto target = protocol_ir::ProtocolModuleOp::create(
-          builder, owner.getLoc(), owner.getProfileAttr());
+          builder, owner.getLoc(), owner.getProfileAttr(), mlir::ArrayAttr{});
       target->setAttrs(owner->getAttrs());
       target.getBody().push_back(new Block);
       choices.remainingCopy = copy;
@@ -736,7 +737,7 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
                         .run(owner);
       copy = choices.remainingCopy;
       siteBytes = choices.remainingSiteBytes;
-      if (failed(result) || failed(verify(*candidate)) ||
+      if (failed(result) || failed(zkc::admitStage(*candidate)) ||
           failed(verifyScopedFinitePreparation(source, *candidate, work, policy,
                                                &outcome, fixedBindings))) {
         choices.origins.clear();

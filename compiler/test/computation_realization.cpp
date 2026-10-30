@@ -10,6 +10,8 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -140,7 +142,8 @@ OwningOpRef<mlir::ModuleOp> closedFixture(mlir::ModuleOp source) {
   auto name = table.insert(closure.release());
   call.setCalleeAttr(SymbolRefAttr::get(
       name, {FlatSymbolRefAttr::get(entry.getSymNameAttr())}));
-  require(succeeded(verify(*result)), "closed computation fixture refused");
+  require(succeeded(zkc::admitStage(*result)),
+          "closed computation fixture refused");
   return result;
 }
 OwningOpRef<mlir::ModuleOp> fixture(MLIRContext &context, StringRef path) {
@@ -202,6 +205,79 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  cases.run("direct realization loads the same dialects as the pass", [&] {
+    auto original = fixture(context, "finite/total-state.mlir");
+    auto logical = formExecutable(*original, {false, false});
+    std::string text;
+    llvm::raw_string_ostream stream(text);
+    logical->print(stream);
+    for (bool throughPass : {false, true}) {
+      MLIRContext fresh(registry);
+      auto candidate = parse(text, fresh);
+      auto before = copy(*candidate);
+      require(!fresh.getLoadedDialect("scf"),
+              "fixture already loaded the output control dialect");
+      if (throughPass)
+        run(*candidate, computation::createRealizeComputationsPass());
+      else
+        require(succeeded(computation::realizeComputations(*candidate)),
+                "direct API relied on pass-manager dialect loading");
+      require(fresh.getLoadedDialect("scf") &&
+                  succeeded(computation::verifyComputationRealization(
+                      *before, *candidate)),
+              "fresh-context realization lost correspondence");
+    }
+  });
+  for (StringRef collision : {"_numerical_binding_0", "_numerical_import_0"})
+    for (bool reverse : {false, true})
+      cases.run(
+          Twine("numerical import ") + collision +
+              (reverse ? " reversed" : " ordered"),
+          [&] {
+            auto original = parse(realization, context);
+            auto projected = formExecutable(*original);
+            auto logical = closedFixture(*projected);
+            auto first =
+                computationFixture(*logical)->getParentOfType<func::FuncOp>();
+            auto unit = cast<mlir::ModuleOp>(numericalUnit(*logical)->clone());
+            auto entry = mathematical::getComputationEntry(unit);
+            entry.setSymName(collision);
+            SymbolTable table(owner(*logical));
+            auto unitName = table.insert(unit);
+            auto second = cast<func::FuncOp>(first->clone());
+            second.setSymName("second_realized");
+            second->setAttr(
+                "runtime.origin",
+                Builder(&context).getArrayAttr(
+                    {Builder(&context).getStringAttr("second_realized"),
+                     Builder(&context).getArrayAttr({})}));
+            second.walk([&](exec::ComputeOp call) {
+              call.setCalleeAttr(SymbolRefAttr::get(
+                  unitName, {FlatSymbolRefAttr::get(&context, collision)}));
+            });
+            table.insert(second);
+            if (reverse)
+              second->moveBefore(first);
+            require(succeeded(verify(*logical)),
+                    "collision fixture did not form");
+            auto candidate = copy(*logical);
+            require(
+                succeeded(computation::realizeComputations(*candidate)) &&
+                    succeeded(computation::verifyComputationRealization(
+                        *logical, *candidate)),
+                "symbol substitution cascaded through a reused binding name");
+            unsigned bindings = 0;
+            candidate->walk([&](runtime::BindingOp) { ++bindings; });
+            require(bindings == 1,
+                    "identical imported bindings were not reused");
+            SymbolTableCollection symbols;
+            candidate->walk([&](exec::ApplyOp call) {
+              require(isa_and_nonnull<runtime::BindingOp>(
+                          symbols.lookupNearestSymbolFrom(
+                              call, call.getBindingAttr())),
+                      "imported application no longer resolves to its binding");
+            });
+          });
   cases.run(
       "direct computation recipe output retains the immutable source", [&] {
         auto original = parse(demanded, context);
@@ -211,7 +287,8 @@ int main() {
         OpBuilder builder(&context);
         entry->setAttr("sym_visibility", builder.getStringAttr("public"));
         entry->setAttr("data.preconditions", builder.getArrayAttr({}));
-        require(succeeded(verify(*logical)), "recipe source metadata refused");
+        require(succeeded(zkc::admitStage(*logical)),
+                "recipe source metadata refused");
         auto before = copy(*logical);
         mathematical::RealizationWork work;
         uint64_t remaining = 1000000, bytes = 16 * 1024 * 1024;
@@ -342,7 +419,8 @@ module {
 }
 )mlir",
                         context);
-    require(succeeded(verify(*source)), "unused caller source refused");
+    require(succeeded(zkc::admitStage(*source)),
+            "unused caller source refused");
     auto unit = cast<mlir::ModuleOp>(source->getBody()->front());
     auto before = copy(*source);
     mathematical::RealizationWork work;
@@ -418,7 +496,8 @@ module {
     values.map(observation->getOperands(), entry.getArguments());
     auto *result = builder.clone(*observation.getOperation(), values);
     func::ReturnOp::create(builder, entry.getLoc(), result->getResults());
-    require(succeeded(verify(*numerical)), "variant recipe source refused");
+    require(succeeded(zkc::admitStage(*numerical)),
+            "variant recipe source refused");
     OwningOpRef<mlir::ModuleOp> before(
         cast<mlir::ModuleOp>(numerical->clone()));
     mathematical::RealizationWork work;
@@ -506,7 +585,7 @@ module {
     auto first = call.getInputs()[0];
     call->setOperand(1, call.getInputs()[1]);
     call->setOperand(2, first);
-    require(succeeded(verify(*candidate)) &&
+    require(succeeded(zkc::admitStage(*candidate)) &&
                 succeeded(computation::realizeComputations(*candidate)),
             "permuted candidate was not admitted and lowered");
     expectRefusal(*candidate, "numerical-lowering-correspondence", [&] {
@@ -649,7 +728,7 @@ module {
         product.addOperands({values, values});
         product.addTypes(data::DomainType::get(&context, items));
         builder.create(product);
-        require(succeeded(verify(*source)),
+        require(succeeded(zkc::admitStage(*source)),
                 "unused product source not admitted");
         auto logical = formExecutable(*source, {true, false});
         auto bulk = copy(*logical);
@@ -676,7 +755,8 @@ module {
           call->setAttr("policy",
                         builder.getBoolArrayAttr({false, false, false}));
         });
-        require(succeeded(verify(*logical)), "disabled source not admitted");
+        require(succeeded(zkc::admitStage(*logical)),
+                "disabled source not admitted");
         expectRefusal(*bulk, "numerical-lowering-correspondence", [&] {
           return computation::verifyComputationRealization(*logical, *bulk);
         });
@@ -886,7 +966,8 @@ module {
         auto first = again->getOperand(1);
         again->setOperand(1, again->getOperand(2));
         again->setOperand(2, first);
-        require(succeeded(verify(*source)), "repeated scoped source refused");
+        require(succeeded(zkc::admitStage(*source)),
+                "repeated scoped source refused");
         std::vector<protocol::AlgorithmOrigin> origins;
         auto expanded = protocol::expandScopedHelpers(*source, &origins);
         require(bool(expanded) &&
@@ -929,7 +1010,7 @@ module {
       "fixed opaque binding survives and cannot be silently repinned", [&] {
         std::string text = realization.str();
         text.insert(text.find(" func.func private"), R"mlir(
-      "runtime.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+      "runtime.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold",function_type=(!runtime.scope, !poly.multilinear<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!poly.multilinear<"bls12-381.fr">)>} : ()->()
     )mlir");
         auto source = parse(text, context);
         auto logical = formExecutable(*source);
@@ -1113,16 +1194,17 @@ module {
       "authored forwarding wrapper is admitted before and after projection",
       [&] {
         auto source = parse(realization, context);
-        require(succeeded(verify(*source)), "authored scoped wrapper refused");
+        require(succeeded(zkc::admitStage(*source)),
+                "authored scoped wrapper refused");
         auto function = scopedFunction(*source, "realized");
         sc::returned(function)->setOperand(0, function.getArgument(2));
-        require(succeeded(verify(*source)),
+        require(succeeded(zkc::admitStage(*source)),
                 "original profile refused a forwarding scoped return");
         auto normalized = computation::prepareComputationRealization(*source);
-        require(bool(normalized) && succeeded(verify(*normalized)),
+        require(bool(normalized) && succeeded(zkc::admitStage(*normalized)),
                 "original forwarding wrapper normalization failed");
         auto logical = formExecutable(*source);
-        require(succeeded(verify(*logical)),
+        require(succeeded(zkc::admitStage(*logical)),
                 "projected authored forwarding wrapper was refused");
         auto lowered = copy(*logical);
         require(succeeded(computation::realizeComputations(*lowered)) &&
@@ -1192,12 +1274,12 @@ module {
           invocations[1] = appendReturns(
               second, invocations[1],
               ValueRange{argument, argument, second.getArgument(1)});
-          require(succeeded(verify(*logical)),
+          require(succeeded(zkc::admitStage(*logical)),
                   "projected profile refused genuine forwarding ports");
           auto snapshot = copy(*logical);
           auto normalized =
               computation::prepareComputationRealization(*logical);
-          require(bool(normalized) && succeeded(verify(*normalized)),
+          require(bool(normalized) && succeeded(zkc::admitStage(*normalized)),
                   "admitted forwarding frontier was refused");
           require(
               OperationEquivalence::isEquivalentTo(
@@ -1263,11 +1345,11 @@ module {
               {bool(flags & 1), bool(flags & 2), false});
           logical->walk(
               [&](exec::ComputeOp call) { call->setAttr("policy", policy); });
-          require(succeeded(verify(*logical)),
+          require(succeeded(zkc::admitStage(*logical)),
                   "retained policy source refused");
           auto normalized =
               computation::prepareComputationRealization(*logical);
-          require(bool(normalized) && succeeded(verify(*normalized)),
+          require(bool(normalized) && succeeded(zkc::admitStage(*normalized)),
                   "policy prevented port growth");
           unsigned count = 0;
           normalized->walk([&](exec::ComputeOp call) {
@@ -1431,7 +1513,11 @@ module {
         OpBuilder builder(&entry.front().back());
         OperationState literal(entry.getLoc(), "algebra.constant");
         literal.addTypes(entry.getArgument(0).getType());
-        literal.addAttribute("value", builder.getStringAttr("123"));
+        literal.addAttribute(
+            "value",
+            take(algebra::makeFieldLiteral(
+                cast<algebra::FieldType>(entry.getArgument(0).getType()),
+                llvm::APInt(64, 123))));
         auto *constantOp = builder.create(literal);
         auto returned = cast<func::ReturnOp>(entry.front().back());
         // Keep the literal live so the total helper simplifier cannot erase it.
@@ -1458,8 +1544,8 @@ module {
             guard = branch;
           if (auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
               parameters && parameters.size() == 1)
-            if (auto value = dyn_cast<StringAttr>(parameters[0]);
-                value && value.getValue() == "123")
+            if (auto value = dyn_cast<algebra::FieldLiteralAttr>(parameters[0]);
+                value && value.getValue().getValue() == 123)
               constant = op;
         });
         require(constant && guard, "guard ordering mutation targets missing");
@@ -1557,7 +1643,8 @@ module { "protocol.module"() ({
               return region;
             });
         control.returned(result);
-        require(succeeded(verify(*source)), "authored scoped aliases refused");
+        require(succeeded(zkc::admitStage(*source)),
+                "authored scoped aliases refused");
         auto logical = formExecutable(*source);
         auto lowered = copy(*logical);
         require(succeeded(computation::realizeComputations(*lowered)),

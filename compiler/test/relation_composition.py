@@ -52,7 +52,7 @@ commands.verified(module(chain), "protocol-application")
 # Count expanded operand storage before cloning wide, otherwise cheap bodies.
 wide = empty_function(
     "wide",
-    f'%zero = "algebra.constant"() {{value="0"}} : () -> {F}\n%a = "algebra.array_from_elements"('
+    f'%zero = "algebra.constant"() {{value=#algebra.literal<{F}, 0 : ui255>}} : () -> {F}\n%a = "algebra.array_from_elements"('
     + ",".join(["%zero"] * 4096)
     + ") : (" + ",".join([F] * 4096) + ') -> !algebra.field_array<"bls12-381.fr", 4096>',
 )
@@ -138,7 +138,7 @@ commands.verified(
 )
 
 # Owner-local affine ports retain single-use custody through an application.
-capability = '!runtime.capability<"resource_unit:Slot.A">'
+capability = '!runtime.capability<resource_unit, "Slot.A">'
 affine = module(f""""protocol.func"() ({{^bb0(%a:{capability}): "protocol.return"(%a) : ({capability})->()}})
 {{sym_name="component",function_type=({capability})->{capability},roles=["A"],input_roles=[["A"]],output_roles=[["A"]]}} : ()->()
 "protocol.func"() ({{^bb0(%a:{capability}):
@@ -350,16 +350,16 @@ commands.run(
 
 # A changed supporting local definition must fail correspondence even when
 # every composed participant body is unchanged.
-local = """"runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
+local = """"runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 """ + scoped_function("unused", [], [F], invocation(
-    "exec.apply", [], [F], 'binding=@constant,parameters=["0"],site="constant"'), ['%r'])
+    "exec.apply", [], [F], 'binding=@constant,parameters=[#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>],site="constant"'), ['%r'])
 local_source = source.replace("func.func private", local + "\nfunc.func private", 1)
 # This dependency is retained and verified even when the author does not use it.
 commands.verified(local_source)
 local_candidate = commands.verified(
     local_source, None, "--zkc-project-protocol=simplify=false"
 )
-local_changed = local_candidate.replace('parameters = ["0"]', 'parameters = ["1"]')
+local_changed = local_candidate.replace('0 : ui255', '1 : ui255')
 assert local_changed != local_candidate
 commands.verified(local_changed)
 source_path.write_text(local_source)
@@ -476,8 +476,9 @@ for name, asset in assets.items():
         for before, after in [
             ('site = "weight_draw0"', 'site = "different_draw"'),
             ("index = 2 : i64", "index = 1 : i64"),
-            ('value = "0"', 'value = "1"'),
+            ('0 : ui255', '1 : ui255'),
         ]:
+            assert before in text, f"missing mutation anchor: {before}"
             bad = text.replace(before, after, 1)
             commands.verified(bad)
             checked(bad, requirements, refuses="r1cs-source-correspondence")

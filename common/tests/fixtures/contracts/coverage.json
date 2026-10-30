@@ -258,6 +258,10 @@
       "sequence.append",
       "sequence.length",
       "sequence.at"
+    ],
+    "physical": [
+      "representation.convert",
+      "table.relayout"
     ]
   },
   "types": {
@@ -293,10 +297,6 @@
     ],
     "nominal_resource": [
       "resource_unit"
-    ],
-    "outside_common_carrier": [
-      "scalar",
-      "capability"
     ],
     "native_structural": [
       "field_array",

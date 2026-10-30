@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "zkc/Contracts/Binding.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include <cstdlib>
 #if EXPECT_ENVELOPE
@@ -44,46 +45,10 @@ void domainControls(mlir::MLIRContext &context) {
     require(!physical, "logical-only type acquired a physical implementation");
     llvm::consumeError(physical.takeError());
   }
-  require(boundOperationName("envelope.keep") == "envelope.keep" &&
-              boundOperationName("envelope.pair").empty(),
-          "contributed operation mapping differs");
-  auto module = parseSourceString<ModuleOp>(R"(
-!T = !envelope.value<!algebra.field<"koala-bear">,4>
-module {
- "runtime.binding"() {sym_name="keep",contract="envelope.keep",arguments=["field:koala-bear","4"],implementation=""} : ()->()
- func.func @Keep(%x:!T)->!T {
-   %y = "envelope.keep"(%x) {binding=@keep,site="keep",parameters=[]} : (!T)->!T
-   return %y : !T
- }
-})",
-                                            ParserConfig(&context, false));
-  require(bool(module), "contributed operation fixture refused");
-  // Logical IR can carry the contributed type without a native representation.
-  // The representation refusal above is independent of operation admission.
-  unsigned operations = 0;
-  module->walk([&](envelope::KeepOp operation) {
-    ++operations;
-    require(succeeded(operation->getName().verifyInvariants(operation)),
-            "valid contributed signature refused");
-    auto original = operation->getResult(0).getType();
-    operation->getResult(0).setType(IntegerType::get(&context, 1));
-    {
-      ScopedDiagnosticHandler silence(&context,
-                                      [](Diagnostic &) { return success(); });
-      require(failed(operation->getName().verifyInvariants(operation)),
-              "wrong contributed result type admitted");
-    }
-    operation->getResult(0).setType(original);
-    require(succeeded(operation->getName().verifyInvariants(operation)),
-            "contributed operation restoration failed");
-  });
-  require(operations == 1, "contributed operation missing");
-  require(succeeded(verify(*module)),
-          "contributed typed adapter failed module verification");
   auto source = parseSourceString<ModuleOp>(R"(
 !T = !envelope.value<!algebra.field<"koala-bear">,4>
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="keep",contract="envelope.keep",arguments=["field:koala-bear","4"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="keep",contract="envelope.keep",arguments=[!algebra.field<"koala-bear">,4:ui64],implementation="",function_type=(!runtime.scope,!T)->!exec.outcome<(!T)>} : ()->()
  func.func @Keep(%scope:!runtime.scope,%x:!T)->!exec.outcome<(!T)> attributes {no_inline,runtime.origin=["Keep",[]]} {
    %attempt = "exec.apply"(%scope,%x) {binding=@keep,site="keep",parameters=[]} : (!runtime.scope,!T)->!exec.outcome<(!T)>
    "exec.dispatch"(%attempt)[^done,^failed] : (!exec.outcome<(!T)>)->()
@@ -101,6 +66,14 @@ module { "protocol.module"() ({
 }) {profile=#protocol.profile<protocol>} : ()->() })",
                                             &context);
   require(bool(source), "contributed scoped carrier failed protocol admission");
+  unsigned applications = 0;
+  source->walk([&](zkc::exec::ApplyOp apply) {
+    ++applications;
+    require(take(operationBinding(apply)).application.contract ==
+                "envelope.keep",
+            "contributed contract lost its exact invocation identity");
+  });
+  require(applications == 1, "contributed scoped application missing");
   bool unknownProperty = false;
   {
     ScopedDiagnosticHandler capture(&context, [&](Diagnostic &diagnostic) {
@@ -112,7 +85,7 @@ module { "protocol.module"() ({
       return success();
     });
     auto malformed = parseSourceString<ModuleOp>(
-        R"(module { "envelope.keep"() <{surprise="must-not-disappear"}> : ()->() })",
+        R"(module { "envelope.field_sum_chain"() <{surprise="must-not-disappear"}> : ()->() })",
         &context);
     require(!malformed, "unknown contributed property disappeared");
   }
@@ -135,10 +108,9 @@ int main() {
   auto module = mlir::parseSourceString<mlir::ModuleOp>(R"(
 !F = !algebra.field<"koala-bear">
 module {
- "runtime.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation=""} : ()->()
  func.func @Sum(%x:!F,%y:!F,%z:!F)->!F {
-   %a = "algebra.exec.field_add"(%x,%y) {binding=@add,site="first",parameters=[]} : (!F,!F)->!F
-   %b = "algebra.exec.field_add"(%a,%z) {binding=@add,site="second",parameters=[]} : (!F,!F)->!F
+   %a = "algebra.field_add"(%x,%y) : (!F,!F)->!F
+   %b = "algebra.field_add"(%a,%z) : (!F,!F)->!F
    return %b : !F
  }
 })",
@@ -165,7 +137,7 @@ module {
   if (mlir::failed(envelope::specializeFieldSums(*module)))
     return 6;
   module->walk([&](envelope::FieldSumChainOp operation) {
-    operation->setAttr("first_attributes", mlir::DictionaryAttr::get(&context));
+    operation->removeAttr("first_location");
   });
   {
     mlir::ScopedDiagnosticHandler silence(

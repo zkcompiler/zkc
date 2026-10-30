@@ -1,5 +1,6 @@
 #include "OracleMerkle.h"
 #include "RealizationEmission.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -52,23 +53,20 @@ struct Emitter {
   }
   Values apply(Control &c, StringRef contract, TypeRange outputs,
                ValueRange inputs, StringRef site,
-               ArrayRef<std::string> statics = {},
-               ArrayRef<std::string> parameters = {}) {
-    auto binding = bindings.binding(
-        builder, unit.getLoc(),
-        {contract.str(), {statics.begin(), statics.end()}, ""});
-    SmallVector<Attribute> attrs;
-    for (const auto &parameter : parameters)
-      attrs.push_back(builder.getStringAttr(parameter));
+               ArrayRef<Attribute> statics = {},
+               ArrayRef<Attribute> parameters = {}) {
+    auto binding =
+        bindings.binding(builder, unit.getLoc(),
+                         {contract.str(), SmallVector<Attribute>(statics), ""});
     return c.invoke(
         "exec.apply", outputs, c.scoped(inputs),
         {builder.getNamedAttr("binding", binding),
-         builder.getNamedAttr("parameters", builder.getArrayAttr(attrs)),
+         builder.getNamedAttr("parameters", builder.getArrayAttr(parameters)),
          builder.getNamedAttr("site", builder.getStringAttr(site))});
   }
   Value number(Control &c, uint64_t n, StringRef site) {
     return apply(c, "index.constant", index, {}, site, {},
-                 {std::to_string(n)})[0];
+                 {builder.getIntegerAttr(index, n)})[0];
   }
   Value binary(Control &c, StringRef contract, Value a, Value b,
                StringRef site) {
@@ -193,29 +191,24 @@ emitOracleMerkle(ModuleOp candidate, protocol_ir::OracleKindAttr kind,
       dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
   if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol)
     return error("oracle-merkle");
-  auto signature = resolveLogicalBinding({"oracle.commit", {scheme.str()}, ""});
-  if (!signature) {
-    consumeError(signature.takeError());
-    return error("oracle-merkle");
-  }
-  auto data = encodeBoundType(kind.getDataType(), false);
-  auto answer = encodeBoundType(kind.getAnswerType(), false);
-  if (!data)
-    return data.takeError();
-  if (!answer)
-    return answer.takeError();
-  if (answer->kind != "field" || signature->inputs.size() != 2 ||
-      signature->outputs.size() != 2 || !(signature->inputs[0] == *data))
-    return error("oracle-merkle");
   auto *context = candidate.getContext();
-  Type root = decodeBoundType(context, signature->outputs[0]);
-  Type state = decodeBoundType(context, signature->outputs[1]);
-  auto proofBound = parseBoundType("proof:" + scheme.str(), false);
-  if (!proofBound)
-    return proofBound.takeError();
-  Type proof = decodeBoundType(context, *proofBound);
-  if (!root || !state || !proof)
+  auto signature = resolveLogicalSignature(
+      [&] { return emitError(candidate.getLoc()); }, context, "oracle.commit",
+      {StringAttr::get(context, scheme)});
+  auto opening = resolveLogicalSignature(
+      [&] { return emitError(candidate.getLoc()); }, context, "oracle.open",
+      {StringAttr::get(context, scheme)});
+  auto answer = dyn_cast<algebra::FieldType>(kind.getAnswerType());
+  if (!answer || !signature || !opening || signature.getNumInputs() != 2 ||
+      signature.getNumResults() != 2 || opening.getNumInputs() != 2 ||
+      opening.getNumResults() != 2 ||
+      signature.getInput(0) != kind.getDataType() ||
+      opening.getInput(0) != signature.getResult(1) ||
+      opening.getResult(0) != kind.getDataType())
     return error("oracle-merkle");
+  Type root = signature.getResult(0);
+  Type state = signature.getResult(1);
+  Type proof = opening.getResult(1);
   Emitter e(unit);
   auto index = e.index;
   OracleMerkleFunctions result;
@@ -226,7 +219,7 @@ emitOracleMerkle(ModuleOp candidate, protocol_ir::OracleKindAttr kind,
         auto zero = e.number(c, 0, "first_query");
         auto position = e.call(c, result.position, {a[1], zero}, "layout");
         auto count = e.apply(c, "vector.length", index, a[0], "actual_rows",
-                             {answer->identity})[0];
+                             {StringAttr::get(context, answer.getDomain())})[0];
         e.require(c, e.binary(c, "index.equal", count, a[1], "exact_rows"),
                   "admit_data");
         auto width = e.number(c, layout->width(), "width");
@@ -234,20 +227,21 @@ emitOracleMerkle(ModuleOp candidate, protocol_ir::OracleKindAttr kind,
         if (grouping == OracleLeafGrouping::AntipodalPairs)
           values = e.apply(c, "vector.transpose", kind.getDataType(),
                            {values, width, position[0]}, "group_rows",
-                           {answer->identity})[0];
+                           {StringAttr::get(context, answer.getDomain())})[0];
         if (order == OracleLeafOrder::BitReversed)
-          values =
-              e.apply(c, "vector.bit_reverse_rows", kind.getDataType(),
-                      {values, width}, "permute_leaves", {answer->identity})[0];
+          values = e.apply(c, "vector.bit_reverse_rows", kind.getDataType(),
+                           {values, width}, "permute_leaves",
+                           {StringAttr::get(context, answer.getDomain())})[0];
         c.returned(e.apply(c, "oracle.commit", {root, state}, {values, width},
-                           "commit", {scheme.str()}));
+                           "commit", {StringAttr::get(context, scheme)}));
       });
   result.open = e.function(
       "open", {state, index, index}, {kind.getDataType(), proof}, false,
       [&](Control &c, ValueRange a) {
         auto position = e.call(c, result.position, {a[1], a[2]}, "layout");
         c.returned(e.apply(c, "oracle.open", {kind.getDataType(), proof},
-                           {a[0], position[1]}, "open", {scheme.str()}));
+                           {a[0], position[1]}, "open",
+                           {StringAttr::get(context, scheme)}));
       });
   result.authenticate = e.function(
       "authenticate", {root, index, index, kind.getDataType(), proof},
@@ -257,10 +251,11 @@ emitOracleMerkle(ModuleOp candidate, protocol_ir::OracleKindAttr kind,
         auto valid =
             e.apply(c, "oracle.check", e.boolean,
                     {a[0], width, position[0], position[1], a[3], a[4]},
-                    "authenticate", {scheme.str()})[0];
+                    "authenticate", {StringAttr::get(context, scheme)})[0];
         e.require(c, valid, "admit_opening");
         c.returned(e.apply(c, "vector.get", kind.getAnswerType(),
-                           {a[3], position[2]}, "answer", {answer->identity}));
+                           {a[3], position[2]}, "answer",
+                           {StringAttr::get(context, answer.getDomain())}));
       });
   return result;
 }

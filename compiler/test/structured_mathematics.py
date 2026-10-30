@@ -195,9 +195,12 @@ with case('an oversized round payload does not establish the required degree'):
 
 with case('canonical distinct interpolation points are checked before simplification'):
     univariate = (FIXTURES / 'univariate.mlir').read_text()
-    for point in ['3', '03', '-1', '52435875175126190479447740508185965837690552500527637822603658699938581184513']:
+    for point, reason in [
+        ('3', 'polynomial-formation'),
+        ('52435875175126190479447740508185965837690552500527637822603658699938581184513', 'field-literal'),
+    ]:
         invalid = univariate.replace('10395434478220956956328808592063228334810757406296085889024', point)
-        commands.source('protocol-bundle', invalid, refuses='polynomial-formation')
+        commands.source('protocol-bundle', invalid, refuses=reason)
 
 
 def single_math(length, arity, body):
@@ -251,7 +254,7 @@ with case('unused invalid coefficients refuse before default simplification'):
 
 with case('participant passes remove dead polynomial observations before expansion'):
     field = '!algebra.field<"bls12-381.fr">'
-    constant = f'%value = "algebra.constant"() {{value="0"}} : () -> {field}'
+    constant = f'%value = "algebra.constant"() {{value=#algebra.literal<{field}, 0 : ui255>}} : () -> {field}'
     projected = commands.verified(single_math(65536, 16, constant), None,
                                   '--zkc-project-protocol=simplify=false')
     assert '"poly.' not in projected
@@ -273,7 +276,7 @@ with case('domain formation does not promise interpolation within the expansion 
     field = '!algebra.field<"bls12-381.fr">'
     polynomial = '!poly.polynomial<"bls12-381.fr", 1>'
     for count in [32, 64]:
-        points = json.dumps([str(i) for i in range(count)])
+        points = "[" + ",".join(f"#algebra.literal<{field}, {i} : ui255>" for i in range(count)) + "]"
         body = f'''%interpolant = "poly.interpolate"(%T) {{points={points}}} : (!algebra.field_array<"bls12-381.fr", {count}>) -> {polynomial}
           %value = "poly.evaluate"(%interpolant, %x) : ({polynomial}, {field}) -> {field}'''
         text = single_math(count, 5 if count == 32 else 6, body)
@@ -289,8 +292,8 @@ with case('domain formation does not promise interpolation within the expansion 
 with case('constant field-array packing compiles under selected simplification'):
     field = '!algebra.field<"bls12-381.fr">'
     polynomial = '!poly.polynomial<"bls12-381.fr", 1>'
-    body = f'''%one = "algebra.constant"() {{value="1"}} : () -> {field}
-      %two = "algebra.constant"() {{value="2"}} : () -> {field}
+    body = f'''%one = "algebra.constant"() {{value=#algebra.literal<{field}, 1 : ui255>}} : () -> {field}
+      %two = "algebra.constant"() {{value=#algebra.literal<{field}, 2 : ui255>}} : () -> {field}
       %table = "algebra.array_from_elements"(%one, %two) : ({field}, {field}) -> !algebra.field_array<"bls12-381.fr", 2>
       %constant_table = "poly.mle"(%table) : (!algebra.field_array<"bls12-381.fr", 2>) -> {polynomial}
       %value = "poly.evaluate"(%constant_table, %x) : ({polynomial}, {field}) -> {field}'''

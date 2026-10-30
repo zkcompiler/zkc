@@ -101,11 +101,13 @@ int main() {
     for (StringRef contract :
          {"numerical.map", "numerical.sum", "numerical.product"})
       cases.run(contract + " exact field " + field, [&] {
-        require(
-            authoringStage(contract) == AuthoringStage::CompilerGenerated &&
-                none_of(boundOperationContracts(),
-                        [&](const auto &op) { return op.name == contract; }),
-            "consumer-owned signature leaked into the generic source API");
+        require(authoringStage(contract) == AuthoringStage::CompilerGenerated &&
+                    any_of(executableOperationContracts(),
+                           [&](const auto &op) {
+                             return op.name == contract &&
+                                    op.numerical.has_value();
+                           }),
+                "numerical family is missing from the complete catalog");
         BindingApplication binding{contract.str(), {field.str(), "001"}, ""};
         auto signature = take(resolveBinding(binding, false));
         require(signature.inputs.size() == 4 &&

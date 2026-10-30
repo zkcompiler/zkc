@@ -1,4 +1,5 @@
 #include "zkc/Dialect/Exec/ControlCursor.h"
+#include "ExecutionAttributes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -10,9 +11,7 @@ using namespace llvm;
 namespace zkc::exec {
 namespace {
 bool attrs(Operation *op, ArrayRef<StringRef> names = {}) {
-  return op && llvm::all_of(op->getAttrs(), [&](NamedAttribute attribute) {
-           return llvm::is_contained(names, attribute.getName().getValue());
-         });
+  return detail::hasOnlyExecutionAttributes(op, names);
 }
 } // namespace
 bool ControlCursor::inspect(Block *block) {

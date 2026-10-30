@@ -5,10 +5,12 @@
 #include "mlir/IR/IRMapping.h"
 #include "zkc/Analysis/MathematicalFacts.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
@@ -264,22 +266,11 @@ class NumericalBodyReader {
         return failure();
       auto binding = symbols.lookupNearestSymbolFrom<runtime::BindingOp>(
           apply, apply.getBindingAttr());
-      auto decoded =
-          binding ? protocol::readBinding(binding)
-                  : llvm::Expected<protocol::OperationBinding>(
-                        llvm::createStringError(llvm::inconvertibleErrorCode(),
-                                                "missing source binding"));
-      if (!decoded) {
-        llvm::consumeError(decoded.takeError());
+      auto checkedBinding =
+          readNativeBinding([&] { return op->emitOpError(); }, binding);
+      if (failed(checkedBinding))
         return failure();
-      }
-      SmallVector<std::string> parameters;
-      for (Attribute attr : apply.getParameters()) {
-        auto text = dyn_cast<StringAttr>(attr);
-        if (!text)
-          return failure();
-        parameters.push_back(text.getValue().str());
-      }
+      auto parameters = apply.getParameters();
       if (!semantics(op)) {
         // Retain typed dataflow and source identity without assigning a total
         // law to a checked or effectful operation. The uninterpreted call has
@@ -287,7 +278,7 @@ class NumericalBodyReader {
         values.map(step.outputs, opaque(op, inputs, step.outputs, target));
         continue;
       }
-      StringRef contract = decoded->application.contract;
+      StringRef contract = checkedBinding->declaration.getContract();
       StringRef name =
           contract == "field.constant"
               ? algebra::ConstantFieldOp::getOperationName()
@@ -311,7 +302,7 @@ class NumericalBodyReader {
       state.addOperands(inputs);
       state.addTypes(ValueRange(step.outputs).getTypes());
       if (contract == "field.constant")
-        state.addAttribute("value", builder.getStringAttr(parameters.front()));
+        state.addAttribute("value", parameters[0]);
       auto *projected = builder.create(state);
       result.sources[projected] = op;
       values.map(step.outputs, projected->getResults());
@@ -729,7 +720,7 @@ std::optional<IterationKind> iterationKind(Operation *op) {
 }
 class ComputationAnalysis {
   ComputationWork &work;
-  MathematicalFactAnalysis factAnalysis;
+  MathematicalFactAnalysis &factAnalysis;
   std::optional<CapacityCause> evidenceDebit;
   facts::Work evidence;
   ComputationDiagnostic &diagnostic;
@@ -747,10 +738,9 @@ class ComputationAnalysis {
   SymbolTableCollection symbols;
 
 public:
-  ComputationAnalysis(ComputationWork &work, Operation *subject,
+  ComputationAnalysis(ComputationWork &work, MathematicalFactAnalysis &facts,
                       ComputationDiagnostic &diagnostic)
-      : work(work), factAnalysis(MathematicalFactAnalysis::rootFor(subject)),
-        evidence([this](uint64_t amount) {
+      : work(work), factAnalysis(facts), evidence([this](uint64_t amount) {
           uint64_t available = this->work.evidence;
           if (consumeComputationWork(this->work.evidence, amount))
             return true;
@@ -1061,9 +1051,16 @@ std::optional<ComputationView> analyzeComputation(Computation c,
 std::optional<ComputationView>
 analyzeComputation(Computation c, ComputationWork &work,
                    ComputationDiagnostic *diagnostic) {
+  MathematicalFactAnalysis facts(
+      MathematicalFactAnalysis::rootFor(c.operation));
+  return analyzeComputation(c, work, facts, diagnostic);
+}
+std::optional<ComputationView>
+analyzeComputation(Computation c, ComputationWork &work,
+                   MathematicalFactAnalysis &facts,
+                   ComputationDiagnostic *diagnostic) {
   ComputationDiagnostic observed;
-  auto result =
-      ComputationAnalysis(work, c.operation, observed).read(c, c.operation);
+  auto result = ComputationAnalysis(work, facts, observed).read(c, c.operation);
   if (result)
     observed = {OptimizationOutcome::success(),
                 c.operation,

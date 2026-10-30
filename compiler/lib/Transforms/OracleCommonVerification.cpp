@@ -1,6 +1,7 @@
 #include "OracleCommonPlan.h"
 #include "OracleVerificationContext.h"
 #include "mlir/IR/OperationSupport.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -67,20 +68,16 @@ bool local(const OracleLocalRecipe &recipe, func::FuncOp actual,
     for (auto [id, input] : zip(expected.inputs, step.inputs))
       if (id >= values.size() || values[id] != input)
         return false;
-    for (auto [attribute, parameter] :
-         zip(op.getParameters(), expected.parameters))
-      if (cast<StringAttr>(attribute).getValue() != parameter)
-        return false;
+    if (!equal(op.getParameters(), expected.parameters))
+      return false;
     auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
         op, op.getBindingAttr());
     if (!binding || binding.getContract() != expected.binding.contract ||
         binding.getImplementation() != expected.binding.implementation ||
         binding.getArguments().size() != expected.binding.arguments.size())
       return false;
-    for (auto [attribute, argument] :
-         zip(binding.getArguments(), expected.binding.arguments))
-      if (cast<StringAttr>(attribute).getValue() != argument)
-        return false;
+    if (!matchesNativeBinding(binding, expected.binding))
+      return false;
     append_range(values, step.outputs);
   }
   const auto &last = found->second.back();

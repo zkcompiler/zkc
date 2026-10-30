@@ -31,15 +31,9 @@ pub(super) fn select(
 }
 
 pub(super) const CONTRIBUTION: Contribution = Contribution {
-    contracts: &[Contract::custom("table.relayout").implemented_by(&["arkworks/table.relayout"])],
-    resolve: |_, _| {
-        Err(AdmissionError::new(
-            ErrorCode::Signature,
-            "binding-adapter-at-logical-stage",
-        ))
-    },
+    contracts: &[Installation::new("table.relayout").implemented_by(&["arkworks/table.relayout"])],
+
     select,
     alternatives: &[],
     physical_error: "uninstalled operation binding",
-    physical_only: true,
 };

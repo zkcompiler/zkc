@@ -198,7 +198,10 @@ int main() {
   });
   mutation("outer dimension orientation", [&](ModuleOp module) {
     auto operation = application(function(module, "work"), "matrix.dimension");
-    operation.setParametersAttr(Builder(&context).getStrArrayAttr({"1"}));
+    operation.setParametersAttr(ArrayAttr::get(
+        &context,
+        {IntegerAttr::get(IntegerType::get(&context, 64, IntegerType::Unsigned),
+                          1)}));
   });
   mutation("strict zip guard order", [&](ModuleOp module) {
     auto comparisons = applications(nonempty(module), "index.equal");

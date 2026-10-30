@@ -32,6 +32,30 @@ choices open until a concrete consumer exercises them. An extension point is
 useful when that consumer can use it without rewriting generic binding or
 checking; an interface description or refusal alone does not demonstrate support.
 
+### Native catalog type observations
+
+A native type binding supplies typed argument observations separately from its
+public-format encoder and decoder. Direct helpers (`DomainAdapter`,
+`TypeNatAdapter`, `DomainNatAdapter` and `NullaryAdapter`) supply these getters.
+Custom bindings name both observation and construction callbacks. Observation
+returns no application for unmatched native carriers. Construction consumes
+already formed typed arguments, checks the native owner's intrinsic invariants
+and returns a type only when that owner is loaded. The public constructor checks
+that the result observes the exact requested application; it never falls back to
+a byte decoder. It must preserve complete Type arguments, exact
+nominal domains and unsigned natural values without printing or parsing them.
+The generated registration checks native heads and logical parameter kinds.
+
+The [catalog type interface](../spec/ir/native-foundation.md#native-logical-type-observation)
+uses MLIR [external interface models](https://mlir.llvm.org/docs/Interfaces/#external-models-for-attribute-operation-and-type-interfaces).
+Normal composed registry registration installs contributed models. A dialect
+whose intrinsic verifier depends on this observation must also call
+`protocol::type_adapters::attachCatalogTypeModels(*this)` after registering its
+types, so a minimal context can construct them. This attaches the same model
+without loading other dialects. Formation, executable admission and byte
+publication remain separate checks; do not use interface membership as a codec
+or execution permission.
+
 ### Applying the boundary to AIR and protocol evaluation
 
 The [relation bundle](../spec/domains/relation-bundles.md) owns deterministic

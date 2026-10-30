@@ -178,10 +178,15 @@ and no height requirement. `Relation/BundlePolynomial.h` separates static
 polynomial reference admission from analysis at actual parameters; reference
 admission alone grants no executable polynomial domain.
 
-`Program/Model.h` contains `zkc::program` records. `LocalDefinitions` is an internal
-structural view of admitted scoped callables. `LocalApply` represents retained
-mathematical computations, finite requests and ordinary helper calls before
-checked expansion; it has no authored carrier.
+`Program/Model.h` contains `zkc::program` records. `LocalDefinitions` is the
+neutral export and comparison view of admitted scoped callables. `LocalApply`
+represents ordinary source helper calls before checked expansion; it has no
+authored byte carrier. Native admission and resource-origin analysis use actual
+SSA closures directly. Mathematical and finite requests cannot be exported into
+this neutral view. `Program/Admission.h` retains independent source-definition
+admission for export/comparison and logical/physical execution-subset admission
+for candidate comparison. Both require actual model function bodies; neither
+admits mathematical or finite signatures.
 `Contracts/Binding.h` owns named operation bindings and assignment pairs.
 Program records carry no diagnostic locations. Language diagnostics retain
 source spans; MLIR operations retain their own locations. Physical selection

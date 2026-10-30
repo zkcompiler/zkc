@@ -4,6 +4,7 @@
 #include "Language.h"
 #include "Relations.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Compiler/ApplicationMap.h"
 #include "zkc/Compiler/Compilation.h"
 #include "zkc/Compiler/NativeProof.h"
 #include "zkc/Compiler/OracleObligations.h"
@@ -70,6 +71,10 @@ int zkc::runCompiler(int argc, char **argv,
            "Protocol IR and native participant programs:\n"
            "  protocol-export FILE.mlir\n"
            "  protocol-structured FILE.mlir --symbol=NAME\n"
+           "  protocol-application-map ORIGINAL.mlir CANDIDATE.mlir "
+           "--symbol=NAME\n"
+           "  protocol-check-application-map ORIGINAL.mlir CANDIDATE.mlir "
+           "MAP.json --symbol=NAME\n"
            "  protocol-oracle-obligations FILE.mlir --symbol=NAME\n"
            "  protocol-check-oracle-obligations FILE.mlir REPORT.json "
            "--symbol=NAME\n"
@@ -416,6 +421,37 @@ int zkc::runCompiler(int argc, char **argv,
              << '\n';
     else
       outs() << result->bundle;
+    return 0;
+  }
+  if (mode == "protocol-application-map" ||
+      mode == "protocol-check-application-map") {
+    bool check = mode == "protocol-check-application-map";
+    if (argc != (check ? 6 : 5))
+      return fail(error("unsupported-option"));
+    StringRef symbol = argv[argc - 1];
+    if (!symbol.consume_front("--symbol=") || symbol.empty())
+      return fail(error("unsupported-option"));
+    auto original = readInput(argv[2], 16 * 1024 * 1024);
+    if (!original)
+      return fail(original.takeError());
+    auto candidate = readInput(argv[3], 16 * 1024 * 1024);
+    if (!candidate)
+      return fail(candidate.takeError());
+    mlir::MLIRContext context(registry);
+    if (check) {
+      auto proposal = readInput(argv[4], 32 * 1024 * 1024);
+      if (!proposal)
+        return fail(proposal.takeError());
+      if (auto e = protocol::checkApplicationMap(*original, *candidate, symbol,
+                                                 *proposal, context))
+        return fail(std::move(e));
+    } else {
+      auto result = protocol::produceApplicationMap(*original, *candidate,
+                                                    symbol, context);
+      if (!result)
+        return fail(result.takeError());
+      outs() << *result;
+    }
     return 0;
   }
   if (mode == "protocol-oracle-obligations" ||

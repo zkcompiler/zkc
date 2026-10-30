@@ -208,7 +208,21 @@ with case('constructed validator export checks the candidate first'):
     assert contracts.count('transcript.native.indexed.challenge') == 1
     assert contracts.count('transcript.native.indexed.observe.data') == 3
     sorts = exported[5] + [ty for instruction in exported[7] for ty in instruction[4]]
-    assert sorts[exported[8][-1]].startswith('!runtime.capability<"transcript:')
+    assert sorts[exported[8][-1]][:2] == ['apply', 'transcript']
+    assert all(isinstance(ty, list) and ty[0] in {'apply', 'variant', 'service'} for ty in sorts)
+    assert all(len(instruction[2]) == 5 for instruction in exported[7] if instruction[2])
+    assert all(attribute[1][0] != 'text' for instruction in exported[7] for attribute in instruction[1])
+    parameter_records = []
+    for instruction in exported[7]:
+        if instruction[0] != 'exec.apply':
+            continue
+        attributes = dict(instruction[1])
+        assert attributes['binding'] == ['symbol', [attributes['binding'][1][0]]]
+        assert attributes['parameters'][0] == 'array'
+        assert all(value[0] == 'parameter' for value in attributes['parameters'][1])
+        parameter_records.extend(value[1] for value in attributes['parameters'][1])
+    assert any(value[0] == 'origin' and value[1][0] == 'zkc.native-origin-template/0'
+               for value in parameter_records)
     candidate_path.write_text(changed)
     commands.run([compiler, 'protocol-constructed-participant', source_path, policy_path, candidate_path],
                  refuses='native-proof-correspondence')

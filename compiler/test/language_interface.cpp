@@ -1,5 +1,6 @@
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
+#include "support/VariantFixture.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguageInterface.h"
 #include "zkc/Contracts/Domains.h"
@@ -130,7 +131,7 @@ variantDocument(StringRef nominal, StringRef first = "case00000000",
       {{first.str(), {"bool"}}, {second.str(), {"bool"}}}};
   auto encoded = zkc::protocol::encodeVariant(descriptor);
   require(bool(encoded), "invalid native variant fixture");
-  std::string type = "!data.variant<\"" + *encoded + "\">";
+  std::string type = zkc::test::variantAssembly(*encoded);
   std::string native =
       "module {\"protocol.module\"() <{profile = #protocol.profile<protocol>}> "
       "({"
@@ -296,11 +297,10 @@ int main() {
               refuses(readInterface(native, zkc::printJson(value)),
                       "source.interface");
             });
-  for (const auto &nominal :
-       {std::string(""), std::string("0"), std::string("gg"),
-        toHex("variant:数学::Choice", false),
-        toHex("variant:数学::Other", true),
-        toHex(toHex("variant:数学::Choice", true), true)})
+  for (const auto &nominal : {std::string("0"), std::string("gg"),
+                              toHex("variant:数学::Choice", false),
+                              toHex("variant:数学::Other", true),
+                              toHex(toHex("variant:数学::Choice", true), true)})
     cases.run("malformed or changed nominal preimage refuses: " + nominal, [&] {
       auto [native, value] = variantDocument(nominal);
       refuses(readInterface(native, zkc::printJson(value)), "source.interface");
@@ -1008,7 +1008,7 @@ protocol Run roles(P)(v:Choice@P)->(a:Token@P,b:Token@P,x:Choice@P,y:Choice@P) {
   });
   cases.run("managed transcript leaves are not source builtin data", [] {
     const std::string type =
-        "!runtime.capability<\"transcript:merlin3.bls12-381.fr64be/0\">";
+        "!runtime.capability<transcript, \"merlin3.bls12-381.fr64be/0\">";
     auto source =
         compile("module sample;protocol Pass "
                 "roles(P)(x:bool@P)->(r:bool@P){return x;}entry fn "

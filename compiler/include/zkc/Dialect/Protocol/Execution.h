@@ -11,9 +11,9 @@ namespace zkc::protocol {
 /// policy are separate checks run by mlir::verify; this reader does not call
 /// them recursively. It neither serializes a carrier nor proves source
 /// correspondence. Native logical models are valid here before selection.
-/// Residual computation units and Kernel calls must first be realized; internal
-/// profile admission handles their validation signatures without publishing
-/// them.
+/// Residual computation units and exec.compute/fold/collect calls must first be
+/// realized. Native profile admission checks their actual definitions and SSA
+/// directly; it does not call this byte-model reconstruction adapter.
 llvm::Expected<program::Participants> readExecutionModel(mlir::Operation *);
 } // namespace zkc::protocol
 #endif

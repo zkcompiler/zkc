@@ -1,9 +1,11 @@
 #include "../lib/Target/PhysicalPlan.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "mlir/Parser/Parser.h"
+#include "support/NativeBindings.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Registry.h"
 
 using namespace mlir;
@@ -13,7 +15,7 @@ namespace sf = zkc::test::scopedFinite;
 namespace sc = zkc::test::scopedComputation;
 namespace {
 const std::string declarations = R"mlir(
-"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
 "data.domain"() ({^entry(%a:!V,%b:!V,%c:!V):
 %as = "data.domain_elements"(%a) : (!V)->!data.domain<!F>
 %bs = "data.domain_elements"(%b) : (!V)->!data.domain<!F>
@@ -75,7 +77,7 @@ class Providers final : public target::CandidateCatalog {
 public:
   unsigned withheld = 0;
   llvm::Expected<std::vector<std::string>> implementations(
-      const protocol::BindingApplication &application) const override {
+      const zkc::NativeBindingApplication &application) const override {
     if ((withheld >= 1 && application.contract == "vector.dot") ||
         (withheld >= 2 && application.contract == "numerical.sum") ||
         (withheld >= 3 && application.contract == "numerical.map") ||
@@ -83,9 +85,8 @@ public:
       return std::vector<std::string>{};
     return target::installedCandidates().implementations(application);
   }
-  std::vector<protocol::BindingApplication>
-  conversions(const protocol::BoundType &from,
-              const protocol::BoundType &to) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type from, mlir::Type to) const override {
     return target::installedCandidates().conversions(from, to);
   }
 };
@@ -144,7 +145,8 @@ int main(int argc, char **argv) {
     cases.run(name, [&] {
       auto actual = sf::clone(*candidate);
       mutate(*actual);
-      require(succeeded(verify(*actual)), "mutation must remain admitted");
+      require(succeeded(zkc::admitStage(*actual)),
+              "mutation must remain admitted");
       ScopedDiagnosticHandler quiet(&context,
                                     [](Diagnostic &) { return success(); });
       require(failed(compare(*source, *actual)),
@@ -278,11 +280,13 @@ int main(int argc, char **argv) {
             scopedApply("sum", "again", "%v", "!V", "%other", "!F") +
                 scopedReturn("%r", "!F"));
       if (variant == 2) {
-        text = replaceText(text, "func.func private @product",
-                           "\"runtime.binding\"() "
-                           "{sym_name=\"length\",contract=\"vector.length\","
-                           "arguments=[\"koala-bear\"],implementation=\"\"} : "
-                           "()->()\nfunc.func private @product");
+        text = replaceText(
+            text, "func.func private @product",
+            "\"runtime.binding\"() "
+            "{sym_name=\"length\",contract=\"vector.length\","
+            "arguments=[\"koala-bear\"],implementation=\"\",function_type=(!"
+            "runtime.scope,!V)->!exec.outcome<(ui64)>} : "
+            "()->()\nfunc.func private @product");
         text = replaceText(
             text, "%sum_attempt =",
             scopedApply("length", "intervening", "%a", "!V", "%n", "ui64") +
@@ -347,7 +351,8 @@ int main(int argc, char **argv) {
         fixture(), "func.func private @product",
         "\"runtime.binding\"() "
         "{sym_name=\"multiply\",contract=\"field.mul\",arguments=[\"koala-"
-        "bear\"],implementation=\"\"} : ()->()\nfunc.func private @product");
+        "bear\"],implementation=\"\",function_type=(!runtime.scope,!F,!F)->!"
+        "exec.outcome<(!F)>} : ()->()\nfunc.func private @product");
     text = replaceText(
         text,
         "\"exec.compute\"(%scope,%a,%b,%c,%s) "

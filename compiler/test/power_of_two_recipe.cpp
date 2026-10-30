@@ -39,13 +39,10 @@ bool evaluate(func::FuncOp function,
     Datum result;
     if (contract == "index.constant") {
       auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
-      uint64_t value;
       require(parameters && parameters.size() == 1 &&
-                  !cast<StringAttr>(parameters[0])
-                       .getValue()
-                       .getAsInteger(10, value),
+                  isa<IntegerAttr>(parameters[0]),
               "invalid executable constant");
-      result = value;
+      result = cast<IntegerAttr>(parameters[0]).getValue().getZExtValue();
     } else if (contract == "index.equal")
       result = std::get<uint64_t>(arg(0)) == std::get<uint64_t>(arg(1));
     else if (contract == "bool.and")
@@ -116,7 +113,8 @@ int main() {
     auto constant = scopedFinite::application(function, "index.constant");
     auto parameters = constant.getParametersAttr();
     OpBuilder builder(&context);
-    auto changed = builder.getStrArrayAttr({"1"});
+    auto changed = builder.getArrayAttr(
+        {builder.getIntegerAttr(builder.getIntegerType(64, false), 1)});
     require(parameters != changed, "constant mutation would change nothing");
     constant.setParametersAttr(changed);
     require(succeeded(verify(*candidate)), "changed constant lost formation");

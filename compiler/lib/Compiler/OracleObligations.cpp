@@ -115,7 +115,7 @@ struct Deriver {
         unsigned sources = 0;
         for (const auto &type : inputs) {
           auto fields = type.getAsArray();
-          if (!fields || fields->size() != 2 || (*fields)[0] != J("oracle"))
+          if (!fields || fields->size() != 3 || (*fields)[0] != J("oracle"))
             break;
           ++sources;
         }

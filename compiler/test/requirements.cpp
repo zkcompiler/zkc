@@ -64,7 +64,7 @@ Expected<json::Value> run(const json::Value &value) {
     return invalid();
   const auto *rawTerms = (*request)[1].getAsArray();
   const auto *rawRules = (*request)[3].getAsArray();
-  if (!rawTerms || !rawRules || rawTerms->size() > 128 ||
+  if (!rawTerms || !rawRules || rawTerms->size() > ScopeTermLimit ||
       rawRules->size() > 128)
     return invalid();
   std::vector<Term> terms;

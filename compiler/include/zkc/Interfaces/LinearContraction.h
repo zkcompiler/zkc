@@ -9,6 +9,9 @@ namespace zkc {
 /// installed representation, implementation, purity, or buffer aliasing.
 /// Target selection must independently admit the complete installed contract
 /// and cover every result use at a compatible values operand in the same block.
+/// Indices address the invocation's logical data inputs and outcome payload,
+/// excluding its scope operand and the outcome wrapper. They are not raw SSA
+/// operand/result numbers; consumers need the admitted execution-flow view.
 struct DiagonalProducerRoles {
   unsigned factorsOperand, valuesOperand, result;
 };

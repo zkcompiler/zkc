@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/ComputationFixture.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include <fstream>
@@ -50,7 +51,8 @@ int main() {
   cases.run("exact-zero unsupported differs from a failed debit", [&] {
     auto source =
         parseSourceString<ModuleOp>(fixture("total-predicate"), &context);
-    require(bool(source) && succeeded(verify(*source)), "fixture refused");
+    require(bool(source) && succeeded(zkc::admitStage(*source)),
+            "fixture refused");
     auto c = readComputation(*source);
     finite::ComputationWork measured;
     auto initial = measured.equations;
@@ -124,7 +126,8 @@ int main() {
   cases.run(
       "missing evidence remains a successful partial structural view", [&] {
         auto source = parseSourceString<ModuleOp>(capturedReduction, &context);
-        require(bool(source) && succeeded(verify(*source)), "control refused");
+        require(bool(source) && succeeded(zkc::admitStage(*source)),
+                "control refused");
         auto c = readComputation(*source);
         finite::ComputationWork work;
         finite::ComputationDiagnostic diagnostic;
@@ -161,7 +164,7 @@ int main() {
       [&] {
         auto source =
             parseSourceString<ModuleOp>(fixture("indexed-zip-dot"), &context);
-        require(bool(source) && succeeded(verify(*source)),
+        require(bool(source) && succeeded(zkc::admitStage(*source)),
                 "indexed control refused");
         auto c = readComputation(*source);
         finite::ComputationWork work;
@@ -208,7 +211,7 @@ int main() {
             &op, op.getAttrOfType<FlatSymbolRefAttr>("binding"));
         require(bool(binding), "missing binding");
         binding.setImplementation("arkworks/field.add");
-        require(succeeded(verify(*source)), "supported pin refused");
+        require(succeeded(zkc::admitStage(*source)), "supported pin refused");
         c = readComputation(*source);
         auto restricted = selectComputation(c, {});
         require(restricted.equations.reduction &&
@@ -224,7 +227,8 @@ int main() {
     auto &body = c.helper->getRegion(0).front();
     OpBuilder builder(&body.back());
     builder.clone(body.front());
-    require(succeeded(verify(*source)), "repeated helper fixture refused");
+    require(succeeded(zkc::admitStage(*source)),
+            "repeated helper fixture refused");
     finite::ComputationWork measured;
     auto initial = measured.structural;
     auto view = finite::analyzeComputation(c, measured);

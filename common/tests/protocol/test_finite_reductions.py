@@ -360,7 +360,7 @@ def test_fusion_proof_construction_preserves_protocol_origins(toolchain, journal
         # consumes the policy and chooses the concrete dot or map realization.
         projected = candidate.read_text()
         assert 'exec.collect' in projected
-        assert 'algebra.exec.vector_dot' not in projected
+        assert 'contract = "vector.dot"' not in projected
         sites = operation_sites(json.loads(deployment[4]))
         assert bool(sites['vector.dot']) == bool(flags), sites
         assert bool(sites['numerical.map']) != bool(flags), sites
@@ -492,7 +492,7 @@ def test_registered_participant_pipeline_forwards_fusion(toolchain, journal, dir
             toolchain.optimizer, original,
             f'--zkc-participant-pipeline=project-only=true fuse-vector-reductions={choice}'])
         assert 'exec.collect' in projected
-        assert 'algebra.exec.vector_dot' not in projected
+        assert 'contract = "vector.dot"' not in projected
         physical = journal.run([
             toolchain.optimizer, original,
             f'--zkc-participant-pipeline=fuse-vector-reductions={choice}'])

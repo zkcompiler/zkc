@@ -4,6 +4,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Support/Json.h"
@@ -189,7 +190,8 @@ module { "protocol.module"() ({
         main(*original).getBody().front().getOps<protocol_ir::StatementOp>();
     (*statements.begin())
         ->setAttr("target", StringAttr::get(&context, "decoy"));
-    require(succeeded(verify(*original)), "alternate target must be admitted");
+    require(succeeded(zkc::admitStage(*original)),
+            "alternate target must be admitted");
     auto changed = take(RealizedProtocol::realize(prepare(*original)));
     checked(changed);
     auto other = changed.candidateSnapshot();
@@ -206,7 +208,7 @@ module { "protocol.module"() ({
          candidate = owner.candidateSnapshot();
     main(*candidate)
         ->setAttr("contracts", main(*original)->getAttr("contracts"));
-    require(succeeded(verify(*candidate)),
+    require(succeeded(zkc::admitStage(*candidate)),
             "ordinary clause mutation must be admitted");
     rejects(*original, *candidate, owner.realizationRecord(),
             "oracle-common-body");

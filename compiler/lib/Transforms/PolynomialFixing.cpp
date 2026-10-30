@@ -1,4 +1,5 @@
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
@@ -123,7 +124,8 @@ struct FixPolynomialFactorsPass
   }
   void runOnOperation() final {
     auto source = getOperation();
-    if (failed(verify(source)) || !llvm::hasSingleElement(*source.getBody()))
+    if (failed(zkc::admitStage(source)) ||
+        !llvm::hasSingleElement(*source.getBody()))
       return signalPassFailure();
     auto original =
         dyn_cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
@@ -141,7 +143,7 @@ struct FixPolynomialFactorsPass
       if (failed(
               FactorFixing(&getContext()).run(participant.getBody().front())))
         return signalPassFailure();
-    if (failed(verify(*candidate)) ||
+    if (failed(zkc::admitStage(*candidate)) ||
         failed(mathematical::verifyProjectionPreserved(source, *candidate)))
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());

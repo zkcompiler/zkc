@@ -56,7 +56,8 @@ for name in ['if', 'for', 'match', 'apply', 'swap-inside', 'swap-outside',
 with case('scoped stop joins the continuing identity arm'):
     accept('if-stop')
     commands.source('protocol-bundle', source('if-terminal'),
-                    refuses='local-terminal-outputs')
+                    refuses='execution-cfg')
+    assert 'stopped arms cannot produce data' in commands.last.stderr
 
 with case('stop through an ordinary call prunes only its local arm'):
     accept('stop-call')
@@ -109,12 +110,12 @@ with case('match payload roots are not inferred from aggregate construction'):
 
 with case('private match still refuses hidden history through a call'):
     commands.source('protocol-bundle', source('private-history'),
-                    refuses='local-match-challenge')
+                    refuses='execution-match-history')
 
 with case('successor chains are work, not nesting'):
     accept('draw80')
     commands.source('protocol-bundle', source('draw-reuse'),
-                    refuses='interactive-resource-reuse')
+                    refuses='execution-resource-reuse')
 
 with case('protocol endpoint invocation cannot appear inside a scoped helper'):
     commands.source('protocol-bundle', source('endpoint-call'),
@@ -137,7 +138,7 @@ with case('callee repeat invariant is checked in both declaration orders'):
 
 with case('cyclic scoped applications keep their formation diagnostic'):
     commands.source('protocol-bundle', source('cycle'),
-                    refuses='interactive-call-cycle')
+                    refuses='execution-call-cycle')
 
 with case('acyclic application expansion retains its own limit'):
     commands.source('protocol-bundle', source('dag'),

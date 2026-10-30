@@ -3,6 +3,7 @@ set(envelope_include "${CMAKE_CURRENT_LIST_DIR}/include")
 set(envelope_generated "${CMAKE_CURRENT_BINARY_DIR}/contributions/envelope")
 file(MAKE_DIRECTORY "${envelope_generated}/envelope")
 set(envelope_includes "${envelope_include}" "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  "${CMAKE_CURRENT_BINARY_DIR}/include"
   ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
 set(LLVM_TARGET_DEFINITIONS "${envelope_include}/envelope/Native.td")
 set(TABLEGEN_OUTPUT)

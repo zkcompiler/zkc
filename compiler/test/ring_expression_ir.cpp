@@ -80,8 +80,10 @@ int main() {
                                     body->getArgument(0), body->getArgument(1));
   refuse("ring-formula-operation");
   equality.erase();
-  auto malformed =
-      algebra::ConstantFieldOp::create(builder, location, field, "00");
+  auto malformed = algebra::ConstantFieldOp::create(
+      builder, location, field,
+      algebra::FieldLiteralAttr::get(&context, cast<algebra::FieldType>(field),
+                                     builder.getI64IntegerAttr(0)));
   refuse("ring-literal");
   malformed.erase();
   product->setAttr("unreviewed", builder.getUnitAttr());

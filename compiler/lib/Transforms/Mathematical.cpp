@@ -19,6 +19,7 @@
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Relation.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecDialect.h"
@@ -639,7 +640,8 @@ public:
     auto root = zkc::protocol_ir::ProtocolModuleOp::create(
         builder, source.getLoc(),
         zkc::protocol_ir::ProfileAttr::get(
-            builder.getContext(), zkc::protocol_ir::Profile::Participant));
+            builder.getContext(), zkc::protocol_ir::Profile::Participant),
+        mlir::ArrayAttr{});
     declarations = new Block();
     root.getBody().push_back(declarations);
     builder.setInsertionPointToEnd(declarations);
@@ -746,7 +748,7 @@ LogicalResult checkHelperObservations(protocol_ir::ProtocolModuleOp unit,
 } // namespace
 LogicalResult verifyHelperObservations(ModuleOp original,
                                        ArrayRef<StringRef> helpers) {
-  if (failed(verify(original)))
+  if (failed(zkc::admitStage(original)))
     return failure();
   if (!hasSingleElement(*original.getBody()))
     return diagnostics::emit(original.emitError(), "mathematical-module");
@@ -936,7 +938,7 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
                                     RealizationTrace *trace = nullptr) {
   RealizationWork work;
   RealizationScope scope(trace, "prepare-source", source, policy, &work);
-  if (failed(verify(source)))
+  if (failed(zkc::admitStage(source)))
     return {};
   if (!llvm::hasSingleElement(*source.getBody())) {
     diagnostics::emit(source.emitError(), "mathematical-module",
@@ -969,7 +971,7 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
       cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
   if (failed(stage("protocol-applications", [&] {
         if (failed(expandApplications(unit, starts)) ||
-            failed(verify(*candidate)))
+            failed(zkc::admitStage(*candidate)))
           return failure();
         return verifyPreparedValues(*beforeApplications, unit, starts);
       })))
@@ -1002,7 +1004,7 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
         }
         // Upstream folders are not profile admission. Independently compare
         // participant substitutions and every retained definition.
-        if (failed(verify(*candidate)) ||
+        if (failed(zkc::admitStage(*candidate)) ||
             failed(verifyProtocolPreparationPreserved(*expanded, unit)))
           return failure();
         return verifyAuthoredLocalsPreserved(*frozenDefinitions, unit);
@@ -1012,14 +1014,15 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
   return candidate;
 }
 
-OwningOpRef<ModuleOp> projectPrepared(ModuleOp candidate) {
+OwningOpRef<ModuleOp> projectPrepared(ModuleOp candidate,
+                                      MathematicalSelectionPolicy policy) {
   // Retain the actual prepared subject, including its role restrictions.
   // Projection selects the permitted local component without mutating it.
   auto output = Projector(candidate.getContext()).run(candidate);
-  if (!output || failed(verify(*output)) ||
+  if (!output || failed(zkc::admitStage(*output)) ||
       failed(verifyAuthoredLocalsPreserved(&candidate.getBody()->front(),
                                            &output->getBody()->front())) ||
-      failed(verifyProjectionPreserved(candidate, *output)))
+      failed(verifyProjectionPreserved(candidate, *output, policy)))
     return {};
   return output;
 }
@@ -1091,7 +1094,7 @@ struct SimplifyParticipantPass
   }
   void runOnOperation() final {
     auto source = getOperation();
-    if (failed(verify(source)) || !hasSingleElement(*source.getBody()))
+    if (failed(zkc::admitStage(source)) || !hasSingleElement(*source.getBody()))
       return signalPassFailure();
     auto original =
         dyn_cast<zkc::protocol_ir::ProtocolModuleOp>(source.getBody()->front());
@@ -1109,7 +1112,7 @@ struct SimplifyParticipantPass
          unit.getBody().front().getOps<zkc::protocol_ir::ParticipantOp>())
       if (failed(simplifyCalculations(participant)))
         return signalPassFailure();
-    if (failed(verify(*candidate)) ||
+    if (failed(zkc::admitStage(*candidate)) ||
         failed(verifyProjectionPreserved(source, *candidate)))
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());
@@ -1145,7 +1148,7 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
     auto candidate = prepareSource(source, simplify, selection.get());
     if (!candidate)
       return signalPassFailure();
-    auto output = projectPrepared(*candidate);
+    auto output = projectPrepared(*candidate, selection.get());
     if (!output)
       return signalPassFailure();
     source->setAttrs(output->getOperation()->getAttrs());
@@ -1167,12 +1170,20 @@ PreparedProtocol::prepare(ModuleOp source, MathematicalSelectionPolicy policy,
   auto candidate = prepareSource(source, false, policy, {}, trace);
   if (!candidate)
     return std::nullopt;
-  return PreparedProtocol(std::move(candidate));
+  return PreparedProtocol(
+      OwningOpRef<ModuleOp>(cast<ModuleOp>(source->clone())),
+      std::move(candidate), policy);
 }
 
 OwningOpRef<ModuleOp> PreparedProtocol::snapshot() const {
   return module ? OwningOpRef<ModuleOp>(cast<ModuleOp>(module.get()->clone()))
                 : OwningOpRef<ModuleOp>();
+}
+
+OwningOpRef<ModuleOp> PreparedProtocol::originalSnapshot() const {
+  return original
+             ? OwningOpRef<ModuleOp>(cast<ModuleOp>(original.get()->clone()))
+             : OwningOpRef<ModuleOp>();
 }
 
 OwningOpRef<ModuleOp> PreparedProtocol::execute() && {
@@ -1204,7 +1215,7 @@ OwningOpRef<ModuleOp> PreparedProtocol::execute() && {
   after.setProfile(protocol_ir::Profile::Exec);
   // The only new edge is profile selection. Compare every actual declaration
   // in order; helper substitution was checked against the prepared source.
-  if (failed(verify(*candidate)) ||
+  if (failed(zkc::admitStage(*candidate)) ||
       expanded->getOperation()->getAttrDictionary() !=
           candidate->getOperation()->getAttrDictionary() ||
       before.getBody().front().getOperations().size() !=
@@ -1219,11 +1230,15 @@ OwningOpRef<ModuleOp> PreparedProtocol::execute() && {
 }
 
 OwningOpRef<ModuleOp> PreparedProtocol::project(bool simplify) && {
-  auto prepared = std::move(module);
-  if (!prepared)
+  return projectOwned(std::move(module), simplify, policy);
+}
+OwningOpRef<ModuleOp>
+PreparedProtocol::projectOwned(OwningOpRef<ModuleOp> prepared, bool simplify,
+                               MathematicalSelectionPolicy policy) {
+  if (!prepared || failed(zkc::admitStage(*prepared)))
     return {};
   if (!simplify)
-    return projectPrepared(*prepared);
+    return projectPrepared(*prepared, policy);
   // Preparation has already checked the entire unsimplified source. Rewrite
   // only a private copy, retaining that subject for the checked edge. Neither
   // helpers nor applications need to be expanded a second time.
@@ -1234,13 +1249,13 @@ OwningOpRef<ModuleOp> PreparedProtocol::project(bool simplify) && {
        unit.getBody().front().getOps<protocol_ir::MathematicalOp>())
     if (failed(simplifyCalculations(program)))
       return {};
-  if (failed(verify(*candidate)) ||
+  if (failed(zkc::admitStage(*candidate)) ||
       failed(verifyProtocolPreparationPreserved(&prepared->getBody()->front(),
                                                 unit)) ||
       failed(
           verifyAuthoredLocalsPreserved(&prepared->getBody()->front(), unit)))
     return {};
-  return projectPrepared(*candidate);
+  return projectPrepared(*candidate, policy);
 }
 } // namespace zkc::mathematical
 

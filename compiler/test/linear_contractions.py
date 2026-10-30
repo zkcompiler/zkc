@@ -38,8 +38,8 @@ for group in (False, True):
 !v = !algebra.field_vector<"{scalar}">
 !a = !algebra.{"group_vector" if group else "field_vector"}<"{domain}">
 module {{ "protocol.module"() ({{
- "runtime.binding"() {{sym_name="map",contract="{mapping}",arguments=["{domain}"],implementation=""}} : ()->()
- "runtime.binding"() {{sym_name="reduce",contract="{reduction}",arguments=["{domain}"],implementation=""}} : ()->()
+ "runtime.binding"() {{sym_name="map",contract="{mapping}",arguments=["{domain}"],implementation="",function_type=(!runtime.scope,!v,!a)->!exec.outcome<(!a)>}} : ()->()
+ "runtime.binding"() {{sym_name="reduce",contract="{reduction}",arguments=["{domain}"],implementation="",function_type=(!runtime.scope,!v,!a)->!exec.outcome<(!r)>}} : ()->()
  {contraction}
  "protocol.func"() ({{ ^entry(%w:!v,%x:!v,%f:!v,%v:!a):
   %out:2 = "protocol.local_call"(%w,%x,%f,%v) {{callee=@contract,role="P",site="contract"}} : (!v,!v,!v,!a)->(!r,!r)

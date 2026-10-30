@@ -2,10 +2,24 @@
 #define ZKC_ANALYSIS_MATHEMATICAL_FACTS_H
 
 #include "mlir/IR/Operation.h"
+#include "mlir/IR/SymbolTable.h"
+#include "mlir/Pass/AnalysisManager.h"
 #include "zkc/Contracts/MathematicalFacts.h"
 #include <memory>
 
 namespace zkc {
+/// Symbol lookup for a single immutable closure. The analysis is owned at the
+/// enclosing module, not cached on a callable that can inspect its siblings.
+/// This holds no admission result or work allowance.
+class SymbolClosureAnalysis {
+  mlir::Operation *root;
+  std::unique_ptr<mlir::SymbolTableCollection> symbols;
+
+public:
+  explicit SymbolClosureAnalysis(mlir::Operation *root);
+  mlir::Operation *lookup(mlir::Operation *, mlir::SymbolRefAttr);
+  void clear();
+};
 /// Reusable observations of ONE immutable symbol closure. Construct on its
 /// module/symbol owner (also through AnalysisManager), never on a function
 /// whose evidence inspects sibling helpers. This borrows IR; it does not clone
@@ -35,6 +49,9 @@ namespace zkc {
 class MathematicalFactAnalysis {
 public:
   explicit MathematicalFactAnalysis(mlir::Operation *symbolRoot);
+  MathematicalFactAnalysis(mlir::Operation *symbolRoot,
+                           mlir::AnalysisManager &);
+  bool isInvalidated(const mlir::AnalysisManager::PreservedAnalyses &);
   ~MathematicalFactAnalysis();
   MathematicalFactAnalysis(const MathematicalFactAnalysis &) = delete;
   MathematicalFactAnalysis &

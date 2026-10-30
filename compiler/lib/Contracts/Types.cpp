@@ -285,7 +285,7 @@ Expected<BoundType> parseBoundType(StringRef spelling, bool physical,
       return error("binding-type-limit");
     StringRef head = logical.take_front(open);
     const auto *declaration = typeDeclaration(head);
-    if (!declaration || !declaration->common)
+    if (!declaration)
       return error("binding-type");
     // There is only one canonical spelling per constructor shape.
     if (!logical.ends_with(">") || declaration->parameters.empty() ||
@@ -454,10 +454,7 @@ Expected<BoundType> formPhysicalType(const BoundType &logical,
     const auto *descriptor = appliedTypeRepresentation(logical, representation);
     if (!descriptor)
       return error("binding-representation");
-    auto expected = parseBoundType(descriptor->childType, true);
-    if (!expected)
-      return expected.takeError();
-    if (children.size() != 1 || !(children[0] == *expected))
+    if (children.size() != 1 || !(children[0] == descriptor->childType))
       return error("binding-representation");
   } else if (logical.kind == "resource_unit") {
     if (representation != "logical.resource_unit/0")
@@ -527,7 +524,7 @@ Expected<BoundType> defaultRepresentation(const BoundType &logical) {
 Expected<BoundType> applyBoundType(StringRef constructor,
                                    ArrayRef<std::string> arguments) {
   const auto *declaration = typeDeclaration(constructor);
-  if (!declaration || !declaration->common)
+  if (!declaration)
     return error("binding-type");
   if (arguments.size() != declaration->parameters.size())
     return error("binding-type-identity");

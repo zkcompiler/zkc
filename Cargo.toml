@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "crates/zkc-catalog",
   "crates/zkc-runtime",
   "crates/zkc",
   "crates/zkc-cli",
@@ -78,6 +79,7 @@ p3-symmetric-043 = { package = "p3-symmetric", version = "=0.4.3" }
 p3-challenger-043 = { package = "p3-challenger", version = "=0.4.3" }
 
 zkc = { path = "crates/zkc" }
+zkc-catalog = { path = "crates/zkc-catalog" }
 zkc-runtime = { path = "crates/zkc-runtime" }
 zkc-cpu = { path = "crates/zkc-cpu" }
 zkc-kernels = { path = "crates/zkc-kernels" }

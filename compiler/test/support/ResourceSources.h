@@ -3,11 +3,14 @@
 // Directly authored scoped sources for compiler/root and runtime integration
 // tests. The builder supplies CFG mechanics; the tests supply all programs.
 #include "NativeCases.h"
+#include "VariantFixture.h"
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -37,23 +40,20 @@ public:
     context.loadAllAvailableDialects();
     builder.setInsertionPointToEnd(module->getBody());
     owner = protocol_ir::ProtocolModuleOp::create(
-        builder, location, protocol_ir::Profile::Protocol);
+        builder, location, protocol_ir::Profile::Protocol, mlir::ArrayAttr{});
     owner.getBody().emplaceBlock();
     scope = runtime::ScopeType::get(&context);
     index = builder.getIntegerType(64, false);
     boolean = builder.getI1Type();
-    rng = parseType("!runtime.capability<\"rng:bls12-381.fr\">", &context);
-    unit = parseType("!runtime.capability<\"resource_unit:Slot.A\">", &context);
+    rng = parseType("!runtime.capability<rng, \"bls12-381.fr\">", &context);
+    unit =
+        parseType("!runtime.capability<resource_unit, \"Slot.A\">", &context);
     transcript = parseType(
-        "!runtime.capability<\"transcript:merlin3.bls12-381.fr64be/0\">",
+        "!runtime.capability<transcript, \"merlin3.bls12-381.fr64be/0\">",
         &context);
     field = parseType("!algebra.field<\"bls12-381.fr\">", &context);
-    tag =
-        parseType("!data.variant<\"variant:"
-                  "5b227a6b632e76617269616e742f30222c5b2243686f696365222c226c65"
-                  "6674222c5b5d2c5b2231222c2232225d2c227269676874222c5b2234222c"
-                  "2232225d2c5b2233222c2235225d2c5b2230222c2236225d5d5d\">",
-                  &context);
+    tag = data::importVariantType(&context,
+                                  {"Choice", {{"left", {}}, {"right", {}}}});
   }
   NamedAttribute text(StringRef name, StringRef value) {
     return builder.getNamedAttr(name, builder.getStringAttr(value));
@@ -102,18 +102,28 @@ public:
                ArrayRef<StringRef> arguments) {
     OpBuilder::InsertionGuard restore(builder);
     builder.setInsertionPointToEnd(&owner.getBody().front());
-    runtime::BindingOp::create(builder, location, name, contract,
-                               builder.getStrArrayAttr(arguments), "",
-                               ArrayAttr{});
+    protocol::BindingApplication application{contract.str(), {}, {}};
+    for (StringRef argument : arguments)
+      application.arguments.push_back(argument.str());
+    auto native =
+        protocol::decodeBindingArguments(builder.getContext(), application);
+    assert(native && "resource fixture static arguments must be admitted");
+    runtime::BindingOp::create(builder, location, name, contract, *native, "");
   }
   Values invoke(exec::ScopedExecutionBuilder &control, StringRef name,
                 ValueRange inputs, TypeRange outputs, StringRef site,
                 ArrayRef<StringRef> parameters = {}) {
-    return control.invoke(
-        "exec.apply", outputs, control.scoped(inputs),
-        {symbol("binding", name), text("site", site),
-         builder.getNamedAttr("parameters",
-                              builder.getStrArrayAttr(parameters))});
+    auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+        control.getFunction(), FlatSymbolRefAttr::get(&context, name));
+    require(bool(binding), "fixture binding is missing");
+    SmallVector<std::string> expected;
+    for (auto parameter : parameters)
+      expected.push_back(parameter.str());
+    auto native = take(protocol::decodeInvocationParameters(
+        binding.getContract(), binding.getArgumentsAttr(), expected));
+    return control.invoke("exec.apply", outputs, control.scoped(inputs),
+                          {symbol("binding", name), text("site", site),
+                           builder.getNamedAttr("parameters", native)});
   }
   Values call(exec::ScopedExecutionBuilder &control, StringRef callee,
               ValueRange inputs, TypeRange outputs, StringRef site) {
@@ -327,8 +337,7 @@ inline void simple(Source &s, StringRef name, bool outside) {
     auto description =
         protocol::encodeVariant({"Box", {{"box", {"rng:bls12-381.fr"}}}});
     require(bool(description), "box descriptor refused");
-    auto type =
-        parseType("!data.variant<\"" + *description + "\">", &s.context);
+    auto type = zkc::test::variantType(&s.context, *description);
     auto box = control.invoke(
         "exec.variant", type, control.scoped(result),
         {s.text("alternative", "box"), s.text("site", "box")})[0];
@@ -635,7 +644,9 @@ inline void execution(Source &s, StringRef mode) {
   auto *child =
       s.protocol("child", {s.rng, s.transcript, s.boolean, s.index, s.index},
                  {s.rng, s.transcript});
-  auto one = s.operation("data.index", {}, s.index, {s.text("value", "1")})
+  auto one = s.operation("data.index", {}, s.index,
+                         {s.builder.getNamedAttr(
+                             "value", s.builder.getIntegerAttr(s.index, 1))})
                  ->getResult(0);
   auto result = s.repeat(
       one, child->getArguments().take_front(2),

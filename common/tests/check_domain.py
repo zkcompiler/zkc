@@ -162,7 +162,7 @@ def install_domain(args, run):
                     *[f"-D{key}={value}" for key, value in selected.items()], *testing,
                     f"-DZKC_CONTRIBUTION_FILES={contribution if name == 'domain' else ''}"],
                    cwd=ROOT / "compiler")
-            invoke(["cmake", "--build", build, "--target", "zkc-compile", "zkc-opt", "zkc-tblgen"])
+            invoke(["cmake", "--build", build, "--target", "zkc-tools"])
         # This structural check needs generated headers, not BUILD_TESTING or
         # the full compiler test graph. Exercise the actual extended ownership.
         invoke(["cmake", "-E", "env",

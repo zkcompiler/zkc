@@ -1,10 +1,11 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/VariantFixture.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Support/Refusal.h"
@@ -49,11 +50,14 @@ int main() {
   require(bool(file), "missing execution fixture");
   auto source = (*file)->getBuffer().str();
   auto read = [&](const std::string &source, bool expected,
-                  bool physical = false) {
+                  bool physical = false, bool formed = true,
+                  StringRef refusal = "execution-cfg") {
     diagnostic.clear();
-    auto module = parseSourceString<ModuleOp>(source, &context);
-    require(module && succeeded(verify(*module)),
-            "execution mutation must remain structurally valid: " + diagnostic);
+    auto module =
+        parseSourceString<ModuleOp>(source, ParserConfig(&context, false));
+    require(module && succeeded(verify(*module)) == formed,
+            "execution mutation crossed the wrong formation boundary: " +
+                diagnostic);
     auto result = protocol::readLocalExecution(*module, physical);
     if (expected && !result)
       throw std::runtime_error(llvm::toString(result.takeError()));
@@ -64,8 +68,8 @@ int main() {
           result.takeError(),
           [&](const Refusal &refusal) { code = refusal.code; },
           [&](const llvm::ErrorInfoBase &) {});
-      require(code == "execution-cfg",
-              "reader refusal lost its diagnostic identifier");
+      require(code == refusal,
+              "reader refusal differs: expected " + refusal + ", got " + code);
       return program::LocalDefinitions{};
     }
     return std::move(*result);
@@ -91,8 +95,75 @@ int main() {
                 function.body.back().get<program::Return>(),
             "lost native body or failure semantics");
   });
-  auto reject = [&](StringRef name, StringRef from, StringRef to) {
-    cases.run(name, [&] { read(change(source, from, to), false); });
+  cases.run(
+      "empty standard call dictionaries preserve reading and comparison", [&] {
+        auto expected = read(source, true);
+        auto module = parseSourceString<ModuleOp>(source, &context);
+        require(bool(module), "call annotation fixture refused");
+        Builder builder(&context);
+        module->walk([&](Operation *op) {
+          unsigned inputs, outputs;
+          if (auto function = dyn_cast<func::FuncOp>(op)) {
+            inputs = function.getNumArguments();
+            outputs = function.getFunctionType().getNumResults();
+          } else if (isa<func::CallOp, exec::ApplyOp>(op)) {
+            inputs = op->getNumOperands();
+            outputs = op->getNumResults();
+          } else
+            return;
+          op->setAttr("arg_attrs", builder.getArrayAttr(SmallVector<Attribute>(
+                                       inputs, builder.getDictionaryAttr({}))));
+          op->setAttr("res_attrs",
+                      builder.getArrayAttr(SmallVector<Attribute>(
+                          outputs, builder.getDictionaryAttr({}))));
+        });
+        require(succeeded(verify(*module)),
+                "empty call annotations did not form");
+        take(protocol::readLocalExecution(*module, false));
+        if (auto error =
+                protocol::verifyLocalExecution(*module, expected, false))
+          throw std::runtime_error(llvm::toString(std::move(error)));
+        func::CallOp ordinary;
+        module->walk([&](func::CallOp call) { ordinary = call; });
+        require(ordinary && ordinary.getNumOperands() &&
+                    ordinary.getNumResults(),
+                "missing ordinary call annotation control");
+        for (StringRef name : {"arg_attrs", "res_attrs"}) {
+          auto saved = ordinary->getAttr(name);
+          ordinary->setAttr(name, builder.getArrayAttr({}));
+          // Standard Func checks dictionary types but leaves their arity to
+          // consumers. Native admission must not discard malformed metadata.
+          require(succeeded(verify(*module)),
+                  "ordinary call control did not form");
+          refuses(protocol::readLocalExecution(*module, false),
+                  "execution-cfg");
+          auto error = protocol::verifyLocalExecution(*module, expected, false);
+          require(bool(error) &&
+                      namesIdentifier(llvm::toString(std::move(error)),
+                                      "execution-correspondence"),
+                  "comparison discarded wrong-sized ordinary call metadata");
+          ordinary->setAttr(name, saved);
+        }
+        exec::ApplyOp application;
+        module->walk([&](exec::ApplyOp op) { application = op; });
+        auto dictionaries =
+            llvm::to_vector(application.getArgAttrsAttr().getValue());
+        dictionaries.back() = builder.getDictionaryAttr(
+            {builder.getNamedAttr("test.semantic", builder.getUnitAttr())});
+        application.setArgAttrsAttr(builder.getArrayAttr(dictionaries));
+        require(succeeded(verify(*module)), "nonempty dictionaries must form");
+        refuses(protocol::readLocalExecution(*module, false), "execution-cfg");
+        auto error = protocol::verifyLocalExecution(*module, expected, false);
+        require(bool(error) && namesIdentifier(llvm::toString(std::move(error)),
+                                               "execution-correspondence"),
+                "comparison silently discarded a call annotation");
+        application.setArgAttrsAttr(builder.getArrayAttr({}));
+        require(failed(verify(*module)), "wrong call dictionary arity formed");
+      });
+  auto reject = [&](StringRef name, StringRef from, StringRef to,
+                    bool formed = true) {
+    cases.run(name,
+              [&] { read(change(source, from, to), false, false, formed); });
   };
   reject("callee body cannot replace metered completion with packaging",
          "\"exec.complete\"(%scope, %sum) : (!S, !F)",
@@ -112,11 +183,12 @@ int main() {
   reject("parent binding cannot select another scope",
          "\"runtime.accept_transfer\"(%scope, %held_yes)",
          "\"runtime.accept_transfer\"(%child_yes, %held_yes)");
-  reject("binding symbol must resolve", "binding=@add", "binding=@absent");
+  reject("binding symbol must resolve", "binding=@add", "binding=@absent",
+         false);
   reject("binding arguments determine actual ports",
-         "arguments=[\"koala-bear\"]", "arguments=[\"bls12-381.fr\"]");
+         "arguments=[\"koala-bear\"]", "arguments=[\"bls12-381.fr\"]", false);
   reject("reached parameter formation remains checked", "parameters=[]",
-         "parameters=[\"unexpected\"]");
+         "parameters=[\"unexpected\"]", false);
   reject("unknown invocation attributes cannot bypass checking", "binding=@add",
          "binding=@add, unchecked=true");
   reject("unconsumed region definitions are refused", "module {",
@@ -257,8 +329,9 @@ int main() {
       {"ExecutionChoice",
        {{"left", {"field:koala-bear"}}, {"right", {"field:koala-bear"}}}});
   require(bool(variant), "variant fixture descriptor refused");
-  auto matching = change(source, "module {",
-                         "!V = !data.variant<\"" + *variant + "\">\nmodule {");
+  auto matching =
+      change(source, "module {",
+             "!V = " + zkc::test::variantAssembly(*variant) + "\nmodule {");
   begin = matching.find("    %tested = \"exec.test\"");
   end = matching.find("  ^yes:", begin);
   require(begin != std::string::npos && end != std::string::npos,
@@ -314,11 +387,10 @@ int main() {
     read(change(matching, "selection=\"left\"", "selection=\"right\""), false);
   });
   cases.run("physical ports retain the installed representation", [&] {
-    auto physical =
-        change(source, "!F = !algebra.field<\"koala-bear\">",
-               "!F = !runtime.represented<!algebra.field<\"koala-bear\">, "
-               "\"plonky3.koala-bear/0\">\n"
-               "!P = !runtime.represented<i1, \"native.bool/0\">");
+    auto physical = replaceAll(source, "!algebra.field<\"koala-bear\">",
+                               "!runtime.represented<!algebra.field<\"koala-"
+                               "bear\">, \"plonky3.koala-bear/0\">");
+    physical = "!P = !runtime.represented<i1, \"native.bool/0\">\n" + physical;
     physical = change(physical, "%condition: i1", "%condition: !P");
     physical = change(physical, ": (!S, i1) -> !D", ": (!S, !P) -> !D");
     physical = change(physical, "implementation=\"\"",
@@ -329,7 +401,7 @@ int main() {
     require(model.functions.front().arguments[1].type ==
                 "field:koala-bear@plonky3.koala-bear/0",
             "represented port was erased");
-    read(physical, false, false);
+    read(physical, false, false, true, "binding-stage");
   });
   auto shape = [&](StringRef name, StringRef operation) {
     cases.run(name, [&] {

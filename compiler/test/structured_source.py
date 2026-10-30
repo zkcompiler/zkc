@@ -10,10 +10,10 @@ from tools import records
 
 commands = Commands(records())
 fixtures = Path(__file__).parent / 'fixtures'
-field = ['field', 'bls12-381.fr']
-vector = ['vector', 'bls12-381.fr']
-boolean = ['bool']
-index = ['index']
+field = ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]
+vector = ['apply', 'vector', [['domain', 'Field', 'bls12-381.fr']]]
+boolean = ['apply', 'bool', []]
+index = ['apply', 'index', []]
 total = (fixtures / 'finite/total-state.mlir').read_text()
 unit = (fixtures / 'finite/unit-state.mlir').read_text()
 loops = (fixtures / 'structured-source/loops-and-captures.mlir').read_text()
@@ -290,17 +290,17 @@ with case('condition-native-type-check-precedes-export-profile'):
     export(source, 'structured-source-original', 'entry')
 
 with case('unused-unsupported-provider-declaration'):
-    binding = '"runtime.binding"() {sym_name="product",contract="vector.product",arguments=["bls12-381.fr"],implementation=""} : ()->()'
+    binding = '"runtime.binding"() {sym_name="product",contract="vector.product",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()'
     export(simple(binding), 'structured-source-binding')
 
 with case('unsupported-collect'):
     export((fixtures / 'finite/total-collect.mlir').read_text(), 'structured-source-operation')
 
 with case('unsupported-affine-helper-signature'):
-    helper = '''func.func private @resource(%scope:!runtime.scope,%s:!runtime.capability<"rng:bls12-381.fr">)
-        ->!exec.outcome<(!runtime.capability<"rng:bls12-381.fr">)> attributes {no_inline,runtime.origin=["resource",[]]} {
-      %r = "exec.returned"(%s) : (!runtime.capability<"rng:bls12-381.fr">)->!exec.outcome<(!runtime.capability<"rng:bls12-381.fr">)>
-      func.return %r : !exec.outcome<(!runtime.capability<"rng:bls12-381.fr">)>
+    helper = '''func.func private @resource(%scope:!runtime.scope,%s:!runtime.capability<rng, "bls12-381.fr">)
+        ->!exec.outcome<(!runtime.capability<rng, "bls12-381.fr">)> attributes {no_inline,runtime.origin=["resource",[]]} {
+      %r = "exec.returned"(%s) : (!runtime.capability<rng, "bls12-381.fr">)->!exec.outcome<(!runtime.capability<rng, "bls12-381.fr">)>
+      func.return %r : !exec.outcome<(!runtime.capability<rng, "bls12-381.fr">)>
     }'''
     export(simple(helper), 'structured-source-type')
 
@@ -341,7 +341,7 @@ with case('field-embedding-retains-nominal-binding-and-ports'):
     base, extension = 'koala-bear', 'koala-bear.ext4-binomial3'
     base_type, extension_type = f'!algebra.field<"{base}">', f'!algebra.field<"{extension}">'
     declarations = f'''
-"runtime.binding"() {{sym_name="embed",contract="field.embed",arguments=["{extension}"],implementation=""}} : ()->()
+"runtime.binding"() {{sym_name="embed",contract="field.embed",arguments=["{extension}"],implementation="",function_type=(!runtime.scope,{base_type})->!exec.outcome<({extension_type})>}} : ()->()
 func.func private @embed_helper(%scope:!runtime.scope,%x:{base_type}) -> !exec.outcome<({extension_type})>
     attributes {{no_inline,runtime.origin=["embed_helper",[]]}} {{
   %r = "exec.apply"(%scope,%x) {{binding=@embed,parameters=[],site="embedding"}} : (!runtime.scope,{base_type})->!exec.outcome<({extension_type})>
@@ -355,10 +355,14 @@ func.func private @embed_helper(%scope:!runtime.scope,%x:{base_type}) -> !exec.o
 }}
 '''
     data = export(simple(declarations))
-    assert data[6] == [['binding', 'embed', 'field.embed', [extension], '']]
-    assert table(data)['embed_helper'][4:6] == [[['field', base]], [['field', extension]]]
+    base_sort = ['apply', 'field', [['domain', 'Field', base]]]
+    extension_sort = ['apply', 'field', [['domain', 'Field', extension]]]
+    assert data[6] == [['binding', 'embed', 'field.embed',
+                       [['domain', 'Field', extension]], '',
+                       [base_sort], [extension_sort]]]
+    assert table(data)['embed_helper'][4:6] == [[base_sort], [extension_sort]]
     assert instructions(table(data)['embed_helper']) == [
-        [['exec', 'exec.apply', 'embed', []], [0], [['field', extension]], [], 'embedding']]
+        [['exec', 'exec.apply', 'embed', []], [0], [extension_sort], [], 'embedding']]
 
 with case('unsupported-service-contract'):
     source = simple().replace('^entry(%flag:i1)', '^entry(%flag:i1,%service:!protocol.service_ref<"random.other/0">)').replace(
@@ -434,11 +438,25 @@ with case('exact-file-byte-limit-includes-final-newline'):
     args = ','.join(f'%a{i}:i1' for i in range(512))
     results = ','.join(['i1'] * 512)
     values = ','.join(f'%a{i}' for i in range(512))
-    names = [f'h{i}' for i in range(93)]
+    names = ['h0']
     def sized_source():
         return simple('\n'.join(f'func.func private @{name}({args}) -> ({results}) '
                                 f'{{ return {values} : {results} }}' for name in names))
     base = commands.source('protocol-structured', sized_source(), '--symbol=main')
+    # Compute the size from one actual row, then choose a maximal whole-row
+    # count. Each extra helper changes only its name and the fixed-size hash.
+    row = json.loads(base)[7][0]
+    row_bytes = len(json.dumps(row, separators=(',', ':')).encode())
+    estimated = len(base.encode())
+    while True:
+        name = f'h{len(names)}'
+        added = row_bytes + len(name) - len(names[0]) + 1
+        if estimated + added > 1024 * 1024:
+            break
+        names.append(name)
+        estimated += added
+    base = commands.source('protocol-structured', sized_source(), '--symbol=main')
+    assert len(base.encode()) == estimated
     padding = 1024 * 1024 - len(base.encode())
     assert 0 <= padding <= sum(512 - len(name) for name in names)
     for i, name in enumerate(names):

@@ -10,7 +10,12 @@ there is no second serialized format.
 The Program retains its trusted immutable `Contracts`, including execution policy.
 `ContractsBuilder` extends the existing operation inventory with exact trusted
 physical realizations, mathematical layouts and bounded aggregate families. Logical erasure and
-attributes are checked against the independent mathematical owner. Catalog-scoped
+attributes are checked by the runtime against the shared typed declaration catalog.
+The catalog supplies scoped signatures, requirements, parameter schemas, history
+facets and type permissions. Runtime domain facts and its closed interpretation
+profile remain explicit; declaration membership never installs an implementation.
+Physical adapters have separate erasures and cannot enter as logical operations.
+Catalog-scoped
 extension IDs cannot be substituted across independently built contexts.
 `Contracts::standard(policy)` explicitly supplies the fixed Native inventory;
 `Contracts::with_policy` preserves identity without altering admitted programs.

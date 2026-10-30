@@ -324,24 +324,29 @@ establish a source relationship and is refused on adjacent executable edges.
 | Check | Establishes |
 |---|---|
 | Local operation formation | Attributes, SSA types, signatures, binding applicability and region interfaces |
-| Whole `protocol.module` | Profile rules, declaration closure, role availability, resources and control obligations |
+| Explicit stage admission (`admitStage`) | Profile rules, declaration closure, role availability, resources and control obligations |
 | Relation assets/declarations | Canonical R1CS/AIR structure, exact identities, typed purposes and conflicts |
 | Projection and later profiles | Required metadata, participant structure, executable readiness and physical bindings |
 | Checked export | Complete verified physical IR and an admitted `zkc.program/0` model |
 | Source-relative preservation | An explicit comparison against the retained input at the selected transformation boundary |
 
 Standalone operation validity does not imply a valid complete program. External
-clients call `mlir::verify` or checked export; private region-verifier hooks rely
-on nested operation checking. Mutable IR must be checked again after an edit.
+clients call the public [`admitStage` service](../../compiler/include/zkc/Dialect/Admission.h)
+or checked export. `mlir::verify` supplies structural formation, including local
+and symbol-use checks; it does not establish whole-stage admission. Private
+semantic helpers rely on that structural preflight. Mutable IR must be admitted
+again after an edit.
 
 ## Translation and executable reading
 
 [Protocol translation](../../compiler/include/zkc/Translation/Protocol.h)
-exports verified physical IR. The core
-[execution reader](../../compiler/include/zkc/Dialect/Protocol/Execution.h)
-reconstructs executable content without depending on Translation. Its internal
-use by a root verifier does not recursively invoke export. Reading an executable
-model alone does not establish mathematical or projection invariants.
+exports admitted physical IR. The
+[native execution readers](../../compiler/include/zkc/Dialect/Exec/Execution.h)
+inspect actual SSA and control. The separate
+[execution model adapter](../../compiler/include/zkc/Dialect/Protocol/Execution.h)
+reconstructs the independent boundary model without depending on Translation.
+Stage admission does not construct this neutral model. Reading the model alone
+does not establish mathematical or projection invariants.
 
 Mathematical profiles retain native SSA until realization. The serialized
 `zkc.program/0` boundary is physical-only. Relation adapters use

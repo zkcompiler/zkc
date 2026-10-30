@@ -7,6 +7,8 @@ def AlgebraDialect : ZKCDialect {
   let name = "algebra";
   let cppNamespace = "::zkc::algebra";
   let useDefaultTypePrinterParser = 1;
+  let useDefaultAttributePrinterParser = 1;
+  let hasConstantMaterializer = 1;
 }
 
 #endif

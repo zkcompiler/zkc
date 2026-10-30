@@ -1,6 +1,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "zkc/Dialect/Commitment/IR/CommitmentOps.h"
+#include "zkc/Dialect/TypeAdapters.h"
 #include "llvm/ADT/TypeSwitch.h"
 using namespace mlir;
 #include "zkc/Dialect/Commitment/IR/commitmentDialect.cpp.inc"
@@ -17,4 +18,5 @@ void zkc::commitment::CommitmentDialect::initialize() {
 #define GET_OP_LIST
 #include "zkc/Dialect/Commitment/IR/commitmentOps.cpp.inc"
       >();
+  zkc::protocol::type_adapters::attachCatalogTypeModels(*this);
 }

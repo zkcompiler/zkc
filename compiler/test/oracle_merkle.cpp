@@ -190,7 +190,10 @@ int main(int argc, char **argv) {
                   swap(0, 1);
                 if (mutation == 4 && op.getSite() == "width")
                   op.setParametersAttr(ArrayAttr::get(
-                      &context, {StringAttr::get(&context, "3")}));
+                      &context,
+                      {IntegerAttr::get(
+                          IntegerType::get(&context, 64, IntegerType::Unsigned),
+                          3)}));
                 if (mutation == 5 && op.getSite() == "even_span") {
                   auto binding =
                       SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(

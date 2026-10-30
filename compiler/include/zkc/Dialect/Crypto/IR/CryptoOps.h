@@ -9,7 +9,6 @@
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
-#include "zkc/Dialect/BoundOperations.h"
 #include "zkc/Dialect/Crypto/IR/CryptoDialect.h"
 #include "zkc/Dialect/Crypto/IR/CryptoTypes.h"
 #include "zkc/Interfaces/LinearContraction.h"

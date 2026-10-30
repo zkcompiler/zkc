@@ -108,6 +108,18 @@ ComputationSelection selectComputation(finite::Computation computation,
   }
   return selectComputation(std::move(*selection.view), policy, work, recipes);
 }
+ComputationSelection selectComputation(finite::Computation computation,
+                                       MathematicalSelectionPolicy policy,
+                                       finite::ComputationWork &work,
+                                       MathematicalFactAnalysis &facts,
+                                       const MathematicalRecipes &recipes) {
+  ComputationSelection selection;
+  selection.view = finite::analyzeComputation(computation, work, facts,
+                                              &selection.diagnostic);
+  if (!selection.view)
+    return selection;
+  return selectComputation(std::move(*selection.view), policy, work, recipes);
+}
 ComputationSelection selectComputation(finite::ComputationView view,
                                        MathematicalSelectionPolicy policy,
                                        finite::ComputationWork &work,

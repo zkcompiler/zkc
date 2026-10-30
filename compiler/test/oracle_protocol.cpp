@@ -4,6 +4,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Transforms/Passes.h"
@@ -68,11 +69,13 @@ int main() {
   Cases cases;
   auto accepted = [&](llvm::StringRef text) {
     auto module = parse(text, context);
-    require(succeeded(verify(*module)), "valid oracle protocol refused");
+    require(succeeded(zkc::admitStage(*module)),
+            "valid oracle protocol refused");
   };
   auto refused = [&](llvm::StringRef text) {
     auto module = parse(text, context);
-    require(failed(verify(*module)), "invalid oracle protocol admitted");
+    require(failed(zkc::admitStage(*module)),
+            "invalid oracle protocol admitted");
   };
   cases.run("sized sends and queries have checked role availability", [&] {
     accepted(source(send));
@@ -105,7 +108,7 @@ int main() {
                                     IntegerAttr::get(
                                         IntegerType::get(&context, 64), 32))}));
     });
-    require(failed(verify(*malformed)),
+    require(failed(zkc::admitStage(*malformed)),
             "signedness of row maximum was ignored");
     refused(replace(source(send), "shape_bounds={}",
                     "shape_bounds={rows=32 : ui64}"));
@@ -131,12 +134,14 @@ int main() {
     module->walk([&](OracleQueryOp query) {
       query.getAnswer().setType(IntegerType::get(&context, 1));
     });
-    require(failed(verify(*module)), "query with a wrong answer type admitted");
+    require(failed(zkc::admitStage(*module)),
+            "query with a wrong answer type admitted");
     module = parse(source(send), context);
     module->walk([&](OracleSendOp oracle) {
       oracle.getDataMutable().set(oracle.getShape().front());
     });
-    require(failed(verify(*module)), "send with a wrong data type admitted");
+    require(failed(zkc::admitStage(*module)),
+            "send with a wrong data type admitted");
   });
   cases.run("forgetting size preserves availability and kind", [&] {
     auto body = std::string(send) + R"mlir(
@@ -148,7 +153,7 @@ int main() {
     malformed->walk([&](OracleForgetShapeOp forget) {
       forget.getOutput().setType(forget.getInput().getType());
     });
-    require(failed(verify(*malformed)),
+    require(failed(zkc::admitStage(*malformed)),
             "forgetting rows preserved the exact size");
     auto restricted = replace(body, " %again =", R"mlir(
  %private = "protocol.restrict_roles"(%u) {roles=["P"]} : (!U) -> !U
@@ -193,7 +198,7 @@ int main() {
  %repeated = "protocol.oracle_query"(%h, %position) {owner="V", site="repeated"} : (!H,ui64) -> !F
 )mlir";
               auto module = parse(source(body), context);
-              require(succeeded(verify(*module)), "CSE input refused");
+              require(succeeded(zkc::admitStage(*module)), "CSE input refused");
               PassManager passes(&context);
               passes.addPass(createCSEPass());
               require(succeeded(passes.run(*module)), "CSE pass failed");
@@ -233,11 +238,12 @@ int main() {
         block.getArguments(), FlatSymbolRefAttr::get(&context, "example"),
         builder.getStrArrayAttr({"V", "P"}), builder.getStringAttr("invoke"));
     MathematicalReturnOp::create(builder, caller.getLoc(), apply.getOutputs());
-    require(succeeded(verify(*module)), "oracle application did not admit");
+    require(succeeded(zkc::admitStage(*module)),
+            "oracle application did not admit");
     OwningOpRef<ModuleOp> original(cast<ModuleOp>(module->clone()));
     require(succeeded(zkc::mathematical::expandApplications(unit)),
             "oracle application did not expand");
-    require(succeeded(verify(*module)),
+    require(succeeded(zkc::admitStage(*module)),
             "oracle role substitution lost formation");
     unsigned sends = 0, queries = 0;
     caller.walk([&](OracleSendOp event) {
@@ -305,7 +311,7 @@ int main() {
         malformed->walk([&](OracleContentsOp contents) {
           contents.getData().setType(IntegerType::get(&context, 1));
         });
-        require(failed(verify(*malformed)),
+        require(failed(zkc::admitStage(*malformed)),
                 "contents with the wrong data type admitted");
       });
   cases.run(
@@ -331,7 +337,7 @@ int main() {
           append.getOutput().setType(OracleSequenceType::get(
               &context, append.getPrefix().getType().getKind(), 5));
         });
-        require(failed(verify(*malformed)),
+        require(failed(zkc::admitStage(*malformed)),
                 "append changed the sequence bound");
         malformed = parse(source(body), context);
         malformed->walk([&](OracleSequenceAtOp at) {
@@ -341,13 +347,13 @@ int main() {
               ArrayAttr::get(&context, {kind.getArguments()[0]}));
           at.getHandle().setType(OracleHandleType::get(&context, unsized));
         });
-        require(failed(verify(*malformed)),
+        require(failed(zkc::admitStage(*malformed)),
                 "selection changed the handle kind");
         // Zero capacity is meaningful. Append/selection remain stopping
         // operations even when their results are unused; CSE cannot erase these
         // checks.
         auto zero = parse(replace(source(body), "<#K, 4>", "<#K, 0>"), context);
-        require(succeeded(verify(*zero)),
+        require(succeeded(zkc::admitStage(*zero)),
                 "zero-capacity sequence lost formation");
         auto prepared = zkc::mathematical::prepareProtocol(*zero);
         require(bool(prepared), "sequence preparation failed");
@@ -397,7 +403,8 @@ int main() {
       if (event.getSite() == "later")
         event->removeAttr("sender");
     });
-    require(failed(verify(*malformed)), "malformed backedge producer admitted");
+    require(failed(zkc::admitStage(*malformed)),
+            "malformed backedge producer admitted");
   });
   cases.run(
       "preparation compares actual dynamic anchors and sequence positions",
@@ -420,7 +427,7 @@ int main() {
         candidate->walk([&](OracleSequenceAppendOp append) {
           append.getElementMutable().set(other);
         });
-        require(succeeded(verify(*candidate)),
+        require(succeeded(zkc::admitStage(*candidate)),
                 "anchor mutation lost formation");
         require(
             failed(zkc::mathematical::verifyProtocolPreparationPreserved(
@@ -433,7 +440,7 @@ int main() {
                                           .front()
                                           .getArgument(3));
         });
-        require(succeeded(verify(*candidate)),
+        require(succeeded(zkc::admitStage(*candidate)),
                 "position mutation lost formation");
         require(
             failed(zkc::mathematical::verifyProtocolPreparationPreserved(

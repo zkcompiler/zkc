@@ -6,6 +6,8 @@
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
+#include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/IR.h"
@@ -127,7 +129,8 @@ int main() {
                                         {((callPolicy - 1) & 2) != 0,
                                          ((callPolicy - 1) & 1) != 0,
                                          ((callPolicy - 1) & 4) != 0}));
-          require(succeeded(verify(*module)), "numerical policy not admitted");
+          require(succeeded(zkc::admitStage(*module)),
+                  "numerical policy not admitted");
           auto before = printed(*module);
           auto view = finite::analyzeComputation(c);
           require(view && view->numericalBody &&
@@ -167,7 +170,8 @@ int main() {
     require(bool(module), "numerical callback did not parse");
     auto c = computation(*module);
     c.helper->getRegion(0).front().front().removeAttr("policy");
-    require(succeeded(verify(*module)), "selection control not admitted");
+    require(succeeded(zkc::admitStage(*module)),
+            "selection control not admitted");
     auto before = printed(*module);
     auto view = finite::analyzeComputation(c);
     require(bool(view), "structural view missing");
@@ -240,7 +244,8 @@ int main() {
         auto *other = &otherWork.front().front();
         other->setAttr("step",
                        FlatSymbolRefAttr::get(otherHelper.getSymNameAttr()));
-        require(succeeded(verify(*module)), "second callback not admitted");
+        require(succeeded(zkc::admitStage(*module)),
+                "second callback not admitted");
         first = readComputation(*module, first.operation);
         auto second = readComputation(*module, other);
         auto before = printed(*module);
@@ -270,7 +275,7 @@ int main() {
       });
   cases.run("reused view retains malformed call policy restrictions", [&] {
     auto module = numericalAdditionFixture(context, "sum");
-    require(bool(module) && succeeded(verify(*module)),
+    require(bool(module) && succeeded(zkc::admitStage(*module)),
             "numerical callback not admitted");
     auto c = computation(*module);
     auto *call = &c.helper->getRegion(0).front().front();
@@ -326,7 +331,7 @@ int main() {
                     StringAttr::get(&context, "arkworks/field.mul"));
             });
           }
-          require(succeeded(verify(*module)),
+          require(succeeded(zkc::admitStage(*module)),
                   "nested policy/pin control not admitted");
           auto before = printed(*module);
           auto owner = computation(*module);
@@ -423,7 +428,7 @@ int main() {
       Value left = combine->getOperand(1), right = combine->getOperand(2);
       combine->setOperand(1, right);
       combine->setOperand(2, left);
-      require(succeeded(verify(*module)), "commuted source refused");
+      require(succeeded(zkc::admitStage(*module)), "commuted source refused");
       c = computation(*module);
       view = finite::analyzeComputation(c);
       require(bool(view), "changed computation view missing");
@@ -450,7 +455,8 @@ int main() {
       // scalar comparison may justify its removal under sufficient capacity.
       duplicateInvocation(combine, cast<func::FuncOp>(c.helper),
                           "unused_combine");
-      require(succeeded(verify(*module)), "unused source operation refused");
+      require(succeeded(zkc::admitStage(*module)),
+              "unused source operation refused");
       c = computation(*module);
       view = finite::analyzeComputation(c);
       require(view && mathematical::matchComputation(*view).reduction &&
@@ -504,7 +510,7 @@ int main() {
             "collect formula missing");
     auto helper = cast<func::FuncOp>(c.helper);
     duplicateInvocation(&helper.front().front(), helper, "unused_lane");
-    require(succeeded(verify(*module)), "unused lane source refused");
+    require(succeeded(zkc::admitStage(*module)), "unused lane source refused");
     c = computation(*module);
     view = finite::analyzeComputation(c);
     require(view && mathematical::matchComputation(*view).elementwise &&
@@ -549,10 +555,9 @@ int main() {
         OpBuilder builder(helper);
         runtime::BindingOp::create(builder, helper.getLoc(), "index_constant",
                                    "index.constant", builder.getArrayAttr({}),
-                                   "", ArrayAttr{});
+                                   "");
         runtime::BindingOp::create(builder, helper.getLoc(), "index_add",
-                                   "index.add", builder.getArrayAttr({}), "",
-                                   ArrayAttr{});
+                                   "index.add", builder.getArrayAttr({}), "");
         Type index = IntegerType::get(&context, 64, IntegerType::Unsigned);
         auto *maximum = appendApply(helper, "index_constant", {}, index,
                                     "maximum", {"18446744073709551615"});
@@ -561,7 +566,8 @@ int main() {
         appendApply(helper, "index_add",
                     {payload(maximum).front(), payload(one).front()}, index,
                     "unused_overflow");
-        require(succeeded(verify(*source)), "unused checked source refused");
+        require(succeeded(zkc::admitStage(*source)),
+                "unused checked source refused");
         c = computation(*source);
         auto view = finite::analyzeComputation(c);
         require(view && view->payload.size() == 4 &&
@@ -601,7 +607,8 @@ int main() {
     add->setOperand(1, first);
     omit(multiply, first);
     omit(reads[1], first);
-    require(succeeded(verify(*module)), "indexed unary source refused");
+    require(succeeded(zkc::admitStage(*module)),
+            "indexed unary source refused");
     c = computation(*module);
     view = finite::analyzeComputation(c);
     require(bool(view), "changed indexed computation view missing");
@@ -610,7 +617,8 @@ int main() {
                 !plan->termIdentity,
             "indexed sum missing");
     add.setBindingAttr(FlatSymbolRefAttr::get(&context, "mul"));
-    require(succeeded(verify(*module)), "indexed product source refused");
+    require(succeeded(zkc::admitStage(*module)),
+            "indexed product source refused");
     c = computation(*module);
     view = finite::analyzeComputation(c);
     require(bool(view), "changed indexed computation view missing");
@@ -637,8 +645,7 @@ int main() {
     auto *tail = rewriter.splitBlock(before, lookup->getIterator());
     OpBuilder builder(helper);
     runtime::BindingOp::create(builder, helper.getLoc(), "fixed_index",
-                               "index.constant", builder.getArrayAttr({}), "",
-                               ArrayAttr{});
+                               "index.constant", builder.getArrayAttr({}), "");
     builder.setInsertionPointToEnd(before);
     exec::ScopedExecutionBuilder control(builder, helper);
     auto index = control.invoke(
@@ -646,7 +653,9 @@ int main() {
         control.getScope(),
         {builder.getNamedAttr("binding",
                               FlatSymbolRefAttr::get(&context, "fixed_index")),
-         builder.getNamedAttr("parameters", builder.getStrArrayAttr({"0"})),
+         builder.getNamedAttr("parameters",
+                              builder.getArrayAttr({builder.getIntegerAttr(
+                                  builder.getIntegerType(64, false), 0)})),
          builder.getNamedAttr("site", builder.getStringAttr("fixed"))},
         failed);
     rewriter.mergeBlocks(tail, builder.getInsertionBlock());
@@ -673,8 +682,10 @@ int main() {
     auto &body = inner.helper->getRegion(0).front();
     OpBuilder builder(&body.back());
     auto field = body.back().getOperand(0).getType();
-    auto zero = algebra::ConstantFieldOp::create(builder, body.back().getLoc(),
-                                                 field, "0");
+    auto zero = algebra::ConstantFieldOp::create(
+        builder, body.back().getLoc(), field,
+        cantFail(algebra::makeFieldLiteral(cast<algebra::FieldType>(field),
+                                           llvm::APInt(1, 0))));
     auto neutral = algebra::FieldAddOp::create(
         builder, body.back().getLoc(), field, body.back().getOperand(0), zero);
     body.back().setOperand(0, neutral);
@@ -797,7 +808,7 @@ int main() {
     SmallVector<Attribute> shared(premises.begin(), premises.end());
     shared.push_back(data::EqualExtentAttr::get(&context, 2, 0, 3, 0));
     c.helper->setAttr("data.preconditions", ArrayAttr::get(&context, shared));
-    require(succeeded(mlir::verify(*module)),
+    require(succeeded(zkc::admitStage(*module)),
             "shared helper premise is not admitted");
     view = finite::analyzeComputation(c);
     require(
@@ -814,7 +825,7 @@ int main() {
       "nested contraction composes exact free and reduced environments", [&] {
         auto module =
             parseSourceString<ModuleOp>(fixture("nested-matrix"), &context);
-        require(bool(module) && succeeded(verify(*module)),
+        require(bool(module) && succeeded(zkc::admitStage(*module)),
                 "nested fixture refused");
         auto c = computation(*module);
         auto view = finite::analyzeComputation(c);
@@ -859,7 +870,8 @@ int main() {
         // identity merely because both matrices have the same nominal type.
         auto *nested = view->sourceOperation(view->nested[0].occurrence);
         nested->setOperand(1, cast<func::FuncOp>(c.helper).getArgument(5));
-        require(succeeded(verify(*module)), "unrelated matrix source refused");
+        require(succeeded(zkc::admitStage(*module)),
+                "unrelated matrix source refused");
         c = computation(*module);
         view = finite::analyzeComputation(c);
         require(view && !mathematical::matchNestedContraction(*view),
@@ -891,7 +903,8 @@ int main() {
               neutralResult(cast<func::FuncOp>(helper), form % 2 == 0,
                             form >= 3);
             }
-            require(succeeded(verify(*source)), "neutral source not admitted");
+            require(succeeded(zkc::admitStage(*source)),
+                    "neutral source not admitted");
             c = computation(*source);
             view = finite::analyzeComputation(c);
             auto match = mathematical::matchNestedContraction(*view);
@@ -929,7 +942,7 @@ int main() {
                 changed->setOperand(index, alternate);
               } else
                 omit(changed);
-              require(succeeded(verify(*drift)),
+              require(succeeded(zkc::admitStage(*drift)),
                       "drift control is not admitted");
               ScopedDiagnosticHandler quiet(
                   &context, [](Diagnostic &) { return success(); });
@@ -957,7 +970,8 @@ int main() {
           } else {
             duplicateInvocation(neutral, step, "dead_neutral");
           }
-          require(succeeded(verify(*source)), "fallback control not admitted");
+          require(succeeded(zkc::admitStage(*source)),
+                  "fallback control not admitted");
           owner = computation(*source);
           view = finite::analyzeComputation(owner);
           auto selection = mathematical::selectNestedContraction(*view);
@@ -972,7 +986,7 @@ int main() {
   for (auto name : {"sum", "bilinear", "nested-matrix"})
     cases.run(std::string(name) + " cumulative optional selection work", [&] {
       auto source = parseSourceString<ModuleOp>(fixture(name), &context);
-      require(bool(source) && succeeded(verify(*source)),
+      require(bool(source) && succeeded(zkc::admitStage(*source)),
               "budget source not admitted");
       auto c = computation(*source);
       bool nested = StringRef(name) == "nested-matrix";
@@ -1023,7 +1037,7 @@ int main() {
     SmallVector<Attribute> shared(premises.begin(), premises.end());
     shared.push_back(data::EqualExtentAttr::get(&context, 2, 0, 3, 0));
     c.helper->setAttr("data.preconditions", ArrayAttr::get(&context, shared));
-    require(succeeded(verify(*source)), "extent control not admitted");
+    require(succeeded(zkc::admitStage(*source)), "extent control not admitted");
     finite::ComputationWork measured;
     measured.evidence = 1000;
     auto view = finite::analyzeComputation(c, measured);
@@ -1065,7 +1079,7 @@ int main() {
                                  result.getType(), "bias");
         end->setOperand(0, payload(bias).front());
         c = computation(*module);
-        require(succeeded(verify(*module)),
+        require(succeeded(zkc::admitStage(*module)),
                 "pointwise composition not admitted");
         auto view = finite::analyzeComputation(c);
         require(

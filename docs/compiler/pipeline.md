@@ -100,9 +100,11 @@ and prepares actual inputs before execution.
 | Driver | Request parsing and publication |
 
 The [architecture map](../architecture.md#implementation-owners) locates these
-components. Mutable IR must be reverified after changes; affected analyses and
-source-relative comparisons must be recomputed. A copied origin identifies an
-occurrence without proving its operands or effects.
+components. After mutation, IR must pass structural verification and the explicit
+`admitStage` service for its profile. Structural verification alone does not admit
+an execution stage. Affected analyses and source-relative comparisons must be
+recomputed. A copied origin identifies an occurrence without proving its operands
+or effects.
 
 ## Pass policy and ownership
 

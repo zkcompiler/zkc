@@ -5,6 +5,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Observation.h"
 #include "zkc/Compiler/Run.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -126,14 +127,15 @@ int main(int argc, char **argv) {
     if (mutations && fixture == "common-input") {
       auto record = take(serializeOracleRealization(*prepared, candidate));
       auto changed = [&](StringRef name,
-                         llvm::function_ref<void(json::Object &)> change) {
+                         llvm::function_ref<void(json::Object &)> change,
+                         StringRef refusal = "oracle-realization-record") {
         cases.run("record refuses " + name, [&] {
           auto parsed = take(json::parse(record));
           change(*parsed.getAsObject());
           std::string text;
           raw_string_ostream(text) << parsed;
           refused(checkOracleRealization(*prepared, *candidate.module, text),
-                  "oracle-realization-record");
+                  refusal);
         });
       };
       changed("missing contract", [&](auto &value) {
@@ -184,8 +186,38 @@ int main(int argc, char **argv) {
         types.push_back(types.front());
       });
       changed("unused type", [&](auto &value) {
-        value.getArray("types")->push_back("bytes");
+        value.getArray("types")->push_back(
+            json::Array{"apply", "bytes", json::Array{}});
       });
+      changed("old printed type schema", [&](auto &value) {
+        (*value.getArray("types"))[0] = "field:koala-bear";
+      });
+      changed("old type-specific array", [&](auto &value) {
+        (*value.getArray("types"))[0] = json::Array{"field", "koala-bear"};
+      });
+      changed("wrong nominal argument kind", [&](auto &value) {
+        (*value.getArray("types"))[0] = json::Array{
+            "apply", "field",
+            json::Array{json::Array{"domain", "Group", "koala-bear"}}};
+      });
+      changed("service is not ordinary type table data", [&](auto &value) {
+        (*value.getArray("types"))[0] =
+            json::Array{"service", "random.koala-bear/0"};
+      });
+      changed("oracle is not ordinary type table data", [&](auto &value) {
+        (*value.getArray("types"))[0] = json::Array{
+            "oracle", "table",
+            json::Array{json::Array{
+                "type", json::Array{"apply", "bool", json::Array{}}}}};
+      });
+      changed(
+          "reordered type inventory",
+          [&](auto &value) {
+            auto &types = *value.getArray("types");
+            require(types.size() > 1, "missing distinct type references");
+            std::swap(types[0], types[1]);
+          },
+          "oracle-common-body");
       changed("missing helper", [&](auto &value) {
         auto &entry = *(*value.getArray("entries"))[0].getAsObject();
         auto &controller = *(*entry.getArray("controllers"))[0].getAsObject();
@@ -233,6 +265,17 @@ int main(int argc, char **argv) {
       changed("declaration order", [&](auto &value) {
         auto &declarations = *value.getArray("declarations");
         std::swap(declarations[0], declarations[1]);
+      });
+      cases.run("record producer enforces its reader lexical depth", [&] {
+        auto &state = entry.controllers.front().body.state;
+        auto saved = state;
+        auto restore = llvm::scope_exit([&] { state = std::move(saved); });
+        Type nested = IntegerType::get(&context, 1);
+        for (unsigned depth = 0; depth != 22; ++depth)
+          nested = data::SequenceType::get(&context, nested);
+        state.push_back(nested);
+        refuses(serializeOracleRealization(*prepared, candidate),
+                "oracle-realization-record-limit");
       });
       cases.run("record refuses an oversized type table", [&] {
         auto parsed = take(json::parse(record));

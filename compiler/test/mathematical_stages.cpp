@@ -97,7 +97,9 @@ int main() {
     std::ostringstream text;
     text << input.rdbuf();
     auto source = parseSourceString<ModuleOp>(
-        replaceText(text.str(), "bls12-381.fr", "koala-bear"), &context);
+        replaceText(replaceText(text.str(), "bls12-381.fr", "koala-bear"),
+                    "ui255", "ui31"),
+        &context);
     require(bool(source), "map fixture refused");
     mathematical::RealizationWork work;
     auto initial = work.requiredFiniteChecking;

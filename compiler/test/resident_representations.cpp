@@ -2,10 +2,12 @@
 #include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
+#include "support/NativeBindings.h"
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
+#include "support/VariantFixture.h"
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
@@ -47,8 +49,8 @@ std::string chain(MLIRContext &context, bool residentInitial = true,
 !G = !algebra.group<"bls12-381.g1">
 )" + scopedFixture(
           R"(
-"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="blst/resident/curve.scale"} : ()->()
-"runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="blst/resident/curve.scale",function_type=(!runtime.scope, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : ()->()
+"runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation="",function_type=(!runtime.scope, i1) -> !exec.outcome<>} : ()->()
 )",
           execution ? "%g:!G,%s:!F,%c:i1,%lo:ui64,%hi:ui64,%allowed:i1,%t:!F"
                     : "%g:!G,%s:!F,%c:i1,%lo:ui64,%hi:ui64",
@@ -210,12 +212,12 @@ void moveInvocationBefore(exec::ApplyOp moved, exec::ApplyOp before) {
   sc::omit(moved, values);
 }
 std::string variantSource(MLIRContext &context, StringRef descriptor) {
-  auto text = "!Tag = !data.variant<\"" + descriptor.str() + "\">\n" +
+  auto text = "!Tag = " + variantAssembly(descriptor) + "\n" +
               R"(!F = !algebra.field<"bls12-381.fr">
 !G = !algebra.group<"bls12-381.g1">
 )" +
               scopedFixture(R"(
-"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="blst/resident/curve.scale"} : ()->()
+"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="blst/resident/curve.scale",function_type=(!runtime.scope, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : ()->()
 )",
                             "%g:!G,%s:!F", "%g,%s", "!G,!F", "!G",
                             scopedReturn("%g", "!G"), 2);
@@ -228,7 +230,7 @@ std::string variantSource(MLIRContext &context, StringRef descriptor) {
   builder.setInsertionPointToEnd(work.addEntryBlock());
   auto group = work.getArgument(1).getType();
   auto field = work.getArgument(2).getType();
-  auto variant = data::VariantType::get(&context, descriptor);
+  auto variant = zkc::test::variantType(&context, descriptor);
   exec::ScopedExecutionBuilder control(builder, work);
   auto point = sc::apply(control, builder, "scale", "initial",
                          work.getArguments().drop_front(), {group})[0];
@@ -285,13 +287,13 @@ PhysicalPlanOptions residentABI(ModuleOp module) {
 class MSMCandidates final : public CandidateCatalog {
 public:
   Expected<std::vector<std::string>>
-  implementations(const BindingApplication &op) const override {
+  implementations(const zkc::NativeBindingApplication &op) const override {
     if (op.contract == "curve.msm")
       return std::vector<std::string>{"blst/resident/curve.msm"};
     return installedCandidates().implementations(op);
   }
-  std::vector<BindingApplication>
-  conversions(const BoundType &a, const BoundType &b) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type a, mlir::Type b) const override {
     return installedCandidates().conversions(a, b);
   }
 };
@@ -377,7 +379,9 @@ int main(int argc, char **argv) {
         require(signature.inputs == std::vector<BoundType>{from} &&
                     signature.outputs == std::vector<BoundType>{to},
                 "exact direct conversion ports");
-        accept(checkDirectConversion(application, from, to));
+        accept(checkDirectConversion(nativeRequest(context, application),
+                                     nativeType(context, from),
+                                     nativeType(context, to)));
         refuses(resolveBinding(application, false), "binding-conversion");
         application.physicalArguments[1] = application.physicalArguments[0];
         refuses(resolveBinding(application, true), "binding-conversion");
@@ -403,7 +407,8 @@ int main(int argc, char **argv) {
                                      ? "bls12-381.g1"
                                      : "bls12-381.fr"},
                                 ""};
-          auto choices = take(installedCandidates().implementations(op));
+          auto choices = take(installedCandidates().implementations(
+              nativeRequest(context, op)));
           require(choices == std::vector<std::string>{"arkworks/" +
                                                       std::string(contract)},
                   "automatic resident choice");
@@ -634,7 +639,7 @@ module { "protocol.module"() ({
 !G = !algebra.group<"bls12-381.g1">
 !GS = !algebra.group_vector<"bls12-381.g1">
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.group_vector<"bls12-381.g1">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>} : ()->()
 )",
                    "%s:!V,%g:!GS", "%s,%g", "!V,!GS", "!G", R"(
 %msm_attempt = "exec.apply"(%scope,%s,%g) {binding=@msm,site="msm",parameters=[]} : (!runtime.scope,!V,!GS)->!exec.outcome<(!G)>
@@ -658,9 +663,9 @@ func.return %done : !exec.outcome<(!G)>
     auto source = R"(!F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
-"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation=""} : ()->()
-"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=[!algebra.field<"bls12-381.fr">],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!algebra.field<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field<"bls12-381.fr">>, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
 )",
                    "%a:!F,%b:!F", "%a,%b", "!F,!F", "!S", R"(
 %add_attempt = "exec.apply"(%scope,%a,%b) {binding=@add,site="add",parameters=[]} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
@@ -700,9 +705,9 @@ func.return %done : !exec.outcome<(!S)>
     auto source = R"(!F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation="blst/resident/vector.mul"} : ()->()
-"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation="blst/resident/vector.sum"} : ()->()
-"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
+"runtime.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation="blst/resident/vector.mul",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation="blst/resident/vector.sum",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 )",
                    "%a:!V,%b:!V,%x:!F", "%a,%b,%x", "!V,!V,!F", "!F", R"(
 %mul_attempt = "exec.apply"(%scope,%a,%b) {binding=@mul,site="mul",parameters=[]} : (!runtime.scope,!V,!V)->!exec.outcome<(!V)>

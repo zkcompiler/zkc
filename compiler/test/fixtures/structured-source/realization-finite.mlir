@@ -11,7 +11,7 @@ module { "protocol.module"() ({
    func.return %s : !F
  }
  func.func private @sum(%xs:!V)->!F {
-   %zero = "algebra.constant"() {value="0"} : ()->!F
+   %zero = "algebra.constant"() {value=#algebra.literal<!F, 0 : ui255>} : ()->!F
    %sum = "algebra.finite_fold"(%xs,%zero) {domain=@items,step=@step} : (!V,!F)->!F
    func.return %sum : !F
  }

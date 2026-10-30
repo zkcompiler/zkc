@@ -6,6 +6,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Diagnostics.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Registry.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/InitLLVM.h"
@@ -108,7 +109,7 @@ void mutation(const CheckedOriginal &original, StringRef name,
       mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), &context);
   require(bool(module), "original parsing failed");
   mutate(*module);
-  require(mlir::succeeded(mlir::verify(*module)),
+  require(mlir::succeeded(zkc::admitStage(*module)),
           "mutation failed IR admission instead of correspondence");
   auto result = compareOriginal(original.entry(), *module);
   if (result) {

@@ -1,4 +1,5 @@
 #include "support/ProtocolDeployment.h"
+#include "zkc/Dialect/Runtime/Parameters.h"
 // The closed source body, not the emitted text, decides which arena a kernel
 // evaluates: the digest written into the original MLIR must be the identity of
 // the captured asset the checked body closed over.
@@ -57,8 +58,6 @@ int main() {
       "a changed digest in the original MLIR is not the checked source", [&] {
         auto original = checked();
         auto identity = take(Asset::read(product())).identity().str();
-        require(StringRef(original.bytes()).contains(identity),
-                "original MLIR does not carry the arena identity");
         auto module =
             mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), &context);
         require(bool(module), "invalid mathematical original");
@@ -68,14 +67,15 @@ int main() {
           auto parameters = op->getAttrOfType<mlir::ArrayAttr>("parameters");
           if (!parameters || parameters.size() != 1)
             return;
-          auto value = dyn_cast<mlir::StringAttr>(parameters[0]);
-          if (!value || value.getValue() != identity)
+          auto value = dyn_cast<runtime::AssetReferenceAttr>(parameters[0]);
+          if (!value || take(runtime::encodeAssetDigest(value)) != identity)
             return;
           std::string other = identity;
           other[0] = other[0] == '0' ? '1' : '0';
           op->setAttr("parameters",
                       mlir::ArrayAttr::get(
-                          &context, {mlir::StringAttr::get(&context, other)}));
+                          &context, {take(runtime::decodeAssetReference(
+                                        &context, value.getFormat(), other))}));
           ++changed;
         });
         require(changed == 1, "expected exactly one ring kernel");

@@ -5,5 +5,6 @@ def RuntimeDialect : ZKCDialect {
   let name = "runtime";
   let cppNamespace = "::zkc::runtime";
   let useDefaultTypePrinterParser = 1;
+  let useDefaultAttributePrinterParser = 1;
 }
 #endif

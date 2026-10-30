@@ -1,6 +1,7 @@
 #include "NativeDeployment.h"
 #include "ArtifactJson.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -123,8 +124,8 @@ Error verifyNativeDeployment(ModuleOp source, ModuleOp physical,
                              const NativeProofOptions &options,
                              const json::Value &descriptor,
                              const json::Array &wireSites, StringRef bytes) {
-  if (!source || !physical || failed(verify(source)) ||
-      failed(verify(physical)))
+  if (!source || !physical || failed(zkc::admitStage(source)) ||
+      failed(zkc::admitStage(physical)))
     return error("native-deployment-subject");
   auto parsed = parseArtifactJson(bytes);
   if (!parsed)

@@ -1,7 +1,7 @@
 !F = !algebra.field<"bls12-381.fr">
 module { "protocol.module"() ({
  func.func private @arithmetic(%a:!F,%b:!F,%flag:i1) -> (!F,i1) {
-   %one = "algebra.constant"() {value="1"} : ()->!F
+   %one = "algebra.constant"() {value=#algebra.literal<!F, 1 : ui255>} : ()->!F
    %sum = algebra.field_add %b,%a : (!F,!F)->!F
    %difference = algebra.field_subtract %a,%b : (!F,!F)->!F
    %product = algebra.field_multiply %sum,%difference : (!F,!F)->!F

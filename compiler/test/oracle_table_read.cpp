@@ -4,11 +4,14 @@
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include <filesystem>
 #include <fstream>
 using namespace mlir;
@@ -85,6 +88,108 @@ int main(int argc, char **argv) {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  cases.run(
+      "native sequence read exceeds byte depth without widening publication",
+      [&] {
+        auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
+        Type row = IntegerType::get(&context, 1);
+        for (unsigned i = 0; i < 12; ++i) {
+          row = constructLogicalType(emit, &context,
+                                     {"sequence", {TypeAttr::get(row)}});
+          require(bool(row), "native sequence formation failed");
+        }
+        auto bytes = encodeBoundType(row, false);
+        require(!bytes, "native formation widened byte publication");
+        consumeError(bytes.takeError());
+        auto kind = protocol_ir::OracleKindAttr::getChecked(
+            emit, &context, StringRef("table"),
+            ArrayAttr::get(&context, {TypeAttr::get(row)}));
+        require(bool(kind), "native table kind inherited byte depth");
+        auto candidate = fresh(context);
+        auto read = take(emitOracleTableRead(*candidate, kind));
+        require(succeeded(verify(*candidate)), "deep native read is malformed");
+        if (auto failure = checkOracleTableRead(*candidate, read, kind))
+          throw std::runtime_error(toString(std::move(failure)));
+        bool typedArgument = false;
+        read.walk([&](exec::ApplyOp op) {
+          if (op.getSite() != "read")
+            return;
+          auto binding =
+              SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+                  op, op.getBindingAttr());
+          typedArgument = binding.getArguments() ==
+                          ArrayAttr::get(&context, {TypeAttr::get(row)});
+          op.getInputsMutable()[1].set(read.getArgument(2));
+        });
+        require(typedArgument, "sequence element did not remain a native type");
+        require(succeeded(verify(*candidate)),
+                "mutation only failed formation");
+        auto refusal = checkOracleTableRead(*candidate, read, kind);
+        require(bool(refusal) && namesIdentifier(toString(std::move(refusal)),
+                                                 "oracle-table-read-body"),
+                "deep actual-body mutation passed independent readback");
+        // No executable byte installation is claimed for this native-only row.
+      });
+  cases.run("equal payloads retain different nominal row identities", [&] {
+    auto kind = [&](StringRef identity) {
+      auto nominal = data::importVariantIdentity(
+          &context, json::Array{"oracle-row-test/0", identity.str()});
+      auto arm = data::AlternativeAttr::get(
+          &context, StringAttr::get(&context, "Record"),
+          ArrayRef<Type>{IntegerType::get(&context, 1)});
+      auto row = data::VariantType::getChecked(
+          UnknownLoc::get(&context), &context, nominal,
+          ArrayRef<data::AlternativeAttr>{arm});
+      require(bool(row), "nominal row formation failed");
+      return protocol_ir::OracleKindAttr::get(
+          &context, "table", ArrayAttr::get(&context, {TypeAttr::get(row)}));
+    };
+    auto original = kind("original"), other = kind("other");
+    auto candidate = fresh(context);
+    auto read = take(emitOracleTableRead(*candidate, original));
+    require(succeeded(verify(*candidate)), "nominal read is malformed");
+    if (auto failure = checkOracleTableRead(*candidate, read, original))
+      throw std::runtime_error(toString(std::move(failure)));
+    auto refusal = checkOracleTableRead(*candidate, read, other);
+    require(bool(refusal) && namesIdentifier(toString(std::move(refusal)),
+                                             "oracle-table-read-body"),
+            "checker erased the nominal row identity");
+  });
+  cases.run("native sequence construction refuses a missing owner", [&] {
+    MLIRContext minimal(registry);
+    ScopedDiagnosticHandler silence(&minimal,
+                                    [](Diagnostic &) { return success(); });
+    require(!minimal.getLoadedDialect<data::DataDialect>(),
+            "Data already loaded");
+    auto sequence = constructLogicalType(
+        [&] { return emitError(UnknownLoc::get(&minimal)); }, &minimal,
+        {"sequence", {TypeAttr::get(IntegerType::get(&minimal, 1))}});
+    require(!sequence && !minimal.getLoadedDialect<data::DataDialect>(),
+            "native construction loaded an unrequested owner");
+  });
+  cases.run("native sequence checks inactive arms and exact carrier kind", [&] {
+    ScopedDiagnosticHandler silence(&context,
+                                    [](Diagnostic &) { return success(); });
+    auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
+    auto nominal = data::importVariantIdentity(
+        &context, json::Array{"oracle-row-test/0", "inactive"});
+    auto affine = runtime::CapabilityType::get(
+        &context, runtime::CapabilityKind::Random, "bls12-381.fr");
+    auto row = data::VariantType::getChecked(
+        emit, &context, nominal,
+        {data::AlternativeAttr::get(&context,
+                                    StringAttr::get(&context, "Empty"), {}),
+         data::AlternativeAttr::get(
+             &context, StringAttr::get(&context, "Dormant"), {affine})});
+    require(bool(row), "affine variant should form independently");
+    require(!constructLogicalType(emit, &context,
+                                  {"sequence", {TypeAttr::get(row)}}),
+            "inactive affine arm acquired sequence permissions");
+    require(!constructLogicalType(
+                emit, &context,
+                {"sequence", {TypeAttr::get(IntegerType::get(&context, 64))}}),
+            "signless integer was confused with the native index carrier");
+  });
   for (StringRef spelling :
        {"field:koala-bear.ext4-binomial3", "group:bls12-381.g1", "index",
         "bool", "bytes", "sequence<bool>"}) {

@@ -2,6 +2,7 @@
 #define ZKC_DIALECT_DATA_IR_DATATYPES_H
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/OpImplementation.h"
+#include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Data/IR/DataDialect.h"
 #include "zkc/Interfaces/Collection.h"
 #define GET_TYPEDEF_CLASSES

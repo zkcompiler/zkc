@@ -8,7 +8,8 @@
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Analysis/TotalClosure.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Execution.h"
@@ -174,15 +175,31 @@ int main() {
             request.setPolicyAttr(
                 builder.getBoolArrayAttr({true, false, false}));
           }
-          require(succeeded(verify(*module)),
+          require(succeeded(zkc::admitStage(*module)),
                   "scoped participant numerical source refused");
           auto closure = take(protocol::readSourceExecutionClosure(
               &module->getBody()->front()));
-          require(closure.bodies.at("work").front().operation == request &&
+          require(closure.computations == SmallVector<Operation *>{request} &&
+                      closure.bodies.at("work").front().operation == request &&
                       !isMemoryEffectFree(request) && !isSpeculatable(request),
                   "participant numerical invocation lost source identity or "
                   "ordered semantics");
         });
+  cases.run("shared mathematical targets retain each actual request", [&] {
+    auto module = parse(participant);
+    auto owner =
+        cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front());
+    auto work = cast<func::FuncOp>(SymbolTable::lookupSymbolIn(owner, "work"));
+    auto copy = cast<func::FuncOp>(work->clone());
+    copy.setSymName("second");
+    owner.getBody().front().push_back(copy);
+    auto closure = take(protocol::readSourceExecutionClosure(owner));
+    require(closure.computations.size() == 2 &&
+                closure.computations[0] != closure.computations[1] &&
+                isa<exec::ComputeOp>(closure.computations[0]) &&
+                isa<exec::ComputeOp>(closure.computations[1]),
+            "distinct actual requests collapsed to one synthetic signature");
+  });
   cases.run("actual source body and ordered adapter interfaces", [&] {
     auto module = accept(source);
     SymbolTableCollection symbols;
@@ -522,7 +539,8 @@ module {
     func.return %call : !exec.outcome<>
   }
 })mlir");
-    require(succeeded(verify(*module)), "zero-port computation refused");
+    require(succeeded(zkc::admitStage(*module)),
+            "zero-port computation refused");
   });
 
   auto closureSource = changed(
@@ -576,7 +594,8 @@ module {
     auto module = parse(changed(participant, "  func.func private @twice",
                                 "  module @unclassified {func.func @entry() "
                                 "{func.return}}\n  func.func private @twice"));
-    refuses("computation-profile", context, [&] { return verify(*module); });
+    refuses("computation-profile", context,
+            [&] { return zkc::admitStage(*module); });
   });
   cases.run("unused external mathematical helpers are refused", [&] {
     checkClosure(
@@ -586,7 +605,7 @@ module {
   });
   cases.run("logical computations cannot be published as an executable", [&] {
     auto module = parse(participant);
-    require(succeeded(verify(*module)), "participant control refused");
+    require(succeeded(zkc::admitStage(*module)), "participant control refused");
     auto read = protocol::readExecutionModel(*module);
     require(!read, "unresolved numerical call escaped executable publication");
     llvm::consumeError(read.takeError());
@@ -597,7 +616,8 @@ module {
         func.func @entry() { func.return }
       } }) {profile=#protocol.profile<physical>} : ()->()
     })mlir");
-    refuses("computation-profile", context, [&] { return verify(*module); });
+    refuses("computation-profile", context,
+            [&] { return zkc::admitStage(*module); });
   });
   cases.run("source closure checks dormant selected units", [&] {
     checkClosure(
@@ -713,7 +733,7 @@ module {
         [&] {
           std::string text = R"mlir(
 !S = !runtime.scope
-!C = !runtime.capability<"resource_unit:Guard">
+!C = !runtime.capability<resource_unit, "Guard">
 !O = !exec.outcome<(!C)>
 module {
   func.func @caller(%scope: !S, %value: !C) -> !O attributes {no_inline, runtime.origin=["caller", []]} {

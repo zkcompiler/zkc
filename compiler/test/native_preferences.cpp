@@ -1,6 +1,7 @@
 #include "../lib/Conversion/Bindings.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
+#include "support/NativeBindings.h"
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
@@ -61,22 +62,23 @@ std::string source(StringRef contract, StringRef domain,
          scopedFixture("\"runtime.binding\"() {sym_name=\"work\",contract=\"" +
                            contract.str() + "\",arguments=[\"" + domain.str() +
                            "\"],implementation=\"" + implementation.str() +
-                           "\"} : ()->()",
+                           "\",function_type=(!runtime.scope," + types +
+                           ")->!exec.outcome<(" + output + ")>} : ()->()",
                        arguments, inputs, types, output, body, 2);
 }
 std::string observationSource(MLIRContext &context, bool fixed, bool joined) {
   auto origin = take(encodeNativeOriginTemplate(
       "main", {}, {"message", "Round", "point", "point", "P", "V"}));
   auto text =
-      R"(!T = !runtime.capability<"transcript:merlin3.bls12-381.fr64be/0">
+      R"(!T = !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">
 !G = !algebra.group<"bls12-381.g2">
 !F = !algebra.field<"bls12-381.fr">
 !I = !algebra.indices
 )" + scopedFixture(
           R"("runtime.binding"() {sym_name="work",contract="curve.scale",arguments=["bls12-381.g2"],implementation=")" +
               std::string(fixed ? "blst/resident/curve.scale" : "") +
-              R"("} : ()->()
-"runtime.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0","group:bls12-381.g2"],implementation=""} : ()->())",
+              R"(",function_type=(!runtime.scope,!G,!F)->!exec.outcome<(!G)>} : ()->()
+"runtime.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0", !algebra.group<"bls12-381.g2">],implementation="",function_type=(!runtime.scope, !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">, !algebra.group<"bls12-381.g2">, !algebra.indices) -> !exec.outcome<(!runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">)>} : ()->())",
           joined ? "%c:i1,%g:!G,%s:!F,%t:!T,%i:!I" : "%g:!G,%s:!F,%t:!T,%i:!I",
           joined ? "%c,%g,%s,%t,%i" : "%g,%s,%t,%i",
           joined ? "i1,!G,!F,!T,!I" : "!G,!F,!T,!I", "!T",
@@ -132,12 +134,12 @@ program::Participants publish(ModuleOp module, const PhysicalPlan &plan) {
 }
 class NoConversions final : public CandidateCatalog {
 public:
-  Expected<std::vector<std::string>>
-  implementations(const BindingApplication &application) const override {
+  Expected<std::vector<std::string>> implementations(
+      const zkc::NativeBindingApplication &application) const override {
     return installedCandidates().implementations(application);
   }
-  std::vector<BindingApplication>
-  conversions(const BoundType &, const BoundType &) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type, mlir::Type) const override {
     return {};
   }
 };
@@ -158,6 +160,10 @@ void fillDeclarations(ModuleOp module) {
         "arguments",
         ArrayAttr::get(module.getContext(),
                        {StringAttr::get(module.getContext(), "bls12-381.fr")}));
+    binding->setAttr(
+        "function_type",
+        TypeAttr::get(take(bindingSignature(
+            module.getContext(), {"field.add", {"bls12-381.fr"}, ""}, false))));
     root.getBody().front().push_back(binding);
   }
 }
@@ -202,7 +208,8 @@ int main(int argc, char **argv) {
       cases.run(contract + " " + argument + " preferred and checked", [&] {
         require(take(defaultImplementation(application)) == fallback,
                 "Contracts canonical default changed");
-        require(take(installedCandidates().implementations(application)) ==
+        require(take(installedCandidates().implementations(
+                    nativeRequest(context, application))) ==
                     std::vector<std::string>{preferred, fallback},
                 "target preference or fallback missing");
         auto module =
@@ -274,7 +281,8 @@ int main(int argc, char **argv) {
           contract.str(),
           {contract == "curve.msm" ? "bls12-381.g1" : "bls12-381.fr"},
           ""};
-      require(take(installedCandidates().implementations(app)) ==
+      require(take(installedCandidates().implementations(
+                  nativeRequest(context, app))) ==
                   std::vector<std::string>{"arkworks/" + contract.str()},
               "unmeasured or permission-sensitive automatic choice");
     }
@@ -286,13 +294,14 @@ int main(int argc, char **argv) {
           std::pair{"ristretto255.group", "dalek"}}) {
       BindingApplication app{"curve.scale", {domain}, ""};
       require(
-          take(installedCandidates().implementations(app)) ==
+          take(installedCandidates().implementations(
+              nativeRequest(context, app))) ==
               std::vector<std::string>{std::string(provider) + "/curve.scale"},
           "BLS preference leaked into other domain");
     }
-    refuses(
-        installedCandidates().implementations({"curve.scale", {"missing"}, ""}),
-        "binding-static-identity");
+    refuses(installedCandidates().implementations(
+                nativeRequest(context, {"curve.scale", {"missing"}, ""})),
+            "binding-signature");
   });
   cases.run("optional conversions fall back at the declaration limit", [&] {
     auto module =
@@ -337,10 +346,10 @@ int main(int argc, char **argv) {
 )" + scopedFixture(
               R"("runtime.binding"() {sym_name="work",contract="curve.scale",arguments=["bls12-381.g2"],implementation=")" +
                   std::string(fixed ? "blst/resident/curve.scale" : "") +
-                  R"("} : ()->()
-"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["group:bls12-381.g2"],implementation="native/sequence.empty"} : ()->()
-"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["group:bls12-381.g2"],implementation="native/sequence.append"} : ()->()
-"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["group:bls12-381.g2"],implementation="native/sequence.length"} : ()->())",
+                  R"(",function_type=(!runtime.scope,!G,!F)->!exec.outcome<(!G)>} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=[!algebra.group<"bls12-381.g2">],implementation="native/sequence.empty",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!algebra.group<"bls12-381.g2">>)>} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!algebra.group<"bls12-381.g2">],implementation="native/sequence.append",function_type=(!runtime.scope, !data.sequence<!algebra.group<"bls12-381.g2">>, !algebra.group<"bls12-381.g2">) -> !exec.outcome<(!data.sequence<!algebra.group<"bls12-381.g2">>)>} : ()->()
+"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=[!algebra.group<"bls12-381.g2">],implementation="native/sequence.length",function_type=(!runtime.scope, !data.sequence<!algebra.group<"bls12-381.g2">>) -> !exec.outcome<(ui64)>} : ()->())",
               "%g:!G,%s:!F", "%g,%s", "!G,!F", "ui64",
               scopedApply("work", "scale", "%g,%s", "!G,!F", "%p", "!G") +
                   scopedApply("empty", "empty", "", "", "%empty", "!S") +

@@ -72,7 +72,7 @@ for fixture in ['attempt-abandonment', 'attempt-abandonment-silent']:
 
 for i, suite in enumerate(SUITES):
     with case(f'long discarded prefix and shorter completion suite {i}'):
-        helper = '''    "runtime.binding"() <{arguments = [], contract = "index.constant", implementation = "", sym_name = "index"}> : () -> ()
+        helper = '''    "runtime.binding"() <{arguments = [], contract = "index.constant", implementation = "", sym_name = "index",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>}> : () -> ()
     func.func @count(%arg0: !runtime.scope, %arg1: i1) -> !exec.outcome<(ui64)> attributes {no_inline, runtime.origin = ["count", []]} {
       %0 = "exec.test"(%arg0, %arg1) <{site = "count"}> : (!runtime.scope, i1) -> !exec.outcome<(i1)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(i1)>) -> ()
@@ -110,7 +110,7 @@ for i, suite in enumerate(SUITES):
       cf.br ^bb5(%19 : ui64)
     }
     func.func private @count_arm_0(%arg0: !runtime.scope) -> !exec.outcome<(ui64)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = ["2"], site = "two"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = [2 : ui64], site = "two"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
       %2 = "exec.complete"(%arg0, %1) : (!runtime.scope, ui64) -> !exec.outcome<(ui64)>
@@ -120,7 +120,7 @@ for i, suite in enumerate(SUITES):
       return %4 : !exec.outcome<(ui64)>
     }
     func.func private @count_arm_1(%arg0: !runtime.scope) -> !exec.outcome<(ui64)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = ["1"], site = "one"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = [1 : ui64], site = "one"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
       %2 = "exec.complete"(%arg0, %1) : (!runtime.scope, ui64) -> !exec.outcome<(ui64)>
@@ -131,7 +131,7 @@ for i, suite in enumerate(SUITES):
     }
 '''
         source = fold.replace(' "protocol.func"', helper + ' "protocol.func"', 1)
-        source = source.replace('%n = "data.index"() {value="2"} : ()->ui64',
+        source = source.replace('%n = "data.index"() {value=2 : ui64} : ()->ui64',
                                 '%n = "protocol.local_call"(%iszero) {callee=@count,role="P",site="count"} : (i1)->ui64\n'
                                 '   %received_count = protocol.exchange %n {sender="P",receiver="V",site="count_message"} : ui64')
         source = source.replace('"protocol.repeat"(%n,', '"protocol.repeat"(%received_count,')

@@ -1,10 +1,11 @@
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Contracts/NativePolicy.h"
-#include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
 #include <map>
 #include <tuple>
@@ -14,20 +15,63 @@ using namespace llvm;
 
 namespace zkc::relation {
 namespace {
+// Both signatures have passed native formation before these comparisons.
+// Compare their semantic structure, including all nominal metadata; native
+// storage is context-local and a program-byte spelling is a separate profile.
+bool sameIdentityTerm(Attribute a, Attribute b) {
+  if (a == b)
+    return true;
+  if (auto text = dyn_cast<StringAttr>(a)) {
+    auto other = dyn_cast<StringAttr>(b);
+    return other && text.getValue() == other.getValue();
+  }
+  auto lhs = dyn_cast<ArrayAttr>(a), rhs = dyn_cast<ArrayAttr>(b);
+  return lhs && rhs && lhs.size() == rhs.size() &&
+         all_of(zip(lhs, rhs), [](auto pair) {
+           return sameIdentityTerm(std::get<0>(pair), std::get<1>(pair));
+         });
+}
 bool sameInput(Type a, Type b) {
-  // MLIR type storage is context-local. The existing logical carrier retains
-  // domains, dimensions and complete nominal descriptors across contexts.
-  auto lhs = protocol::encodeBoundType(a, false);
-  if (!lhs) {
-    consumeError(lhs.takeError());
-    return false;
+  if (a == b)
+    return true;
+  auto lhsVariant = dyn_cast<data::VariantType>(a);
+  auto rhsVariant = dyn_cast<data::VariantType>(b);
+  if (lhsVariant || rhsVariant) {
+    if (!lhsVariant || !rhsVariant ||
+        !sameIdentityTerm(lhsVariant.getIdentity().getTerm(),
+                          rhsVariant.getIdentity().getTerm()) ||
+        lhsVariant.getAlternatives().size() !=
+            rhsVariant.getAlternatives().size())
+      return false;
+    for (auto [lhs, rhs] :
+         zip(lhsVariant.getAlternatives(), rhsVariant.getAlternatives())) {
+      if (lhs.getLabel().getValue() != rhs.getLabel().getValue() ||
+          lhs.getPayload().size() != rhs.getPayload().size())
+        return false;
+      for (auto [left, right] : zip(lhs.getPayload(), rhs.getPayload()))
+        if (!sameInput(left, right))
+          return false;
+    }
+    return true;
   }
-  auto rhs = protocol::encodeBoundType(b, false);
-  if (!rhs) {
-    consumeError(rhs.takeError());
+  auto lhs = cast<CatalogTypeInterface>(a).getCatalogApplication();
+  auto rhs = cast<CatalogTypeInterface>(b).getCatalogApplication();
+  if (lhs->constructor != rhs->constructor ||
+      lhs->arguments.size() != rhs->arguments.size())
     return false;
+  for (auto [left, right] : zip(lhs->arguments, rhs->arguments)) {
+    if (auto type = dyn_cast<TypeAttr>(left)) {
+      auto other = dyn_cast<TypeAttr>(right);
+      if (!other || !sameInput(type.getValue(), other.getValue()))
+        return false;
+    } else if (auto natural = dyn_cast<IntegerAttr>(left)) {
+      auto other = dyn_cast<IntegerAttr>(right);
+      if (!other || natural.getValue() != other.getValue())
+        return false;
+    } else if (!sameIdentityTerm(left, right))
+      return false;
   }
-  return *lhs == *rhs;
+  return true;
 }
 bool sameSchema(DeclareOp a, DeclareOp b) {
   if (a.getSignature().getNumInputs() != b.getSignature().getNumInputs())
@@ -41,25 +85,30 @@ bool sameSchema(DeclareOp a, DeclareOp b) {
       return false;
   return true;
 }
-bool logicalInputs(TypeRange inputs) {
-  protocol::TypeParseBudget budget;
-  size_t remainingBytes = 1024 * 1024;
-  if (inputs.size() > 100000)
-    return false;
-  for (Type input : inputs) {
-    auto logical = protocol::encodeBoundType(input, false);
-    if (!logical) {
-      consumeError(logical.takeError());
-      return false;
-    }
-    size_t bytes = logical->spelling().size();
-    if (bytes > remainingBytes ||
-        protocol::logicalRelationData(*logical, budget) !=
-            protocol::RelationData::Supported)
-      return false;
-    remainingBytes -= bytes;
+bool relationData(Type type) {
+  if (auto variant = dyn_cast<data::VariantType>(type)) {
+    for (auto arm : variant.getAlternatives())
+      if (!all_of(arm.getPayload(), relationData))
+        return false;
+    return true;
   }
-  return true;
+  auto application = cast<CatalogTypeInterface>(type).getCatalogApplication();
+  if (application->constructor == "sequence")
+    return relationData(cast<TypeAttr>(application->arguments[0]).getValue());
+  return protocol::logicalRelationAtom(application->constructor);
+}
+bool logicalInputs(DeclareOp declaration) {
+  auto inputs = declaration.getSignature().getInputs();
+  if (inputs.size() > 100000 || failed(verifyLogicalTypes(
+                                    [&] {
+                                      auto diagnostic =
+                                          declaration.emitOpError();
+                                      diagnostic.abandon();
+                                      return diagnostic;
+                                    },
+                                    inputs)))
+    return false;
+  return all_of(inputs, relationData);
 }
 } // namespace
 Expected<json::Value> readStaticArguments(ArrayAttr arguments) {
@@ -100,8 +149,7 @@ LogicalResult DeclareOp::verify() {
   auto signature = getSignature();
   if (signature.getNumResults() != 1 ||
       !signature.getResult(0).isSignlessInteger(1) ||
-      getPurposes().size() != signature.getNumInputs() ||
-      !logicalInputs(signature.getInputs()))
+      getPurposes().size() != signature.getNumInputs() || !logicalInputs(*this))
     return diagnostics::emit(emitOpError(), "relation-declaration-signature",
                              "expected supported immutable logical data inputs "
                              "within type limits and one bool result");

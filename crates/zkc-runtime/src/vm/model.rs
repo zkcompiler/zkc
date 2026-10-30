@@ -108,39 +108,10 @@ impl Type {
     /// ground values must use `PhysicalType::is_affine` or
     /// `LogicalType::is_duplicable` to check their actual permissions.
     pub fn is_affine(self) -> bool {
-        match self {
-            Self::Sequence
-            | Self::FixedVector
-            | Self::Variant
-            | Self::ResourceUnit
-            | Self::Rng
-            | Self::Nonce
-            | Self::Transcript => true,
-            Self::FieldArray
-            | Self::Index
-            | Self::Bytes
-            | Self::QuotientMatrix
-            | Self::Shake128State
-            | Self::Indices
-            | Self::Matrix
-            | Self::Vector
-            | Self::Polynomial
-            | Self::Field
-            | Self::Table
-            | Self::Point
-            | Self::Round
-            | Self::Bool
-            | Self::Commitment
-            | Self::Commitments
-            | Self::Proof
-            | Self::Group
-            | Self::Groups
-            | Self::OpeningStates
-            | Self::ProverKey
-            | Self::VerifierKey
-            | Self::OpeningState => false,
-        }
+        !self.is_duplicable()
     }
+    /// Wire codec availability for a nominal leaf, independently of
+    /// the catalog's message-data profile and complete aggregate permissions.
     pub fn is_serializable(self) -> bool {
         match self {
             Self::QuotientMatrix
@@ -180,46 +151,14 @@ impl Type {
     /// arguments may permit copying. Use `LogicalType::is_duplicable` or
     /// `PhysicalType::is_duplicable` for ground values.
     pub fn is_duplicable(self) -> bool {
-        self != Self::ResourceUnit && self.is_discardable()
+        zkc_catalog::constructor(self.name())
+            .is_some_and(|row| row.copy && !row.parameters.contains(&zkc_catalog::Kind::Type))
     }
-    /// Drop permission guaranteed by the constructor head alone.
-    /// `FixedVector` and `Variant` conservatively return false; use
-    /// `LogicalType::is_discardable` or `PhysicalType::is_discardable` for ground
-    /// values. Local storage can be droppable without a wire codec, and logical
-    /// resource units are droppable but never duplicable.
+    /// Drop permission guaranteed by the constructor alone. Type parameters
+    /// and variants require checking every actual child before granting it.
     pub fn is_discardable(self) -> bool {
-        match self {
-            Self::ResourceUnit => true,
-            Self::Sequence
-            | Self::FixedVector
-            | Self::Variant
-            | Self::Rng
-            | Self::Nonce
-            | Self::Transcript => false,
-            Self::FieldArray
-            | Self::Index
-            | Self::Bytes
-            | Self::QuotientMatrix
-            | Self::Shake128State
-            | Self::Indices
-            | Self::Matrix
-            | Self::Vector
-            | Self::Polynomial
-            | Self::Field
-            | Self::Table
-            | Self::Point
-            | Self::Round
-            | Self::Bool
-            | Self::Commitment
-            | Self::Commitments
-            | Self::OpeningStates
-            | Self::Proof
-            | Self::ProverKey
-            | Self::VerifierKey
-            | Self::OpeningState
-            | Self::Group
-            | Self::Groups => true,
-        }
+        zkc_catalog::constructor(self.name())
+            .is_some_and(|row| row.drop && !row.parameters.contains(&zkc_catalog::Kind::Type))
     }
     pub(crate) fn parse_kind(name: &str) -> Result<Self, AdmissionError> {
         let ty = match name {

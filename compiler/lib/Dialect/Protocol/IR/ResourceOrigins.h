@@ -2,8 +2,8 @@
 #define ZKC_PROTOCOL_RESOURCEORIGINS_H
 
 #include "zkc/Analysis/NativeTypes.h"
+#include "zkc/Dialect/Exec/ResourceOrigins.h"
 #include "zkc/Dialect/Operations.h"
-#include "zkc/Program/ResourceOrigins.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 
@@ -25,9 +25,9 @@ class ResourceOrigins {
   uint64_t remaining;
   unsigned depthLimit;
   // Scoped helper facts are derived once from the actual admitted closure.
-  // The owned snapshot cannot be invalidated by a later IR mutation; this
-  // object itself is used only while the enclosing IR remains immutable.
-  std::unique_ptr<program::ResourceOriginAnalysis> execution;
+  // The native view and summaries borrow this immutable owner's actual IR;
+  // any mutation invalidates this analysis together with its cached facts.
+  std::unique_ptr<exec::ResourceOriginAnalysis> execution;
   mlir::Operation *executionOwner = nullptr;
 
   mlir::LogicalResult charge(mlir::Operation *op, uint64_t amount);

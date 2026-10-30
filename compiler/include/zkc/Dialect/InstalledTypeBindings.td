@@ -1,6 +1,7 @@
 #ifndef ZKC_DIALECT_INSTALLED_TYPE_BINDINGS_TD
 #define ZKC_DIALECT_INSTALLED_TYPE_BINDINGS_TD
 // This native aggregate and its neutral declarations form one installation.
+include "zkc/Contracts/Declarations.td"
 include "zkc/Dialect/IR.td"
 include "zkc/Dialect/TypeBindings.td"
 include "zkc/Dialect/CoreTypeBindings.td"

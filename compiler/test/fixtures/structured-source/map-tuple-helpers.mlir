@@ -14,7 +14,7 @@ module { "protocol.module"() ({
    func.return
  }
  func.func private @formula(%a:!F,%b:!F,%unused:!F,%s:!F)->!F {
-   %one = "algebra.constant"() {value="1"} : ()->!F
+   %one = "algebra.constant"() {value=#algebra.literal<!F, 1 : ui255>} : ()->!F
    func.call @observe(%a) : (!F)->()
    %pair:2 = func.call @pair(%a,%b) : (!F,!F)->(!F,!F)
    %d = "algebra.field_subtract"(%pair#0,%pair#1) : (!F,!F)->!F

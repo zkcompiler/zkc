@@ -1,6 +1,7 @@
 #include "Support.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -18,7 +19,7 @@ checkLowering(mlir::ModuleOp original, mlir::ModuleOp candidate,
               mathematical::VerificationDecision &outcome, bool maps) {
   outcome = {mathematical::VerificationObservation::Mismatch,
              "numerical lowering differs"};
-  if (failed(verify(original)) || failed(verify(candidate)))
+  if (failed(zkc::admitStage(original)) || failed(zkc::admitStage(candidate)))
     return failure();
   if (original->getAttrDictionary() != candidate->getAttrDictionary() ||
       !hasSingleElement(*original.getBody()) ||

@@ -114,7 +114,7 @@ func.return %r : !F }}''')
 
 
 def instruction_budget_source(constants, extra=False):
-    body = '\n'.join(f'%c{i} = "algebra.constant"() {{value="0"}} : ()->!F' for i in range(constants))
+    body = '\n'.join(f'%c{i} = "algebra.constant"() {{value=#algebra.literal<!F, 0 : ui255>}} : ()->!F' for i in range(constants))
     helper = 'func.func private @formula(%x:!F)->!F {\n' + body + '\nfunc.return %x : !F }'
     body = invocation('exec.compute',['!F'],['!F'],'callee=@formula,site="compute"')
     work = scoped_function('work',['!F'],['!F'],body,['%r'])
@@ -126,8 +126,8 @@ def instruction_budget_source(constants, extra=False):
 
 mapped = (fixtures / 'map-declarations.mlir').read_text()
 realized = (fixtures / 'realization-projection.mlir').read_text()
-vector_type = ['vector', 'bls12-381.fr']
-field_type = ['field', 'bls12-381.fr']
+vector_type = ['apply', 'vector', [['domain', 'Field', 'bls12-381.fr']]]
+field_type = ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]
 map_args = [['2', '7'], ['11', '13'], ['8', '9'], '3']
 
 with case('exact-original-declaration-records-and-full-projection-abi'):
@@ -141,7 +141,7 @@ with case('exact-original-declaration-records-and-full-projection-abi'):
     assert [row[1] for row in snapshot[7] if row[0] == 'function'] == ['square','formula','row','work','main']
     snapshot = export(realized)
     computation = next(row for row in snapshot[7] if row[0] == 'realize')
-    assert computation[2:] == [[vector_type, ['index'], ['index']], [vector_type], 'value']
+    assert computation[2:] == [[vector_type, ['apply', 'index', []], ['apply', 'index', []]], [vector_type], 'value']
     assert run(realized, [['2', '7'], maximum, maximum]) == returned([['2', '7']])
     assert run(realized, [['2', '7'], None, maximum]) == stopped('incomplete', 'work')
 
@@ -165,7 +165,7 @@ with case('nested-zero-and-multiple-result-math-calls'):
 
 with case('realization-total-profile-keeps-pure-index-and-group-values'):
     source = realized.replace('   func.return %xs',
-        '   %max = "data.index"() {value="' + maximum + '"} : ()->ui64\n'
+        '   %max = "data.index"() {value=' + maximum + ' : ui64} : ()->ui64\n'
         '   %unused = "data.index_equal"(%max,%dimension) : (ui64,ui64)->i1\n'
         '   func.return %xs')
     export(source)
@@ -176,7 +176,7 @@ with case('realization-total-profile-keeps-pure-index-and-group-values'):
 
 with case('other-installed-fields-export-with-their-rows'):
     # The map profile lifts any installed field; Lean admits only its own rows.
-    source = mapped.replace('bls12-381.fr', 'koala-bear')
+    source = mapped.replace('bls12-381.fr', 'koala-bear').replace('ui255', 'ui31')
     commands.verified(source)
     nominals, services = export(source)[9]
     assert nominals == [['nominal', 'koala-bear', 'Field', [],
@@ -225,7 +225,7 @@ native_negatives = {
     'dropped-computation-argument': (realized, '"exec.compute"(%scope,%a0,%a1,%a2)', '"exec.compute"(%scope,%a0,%a1)'),
     'computation-premise': (realized, '->!V {\n   func.return', '->!V attributes {data.preconditions=[#data.index_bound<1,0,0>]} {\n   func.return'),
     'domain-symbol-collision': (mapped, 'sym_name="rows"', 'sym_name="work"'),
-    'binding-function-collision': (mapped, 'func.func @work', '"runtime.binding"() {sym_name="work",contract="index.add",arguments=[],implementation=""} : ()->()\nfunc.func @work'),
+    'binding-function-collision': (mapped, 'func.func @work', '"runtime.binding"() {sym_name="work",contract="index.add",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>} : ()->()\nfunc.func @work'),
     'computation-symbol-collision': (realized, 'func.func private @value', 'func.func private @work'),
     'map-cycle': (mapped, '%r = "algebra.field_multiply"(%x,%x) : (!F,!F)->!F', '%r = func.call @square(%x) : (!F)->!F'),
     'computation-cycle': (realized, '   func.return %xs', '   %again = func.call @value(%xs,%dimension,%width) : (!V,ui64,ui64)->!V\n   func.return %again'),
@@ -245,9 +245,9 @@ for label, (original, before, after) in native_negatives.items():
 # recognizer. All actual operations still belong to admission, even if unused.
 for label, operation in {
     'equality': '%bad = "algebra.field_equal"(%a,%b) : (!F,!F)->i1',
-    'index': '%bad = "data.index"() {value="0"} : ()->ui64',
-    'other-field': '%bad = "algebra.constant"() {value="1"} : ()->!algebra.field<"bn254.fr">',
-    'other-lean-admitted-field': '%bad = "algebra.constant"() {value="1"} : ()->!algebra.field<"koala-bear">',
+    'index': '%bad = "data.index"() {value=0 : ui64} : ()->ui64',
+    'other-field': '%bad = "algebra.constant"() {value=#algebra.literal<!algebra.field<"bn254.fr">, 1 : ui254>} : ()->!algebra.field<"bn254.fr">',
+    'other-lean-admitted-field': '%bad = "algebra.constant"() {value=#algebra.literal<!algebra.field<"koala-bear">, 1 : ui31>} : ()->!algebra.field<"koala-bear">',
     'select': '%yes = arith.constant true\n%bad = arith.select %yes,%a,%b : !F',
 }.items():
     with case('dead-collection-formula-' + label):
@@ -380,7 +380,7 @@ with case('native-callback-name-bound-and-separate-wire-helper-bound'):
     export(re.sub(r'@row\b', '@' + 'n' * 128, mapped))
     bad = re.sub(r'@row\b', '@' + 'n' * 129, mapped)
     export(bad, refusal='structured-source-original')
-    assert 'local-realization-callback' in commands.last.stderr
+    assert 'execution-cfg' in commands.last.stderr
     run(bad, [], refusal='structured-reference-source')
     for source, name in [(mapped, 'formula'), (realized, 'value')]:
         export(re.sub('@' + name + r'\b', '@' + 'h' * 512, source))
@@ -442,9 +442,15 @@ for preparation in ('map', 'realize'):
             run(source, inputs, refusal='structured-reference-capacity')
             assert 'evaluation steps or depth' in commands.last.stderr
             source = reference_chain(65, preparation, reverse)
-            commands.verified(source)
-            run(source, inputs, role='V', refusal='structured-reference-capacity')
-            assert 'reference depth' in commands.last.stderr
+            if preparation == 'map':
+                # Complete native admission checks the finite callback closure
+                # even when the observer's participant would skip execution.
+                commands.verified(source, 'finite-formation')
+                run(source, inputs, role='V', refusal='structured-reference-source')
+            else:
+                commands.verified(source)
+                run(source, inputs, role='V', refusal='structured-reference-capacity')
+                assert 'reference depth' in commands.last.stderr
 
 with case('derived-instruction-export-4096-4097'):
     # 4094 pure instructions, one actual Compute and its derived declaration.
@@ -516,7 +522,8 @@ with case('received-row-malformation-capacity-and-shape-remain-distinct'):
     source = source.replace('input_roles=[["P"],["P"],["P"],["P"]]', 'input_roles=[["P"],["V"],["V"],["V"]]')
     source = source.replace('output_roles=[["P"]]', 'output_roles=[["V"]]')
     export(source)
-    action = ['receive', 'receive', 'P', 'V', vector_type]
+    # Replay action types belong to the independent open-request contract.
+    action = ['receive', 'receive', 'P', 'V', ['vector', 'bls12-381.fr']]
     inputs = [None, ['11'], ['8'], '3']
     def replies(value):
         return [['reply', action, ['value', value]]]

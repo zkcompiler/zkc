@@ -9,14 +9,18 @@
 #include "mlir/IR/IRMapping.h"
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Analysis/MathematicalFacts.h"
 #include "zkc/Contracts/Binding.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
@@ -47,7 +51,8 @@ class BindingSymbols {
     unsigned next = 0;
   };
   llvm::DenseMap<Operation *, std::unique_ptr<Occurrences>> occurrences;
-  std::map<std::pair<std::string, std::vector<std::string>>, std::string>
+  std::map<std::pair<std::string, std::string>,
+           llvm::DenseMap<ArrayAttr, std::string>>
       bindings;
 
 public:
@@ -83,23 +88,19 @@ public:
     } while (!sites->names.insert(result).second);
     return result;
   }
-  FlatSymbolRefAttr get(protocol::BindingApplication application,
+  FlatSymbolRefAttr get(const NativeBindingApplication &application,
                         Location location, OpBuilder &builder) {
-    assert(!protocol::boundOperationName(application.contract).empty() &&
-           "mathematical recipe requires an installed execution contract");
-    auto key = std::make_pair(application.contract, application.arguments);
-    auto found = bindings.find(key);
-    if (found == bindings.end()) {
+    auto arguments = builder.getArrayAttr(application.arguments);
+    auto &instances =
+        bindings[{application.contract, application.implementation}];
+    auto found = instances.find(arguments);
+    if (found == instances.end()) {
       auto name = fresh();
       OpBuilder::InsertionGuard guard(builder);
       builder.setInsertionPointToStart(&unit->getRegion(0).front());
-      SmallVector<Attribute> arguments;
-      for (auto &argument : application.arguments)
-        arguments.push_back(builder.getStringAttr(argument));
       runtime::BindingOp::create(builder, location, name, application.contract,
-                                 builder.getArrayAttr(arguments), "",
-                                 mlir::ArrayAttr{});
-      found = bindings.emplace(std::move(key), name).first;
+                                 arguments, application.implementation);
+      found = instances.try_emplace(arguments, name).first;
     }
     return FlatSymbolRefAttr::get(builder.getContext(), found->second);
   }
@@ -107,16 +108,18 @@ public:
 
 // Execution recipes belong to lowering; the IR exposes mathematical identity
 // and dependencies without selecting an executable contract.
-protocol::BindingApplication algebraBinding(Operation *op) {
-  protocol::BindingApplication result;
+NativeBindingApplication algebraBinding(Operation *op) {
+  NativeBindingApplication result;
   if (auto restrict = dyn_cast<algebra::MultilinearRestrictPrefixOp>(op)) {
     result.contract = "multilinear.restrict_prefix";
-    result.arguments = {restrict.getResult().getType().getDomain().str()};
+    result.arguments = {StringAttr::get(
+        op->getContext(), restrict.getResult().getType().getDomain())};
     return result;
   }
   if (auto identity = dyn_cast<algebra::GroupIdentityOp>(op)) {
     result.contract = "curve.identity";
-    result.arguments = {identity.getResult().getType().getDomain().str()};
+    result.arguments = {StringAttr::get(
+        op->getContext(), identity.getResult().getType().getDomain())};
     return result;
   }
   if (isa<zkc::algebra::SubtractFieldOp>(op))
@@ -136,17 +139,17 @@ protocol::BindingApplication algebraBinding(Operation *op) {
   if (isa<zkc::algebra::PairingOp>(op)) {
     result.contract = "pairing.apply";
     auto group = cast<zkc::algebra::GroupType>(op->getOperand(0).getType());
-    result.arguments = {protocol::installedDomains()
-                            .associatedIdentity(group.getDomain(), "Scalar")
-                            .str()};
+    result.arguments = {StringAttr::get(
+        op->getContext(), protocol::installedDomains().associatedIdentity(
+                              group.getDomain(), "Scalar"))};
     return result;
   }
   if (result.contract.empty() || op->getNumOperands() == 0)
     return result;
   if (auto t = dyn_cast<zkc::algebra::FieldType>(op->getOperand(0).getType()))
-    result.arguments = {t.getDomain().str()};
+    result.arguments = {StringAttr::get(op->getContext(), t.getDomain())};
   if (auto t = dyn_cast<zkc::algebra::GroupType>(op->getOperand(0).getType()))
-    result.arguments = {t.getDomain().str()};
+    result.arguments = {StringAttr::get(op->getContext(), t.getDomain())};
   return result;
 }
 // Recipes read immutable mathematical expressions and emit scoped operations.
@@ -154,6 +157,10 @@ protocol::BindingApplication algebraBinding(Operation *op) {
 // built.
 class Recipes {
   Operation *sourceRoot;
+  // The source stays immutable throughout recipe emission into another owner.
+  // Its reusable facts share one module analysis manager; query budgets remain
+  // in RealizationWork and never become analysis state.
+  ModuleAnalysisManager sourceAnalyses;
   protocol_ir::ProtocolModuleOp owner;
   OpBuilder &rewriter;
   BindingSymbols symbols;
@@ -221,10 +228,8 @@ class Recipes {
       // arguments and the shared failure continuation (even on first use).
       if (!reserve(16 + 2 * (state.operands.size() + state.types.size())))
         return SmallVector<Value>(state.types.size());
-      return control.invoke(state.attributes.get("binding")
-                                ? "exec.apply"
-                                : state.name.getStringRef(),
-                            state.types, control.scoped(state.operands),
+      return control.invoke(state.name.getStringRef(), state.types,
+                            control.scoped(state.operands),
                             state.attributes.getAttrs());
     };
     if (isa<poly::ProjectQuotientOp, poly::ObserveQuotientOp,
@@ -241,34 +246,33 @@ class Recipes {
                            : isa<poly::SubtractQuotientOp>(op)
                                ? "quotient.subtract"
                                : "quotient.multiply";
-      if (protocol::boundOperationName(contract).empty() ||
-          protocol::boundOperationName("index.constant").empty())
+      if (!protocol::operationContracts(contract) ||
+          !protocol::operationContracts("index.constant"))
         return failure();
       auto emit = [&](StringRef name, ValueRange operands, Type result,
-                      ArrayRef<std::string> parameters, bool root) {
-        OperationState state(op->getLoc(), protocol::boundOperationName(name));
+                      ArrayRef<Attribute> parameters, bool root) {
+        OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
         state.addOperands(operands);
         state.addTypes(result);
         auto occurrence =
             root ? site.getValue().str()
                  : symbols.freshSite(control.getFunction(), site.getValue());
         state.addAttribute("site", rewriter.getStringAttr(occurrence));
-        SmallVector<Attribute> attrs;
-        for (const auto &value : parameters)
-          attrs.push_back(rewriter.getStringAttr(value));
-        state.addAttribute("parameters", rewriter.getArrayAttr(attrs));
+        state.addAttribute("parameters", rewriter.getArrayAttr(parameters));
         state.addAttribute("binding", symbols.get({name.str(), {}, {}},
                                                   op->getLoc(), rewriter));
         return emitState(state).front();
       };
-      auto index = protocol::decodeBoundType(
-          op->getContext(), cantFail(protocol::parseBoundType("index", false)));
+      auto index =
+          IntegerType::get(op->getContext(), 64, IntegerType::Unsigned);
       SmallVector<Value> operands(inputs);
-      operands.push_back(emit("index.constant", {}, index,
-                              {std::to_string(type.getModulus())}, false));
+      operands.push_back(
+          emit("index.constant", {}, index,
+               {rewriter.getIntegerAttr(index, type.getModulus())}, false));
       if (project)
-        operands.push_back(emit("index.constant", {}, index,
-                                {std::to_string(type.getDegree())}, false));
+        operands.push_back(
+            emit("index.constant", {}, index,
+                 {rewriter.getIntegerAttr(index, type.getDegree())}, false));
       auto output = algebra::IndicesType::get(op->getContext());
       replace(emit(contract, operands, output, {}, true));
       return success();
@@ -278,8 +282,7 @@ class Recipes {
       if (!collection || !collection->get)
         return refuse(op, "no admitted collection access");
       const auto &application = *collection->get;
-      OperationState state(op->getLoc(),
-                           protocol::boundOperationName(application.contract));
+      OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
       state.addOperands(inputs);
       state.addTypes(op->getResultTypes());
       state.addAttribute("site", site);
@@ -294,20 +297,13 @@ class Recipes {
       auto sequence = cast<data::SequenceType>(
           isa<data::SequenceEmptyOp>(op) ? op->getResult(0).getType()
                                          : op->getOperand(0).getType());
-      auto element =
-          protocol::encodeBoundType(sequence.getElementType(), false);
-      if (!element) {
-        llvm::consumeError(element.takeError());
-        return failure();
-      }
-      protocol::BindingApplication application;
+      NativeBindingApplication application;
       application.contract = isa<data::SequenceEmptyOp>(op) ? "sequence.empty"
                              : isa<data::SequenceAppendOp>(op)
                                  ? "sequence.append"
                                  : "sequence.length";
-      application.arguments = {element->spelling()};
-      OperationState state(op->getLoc(),
-                           protocol::boundOperationName(application.contract));
+      application.arguments = {TypeAttr::get(sequence.getElementType())};
+      OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
       state.addOperands(inputs);
       state.addTypes(op->getResultTypes());
       state.addAttribute("site", site);
@@ -320,15 +316,14 @@ class Recipes {
     if (isa<data::PowerOfTwoOp>(op)) {
       for (StringRef contract :
            {"index.constant", "index.equal", "bool.and", "bool.or"})
-        if (protocol::boundOperationName(contract).empty())
+        if (!protocol::operationContracts(contract))
           return failure();
       auto emit = [&](StringRef contract, ValueRange operands, Type type,
                       ArrayRef<Attribute> parameters = {},
                       bool last = false) -> Value {
-        protocol::BindingApplication application;
+        NativeBindingApplication application;
         application.contract = contract.str();
-        OperationState state(op->getLoc(),
-                             protocol::boundOperationName(contract));
+        OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
         state.addOperands(operands);
         state.addTypes(type);
         auto occurrence =
@@ -346,7 +341,8 @@ class Recipes {
       for (unsigned exponent = 0; exponent < 64; ++exponent) {
         auto constant = [&](uint64_t value) {
           return emit("index.constant", {}, inputs[0].getType(),
-                      {rewriter.getStringAttr(std::to_string(value))});
+                      {rewriter.getIntegerAttr(
+                          rewriter.getIntegerType(64, false), value)});
         };
         auto r = constant(exponent), n = constant(uint64_t(1) << exponent);
         auto equalR = emit("index.equal", {inputs[1], r}, rewriter.getI1Type());
@@ -362,34 +358,36 @@ class Recipes {
     if (auto dim = dyn_cast<data::DimOp>(op)) {
       auto collection = cast<CollectionTypeInterface>(dim.getInput().getType());
       auto axis = dim.getAxisAttr().getInt();
-      protocol::BindingApplication application;
+      NativeBindingApplication application;
       SmallVector<Attribute> parameters;
       ValueRange operands = inputs;
       if (auto extent = collection.getStaticExtent(axis)) {
         application.contract = "index.constant";
-        parameters.push_back(rewriter.getStringAttr(std::to_string(*extent)));
+        parameters.push_back(rewriter.getIntegerAttr(
+            rewriter.getIntegerType(64, false), *extent));
         operands = {};
       } else if (auto field = dyn_cast<algebra::FieldType>(
                      collection.getElementType())) {
         application.contract =
             collection.getRank() == 2 ? "matrix.dimension" : "vector.length";
-        application.arguments = {field.getDomain().str()};
+        application.arguments = {rewriter.getStringAttr(field.getDomain())};
         if (collection.getRank() == 2)
-          parameters.push_back(rewriter.getStringAttr(std::to_string(axis)));
+          parameters.push_back(rewriter.getIntegerAttr(
+              rewriter.getIntegerType(64, false), axis));
       } else if (auto group = dyn_cast<algebra::GroupType>(
                      collection.getElementType())) {
         application.contract = "curve.length";
-        application.arguments = {group.getDomain().str()};
+        application.arguments = {rewriter.getStringAttr(group.getDomain())};
       } else {
         application.contract =
             collection.getCollectionKind() == CollectionKind::Bytes
                 ? "bytes.length"
                 : "indices.length";
       }
-      auto name = protocol::boundOperationName(application.contract);
-      if (name.empty())
+      auto *declaration = protocol::operationContracts(application.contract);
+      if (!declaration)
         return failure();
-      OperationState state(op->getLoc(), name);
+      OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
       state.addOperands(operands);
       state.addTypes(op->getResultTypes());
       state.addAttribute("site", site);
@@ -400,17 +398,17 @@ class Recipes {
       return success();
     }
     if (isa<data::IndexOp, data::EqualOp, data::LessOp>(op)) {
-      protocol::BindingApplication application;
+      NativeBindingApplication application;
       application.contract = isa<data::IndexOp>(op)   ? "index.constant"
                              : isa<data::EqualOp>(op) ? "index.equal"
                                                       : "index.less";
-      auto name = protocol::boundOperationName(application.contract);
-      if (name.empty())
+      auto *declaration = protocol::operationContracts(application.contract);
+      if (!declaration)
         return failure();
       SmallVector<Attribute> parameters;
       if (auto constant = dyn_cast<data::IndexOp>(op))
-        parameters.push_back(rewriter.getStringAttr(constant.getValue()));
-      OperationState state(op->getLoc(), name);
+        parameters.push_back(constant.getValueAttr());
+      OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
       state.addOperands(inputs);
       state.addTypes(op->getResultTypes());
       state.addAttribute("site", site);
@@ -431,30 +429,14 @@ class Recipes {
     }
     if (isa<data::GetOp, data::IsOp>(op)) {
       auto type = cast<data::VariantType>(op->getOperand(0).getType());
-      auto descriptor = protocol::decodeVariant(type.getDescriptor());
-      if (!descriptor)
-        return failure();
       SmallVector<SmallVector<Type>> payloads;
       SmallVector<Attribute> labels;
-      for (const auto &arm : descriptor->alternatives) {
-        SmallVector<Type> types;
-        for (const auto &spelling : arm.payload) {
-          auto bound = protocol::parseBoundType(spelling, false);
-          if (!bound) {
-            consumeError(bound.takeError());
-            return failure();
-          }
-          auto decoded = protocol::decodeBoundType(op->getContext(), *bound);
-          if (!decoded)
-            return failure();
-          types.push_back(decoded);
-        }
-        payloads.push_back(std::move(types));
-        labels.push_back(rewriter.getStringAttr(arm.label));
-      }
       SmallVector<std::string> alternatives;
-      for (const auto &arm : descriptor->alternatives)
-        alternatives.push_back(arm.label);
+      for (auto arm : type.getAlternatives()) {
+        payloads.emplace_back(arm.getPayload());
+        labels.push_back(arm.getLabel());
+        alternatives.push_back(arm.getLabel().getValue().str());
+      }
       auto outline = [&](unsigned i) {
         OpBuilder::InsertionGuard restore(rewriter);
         auto function = region(payloads[i], op->getResultTypes());
@@ -477,7 +459,9 @@ class Recipes {
                       "exec.boolean", rewriter.getI1Type(), nested.scoped({}),
                       {rewriter.getNamedAttr(
                            "value", rewriter.getBoolAttr(
-                                        descriptor->alternatives[i].label ==
+                                        type.getAlternatives()[i]
+                                            .getLabel()
+                                            .getValue() ==
                                         cast<data::IsOp>(op).getAlternative())),
                        rewriter.getNamedAttr(
                            "site", rewriter.getStringAttr(occurrence))})
@@ -572,7 +556,7 @@ class Recipes {
           }))
         return refuse(op, "expected scalar Boolean operands");
       for (StringRef contract : {"bool.and", "bool.or", "bool.not"})
-        if (protocol::boundOperationName(contract).empty())
+        if (!protocol::operationContracts(contract))
           return refuse(op, "missing Boolean execution binding");
       auto emit = [&](StringRef contract, ValueRange operands,
                       bool last) -> Value {
@@ -580,10 +564,9 @@ class Recipes {
         if (!last)
           occurrence =
               symbols.freshSite(control.getFunction(), site.getValue());
-        protocol::BindingApplication application;
+        NativeBindingApplication application;
         application.contract = contract.str();
-        OperationState state(op->getLoc(),
-                             protocol::boundOperationName(contract));
+        OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
         state.addOperands(operands);
         state.addTypes(rewriter.getI1Type());
         state.addAttribute("site", rewriter.getStringAttr(occurrence));
@@ -617,49 +600,50 @@ class Recipes {
       for (StringRef contract :
            {"field.constant", "field_array.at", "field_array.from_vector",
             "vector.empty", "vector.append"})
-        if (protocol::boundOperationName(contract).empty())
+        if (!protocol::operationContracts(contract))
           return failure();
-      auto emit = [&](StringRef contract, ArrayRef<std::string> arguments,
+      auto emit = [&](StringRef contract, ArrayRef<Attribute> arguments,
                       ValueRange operands, Type output,
-                      ArrayRef<std::string> parameters, bool last) -> Value {
+                      ArrayRef<Attribute> parameters, bool last) -> Value {
         auto occurrence =
             last ? site.getValue().str()
                  : symbols.freshSite(control.getFunction(), site.getValue());
-        protocol::BindingApplication application{
-            contract.str(),
-            std::vector<std::string>(arguments.begin(), arguments.end()),
-            {}};
-        OperationState state(op->getLoc(),
-                             protocol::boundOperationName(contract));
+        NativeBindingApplication application{
+            contract.str(), SmallVector<Attribute>(arguments), {}};
+        OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
         state.addOperands(operands);
         state.addTypes(output);
         state.addAttribute("site", rewriter.getStringAttr(occurrence));
-        SmallVector<Attribute> attrs;
-        for (const auto &parameter : parameters)
-          attrs.push_back(rewriter.getStringAttr(parameter));
-        state.addAttribute("parameters", rewriter.getArrayAttr(attrs));
+        state.addAttribute("parameters", rewriter.getArrayAttr(parameters));
         state.addAttribute("binding",
                            symbols.get(application, op->getLoc(), rewriter));
         return emitState(state).front();
       };
       Value result;
       if (auto constant = dyn_cast<algebra::ConstantFieldOp>(op)) {
-        auto field = constant.getResult().getType().getDomain().str();
+        auto field =
+            rewriter.getStringAttr(constant.getResult().getType().getDomain());
         result =
             emit("field.constant", {field}, {}, constant.getResult().getType(),
-                 {constant.getValue().str()}, true);
+                 {constant.getValue()}, true);
       } else if (auto at = dyn_cast<algebra::ArrayAtOp>(op)) {
         auto array = at.getArray().getType();
-        auto field =
-            cast<algebra::FieldType>(array.getElementType()).getDomain().str();
-        result =
-            emit("field_array.at", {field, std::to_string(array.getLength())},
-                 inputs, at.getResult().getType(),
-                 {std::to_string(at.getIndexAttr().getInt())}, true);
+        auto field = rewriter.getStringAttr(
+            cast<algebra::FieldType>(array.getElementType()).getDomain());
+        result = emit(
+            "field_array.at",
+            {field,
+             rewriter.getIntegerAttr(
+                 IntegerType::get(op->getContext(), 64, IntegerType::Unsigned),
+                 array.getLength())},
+            inputs, at.getResult().getType(),
+            {rewriter.getIntegerAttr(rewriter.getIntegerType(64, false),
+                                     at.getIndexAttr().getInt())},
+            true);
       } else {
         auto array = cast<algebra::FieldArrayType>(op->getResult(0).getType());
-        auto field =
-            cast<algebra::FieldType>(array.getElementType()).getDomain().str();
+        auto field = rewriter.getStringAttr(
+            cast<algebra::FieldType>(array.getElementType()).getDomain());
         auto vector = algebra::FieldVectorType::get(array.getContext(),
                                                     array.getDomain());
         result = emit("vector.empty", {field}, {}, vector, {}, false);
@@ -667,18 +651,20 @@ class Recipes {
           result = emit("vector.append", {field}, ValueRange{result, value},
                         vector, {}, false);
         result = emit("field_array.from_vector",
-                      {field, std::to_string(array.getLength())},
+                      {field, rewriter.getIntegerAttr(
+                                  IntegerType::get(op->getContext(), 64,
+                                                   IntegerType::Unsigned),
+                                  array.getLength())},
                       ValueRange{result}, array, {}, true);
       }
       replace(result);
       return success();
     }
     auto application = algebraBinding(op);
-    auto name = protocol::boundOperationName(application.contract);
-    if (application.contract.empty() || name.empty())
+    if (!protocol::operationContracts(application.contract))
       return refuse(op, "no execution recipe for this operation");
     auto reference = symbols.get(application, op->getLoc(), rewriter);
-    OperationState state(op->getLoc(), name);
+    OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
     state.addOperands(inputs);
     state.addTypes(op->getResultTypes());
     state.addAttribute("site", site);
@@ -694,9 +680,10 @@ public:
           RealizationWork &work, RealizationTrace *trace,
           NumericalSelection *selection, finite::ScopedEmissionBudget &budget,
           bool orderedRetry)
-      : sourceRoot(sourceRoot), owner(owner), rewriter(builder),
-        symbols(owner, sourceRoot), policy(policy), work(work), trace(trace),
-        selection(selection), budget(budget), orderedRetry(orderedRetry) {}
+      : sourceRoot(sourceRoot), sourceAnalyses(sourceRoot, nullptr),
+        owner(owner), rewriter(builder), symbols(owner, sourceRoot),
+        policy(policy), work(work), trace(trace), selection(selection),
+        budget(budget), orderedRetry(orderedRetry) {}
 
   FailureOr<SmallVector<Value>>
   expression(Operation *source, ValueRange inputs,
@@ -755,7 +742,9 @@ public:
     };
     return finite::realizeScopedTotalExpression(
         source, sourceRoot, inputs, rewriter, control, callback, work,
-        effective, trace, budget, orderedRetry, pair, consumerInputs);
+        effective, trace, budget, orderedRetry, pair, consumerInputs,
+        &AnalysisManager(sourceAnalyses)
+             .getAnalysis<MathematicalFactAnalysis>());
   }
 
   LogicalResult body(func::FuncOp source, func::FuncOp target,
@@ -895,7 +884,7 @@ scheduledCandidate(mlir::ModuleOp mathematical, func::FuncOp working,
       mlir::ModuleOp::create(source.getLoc()));
   OpBuilder builder(candidate->getBody(), candidate->getBody()->end());
   auto owner = protocol_ir::ProtocolModuleOp::create(
-      builder, source.getLoc(), protocol_ir::Profile::Exec);
+      builder, source.getLoc(), protocol_ir::Profile::Exec, mlir::ArrayAttr{});
   owner.getBody().emplaceBlock();
   builder.setInsertionPointToEnd(&owner.getBody().front());
   SmallVector<Type> arguments{runtime::ScopeType::get(builder.getContext())};

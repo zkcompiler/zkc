@@ -4,7 +4,6 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "llvm/ADT/TypeSwitch.h"
-#include "llvm/Support/JSON.h"
 using namespace mlir;
 #include "zkc/Dialect/Exec/IR/execDialect.cpp.inc"
 #define GET_TYPEDEF_CLASSES
@@ -38,41 +37,27 @@ namespace {
 LogicalResult refuse(Operation *op, StringRef reason) {
   return diagnostics::emit(op->emitOpError(), "execution-formation", reason);
 }
-LogicalResult descriptor(Operation *op, StringRef expected,
-                         StringRef key = {}) {
-  auto attr = op->getAttrOfType<StringAttr>("descriptor");
-  auto parsed = llvm::json::parse(attr.getValue());
-  if (!parsed) {
-    llvm::consumeError(parsed.takeError());
-    return refuse(op, "invalid invocation descriptor");
-  }
-  auto *object = parsed->getAsObject();
-  if (!object || object->getString("op") != expected ||
-      object->size() != (key.empty() ? 1 : 2) ||
-      (!key.empty() &&
-       (!object->getString(key) || object->getString(key)->empty())))
-    return refuse(op, "invocation descriptor identity");
-  return success();
-}
 } // namespace
 LogicalResult NumericOp::verify() {
-  return descriptor(*this, "numeric", "calculation");
+  return getCalculation().empty() ? refuse(*this, "empty calculation identity")
+                                  : success();
 }
 LogicalResult InvokeOp::verify() {
   if (getOutcome().getType().getPayload().size() != 1)
     return refuse(*this, "invocation requires one logical result");
-  return descriptor(*this, "invoke", "deployment");
+  return getDeployment().empty() ? refuse(*this, "empty deployment identity")
+                                 : success();
 }
 LogicalResult RequireOp::verify() {
   if (getInputs().size() != 1 || !getInputs()[0].getType().isInteger(1) ||
       !getOutcome().getType().getPayload().empty())
     return refuse(*this, "require takes one Boolean and returns no values");
-  return descriptor(*this, "require");
+  return success();
 }
 LogicalResult DropOp::verify() {
   if (getInputs().size() != 1 || !getOutcome().getType().getPayload().empty())
     return refuse(*this, "drop takes one value and returns no values");
-  return descriptor(*this, "drop");
+  return success();
 }
 LogicalResult ReturnOp::verify() {
   if (getValues().getTypes() != TypeRange(getOutcome().getType().getPayload()))

@@ -689,15 +689,15 @@ Error compareInterface(const ClosedEntry &entry, const LanguageInterface &view,
         !view.relations.empty() || view.proof || !view.setups.empty())
       return error("source.correspondence",
                    "Host source/interface identity differs");
-    auto plan = planHost(entry, limits);
-    if (!plan)
-      return plan.takeError();
-    if (plan->signatures.size() != view.host->functions.size())
+    auto signatures = renderHostSignatures(entry, limits);
+    if (!signatures)
+      return signatures.takeError();
+    if (signatures->size() != view.host->functions.size())
       return error("source.correspondence", "Host interface closure differs");
     // The reader independently bound these schemas and signatures to actual
     // SSA. The canonical source interface fixes nominal fields and permissions.
     for (auto [i, declared] : enumerate(view.host->functions)) {
-      const auto &expected = *plan->signatures[i].getAsObject();
+      const auto &expected = *(*signatures)[i].getAsObject();
       if (expected.getString("symbol") != declared.symbol ||
           expected.getArray("parameters")->size() !=
               declared.parameters.size() ||

@@ -36,7 +36,7 @@ fn identity(x:Fr)->Fr{return x;}
 protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return identity(x);}
 ''')
     definition = local(export(identity))
-    assert definition[4:6] == [[['field', 'bls12-381.fr']]] * 2
+    assert definition[4:6] == [[['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]]] * 2
     assert definition[9] == ['block', [], ['return', [0]]]
 
 # Shared fixture setup is outside the cases: each mutation can then be judged
@@ -89,8 +89,8 @@ protocol Run roles(P)(x:Fr@P,y:Fr@P,n:index@P)->(r:Fr@P){return replace(x,y,n);}
     body = local(export(loop))[9][1]
     iteration = next(op for op in body if op[0] == ['for'])
     region = iteration[3][0]
-    assert region[0] == [['index'], ['field', 'bls12-381.fr'], ['field', 'bls12-381.fr']]
-    assert region[1] == [['field', 'bls12-381.fr']] * 2
+    assert region[0] == [['apply', 'index', []], ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]], ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]]
+    assert region[1] == [['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]] * 2
     assert region[2][2] == ['yield', [2, 2]]
 
 with case('stopping arm keeps its reason and occurrence'):
@@ -127,8 +127,8 @@ with case('primitive identity comes from its binding and exact data ports'):
     step = local(snapshot)[9][1][0]
     assert step[0][0:2] == ['exec', 'exec.apply']
     binding = next(row for row in snapshot[6] if row[1] == step[0][2])
-    assert binding[2:] == ['index.add', [], '']
-    assert step[1:4] == [[0, 1], [['index']], []]
+    assert binding[2:] == ['index.add', [], '', [['apply', 'index', []]] * 2, [['apply', 'index', []]]]
+    assert step[1:4] == [[0, 1], [['apply', 'index', []]], []]
 
 with case('same-port contract retargeting remains visible'):
     changed = primitive.replace('contract = "index.add"', 'contract = "index.sub"')
@@ -137,7 +137,19 @@ with case('same-port contract retargeting remains visible'):
     step = local(snapshot)[9][1][0]
     assert step[0][0:2] == ['exec', 'exec.apply']
     binding = next(row for row in snapshot[6] if row[1] == step[0][2])
-    assert binding[2:] == ['index.sub', [], '']
+    assert binding[2:] == ['index.sub', [], '', [['apply', 'index', []]] * 2, [['apply', 'index', []]]]
+
+with case('invocation parameters export semantic records'):
+    constant = emit('constant', '''
+fn answer()->index{return 42;}
+protocol Run roles(P)()->(r:index@P){return answer();}
+''')
+    snapshot = export(constant)
+    step = local(snapshot)[9][1][0]
+    assert step[0][0:2] == ['exec', 'exec.apply']
+    assert step[0][3] == [['natural', '42']]
+    binding = next(row for row in snapshot[6] if row[1] == step[0][2])
+    assert binding[2:] == ['index.constant', [], '', [], [['apply', 'index', []]]]
 
 with case('retired per-primitive operation has no source reader'):
     changed = primitive.replace('"exec.apply"', '"algebra.exec.index_add"')
@@ -155,11 +167,11 @@ domain = next(d for d in mapping[4] if d[1] == collection[5])
 with case('collection preserves all zipped operands including an unused row'):
     assert domain[3:] == [[['elements', 0], ['elements', 1], ['zip', [1, 0]],
                           ['elements', 2], ['zip', [1, 0]]], 0]
-    assert collection[4] == [['vector', 'bls12-381.fr']]
+    assert collection[4] == [['apply', 'vector', [['domain', 'Field', 'bls12-381.fr']]]]
     assert collection[7] == ''
     callback = next(d for d in mapping[7] if d[1] == collection[6])
     assert callback[2:4] == ['local', 'private']
-    assert callback[4][:3] == [['field', 'bls12-381.fr']] * 3
+    assert callback[4][:3] == [['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]] * 3
     assert callback[4][3:] == collection[3]
     computation = next(d for d in mapping[7] if d[1] == callback[9][1][0][0][1])
     assert computation[0] == 'realize'

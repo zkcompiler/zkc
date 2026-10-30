@@ -34,8 +34,8 @@ struct LocalCall {
   Names inputs;
   Names outputs;
 };
-/// Internal role-free, acyclic application before native helper expansion or
-/// for signature-only validation of admitted logical realizations.
+/// Neutral role-free, acyclic call to an actual source helper definition
+/// before native helper expansion, used only for export and comparison.
 /// This record is never admitted by the participant-program codec.
 struct LocalApply {
   std::string callee;

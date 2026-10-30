@@ -62,8 +62,10 @@ def stopped(reason='refused', site='primitive'):
 
 def binding(contract, name='operation', implementation=''):
     arguments = [] if contract.startswith('index.') else ['bls12-381.fr']
+    inputs, outputs = catalogue[contract]
+    signature = '(' + ','.join(['!runtime.scope'] + [ports[p] for p in inputs]) + ') -> !exec.outcome<(' + ','.join(ports[p] for p in outputs) + ')>'
     return ('"runtime.binding"() {sym_name=' + json.dumps(name) + ',contract=' + json.dumps(contract) +
-            ',arguments=' + json.dumps(arguments) + ',implementation=' + json.dumps(implementation) + '} : ()->()')
+            ',arguments=' + json.dumps(arguments) + ',implementation=' + json.dumps(implementation) + ',function_type=' + signature + '} : ()->()')
 
 
 def wrapped(inputs, outputs, body, results, declarations='', after=''):
@@ -88,7 +90,7 @@ def primitive(contract, parameters=(), drop=False, reverse=False, name='operatio
     ins, outs = catalogue[contract]
     inputs, outputs = [ports[x] for x in ins], [ports[x] for x in outs]
     body = invocation('exec.apply', inputs, outputs,
-        f'binding=@{name},parameters={json.dumps(list(parameters))},site="primitive"')
+        f'binding=@{name},parameters=[{", ".join(str(p) + " : ui64" for p in parameters)}],site="primitive"')
     results = ['%r'] if len(outputs) == 1 else [f'%r{i}' for i in range(len(outputs))]
     return wrapped(inputs, [] if drop else outputs, body,
                    [] if drop else list(reversed(results)) if reverse else results, binding(contract, name))
@@ -99,16 +101,23 @@ def reject_native(source, inputs):
     run(source, inputs, refusal='structured-reference-source')
 
 
+def logical(kind):
+    name = {'i': 'index', 'b': 'bool', 'f': 'field', 'v': 'vector'}[kind]
+    arguments = [['domain', 'Field', 'bls12-381.fr']] if kind in 'fv' else []
+    return ['apply', name, arguments]
+
+
 with case('all-fifteen-exact-bindings-and-descriptors'):
     for contract, (inputs, outputs) in catalogue.items():
         parameters = [str(maximum)] if contract == 'index.constant' else []
         snapshot = export(primitive(contract, parameters))
         assert len(snapshot) == 11 and snapshot[4:6] == [[], []]
         assert snapshot[6] == [['binding', 'operation', contract,
-                                [] if contract.startswith('index.') else ['bls12-381.fr'], '']]
+                                [] if contract.startswith('index.') else [['domain', 'Field', 'bls12-381.fr']], '',
+                                [logical(x) for x in inputs], [logical(x) for x in outputs]]]
         work = snapshot[7][0]
         op = work[9][1][0]
-        assert op[0] == ['exec', 'exec.apply', 'operation', parameters]
+        assert op[0] == ['exec', 'exec.apply', 'operation', [['natural', x] for x in parameters]]
         assert op[1] == list(range(len(inputs))) and len(op[2]) == len(outputs)
         assert op[3:] == [[], 'primitive']
         assert work[9][2] == ['return', list(range(len(outputs)))]
@@ -177,6 +186,8 @@ with case('unused-supported-bindings-retained-in-order-and-independently-admitte
     assert [b[1] for b in export(source)[6]] == ['unused', 'operation']
     assert run(source, ['1', '2']) == returned(['3'])
     bad = source.replace('contract="vector.split"', 'contract="vector.product"')
+    bad = bad.replace('!exec.outcome<(' + vector + ',' + vector + ')>',
+                      '!exec.outcome<(' + field + ')>')
     export(bad, refusal='structured-source-binding')
     run(bad, ['1', '2'], refusal='structured-reference-binding')
 
@@ -220,8 +231,11 @@ for name, bad in [
         reject_native(bad, ['1', '2'])
 
 for literal in ['00', '+1', '-1', '1 ', str(maximum + 1), '9' * 100]:
-    with case('canonical-u64-parameter-' + literal[:24]):
-        reject_native(primitive('index.constant', [literal]), [])
+    with case('byte-spelling-is-not-a-native-parameter-' + literal[:24]):
+        source = primitive('index.constant', [literal])
+        source = source.replace(f'parameters=[{literal} : ui64]',
+                                'parameters=' + json.dumps([literal]))
+        reject_native(source, [])
 
 with case('nominal-domain-profile-on-unused-binding'):
     source = primitive('index.add').replace(binding('index.add'),
@@ -242,7 +256,7 @@ with case('scoped-invocations-and-pure-computations-remain-distinct'):
     protocol = base.replace('"protocol.local_call"(%a0,%a1) {callee=@work,role="P",site="call"}',
                             '"exec.apply"(%a0,%a1) {binding=@operation,parameters=[],site="call"}')
     reject_native(protocol, ['1', '2'])
-    pure = base.replace('%value_attempt =', '%unscoped = "data.index"() {value="0"} : ()->ui64\n%value_attempt =')
+    pure = base.replace('%value_attempt =', '%unscoped = "data.index"() {value=0 : ui64} : ()->ui64\n%value_attempt =')
     reject_native(pure, ['1', '2'])
 
 with case('primitive-sites-and-split-full-result-abi'):

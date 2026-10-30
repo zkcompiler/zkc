@@ -1,12 +1,15 @@
 #include "zkc/Dialect/Bindings.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
+#include "support/ContractWitnesses.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/OperationShapes.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Program/Codec.h"
+#include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
@@ -31,7 +34,10 @@ template <typename T> T accept(Expected<T> result) {
 }
 template <typename T> void refuse(Expected<T> result, StringRef code) {
   require(!result, "expected refusal");
-  require(toString(result.takeError()) == code, code);
+  handleAllErrors(result.takeError(), [&](const zkc::Refusal &refusal) {
+    require(refusal.code == code, "expected " + code.str() + "; received " +
+                                      refusal.code + ": " + refusal.detail);
+  });
 }
 } // namespace
 int main() {
@@ -55,28 +61,87 @@ int main() {
   registerDialects(registry);
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
-  llvm::StringSet<> contracts;
-  for (const auto &kernel : operationShapes()) {
-    require(contracts.insert(kernel.key).second, "unique installed contract");
-    auto operation = boundOperationName(kernel.key);
-    bool scopedOnly = kernel.key == "resource_unit.create" ||
-                      kernel.key == "resource_unit.pass" ||
-                      kernel.key == "resource_unit.consume" ||
-                      kernel.key == "control.require";
-    require(operation.empty() == scopedOnly, kernel.key);
-    if (!scopedOnly)
-      require(context.isOperationRegistered(operation), operation);
+  require(context.isOperationRegistered("exec.apply"),
+          "the installed contract invocation is registered");
+  for (StringRef retired : {"algebra.exec.field_add", "poly.exec.fold",
+                            "crypto.exec.random_draw", "data.exec.sequence_at"})
+    require(!context.isOperationRegistered(retired),
+            "retired execution wrapper is still registered");
+  {
+    mlir::OpBuilder builder(&context);
+    auto location = builder.getUnknownLoc();
+    mlir::OwningOpRef<mlir::ModuleOp> module(mlir::ModuleOp::create(location));
+    builder.setInsertionPointToEnd(module->getBody());
+    auto element = builder.getI1Type();
+    auto binding = runtime::BindingOp::create(
+        builder, location, "empty", "sequence.empty",
+        builder.getArrayAttr({mlir::TypeAttr::get(element)}), "");
+    auto callable =
+        mlir::dyn_cast<mlir::CallableOpInterface>(binding.getOperation());
+    require(callable && !callable.getCallableRegion() &&
+                callable.getArgumentTypes() ==
+                    binding.getFunctionType().getInputs() &&
+                callable.getResultTypes() ==
+                    binding.getFunctionType().getResults(),
+            "native binding must expose its complete external callable ABI");
+    auto function = mlir::func::FuncOp::create(builder, location, "caller",
+                                               binding.getFunctionType());
+    builder.setInsertionPointToEnd(function.addEntryBlock());
+    mlir::OperationState state(location, exec::ApplyOp::getOperationName());
+    state.addOperands(function.getArguments());
+    state.addTypes(binding.getFunctionType().getResults());
+    state.addAttribute("binding", mlir::FlatSymbolRefAttr::get(binding));
+    state.addAttribute("parameters", builder.getArrayAttr({}));
+    state.addAttribute("site", builder.getStringAttr("empty"));
+    auto *application = builder.create(state);
+    mlir::func::ReturnOp::create(builder, location, application->getResults());
+    auto call = mlir::dyn_cast<mlir::CallOpInterface>(application);
+    require(call &&
+                llvm::equal(call.getArgOperands(), function.getArguments()) &&
+                mlir::succeeded(mlir::verify(*module)),
+            "call interface must retain scope and exact outcome ports");
+    require(accept(readBinding(binding)).application.arguments ==
+                std::vector<std::string>{"bool"},
+            "complete type must be encoded only at the interchange boundary");
+    auto type = binding.getFunctionType();
+    auto annotation = builder.getDictionaryAttr(
+        {builder.getNamedAttr("test.note", builder.getUnitAttr())});
+    binding.setArgAttrsAttr(builder.getArrayAttr({annotation}));
+    require(mlir::succeeded(mlir::verify(*module)),
+            "formed standard call dictionaries must not be rejected as type "
+            "errors");
+    refuse(readBinding(binding), "binding-attributes");
+    binding.removeArgAttrsAttr();
+    mlir::ScopedDiagnosticHandler quiet(
+        &context, [](mlir::Diagnostic &) { return mlir::success(); });
+    binding->setAttr("physical_arguments", builder.getArrayAttr({}));
+    require(mlir::failed(mlir::verify(*module)),
+            "legacy native physical attributes survived");
+    binding->removeAttr("physical_arguments");
+    binding.setArgumentsAttr(builder.getStrArrayAttr({"bool"}));
+    require(mlir::failed(mlir::verify(*module)),
+            "a string cannot stand in for a complete native type");
+    binding.setArgumentsAttr(
+        builder.getArrayAttr({mlir::TypeAttr::get(element)}));
+    binding.setFunctionType(
+        executableBindingSignature(builder.getFunctionType({}, {element})));
+    require(mlir::failed(mlir::verify(*module)),
+            "forged callable erasure was accepted");
+    binding.setFunctionType(type);
+    application->setAttr("arg_attrs", builder.getArrayAttr({}));
+    require(mlir::failed(mlir::verify(*module)),
+            "scope was omitted from call attribute arity");
+    application->removeAttr("arg_attrs");
+    require(mlir::succeeded(mlir::verify(*module)),
+            "restored native callable failed formation");
   }
-  require(boundOperationName("uninstalled.contract").empty(),
-          "unknown contracts have no IR mapping");
-  require(boundOperationName("transcript.observe.uninstalled").empty(),
-          "unknown observation types have no IR mapping");
-  require(boundOperationName("table.relayout").empty(),
-          "physical adapters do not acquire logical operations");
   mlir::OperationState state(mlir::UnknownLoc::get(&context),
                              zkc::runtime::BindingOp::getOperationName());
   auto *detached = mlir::Operation::create(state);
   refuse(readBinding(detached), "binding-declaration-context");
+  require(!bindingMatches(mlir::cast<runtime::BindingOp>(detached),
+                          {"missing", {"bool.and", {}, ""}}, false),
+          "incomplete native binding cannot match an admitted record");
   detached->destroy();
   refuse(readBinding(nullptr), "binding-declaration-context");
   {
@@ -85,12 +150,14 @@ int main() {
     mlir::OwningOpRef<mlir::ModuleOp> module(
         mlir::ModuleOp::create(mlir::UnknownLoc::get(&context)));
     mlir::OpBuilder builder(module->getBody(), module->getBody()->end());
-    auto binding = runtime::BindingOp::create(
-        builder, module->getLoc(), "convert", "representation.convert",
-        builder.getStrArrayAttr({"field:bls12-381.fr"}),
-        "native/representation.convert",
-        builder.getStrArrayAttr(
-            {physical.spelling(), "field:bls12-381.fr@blst/fr"}));
+    auto binding = accept(
+        importBinding(builder, module->getLoc(),
+                      {"convert",
+                       {"representation.convert",
+                        {"field:bls12-381.fr"},
+                        "native/representation.convert",
+                        {physical.spelling(), "field:bls12-381.fr@blst/fr"}}},
+                      true));
     require(accept(readBinding(binding)).application.physicalArguments.size() ==
                     2 &&
                 mlir::succeeded(mlir::verify(*module)),
@@ -103,13 +170,14 @@ int main() {
     auto *root = builder.create(rootState);
     auto *body = builder.createBlock(&root->getRegion(0));
     binding->moveBefore(body, body->end());
-    refuse(readBinding(binding), "binding-conversion");
+    refuse(readBinding(binding), "binding-stage");
     root->setAttr("profile", protocol_ir::ProfileAttr::get(
                                  &context, protocol_ir::Profile::Physical));
     require(bool(readBinding(binding)),
             "physical Protocol profile refused a physical declaration");
-    binding.setPhysicalArgumentsAttr(
-        builder.getStrArrayAttr({physical.spelling(), physical.spelling()}));
+    auto port = decodeBoundType(&context, physical);
+    binding.setFunctionType(
+        executableBindingSignature(builder.getFunctionType({port}, {port})));
     refuse(readBinding(binding), "binding-conversion");
     binding->moveBefore(module->getBody(), module->getBody()->begin());
     refuse(readBinding(binding), "binding-conversion");
@@ -123,8 +191,7 @@ int main() {
     auto loc = outer->getLoc();
     auto declare = [&] {
       runtime::BindingOp::create(builder, loc, "combine", "bool.and",
-                                 builder.getArrayAttr({}), "",
-                                 mlir::ArrayAttr{});
+                                 builder.getArrayAttr({}), "");
     };
     declare();
     auto inner = mlir::ModuleOp::create(loc, "schedule");
@@ -133,11 +200,12 @@ int main() {
     auto type = builder.getI1Type();
     auto fn = mlir::func::FuncOp::create(
         builder, loc, "evaluate",
-        builder.getFunctionType({type, type}, {type}));
+        builder.getFunctionType({runtime::ScopeType::get(&context), type, type},
+                                {exec::OutcomeType::get(&context, {type})}));
     builder.setInsertionPointToEnd(fn.addEntryBlock());
-    mlir::OperationState call(loc, boundOperationName("bool.and"));
+    mlir::OperationState call(loc, exec::ApplyOp::getOperationName());
     call.addOperands(fn.getArguments());
-    call.addTypes(type);
+    call.addTypes(exec::OutcomeType::get(&context, {type}));
     call.addAttribute("binding",
                       mlir::FlatSymbolRefAttr::get(&context, "combine"));
     call.addAttribute("parameters", builder.getArrayAttr({}));
@@ -264,7 +332,7 @@ int main() {
 
   // Every installed polymorphic operation signature is itself well formed and
   // sufficient for a body invoking exactly that operation.
-  for (const auto &op : boundOperationContracts()) {
+  for (const auto &op : zkc::test::genericWitnessOperations()) {
     generic::Function body;
     body.signature = op.signature;
     generic::Call call{"site", op.name, {}, {}};
@@ -278,7 +346,8 @@ int main() {
       body.returns.push_back(op.signature.inputs.size() + i);
     body.body.push_back(std::move(call));
     accept(generic::check(body, boundTypeConstructors(),
-                          boundOperationContracts(), boundCapabilityRules()));
+                          zkc::test::genericWitnessOperations(),
+                          boundCapabilityRules()));
   }
   program::LocalDefinitions module;
   module.bindings.push_back(

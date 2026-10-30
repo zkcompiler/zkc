@@ -4,16 +4,16 @@
 !ms = !data.sequence<!m>
 !vs = !data.sequence<!v>
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="at",contract="sequence.at",arguments=["matrix:bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="vector",contract="sequence.at",arguments=["vector:bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["matrix:bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="vlength",contract="sequence.length",arguments=["vector:bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
- "runtime.binding"() {sym_name="zero",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="bilinear",contract="matrix.bilinear",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="at",contract="sequence.at",arguments=[!algebra.field_matrix<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field_matrix<"bls12-381.fr">>, ui64) -> !exec.outcome<(!algebra.field_matrix<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="vector",contract="sequence.at",arguments=[!algebra.field_vector<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field_vector<"bls12-381.fr">>, ui64) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="length",contract="sequence.length",arguments=[!algebra.field_matrix<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field_matrix<"bls12-381.fr">>) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="vlength",contract="sequence.length",arguments=[!algebra.field_vector<"bls12-381.fr">],implementation="",function_type=(!runtime.scope, !data.sequence<!algebra.field_vector<"bls12-381.fr">>) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation="",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(i1)>} : ()->()
+ "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation="",function_type=(!runtime.scope, i1, i1) -> !exec.outcome<(i1)>} : ()->()
+ "runtime.binding"() {sym_name="zero",contract="field.constant",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+ "runtime.binding"() {sym_name="bilinear",contract="matrix.bilinear",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_matrix<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
     func.func @evaluate(%arg0: !runtime.scope, %arg1: !ms, %arg2: !vs, %arg3: !vs) -> !exec.outcome<(!f, i1)> attributes {no_inline, runtime.origin = ["evaluate", []]} {
       %0 = "exec.apply"(%arg0, %arg1) <{binding = @length, parameters = [], site = "count"}> : (!runtime.scope, !ms) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
@@ -69,10 +69,10 @@ module { "protocol.module"() ({
       cf.br ^bb11(%31 : !f)
     }
     func.func private @control_0(%arg0: !runtime.scope, %arg1: ui64, %arg2: !ms, %arg3: !vs, %arg4: !vs) -> !exec.outcome<(!f)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @constant, parameters = ["0"], site = "start"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @constant, parameters = [0 : ui64], site = "start"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0) <{binding = @zero, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
+      %2 = "exec.apply"(%arg0) <{binding = @zero, parameters = [#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(!f)>) -> ()
     ^bb2(%3: !exec.stop):  // 5 preds: ^bb0, ^bb1, ^bb3, ^bb7, ^bb9
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!f)>
@@ -137,7 +137,7 @@ module { "protocol.module"() ({
       return %12 : !exec.outcome<(!f)>
     }
     func.func private @control_2(%arg0: !runtime.scope, %arg1: ui64, %arg2: !ms, %arg3: !vs, %arg4: !vs) -> !exec.outcome<(!f)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @zero, parameters = ["0"], site = "mismatch_zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
+      %0 = "exec.apply"(%arg0) <{binding = @zero, parameters = [#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>], site = "mismatch_zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!f)>) -> ()
     ^bb1(%1: !f):  // pred: ^bb0
       %2 = "exec.complete"(%arg0, %1) : (!runtime.scope, !f) -> !exec.outcome<(!f)>

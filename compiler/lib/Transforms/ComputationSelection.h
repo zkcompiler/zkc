@@ -56,12 +56,15 @@ selectComputation(finite::Computation computation,
                   MathematicalSelectionPolicy policy,
                   finite::ComputationWork &work,
                   const MathematicalRecipes &recipes = mathematicalRecipes());
-/// Reuse facts from an admitted immutable source closure. The result owns the
-/// passed view: move it to transfer ownership, or copy it to share temporary
-/// SSA storage. Rebuild after source edits/cloning; no persistent cache is
-/// used. Source IR and enclosing views supplying borrowed SSA must outlive the
-/// result. Recognition and selection debit work on every call;
-/// structural/evidence work already spent producing the view is not repeated.
+/// Reuse owner-scoped facts, preserving the invocation's work account.
+ComputationSelection
+selectComputation(finite::Computation computation,
+                  MathematicalSelectionPolicy policy,
+                  finite::ComputationWork &work, MathematicalFactAnalysis &,
+                  const MathematicalRecipes &recipes = mathematicalRecipes());
+/// Select from a previously inspected view. The result owns that view; borrowed
+/// source IR must remain immutable and live. Work already debited by inspection
+/// is not spent a second time, while recognition is charged on each selection.
 ComputationSelection
 selectComputation(finite::ComputationView view,
                   MathematicalSelectionPolicy policy,

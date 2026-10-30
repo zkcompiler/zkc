@@ -1,7 +1,11 @@
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/InvocationParameters.h"
 
 using namespace llvm;
 using namespace mlir;
@@ -10,33 +14,31 @@ using namespace mlir;
 namespace zkc {
 namespace {
 const protocol::OperationContracts *semanticRoles(Operation *op) {
-  auto binding = protocol::operationBinding(op);
-  if (!binding) {
-    consumeError(binding.takeError());
+  auto apply = dyn_cast<exec::ApplyOp>(op);
+  if (!apply)
     return {};
-  }
-  // An explicit physical choice does not change the logical roles.
-  binding->application.implementation.clear();
-  auto logical = protocol::resolveBinding(binding->application, false);
-  if (!logical) {
-    consumeError(logical.takeError());
+  auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+      op, apply.getBindingAttr());
+  if (!binding || !apply.getParametersAttr())
     return {};
-  }
-  auto typesMatch = [&](TypeRange actual,
-                        ArrayRef<protocol::BoundType> expected) {
-    if (actual.size() != expected.size())
-      return false;
-    for (auto [type, target] : zip(actual, expected))
-      if (type != protocol::decodeBoundType(op->getContext(), target))
-        return false;
-    return true;
+  auto silent = [&] {
+    auto diagnostic = emitError(op->getLoc());
+    diagnostic.abandon();
+    return diagnostic;
   };
-  if (op->getName().getStringRef() !=
-          protocol::boundOperationName(binding->application.contract) ||
-      !typesMatch(op->getOperandTypes(), logical->inputs) ||
-      !typesMatch(op->getResultTypes(), logical->outputs))
+  if (failed(verifyInvocationParameters(silent, binding.getContract(),
+                                        binding.getArgumentsAttr(),
+                                        apply.getParametersAttr())))
     return {};
-  return protocol::operationContracts(binding->application.contract);
+  // A selected implementation does not change the logical roles. Resident
+  // ports only match when they retain this exact mathematical signature.
+  auto logical =
+      resolveLogicalSignature(silent, op->getContext(), binding.getContract(),
+                              binding.getArguments().getValue());
+  if (!logical || !equal(apply.getInputs().getTypes(), logical.getInputs()) ||
+      !equal(apply.getOutcome().getType().getPayload(), logical.getResults()))
+    return {};
+  return protocol::operationContracts(binding.getContract());
 }
 std::optional<DiagonalProducerRoles> producerRoles(Operation *op) {
   const auto *facts = semanticRoles(op);
@@ -56,19 +58,11 @@ std::optional<DiagonalContractionRoles> consumerRoles(Operation *op) {
 }
 } // namespace
 std::optional<DiagonalProducerRoles>
-zkc::algebra::VectorMulOp::getDiagonalProducerRoles() {
-  return producerRoles(*this);
-}
-std::optional<DiagonalProducerRoles>
-zkc::algebra::CurveScaleEachOp::getDiagonalProducerRoles() {
+zkc::exec::ApplyOp::getDiagonalProducerRoles() {
   return producerRoles(*this);
 }
 std::optional<DiagonalContractionRoles>
-zkc::algebra::VectorDotOp::getDiagonalContractionRoles() {
-  return consumerRoles(*this);
-}
-std::optional<DiagonalContractionRoles>
-zkc::algebra::CurveMSMOp::getDiagonalContractionRoles() {
+zkc::exec::ApplyOp::getDiagonalContractionRoles() {
   return consumerRoles(*this);
 }
 } // namespace zkc

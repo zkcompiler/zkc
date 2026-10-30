@@ -7,6 +7,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
@@ -271,7 +272,7 @@ int main() {
           require(succeeded(projection.run(*source)),
                   "scoped projection failed");
           auto normalized = computation::prepareComputationRealization(*source);
-          require(bool(normalized) && succeeded(verify(*normalized)),
+          require(bool(normalized) && succeeded(zkc::admitStage(*normalized)),
                   "scoped shared frontier was refused");
           unsigned imports = 0, exports = 0;
           SymbolTable original(owner(*source));
@@ -293,7 +294,7 @@ int main() {
               cast<mlir::ModuleOp>(source->clone()));
           require(
               succeeded(computation::realizeComputations(*lowered, policy)) &&
-                  succeeded(verify(*lowered)),
+                  succeeded(zkc::admitStage(*lowered)),
               "scoped shared frontier realization failed");
           require(succeeded(computation::verifyComputationRealization(
                       *source, *lowered, policy)),
@@ -315,7 +316,7 @@ int main() {
               changed = true;
               break;
             }
-          require(changed && succeeded(verify(*lowered)),
+          require(changed && succeeded(zkc::admitStage(*lowered)),
                   "coefficient import mutation must remain admitted");
           bool identifier = false;
           ScopedDiagnosticHandler handler(

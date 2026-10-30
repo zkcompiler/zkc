@@ -10,6 +10,8 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Contracts/Operations.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
@@ -32,7 +34,7 @@ const char *source = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : () -> ()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : () -> ()
  "data.domain"() ({
  ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V) -> !data.domain<!F>
@@ -113,7 +115,7 @@ OwningOpRef<ModuleOp> linearCollect(MLIRContext &context, unsigned additions,
                      .lookup<runtime::BindingOp>("mul");
   binding.setContract(subtract ? "field.sub" : "field.add");
   linearBody(sf::function(*module, "square"), additions, "mul", 1, 1, subtract);
-  require(succeeded(verify(*module)), "linear callback refused");
+  require(succeeded(zkc::admitStage(*module)), "linear callback refused");
   return module;
 }
 OwningOpRef<ModuleOp> prepare(ModuleOp source,
@@ -163,8 +165,8 @@ void refusesIR(StringRef text, MLIRContext &context, StringRef code) {
       codes.push_back(refusal.code);
     return success();
   });
-  require(!parseSourceString<ModuleOp>(text, &context),
-          "invalid IR was admitted");
+  auto module = parseSourceString<ModuleOp>(text, &context);
+  require(!module || failed(admitStage(*module)), "invalid IR was admitted");
   require(llvm::is_contained(codes, code.str()), "missing refusal identifier " +
                                                      code + "; observed " +
                                                      llvm::join(codes, ", "));
@@ -192,7 +194,8 @@ int main(int argc, char **argv) {
       auto module = parseSourceString<ModuleOp>(source, &context);
       require(bool(module), "fold fixture refused");
       linearBody(sf::function(*module, "step"), terms, "add", 1, 2);
-      require(succeeded(verify(*module)), "long repeated-term fold refused");
+      require(succeeded(zkc::admitStage(*module)),
+              "long repeated-term fold refused");
       auto subject = readComputation(*module);
       auto later = readComputation(*original);
       auto view = finite::analyzeComputation(subject);
@@ -254,7 +257,7 @@ int main(int argc, char **argv) {
     inputs[body.getArgument(0)] = {vector, true};
     inputs[vector] = {vector, false};
     unsigned emitted = 0;
-    auto emit = [&](StringRef, ValueRange, Type, ArrayRef<std::string>) {
+    auto emit = [&](StringRef, ValueRange, Type, ArrayRef<Attribute>) {
       ++emitted;
       return Value();
     };
@@ -353,7 +356,7 @@ int main(int argc, char **argv) {
     require(bool(collect), "missing collection");
     auto second = sc::duplicateInvocation(collect, helper, "second");
     sc::returned(helper)->setOperand(0, sc::payload(second).front());
-    require(succeeded(verify(*original)), "two invocations refused");
+    require(succeeded(zkc::admitStage(*original)), "two invocations refused");
     for (uint64_t allowance : {uint64_t(0), cost}) {
       mathematical::RealizationWork work;
       work.lanes = allowance;
@@ -490,7 +493,7 @@ int main(int argc, char **argv) {
   cases.run("descriptor arbitrary expression refused", [&] {
     auto invalid = replace(
         source, "   %d =",
-        "   %bad = \"data.index\"() {value=\"0\"} : () -> ui64\n   %d =");
+        "   %bad = \"data.index\"() {value=0 : ui64} : () -> ui64\n   %d =");
     require(!parseSourceString<ModuleOp>(invalid, &context),
             "descriptor evaluated arbitrary expression");
   });
@@ -823,8 +826,9 @@ int main(int argc, char **argv) {
               context, "finite-bound");
   });
   cases.run("shifted index does not inherit bound", [&] {
-    auto text = replace(fixture("total-state"), "   %v =",
-                        R"mlir(   %one = "data.index"() {value="1"} : ()->ui64
+    auto text =
+        replace(fixture("total-state"), "   %v =",
+                R"mlir(   %one = "data.index"() {value=1 : ui64} : ()->ui64
    %isSmall = "data.index_less"(%i,%one) : (ui64,ui64)->i1
    %shifted = arith.select %isSmall,%one,%i : ui64
    %v =)mlir");
@@ -906,7 +910,7 @@ int main(int argc, char **argv) {
  }
  func.func private @read()->i1 {
    %s = func.call @relay() : ()->!data.sequence<i1>
-   %i = "data.index"() {value="0"} : ()->ui64
+   %i = "data.index"() {value=0 : ui64} : ()->ui64
    %b = "data.bounded_at"(%s,%i) : (!data.sequence<i1>,ui64)->i1
    func.return %b : i1
  }
@@ -979,8 +983,8 @@ int main(int argc, char **argv) {
               "changed native result accepted");
     });
   if (checkedAccess) {
-    bool installed = !protocol::boundOperationName("matrix.get").empty() &&
-                     !protocol::boundOperationName("field_array.get").empty();
+    bool installed = protocol::operationContracts("matrix.get") &&
+                     protocol::operationContracts("field_array.get");
     cases.run("checked access prerequisites installed", [&] {
       require(installed, "matrix.get and field_array.get must be integrated");
     });

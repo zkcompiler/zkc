@@ -8,6 +8,9 @@
 #include "zkc/Transforms/Finite.h"
 #include "llvm/ADT/DenseSet.h"
 
+namespace zkc {
+class MathematicalFactAnalysis;
+}
 namespace zkc::protocol {
 struct SourceExecutionClosure;
 }
@@ -34,7 +37,8 @@ mlir::FailureOr<llvm::SmallVector<mlir::Value>> realizeScopedTotalExpression(
     mathematical::RealizationWork &work, MathematicalSelectionPolicy policy,
     mathematical::RealizationTrace *trace, ScopedEmissionBudget &budget,
     bool orderedRetry, const CollectFold *pair = nullptr,
-    mlir::ValueRange consumerInputs = {});
+    mlir::ValueRange consumerInputs = {},
+    MathematicalFactAnalysis *facts = nullptr);
 
 // Producer-only traversal at the caller's current scoped insertion point.
 // Callback substitution uses the same builder and borrowed runtime scope.

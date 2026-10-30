@@ -1,6 +1,8 @@
 #include "CheckedCandidate.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Builders.h"
@@ -23,19 +25,15 @@ class Realizer {
   protocol_ir::ProtocolModuleOp unit;
   OpBuilder builder;
   llvm::StringSet<> names;
-  std::map<std::pair<std::string, std::vector<std::string>>, std::string>
-      bindings;
+  llvm::DenseMap<std::pair<StringAttr, ArrayAttr>, std::string> bindings;
   unsigned nextName = 0, nextSite = 0;
   exec::ScopedExecutionBuilder *scope = nullptr;
   Location loc;
   algebra::FieldType field;
   Type index, boolean, vector, table, point;
   std::string site() { return "residual_" + std::to_string(nextSite++); }
-  FlatSymbolRefAttr binding(StringRef contract,
-                            ArrayRef<std::string> arguments) {
-    auto key = std::make_pair(
-        contract.str(),
-        std::vector<std::string>(arguments.begin(), arguments.end()));
+  FlatSymbolRefAttr binding(StringRef contract, ArrayAttr arguments) {
+    auto key = std::make_pair(builder.getStringAttr(contract), arguments);
     auto found = bindings.find(key);
     if (found == bindings.end()) {
       std::string name;
@@ -44,45 +42,40 @@ class Realizer {
       } while (!names.insert(name).second);
       OpBuilder::InsertionGuard guard(builder);
       builder.setInsertionPointToStart(&unit.getBody().front());
-      SmallVector<Attribute> args;
-      for (const auto &arg : arguments)
-        args.push_back(builder.getStringAttr(arg));
-      runtime::BindingOp::create(builder, loc, name, contract,
-                                 builder.getArrayAttr(args), "",
-                                 mlir::ArrayAttr{});
-      found = bindings.emplace(std::move(key), name).first;
+      runtime::BindingOp::create(builder, loc, name, contract, arguments, "");
+      found = bindings.try_emplace(std::move(key), name).first;
     }
     return FlatSymbolRefAttr::get(builder.getContext(), found->second);
   }
   SmallVector<Value> emit(StringRef contract, ValueRange inputs,
                           TypeRange outputs,
-                          ArrayRef<std::string> parameters = {},
+                          ArrayRef<Attribute> parameters = {},
                           std::optional<unsigned> length = {}) {
-    SmallVector<std::string> arguments;
+    SmallVector<Attribute> arguments;
     if (!contract.starts_with("index.") && contract != "control.require")
-      arguments.push_back(field.getDomain().str());
+      arguments.push_back(builder.getStringAttr(field.getDomain()));
     if (length)
-      arguments.push_back(std::to_string(*length));
-    auto reference = binding(contract, arguments);
-    SmallVector<Attribute> parametersAttrs;
-    for (const auto &param : parameters)
-      parametersAttrs.push_back(builder.getStringAttr(param));
+      arguments.push_back(
+          builder.getIntegerAttr(builder.getIntegerType(64, false), *length));
+    auto reference = binding(contract, builder.getArrayAttr(arguments));
     return scope->invoke(
         exec::ApplyOp::getOperationName(), outputs, scope->scoped(inputs),
         {builder.getNamedAttr("binding", reference),
          builder.getNamedAttr("site", builder.getStringAttr(site())),
-         builder.getNamedAttr("parameters",
-                              builder.getArrayAttr(parametersAttrs))});
+         builder.getNamedAttr("parameters", builder.getArrayAttr(parameters))});
   }
   Value one(StringRef contract, ValueRange inputs, Type output,
-            ArrayRef<std::string> params = {}) {
+            ArrayRef<Attribute> params = {}) {
     return emit(contract, inputs, TypeRange{output}, params).front();
   }
   Value natural(unsigned n) {
-    return one("index.constant", {}, index, {std::to_string(n)});
+    return one("index.constant", {}, index, {builder.getIntegerAttr(index, n)});
   }
-  Value scalar(StringRef n) {
-    return one("field.constant", {}, field, {n.str()});
+  Value scalar(algebra::FieldLiteralAttr value) {
+    return one("field.constant", {}, field, {value});
+  }
+  Value scalar(uint64_t value) {
+    return scalar(cantFail(algebra::makeFieldLiteral(field, APInt(64, value))));
   }
   void require(Value value) { (void)emit("control.require", value, {}); }
   Value arity(Value value) { return one("poly.table_arity", value, index); }
@@ -157,7 +150,7 @@ class Realizer {
       vectors.push_back(one("vector.from_table", factor, vector));
     auto length = one("vector.length", vectors.front(), index);
     auto half = one("index.div", {length, natural(2)}, index);
-    auto zero = scalar("0");
+    auto zero = scalar(0);
     unsigned width = *poly::recipeDegree(recipe) + 1;
     SmallVector<Value> seeds(width, zero), captures(vectors);
     captures.push_back(half);
@@ -247,7 +240,7 @@ class Realizer {
     SmallVector<Coefficients> values;
     for (auto factor : tables)
       values.push_back({one("poly.evaluate", {factor, empty}, field)});
-    return {p, expression(recipe, values, scalar("0")).front()};
+    return {p, expression(recipe, values, scalar(0)).front()};
   }
 
 public:
@@ -294,7 +287,7 @@ public:
       SmallVector<Coefficients> values;
       for (auto factor : arguments.drop_front())
         values.push_back({one("poly.evaluate", {factor, arguments[0]}, field)});
-      returned = {expression(recipe, values, scalar("0")).front()};
+      returned = {expression(recipe, values, scalar(0)).front()};
     } else {
       SmallVector<Type> inputs{point};
       inputs.append(recipe.getBody().front().getNumArguments(), table);
@@ -377,10 +370,10 @@ static LogicalResult realizeRecipes(ModuleOp module) {
   for (auto recipe :
        make_early_inc_range(unit.getBody().front().getOps<poly::RecipeOp>()))
     recipe.erase();
-  return verify(module);
+  return zkc::admitStage(module);
 }
 LogicalResult expandPolynomialRecipes(ModuleOp module) {
-  if (failed(verify(module)))
+  if (failed(zkc::admitStage(module)))
     return failure();
   mathematical::CheckedCandidate candidate(module);
   if (failed(realizeRecipes(*candidate)))

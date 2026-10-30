@@ -2,10 +2,12 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
@@ -103,7 +105,7 @@ class TranscriptCorrespondence {
     return bind(a.getResults(), b.getResults(), env);
   }
   bool kernel(const protocol::SourceExecutionStep *step, StringRef contract,
-              ArrayRef<std::string> arguments, ValueRange inputs,
+              ArrayRef<Attribute> arguments, ValueRange inputs,
               ArrayRef<std::string> parameters, StringRef site) {
     if (!step || !charge(1 + inputs.size()) || !step->regions.empty())
       return false;
@@ -115,20 +117,12 @@ class TranscriptCorrespondence {
     auto binding =
         reference ? symbols.lookup<runtime::BindingOp>(reference.getValue())
                   : runtime::BindingOp();
-    auto strings = [](ArrayAttr a, ArrayRef<std::string> b) {
-      if (!a || a.size() != b.size())
-        return false;
-      for (auto [x, y] : zip(a, b)) {
-        auto string = dyn_cast<StringAttr>(x);
-        if (!string || string.getValue() != y)
-          return false;
-      }
-      return true;
-    };
     if (!binding || binding.getContract() != contract ||
         !binding.getImplementation().empty() ||
-        !strings(binding.getArguments(), arguments) ||
-        !strings(op->getAttrOfType<ArrayAttr>("parameters"), parameters))
+        !llvm::equal(binding.getArguments(), arguments) ||
+        !protocol::invocationParametersMatch(
+            contract, binding.getArgumentsAttr(),
+            op->getAttrOfType<ArrayAttr>("parameters"), parameters))
       return false;
     bindings.insert(binding.getSymName());
     return true;
@@ -233,18 +227,14 @@ class TranscriptCorrespondence {
         indices = append->outputs[0];
       }
       operands.push_back(indices);
-      auto logical = protocol::encodeBoundType(event.payload, false);
-      if (!logical) {
-        consumeError(logical.takeError());
-        return false;
-      }
       std::string contract =
           !event.query  ? "transcript.native.indexed.observe.data"
           : event.bound ? "transcript.native.indexed.index"
                         : "transcript.native.indexed.challenge";
-      SmallVector<std::string> parameters{policy.suite};
+      SmallVector<Attribute> parameters{
+          StringAttr::get(function.getContext(), policy.suite)};
       if (!event.query)
-        parameters.push_back(logical->spelling());
+        parameters.push_back(TypeAttr::get(event.payload));
       auto *step = take();
       if (!kernel(step, contract, parameters, operands, {event.origin},
                   "transition"))
@@ -669,7 +659,8 @@ public:
             rules[site] = &rule;
     } else {
       stateTypes.push_back(runtime::CapabilityType::get(
-          candidate.getContext(), "transcript:" + policy.suite));
+          candidate.getContext(), zkc::runtime::CapabilityKind::Transcript,
+          policy.suite));
     }
     for (const auto &invocation : invocations) {
       auto inserted = startRules.emplace(
@@ -767,8 +758,9 @@ public:
 } // namespace
 Error verifyNativeEntrySelection(ModuleOp prepared, ModuleOp selected,
                                  StringRef entry) {
-  if (!prepared || !selected || failed(verify(prepared)) ||
-      failed(verify(selected)) || !hasSingleElement(*prepared.getBody()) ||
+  if (!prepared || !selected || failed(zkc::admitStage(prepared)) ||
+      failed(zkc::admitStage(selected)) ||
+      !hasSingleElement(*prepared.getBody()) ||
       !hasSingleElement(*selected.getBody()))
     return error("native-entry-correspondence");
   auto a = dyn_cast<pir::ProtocolModuleOp>(prepared.getBody()->front());
@@ -799,7 +791,8 @@ Error verifyNativeTranscript(
     ArrayRef<protocol::ConstructionInvocation> invocations) {
   if (!projected || !constructed ||
       projected.getContext() != constructed.getContext() ||
-      failed(verify(projected)) || failed(verify(constructed)) ||
+      failed(zkc::admitStage(projected)) ||
+      failed(zkc::admitStage(constructed)) ||
       !hasSingleElement(*projected.getBody()) ||
       !hasSingleElement(*constructed.getBody()))
     return error("native-transcript-subject");

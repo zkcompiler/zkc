@@ -4,9 +4,9 @@
 !R = !algebra.group<"ristretto255.group">
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
-    "runtime.binding"() <{arguments = ["ristretto255.group"], contract = "curve.scale_each", implementation = "", sym_name = "map"}> : () -> ()
-    "runtime.binding"() <{arguments = ["ristretto255.group"], contract = "curve.msm", implementation = "", sym_name = "reduce"}> : () -> ()
-    "runtime.binding"() <{arguments = [], contract = "control.require", implementation = "", sym_name = "guard"}> : () -> ()
+    "runtime.binding"() <{arguments = ["ristretto255.group"], contract = "curve.scale_each", implementation = "", sym_name = "map",function_type=(!runtime.scope, !algebra.field_vector<"ristretto255.scalar">, !algebra.group_vector<"ristretto255.group">) -> !exec.outcome<(!algebra.group_vector<"ristretto255.group">)>}> : () -> ()
+    "runtime.binding"() <{arguments = ["ristretto255.group"], contract = "curve.msm", implementation = "", sym_name = "reduce",function_type=(!runtime.scope, !algebra.field_vector<"ristretto255.scalar">, !algebra.group_vector<"ristretto255.group">) -> !exec.outcome<(!algebra.group<"ristretto255.group">)>}> : () -> ()
+    "runtime.binding"() <{arguments = [], contract = "control.require", implementation = "", sym_name = "guard",function_type=(!runtime.scope, i1) -> !exec.outcome<>}> : () -> ()
     func.func @Work(%arg0: !runtime.scope, %arg1: !V, %arg2: !V, %arg3: !V, %arg4: !A, %arg5: i1) -> !exec.outcome<(!R, !R)> attributes {no_inline, runtime.origin = ["Work", []]} {
       %0 = "exec.apply"(%arg0, %arg3, %arg4) <{binding = @map, parameters = [], site = "weighted"}> : (!runtime.scope, !V, !A) -> !exec.outcome<(!A)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!A)>) -> ()

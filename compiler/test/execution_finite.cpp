@@ -5,7 +5,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Analysis/Finite.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/Execution.h"
@@ -168,7 +168,7 @@ int main() {
   auto affineFold = [&] {
     auto text = changed(
         collect, "!O = !exec.outcome<(!V)>",
-        "!T = !runtime.capability<\"transcript:merlin3.bls12-381.fr64be/0\">\n"
+        "!T = !runtime.capability<transcript, \"merlin3.bls12-381.fr64be/0\">\n"
         "!O = !exec.outcome<(!T)>");
     text = changed(text,
                    "@body(%scope:!S,%item:!F,%domain:!V)->!exec.outcome<(!F)>",
@@ -194,10 +194,11 @@ int main() {
                        "execution-cfg");
   });
   cases.run("scoped finite callback cannot replace an affine root", [&] {
-    auto text = changed(affineFold(), "transcript:merlin3.bls12-381.fr64be/0",
-                        "resource_unit:Guard");
+    auto text =
+        changed(affineFold(), "transcript, \"merlin3.bls12-381.fr64be/0\"",
+                "resource_unit, \"Guard\"");
     text = changed(text, "module {", R"mlir(module {
- "runtime.binding"() {sym_name="create",contract="resource_unit.create",arguments=["Guard"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="create",contract="resource_unit.create",arguments=["Guard"],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(!runtime.capability<resource_unit, "Guard">)>} : ()->()
 )mlir");
     text = changed(text, R"mlir(   %ok = "exec.returned"(%state) : (!T)->!O
    return %ok : !O)mlir",
@@ -214,14 +215,15 @@ int main() {
     refuseAdmission(*module, "mathematical-formation");
   });
   cases.run("scoped finite callback retains a sampling successor root", [&] {
-    auto text = changed(affineFold(), "transcript:merlin3.bls12-381.fr64be/0",
-                        "rng:bls12-381.fr");
+    auto text =
+        changed(affineFold(), "transcript, \"merlin3.bls12-381.fr64be/0\"",
+                "rng, \"bls12-381.fr\"");
     text = changed(text, "!algebra.field<\"koala-bear\">",
                    "!algebra.field<\"bls12-381.fr\">");
     text = changed(text, "!algebra.field_vector<\"koala-bear\">",
                    "!algebra.field_vector<\"bls12-381.fr\">");
     text = changed(text, "module {", R"mlir(module {
- "runtime.binding"() {sym_name="draw",contract="random.draw",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="draw",contract="random.draw",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !runtime.capability<rng, "bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">)>} : ()->()
 )mlir");
     text = changed(text, R"mlir(   %ok = "exec.returned"(%state) : (!T)->!O
    return %ok : !O)mlir",

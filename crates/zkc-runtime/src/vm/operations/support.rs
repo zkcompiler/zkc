@@ -10,35 +10,6 @@ pub(super) fn primary(binding: &OperationBinding) -> Result<Identity> {
     Identity::parse(binding.arguments.first().ok_or_else(failure)?)
 }
 
-pub(super) fn require_primary(binding: &OperationBinding, identity: Identity) -> Result<()> {
-    if binding.arguments.len() != 1 || primary(binding)? != identity {
-        return Err(failure());
-    }
-    Ok(())
-}
-
-pub(super) fn field_type(kind: Type, field: Identity) -> Result<LogicalType> {
-    let identity = match kind {
-        Type::Bool
-        | Type::Index
-        | Type::Indices
-        | Type::Bytes
-        | Type::Shake128State
-        | Type::QuotientMatrix => Identity::None,
-        Type::Field
-        | Type::Matrix
-        | Type::Vector
-        | Type::Polynomial
-        | Type::Round
-        | Type::Table
-        | Type::Point
-        | Type::Rng
-        | Type::Nonce => field,
-        _ => return Err(failure()),
-    };
-    LogicalType::new(kind, identity)
-}
-
 pub(super) fn literal_rule(rule: AttributeRule, field: Identity) -> AttributeRule {
     match (rule, field) {
         (
@@ -79,29 +50,6 @@ pub(super) fn literal_rule(rule: AttributeRule, field: Identity) -> AttributeRul
         (AttributeRule::FieldDecimals, Identity::Bn254Fr) => AttributeRule::Bn254Decimals,
         _ => rule,
     }
-}
-
-pub(super) fn instantiate(
-    shape: OperationSignature,
-    field: Identity,
-    make: impl Fn(Type) -> Result<LogicalType>,
-) -> Result<OperationSignature<LogicalType>> {
-    Ok(OperationSignature {
-        inputs: shape.inputs.into_iter().map(&make).collect::<Result<_>>()?,
-        outputs: shape.outputs.into_iter().map(make).collect::<Result<_>>()?,
-        attributes: literal_rule(shape.attributes, field),
-    })
-}
-
-pub(super) fn field_signature(
-    binding: &OperationBinding,
-    contract: &Contract,
-) -> Result<OperationSignature<LogicalType>> {
-    let shape = contract.shape()?;
-    let primary = primary(binding)?;
-    let field = primary.scalar_field().ok_or_else(failure)?;
-    require_primary(binding, field)?;
-    instantiate(shape, field, |kind| field_type(kind, field))
 }
 
 /// Family rules have already checked the binding. Registry dispatch owns exact

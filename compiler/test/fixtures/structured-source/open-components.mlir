@@ -11,7 +11,7 @@ module { "protocol.module"() ({
     func.return %x,%y : !F,!F
   }
   func.func private @constant(%ignored:!F) -> !F {
-    %five = "algebra.constant"() {value="5"} : ()->!F
+    %five = "algebra.constant"() {value=#algebra.literal<!F, 5 : ui255>} : ()->!F
     func.return %five : !F
   }
   "protocol.func"() ({

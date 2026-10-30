@@ -2,6 +2,7 @@
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 #include <cstdint>
+#include <optional>
 using namespace llvm;
 namespace zkc::protocol {
 namespace {
@@ -32,9 +33,12 @@ struct Reader {
     bytes = bytes.drop_front(size);
     return true;
   }
-  bool name() {
+  bool name(std::string &out) {
     StringRef value;
-    return string(value) && identifier(value);
+    if (!string(value) || !identifier(value))
+      return false;
+    out = value.str();
+    return true;
   }
 };
 void header(std::string &out, unsigned tag, uint64_t size) {
@@ -46,8 +50,17 @@ void string(std::string &out, StringRef value) {
   header(out, 0, value.size());
   out.append(value.data(), value.size());
 }
+std::optional<uint64_t> inputPort(StringRef value) {
+  uint64_t port;
+  if (!value.consume_front("input_") || value.empty() ||
+      (value.size() > 1 && value.front() == '0') ||
+      !all_of(value, [](char c) { return c >= '0' && c <= '9'; }) ||
+      value.getAsInteger(10, port))
+    return std::nullopt;
+  return port;
+}
 } // namespace
-Error checkNativeOrigin(StringRef hex, StringRef kind, StringRef method) {
+Expected<NativeOriginTemplate> decodeNativeOriginTemplate(StringRef hex) {
   auto invalid = [] { return error("interactive-native-origin"); };
   if (hex.empty() || hex.size() > 4096 || hex.size() % 2 ||
       !all_of(hex, [](char c) {
@@ -62,54 +75,111 @@ Error checkNativeOrigin(StringRef hex, StringRef kind, StringRef method) {
   Reader reader{bytes};
   StringRef value;
   uint64_t count;
+  NativeOriginTemplate result;
   if (!reader.array(5) || !reader.string(value) ||
-      value != "zkc.native-origin-template/0" || !reader.name() ||
+      value != "zkc.native-origin-template/0" || !reader.name(result.entry) ||
       !reader.header(1, count) || count > 64)
     return invalid();
   for (uint64_t i = 0; i < count; ++i) {
+    NativeOriginStep step;
     if (!reader.array(3) || !reader.string(value) ||
-        (value != "apply" && value != "repeat") || !reader.name() ||
-        !reader.name())
+        (value != "apply" && value != "repeat") ||
+        !reader.name(step.protocol) || !reader.name(step.site))
       return invalid();
+    step.kind = value == "apply" ? NativeOriginStep::Kind::Apply
+                                 : NativeOriginStep::Kind::Repeat;
+    result.path.push_back(std::move(step));
   }
-  unsigned fields = kind == "query"     ? 7
-                    : kind == "message" ? 6
-                    : kind == "start"   ? 3
-                                        : 0;
-  if (!fields || !reader.array(0) || !reader.array(fields) ||
-      !reader.string(value) || value != kind)
+  if (!reader.array(0) || !reader.header(1, count) || !reader.string(value))
     return invalid();
-  for (unsigned i = 1; i < fields; ++i) {
-    if (!reader.string(value) || !identifier(value) ||
-        (kind == "query" && i == 5 && !method.empty() && value != method))
+  if (value == "query" && count == 7) {
+    NativeQueryOrigin query;
+    std::string port;
+    if (!reader.name(query.protocol) || !reader.name(query.site) ||
+        !reader.name(port) || !reader.name(query.service) ||
+        !reader.name(query.method) || !reader.name(query.owner))
       return invalid();
-    if (kind == "query" && i == 3) {
-      uint64_t port;
-      if (!value.consume_front("input_") || value.empty() ||
-          (value.size() > 1 && value.front() == '0') ||
-          !all_of(value, [](char c) { return c >= '0' && c <= '9'; }) ||
-          value.getAsInteger(10, port))
-        return invalid();
-    }
-  }
-  return reader.bytes.empty() ? Error::success() : invalid();
+    auto input = inputPort(port);
+    if (!input)
+      return invalid();
+    query.serviceInput = *input;
+    result.event = std::move(query);
+  } else if (value == "message" && count == 6) {
+    NativeMessageOrigin message;
+    if (!reader.name(message.protocol) || !reader.name(message.site) ||
+        !reader.name(message.schema) || !reader.name(message.sender) ||
+        !reader.name(message.receiver))
+      return invalid();
+    result.event = std::move(message);
+  } else if (value == "start" && count == 3) {
+    NativeStartOrigin start;
+    if (!reader.name(start.protocol) || !reader.name(start.site))
+      return invalid();
+    result.event = std::move(start);
+  } else
+    return invalid();
+  if (!reader.bytes.empty())
+    return invalid();
+  return result;
+}
+Error checkNativeOrigin(StringRef hex, StringRef kind, StringRef method) {
+  auto origin = decodeNativeOriginTemplate(hex);
+  if (!origin)
+    return origin.takeError();
+  if (kind == "query") {
+    auto *query = std::get_if<NativeQueryOrigin>(&origin->event);
+    if (query && (method.empty() || query->method == method))
+      return Error::success();
+  } else if ((kind == "message" &&
+              std::holds_alternative<NativeMessageOrigin>(origin->event)) ||
+             (kind == "start" &&
+              std::holds_alternative<NativeStartOrigin>(origin->event)))
+    return Error::success();
+  return error("interactive-native-origin");
 }
 Expected<std::string>
-encodeNativeOriginTemplate(StringRef entry,
-                           ArrayRef<std::array<std::string, 3>> path,
-                           ArrayRef<std::string> event) {
-  if (!identifier(entry) || path.size() > 64 || event.empty() ||
-      event.size() > 7 || !all_of(event, identifier))
+encodeNativeOriginTemplate(const NativeOriginTemplate &origin) {
+  if (!identifier(origin.entry) || origin.path.size() > 64)
+    return error("interactive-native-origin");
+  std::vector<std::string> event;
+  if (auto *query = std::get_if<NativeQueryOrigin>(&origin.event)) {
+    if (!all_of(std::initializer_list<StringRef>{StringRef(query->protocol),
+                                                 StringRef(query->site),
+                                                 StringRef(query->service),
+                                                 StringRef(query->method),
+                                                 StringRef(query->owner)},
+                identifier))
+      return error("interactive-native-origin");
+    event = {"query",        query->protocol,
+             query->site,    "input_" + std::to_string(query->serviceInput),
+             query->service, query->method,
+             query->owner};
+  } else if (auto *message = std::get_if<NativeMessageOrigin>(&origin.event)) {
+    if (!all_of(std::initializer_list<StringRef>{StringRef(message->protocol),
+                                                 StringRef(message->site),
+                                                 StringRef(message->schema),
+                                                 StringRef(message->sender),
+                                                 StringRef(message->receiver)},
+                identifier))
+      return error("interactive-native-origin");
+    event = {"message",       message->protocol, message->site,
+             message->schema, message->sender,   message->receiver};
+  } else if (auto *start = std::get_if<NativeStartOrigin>(&origin.event)) {
+    if (!identifier(start->protocol) || !identifier(start->site))
+      return error("interactive-native-origin");
+    event = {"start", start->protocol, start->site};
+  }
+  if (event.empty() || !all_of(event, identifier))
     return error("interactive-native-origin");
   size_t size = 9 + 9 + StringRef("zkc.native-origin-template/0").size() + 9 +
-                entry.size() + 9 + 9 + 9;
-  for (const auto &step : path) {
-    if ((step[0] != "apply" && step[0] != "repeat") ||
-        !all_of(step, identifier))
+                origin.entry.size() + 9 + 9 + 9;
+  for (const auto &step : origin.path) {
+    if ((step.kind != NativeOriginStep::Kind::Apply &&
+         step.kind != NativeOriginStep::Kind::Repeat) ||
+        !identifier(step.protocol) || !identifier(step.site))
       return error("interactive-native-origin");
-    size += 9;
-    for (const auto &part : step)
-      size += 9 + part.size();
+    size += 9 + 9 + (step.kind == NativeOriginStep::Kind::Apply ? 5 : 6) + 9 +
+            step.protocol.size() + 9 + step.site.size();
   }
   for (const auto &part : event)
     size += 9 + part.size();
@@ -119,12 +189,14 @@ encodeNativeOriginTemplate(StringRef entry,
   bytes.reserve(size);
   header(bytes, 1, 5);
   string(bytes, "zkc.native-origin-template/0");
-  string(bytes, entry);
-  header(bytes, 1, path.size());
-  for (const auto &step : path) {
+  string(bytes, origin.entry);
+  header(bytes, 1, origin.path.size());
+  for (const auto &step : origin.path) {
     header(bytes, 1, 3);
-    for (const auto &part : step)
-      string(bytes, part);
+    string(bytes,
+           step.kind == NativeOriginStep::Kind::Apply ? "apply" : "repeat");
+    string(bytes, step.protocol);
+    string(bytes, step.site);
   }
   header(bytes, 1, 0);
   header(bytes, 1, event.size());
@@ -137,9 +209,38 @@ encodeNativeOriginTemplate(StringRef entry,
     hex.push_back(digits[byte >> 4]);
     hex.push_back(digits[byte & 15]);
   }
-  if (auto e = checkNativeOrigin(hex, event.front()))
-    return std::move(e);
   return hex;
 }
-
+Expected<std::string>
+encodeNativeOriginTemplate(StringRef entry,
+                           ArrayRef<std::array<std::string, 3>> path,
+                           ArrayRef<std::string> event) {
+  NativeOriginTemplate origin;
+  if (!identifier(entry) || path.size() > 64 || event.empty() ||
+      event.size() > 7 || !all_of(event, identifier))
+    return error("interactive-native-origin");
+  origin.entry = entry.str();
+  for (const auto &step : path) {
+    if ((step[0] != "apply" && step[0] != "repeat") ||
+        !all_of(step, identifier))
+      return error("interactive-native-origin");
+    origin.path.push_back({step[0] == "apply" ? NativeOriginStep::Kind::Apply
+                                              : NativeOriginStep::Kind::Repeat,
+                           step[1], step[2]});
+  }
+  if (event[0] == "query" && event.size() == 7) {
+    auto input = inputPort(event[3]);
+    if (!input)
+      return error("interactive-native-origin");
+    origin.event = NativeQueryOrigin{event[1], event[2], *input,
+                                     event[4], event[5], event[6]};
+  } else if (event[0] == "message" && event.size() == 6)
+    origin.event =
+        NativeMessageOrigin{event[1], event[2], event[3], event[4], event[5]};
+  else if (event[0] == "start" && event.size() == 3)
+    origin.event = NativeStartOrigin{event[1], event[2]};
+  else
+    return error("interactive-native-origin");
+  return encodeNativeOriginTemplate(origin);
+}
 } // namespace zkc::protocol

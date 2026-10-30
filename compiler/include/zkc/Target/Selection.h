@@ -1,6 +1,6 @@
 #ifndef ZKC_TARGET_SELECTION_H
 #define ZKC_TARGET_SELECTION_H
-#include "zkc/Contracts/Bindings.h"
+#include "zkc/Target/Catalog.h"
 #include "zkc/Target/CpuTarget.h"
 #include <optional>
 namespace zkc::target {
@@ -21,14 +21,22 @@ struct ValueLayoutSelection {
   unsigned result = 0;
   std::string physicalType;
 };
+/// Bounded textual pipeline options. Parsing normalizes syntax only; the
+/// physical planner independently checks names, ports and admitted layouts.
+llvm::Expected<protocol::Assignments>
+    parseImplementationSelections(llvm::StringRef);
+std::string printImplementationSelections(const protocol::Assignments &);
+llvm::Expected<std::vector<FunctionPortSelection>>
+    parseFunctionPortSelections(llvm::StringRef);
+std::string printFunctionPortSelections(llvm::ArrayRef<FunctionPortSelection>);
 struct ImplementationChoice {
-  protocol::BindingApplication application;
+  NativeBindingApplication application;
   bool fixed;
 };
 /// Honor explicit choices, otherwise use the installed canonical fallback.
 /// Contracts establishes legality; policy cannot change source admission.
 llvm::Expected<ImplementationChoice>
-selectImplementation(protocol::BindingApplication,
+selectImplementation(NativeBindingApplication,
                      std::optional<llvm::StringRef> requested = {},
                      const CpuTarget &cpuTarget = {});
 } // namespace zkc::target

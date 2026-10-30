@@ -40,15 +40,16 @@ int main() {
   for (const auto &entry : appliedTypeRepresentations()) {
     json::Array arguments;
     for (const auto &argument : entry.arguments) {
-      if (argument.kind == TypeArgument::Kind::Nat)
+      if (argument.argument.kind == TypeArgument::Kind::Nat)
         arguments.push_back(json::Object{{"kind", "Nat"},
                                          {"minimum", argument.minimum},
                                          {"maximum", argument.maximum}});
       else
         arguments.push_back(json::Object{
-            {"kind",
-             argument.kind == TypeArgument::Kind::Type ? "Type" : "Domain"},
-            {"exact", argument.exact}});
+            {"kind", argument.argument.kind == TypeArgument::Kind::Type
+                         ? "Type"
+                         : "Domain"},
+            {"exact", argument.argument.spelling()}});
     }
     appliedRepresentations.push_back(
         json::Object{{"constructor", entry.constructor},

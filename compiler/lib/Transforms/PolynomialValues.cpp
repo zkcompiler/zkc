@@ -2,6 +2,7 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SmallString.h"
@@ -36,12 +37,22 @@ class PolynomialValues {
         cast<poly::PolynomialType>(terms.expression(polynomial).type)
             .getDomain());
   }
-  Term literal(algebra::FieldType type, StringRef number) {
-    if (!algebra::isCanonicalFieldLiteral(type.getDomain(), number))
+  Term literal(algebra::FieldLiteralAttr value) {
+    return value ? make("algebra.constant", value.getField(), {},
+                        builder.getDictionaryAttr(
+                            {builder.getNamedAttr("value", value)}))
+                 : 0;
+  }
+  Term literal(algebra::FieldType field, const APInt &value) {
+    auto attribute = algebra::makeFieldLiteral(field, value);
+    if (!attribute) {
+      consumeError(attribute.takeError());
       return 0;
-    return make("algebra.constant", type, {},
-                builder.getDictionaryAttr({builder.getNamedAttr(
-                    "value", builder.getStringAttr(number))}));
+    }
+    return literal(*attribute);
+  }
+  Term literal(algebra::FieldType field, uint64_t value) {
+    return literal(field, APInt(64, value));
   }
   Term binary(StringRef name, Term a, Term b) {
     if (!a || !b)
@@ -168,11 +179,10 @@ class PolynomialValues {
     APInt modulus(width, decimal, 10), zero(width, 0), one(width, 1);
     SmallVector<SmallVector<APInt>> matrix;
     for (unsigned row = 0; row < n; ++row) {
-      auto spelling = cast<StringAttr>(points[row]).getValue();
-      if (!algebra::isCanonicalFieldLiteral(type.getDomain(), spelling) ||
-          !all_of(spelling, [](char c) { return c >= '0' && c <= '9'; }))
+      auto point = dyn_cast<algebra::FieldLiteralAttr>(points[row]);
+      if (!point || point.getField() != type)
         return {};
-      APInt x(width, spelling, 10), power = one;
+      APInt x = point.getValue().getValue().zextOrTrunc(width), power = one;
       SmallVector<APInt> line(2 * n, zero);
       for (unsigned column = 0; column < n; ++column) {
         line[column] = power;
@@ -220,13 +230,12 @@ class PolynomialValues {
                                .urem(modulus);
       }
     }
-    SmallVector<Term> result(n, literal(type, "0"));
+    SmallVector<Term> result(n, literal(type, uint64_t(0)));
     for (unsigned degree = 0; degree < n; ++degree)
       for (unsigned sample = 0; sample < n; ++sample) {
-        SmallString<128> weight;
-        matrix[degree][n + sample].toString(weight, 10, false);
         result[degree] = add(result[degree],
-                             multiply(literal(type, weight), values[sample]));
+                             multiply(literal(type, matrix[degree][n + sample]),
+                                      values[sample]));
       }
     return result;
   }
@@ -263,7 +272,7 @@ class PolynomialValues {
       if (!terms.charge(size) ||
           (product && !terms.charge(a.size() * b.size())))
         return {};
-      Term zero = literal(field(polynomial), "0");
+      Term zero = literal(field(polynomial), uint64_t(0));
       result.assign(size, zero);
       if (product) {
         for (unsigned i = 0; i < a.size(); ++i)
@@ -280,10 +289,13 @@ class PolynomialValues {
       SmallVector<Attribute> points;
       SmallVector<Term> samples;
       for (unsigned i = 0; i <= bound[0]; ++i) {
-        auto point = std::to_string(i);
-        points.push_back(builder.getStringAttr(point));
-        samples.push_back(
-            evaluate(polynomial, {literal(field(polynomial), point)}));
+        auto point = algebra::makeFieldLiteral(field(polynomial), APInt(64, i));
+        if (!point) {
+          consumeError(point.takeError());
+          return {};
+        }
+        points.push_back(*point);
+        samples.push_back(evaluate(polynomial, {literal(*point)}));
       }
       result =
           interpolate(samples, builder.getArrayAttr(points), field(polynomial));
@@ -331,8 +343,8 @@ class PolynomialValues {
       auto count = node.attributes.getAs<IntegerAttr>("count").getInt();
       if (count < 0 || count >= 63 || !terms.charge(uint64_t(1) << count))
         return 0;
-      auto zero = literal(field(polynomial), "0"),
-           one = literal(field(polynomial), "1");
+      auto zero = literal(field(polynomial), uint64_t(0)),
+           one = literal(field(polynomial), uint64_t(1));
       result = zero;
       for (uint64_t assignment = 0; assignment < (uint64_t(1) << count);
            ++assignment) {
@@ -404,15 +416,14 @@ class PolynomialValues {
       unsigned size = cast<algebra::FieldArrayType>(node.type).getLength();
       if (values.empty() || values.size() > size || !terms.charge(size))
         return 0;
-      values.resize(size, literal(field(inputs[0]), "0"));
+      values.resize(size, literal(field(inputs[0]), uint64_t(0)));
       return make("algebra.array_from_elements", node.type, values);
     }
     if (name == "poly.evaluate_domain") {
       SmallVector<Term> values;
       for (auto point : node.attributes.getAs<ArrayAttr>("points"))
         values.push_back(evaluate(
-            inputs[0],
-            {literal(field(inputs[0]), cast<StringAttr>(point).getValue())}));
+            inputs[0], {literal(cast<algebra::FieldLiteralAttr>(point))}));
       return make("algebra.array_from_elements", node.type, values);
     }
     if (name == "poly.fix_table") {

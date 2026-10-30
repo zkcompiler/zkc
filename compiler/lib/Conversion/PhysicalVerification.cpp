@@ -3,6 +3,8 @@
 #include "Bindings.h"
 #include "Storage.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -29,27 +31,35 @@ class PhysicalCorrespondence {
   size_t remaining = 1000000;
   bool charge() { return remaining && (--remaining, true); }
   bool binding(runtime::BindingOp op,
-               const protocol::OperationBinding &expected) {
+               const target::NativeBindingChoice &expected) {
     if (!op || op.getSymName() != expected.name ||
         op.getContract() != expected.application.contract ||
         op.getImplementation() != expected.application.implementation ||
-        op.getArguments().size() != expected.application.arguments.size())
+        !llvm::equal(op.getArguments(), expected.application.arguments) ||
+        op.getFunctionType() !=
+            executableBindingSignature(expected.application.valueType))
       return false;
-    for (auto [actual, argument] :
-         zip(op.getArguments(), expected.application.arguments))
-      if (cast<StringAttr>(actual).getValue() != argument)
+    // Read the actual declaration, including every inactive layout and the
+    // selected installation. Expected emitter output is not admission.
+    for (auto attribute : op->getAttrs())
+      if (!is_contained(ArrayRef<StringRef>{"sym_name", "contract", "arguments",
+                                            "implementation", "function_type",
+                                            "arg_attrs", "res_attrs"},
+                        attribute.getName().getValue()))
         return false;
-    auto physical = op.getPhysicalArgumentsAttr();
-    if (!physical ||
-        physical.size() != expected.application.physicalArguments.size())
+    if (failed(readNativeBinding([&] { return op.emitOpError(); }, op, true)))
       return false;
-    for (auto [actual, argument] :
-         zip(physical, expected.application.physicalArguments))
-      if (cast<StringAttr>(actual).getValue() != argument)
-        return false;
-    return op->getAttrs().size() == 5;
+    // ABI-sized empty dictionaries are inert. A generated declaration cannot
+    // introduce an uninterpreted annotation; original attributes are also
+    // compared in full by the enclosing correspondence traversal.
+    for (StringRef name : {"arg_attrs", "res_attrs"})
+      if (auto attributes = op->getAttrOfType<ArrayAttr>(name))
+        for (auto attribute : attributes)
+          if (!cast<DictionaryAttr>(attribute).empty())
+            return false;
+    return true;
   }
-  bool application(Operation *op, const protocol::OperationBinding &binding,
+  bool application(Operation *op, const target::NativeBindingChoice &binding,
                    ValueRange operands, TypeRange results, Attribute site,
                    ArrayAttr parameters) {
     if (!op || !charge() || !isa<exec::ApplyOp>(op) || op->getNumRegions() ||
@@ -236,13 +246,14 @@ class PhysicalCorrespondence {
         auto selected = originals.lookup(index);
         if (!selected)
           return false;
-        SmallVector<Attribute> parameters;
-        for (const auto &parameter :
-             selected->binding.application.physicalArguments)
-          parameters.push_back(
-              StringAttr::get(source->getContext(), parameter));
-        attributes.set("physical_arguments",
-                       ArrayAttr::get(source->getContext(), parameters));
+        if (!binding(dyn_cast<runtime::BindingOp>(actual), selected->binding))
+          return false;
+        attributes.set("function_type",
+                       TypeAttr::get(executableBindingSignature(
+                           selected->binding.application.valueType)));
+        attributes.set("arguments",
+                       ArrayAttr::get(source->getContext(),
+                                      selected->binding.application.arguments));
         attributes.set(
             "implementation",
             StringAttr::get(source->getContext(),
@@ -329,7 +340,7 @@ Error verifyPhysicalMaterialization(
   auto selected = checked.choices().selectedSubject(before);
   if (!selected)
     return selected.takeError();
-  if (failed(verify(before)) || failed(verify(after)))
+  if (failed(zkc::admitStage(before)) || failed(zkc::admitStage(after)))
     return error("binding-materialization-formation");
   // Decisions index this exact selected executable subject, never original
   // numerical operations. Its numerical edge was checked before constructing

@@ -4,7 +4,9 @@
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
@@ -347,7 +349,7 @@ int main(int argc, char **argv) {
                             .str();
           call->getResult(0).replaceAllUsesWith(call->getOperand(0));
           call->erase();
-          require(succeeded(mlir::verify(*module)),
+          require(succeeded(zkc::admitStage(*module)),
                   "uncalled helper original invalid");
           auto print = [&] {
             std::string result;
@@ -365,7 +367,7 @@ int main(int argc, char **argv) {
           auto before = print();
           mlir::ScopedDiagnosticHandler quiet(
               &context, [](mlir::Diagnostic &) { return mlir::success(); });
-          require(succeeded(mlir::verify(*module)) == valid,
+          require(succeeded(zkc::admitStage(*module)) == valid,
                   "uncalled helper admission verdict differs");
           require(succeeded(zkc::mathematical::verifyHelperObservations(
                       *module, {target})) == valid,
@@ -387,7 +389,7 @@ int main(int argc, char **argv) {
           originals[0].bytes(), &context);
       require(bool(module), "cannot parse source original");
       mutation(*module);
-      require(succeeded(mlir::verify(*module)),
+      require(succeeded(zkc::admitStage(*module)),
               "mutation must be admitted native IR");
       auto result = compareOriginal(originals[0].entry(), *module);
       require(!result, "altered formal operation matched");
@@ -407,8 +409,13 @@ int main(int argc, char **argv) {
   });
   mutate("domain coordinate changed", [&](auto module) {
     mlir::Builder b(&context);
-    first(module, "poly.evaluate_domain")
-        ->setAttr("points", b.getStrArrayAttr({"0", "1", "3"}));
+    mlir::Operation *evaluation = first(module, "poly.evaluate_domain");
+    auto points = evaluation->getAttrOfType<mlir::ArrayAttr>("points");
+    auto field =
+        mlir::cast<zkc::algebra::FieldLiteralAttr>(points[0]).getField();
+    llvm::SmallVector<mlir::Attribute> changed(points.getValue());
+    changed.back() = take(zkc::algebra::makeFieldLiteral(field, APInt(64, 3)));
+    evaluation->setAttr("points", b.getArrayAttr(changed));
   });
   mutate("array index changed", [&](auto module) {
     mlir::Builder b(&context);

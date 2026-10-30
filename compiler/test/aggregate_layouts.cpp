@@ -1,20 +1,25 @@
 #include "../lib/Conversion/Bindings.h"
 #include "../lib/Target/AggregateLayouts.h"
 #include "../lib/Target/ExecutionPorts.h"
+#include "../lib/Target/NativePlanTypes.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/IR/Verifier.h"
+#include "support/NativeBindings.h"
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
+#include "support/VariantFixture.h"
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Execution.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
@@ -194,10 +199,10 @@ std::string sequenceSource() {
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 !T = !data.sequence<!data.sequence<!algebra.field<"bls12-381.fr">>>
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
-"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
-"runtime.binding"() {sym_name="outer",contract="sequence.empty",arguments=["sequence<field:bls12-381.fr>"],implementation="native/sequence.empty"} : ()->()
-"runtime.binding"() {sym_name="pack",contract="sequence.append",arguments=["sequence<field:bls12-381.fr>"],implementation="native/sequence.append"} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.empty",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.append",function_type=(!runtime.scope, !data.sequence<!algebra.field<"bls12-381.fr">>, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
+"runtime.binding"() {sym_name="outer",contract="sequence.empty",arguments=[!data.sequence<!algebra.field<"bls12-381.fr">>],implementation="native/sequence.empty",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!data.sequence<!algebra.field<"bls12-381.fr">>>)>} : ()->()
+"runtime.binding"() {sym_name="pack",contract="sequence.append",arguments=[!data.sequence<!algebra.field<"bls12-381.fr">>],implementation="native/sequence.append",function_type=(!runtime.scope, !data.sequence<!data.sequence<!algebra.field<"bls12-381.fr">>>, !data.sequence<!algebra.field<"bls12-381.fr">>) -> !exec.outcome<(!data.sequence<!data.sequence<!algebra.field<"bls12-381.fr">>>)>} : ()->()
 )",
                    "%x:!F", "%x", "!F", "!T",
                    scopedApply("empty", "empty", "", "", "%s", "!S") +
@@ -215,7 +220,7 @@ std::string scalarJoinSource(MLIRContext &context, unsigned count,
       context, R"(!F = !algebra.field<"bls12-381.fr">
 )",
       R"(
-"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
+"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 )",
       "%x:!F,%c:i1", "%x,%c", "!F,i1", "!F", 2,
       [&](OpBuilder &builder, func::FuncOp work,
@@ -263,11 +268,11 @@ std::string cyclicSequenceSource(MLIRContext &context, bool seeded) {
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 )",
       R"(
-"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
-"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
-"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
-"runtime.binding"() {sym_name="at",contract="sequence.at",arguments=["field:bls12-381.fr"],implementation="native/sequence.at"} : ()->()
-"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["field:bls12-381.fr"],implementation="native/sequence.length"} : ()->()
+"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.empty",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.append",function_type=(!runtime.scope, !data.sequence<!algebra.field<"bls12-381.fr">>, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
+"runtime.binding"() {sym_name="at",contract="sequence.at",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.at",function_type=(!runtime.scope, !data.sequence<!algebra.field<"bls12-381.fr">>, ui64) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.length",function_type=(!runtime.scope, !data.sequence<!algebra.field<"bls12-381.fr">>) -> !exec.outcome<(ui64)>} : ()->()
 )",
       "%x:!F,%c:i1,%lo:ui64,%hi:ui64", "%x,%c,%lo,%hi", "!F,i1,ui64,ui64",
       "ui64", 4,
@@ -323,11 +328,11 @@ std::string inferredSequenceSource(MLIRContext &context, StringRef kind) {
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 )",
       R"(
-"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
-"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
-"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
-"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["field:bls12-381.fr"],implementation="native/sequence.length"} : ()->()
-"runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.empty",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.append",function_type=(!runtime.scope, !data.sequence<!algebra.field<"bls12-381.fr">>, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
+"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.length",function_type=(!runtime.scope, !data.sequence<!algebra.field<"bls12-381.fr">>) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation="",function_type=(!runtime.scope, i1) -> !exec.outcome<>} : ()->()
 )",
       "%x:!F,%c:i1,%lo:ui64,%hi:ui64", "%x,%c,%lo,%hi", "!F,i1,ui64,ui64",
       "ui64", 4,
@@ -360,7 +365,7 @@ std::string inferredSequenceSource(MLIRContext &context, StringRef kind) {
           auto values = sc::apply(control, builder, "append", "append",
                                   {empty, element}, {sequence})[0];
           auto tag = control.invoke(
-              "exec.variant", {data::VariantType::get(&context, descriptor)},
+              "exec.variant", {zkc::test::variantType(&context, descriptor)},
               control.scoped({values}),
               {builder.getNamedAttr("alternative",
                                     builder.getStringAttr("some")),
@@ -432,9 +437,9 @@ std::string independentVariantSource(MLIRContext &context,
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 )",
       R"(
-"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
-"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["field:bls12-381.fr"],implementation="native/sequence.length"} : ()->()
-"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.empty",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
+"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.length",function_type=(!runtime.scope, !data.sequence<!algebra.field<"bls12-381.fr">>) -> !exec.outcome<(ui64)>} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.append",function_type=(!runtime.scope, !data.sequence<!algebra.field<"bls12-381.fr">>, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
 )",
       "%x:!F", "%x", "!F", "ui64", 1,
       [&](OpBuilder &builder, func::FuncOp work,
@@ -445,7 +450,7 @@ std::string independentVariantSource(MLIRContext &context,
         auto empty =
             sc::apply(control, builder, "empty", "empty", {}, {sequence})[0];
         auto tag = control.invoke(
-            "exec.variant", {data::VariantType::get(&context, descriptor)},
+            "exec.variant", {zkc::test::variantType(&context, descriptor)},
             control.scoped({empty}),
             {builder.getNamedAttr("alternative", builder.getStringAttr("left")),
              builder.getNamedAttr("site", builder.getStringAttr("tag"))})[0];
@@ -472,8 +477,8 @@ std::string selectedVariantSource(MLIRContext &context, StringRef descriptor) {
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 )",
       R"(
-"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
-"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.empty",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.append",function_type=(!runtime.scope, !data.sequence<!algebra.field<"bls12-381.fr">>, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
 )",
       "%x:!F", "%x", "!F", "!S", 1,
       [&](OpBuilder &builder, func::FuncOp work,
@@ -486,7 +491,7 @@ std::string selectedVariantSource(MLIRContext &context, StringRef descriptor) {
         auto values = sc::apply(control, builder, "append", "append",
                                 {empty, work.getArgument(1)}, {sequence})[0];
         auto tag = control.invoke(
-            "exec.variant", {data::VariantType::get(&context, descriptor)},
+            "exec.variant", {zkc::test::variantType(&context, descriptor)},
             control.scoped({values}),
             {builder.getNamedAttr("alternative", builder.getStringAttr("some")),
              builder.getNamedAttr("site", builder.getStringAttr("tag"))})[0];
@@ -513,9 +518,9 @@ std::string aggregateControlSource(MLIRContext &context) {
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 )",
       R"(
-"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
-"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
-"runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.empty",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.append",function_type=(!runtime.scope, !data.sequence<!algebra.field<"bls12-381.fr">>, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
+"runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation="",function_type=(!runtime.scope, i1) -> !exec.outcome<>} : ()->()
 )",
       "%x:!F,%c:i1,%lo:ui64,%hi:ui64", "%x,%c,%lo,%hi", "!F,i1,ui64,ui64", "!S",
       4,
@@ -566,7 +571,7 @@ class DenseCandidates final : public CandidateCatalog {
 public:
   bool conversionsAvailable = true;
   Expected<std::vector<std::string>>
-  implementations(const BindingApplication &app) const override {
+  implementations(const zkc::NativeBindingApplication &app) const override {
     if (app.contract == "fixed_vector.from_vector")
       return std::vector<std::string>{"blst/resident/fixed_vector.from_vector",
                                       "plonky3/fixed_vector.from_vector"};
@@ -575,8 +580,8 @@ public:
                                       "blst/resident/field_array.from_vector"};
     return installedCandidates().implementations(app);
   }
-  std::vector<BindingApplication>
-  conversions(const BoundType &from, const BoundType &to) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type from, mlir::Type to) const override {
     if (!conversionsAvailable)
       return {};
     return installedCandidates().conversions(from, to);
@@ -654,7 +659,10 @@ int main(int argc, char **argv) {
           LayoutFixture fixture(context);
           auto &layouts = fixture.layouts;
           auto resident = fixture.variable();
-          accept(layouts.pin(resident, take(parseBoundType(scalar, true)), 0));
+          accept(layouts.pin(
+              resident,
+              decodeBoundType(&context, take(parseBoundType(scalar, true))),
+              0));
           SmallVector<AggregateLayouts::Id> results, packed{resident};
           for (unsigned i = 0; i < 512; ++i) {
             results.push_back(fixture.variable());
@@ -668,7 +676,8 @@ int main(int argc, char **argv) {
           }
           accept(layouts.solve());
           for (auto result : packed)
-            require(take(layouts.physical(result)).spelling() == scalar,
+            require(take(encodeBoundType(take(layouts.physical(result)), true))
+                            .spelling() == scalar,
                     "join/packing dependency retained a provisional default");
           require(1000000 - fixture.account.selectionBookkeeping < 100000,
                   "linear dependency chain repeatedly rescanned the graph");
@@ -681,15 +690,17 @@ int main(int argc, char **argv) {
     LayoutFixture fixture(context);
     auto &layouts = fixture.layouts;
     auto resident = fixture.variable();
-    accept(layouts.pin(resident, take(parseBoundType(scalar, true)), 0));
+    accept(layouts.pin(
+        resident, decodeBoundType(&context, take(parseBoundType(scalar, true))),
+        0));
     SmallVector<AggregateLayouts::Id> sources;
     for (unsigned i = 0; i < 512; ++i)
       sources.push_back(fixture.variable());
     auto unanimous = fixture.variable(), mixed = fixture.variable();
     accept(layouts.join(unanimous, sources));
     auto ordinary = fixture.variable();
-    auto native = take(defaultRepresentation(
-        take(parseBoundType("field:bls12-381.fr", false))));
+    auto native =
+        take(defaultPlanType(fixture.variables.getArgument(0).getType()));
     accept(layouts.pin(ordinary, native, 1));
     auto mixedSources = sources;
     mixedSources.push_back(ordinary);
@@ -697,7 +708,8 @@ int main(int argc, char **argv) {
     for (auto source : sources)
       accept(layouts.join(source, {resident, resident}));
     accept(layouts.solve());
-    require(take(layouts.physical(unanimous)).spelling() == scalar,
+    require(take(encodeBoundType(take(layouts.physical(unanimous)), true))
+                    .spelling() == scalar,
             "wide join lost unanimous resident evidence");
     require(take(layouts.physical(mixed)) == native,
             "mixed live yields did not select the default");
@@ -715,9 +727,10 @@ int main(int argc, char **argv) {
             auto &layouts = fixture.layouts;
             auto first = fixture.variable(), second = fixture.variable();
             auto target = fixture.variable();
-            auto ordinary = take(defaultRepresentation(
-                take(parseBoundType("field:bls12-381.fr", false))));
-            auto resident = take(parseBoundType(scalar, true));
+            auto ordinary = take(
+                defaultPlanType(fixture.variables.getArgument(0).getType()));
+            auto resident =
+                decodeBoundType(&context, take(parseBoundType(scalar, true)));
             accept(layouts.pin(first, residentFirst ? resident : ordinary, 0));
             accept(layouts.pin(second, residentFirst ? ordinary : resident, 1));
             accept(layouts.pack(reverseEdges ? second : first, target, false));
@@ -741,14 +754,18 @@ int main(int argc, char **argv) {
         auto child = layouts.child(container, 0);
         accept(layouts.pack(source, child, false));
         accept(layouts.solve());
-        require(take(layouts.physical(container)).spelling() ==
+        require(take(encodeBoundType(take(layouts.physical(container)), true))
+                        .spelling() ==
                     "sequence<field:bls12-381.fr>@logical.sequence/0",
                 "unseeded aggregate did not retain its default");
         auto resident = fixture.variable();
-        accept(layouts.pin(resident, take(parseBoundType(scalar, true)), 0));
+        accept(layouts.pin(
+            resident,
+            decodeBoundType(&context, take(parseBoundType(scalar, true))), 0));
         accept(layouts.equate(source, resident));
         accept(layouts.solve());
-        require(take(layouts.physical(container)).spelling() == sequence,
+        require(take(encodeBoundType(take(layouts.physical(container)), true))
+                        .spelling() == sequence,
                 "new equality retained a cached physical child or stale "
                 "provenance");
       });
@@ -756,11 +773,12 @@ int main(int argc, char **argv) {
     LayoutFixture fixture(context);
     auto &layouts = fixture.layouts;
     auto resident = fixture.variable(), ordinary = fixture.variable();
-    accept(layouts.pin(resident, take(parseBoundType(scalar, true)), 0));
-    accept(layouts.pin(ordinary,
-                       take(defaultRepresentation(
-                           take(parseBoundType("field:bls12-381.fr", false)))),
-                       1));
+    accept(layouts.pin(
+        resident, decodeBoundType(&context, take(parseBoundType(scalar, true))),
+        0));
+    accept(layouts.pin(
+        ordinary,
+        take(defaultPlanType(fixture.variables.getArgument(0).getType())), 1));
     auto left = fixture.variable(), right = fixture.variable();
     accept(layouts.join(left, {resident, resident}));
     accept(layouts.join(right, {ordinary, ordinary}));
@@ -775,9 +793,11 @@ int main(int argc, char **argv) {
         LayoutFixture fixture(context);
         auto &layouts = fixture.layouts;
         auto resident = fixture.variable();
-        auto ordinary = take(defaultRepresentation(
-            take(parseBoundType("field:bls12-381.fr", false))));
-        accept(layouts.pin(resident, take(parseBoundType(scalar, true)), 0));
+        auto ordinary =
+            take(defaultPlanType(fixture.variables.getArgument(0).getType()));
+        accept(layouts.pin(
+            resident,
+            decodeBoundType(&context, take(parseBoundType(scalar, true))), 0));
         auto joined = fixture.variable();
         auto left = fixture.variable(), right = fixture.variable();
         auto derived = fixture.variable();
@@ -789,7 +809,8 @@ int main(int argc, char **argv) {
         accept(layouts.join(derived, {right, resident}));
         accept(layouts.pack(derived, layouts.child(container, 0), false));
         accept(layouts.solve());
-        require(take(layouts.physical(container)).spelling() == sequence,
+        require(take(encodeBoundType(take(layouts.physical(container)), true))
+                        .spelling() == sequence,
                 "packing cycle lost unanimous evidence");
         auto before = fixture.account.selectionBookkeeping;
         accept(layouts.pin(joined, ordinary, 1));
@@ -799,7 +820,8 @@ int main(int argc, char **argv) {
                     take(layouts.physical(derived)) == ordinary,
                 "changed definition left stale evidence in a cycle or "
                 "dependent join");
-        require(take(layouts.physical(container)).spelling() ==
+        require(take(encodeBoundType(take(layouts.physical(container)), true))
+                        .spelling() ==
                     "sequence<field:bls12-381.fr>@logical.sequence/0",
                 "subsequent solve reused a cached physical child");
         require(fixture.account.selectionBookkeeping < before,
@@ -814,7 +836,9 @@ int main(int argc, char **argv) {
         LayoutFixture fixture(context);
         auto &layouts = fixture.layouts;
         auto resident = fixture.variable();
-        accept(layouts.pin(resident, take(parseBoundType(scalar, true)), 0));
+        accept(layouts.pin(
+            resident,
+            decodeBoundType(&context, take(parseBoundType(scalar, true))), 0));
         auto first = fixture.variable(), second = fixture.variable();
         auto packedFirst = fixture.variable(),
              packedSecond = fixture.variable();
@@ -823,15 +847,17 @@ int main(int argc, char **argv) {
         accept(layouts.join(first, {packedSecond, resident}));
         accept(layouts.join(second, {packedFirst, resident}));
         accept(layouts.solve());
-        auto ordinary = take(defaultRepresentation(
-            take(parseBoundType("field:bls12-381.fr", false))));
+        auto ordinary =
+            take(defaultPlanType(fixture.variables.getArgument(0).getType()));
         require(take(layouts.physical(first)) == ordinary &&
                     take(layouts.physical(second)) == ordinary,
                 "cyclic yields invented unanimous resident evidence");
         accept(layouts.pack(resident, packedFirst, false));
         accept(layouts.solve());
-        require(take(layouts.physical(first)).spelling() == scalar &&
-                    take(layouts.physical(second)).spelling() == scalar,
+        require(take(encodeBoundType(take(layouts.physical(first)), true))
+                            .spelling() == scalar &&
+                    take(encodeBoundType(take(layouts.physical(second)), true))
+                            .spelling() == scalar,
                 "new lower-id packing evidence did not resolve the join cycle");
       });
   for (bool seeded : {false, true})
@@ -952,9 +978,9 @@ int main(int argc, char **argv) {
     auto source = R"(!F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
-"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
-"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["field:bls12-381.fr"],implementation="native/sequence.length"} : ()->()
+"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.append",function_type=(!runtime.scope, !data.sequence<!algebra.field<"bls12-381.fr">>, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!data.sequence<!algebra.field<"bls12-381.fr">>)>} : ()->()
+"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.length",function_type=(!runtime.scope, !data.sequence<!algebra.field<"bls12-381.fr">>) -> !exec.outcome<(ui64)>} : ()->()
 )",
                    "%x:!F,%s:!S", "%x,%s", "!F,!S", "ui64",
                    scopedApply("add", "add", "%x,%x", "!F,!F", "%v", "!F") +
@@ -1000,7 +1026,7 @@ int main(int argc, char **argv) {
         auto source = R"(!V = !algebra.field_vector<"koala-bear">
 !X = !algebra.fixed_vector<!algebra.field<"koala-bear">,2>
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["koala-bear","2"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["koala-bear", 2 : ui64],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"koala-bear">) -> !exec.outcome<(!algebra.fixed_vector<!algebra.field<"koala-bear">, 2>)>} : ()->()
 )",
                    "%v:!V", "%v", "!V", "!X",
                    scopedApply("fixed", "fixed", "%v", "!V", "%out", "!X") +
@@ -1019,23 +1045,23 @@ int main(int argc, char **argv) {
                     *pinned, catalog,
                     {{"fixed", "blst/resident/fixed_vector.from_vector"}}),
                 "binding-implementation");
-        refuses(
-            selectImplementation({"fixed_vector.from_vector",
-                                  {"koala-bear", "2"},
-                                  "blst/resident/fixed_vector.from_vector"}),
-            "binding-implementation");
-        refuses(
-            selectImplementation({"fixed_vector.from_vector",
-                                  {"koala-bear", "bad"},
-                                  "blst/resident/fixed_vector.from_vector"}),
-            "binding-static-identity");
+        refuses(selectImplementation(nativeRequest(
+                    context, {"fixed_vector.from_vector",
+                              {"koala-bear", "2"},
+                              "blst/resident/fixed_vector.from_vector"})),
+                "binding-implementation");
+        refuses(selectImplementation(nativeRequest(
+                    context, {"fixed_vector.from_vector",
+                              {"koala-bear", "bad"},
+                              "blst/resident/fixed_vector.from_vector"})),
+                "binding-signature");
       });
   cases.run(
       "aggregate layout conflict advances its automatic family owner", [&] {
         auto source = R"(!V = !algebra.field_vector<"bls12-381.fr">
 !A = !algebra.field_array<"bls12-381.fr",2>
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="array",contract="field_array.from_vector",arguments=["bls12-381.fr","2"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="array",contract="field_array.from_vector",arguments=["bls12-381.fr", 2 : ui64],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_array<"bls12-381.fr", 2>)>} : ()->()
 )",
                    "%v:!V", "%v", "!V", "!A",
                    scopedApply("array", "array", "%v", "!V", "%out", "!A") +
@@ -1065,15 +1091,17 @@ int main(int argc, char **argv) {
             Twine(declarations),
         [&] {
           std::string bindings = R"(
-"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["field:bls12-381.fr"],implementation="native/sequence.length"} : ()->()
+"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=[!algebra.field<"bls12-381.fr">],implementation="native/sequence.length",function_type=(!runtime.scope, !data.sequence<!algebra.field<"bls12-381.fr">>) -> !exec.outcome<(ui64)>} : ()->()
 )";
           std::string body;
           for (unsigned i = 0; i + 1 < declarations; ++i) {
             auto suffix = std::to_string(i);
-            bindings +=
-                "\"runtime.binding\"() {sym_name=\"empty_" + suffix +
-                "\",contract=\"sequence.empty\",arguments=[\"field:bls12-381."
-                "fr\"],implementation=\"native/sequence.empty\"} : ()->()\n";
+            bindings += "\"runtime.binding\"() {sym_name=\"empty_" + suffix +
+                        "\",contract=\"sequence.empty\",arguments=[!algebra."
+                        "field<\"bls12-381.fr\">],"
+                        "implementation=\"native/"
+                        "sequence.empty\",function_type=(!runtime.scope)->!"
+                        "exec.outcome<(!S)>} : ()->()\n";
             body += scopedApply("empty_" + suffix, "empty_" + suffix, "", "",
                                 "%s" + suffix, "!S");
             body += scopedApply("length", "length_" + suffix, "%s" + suffix,
@@ -1086,14 +1114,13 @@ int main(int argc, char **argv) {
           auto plan = take(proposePhysical(*module, installedCandidates()));
           require(plan.bindings.size() == declarations,
                   "default specialization duplicated its normalized origin");
-          require(llvm::all_of(plan.bindings,
-                               [](const BindingDecision &binding) {
-                                 return binding.purpose ==
-                                            BindingPurpose::Original &&
-                                        !binding.origin &&
-                                        binding.binding.application
-                                                .physicalArguments.size() == 1;
-                               }),
+          require(llvm::all_of(
+                      plan.bindings,
+                      [](const BindingDecision &binding) {
+                        return binding.purpose == BindingPurpose::Original &&
+                               !binding.origin &&
+                               bool(binding.binding.application.valueType);
+                      }),
                   "default origin lost its complete application or provenance");
           auto forged = plan;
           while (forged.bindings.size() <= 4096)
@@ -1199,6 +1226,111 @@ int main(int argc, char **argv) {
                          {take(parseBoundType(scalar, true))}),
             "binding-representation");
   });
+  cases.run("canonical boundary preserves nested nominal byte contracts", [&] {
+    auto inner = *encodeVariant(
+        {json::Array{"Inner", json::Array{"ordered", "identity"}},
+         {{"empty", {}}, {"value", {"field:bls12-381.fr"}}}});
+    auto outer = *encodeVariant(
+        {"Outer",
+         {{"none", {}}, {"nested", {inner, "sequence<field:koala-bear>"}}}});
+    auto logical = zkc::test::variantType(&context, outer);
+    SmallVector<data::AlternativeAttr> wideArms;
+    for (unsigned i = 0; i < 33; ++i)
+      wideArms.push_back(data::AlternativeAttr::get(
+          &context, StringAttr::get(&context, "arm" + std::to_string(i)),
+          ArrayRef<Type>{}));
+    auto wide = data::VariantType::get(
+        &context,
+        data::importVariantIdentity(&context, json::Value("WideChoice")),
+        wideArms);
+    auto widePhysical = take(defaultPlanType(wide));
+    require(logicalValueType(widePhysical) == wide,
+            "native default formation inherited byte alternative limits");
+    refuses(encodeBoundType(widePhysical, true), "variant-type");
+    auto native = take(defaultPlanType(logical));
+    auto expected =
+        take(defaultRepresentation(take(parseBoundType(outer, false))));
+    require(take(encodeBoundType(native, true)) == expected,
+            "direct export changed the independent byte contract");
+    require(nativeType(context, expected) == native,
+            "direct import lost complete nominal source structure");
+    auto swapped = *encodeVariant(
+        {"Outer",
+         {{"nested", {inner, "sequence<field:koala-bear>"}}, {"none", {}}}});
+    auto different = nativeType(
+        context,
+        take(defaultRepresentation(take(parseBoundType(swapped, false)))));
+    require(different != native,
+            "boundary import erased nominal alternative order");
+    auto forged = expected;
+    auto children = *forged.physicalChildren;
+    children.pop_back();
+    forged.physicalChildren =
+        std::make_shared<const std::vector<BoundType>>(std::move(children));
+    require(!decodeBoundType(&context, forged),
+            "boundary import admitted incomplete inactive layout");
+  });
+  for (StringRef mutation :
+       {"missing child", "reordered children", "inactive logical child",
+        "inactive representation", "nominal identity", "alternative order"})
+    cases.run("native physical reader refuses " + mutation, [&] {
+      auto spelling = *encodeVariant(
+          {"ReaderChoice",
+           {{"none", {}},
+            {"some", {"sequence<field:bls12-381.fr>"}},
+            {"unused", {"fixed_vector<field:bls12-381.fr,2>"}}}});
+      auto schema = take(parseBoundType(spelling, false));
+      auto full = take(physicalType(
+          schema, "logical.variant/0",
+          {take(parseBoundType(sequence, true)),
+           take(parseBoundType(
+               "fixed_vector<field:bls12-381.fr,2>@blst/fixed-vector[blst/fr]",
+               true))}));
+      auto module = take(
+          executableFixture(selectedVariantSource(context, spelling), context));
+      PhysicalPlanOptions options;
+      abi(options, *module, false, 0, scalar);
+      abi(options, *module, true, 0, sequence);
+      layout(options, *module, "tag", full.spelling());
+      auto plan =
+          take(proposePhysical(*module, installedCandidates(), {}, options));
+      take(validatePhysical(*module, plan));
+      auto &decision = at(plan, *module, "tag");
+      auto represented = cast<runtime::RepresentedType>(decision.outputs[0]);
+      auto logical = cast<data::VariantType>(represented.getLogical());
+      SmallVector<Type> children(represented.getChildren());
+      if (mutation == "missing child")
+        children.pop_back();
+      else if (mutation == "reordered children")
+        std::swap(children[0], children[1]);
+      else if (mutation == "inactive logical child")
+        children[1] = logicalValueType(children[1]);
+      else if (mutation == "inactive representation") {
+        auto inactive = cast<runtime::RepresentedType>(children[1]);
+        children[1] = runtime::RepresentedType::get(
+            &context, inactive.getLogical(), "foreign/dense",
+            inactive.getChildren());
+      } else if (mutation == "nominal identity")
+        logical = data::VariantType::get(
+            &context,
+            data::importVariantIdentity(&context,
+                                        json::Value("ForgedReaderChoice")),
+            logical.getAlternatives());
+      else {
+        SmallVector<data::AlternativeAttr> alternatives(
+            logical.getAlternatives());
+        std::swap(alternatives[1], alternatives[2]);
+        logical = data::VariantType::get(&context, logical.getIdentity(),
+                                         alternatives);
+        std::swap(children[0], children[1]);
+      }
+      decision.outputs[0] = runtime::RepresentedType::get(
+          &context, logical, represented.getRepresentation(), children);
+      refuses(validatePhysical(*module, plan),
+              mutation == "nominal identity" || mutation == "alternative order"
+                  ? "binding-operation-signature"
+                  : "binding-representation");
+    });
   cases.run("implementation selection premises are descriptor data", [&] {
     auto ordinary =
         *installedImplementations().find("field.add", "arkworks/field.add");
@@ -1293,6 +1425,9 @@ int main(int argc, char **argv) {
     layout(options, *module, "empty", sequence);
     auto plan =
         take(proposePhysical(*module, installedCandidates(), {}, options));
+    options.functionPorts[0].physicalType = "invalid";
+    options.valueLayouts[0].physicalType = "invalid";
+    take(validatePhysical(*module, plan));
     auto wrong = plan;
     at(wrong, *module, "empty").outputs[0] = decodeBoundType(
         &context,
@@ -1324,8 +1459,18 @@ int main(int argc, char **argv) {
         abi(options, *module, false, 0, scalar);
         abi(options, *module, true, 0, sequence);
         layout(options, *module, "tag", full.spelling());
-        auto plan =
-            take(proposePhysical(*module, installedCandidates(), {}, options));
+        PhysicalPlan plan;
+        {
+          unsigned errors = 0;
+          ScopedDiagnosticHandler capture(&context, [&](Diagnostic &value) {
+            errors += value.getSeverity() == DiagnosticSeverity::Error;
+            return success();
+          });
+          plan = take(
+              proposePhysical(*module, installedCandidates(), {}, options));
+          require(errors == 0, "successful exact selection emitted a "
+                               "speculative default failure");
+        }
         require(take(encodeBoundType(bodyDecision(plan, *module, "match", 2)
                                          .blockArguments[0][0],
                                      true))
@@ -1393,10 +1538,10 @@ int main(int argc, char **argv) {
 !X = !algebra.fixed_vector<!algebra.field<"bls12-381.fr">,2>
 !S = !data.sequence<!algebra.fixed_vector<!algebra.field<"bls12-381.fr">,2>>
 )" + scopedFixture(R"(
-"runtime.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["bls12-381.fr","2"],implementation="blst/resident/fixed_vector.from_vector"} : ()->()
-"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["fixed_vector<field:bls12-381.fr,2>"],implementation="native/sequence.empty"} : ()->()
-"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["fixed_vector<field:bls12-381.fr,2>"],implementation="native/sequence.append"} : ()->()
-"runtime.binding"() {sym_name="at",contract="sequence.at",arguments=["fixed_vector<field:bls12-381.fr,2>"],implementation="native/sequence.at"} : ()->()
+"runtime.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["bls12-381.fr", 2 : ui64],implementation="blst/resident/fixed_vector.from_vector",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>)>} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=[!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>],implementation="native/sequence.empty",function_type=(!runtime.scope) -> !exec.outcome<(!data.sequence<!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>>)>} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=[!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>],implementation="native/sequence.append",function_type=(!runtime.scope, !data.sequence<!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>>, !algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>) -> !exec.outcome<(!data.sequence<!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>>)>} : ()->()
+"runtime.binding"() {sym_name="at",contract="sequence.at",arguments=[!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>],implementation="native/sequence.at",function_type=(!runtime.scope, !data.sequence<!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>>, ui64) -> !exec.outcome<(!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 2>)>} : ()->()
 )",
                    "%v:!V,%i:ui64", "%v,%i", "!V,ui64", "!X",
                    scopedApply("empty", "empty", "", "", "%s", "!S") +
@@ -1441,8 +1586,8 @@ int main(int argc, char **argv) {
                     b.purpose == BindingPurpose::Specialization &&
                     b.origin == ordinary.binding && a.fixed && b.fixed,
                 "source binding origin or fixed implementation lost");
-        require(a.binding.application.physicalArguments !=
-                    b.binding.application.physicalArguments,
+        require(a.binding.application.valueType !=
+                    b.binding.application.valueType,
                 "full physical parameters collapsed");
         auto forged = plan;
         forged.bindings[*selected.binding].binding.application.implementation =
@@ -1463,10 +1608,10 @@ int main(int argc, char **argv) {
 !X = !algebra.fixed_vector<!algebra.field<"bls12-381.fr">,4>
 )" + scopedFixture(
             R"(
-"runtime.binding"() {sym_name="array",contract="field_array.from_vector",arguments=["bls12-381.fr","4"],implementation="blst/resident/field_array.from_vector"} : ()->()
-"runtime.binding"() {sym_name="get",contract="field_array.get",arguments=["bls12-381.fr","4"],implementation="blst/resident/field_array.get"} : ()->()
-"runtime.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["bls12-381.fr","4"],implementation="blst/resident/fixed_vector.from_vector"} : ()->()
-"runtime.binding"() {sym_name="dot",contract="fixed_vector.dot",arguments=["bls12-381.fr","4"],implementation="blst/resident/fixed_vector.dot"} : ()->()
+"runtime.binding"() {sym_name="array",contract="field_array.from_vector",arguments=["bls12-381.fr", 4 : ui64],implementation="blst/resident/field_array.from_vector",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_array<"bls12-381.fr", 4>)>} : ()->()
+"runtime.binding"() {sym_name="get",contract="field_array.get",arguments=["bls12-381.fr", 4 : ui64],implementation="blst/resident/field_array.get",function_type=(!runtime.scope, !algebra.field_array<"bls12-381.fr", 4>, ui64) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
+"runtime.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["bls12-381.fr", 4 : ui64],implementation="blst/resident/fixed_vector.from_vector",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 4>)>} : ()->()
+"runtime.binding"() {sym_name="dot",contract="fixed_vector.dot",arguments=["bls12-381.fr", 4 : ui64],implementation="blst/resident/fixed_vector.dot",function_type=(!runtime.scope, !algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 4>, !algebra.fixed_vector<!algebra.field<"bls12-381.fr">, 4>) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 )",
             "%v:!V,%i:ui64", "%v,%i", "!V,ui64", "!F",
             scopedApply("array", "array", "%v", "!V", "%a", "!A") +
@@ -1592,19 +1737,20 @@ int main(int argc, char **argv) {
     consumeError(std::move(release));
   });
   cases.run("compiled indexed observation preserves selected payload", [&] {
-    auto origin = take(encodeNativeOriginTemplate(
-        "main", {}, {"message", "Round", "response", "response", "P", "V"}));
+    StringRef origin =
+        "#runtime.origin<\"main\", #runtime.message_origin<\"Round\", "
+        "\"response\", \"response\", \"P\", \"V\">>";
     auto source =
-        R"(!T = !runtime.capability<"transcript:merlin3.bls12-381.fr64be/0">
+        R"(!T = !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 !I = !algebra.indices
 )" + scopedFixture(
             R"(
-"runtime.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0","sequence<field:bls12-381.fr>"],implementation="arkworks/transcript.native.indexed.observe.data"} : ()->()
+"runtime.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0", !data.sequence<!algebra.field<"bls12-381.fr">>],implementation="arkworks/transcript.native.indexed.observe.data",function_type=(!runtime.scope, !runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">, !data.sequence<!algebra.field<"bls12-381.fr">>, !algebra.indices) -> !exec.outcome<(!runtime.capability<transcript, "merlin3.bls12-381.fr64be/0">)>} : ()->()
 )",
             "%t:!T,%s:!S,%i:!I", "%t,%s,%i", "!T,!S,!I", "!T",
             scopedApply("observe", "observe", "%t,%s,%i", "!T,!S,!I", "%out",
-                        "!T", "[\"" + origin + "\"]") +
+                        "!T", ("[" + origin + "]").str()) +
                 scopedReturn("%out", "!T"),
             3);
     auto module = take(executableFixture(source, context));
@@ -1618,12 +1764,15 @@ int main(int argc, char **argv) {
                     sequence,
             "observation relabeled or converted selected payload");
     const auto &binding = plan.bindings[*observation.binding];
-    require(binding.binding.application.physicalArguments ==
-                std::vector<std::string>{sequence},
+    require(binding.binding.application.valueType.getInput(1) ==
+                observation.inputs[1],
             "observation lost exact parameter");
     auto wrong = binding.binding.application;
-    wrong.physicalArguments = {scalar};
-    refuses(resolveBinding(wrong, true), "binding-representation");
+    SmallVector<Type> inputs(wrong.valueType.getInputs());
+    inputs[1] = nativeType(context, take(parseBoundType(scalar, true)));
+    wrong.valueType =
+        FunctionType::get(&context, inputs, wrong.valueType.getResults());
+    refuses(resolveNativeApplication(wrong), "binding-signature");
     publish(*module, take(validatePhysical(*module, plan)));
   });
   return cases.result();

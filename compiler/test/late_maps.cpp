@@ -2,6 +2,7 @@
 #include "../lib/Target/PhysicalPlan.h"
 #include "../lib/Transforms/NumericalSelection.h"
 #include "mlir/IR/OperationSupport.h"
+#include "support/NativeBindings.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
@@ -59,7 +60,7 @@ constexpr StringLiteral domain = R"mlir(
 )mlir";
 std::string reductionFixture(bool repeated = false) {
   std::string definitions = R"mlir(
-"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"koala-bear">) -> !exec.outcome<(!algebra.field<"koala-bear">)>} : ()->()
 func.func private @formula(%a:!F,%b:!F,%unused:!F)->!F {
   %r = algebra.field_multiply %a,%b : (!F,!F)->!F
   func.return %r : !F
@@ -125,7 +126,7 @@ OwningOpRef<ModuleOp> identityCaptureFixture(MLIRContext &context,
                                              StringRef kind) {
   auto text =
       aliases.str() + R"mlir(
-!tag = !data.variant<"variant:5b227a6b632e76617269616e742f30222c5b2243686f696365222c226c656674222c5b5d2c5b2231222c2232225d2c227269676874222c5b2234222c2232225d2c5b2233222c2235225d2c5b2230222c2236225d5d5d">
+!tag = !data.variant<#data.identity<["atom", "Choice"]>, [#data.alternative<"left">, #data.alternative<"right">]>
 )mlir" +
       scopedFixture(unaryDeclarations(true),
                     "%xs:!V,%other:!V,%flag:i1,%lo:ui64,%hi:ui64,%tag:!tag",
@@ -268,18 +269,17 @@ public:
   explicit Withheld(std::vector<std::string> contracts = {})
       : contracts(std::move(contracts)) {}
   llvm::Expected<std::vector<std::string>> implementations(
-      const protocol::BindingApplication &application) const override {
+      const zkc::NativeBindingApplication &application) const override {
     if (llvm::is_contained(contracts, application.contract))
       return std::vector<std::string>{};
     return target::installedCandidates().implementations(application);
   }
   std::vector<std::string> diagonalImplementations(
-      const protocol::BindingApplication &application) const override {
+      const zkc::NativeBindingApplication &application) const override {
     return target::installedCandidates().diagonalImplementations(application);
   }
-  std::vector<protocol::BindingApplication>
-  conversions(const protocol::BoundType &from,
-              const protocol::BoundType &to) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type from, mlir::Type to) const override {
     return target::installedCandidates().conversions(from, to);
   }
 };
@@ -523,7 +523,7 @@ int main() {
                 } else
                   helper.setPublic();
                 require(named(context, "mathematical-formation",
-                              [&] { return verify(*candidate); }),
+                              [&] { return admitStage(*candidate); }),
                         "logical request bypassed closure admission");
               });
   for (StringRef body : {"missing", "through"})
@@ -573,7 +573,7 @@ int main() {
     unit(*candidate).setProfile(protocol_ir::Profile::Physical);
     ScopedDiagnosticHandler quiet(&context,
                                   [](Diagnostic &) { return success(); });
-    require(failed(verify(*candidate)),
+    require(failed(admitStage(*candidate)),
             "physical profile admitted pending collection");
   });
   cases.run(

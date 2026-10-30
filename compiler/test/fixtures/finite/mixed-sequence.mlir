@@ -2,7 +2,7 @@
 !S = !data.sequence<i1>
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
-    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.add", implementation = "", sym_name = "add"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.add", implementation = "", sym_name = "add",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>}> : () -> ()
     "data.domain"() <{function_type = (!S) -> !data.domain<i1>, sym_name = "items", sym_visibility = "private"}> ({
     ^bb0(%arg0: !S):
       %0 = "data.domain_elements"(%arg0) : (!S) -> !data.domain<i1>

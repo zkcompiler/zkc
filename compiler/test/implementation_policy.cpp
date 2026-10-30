@@ -1,11 +1,15 @@
+#include "support/NativeBindings.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Implementations.h"
+#include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Registry.h"
 #include "zkc/Target/Catalog.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 
 using namespace llvm;
 using namespace zkc::protocol;
+using namespace zkc::test;
 namespace {
 unsigned checks = 0;
 void require(bool condition, StringRef message) {
@@ -49,17 +53,21 @@ BoundOperation physical(StringRef contract, std::vector<std::string> arguments,
 }
 void defaultIs(StringRef contract, std::vector<std::string> arguments,
                StringRef expected) {
+  mlir::DialectRegistry registry;
+  zkc::registerDialects(registry);
+  mlir::MLIRContext context(registry);
+  context.loadAllAvailableDialects();
   BindingApplication binding{contract.str(), std::move(arguments), ""};
   require(accept(defaultImplementation(binding)) == expected,
           "selected default changed");
-  auto candidates =
-      accept(zkc::target::installedCandidates().implementations(binding));
+  auto candidates = accept(zkc::target::installedCandidates().implementations(
+      nativeRequest(context, binding)));
   require(candidates == std::vector<std::string>{expected.str()},
           "candidate policy changed the default");
 }
 
 const zkc::generic::Scope &scopeFor(StringRef contract) {
-  for (const auto &operation : boundOperationContracts())
+  for (const auto &operation : executableOperationContracts())
     if (operation.name == contract)
       return operation.signature.scope;
   errs() << "missing logical contract " << contract << '\n';
@@ -349,6 +357,10 @@ void denseLayoutPolicies(const ImplementationCatalog &installed) {
 } // namespace
 
 int main() {
+  mlir::DialectRegistry registry;
+  zkc::registerDialects(registry);
+  mlir::MLIRContext context(registry);
+  context.loadAllAvailableDialects();
   const auto &catalog = installedImplementations();
   selectorPolicies(catalog);
   denseLayoutPolicies(catalog);
@@ -543,26 +555,31 @@ int main() {
   for (const auto &row : diagonals) {
     BindingApplication binding{row.contract.str(), {row.domain.str()}, ""};
     auto alternatives =
-        zkc::target::installedCandidates().diagonalImplementations(binding);
+        zkc::target::installedCandidates().diagonalImplementations(
+            nativeRequest(context, binding));
     require(alternatives == std::vector<std::string>{row.implementation.str()},
             "diagonal candidate not selected by exact metadata");
     binding.implementation = row.implementation.str();
-    auto ports = accept(zkc::target::resolveDiagonalImplementation(binding));
-    require(
-        (row.output ? ports.outputs : ports.inputs)[row.port].representation ==
-            row.representation,
-        "diagonal layout on wrong port");
+    auto ports = accept(zkc::target::resolveDiagonalImplementation(
+        nativeRequest(context, binding)));
+    require(mlir::cast<zkc::runtime::RepresentedType>(
+                (row.output ? ports.getResults() : ports.getInputs())[row.port])
+                    .getRepresentation() == row.representation,
+            "diagonal layout on wrong port");
     unsigned count = 0;
-    for (const auto *side : {&ports.inputs, &ports.outputs})
-      for (const auto &port : *side)
-        count += isDiagonalRepresentation(port.representation);
+    for (auto side : {ports.getInputs(), ports.getResults()})
+      for (mlir::Type port : side)
+        count += isDiagonalRepresentation(
+            mlir::cast<zkc::runtime::RepresentedType>(port)
+                .getRepresentation());
     require(count == 1, "diagonal representation escaped its declared port");
   }
   require(!isDiagonalRepresentation("uninstalled.fr-diagonal/0") &&
               !isDiagonalRepresentation("future.diagonal/0"),
           "diagonal representation recognized by spelling");
   require(zkc::target::installedCandidates()
-              .diagonalImplementations({"vector.mul", {"bn254.fr"}, ""})
+              .diagonalImplementations(
+                  nativeRequest(context, {"vector.mul", {"bn254.fr"}, ""}))
               .empty(),
           "diagonal provider inherited BN254 support");
   refuse(
@@ -639,8 +656,10 @@ int main() {
       {"bls12-381.fr", "arkworks.mle-lsb/0", "arkworks.mle-msb/0"},
       "arkworks/table.relayout"};
   auto conversion = accept(resolveBinding(relayout, true));
-  succeeds(zkc::target::checkDirectConversion(relayout, conversion.inputs[0],
-                                              conversion.outputs[0]));
+  succeeds(zkc::target::checkDirectConversion(
+      nativeRequest(context, relayout),
+      nativeType(context, conversion.inputs[0]),
+      nativeType(context, conversion.outputs[0])));
   relayout.arguments[2] = relayout.arguments[1];
   refuse(resolveBinding(relayout, true), "binding-conversion");
   outs() << checks << " implementation policy checks passed\n";

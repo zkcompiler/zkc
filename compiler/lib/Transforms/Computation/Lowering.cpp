@@ -13,6 +13,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecDialect.h"
@@ -27,6 +28,27 @@ using namespace mlir;
 using namespace llvm;
 namespace zkc::computation {
 namespace {
+void registerRealizationDialects(DialectRegistry &registry) {
+  registry.insert<runtime::RuntimeDialect, algebra::AlgebraDialect,
+                  exec::ExecDialect, func::FuncDialect, scf::SCFDialect,
+                  arith::ArithDialect, cf::ControlFlowDialect,
+                  tensor::TensorDialect, linalg::LinalgDialect>();
+}
+void loadRealizationDialects(MLIRContext &context) {
+  DialectRegistry dependencies;
+  registerRealizationDialects(dependencies);
+  auto names = dependencies.getRegisteredDialectNames();
+  // Pass-manager entry loads these before concurrent execution. Direct API
+  // entry needs the same inventory, without loading unrelated registered
+  // dialects.
+  if (llvm::all_of(names, [&](StringRef name) {
+        return context.getLoadedDialect(name) != nullptr;
+      }))
+    return;
+  context.appendDialectRegistry(dependencies);
+  for (StringRef name : names)
+    context.getOrLoadDialect(name);
+}
 LogicalResult refuse(Operation *op, StringRef detail) {
   return diagnostics::emit(op->emitOpError(), "computation-realization",
                            detail);
@@ -115,15 +137,30 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
       } else
         return refuse(call, "unresolved numerical declaration");
     }
+    // A reused outer binding may have the old name of a scratch function.
+    // Rename uses in two phases so one substitution cannot rewrite references
+    // introduced by another. Definitions retain their original names until
+    // copy.
+    for (const auto &entry : renamed)
+      reserved.insert(entry.second);
+    SmallVector<std::pair<StringAttr, StringAttr>> finalNames;
+    unsigned nextTemporary = 0;
     for (auto &definition : output.getBody().front()) {
       auto old = SymbolTable::getSymbolName(&definition);
-      if (failed(SymbolTable::replaceAllSymbolUses(
-              old,
-              StringAttr::get(owner.getContext(),
-                              renamed.lookup(old.getValue())),
-              output)))
+      std::string temporary;
+      do {
+        temporary = "_numerical_import_" + std::to_string(nextTemporary++);
+      } while (!reserved.insert(temporary).second);
+      auto intermediate = StringAttr::get(owner.getContext(), temporary);
+      if (failed(SymbolTable::replaceAllSymbolUses(old, intermediate, output)))
         return refuse(call, "numerical symbol import refused");
+      finalNames.emplace_back(
+          intermediate,
+          StringAttr::get(owner.getContext(), renamed.lookup(old.getValue())));
     }
+    for (auto [temporary, final] : finalNames)
+      if (failed(SymbolTable::replaceAllSymbolUses(temporary, final, output)))
+        return refuse(call, "numerical symbol import refused");
     OpBuilder builder(owner.getContext());
     builder.setInsertionPointToEnd(&owner.getBody().front());
     for (auto &definition : output.getBody().front()) {
@@ -231,10 +268,8 @@ OwningOpRef<mlir::ModuleOp> proposeComputationRealization(
     mlir::ModuleOp source, MathematicalSelectionPolicy policy,
     mathematical::RealizationTrace *trace,
     mathematical::NumericalSelection *selection, mlir::ModuleOp prepared) {
-  source.getContext()->getOrLoadDialect<algebra::AlgebraDialect>();
-  source.getContext()->getOrLoadDialect<exec::ExecDialect>();
-  source.getContext()->getOrLoadDialect<runtime::RuntimeDialect>();
-  if (failed(verify(source)) || !hasSingleElement(*source.getBody()))
+  loadRealizationDialects(*source.getContext());
+  if (failed(zkc::admitStage(source)) || !hasSingleElement(*source.getBody()))
     return {};
   auto owner =
       dyn_cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
@@ -271,7 +306,7 @@ OwningOpRef<mlir::ModuleOp> proposeComputationRealization(
   if (failed(discoverComputations(*candidate, policy, *selection)))
     return {};
   if (failed(materializeComputations(*candidate, policy, trace, *selection)) ||
-      failed(verify(*candidate)))
+      failed(zkc::admitStage(*candidate)))
     return {};
   scope.publish(mathematical::PublicationBoundary::ReturnedCandidate);
   retained = true;
@@ -309,10 +344,7 @@ struct RealizeComputationsPass
       : PassWrapper(other), selection(*this, other.selection.get()),
         trace(other.trace) {}
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry.insert<runtime::RuntimeDialect, algebra::AlgebraDialect,
-                    exec::ExecDialect, func::FuncDialect, scf::SCFDialect,
-                    arith::ArithDialect, cf::ControlFlowDialect,
-                    tensor::TensorDialect, linalg::LinalgDialect>();
+    registerRealizationDialects(registry);
   }
   StringRef getArgument() const final { return "zkc-realize-computations"; }
   StringRef getDescription() const final {

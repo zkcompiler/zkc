@@ -199,7 +199,7 @@ with case('missing-unused-local-input-qualified-call-stop'):
     snapshot = export(local_source)
     main = next(row for row in snapshot[7] if row[1] == 'main')
     assert main[9] == ['block', [
-        [['protocol_apply', 'child', ['P', 'Q']], [0, 1], [field], [], 'A']
+        [['protocol_apply', 'child', ['P', 'Q']], [0, 1], [['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]], [], 'A']
     ], ['return', [0]]]
     assert run(local_source, ['7', None]) == stopped('incomplete', 'apply_1_A_work')
     assert run(local_source, ['7', '8']) == returned(['7'])
@@ -229,12 +229,12 @@ stopping = '''func.func @stop(%scope:!runtime.scope)->!exec.outcome<> attributes
   func.return %failure : !exec.outcome<>
 }'''
 subset = module(pure, stopping,
-    protocol('child', '''%one = "algebra.constant"() {value="1"} : ()->!F
+    protocol('child', '''%one = "algebra.constant"() {value=#algebra.literal<!F, 1 : ui255>} : ()->!F
       %v = func.call @identity(%one) : (!F)->!F
       "protocol.local_call"() {callee=@stop,role="A",site="stop"} : ()->()''',
              roles=('A',), inputs=()),
     protocol('main', apply(roles=('P',), args='', inputs='') + '''
-      %answer = "algebra.constant"() {value="7"} : ()->!F''', inputs=(),
+      %answer = "algebra.constant"() {value=#algebra.literal<!F, 7 : ui255>} : ()->!F''', inputs=(),
              outputs=(('!F', ('Q',)),), returns=('%answer',)))
 with case('outside-roster-zero-result-child-and-native-projection'):
     snapshot = export(subset)

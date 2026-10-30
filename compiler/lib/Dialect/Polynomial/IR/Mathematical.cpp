@@ -4,7 +4,7 @@
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
-#include "llvm/ADT/StringSet.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/Support/MathExtras.h"
 #include <limits>
 
@@ -63,11 +63,14 @@ LogicalResult verifyDomain(Operation *owner, StringRef domain,
                            ArrayAttr points) {
   if (!points || points.empty() || points.size() > MaximumDomainLength)
     return refuse(owner, "expected 1..64 ordered domain points");
-  llvm::StringSet<> seen;
+  llvm::SmallDenseSet<Attribute, 8> seen;
   for (auto point : points) {
-    auto value = dyn_cast<StringAttr>(point);
-    if (!value || !algebra::isCanonicalFieldLiteral(domain, value.getValue()) ||
-        !seen.insert(value.getValue()).second)
+    auto value = dyn_cast<algebra::FieldLiteralAttr>(point);
+    if (!value || value.getField().getDomain() != domain ||
+        failed(algebra::FieldLiteralAttr::verify(
+            [&] { return owner->emitOpError(); }, value.getField(),
+            value.getValue())) ||
+        !seen.insert(value).second)
       return refuse(owner,
                     "domain points must be distinct canonical field literals");
   }

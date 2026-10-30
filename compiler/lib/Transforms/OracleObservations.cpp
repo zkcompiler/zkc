@@ -1,6 +1,7 @@
 #include "OracleSchedule.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -40,11 +41,6 @@ struct Analysis {
           value = repeat.getInputs()[argument.getArgNumber()];
           continue;
         }
-      }
-      if (auto index = value.getDefiningOp<data::IndexOp>()) {
-        uint64_t number;
-        if (!index.getValue().getAsInteger(10, number))
-          return std::optional<uint64_t>(number);
       }
       Attribute attr;
       if (matchPattern(value, m_Constant(&attr)))
@@ -126,7 +122,7 @@ struct Analysis {
   }
 };
 Expected<pir::ProtocolModuleOp> admitted(ModuleOp prepared) {
-  if (!prepared || failed(verify(prepared)) ||
+  if (!prepared || failed(zkc::admitStage(prepared)) ||
       !hasSingleElement(prepared.getBody()->getOperations()))
     return error("oracle-observation-source");
   auto module = dyn_cast<pir::ProtocolModuleOp>(prepared.getBody()->front());

@@ -20,6 +20,7 @@
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
+#include "zkc/Transforms/Stages.h"
 #include "zkc/Translation/Entry.h"
 #include "zkc/Translation/Protocol.h"
 #include "llvm/ADT/StringExtras.h"
@@ -56,9 +57,11 @@ Expected<std::string> numerical(mlir::ModuleOp original, StringRef root,
   mlir::PassManager pipeline(prepared->getContext());
   if (observations)
     observations->instrument(pipeline);
-  pipeline.addPass(protocol::createSelectPhysicalPass(
-      {}, false, options.releaseStorage, nullptr, {},
-      options.mathematicalSelection, options.cpuTarget));
+  PhysicalPipelineOptions physicalOptions;
+  physicalOptions.releaseStorage = options.releaseStorage;
+  physicalOptions.mathematics = options.mathematicalSelection;
+  physicalOptions.cpuTarget = options.cpuTarget;
+  buildPhysicalPipeline(pipeline, physicalOptions);
   auto outcome = pipeline.run(*prepared);
   if (mlir::failed(outcome) || diagnostics.hasErrors())
     return diagnostics.failure(

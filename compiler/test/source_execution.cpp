@@ -4,7 +4,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Analysis/TotalClosure.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Program/Admission.h"
@@ -68,6 +68,19 @@ int main() {
     llvm::consumeError(native.takeError());
     refused(protocol::verifyExecutionDefinitions(*module, expected, false));
   });
+  cases.run(
+      "neutral source definitions cannot resolve a synthetic callee", [&] {
+        auto candidate = expected;
+        candidate.functions.front()
+            .body.front()
+            .get<program::LocalApply>()
+            ->callee = "absent_realization";
+        auto error = protocol::admitNativeLocalDefinitions(candidate);
+        require(bool(error) && namesIdentifier(llvm::toString(std::move(error)),
+                                               "algorithm-call-symbol"),
+                "neutral source admission accepted an unresolved callee");
+        refused(protocol::verifySourceExecutionDefinitions(*module, candidate));
+      });
   auto different = [&](StringRef name, StringRef from, StringRef to) {
     cases.run(name.str(), [&] {
       auto mutated = parse(change(source, from, to));

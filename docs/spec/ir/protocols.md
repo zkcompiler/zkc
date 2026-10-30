@@ -811,10 +811,15 @@ tensors have no logical collection encoding or compatibility alias in this profi
 A purpose applies to its entire input, including nested leaves. Mixed purposes
 use separate entry ports. No per-member selector, computed operand or flattening
 is inferred. Declaration admission is independent of executable host construction
-and wire-codec availability. The implementation bounds a signature to 100000
-inputs, 1 MiB of total canonical type spellings and a shared 200000-unit type
-traversal budget with nesting depth 64; the logical parser and nominal-descriptor
-limits also apply. Budget exhaustion uses `relation-declaration-signature`.
+and wire-codec availability. Native formation bounds a signature to 100000
+inputs, 200000 expanded structural nodes, structural depth below 64 and 64 MiB
+of expanded string metadata. These limits are shared across all inputs; repeated
+occurrences of a uniqued type still count. Native consistency compares formed
+constructors, typed arguments, complete identity trees and ordered alternatives
+directly, including across MLIR contexts. It does not serialize a type or depend
+on the byte grammar's depth or spelling limits. Publication separately checks
+the selected external format and can refuse an otherwise formed native type.
+Budget exhaustion uses `relation-declaration-signature`.
 
 Declarations with the same external identity must agree on input types and
 purposes within a unit and across the units explicitly selected into one

@@ -1,8 +1,8 @@
 #include "OracleQueryExchange.h"
 #include "RealizationEmission.h"
-#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
@@ -19,7 +19,7 @@ planOracleQueryExchange(const OracleAnchorStorage &storage,
   result.holder = holder.role;
   result.state = receiver.state;
   result.receiverStores = receiver.stores;
-  std::vector<VariantAlternative> alternatives;
+  SmallVector<data::AlternativeAttr> alternatives;
   json::Array constructors;
   for (auto [slot, item] : enumerate(receiver.constructors)) {
     const auto &anchor = storage.constructors[item.source];
@@ -73,14 +73,9 @@ planOracleQueryExchange(const OracleAnchorStorage &storage,
     arm.open = functions.open;
     arm.authenticate = functions.authenticate;
     arm.resume = receiver.resume[item.kind];
-    VariantAlternative alternative{arm.alternative, {}};
-    for (Type type : arm.opened) {
-      auto bound = encodeBoundType(type, false);
-      if (!bound)
-        return bound.takeError();
-      alternative.payload.push_back(bound->spelling());
-    }
-    alternatives.push_back(std::move(alternative));
+    auto *context = arm.opened.front().getContext();
+    alternatives.push_back(data::AlternativeAttr::get(
+        context, StringAttr::get(context, arm.alternative), arm.opened));
     constructors.push_back(std::to_string(item.source));
     result.holderStores.push_back(anchor.roles[held->role].sequence);
     result.arms.push_back(std::move(arm));
@@ -92,17 +87,27 @@ planOracleQueryExchange(const OracleAnchorStorage &storage,
                        toHex(receiver.role, true), toHex(holder.role, true),
                        json::Array(constructors)};
   };
-  // Both variants go through the existing descriptor limits, including the
-  // maximum of 32 alternatives. No unbounded generated type bypasses admission.
-  auto request = encodeVariant({nominal("zkc.oracle.opening-request/0"),
-                                {{"Record", {"index", "index", "index"}}}});
-  auto response = encodeVariant(
-      {nominal("zkc.oracle.opening-response/0"), std::move(alternatives)});
-  if (!request || !response)
+  if (alternatives.size() > 32)
     return refuse();
   auto *context = receiver.state.front().getContext();
-  result.request = data::VariantType::get(context, *request);
-  result.response = data::VariantType::get(context, *response);
+  auto requestIdentity = data::importVariantIdentity(
+      context, nominal("zkc.oracle.opening-request/0"));
+  auto responseIdentity = data::importVariantIdentity(
+      context, nominal("zkc.oracle.opening-response/0"));
+  if (!requestIdentity || !responseIdentity)
+    return refuse();
+  auto index = IntegerType::get(context, 64, IntegerType::Unsigned);
+  auto record =
+      data::AlternativeAttr::get(context, StringAttr::get(context, "Record"),
+                                 ArrayRef<Type>{index, index, index});
+  result.request = data::VariantType::getChecked(
+      UnknownLoc::get(context), context, requestIdentity,
+      ArrayRef<data::AlternativeAttr>{record});
+  result.response = data::VariantType::getChecked(
+      UnknownLoc::get(context), context, responseIdentity,
+      ArrayRef<data::AlternativeAttr>(alternatives));
+  if (!result.request || !result.response)
+    return refuse();
   return result;
 }
 namespace {
@@ -154,21 +159,18 @@ struct Emitter {
   }
   Values apply(Control &c, StringRef contract, TypeRange outputs,
                ValueRange inputs, StringRef site,
-               ArrayRef<std::string> parameters = {}) {
+               ArrayRef<Attribute> parameters = {}) {
     auto binding =
         bindings.binding(builder, unit.getLoc(), {contract.str(), {}, ""});
-    SmallVector<StringRef> values;
-    for (const auto &parameter : parameters)
-      values.push_back(parameter);
     return c.invoke(
         "exec.apply", outputs, c.scoped(inputs),
         {builder.getNamedAttr("binding", binding),
-         builder.getNamedAttr("parameters", builder.getStrArrayAttr(values)),
+         builder.getNamedAttr("parameters", builder.getArrayAttr(parameters)),
          builder.getNamedAttr("site", builder.getStringAttr(site))});
   }
   Value number(Control &c, unsigned value, StringRef site) {
     return apply(c, "index.constant", index, {}, site,
-                 {std::to_string(value)})[0];
+                 {builder.getIntegerAttr(index, value)})[0];
   }
   Value equal(Control &c, Value actual, unsigned expected, StringRef site) {
     auto constant = number(c, expected, site.str() + "_expected");

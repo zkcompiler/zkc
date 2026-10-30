@@ -5,10 +5,10 @@
 module { "protocol.module"() ({
  "protocol.func"() ({
  ^entry(%data:!D,%other:!D,%position:ui64,%allow:i1):
-  %rows = "data.index"() {value="8"} : ()->ui64
-  %zero = "data.index"() {value="0"} : ()->ui64
-  %one = "data.index"() {value="1"} : ()->ui64
-  %four = "data.index"() {value="4"} : ()->ui64
+  %rows = "data.index"() {value=8 : ui64} : ()->ui64
+  %zero = "data.index"() {value=0 : ui64} : ()->ui64
+  %one = "data.index"() {value=1 : ui64} : ()->ui64
+  %four = "data.index"() {value=4 : ui64} : ()->ui64
   %a = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="left"} : (!D,ui64)->!H
   %b = "protocol.oracle_send"(%other,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="right"} : (!D,ui64)->!H
   %x = "protocol.oracle_query"(%a,%zero) {owner="V",site="first"} : (!H,ui64)->!F

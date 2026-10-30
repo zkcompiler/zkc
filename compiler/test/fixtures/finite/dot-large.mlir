@@ -2,8 +2,8 @@
 !V = !algebra.field_vector<"bls12-381.fr">
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
-    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.add", implementation = "", sym_name = "add"}> : () -> ()
-    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.mul", implementation = "", sym_name = "mul"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.add", implementation = "", sym_name = "add",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.mul", implementation = "", sym_name = "mul",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>}> : () -> ()
     "data.domain"() <{function_type = (!V, !V, !V) -> !data.domain<!F, !F, !F>, sym_name = "items", sym_visibility = "private"}> ({
     ^bb0(%arg0: !V, %arg1: !V, %arg2: !V):
       %0 = "data.domain_elements"(%arg0) : (!V) -> !data.domain<!F>
@@ -12,8 +12,8 @@ module {
       %3 = "data.domain_zip"(%0, %1, %2) : (!data.domain<!F>, !data.domain<!F>, !data.domain<!F>) -> !data.domain<!F, !F, !F>
       "data.domain_yield"(%3) : (!data.domain<!F, !F, !F>) -> ()
     }) : () -> ()
-    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.length", implementation = "", sym_name = "length"}> : () -> ()
-    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.fill", implementation = "", sym_name = "fill"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.length", implementation = "", sym_name = "length",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(ui64)>}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.fill", implementation = "", sym_name = "fill",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, ui64) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>}> : () -> ()
     "protocol.func"() <{function_type = (!V, !F, !F) -> !F, input_roles = [["P"], ["P"], ["P"]], origin = ["main", []], output_roles = [["P"]], roles = ["P"], sym_name = "main"}> ({
     ^bb0(%arg0: !V, %arg1: !F, %arg2: !F):
       %0 = "protocol.local_call"(%arg0, %arg1, %arg2) <{callee = @large, role = "P", site = "large"}> : (!V, !F, !F) -> !F

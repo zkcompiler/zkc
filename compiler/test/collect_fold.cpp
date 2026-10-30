@@ -4,6 +4,8 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include <utility>
 
@@ -157,7 +159,10 @@ int main() {
         if (sc::payload(call)[0] == value)
           seed = call;
       require(seed && seed.getParameters() ==
-                          Builder(&context).getStrArrayAttr({literal}),
+                          Builder(&context).getArrayAttr(
+                              {take(algebra::decodeFieldLiteral(
+                                  cast<algebra::FieldType>(value.getType()),
+                                  literal))}),
               "nonzero seed value was synthesized, reordered or reset");
     }
   });
@@ -373,7 +378,8 @@ int main() {
         (reason == "predicate" ? producer : consumer)
             ->setAttr("predicate", FlatSymbolRefAttr::get(&context, "select"));
       }
-      require(succeeded(verify(*unit)), "decline fixture is not admitted");
+      require(succeeded(zkc::admitStage(*unit)),
+              "decline fixture is not admitted");
       uint64_t remaining = 100000;
       require(failed(pair(*unit, remaining)),
               "unsafe composition was selected");

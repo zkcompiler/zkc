@@ -1,77 +1,94 @@
 #include "zkc/Contracts/OracleKinds.h"
-#include "zkc/Dialect/Bindings.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolTypes.h"
-#include "llvm/Support/Error.h"
+#include "zkc/Dialect/TypeFormation.h"
 
 using namespace mlir;
 using namespace llvm;
 namespace zkc::protocol_ir {
 namespace {
-Expected<protocol::OracleKindSignature> signature(StringRef identity,
-                                                  ArrayAttr arguments) {
-  std::vector<protocol::TypeArgument> typed;
-  if (!arguments || arguments.size() > 2)
-    return createStringError(inconvertibleErrorCode(),
-                             "oracle kind requires typed arguments");
-  for (auto argument : arguments) {
-    if (auto type = dyn_cast<TypeAttr>(argument)) {
-      auto logical = protocol::encodeBoundType(type.getValue(), false);
-      if (!logical)
-        return logical.takeError();
-      if (protocol::decodeBoundType(type.getContext(), *logical) !=
-          type.getValue())
-        return createStringError(
-            inconvertibleErrorCode(),
-            "oracle kind requires canonical logical types");
-      typed.push_back(
-          protocol::TypeArgument::typeArgument(std::move(*logical)));
-    } else if (auto natural = dyn_cast<IntegerAttr>(argument);
-               natural && natural.getType().isUnsignedInteger(64))
-      typed.push_back(protocol::TypeArgument::naturalArgument(
-          natural.getValue().getZExtValue()));
-    else
-      return createStringError(
-          inconvertibleErrorCode(),
-          "oracle kind arguments must be types or ui64 naturals");
+struct NativeKindSignature {
+  Type data, query, answer;
+  std::optional<uint64_t> rows;
+};
+FailureOr<NativeKindSignature>
+signature(llvm::function_ref<InFlightDiagnostic()> emit, StringRef identity,
+          ArrayAttr arguments) {
+  auto refuse = [&](StringRef detail) -> FailureOr<NativeKindSignature> {
+    emit() << detail;
+    return failure();
+  };
+  if (identity != "table")
+    return refuse("unsupported oracle kind");
+  if (!arguments || (arguments.size() != 1 && arguments.size() != 2))
+    return refuse("oracle table needs a row type and optional static rows");
+  auto row = dyn_cast<TypeAttr>(arguments[0]);
+  if (!row || row.getContext() != arguments.getContext() ||
+      row.getValue().getContext() != arguments.getContext())
+    return refuse("oracle table requires a logical row in its context");
+  std::optional<uint64_t> rows;
+  if (arguments.size() == 2) {
+    auto value = dyn_cast<IntegerAttr>(arguments[1]);
+    if (!value || !value.getType().isUnsignedInteger(64) ||
+        value.getContext() != arguments.getContext())
+      return refuse("oracle table static rows must be ui64");
+    rows = value.getValue().getZExtValue();
   }
-  return protocol::oracleKindSignature(identity, typed);
+  auto policy = mathematical::nativeTypePolicy(row.getValue());
+  if (!policy || !policy->total || !policy->shared || policy->affine)
+    return refuse("oracle table rows require formed total shared data");
+  auto interface = dyn_cast<CatalogTypeInterface>(row.getValue());
+  auto application =
+      interface ? interface.getCatalogApplication() : std::nullopt;
+  auto collection = protocol::oracleTableCollectionConstructor(
+      application ? application->constructor : StringRef{});
+  SmallVector<Attribute> parameters;
+  if (collection == "sequence")
+    parameters.push_back(row);
+  else
+    parameters = application->arguments;
+  auto data = constructLogicalType(emit, arguments.getContext(),
+                                   {collection, parameters});
+  auto query =
+      constructLogicalType(emit, arguments.getContext(), {"index", {}});
+  if (!data || !query)
+    return failure();
+  return NativeKindSignature{data, query, row.getValue(), rows};
 }
-Type associatedType(
-    OracleKindAttr kind,
-    protocol::BoundType protocol::OracleKindSignature::*member) {
-  auto checked = signature(kind.getIdentity(), kind.getArguments());
-  if (!checked) {
-    consumeError(checked.takeError());
-    return {};
-  }
-  return protocol::decodeBoundType(kind.getContext(), (*checked).*member);
+FailureOr<NativeKindSignature> signature(OracleKindAttr kind) {
+  return signature(
+      [&] {
+        auto diagnostic = emitError(UnknownLoc::get(kind.getContext()));
+        diagnostic.abandon();
+        return diagnostic;
+      },
+      kind.getIdentity(), kind.getArguments());
+}
+Type associatedType(OracleKindAttr kind, Type NativeKindSignature::*member) {
+  auto checked = signature(kind);
+  return succeeded(checked) ? (*checked).*member : Type{};
 }
 } // namespace
 LogicalResult
 OracleKindAttr::verify(llvm::function_ref<InFlightDiagnostic()> emit,
                        StringRef identity, ArrayAttr arguments) {
-  auto checked = signature(identity, arguments);
-  if (!checked)
-    return emit() << toString(checked.takeError());
-  return success();
+  return success(succeeded(signature(emit, identity, arguments)));
 }
 Type OracleKindAttr::getDataType() const {
-  return associatedType(*this, &protocol::OracleKindSignature::data);
+  return associatedType(*this, &NativeKindSignature::data);
 }
 Type OracleKindAttr::getQueryType() const {
-  return associatedType(*this, &protocol::OracleKindSignature::query);
+  return associatedType(*this, &NativeKindSignature::query);
 }
 Type OracleKindAttr::getAnswerType() const {
-  return associatedType(*this, &protocol::OracleKindSignature::answer);
+  return associatedType(*this, &NativeKindSignature::answer);
 }
 std::vector<protocol::OracleShapeDimension>
 OracleKindAttr::getShapeDimensions() const {
-  auto checked = signature(getIdentity(), getArguments());
-  if (!checked) {
-    consumeError(checked.takeError());
+  auto checked = signature(*this);
+  if (failed(checked))
     return {};
-  }
-  return checked->shape;
+  return {{"rows", checked->rows}};
 }
 std::optional<uint64_t> OracleKindAttr::getStaticShape(StringRef name) const {
   for (const auto &dimension : getShapeDimensions())

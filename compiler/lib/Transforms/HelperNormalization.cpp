@@ -102,7 +102,7 @@ LogicalResult CheckedHelperNormalizations::prepare(Operation *source) {
         builder.setInsertionPoint(dim);
         auto index = data::IndexOp::create(
             builder, dim.getLoc(), dim.getOutput().getType(),
-            builder.getStringAttr(std::to_string(*extent)));
+            builder.getIntegerAttr(builder.getIntegerType(64, false), *extent));
         dim.getOutput().replaceAllUsesWith(index.getOutput());
         dim.erase();
       }

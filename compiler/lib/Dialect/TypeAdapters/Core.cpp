@@ -1,10 +1,46 @@
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/TypeAdapters/Support.h"
 #include "zkc/Dialect/Types.h"
 
 using namespace mlir;
 namespace zkc::protocol::type_adapters {
 namespace {
+std::optional<llvm::SmallVector<Attribute>> sequenceArguments(Type type,
+                                                              llvm::StringRef) {
+  auto sequence = dyn_cast<zkc::data::SequenceType>(type);
+  if (!sequence || !sequence.getElementType())
+    return std::nullopt;
+  return llvm::SmallVector<Attribute>{TypeAttr::get(sequence.getElementType())};
+}
+std::optional<llvm::SmallVector<Attribute>> booleanArguments(Type type,
+                                                             llvm::StringRef) {
+  if (!type.isSignlessInteger(1))
+    return std::nullopt;
+  return llvm::SmallVector<Attribute>{};
+}
+std::optional<llvm::SmallVector<Attribute>> indexArguments(Type type,
+                                                           llvm::StringRef) {
+  if (!type.isUnsignedInteger(64))
+    return std::nullopt;
+  return llvm::SmallVector<Attribute>{};
+}
+Type constructSequence(llvm::function_ref<InFlightDiagnostic()> emit,
+                       MLIRContext *context, llvm::StringRef,
+                       llvm::ArrayRef<Attribute> arguments) {
+  return loadedCheckedType<zkc::data::SequenceType>(
+      emit, context, cast<TypeAttr>(arguments[0]).getValue());
+}
+Type constructBoolean(llvm::function_ref<InFlightDiagnostic()>,
+                      MLIRContext *context, llvm::StringRef,
+                      llvm::ArrayRef<Attribute>) {
+  return IntegerType::get(context, 1);
+}
+Type constructIndex(llvm::function_ref<InFlightDiagnostic()>,
+                    MLIRContext *context, llvm::StringRef,
+                    llvm::ArrayRef<Attribute>) {
+  return IntegerType::get(context, 64, IntegerType::Unsigned);
+}
 using Shake128Adapter = NullaryAdapter<zkc::crypto::Shake128StateType>;
 using BytesAdapter = NullaryAdapter<zkc::data::BytesType>;
 Type decodeSequence(MLIRContext *context, const BoundType &type) {
@@ -20,7 +56,7 @@ std::optional<BoundType> encodeSequence(Type type,
   auto sequence = dyn_cast<zkc::data::SequenceType>(type);
   if (!sequence)
     return std::nullopt;
-  auto element = encodeLogicalType(sequence.getElementType());
+  auto element = encodeBoundType(sequence.getElementType(), false);
   if (!element) {
     llvm::consumeError(element.takeError());
     return std::nullopt;
@@ -47,16 +83,26 @@ std::optional<BoundType> encodeIndex(Type type, llvm::StringRef constructor) {
   return std::nullopt;
 }
 Type decodeVariantType(MLIRContext *context, const BoundType &type) {
-  return loadedType<zkc::data::VariantType>(context,
-                                            "variant:" + type.identity);
+  auto registered =
+      context ? AbstractType::lookup(zkc::data::VariantType::name, context)
+              : std::nullopt;
+  if (!registered ||
+      registered->get().getTypeID() != zkc::data::VariantType::getTypeID())
+    return {};
+  auto descriptor = decodeVariant("variant:" + type.identity);
+  return descriptor ? zkc::data::importVariantType(context, *descriptor)
+                    : Type{};
 }
 std::optional<BoundType> encodeVariantType(Type type,
                                            llvm::StringRef constructor) {
-  if (auto variant = dyn_cast<zkc::data::VariantType>(type)) {
-    auto descriptor = variant.getDescriptor();
-    if (descriptor.consume_front("variant:"))
-      return BoundType{constructor.str(), descriptor.str(), {}};
-  }
+  // This required contribution callback shares the canonical structural codec.
+  // It owns neither a second table encoder nor native admission semantics.
+  if (!isa<zkc::data::VariantType>(type) || constructor != "variant")
+    return std::nullopt;
+  auto result = encodeBoundType(type, false);
+  if (result)
+    return std::move(*result);
+  llvm::consumeError(result.takeError());
   return std::nullopt;
 }
 } // namespace

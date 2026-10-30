@@ -5,7 +5,7 @@ module { "protocol.module"() ({
  func.func private @mixed(%a:!F,%b:!F)->(!F,!P,!F) {
    %difference = algebra.field_subtract %a,%b : (!F,!F)->!F
    %values = "algebra.array_from_elements"(%difference,%b) : (!F,!F)->!A
-   %p = "poly.interpolate"(%values) {points=["0","1"]} : (!A)->!P
+   %p = "poly.interpolate"(%values) {points=[#algebra.literal<!algebra.field<"bls12-381.fr">, 0 : ui255>,#algebra.literal<!algebra.field<"bls12-381.fr">, 1 : ui255>]} : (!A)->!P
    %product = algebra.field_multiply %difference,%b : (!F,!F)->!F
    func.return %product,%p,%difference : !F,!P,!F
  }

@@ -24,7 +24,7 @@ module { "protocol.module"() ({
  }) {sym_name="wrapper",function_type=(!D,!H,ui64)->(!D,!H,ui64),roles=["P","V"],input_roles=[["P"],["V"],["V"]],output_roles=[["P"],["V"],["V"]]} : ()->()
  "protocol.func"() ({
  ^entry(%data:!D,%trips:ui64,%position:ui64):
-  %rows = "data.index"() {value="4"} : ()->ui64
+  %rows = "data.index"() {value=4 : ui64} : ()->ui64
   %a = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="first"} : (!D,ui64)->!H
   %b = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="equal_data"} : (!D,ui64)->!H
   %last = "protocol.repeat"(%trips,%a) ({

@@ -18,8 +18,8 @@ class NativeTypePolicies {
   mlir::Operation *owner;
   llvm::DenseMap<mlir::Type, std::optional<NativeTypePolicy>> cache;
   unsigned remaining = 200000;
-  // Bytes of distinct top-level spellings, not a character-instruction budget.
-  // Nested variant decoding can revisit a spelling at each formed type depth.
+  // Expanded native metadata bytes across distinct queried types. No encoded
+  // spelling is built or charged; byte publication has its own limits.
   size_t remainingBytes = 1024 * 1024;
   bool limited = false;
 

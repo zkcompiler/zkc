@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
@@ -218,9 +219,9 @@ void polynomialMutations(MLIRContext &context) {
         changed = true;
       } else if (coefficients) {
         auto constant = dyn_cast<algebra::ConstantFieldOp>(op);
-        if (constant && constant.getValue() != "0" &&
-            constant.getValue() != "1" && constant.getValue() != "2") {
-          constant.setValue("0");
+        if (constant && constant.getValue().getValue().getValue().ugt(2)) {
+          constant.setValueAttr(cantFail(algebra::makeFieldLiteral(
+              constant.getResult().getType(), llvm::APInt(1, 0))));
           changed = true;
         }
       }

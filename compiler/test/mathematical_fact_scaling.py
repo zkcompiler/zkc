@@ -134,8 +134,8 @@ func.func private @body(%i:ui64,%lo:ui64,%hi:ui64,%x:!F)->!F {{
 }}
 func.func private @identity(%n:ui64)->ui64 {{ func.return %n : ui64 }}
 func.func @subject(%x:!F)->!A {{
- %lo = "data.index"() {{value="0"}} : ()->ui64
- %n0 = "data.index"() {{value="3"}} : ()->ui64
+ %lo = "data.index"() {{value=0 : ui64}} : ()->ui64
+ %n0 = "data.index"() {{value=3 : ui64}} : ()->ui64
  {calls}
  %r = "algebra.finite_collect"(%lo,%n{forwards},%x) {{domain=@items,body=@body}}
    : (ui64,ui64,!F)->!A

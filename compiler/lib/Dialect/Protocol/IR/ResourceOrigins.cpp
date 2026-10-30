@@ -58,16 +58,15 @@ LogicalResult ResourceOrigins::call(Operation *op, unsigned depth,
       auto closure = protocol::readSourceExecutionClosure(executionOwner);
       if (!closure)
         return diagnostics::emit(op->emitOpError(), closure.takeError());
-      auto analysis = program::ResourceOriginAnalysis::create(
-          std::move(closure->definitions), std::move(closure->computations),
-          remaining, depthLimit);
+      auto analysis = exec::ResourceOriginAnalysis::create(
+          executionOwner, std::move(*closure), remaining, depthLimit);
       if (!analysis)
         return diagnostics::emit(op->emitOpError(), analysis.takeError());
       execution = std::move(*analysis);
     }
     if (executionOwner != function->getParentOp())
       return malformed(op, "resource-origin query crossed its source closure");
-    auto roots = execution->get(function.getSymName(), depth + 1);
+    auto roots = execution->get(function, depth + 1);
     if (!roots)
       return diagnostics::emit(op->emitOpError(), roots.takeError());
     Summary summary;
@@ -112,12 +111,12 @@ LogicalResult ResourceOrigins::successors(Operation *op,
   if (none_of(op->getOperands(), [&](Value value) { return affine(value); }) ||
       none_of(op->getResults(), [&](Value value) { return affine(value); }))
     return success();
-  auto binding = protocol::operationBinding(op);
-  if (!binding) {
-    consumeError(binding.takeError());
+  if (!op->hasAttr("binding"))
     return success();
-  }
-  auto facts = protocol::operationContracts(binding->application.contract);
+  auto binding = lookupNativeBinding(op);
+  if (failed(binding))
+    return failure();
+  auto facts = protocol::operationContracts(binding->declaration.getContract());
   if (!facts)
     return success();
   // At most three installed facets. Unknown/conflicting equations for the same

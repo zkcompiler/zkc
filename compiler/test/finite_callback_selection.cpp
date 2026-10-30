@@ -8,6 +8,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/ComputationRecipes.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
@@ -175,7 +176,8 @@ protocol_ir::ProtocolModuleOp unit(ModuleOp module) {
 }
 OwningOpRef<ModuleOp> parse(MLIRContext &context) {
   auto result = parseSourceString<ModuleOp>(sourceText, &context);
-  require(bool(result) && succeeded(verify(*result)), "source refused");
+  require(bool(result) && succeeded(zkc::admitStage(*result)),
+          "source refused");
   return result;
 }
 OwningOpRef<ModuleOp> copy(ModuleOp source) {
@@ -297,7 +299,7 @@ int main() {
         std::string replacement;
         if (body == "uniform")
           replacement = R"mlir(
-   %term = "algebra.constant"() {value="7"} : ()->!F
+   %term = "algebra.constant"() {value=#algebra.literal<!F, 7 : ui255>} : ()->!F
    %r = algebra.field_add %s,%term : (!F,!F)->!F
 )mlir";
         else
@@ -308,8 +310,8 @@ int main() {
 )mlir";
         if (body.starts_with("zero-")) {
           replacement = R"mlir(
-   %zero = "algebra.constant"() {value="0"} : ()->!F
-   %one = "algebra.constant"() {value="1"} : ()->!F
+   %zero = "algebra.constant"() {value=#algebra.literal<!F, 0 : ui255>} : ()->!F
+   %one = "algebra.constant"() {value=#algebra.literal<!F, 1 : ui255>} : ()->!F
 )mlir";
           if (body == "zero-add")
             replacement +=
@@ -339,7 +341,7 @@ int main() {
           auto at = replacement.find("%r =");
           replacement.replace(at, 4, "%combined =");
           replacement += R"mlir(
-   %one = "algebra.constant"() {value="1"} : ()->!F
+   %one = "algebra.constant"() {value=#algebra.literal<!F, 1 : ui255>} : ()->!F
    %r = algebra.field_multiply %combined,%one : (!F,!F)->!F
 )mlir";
         }
@@ -353,8 +355,16 @@ int main() {
           text.replace(at, 10, field.str());
           at += field.size();
         }
+        if (field == "koala-bear") {
+          size_t width = 0;
+          while ((width = text.find("ui255", width)) != std::string::npos) {
+            text.replace(width, 5, "ui31");
+            width += 4;
+          }
+        }
         auto source = parseSourceString<ModuleOp>(text, &context);
-        require(bool(source) && succeeded(verify(*source)), "source refused");
+        require(bool(source) && succeeded(zkc::admitStage(*source)),
+                "source refused");
         RealizationWork work;
         auto candidate = emit(*source, work);
         require(hasLoop(selected(*candidate)) == (body == "state-dependent"),
@@ -420,7 +430,8 @@ int main() {
           auto apply = cast<exec::ApplyOp>(length);
           apply.setBindingAttr(binding);
           apply.getInputsMutable().clear();
-          apply.setParametersAttr(builder.getStrArrayAttr({"1"}));
+          apply.setParametersAttr(builder.getArrayAttr(
+              {builder.getIntegerAttr(builder.getIntegerType(64, false), 1)}));
           require(succeeded(computation::verifyRecipeOutput(*malformed)) &&
                       !compare(*source, *malformed),
                   "broadcast lost its admitted cardinality");
@@ -437,7 +448,8 @@ int main() {
     at = text.find("%state,%p :");
     text.replace(at, 9, "%state,%term");
     auto source = parseSourceString<ModuleOp>(text, &context);
-    require(bool(source) && succeeded(verify(*source)), "source refused");
+    require(bool(source) && succeeded(zkc::admitStage(*source)),
+            "source refused");
     RealizationWork work;
     auto candidate = emit(*source, work);
     require(!hasLoop(selected(*candidate)) && compare(*source, *candidate),
@@ -471,7 +483,8 @@ int main() {
     SmallVector<Attribute> attributes(premises.begin(), premises.end());
     attributes.push_back(data::EqualExtentAttr::get(&context, 2, 0, 3, 0));
     step->setAttr("data.preconditions", ArrayAttr::get(&context, attributes));
-    require(succeeded(verify(*source)), "packed callback source refused");
+    require(succeeded(zkc::admitStage(*source)),
+            "packed callback source refused");
     RealizationWork work;
     auto candidate = emit(*source, work);
     require(
@@ -521,7 +534,7 @@ module { "protocol.module"() ({
       text.replace(text.find("EXTRA_ELEMENT"),
                    StringRef("EXTRA_ELEMENT").size(), element.str());
       auto source = parseSourceString<ModuleOp>(text, &context);
-      require(bool(source) && succeeded(verify(*source)),
+      require(bool(source) && succeeded(zkc::admitStage(*source)),
               "field domain fixture refused");
       RealizationWork work;
       RealizationTrace trace;
@@ -559,7 +572,8 @@ module { "protocol.module"() ({
             step->setAttr("data.preconditions",
                           ArrayAttr::get(&context, attributes));
           }
-          require(succeeded(verify(*source)), "indexed source refused");
+          require(succeeded(zkc::admitStage(*source)),
+                  "indexed source refused");
           RealizationWork work;
           RealizationTrace trace;
           auto candidate = emit(*source, work, true, &trace);
@@ -606,7 +620,8 @@ module { "protocol.module"() ({
         auto call = func::CallOp::create(builder, step.getLoc(), accessed,
                                          step.getArguments());
         func::ReturnOp::create(builder, step.getLoc(), call.getResults());
-        require(succeeded(verify(*source)), "indexed wrapper source refused");
+        require(succeeded(zkc::admitStage(*source)),
+                "indexed wrapper source refused");
         RealizationWork work;
         auto candidate = emit(*source, work);
         require(!hasLoop(selected(*candidate)) && compare(*source, *candidate),
@@ -786,7 +801,7 @@ module { "protocol.module"() ({
           replace("ROW", row ? "%selected" : "%i");
           replace("COLUMN", row ? "%i" : "%selected");
           auto source = parseSourceString<ModuleOp>(text, &context);
-          require(bool(source) && succeeded(verify(*source)),
+          require(bool(source) && succeeded(zkc::admitStage(*source)),
                   "matrix helper fixture refused");
           RealizationWork work;
           auto candidate = emit(*source, work);
@@ -838,7 +853,7 @@ module { "protocol.module"() ({
                  "{sym_name=\"main\",function_type=()->(),roles=[\"P\"],input_"
                  "roles=[],output_roles=[]} : ()->()\n");
     auto source = parseSourceString<ModuleOp>(text, &context);
-    require(bool(source) && succeeded(verify(*source)), "bad fixture");
+    require(bool(source) && succeeded(zkc::admitStage(*source)), "bad fixture");
     RealizationWork work;
     RealizationTrace trace;
     auto candidate = emit(*source, work, true, &trace);
@@ -857,7 +872,7 @@ module { "protocol.module"() ({
         "group callback comparison coverage " + llvm::Twine(variant), [&] {
           auto source =
               parseSourceString<ModuleOp>(groupSource(variant), &context);
-          require(bool(source) && succeeded(verify(*source)),
+          require(bool(source) && succeeded(zkc::admitStage(*source)),
                   "group fixture refused");
           RealizationWork work;
           RealizationTrace trace;
@@ -967,7 +982,7 @@ module { "protocol.module"() ({
     mapping.map(originalFold->getOperand(1), step.getArgument(0));
     auto *unused = builder.clone(*originalFold, mapping);
     unused->setAttr("step", FlatSymbolRefAttr::get(&context, "inner"));
-    require(succeeded(verify(*source)), "nested source refused");
+    require(succeeded(zkc::admitStage(*source)), "nested source refused");
     RealizationWork work;
     auto candidate = emit(*source, work);
     bool retained = false;

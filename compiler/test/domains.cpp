@@ -1,4 +1,5 @@
 #include "zkc/Contracts/Domains.h"
+#include "support/ContractWitnesses.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Bindings.h"
@@ -586,11 +587,12 @@ void installedBindings() {
 
   codecs["commitments"] = "zkcv.commitments.rows-merkle-keccak256.koala-bear/0";
   std::map<std::string, std::string> roots{
+      {"Type", "bool"},
       {"Field", "bls12-381.fr"},
       {"Group", "bls12-381.g1"},
       {"Commitment", "multilinear.kzg.bls12-381/0"},
       {"Transcript", "merlin3.bls12-381.fr64be/0"}};
-  for (const auto &operation : boundOperationContracts()) {
+  for (const auto &operation : zkc::test::genericWitnessOperations()) {
     const bool oracle =
         any_of(operation.signature.requirements, [](const auto &predicate) {
           return predicate.relation == "VectorCommitment";
@@ -848,7 +850,7 @@ void bn254Domains() {
   for (StringRef group : {"bn254.g1", "bn254.g2"}) {
     require(associatedIdentity(group, "Scalar") == "bn254.fr",
             "both BN254 groups act by Fr");
-    for (const auto &op : boundOperationContracts()) {
+    for (const auto &op : zkc::test::genericWitnessOperations()) {
       if (!StringRef(op.name).starts_with("curve.") ||
           op.name == "curve.commit" || op.name == "curve.response")
         continue;
@@ -883,9 +885,7 @@ void bn254Domains() {
   protocol::OperationBinding pairing{"check",
                                      {"pairing.check", {"bn254.fr"}, ""}};
   auto logical = accept(resolveBinding(pairing.application, false));
-  require(boundOperationName(pairing.application.contract) ==
-                  "algebra.exec.pairing_check" &&
-              logical.inputs ==
+  require(logical.inputs ==
                   std::vector<BoundType>{{"groups", "bn254.g1", ""},
                                          {"groups", "bn254.g2", ""}} &&
               logical.outputs == std::vector<BoundType>{{"bool", "", ""}},

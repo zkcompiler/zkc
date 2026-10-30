@@ -10,21 +10,11 @@ using namespace mlir;
 
 namespace envelope {
 namespace {
-// The bounded witness handles logical field.add only. Physical operations and
-// extension attributes require a separately reviewed applicability rule.
-bool logicalAttributes(DictionaryAttr attributes) {
-  if (!attributes || attributes.size() != 3)
-    return false;
-  auto site = attributes.getAs<StringAttr>("site");
-  auto binding = attributes.getAs<FlatSymbolRefAttr>("binding");
-  auto parameters = attributes.getAs<ArrayAttr>("parameters");
-  return site && !site.getValue().empty() && binding && parameters &&
-         parameters.empty();
-}
-
+// This temporary abstraction groups two total mathematical additions. It has
+// no scoped execution, reached failure, budget or invocation identity to erase.
 bool fieldSum(Operation *op) {
-  if (!op || !isa<zkc::algebra::FieldSumOp>(op) || op->getNumOperands() != 2 ||
-      op->getNumResults() != 1 || !logicalAttributes(op->getAttrDictionary()))
+  if (!op || !isa<zkc::algebra::FieldAddOp>(op) || op->getNumOperands() != 2 ||
+      op->getNumResults() != 1 || !op->getAttrs().empty())
     return false;
   Type type = op->getResult(0).getType();
   return isa<zkc::algebra::FieldType>(type) &&
@@ -32,10 +22,10 @@ bool fieldSum(Operation *op) {
          op->getOperand(1).getType() == type;
 }
 
-class Specialize final : public OpRewritePattern<zkc::algebra::FieldSumOp> {
+class Specialize final : public OpRewritePattern<zkc::algebra::FieldAddOp> {
 public:
   using OpRewritePattern::OpRewritePattern;
-  LogicalResult matchAndRewrite(zkc::algebra::FieldSumOp second,
+  LogicalResult matchAndRewrite(zkc::algebra::FieldAddOp second,
                                 PatternRewriter &rewriter) const override {
     if (!fieldSum(second))
       return failure();
@@ -43,15 +33,12 @@ public:
     if (!fieldSum(first) || first->getNextNode() != second.getOperation() ||
         !first->getResult(0).hasOneUse())
       return failure();
-    // Both dictionaries are retained separately, including distinct binding and
-    // occurrence identities. No source binding declaration is added or removed.
+    // Retain both diagnostic locations without changing the ordered expression.
     rewriter.setInsertionPoint(first);
     OperationState state(second.getLoc(), FieldSumChainOp::getOperationName());
     state.addOperands(
         {first->getOperand(0), first->getOperand(1), second->getOperand(1)});
     state.addTypes(second->getResultTypes());
-    state.addAttribute("first_attributes", first->getAttrDictionary());
-    state.addAttribute("second_attributes", second->getAttrDictionary());
     state.addAttribute("first_location", first->getLoc());
     state.addAttribute("second_location", second.getLoc());
     Operation *composite = rewriter.create(state);
@@ -70,35 +57,29 @@ public:
     // can construct malformed IR without running the textual parser.
     if (composite->getNumOperands() != 3 || composite->getNumResults() != 1 ||
         composite->getNumRegions() || composite->getNumSuccessors() ||
-        composite->getAttrs().size() != 4)
+        composite->getAttrs().size() != 2)
       return failure();
-    auto first = composite->getAttrOfType<DictionaryAttr>("first_attributes");
-    auto second = composite->getAttrOfType<DictionaryAttr>("second_attributes");
     auto firstLocation =
         composite->getAttrOfType<LocationAttr>("first_location");
     auto secondLocation =
         composite->getAttrOfType<LocationAttr>("second_location");
     Type type = composite->getResult(0).getType();
-    if (!logicalAttributes(first) || !logicalAttributes(second) ||
-        !firstLocation || !secondLocation ||
+    if (!firstLocation || !secondLocation ||
         !isa<zkc::algebra::FieldType>(type) ||
         llvm::any_of(composite->getOperandTypes(),
                      [type](Type input) { return input != type; }))
       return failure();
     rewriter.setInsertionPoint(composite);
-    auto restore = [&](Location location, DictionaryAttr attributes, Value lhs,
-                       Value rhs) {
+    auto restore = [&](Location location, Value lhs, Value rhs) {
       OperationState state(location,
-                           zkc::algebra::FieldSumOp::getOperationName());
+                           zkc::algebra::FieldAddOp::getOperationName());
       state.addOperands({lhs, rhs});
       state.addTypes(type);
-      state.addAttributes(attributes.getValue());
       return rewriter.create(state)->getResult(0);
     };
-    Value partial = restore(firstLocation, first, composite->getOperand(0),
+    Value partial = restore(firstLocation, composite->getOperand(0),
                             composite->getOperand(1));
-    Value result =
-        restore(secondLocation, second, partial, composite->getOperand(2));
+    Value result = restore(secondLocation, partial, composite->getOperand(2));
     rewriter.replaceOp(composite, result);
     return success();
   }
@@ -124,7 +105,7 @@ LogicalResult specializeFieldSums(ModuleOp module) {
   // Post-order walking permits erasing the current operation. A match erases
   // only it and its already-visited immediate predecessor. Unlike a greedy
   // canonicalizer this does not fold or delete unrelated admitted operations.
-  module.walk([&](zkc::algebra::FieldSumOp op) {
+  module.walk([&](zkc::algebra::FieldAddOp op) {
     (void)pattern.matchAndRewrite(op, rewriter);
   });
   return success();

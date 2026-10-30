@@ -2,6 +2,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Contracts.h"
 #include "zkc/Dialect/Protocol/OraclePorts.h"
@@ -104,7 +105,7 @@ int main() {
       return success();
     });
     auto module = parse(text, context);
-    require(succeeded(verify(*module)),
+    require(succeeded(zkc::admitStage(*module)),
             "valid oracle ports refused: " + message);
     if (prepare) {
       auto candidate = zkc::mathematical::prepareProtocol(*module);
@@ -113,12 +114,13 @@ int main() {
   };
   auto refused = [&](llvm::StringRef text) {
     auto module = parse(text, context);
-    require(failed(verify(*module)), "invalid oracle ports admitted");
+    require(failed(zkc::admitStage(*module)), "invalid oracle ports admitted");
   };
   cases.run(
       "typed contracts preserve anchors, residuals and exact selection", [&] {
         auto module = parse(contractSource(), context);
-        require(succeeded(verify(*module)), "contract fixture formation");
+        require(succeeded(zkc::admitStage(*module)),
+                "contract fixture formation");
         auto unit = *module->getOps<ProtocolModuleOp>().begin();
         auto reader =
             cast<MathematicalOp>(SymbolTable::lookupSymbolIn(unit, "reader"));
@@ -207,7 +209,7 @@ int main() {
                   "protocol-contract-statement");
   cases.run("typed oracle interface retains the actual paired leaves", [&] {
     auto module = parse(source(), context);
-    require(succeeded(verify(*module)), "source formation");
+    require(succeeded(zkc::admitStage(*module)), "source formation");
     auto unit = *module->getOps<ProtocolModuleOp>().begin();
     auto reader =
         cast<MathematicalOp>(SymbolTable::lookupSymbolIn(unit, "reader"));
@@ -251,7 +253,7 @@ module { "protocol.module"() ({
  }) {sym_name="reader",function_type=(!D,!H)->i1,roles=["A","B"],input_roles=[["A"],["B"]],output_roles=[["B"]],contracts=[["target","valid",[@claimed,[["anchor","input",1:i64]]],unit,["output",0:i64,"B"]]]} : ()->()
  "protocol.func"() ({
  ^entry(%data:!D):
-  %rows = "data.index"() {value="4"} : ()->ui64
+  %rows = "data.index"() {value=4 : ui64} : ()->ui64
   %handle = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="word",shape_names=["rows"],shape_bounds={}} : (!D,ui64)->!H
   %parts:2 = "protocol.oracle_components"(%handle) {holder="P",receivers=["V"]} : (!H)->(!D,!H)
   %accepted = "protocol.apply"(%parts#0,%parts#1) {callee=@reader,roles=["P","V"],site="check"} : (!D,!H)->i1
@@ -271,7 +273,7 @@ module { "protocol.module"() ({
           diagnostics += message.str();
           return success();
         });
-        require(failed(verify(*module)) &&
+        require(failed(zkc::admitStage(*module)) &&
                     diagnostics.find(
                         "entry statement bindings cannot be applied") !=
                         std::string::npos,
@@ -280,7 +282,7 @@ module { "protocol.module"() ({
             cast<MathematicalOp>(SymbolTable::lookupSymbolIn(unit, "main"));
         caller.erase();
         diagnostics.clear();
-        require(succeeded(verify(*module)),
+        require(succeeded(zkc::admitStage(*module)),
                 "standalone logical statement entry refused: " + diagnostics);
         SymbolTableCollection symbols;
         unsigned remaining = 100000;
@@ -365,7 +367,7 @@ module { "protocol.module"() ({
                                                          IntegerType::Unsigned),
                                         32))}));
     });
-    require(failed(verify(*malformed)),
+    require(failed(zkc::admitStage(*malformed)),
             "sized input accepted a second row maximum");
     auto unsized = dynamic();
     refused(replace(unsized, "shape_bounds={rows=32:ui64},", ""));
@@ -389,7 +391,7 @@ module { "protocol.module"() ({
     %selectedRows = "protocol.oracle_shape"(%selected) {dimension="rows"} : (!H)->ui64
     %result:3 =)mlir");
         auto module = parse(text, context);
-        require(succeeded(verify(*module)),
+        require(succeeded(zkc::admitStage(*module)),
                 "dynamic selection fixture refused");
         OracleQueryOp query;
         OracleShapeOp rows;
@@ -436,7 +438,7 @@ module { "protocol.module"() ({
     %shape = func.call @choose(%later#2,%result#2) : (ui64,ui64)->ui64
     "protocol.return"(%value))mlir");
         auto module = parse(text, context);
-        require(succeeded(verify(*module)),
+        require(succeeded(zkc::admitStage(*module)),
                 "repeated-call shape fixture refused");
         func::CallOp shape;
         ApplyOp later;
@@ -484,7 +486,7 @@ module { "protocol.module"() ({
         require(other && selected, "missing prepared port components");
         selected.getDataMutable().set(other.getData());
         selected.getAnchorMutable().set(other.getAnchor());
-        require(succeeded(verify(*candidate)),
+        require(succeeded(zkc::admitStage(*candidate)),
                 "pair-preserving mutation lost formation");
         require(
             failed(zkc::mathematical::verifyProtocolPreparationPreserved(

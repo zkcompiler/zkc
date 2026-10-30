@@ -2,8 +2,8 @@
 !I = !algebra.indices
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
-    "runtime.binding"() <{arguments = [], contract = "index.mul", implementation = "", sym_name = "mul"}> : () -> ()
-    "runtime.binding"() <{arguments = [], contract = "index.add", implementation = "", sym_name = "add"}> : () -> ()
+    "runtime.binding"() <{arguments = [], contract = "index.mul", implementation = "", sym_name = "mul",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>}> : () -> ()
+    "runtime.binding"() <{arguments = [], contract = "index.add", implementation = "", sym_name = "add",function_type=(!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>}> : () -> ()
     "data.domain"() <{function_type = (!V, ui64, ui64) -> !data.domain<ui64, ui64>, sym_name = "items", sym_visibility = "private"}> ({
     ^bb0(%arg0: !V, %arg1: ui64, %arg2: ui64):
       %0 = "data.domain_indices"(%arg0) <{axis = 0 : i64}> : (!V) -> !data.domain<ui64>

@@ -1,10 +1,10 @@
 !f = !algebra.field<"bls12-381.fr">
 !m = !algebra.field_matrix<"bls12-381.fr">
-!opt = !data.variant<"variant:5b227a6b632e76617269616e742f30222c5b224f7074696f6e616c5472616365222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226d61747269783a626c7331322d3338312e6672222c5b2235225d2c5b2234222c2236225d2c5b2233222c2237225d2c5b2230222c2238225d5d5d">
-!pair = !data.variant<"variant:5b227a6b632e76617269616e742f30222c5b22547261636550616972222c2270616972222c224f7074696f6e616c5472616365222c226e6f6e65222c5b5d2c5b2233222c2234225d2c22736f6d65222c226d61747269783a626c7331322d3338312e6672222c5b2237225d2c5b2236222c2238225d2c5b2235222c2239225d2c5b2232222c223130225d2c5b223131222c223131225d2c5b2231222c223132225d2c5b223133225d2c5b2230222c223134225d5d5d">
+!opt = !data.variant<#data.identity<["atom", "OptionalTrace"]>, [#data.alternative<"none">, #data.alternative<"some", [!algebra.field_matrix<"bls12-381.fr">]>]>
+!pair = !data.variant<#data.identity<["atom", "TracePair"]>, [#data.alternative<"pair", [!data.variant<#data.identity<["atom", "OptionalTrace"]>, [#data.alternative<"none">, #data.alternative<"some", [!algebra.field_matrix<"bls12-381.fr">]>]>, !data.variant<#data.identity<["atom", "OptionalTrace"]>, [#data.alternative<"none">, #data.alternative<"some", [!algebra.field_matrix<"bls12-381.fr">]>]>]>]>
 module { "protocol.module"() ({
- "runtime.binding"() {sym_name="dimension",contract="matrix.dimension",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="dimension",contract="matrix.dimension",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_matrix<"bls12-381.fr">) -> !exec.outcome<(ui64)>} : ()->()
+ "runtime.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation="",function_type=(!runtime.scope) -> !exec.outcome<(ui64)>} : ()->()
     func.func @dimensions(%arg0: !runtime.scope, %arg1: !opt) -> !exec.outcome<(ui64, ui64)> attributes {no_inline, runtime.origin = ["dimensions", []]} {
       "exec.match"(%arg0, %arg1)[^bb2, ^bb3, ^bb4] <{alternatives = ["none", "some"], site = "presence"}> : (!runtime.scope, !opt) -> ()
     ^bb1(%0: ui64, %1: ui64):  // 2 preds: ^bb7, ^bb10
@@ -39,7 +39,7 @@ module { "protocol.module"() ({
       cf.br ^bb1(%20, %21 : ui64, ui64)
     }
     func.func private @control_0(%arg0: !runtime.scope) -> !exec.outcome<(ui64, ui64)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = ["0"], site = "absent"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = [0 : ui64], site = "absent"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
       %2 = "exec.complete"(%arg0, %1, %1) : (!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64, ui64)>
@@ -49,10 +49,10 @@ module { "protocol.module"() ({
       return %4 : !exec.outcome<(ui64, ui64)>
     }
     func.func private @control_1(%arg0: !runtime.scope, %arg1: !m) -> !exec.outcome<(ui64, ui64)> attributes {no_inline, runtime.region} {
-      %0 = "exec.apply"(%arg0, %arg1) <{binding = @dimension, parameters = ["0"], site = "height"}> : (!runtime.scope, !m) -> !exec.outcome<(ui64)>
+      %0 = "exec.apply"(%arg0, %arg1) <{binding = @dimension, parameters = [0 : ui64], site = "height"}> : (!runtime.scope, !m) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb1(%1: ui64):  // pred: ^bb0
-      %2 = "exec.apply"(%arg0, %arg1) <{binding = @dimension, parameters = ["1"], site = "width"}> : (!runtime.scope, !m) -> !exec.outcome<(ui64)>
+      %2 = "exec.apply"(%arg0, %arg1) <{binding = @dimension, parameters = [1 : ui64], site = "width"}> : (!runtime.scope, !m) -> !exec.outcome<(ui64)>
       "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(ui64)>) -> ()
     ^bb2(%3: !exec.stop):  // 2 preds: ^bb0, ^bb1
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(ui64, ui64)>

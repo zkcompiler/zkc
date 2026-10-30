@@ -1,7 +1,7 @@
 module {
 "protocol.module"() ({
-  "runtime.binding"() {sym_name="add", contract="field.add", arguments=["bls12-381.fr"], implementation=""} : () -> ()
-  "runtime.binding"() {sym_name="require", contract="control.require", arguments=[], implementation=""} : () -> ()
+  "runtime.binding"() {sym_name="add", contract="field.add", arguments=["bls12-381.fr"], implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : () -> ()
+  "runtime.binding"() {sym_name="require", contract="control.require", arguments=[], implementation="",function_type=(!runtime.scope, i1) -> !exec.outcome<>} : () -> ()
     func.func @leaf(%arg0: !runtime.scope, %arg1: !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)> attributes {no_inline, runtime.origin = ["leaf", []]} {
       %0 = "exec.apply"(%arg0, %arg1, %arg1) <{binding = @add, parameters = [], site = "twice"}> : (!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!algebra.field<"bls12-381.fr">)>) -> ()
@@ -12,14 +12,14 @@ module {
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>
       return %4 : !exec.outcome<(!algebra.field<"bls12-381.fr">)>
     }
-    func.func @work(%arg0: !runtime.scope, %arg1: !algebra.field<"bls12-381.fr">, %arg2: !runtime.capability<"rng:bls12-381.fr">, %arg3: i1) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<"rng:bls12-381.fr">)> attributes {no_inline, runtime.origin = ["work", []]} {
+    func.func @work(%arg0: !runtime.scope, %arg1: !algebra.field<"bls12-381.fr">, %arg2: !runtime.capability<rng, "bls12-381.fr">, %arg3: i1) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">)> attributes {no_inline, runtime.origin = ["work", []]} {
       %0 = "exec.test"(%arg0, %arg3) <{site = "authored_branch"}> : (!runtime.scope, i1) -> !exec.outcome<(i1)>
       "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(i1)>) -> ()
     ^bb1(%1: i1):  // pred: ^bb0
       cf.cond_br %1, ^bb3, ^bb4
     ^bb2(%2: !exec.stop):  // 8 preds: ^bb0, ^bb3, ^bb4, ^bb5, ^bb6, ^bb7, ^bb9, ^bb10
-      %3 = "exec.failed"(%2) : (!exec.stop) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<"rng:bls12-381.fr">)>
-      return %3 : !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<"rng:bls12-381.fr">)>
+      %3 = "exec.failed"(%2) : (!exec.stop) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">)>
+      return %3 : !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">)>
     ^bb3:  // pred: ^bb1
       %4 = "runtime.enter_scope"(%arg0) <{kind = "conditional", operandSegmentSizes = array<i32: 1, 0, 0>, selection = "then", site = "authored_branch"}> : (!runtime.scope) -> !exec.outcome<(!runtime.scope)>
       "exec.dispatch"(%4)[^bb6, ^bb2] : (!exec.outcome<(!runtime.scope)>) -> ()
@@ -48,8 +48,8 @@ module {
     ^bb11:  // pred: ^bb10
       cf.br ^bb5
     ^bb12(%17: !algebra.field<"bls12-381.fr">):  // pred: ^bb5
-      %18 = "exec.returned"(%17, %arg2) : (!algebra.field<"bls12-381.fr">, !runtime.capability<"rng:bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<"rng:bls12-381.fr">)>
-      return %18 : !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<"rng:bls12-381.fr">)>
+      %18 = "exec.returned"(%17, %arg2) : (!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">)>
+      return %18 : !exec.outcome<(!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">)>
     }
     func.func private @control_0(%arg0: !runtime.scope) -> !exec.outcome<> attributes {no_inline, runtime.region} {
       %0 = "exec.complete"(%arg0) : (!runtime.scope) -> !exec.outcome<>
@@ -73,14 +73,14 @@ module {
 
 
   "protocol.func"() ({
-  ^entry(%x: !algebra.field<"bls12-381.fr">, %resource: !runtime.capability<"rng:bls12-381.fr">, %go: i1):
+  ^entry(%x: !algebra.field<"bls12-381.fr">, %resource: !runtime.capability<rng, "bls12-381.fr">, %go: i1):
     %sum = algebra.field_add %x, %x : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
     protocol.guard %go {owner="P", site="before_work"}
     "protocol.local_call"(%go) {callee=@check, role="P", site="first_check"} : (i1) -> ()
     "protocol.local_call"(%go) {callee=@check, role="P", site="second_check"} : (i1) -> ()
-    %done:2 = "protocol.local_call"(%sum, %resource, %go) {callee=@work, role="P", site="work"} : (!algebra.field<"bls12-381.fr">, !runtime.capability<"rng:bls12-381.fr">, i1) -> (!algebra.field<"bls12-381.fr">, !runtime.capability<"rng:bls12-381.fr">)
+    %done:2 = "protocol.local_call"(%sum, %resource, %go) {callee=@work, role="P", site="work"} : (!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">, i1) -> (!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">)
     %sent = protocol.exchange %done#0 {sender="P", receiver="V", site="send"} : !algebra.field<"bls12-381.fr">
-    "protocol.return"(%sent, %done#1) : (!algebra.field<"bls12-381.fr">, !runtime.capability<"rng:bls12-381.fr">) -> ()
-  }) {sym_name="main", function_type=(!algebra.field<"bls12-381.fr">, !runtime.capability<"rng:bls12-381.fr">, i1) -> (!algebra.field<"bls12-381.fr">, !runtime.capability<"rng:bls12-381.fr">), roles=["P", "V"], input_roles=[["P"],["P"],["P"]], output_roles=[["P", "V"],["P"]]} : () -> ()
+    "protocol.return"(%sent, %done#1) : (!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">) -> ()
+  }) {sym_name="main", function_type=(!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">, i1) -> (!algebra.field<"bls12-381.fr">, !runtime.capability<rng, "bls12-381.fr">), roles=["P", "V"], input_roles=[["P"],["P"],["P"]], output_roles=[["P", "V"],["P"]]} : () -> ()
 }) {profile=#protocol.profile<protocol>} : () -> ()
 }

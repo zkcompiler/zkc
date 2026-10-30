@@ -52,7 +52,7 @@ def early_search(source):
     ^decision(%continue: i1, %carry: !runtime.transfer<(ui64, i1)>):
       cf.cond_br %continue, ^bb9(%carry : !runtime.transfer<(ui64, i1)>), ^bb8(%carry : !runtime.transfer<(ui64, i1)>)''')
     parent = parent[:call_start] + call + parent[call_end:]
-    binding = ' "runtime.binding"() {sym_name="not",contract="bool.not",arguments=[],implementation=""} : ()->()\n'
+    binding = ' "runtime.binding"() {sym_name="not",contract="bool.not",arguments=[],implementation="",function_type=(!runtime.scope, i1) -> !exec.outcome<(i1)>} : ()->()\n'
     return source[:start] + binding + parent + body + source[end:]
 
 

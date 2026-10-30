@@ -2,6 +2,7 @@
 #include "CollectFold.h"
 #include "CollectionInterpretation.h"
 #include "MathematicalComparison.h"
+#include "NativeBindingApplication.h"
 #include "RealizationSubject.h"
 #include "ScopedCandidate.h"
 #include "ScopedNestedContraction.h"
@@ -12,6 +13,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
@@ -146,8 +148,8 @@ class Reader {
     return op;
   }
   Value kernel(StringRef contract, ValueRange operands, Type result,
-               ArrayRef<std::string> arguments = {},
-               ArrayRef<std::string> parameters = {}) {
+               ArrayRef<Attribute> arguments = {},
+               ArrayRef<Attribute> parameters = {}) {
     auto *op = consume(exec::ApplyOp::getOperationName());
     if (!op)
       return {};
@@ -170,17 +172,17 @@ class Reader {
       fail();
       return {};
     }
-    for (auto [a, b] : zip(binding.getArguments(), arguments))
-      if (a != StringAttr::get(op->getContext(), b))
-        fail();
-    for (auto [a, b] : zip(params, parameters))
-      if (a != StringAttr::get(op->getContext(), b))
-        fail();
+    if (!matchesNativeBinding(
+            binding, {contract.str(), SmallVector<Attribute>(arguments), {}}))
+      fail();
+    if (!llvm::equal(params, parameters))
+      fail();
     bindings.insert(binding);
     return result ? ports.outputs(op)[0] : Value();
   }
   Value natural(uint64_t n) {
-    return kernel("index.constant", {}, index, {}, {std::to_string(n)});
+    return kernel("index.constant", {}, index, {},
+                  {IntegerAttr::get(index, n)});
   }
   void require(Value condition) {
     if (!condition) {
@@ -199,8 +201,9 @@ class Reader {
       return natural(
           cast<algebra::FieldArrayType>(container.getType()).getLength());
     return kernel(col.length, container, index, col.arguments,
-                  col.matrix ? ArrayRef<std::string>{std::to_string(selected)}
-                             : ArrayRef<std::string>{});
+                  col.matrix
+                      ? ArrayRef<Attribute>{IntegerAttr::get(index, selected)}
+                      : ArrayRef<Attribute>{});
   }
   Operation *control(StringRef name, ValueRange operands, TypeRange results,
                      unsigned regions) {
@@ -300,8 +303,8 @@ class Reader {
                          Value size) {
     auto output = c.signature.getResult(0);
     auto field = cast<algebra::FieldVectorType>(output).getElementType();
-    SmallVector<std::string> parameters{
-        cast<algebra::FieldType>(field).getDomain().str()};
+    SmallVector<Attribute> parameters{StringAttr::get(
+        field.getContext(), cast<algebra::FieldType>(field).getDomain())};
     Value zero = natural(0);
     Value nonempty = kernel("index.less", {zero, size}, boolean);
     SmallVector<Value> inputs{nonempty};

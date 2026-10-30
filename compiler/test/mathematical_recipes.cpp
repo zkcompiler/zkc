@@ -7,11 +7,13 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Finite.h"
@@ -76,16 +78,22 @@ func::FuncOp function(ModuleOp module, StringRef name) {
 Value apply(OpBuilder &builder, exec::ScopedExecutionBuilder &control,
             StringRef binding, ValueRange inputs, Type output, StringRef site,
             ArrayRef<StringRef> parameters = {}, Block *stop = nullptr) {
-  SmallVector<Attribute> values;
+  auto declaration = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+      control.getFunction(),
+      FlatSymbolRefAttr::get(builder.getContext(), binding));
+  require(bool(declaration), "missing fixture binding");
+  SmallVector<std::string> expected;
   for (auto value : parameters)
-    values.push_back(builder.getStringAttr(value));
+    expected.push_back(value.str());
+  auto values = take(protocol::decodeInvocationParameters(
+      declaration.getContract(), declaration.getArgumentsAttr(), expected));
   return control
       .invoke(
           "exec.apply", output, control.scoped(inputs),
           {builder.getNamedAttr("binding", FlatSymbolRefAttr::get(
                                                builder.getContext(), binding)),
            builder.getNamedAttr("site", builder.getStringAttr(site)),
-           builder.getNamedAttr("parameters", builder.getArrayAttr(values))},
+           builder.getNamedAttr("parameters", values)},
           stop)
       .front();
 }
@@ -170,9 +178,9 @@ int main() {
     require(bool(source), "collection fixture refused");
     auto square = function(*source, "square");
     OpBuilder builder(square);
-    runtime::BindingOp::create(
-        builder, square.getLoc(), "constant", "field.constant",
-        builder.getStrArrayAttr({"bls12-381.fr"}), "", ArrayAttr());
+    runtime::BindingOp::create(builder, square.getLoc(), "constant",
+                               "field.constant",
+                               builder.getStrArrayAttr({"bls12-381.fr"}), "");
     square.getBody().dropAllReferences();
     square.getBody().getBlocks().clear();
     square.addEntryBlock();
@@ -384,7 +392,11 @@ int main() {
         if (SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
                 op, op.getBindingAttr())
                 .getContract() == "field.constant") {
-          op.setParametersAttr(builder.getStrArrayAttr({"23"}));
+          op.setParametersAttr(
+              builder.getArrayAttr({cantFail(algebra::decodeFieldLiteral(
+                  cast<algebra::FieldType>(
+                      op.getOutcome().getType().getPayload()[0]),
+                  "23"))}));
           changed = true;
         }
       });
@@ -675,15 +687,30 @@ int main() {
                   op.getImplementation() == "arkworks/field.add";
     });
     require(retained, "pinned implementation disappeared");
-    // An unavailable pin is still mathematically identifiable, but ordinary
-    // binding admission rejects it. Analysis is not physical admission.
-    declaration.setImplementation("withheld/field.add");
-    require(finite::semantics(&operation) && !finite::replaceable(&operation),
-            "unavailable provider erased meaning");
-    auto physical = protocol::operationBinding(&operation);
-    require(!physical, "unknown physical implementation gained admission");
-    llvm::consumeError(physical.takeError());
   });
+  for (bool meaning : {true, false})
+    cases.run(meaning ? "unavailable pin retains mathematical meaning"
+                      : "unavailable pin fails ordinary binding admission",
+              [&] {
+                auto module =
+                    parseSourceString<ModuleOp>(fixture("sum"), &context);
+                require(bool(module), "sum refused");
+                auto operation = findKernel(*module, "field.add");
+                auto declaration =
+                    SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+                        operation, operation.getBindingAttr());
+                require(bool(declaration), "missing scalar binding");
+                declaration.setImplementation("withheld/field.add");
+                // Analysis retains logical meaning independently of provider
+                // admission; an unavailable pin still forbids replacement.
+                if (meaning)
+                  require(finite::semantics(operation) &&
+                              !finite::replaceable(operation),
+                          "unavailable provider erased meaning");
+                else
+                  refuses(protocol::operationBinding(operation),
+                          "binding-implementation");
+              });
   cases.run(
       "nested equation recognition preserves implementation constraints", [&] {
         auto module =
@@ -734,8 +761,7 @@ int main() {
         &context, domain.getFunctionType().getInputs(), {domainType}));
     builder.setInsertionPoint(step);
     runtime::BindingOp::create(builder, step.getLoc(), "get", "curve.get",
-                               builder.getStrArrayAttr({"bls12-381.g1"}), "",
-                               ArrayAttr());
+                               builder.getStrArrayAttr({"bls12-381.g1"}), "");
     SmallVector<Type> inputs(step.getArgumentTypes());
     inputs[2] = index;
     step.setFunctionType(

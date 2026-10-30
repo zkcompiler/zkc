@@ -13,7 +13,7 @@ module { "protocol.module"() ({
      shape_arguments={rows=3:ui64},shape_bounds={rows=4:ui64},admissibility=@admissible} : ()->()
  "protocol.func"() ({
   ^bb0(%left:!D,%right:!D,%unrelated:!D,%mapped:ui64,%extent:ui64,%position:ui64,%trips:ui64):
-   %rows = "data.index"() {value="4"} : ()->ui64
+   %rows = "data.index"() {value=4 : ui64} : ()->ui64
    %a = "protocol.oracle_send"(%left,%rows) {shape_names=["rows"],shape_bounds={rows=4:ui64},
      sender="P",receivers=["V"],site="left"} : (!D,ui64)->!H
    %b = "protocol.oracle_send"(%right,%rows) {shape_names=["rows"],shape_bounds={rows=4:ui64},

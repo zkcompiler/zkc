@@ -10,6 +10,7 @@
 #include "zkc/Compiler/PolynomialReduction.h"
 #include "zkc/Compiler/PublicCoin.h"
 #include "zkc/Compiler/Run.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Program/Codec.h"
@@ -18,6 +19,7 @@
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Passes.h"
+#include "zkc/Transforms/Stages.h"
 #include "zkc/Translation/Protocol.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
@@ -46,7 +48,7 @@ Expected<OwningOpRef<ModuleOp>> parseNativeSource(StringRef text,
   source.AddNewSourceBuffer(MemoryBuffer::getMemBufferCopy(text, filename),
                             SMLoc());
   auto module = parseSourceFile<ModuleOp>(source, &context);
-  if (!module || diagnostics.hasErrors())
+  if (!module || failed(zkc::admitStage(*module)) || diagnostics.hasErrors())
     return diagnostics.failure();
   auto roots = module->getOps<protocol_ir::ProtocolModuleOp>();
   if (!llvm::hasSingleElement(roots) ||
@@ -69,17 +71,12 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
   trace.eventLimit = 4096;
   if (observations)
     observations->instrument(pipeline);
-  auto add = [&](std::unique_ptr<Pass> pass) {
-    if (stages)
-      stages->push_back(pass->getArgument().str());
-    pipeline.addPass(std::move(pass));
-  };
-  if (simplify)
-    add(protocol::createSimplifyParticipantPass());
-  if (fixPolynomials)
-    add(protocol::createFixPolynomialFactorsPass());
-  add(protocol::createLowerMathPass(mathematicalSelection,
-                                    observations ? &trace : nullptr));
+  buildExecutionPipeline(pipeline, simplify, fixPolynomials,
+                         mathematicalSelection,
+                         observations ? &trace : nullptr);
+  if (stages)
+    for (auto &pass : pipeline.getPasses())
+      stages->push_back(pass.getArgument().str());
   auto outcome = pipeline.run(module);
   if (observations)
     observations->decisions(module, trace);
@@ -131,12 +128,15 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
   PassManager physical(module.getContext());
   if (observations)
     observations->instrument(physical);
-  auto selection =
-      protocol::createSelectPhysicalPass({}, false, releaseStorage, &statistics,
-                                         {}, mathematicalSelection, cpuTarget);
+  PhysicalPipelineOptions options;
+  options.releaseStorage = releaseStorage;
+  options.statistics = &statistics;
+  options.mathematics = mathematicalSelection;
+  options.cpuTarget = cpuTarget;
+  buildPhysicalPipeline(physical, options);
   if (stages)
-    stages->push_back(selection->getArgument().str());
-  physical.addPass(std::move(selection));
+    for (auto &pass : physical.getPasses())
+      stages->push_back(pass.getArgument().str());
   auto physicalOutcome = physical.run(module);
   if (observations && succeeded(physicalOutcome))
     observations->phase("physical", module);

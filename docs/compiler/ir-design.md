@@ -21,8 +21,8 @@ conditions, not registered dialects or supported protocol claims.
 | Poly | Formal polynomial and quotient-ring values, domains, bases and evaluation structure before concrete realization |
 | Data | Logical aggregates, sequences, variants, domains and explicit ordering; no authentication or oracle claim follows from a container |
 | Relation | Relation declarations/assets, public/witness layout and deterministic interpretation; imported syntax remains an adapter concern |
-| Commitment | Scheme-specific commitment, opening and verification semantics and their exact setup/domain parameters |
-| Crypto | Cryptographic primitive operations and explicit state; a hash invocation is not itself a random-oracle security judgment |
+| Commitment | Scheme-specific types and attributes with exact setup/domain parameters; installed commitment/opening actions use Exec bindings |
+| Crypto | Cryptographic types and attributes, with installed primitive actions through Exec; a hash invocation is not itself a random-oracle security judgment |
 | Exec | Ordered fallible numerical execution, explicit returned/stopped outcomes, scoped computation invocations and retained finite requests |
 | Runtime | Logical binding declarations, resource custody and selected installed implementations/representations; Host authorization remains separate |
 
@@ -77,6 +77,15 @@ allows optimization. MLIR [effect/speculation interfaces](https://mlir.llvm.org/
 help generic passes reason about operations; protocol observations and affine
 custody still need their own checks.
 
+The admission boundary matters even for mathematical operations. A bounded read
+can be speculatable only in the profile that has established its bound premises.
+Structural formation alone must not let generic folding erase an inadmissible
+dormant body before that check. Ordered invocations keep conservative effects;
+introducing a more precise memory resource does not grant freedom to move a
+challenge, change the first failure, or remove a reached charge. Use a shared
+ordering resource alongside finer storage effects if a real consumer needs the
+precision. A new effect-token dialect is not required.
+
 Logical collections need a separate ownership decision in represented execution.
 Current generic `data.sequence<T>` and specialized Algebra vectors/arrays have
 related element/shape structure but distinct logical schemas, codecs and installed
@@ -114,6 +123,12 @@ also constrains traversal/mutation under parallel execution. Optional trace and
 statistics observers are caller-owned synchronous instrumentation, not a shared
 analysis cache or an authorization channel.
 
+Direct transformation APIs initialize the same dialect dependencies as their
+pass wrappers, before parallel execution. Registered dialects need not already
+be loaded. Symbol import uses collision-safe substitutions even when an existing
+binding is reused; fresh final names alone do not prevent a replacement from
+rewriting references introduced by another replacement.
+
 A producer works on a private candidate; a separate comparison checks that
 candidate against the retained source before publication. Analysis results bind
 to their actual subjects and invalidate on mutation. Do not keep an editable
@@ -129,6 +144,39 @@ spelling when the admitted semantics permit equivalent structure. Conversely,
 do not silently enlarge the theorem or implementation profile to accept an
 upstream rewrite that the reader does not understand.
 
+### Complete the infrastructure before widening optimization
+
+The remaining foundation work makes explicit stage admission and one stage
+pipeline builder common to direct, textual and production routes. An admitted
+profile names its operation vocabulary, semantic attributes, premises and
+comparison relation; enabling an entire standard dialect is too coarse.
+
+| Mechanism | Adoption boundary |
+|---|---|
+| ODS, typed accessors, symbol/call/branch interfaces | Default structural implementation where the interface describes the actual ABI or successors |
+| AnalysisManager | Owner-scoped reusable facts, with dependency-aware invalidation; direct calls compute fresh facts or explicitly invalidate |
+| RewritePattern / PatternRewriter | Local transformations inside an admitted candidate profile |
+| ConversionTarget / TypeConverter | Actual vocabulary or representation changes; never a substitute for read-only admission or correspondence |
+| DataFlowSolver | Monotone availability/range problems with defined transfer functions; exact custody and resource roots keep their own validators |
+| InferType / shape and integer-range interfaces | Derived result facts with concrete consumers; range facts do not manufacture source premises or security proofs |
+| Transform / PDL | Reusable schedules over an independently admitted payload, when schedule reuse justifies the extra surface |
+| BufferizableOpInterface / destination style | Represented execution after aliasing, allocation, refusal and custody contracts exist |
+
+Whole-module projection, protocol construction and realization remain structured
+algorithms where their global obligations demand it. They still use standard
+symbols, builders and pass orchestration. Adding interfaces with no truthful
+model or consumer would increase maintenance without making the compiler more
+native to MLIR.
+
+Keep public native views separate from neutral export/comparison adapters as
+those boundaries are retired. Analysis objects borrow actual IR; serialized
+records own their data. Pointer-returning summaries require stable storage across
+cache growth, and dependency depth is semantic path height rather than the order
+in which a traversal happened to encounter cached nodes. Bound structure before
+calling recursive upstream utilities. Split large files by semantic invariant
+and consumer, not arbitrary line counts; preserve the acyclic Source/Contracts/
+Program, IR, Translation/Transforms, Compiler component boundaries.
+
 ## Information that must survive future transitions
 
 | Information | Required consumer and preservation boundary |
@@ -136,7 +184,7 @@ upstream rewrite that the reader does not understand.
 | Nominal fields, extension basis, polynomial degree/basis/axes | Algebra/Poly analysis, transcript encodings and physical representations |
 | Statement and witness layouts, ordered children and variant alternatives | Source/IR comparison, commitment context, independent program readers and Host input binding |
 | Actual receives, draw occurrences and dynamic iteration coordinates | Projection, transcript construction, observations and security interpretation |
-| Ideal oracle identity, dynamic anchor and query order | Planned Protocol oracle operations and realization comparison, before scheme-specific opening materialization |
+| Ideal oracle identity, dynamic anchor and query order | Protocol oracle operations and current realization comparison; broader claim interpretation remains pending |
 | Virtual oracle dependencies and authentication dominance | Planned realization records; every answer use is justified after its relevant check |
 | Logical queries, unique openings, challenge blocks and primitive hash calls | Separate cost/security counts; batching must not identify these quantities |
 | Lookup multiplicities, active masks, scope and table identity | Planned constraint interpretation; finite-field sums alone do not preserve natural multiplicity |
@@ -153,6 +201,21 @@ work. They must become typed operands, types, properties or checked immutable
 records at the responsible stage before a transformation can erase their inputs.
 Origin labels and free-form metadata cannot substitute for the actual relation.
 A record names its producer, consumers, invalidation condition and lowering point.
+
+Derive occurrence and interaction information from actual Protocol/control IR.
+Source application paths, dynamic iteration coordinates, oracle instance identity,
+SSA aliases and artifact digests are different identities. Shared extraction may
+serve several consumers, but separate encoders and independently checked judgments
+retain their contracts. The application map records associations; it is not a
+second authored interaction graph or evidence of an admissible schedule.
+
+Oracle integration must connect acceptance to the actual root/anchor, setup,
+domain, position and authenticated answer. Recomputing an obligation report does
+not discharge its predicates, and producing an ignored verification Boolean does
+not establish a claim. A checked helper/body relation can enforce that connection;
+introduce a typed authenticated result only if it has a complete producer and
+consumer interpretation. Physical opening sharing must preserve logical query
+multiplicity, dependencies, stopped prefixes and answer-publication rules.
 
 ## Target architecture and boundaries
 
