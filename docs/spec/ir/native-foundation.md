@@ -79,27 +79,12 @@ token. The call retains the actual ordered operands, structured parameters,
 source occurrence and referenced declaration. Reached validation, charging,
 kernel effects, output validation and retention are part of invocation behavior.
 
-The binding's stored `function_type` is the actual executable signature above.
-Logical ports are derived from the catalog; they are not another independently
-authored signature. At a logical stage, the stored ports must agree exactly
-with that derivation. Physical selection replaces value ports with complete
-represented types; erasing those representations must recover the same logical
-ports. Actual represented ports determine layout choices. Do not retain a
-second string-carried `physical_arguments` schema inside the IR: encoding an
-existing program-byte binding recovers its boundary arguments from the selected
-ports. Selection/admission independently checks applicability of the chosen
-implementation and every represented port.
-
-Use CallableOpInterface, CallOpInterface and SymbolUserOpInterface at this
-boundary with exact type checks and correct symbol scope. The binding is an
-external callable with no callable region. Its argument types include scope;
-its sole result is the typed outcome. The call interface exposes all actual
-operands, including scope. Standard argument/result attribute arrays, when
-present, follow that executable signature. None of these interfaces grants
-inlining, speculation, purity or permission to ignore reached failure.
-`exec.compute` does not acquire this interface by analogy: its mathematical
-helper has a different ABI from the scoped execution boundary. Calling a binding is
-not protocol composition or an ordinary mathematical helper application.
+SymbolUserOpInterface checks the actual lexical binding and call signature.
+Selection/admission independently checks applicability of the chosen
+implementation and every represented port. `exec.compute` does not acquire the
+call interface by analogy: its mathematical helper has a different ABI from
+the scoped execution boundary. Calling a binding is not protocol composition
+or an ordinary mathematical helper application.
 `exec.compute`, finite requests, scope transitions, outcome dispatch and
 publication keep their separate meanings where they are observably distinct.
 Per-contract executable wrapper operations are absent;
@@ -112,6 +97,71 @@ the reconstructed type. Native neutral types remain independent of MLIR.
 Canonical public spellings are encoded/decoded at format boundaries once,
 under explicit work limits. Keeping a stable public spelling is not a second
 internal schema or compatibility execution route.
+
+### Field literals and selected Ring parameters
+
+`algebra.literal` retains its nominal `algebra.field` type and an unsigned
+integer attribute. The integer width is the declared binary presentation width,
+or the bit width of the modulus minus one for a natural literal. Naturals are
+strictly below the modulus. Binary presentations admit their exact bit patterns;
+the byte spelling uses `0` and `1` for those two values and minimal lowercase
+hexadecimal for other patterns. Formation performs no reduction, field coercion
+or interpretation of an arbitrary string. This representation does not enlarge
+the set of supported field presentations.
+
+Source mathematics stays in ordinary scalar SSA. A selected numerical kernel's
+Ring graph is immutable parameter data: `algebra.ring_expression` retains
+ordered nominal input types, typed `algebra.ring_node` attributes and output
+indices. Node kinds are enums. Edges, input positions, literals and embedding
+targets are checked directly, including field agreement, acyclicity, depth and
+reachability. Unused input slots and repeated input nodes remain distinct.
+The owning [Ring contract](../domains/ring-expressions.md) defines the graph;
+the native carrier does not store another independently authored copy of a
+source function.
+
+This distinction is observable: [numerical execution](../runtime/numerical.md)
+charges for encoded graph bytes and nodes, and allocates node-dependent scratch.
+Replacing the selected graph with an ordinary optimizable scalar region could
+change budget outcomes or exact bytes merely by sharing input nodes. Earlier
+checked selection may derive or change the graph; storing or serializing an
+already selected parameter preserves its order and sharing exactly. MLIR
+attribute formation does not establish numerical-call admission. The call's
+positional signature, restricted numerical profile, and encoded-size limits
+remain separate checks at their owning boundaries. Numerical parameter admission
+checks the actual typed graph and counts its canonical output bytes without
+building or reparsing a string. Native encoding is tested against the independent
+neutral Ring writer, including empty graphs, constant-only graphs and the exact
+numerical byte ceiling.
+
+### Source origins and asset parameters
+
+`runtime.origin` contains an entry identity, an ordered path of
+`runtime.origin_step` attributes, and one `runtime.query_origin`,
+`runtime.message_origin` or `runtime.start_origin` event. Path kinds are the
+`apply` and `repeat` enum cases. A query stores its service-input index as u64,
+separately from its service contract, method and owner; it does not parse an
+`input_N` name internally. Message events retain schema, sender and receiver.
+Start events retain the original caller and application site. All names, the
+path bound and the 2048-byte canonical template bound follow the
+[native occurrence contract](construction.md#native-occurrence-encoding).
+Native formation checks these fields and accounts for framing directly. The
+hexadecimal template belongs to the byte boundary. Formation neither establishes
+source correspondence nor proves distinct transcript namespaces.
+
+`runtime.asset` holds its nominal format identity and exactly 32 digest bytes.
+The invocation's catalog schema determines the required asset format. Equal
+digests in different formats remain different references. Neither constructing
+this attribute nor passing its shape check authorizes an asset, setup or mutable
+resource. Hexadecimal spelling is an interchange encoding of the digest bytes.
+
+Invocation admission derives associated identities and complete type terms from
+the same native catalog scope used for callable signatures. Ordinary natural
+parameters use unsigned 64-bit integer attributes; field literals cannot be
+substituted for them or for a different nominal field. Sampling and observation
+facets determine an origin parameter's event kind and query method. These checks
+establish parameter formation, not physical installation, reached execution,
+source correspondence or a security-transform theorem.
+
 
 Compiler analyses inspect actual SSA values, control regions and symbol
 dependencies. Reconstructing a neutral executable program and caching it as the

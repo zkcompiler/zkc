@@ -19,6 +19,13 @@ mlir::FunctionType
 resolveLogicalSignature(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
                         mlir::MLIRContext *context, llvm::StringRef contract,
                         llvm::ArrayRef<mlir::Attribute> arguments);
+/// Resolve every catalog term directly, including associated identities and
+/// complete type applications. The result borrows no operation and grants no
+/// executable installation or invocation admission.
+mlir::FailureOr<llvm::SmallVector<mlir::Attribute>>
+resolveBindingTerms(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
+                    mlir::MLIRContext *, llvm::StringRef contract,
+                    llvm::ArrayRef<mlir::Attribute> arguments);
 /// Wrap mathematical value ports in the explicit ordered execution ABI.
 mlir::FunctionType executableBindingSignature(mlir::FunctionType values);
 /// Check optional standard call argument/result dictionaries against actual

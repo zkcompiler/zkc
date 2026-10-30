@@ -4,17 +4,25 @@
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeAttrs.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/TypeAdapters.h"
 #include "llvm/ADT/TypeSwitch.h"
 using namespace mlir;
 #include "zkc/Dialect/Runtime/IR/runtimeDialect.cpp.inc"
 #include "zkc/Dialect/Runtime/IR/runtimeEnums.cpp.inc"
+#include "zkc/Dialect/Runtime/IR/runtimeParameterEnums.cpp.inc"
+#define GET_ATTRDEF_CLASSES
+#include "zkc/Dialect/Runtime/IR/runtimeAttrs.cpp.inc"
 #define GET_TYPEDEF_CLASSES
 #include "zkc/Dialect/Runtime/IR/runtimeTypes.cpp.inc"
 #define GET_OP_CLASSES
 #include "zkc/Dialect/Runtime/IR/runtimeOps.cpp.inc"
 void zkc::runtime::RuntimeDialect::initialize() {
+  addAttributes<
+#define GET_ATTRDEF_LIST
+#include "zkc/Dialect/Runtime/IR/runtimeAttrs.cpp.inc"
+      >();
   addTypes<
 #define GET_TYPEDEF_LIST
 #include "zkc/Dialect/Runtime/IR/runtimeTypes.cpp.inc"

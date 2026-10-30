@@ -47,9 +47,13 @@ program interchange boundary. Resource capability
 types now retain enum kinds and separate identities; native transcript checks
 consume those fields directly. Native type-use policies inspect typed catalog
 arguments and all aggregate alternatives without encoding and reparsing types.
-Closed message-frame membership and byte-publication limits remain separate. Other
-legacy inner neutral conversions and fully typed MLIR invocation arguments
-remain in progress. The
+Closed message-frame membership and byte-publication limits remain separate.
+Native field literals, selected Ring graphs, source origins and asset references
+now have structured attributes and independent boundary checks. Native parameter
+admission resolves the catalog scope directly, including numerical slots and
+byte-sensitive limits. These carriers are implemented; the default execution
+call producers and readers still await their parameter cutover. Other legacy
+inner neutral conversions also remain in progress. The
 [interface inventory](spec/formats/foundation-interfaces.md) defines the remaining
 source/constructed export, realization-record and application-map
 cutovers. Their replacement emission and complete stage-admission migration

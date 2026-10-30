@@ -40,6 +40,18 @@ mlir_tablegen(include/zkc/Dialect/Runtime/IR/runtimeEnums.h.inc -gen-enum-decls
   EXTRA_INCLUDES ${zkc_tablegen_includes})
 mlir_tablegen(include/zkc/Dialect/Runtime/IR/runtimeEnums.cpp.inc -gen-enum-defs
   EXTRA_INCLUDES ${zkc_tablegen_includes})
+set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/Runtime/IR/RuntimeAttrs.td)
+list(APPEND zkc_generated_headers
+  include/zkc/Dialect/Runtime/IR/runtimeAttrs.h.inc
+  include/zkc/Dialect/Runtime/IR/runtimeParameterEnums.h.inc)
+mlir_tablegen(include/zkc/Dialect/Runtime/IR/runtimeAttrs.h.inc -gen-attrdef-decls
+  -attrdefs-dialect=runtime EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Runtime/IR/runtimeAttrs.cpp.inc -gen-attrdef-defs
+  -attrdefs-dialect=runtime EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Runtime/IR/runtimeParameterEnums.h.inc -gen-enum-decls
+  EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Runtime/IR/runtimeParameterEnums.cpp.inc -gen-enum-defs
+  EXTRA_INCLUDES ${zkc_tablegen_includes})
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/Protocol/IR)
 set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/Protocol/IR/ProtocolAttrs.td)
 list(APPEND zkc_generated_headers
@@ -60,6 +72,19 @@ mlir_tablegen(include/zkc/Dialect/Data/IR/dataAttrs.h.inc -gen-attrdef-decls
   -attrdefs-dialect=data EXTRA_INCLUDES ${zkc_tablegen_includes})
 mlir_tablegen(include/zkc/Dialect/Data/IR/dataAttrs.cpp.inc -gen-attrdef-defs
   -attrdefs-dialect=data EXTRA_INCLUDES ${zkc_tablegen_includes})
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/Algebra/IR)
+set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/Algebra/IR/AlgebraAttrs.td)
+list(APPEND zkc_generated_headers
+  include/zkc/Dialect/Algebra/IR/algebraAttrs.h.inc
+  include/zkc/Dialect/Algebra/IR/algebraEnums.h.inc)
+mlir_tablegen(include/zkc/Dialect/Algebra/IR/algebraAttrs.h.inc -gen-attrdef-decls
+  -attrdefs-dialect=algebra EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Algebra/IR/algebraAttrs.cpp.inc -gen-attrdef-defs
+  -attrdefs-dialect=algebra EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Algebra/IR/algebraEnums.h.inc -gen-enum-decls
+  EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Algebra/IR/algebraEnums.cpp.inc -gen-enum-defs
+  EXTRA_INCLUDES ${zkc_tablegen_includes})
 set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/IR.td)
 set(zkc_builtin_headers "// Generated private registration includes.\n")
 set(zkc_builtin_classes "// Generated private registration classes.\n")

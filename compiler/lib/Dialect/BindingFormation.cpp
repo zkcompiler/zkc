@@ -130,6 +130,33 @@ struct SignatureFormation {
     }
     return success();
   }
+  const generic::Operation *binding(StringRef contract,
+                                    ArrayRef<Attribute> arguments,
+                                    DenseBoolArrayAttr &mask) {
+    const generic::Operation *declaration = nullptr;
+    for (const auto &candidate : protocol::executableOperationContracts())
+      if (candidate.name == contract)
+        declaration = &candidate;
+    if (!context || !declaration) {
+      (void)refuse("missing context or unknown catalog operation");
+      return {};
+    }
+    ArrayRef<Attribute> roots = arguments;
+    if (declaration->numerical) {
+      if (arguments.empty() ||
+          !(mask = dyn_cast_or_null<DenseBoolArrayAttr>(arguments.back())) ||
+          mask.getContext() != context ||
+          static_cast<size_t>(mask.size()) > protocol::NumericalLimits::slots) {
+        (void)refuse("numerical family requires a bounded Boolean mask");
+        return {};
+      }
+      roots = arguments.drop_back();
+    }
+    if (failed(scope(declaration->signature.scope, roots)) ||
+        failed(requirements(declaration->signature.requirements)))
+      return {};
+    return declaration;
+  }
   Type port(const generic::Type &port) {
     if (!port.term)
       return application(port.constructor, port.arguments);
@@ -148,34 +175,25 @@ struct SignatureFormation {
 };
 } // namespace
 
+FailureOr<SmallVector<Attribute>>
+resolveBindingTerms(llvm::function_ref<InFlightDiagnostic()> emit,
+                    MLIRContext *context, StringRef contract,
+                    ArrayRef<Attribute> arguments) {
+  SignatureFormation formation{emit, context, {}};
+  DenseBoolArrayAttr mask;
+  if (!formation.binding(contract, arguments, mask))
+    return failure();
+  return std::move(formation.terms);
+}
+
 FunctionType
 resolveLogicalSignature(llvm::function_ref<InFlightDiagnostic()> emit,
                         MLIRContext *context, StringRef contract,
                         ArrayRef<Attribute> arguments) {
   SignatureFormation formation{emit, context, {}};
-  const generic::Operation *declaration = nullptr;
-  for (const auto &candidate : protocol::executableOperationContracts())
-    if (candidate.name == contract)
-      declaration = &candidate;
-  if (!context || !declaration) {
-    (void)formation.refuse("missing context or unknown catalog operation");
-    return {};
-  }
-  ArrayRef<Attribute> roots = arguments;
   DenseBoolArrayAttr mask;
-  if (declaration->numerical) {
-    if (arguments.empty() ||
-        !(mask = dyn_cast_or_null<DenseBoolArrayAttr>(arguments.back())) ||
-        mask.getContext() != context ||
-        static_cast<size_t>(mask.size()) > protocol::NumericalLimits::slots) {
-      (void)formation.refuse(
-          "numerical family requires a bounded Boolean mask");
-      return {};
-    }
-    roots = arguments.drop_back();
-  }
-  if (failed(formation.scope(declaration->signature.scope, roots)) ||
-      failed(formation.requirements(declaration->signature.requirements)))
+  auto *declaration = formation.binding(contract, arguments, mask);
+  if (!declaration)
     return {};
   SmallVector<Type> inputs, outputs;
   if (declaration->numerical) {
