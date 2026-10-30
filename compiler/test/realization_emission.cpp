@@ -3,6 +3,8 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Admission.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -58,18 +60,15 @@ struct Emitted {
 };
 Emitted emit(RealizationEmitter &emitter, exec::ScopedExecutionBuilder &control,
              OpBuilder &builder, StringRef site,
-             const protocol::BindingApplication &application, ValueRange inputs,
-             Type output, ArrayRef<std::string> parameters = {}) {
+             const NativeBindingApplication &application, ValueRange inputs,
+             Type output, ArrayRef<Attribute> parameters = {}) {
   auto reference = emitter.binding(builder, control.getLocation(), application);
-  SmallVector<Attribute> encoded;
-  for (const auto &parameter : parameters)
-    encoded.push_back(builder.getStringAttr(parameter));
   auto *block = builder.getInsertionBlock();
   auto values = control.invoke(
       "exec.apply", {output}, control.scoped(inputs),
       {builder.getNamedAttr("binding", reference),
        builder.getNamedAttr("site", builder.getStringAttr(site)),
-       builder.getNamedAttr("parameters", builder.getArrayAttr(encoded))});
+       builder.getNamedAttr("parameters", builder.getArrayAttr(parameters))});
   auto *operation = block->getTerminator()->getPrevNode();
   require(operation && isa<exec::ApplyOp>(operation) &&
               succeeded(verify(operation)),
@@ -77,17 +76,20 @@ Emitted emit(RealizationEmitter &emitter, exec::ScopedExecutionBuilder &control,
   return {operation, values.front()};
 }
 
-void checkPorts(const protocol::BindingApplication &application,
-                TypeRange inputs, Type output) {
-  auto resolved = take(protocol::resolveBinding(application, false));
-  require(resolved.inputs.size() == inputs.size() &&
-              resolved.outputs.size() == 1,
-          "collection contract arity changed");
-  for (auto [actual, expected] : llvm::zip(inputs, resolved.inputs))
-    require(take(protocol::encodeBoundType(actual, false)) == expected,
-            "collection contract input changed");
-  require(take(protocol::encodeBoundType(output, false)) == resolved.outputs[0],
-          "collection contract output changed");
+void checkPorts(const NativeBindingApplication &application, TypeRange inputs,
+                Type output) {
+  auto resolved = resolveLogicalSignature(
+      [&] { return emitError(UnknownLoc::get(output.getContext())); },
+      output.getContext(), application.contract, application.arguments);
+  require(bool(resolved), "collection contract signature did not form");
+  require(llvm::equal(resolved.getInputs(), inputs) &&
+              llvm::equal(resolved.getResults(), TypeRange{output}),
+          "collection contract signature changed");
+}
+runtime::BindingOp binding(Operation *operation) {
+  auto resolved = lookupNativeBinding(operation);
+  require(succeeded(resolved), "native binding did not resolve");
+  return resolved->declaration;
 }
 } // namespace
 
@@ -159,8 +161,8 @@ int main() {
                field, nullptr, "field_array.get", "vector.empty",
                "vector.append", 1, 0}}) {
     cases.run(
-        "collection realization: " +
-            take(protocol::encodeBoundType(family.type, false)).spelling(),
+        std::string("collection realization: ") + family.get +
+            (family.extent ? " length " + std::to_string(*family.extent) : ""),
         [&] {
           auto recipe = collectionRealization(family.type);
           require(bool(recipe), "admitted collection has no recipe");
@@ -182,13 +184,29 @@ int main() {
           auto args = helper.getArguments().drop_front();
           exec::ScopedExecutionBuilder control(builder, helper);
           unsigned site = 0;
-          auto emit = [&](const std::optional<protocol::BindingApplication>
+          auto emit = [&](const std::optional<NativeBindingApplication>
                               &application,
                           StringRef contract, ValueRange inputs, Type output,
-                          llvm::ArrayRef<std::string> parameters = {}) {
+                          llvm::ArrayRef<Attribute> parameters = {}) {
             require(application && application->contract == contract &&
                         application->implementation.empty(),
                     "unexpected collection realization contract");
+            SmallVector<Attribute> expected;
+            if (contract != "index.constant") {
+              if (auto sequence = dyn_cast<data::SequenceType>(family.type))
+                expected.push_back(TypeAttr::get(sequence.getElementType()));
+              else if (auto field =
+                           dyn_cast<algebra::FieldType>(family.element))
+                expected.push_back(builder.getStringAttr(field.getDomain()));
+              else if (auto group =
+                           dyn_cast<algebra::GroupType>(family.element))
+                expected.push_back(builder.getStringAttr(group.getDomain()));
+            }
+            if (family.extent && (contract == family.get ||
+                                  contract == "field_array.from_vector"))
+              expected.push_back(builder.getIntegerAttr(index, *family.extent));
+            require(llvm::equal(application->arguments, expected),
+                    "collection recipe changed its kinded arguments");
             checkPorts(*application, inputs.getTypes(), output);
             return ::emit(emitter, control, builder,
                           "collection_" + std::to_string(site++), *application,
@@ -197,14 +215,16 @@ int main() {
           };
           if (family.extent) {
             require(!recipe->length, "array length must stay intrinsic");
-            emit(protocol::BindingApplication{"index.constant", {}, ""},
-                 "index.constant", {}, index, {std::to_string(*family.extent)});
+            emit(NativeBindingApplication{"index.constant", {}, ""},
+                 "index.constant", {}, index,
+                 {builder.getIntegerAttr(index, *family.extent)});
           } else {
             for (unsigned axis = 0; axis < family.rank; ++axis)
               emit(recipe->length, family.length, args[0], index,
                    family.rank == 2
-                       ? llvm::ArrayRef<std::string>{std::to_string(axis)}
-                       : llvm::ArrayRef<std::string>{});
+                       ? llvm::ArrayRef<Attribute>{builder.getIntegerAttr(index,
+                                                                          axis)}
+                       : llvm::ArrayRef<Attribute>{});
           }
           SmallVector<Value> lookup{args[0], args[2]};
           if (family.rank == 2)
@@ -225,7 +245,7 @@ int main() {
                     "matrix gained a collection construction recipe");
           }
           control.returned(args[2]);
-          require(succeeded(verify(*candidate)),
+          require(succeeded(zkc::admitStage(*candidate)),
                   "collection emission failed candidate admission");
         });
   }
@@ -267,8 +287,8 @@ int main() {
       helper.front().back().erase();
       builder.setInsertionPointToEnd(&helper.front());
       exec::ScopedExecutionBuilder control(builder, helper);
-      protocol::BindingApplication application{
-          "field.add", {field.getDomain().str()}, ""};
+      NativeBindingApplication application{
+          "field.add", {builder.getStringAttr(field.getDomain())}, ""};
       auto emit = [&](StringRef site) {
         auto value = ::emit(emitter, control, builder, site, application,
                             helper.getArguments().drop_front(), field);
@@ -276,27 +296,28 @@ int main() {
         require(op->getParentOp() == helper &&
                     op->getAttrOfType<StringAttr>("site").getValue() == site,
                 "emitter lost function or occurrence identity");
-        return take(protocol::operationBinding(op));
+        return binding(op);
       };
       auto first = emit("authored_finite_0");
       auto second = emit("map_1");
-      require(first.name == prefix.str() + "3" && first.name == second.name &&
-                  first.application.implementation.empty(),
+      require(first.getSymName() == prefix.str() + "3" &&
+                  first.getSymName() == second.getSymName() &&
+                  first.getImplementation().empty(),
               "binding collision or generated deduplication changed");
       application.implementation = "arkworks/field.add";
       auto constrained = emit("explicit_2");
-      require(constrained.name != first.name &&
-                  constrained.name != pinned.getSymName() &&
-                  constrained.application.implementation ==
+      require(constrained.getSymName() != first.getSymName() &&
+                  constrained.getSymName() != pinned.getSymName() &&
+                  constrained.getImplementation() ==
                       application.implementation &&
-                  emit("explicit_3").name == constrained.name,
+                  emit("explicit_3").getSymName() == constrained.getSymName(),
               "exact generated pin was lost or merged with source binding");
       require(spelling(*original) == before &&
                   spelling(SymbolTable::lookupSymbolIn(
                       unit, prefix.str() + "0")) == pinnedBefore,
               "producer mutated the source or its retained named pin");
       control.returned(helper.getArgument(1));
-      require(succeeded(verify(*candidate)),
+      require(succeeded(zkc::admitStage(*candidate)),
               "binding emission failed candidate admission");
     });
   }
@@ -310,28 +331,90 @@ int main() {
         auto helper = function(builder, unit, "constants", {}, field);
         exec::ScopedExecutionBuilder control(builder, helper);
         auto other = algebra::FieldType::get(&context, "bn254.fr");
-        auto emit = [&](algebra::FieldType type, StringRef parameter,
+        auto emit = [&](algebra::FieldType type, uint64_t parameter,
                         StringRef site) {
-          return ::emit(emitter, control, builder, site,
-                        {"field.constant", {type.getDomain().str()}, ""}, {},
-                        type, {parameter.str()});
+          return ::emit(
+              emitter, control, builder, site,
+              {"field.constant", {builder.getStringAttr(type.getDomain())}, ""},
+              {}, type,
+              {take(algebra::makeFieldLiteral(type,
+                                              llvm::APInt(64, parameter)))});
         };
-        auto one = emit(field, "1", "one");
-        auto two = emit(field, "2", "two");
-        auto differentField = emit(other, "1", "other_field");
-        auto first = take(protocol::operationBinding(one.operation));
+        auto one = emit(field, 1, "one");
+        auto two = emit(field, 2, "two");
+        auto differentField = emit(other, 1, "other_field");
+        auto first = binding(one.operation);
         require(
-            first.name ==
-                    take(protocol::operationBinding(two.operation)).name &&
-                first.name !=
-                    take(protocol::operationBinding(differentField.operation))
-                        .name &&
+            first.getSymName() == binding(two.operation).getSymName() &&
+                first.getSymName() !=
+                    binding(differentField.operation).getSymName() &&
                 one.operation->getAttr("parameters") !=
                     two.operation->getAttr("parameters"),
             "deduplication changed a static domain or occurrence parameters");
         control.returned(one.value);
-        require(succeeded(verify(*candidate)),
+        require(succeeded(zkc::admitStage(*candidate)),
                 "constant candidate failed admission");
+      });
+  cases.run(
+      "kinded static values retain distinct bindings and scoped ports", [&] {
+        auto candidate = module(context);
+        auto unit =
+            cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
+        OpBuilder builder(&context);
+        RealizationEmitter emitter(unit, "_typed_binding_");
+        auto declare = [&](StringRef contract, ArrayRef<Attribute> arguments,
+                           TypeRange inputs, Type output) {
+          NativeBindingApplication application{
+              contract.str(), SmallVector<Attribute>(arguments), ""};
+          auto reference = emitter.binding(builder, unit.getLoc(), application);
+          require(reference ==
+                      emitter.binding(builder, unit.getLoc(), application),
+                  "equal typed static values did not deduplicate");
+          auto declaration = SymbolTable(unit).lookup<runtime::BindingOp>(
+              reference.getValue());
+          SmallVector<Type> ports{runtime::ScopeType::get(&context)};
+          llvm::append_range(ports, inputs);
+          auto expected = builder.getFunctionType(
+              ports, {exec::OutcomeType::get(&context, {output})});
+          require(declaration && declaration.getFunctionType() == expected &&
+                      matchesNativeBinding(declaration, application),
+                  "typed declaration changed its static values or scoped ABI");
+          return reference;
+        };
+        auto sequence = data::SequenceType::get(&context, vector);
+        auto otherVector = algebra::FieldVectorType::get(&context, "bn254.fr");
+        auto otherSequence = data::SequenceType::get(&context, otherVector);
+        auto firstType = declare("sequence.at", {TypeAttr::get(vector)},
+                                 {sequence, index}, vector);
+        auto secondType = declare("sequence.at", {TypeAttr::get(otherVector)},
+                                  {otherSequence, index}, otherVector);
+        require(firstType != secondType,
+                "distinct complete element types shared a binding");
+        auto domain = builder.getStringAttr(field.getDomain());
+        auto firstLength = declare(
+            "field_array.get", {domain, builder.getIntegerAttr(index, 0)},
+            {algebra::FieldArrayType::get(&context, field.getDomain(), 0),
+             index},
+            field);
+        auto secondLength = declare(
+            "field_array.get", {domain, builder.getIntegerAttr(index, 4)},
+            {algebra::FieldArrayType::get(&context, field.getDomain(), 4),
+             index},
+            field);
+        require(firstLength != secondLength,
+                "distinct unsigned lengths shared a binding");
+        auto firstAccess =
+            declare("numerical.map",
+                    {domain, builder.getDenseBoolArrayAttr({true, false})},
+                    {index, vector, field}, vector);
+        auto secondAccess =
+            declare("numerical.map",
+                    {domain, builder.getDenseBoolArrayAttr({false, true})},
+                    {index, field, vector}, vector);
+        require(firstAccess != secondAccess,
+                "distinct ordered access flags shared a binding");
+        require(succeeded(verify(*candidate)),
+                "typed declarations failed candidate formation");
       });
   return cases.result();
 }

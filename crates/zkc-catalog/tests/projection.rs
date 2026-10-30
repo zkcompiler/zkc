@@ -32,6 +32,7 @@ fn complete_static_inventory() {
         ("capabilities", CATALOG.capabilities.len()),
         ("exports", CATALOG.exports.len()),
         ("families", CATALOG.families.len()),
+        ("consumerProfiles", CATALOG.consumer_profiles.len()),
         ("associatedTypes", CATALOG.associated_types.len()),
         (
             "mathematicalIdentities",
@@ -90,6 +91,187 @@ fn complete_static_inventory() {
         }]
     ));
     assert_eq!(check(&value).unwrap(), check(&value).unwrap());
+}
+
+#[test]
+fn owner_fixed_primitive_profile_preserves_exact_roots() {
+    use zkc_catalog::{ConsumerImplementation, ParameterValidator};
+    let profile = zkc_catalog::consumer_profile("structured-source-primitives").unwrap();
+    assert_eq!(profile.implementation, ConsumerImplementation::Unselected);
+    assert_eq!(
+        profile.type_constructors,
+        ["index", "bool", "field", "vector"]
+    );
+    assert_eq!(
+        profile.parameter_validators,
+        [ParameterValidator::None, ParameterValidator::Natural]
+    );
+    let expected = [
+        ("index.constant", false),
+        ("index.add", false),
+        ("index.sub", false),
+        ("index.mul", false),
+        ("index.div", false),
+        ("index.mod", false),
+        ("index.equal", false),
+        ("index.less", false),
+        ("vector.empty", true),
+        ("vector.length", true),
+        ("vector.sum", true),
+        ("vector.split", true),
+        ("vector.append", true),
+        ("vector.equal", true),
+        ("field.equal", true),
+        ("field.embed", true),
+    ];
+    assert_eq!(profile.operations.len(), expected.len());
+    for (entry, (name, field)) in profile.operations.iter().zip(expected) {
+        assert_eq!(entry.operation, name);
+        assert_eq!(
+            entry.static_parameters,
+            if field {
+                &[Kind::Domain("Field")][..]
+            } else {
+                &[]
+            }
+        );
+        assert_eq!(
+            zkc_catalog::consumer_profile_operation(profile.name, name),
+            Some(entry)
+        );
+    }
+    assert!(zkc_catalog::consumer_profile("missing").is_none());
+    assert!(zkc_catalog::consumer_profile_operation("missing", "index.add").is_none());
+    assert!(zkc_catalog::consumer_profile_operation(profile.name, "field.add").is_none());
+    assert!(zkc_catalog::consumer_profile_operation(profile.name, "numerical.map").is_none());
+    assert!(zkc_catalog::operation("field.add").is_some());
+}
+
+#[test]
+fn profile_exact_fields_and_references_refuse() {
+    for path in [
+        "/consumerProfiles/0",
+        "/consumerProfiles/0/operations/0",
+        "/consumerProfiles/0/operations/0/parameters",
+        "/consumerProfiles/0/operations/0/signature",
+        "/consumerProfiles/0/operations/8/scope/0/parameter",
+    ] {
+        let mut changed = source();
+        changed
+            .pointer_mut(path)
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .insert("unexpected".into(), json!(true));
+        assert!(
+            check(&changed).unwrap_err().contains("unknown field"),
+            "{path}"
+        );
+    }
+    let mut old = source();
+    old.as_object_mut().unwrap().remove("consumerProfiles");
+    assert!(
+        check(&old)
+            .unwrap_err()
+            .contains("missing field consumerProfiles")
+    );
+
+    type Mutation = (&'static str, fn(&mut Value));
+    let cases: &[Mutation] = &[
+        ("unknown member", |p| {
+            p["operations"][0]["operation"] = json!("missing")
+        }),
+        ("duplicate member", |p| {
+            let member = p["operations"][0].clone();
+            p["operations"].as_array_mut().unwrap().push(member);
+        }),
+        ("unknown constructor", |p| {
+            p["typeConstructors"][0] = json!("missing")
+        }),
+        ("duplicate constructor", |p| {
+            p["typeConstructors"][0] = json!("field")
+        }),
+        ("unsupported type", |p| {
+            p["typeConstructors"] = json!(["index", "bool", "vector"])
+        }),
+        ("unknown validator", |p| {
+            p["parameterValidators"][0] = json!("Unknown")
+        }),
+        ("unsupported parameter family", |p| {
+            p["parameterValidators"][0] = json!("NumericalExpression")
+        }),
+        ("duplicate validator", |p| {
+            p["parameterValidators"][1] = json!("None")
+        }),
+        ("unsupported validator", |p| {
+            p["parameterValidators"] = json!(["None"])
+        }),
+        ("selected implementation", |p| {
+            p["implementation"] = json!("selected")
+        }),
+    ];
+    for (name, mutate) in cases {
+        let mut changed = source();
+        mutate(&mut changed["consumerProfiles"][0]);
+        assert!(check(&changed).is_err(), "{name}");
+    }
+    let mut changed = source();
+    let profile = changed["consumerProfiles"][0].clone();
+    changed["consumerProfiles"]
+        .as_array_mut()
+        .unwrap()
+        .push(profile);
+    assert!(check(&changed).is_err());
+}
+
+#[test]
+fn consumer_expectations_refuse_independently_valid_declaration_drift() {
+    for (field, value) in [
+        (
+            "scope",
+            json!([{"kind":"root","name":"Other","parameter":{"kind":"Domain","sort":"Field"}}]),
+        ),
+        ("stage", json!("Construction")),
+        (
+            "parameters",
+            json!({"validator":"Natural","minimum":1,"maximum":1}),
+        ),
+        ("requirements", json!([])),
+        (
+            "signature",
+            json!({"kind":"fixed","inputs":[],"outputs":[{"constructor":"bool","arguments":[]}]}),
+        ),
+    ] {
+        for declaration in [false, true] {
+            let mut changed = source();
+            if declaration {
+                operation(&mut changed, "field.equal")[field] = value.clone();
+            } else {
+                let member = changed["consumerProfiles"][0]["operations"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .find(|m| m["operation"] == "field.equal")
+                    .unwrap();
+                member[field] = value.clone();
+            }
+            let error = check(&changed).unwrap_err();
+            assert!(
+                error.contains(&format!("consumer operation {field} mismatch")),
+                "{field}/{declaration}: {error}"
+            );
+        }
+    }
+}
+
+#[test]
+fn adding_a_declaration_does_not_enroll_it() {
+    let mut changed = source();
+    let mut extra = operation(&mut changed, "field.equal").clone();
+    extra["name"] = json!("example.unenrolled");
+    changed["operations"].as_array_mut().unwrap().push(extra);
+    assert!(check(&changed).is_ok());
+    assert_eq!(changed["consumerProfiles"], source()["consumerProfiles"]);
 }
 
 // Collect one representative of every exact object shape. The two alternatives

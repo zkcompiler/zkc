@@ -2,6 +2,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -757,8 +758,9 @@ public:
 } // namespace
 Error verifyNativeEntrySelection(ModuleOp prepared, ModuleOp selected,
                                  StringRef entry) {
-  if (!prepared || !selected || failed(verify(prepared)) ||
-      failed(verify(selected)) || !hasSingleElement(*prepared.getBody()) ||
+  if (!prepared || !selected || failed(zkc::admitStage(prepared)) ||
+      failed(zkc::admitStage(selected)) ||
+      !hasSingleElement(*prepared.getBody()) ||
       !hasSingleElement(*selected.getBody()))
     return error("native-entry-correspondence");
   auto a = dyn_cast<pir::ProtocolModuleOp>(prepared.getBody()->front());
@@ -789,7 +791,8 @@ Error verifyNativeTranscript(
     ArrayRef<protocol::ConstructionInvocation> invocations) {
   if (!projected || !constructed ||
       projected.getContext() != constructed.getContext() ||
-      failed(verify(projected)) || failed(verify(constructed)) ||
+      failed(zkc::admitStage(projected)) ||
+      failed(zkc::admitStage(constructed)) ||
       !hasSingleElement(*projected.getBody()) ||
       !hasSingleElement(*constructed.getBody()))
     return error("native-transcript-subject");

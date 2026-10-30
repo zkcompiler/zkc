@@ -88,7 +88,8 @@ llvm::Expected<BoundOperation> resolveBinding(const BindingApplication &,
                                               const ImplementationCatalog &);
 llvm::Expected<BoundOperation> resolveBinding(const BindingApplication &,
                                               bool physical);
-/// Shared declaration validation for typed source, MLIR, and encoded inputs.
+/// Independent neutral declaration validation for source/model and byte
+/// boundaries. Native MLIR admission uses its typed installation checker.
 llvm::Error checkBindingDeclaration(llvm::StringRef name,
                                     const BindingApplication &, bool physical);
 /// Static library declarations use the same operation contracts. Bodies are

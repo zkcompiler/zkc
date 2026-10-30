@@ -28,7 +28,7 @@ using BindingIndex = size_t;
 /// payload; they need not have existed in the original numerical source.
 enum class BindingPurpose { Original, Contraction, Conversion, Specialization };
 struct BindingDecision {
-  protocol::OperationBinding binding;
+  NativeBindingChoice binding;
   BindingPurpose purpose = BindingPurpose::Original;
   std::optional<OperationIndex> declaration;
   bool fixed = false;

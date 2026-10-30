@@ -13,6 +13,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecDialect.h"
@@ -268,7 +269,7 @@ OwningOpRef<mlir::ModuleOp> proposeComputationRealization(
     mathematical::RealizationTrace *trace,
     mathematical::NumericalSelection *selection, mlir::ModuleOp prepared) {
   loadRealizationDialects(*source.getContext());
-  if (failed(verify(source)) || !hasSingleElement(*source.getBody()))
+  if (failed(zkc::admitStage(source)) || !hasSingleElement(*source.getBody()))
     return {};
   auto owner =
       dyn_cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
@@ -305,7 +306,7 @@ OwningOpRef<mlir::ModuleOp> proposeComputationRealization(
   if (failed(discoverComputations(*candidate, policy, *selection)))
     return {};
   if (failed(materializeComputations(*candidate, policy, trace, *selection)) ||
-      failed(verify(*candidate)))
+      failed(zkc::admitStage(*candidate)))
     return {};
   scope.publish(mathematical::PublicationBoundary::ReturnedCandidate);
   retained = true;

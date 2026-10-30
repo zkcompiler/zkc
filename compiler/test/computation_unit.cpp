@@ -1,7 +1,6 @@
-#include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
-#include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
 #include <string>
 #include <tuple>
@@ -25,20 +24,10 @@ OwningOpRef<mlir::ModuleOp> parse(StringRef text, MLIRContext &context) {
   require(bool(result), "test input did not parse");
   return result;
 }
-LogicalResult admit(mlir::ModuleOp module) {
-  if (failed(verify(module)))
-    return failure();
-  auto result = module.walk([](mlir::ModuleOp unit) {
-    if (mathematical::isComputationUnit(unit) &&
-        failed(mathematical::verifyComputationUnit(unit)))
-      return WalkResult::interrupt();
-    return WalkResult::advance();
-  });
-  return failure(result.wasInterrupted());
-}
 void accepts(StringRef text, MLIRContext &context) {
   auto module = parse(text, context);
-  require(succeeded(admit(*module)), "valid computation unit was refused");
+  require(succeeded(zkc::admitStage(*module)),
+          "valid computation unit was refused");
 }
 void rejects(StringRef text, StringRef code, MLIRContext &context) {
   auto module = parse(text, context);
@@ -47,7 +36,8 @@ void rejects(StringRef text, StringRef code, MLIRContext &context) {
     diagnostic += value.str();
     return success();
   });
-  require(failed(admit(*module)), "malformed computation unit was admitted");
+  require(failed(zkc::admitStage(*module)),
+          "malformed computation unit was admitted");
   require(namesIdentifier(diagnostic, code),
           "unexpected refusal: " + diagnostic);
 }

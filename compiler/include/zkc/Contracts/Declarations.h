@@ -93,5 +93,27 @@ struct ParameterContract {
   llvm::StringRef assetFormat = {};
 };
 const ParameterContract *parameterContract(llvm::StringRef contract);
+
+enum class ConsumerImplementation { Unselected };
+struct ConsumerProfileOperation {
+  std::string operation;
+  /// Formal roots in scope order, excluding projections and constants.
+  std::vector<StaticParameter> staticParameters;
+};
+struct ConsumerProfile {
+  std::string name;
+  ConsumerImplementation implementation;
+  std::vector<std::string> typeConstructors;
+  std::vector<ParameterValidator> parameterValidators;
+  std::vector<ConsumerProfileOperation> operations;
+};
+/// Owner-fixed selections; declaration/contribution presence never enrolls an
+/// operation. Generation checks each entry against its exact declaration.
+llvm::ArrayRef<ConsumerProfile> consumerProfiles();
+const ConsumerProfile *consumerProfile(llvm::StringRef name);
+/// Null for an unknown profile or nonmember. Membership grants no execution,
+/// interpretation, domain, implementation or actual-argument admission.
+const ConsumerProfileOperation *
+consumerProfileOperation(llvm::StringRef profile, llvm::StringRef operation);
 } // namespace zkc::protocol
 #endif

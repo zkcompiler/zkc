@@ -6,6 +6,7 @@
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -184,7 +185,8 @@ int main() {
             diagnostic.str().find("variant-boundary") != std::string::npos;
         return success();
       });
-      require(!parseSourceString<ModuleOp>(commonText, &context) && boundary,
+      auto common = parseSourceString<ModuleOp>(commonText, &context);
+      require((!common || failed(admitStage(*common))) && boundary,
               "common variant boundary survived admission");
     }
   });
@@ -234,7 +236,7 @@ int main() {
               diagnostic.str().find("variant-boundary") != std::string::npos;
           return success();
         });
-        require(failed(verify(*invalid)) && boundary,
+        require(failed(admitStage(*invalid)) && boundary,
                 "supplied participant did not refuse its variant boundary");
       }
     }
@@ -445,7 +447,7 @@ int main() {
             std::string::npos;
         return success();
       });
-      require(failed(verify(*changed)) && correct,
+      require(failed(admitStage(*changed)) && correct,
               "authored resource call was relabeled as generated total math");
     }
     require(

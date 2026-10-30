@@ -135,8 +135,8 @@ with case('group-scale-order-domain-and-additive-test-model'):
 with case('service-alias-and-distinct-handles-exact-query-order'):
     defs = definitions(export(services))
     ops = defs['main'][9][1]
-    assert ops[0] == [['draw', 'P', field[1]], [0], [field], [], 'first']
-    assert ops[1] == [['draw', 'P', field[1]], [2], [field], [], 'second']
+    assert ops[0] == [['draw', 'P', field[1]], [0], [['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]], [], 'first']
+    assert ops[1] == [['draw', 'P', field[1]], [2], [['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]], [], 'second']
     for handles in [('17', '17'), ('17', '29'), ('0', '18446744073709551615')]:
         script = [reply(['draw', site, 'P', contract, handle, field[1]], value)
                   for site, handle, value in zip(['first', 'second'], handles, ['3', '8'])]
@@ -337,7 +337,9 @@ for lower, upper in [(0, 0), (2, 1), (0, 1), (1, 3), (2, 5)]:
 with case('statement-zero-and-nonzero-acceptance-and-opaque-relation-metadata'):
     data = export(schnorr)
     assert data[5] == [['relation', 'schnorr_relation', 'public', 'external', 'example/schnorr', '0', [],
-                        [group, group, field], [['bool']], ['parameter', 'statement', 'witness'], None]]
+                        [['apply', 'group', [['domain', 'Group', 'bls12-381.g1']]]] * 2 +
+                        [['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]],
+                        [['apply', 'bool', []]], ['parameter', 'statement', 'witness'], None]]
     statement = definitions(data)['main'][9][1][0]
     assert statement == [['statement', 'schnorr_relation', ['Bob', 'Bob', 'Alice'], 0, None], [0, 2, 1], [], [], '']
     nonzero = schnorr.replace('acceptance=0', 'acceptance=1').replace(
@@ -415,7 +417,7 @@ with case('service-reference-cannot-be-returned'):
 with case('restrict-has-no-artificial-site'):
     restricted = components.replace('%a = func.call @nested',
                                     '%narrow = "protocol.restrict_roles"(%x) {roles=["P"]} : (!F)->!F\n%a = func.call @nested')
-    assert definitions(export(restricted))['main'][9][1][0] == [['restrict', ['P']], [0], [field], [], '']
+    assert definitions(export(restricted))['main'][9][1][0] == [['restrict', ['P']], [0], [['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]], [], '']
     export(restricted.replace('roles=["P"]} : (!F)', 'roles=["P"],site="invented"} : (!F)'),
            refusal='structured-source-original')
     export(restricted.replace('roles=["P"]} : (!F)', 'roles=["V"]} : (!F)'),

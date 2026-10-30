@@ -4,6 +4,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/Support/JSON.h"
@@ -86,7 +87,8 @@ int main() {
     auto module =
         parseSourceString<ModuleOp>(text, ParserConfig(&context, false));
     require(bool(module), "fixture did not parse: " + diagnostics);
-    require(succeeded(verify(*module)), "fixture not admitted: " + diagnostics);
+    require(succeeded(zkc::admitStage(*module)),
+            "fixture not admitted: " + diagnostics);
     return module;
   };
   auto analyzes = [&](StringRef text, StringRef observer = "V") {

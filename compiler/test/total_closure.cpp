@@ -3,6 +3,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Analysis/TotalClosure.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/IR.h"
 #include <fstream>
@@ -326,7 +327,7 @@ int main() {
         "structured-source/indexed-helper"})
     cases.run("owner-independent closure: " + name, [&] {
       auto source = parse(fixture(name), context);
-      require(succeeded(verify(*source)), "Protocol fixture refused");
+      require(succeeded(zkc::admitStage(*source)), "Protocol fixture refused");
       auto unit = *source->getOps<protocol_ir::ProtocolModuleOp>().begin();
       SmallVector<Operation *> definitions;
       SmallVector<func::FuncOp> mathematics, execution;

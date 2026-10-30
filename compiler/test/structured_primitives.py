@@ -101,16 +101,23 @@ def reject_native(source, inputs):
     run(source, inputs, refusal='structured-reference-source')
 
 
+def logical(kind):
+    name = {'i': 'index', 'b': 'bool', 'f': 'field', 'v': 'vector'}[kind]
+    arguments = [['domain', 'Field', 'bls12-381.fr']] if kind in 'fv' else []
+    return ['apply', name, arguments]
+
+
 with case('all-fifteen-exact-bindings-and-descriptors'):
     for contract, (inputs, outputs) in catalogue.items():
         parameters = [str(maximum)] if contract == 'index.constant' else []
         snapshot = export(primitive(contract, parameters))
         assert len(snapshot) == 11 and snapshot[4:6] == [[], []]
         assert snapshot[6] == [['binding', 'operation', contract,
-                                [] if contract.startswith('index.') else ['bls12-381.fr'], '']]
+                                [] if contract.startswith('index.') else [['domain', 'Field', 'bls12-381.fr']], '',
+                                [logical(x) for x in inputs], [logical(x) for x in outputs]]]
         work = snapshot[7][0]
         op = work[9][1][0]
-        assert op[0] == ['exec', 'exec.apply', 'operation', parameters]
+        assert op[0] == ['exec', 'exec.apply', 'operation', [['natural', x] for x in parameters]]
         assert op[1] == list(range(len(inputs))) and len(op[2]) == len(outputs)
         assert op[3:] == [[], 'primitive']
         assert work[9][2] == ['return', list(range(len(outputs)))]

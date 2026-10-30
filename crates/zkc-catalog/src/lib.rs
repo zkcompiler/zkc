@@ -17,3 +17,22 @@ pub fn operation(name: &str) -> Option<&'static Operation> {
 pub fn constructor(name: &str) -> Option<&'static TypeConstructor> {
     CATALOG.types.iter().find(|row| row.name == name)
 }
+
+pub fn consumer_profile(name: &str) -> Option<&'static ConsumerProfile> {
+    CATALOG
+        .consumer_profiles
+        .iter()
+        .find(|row| row.name == name)
+}
+
+/// Query a fixed owner-selected profile. Actual arguments, domain capabilities,
+/// implementation selection and invocation parameters require separate checks.
+pub fn consumer_profile_operation(
+    profile: &str,
+    operation: &str,
+) -> Option<&'static ConsumerProfileOperation> {
+    consumer_profile(profile)?
+        .operations
+        .iter()
+        .find(|row| row.operation == operation)
+}

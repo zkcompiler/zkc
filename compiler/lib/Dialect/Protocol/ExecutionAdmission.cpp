@@ -306,7 +306,7 @@ class ExecutionAdmission {
   bool check() {
     if (!attributes(owner, {"profile", "source_declarations"}) ||
         (owner->hasAttr("source_declarations") &&
-         !owner->getAttrOfType<StringAttr>("source_declarations")))
+         !owner->getAttrOfType<ArrayAttr>("source_declarations")))
       return fail(owner, "interactive-module");
     auto closure = physical ? readExecutionClosure(owner, true)
                             : readSourceExecutionClosure(owner);

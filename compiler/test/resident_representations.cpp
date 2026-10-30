@@ -2,6 +2,7 @@
 #include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
+#include "support/NativeBindings.h"
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
@@ -286,13 +287,13 @@ PhysicalPlanOptions residentABI(ModuleOp module) {
 class MSMCandidates final : public CandidateCatalog {
 public:
   Expected<std::vector<std::string>>
-  implementations(const BindingApplication &op) const override {
+  implementations(const zkc::NativeBindingApplication &op) const override {
     if (op.contract == "curve.msm")
       return std::vector<std::string>{"blst/resident/curve.msm"};
     return installedCandidates().implementations(op);
   }
-  std::vector<BindingApplication>
-  conversions(const BoundType &a, const BoundType &b) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type a, mlir::Type b) const override {
     return installedCandidates().conversions(a, b);
   }
 };
@@ -378,7 +379,9 @@ int main(int argc, char **argv) {
         require(signature.inputs == std::vector<BoundType>{from} &&
                     signature.outputs == std::vector<BoundType>{to},
                 "exact direct conversion ports");
-        accept(checkDirectConversion(application, from, to));
+        accept(checkDirectConversion(nativeRequest(context, application),
+                                     nativeType(context, from),
+                                     nativeType(context, to)));
         refuses(resolveBinding(application, false), "binding-conversion");
         application.physicalArguments[1] = application.physicalArguments[0];
         refuses(resolveBinding(application, true), "binding-conversion");
@@ -404,7 +407,8 @@ int main(int argc, char **argv) {
                                      ? "bls12-381.g1"
                                      : "bls12-381.fr"},
                                 ""};
-          auto choices = take(installedCandidates().implementations(op));
+          auto choices = take(installedCandidates().implementations(
+              nativeRequest(context, op)));
           require(choices == std::vector<std::string>{"arkworks/" +
                                                       std::string(contract)},
                   "automatic resident choice");

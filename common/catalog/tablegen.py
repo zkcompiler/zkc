@@ -182,12 +182,13 @@ def project(catalog):
     done = set()
     pending = set()
 
-    def operation(i, o):
-        if o["name"] in done:
+    def operation(i, o, consumer=False):
+        if not consumer and o["name"] in done:
             return
-        if o["name"] in pending:
+        if not consumer and o["name"] in pending:
             raise ValueError("cyclic derived counterpart")
-        pending.add(o["name"])
+        if not consumer:
+            pending.add(o["name"])
         if "derivedCounterpart" in o:
             target = o["derivedCounterpart"]
             j = next(
@@ -232,7 +233,7 @@ def project(catalog):
             )
 
         sig = o["signature"]
-        fields = [ordinal(i), "let stage = " + o["stage"] + ";"]
+        fields = ([] if consumer else [ordinal(i)]) + ["let stage = " + o["stage"] + ";"]
         if sig["kind"] == "fixed":
             inputs, outputs = (
                 seq(port(p) for p in sig[k]) for k in ("inputs", "outputs")
@@ -258,7 +259,7 @@ def project(catalog):
         if "fieldTerm" in params:
             fields.append("let parameterField = " + terms[params["fieldTerm"]] + ";")
         facets = []
-        for f in o["facets"]:
+        for f in o.get("facets", []):
             k = f["kind"]
             base = "ZKC_" + k
             if k in (
@@ -315,7 +316,8 @@ def project(catalog):
             else:
                 raise ValueError(k)
             facets.append(emit(base + "<" + ", ".join(args) + ">"))
-        fields.append("let facets = " + seq(facets) + ";")
+        if not consumer:
+            fields.append("let facets = " + seq(facets) + ";")
         if "derivedCounterpart" in o:
             fields.append(
                 "let derivedCounterpart = " + operations[o["derivedCounterpart"]] + ";"
@@ -326,15 +328,29 @@ def project(catalog):
             )
             for n in o["requirements"]
         )
-        emit(
-            f"ZKC_Operation<{q(o['name'])}, {seq(terms)}, {inputs}, {outputs}, {needs}>",
+        result = emit(
+            (f"ZKC_ConsumerOperation<{operations[o['name']]}" if consumer
+             else f"ZKC_Operation<{q(o['name'])}")
+            + f", {seq(terms)}, {inputs}, {outputs}, {needs}>",
             fields,
-            operations[o["name"]],
+            None if consumer else operations[o["name"]],
         )
-        done.add(o["name"])
+        if not consumer:
+            done.add(o["name"])
+        return result
 
     for i, o in enumerate(catalog["operations"]):
         operation(i, o)
+    for i, profile in enumerate(catalog["consumerProfiles"]):
+        entries = [operation(j, dict(member, name=member["operation"]), consumer=True)
+                   for j, member in enumerate(profile["operations"])]
+        emit(
+            f"ZKC_ConsumerProfile<{q(profile['name'])}, "
+            f"{seq(types[t] for t in profile['typeConstructors'])}, "
+            f"{seq(q(v) for v in profile['parameterValidators'])}, {seq(entries)}>",
+            [ordinal(i), f"let implementation = {q(profile['implementation'])};"],
+            symbol("ConsumerProfile", profile["name"]),
+        )
     schema = 'include "zkc/Contracts/Declarations/Schema.td"\n'
     math = (
         "#ifndef ZKC_CATALOG_MATHEMATICAL\n#define ZKC_CATALOG_MATHEMATICAL\n"

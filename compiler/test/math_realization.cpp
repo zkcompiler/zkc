@@ -10,8 +10,8 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Program/Admission.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -229,7 +229,8 @@ int main(int argc, char **argv) {
     auto module = parseSourceString<ModuleOp>(text, &context);
     require(bool(module), "extra helper fixture refused");
     scopedComputation::computation(function(*module, name), caller);
-    require(succeeded(verify(*module)), "extra scoped computation refused");
+    require(succeeded(zkc::admitStage(*module)),
+            "extra scoped computation refused");
     return module;
   };
   cases.run("multiple computations and nested helpers", [&] {
@@ -447,7 +448,7 @@ module @restriction attributes {exec.computation} {
                 auto module = parseSourceString<ModuleOp>(large(220), &context);
                 require(bool(module), "single helper budget control refused");
                 request(*module, "large1");
-                require(succeeded(verify(*module)),
+                require(succeeded(zkc::admitStage(*module)),
                         "one large occurrence must be admitted");
                 request(*module, "large2");
                 std::string diagnostic;
@@ -455,7 +456,7 @@ module @restriction attributes {exec.computation} {
                   diagnostic += d.str();
                   return success();
                 });
-                auto checked = verify(*module);
+                auto checked = zkc::admitStage(*module);
                 require(failed(checked) &&
                             namesIdentifier(diagnostic,
                                             "mathematical-analysis-limit"),
@@ -576,57 +577,6 @@ module @restriction attributes {exec.computation} {
     OpBuilder builder(f);
     runtime::BindingOp::create(builder, f.getLoc(), "extra", "field.add",
                                builder.getStrArrayAttr({"bls12-381.fr"}), "");
-  });
-  cases.run("internal signatures never enable ordinary source admission", [&] {
-    program::LocalDefinitions empty;
-    protocol::LocalRealization one{
-        "realized", {"field:bls12-381.fr"}, {"field:bls12-381.fr"}};
-    require(!protocol::admitNativeLocalDefinitions(empty, {one}),
-            "valid internal signature refused");
-    program::Function caller;
-    caller.name = "caller";
-    caller.arguments = {{"x", "field:bls12-381.fr"}};
-    caller.results = {"field:bls12-381.fr"};
-    caller.origin = program::LogicalOrigin{"caller", {}};
-    caller.body =
-        program::Body{{"invoke", program::LocalApply{"realized", {"x"}, {"r"}}},
-                      {"", program::Return{{"r"}}}};
-    program::LocalDefinitions calls;
-    calls.functions.push_back(std::move(caller));
-    require(!protocol::admitNativeLocalDefinitions(calls, {one}),
-            "explicit internal realization signature was not resolved");
-    auto ordinary = protocol::admitNativeLocalDefinitions(calls);
-    require(bool(ordinary), "ordinary admission accepted an unresolved call");
-    require(llvm::toString(std::move(ordinary)).find("algorithm-call-symbol") !=
-                std::string::npos,
-            "wrong unresolved ordinary call refusal");
-    auto duplicate = protocol::admitNativeLocalDefinitions(empty, {one, one});
-    require(bool(duplicate), "duplicate internal signature admitted");
-    require(
-        llvm::toString(std::move(duplicate)).find("local-realization-symbol") !=
-            std::string::npos,
-        "wrong signature collision refusal");
-    one.inputs = {"polynomial:bls12-381.fr"};
-    auto invalid = protocol::admitNativeLocalDefinitions(empty, {one});
-    require(bool(invalid), "non-total runtime data admitted");
-    require(llvm::toString(std::move(invalid))
-                    .find("local-realization-signature") != std::string::npos,
-            "wrong data-only refusal");
-  });
-  cases.run("realization signatures share a policy work limit", [&] {
-    program::LocalDefinitions empty;
-    std::vector<protocol::LocalRealization> signatures;
-    for (unsigned i = 0; i < 100; ++i)
-      signatures.push_back(
-          {"realization_" + std::to_string(i),
-           std::vector<std::string>(1024, "field:bls12-381.fr"),
-           std::vector<std::string>(1024, "field:bls12-381.fr")});
-    auto refused = protocol::admitNativeLocalDefinitions(empty, signatures);
-    require(bool(refused), "shared policy work ceiling was ignored");
-    require(
-        llvm::toString(std::move(refused)).find("local-realization-limit") !=
-            std::string::npos,
-        "wrong realization policy limit refusal");
   });
   return cases.result();
 }

@@ -31,25 +31,23 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
     const auto &binding = decision.binding;
     if (decision.purpose == target::BindingPurpose::Original) {
       auto declaration = cast<runtime::BindingOp>(work[*decision.declaration]);
-      auto arguments =
-          decodeBindingArguments(module.getContext(), binding.application);
-      if (!arguments)
-        return arguments.takeError();
-      auto signature =
-          bindingSignature(module.getContext(), binding.application, true);
-      if (!signature)
-        return signature.takeError();
-      declaration.setArgumentsAttr(*arguments);
+      declaration.setArgumentsAttr(
+          builder.getArrayAttr(binding.application.arguments));
       declaration.setImplementation(binding.application.implementation);
-      declaration.setFunctionType(*signature);
+      declaration.setFunctionType(
+          executableBindingSignature(binding.application.valueType));
     } else {
       builder.setInsertionPointToStart(&root.getBody().front());
-      auto imported = importBinding(builder, work[decision.location]->getLoc(),
-                                    binding, true);
-      if (!imported)
-        return imported.takeError();
+      runtime::BindingOp::create(
+          builder, work[decision.location]->getLoc(), binding.name,
+          binding.application.contract,
+          builder.getArrayAttr(binding.application.arguments),
+          binding.application.implementation,
+          executableBindingSignature(binding.application.valueType),
+          ArrayAttr{}, ArrayAttr{});
     }
   }
+
   // Retain the complete admitted bodies while constructing their replacements.
   // The port index borrows these actual values; no mutation invalidates it.
   OwningOpRef<ModuleOp> retired(ModuleOp::create(module.getLoc()));
@@ -147,8 +145,8 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
           return error("binding-materialization-coordinate");
         inputs.push_back(mapped);
       }
-      auto invoke = [&](const OperationBinding &binding, TypeRange outputs,
-                        ValueRange inputs, StringRef site,
+      auto invoke = [&](const target::NativeBindingChoice &binding,
+                        TypeRange outputs, ValueRange inputs, StringRef site,
                         ArrayAttr parameters) {
         return native.invoke(
             "exec.apply", outputs, native.scoped(inputs),

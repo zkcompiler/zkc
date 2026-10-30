@@ -89,6 +89,61 @@ int main() {
     refuses(limited->get(function(source, "f0")),
             "mathematical-analysis-limit");
   });
+  cases.run("every smaller native query allowance refuses", [] {
+    Source source;
+    simple(source, "if", true);
+    auto closure = take(protocol::readSourceExecutionClosure(source.owner));
+    auto query =
+        [&](uint64_t &remaining) -> Expected<exec::ResourceOriginSummary> {
+      auto roots = exec::ResourceOriginAnalysis::create(source.owner, closure,
+                                                        remaining);
+      if (!roots)
+        return roots.takeError();
+      return (*roots)->get(function(source, "step"));
+    };
+    uint64_t work = 100000;
+    expect(take(query(work)), {{0, 0}});
+    uint64_t cost = 100000 - work;
+    require(cost > 0 && cost < 1000, "unexpected native query cost");
+    for (uint64_t limit = 0; limit < cost; ++limit) {
+      uint64_t remaining = limit;
+      refuses(query(remaining), "mathematical-analysis-limit");
+    }
+    expect(take(query(cost)), {{0, 0}});
+    require(cost == 0, "exact native query allowance was not consumed");
+  });
+  cases.run("cached native exhaustion cannot be cleared by restoring work", [] {
+    Source source;
+    simple(source, "apply", true);
+    uint64_t work = 100000;
+    auto roots = analysis(source, work);
+    expect(take(roots->get(function(source, "step"))), {{0, 0}});
+    work = 0;
+    refuses(roots->get(function(source, "step")),
+            "mathematical-analysis-limit");
+    work = 100000;
+    refuses(roots->get(function(source, "step")),
+            "mathematical-analysis-limit");
+  });
+  cases.run("native queries refuse zero depth and absent functions", [] {
+    Source source;
+    simple(source, "apply", true);
+    uint64_t work = 100000;
+    auto zeroDepth = analysis(source, work, 0);
+    refuses(zeroDepth->get(function(source, "step")),
+            "mathematical-analysis-limit");
+    auto roots = analysis(source, work);
+    refuses(roots->get(func::FuncOp{}), "mathematical-formation");
+  });
+  cases.run("copyable native results never supply resource roots", [] {
+    Source source;
+    auto identity = source.function("identity", source.boolean, source.boolean);
+    exec::ScopedExecutionBuilder body(source.builder, identity);
+    body.returned(identity.getArgument(1));
+    uint64_t work = 100000;
+    auto roots = analysis(source, work);
+    expect(take(roots->get(identity)), {});
+  });
   cases.run("function identity cannot cross an admitted owner", [] {
     Source left, right;
     simple(left, "apply", true);

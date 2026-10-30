@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
@@ -272,7 +273,7 @@ public:
 } // namespace
 Expected<program::Participants> verifyProgramArtifact(Operation *subject,
                                                       StringRef bytes) {
-  if (!subject || failed(verify(subject)))
+  if (!subject || failed(zkc::admitStage(subject)))
     return error("artifact-correspondence-subject");
   if (auto wrapper = dyn_cast<ModuleOp>(subject)) {
     if (!hasSingleElement(*wrapper.getBody()))

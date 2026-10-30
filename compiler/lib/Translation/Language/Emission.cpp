@@ -17,6 +17,8 @@
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Relation/Formula.h"
+#include "zkc/Dialect/StructuredData.h"
+#include "zkc/Interfaces/CatalogType.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/Layout.h"
@@ -25,6 +27,7 @@
 #include "zkc/Relation/AIR.h"
 #include "zkc/Relation/R1CS.h"
 #include "zkc/Support/BoundedStream.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Entry.h"
 #include "zkc/Translation/Language.h"
@@ -212,11 +215,24 @@ class Emitter {
     } else if (contract.starts_with("field.") ||
                contract.starts_with("curve.") ||
                contract.starts_with("resource_unit.")) {
-      auto type = take(protocol::encodeBoundType(
-          inputs.empty() ? outputs.front() : inputs.front().getType(), false));
-      if (!type)
+      auto type = inputs.empty() ? outputs.front() : inputs.front().getType();
+      auto observation = mlir::dyn_cast<CatalogTypeInterface>(type);
+      auto application =
+          observation ? observation.getCatalogApplication() : std::nullopt;
+      if (!application || application->arguments.size() != 1)
         return {};
-      arguments.push_back(type->identity);
+      if ((contract.starts_with("field.") &&
+           application->constructor != "field") ||
+          (contract.starts_with("curve.") &&
+           application->constructor != "group") ||
+          (contract.starts_with("resource_unit.") &&
+           application->constructor != "resource_unit"))
+        return {};
+      auto identity =
+          mlir::dyn_cast<mlir::StringAttr>(application->arguments[0]);
+      if (!identity)
+        return {};
+      arguments.push_back(identity.getValue().str());
     }
     const auto key = std::make_pair(contract.str(), arguments);
     auto found = bindings.find(key);
@@ -1695,9 +1711,19 @@ public:
     auto sourceDeclarations = inspectComponentDeclarations(project, limits);
     if (!sourceDeclarations)
       return sourceDeclarations.takeError();
-    if (*sourceDeclarations != "[[],[]]")
-      unit->setAttr("source_declarations",
-                    builder.getStringAttr(*sourceDeclarations));
+    if (*sourceDeclarations != "[[],[]]") {
+      // The neutral frontend stays MLIR-independent. Convert its checked
+      // inspection document once at this boundary; retain structured native
+      // inherent data for all subsequent passes and comparisons.
+      auto data = parseNaturalJson(*sourceDeclarations, limits.interfaceBytes,
+                                   64, "component-declaration", "source.limit");
+      if (!data)
+        return data.takeError();
+      auto retained = importDeclarationData(&context, *data);
+      if (!retained)
+        return retained.takeError();
+      unit->setAttr("source_declarations", *retained);
+    }
     definitions = &unit->getRegion(0).front();
     for (auto &decl : declared) {
       if (!decl.body || !decl.parameters.empty())

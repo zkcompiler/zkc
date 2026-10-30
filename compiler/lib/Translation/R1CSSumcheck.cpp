@@ -1,6 +1,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Support/Refusal.h"
@@ -143,7 +144,8 @@ public:
   OwningOpRef<ModuleOp> run() {
     OwningOpRef<ModuleOp> module = ModuleOp::create(loc);
     b.setInsertionPointToStart(module->getBody());
-    unit = pir::ProtocolModuleOp::create(b, loc, pir::Profile::Protocol);
+    unit = pir::ProtocolModuleOp::create(b, loc, pir::Profile::Protocol,
+                                         mlir::ArrayAttr{});
     unit.getBody().push_back(new Block());
     b.setInsertionPointToEnd(&unit.getBody().front());
     Type assignment = algebra::FieldArrayType::get(
@@ -329,7 +331,7 @@ Expected<OwningOpRef<ModuleOp>> authorR1CSSumcheck(const R1CS &relation,
   context.getOrLoadDialect<func::FuncDialect>();
   context.getOrLoadDialect<arith::ArithDialect>();
   auto module = R1CSSumcheckBuilder(relation, context).run();
-  if (failed(verify(*module)))
+  if (failed(zkc::admitStage(*module)))
     return error("native-r1cs-ir");
   return module;
 }

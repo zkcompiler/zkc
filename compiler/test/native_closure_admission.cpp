@@ -2,7 +2,7 @@
 #include "../lib/Dialect/Exec/ExecutionDefinitions.h"
 #include "mlir/IR/Verifier.h"
 #include "support/ResourceSources.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "llvm/ADT/ScopeExit.h"
 using namespace mlir;
 using namespace zkc;
@@ -173,6 +173,77 @@ int main() {
   cases.run("history behind an ordinary call remains forbidden in matches", [] {
     Source source;
     execution(source, "private-history");
+    rejected(source, "execution-match-history");
+  });
+  cases.run("match history follows actual finite callback edges", [] {
+    Source source;
+    execution(source, "ordinary");
+    auto domainType = parseType("!data.domain<ui64>", &source.context);
+    source.builder.setInsertionPointToEnd(&source.owner.getBody().front());
+    auto *domain = source.operation(
+        "data.domain", {}, {},
+        {source.text("sym_name", "items"),
+         source.text("sym_visibility", "private"),
+         source.builder.getNamedAttr(
+             "function_type", TypeAttr::get(source.builder.getFunctionType(
+                                  {source.index, source.index}, domainType)))},
+        true);
+    auto *bounds = new Block;
+    domain->getRegion(0).push_back(bounds);
+    bounds->addArgument(source.index, source.location);
+    bounds->addArgument(source.index, source.location);
+    source.builder.setInsertionPointToEnd(bounds);
+    auto *range = source.operation("data.domain_range", bounds->getArguments(),
+                                   domainType);
+    source.operation("data.domain_yield", range->getResults());
+    auto callback =
+        source.function("fold_step",
+                        {source.rng, source.transcript, source.index,
+                         source.index, source.index, source.boolean},
+                        {source.rng, source.transcript});
+    callback.setPrivate();
+    exec::ScopedExecutionBuilder callbackBody(source.builder, callback);
+    callbackBody.returned(
+        source.call(callbackBody, "draw",
+                    {callback.getArgument(1), callback.getArgument(2),
+                     callback.getArgument(6)},
+                    {source.rng, source.transcript}, "draw"));
+    auto step =
+        cast<func::FuncOp>(SymbolTable::lookupSymbolIn(source.owner, "step"));
+    step.getBody().dropAllReferences();
+    step.getBody().getBlocks().clear();
+    // The replacement root owns its new outlined regions. Retaining the old
+    // unused regions would fail closure inventory before the history check.
+    for (auto function : llvm::make_early_inc_range(
+             source.owner.getBody().front().getOps<func::FuncOp>()))
+      if (function->hasAttr("runtime.region"))
+        function.erase();
+    source.builder.setInsertionPointToEnd(step.addEntryBlock());
+    exec::ScopedExecutionBuilder control(source.builder, step);
+    auto tag = control.invoke(
+        "exec.variant", source.tag, control.scoped({}),
+        {source.text("alternative", "left"), source.text("site", "tag")});
+    auto result = control.match(
+        tag[0], step.getArguments().drop_front(),
+        {source.rng, source.transcript}, {"left", "right"}, "finite_match",
+        [&](unsigned arm) {
+          auto region =
+              source.region({source.rng, source.transcript, source.boolean,
+                             source.index, source.index},
+                            {source.rng, source.transcript});
+          exec::ScopedExecutionBuilder body(source.builder, region);
+          auto folded = body.invoke(
+              "exec.fold", {source.rng, source.transcript},
+              body.scoped({region.getArgument(4), region.getArgument(5),
+                           region.getArgument(1), region.getArgument(2),
+                           region.getArgument(3)}),
+              {source.symbol("domain", "items"),
+               source.symbol("step", "fold_step"),
+               source.text("site", arm ? "right_fold" : "left_fold")});
+          body.complete(folded);
+          return region;
+        });
+    control.returned(result);
     rejected(source, "execution-match-history");
   });
   cases.run("all call edges count even in dormant helpers", [] {

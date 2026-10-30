@@ -1,12 +1,13 @@
 #include "OracleCommonPlan.h"
 #include "OracleVerificationContext.h"
 #include "zkc/Contracts/OracleKinds.h"
-#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Protocol/Contracts.h"
 #include "zkc/Dialect/Protocol/OraclePorts.h"
+#include "zkc/Dialect/StructuredData.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
-#include "llvm/ADT/StringSet.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/Support/JSON.h"
 #include <limits>
 using namespace mlir;
@@ -232,7 +233,6 @@ struct Codec {
     if (!reading || !valid)
       return;
     SmallVector<Attribute> attrs;
-    std::vector<TypeArgument> logical;
     for (const auto &arg : arguments) {
       if (arg.tag == "type") {
         if (arg.type >= types.size()) {
@@ -240,30 +240,22 @@ struct Codec {
           return;
         }
         Type type = types[arg.type];
-        auto encoded = encodeBoundType(type, false);
-        if (!encoded) {
-          consumeError(encoded.takeError());
-          valid = false;
-          return;
-        }
-        logical.push_back(TypeArgument::typeArgument(*encoded));
         attrs.push_back(TypeAttr::get(type));
       } else {
-        logical.push_back(TypeArgument::naturalArgument(arg.natural));
         attrs.push_back(IntegerAttr::get(
             IntegerType::get(candidate.getContext(), 64, IntegerType::Unsigned),
             arg.natural));
       }
     }
-    auto signature = oracleKindSignature(identity, logical);
-    if (!signature) {
-      consumeError(signature.takeError());
-      valid = false;
-      return;
-    }
-    kind = protocol_ir::OracleKindAttr::get(
-        candidate.getContext(), identity,
+    kind = protocol_ir::OracleKindAttr::getChecked(
+        [&] {
+          auto diagnostic = emitError(UnknownLoc::get(candidate.getContext()));
+          diagnostic.abandon();
+          return diagnostic;
+        },
+        candidate.getContext(), StringRef(identity),
         ArrayAttr::get(candidate.getContext(), attrs));
+    valid &= bool(kind);
   }
   void item(json::Value &node, OracleQuerySize &value) {
     object(node, [&](Object &object) {
@@ -658,13 +650,19 @@ Expected<json::Value> encode(ModuleOp prepared, ModuleOp candidate,
   }
   if (!codec.valid)
     return refuse();
-  json::Array types;
   for (Type type : codec.types) {
-    auto encoded = encodeBoundType(type, false);
-    if (!encoded)
-      return encoded.takeError();
-    types.push_back(encoded->spelling());
+    if (failed(verifyLogicalType(
+            [&] {
+              auto diagnostic = emitError(UnknownLoc::get(type.getContext()));
+              diagnostic.abandon();
+              return diagnostic;
+            },
+            type)))
+      return refuse();
   }
+  auto types = exportLogicalTypesData(TypeRange(codec.types));
+  if (!types)
+    return types.takeError();
   json::Array roots;
   for (const auto &selection : selections) {
     const auto &choice = selection.realization;
@@ -689,7 +687,7 @@ Expected<json::Value> encode(ModuleOp prepared, ModuleOp candidate,
                          ? "per-query"
                          : "atomic-blocks"},
                     {"roots", std::move(roots)}}},
-      {"types", std::move(types)},
+      {"types", std::move(*types)},
       {"entries", std::move(encoded)},
       {"declarations", declarations(candidate)}};
 }
@@ -707,8 +705,14 @@ serializeOracleRealization(ModuleOp prepared,
     return record.takeError();
   std::string text;
   raw_string_ostream(text) << *record;
-  if (text.size() > byteLimit)
-    return error("oracle-realization-record-limit");
+  // Complete type trees can increase lexical JSON depth beyond native type
+  // depth. Publication must satisfy the same complete envelope bounds as its
+  // reader, including the distinction between semantic and lexical nesting.
+  auto bounded =
+      parseNaturalJson(text, byteLimit, 64, "oracle-realization-record",
+                       "oracle-realization-record-limit");
+  if (!bounded)
+    return bounded.takeError();
   return text;
 }
 Error checkOracleRealization(ModuleOp prepared, ModuleOp candidate,
@@ -742,27 +746,24 @@ Error checkOracleRealization(ModuleOp prepared, ModuleOp candidate,
   auto *types = record->getArray("types");
   if (types->size() > 4096)
     return error("oracle-realization-record-limit");
-  llvm::StringSet<> seen;
-  for (const auto &node : *types) {
-    auto spelling = node.getAsString();
-    if (!spelling || !seen.insert(*spelling).second)
+  llvm::DenseSet<Type> seen;
+  auto decoded = importLogicalTypesData(candidate.getContext(), *types);
+  if (!decoded) {
+    consumeError(decoded.takeError());
+    return refuse();
+  }
+  for (Type type : *decoded) {
+    if (!seen.insert(type).second ||
+        failed(verifyLogicalType(
+            [&] {
+              auto diagnostic =
+                  emitError(UnknownLoc::get(candidate.getContext()));
+              diagnostic.abandon();
+              return diagnostic;
+            },
+            type)))
       return refuse();
-    auto type = parseBoundType(*spelling, false);
-    if (!type) {
-      consumeError(type.takeError());
-      return refuse();
-    }
-    Type decoded = decodeBoundType(candidate.getContext(), *type);
-    if (!decoded)
-      return refuse();
-    auto back = encodeBoundType(decoded, false);
-    if (!back) {
-      consumeError(back.takeError());
-      return refuse();
-    }
-    if (back->spelling() != *spelling)
-      return refuse();
-    codec.types.push_back(decoded);
+    codec.types.push_back(type);
   }
   std::vector<OracleCommonEntryRealization> entries;
   codec.item(*record->get("entries"), entries);

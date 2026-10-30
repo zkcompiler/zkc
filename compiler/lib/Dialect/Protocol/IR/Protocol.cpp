@@ -229,20 +229,6 @@ LogicalResult zkc::protocol_ir::ProtocolEntryOp::verifySymbolUses(
 }
 } // namespace zkc
 
-mlir::LogicalResult zkc::protocol_ir::ProtocolModuleOp::verifyRegions() {
-  for (auto unit : getBody().front().getOps<mlir::ModuleOp>())
-    if (failed(mathematical::verifyComputationUnit(unit)))
-      return failure();
-  if (isMathematicalProfile(getProfile()))
-    return mathematical::verifyModule(*this);
-  mathematical::NativeTypePolicies types(*this);
-  if (failed(mathematical::verifyProjectionMetadata(*this, types)))
-    return failure();
-  if (failed(mathematical::verifyNativeExecution(*this, types)))
-    return failure();
-  return protocol::verifyModule(*this);
-}
-
 LogicalResult zkc::protocol_ir::FinishIfOp::verify() {
   auto reject = [&](StringRef detail) {
     return diagnostics::emit(emitOpError(), "interactive-return-type", detail);

@@ -2,6 +2,7 @@
 #include "../lib/Transforms/ScopedCandidate.h"
 #include "support/NumericalLoops.h"
 #include "zkc/Dialect/Exec/Builders.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 
 using namespace mlir;
@@ -21,8 +22,8 @@ OwningOpRef<mlir::ModuleOp> expected(MLIRContext &context, bool omit = false,
   auto location = UnknownLoc::get(&context);
   OwningOpRef<mlir::ModuleOp> module(mlir::ModuleOp::create(location));
   OpBuilder builder(module->getBody(), module->getBody()->end());
-  auto root = protocol_ir::ProtocolModuleOp::create(builder, location,
-                                                    protocol_ir::Profile::Exec);
+  auto root = protocol_ir::ProtocolModuleOp::create(
+      builder, location, protocol_ir::Profile::Exec, mlir::ArrayAttr{});
   root.getBody().emplaceBlock();
   builder.setInsertionPointToEnd(&root.getBody().front());
   for (auto [name, contract] :

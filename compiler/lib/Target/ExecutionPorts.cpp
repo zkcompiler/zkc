@@ -1,5 +1,6 @@
 #include "ExecutionPorts.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -10,7 +11,8 @@ using namespace mlir;
 using namespace llvm;
 namespace zkc::target {
 Expected<ExecutionPorts> ExecutionPorts::read(ModuleOp module) {
-  if (!module || failed(verify(module)) || !hasSingleElement(*module.getBody()))
+  if (!module || failed(zkc::admitStage(module)) ||
+      !hasSingleElement(*module.getBody()))
     return error("binding-execution-profile");
   auto root =
       dyn_cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());

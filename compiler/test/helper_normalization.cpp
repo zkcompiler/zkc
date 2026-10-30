@@ -8,6 +8,7 @@
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Computation.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -43,7 +44,8 @@ void computationFixture(ModuleOp module, StringRef helper, StringRef caller) {
   auto function = SymbolTable(unit(module)).lookup<func::FuncOp>(helper);
   require(bool(function), "missing computation helper");
   sc::computation(function, caller);
-  require(succeeded(verify(module)), "scoped computation fixture refused");
+  require(succeeded(zkc::admitStage(module)),
+          "scoped computation fixture refused");
 }
 OwningOpRef<ModuleOp> prepare(ModuleOp source,
                               MathematicalSelectionPolicy policy = {}) {

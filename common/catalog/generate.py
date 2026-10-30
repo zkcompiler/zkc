@@ -1,4 +1,4 @@
-"""Validate the authored catalog's exact shape and project TableGen inputs.
+"""Validate exact catalog shapes and consumer expectations; project TableGen.
 
 zkc-tblgen separately checks kinds, scopes, requirements, permissions and facets.
 The Rust build performs its own formation checks without running this tool.
@@ -276,6 +276,91 @@ def rule(value):
     require(len(value) == 2, "implication needs two predicates")
 
 
+def consumer_operation(value):
+    record(
+        value,
+        {
+            "operation": text,
+            "scope": sequence(term),
+            "stage": one_of("Source", "Construction", "CompilerGenerated", "Physical"),
+            "parameters": parameters,
+            "signature": signature,
+            "requirements": sequence(requirement),
+        },
+    )
+
+
+def consumer_profile(value):
+    record(
+        value,
+        {
+            "name": text,
+            "implementation": one_of("unselected"),
+            "typeConstructors": sequence(text),
+            "parameterValidators": sequence(text),
+            "operations": sequence(consumer_operation),
+        },
+    )
+
+
+def validate_profiles(catalog):
+    operations = {row["name"]: row for row in catalog["operations"]}
+    types = {row["name"] for row in catalog["types"]}
+    validators = {
+        "None", "Natural", "Extent", "FieldLiteral", "FieldLiterals",
+        "MatrixShape", "MatrixIdentity", "AssetIdentity", "MatrixVector",
+        "GatherIndices", "ScatterIndices", "NativeOrigin",
+    }
+    for profile in catalog["consumerProfiles"]:
+        require(bool(profile["name"]), "empty consumer profile identity")
+        constructors = profile["typeConstructors"]
+        require(len(constructors) == len(set(constructors)), "duplicate profile constructor")
+        require(set(constructors) <= types, "unknown profile constructor")
+        parameters = profile["parameterValidators"]
+        require(len(parameters) == len(set(parameters)), "duplicate profile validator")
+        require(set(parameters) <= validators, "unsupported profile parameter family")
+        seen = set()
+        for member in profile["operations"]:
+            name = member["operation"]
+            require(name not in seen, "duplicate profile membership")
+            seen.add(name)
+            require(name in operations, "unknown profile operation")
+            op = operations[name]
+            require(op["signature"]["kind"] == "fixed", "unsupported profile signature family")
+            for key in ("scope", "stage", "signature", "requirements", "parameters"):
+                require(member[key] == op[key], f"consumer operation {key} mismatch")
+            require(op["parameters"]["validator"] in parameters, "unsupported profile validator")
+            # Closed type dependencies: all scoped Type terms must be known
+            # constructor applications. Open complete-Type roots/projections
+            # need a separately specified profile family, not a default codec.
+            kinds = []
+            for scoped in op["scope"]:
+                tag = scoped["kind"]
+                if tag == "root":
+                    result = scoped["parameter"]
+                elif tag == "project":
+                    parent = scoped["parent"]
+                    require(parent < len(kinds), "unscoped profile projection")
+                    matches = [m for m in catalog["members"]
+                               if m["owner"] == kinds[parent] and m["name"] == scoped["member"]]
+                    require(len(matches) == 1, "unknown profile associated member")
+                    result = matches[0]["result"]
+                else:
+                    result = {"kind": "Type" if tag == "apply" else "Nat", "sort": ""}
+                require(result["kind"] != "Type" or tag == "apply", "unsupported profile Type term")
+                if tag == "apply":
+                    require(scoped["constructor"] in constructors, "unsupported profile type constructor")
+                    require(all(a < len(kinds) for a in scoped["arguments"]), "unscoped profile application")
+                kinds.append(result)
+            for port in op["signature"]["inputs"] + op["signature"]["outputs"]:
+                if "term" in port:
+                    index = port["term"]
+                    require(index < len(kinds) and kinds[index]["kind"] == "Type",
+                            "unsupported profile complete port")
+                else:
+                    require(port["constructor"] in constructors, "unsupported profile type constructor")
+
+
 def validate(catalog):
     def row(fields):
         return lambda value: record(value, fields)
@@ -307,6 +392,7 @@ def validate(catalog):
                 )
             ),
             "operations": sequence(operation),
+            "consumerProfiles": sequence(consumer_profile),
             "members": sequence(row({"name": text, "owner": kind, "result": kind})),
             "rules": sequence(rule),
             "capabilities": sequence(row({"name": text, "parameters": sequence(kind)})),
@@ -355,6 +441,7 @@ def validate(catalog):
         "capabilities",
         "mathematicalIdentities",
         "mathematicalIntrinsics",
+        "consumerProfiles",
     ):
         names = [row["name"] for row in catalog[category]]
         require(len(names) == len(set(names)), f"duplicate {category} identity")
@@ -362,6 +449,7 @@ def validate(catalog):
     for row in catalog["operations"]:
         for key in ("scope", "requirements", "facets"):
             require(len(row[key]) <= 1024, "operation declaration limit")
+    validate_profiles(catalog)
 
 
 def unique(pairs):

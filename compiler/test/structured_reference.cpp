@@ -9,10 +9,12 @@
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/StructuredData.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "llvm/ADT/DenseSet.h"
@@ -933,14 +935,11 @@ public:
     // Native ownership admission checks their meaning; the observer bounds and
     // parses the carrier without using it to supply values or control flow.
     if (auto attr = unit->getAttr("source_declarations")) {
-      auto text = dyn_cast<StringAttr>(attr);
-      if (!text)
+      auto parsed = exportDeclarationData(attr);
+      if (!parsed) {
+        consumeError(parsed.takeError());
         return error("structured-reference-unsupported", "source declarations");
-      auto parsed = parseNaturalJson(text.getValue(), 16 * 1024 * 1024, 256,
-                                     "structured-reference-unsupported",
-                                     "structured-reference-capacity");
-      if (!parsed)
-        return parsed.takeError();
+      }
       auto rows = parsed->getAsArray();
       if (!rows || rows->size() != 2 || !(*rows)[0].getAsArray() ||
           !(*rows)[1].getAsArray())
@@ -2370,7 +2369,7 @@ int main(int argc, char **argv) {
   registerDialects(registry);
   MLIRContext context(registry);
   auto module = parseSourceString<ModuleOp>(*source, &context);
-  if (!module || failed(verify(*module)))
+  if (!module || failed(admitStage(*module)))
     return fail(error("structured-reference-source"));
   if (!module->getOperation()->getAttrs().empty() ||
       !llvm::hasSingleElement(module->getBody()->getOperations()))

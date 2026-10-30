@@ -20,14 +20,26 @@ def main():
     directory.mkdir(parents=True)
     generator = tool("tablegen")
 
-    def native(value, expected=None):
-        validate(value)
+    def native(value, expected=None, check_source=True, composed=False):
+        if check_source:
+            validate(value)
         declarations, mathematical = project(value)
         (directory / "Catalog.td").write_text(declarations)
         (directory / "Mathematical.td").write_text(mathematical)
+        input_path = directory / "Catalog.td"
+        if composed:
+            input_path = directory / "Installation.td"
+            input_path.write_text('''include "zkc/Contracts/Declarations/Schema.td"
+defset list<ZKC_Declaration> BaseRecords = {
+include "zkc/Contracts/Catalog.td"
+}
+def Base : ZKC_Contribution<"base", [], BaseRecords>;
+def Extra : ZKC_Operation<"example.unenrolled", [], [], []>;
+def Extension : ZKC_Contribution<"example", ["base"], [Extra]>;
+''')
         result = subprocess.run([generator, "--dump-contract-declarations",
                                  "-I", directory.parents[1], "-I", ROOT / "compiler/include",
-                                 directory / "Catalog.td"], text=True, capture_output=True)
+                                 input_path], text=True, capture_output=True)
         if expected:
             assert result.returncode and expected in result.stderr, result.stderr
             return None
@@ -37,6 +49,51 @@ def main():
     with case("every section survives independent native projection"):
         assert native(source) == source
         assert project(source) == project(source)
+
+    with case("installed contribution cannot enroll itself into the selected consumer"):
+        inventory = native(source, composed=True)
+        assert inventory["operations"][-1]["name"] == "example.unenrolled"
+        assert inventory["consumerProfiles"] == source["consumerProfiles"]
+
+    with case("separate consumer profiles require explicit declaration expectations"):
+        value = copy.deepcopy(source)
+        profile = copy.deepcopy(value["consumerProfiles"][0])
+        profile["name"] = "example-primitives"
+        profile["operations"] = []
+        op = next(o for o in value["operations"] if o["name"] == "field.add")
+        profile["operations"].append({"operation": op["name"], **{
+            key: copy.deepcopy(op[key]) for key in ("scope", "stage", "parameters", "signature", "requirements")}})
+        value["consumerProfiles"].append(profile)
+        assert native(value) == value
+
+    for field, mutate in [
+        ("scope", lambda m: m["scope"][0].update(name="Other")),
+        ("stage", lambda m: m.update(stage="Construction")),
+        ("signature", lambda m: m["signature"].update(inputs=[])),
+        ("requirements", lambda m: m.update(requirements=[])),
+        ("parameters", lambda m: m.update(parameters={"validator": "Natural", "minimum": 1, "maximum": 1})),
+    ]:
+        for side in ("declaration", "consumer"):
+            with case("native consumer refuses " + side + " " + field + " drift"):
+                value = copy.deepcopy(source)
+                target = (next(o for o in value["operations"] if o["name"] == "field.equal")
+                          if side == "declaration" else
+                          next(m for m in value["consumerProfiles"][0]["operations"] if m["operation"] == "field.equal"))
+                mutate(target)
+                native(value, "consumer operation " + field + " mismatch", check_source=False)
+
+    for label, mutate, expected in [
+        ("duplicate membership", lambda p: p["operations"].append(copy.deepcopy(p["operations"][0])), "duplicate profile membership"),
+        ("unsupported constructor", lambda p: p["typeConstructors"].remove("field"), "unsupported profile type constructor"),
+        ("unsupported validator", lambda p: p.update(parameterValidators=["None"]), "unsupported profile validator"),
+        ("unknown parameter family", lambda p: p["parameterValidators"].append("Unknown"), "unsupported profile parameter family"),
+        ("selected implementation", lambda p: p.update(implementation="selected"), "unsupported profile implementation policy"),
+        ("numerical signature family", lambda p: p["operations"][0].update(operation="numerical.map"), "unsupported profile signature family"),
+    ]:
+        with case("native consumer refuses " + label):
+            value = copy.deepcopy(source)
+            mutate(value["consumerProfiles"][0])
+            native(value, expected, check_source=False)
 
     with case("nominal identities preserve Unicode and literal bytes"):
         value = copy.deepcopy(source)
@@ -74,6 +131,11 @@ def main():
     for name, mutate in [
         ("unknown root field", lambda v: v.update(unexpected=True)),
         ("unknown nested field", lambda v: v["operations"][0]["scope"][0].update(unexpected=0)),
+        ("old envelope without profiles", lambda v: v.pop("consumerProfiles")),
+        ("unknown profile field", lambda v: v["consumerProfiles"][0].update(unexpected=True)),
+        ("unknown consumer operation field", lambda v: v["consumerProfiles"][0]["operations"][0].update(unexpected=True)),
+        ("unknown consumer signature field", lambda v: v["consumerProfiles"][0]["operations"][0]["signature"].update(unexpected=True)),
+        ("unknown consumer parameter field", lambda v: v["consumerProfiles"][0]["operations"][0]["parameters"].update(unexpected=True)),
         ("duplicate operation", lambda v: v["operations"].append(copy.deepcopy(v["operations"][0]))),
         ("Boolean count", lambda v: v["operations"][0]["parameters"].update(minimum=True)),
     ]:

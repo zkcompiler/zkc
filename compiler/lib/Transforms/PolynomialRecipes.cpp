@@ -1,6 +1,7 @@
 #include "CheckedCandidate.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -369,10 +370,10 @@ static LogicalResult realizeRecipes(ModuleOp module) {
   for (auto recipe :
        make_early_inc_range(unit.getBody().front().getOps<poly::RecipeOp>()))
     recipe.erase();
-  return verify(module);
+  return zkc::admitStage(module);
 }
 LogicalResult expandPolynomialRecipes(ModuleOp module) {
-  if (failed(verify(module)))
+  if (failed(zkc::admitStage(module)))
     return failure();
   mathematical::CheckedCandidate candidate(module);
   if (failed(realizeRecipes(*candidate)))

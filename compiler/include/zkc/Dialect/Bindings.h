@@ -6,10 +6,31 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Diagnostics.h"
 #include "zkc/Contracts/Binding.h"
-#include "zkc/Contracts/Bindings.h"
+#include "zkc/Dialect/BindingTypes.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "llvm/ADT/SmallVector.h"
+#include <optional>
 
 namespace zkc {
+/// In-process binding request and choice. Static values retain their native
+/// kinds. valueType is empty before layout selection and otherwise contains
+/// the complete data-only physical signature, including inactive children.
+/// Scope/outcome ABI is derived with executableBindingSignature.
+struct NativeBindingApplication {
+  std::string contract;
+  llvm::SmallVector<mlir::Attribute> arguments;
+  std::string implementation;
+  mlir::FunctionType valueType = {};
+  /// Supplies context for requests without static arguments or selected ports.
+  mlir::MLIRContext *context = nullptr;
+};
+/// Derive installed native ports from exact static arguments and optional
+/// complete layout evidence. This owns installation/signature formation only;
+/// it neither emits a declaration nor validates a physical plan or invocation.
+mlir::FunctionType resolveInstalledSignature(
+    llvm::function_ref<mlir::InFlightDiagnostic()> emit, mlir::MLIRContext *,
+    const NativeBindingApplication &, bool physical,
+    const protocol::ImplementationCatalog &, mlir::Type familyLayout = {});
 /// Derive mathematical ports directly from catalog scope and kinded native
 /// static values. Domains use StringAttr, complete types TypeAttr, naturals
 /// ui64 IntegerAttr, and the numerical family a trailing DenseBoolArrayAttr.
@@ -32,13 +53,33 @@ mlir::FunctionType executableBindingSignature(mlir::FunctionType values);
 /// ABI.
 mlir::LogicalResult verifyCallAttributes(mlir::Operation *, unsigned inputs,
                                          unsigned outputs);
+
+/// Checked native declaration view. The actual ABI and complete layouts are
+/// admitted against the installed implementation, without exporting native
+/// types. Recheck after mutating the declaration or its enclosing profile.
+/// This supplies no reached invocation, codec execution or resource authority.
+struct NativeBinding {
+  runtime::BindingOp declaration;
+  mlir::FunctionType logicalType, valueType;
+  bool physical;
+};
+/// Check context, static formation, exact callable ports, uniform stage,
+/// selected provider and complete implementation-family layouts. An explicit
+/// stage additionally constrains a declaration in a builtin module.
+mlir::FailureOr<NativeBinding>
+readNativeBinding(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
+                  mlir::Operation *,
+                  std::optional<bool> physical = std::nullopt);
+mlir::FailureOr<NativeBinding>
+readNativeBinding(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
+                  mlir::Operation *, std::optional<bool> physical,
+                  const protocol::ImplementationCatalog &);
+/// Resolve a binding reference in its lexical symbol table, then check the
+/// native declaration. Does not check the user's actual invocation ports.
+mlir::FailureOr<NativeBinding> lookupNativeBinding(mlir::Operation *user);
 } // namespace zkc
 
 namespace zkc::protocol {
-/// Decode in already loaded dialects; return a null type if one is missing.
-/// This operation never registers or loads dialects into the caller context.
-mlir::Type decodeBoundType(mlir::MLIRContext *, const BoundType &);
-llvm::Expected<BoundType> encodeBoundType(mlir::Type, bool physical);
 /// Decode/encode static values only at neutral-model interchange boundaries.
 llvm::Expected<mlir::ArrayAttr>
 decodeBindingArguments(mlir::MLIRContext *, const BindingApplication &);
@@ -59,10 +100,13 @@ llvm::Expected<runtime::BindingOp> importBinding(mlir::OpBuilder &,
                                                  mlir::Location,
                                                  const OperationBinding &,
                                                  bool physical);
-/// Read a closed declaration. A Protocol module fixes its stage; a builtin
-/// module admits logical or physical formation. Consumers of the latter must
-/// also check their selected stage and actual invocation ports.
+/// Explicit neutral-model export adapter. Native admission and the independent
+/// neutral resolver both check the result; export also imposes byte-profile
+/// limits. Failures emit no diagnostics. Inner semantic consumers use
+/// readNativeBinding instead.
 llvm::Expected<protocol::OperationBinding> readBinding(mlir::Operation *);
+/// Export a referenced declaration at a neutral boundary. Native semantic
+/// users resolve the declaration with lookupNativeBinding instead.
 llvm::Expected<protocol::OperationBinding> operationBinding(mlir::Operation *);
 } // namespace zkc::protocol
 

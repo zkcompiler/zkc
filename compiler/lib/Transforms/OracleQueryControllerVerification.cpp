@@ -1,6 +1,8 @@
+#include "NativeBindingApplication.h"
 #include "OracleQueryController.h"
 #include "OracleTableRead.h"
 #include "OracleVerificationContext.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Data/Variant.h"
@@ -8,6 +10,7 @@
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
 using namespace mlir;
@@ -47,34 +50,29 @@ Error layout(const OracleVerificationContext &targetContext,
     return refuse();
   auto index = IntegerType::get(context, 64, IntegerType::Unsigned);
   std::vector<pir::OracleKindAttr> kinds;
-  std::vector<Type> references, answers, stores;
+  std::vector<Type> answers, stores;
   auto sequence = [&](Type type) -> Expected<Type> {
-    auto bound = encodeBoundType(type, false);
-    if (!bound)
-      return bound.takeError();
-    auto sequence =
-        parseBoundType("sequence<" + bound->spelling() + ">", false);
-    if (!sequence)
-      return sequence.takeError();
-    auto decoded = decodeBoundType(context, *sequence);
-    if (!decoded)
+    auto result = constructLogicalType(
+        [&] { return emitError(targetContext.getModule().getLoc()); }, context,
+        {"sequence", {TypeAttr::get(type)}});
+    if (!result)
       return refuse();
-    return decoded;
+    return result;
   };
   auto intern = [&](pir::OracleKindAttr kind) -> Expected<unsigned> {
-    if (!kind || kind.getIdentity() != "table")
+    if (!kind || kind.getContext() != context ||
+        kind.getIdentity() != "table" ||
+        failed(pir::OracleKindAttr::verify(
+            [&] { return emitError(targetContext.getModule().getLoc()); },
+            kind.getIdentity(), kind.getArguments())))
       return refuse();
-    auto reference = oracleReferenceType(kind);
-    if (!reference)
-      return reference.takeError();
-    auto found = llvm::find(references, *reference);
-    if (found != references.end())
-      return unsigned(found - references.begin());
+    for (auto [i, other] : enumerate(kinds))
+      if (sameOracleReferenceKind(other, kind))
+        return i;
     auto answer = sequence(kind.getAnswerType());
     if (!answer)
       return answer.takeError();
     kinds.push_back(kind);
-    references.push_back(*reference);
     answers.push_back(*answer);
     return unsigned(kinds.size() - 1);
   };
@@ -134,7 +132,17 @@ Error layout(const OracleVerificationContext &targetContext,
         if (!spelling || spelling->size() > metadataRemaining)
           return refuse();
         metadataRemaining -= spelling->size();
-        Type record = data::importVariantType(context, descriptor);
+        auto nominal = data::importVariantIdentity(context, descriptor.nominal);
+        auto arm = data::AlternativeAttr::get(
+            context, StringAttr::get(context, "Record"),
+            Types(4 + previous.size(), index));
+        Type record = nominal
+                          ? data::VariantType::getChecked(
+                                targetContext.getModule().getLoc(), context,
+                                nominal, ArrayRef<data::AlternativeAttr>{arm})
+                          : data::VariantType{};
+        if (!record)
+          return refuse();
         auto arena = sequence(record);
         if (!arena)
           return arena.takeError();
@@ -212,7 +220,7 @@ struct Reader {
       return step->outputs;
     }
     Values apply(StringRef contract, TypeRange outputs, ValueRange inputs,
-                 StringRef site, ArrayRef<std::string> statics = {},
+                 StringRef site, ArrayRef<Attribute> statics = {},
                  ArrayRef<std::string> parameters = {}) {
       auto *step = take("exec.apply", site);
       auto values = result(step, outputs, inputs);
@@ -226,13 +234,8 @@ struct Reader {
                          binding.getArguments().size() == statics.size() &&
                          op.getParameters().size() == parameters.size()))
         return values;
-      reader.expect(bindingMatches(
-          binding,
-          {binding.getSymName().str(),
-           {contract.str(),
-            std::vector<std::string>(statics.begin(), statics.end()),
-            {}}},
-          false));
+      reader.expect(matchesNativeBinding(
+          binding, {contract.str(), SmallVector<Attribute>(statics), {}}));
       reader.expect(
           invocationParametersMatch(contract, binding.getArgumentsAttr(),
                                     op.getParametersAttr(), parameters));
@@ -408,10 +411,8 @@ struct Reader {
     check(cursor, function.getArguments().drop_front());
     expect(cursor.offset == cursor.steps.size());
   }
-  std::string element(Type sequence) {
-    return cantFail(encodeBoundType(sequence, false))
-        .arguments.front()
-        .type->spelling();
+  Attribute element(Type sequence) {
+    return TypeAttr::get(cast<data::SequenceType>(sequence).getElementType());
   }
   Types allTypes() {
     Types types(model.state.begin(), model.state.end());
@@ -429,9 +430,8 @@ struct Reader {
     return Controller::HeaderSize + model.kinds.size() + frame;
   }
   unsigned kindNumber(pir::OracleKindAttr kind) {
-    auto reference = cantFail(oracleReferenceType(kind));
     for (auto [i, current] : enumerate(model.kinds))
-      if (cantFail(oracleReferenceType(current)) == reference)
+      if (sameOracleReferenceKind(current, kind))
         return i;
     llvm_unreachable("validated controller kind inventory");
   }
@@ -884,20 +884,18 @@ struct Reader {
     if (!expect(bool(model.evaluate)))
       return;
     auto root = model.kinds.front();
-    auto answer = encodeBoundType(root.getAnswerType(), false);
-    if (!answer) {
-      consumeError(answer.takeError());
-      valid = false;
-      return;
-    }
+    Type answer = root.getAnswerType();
     std::string family = "sequence";
-    std::vector<std::string> statics{answer->spelling()};
-    if (answer->kind == "index") {
+    SmallVector<Attribute> statics{TypeAttr::get(answer)};
+    if (answer == index) {
       family = "indices";
       statics.clear();
-    } else if (answer->kind == "field" || answer->kind == "group") {
-      family = answer->kind == "field" ? "vector" : "curve";
-      statics = {answer->identity};
+    } else if (auto field = dyn_cast<algebra::FieldType>(answer)) {
+      family = "vector";
+      statics = {StringAttr::get(unit.getContext(), field.getDomain())};
+    } else if (auto group = dyn_cast<algebra::GroupType>(answer)) {
+      family = "curve";
+      statics = {StringAttr::get(unit.getContext(), group.getDomain())};
     }
     Type data = root.getDataType();
     auto reference = cantFail(oracleReferenceType(root));

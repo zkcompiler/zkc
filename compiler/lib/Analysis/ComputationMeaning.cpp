@@ -23,7 +23,14 @@ runtime::BindingOp semanticBinding(Operation *op) {
   if (!declaration || !declaration.getContractAttr() ||
       !declaration.getArgumentsAttr() || !declaration.getImplementationAttr())
     return {};
-  return declaration;
+  auto checked = readNativeBinding(
+      [&] {
+        auto diagnostic = emitError(op->getLoc());
+        diagnostic.abandon();
+        return diagnostic;
+      },
+      declaration);
+  return succeeded(checked) ? checked->declaration : runtime::BindingOp{};
 }
 } // namespace
 const protocol::ComputationContract *semantics(Operation *op) {
@@ -36,8 +43,8 @@ const protocol::ComputationContract *semantics(Operation *op) {
       if (!is_contained(ArrayRef<StringRef>{"binding", "parameters", "site"},
                         attribute.getName().getValue()))
         return nullptr;
-    // Binding admission validates the original physical constraint separately.
-    // Reading mathematical meaning must not re-enter physical resolution.
+    // Preserve the original implementation constraint using native admission;
+    // meaning lookup never reconstructs a neutral binding application.
     auto binding = semanticBinding(op);
     if (!binding)
       return nullptr;

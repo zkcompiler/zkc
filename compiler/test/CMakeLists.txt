@@ -12,6 +12,9 @@ function(add_zkc_test name component)
   endif()
 endfunction()
 
+add_zkc_test(stage_admission Compiler stage-admission)
+mlir_target_link_libraries(zkc-stage_admission-test PRIVATE MLIRParser MLIRPass MLIRTransforms)
+
 # Source fixtures use the same dependency closure as CLI consumers.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 file(GLOB_RECURSE source_project_manifests CONFIGURE_DEPENDS
@@ -43,6 +46,9 @@ add_zkc_test(oracle_virtual Transforms oracle-virtual)
 mlir_target_link_libraries(zkc-oracle_virtual-test PRIVATE MLIRParser)
 add_zkc_test(oracle_protocol Transforms oracle-protocol)
 mlir_target_link_libraries(zkc-oracle_protocol-test PRIVATE MLIRParser MLIRPass MLIRTransforms)
+add_zkc_test(structured_data IR structured-data)
+add_zkc_test(structured_declarations Translation structured-declarations)
+mlir_target_link_libraries(zkc-structured_declarations-test PRIVATE MLIRParser)
 add_zkc_test(service_signatures IR service-signatures)
 mlir_target_link_libraries(zkc-service_signatures-test PRIVATE MLIRAsmParser)
 add_zkc_test(oracle_kinds IR oracle-kinds)
@@ -558,8 +564,6 @@ target_compile_definitions(zkc-total_verification_capacity-test PRIVATE
   ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
 mlir_target_link_libraries(zkc-total_verification_capacity-test PRIVATE MLIRParser)
 
-add_zkc_test(program_logical_realizations Program program-logical-realizations)
-add_zkc_test(program_resource_origins Program program-resource-origins)
 
 add_zkc_test(computation_realization Transforms computation-realization)
 target_compile_definitions(zkc-computation_realization-test PRIVATE
@@ -640,3 +644,8 @@ mlir_target_link_libraries(zkc-pass_policy-test PRIVATE MLIRParser MLIRPass)
 add_zkc_test(source_syntax Syntax source-syntax)
 target_compile_definitions(zkc-source_syntax-test PRIVATE
   ZKC_SYNTAX_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/syntax")
+
+add_zkc_test(application_map Compiler application-map)
+mlir_target_link_libraries(zkc-application_map-test PRIVATE MLIRParser)
+target_compile_definitions(zkc-application_map-test PRIVATE
+  ZKC_APPLICATION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")

@@ -13583,5 +13583,638 @@
       "parameters": [],
       "participants": false
     }
+  ],
+  "consumerProfiles": [
+    {
+      "name": "structured-source-primitives",
+      "implementation": "unselected",
+      "typeConstructors": [
+        "index",
+        "bool",
+        "field",
+        "vector"
+      ],
+      "parameterValidators": [
+        "None",
+        "Natural"
+      ],
+      "operations": [
+        {
+          "operation": "index.constant",
+          "scope": [],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 1,
+            "minimum": 1,
+            "validator": "Natural"
+          },
+          "signature": {
+            "inputs": [],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "index.add",
+          "scope": [],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "index.sub",
+          "scope": [],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "index.mul",
+          "scope": [],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "index.div",
+          "scope": [],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "index.mod",
+          "scope": [],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "index.equal",
+          "scope": [],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "bool"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "index.less",
+          "scope": [],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              },
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "bool"
+              }
+            ]
+          },
+          "requirements": []
+        },
+        {
+          "operation": "vector.empty",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.length",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "index"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.sum",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.split",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.append",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "vector.equal",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "vector"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "bool"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "CommRing"
+            }
+          ]
+        },
+        {
+          "operation": "field.equal",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "F",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              },
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [],
+                "constructor": "bool"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "Field"
+            }
+          ]
+        },
+        {
+          "operation": "field.embed",
+          "scope": [
+            {
+              "kind": "root",
+              "name": "E",
+              "parameter": {
+                "kind": "Domain",
+                "sort": "Field"
+              }
+            },
+            {
+              "kind": "project",
+              "member": "BaseField",
+              "parent": 0
+            }
+          ],
+          "stage": "Source",
+          "parameters": {
+            "maximum": 0,
+            "minimum": 0,
+            "validator": "None"
+          },
+          "signature": {
+            "inputs": [
+              {
+                "arguments": [
+                  1
+                ],
+                "constructor": "field"
+              }
+            ],
+            "kind": "fixed",
+            "outputs": [
+              {
+                "arguments": [
+                  0
+                ],
+                "constructor": "field"
+              }
+            ]
+          },
+          "requirements": [
+            {
+              "arguments": [
+                0
+              ],
+              "capability": "ExtensionField"
+            }
+          ]
+        }
+      ]
+    }
   ]
 }

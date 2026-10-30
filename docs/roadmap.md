@@ -37,11 +37,13 @@ same execution contract; the VM separation itself makes no performance claim.
 The [IR ownership design](compiler/ir-design.md) defines the target boundaries.
 The maintained path already has checked Tensor/Linalg computation, separate IR
 interpretation and transformation production, and one Computation owner. The
-current foundation unit has removed per-contract executable wrappers and migrated
-most inner schemas to typed structure. It still must retire neutral installation
-conversion and implicit whole-stage verifier work, and complete the shared
-admission/analysis/export services specified by the
-[native MLIR foundation](spec/ir/native-foundation.md).
+foundation uses one typed executable invocation, structured native types and
+attributes, explicit stage admission, shared pipeline builders and owner-scoped
+analyses. Native installation and physical selection use complete native
+signatures; byte conversion belongs to publication and interchange. The
+[native MLIR foundation](spec/ir/native-foundation.md) specifies these boundaries.
+Further optimization must preserve the admitted profile and independently
+checked source/candidate relation.
 
 Each unit below is one substantial pull request: research alternatives and
 consumers, specify concrete semantics/refusals, implement the complete unit,
@@ -127,13 +129,24 @@ wrappers and inner string-schema verification; leave no fallback route. Run
 one broad native validation at this boundary, repeating only after relevant
 changes or unresolved failures. Lean builds and formal pipelines are excluded.
 
-Complete this foundation in dependency order: native binding installation and
-export-adapter separation; explicit read-only admission and shared stage builders;
-owner-scoped analysis lifecycles and final catalog/application exports; then the
-full default-route deletion and validation audit. Exercise fresh-context direct
-APIs, textual and nested pipelines, nondefault policy/target parity, dormant
-invalid bodies, sibling-callee mutation and concurrent pass execution. No cached
-fact or profile marker substitutes for re-admission after mutation.
+Preserve the foundation's direct/textual/production parity as later units extend
+it. Its regression boundaries include fresh-context direct APIs, textual and
+nested pipelines, nondefault policy/target parity, dormant invalid bodies,
+sibling-callee mutation and concurrent pass execution. No cached fact or profile
+marker substitutes for re-admission after mutation. New consumers must use the
+same stage builders and declare the analyses and source associations they
+preserve.
+
+The initial application-map edge is unsimplified preparation. Downstream work
+must read its actual source/candidate associations before adding transformation
+rules. Folding/CSE, polynomial realization and construction-start insertion need
+bounded independent derivations for introduced instructions and eliminated or
+reused results; they cannot be accepted by assigning auxiliary labels. Extend
+whole-value associations to component paths or checked frontend written links
+only with the owning source/layout contract and corresponding mutation controls.
+The catalog's fixed consumer profile similarly gains new operations through
+explicit owner-reviewed signature and parameter data plus an independent
+interpretation; contribution registration does not enroll operations by itself.
 
 Widen MLIR transformation features only after those boundaries exist. Use local
 patterns and conversion legality where they describe a real transformation.

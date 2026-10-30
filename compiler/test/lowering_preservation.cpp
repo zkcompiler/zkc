@@ -8,6 +8,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -194,8 +195,8 @@ int main() {
               diagnostic.str().find(formationCode.str()) != std::string::npos;
           return success();
         });
-        require(failed(verify(*candidate)) && code,
-                "structural mutation escaped formation admission");
+        require(failed(zkc::admitStage(*candidate)) && code,
+                "invalid projection or source closure escaped stage admission");
         return;
       }
       require(succeeded(verify(*candidate)),

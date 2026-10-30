@@ -58,7 +58,7 @@ llvm::ArrayRef<llvm::ArrayRef<TypeAdapter>> installedAdapters() {
   static constexpr TypeAdapter first[] = {
       {"bool", noDecode, boolean, booleanArguments, nullptr, nullptr},
       {"index", noDecode, index, nullptr, nullptr, nullptr},
-      {"fixed_vector", noDecode, Applied::encode, nullptr, nullptr, nullptr},
+      {"fixed_vector", noDecode, never, Applied::arguments, nullptr, nullptr},
       {"duplicate", noDecode, float32, floatArguments, nullptr, nullptr}};
   static constexpr TypeAdapter second[] = {
       {"other_bool", noDecode, boolean, booleanArguments, nullptr, nullptr},
@@ -81,29 +81,35 @@ int main() {
               require(!observeCatalogType(Type{}),
                       "missing native type acquired an observation");
             });
-  cases.run("custom/custom ambiguity refuses",
-            [&] { refuses(encodeLogicalType(booleanType), "binding-type"); });
   cases.run("nested custom/custom ambiguity refuses", [&] {
     auto nested = RankedTensorType::get({4}, booleanType);
-    require(!Applied::encode(nested, "fixed_vector"),
-            "nested helper selected the first custom match");
-    refuses(encodeLogicalType(nested), "binding-type");
+    auto application = observeCatalogType(nested);
+    require(bool(application), "applied observation missing");
+    auto element = cast<TypeAttr>(application->arguments[0]).getValue();
+    require(!observeCatalogType(element),
+            "nested observation selected the first custom match");
   });
-  cases.run("unique nested encoding retains Type and Nat", [&] {
+  cases.run("unique nested observation retains Type and Nat", [&] {
     auto element = IntegerType::get(&context, 64, IntegerType::Unsigned);
     auto nested = RankedTensorType::get({4}, element);
-    BoundType expected{"fixed_vector",
-                       {},
-                       {},
-                       {TypeArgument::typeArgument({"index", {}, {}}),
-                        TypeArgument::naturalArgument(4)}};
-    require(take(encodeLogicalType(nested)) == expected,
-            "unique nested translation changed structure");
+    auto application = observeCatalogType(nested);
+    require(application && application->constructor == "fixed_vector" &&
+                application->arguments.size() == 2 &&
+                cast<TypeAttr>(application->arguments[0]).getValue() ==
+                    element &&
+                cast<IntegerAttr>(application->arguments[1])
+                    .getType()
+                    .isUnsignedInteger(64) &&
+                cast<IntegerAttr>(application->arguments[1])
+                        .getValue()
+                        .getZExtValue() == 4,
+            "unique nested observation changed structure");
   });
   cases.run("duplicate registration invalidates unique native match", [&] {
     require(!findAdapter("duplicate"),
             "duplicate constructor acquired an owner");
-    refuses(encodeLogicalType(Float32Type::get(&context)), "binding-type");
+    require(!observeCatalogType(Float32Type::get(&context)),
+            "duplicate registration acquired a native observation");
   });
   return cases.result();
 }

@@ -8,6 +8,7 @@
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguageInspection.h"
 #include "zkc/Compiler/LanguageInterface.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Printing.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
@@ -96,7 +97,7 @@ int main() {
       auto candidate = parse(bytes);
       relation(*candidate)
           ->setAttr(attribute, mlir::StringAttr::get(&context, "altered"));
-      require(succeeded(mlir::verify(*candidate)),
+      require(succeeded(zkc::admitStage(*candidate)),
               "mutation is not admitted IR");
       refuses(compareOriginal(entry, *candidate), "source.correspondence");
     });

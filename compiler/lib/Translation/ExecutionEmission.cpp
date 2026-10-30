@@ -1,6 +1,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Builders.h"
@@ -286,7 +287,7 @@ public:
                          builder.getArrayAttr(arguments)}));
       BodyWriter(*this, root, names).run(record.body);
     }
-    if (failed(verify(*module)))
+    if (failed(zkc::admitStage(*module)))
       return error("execution-emission", "invalid generated CFG");
     for (auto function : module->getOps<func::FuncOp>())
       if (failed(runtime::verifyScopeOwnership(function)))

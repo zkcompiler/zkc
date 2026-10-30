@@ -4,7 +4,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/ControlCursor.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/Execution.h"

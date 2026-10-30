@@ -84,11 +84,12 @@ bool matchesPhysicalPattern(Type type, const protocol::BoundType &pattern,
                       });
 }
 const protocol::AppliedTypeRepresentation *
-representationFor(const CatalogTypeApplication &application, StringRef name) {
+representationFor(const CatalogTypeApplication &application, StringRef name,
+                  bool selectDefault = false) {
   const protocol::AppliedTypeRepresentation *selected = nullptr;
   for (const auto &entry : protocol::appliedTypeRepresentations()) {
     if (entry.constructor != application.constructor ||
-        entry.representation != name ||
+        (selectDefault ? !entry.isDefault : entry.representation != name) ||
         entry.arguments.size() != application.arguments.size())
       continue;
     bool matches = llvm::all_of(
@@ -359,6 +360,73 @@ Type logicalValueType(Type type) {
   if (auto represented = dyn_cast_or_null<runtime::RepresentedType>(type))
     return represented.getLogical();
   return type;
+}
+Type defaultPhysicalType(llvm::function_ref<InFlightDiagnostic()> emit,
+                         Type logical) {
+  if (failed(verifyLogicalType(emit, logical)))
+    return {};
+  if (!logical.getContext()->getLoadedDialect<runtime::RuntimeDialect>()) {
+    diagnostics::emit(emit(), "binding-representation",
+                      "native representation owner is not loaded");
+    return {};
+  }
+  // Formation bounds the expanded tree before recursion. Defaults are selected
+  // independently of a provider; an implementation cannot supply a fallback.
+  auto select = [&](auto &&self, Type value) -> Type {
+    StringRef representation;
+    SmallVector<Type> children;
+    auto include = [&](Type child) {
+      auto selected = self(self, child);
+      if (!selected)
+        return false;
+      children.push_back(selected);
+      return true;
+    };
+    if (auto variant = dyn_cast<data::VariantType>(value)) {
+      representation = "logical.variant/0";
+      for (auto arm : variant.getAlternatives())
+        for (auto payload : arm.getPayload())
+          if (!include(payload))
+            return {};
+    } else {
+      auto application =
+          cast<CatalogTypeInterface>(value).getCatalogApplication();
+      auto kind = application->constructor;
+      if (kind == "sequence" || kind == "fixed_vector") {
+        if (!include(cast<TypeAttr>(application->arguments[0]).getValue()))
+          return {};
+      } else if (kind == "field_array") {
+        auto field = constructLogicalType(
+            emit, value.getContext(), {"field", {application->arguments[0]}});
+        if (!field || !include(field))
+          return {};
+      }
+      if (kind == "sequence")
+        representation = "logical.sequence/0";
+      else if (kind == "resource_unit")
+        representation = "logical.resource_unit/0";
+      else if (kind == "field_array" || kind == "fixed_vector") {
+        if (auto *entry = representationFor(*application, {}, true))
+          representation = entry->representation;
+      } else {
+        StringRef identity;
+        if (!application->arguments.empty())
+          identity = cast<StringAttr>(application->arguments[0]).getValue();
+        if (auto *entry = protocol::installedDomains().defaultRepresentation(
+                kind, identity))
+          representation = entry->identity;
+      }
+    }
+    if (representation.empty()) {
+      diagnostics::emit(emit(), "binding-representation",
+                        "no installed default for the complete logical type");
+      return {};
+    }
+    return runtime::RepresentedType::getChecked(emit, value.getContext(), value,
+                                                representation,
+                                                ArrayRef<Type>(children));
+  };
+  return select(select, logical);
 }
 LogicalResult
 verifyLogicalTypeApplication(llvm::function_ref<InFlightDiagnostic()> emit,

@@ -2,6 +2,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -344,7 +345,7 @@ public:
 } // namespace
 LogicalResult verifyPolynomialRecipesPreserved(ModuleOp original,
                                                ModuleOp candidate) {
-  if (failed(verify(original)) || failed(verify(candidate)))
+  if (failed(zkc::admitStage(original)) || failed(zkc::admitStage(candidate)))
     return failure();
   auto refuse = [&](StringRef reason) {
     return diagnostics::emit(candidate.emitError(),

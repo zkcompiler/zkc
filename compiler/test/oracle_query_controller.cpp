@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Run.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -131,7 +132,7 @@ OwningOpRef<ModuleOp> parse(MLIRContext &context, StringRef text) {
   auto result =
       parseSourceString<ModuleOp>(text, ParserConfig(&context, false));
   require(bool(result), "parse: " + diagnostics);
-  require(succeeded(verify(*result)), "formation: " + diagnostics);
+  require(succeeded(zkc::admitStage(*result)), "formation: " + diagnostics);
   return result;
 }
 OwningOpRef<ModuleOp> fresh(MLIRContext &context) {

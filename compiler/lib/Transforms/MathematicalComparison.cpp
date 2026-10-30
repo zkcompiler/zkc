@@ -1481,23 +1481,19 @@ class ModuleComparison {
         auto group = dyn_cast<algebra::GroupType>(results[0].getType());
         if (!group)
           return 0;
-        SmallVector<protocol::BoundType> inputs, outputs;
-        for (Value operand : operands) {
-          auto type = protocol::encodeBoundType(operand.getType(), false);
-          if (!type) {
-            consumeError(type.takeError());
-            return 0;
-          }
-          inputs.push_back(*type);
-        }
-        auto type = protocol::encodeBoundType(group, false);
-        if (!type) {
-          consumeError(type.takeError());
+        auto silent = [&] {
+          auto diagnostic = emitError(op.getLoc());
+          diagnostic.abandon();
+          return diagnostic;
+        };
+        auto signature = resolveLogicalSignature(
+            silent, op.getContext(), contract,
+            {StringAttr::get(op.getContext(), group.getDomain())});
+        if (!signature ||
+            !equal(signature.getInputs(), ValueRange(operands).getTypes()) ||
+            !equal(signature.getResults(), ValueRange(results).getTypes()))
           return 0;
-        }
-        outputs.push_back(*type);
-        const auto *facet = protocol::admitComputationContract(
-            {contract.str(), {group.getDomain().str()}, ""}, inputs, outputs);
+        const auto *facet = protocol::computationContract(contract);
         if (!facet ||
             facet->law.algebra != protocol::ComputationAlgebra::GroupModule ||
             !facet->law.total || operands.size() != 2)
@@ -1570,10 +1566,15 @@ public:
     auto group = cast<algebra::GroupType>(computation.signature.getResult(0));
     // Signature resolution establishes the installed group/scalar module,
     // rather than inferring that every nominal group has a scalar action.
-    auto module = protocol::resolveBinding(
-        {"curve.scale", {group.getDomain().str()}, ""}, false);
+    auto module = resolveLogicalSignature(
+        [&] {
+          auto diagnostic = emitError(computation.domain->getLoc());
+          diagnostic.abandon();
+          return diagnostic;
+        },
+        group.getContext(), "curve.scale",
+        {StringAttr::get(group.getContext(), group.getDomain())});
     if (!module) {
-      consumeError(module.takeError());
       return failure();
     }
     llvm::DenseMap<Value, Value> mapping;

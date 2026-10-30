@@ -6,8 +6,8 @@ namespace mlir {
 class Operation;
 }
 namespace zkc {
-// Internal region-verifier hooks. MLIR must have verified local invariants and
-// nested operations first. Public callers use mlir::verify or checked export.
+// Internal stage-admission hook. Ordinary MLIR verification must have checked
+// local invariants and nested operations first. Public callers use admitStage.
 namespace protocol {
 /// Whole executable protocol admission over native types, SSA and symbols.
 /// Neither this nor MLIR verification establishes source-relative correctness.

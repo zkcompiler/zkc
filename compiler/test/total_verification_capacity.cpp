@@ -5,6 +5,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/ComputationRecipes.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/MathematicalTrace.h"
@@ -39,7 +40,8 @@ void checkConstructionReserve(MLIRContext &context, int copySlack,
                               bool shortDiscardSites = false) {
   auto source = parseSourceString<ModuleOp>(
       fixture("../structured-source/realization-finite.mlir"), &context);
-  require(bool(source) && succeeded(verify(*source)), "sum source refused");
+  require(bool(source) && succeeded(zkc::admitStage(*source)),
+          "sum source refused");
   auto numerical = computationRecipeSource(unit(*source), "sum", "calculation");
   auto original = copy(*source);
   OwningOpRef<mlir::ModuleOp> before(cast<mlir::ModuleOp>(numerical->clone()));
@@ -251,7 +253,7 @@ int main() {
             auto fold = cast<algebra::FiniteFoldOp>(helper.front().front());
             fold.setStepAttr(FlatSymbolRefAttr::get(&context, "inside"));
           }
-          require(succeeded(verify(*source)), "total source refused");
+          require(succeeded(zkc::admitStage(*source)), "total source refused");
           auto numerical =
               computationRecipeSource(unit(*source), "total", "calculation");
           auto original = copy(*source);

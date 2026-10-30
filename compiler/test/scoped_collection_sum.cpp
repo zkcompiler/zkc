@@ -1,9 +1,11 @@
 #include "../lib/Target/PhysicalPlan.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "mlir/Parser/Parser.h"
+#include "support/NativeBindings.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Registry.h"
 
 using namespace mlir;
@@ -75,7 +77,7 @@ class Providers final : public target::CandidateCatalog {
 public:
   unsigned withheld = 0;
   llvm::Expected<std::vector<std::string>> implementations(
-      const protocol::BindingApplication &application) const override {
+      const zkc::NativeBindingApplication &application) const override {
     if ((withheld >= 1 && application.contract == "vector.dot") ||
         (withheld >= 2 && application.contract == "numerical.sum") ||
         (withheld >= 3 && application.contract == "numerical.map") ||
@@ -83,9 +85,8 @@ public:
       return std::vector<std::string>{};
     return target::installedCandidates().implementations(application);
   }
-  std::vector<protocol::BindingApplication>
-  conversions(const protocol::BoundType &from,
-              const protocol::BoundType &to) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type from, mlir::Type to) const override {
     return target::installedCandidates().conversions(from, to);
   }
 };
@@ -144,7 +145,8 @@ int main(int argc, char **argv) {
     cases.run(name, [&] {
       auto actual = sf::clone(*candidate);
       mutate(*actual);
-      require(succeeded(verify(*actual)), "mutation must remain admitted");
+      require(succeeded(zkc::admitStage(*actual)),
+              "mutation must remain admitted");
       ScopedDiagnosticHandler quiet(&context,
                                     [](Diagnostic &) { return success(); });
       require(failed(compare(*source, *actual)),

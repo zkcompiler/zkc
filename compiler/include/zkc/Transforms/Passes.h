@@ -12,6 +12,9 @@ namespace mlir {
 class ModuleOp;
 }
 namespace zkc {
+/// Read-only complete stage admission at the owning module scope. Run before
+/// generic rewrites and after transformations before publishing a candidate.
+std::unique_ptr<mlir::Pass> createAdmitStagePass();
 namespace mathematical {
 struct RealizationTrace;
 }

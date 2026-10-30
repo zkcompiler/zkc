@@ -11,6 +11,7 @@
 #include "support/ScopedFinite.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Computation.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -35,7 +36,8 @@ OwningOpRef<ModuleOp> fixture(MLIRContext &context, StringRef name,
   std::ostringstream bytes;
   bytes << input.rdbuf();
   auto source = parseSourceString<ModuleOp>(bytes.str(), &context);
-  require(bool(source) && succeeded(verify(*source)), "fixture refused");
+  require(bool(source) && succeeded(zkc::admitStage(*source)),
+          "fixture refused");
   return source;
 }
 OwningOpRef<ModuleOp> copy(ModuleOp source) {
@@ -341,7 +343,7 @@ int main() {
           op->setAttr("step", FlatSymbolRefAttr::get(&context, "inside"));
         });
       }
-      require(succeeded(verify(*source)), "total control refused");
+      require(succeeded(zkc::admitStage(*source)), "total control refused");
       auto numerical =
           computationRecipeSource(unit(*source), "total", "calculation");
       // Force allocation of a different working name in the nested case.

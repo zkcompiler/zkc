@@ -111,12 +111,12 @@ LogicalResult ResourceOrigins::successors(Operation *op,
   if (none_of(op->getOperands(), [&](Value value) { return affine(value); }) ||
       none_of(op->getResults(), [&](Value value) { return affine(value); }))
     return success();
-  auto binding = protocol::operationBinding(op);
-  if (!binding) {
-    consumeError(binding.takeError());
+  if (!op->hasAttr("binding"))
     return success();
-  }
-  auto facts = protocol::operationContracts(binding->application.contract);
+  auto binding = lookupNativeBinding(op);
+  if (failed(binding))
+    return failure();
+  auto facts = protocol::operationContracts(binding->declaration.getContract());
   if (!facts)
     return success();
   // At most three installed facets. Unknown/conflicting equations for the same

@@ -2,15 +2,18 @@
 #include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
+#include "support/NativeBindings.h"
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
 #include "zkc/Contracts/Implementations.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Transforms/Protocol.h"
 #include <tuple>
 #include <type_traits>
@@ -260,22 +263,22 @@ public:
   bool diagonalAvailable = true, invalidDiagonalFirst = false;
   std::string withheldDiagonalContract;
   std::vector<std::string> diagonalImplementations(
-      const BindingApplication &application) const override {
+      const zkc::NativeBindingApplication &application) const override {
     if (!diagonalAvailable || application.contract == withheldDiagonalContract)
       return {};
     auto result = installedCandidates().diagonalImplementations(application);
     if (invalidDiagonalFirst) {
-      auto ordinary = take(defaultImplementation(application));
+      auto ordinary = take(defaultNativeImplementation(application));
       result.insert(result.begin(), {"test/" + application.contract, ordinary});
     }
     return result;
   }
-  Expected<std::vector<std::string>>
-  implementations(const BindingApplication &application) const override {
+  Expected<std::vector<std::string>> implementations(
+      const zkc::NativeBindingApplication &application) const override {
     if (withholdOrdinary)
       return std::vector<std::string>{};
     if (application.contract == "poly.fold" &&
-        application.arguments == std::vector<std::string>{"bls12-381.fr"}) {
+        hasNativeArguments(application, {"bls12-381.fr"})) {
       std::vector<std::string> result{"arkworks-msb/poly.fold",
                                       "arkworks/poly.fold"};
       if (reverseOrder)
@@ -284,8 +287,8 @@ public:
     }
     return installedCandidates().implementations(application);
   }
-  std::vector<BindingApplication>
-  conversions(const BoundType &from, const BoundType &to) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type from, mlir::Type to) const override {
     if (!available)
       return {};
     auto result = installedCandidates().conversions(from, to);
@@ -293,8 +296,9 @@ public:
     if (invalidFirst)
       result.insert(result.begin(),
                     {"table.relayout",
-                     {from.identity, from.representation, to.representation},
-                     "test/table.relayout"});
+                     {mlir::StringAttr::get(from.getContext(), "bls12-381.fr")},
+                     "test/table.relayout",
+                     mlir::FunctionType::get(from.getContext(), {from}, {to})});
     return result;
   }
 };
@@ -450,10 +454,10 @@ int main() {
         forged.binding.application.implementation = "arkworks/field.mul";
         forged.purpose = BindingPurpose::Contraction;
         forged.declaration.reset();
-        auto add = take(
-            resolveBinding(plan.bindings.front().binding.application, true));
-        auto mul = take(resolveBinding(forged.binding.application, true));
-        require(add.inputs == mul.inputs && add.outputs == mul.outputs,
+        auto add = take(resolveNativeApplication(
+            plan.bindings.front().binding.application));
+        auto mul = take(resolveNativeApplication(forged.binding.application));
+        require(add == mul,
                 "mutation must preserve the complete physical signature");
         site(plan, *module, "add").binding = plan.bindings.size();
         plan.bindings.push_back(forged);
@@ -470,7 +474,8 @@ int main() {
   cases.run("nominal arguments cannot be substituted", [&] {
     auto module = take(executableFixture(arithmetic(), context));
     auto plan = take(proposePhysical(*module));
-    plan.bindings.front().binding.application.arguments = {"bn254.fr"};
+    plan.bindings.front().binding.application.arguments = {
+        StringAttr::get(&context, "bn254.fr")};
     refusedMutation(*module, plan, "binding-operation");
   });
   cases.run("source fixedness is recomputed", [&] {
@@ -588,22 +593,31 @@ int main() {
         require(printed(*module) == before,
                 "unavailable conversion changed input");
       });
-  cases.run("unary signatures and cross-field layouts grant no law", [&] {
-    auto logical = take(parseBoundType("field:bls12-381.fr", false));
-    auto field = take(defaultRepresentation(logical));
-    reject(checkDirectConversion(
-               {"field.neg", {"bls12-381.fr"}, "arkworks/field.neg"}, field,
-               field),
+  cases.run("unary signatures and cross-field ports grant no law", [&] {
+    auto from = nativeType(
+        context,
+        take(parseBoundType("field:bls12-381.fr@arkworks.fr/0", true)));
+    auto resident = nativeType(
+        context, take(parseBoundType("field:bls12-381.fr@blst/fr", true)));
+    auto negation = nativeRequest(
+        context, {"field.neg", {"bls12-381.fr"}, "arkworks/field.neg"});
+    negation.valueType = FunctionType::get(&context, {from}, {from});
+    require(take(resolveNativeApplication(negation)) == negation.valueType,
+            "unary contract signature must be independently installed");
+    reject(checkDirectConversion(negation, from, from),
            "binding-no-conversion");
-    auto from =
-        take(parseBoundType("table:bls12-381.fr@arkworks.mle-lsb/0", true));
-    auto to = from;
-    to.identity = "bn254.fr";
-    reject(checkDirectConversion(
-               {"table.relayout",
-                {"bls12-381.fr", from.representation, to.representation},
-                "arkworks/table.relayout"},
-               from, to),
+    negation.valueType = FunctionType::get(&context, {from}, {resident});
+    reject(checkDirectConversion(negation, from, resident),
+           "binding-no-conversion");
+    auto to = nativeType(context,
+                         take(defaultRepresentation(
+                             take(parseBoundType("field:bn254.fr", false)))));
+    NativeBindingApplication crossField{
+        "table.relayout",
+        {StringAttr::get(&context, "bls12-381.fr")},
+        "arkworks/table.relayout",
+        FunctionType::get(&context, {from}, {to})};
+    reject(checkDirectConversion(crossField, from, to),
            "binding-no-conversion");
   });
   cases.run("Plonky3 compatible nominal operation retains default", [&] {
@@ -657,10 +671,12 @@ int main() {
           std::tuple{"curve.msm", "ristretto255.group", "dalek"}}) {
       BindingApplication application{contract, {identity}, ""};
       require(
-          take(installedCandidates().implementations(application)) ==
+          take(installedCandidates().implementations(
+              nativeRequest(context, application))) ==
               std::vector<std::string>{std::string(backend) + "/" + contract},
           "ordinary default remains dense");
-      require(installedCandidates().diagonalImplementations(application) ==
+      require(installedCandidates().diagonalImplementations(
+                  nativeRequest(context, application)) ==
                   std::vector<std::string>{std::string(backend) + "-diagonal/" +
                                            contract},
               "separate diagonal preference resolves through Contracts");
@@ -677,12 +693,14 @@ int main() {
           reverse ? std::vector<ImplementationDescriptor>{b, a}
                   : std::vector<ImplementationDescriptor>{a, b},
           {}));
+      require(diagonalCandidates(
+                  nativeRequest(context, {"vector.mul", {"bls12-381.fr"}, ""}),
+                  catalog) == std::vector<std::string>{a.identity, b.identity},
+              "stable candidate identities");
       require(
-          diagonalCandidates({"vector.mul", {"bls12-381.fr"}, ""}, catalog) ==
-              std::vector<std::string>{a.identity, b.identity},
-          "stable candidate identities");
-      require(
-          diagonalCandidates({"vector.mul", {"bn254.fr"}, ""}, catalog).empty(),
+          diagonalCandidates(
+              nativeRequest(context, {"vector.mul", {"bn254.fr"}, ""}), catalog)
+              .empty(),
           "discovery preserves exact domain applicability");
     }
     // Discovery in an independent catalog cannot install code into this build.
@@ -770,14 +788,16 @@ int main() {
             continue;
           binding.binding.application.implementation =
               "arkworks/" + binding.binding.application.contract;
+          binding.binding.application.valueType = {};
           auto installed =
-              take(resolveBinding(binding.binding.application, true));
+              take(resolveNativeApplication(binding.binding.application));
+          binding.binding.application.valueType = installed;
           decision.inputs.clear();
           decision.outputs.clear();
-          for (const auto &port : installed.inputs)
-            decision.inputs.push_back(decodeBoundType(&context, port));
-          for (const auto &port : installed.outputs)
-            decision.outputs.push_back(decodeBoundType(&context, port));
+          for (const auto &port : installed.getInputs())
+            decision.inputs.push_back(port);
+          for (const auto &port : installed.getResults())
+            decision.outputs.push_back(port);
         }
         // All producer/consumer edges and full signatures still agree. Only
         // exact diagonal semantic admission should refuse this proposal.
@@ -1089,6 +1109,37 @@ int main() {
     site(plan, *module, "add").binding.reset();
     refusedMutation(*module, plan, "binding-plan-coverage");
   });
+  cases.run("physical materialization preserves empty ABI dictionaries", [&] {
+    auto module = take(executableFixture(arithmetic(), context));
+    runtime::BindingOp binding;
+    module->walk([&](runtime::BindingOp value) {
+      if (value.getContract() == "field.add")
+        binding = value;
+    });
+    require(binding, "missing addition declaration");
+    auto empty = DictionaryAttr::get(&context);
+    binding->setAttr("arg_attrs",
+                     ArrayAttr::get(&context, {empty, empty, empty}));
+    binding->setAttr("res_attrs", ArrayAttr::get(&context, {empty}));
+    require(succeeded(admitStage(*module)), "inert call dictionaries refused");
+    auto plan = take(proposePhysical(*module));
+    auto checked = take(validatePhysical(*module, plan));
+    accept(materializePhysical(*module, checked));
+    // Publication replaces the complete module body; reacquire actual owners.
+    binding = {};
+    module->walk([&](runtime::BindingOp value) {
+      if (value.getContract() == "field.add")
+        binding = value;
+    });
+    require(binding && succeeded(admitStage(*module)) &&
+                binding->getAttrOfType<ArrayAttr>("arg_attrs").size() == 3 &&
+                binding->getAttrOfType<ArrayAttr>("res_attrs").size() == 1,
+            "materialization dropped or invalidated inert ABI dictionaries");
+    binding->setAttr("arg_attrs", ArrayAttr::get(&context, {empty, empty}));
+    ScopedDiagnosticHandler silence(&context,
+                                    [](Diagnostic &) { return success(); });
+    require(failed(admitStage(*module)), "wrong ABI dictionary arity admitted");
+  });
   cases.run("null proposed port refuses before type dereference", [&] {
     auto module = take(executableFixture(arithmetic(), context));
     auto plan = take(proposePhysical(*module));
@@ -1180,6 +1231,75 @@ int main() {
     require(failureLocation == location,
             "validation refusal retains operation location");
   });
+  cases.run(
+      "unused native binding outside byte depth reaches physical "
+      "materialization",
+      [&] {
+        auto module = take(executableFixture(arithmetic(), context));
+        auto root =
+            cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front());
+        auto emit = [&] { return module->emitError(); };
+        Type element = constructLogicalType(
+            emit, &context,
+            {"field", {StringAttr::get(&context, "bls12-381.fr")}});
+        require(bool(element), "missing native scalar");
+        for (unsigned depth = 0; depth != 12; ++depth) {
+          element = constructLogicalType(
+              emit, &context, {"sequence", {TypeAttr::get(element)}});
+          require(bool(element), "native nested sequence formation failed");
+        }
+        NativeBindingApplication request{
+            "sequence.empty", {TypeAttr::get(element)}, "", {}, &context};
+        auto logical = resolveLogicalSignature(emit, &context, request.contract,
+                                               request.arguments);
+        require(bool(logical), "native logical signature failed");
+        OpBuilder builder(&root.getBody().front(),
+                          root.getBody().front().begin());
+        auto unused = runtime::BindingOp::create(
+            builder, module->getLoc(), "unused_deep", request.contract,
+            builder.getArrayAttr(request.arguments), "",
+            executableBindingSignature(logical), ArrayAttr{}, ArrayAttr{});
+        require(succeeded(readNativeBinding(emit, unused, false)),
+                "native declaration inherited byte limits");
+        refuses(readBinding(unused), "binding-type-limit");
+        auto plan = take(proposePhysical(*module));
+        auto selected =
+            llvm::find_if(plan.bindings, [](const BindingDecision &choice) {
+              return choice.binding.name == "unused_deep";
+            });
+        require(selected != plan.bindings.end() &&
+                    selected->binding.application.arguments.front() ==
+                        TypeAttr::get(element) &&
+                    bool(selected->binding.application.valueType),
+                "unused selection lost complete native arguments or ports");
+        auto altered = plan;
+        auto index = std::distance(plan.bindings.begin(), selected);
+        altered.bindings[index].binding.application.arguments[0] =
+            TypeAttr::get(logical.getResult(0));
+        refuses(validatePhysical(*module, altered), "binding-operation");
+        auto checked = take(validatePhysical(*module, plan));
+        accept(materializePhysical(*module, checked));
+        // Materialization replaced the root; resolve against the actual body.
+        root = cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front());
+        auto actual = dyn_cast_or_null<runtime::BindingOp>(
+            SymbolTable::lookupSymbolIn(root, "unused_deep"));
+        require(actual && succeeded(readNativeBinding(emit, actual, true)),
+                "complete native declaration was lost at materialization");
+        refuses(readBinding(actual), "binding-type-limit");
+        auto arguments =
+            SmallVector<Attribute>(actual.getArguments().getValue());
+        arguments[0] = TypeAttr::get(logical.getResult(0));
+        actual.setArgumentsAttr(builder.getArrayAttr(arguments));
+        require(failed(readNativeBinding([&] { return actual.emitOpError(); },
+                                         actual, true)),
+                "actual reader admitted an altered complete Type argument");
+        arguments[0] =
+            StringAttr::get(&context, "sequence<field:bls12-381.fr>");
+        actual.setArgumentsAttr(builder.getArrayAttr(arguments));
+        require(failed(readNativeBinding([&] { return actual.emitOpError(); },
+                                         actual, true)),
+                "actual reader admitted an altered static argument kind");
+      });
   for (bool changeReturn : {false, true}) {
     cases.run(changeReturn ? "materialized scoped return changed"
                            : "materialized invocation operand changed",

@@ -2,6 +2,7 @@
 #include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
+#include "support/NativeBindings.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "support/ScopedFixture.h"
@@ -27,7 +28,7 @@ void accept(Error error) {
   if (error)
     throw std::runtime_error(toString(std::move(error)));
 }
-void flatLayouts() {
+void flatLayouts(MLIRContext &context) {
   for (StringRef spelling : {"field:bn254.fr@halo2curves-axiom/bn254.fr",
                              "vector:bn254.fr@halo2curves-axiom/bn254.fr",
                              "group:bn254.g1@halo2curves-axiom/bn254.g1",
@@ -41,15 +42,17 @@ void flatLayouts() {
     for (bool reverse : {false, true}) {
       auto from = reverse ? resident : canonical;
       auto to = reverse ? canonical : resident;
-      auto candidates = installedCandidates().conversions(from, to);
+      auto source = nativeType(context, from), target = nativeType(context, to);
+      auto candidates = installedCandidates().conversions(source, target);
       require(candidates.size() == 1, "exact direct conversion candidate");
-      accept(checkDirectConversion(candidates.front(), from, to));
-      auto signature = take(resolveBinding(candidates.front(), true));
-      require(signature.inputs == std::vector<BoundType>{from} &&
-                  signature.outputs == std::vector<BoundType>{to},
+      accept(checkDirectConversion(candidates.front(), source, target));
+      auto signature = take(resolveNativeApplication(candidates.front()));
+      require(signature == FunctionType::get(&context, {source}, {target}),
               "exact conversion signature");
-      candidates.front().physicalArguments[1] = from.spelling();
-      refuses(resolveBinding(candidates.front(), true), "binding-conversion");
+      candidates.front().valueType =
+          FunctionType::get(&context, {source}, {source});
+      refuses(resolveNativeApplication(candidates.front()),
+              "binding-conversion");
     }
   }
   for (StringRef spelling :
@@ -61,7 +64,7 @@ void flatLayouts() {
     consumeError(parsed.takeError());
   }
 }
-void inventory() {
+void inventory(MLIRContext &context) {
   const auto &catalog = installedImplementations();
   // Independently enumerated expected operations and domains.
   for (StringRef contract : {"field.constant",    "field.from_index",
@@ -111,7 +114,8 @@ void inventory() {
       require(take(defaultImplementation(application)) ==
                   ("arkworks/" + contract).str(),
               "canonical default changed");
-      require(take(installedCandidates().implementations(application)) ==
+      require(take(installedCandidates().implementations(
+                  nativeRequest(context, application))) ==
                   std::vector<std::string>{("arkworks/" + contract).str()},
               "alternative became automatic");
       application.implementation = name;
@@ -247,8 +251,8 @@ int main(int argc, char **argv) {
   if (argc != 1)
     return 2;
   Cases cases;
-  cases.run("flat layout and codec ownership", flatLayouts);
-  cases.run("finite exact operation inventory", inventory);
+  cases.run("flat layout and codec ownership", [&] { flatLayouts(context); });
+  cases.run("finite exact operation inventory", [&] { inventory(context); });
   for (auto domain : {"bn254.g1", "bn254.g2"})
     for (bool resident : {false, true})
       cases.run(Twine(resident ? "retained source ports: "

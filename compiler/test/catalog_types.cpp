@@ -1,4 +1,5 @@
 #include "support/NativeCases.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -17,6 +18,36 @@ int main() {
   context.loadAllAvailableDialects();
   Builder builder(&context);
   Cases cases;
+  cases.run(
+      "consumer selection preserves kinded roots and refuses nonmembers", [&] {
+        using namespace zkc::protocol;
+        const auto *profile = consumerProfile("structured-source-primitives");
+        require(profile && profile->operations.size() == 16 &&
+                    profile->implementation ==
+                        ConsumerImplementation::Unselected,
+                "structured primitive selection changed");
+        const auto *index =
+            consumerProfileOperation(profile->name, "index.add");
+        const auto *embed =
+            consumerProfileOperation(profile->name, "field.embed");
+        require(index && index->staticParameters.empty(),
+                "index gained a static argument");
+        require(embed && embed->staticParameters ==
+                             std::vector<StaticParameter>{
+                                 {StaticKind::Domain, "Field"}},
+                "associated field projection became a caller argument");
+        require(!consumerProfile("missing") &&
+                    !consumerProfileOperation("missing", "index.add") &&
+                    !consumerProfileOperation(profile->name, "field.add") &&
+                    !consumerProfileOperation(profile->name, "numerical.map"),
+                "declaration presence acquired consumer membership");
+        const auto *constant = parameterContract("index.constant");
+        const auto *embedding = parameterContract("field.embed");
+        require(constant && embedding &&
+                    constant->validator == ParameterValidator::Natural &&
+                    embedding->validator == ParameterValidator::None,
+                "selected validator lost correspondence");
+      });
   auto location = builder.getUnknownLoc();
   auto emit = [&] { return emitError(location); };
   SmallVector<std::string> codes;

@@ -9,7 +9,7 @@ namespace {
 std::optional<llvm::SmallVector<Attribute>> sequenceArguments(Type type,
                                                               llvm::StringRef) {
   auto sequence = dyn_cast<zkc::data::SequenceType>(type);
-  if (!sequence)
+  if (!sequence || !sequence.getElementType())
     return std::nullopt;
   return llvm::SmallVector<Attribute>{TypeAttr::get(sequence.getElementType())};
 }
@@ -56,7 +56,7 @@ std::optional<BoundType> encodeSequence(Type type,
   auto sequence = dyn_cast<zkc::data::SequenceType>(type);
   if (!sequence)
     return std::nullopt;
-  auto element = encodeLogicalType(sequence.getElementType());
+  auto element = encodeBoundType(sequence.getElementType(), false);
   if (!element) {
     llvm::consumeError(element.takeError());
     return std::nullopt;
@@ -95,12 +95,14 @@ Type decodeVariantType(MLIRContext *context, const BoundType &type) {
 }
 std::optional<BoundType> encodeVariantType(Type type,
                                            llvm::StringRef constructor) {
-  if (auto variant = dyn_cast<zkc::data::VariantType>(type)) {
-    auto descriptor = zkc::data::exportVariantType(variant);
-    auto spelling = descriptor ? encodeVariant(*descriptor) : std::nullopt;
-    if (spelling)
-      return BoundType{constructor.str(), spelling->substr(8), {}};
-  }
+  // This required contribution callback shares the canonical structural codec.
+  // It owns neither a second table encoder nor native admission semantics.
+  if (!isa<zkc::data::VariantType>(type) || constructor != "variant")
+    return std::nullopt;
+  auto result = encodeBoundType(type, false);
+  if (result)
+    return std::move(*result);
+  llvm::consumeError(result.takeError());
   return std::nullopt;
 }
 } // namespace

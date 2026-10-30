@@ -721,6 +721,102 @@ def Bad : ZKC_Operation<"law.action", [F],
   [ZKC_Holds<Field,[F]>]> { let facets = [ZKC_Mathematical<Meaning>]; }
 ]=] "scalar action law requires ordered group and associated scalar ports")
 
+# Consumer-owned expectations are checked independently of operation formation.
+function(profile_case name definitions expected_error)
+  declaration_case("profile-${name}" "
+class ExpectedMultiply : ZKC_ConsumerOperation<Multiply, [F],
+  [ZKC_Apply<Element,[F]>, ZKC_Apply<Element,[F]>],
+  [ZKC_Apply<Element,[F]>], [ZKC_Holds<Ring,[F]>]>;
+class Selected<list<ZKC_ConsumerOperation> entries> :
+  ZKC_ConsumerProfile<\"example\", [Element], [\"None\"], entries>;
+${definitions}" "${expected_error}")
+  set(failures "${failures}" PARENT_SCOPE)
+endfunction()
+profile_case(valid [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry]>;
+]=] "")
+profile_case(duplicate-membership [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry, Entry]>;
+]=] "duplicate profile membership")
+profile_case(duplicate-profile [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry]>;
+def Other : Selected<[Entry]>;
+]=] "duplicate consumer profile ownership")
+profile_case(unknown-operation [=[
+def Entry : ZKC_ConsumerOperation<Missing, [], [], []>;
+]=] "Variable not defined: 'Missing'")
+profile_case(unowned-entry [=[
+def Entry : ExpectedMultiply;
+]=] "unowned consumer operation")
+profile_case(scope-drift [=[
+def OtherF : ZKC_Root<"Other", FDomain>;
+def Entry : ZKC_ConsumerOperation<Multiply, [OtherF],
+  [ZKC_Apply<Element,[OtherF]>, ZKC_Apply<Element,[OtherF]>],
+  [ZKC_Apply<Element,[OtherF]>], [ZKC_Holds<Ring,[OtherF]>]>;
+def Profile : Selected<[Entry]>;
+]=] "consumer operation scope mismatch")
+profile_case(signature-drift [=[
+def Entry : ExpectedMultiply { let inputs = []; }
+def Profile : Selected<[Entry]>;
+]=] "consumer operation signature mismatch")
+profile_case(requirement-drift [=[
+def Entry : ExpectedMultiply { let requirements = []; }
+def Profile : Selected<[Entry]>;
+]=] "consumer operation requirements mismatch")
+profile_case(validator-drift [=[
+def Entry : ExpectedMultiply { let parameters = NaturalParameter; }
+def Profile : Selected<[Entry]> { let parameterValidators = ["None", "Natural"]; }
+]=] "consumer operation parameters mismatch")
+profile_case(stage-drift [=[
+def Entry : ExpectedMultiply { let stage = Construction; }
+def Profile : Selected<[Entry]>;
+]=] "consumer operation stage mismatch")
+profile_case(unsupported-constructor [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry]> { let typeConstructors = []; }
+]=] "unsupported profile type constructor")
+profile_case(duplicate-constructor [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry]> { let typeConstructors = [Element, Element]; }
+]=] "duplicate profile constructor")
+profile_case(unsupported-validator [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry]> { let parameterValidators = []; }
+]=] "unsupported profile validator")
+profile_case(unknown-validator [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry]> { let parameterValidators = ["Unknown"]; }
+]=] "unsupported profile parameter family")
+profile_case(selected-implementation [=[
+def Entry : ExpectedMultiply;
+def Profile : Selected<[Entry]> { let implementation = "selected"; }
+]=] "unsupported profile implementation policy")
+profile_case(open-type [=[
+def T : ZKC_Root<"T", TypeParameter>;
+def Op : ZKC_Operation<"example.open", [T], [T], [T]>;
+def Entry : ZKC_ConsumerOperation<Op, [T], [T], [T]>;
+def Profile : Selected<[Entry]>;
+]=] "unsupported profile Type term")
+profile_case(nested-type [=[
+def Container : ZKC_Type<"container", [TypeParameter], PrivateImmutable>;
+def E : ZKC_Apply<Element,[F]>;
+def C : ZKC_Apply<Container,[E]>;
+def Op : ZKC_Operation<"example.nested", [F,E,C], [C], [C]>;
+def Entry : ZKC_ConsumerOperation<Op, [F,E,C], [C], [C]>;
+def Profile : Selected<[Entry]> { let typeConstructors = [Container, Element]; }
+]=] "")
+profile_case(nested-constructor-refusal [=[
+def Container : ZKC_Type<"container", [TypeParameter], PrivateImmutable>;
+def E : ZKC_Apply<Element,[F]>;
+def C : ZKC_Apply<Container,[E]>;
+def Op : ZKC_Operation<"example.nested", [F,E,C], [C], [C]>;
+def Entry : ZKC_ConsumerOperation<Op, [F,E,C], [C], [C]>;
+def Profile : Selected<[Entry]> { let typeConstructors = [Container]; }
+]=] "unsupported profile type constructor")
+
 if(failures)
   list(JOIN failures "\n" diagnostic)
   message(FATAL_ERROR "${diagnostic}")

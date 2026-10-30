@@ -11,6 +11,7 @@
 #include "support/ScopedFinite.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Operations.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
@@ -114,7 +115,7 @@ OwningOpRef<ModuleOp> linearCollect(MLIRContext &context, unsigned additions,
                      .lookup<runtime::BindingOp>("mul");
   binding.setContract(subtract ? "field.sub" : "field.add");
   linearBody(sf::function(*module, "square"), additions, "mul", 1, 1, subtract);
-  require(succeeded(verify(*module)), "linear callback refused");
+  require(succeeded(zkc::admitStage(*module)), "linear callback refused");
   return module;
 }
 OwningOpRef<ModuleOp> prepare(ModuleOp source,
@@ -164,8 +165,8 @@ void refusesIR(StringRef text, MLIRContext &context, StringRef code) {
       codes.push_back(refusal.code);
     return success();
   });
-  require(!parseSourceString<ModuleOp>(text, &context),
-          "invalid IR was admitted");
+  auto module = parseSourceString<ModuleOp>(text, &context);
+  require(!module || failed(admitStage(*module)), "invalid IR was admitted");
   require(llvm::is_contained(codes, code.str()), "missing refusal identifier " +
                                                      code + "; observed " +
                                                      llvm::join(codes, ", "));
@@ -193,7 +194,8 @@ int main(int argc, char **argv) {
       auto module = parseSourceString<ModuleOp>(source, &context);
       require(bool(module), "fold fixture refused");
       linearBody(sf::function(*module, "step"), terms, "add", 1, 2);
-      require(succeeded(verify(*module)), "long repeated-term fold refused");
+      require(succeeded(zkc::admitStage(*module)),
+              "long repeated-term fold refused");
       auto subject = readComputation(*module);
       auto later = readComputation(*original);
       auto view = finite::analyzeComputation(subject);
@@ -354,7 +356,7 @@ int main(int argc, char **argv) {
     require(bool(collect), "missing collection");
     auto second = sc::duplicateInvocation(collect, helper, "second");
     sc::returned(helper)->setOperand(0, sc::payload(second).front());
-    require(succeeded(verify(*original)), "two invocations refused");
+    require(succeeded(zkc::admitStage(*original)), "two invocations refused");
     for (uint64_t allowance : {uint64_t(0), cost}) {
       mathematical::RealizationWork work;
       work.lanes = allowance;

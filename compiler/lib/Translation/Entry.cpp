@@ -3,6 +3,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Printing.h"
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Json.h"
@@ -524,7 +525,7 @@ Expected<std::string> emitHostOriginal(const ClosedEntry &entry,
                         mlir::StringAttr::get(&context, calculation.id));
     module->getBody()->push_back(nested->release());
   }
-  if (mlir::failed(mlir::verify(*module)))
+  if (mlir::failed(zkc::admitStage(*module)))
     return error("target.admission", "Host original failed MLIR verification");
   std::string text;
   BoundedStream stream(text, limits.irBytes);
@@ -537,7 +538,7 @@ Expected<std::string> emitHostOriginal(const ClosedEntry &entry,
 }
 Expected<json::Array> readHostFunctions(mlir::ModuleOp module,
                                         const Limits &limits) {
-  if (!module || mlir::failed(mlir::verify(module)))
+  if (!module || mlir::failed(zkc::admitStage(module)))
     return error("target.admission", "Host original failed verification");
   return entry_detail::reconstructNativeHost(module, limits);
 }

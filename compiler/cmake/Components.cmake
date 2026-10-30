@@ -193,9 +193,9 @@ add_zkc_component(Program
   lib/Program/Encode.cpp
   lib/Program/Structure.cpp
   lib/Program/Admission.cpp
-  lib/Program/ResourceOrigins.cpp
 )
 add_zkc_component(IR
+  lib/Dialect/Admission.cpp
   lib/Dialect/Collection.cpp
   lib/Dialect/Diagnostics.cpp
   lib/Dialect/Crypto/IR/CryptoDialect.cpp
@@ -233,7 +233,9 @@ add_zkc_component(IR
   lib/Dialect/Algebra/IR/Mathematical.cpp
   lib/Dialect/Algebra/RingExpression.cpp
   lib/Dialect/InvocationParameters.cpp
+  lib/Dialect/StructuredData.cpp
   lib/Dialect/BindingFormation.cpp
+  lib/Dialect/BindingTypes.cpp
   lib/Dialect/Bindings.cpp
   lib/Dialect/TypeFormation.cpp
   lib/Dialect/MathematicalInterfaces.cpp
@@ -299,6 +301,8 @@ add_zkc_component(Translation
   lib/Translation/R1CSSumcheck.cpp
 )
 add_zkc_component(Transforms
+  lib/Transforms/Admission.cpp
+  lib/Transforms/Stages.cpp
   lib/Transforms/PassStatistics.cpp
   lib/Conversion/Bindings.cpp
   lib/Conversion/PhysicalVerification.cpp
@@ -380,6 +384,7 @@ add_zkc_component(Transforms
   lib/Target/Selection.cpp
   lib/Target/Catalog.cpp
   lib/Target/ExecutionPorts.cpp
+  lib/Target/NativePlanTypes.cpp
   lib/Target/PhysicalPlan.cpp
   lib/Target/StorageSchedule.cpp
 )
@@ -399,6 +404,9 @@ add_zkc_component(Compiler
   lib/Compiler/ComponentContracts.cpp
   lib/Compiler/SourceCorrespondence.cpp
   lib/Compiler/Compilation.cpp
+  lib/Compiler/ApplicationMap.cpp
+  lib/Compiler/ApplicationMapData.cpp
+  lib/Compiler/ApplicationMapVerification.cpp
   lib/Compiler/StructuredSource.cpp
   lib/Compiler/ArtifactJson.cpp
   lib/Compiler/RunVerification.cpp
@@ -447,7 +455,7 @@ target_link_libraries(ZkcTranslation PUBLIC ZkcIR ZkcLanguage)
 # Follow MLIR's package linkage too: embedding static MLIR archives alongside
 # its dylib duplicates MLIR definitions and process-global state.
 mlir_target_link_libraries(ZkcIR PUBLIC
-  MLIRIR MLIRControlFlowInterfaces MLIRSideEffectInterfaces
+  MLIRIR MLIRPass MLIRControlFlowInterfaces MLIRSideEffectInterfaces
   MLIRInferTypeOpInterface MLIRFunctionInterfaces MLIRCallInterfaces
   MLIRFuncDialect MLIRArithDialect MLIRSCFDialect MLIRControlFlowDialect
   MLIRLinalgDialect MLIRTensorDialect)

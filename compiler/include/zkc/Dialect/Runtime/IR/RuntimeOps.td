@@ -11,8 +11,10 @@ def Runtime_BindingOp : Op<RuntimeDialect, "binding", [Symbol, CallableOpInterfa
   let description = [{
     Declare an installed operation contract and its static selection. A
     Protocol module fixes the stage; a builtin module permits logical or
-    physical formation, with stage and port checking owned by its consumer.
-    This declaration supplies neither installation nor invocation authority.
+    physical declarations. Verification checks exact native ports and selected
+    installation applicability. Consumers additionally check their required
+    stage and actual invocation. This declaration supplies no reached
+    invocation or resource authority.
   }];
   let arguments = (ins SymbolNameAttr:$sym_name, StrAttr:$contract,
     ArrayAttr:$arguments, StrAttr:$implementation,

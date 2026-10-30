@@ -17,9 +17,10 @@
 #include "support/ProtocolDeployment.h"
 #include "support/ScopedFixture.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Exec/Builders.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
@@ -236,7 +237,7 @@ struct Fixture {
         entry(take(closeNativeRun(checked, "sample::Run"))),
         text(take(emitOriginal(entry, context))),
         module(parseSourceString<ModuleOp>(text, &context)) {
-    require(module && succeeded(verify(*module)),
+    require(module && succeeded(zkc::admitStage(*module)),
             "source emission failed admission");
     take(compareOriginal(entry, *module));
     module->walk([&](mlir::Operation *op) {
@@ -409,7 +410,7 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
               changed = true;
             }
           });
-          require(changed && succeeded(verify(*physical)),
+          require(changed && succeeded(zkc::admitStage(*physical)),
                   "same-typed payload mutation was not admitted");
           auto error = protocol::verifyPhysicalMaterialization(
               *candidate, *physical, checked);
@@ -470,7 +471,7 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
           auto module = OwningOpRef<ModuleOp>(ModuleOp::create(location));
           builder.setInsertionPointToStart(module->getBody());
           auto root = protocol_ir::ProtocolModuleOp::create(
-              builder, location, protocol_ir::Profile::Exec);
+              builder, location, protocol_ir::Profile::Exec, mlir::ArrayAttr{});
           root.getBody().push_back(new Block);
           builder.setInsertionPointToStart(&root.getBody().front());
           runtime::BindingOp::create(builder, location, "fold", "poly.fold",
@@ -549,7 +550,7 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
                 TypeRange{table}, "choose",
                 [&](unsigned arm) { return arm ? alternative : branch; });
           outer.returned(result);
-          require(succeeded(verify(*module)),
+          require(succeeded(zkc::admitStage(*module)),
                   "execution table fixture failed admission");
           auto flow = take(target::ExecutionPorts::read(*module));
           target::PhysicalPlanOptions options;
@@ -604,7 +605,7 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
       auto candidate = protocol::expandScopedHelpers(*fixture.module);
       require(bool(candidate), "expansion mutation fixture failed");
       edit(*candidate);
-      require(succeeded(verify(*candidate)),
+      require(succeeded(zkc::admitStage(*candidate)),
               "expansion mutation must remain admitted");
       ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
       require(failed(protocol::verifyScopedHelperExpansionPreserved(
@@ -663,7 +664,7 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
             }
             changed = true;
           });
-          require(changed && succeeded(verify(*candidate)),
+          require(changed && succeeded(zkc::admitStage(*candidate)),
                   "numerical mutation must remain admitted");
           ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
           require(failed(computation::verifyComputationRealization(*source,
@@ -703,7 +704,7 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
       std::string after;
       llvm::raw_string_ostream current(after);
       source->print(current);
-      require(before == after && succeeded(verify(*source)),
+      require(before == after && succeeded(zkc::admitStage(*source)),
               "failed preparation mutated its source");
     });
   cases.run(
@@ -786,7 +787,7 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
           changed = true;
         }
       });
-      require(changed && succeeded(verify(*candidate)),
+      require(changed && succeeded(zkc::admitStage(*candidate)),
               "finite mutation was not admitted");
       ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
       require(failed(protocol::verifyScopedFinitePreparation(*source,
@@ -846,7 +847,7 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
                   erased = true;
                 }
             } while (erased);
-            require(succeeded(verify(*fixture.module)),
+            require(succeeded(zkc::admitStage(*fixture.module)),
                     "authored finite source refused");
             auto closure =
                 take(protocol::readSourceExecutionClosure(sourceOwner));
@@ -855,7 +856,8 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
             OpBuilder builder(candidate->getBody(),
                               candidate->getBody()->end());
             auto owner = protocol_ir::ProtocolModuleOp::create(
-                builder, location, protocol_ir::Profile::Exec);
+                builder, location, protocol_ir::Profile::Exec,
+                mlir::ArrayAttr{});
             owner.getBody().emplaceBlock();
             builder.setInsertionPointToEnd(&owner.getBody().front());
             SmallVector<mlir::Type> types{runtime::ScopeType::get(&context)};
@@ -897,7 +899,7 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
                 emit, work, policy);
             require(succeeded(results), "scoped finite emission failed");
             control.returned(*results);
-            require(succeeded(verify(*candidate)),
+            require(succeeded(zkc::admitStage(*candidate)),
                     "scoped finite candidate failed admission");
             auto actual = take(mathematical::ScopedCandidate::read(owner));
             mathematical::CandidatePorts ports(actual.get());
@@ -955,7 +957,7 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
                   mutated = true;
                 }
               });
-            require(mutated && succeeded(verify(*candidate)),
+            require(mutated && succeeded(zkc::admitStage(*candidate)),
                     "finite mutation must remain ordinarily admitted");
             actual = take(mathematical::ScopedCandidate::read(owner));
             ports = mathematical::CandidatePorts(actual.get());
@@ -997,7 +999,7 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
           });
           require(changed, "missing conditional invocation");
           if (discharged) {
-            require(succeeded(verify(*fixture.module)),
+            require(succeeded(zkc::admitStage(*fixture.module)),
                     "actual static entry premise was lost");
             auto source = projected(fixture);
             PassManager lowering(&context);
@@ -1014,7 +1016,7 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
             return;
           }
           ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
-          require(failed(verify(*fixture.module)),
+          require(failed(zkc::admitStage(*fixture.module)),
                   "undischarged actual premise accepted");
         });
   auto preparedMutation = [&](StringRef name, unsigned sample, auto edit,
@@ -1033,13 +1035,13 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
       edit(*candidate);
       ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
       if (formed) {
-        require(succeeded(verify(*candidate)),
+        require(succeeded(zkc::admitStage(*candidate)),
                 "preparation mutation lost admission");
         require(failed(mathematical::verifyProjectionPreserved(*original,
                                                                *candidate)),
                 "preparation changed semantics without detection");
       } else {
-        require(failed(verify(*candidate)),
+        require(failed(zkc::admitStage(*candidate)),
                 "malformed calculation was admitted");
       }
     });
@@ -1218,7 +1220,7 @@ protocol Run roles(P)(xs:Vector<Fr>@P,go:bool@P)->(a:Vector<Fr>@P,b:Vector<Fr>@P
               "finite premise did not follow the actual capture argument");
       function->removeAttr("data.preconditions");
     });
-    require(succeeded(verify(*candidate)),
+    require(succeeded(zkc::admitStage(*candidate)),
             "premise deletion must remain admitted");
     ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
     require(failed(protocol::verifyScopedHelperExpansionPreserved(
@@ -1288,7 +1290,7 @@ protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}
                                                builder.getArrayAttr({})}));
           owner.getBody().front().push_back(clone);
         }
-        require(succeeded(verify(*source)),
+        require(succeeded(zkc::admitStage(*source)),
                 "unchanged-root source must be admitted");
         mathematical::RealizationWork construction;
         uint64_t constructionCopy = 1000000,
@@ -1343,7 +1345,7 @@ protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}
         changed = true;
       }
     });
-    require(changed && succeeded(verify(*candidate)),
+    require(changed && succeeded(zkc::admitStage(*candidate)),
             "body mutation must remain admitted");
     ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
     require(failed(mathematical::verifyProjectionPreserved(*fixture.module,
@@ -1368,12 +1370,12 @@ protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}
                 auto extra = cast<func::FuncOp>(original->clone());
                 extra.setSymName("dormant");
                 owner.getRegion(0).front().push_back(extra);
-                require(succeeded(verify(*fixture.module)),
+                require(succeeded(zkc::admitStage(*fixture.module)),
                         "dormant helper fixture is invalid");
                 auto candidate = projected(fixture);
                 auto &target = candidate->getBody()->front();
                 SymbolTable::lookupSymbolIn(&target, "dormant")->erase();
-                require(succeeded(verify(*candidate)),
+                require(succeeded(zkc::admitStage(*candidate)),
                         "dormant deletion must remain admitted");
                 ScopedDiagnosticHandler silence(&context,
                                                 [](mlir::Diagnostic &) {});
@@ -1387,14 +1389,14 @@ protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}
     candidate->walk(
         [&](protocol_ir::LocalCallOp call) { call.setRole("different"); });
     ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
-    require(failed(verify(*candidate)),
+    require(failed(zkc::admitStage(*candidate)),
             "participant invocation accepted a foreign role");
   });
   auto mutation = [&](llvm::StringRef name, unsigned sample, auto edit) {
     cases.run(name, [&] {
       Fixture fixture(context, samples[sample]);
       edit(*fixture.module);
-      require(succeeded(verify(*fixture.module)),
+      require(succeeded(zkc::admitStage(*fixture.module)),
               "correspondence mutation must remain admitted");
       refuses(compareOriginal(fixture.entry, *fixture.module),
               "source.correspondence");

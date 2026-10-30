@@ -1,6 +1,6 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -222,7 +222,7 @@ public:
         return error("execution-cfg", problem);
       result.functions.push_back(std::move(record));
     }
-    if (auto e = source ? admitNativeLocalDefinitions(result, {})
+    if (auto e = source ? admitNativeLocalDefinitions(result)
                         : admitExecutionDefinitions(result, physical))
       return std::move(e);
     return result;

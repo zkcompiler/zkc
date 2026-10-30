@@ -90,6 +90,7 @@ int main() {
             refuse(logical, row.representation);
             refuse(logical, row.representation, {logicalValueType(child)});
             refuse(logical, row.representation, {child, child});
+            refuse(logical, "", {child});
           });
   auto bls = algebra::FieldType::get(&context, "bls12-381.fr");
   auto koala = algebra::FieldType::get(&context, "koala-bear");
@@ -195,8 +196,9 @@ int main() {
             "unused binding accepted a forged represented port");
     binding.setFunctionType(
         executableBindingSignature(b.getFunctionType({}, {bear})));
+    binding.setImplementation("plonky3/field.constant");
     require(succeeded(verify(*module)),
-            "formed binding acquired installation requirements");
+            "installed physical binding failed native admission");
   });
   cases.run("expanded represented alternatives consume structural work", [&] {
     Type logical = koala, physical = bear;

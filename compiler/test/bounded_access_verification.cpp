@@ -6,10 +6,12 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Execution.h"
 #include "zkc/Transforms/Passes.h"
+#include "llvm/ADT/StringExtras.h"
 #include <iterator>
 
 using namespace mlir;
@@ -43,7 +45,8 @@ bool hasFinite(ModuleOp module) {
 }
 OwningOpRef<ModuleOp> parse(MLIRContext &context, StringRef source) {
   auto module = parseSourceString<ModuleOp>(source, &context);
-  require(bool(module) && succeeded(verify(*module)), "fixture refused");
+  require(bool(module) && succeeded(zkc::admitStage(*module)),
+          "fixture refused");
   return module;
 }
 void refuses(MLIRContext &context, llvm::function_ref<LogicalResult()> check,
@@ -56,7 +59,8 @@ void refuses(MLIRContext &context, llvm::function_ref<LogicalResult()> check,
   });
   require(failed(check()), "expected refusal " + code);
   require(llvm::is_contained(codes, code.str()),
-          "missing refusal identifier " + code);
+          "missing refusal identifier " + code +
+              " actual: " + llvm::join(codes, ","));
   StringRef other =
       code == "finite-bound" ? "finite-analysis-limit" : "finite-bound";
   require(!llvm::is_contained(codes, other.str()),
@@ -69,12 +73,12 @@ void refusesBound(ModuleOp module, StringRef code = "finite-bound") {
   refuses(
       *module.getContext(), [&] { return finite::verifyClosure(unit(module)); },
       code);
-  refuses(*module.getContext(), [&] { return verify(module); }, code);
+  refuses(*module.getContext(), [&] { return zkc::admitStage(module); }, code);
 }
 void project(ModuleOp module) {
   PassManager manager(module.getContext());
   manager.addPass(protocol::createProjectProtocolPass(false, {false, false}));
-  require(succeeded(manager.run(module)) && succeeded(verify(module)),
+  require(succeeded(manager.run(module)) && succeeded(zkc::admitStage(module)),
           "participant fixture refused");
   require(unit(module).getProfile() == protocol_ir::Profile::Participant,
           "fixture was not projected");
@@ -193,7 +197,7 @@ int main() {
                       "valid helper mutation changed local structure");
               refusesBound(*module);
               changed.front().back().setOperand(0, changed.getArgument(0));
-              require(succeeded(verify(*module)),
+              require(succeeded(zkc::admitStage(*module)),
                       "restoring forwarding did not restore admission");
             });
     cases.run(shape + " closure preserves analysis-limit diagnostic", [&] {
@@ -258,7 +262,7 @@ int main() {
     for (auto helper : llvm::make_early_inc_range(
              unit(*module).getBody().front().getOps<func::FuncOp>()))
       helper.erase();
-    require(succeeded(verify(*module)),
+    require(succeeded(zkc::admitStage(*module)),
             "isolated participant control malformed");
     unit(*module).setProfileAttr(
         protocol_ir::ProfileAttr::get(&context, protocol_ir::Profile::Exec));
@@ -267,7 +271,10 @@ int main() {
     // Execution admission uses its own closed instruction grammar.
     auto model = protocol::readExecutionModel(module->getOperation());
     zkc::test::refuses(std::move(model), "binding-operation");
-    refuses(context, [&] { return verify(*module); }, "binding-operation");
+    // Native admission first checks ordered execution occurrences; this
+    // mathematical access has no admitted executable occurrence.
+    refuses(
+        context, [&] { return zkc::admitStage(*module); }, "interactive-site");
   });
   cases.run("generic module verification is structural without an owner", [&] {
     auto module = parse(context, R"mlir(
@@ -283,7 +290,8 @@ module {
     require(succeeded(finite::verifyClosure(*module)),
             "positive explicit closure check failed");
     access(*module)->getOperand(1).getDefiningOp<data::IndexOp>().setValue(4);
-    require(succeeded(verify(access(*module))) && succeeded(verify(*module)),
+    require(succeeded(verify(access(*module))) &&
+                succeeded(zkc::admitStage(*module)),
             "generic verification unexpectedly performed closure admission");
     refuses(
         context, [&] { return finite::verifyClosure(*module); },

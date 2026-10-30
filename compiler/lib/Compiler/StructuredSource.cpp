@@ -7,20 +7,21 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Services.h"
-#include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
-#include "zkc/Dialect/Data/Variant.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
-#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Operations.h"
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/StructuredData.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "llvm/ADT/StringExtras.h"
@@ -51,40 +52,44 @@ struct UsedIdentities {
 // This profile is deliberately smaller than the installed native catalogue.
 // Catalogue resolution below still owns nominal arguments, full ordered ports,
 // and parameters; membership alone never authorizes an execution.
-bool primitiveContract(StringRef contract) {
-  return llvm::is_contained(
-      ArrayRef<StringRef>{"index.constant", "index.add", "index.sub",
-                          "index.mul", "index.div", "index.mod", "index.equal",
-                          "index.less", "vector.empty", "vector.length",
-                          "vector.sum", "vector.split", "vector.append",
-                          "vector.equal", "field.equal", "field.embed"},
-      contract);
-}
-
-Expected<OperationBinding> primitiveBinding(Operation *op,
-                                            UsedIdentities &used) {
-  auto binding = readBinding(op);
-  if (!binding)
-    return binding.takeError();
-  const auto &application = binding->application;
-  if (!primitiveContract(application.contract) ||
-      (StringRef(application.contract).starts_with("index.")
-           ? !application.arguments.empty()
-           : application.arguments.size() != 1 ||
-                 installedDomains().identitySort(application.arguments[0]) !=
-                     "Field"))
+Expected<runtime::BindingOp> primitiveBinding(Operation *op,
+                                              UsedIdentities &used) {
+  auto declaration = dyn_cast_or_null<runtime::BindingOp>(op);
+  if (!declaration)
     return error("structured-source-binding");
-  for (const auto &argument : application.arguments)
-    used.domains.insert(argument);
-  if (!application.implementation.empty())
+  auto emit = [&] {
+    auto diagnostic = declaration.emitError();
+    diagnostic.abandon();
+    return diagnostic;
+  };
+  auto binding = readNativeBinding(emit, declaration, false);
+  if (failed(binding))
+    return error("structured-source-binding");
+  auto *profile = consumerProfileOperation("structured-source-primitives",
+                                           declaration.getContract());
+  if (!profile ||
+      declaration.getArguments().size() != profile->staticParameters.size())
+    return error("structured-source-binding");
+  // Enrollment and actual static formation are separate. This initial profile
+  // has only closed domain roots; future kinds require an explicit consumer.
+  for (auto [argument, parameter] :
+       llvm::zip(declaration.getArguments(), profile->staticParameters)) {
+    auto domain = dyn_cast<StringAttr>(argument);
+    if (parameter.kind != StaticKind::Domain || !domain ||
+        installedDomains().identitySort(domain.getValue()) != parameter.sort)
+      return error("structured-source-binding");
+    used.domains.insert(domain.getValue().str());
+  }
+  if (!declaration.getImplementation().empty())
     return error("structured-source-implementation");
-  auto resolved = resolveLogicalBinding(application);
-  if (!resolved)
-    return resolved.takeError();
-  return std::move(*binding);
+  return declaration;
 }
 
-Error attributes(Operation &op, ArrayRef<StringRef> allowed) {
+unsigned siteLimit(StructuredSourceProfile profile) {
+  return profile == StructuredSourceProfile::Prepared ? 4096 : 512;
+}
+Error checkAttributes(Operation &op, ArrayRef<StringRef> allowed,
+                      StructuredSourceProfile profile) {
   for (NamedAttribute attr : op.getAttrs()) {
     if (!llvm::is_contained(allowed, attr.getName().getValue()))
       return error("structured-source-attribute", attr.getName().getValue());
@@ -96,21 +101,24 @@ Error attributes(Operation &op, ArrayRef<StringRef> allowed) {
         return origin.takeError();
       continue;
     }
-    // This serialized declaration table has its own bounded, strict decoder
-    // below. Its individual names still obey the ordinary string limit.
+    // The declaration carrier has its own expanded traversal and shape checks.
     if (attr.getName() == "source_declarations" &&
         isa<protocol_ir::ProtocolModuleOp>(op)) {
-      auto text = dyn_cast<StringAttr>(attr.getValue());
-      if (!text || !json::isUTF8(text.getValue()))
+      auto declarations = exportDeclarationData(attr.getValue());
+      if (!declarations) {
+        consumeError(declarations.takeError());
         return error("component-declaration");
-      if (text.getValue().size() > 16 * 1024 * 1024)
-        return error("structured-source-limit");
+      }
       continue;
     }
     bool valid = true, bounded = true;
     attr.getValue().walk([&](StringAttr string) {
       valid &= json::isUTF8(string.getValue());
-      bounded &= string.getValue().size() <= 512;
+      unsigned limit =
+          attr.getName() == "site" || attr.getName() == "runtime.site"
+              ? siteLimit(profile)
+              : 512;
+      bounded &= string.getValue().size() <= limit;
     });
     // MLIR strings can contain arbitrary bytes. LLVM's JSON constructor
     // asserts or repairs invalid UTF-8; neither is a faithful source export.
@@ -182,23 +190,54 @@ json::Array oracleShapeValues(protocol_ir::OracleKindAttr kind,
   return result;
 }
 
-Expected<json::Value> encodeSort(Type type, UsedIdentities &used,
-                                 unsigned depth = 0) {
+// Preserve the source profile's former 512-byte complete nominal identity
+// bound without constructing its retired JSON-inside-a-string representation.
+bool sourceIdentityWithinLimit(data::IdentityAttr identity) {
+  SmallVector<ArrayAttr> pending{identity.getTerm()};
+  unsigned bytes = 0, remaining = 200000;
+  while (!pending.empty()) {
+    auto term = pending.pop_back_val();
+    if (!remaining-- || bytes > 512)
+      return false;
+    if (cast<StringAttr>(term[0]).getValue() == "atom") {
+      bytes += 2;
+      for (unsigned char c : cast<StringAttr>(term[1]).getValue()) {
+        bytes += c == '"' || c == '\\' || c == '\b' || c == '\f' || c == '\n' ||
+                         c == '\r' || c == '\t'
+                     ? 2
+                 : c < 32 ? 6
+                          : 1;
+        if (bytes > 512)
+          return false;
+      }
+    } else {
+      auto children = cast<ArrayAttr>(term[1]);
+      bytes += 2 + (children.empty() ? 0 : children.size() - 1);
+      for (auto child : children)
+        pending.push_back(cast<ArrayAttr>(child));
+    }
+  }
+  return bytes <= 512;
+}
+
+// Keep admission separate from the broader shared serializable vocabulary.
+// In particular, multi-alternative variants, fixed arrays, arbitrary catalog
+// heads, and nested service ports retain their previous source refusals.
+Error checkSortProfile(Type type, UsedIdentities &used, unsigned depth) {
   if (depth >= depthLimit)
     return error("structured-source-type-depth");
   const auto &catalog = installedDomains();
   auto nominal = [&](StringRef kind, StringRef sort,
-                     StringRef identity) -> Expected<json::Value> {
+                     StringRef identity) -> Error {
     if (catalog.identitySort(identity) != sort ||
         !catalog.admitsLogicalType(kind, identity))
       return error("structured-source-type");
     used.domains.insert(identity);
-    return json::Array{kind, identity};
+    return Error::success();
   };
-  if (type.isSignlessInteger(1))
-    return json::Array{"bool"};
-  if (type.isUnsignedInteger(64))
-    return json::Array{"index"};
+  if (type.isSignlessInteger(1) || type.isUnsignedInteger(64) ||
+      isa<algebra::IndicesType>(type))
+    return Error::success();
   if (auto field = dyn_cast<algebra::FieldType>(type))
     return nominal("field", "Field", field.getDomain());
   if (auto vector = dyn_cast<algebra::FieldVectorType>(type))
@@ -207,46 +246,36 @@ Expected<json::Value> encodeSort(Type type, UsedIdentities &used,
     return nominal("group", "Group", group.getDomain());
   if (auto groups = dyn_cast<algebra::GroupVectorType>(type))
     return nominal("groups", "Group", groups.getDomain());
-  if (isa<algebra::IndicesType>(type))
-    return json::Array{"indices"};
-  if (auto handle = dyn_cast<protocol_ir::OracleHandleType>(type)) {
-    auto encoded = encodeOracleKind(handle.getKind(), used, depth + 1);
-    if (!encoded)
-      return encoded.takeError();
-    return json::Array{"oracle", std::move(*encoded)};
+  protocol_ir::OracleKindAttr kind;
+  if (auto handle = dyn_cast<protocol_ir::OracleHandleType>(type))
+    kind = handle.getKind();
+  if (auto sequence = dyn_cast<protocol_ir::OracleSequenceType>(type))
+    kind = sequence.getKind();
+  if (kind) {
+    for (auto argument : kind.getArguments()) {
+      if (auto child = dyn_cast<TypeAttr>(argument)) {
+        if (auto e = checkSortProfile(child.getValue(), used, depth + 2))
+          return e;
+      } else if (auto natural = dyn_cast<IntegerAttr>(argument);
+                 !natural || !natural.getType().isUnsignedInteger(64))
+        return error("structured-source-oracle-kind");
+    }
+    return Error::success();
   }
-  if (auto sequence = dyn_cast<protocol_ir::OracleSequenceType>(type)) {
-    auto encoded = encodeOracleKind(sequence.getKind(), used, depth + 1);
-    if (!encoded)
-      return encoded.takeError();
-    return json::Array{"oracle_sequence", std::move(*encoded),
-                       std::to_string(sequence.getMaximum())};
-  }
-  if (auto sequence = dyn_cast<data::SequenceType>(type)) {
-    auto element = encodeSort(sequence.getElementType(), used, depth + 1);
-    if (!element)
-      return element.takeError();
-    return json::Array{"sequence", std::move(*element)};
-  }
+  if (auto sequence = dyn_cast<data::SequenceType>(type))
+    return checkSortProfile(sequence.getElementType(), used, depth + 1);
   if (auto product = dyn_cast<data::VariantType>(type)) {
     if (product.getAlternatives().size() != 1)
       return error("structured-source-product");
     auto constructor = product.getAlternatives().front();
-    std::string identity =
-        printJson(data::exportVariantIdentity(product.getIdentity()));
-    auto label = constructor.getLabel().getValue();
-    if (identity.size() > 512 || label.size() > 512 ||
+    if (!sourceIdentityWithinLimit(product.getIdentity()) ||
+        constructor.getLabel().getValue().size() > 512 ||
         constructor.getPayload().size() > signatureLimit)
       return error("structured-source-limit");
-    json::Array fields;
-    for (auto type : constructor.getPayload()) {
-      auto component = encodeSort(type, used, depth + 1);
-      if (!component)
-        return component.takeError();
-      fields.push_back(std::move(*component));
-    }
-    return json::Array{"product", std::move(identity), label,
-                       std::move(fields)};
+    for (auto child : constructor.getPayload())
+      if (auto e = checkSortProfile(child, used, depth + 1))
+        return e;
+    return Error::success();
   }
   if (auto service = dyn_cast<protocol_ir::ServiceReferenceType>(type)) {
     if (depth)
@@ -256,9 +285,15 @@ Expected<json::Value> encodeSort(Type type, UsedIdentities &used,
       return error("structured-source-type");
     used.services.insert(service.getContract());
     used.domains.insert(sampled);
-    return json::Array{"service", service.getContract()};
+    return Error::success();
   }
   return error("structured-source-type");
+}
+Expected<json::Value> encodeSort(Type type, UsedIdentities &used,
+                                 unsigned depth = 0) {
+  if (auto e = checkSortProfile(type, used, depth))
+    return std::move(e);
+  return exportLogicalTypeData(type);
 }
 
 Expected<json::Array> encodeSorts(TypeRange types, UsedIdentities &used,
@@ -362,9 +397,42 @@ bool boundedWire(const json::Value &value, unsigned depth = 0) {
   return true;
 }
 
-// The protocol origin slot has its own typed tree budget and a longer template
-// path. Keep every other slot under the ordinary lexical wire bounds.
-bool boundedSourceWire(const json::Value &source) {
+// The exporter owns these row shapes. Only instruction/stop sites receive
+// the prepared profile's larger bound; descriptor and type strings do not.
+bool boundedBlockWire(const json::Value &value, unsigned parentDepth,
+                      StructuredSourceProfile profile) {
+  unsigned depth = parentDepth + 1;
+  if (depth + 2 > depthLimit)
+    return false;
+  const auto &block = *value.getAsArray();
+  for (const auto &value : *block[1].getAsArray()) {
+    const auto &row = *value.getAsArray();
+    for (unsigned field : {0u, 1u, 2u})
+      if (!boundedWire(row[field], depth + 2))
+        return false;
+    if (row[4].getAsString()->size() > siteLimit(profile) ||
+        depth + 3 > depthLimit)
+      return false;
+    for (const auto &value : *row[3].getAsArray()) {
+      const auto &region = *value.getAsArray();
+      if (!boundedWire(region[0], depth + 4) ||
+          !boundedWire(region[1], depth + 4) ||
+          !boundedBlockWire(region[2], depth + 4, profile))
+        return false;
+    }
+  }
+  const auto &terminator = *block[2].getAsArray();
+  if (terminator[0].getAsString() == "stop")
+    return boundedWire(terminator[0], depth + 1) &&
+           boundedWire(terminator[1], depth + 1) &&
+           terminator[2].getAsString()->size() <= siteLimit(profile);
+  return boundedWire(block[2], depth);
+}
+
+// Protocol origins have their own typed tree budget and longer template paths.
+// Every other non-site slot remains under the original lexical wire bounds.
+bool boundedSourceWire(const json::Value &source,
+                       StructuredSourceProfile profile) {
   const auto &slots = *source.getAsArray();
   for (unsigned slot = 0; slot < slots.size(); ++slot) {
     if (slot != 7) {
@@ -374,15 +442,23 @@ bool boundedSourceWire(const json::Value &source) {
     }
     for (const auto &definition : *slots[slot].getAsArray()) {
       const auto &row = *definition.getAsArray();
-      if (row.size() != 10 || row[0].getAsString() != "function" ||
-          row[2].getAsString() != "protocol") {
+      bool function = row.size() == 10 && row[0].getAsString() == "function";
+      bool oracle = row.size() == 8 && row[0].getAsString() == "oracle";
+      if (!function && !oracle) {
         if (!boundedWire(definition, 2))
           return false;
         continue;
       }
-      for (unsigned field = 0; field < row.size(); ++field)
-        if (field != 8 && !boundedWire(row[field], 3))
+      unsigned body = function ? 9 : 7;
+      for (unsigned field = 0; field < row.size(); ++field) {
+        if (function && field == 8 && row[2].getAsString() == "protocol")
+          continue;
+        if (field == body) {
+          if (!boundedBlockWire(row[field], 3, profile))
+            return false;
+        } else if (!boundedWire(row[field], 3))
           return false;
+      }
     }
   }
   return true;
@@ -452,6 +528,11 @@ class Exporter {
   const SourceMgr &sourceManager;
   std::vector<StructuredSourceAssociation> &associations;
   uint64_t associationBytes = 0;
+  StructuredSourceProfile profile;
+
+  Error attributes(Operation &op, ArrayRef<StringRef> allowed) {
+    return checkAttributes(op, allowed, profile);
+  }
 
   Error associate(ArrayRef<unsigned> row, Operation &op,
                   StructuredSourceDerivation derivation =
@@ -594,14 +675,14 @@ class Exporter {
       auto binding = primitiveBinding(symbols.lookup(apply.getBinding()), used);
       if (!binding)
         return binding.takeError();
-      auto parameters = encodeInvocationParameters(apply);
+      auto declaration = symbols.lookup<runtime::BindingOp>(apply.getBinding());
+      auto parameters = exportInvocationParametersData(
+          declaration.getContract(), declaration.getArgumentsAttr(),
+          apply.getParametersAttr());
       if (!parameters)
         return parameters.takeError();
-      json::Array encoded;
-      for (const auto &parameter : *parameters)
-        encoded.push_back(parameter);
-      return json::Array{"exec", apply->getName().getStringRef(), binding->name,
-                         std::move(encoded)};
+      return json::Array{"exec", apply->getName().getStringRef(),
+                         binding->getSymName(), std::move(*parameters)};
     }
     if (auto boolean = dyn_cast<exec::BooleanOp>(op))
       return json::Array{"bool.constant", boolean.getValue()};
@@ -1713,9 +1794,11 @@ public:
   Exporter(protocol_ir::ProtocolModuleOp unit,
            protocol_ir::MathematicalOp selected, const AsmParserState &parser,
            const SourceMgr &sourceManager,
-           std::vector<StructuredSourceAssociation> &associations)
+           std::vector<StructuredSourceAssociation> &associations,
+           StructuredSourceProfile profile)
       : unit(unit), selected(selected), symbols(unit), parser(parser),
-        sourceManager(sourceManager), associations(associations) {}
+        sourceManager(sourceManager), associations(associations),
+        profile(profile) {}
 
   Expected<json::Value> run(StringRef bytes) {
     if (auto e = attributes(*unit, {"profile", "source_declarations"}))
@@ -1794,10 +1877,15 @@ public:
           return binding.takeError();
         if (auto e = associate({6, unsigned(bindings.size())}, op))
           return std::move(e);
-        bindings.push_back(
-            json::Array{"binding", binding->name, binding->application.contract,
-                        names(op.getAttrOfType<ArrayAttr>("arguments")),
-                        binding->application.implementation});
+        auto encoded = exportBindingData(cast<runtime::BindingOp>(op));
+        if (!encoded)
+          return encoded.takeError();
+        // Keep the row address and the original first five slots. The final
+        // two slots carry the catalog-rederived logical ports.
+        bindings.push_back(json::Array{
+            "binding", binding->getSymName(), std::move((*encoded)[0]),
+            std::move((*encoded)[1]), std::move((*encoded)[2]),
+            std::move((*encoded)[3]), std::move((*encoded)[4])});
       } else {
         if (auto function = dyn_cast<func::FuncOp>(op);
             function && function->hasAttr("runtime.region"))
@@ -1871,14 +1959,11 @@ public:
           return std::move(e);
     json::Value declarations = json::Array{json::Array{}, json::Array{}};
     if (auto attr = unit->getAttr("source_declarations")) {
-      auto text = dyn_cast<StringAttr>(attr);
-      if (!text)
+      auto parsed = exportDeclarationData(attr);
+      if (!parsed) {
+        consumeError(parsed.takeError());
         return error("component-declaration");
-      auto parsed = zkc::parseNaturalJson(text.getValue(), 16 * 1024 * 1024,
-                                          256, "component-declaration",
-                                          "structured-source-limit");
-      if (!parsed)
-        return parsed.takeError();
+      }
       auto rows = parsed->getAsArray();
       if (!rows || rows->size() != 2 || !(*rows)[0].getAsArray() ||
           !(*rows)[1].getAsArray())
@@ -1910,7 +1995,8 @@ public:
 } // namespace
 
 Expected<StructuredSource>
-exportStructuredSource(StringRef bytes, StringRef name, MLIRContext &context) {
+exportStructuredSource(StringRef bytes, StringRef name, MLIRContext &context,
+                       StructuredSourceProfile profile) {
   if (bytes.size() > 16 * 1024 * 1024 || !mlirNestingWithinLimit(bytes))
     return error("structured-source-limit");
   SourceMgr manager;
@@ -1924,9 +2010,9 @@ exportStructuredSource(StringRef bytes, StringRef name, MLIRContext &context) {
   auto original =
       mlir::detail::constructContainerOpForParserIfNecessary<ModuleOp>(
           &parsed, &context, FileLineColLoc::get(&context, "original", 1, 1));
-  if (!original || failed(verify(*original)))
+  if (!original || failed(zkc::admitStage(*original)))
     return error("structured-source-original");
-  if (auto e = attributes(**original, {}))
+  if (auto e = checkAttributes(**original, {}, profile))
     return std::move(e);
   if (!llvm::hasSingleElement(original->getBody()->getOperations()))
     return error("structured-source-module");
@@ -1940,10 +2026,11 @@ exportStructuredSource(StringRef bytes, StringRef name, MLIRContext &context) {
     return error("structured-source-symbol");
   StructuredSource result;
   auto exported =
-      Exporter(unit, selected, parser, manager, result.associations).run(bytes);
+      Exporter(unit, selected, parser, manager, result.associations, profile)
+          .run(bytes);
   if (!exported)
     return exported.takeError();
-  if (!boundedSourceWire(*exported))
+  if (!boundedSourceWire(*exported, profile))
     return error("structured-source-limit");
   // Own framing and its byte budget together: callers emit these exact bytes.
   auto serialized = printJson(*exported) + '\n';

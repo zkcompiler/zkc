@@ -105,7 +105,9 @@ header = loop[4]
 with case('unchanged-repeat-full-original-callback-and-independent-received-values'):
     assert loop[0] == ['protocol_repeat', 2, 4, [P, V], [[P], [V]]]
     assert len(loop[3]) == 1 and loop[3][0][2][2][0] == 'yield'
-    assert loop[3][0][0] == [['index'], field, field, ['bool'], ['service', service]]
+    assert loop[3][0][0] == [['apply', 'index', []], ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]],
+                              ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]],
+                              ['apply', 'bool', []], ['service', service]]
     calls = [i for i in instructions(loop[3][0][2]) if i[0][0] == 'protocol_apply']
     [call] = calls
     round_body = next(d[9] for d in repeat_snapshot[7] if d[1] == call[0][1])
@@ -387,7 +389,8 @@ for label, path, entry, maximum in [
         # the repeat. Keep the exact public-point/table/Pending output order.
         assert reduction[9][2] == ['return', [5, 2, 3, 4, 0, 1]]
         assert reduction[9][1][-1][0][0] == 'local_call'
-        assert reduction[9][1][-1][2] == [['vector', 'bls12-381.fr'], field]
+        assert reduction[9][1][-1][2] == [['apply', 'vector', [['domain', 'Field', 'bls12-381.fr']]],
+                                              ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]]
         # Admission validates every dormant declaration before optional zero
         # execution. Full symbolic Sumcheck equations are a subsequent package.
         # The composed project's current Entry completes both public sums.

@@ -27,8 +27,8 @@ does not install a runtime implementation by adding a declaration.
 ## Inventory
 
 The root has exactly `format`, `sorts`, `types`, `operations`, `members`, `rules`,
-`capabilities`, `exports`, `families`, `associatedTypes`, `mathematicalIdentities`
-and `mathematicalIntrinsics`. The format tag is
+`capabilities`, `exports`, `families`, `associatedTypes`, `mathematicalIdentities`,
+`mathematicalIntrinsics` and `consumerProfiles`. The format tag is
 `zkc.contract-declarations/0`. Every list follows the contribution dependency
 order and then its explicit declaration order. No consumer may infer meaning
 from an ordinal instead of the declared identity. Unknown fields, duplicate
@@ -53,6 +53,9 @@ Operation  = {name, scope, stage, parameters, signature, requirements,
               facets, derivedCounterpart?}
 Meaning    = {name, laws}
 Intrinsic  = {name, identity, domainKind, naturals, domainPoints, scalar}
+ConsumerProfile = {name, implementation, typeConstructors,
+                   parameterValidators, operations}
+ConsumerOperation = {operation, scope, stage, parameters, signature, requirements}
 ```
 
 `sorts` is the list of declared sort names. A Kind has `kind` equal to `Domain`,
@@ -237,6 +240,78 @@ membership data can replace a hand-maintained operation list, provided generatio
 checks declaration references and complete signature/type dependencies. Unknown
 entries and unsupported parameter families refuse rather than acquire meaning
 from a generic serialization callback.
+
+`consumerProfiles` is a required list, including when empty. The former root
+shape without that field is refused under the same development `/0` tag. A
+profile has a unique nonempty `name`; `implementation` is exactly `unselected`.
+`typeConstructors` lists unique declared constructor identities.
+`parameterValidators` lists unique validator names from the invocation parameter
+vocabulary, excluding `NumericalExpression`. `operations` is an ordered list of
+ConsumerOperation records with unique `operation` identities within the profile.
+All fields and nested record shapes are exact; unknown fields refuse.
+
+Each ConsumerOperation references an installed operation and separately records
+the consumer's expected `scope`, `stage`, `parameters`, `signature` and
+`requirements`. These use exactly the corresponding operation record schemas.
+Generation requires equality of each expected field with the actual declaration,
+including root names/kinds, projection parents/members, ordered ports and
+requirements, validator bounds, scoped literal field and asset format. The
+expectation is authored by the consumer owner; regenerating it automatically
+from a changed operation would defeat this correspondence check. Facets remain
+operation-owned obligations and are not a generated interpretation table.
+
+The current closed profile family supports fixed signatures only. Every
+selected operation's parameter validator must occur in the profile's list.
+Every constructor application in its scope and ordered ports must occur in
+`typeConstructors`. This checks nested complete-Type dependencies through the
+entire scoped term graph, including non-port terms. Domain and Nat roots and
+associated projections are allowed. A scoped Type must be a known constructor
+application: open Type roots or associated Type projections refuse. Supporting
+those forms or variable signature families requires an explicitly specified
+profile extension. General declaration formation remains independent of this
+narrower consumer family.
+
+The initial owner-fixed profile is `structured-source-primitives`. It requires
+unselected implementations, lists constructors `index`, `bool`, `field`,
+`vector`, and validators `None`, `Natural`. Its exact operation order is:
+
+```text
+index.constant, index.add, index.sub, index.mul, index.div, index.mod,
+index.equal, index.less, vector.empty, vector.length, vector.sum,
+vector.split, vector.append, vector.equal, field.equal, field.embed
+```
+
+The eight index operations have no static roots. Every field/vector operation
+has exactly one Domain root of sort Field. `field.embed` additionally projects
+the associated `BaseField`; that projection is not another caller argument and
+its declared `ExtensionField` requirement remains mandatory. `vector.equal`
+retains its declared `CommRing` requirement. `index.constant` uses the exact
+`Natural` validator with bounds `[1,1]`; the others use `None` with `[0,0]`.
+There is no enrollment by operation prefix, authoring stage, contribution
+installation, MLIR interface or inherited TableGen class.
+
+Native consumers query `consumerProfile(name)` and
+`consumerProfileOperation(profileName, operationName)` from
+`zkc/Contracts/Declarations.h`; either returns null when unknown. The operation
+query returns `ConsumerProfileOperation`, with its exact nominal `operation`
+and ordered kinded `staticParameters`, derived from the checked formal roots.
+`consumerProfiles()` enumerates the immutable profiles, including their
+implementation policy, constructor and validator sets. Existing catalog
+signature and parameter queries supply the declarations whose expectations
+were checked. Rust exposes the corresponding `CATALOG.consumer_profiles`,
+`consumer_profile` and `consumer_profile_operation` APIs. Consumers choose the
+fixed profile name before inspecting candidate declarations. Contributions may
+install declarations or separate profiles, but cannot add entries to that fixed
+selection by declaring themselves supported.
+
+Membership and root metadata are queries, not binding validators. Consumers
+still check actual static argument kinds and nominal domains, reject a selected
+implementation, resolve the exact logical signature and capabilities, validate
+invocation parameters, and admit actual calls and CFG structure. The profile
+does not expand the structured exporter's aggregate policy, install executable
+behavior or extend an independent interpreter's primitive semantics. In
+particular, exporter membership for `field.embed` does not assert interpreter
+support for it.
 
 MLIR interfaces expose structural behavior to compiler algorithms; they do not
 replace this selected consumer profile. In particular, implementing a call or

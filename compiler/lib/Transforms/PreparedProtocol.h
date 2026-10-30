@@ -13,15 +13,23 @@ struct RealizationTrace;
 // own caller input instead of accepting a claim of prior preparation.
 class PreparedProtocol {
   friend class RealizedProtocol;
-  mlir::OwningOpRef<mlir::ModuleOp> module;
-  explicit PreparedProtocol(mlir::OwningOpRef<mlir::ModuleOp> module)
-      : module(std::move(module)) {}
+  mlir::OwningOpRef<mlir::ModuleOp> original, module;
+  MathematicalSelectionPolicy policy;
+  PreparedProtocol(mlir::OwningOpRef<mlir::ModuleOp> original,
+                   mlir::OwningOpRef<mlir::ModuleOp> module,
+                   MathematicalSelectionPolicy policy)
+      : original(std::move(original)), module(std::move(module)),
+        policy(policy) {}
+  static mlir::OwningOpRef<mlir::ModuleOp>
+  projectOwned(mlir::OwningOpRef<mlir::ModuleOp>, bool simplify,
+               MathematicalSelectionPolicy);
 
 public:
   static std::optional<PreparedProtocol>
   prepare(mlir::ModuleOp source, MathematicalSelectionPolicy policy = {},
           RealizationTrace *trace = nullptr);
   mlir::OwningOpRef<mlir::ModuleOp> snapshot() const;
+  mlir::OwningOpRef<mlir::ModuleOp> originalSnapshot() const;
   mlir::OwningOpRef<mlir::ModuleOp> project(bool simplify) &&;
   // Role-free helpers have no participant projection. Admit their closed
   // declaration inventory, expand scoped calls with the independent checker,

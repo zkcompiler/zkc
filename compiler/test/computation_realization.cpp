@@ -10,6 +10,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
@@ -141,7 +142,8 @@ OwningOpRef<mlir::ModuleOp> closedFixture(mlir::ModuleOp source) {
   auto name = table.insert(closure.release());
   call.setCalleeAttr(SymbolRefAttr::get(
       name, {FlatSymbolRefAttr::get(entry.getSymNameAttr())}));
-  require(succeeded(verify(*result)), "closed computation fixture refused");
+  require(succeeded(zkc::admitStage(*result)),
+          "closed computation fixture refused");
   return result;
 }
 OwningOpRef<mlir::ModuleOp> fixture(MLIRContext &context, StringRef path) {
@@ -285,7 +287,8 @@ int main() {
         OpBuilder builder(&context);
         entry->setAttr("sym_visibility", builder.getStringAttr("public"));
         entry->setAttr("data.preconditions", builder.getArrayAttr({}));
-        require(succeeded(verify(*logical)), "recipe source metadata refused");
+        require(succeeded(zkc::admitStage(*logical)),
+                "recipe source metadata refused");
         auto before = copy(*logical);
         mathematical::RealizationWork work;
         uint64_t remaining = 1000000, bytes = 16 * 1024 * 1024;
@@ -416,7 +419,8 @@ module {
 }
 )mlir",
                         context);
-    require(succeeded(verify(*source)), "unused caller source refused");
+    require(succeeded(zkc::admitStage(*source)),
+            "unused caller source refused");
     auto unit = cast<mlir::ModuleOp>(source->getBody()->front());
     auto before = copy(*source);
     mathematical::RealizationWork work;
@@ -492,7 +496,8 @@ module {
     values.map(observation->getOperands(), entry.getArguments());
     auto *result = builder.clone(*observation.getOperation(), values);
     func::ReturnOp::create(builder, entry.getLoc(), result->getResults());
-    require(succeeded(verify(*numerical)), "variant recipe source refused");
+    require(succeeded(zkc::admitStage(*numerical)),
+            "variant recipe source refused");
     OwningOpRef<mlir::ModuleOp> before(
         cast<mlir::ModuleOp>(numerical->clone()));
     mathematical::RealizationWork work;
@@ -580,7 +585,7 @@ module {
     auto first = call.getInputs()[0];
     call->setOperand(1, call.getInputs()[1]);
     call->setOperand(2, first);
-    require(succeeded(verify(*candidate)) &&
+    require(succeeded(zkc::admitStage(*candidate)) &&
                 succeeded(computation::realizeComputations(*candidate)),
             "permuted candidate was not admitted and lowered");
     expectRefusal(*candidate, "numerical-lowering-correspondence", [&] {
@@ -723,7 +728,7 @@ module {
         product.addOperands({values, values});
         product.addTypes(data::DomainType::get(&context, items));
         builder.create(product);
-        require(succeeded(verify(*source)),
+        require(succeeded(zkc::admitStage(*source)),
                 "unused product source not admitted");
         auto logical = formExecutable(*source, {true, false});
         auto bulk = copy(*logical);
@@ -750,7 +755,8 @@ module {
           call->setAttr("policy",
                         builder.getBoolArrayAttr({false, false, false}));
         });
-        require(succeeded(verify(*logical)), "disabled source not admitted");
+        require(succeeded(zkc::admitStage(*logical)),
+                "disabled source not admitted");
         expectRefusal(*bulk, "numerical-lowering-correspondence", [&] {
           return computation::verifyComputationRealization(*logical, *bulk);
         });
@@ -960,7 +966,8 @@ module {
         auto first = again->getOperand(1);
         again->setOperand(1, again->getOperand(2));
         again->setOperand(2, first);
-        require(succeeded(verify(*source)), "repeated scoped source refused");
+        require(succeeded(zkc::admitStage(*source)),
+                "repeated scoped source refused");
         std::vector<protocol::AlgorithmOrigin> origins;
         auto expanded = protocol::expandScopedHelpers(*source, &origins);
         require(bool(expanded) &&
@@ -1187,16 +1194,17 @@ module {
       "authored forwarding wrapper is admitted before and after projection",
       [&] {
         auto source = parse(realization, context);
-        require(succeeded(verify(*source)), "authored scoped wrapper refused");
+        require(succeeded(zkc::admitStage(*source)),
+                "authored scoped wrapper refused");
         auto function = scopedFunction(*source, "realized");
         sc::returned(function)->setOperand(0, function.getArgument(2));
-        require(succeeded(verify(*source)),
+        require(succeeded(zkc::admitStage(*source)),
                 "original profile refused a forwarding scoped return");
         auto normalized = computation::prepareComputationRealization(*source);
-        require(bool(normalized) && succeeded(verify(*normalized)),
+        require(bool(normalized) && succeeded(zkc::admitStage(*normalized)),
                 "original forwarding wrapper normalization failed");
         auto logical = formExecutable(*source);
-        require(succeeded(verify(*logical)),
+        require(succeeded(zkc::admitStage(*logical)),
                 "projected authored forwarding wrapper was refused");
         auto lowered = copy(*logical);
         require(succeeded(computation::realizeComputations(*lowered)) &&
@@ -1266,12 +1274,12 @@ module {
           invocations[1] = appendReturns(
               second, invocations[1],
               ValueRange{argument, argument, second.getArgument(1)});
-          require(succeeded(verify(*logical)),
+          require(succeeded(zkc::admitStage(*logical)),
                   "projected profile refused genuine forwarding ports");
           auto snapshot = copy(*logical);
           auto normalized =
               computation::prepareComputationRealization(*logical);
-          require(bool(normalized) && succeeded(verify(*normalized)),
+          require(bool(normalized) && succeeded(zkc::admitStage(*normalized)),
                   "admitted forwarding frontier was refused");
           require(
               OperationEquivalence::isEquivalentTo(
@@ -1337,11 +1345,11 @@ module {
               {bool(flags & 1), bool(flags & 2), false});
           logical->walk(
               [&](exec::ComputeOp call) { call->setAttr("policy", policy); });
-          require(succeeded(verify(*logical)),
+          require(succeeded(zkc::admitStage(*logical)),
                   "retained policy source refused");
           auto normalized =
               computation::prepareComputationRealization(*logical);
-          require(bool(normalized) && succeeded(verify(*normalized)),
+          require(bool(normalized) && succeeded(zkc::admitStage(*normalized)),
                   "policy prevented port growth");
           unsigned count = 0;
           normalized->walk([&](exec::ComputeOp call) {
@@ -1635,7 +1643,8 @@ module { "protocol.module"() ({
               return region;
             });
         control.returned(result);
-        require(succeeded(verify(*source)), "authored scoped aliases refused");
+        require(succeeded(zkc::admitStage(*source)),
+                "authored scoped aliases refused");
         auto logical = formExecutable(*source);
         auto lowered = copy(*logical);
         require(succeeded(computation::realizeComputations(*lowered)),

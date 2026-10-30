@@ -9,6 +9,9 @@
 #include <memory>
 #include <optional>
 
+namespace zkc {
+class MathematicalFactAnalysis;
+}
 namespace zkc::finite {
 struct ComputationBody;
 /// Views borrow admitted source IR and may own exact temporary SSA copies.
@@ -181,6 +184,11 @@ std::optional<ComputationView> analyzeComputation(Computation computation,
                                                   unsigned budget = 100000);
 std::optional<ComputationView>
 analyzeComputation(Computation computation, ComputationWork &work,
+                   ComputationDiagnostic *diagnostic = nullptr);
+/// Reuse only facts from this immutable source closure. Work and diagnostics
+/// belong to this invocation, including when the analysis is already warm.
+std::optional<ComputationView>
+analyzeComputation(Computation, ComputationWork &, MathematicalFactAnalysis &,
                    ComputationDiagnostic *diagnostic = nullptr);
 } // namespace zkc::finite
 #endif

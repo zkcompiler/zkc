@@ -126,8 +126,8 @@ def instruction_budget_source(constants, extra=False):
 
 mapped = (fixtures / 'map-declarations.mlir').read_text()
 realized = (fixtures / 'realization-projection.mlir').read_text()
-vector_type = ['vector', 'bls12-381.fr']
-field_type = ['field', 'bls12-381.fr']
+vector_type = ['apply', 'vector', [['domain', 'Field', 'bls12-381.fr']]]
+field_type = ['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]
 map_args = [['2', '7'], ['11', '13'], ['8', '9'], '3']
 
 with case('exact-original-declaration-records-and-full-projection-abi'):
@@ -141,7 +141,7 @@ with case('exact-original-declaration-records-and-full-projection-abi'):
     assert [row[1] for row in snapshot[7] if row[0] == 'function'] == ['square','formula','row','work','main']
     snapshot = export(realized)
     computation = next(row for row in snapshot[7] if row[0] == 'realize')
-    assert computation[2:] == [[vector_type, ['index'], ['index']], [vector_type], 'value']
+    assert computation[2:] == [[vector_type, ['apply', 'index', []], ['apply', 'index', []]], [vector_type], 'value']
     assert run(realized, [['2', '7'], maximum, maximum]) == returned([['2', '7']])
     assert run(realized, [['2', '7'], None, maximum]) == stopped('incomplete', 'work')
 
@@ -380,7 +380,7 @@ with case('native-callback-name-bound-and-separate-wire-helper-bound'):
     export(re.sub(r'@row\b', '@' + 'n' * 128, mapped))
     bad = re.sub(r'@row\b', '@' + 'n' * 129, mapped)
     export(bad, refusal='structured-source-original')
-    assert 'local-realization-callback' in commands.last.stderr
+    assert 'execution-cfg' in commands.last.stderr
     run(bad, [], refusal='structured-reference-source')
     for source, name in [(mapped, 'formula'), (realized, 'value')]:
         export(re.sub('@' + name + r'\b', '@' + 'h' * 512, source))
@@ -442,9 +442,15 @@ for preparation in ('map', 'realize'):
             run(source, inputs, refusal='structured-reference-capacity')
             assert 'evaluation steps or depth' in commands.last.stderr
             source = reference_chain(65, preparation, reverse)
-            commands.verified(source)
-            run(source, inputs, role='V', refusal='structured-reference-capacity')
-            assert 'reference depth' in commands.last.stderr
+            if preparation == 'map':
+                # Complete native admission checks the finite callback closure
+                # even when the observer's participant would skip execution.
+                commands.verified(source, 'finite-formation')
+                run(source, inputs, role='V', refusal='structured-reference-source')
+            else:
+                commands.verified(source)
+                run(source, inputs, role='V', refusal='structured-reference-capacity')
+                assert 'reference depth' in commands.last.stderr
 
 with case('derived-instruction-export-4096-4097'):
     # 4094 pure instructions, one actual Compute and its derived declaration.
@@ -516,7 +522,8 @@ with case('received-row-malformation-capacity-and-shape-remain-distinct'):
     source = source.replace('input_roles=[["P"],["P"],["P"],["P"]]', 'input_roles=[["P"],["V"],["V"],["V"]]')
     source = source.replace('output_roles=[["P"]]', 'output_roles=[["V"]]')
     export(source)
-    action = ['receive', 'receive', 'P', 'V', vector_type]
+    # Replay action types belong to the independent open-request contract.
+    action = ['receive', 'receive', 'P', 'V', ['vector', 'bls12-381.fr']]
     inputs = [None, ['11'], ['8'], '3']
     def replies(value):
         return [['reply', action, ['value', value]]]

@@ -4,6 +4,7 @@
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "zkc/Dialect/Exec/Builders.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 
@@ -157,7 +158,7 @@ consumeSchedule(mlir::ModuleOp source, uint64_t &remaining,
   OwningOpRef<mlir::ModuleOp> result(mlir::ModuleOp::create(source.getLoc()));
   OpBuilder builder(result->getBody(), result->getBody()->end());
   auto output = protocol_ir::ProtocolModuleOp::create(
-      builder, source.getLoc(), protocol_ir::Profile::Exec);
+      builder, source.getLoc(), protocol_ir::Profile::Exec, mlir::ArrayAttr{});
   output.getBody().emplaceBlock();
   if (failed(
           Consumer(**view, builder, remaining, capacity).run(input, output)) ||

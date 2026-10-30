@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
@@ -82,7 +83,7 @@ void queryAuthority(MLIRContext &context) {
     identified |= d.str().find("mathematical-projection") != std::string::npos;
     return success();
   });
-  require(failed(verify(*changed)) && identified,
+  require(failed(zkc::admitStage(*changed)) && identified,
           "projection admitted a same-contract authority substitution");
   changed->walk([&](protocol_ir::ProjectionOp record) {
     auto interface = cast<DictionaryAttr>(record.getInterfaces()[0]);
@@ -96,7 +97,7 @@ void queryAuthority(MLIRContext &context) {
     record.setInterfacesAttr(
         builder.getArrayAttr({updated.getDictionary(&context)}));
   });
-  require(succeeded(verify(*changed)),
+  require(succeeded(zkc::admitStage(*changed)),
           "matching forged metadata lost formation");
   identified = false;
   require(failed(mathematical::verifyProjectionPreserved(*source, *changed)) &&
@@ -200,7 +201,8 @@ void suppliedMaterialization(MLIRContext &context) {
                      .getOps<protocol_ir::ProjectionOp>()
                      .begin();
   record.erase();
-  require(succeeded(verify(*source)), "supplied executable is not well formed");
+  require(succeeded(zkc::admitStage(*source)),
+          "supplied executable is not well formed");
   run(*source, computation::createRealizeComputationsPass());
   auto candidate = copy(*source);
   run(*candidate, protocol::createSelectPhysicalPass());
@@ -272,7 +274,8 @@ void executableIdentity(ModuleOp module) {
                      .getOps<protocol_ir::ProjectionOp>()
                      .begin();
   record.erase();
-  require(succeeded(verify(*supplied)), "supplied executable fixture refused");
+  require(succeeded(zkc::admitStage(*supplied)),
+          "supplied executable fixture refused");
   ScopedDiagnosticHandler expected(module.getContext(),
                                    [](Diagnostic &) { return success(); });
   require(failed(mathematical::verifyProjectionPreserved(*supplied, module)),
@@ -417,7 +420,8 @@ void scheduling(MLIRContext &context) {
     record.setInterfacesAttr(ArrayAttr::get(&context, interfaces));
     ScopedDiagnosticHandler silence(&context,
                                     [](Diagnostic &) { return success(); });
-    require(failed(verify(*invalid)), "reordered participant mapping admitted");
+    require(failed(zkc::admitStage(*invalid)),
+            "reordered participant mapping admitted");
     auto exported = protocol::exportProgram(invalid->getOperation());
     require(!exported, "export bypassed positional roster verification");
     llvm::consumeError(exported.takeError());
@@ -435,7 +439,8 @@ void scheduling(MLIRContext &context) {
     record.setCalculationsAttr(ArrayAttr::get(&context, origins));
     ScopedDiagnosticHandler silence(&context,
                                     [](Diagnostic &) { return success(); });
-    require(failed(verify(*invalid)), "duplicate calculation origin admitted");
+    require(failed(zkc::admitStage(*invalid)),
+            "duplicate calculation origin admitted");
   }
   run(*bound, computation::createRealizeComputationsPass());
   auto physical = copy(*bound);
@@ -493,7 +498,7 @@ int main() {
   auto entry =
       *root.getBody().front().getOps<protocol_ir::ProtocolEntryOp>().begin();
   rename(root, entry, "renamed_entry");
-  require(succeeded(verify(*projected)),
+  require(succeeded(zkc::admitStage(*projected)),
           "nested symbol uses did not survive rename");
   run(*projected, createSymbolDCEPass());
   require(SymbolTable::lookupSymbolIn(root, "renamed_predicate") != nullptr,
@@ -518,9 +523,11 @@ int main() {
     SymbolTableCollection symbols;
     require(succeeded(record.verifySymbolUses(symbols)),
             "symbol hook attempted full metadata validation");
+    require(succeeded(verify(*invalid)),
+            "metadata mutation lost structural validity");
     ScopedDiagnosticHandler expected(&context,
                                      [](Diagnostic &) { return success(); });
-    require(failed(verify(*invalid)),
+    require(failed(zkc::admitStage(*invalid)),
             "module did not validate malformed metadata");
   }
   run(*bound, computation::createRealizeComputationsPass());
@@ -535,7 +542,7 @@ int main() {
   for (auto &op : llvm::make_early_inc_range(declarations))
     if (isa<protocol_ir::ProjectionOp, relation::DeclareOp>(op))
       op.erase();
-  require(succeeded(verify(*supplied)),
+  require(succeeded(zkc::admitStage(*supplied)),
           "supplied exec path unexpectedly requires metadata");
   ScopedDiagnosticHandler expected(&context,
                                    [](Diagnostic &) { return success(); });
@@ -548,11 +555,12 @@ int main() {
                      .getOps<protocol_ir::ProjectionOp>()
                      .begin();
   record.erase();
-  require(failed(verify(*malformed)),
+  require(failed(zkc::admitStage(*malformed)),
           "participant admitted missing projection record");
   malformed = copy(*projected);
   malformed->walk([&](protocol_ir::EmitOp op) { op.setPeer("outsider"); });
-  require(failed(verify(*malformed)), "exchange peer mutation admitted");
+  require(failed(zkc::admitStage(*malformed)),
+          "exchange peer mutation admitted");
   malformed = copy(*projected);
   malformed->walk([&](protocol_ir::ParticipantOp op) {
     if (op.getRole() != "V")
@@ -562,25 +570,29 @@ int main() {
     protocol_ir::GuardOp::create(builder, op.getLoc(), guard.getCondition(),
                                  "unrecorded", op.getRole());
   });
-  require(failed(verify(*malformed)), "unrecorded participant action admitted");
+  require(failed(zkc::admitStage(*malformed)),
+          "unrecorded participant action admitted");
   malformed = copy(*projected);
   malformed->walk([&](protocol_ir::GuardOp op) { op.setOwner("outsider"); });
-  require(failed(verify(*malformed)), "guard for another participant admitted");
+  require(failed(zkc::admitStage(*malformed)),
+          "guard for another participant admitted");
   malformed = copy(*projected);
   malformed->walk([&](protocol_ir::ProtocolEntryOp op) {
     op->setAttr("trusted", UnitAttr::get(&context));
   });
-  require(failed(verify(*malformed)), "unknown entry annotation admitted");
+  require(failed(zkc::admitStage(*malformed)),
+          "unknown entry annotation admitted");
   malformed = copy(*projected);
   malformed->walk([&](relation::DeclareOp op) {
     op->setAttr("trusted", UnitAttr::get(&context));
   });
-  require(failed(verify(*malformed)), "unknown relation annotation admitted");
+  require(failed(zkc::admitStage(*malformed)),
+          "unknown relation annotation admitted");
   malformed = copy(*physical);
   malformed->walk([&](protocol_ir::ProjectionOp op) {
     op.setCalculationsAttr(ArrayAttr::get(&context, {}));
   });
-  require(failed(verify(*malformed)),
+  require(failed(zkc::admitStage(*malformed)),
           "guard recipe lost its calculation origin");
   auto structural = protocol::readExecutionModel(malformed->getOperation());
   require(bool(structural), "mutation must retain the executable grammar");

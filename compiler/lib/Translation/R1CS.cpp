@@ -1,5 +1,6 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Translation/Relations.h"
@@ -28,7 +29,7 @@ Expected<OwningOpRef<ModuleOp>> importR1CS(const R1CS &relation, StringRef name,
                      b.getI64IntegerAttr(relation.publicInputs()));
   state.addAttribute("constraints", encodeR1CSConstraints(b, relation));
   b.create(state);
-  if (failed(verify(*module)))
+  if (failed(zkc::admitStage(*module)))
     return zkc::error("relation-ir");
   return module;
 }

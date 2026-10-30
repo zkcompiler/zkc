@@ -46,12 +46,11 @@ Expected<func::FuncOp> emitOracleTableRead(ModuleOp candidate,
   builder.setInsertionPointToEnd(helper.addEntryBlock());
   mathematical::RealizationEmitter bindings(unit, "_oracle_read_binding_");
   exec::ScopedExecutionBuilder control(builder, helper);
-  auto call = [&](StringRef contract, ArrayRef<std::string> arguments,
+  auto call = [&](StringRef contract, ArrayRef<Attribute> arguments,
                   TypeRange outputs, ValueRange inputs, StringRef site) {
     auto binding = bindings.binding(
         builder, helper.getLoc(),
-        {contract.str(),
-         std::vector<std::string>(arguments.begin(), arguments.end()), ""});
+        {contract.str(), SmallVector<Attribute>(arguments), ""});
     return control.invoke(
         "exec.apply", outputs, control.scoped(inputs),
         {builder.getNamedAttr("binding", binding),

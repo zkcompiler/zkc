@@ -5,7 +5,7 @@
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Support/Refusal.h"

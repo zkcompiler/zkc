@@ -491,6 +491,90 @@ fn constructor(v: &Value) -> Result<String> {
         ],
     ))
 }
+
+fn consumer_operation(v: &Value) -> Result<String> {
+    let fields = object(
+        v,
+        &[
+            "operation",
+            "scope",
+            "stage",
+            "parameters",
+            "signature",
+            "requirements",
+        ],
+        &[],
+    )?;
+    // Reuse exact syntax checking for the consumed operation shape, without
+    // installing another operation or inventing facets for the expectation.
+    let mut expected = fields.clone();
+    let identity = expected.remove("operation").unwrap();
+    expected.insert("name".into(), identity);
+    expected.insert("facets".into(), Value::Array(Vec::new()));
+    operation(&Value::Object(expected))?;
+    let roots = list(&v["scope"])?
+        .iter()
+        .filter(|term| term["kind"] == "root")
+        .map(|term| kind(&term["parameter"]))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(record(
+        "ConsumerProfileOperation",
+        &[
+            ("operation", quoted(&v["operation"])?),
+            ("static_parameters", format!("&[{}]", roots.join(","))),
+        ],
+    ))
+}
+
+fn consumer_profile(v: &Value) -> Result<String> {
+    object(
+        v,
+        &[
+            "name",
+            "implementation",
+            "typeConstructors",
+            "parameterValidators",
+            "operations",
+        ],
+        &[],
+    )?;
+    choice(&v["implementation"], &["unselected"])?;
+    Ok(record(
+        "ConsumerProfile",
+        &[
+            ("name", quoted(&v["name"])?),
+            (
+                "implementation",
+                "ConsumerImplementation::Unselected".into(),
+            ),
+            ("type_constructors", array(&v["typeConstructors"], quoted)?),
+            (
+                "parameter_validators",
+                array(&v["parameterValidators"], |v| {
+                    variant(
+                        v,
+                        "ParameterValidator",
+                        &[
+                            "None",
+                            "Natural",
+                            "Extent",
+                            "FieldLiteral",
+                            "FieldLiterals",
+                            "MatrixShape",
+                            "MatrixIdentity",
+                            "AssetIdentity",
+                            "MatrixVector",
+                            "GatherIndices",
+                            "ScatterIndices",
+                            "NativeOrigin",
+                        ],
+                    )
+                })?,
+            ),
+            ("operations", array(&v["operations"], consumer_operation)?),
+        ],
+    ))
+}
 fn laws(v: &Value) -> Result<String> {
     object(
         v,
@@ -579,6 +663,7 @@ pub fn generate(bytes: &[u8]) -> Result<String> {
             "associatedTypes",
             "mathematicalIdentities",
             "mathematicalIntrinsics",
+            "consumerProfiles",
         ],
         &[],
     )?;
@@ -587,6 +672,10 @@ pub fn generate(bytes: &[u8]) -> Result<String> {
         ("sorts", array(&v["sorts"], quoted)?),
         ("types", array(&v["types"], constructor)?),
         ("operations", array(&v["operations"], operation)?),
+        (
+            "consumer_profiles",
+            array(&v["consumerProfiles"], consumer_profile)?,
+        ),
         (
             "members",
             array(&v["members"], |v| {

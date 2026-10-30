@@ -17,12 +17,13 @@ namespace zkc::mathematical {
 // consumers retain this edge through execution and must interpret it before
 // publishing logical claims.
 class RealizedProtocol {
-  mlir::OwningOpRef<mlir::ModuleOp> original, candidate;
+  PreparedProtocol prepared;
+  mlir::OwningOpRef<mlir::ModuleOp> candidate;
   std::string record;
-  RealizedProtocol(mlir::OwningOpRef<mlir::ModuleOp> original,
+  RealizedProtocol(PreparedProtocol prepared,
                    mlir::OwningOpRef<mlir::ModuleOp> candidate,
                    std::string record)
-      : original(std::move(original)), candidate(std::move(candidate)),
+      : prepared(std::move(prepared)), candidate(std::move(candidate)),
         record(std::move(record)) {}
 
 public:

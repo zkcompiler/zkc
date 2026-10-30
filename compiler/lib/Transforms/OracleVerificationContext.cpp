@@ -1,5 +1,6 @@
 #include "OracleVerificationContext.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Support/Refusal.h"
 using namespace mlir;
 using namespace llvm;
@@ -11,7 +12,7 @@ OracleVerificationContext::read(ModuleOp module) {
   auto unit =
       dyn_cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
   if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol ||
-      failed(verify(module)))
+      failed(zkc::admitStage(module)))
     return error("oracle-verification-source");
   auto closure = readSourceExecutionClosure(unit);
   if (!closure)

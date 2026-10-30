@@ -76,8 +76,7 @@ bool local(const OracleLocalRecipe &recipe, func::FuncOp actual,
         binding.getImplementation() != expected.binding.implementation ||
         binding.getArguments().size() != expected.binding.arguments.size())
       return false;
-    if (!bindingMatches(binding, {binding.getSymName().str(), expected.binding},
-                        false))
+    if (!matchesNativeBinding(binding, expected.binding))
       return false;
     append_range(values, step.outputs);
   }

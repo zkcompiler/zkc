@@ -1,10 +1,10 @@
 # Foundation interface cutover
 
 This page defines the shared interface changes for the
-[native MLIR foundation](../ir/native-foundation.md). These are specified target
-contracts, not a claim that current tools emit or admit them. The
-[contract register](../contracts.md) and [status](../../status.md) distinguish
-the current producer profile from the cutover. The foundation lands one native
+[native MLIR foundation](../ir/native-foundation.md). The native producers and readers
+implement these contracts. The [contract register](../contracts.md) and
+[status](../../status.md) distinguish their supported profiles from independently
+maintained formal consumers. The foundation lands one native
 route; old readers and compatibility wrappers do not remain in that route.
 
 ## Schema changes and retained meanings

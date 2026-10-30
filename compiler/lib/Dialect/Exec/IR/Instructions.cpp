@@ -51,10 +51,11 @@ LogicalResult ApplyOp::verifySymbolUses(SymbolTableCollection &symbols) {
   if (!declaration || !declaration.getContractAttr() ||
       !declaration.getArgumentsAttr())
     return diagnostics::emit(emitOpError(), "binding-reference");
-  auto attribute = declaration->getAttrOfType<TypeAttr>("function_type");
-  auto type =
-      attribute ? dyn_cast<FunctionType>(attribute.getValue()) : FunctionType{};
-  if (!type || getOperandTypes() != TypeRange(type.getInputs()) ||
+  auto checked = readNativeBinding([&] { return emitOpError(); }, declaration);
+  if (failed(checked))
+    return failure();
+  auto type = executableBindingSignature(checked->valueType);
+  if (getOperandTypes() != TypeRange(type.getInputs()) ||
       getOperation()->getResultTypes() != TypeRange(type.getResults()))
     return diagnostics::emit(
         emitOpError(), "binding-signature",

@@ -3,6 +3,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/PassManager.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
@@ -13,6 +14,7 @@
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Passes.h"
+#include "zkc/Transforms/Stages.h"
 #include "zkc/Translation/Relations.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
@@ -625,7 +627,7 @@ checkPolynomialReductions(ModuleOp original, ModuleOp candidate, StringRef text,
   if (!requirements)
     return requirements.takeError();
   if (original.getContext() != candidate.getContext() ||
-      failed(verify(original)) || failed(verify(candidate)) ||
+      failed(zkc::admitStage(original)) || failed(zkc::admitStage(candidate)) ||
       !hasSingleElement(*original.getBody()) ||
       !hasSingleElement(*candidate.getBody()))
     return error("polynomial-correspondence-module");
@@ -653,8 +655,7 @@ checkPolynomialReductions(ModuleOp original, ModuleOp candidate, StringRef text,
   // cannot make an incorrect authored verifier receive this report.
   OwningOpRef<ModuleOp> projected(cast<ModuleOp>(original->clone()));
   PassManager preparation(original.getContext());
-  preparation.addPass(
-      protocol::createProjectProtocolPass(false, mathematicalSelection));
+  buildProjectionPipeline(preparation, false, mathematicalSelection);
   if (failed(preparation.run(*projected)))
     return error("polynomial-correspondence-source");
   auto expected = cast<pir::ProtocolModuleOp>(projected->getBody()->front());

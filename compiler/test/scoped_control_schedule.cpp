@@ -5,7 +5,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/ControlCursor.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/Execution.h"

@@ -1,4 +1,5 @@
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Protocol/Execution.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -23,7 +24,7 @@ Error verifyExportSubject(Operation *root) {
         // Preserve the caller's diagnostic handling and location information.
         return failure();
       });
-  if (failed(verify(root))) {
+  if (failed(zkc::admitStage(root))) {
     if (refusals)
       return refusals;
     return error("interactive-malformed-ir");

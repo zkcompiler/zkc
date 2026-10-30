@@ -5,6 +5,7 @@
 #include "mlir/Transforms/Passes.h"
 #include "support/NativeCases.h"
 #include "support/ScopedFinite.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/IR.h"
 #include <fstream>
 #include <sstream>
@@ -77,7 +78,8 @@ void simplify(ModuleOp module, StringRef pipeline) {
     manager.addPass(createCanonicalizerPass());
   }
   require(succeeded(manager.run(module)), "generic simplification failed");
-  require(succeeded(verify(module)), "simplified module was not admitted");
+  require(succeeded(zkc::admitStage(module)),
+          "simplified module was not admitted");
 }
 
 void preservesDomains(StringRef source, MLIRContext &context,

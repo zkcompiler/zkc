@@ -3,12 +3,14 @@
 #include "mlir/Pass/PassManager.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Passes.h"
+#include "zkc/Transforms/Stages.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/SHA256.h"
@@ -478,7 +480,7 @@ Expected<json::Value> analyzePublicCoin(ModuleOp original, StringRef text,
   auto requirement = parseRequirement(text);
   if (!requirement)
     return requirement.takeError();
-  if (!original || failed(verify(original)) ||
+  if (!original || failed(zkc::admitStage(original)) ||
       !hasSingleElement(*original.getBody()))
     return error("public-coin-module");
   auto root = dyn_cast<pir::ProtocolModuleOp>(original.getBody()->front());
@@ -493,7 +495,7 @@ Expected<json::Value> analyzePublicCoin(ModuleOp original, StringRef text,
     return sourceHash.takeError();
   OwningOpRef<ModuleOp> prepared(cast<ModuleOp>(original->clone()));
   PassManager pipeline(original.getContext());
-  pipeline.addPass(protocol::createPrepareProtocolPass(false, policy));
+  buildPreparationPipeline(pipeline, false, policy);
   if (failed(pipeline.run(*prepared)))
     return error("public-coin-module");
   auto preparedHash = fingerprint(*prepared);

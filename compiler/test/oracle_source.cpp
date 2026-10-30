@@ -71,7 +71,8 @@ const J &at(const J &value, ArrayRef<unsigned> path) {
   return *result;
 }
 J kind(bool sized = true) {
-  A arguments{A{"type", A{"field", "koala-bear"}}};
+  A arguments{
+      A{"type", A{"apply", "field", A{A{"domain", "Field", "koala-bear"}}}}};
   if (sized)
     arguments.push_back(A{"nat", "16"});
   return A{"table", std::move(arguments)};
@@ -234,7 +235,8 @@ int main(int argc, char **argv) {
                     at(snapshot, {7, 1, 7, 1, 0, 4}) == J("first") &&
                     at(snapshot, {7, 1, 7, 1, 1, 4}) == J("second"),
                 "query order or coordinates changed");
-        require(at(snapshot, {7, 2, 4, 1}) == J(A{"oracle", kind()}),
+        require(at(snapshot, {7, 2, 4, 1}) ==
+                    J(A{"oracle", "table", (*kind().getAsArray())[1]}),
                 "interface anchor erased");
         auto &ops = *at(snapshot, {7, 2, 9, 1}).getAsArray();
         require(ops.size() == 13, "oracle operation lost");
@@ -252,7 +254,8 @@ int main(int argc, char **argv) {
         require(at(ops[5], {0}) ==
                     J(A{"oracle_forget_shape", kind(), kind(false)}),
                 "refinement erased");
-        require(at(ops[6], {2, 0}) == J(A{"oracle_sequence", kind(false), "4"}),
+        require(at(ops[6], {2, 0}) == J(A{"oracle_sequence", "table",
+                                          (*kind(false).getAsArray())[1], "4"}),
                 "bounded sequence erased");
         require(at(ops[7], {0}) == J(A{"oracle_sequence_append", kind(false),
                                        "4", A{"P", "V"}}),
@@ -330,7 +333,7 @@ int main(int argc, char **argv) {
     auto snapshot = take(json::parse(take(capture(text)).bytes));
     require(at(snapshot, {7, 1, 3, 1, 1, 1}) == J("18446744073709551615"),
             "kind natural narrowed");
-    require(at(snapshot, {7, 2, 9, 1, 6, 2, 0, 2}) == J("18446744073709551615"),
+    require(at(snapshot, {7, 2, 9, 1, 6, 2, 0, 3}) == J("18446744073709551615"),
             "capacity narrowed");
   });
   cases.run(
@@ -370,10 +373,11 @@ int main(int argc, char **argv) {
                           index ? "!algebra.indices"
                                 : "!algebra.group_vector<\"bls12-381.g1\">");
           auto result = take(json::parse(take(capture(typed)).bytes));
-          require(
-              at(result, {7, 2, 4, 0}) ==
-                  (index ? J(A{"indices"}) : J(A{"groups", "bls12-381.g1"})),
-              "associated Data collection changed");
+          require(at(result, {7, 2, 4, 0}) ==
+                      (index ? J(A{"apply", "indices", A{}})
+                             : J(A{"apply", "groups",
+                                   A{A{"domain", "Group", "bls12-381.g1"}}})),
+                  "associated Data collection changed");
         }
       });
   return cases.result();

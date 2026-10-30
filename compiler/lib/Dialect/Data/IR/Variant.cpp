@@ -148,24 +148,6 @@ VariantType importVariantType(MLIRContext *context,
   return VariantType::getChecked(builder.getUnknownLoc(), context, identity,
                                  ArrayRef<AlternativeAttr>(alternatives));
 }
-std::optional<protocol::VariantDescriptor> exportVariantType(VariantType type) {
-  protocol::VariantDescriptor result{exportVariantIdentity(type.getIdentity()),
-                                     {}};
-  for (auto arm : type.getAlternatives()) {
-    protocol::VariantAlternative alternative{arm.getLabel().getValue().str(),
-                                             {}};
-    for (auto child : arm.getPayload()) {
-      auto bound = protocol::encodeBoundType(child, false);
-      if (!bound) {
-        llvm::consumeError(bound.takeError());
-        return std::nullopt;
-      }
-      alternative.payload.push_back(bound->spelling());
-    }
-    result.alternatives.push_back(std::move(alternative));
-  }
-  return result;
-}
 llvm::Expected<llvm::SmallVector<Type>>
 variantPayloadTypes(Type carrier, llvm::StringRef alternative) {
   auto represented = dyn_cast_or_null<runtime::RepresentedType>(carrier);

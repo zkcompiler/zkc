@@ -2,6 +2,7 @@
 #include "../lib/Target/PhysicalPlan.h"
 #include "../lib/Transforms/NumericalSelection.h"
 #include "mlir/IR/OperationSupport.h"
+#include "support/NativeBindings.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
@@ -268,18 +269,17 @@ public:
   explicit Withheld(std::vector<std::string> contracts = {})
       : contracts(std::move(contracts)) {}
   llvm::Expected<std::vector<std::string>> implementations(
-      const protocol::BindingApplication &application) const override {
+      const zkc::NativeBindingApplication &application) const override {
     if (llvm::is_contained(contracts, application.contract))
       return std::vector<std::string>{};
     return target::installedCandidates().implementations(application);
   }
   std::vector<std::string> diagonalImplementations(
-      const protocol::BindingApplication &application) const override {
+      const zkc::NativeBindingApplication &application) const override {
     return target::installedCandidates().diagonalImplementations(application);
   }
-  std::vector<protocol::BindingApplication>
-  conversions(const protocol::BoundType &from,
-              const protocol::BoundType &to) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type from, mlir::Type to) const override {
     return target::installedCandidates().conversions(from, to);
   }
 };
@@ -523,7 +523,7 @@ int main() {
                 } else
                   helper.setPublic();
                 require(named(context, "mathematical-formation",
-                              [&] { return verify(*candidate); }),
+                              [&] { return admitStage(*candidate); }),
                         "logical request bypassed closure admission");
               });
   for (StringRef body : {"missing", "through"})
@@ -573,7 +573,7 @@ int main() {
     unit(*candidate).setProfile(protocol_ir::Profile::Physical);
     ScopedDiagnosticHandler quiet(&context,
                                   [](Diagnostic &) { return success(); });
-    require(failed(verify(*candidate)),
+    require(failed(admitStage(*candidate)),
             "physical profile admitted pending collection");
   });
   cases.run(

@@ -195,6 +195,31 @@ class ZKC_Operation<string value, list<ZKC_Term> terms,
   list<ZKC_Facet> facets = [];
   ZKC_Operation derivedCounterpart = ?;
 }
+// A consumer-owned expectation, separate from the installed operation. The
+// generator checks exact correspondence before publishing membership data.
+class ZKC_ConsumerOperation<ZKC_Operation target, list<ZKC_Term> terms,
+                            list<ZKC_Term> ins, list<ZKC_Term> outs,
+                            list<ZKC_Holds> needs = []> : ZKC_Declaration {
+  ZKC_Operation operation = target;
+  string name = target.name;
+  list<ZKC_Term> scope = terms;
+  list<ZKC_Term> inputs = ins;
+  list<ZKC_Term> outputs = outs;
+  list<ZKC_Holds> requirements = needs;
+  ZKC_NumericalSignature numerical = ?;
+  ZKC_Stage stage = Source;
+  ZKC_Parameters parameters = NoParameters;
+  ZKC_Term parameterField = ?;
+}
+class ZKC_ConsumerProfile<string value, list<ZKC_Type> types,
+                         list<string> validators,
+                         list<ZKC_ConsumerOperation> entries> : ZKC_Declaration {
+  string name = value;
+  string implementation = "unselected";
+  list<ZKC_Type> typeConstructors = types;
+  list<string> parameterValidators = validators;
+  list<ZKC_ConsumerOperation> operations = entries;
+}
 class ZKC_TypeFamily<string value> : ZKC_TypeHead<value>;
 class ZKC_TypeFamilyCase<ZKC_TypeFamily f, ZKC_Type element, ZKC_Type result> : ZKC_Declaration {
   ZKC_TypeFamily family = f;

@@ -4,6 +4,7 @@
 #include "../Transforms/ScopedPreparation.h"
 #include "AggregateLayouts.h"
 #include "ExecutionPorts.h"
+#include "NativePlanTypes.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/RegionKindInterface.h"
 #include "mlir/IR/Verifier.h"
@@ -11,11 +12,14 @@
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Target/Selection.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -23,6 +27,7 @@
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/TimeProfiler.h"
+#include <cstdint>
 #include <deque>
 #include <map>
 #include <set>
@@ -54,6 +59,17 @@ SmallVector<const void *> identities(ModuleOp module) {
   return result;
 }
 } // namespace
+struct NativeFunctionPortSelection {
+  std::string function;
+  bool output;
+  unsigned port;
+  Type physicalType;
+};
+struct NativeValueLayoutSelection {
+  std::string function, site;
+  unsigned result;
+  Type physicalType;
+};
 struct InputSnapshot {
   ModuleOp subject;
   std::string contents;
@@ -61,8 +77,8 @@ struct InputSnapshot {
   protocol::Assignments selections;
   bool linearContractions;
   MathematicalSelectionPolicy numericalPolicy;
-  SmallVector<FunctionPortSelection> functionPorts;
-  SmallVector<ValueLayoutSelection> valueLayouts;
+  SmallVector<NativeFunctionPortSelection> functionPorts;
+  SmallVector<NativeValueLayoutSelection> valueLayouts;
   CpuTarget cpuTarget;
   // This owned payload is the numerical decision, including actual recipes,
   // generated bindings, sites and SSA. Policy flags are not a replay format.
@@ -108,34 +124,10 @@ void locate(Location *failureLocation, Operation *op) {
   if (failureLocation)
     *failureLocation = op->getLoc();
 }
-Expected<Type> defaultPort(Type type) {
-  auto logical = encodeBoundType(type, false);
-  if (!logical)
-    return logical.takeError();
-  auto physical = defaultRepresentation(*logical);
-  if (!physical)
-    return physical.takeError();
-  auto decoded = decodeBoundType(type.getContext(), *physical);
-  if (!decoded)
-    return createStringError(
-        "physical conversion requires loaded zkc dialects");
-  return decoded;
-}
-Expected<SmallVector<Type>> decodePorts(MLIRContext *context,
-                                        ArrayRef<BoundType> types) {
-  SmallVector<Type> result;
-  for (const auto &type : types) {
-    auto decoded = decodeBoundType(context, type);
-    if (!decoded)
-      return createStringError(
-          "physical conversion requires loaded zkc dialects");
-    result.push_back(decoded);
-  }
-  return result;
-}
+Expected<Type> defaultPort(Type type) { return defaultPlanType(type); }
 Expected<FunctionType>
 selectedFunctionType(Operation *op, FunctionType logical,
-                     ArrayRef<FunctionPortSelection> selections) {
+                     ArrayRef<NativeFunctionPortSelection> selections) {
   SmallVector<Type> inputs, outputs;
   std::set<std::pair<bool, unsigned>> seen;
   auto name = op->getAttrOfType<StringAttr>("sym_name");
@@ -151,7 +143,7 @@ selectedFunctionType(Operation *op, FunctionType logical,
     auto &ports = output ? outputs : inputs;
     auto types = output ? logical.getResults() : logical.getInputs();
     for (auto [index, source] : enumerate(types)) {
-      const FunctionPortSelection *choice = nullptr;
+      const NativeFunctionPortSelection *choice = nullptr;
       for (const auto &candidate : selections)
         if (name && candidate.function == name.getValue() &&
             candidate.output == output && candidate.port == index)
@@ -163,17 +155,11 @@ selectedFunctionType(Operation *op, FunctionType logical,
         ports.push_back(*physical);
         continue;
       }
-      auto schema = encodeBoundType(source, false);
-      if (!schema)
-        return schema.takeError();
-      auto selected = parseBoundType(choice->physicalType, true);
-      if (!selected)
-        return selected.takeError();
-      if (!(erasePhysicalType(*selected) == *schema))
+      auto type = choice->physicalType;
+      if (auto e = checkPhysicalType(type))
+        return e;
+      if (logicalValueType(type) != source)
         return error("binding-operation-signature");
-      auto type = decodeBoundType(op->getContext(), *selected);
-      if (!type)
-        return error("binding-representation");
       ports.push_back(type);
     }
   }
@@ -181,27 +167,21 @@ selectedFunctionType(Operation *op, FunctionType logical,
 }
 
 Expected<SmallVector<Type>> variantPorts(Type type, unsigned alternative) {
-  auto bound = encodeBoundType(type, true);
-  if (!bound)
-    return bound.takeError();
-  auto descriptor = decodeVariant(erasePhysicalType(*bound).spelling());
-  if (!descriptor || !bound->physicalChildren ||
-      alternative >= descriptor->alternatives.size())
+  if (auto e = checkPhysicalType(type))
+    return e;
+  auto variant = dyn_cast<data::VariantType>(logicalValueType(type));
+  if (!variant || alternative >= variant.getAlternatives().size())
     return error("variant-type");
-  size_t start = 0;
-  for (unsigned i = 0; i < alternative; ++i)
-    start += descriptor->alternatives[i].payload.size();
-  auto children =
-      ArrayRef(*bound->physicalChildren)
-          .slice(start, descriptor->alternatives[alternative].payload.size());
-  return decodePorts(type.getContext(), children);
+  return data::variantPayloadTypes(
+      type, variant.getAlternatives()[alternative].getLabel().getValue());
 }
-bool sameApplication(const BindingApplication &a, const BindingApplication &b) {
+bool sameApplication(const NativeBindingApplication &a,
+                     const NativeBindingApplication &b) {
   return a.contract == b.contract && a.arguments == b.arguments &&
-         a.implementation == b.implementation &&
-         a.physicalArguments == b.physicalArguments;
+         a.implementation == b.implementation && a.valueType == b.valueType;
 }
-bool sameLogical(const BindingApplication &a, const BindingApplication &b) {
+bool sameLogical(const NativeBindingApplication &a,
+                 const NativeBindingApplication &b) {
   return a.contract == b.contract && a.arguments == b.arguments;
 }
 bool interfaceOperation(Operation *op) {
@@ -240,12 +220,7 @@ std::string fresh(std::set<std::string> &used, StringRef prefix,
 // child; actual service draw support cannot be inferred from an index result.
 Error checkTargetPlan(ModuleOp module, const PhysicalPlan &plan,
                       const CpuTarget &cpuTarget, Location *failureLocation) {
-  auto type = [&](Type physical) -> Error {
-    auto encoded = encodeBoundType(physical, true);
-    if (!encoded)
-      return encoded.takeError();
-    return cpuTarget.checkType(*encoded);
-  };
+  auto type = [&](Type physical) { return cpuTarget.checkType(physical); };
   auto ports = [&](TypeRange physical) -> Error {
     for (auto port : physical)
       if (auto e = type(port))
@@ -256,11 +231,11 @@ Error checkTargetPlan(ModuleOp module, const PhysicalPlan &plan,
   for (const auto &binding : plan.bindings) {
     if (binding.location < operations.size())
       locate(failureLocation, operations[binding.location]);
-    auto installed = resolveBinding(binding.binding.application, true);
+    auto installed =
+        resolveNativeApplication(binding.binding.application, true);
     if (!installed)
       return installed.takeError();
-    if (auto e =
-            cpuTarget.checkBinding(binding.binding.application, *installed))
+    if (auto e = cpuTarget.checkNativeApplication(binding.binding.application))
       return e;
   }
   for (auto [index, decision] : enumerate(plan.operations)) {
@@ -309,8 +284,16 @@ Error decline(Error e, ArrayRef<StringRef> allowed, bool &declined) {
     return Error::success();
   });
 }
+std::vector<uintptr_t>
+argumentIdentities(const NativeBindingApplication &application) {
+  std::vector<uintptr_t> result;
+  for (Attribute argument : application.arguments)
+    result.push_back(
+        reinterpret_cast<uintptr_t>(argument.getAsOpaquePointer()));
+  return result;
+}
 struct ImplementationCursor {
-  BindingApplication logical;
+  NativeBindingApplication logical;
   SmallVector<mathematical::NumericalOccurrence> owners;
   // Empty for generated bindings: their identity is the owned occurrence set
   // and logical application, not a generated symbol spelling.
@@ -326,7 +309,7 @@ public:
   CpuTarget cpuTarget;
   SmallVector<ImplementationCursor, 2> implementations;
   using ImplementationKey =
-      std::tuple<std::string, std::vector<std::string>,
+      std::tuple<std::string, std::vector<uintptr_t>,
                  std::vector<mathematical::NumericalOccurrence>, std::string>;
   std::map<ImplementationKey, size_t> implementationCoordinates;
   SmallVector<std::optional<size_t>> bindingCursors;
@@ -345,13 +328,13 @@ public:
   }
 
   Expected<ImplementationChoice>
-  choose(const BindingApplication &application,
+  choose(const NativeBindingApplication &application,
          std::optional<StringRef> request, const CandidateCatalog &catalog,
          ArrayRef<mathematical::NumericalOccurrence> owners, StringRef authored,
          std::optional<size_t> &cursor) {
     if (request || !application.implementation.empty())
       return selectImplementation(application, request, cpuTarget);
-    auto logical = resolveBinding(application, false);
+    auto logical = resolveNativeApplication(application, false);
     if (!logical)
       return logical.takeError();
     if (!numerical.chargeCatalog())
@@ -362,10 +345,10 @@ public:
     SmallVector<ImplementationKey> keys;
     if (authored.empty() && !owners.empty()) {
       for (auto owner : owners)
-        keys.emplace_back(application.contract, application.arguments,
+        keys.emplace_back(application.contract, argumentIdentities(application),
                           std::vector{owner}, std::string{});
     } else
-      keys.emplace_back(application.contract, application.arguments,
+      keys.emplace_back(application.contract, argumentIdentities(application),
                         std::vector<mathematical::NumericalOccurrence>{},
                         authored.str());
     size_t id = implementations.size();
@@ -422,16 +405,16 @@ public:
       auto installed = descriptor &&
                                descriptor->family !=
                                    ImplementationDescriptor::Family::Exact &&
-                               selected.physicalArguments.empty()
-                           ? resolveBinding(selected, false)
-                           : resolveBinding(selected, true);
-      Error refusal = installed ? cpuTarget.checkImplementation(selected)
+                               !selected.valueType
+                           ? resolveNativeApplication(selected, false)
+                           : resolveNativeApplication(selected, true);
+      Error refusal = installed ? cpuTarget.checkNativeImplementation(selected)
                                 : installed.takeError();
       if (!refusal &&
           !(descriptor &&
             descriptor->family != ImplementationDescriptor::Family::Exact &&
-            selected.physicalArguments.empty()))
-        refusal = cpuTarget.checkBinding(selected, *installed);
+            !selected.valueType))
+        refusal = cpuTarget.checkNativeApplication(selected);
       if (!refusal)
         return ImplementationChoice{std::move(selected), false};
       if (refusal)
@@ -478,25 +461,19 @@ public:
     return advanced;
   }
 };
-Expected<BindingApplication>
+Expected<NativeBindingApplication>
 chooseConversion(Type from, Type to, const CandidateCatalog &catalog,
                  mathematical::NumericalSelection &selection,
                  const CpuTarget &cpuTarget) {
-  auto source = encodeBoundType(from, true);
-  if (!source)
-    return source.takeError();
-  auto target = encodeBoundType(to, true);
-  if (!target)
-    return target.takeError();
   if (!selection.chargeCatalog())
     return error("finite-analysis-limit");
-  auto candidates = catalog.conversions(*source, *target);
+  auto candidates = catalog.conversions(from, to);
   if (!selection.chargeCatalog(candidates.size()))
     return error("finite-analysis-limit");
   for (auto candidate : candidates) {
     // A catalog suggestion can name an uninstalled adapter. Decline that
     // suggestion; authored bindings and explicit pins were admitted separately.
-    if (auto e = checkDirectConversion(candidate, *source, *target)) {
+    if (auto e = checkDirectConversion(candidate, from, to)) {
       bool unavailable;
       if (auto terminal =
               decline(std::move(e),
@@ -508,10 +485,10 @@ chooseConversion(Type from, Type to, const CandidateCatalog &catalog,
     }
     // Special adapters bypass ImplementationCatalog. Check both independently
     // resolved endpoints after their conversion law has been admitted.
-    auto installed = resolveBinding(candidate, true);
+    auto installed = resolveNativeApplication(candidate, true);
     if (!installed)
       return installed.takeError();
-    if (auto e = cpuTarget.checkBinding(candidate, *installed)) {
+    if (auto e = cpuTarget.checkNativeApplication(candidate)) {
       bool unavailable;
       if (auto terminal =
               decline(std::move(e), {"cpu-target-unavailable"}, unavailable))
@@ -604,8 +581,8 @@ class Proposer {
   PhysicalSelection &selection;
   std::optional<ExecutionPorts> execution;
   ExecutionPorts &flow() { return *execution; }
-  ArrayRef<FunctionPortSelection> functionPorts;
-  ArrayRef<ValueLayoutSelection> valueLayouts;
+  ArrayRef<NativeFunctionPortSelection> functionPorts;
+  ArrayRef<NativeValueLayoutSelection> valueLayouts;
   SmallVector<BindingDecision> originals;
   std::map<std::string, BindingIndex> names;
   std::map<std::string, SmallVector<OperationIndex>> bindingUses;
@@ -619,8 +596,7 @@ class Proposer {
     // Malformed applications and exact authored selections are terminal.
     // Only a deferred automatic application's unavailable specialization can
     // advance its already bounded implementation cursor.
-    if (decision.fixed ||
-        !decision.binding.application.physicalArguments.empty())
+    if (decision.fixed || decision.binding.application.valueType)
       return refusal;
     return handleErrors(std::move(refusal),
                         [&](const Refusal &failure) -> Error {
@@ -646,22 +622,15 @@ class Proposer {
       }
     });
     auto aggregate = [](Type type) {
-      auto logical = encodeBoundType(type, false);
-      if (!logical) {
-        consumeError(logical.takeError());
-        return false;
-      }
-      return logical->kind == "sequence" || logical->kind == "variant" ||
-             logical->kind == "field_array" || logical->kind == "fixed_vector";
+      auto kind = planTypeConstructor(type);
+      return kind == "sequence" || kind == "variant" || kind == "field_array" ||
+             kind == "fixed_vector";
     };
     auto pin = [&](Value value, Type type, OperationIndex owner) -> Error {
       auto id = layouts.get(value);
       if (!id)
         return id.takeError();
-      auto bound = encodeBoundType(type, true);
-      if (!bound)
-        return bound.takeError();
-      return layouts.pin(*id, *bound, owner);
+      return layouts.pin(*id, type, owner);
     };
     auto equate = [&](Value left, Value right) -> Error {
       auto a = layouts.get(left);
@@ -695,7 +664,7 @@ class Proposer {
             installedImplementations().find(app.contract, app.implementation);
         using Family = ImplementationDescriptor::Family;
         if (descriptor && descriptor->family == Family::Sequence &&
-            app.physicalArguments.empty()) {
+            !app.valueType) {
           if (app.contract == "sequence.append") {
             if (auto e = equate(flow().inputs(op)[0], flow().outputs(op)[0]))
               return e;
@@ -722,7 +691,7 @@ class Proposer {
           // constrain aggregate ports. Observation's inferred payload does not.
           bool observation = descriptor &&
                              descriptor->family == Family::Observation &&
-                             app.physicalArguments.empty();
+                             !app.valueType;
           for (auto [value, type] : zip(flow().inputs(op), d.inputs))
             if (aggregate(value.getType()) && !observation)
               if (auto e = pin(value, type, index))
@@ -746,19 +715,22 @@ class Proposer {
         auto container = layouts.get(flow().outputs(op)[0]);
         if (!container)
           return container.takeError();
-        auto logical = encodeBoundType(flow().outputs(op)[0].getType(), false);
-        if (!logical)
-          return logical.takeError();
-        auto descriptor = decodeVariant(logical->spelling());
-        if (!descriptor)
+        auto variant =
+            dyn_cast<data::VariantType>(flow().outputs(op)[0].getType());
+        if (!variant)
           return error("variant-type");
         auto label = op->getAttrOfType<StringAttr>("alternative").getValue();
         unsigned offset = 0;
-        for (const auto &arm : descriptor->alternatives) {
-          if (arm.label == label)
+        bool found = false;
+        for (auto arm : variant.getAlternatives()) {
+          if (arm.getLabel().getValue() == label) {
+            found = true;
             break;
-          offset += arm.payload.size();
+          }
+          offset += arm.getPayload().size();
         }
+        if (!found)
+          return error("variant-alternative");
         for (auto [i, value] : enumerate(flow().inputs(op)))
           if (auto e =
                   payload(value, layouts.child(*container, offset + i), true))
@@ -856,18 +828,10 @@ class Proposer {
       }
       if (!found || seed.result >= flow().outputs(found).size())
         return error("binding-unknown-selection");
-      auto selected = parseBoundType(seed.physicalType, true);
-      if (!selected)
-        return selected.takeError();
-      auto logical =
-          encodeBoundType(flow().outputs(found)[seed.result].getType(), false);
-      if (!logical)
-        return logical.takeError();
-      if (!(erasePhysicalType(*selected) == *logical))
+      Type type = seed.physicalType;
+      if (logicalValueType(type) !=
+          flow().outputs(found)[seed.result].getType())
         return error("binding-operation-signature");
-      auto type = decodeBoundType(module.getContext(), *selected);
-      if (!type)
-        return error("binding-representation");
       if (auto e = pin(flow().outputs(found)[seed.result], type,
                        indices.lookup(found)))
         return e;
@@ -886,7 +850,7 @@ class Proposer {
           auto type = layouts.physical(*id);
           if (!type)
             return type.takeError();
-          hints[result] = decodeBoundType(module.getContext(), *type);
+          hints[result] = *type;
         }
     return Error::success();
   }
@@ -901,7 +865,7 @@ class Proposer {
       consumeError(selected.takeError());
       return type;
     };
-    SmallVector<BindingApplication> applications(operations.size());
+    SmallVector<NativeBindingApplication> applications(operations.size());
     llvm::DenseMap<Value, Type> hints;
     std::deque<Operation *> pending;
     llvm::DenseSet<Operation *> queued;
@@ -925,14 +889,9 @@ class Proposer {
       notify(value);
     };
     auto aggregate = [&](Type type) {
-      auto logical =
-          encodeBoundType(type, isa<zkc::runtime::RepresentedType>(type));
-      if (!logical) {
-        consumeError(logical.takeError());
-        return false;
-      }
-      return logical->kind == "sequence" || logical->kind == "variant" ||
-             logical->kind == "field_array" || logical->kind == "fixed_vector";
+      auto kind = planTypeConstructor(type);
+      return kind == "sequence" || kind == "variant" || kind == "field_array" ||
+             kind == "fixed_vector";
     };
     for (auto [index, op] : enumerate(operations)) {
       auto &d = plan.operations[index];
@@ -975,15 +934,8 @@ class Proposer {
         bool deferred =
             descriptor &&
             descriptor->family != ImplementationDescriptor::Family::Exact &&
-            initialApplication.physicalArguments.empty();
-        if (deferred) {
-          auto parameters = defaultPhysicalArguments(initialApplication);
-          if (parameters)
-            initialApplication.physicalArguments = *parameters;
-          else
-            consumeError(parameters.takeError());
-        }
-        auto signature = resolveBinding(initialApplication, true);
+            !initialApplication.valueType;
+        auto signature = resolveNativeApplication(initialApplication, true);
         if (!signature) {
           if (!deferred)
             return signature.takeError();
@@ -993,14 +945,10 @@ class Proposer {
           for (auto type : flow().inputs(op).getTypes())
             d.inputs.push_back(initial(type));
         } else {
-          auto inputs = decodePorts(module.getContext(), signature->inputs);
-          if (!inputs)
-            return inputs.takeError();
-          auto outputs = decodePorts(module.getContext(), signature->outputs);
-          if (!outputs)
-            return outputs.takeError();
-          d.inputs = *inputs;
-          d.outputs = *outputs;
+          d.inputs.assign(signature->getInputs().begin(),
+                          signature->getInputs().end());
+          d.outputs.assign(signature->getResults().begin(),
+                           signature->getResults().end());
         }
       } else
         for (auto type : flow().outputs(op).getTypes())
@@ -1035,32 +983,25 @@ class Proposer {
                               ImplementationDescriptor::Family::Observation) {
           auto payload =
               operationContracts(app.contract)->observation->payloadInput;
-          if (app.physicalArguments.empty()) {
-            auto selected = encodeBoundType(
-                valuePort(flow().inputs(op)[payload], plan, indices, flow()),
-                true);
-            if (!selected) {
-              consumeError(selected.takeError());
+          Type layout;
+          if (!app.valueType) {
+            layout =
+                valuePort(flow().inputs(op)[payload], plan, indices, flow());
+            if (!isa<runtime::RepresentedType>(layout))
               continue;
-            }
-            app.physicalArguments = {selected->spelling()};
           }
-          auto signature = resolveBinding(app, true);
+          auto signature = resolveNativeApplication(app, true, layout);
           if (!signature)
             return familyFailure(signature.takeError(), plan, index);
-          auto inputs = decodePorts(module.getContext(), signature->inputs);
-          if (!inputs)
-            return inputs.takeError();
-          auto outputs = decodePorts(module.getContext(), signature->outputs);
-          if (!outputs)
-            return outputs.takeError();
-          d.inputs = *inputs;
-          for (auto [result, type] : zip(flow().outputs(op), *outputs))
+          d.inputs.assign(signature->getInputs().begin(),
+                          signature->getInputs().end());
+          for (auto [result, type] :
+               zip(flow().outputs(op), signature->getResults()))
             assign(result, type);
           applications[index] = std::move(app);
-          if (plan.bindings[*d.binding]
-                  .binding.application.physicalArguments.empty())
-            applications[index].physicalArguments.clear();
+          if (plan.bindings[*d.binding].binding.application.valueType ==
+              FunctionType{})
+            applications[index].valueType = {};
           continue;
         }
         if (descriptor &&
@@ -1073,43 +1014,36 @@ class Proposer {
                       ImplementationDescriptor::Family::FieldArray
                   ? "field_array"
                   : "fixed_vector";
-          auto logicalSignature = resolveLogicalBinding(app);
+          auto logicalSignature = resolveNativeApplication(app, false);
           if (!logicalSignature)
             return logicalSignature.takeError();
-          const BoundType *containerSchema = nullptr;
-          for (const auto *ports :
-               {&logicalSignature->inputs, &logicalSignature->outputs})
-            for (const auto &port : *ports)
-              if (!containerSchema && port.kind == kind)
-                containerSchema = &port;
-          if (!containerSchema)
+          Type containerLogical;
+          for (auto ports :
+               {logicalSignature->getInputs(), logicalSignature->getResults()})
+            for (Type port : ports)
+              if (!containerLogical && planTypeConstructor(port) == kind)
+                containerLogical = port;
+          if (!containerLogical)
             return error("binding-representation");
           for (auto result : flow().outputs(op))
             if (auto hint = hints.lookup(result)) {
-              auto selected = encodeBoundType(hint, true);
-              if (!selected)
-                return selected.takeError();
-              if (erasePhysicalType(*selected) == *containerSchema) {
+              if (logicalValueType(hint) == containerLogical) {
                 container = hint;
                 break;
               }
               if (app.contract == "sequence.at") {
-                auto formed = physicalType(*containerSchema,
-                                           "logical.sequence/0", {*selected});
+                auto formed = formPhysicalType(containerLogical,
+                                               "logical.sequence/0", {hint});
                 if (!formed)
                   return formed.takeError();
-                container = decodeBoundType(module.getContext(), *formed);
+                container = *formed;
               }
             }
           // Actual container inputs determine access and append layouts.
           for (auto operand : flow().inputs(op)) {
             auto actual = valuePort(operand, plan, indices, flow());
-            auto bound = encodeBoundType(actual, true);
-            if (!bound) {
-              consumeError(bound.takeError());
-              continue;
-            }
-            if (bound->kind == kind) {
+            if (isa<runtime::RepresentedType>(actual) &&
+                planTypeConstructor(actual) == kind) {
               if (!container)
                 container = actual;
               break;
@@ -1121,14 +1055,8 @@ class Proposer {
                 container = type;
                 break;
               }
-          if (container && isa<zkc::runtime::RepresentedType>(container)) {
-            auto selected = encodeBoundType(container, true);
-            if (!selected)
-              return selected.takeError();
-            if (app.physicalArguments.empty())
-              app.physicalArguments = {selected->spelling()};
-          }
-          auto signature = resolveBinding(app, true);
+          auto signature = resolveNativeApplication(
+              app, true, app.valueType ? Type{} : container);
           if (!signature) {
             if (!container || !isa<zkc::runtime::RepresentedType>(container)) {
               consumeError(signature.takeError());
@@ -1136,67 +1064,68 @@ class Proposer {
             }
             return familyFailure(signature.takeError(), plan, index);
           }
-          auto inputs = decodePorts(module.getContext(), signature->inputs);
-          if (!inputs)
-            return inputs.takeError();
-          auto outputs = decodePorts(module.getContext(), signature->outputs);
-          if (!outputs)
-            return outputs.takeError();
-          d.inputs = *inputs;
-          for (auto [result, type] : zip(flow().outputs(op), *outputs))
+          d.inputs.assign(signature->getInputs().begin(),
+                          signature->getInputs().end());
+          for (auto [result, type] :
+               zip(flow().outputs(op), signature->getResults()))
             assign(result, type);
           applications[index] = std::move(app);
           // Recompute unconstrained source families when their inputs change.
-          if (plan.bindings[*d.binding]
-                  .binding.application.physicalArguments.empty())
-            applications[index].physicalArguments.clear();
+          if (plan.bindings[*d.binding].binding.application.valueType ==
+              FunctionType{})
+            applications[index].valueType = {};
         }
         continue;
       }
       if (isa<zkc::exec::VariantOp>(op)) {
-        auto logical = encodeBoundType(flow().outputs(op)[0].getType(), false);
+        auto logical =
+            dyn_cast<data::VariantType>(flow().outputs(op)[0].getType());
         if (!logical)
-          return logical.takeError();
-        auto descriptor = decodeVariant(logical->spelling());
-        if (!descriptor)
           return error("variant-type");
+        auto alternatives = logical.getAlternatives();
         auto label = op->getAttrOfType<StringAttr>("alternative").getValue();
         size_t start = 0;
         unsigned active = 0;
-        for (; active < descriptor->alternatives.size() &&
-               descriptor->alternatives[active].label != label;
+        for (; active < alternatives.size() &&
+               alternatives[active].getLabel().getValue() != label;
              ++active)
-          start += descriptor->alternatives[active].payload.size();
-        if (active == descriptor->alternatives.size())
+          start += alternatives[active].getPayload().size();
+        if (active == alternatives.size())
           return error("variant-alternative");
         Type selected = hints.lookup(flow().outputs(op)[0]);
         if (!selected) {
-          auto schemas = logicalChildren(*logical);
+          auto schemas = planLogicalChildren(logical);
           if (!schemas)
             return schemas.takeError();
-          std::vector<BoundType> children;
+          SmallVector<Type> children;
           bool ready = true;
           for (auto [i, schema] : enumerate(*schemas)) {
-            Expected<BoundType> child =
-                i >= start && i < start + flow().inputs(op).size()
-                    ? encodeBoundType(valuePort(flow().inputs(op)[i - start],
-                                                plan, indices, flow()),
-                                      true)
-                    : defaultRepresentation(schema);
-            if (!child) {
-              consumeError(child.takeError());
-              ready = false;
-              break;
+            Type child;
+            if (i >= start && i < start + flow().inputs(op).size()) {
+              child = valuePort(flow().inputs(op)[i - start], plan, indices,
+                                flow());
+              if (!isa<runtime::RepresentedType>(child)) {
+                ready = false;
+                break;
+              }
+            } else {
+              auto ordinary = defaultPort(schema);
+              if (!ordinary) {
+                consumeError(ordinary.takeError());
+                ready = false;
+                break;
+              }
+              child = *ordinary;
             }
-            children.push_back(std::move(*child));
+            children.push_back(child);
           }
           if (!ready)
             continue;
           auto formed =
-              physicalType(*logical, "logical.variant/0", std::move(children));
+              formPhysicalType(logical, "logical.variant/0", children);
           if (!formed)
             return formed.takeError();
-          selected = decodeBoundType(module.getContext(), *formed);
+          selected = *formed;
         }
         assign(flow().outputs(op)[0], selected);
         auto payload = variantPorts(selected, active);
@@ -1290,20 +1219,17 @@ class Proposer {
     for (auto [index, op] : enumerate(operations)) {
       auto &d = plan.operations[index];
       for (auto type : d.outputs) {
-        auto checked = encodeBoundType(type, true);
-        if (!checked)
-          return checked.takeError();
+        if (auto e = checkPhysicalType(type))
+          return e;
       }
       for (auto type : d.inputs) {
-        auto checked = encodeBoundType(type, true);
-        if (!checked)
-          return checked.takeError();
+        if (auto e = checkPhysicalType(type))
+          return e;
       }
       for (const auto &args : d.blockArguments)
         for (auto type : args) {
-          auto checked = encodeBoundType(type, true);
-          if (!checked)
-            return checked.takeError();
+          if (auto e = checkPhysicalType(type))
+            return e;
         }
     }
     // Resolve exact specialization declarations after equations have settled.
@@ -1314,65 +1240,33 @@ class Proposer {
       if (!d.binding)
         continue;
       auto app = applications[index];
-      auto descriptor =
-          installedImplementations().find(app.contract, app.implementation);
-      if (descriptor &&
-          descriptor->family == ImplementationDescriptor::Family::Observation) {
-        auto payload =
-            operationContracts(app.contract)->observation->payloadInput;
-        auto selected = encodeBoundType(d.inputs[payload], true);
-        if (!selected)
-          return selected.takeError();
-        app.physicalArguments = {selected->spelling()};
-      } else if (descriptor && descriptor->family !=
-                                   ImplementationDescriptor::Family::Exact) {
-        const auto &ports =
-            descriptor->family == ImplementationDescriptor::Family::Sequence &&
-                    app.contract == "sequence.empty"
-                ? d.outputs
-                : d.inputs;
-        for (auto type : ports) {
-          auto bound = encodeBoundType(type, true);
-          if (!bound)
-            return bound.takeError();
-          if (bound->physicalChildren &&
-              (bound->kind == "sequence" || bound->kind == "field_array" ||
-               bound->kind == "fixed_vector")) {
-            app.physicalArguments = {bound->spelling()};
-            break;
-          }
-        }
-        if (app.physicalArguments.empty()) {
-          auto parameters = defaultPhysicalArguments(app);
-          if (!parameters)
-            return parameters.takeError();
-          app.physicalArguments = *parameters;
-        }
-      }
+      app.valueType =
+          FunctionType::get(module.getContext(), d.inputs, d.outputs);
+      auto signature = resolveNativeApplication(app);
+      if (!signature)
+        return signature.takeError();
       applications[index] = std::move(app);
     }
-    // Normalize origins first. A family without a complete default can reuse
-    // its first reached application; unused declarations still require an
-    // independently admitted complete default.
+    // An unused declaration still needs a complete installed native layout.
+    // If no default exists, a reached application can supply its exact family
+    // layout; the installation resolver independently admits it below.
     for (auto [origin, binding] : enumerate(plan.bindings))
-      if (binding.binding.application.physicalArguments.empty()) {
-        auto parameters = defaultPhysicalArguments(binding.binding.application);
-        if (!parameters) {
+      if (!binding.binding.application.valueType) {
+        auto signature = resolveNativeApplication(binding.binding.application);
+        if (!signature) {
           bool found = false;
           for (auto [index, decision] : enumerate(plan.operations))
-            if (decision.binding == origin &&
-                !applications[index].physicalArguments.empty()) {
-              consumeError(parameters.takeError());
-              binding.binding.application.physicalArguments =
-                  applications[index].physicalArguments;
+            if (decision.binding == origin && applications[index].valueType) {
+              consumeError(signature.takeError());
+              binding.binding.application.valueType =
+                  applications[index].valueType;
               found = true;
               break;
             }
           if (!found)
-            return parameters.takeError();
+            return signature.takeError();
         } else
-          binding.binding.application.physicalArguments =
-              std::move(*parameters);
+          binding.binding.application.valueType = *signature;
       }
     for (auto [index, op] : enumerate(operations)) {
       auto &d = plan.operations[index];
@@ -1413,8 +1307,8 @@ class Proposer {
 public:
   Proposer(ModuleOp module, const CandidateCatalog &catalog,
            Location *failureLocation, PhysicalSelection &selection,
-           ArrayRef<FunctionPortSelection> functionPorts,
-           ArrayRef<ValueLayoutSelection> valueLayouts)
+           ArrayRef<NativeFunctionPortSelection> functionPorts,
+           ArrayRef<NativeValueLayoutSelection> valueLayouts)
       : module(module), root(cast<zkc::protocol_ir::ProtocolModuleOp>(
                             &module.getBody()->front())),
         catalog(catalog), operations(physicalPlanOperations(module)),
@@ -1463,7 +1357,7 @@ public:
         symbols.insert(name.getValue().str());
       if (!isa<zkc::runtime::BindingOp>(op))
         continue;
-      auto binding = readBinding(&op);
+      auto binding = readPlanBinding(cast<runtime::BindingOp>(&op));
       if (!binding)
         return binding.takeError();
       auto request = choices.find(binding->name);
@@ -1577,11 +1471,11 @@ public:
             }
             continue;
           }
-          if (auto e =
-                  selection.cpuTarget.checkBinding(candidate, *installed)) {
+          if (auto e = selection.cpuTarget.checkNativeApplication(candidate)) {
             consumeError(std::move(e));
             continue;
           }
+          candidate.valueType = *installed;
           clone.binding.application = std::move(candidate);
           available = true;
           break;
@@ -1664,8 +1558,8 @@ public:
               sameApplication(candidate.binding.application, *application))
             binding = i;
         if (binding == plan.bindings.size()) {
-          protocol::OperationBinding declaration{fresh(used, "layout_", next),
-                                                 std::move(*application)};
+          NativeBindingChoice declaration{fresh(used, "layout_", next),
+                                          std::move(*application)};
           plan.bindings.push_back({std::move(declaration),
                                    BindingPurpose::Conversion,
                                    {},
@@ -1691,7 +1585,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
                 PhysicalPlanOptions options, Location *failureLocation) {
   llvm::TimeTraceScope timing("zkc.physical-proposal");
   locate(failureLocation, module);
-  if (failed(verify(module)) || module.getBody()->empty() ||
+  if (failed(zkc::admitStage(module)) || module.getBody()->empty() ||
       !isa<zkc::protocol_ir::ProtocolModuleOp>(module.getBody()->front()))
     return error("binding-operation");
   auto root =
@@ -1709,7 +1603,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
   for (auto declaration :
        root.getBody().front().getOps<zkc::runtime::BindingOp>()) {
     locate(failureLocation, declaration);
-    auto binding = readBinding(declaration);
+    auto binding = readPlanBinding(declaration);
     if (!binding)
       return binding.takeError();
     originalPins.emplace(binding->name, binding->application.implementation);
@@ -1725,6 +1619,27 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
   }
   if (!requests.empty())
     return error("binding-unknown-selection");
+  SmallVector<NativeFunctionPortSelection> functionPorts;
+  SmallVector<NativeValueLayoutSelection> valueLayouts;
+  for (const auto &choice : options.functionPorts) {
+    auto bound = parseBoundType(choice.physicalType, true);
+    if (!bound)
+      return bound.takeError();
+    auto type = decodeBoundType(module.getContext(), *bound);
+    if (!type)
+      return error("binding-type-identity");
+    functionPorts.push_back(
+        {choice.function, choice.output, choice.port, type});
+  }
+  for (const auto &choice : options.valueLayouts) {
+    auto bound = parseBoundType(choice.physicalType, true);
+    if (!bound)
+      return bound.takeError();
+    auto type = decodeBoundType(module.getContext(), *bound);
+    if (!type)
+      return error("binding-type-identity");
+    valueLayouts.push_back({choice.function, choice.site, choice.result, type});
+  }
   auto input = std::make_shared<InputSnapshot>(
       InputSnapshot{module,
                     structure(module),
@@ -1732,8 +1647,8 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
                     protocol::Assignments(selections.begin(), selections.end()),
                     options.linearContractions,
                     options.numericalPolicy,
-                    options.functionPorts,
-                    options.valueLayouts,
+                    std::move(functionPorts),
+                    std::move(valueLayouts),
                     options.cpuTarget,
                     {},
                     {}});
@@ -1915,7 +1830,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
         if (original != originalPins.end())
           declaration.setImplementation(original->second);
       }
-      if (!refusal && failed(verify(selected)))
+      if (!refusal && failed(zkc::admitStage(selected)))
         return error("binding-operation");
     }
     if (auto e = input->check(module))
@@ -1924,7 +1839,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     selection.bindingCursors.clear();
     PhysicalPlan plan;
     Proposer proposer(selected, catalog, failureLocation, selection,
-                      options.functionPorts, options.valueLayouts);
+                      input->functionPorts, input->valueLayouts);
     if (!refusal)
       refusal = proposer.initialize(selections, options.linearContractions);
     size_t groupLimit = 4096;
@@ -2050,12 +1965,11 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
 }
 
 namespace {
-Error checkFixed(const BindingApplication &source,
-                 const BindingApplication &selected,
+Error checkFixed(const NativeBindingApplication &source,
+                 const NativeBindingApplication &selected,
                  std::optional<StringRef> request, bool recordedFixed) {
   if (!sameLogical(source, selected) ||
-      (!source.physicalArguments.empty() &&
-       source.physicalArguments != selected.physicalArguments))
+      (source.valueType && source.valueType != selected.valueType))
     return error("binding-operation");
   const bool fixed = request.has_value() || !source.implementation.empty();
   if (fixed != recordedFixed ||
@@ -2081,30 +1995,24 @@ Error checkLogicalPorts(TypeRange logical, ArrayRef<Type> recorded) {
   if (logical.size() != recorded.size())
     return error("binding-operation-signature");
   for (auto [source, type] : zip(logical, recorded)) {
-    auto original = encodeBoundType(source, false);
-    if (!original)
-      return original.takeError();
     if (!type)
       return error("binding-operation-signature");
-    auto selected = encodeBoundType(type, true);
-    if (!selected)
-      return selected.takeError();
-    auto erased = erasePhysicalType(*selected);
-    if (!(erased == *original))
+    if (auto e = checkPhysicalType(type))
+      return e;
+    if (logicalValueType(type) != source)
       return error("binding-operation-signature");
   }
   return Error::success();
 }
-Error checkInstalledPorts(TypeRange recorded, ArrayRef<BoundType> installed) {
+Error checkInstalledPorts(TypeRange recorded, TypeRange installed) {
   if (recorded.size() != installed.size())
     return error("binding-operation-signature");
   for (auto [type, expected] : zip(recorded, installed)) {
     if (!type)
       return error("binding-operation-signature");
-    auto actual = encodeBoundType(type, true);
-    if (!actual)
-      return actual.takeError();
-    if (!(*actual == expected))
+    if (auto e = checkPhysicalType(type))
+      return e;
+    if (type != expected)
       return error("binding-operation-signature");
   }
   return Error::success();
@@ -2121,7 +2029,7 @@ checkAllUses(Operation *op, const PhysicalPlan &plan, const Indices &indices,
     return error("binding-contraction");
   const auto &application =
       plan.bindings[*decision.binding].binding.application;
-  auto installed = resolveBinding(application, true);
+  auto installed = resolveNativeApplication(application, true);
   if (!installed)
     return installed.takeError();
   const auto *facts = operationContracts(application.contract);
@@ -2134,9 +2042,10 @@ checkAllUses(Operation *op, const PhysicalPlan &plan, const Indices &indices,
       production.valuesOperand >= inputs.size() ||
       production.factorsOperand == production.valuesOperand)
     return error("binding-contraction");
-  const auto &view = installed->outputs[production.result];
+  const auto &view = installed->getResult(production.result);
   auto result = outputs[production.result];
-  if (!isDiagonalRepresentation(view.representation) ||
+  if (!isDiagonalRepresentation(
+          cast<runtime::RepresentedType>(view).getRepresentation()) ||
       flow.uses(result).empty() ||
       inputs[production.valuesOperand].getType() != result.getType())
     return error("binding-contraction");
@@ -2158,7 +2067,8 @@ checkAllUses(Operation *op, const PhysicalPlan &plan, const Indices &indices,
       return error("binding-contraction");
     const auto &consumerApplication =
         plan.bindings[*selected.binding].binding.application;
-    auto consumerInstalled = resolveBinding(consumerApplication, true);
+    auto consumerInstalled =
+        resolveNativeApplication(consumerApplication, true);
     if (!consumerInstalled)
       return consumerInstalled.takeError();
     const auto *consumerFacts =
@@ -2172,7 +2082,7 @@ checkAllUses(Operation *op, const PhysicalPlan &plan, const Indices &indices,
         roles.coefficientsOperand == roles.valuesOperand ||
         consumed[roles.coefficientsOperand].getType() !=
             inputs[production.factorsOperand].getType() ||
-        !(consumerInstalled->inputs[roles.valuesOperand] == view))
+        !(consumerInstalled->getInput(roles.valuesOperand) == view))
       return error("binding-contraction");
     consumers.push_back(index);
   }
@@ -2193,7 +2103,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   // Check the original numerical-bearing source independently against the exact
   // retained executable payload, before checking any installed physical
   // choices. This reader does not emit or select numerical recipes.
-  if (failed(verify(module)))
+  if (failed(zkc::admitStage(module)))
     return error("binding-operation");
   ModuleOp selected = module;
   ModuleOp numericalSource = module;
@@ -2207,7 +2117,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
           SymbolTable::lookupSymbolIn(sourceOwner, name));
       if (!binding)
         return error("binding-unknown-selection");
-      auto decoded = readBinding(binding);
+      auto decoded = readPlanBinding(binding);
       if (!decoded)
         return decoded.takeError();
       auto fixed = selectImplementation(decoded->application, implementation,
@@ -2264,7 +2174,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
     if (declarationIndex >= plan.bindings.size())
       return error("binding-plan-coverage");
     const auto &decision = plan.bindings[declarationIndex];
-    auto source = readBinding(declaration);
+    auto source = readPlanBinding(declaration);
     if (!source)
       return source.takeError();
     if (decision.purpose != BindingPurpose::Original ||
@@ -2312,9 +2222,18 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
       return error("binding-plan-coverage");
     if (!symbols.insert(decision.binding.name).second)
       return error("binding-plan-coverage");
-    if (auto e = checkBindingDeclaration(decision.binding.name,
-                                         decision.binding.application, true))
-      return e;
+    StringRef name = decision.binding.name;
+    if (name.empty() || name.size() > 256 ||
+        !(isAlpha(name.front()) || name.front() == '_') ||
+        !all_of(name, [](char c) {
+          return isAlnum(c) || c == '_' || c == '.' || c == '-';
+        }))
+      return error("binding-name");
+    if (!decision.binding.application.valueType)
+      return error("binding-signature");
+    auto installed = resolveNativeApplication(decision.binding.application);
+    if (!installed)
+      return installed.takeError();
   }
 
   // Check complete definition and use signatures before consulting any ports
@@ -2396,12 +2315,14 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
               catalog.diagonalImplementations(base.binding.application),
               binding.binding.application.implementation))
         return error("binding-implementation");
-      auto installed = resolveBinding(binding.binding.application, true);
+      auto installed =
+          resolveNativeApplication(binding.binding.application, true);
       if (!installed)
         return installed.takeError();
-      if (auto e = checkInstalledPorts(decision.inputs, installed->inputs))
+      if (auto e = checkInstalledPorts(decision.inputs, installed->getInputs()))
         return e;
-      if (auto e = checkInstalledPorts(decision.outputs, installed->outputs))
+      if (auto e =
+              checkInstalledPorts(decision.outputs, installed->getResults()))
         return e;
     } else {
       if (decision.binding || (flow.get(op).step && !interfaceOperation(op)))
@@ -2491,16 +2412,14 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
         if (d.inputs[operand] != valuePort(value, plan, indices, flow))
           return error("binding-operation-signature");
     } else if (isa<zkc::exec::VariantOp>(op)) {
-      auto bound = encodeBoundType(d.outputs[0], true);
-      if (!bound)
-        return bound.takeError();
-      auto descriptor = decodeVariant(erasePhysicalType(*bound).spelling());
-      if (!descriptor)
+      auto variant =
+          dyn_cast<data::VariantType>(logicalValueType(d.outputs[0]));
+      if (!variant)
         return error("variant-type");
       auto label = op->getAttrOfType<StringAttr>("alternative").getValue();
       unsigned arm = 0;
-      for (; arm < descriptor->alternatives.size() &&
-             descriptor->alternatives[arm].label != label;
+      for (; arm < variant.getAlternatives().size() &&
+             variant.getAlternatives()[arm].getLabel().getValue() != label;
            ++arm) {
       }
       auto payload = variantPorts(d.outputs[0], arm);
@@ -2518,9 +2437,6 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
 
   for (const auto &seed : plan.input->valueLayouts) {
     bool found = false;
-    auto expected = parseBoundType(seed.physicalType, true);
-    if (!expected)
-      return expected.takeError();
     for (auto [index, op] : enumerate(operations)) {
       auto function = op->getParentOfType<func::FuncOp>();
       auto site = op->getAttrOfType<StringAttr>("site");
@@ -2530,11 +2446,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
         if (found || seed.result >= plan.operations[index].outputs.size())
           return error("binding-unknown-selection");
         found = true;
-        auto actual =
-            encodeBoundType(plan.operations[index].outputs[seed.result], true);
-        if (!actual)
-          return actual.takeError();
-        if (!(*actual == *expected))
+        if (plan.operations[index].outputs[seed.result] != seed.physicalType)
           return error("binding-selection-conflict");
       }
     }
@@ -2568,18 +2480,11 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
           conversion.to != to || conversion.binding >= plan.bindings.size())
         return error("binding-no-conversion");
       const auto &binding = plan.bindings[conversion.binding];
-      auto source = encodeBoundType(from, true);
-      if (!source)
-        return source.takeError();
-      auto target = encodeBoundType(to, true);
-      if (!target)
-        return target.takeError();
       if (binding.purpose != BindingPurpose::Conversion)
         return error("binding-no-conversion");
-      if (auto e = checkDirectConversion(binding.binding.application, *source,
-                                         *target))
+      if (auto e = checkDirectConversion(binding.binding.application, from, to))
         return e;
-      auto available = catalog.conversions(*source, *target);
+      auto available = catalog.conversions(from, to);
       if (none_of(available, [&](const auto &candidate) {
             return sameApplication(candidate, binding.binding.application);
           }))

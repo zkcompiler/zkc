@@ -5,6 +5,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -44,7 +45,7 @@ fixture(mlir::MLIRContext &context, llvm::StringRef field = "bls12-381.fr",
     text.replace(position, end - position, "!V = !data.sequence<!F>");
   }
   auto result = mlir::parseSourceString<mlir::ModuleOp>(text, &context);
-  require(bool(result) && mlir::succeeded(mlir::verify(*result)),
+  require(bool(result) && mlir::succeeded(zkc::admitStage(*result)),
           "collect-fold fixture refused");
   return result;
 }

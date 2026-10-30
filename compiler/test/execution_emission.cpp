@@ -5,7 +5,7 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -238,8 +238,8 @@ int main(int argc, char **argv) {
                 "physical conversion lost its exact layout endpoints");
         if (auto e = protocol::verifyLocalExecution(*emitted, expected, true))
           throw std::runtime_error(llvm::toString(std::move(e)));
-        refuses(protocol::readLocalExecution(*emitted, false),
-                "binding-conversion");
+        // The native declaration is physical before byte conversion is read.
+        refuses(protocol::readLocalExecution(*emitted, false), "binding-stage");
         auto binding = *emitted->getOps<runtime::BindingOp>().begin();
         binding.setFunctionType(
             take(protocol::bindingSignature(&context,

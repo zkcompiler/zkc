@@ -9,6 +9,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Interfaces/Collection.h"
 #include "llvm/ADT/DenseSet.h"
 #include <memory>
@@ -256,17 +257,18 @@ LogicalResult helperAssumptions(const Computation &c, CallbackRole role,
 }
 } // namespace
 Type elementType(Type container, bool matrix) {
-  auto bound = protocol::encodeBoundType(container, false);
-  if (!bound) {
-    consumeError(bound.takeError());
+  if (!container ||
+      (matrix ? !isa<algebra::FieldMatrixType>(container)
+              : !isa<algebra::FieldVectorType, algebra::GroupVectorType,
+                     algebra::IndicesType, algebra::FieldArrayType,
+                     data::SequenceType>(container)))
     return {};
-  }
-  if (matrix) {
-    if (bound->kind != "matrix")
-      return {};
-  } else if (!is_contained(ArrayRef<StringRef>{"vector", "groups", "indices",
-                                               "field_array", "sequence"},
-                           bound->kind))
+  auto silent = [&] {
+    auto diagnostic = emitError(UnknownLoc::get(container.getContext()));
+    diagnostic.abandon();
+    return diagnostic;
+  };
+  if (failed(verifyLogicalType(silent, container)))
     return {};
   auto collection = dyn_cast<CollectionTypeInterface>(container);
   return collection ? collection.getElementType() : Type();

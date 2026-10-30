@@ -39,6 +39,12 @@ verifyValueType(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
 /// Erase only the outer representation. This operation grants no formation,
 /// stage admission or permission to reinterpret a value at runtime.
 mlir::Type logicalValueType(mlir::Type type);
+/// Select the installed default complete physical layout directly from a
+/// formed logical native type. This grants no implementation admission and
+/// never crosses a neutral-model or byte boundary or loads a missing dialect.
+mlir::Type
+defaultPhysicalType(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
+                    mlir::Type logical);
 /// Verify constructor parameters before interning the parent native type.
 /// This avoids recursively constructing a type from its own verifier.
 mlir::LogicalResult verifyLogicalTypeApplication(

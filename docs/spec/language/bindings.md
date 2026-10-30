@@ -74,8 +74,8 @@ logical type. MLIR retains both parts in `!runtime.represented<logical, represen
 domain-owned logical MLIR types preserve their static arguments before planning.
 The [nominal collection types](../ir/iteration.md) map directly to the existing
 `vector:F`, `groups:G`, `indices`, `matrix:F` and `field_array<F,N>` constructors.
-Adapter round trips preserve the exact native type and logical application;
-shape evidence cannot select another constructor. Builtin tensors are not
+The native-to-neutral adapter preserves exact nominal identity and logical
+application; shape evidence cannot select another constructor. Builtin tensors are not
 compatibility carriers. These MLIR choices leave source syntax, native carriers
 and codec spellings unchanged.
 
@@ -109,6 +109,35 @@ it does not establish installation or reached invocation authority. A Protocol
 module fixes the declaration's stage. A `builtin.module` admits a well-formed
 logical or physical declaration; the selected execution profile must then check
 its stage and actual invocation ports, including both conversion endpoints.
+Native declaration checking uses the actual callable types and complete
+represented layouts. An explicit implementation is checked against its resolved
+scope, provider restrictions and exact representation family. Logical signatures
+alone do not authorize that selection. Neutral model import/export adapters
+retain independent resolution and byte-profile limits; native declaration
+checking does not serialize or reparse the declaration's types.
+
+Native recipe and physical-selection requests use `NativeBindingApplication`.
+Its kinded attributes remain in the owning MLIR context; an optional complete
+value signature records selected layouts, excluding scope/outcome bookkeeping.
+`resolveInstalledSignature` checks the installed family against those actual
+layouts. Candidate catalogs rank typed requests and conversions but cannot add
+installation facts or conversion laws. The materialization reader rechecks the
+actual declaration, ordered operands and complete ports independently of the
+proposal algorithm. Textual physical layout options are decoded at ingress;
+the normalized plan and its checks retain native types thereafter.
+
+`protocol::encodeBoundType` is the canonical native-to-neutral type adapter.
+It checks native formation, context consistency and unique catalog ownership
+directly, then exports ordered static arguments, complete nominal variant
+structure and every represented child, including inactive arms. Its structural
+encoder preserves the existing `/0` spellings and checks the neutral profile's
+nesting, work, metadata, spelling and variant-table expansion limits without
+reparsing its output or reconstructing a native identity. A formed native type
+outside those limits refuses at export. `protocol::readBinding` first checks the
+native declaration with `readNativeBinding`, then independently checks neutral
+publication attributes, resolution and exact ports. These export APIs return
+failures without emitting diagnostics. `decodeBoundType` remains a strict
+neutral input boundary with independent byte admission.
 
 The finite numerical installation also admits `koala-bear` field, vector, matrix,
 coefficient-polynomial and quadratic-round carriers with Plonky3 implementations.

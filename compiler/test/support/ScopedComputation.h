@@ -4,6 +4,7 @@
 #include "NativeCases.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -112,7 +113,8 @@ inline void numericalAddition(ModuleOp module) {
   auto *replacement = builder.create(state);
   addition.getOutcome().replaceAllUsesWith(replacement->getResult(0));
   addition.erase();
-  require(succeeded(verify(module)), "numerical source fixture refused");
+  require(succeeded(zkc::admitStage(module)),
+          "numerical source fixture refused");
 }
 inline exec::ReturnOp returned(func::FuncOp function) {
   exec::ReturnOp result;

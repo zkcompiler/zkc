@@ -3,6 +3,7 @@
 #include "../lib/Target/PhysicalPlan.h"
 #include "../lib/Transforms/Computation/Support.h"
 #include "mlir/IR/Verifier.h"
+#include "support/NativeBindings.h"
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
@@ -468,24 +469,24 @@ public:
           return result;
         }()) {}
   unsigned queryCount() const { return queries; }
-  Expected<std::vector<std::string>>
-  implementations(const BindingApplication &application) const override {
+  Expected<std::vector<std::string>> implementations(
+      const zkc::NativeBindingApplication &application) const override {
     ++queries;
     if (is_contained(withheldContracts, application.contract))
       return std::vector<std::string>{};
     if (application.contract == "poly.fold" &&
-        application.arguments == std::vector<std::string>{"bls12-381.fr"})
+        hasNativeArguments(application, {"bls12-381.fr"}))
       return std::vector<std::string>{"arkworks-msb/poly.fold",
                                       "arkworks/poly.fold"};
     return installedCandidates().implementations(application);
   }
   std::vector<std::string> diagonalImplementations(
-      const BindingApplication &application) const override {
+      const zkc::NativeBindingApplication &application) const override {
     ++queries;
     return installedCandidates().diagonalImplementations(application);
   }
-  std::vector<BindingApplication>
-  conversions(const BoundType &from, const BoundType &to) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type from, mlir::Type to) const override {
     ++queries;
     return installedCandidates().conversions(from, to);
   }
@@ -493,18 +494,21 @@ public:
 
 class DirectionalCatalog final : public CandidateCatalog {
 public:
-  Expected<std::vector<std::string>>
-  implementations(const BindingApplication &application) const override {
+  Expected<std::vector<std::string>> implementations(
+      const zkc::NativeBindingApplication &application) const override {
     if (application.contract == "poly.product_sum")
       return std::vector<std::string>{"arkworks/poly.product_sum",
                                       "arkworks-msb/poly.product_sum"};
     return installedCandidates().implementations(application);
   }
-  std::vector<BindingApplication>
-  conversions(const BoundType &from, const BoundType &to) const override {
-    auto pinned = take(resolveBinding(
-        {"poly.fold", {"bls12-381.fr"}, "arkworks-msb/poly.fold"}, true));
-    if (from.representation == pinned.outputs[0].representation)
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type from, mlir::Type to) const override {
+    auto pinned = take(resolveNativeApplication(
+        {"poly.fold",
+         {StringAttr::get(from.getContext(), "bls12-381.fr")},
+         "arkworks-msb/poly.fold"}));
+    if (mlir::cast<runtime::RepresentedType>(from).getRepresentation() ==
+        cast<runtime::RepresentedType>(pinned.getResult(0)).getRepresentation())
       return {};
     return installedCandidates().conversions(from, to);
   }
@@ -567,8 +571,7 @@ int main() {
       const auto &sub = bindingFor(checked.choices(), "field.sub");
       const auto &mul = bindingFor(checked.choices(), "field.mul");
       auto backend = identity == "bls12-381.fr" ? "arkworks" : "plonky3";
-      require(sub.binding.application.arguments ==
-                      std::vector<std::string>{identity.str()} &&
+      require(hasNativeArguments(sub.binding.application, {identity}) &&
                   sub.binding.application.implementation ==
                       std::string(backend) + "/field.sub" &&
                   mul.binding.application.implementation ==

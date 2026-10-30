@@ -2,6 +2,7 @@
 #include "CollectFold.h"
 #include "CollectionInterpretation.h"
 #include "MathematicalComparison.h"
+#include "NativeBindingApplication.h"
 #include "RealizationSubject.h"
 #include "ScopedCandidate.h"
 #include "ScopedNestedContraction.h"
@@ -147,7 +148,7 @@ class Reader {
     return op;
   }
   Value kernel(StringRef contract, ValueRange operands, Type result,
-               ArrayRef<std::string> arguments = {},
+               ArrayRef<Attribute> arguments = {},
                ArrayRef<Attribute> parameters = {}) {
     auto *op = consume(exec::ApplyOp::getOperationName());
     if (!op)
@@ -171,13 +172,8 @@ class Reader {
       fail();
       return {};
     }
-    if (!protocol::bindingMatches(
-            binding,
-            {binding.getSymName().str(),
-             {contract.str(),
-              std::vector<std::string>(arguments.begin(), arguments.end()),
-              {}}},
-            false))
+    if (!matchesNativeBinding(
+            binding, {contract.str(), SmallVector<Attribute>(arguments), {}}))
       fail();
     if (!llvm::equal(params, parameters))
       fail();
@@ -307,8 +303,8 @@ class Reader {
                          Value size) {
     auto output = c.signature.getResult(0);
     auto field = cast<algebra::FieldVectorType>(output).getElementType();
-    SmallVector<std::string> parameters{
-        cast<algebra::FieldType>(field).getDomain().str()};
+    SmallVector<Attribute> parameters{StringAttr::get(
+        field.getContext(), cast<algebra::FieldType>(field).getDomain())};
     Value zero = natural(0);
     Value nonempty = kernel("index.less", {zero, size}, boolean);
     SmallVector<Value> inputs{nonempty};

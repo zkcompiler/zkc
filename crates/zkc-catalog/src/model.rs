@@ -241,6 +241,29 @@ pub struct Operation {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConsumerImplementation {
+    Unselected,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ConsumerProfileOperation {
+    pub operation: &'static str,
+    /// Formal roots only, in declaration scope order.
+    pub static_parameters: &'static [Kind],
+}
+
+/// Generation checks each entry's exact declaration expectation before
+/// publishing these references. Membership supplies no execution or proof.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ConsumerProfile {
+    pub name: &'static str,
+    pub implementation: ConsumerImplementation,
+    pub type_constructors: &'static [&'static str],
+    pub parameter_validators: &'static [ParameterValidator],
+    pub operations: &'static [ConsumerProfileOperation],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Algebra {
     FieldRing,
     GroupModule,
@@ -322,4 +345,5 @@ pub struct Catalog {
     pub associated_types: &'static [AssociatedType],
     pub mathematical_identities: &'static [MathematicalIdentity],
     pub mathematical_intrinsics: &'static [Intrinsic],
+    pub consumer_profiles: &'static [ConsumerProfile],
 }

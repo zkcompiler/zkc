@@ -13,7 +13,6 @@ IdentityAttr importVariantIdentity(mlir::MLIRContext *,
 llvm::json::Value exportVariantIdentity(IdentityAttr);
 VariantType importVariantType(mlir::MLIRContext *,
                               const protocol::VariantDescriptor &);
-std::optional<protocol::VariantDescriptor> exportVariantType(VariantType);
 /// Exact flattened payload of a declared nominal alternative, including the
 /// installed child representations when the carrier is represented.
 llvm::Expected<llvm::SmallVector<mlir::Type>>

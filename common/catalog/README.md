@@ -3,7 +3,7 @@
 `declarations.json` is authored neutral data, not a generated snapshot. It owns
 the built-in declaration facts in [`zkc.contract-declarations/0`](../../docs/spec/formats/contract-declarations.md).
 Edit this source when changing identities, kinded signatures, requirements,
-permissions or mathematical facets. Array order is declaration order; nominal
+permissions, mathematical facets or owner-fixed consumer profiles. Array order is declaration order; nominal
 identity determines meaning. No row installs executable code or a formal interpretation.
 
 The compiler's configure step checks exact JSON shapes and projects ordinary
@@ -19,3 +19,24 @@ installation, executable behavior and supported interpretation profiles have
 their own owners. Native contribution declarations are separately admitted and
 are included in the installed exported inventory; adding one does not silently
 change the built-in Rust installation.
+
+`consumerProfiles` explicitly selects operations for a named consumer. Each
+entry pins the consumed declaration shape separately; generation rejects drift
+in scope, stage, ordered signature, requirements or parameter schema. Update an
+expectation only after its consumer owner accepts that contract. Adding a
+declaration or contribution never enrolls it into an existing profile. The first
+profile, `structured-source-primitives`, preserves the structured exporter's
+sixteen primitive identities and its unselected implementation policy.
+
+Build-free source controls and TableGen input regeneration:
+
+```sh
+python3 common/catalog/test_profiles.py -v
+python3 common/catalog/generate.py --source common/catalog/declarations.json --output build/compiler/include/zkc/Contracts
+```
+
+`Catalog.td` and `Mathematical.td` are generated outputs. The normal compiler
+configure step runs this projection; the `ZkcContractDeclarationsGen` target
+then regenerates native `Declarations.cpp.inc` using `zkc-tblgen`. Cargo
+regenerates its own `OUT_DIR/catalog.rs` when the source or Rust generator
+changes. None of these outputs is authored source or belongs under `lean/`.

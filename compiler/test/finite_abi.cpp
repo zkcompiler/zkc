@@ -4,6 +4,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
@@ -279,7 +280,7 @@ int main() {
                 fresh->symbol != callback->symbol &&
                 failed(readCallback(c, CallbackRole::Step)),
             "reread retained stale helper or granted a total expression");
-    require(succeeded(mlir::verify(*module)),
+    require(succeeded(zkc::admitStage(*module)),
             "replacement did not remain admitted");
   });
   cases.run("ABI inspection does not weaken finite body admission", [&] {

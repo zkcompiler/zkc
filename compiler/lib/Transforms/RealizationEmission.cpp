@@ -22,11 +22,12 @@ void RealizationEmitter::reserveNames(Operation *source) {
 
 FlatSymbolRefAttr
 RealizationEmitter::binding(OpBuilder &builder, Location location,
-                            const protocol::BindingApplication &application) {
-  Key key{application.contract, application.arguments,
-          application.implementation};
-  auto found = bindings.find(key);
-  if (found == bindings.end()) {
+                            const NativeBindingApplication &application) {
+  auto arguments = builder.getArrayAttr(application.arguments);
+  auto &instances =
+      bindings[{application.contract, application.implementation}];
+  auto found = instances.find(arguments);
+  if (found == instances.end()) {
     std::string name;
     do {
       name = prefix + std::to_string(next++);
@@ -34,15 +35,9 @@ RealizationEmitter::binding(OpBuilder &builder, Location location,
              SymbolTable::lookupSymbolIn(unit, name));
     OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToStart(&unit->getRegion(0).front());
-    auto arguments =
-        protocol::decodeBindingArguments(builder.getContext(), application);
-    if (!arguments) {
-      emitError(location) << toString(arguments.takeError());
-      return {};
-    }
     runtime::BindingOp::create(builder, location, name, application.contract,
-                               *arguments, application.implementation);
-    found = bindings.emplace(std::move(key), name).first;
+                               arguments, application.implementation);
+    found = instances.try_emplace(arguments, name).first;
   }
   return FlatSymbolRefAttr::get(builder.getContext(), found->second);
 }

@@ -1,8 +1,8 @@
 # Native MLIR foundation
 
-This contract defines the target compiler structure and its shared boundaries.
-It is specified before the implementation cutover; [status](../../status.md)
-distinguishes specified formats from supported producers and consumers. The
+This contract defines the compiler structure and its shared boundaries.
+[Status](../../status.md) records supported producer and consumer profiles;
+independent interpretation remains separate from native implementation. The
 [interface inventory](../formats/foundation-interfaces.md) records the schema
 changes consumers must implement under development version `0`.
 

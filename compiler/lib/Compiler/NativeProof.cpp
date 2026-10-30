@@ -10,6 +10,7 @@
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/Builders.h"
@@ -22,10 +23,12 @@
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/Runtime/Parameters.h"
+#include "zkc/Dialect/StructuredData.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
+#include "zkc/Transforms/Stages.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
@@ -1377,7 +1380,7 @@ struct PreparedProof {
 Expected<PreparedProof>
 prepareProof(ModuleOp source, const NativeProofPolicy &policy,
              MathematicalSelectionPolicy mathematicalSelection) {
-  if (!source || failed(verify(source)))
+  if (!source || failed(zkc::admitStage(source)))
     return error("native-proof-source");
   auto original = unit(source);
   if (!original || original.getProfile() != pir::Profile::Protocol)
@@ -1558,8 +1561,7 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy,
     return std::move(e);
   allDefinitions = {};
   PassManager passes(source.getContext());
-  passes.addPass(
-      protocol::createProjectProtocolPass(false, mathematicalSelection));
+  buildProjectionPipeline(passes, false, mathematicalSelection);
   if (failed(passes.run(*candidate)))
     return error("native-proof-projection");
   auto projected = OwningOpRef<ModuleOp>(cast<ModuleOp>((*candidate)->clone()));
@@ -1571,7 +1573,7 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy,
             Emitter(unit(*candidate), policy, plan, preparedSource->invocations)
                 .run(*admitted, exportedPlan))
       return std::move(e);
-  if (failed(verify(*candidate)))
+  if (failed(zkc::admitStage(*candidate)))
     return error("native-proof-construction");
   if (auto e = detail::verifyNativeTranscript(*projected, *candidate, policy,
                                               admitted->events, plan,
@@ -1606,7 +1608,7 @@ Error checkNativeProof(ModuleOp source, ModuleOp candidate,
                        const NativeProofPolicy &policy,
                        MathematicalSelectionPolicy mathematicalSelection) {
   if (!source || !candidate || candidate.getContext() != source.getContext() ||
-      failed(verify(candidate)))
+      failed(zkc::admitStage(candidate)))
     return error("native-proof-candidate");
   auto expected = constructNativeProof(source, policy, mathematicalSelection);
   if (!expected)
@@ -1621,18 +1623,6 @@ Error checkNativeProof(ModuleOp source, ModuleOp candidate,
 
 namespace zkc {
 namespace {
-std::string printedText(Type value) {
-  std::string text;
-  raw_string_ostream out(text);
-  value.print(out);
-  return text;
-}
-std::string printedText(Attribute value) {
-  std::string text;
-  raw_string_ostream out(text);
-  value.print(out);
-  return text;
-}
 std::string printedText(Operation *value) {
   std::string text;
   raw_string_ostream out(text);
@@ -1642,36 +1632,6 @@ std::string printedText(Operation *value) {
 std::string sha256Identity(StringRef text) {
   return "sha256:" + toHex(SHA256::hash(arrayRefFromStringRef(text)), true);
 }
-json::Array printedTypes(TypeRange types) {
-  json::Array result;
-  for (Type type : types)
-    result.push_back(printedText(type));
-  return result;
-}
-// Attribute values keep their kind. Unrecognized kinds keep their exact
-// printed form; consumers refuse what they do not interpret.
-json::Value attributeValue(Attribute value) {
-  if (auto text = dyn_cast<StringAttr>(value))
-    return json::Array{"string", text.getValue().str()};
-  if (auto symbol = dyn_cast<FlatSymbolRefAttr>(value))
-    return json::Array{"symbol", symbol.getValue().str()};
-  if (auto flag = dyn_cast<BoolAttr>(value))
-    return json::Array{"bool", flag.getValue()};
-  // Unsigned integer types print unsigned; signless and signed print signed.
-  if (auto integer = dyn_cast<IntegerAttr>(value))
-    return json::Array{"integer",
-                       toString(integer.getValue(), 10,
-                                !integer.getType().isUnsignedInteger())};
-  if (auto array = dyn_cast<ArrayAttr>(value);
-      array && all_of(array, [](Attribute a) { return isa<StringAttr>(a); })) {
-    json::Array strings;
-    for (Attribute element : array)
-      strings.push_back(cast<StringAttr>(element).getValue().str());
-    return json::Array{"strings", std::move(strings)};
-  }
-  return json::Array{"text", printedText(value)};
-}
-
 // Reads the supplied, independently checked candidate. It never reconstructs an
 // expected participant or substitutes a mathematical reference. References are
 // absolute positions in a scoped environment: inputs first, then every
@@ -1709,31 +1669,41 @@ class ParticipantExporter {
     auto symbol = op.getAttrOfType<FlatSymbolRefAttr>("binding");
     if (!symbol)
       return json::Array{};
-    Operation *declaration = symbols.lookup(symbol.getValue());
-    if (!declaration ||
-        declaration->getName().getStringRef() != "runtime.binding")
+    auto declaration =
+        dyn_cast_or_null<runtime::BindingOp>(symbols.lookup(symbol.getValue()));
+    if (!declaration)
       return error("constructed-participant-binding");
-    auto contract = declaration->getAttrOfType<StringAttr>("contract");
-    auto arguments = declaration->getAttrOfType<ArrayAttr>("arguments");
-    auto implementation =
-        declaration->getAttrOfType<StringAttr>("implementation");
-    if (!contract || !arguments || !implementation)
-      return error("constructed-participant-binding");
-    auto encoded =
-        protocol::encodeBindingArguments(contract.getValue(), arguments);
-    if (!encoded)
-      return encoded.takeError();
-    json::Array values;
-    for (const auto &argument : *encoded)
-      values.push_back(argument);
-    return json::Array{contract.getValue().str(), std::move(values),
-                       implementation.getValue().str()};
+    auto data = exportBindingData(declaration);
+    if (!data)
+      return data.takeError();
+    return std::move(*data);
   }
-  json::Array attributes(Operation &op) {
+  Expected<json::Array> attributes(Operation &op) {
     json::Array result;
-    for (NamedAttribute attribute : op.getAttrs())
-      result.push_back(json::Array{attribute.getName().getValue().str(),
-                                   attributeValue(attribute.getValue())});
+    for (NamedAttribute attribute : op.getAttrs()) {
+      if (attribute.getName() == "parameters" && isa<exec::ApplyOp>(op)) {
+        auto declaration = symbols.lookup<runtime::BindingOp>(
+            cast<exec::ApplyOp>(op).getBinding());
+        if (!declaration)
+          return error("constructed-participant-binding");
+        auto parameters = exportInvocationParametersData(
+            declaration.getContract(), declaration.getArgumentsAttr(),
+            cast<exec::ApplyOp>(op).getParametersAttr());
+        if (!parameters)
+          return parameters.takeError();
+        json::Array values;
+        for (auto &parameter : *parameters)
+          values.push_back(json::Array{"parameter", std::move(parameter)});
+        result.push_back(json::Array{attribute.getName().getValue().str(),
+                                     json::Array{"array", std::move(values)}});
+        continue;
+      }
+      auto value = exportSemanticAttributeData(attribute.getValue());
+      if (!value)
+        return value.takeError();
+      result.push_back(
+          json::Array{attribute.getName().getValue().str(), std::move(*value)});
+    }
     return result;
   }
   Expected<SmallVector<unsigned>> terminal(ValueRange values) {
@@ -1756,11 +1726,17 @@ class ParticipantExporter {
     auto arguments = operands(inputs);
     if (!arguments)
       return arguments.takeError();
+    auto metadata = attributes(op);
+    if (!metadata)
+      return metadata.takeError();
+    auto types = exportLogicalTypesData(outputs);
+    if (!types)
+      return types.takeError();
     json::Array instruction{op.getName().getStringRef().str(),
-                            attributes(op),
+                            std::move(*metadata),
                             std::move(*declaration),
                             std::move(*arguments),
-                            printedTypes(outputs),
+                            std::move(*types),
                             std::move(regions)};
     if (op.getName().getStringRef() == "protocol.service_query") {
       auto site = op.getAttrOfType<StringAttr>("site");
@@ -1894,8 +1870,11 @@ public:
         json::Array yieldedList;
         for (unsigned index : *yielded)
           yieldedList.push_back(index);
-        json::Array region{printedTypes(loop.getArgumentTypes()),
-                           std::move(nested), std::move(yieldedList)};
+        auto arguments = exportLogicalTypesData(loop.getArgumentTypes());
+        if (!arguments)
+          return arguments.takeError();
+        json::Array region{std::move(*arguments), std::move(nested),
+                           std::move(yieldedList)};
         if (auto e = emit(op, op.getOperands(), op.getResultTypes(), out,
                           json::Array{std::move(region)}))
           return std::move(e);
@@ -1967,12 +1946,17 @@ public:
                         std::to_string(root), std::to_string(input.getInt()),
                         contract.getValue().str()});
       }
+    auto inputs = exportLogicalTypesData(type.getInputs());
+    if (!inputs)
+      return inputs.takeError();
+    auto outputs = exportLogicalTypesData(type.getResults());
+    if (!outputs)
+      return outputs.takeError();
     json::Value record(json::Array{
         "zkc.constructed-participant/0", sha256Identity(source),
         sha256Identity(candidate), encodeNativeProofPolicy(policy),
-        participant.getSymName().str(), printedTypes(type.getInputs()),
-        printedTypes(type.getResults()), std::move(instructions),
-        std::move(results), std::move(services)});
+        participant.getSymName().str(), std::move(*inputs), std::move(*outputs),
+        std::move(instructions), std::move(results), std::move(services)});
     if (printJson(record).size() > 1024 * 1024)
       return error("constructed-participant-limit");
     return record;

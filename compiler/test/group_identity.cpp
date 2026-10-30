@@ -173,7 +173,7 @@ int main() {
                   observed += d.str();
                   diagnostic |= namesIdentifier(
                       d.str(), generator ? "numerical-lowering-correspondence"
-                                         : "execution-source-closure");
+                                         : "binding-signature");
                   return success();
                 });
                 if (generator) {

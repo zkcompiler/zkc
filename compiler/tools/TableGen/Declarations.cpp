@@ -87,7 +87,8 @@ std::string indices(ArrayRef<int64_t> values) {
 struct Model {
   DeclarationOrder order;
   Records sorts, types, operations, members, capabilities, rules, typeExports,
-      families, familyCases, associatedTypes, capabilityExports;
+      families, familyCases, associatedTypes, capabilityExports,
+      consumerProfiles;
   explicit Model(const RecordKeeper &records)
       : order(records), sorts(order.sort("ZKC_Sort")),
         types(order.sort("ZKC_Type")), operations(order.sort("ZKC_Operation")),
@@ -98,15 +99,18 @@ struct Model {
         families(order.sort("ZKC_TypeFamily")),
         familyCases(order.sort("ZKC_TypeFamilyCase")),
         associatedTypes(order.sort("ZKC_AssociatedType")),
-        capabilityExports(order.sort("ZKC_CapabilityExport")) {
+        capabilityExports(order.sort("ZKC_CapabilityExport")),
+        consumerProfiles(order.sort("ZKC_ConsumerProfile")) {
     if (records.getAllDerivedDefinitions("ZKC_Declaration").size() > 100000)
       PrintFatalError("declaration record limit");
     validateMathematicalDeclarations(records);
     validate();
+    validateConsumerProfiles();
   }
   void validate();
-  void validateOperation(const Record *op);
+  void validateOperation(const Record *op, bool consumer = false);
   void validateFacets(const Record *op);
+  void validateConsumerProfiles();
 };
 void uniqueNames(ArrayRef<const Record *> records, StringRef category) {
   std::set<std::string> names;
@@ -239,7 +243,7 @@ void Model::validate() {
             "source capability requires a unary domain predicate");
   }
 }
-void Model::validateOperation(const Record *op) {
+void Model::validateOperation(const Record *op, bool consumer) {
   require(path(name(op), "."), op, "invalid operation key");
   const auto stage = name(op->getValueAsDef("stage"));
   require(stage == "Source" || stage == "Construction" ||
@@ -305,7 +309,7 @@ void Model::validateOperation(const Record *op) {
     for (const auto *arg : args)
       require(available.count(arg), op, "unscoped typed reference");
   };
-  for (auto field : {"inputs", "outputs", "requirements", "facets"})
+  for (auto field : {"inputs", "outputs", "requirements"})
     require(op->getValueAsListOfDefs(field).size() <= 1024, op,
             "operation declaration limit");
   if (auto *family = optionalDef(op, "numerical")) {
@@ -394,7 +398,11 @@ void Model::validateOperation(const Record *op) {
     require(kind == "Domain" && sort == "Field", op,
             "parameter field must have Field sort");
   }
-  validateFacets(op);
+  if (!consumer) {
+    require(op->getValueAsListOfDefs("facets").size() <= 1024, op,
+            "operation declaration limit");
+    validateFacets(op);
+  }
 }
 std::string facetKind(const Record *r) {
   for (auto kind : {"History", "Observation", "Sampling", "Diagonal",
@@ -868,6 +876,38 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
     os << "{" << quote(r->getValueAsString("module")) << ", " << quote(name(r))
        << ", " << quote(name(r->getValueAsDef("capability"))) << "},\n";
   os << "}; return values; }\n";
+  os << "llvm::ArrayRef<ConsumerProfile> consumerProfiles() {\n"
+        "static const std::vector<ConsumerProfile> values = {\n";
+  for (const auto *profile : m.consumerProfiles) {
+    os << "{" << quote(name(profile))
+       << ", ConsumerImplementation::Unselected, "
+       << names(profile->getValueAsListOfDefs("typeConstructors")) << ", {";
+    for (auto validator :
+         profile->getValueAsListOfStrings("parameterValidators"))
+      os << "ParameterValidator::" << validator << ",";
+    os << "}, {\n";
+    for (const auto *entry : profile->getValueAsListOfDefs("operations")) {
+      os << "{" << quote(name(entry->getValueAsDef("operation"))) << ", {";
+      for (const auto *term : entry->getValueAsListOfDefs("scope"))
+        if (term->isSubClassOf("ZKC_Root")) {
+          emitParameter(term->getValueAsDef("parameter"));
+          os << ",";
+        }
+      os << "}},\n";
+    }
+    os << "}},\n";
+  }
+  os << "}; return values; }\n"
+        "const ConsumerProfile *consumerProfile(llvm::StringRef name) {\n"
+        "for (const auto &p : consumerProfiles()) if (p.name == name) return "
+        "&p;\n"
+        "return nullptr; }\n"
+        "const ConsumerProfileOperation *consumerProfileOperation(\n"
+        "llvm::StringRef profile, llvm::StringRef operation) {\n"
+        "auto *p = consumerProfile(profile); if (!p) return nullptr;\n"
+        "for (const auto &op : p->operations) if (op.operation == operation) "
+        "return &op;\n"
+        "return nullptr; }\n";
 }
 // An inert inspection view. It exposes declaration structure, never executable
 // callbacks or an admission claim. Native/formal interpretation stays separate.
@@ -966,6 +1006,102 @@ json::Object facetJSON(const Record *facet) {
   }
   return result;
 }
+json::Object operationInterfaceJSON(const Record *op) {
+  auto scope = op->getValueAsListOfDefs("scope");
+  json::Array terms;
+  for (const auto *term : scope)
+    terms.push_back(scopeTermJSON(term, scope));
+  const auto *p = op->getValueAsDef("parameters");
+  const auto maximum = p->getValueAsInt("maximum");
+  json::Object object{
+      {"scope", std::move(terms)},
+      {"stage", name(op->getValueAsDef("stage"))},
+      {"parameters",
+       json::Object{{"validator", name(p)},
+                    {"minimum", p->getValueAsInt("minimum")},
+                    {"maximum", maximum < 0 ? json::Value(nullptr)
+                                            : json::Value(maximum)}}},
+      {"requirements", applicationsJSON(op, "requirements")}};
+  if (auto *field = optionalDef(op, "parameterField"))
+    object["parameters"].getAsObject()->try_emplace("fieldTerm",
+                                                    termIndex(scope, field));
+  if (!p->getValueAsString("assetFormat").empty())
+    object["parameters"].getAsObject()->try_emplace(
+        "assetFormat", p->getValueAsString("assetFormat"));
+  if (auto *family = optionalDef(op, "numerical"))
+    object["signature"] = json::Object{
+        {"kind", "numerical"},
+        {"fieldTerm", termIndex(scope, family->getValueAsDef("fieldTerm"))},
+        {"result", family->getValueAsString("result")}};
+  else
+    object["signature"] =
+        json::Object{{"kind", "fixed"},
+                     {"inputs", applicationsJSON(op, "inputs")},
+                     {"outputs", applicationsJSON(op, "outputs")}};
+  return object;
+}
+void Model::validateConsumerProfiles() {
+  uniqueNames(consumerProfiles, "consumer profile");
+  const std::set<StringRef> supportedValidators{
+      "None",          "Natural",       "Extent",         "FieldLiteral",
+      "FieldLiterals", "MatrixShape",   "MatrixIdentity", "AssetIdentity",
+      "MatrixVector",  "GatherIndices", "ScatterIndices", "NativeOrigin"};
+  std::set<const Record *> selectedEntries;
+  for (const auto *profile : consumerProfiles) {
+    require(!name(profile).empty(), profile, "empty consumer profile identity");
+    require(profile->getValueAsString("implementation") == "unselected",
+            profile, "unsupported profile implementation policy");
+    std::set<const Record *> constructors;
+    for (const auto *type : profile->getValueAsListOfDefs("typeConstructors")) {
+      require(is_contained(types, type), profile,
+              "unknown profile constructor");
+      require(constructors.insert(type).second, profile,
+              "duplicate profile constructor");
+    }
+    std::set<StringRef> validators;
+    for (auto validator :
+         profile->getValueAsListOfStrings("parameterValidators")) {
+      require(supportedValidators.count(validator), profile,
+              "unsupported profile parameter family");
+      require(validators.insert(validator).second, profile,
+              "duplicate profile validator");
+    }
+    std::set<const Record *> selected;
+    for (const auto *entry : profile->getValueAsListOfDefs("operations")) {
+      selectedEntries.insert(entry);
+      const auto *op = entry->getValueAsDef("operation");
+      require(is_contained(operations, op), entry, "unknown profile operation");
+      require(selected.insert(op).second, entry,
+              "duplicate profile membership");
+      require(!optionalDef(op, "numerical") && !optionalDef(entry, "numerical"),
+              entry, "unsupported profile signature family");
+      // Validate the expectation independently, before comparing its neutral
+      // form. Record identity and TableGen inheritance confer no exception.
+      validateOperation(entry, true);
+      auto actual = operationInterfaceJSON(op);
+      auto expected = operationInterfaceJSON(entry);
+      for (auto field :
+           {"scope", "stage", "signature", "requirements", "parameters"})
+        require(*actual.get(field) == *expected.get(field), entry,
+                Twine("consumer operation ") + field + " mismatch");
+      require(validators.count(name(op->getValueAsDef("parameters"))), entry,
+              "unsupported profile validator");
+      auto checkType = [&](const Record *term) {
+        auto kind = parameter(term->getValueAsDef("parameter")).first;
+        require(kind != "Type" || term->isSubClassOf("ZKC_Apply"), entry,
+                "unsupported profile Type term");
+        if (term->isSubClassOf("ZKC_Apply"))
+          require(constructors.count(term->getValueAsDef("constructor")), entry,
+                  "unsupported profile type constructor");
+      };
+      for (auto field : {"scope", "inputs", "outputs"})
+        for (const auto *term : op->getValueAsListOfDefs(field))
+          checkType(term);
+    }
+  }
+  for (const auto *entry : order.sort("ZKC_ConsumerOperation"))
+    require(selectedEntries.count(entry), entry, "unowned consumer operation");
+}
 json::Object inventory(const Model &m) {
   json::Object result{{"format", "zkc.contract-declarations/0"}};
   json::Array sorts;
@@ -998,38 +1134,9 @@ json::Object inventory(const Model &m) {
     rules.push_back(json::Array{name(r->getValueAsDef("premise")),
                                 name(r->getValueAsDef("conclusion"))});
   for (const auto *op : m.operations) {
-    auto scope = op->getValueAsListOfDefs("scope");
-    json::Array terms, facets;
-    for (const auto *term : scope)
-      terms.push_back(scopeTermJSON(term, scope));
-    const auto *p = op->getValueAsDef("parameters");
-    const auto maximum = p->getValueAsInt("maximum");
-    json::Object object{
-        {"name", name(op)},
-        {"scope", std::move(terms)},
-        {"stage", name(op->getValueAsDef("stage"))},
-        {"parameters",
-         json::Object{{"validator", name(p)},
-                      {"minimum", p->getValueAsInt("minimum")},
-                      {"maximum", maximum < 0 ? json::Value(nullptr)
-                                              : json::Value(maximum)}}},
-        {"requirements", applicationsJSON(op, "requirements")}};
-    if (auto *field = optionalDef(op, "parameterField"))
-      object["parameters"].getAsObject()->try_emplace("fieldTerm",
-                                                      termIndex(scope, field));
-    if (!p->getValueAsString("assetFormat").empty())
-      object["parameters"].getAsObject()->try_emplace(
-          "assetFormat", p->getValueAsString("assetFormat"));
-    if (auto *family = optionalDef(op, "numerical"))
-      object["signature"] = json::Object{
-          {"kind", "numerical"},
-          {"fieldTerm", termIndex(scope, family->getValueAsDef("fieldTerm"))},
-          {"result", family->getValueAsString("result")}};
-    else
-      object["signature"] =
-          json::Object{{"kind", "fixed"},
-                       {"inputs", applicationsJSON(op, "inputs")},
-                       {"outputs", applicationsJSON(op, "outputs")}};
+    auto object = operationInterfaceJSON(op);
+    object["name"] = name(op);
+    json::Array facets;
     for (const auto *facet : op->getValueAsListOfDefs("facets"))
       facets.push_back(facetJSON(facet));
     object["facets"] = std::move(facets);
@@ -1089,6 +1196,27 @@ json::Object inventory(const Model &m) {
   result["associatedTypes"] = std::move(associatedTypes);
   result["mathematicalIdentities"] = std::move(meanings);
   result["mathematicalIntrinsics"] = std::move(intrinsics);
+  json::Array profiles;
+  for (const auto *profile : m.consumerProfiles) {
+    json::Array entries, constructors, validators;
+    for (const auto *entry : profile->getValueAsListOfDefs("operations")) {
+      auto object = operationInterfaceJSON(entry);
+      object["operation"] = name(entry->getValueAsDef("operation"));
+      entries.push_back(std::move(object));
+    }
+    for (const auto *type : profile->getValueAsListOfDefs("typeConstructors"))
+      constructors.push_back(name(type));
+    for (auto validator :
+         profile->getValueAsListOfStrings("parameterValidators"))
+      validators.push_back(validator);
+    profiles.push_back(json::Object{
+        {"name", name(profile)},
+        {"implementation", profile->getValueAsString("implementation")},
+        {"typeConstructors", std::move(constructors)},
+        {"parameterValidators", std::move(validators)},
+        {"operations", std::move(entries)}});
+  }
+  result["consumerProfiles"] = std::move(profiles);
   return result;
 }
 } // namespace

@@ -66,7 +66,9 @@ fn domain(sort: &'static str, identity: Identity) -> Result<Argument> {
 
 fn root(kind: Kind, text: &str) -> Result<Argument> {
     match kind {
-        Kind::Domain("Slot") => ResourceDomain::parse(text).map(Argument::Slot),
+        Kind::Domain("Slot") => ResourceDomain::parse(text)
+            .map(Argument::Slot)
+            .map_err(|_| AdmissionError::new(ErrorCode::Type, "binding-resource-unit-domain")),
         Kind::Domain(sort) => domain(sort, Identity::parse(text)?),
         Kind::Type => LogicalType::parse(text).map(Argument::Type),
         Kind::Nat => super::super::structural::natural(text).map(Argument::Nat),

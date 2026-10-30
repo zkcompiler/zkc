@@ -2,6 +2,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/OperationShapes.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
@@ -461,7 +462,7 @@ struct EliminatePolynomialsPass
   }
   void runOnOperation() final {
     auto source = getOperation();
-    if (mlir::failed(verify(source)) ||
+    if (mlir::failed(zkc::admitStage(source)) ||
         !llvm::hasSingleElement(*source.getBody()))
       return signalPassFailure();
     auto original =
@@ -481,7 +482,7 @@ struct EliminatePolynomialsPass
       if (mlir::failed(
               eliminatePolynomials(participant.getBody().front(), remaining)))
         return signalPassFailure();
-    if (mlir::failed(verify(*candidate)) ||
+    if (mlir::failed(zkc::admitStage(*candidate)) ||
         mlir::failed(
             mathematical::verifyProjectionPreserved(source, *candidate)))
       return signalPassFailure();

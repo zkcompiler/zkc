@@ -2,6 +2,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -222,7 +223,7 @@ int main(int argc, char **argv) {
     cases.run(label, [&] {
       auto candidate = sf::clone(*expanded);
       change(*candidate);
-      require(succeeded(verify(*candidate)),
+      require(succeeded(zkc::admitStage(*candidate)),
               "semantic mutation must remain admitted");
       ScopedDiagnosticHandler quiet(&context,
                                     [](Diagnostic &) { return success(); });
@@ -321,8 +322,12 @@ int main(int argc, char **argv) {
         diagnostics += diagnostic.str();
         return success();
       });
-      require(failed(verify(*candidate)) &&
-                  failed(compare(*source, *candidate)),
+      // Type and binding mismatches are structural; unsupported source
+      // attributes are owned by admission of the complete execution closure.
+      auto admitted = change == "scale-types" || change == "binding-field"
+                          ? verify(*candidate)
+                          : zkc::admitStage(*candidate);
+      require(failed(admitted) && failed(compare(*source, *candidate)),
               "malformed candidate escaped actual source admission");
       require(namesIdentifier(diagnostics, change == "scale-types" ||
                                                    change == "binding-field"
@@ -591,7 +596,7 @@ func.func private @test(%x:!F)->i1 {
                       {take(algebra::importRingExpression(
                           &context, take(ring::readExpressionText(wrong))))}));
               require(
-                  succeeded(verify(*result)) &&
+                  succeeded(zkc::admitStage(*result)) &&
                       failed(compare(*original, *result, policy)),
                   "capacity fallback concealed an admitted semantic mismatch");
             }
@@ -766,7 +771,7 @@ module { "protocol.module"() ({
     auto original = parse(edit(fixture, " \"protocol.func\"",
                                declarations + " \"protocol.func\""));
     auto scalar = sc::computation(function(*original, "formula"), "scalar");
-    require(succeeded(verify(*original)),
+    require(succeeded(zkc::admitStage(*original)),
             "shared scalar computation malformed");
     auto candidate = prepare(*original);
     require(

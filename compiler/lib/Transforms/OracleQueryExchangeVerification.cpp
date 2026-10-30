@@ -1,3 +1,4 @@
+#include "NativeBindingApplication.h"
 #include "OracleQueryExchange.h"
 #include "OracleVerificationContext.h"
 #include "zkc/Dialect/Bindings.h"
@@ -72,13 +73,11 @@ struct Reader {
                          binding.getArguments().size() == statics.size() &&
                          op.getParameters().size() == parameters.size()))
         return values;
-      reader.expect(bindingMatches(
-          binding,
-          {binding.getSymName().str(),
-           {contract.str(),
-            std::vector<std::string>(statics.begin(), statics.end()),
-            {}}},
-          false));
+      SmallVector<Attribute> arguments;
+      for (const auto &identity : statics)
+        arguments.push_back(StringAttr::get(op.getContext(), identity));
+      reader.expect(matchesNativeBinding(
+          binding, {contract.str(), std::move(arguments), {}}));
       reader.expect(
           invocationParametersMatch(contract, binding.getArgumentsAttr(),
                                     op.getParametersAttr(), parameters));

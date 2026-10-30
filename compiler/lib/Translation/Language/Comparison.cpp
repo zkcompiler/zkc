@@ -6,6 +6,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/OperationShapes.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -21,12 +22,14 @@
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
+#include "zkc/Dialect/StructuredData.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Language/SourceTerms.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Entry.h"
 #include "zkc/Translation/Language.h"
@@ -1865,12 +1868,24 @@ public:
     auto retained = inspectComponentDeclarations(project, limits);
     if (!retained)
       return retained.takeError();
-    auto declarations =
-        native->getAttrOfType<mlir::StringAttr>("source_declarations");
-    if ((*retained == "[[],[]]" && declarations) ||
-        (*retained != "[[],[]]" &&
-         (!declarations || declarations.getValue() != *retained)))
-      return error("source.correspondence", "source declarations differ");
+    auto declarations = native->getAttr("source_declarations");
+    if (*retained == "[[],[]]") {
+      if (declarations)
+        return error("source.correspondence", "source declarations differ");
+    } else {
+      auto expected = parseNaturalJson(*retained, limits.interfaceBytes, 64,
+                                       "component-declaration", "source.limit");
+      if (!expected)
+        return expected.takeError();
+      auto actual = exportDeclarationData(declarations);
+      if (!actual) {
+        consumeError(actual.takeError());
+        return error("source.correspondence",
+                     "source declaration carrier differs");
+      }
+      if (!equalNaturalJson(*actual, *expected))
+        return error("source.correspondence", "source declarations differ");
+    }
     SmallVector<mlir::Operation *> functions;
     std::map<std::string, protocol_ir::ConstructionOp> constructions;
     std::map<std::string, relation::DeclareOp> relations;
@@ -2215,7 +2230,7 @@ Expected<Correspondence> compareOriginal(const ClosedEntry &project,
   if (project.project().installationIdentity() != installedCatalogIdentity())
     return error("source.environment",
                  "source was checked against another installed catalog");
-  if (!module || mlir::failed(mlir::verify(module)))
+  if (!module || mlir::failed(zkc::admitStage(module)))
     return error("target.admission",
                  "original failed mathematical IR admission");
   if (project.entry().kind == Declaration::Kind::EntryFunction)
@@ -2229,7 +2244,7 @@ Expected<Correspondence> compareNumericalOriginal(const ClosedEntry &project,
   auto definitions = numericalDefinitions(project, fragment);
   if (!definitions)
     return definitions.takeError();
-  if (!module || mlir::failed(mlir::verify(module)))
+  if (!module || mlir::failed(zkc::admitStage(module)))
     return error("target.admission", "numerical original failed admission");
   return Comparator(project, module, limits, *definitions).run();
 }

@@ -33,14 +33,22 @@ records ownership and consumers; it adds no execution registry or authority.
 
 | Fact or obligation | Existing carrier and lifetime |
 |---|---|
-| Nominal domain, ports and mathematical laws | `OperationContracts`, logical types and admitted `BindingApplication`; stable declaration facts |
-| Representation and fixed implementation | `PhysicalPlan`, selected binding and `BoundSignature`; checked against the actual materialized call |
+| Nominal domain, ports and mathematical laws | `OperationContracts`, native logical types and kinded binding attributes; stable declaration facts |
+| Representation and fixed implementation | `PhysicalPlan`, native binding choices and complete `FunctionType` ports; checked against the actual materialized declaration and call |
 | Binding lifetime | Checked physical schedule and actual `runtime.release_bindings` instructions; block-local uses and discardability, without ownership of shared backing |
 | Immutable dependencies | Source SSA/helper closure and exact static application attributes; compiler analyses expire when either changes |
 | Installed code | `InstalledOperation`; linked against the instance's owned backend, with no captured frame or resource authority |
 | Role, site, origin and ordered operands | `CallContext` and the active VM frame; derived at the reached invocation |
 | Output allowance and retained backing | `Invocation`, VM storage accounting and provider value contracts; aliases retain their backing, fresh output consumes capacity |
 | Setup authorization, capability generation and resource successors | Provider custody checks at use; a handle or cached validation result cannot replace them |
+
+Native recipes and physical candidate catalogs carry `NativeBindingApplication`:
+contract and implementation identities, kinded attributes, and the complete
+selected value signature where applicable. Candidate policy supplies preferences;
+installation formation and actual-body checking independently establish whether
+they apply. Storage permissions inspect native types directly. The neutral
+`BindingApplication` and `BoundSignature` remain boundary contracts for program
+bytes and their independent readers; native policy does not serialize into them.
 
 `exec.apply` is the single executable contract invocation. Its `runtime.binding`
 symbol fixes the operation and static specialization; its actual inputs and

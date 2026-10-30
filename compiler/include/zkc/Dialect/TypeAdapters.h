@@ -15,7 +15,9 @@
 
 namespace zkc::protocol::type_adapters {
 /// Native catalog observations and boundary translation are distinct callbacks.
-/// Observations inspect MLIR storage; parseBoundType owns byte-type admission.
+/// Observations inspect MLIR storage. Owner encode callbacks remain part of the
+/// contribution contract; encodeBoundType alone exports and admits a complete
+/// native tree. parseBoundType independently admits neutral input bytes.
 /// A callback returns no value when its carrier does not apply.
 struct TypeAdapter {
   llvm::StringLiteral constructor;
@@ -38,8 +40,6 @@ template <ParameterKind... Kinds> struct ParameterKinds {};
 llvm::ArrayRef<llvm::ArrayRef<TypeAdapter>> installedAdapters();
 /// Unknown or multiply registered constructors have no adapter.
 const TypeAdapter *findAdapter(llvm::StringRef constructor);
-/// Refuses both missing and ambiguous carrier matches, independently of order.
-llvm::Expected<BoundType> encodeLogicalType(mlir::Type);
 
 /// Native observations use typed getters, never the serialization callbacks.
 std::optional<CatalogTypeApplication> observeCatalogType(mlir::Type);

@@ -4,6 +4,7 @@
 #include "../lib/Target/PhysicalPlan.h"
 #include "../lib/Target/StorageSchedule.h"
 #include "mlir/IR/Verifier.h"
+#include "support/NativeBindings.h"
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFixture.h"
@@ -307,8 +308,8 @@ module { "protocol.module"() ({
 class CountingCatalog final : public CandidateCatalog {
 public:
   mutable unsigned queries = 0;
-  Expected<std::vector<std::string>>
-  implementations(const BindingApplication &application) const override {
+  Expected<std::vector<std::string>> implementations(
+      const zkc::NativeBindingApplication &application) const override {
     ++queries;
     if (application.contract == "poly.fold")
       return std::vector<std::string>{"arkworks-msb/poly.fold",
@@ -316,12 +317,12 @@ public:
     return installedCandidates().implementations(application);
   }
   std::vector<std::string> diagonalImplementations(
-      const BindingApplication &application) const override {
+      const zkc::NativeBindingApplication &application) const override {
     ++queries;
     return installedCandidates().diagonalImplementations(application);
   }
-  std::vector<BindingApplication>
-  conversions(const BoundType &from, const BoundType &to) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type from, mlir::Type to) const override {
     ++queries;
     return installedCandidates().conversions(from, to);
   }
@@ -334,6 +335,25 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+
+  cases.run("storage permissions use native types beyond byte export limits",
+            [&] {
+              std::string type = "i1";
+              for (unsigned depth = 0; depth != 22; ++depth)
+                type = "!data.sequence<" + type + ">";
+              auto source = scopedFixture("", "%data:" + type + ",%keep:i1",
+                                          "%data,%keep", type + ",i1", "i1",
+                                          scopedReturn("%keep", "i1"), 2);
+              auto module = take(executableFixture(source, context));
+              auto proposal = propose(*module);
+              auto checked = check(*module, proposal);
+              auto output = materializedCopy(*module, checked);
+              auto releases = take(proposeStorage(*output));
+              accept(validateStorage(*output, {}, releases));
+              auto helper = first<func::FuncOp>(*output);
+              refuses(encodeBoundType(helper.getArgument(1).getType(), true),
+                      "binding-type-limit");
+            });
 
   for (bool releases : {false, true})
     cases.run(releases ? "physical plan records releases"

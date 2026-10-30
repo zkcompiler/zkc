@@ -1,5 +1,6 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Translation/Relations.h"
@@ -22,7 +23,7 @@ Expected<OwningOpRef<ModuleOp>> importAIR(const AIR &relation, StringRef symbol,
   state.addAttribute("sym_name", b.getStringAttr(symbol));
   state.addAttributes(encodeAIRAttributes(b, relation).getValue());
   b.create(state);
-  if (failed(verify(*module)))
+  if (failed(zkc::admitStage(*module)))
     return zkc::error("air-ir");
   return module;
 }

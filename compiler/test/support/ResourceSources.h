@@ -40,7 +40,7 @@ public:
     context.loadAllAvailableDialects();
     builder.setInsertionPointToEnd(module->getBody());
     owner = protocol_ir::ProtocolModuleOp::create(
-        builder, location, protocol_ir::Profile::Protocol);
+        builder, location, protocol_ir::Profile::Protocol, mlir::ArrayAttr{});
     owner.getBody().emplaceBlock();
     scope = runtime::ScopeType::get(&context);
     index = builder.getIntegerType(64, false);

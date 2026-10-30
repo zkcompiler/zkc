@@ -145,10 +145,10 @@ def MathematicalOp : Op<ProtocolDialect, "func",
 
 def ProtocolModuleOp : Op<ProtocolDialect, "module",
     [IsolatedFromAbove, SymbolTable, SingleBlock, NoTerminator]> {
-  let arguments = (ins ProtocolProfileAttr:$profile);
+  let arguments = (ins ProtocolProfileAttr:$profile,
+    OptionalAttr<ArrayAttr>:$source_declarations);
   let regions = (region AnyRegion:$body);
   let hasVerifier = 1;
-  let hasRegionVerifier = 1;
 }
 
 // Retained source interfaces and actual symbol uses. This is compilation

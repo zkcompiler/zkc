@@ -4,6 +4,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Analysis/MathematicalFacts.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -269,7 +270,8 @@ int main() {
                 parseSourceString<ModuleOp>(source(fixture(length)), &context);
             StringRef expected =
                 length ? "finite-analysis-limit" : "finite-bound";
-            require(!module && llvm::is_contained(codes, expected.str()),
+            require((!module || failed(admitStage(*module))) &&
+                        llvm::is_contained(codes, expected.str()),
                     "mandatory check lost its status-specific diagnostic " +
                         expected);
             require(!llvm::is_contained(codes, length

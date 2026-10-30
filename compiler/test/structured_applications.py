@@ -199,7 +199,7 @@ with case('missing-unused-local-input-qualified-call-stop'):
     snapshot = export(local_source)
     main = next(row for row in snapshot[7] if row[1] == 'main')
     assert main[9] == ['block', [
-        [['protocol_apply', 'child', ['P', 'Q']], [0, 1], [field], [], 'A']
+        [['protocol_apply', 'child', ['P', 'Q']], [0, 1], [['apply', 'field', [['domain', 'Field', 'bls12-381.fr']]]], [], 'A']
     ], ['return', [0]]]
     assert run(local_source, ['7', None]) == stopped('incomplete', 'apply_1_A_work')
     assert run(local_source, ['7', '8']) == returned(['7'])

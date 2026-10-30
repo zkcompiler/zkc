@@ -3,6 +3,7 @@
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Language/Project.h"
@@ -228,7 +229,10 @@ int main() {
       }
       ScopedDiagnosticHandler quiet(
           &context, [](mlir::Diagnostic &) { return success(); });
-      require(succeeded(verify(*module)) == formed,
+      // The ordinary-call substitution has an invalid ABI. The other
+      // mutations admit native stages and fail source correspondence.
+      auto admitted = formed ? zkc::admitStage(*module) : verify(*module);
+      require(succeeded(admitted) == formed,
               "mutation reached the wrong formation boundary");
       refuses(compareOriginal(closed, *module),
               formed ? "source.correspondence" : "target.admission");

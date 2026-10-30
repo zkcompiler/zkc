@@ -9,6 +9,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/ComputationRecipes.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -96,7 +97,8 @@ OwningOpRef<ModuleOp> fixture(MLIRContext &context, unsigned width = 0,
                               bool callFree = false, unsigned depth = 0) {
   auto result = parseSourceString<ModuleOp>(fixtureText(width, callFree, depth),
                                             &context);
-  require(bool(result) && succeeded(verify(*result)), "fixture refused");
+  require(bool(result) && succeeded(zkc::admitStage(*result)),
+          "fixture refused");
   return result;
 }
 bool same(Operation *left, Operation *right) {
@@ -199,7 +201,8 @@ int main() {
     auto step = helper(*source, "step");
     OpBuilder builder(&step.front().back());
     builder.clone(step.front().front());
-    require(succeeded(verify(*source)), "duplicate-call fixture refused");
+    require(succeeded(zkc::admitStage(*source)),
+            "duplicate-call fixture refused");
     work = 100000;
     size = finite::sizeCallbackPreparation(c, unit(*source), work, outcome);
     require(size && size->work == 31 && !size->arrayProjections &&
@@ -227,7 +230,7 @@ int main() {
  %selected = "algebra.array_at"(%pack) {index=1:i64} : (!algebra.field_array<"koala-bear",2>)->!F
 )mlir");
     auto source = parseSourceString<ModuleOp>(text, &context);
-    require(bool(source) && succeeded(verify(*source)),
+    require(bool(source) && succeeded(zkc::admitStage(*source)),
             "packed helper refused");
     uint64_t work = 100000;
     OptimizationOutcome outcome;
@@ -286,7 +289,7 @@ int main() {
                 diagnostic |= namesIdentifier(value.str(), "finite-formation");
                 return success();
               });
-              require(succeeded(verify(*source)) == (depth < 62),
+              require(succeeded(zkc::admitStage(*source)) == (depth < 62),
                       "whole-source helper path has the wrong bound");
               require(depth < 62 || diagnostic,
                       "whole-source depth refusal lost its identifier");
@@ -512,7 +515,7 @@ int main() {
           mapping.map(total.getArgument(1), step.getArgument(0));
           OpBuilder builder(&step.front().front());
           builder.clone(total.front().front(), mapping);
-          require(succeeded(verify(*source)), "nested source refused");
+          require(succeeded(zkc::admitStage(*source)), "nested source refused");
           CheckedHelperNormalizations helpers(unit(*source));
           require(succeeded(helpers.prepare(step)),
                   "nested realization normalization refused");

@@ -451,13 +451,13 @@ Expected<LaneRealizationResult> emitNumericalLanes(const LaneFormula &formula,
   auto field = dyn_cast<algebra::FieldType>(finite::elementType(vector));
   if (!field || !rows || !rows.getType().isUnsignedInteger(64))
     return unsupported();
-  std::string mask;
+  SmallVector<bool> access;
   SmallVector<Value> operands{rows};
   for (const auto &slot : formula.slots) {
     if (!slot.value ||
         slot.value.getType() != (slot.lanes ? vector : Type(field)))
       return unsupported();
-    mask += slot.lanes ? '1' : '0';
+    access.push_back(slot.lanes);
     operands.push_back(slot.value);
   }
   // An admitted identity map borrows its existing column. Domain guards and
@@ -539,21 +539,21 @@ Expected<LaneRealizationResult> emitNumericalLanes(const LaneFormula &formula,
   StringRef contract = mode == LaneResultMode::Map   ? "numerical.map"
                        : mode == LaneResultMode::Sum ? "numerical.sum"
                                                      : "numerical.product";
-  protocol::BindingApplication binding{
-      contract.str(), {field.getDomain().str(), mask}, ""};
+  NativeBindingApplication binding{
+      contract.str(),
+      {StringAttr::get(field.getContext(), field.getDomain()),
+       DenseBoolArrayAttr::get(field.getContext(), access)},
+      ""};
   // Feasibility is checked before invoking the emitter, including exact
   // field/body/slot agreement. An invalid producer is an error, not fallback.
-  auto arguments =
-      protocol::decodeBindingArguments(field.getContext(), binding);
-  if (!arguments)
-    return arguments.takeError();
   auto silent = [&] {
     auto diagnostic = emitError(UnknownLoc::get(field.getContext()));
     diagnostic.abandon();
     return diagnostic;
   };
   if (failed(verifyInvocationParameters(
-          silent, contract, *arguments,
+          silent, contract,
+          ArrayAttr::get(field.getContext(), binding.arguments),
           ArrayAttr::get(field.getContext(), {*body}))))
     return zkc::error("mathematical-lane-realization",
                       "invalid numerical parameters");

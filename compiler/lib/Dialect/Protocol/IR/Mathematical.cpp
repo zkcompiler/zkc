@@ -694,7 +694,7 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
   for (auto attr : module->getAttrs())
     if (attr.getName() != "profile" &&
         !(attr.getName() == "source_declarations" &&
-          isa<StringAttr>(attr.getValue())))
+          isa<ArrayAttr>(attr.getValue())))
       return diagnostics::emit(
           module.emitOpError(), "mathematical-module",
           "unexpected common mathematical module attribute");

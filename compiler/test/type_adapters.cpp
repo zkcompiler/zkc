@@ -50,6 +50,19 @@ void roundTrip(MLIRContext &context, const BoundType &bound, bool physical) {
                    : "binding-logical-type-at-physical-stage");
   require(decodeBoundType(&context, encoded) == native,
           "native type identity changed");
+  // Contribution callbacks remain an owner contract. Check their unique
+  // applicability and byte agreement independently of canonical export.
+  unsigned matches = 0;
+  auto expected = physical ? erasePhysicalType(bound) : bound;
+  for (auto table : type_adapters::installedAdapters())
+    for (const auto &adapter : table)
+      if (auto value =
+              adapter.encode(logicalValueType(native), adapter.constructor)) {
+        ++matches;
+        require(value->kind == adapter.constructor && *value == expected,
+                "owner callback disagrees with canonical type export");
+      }
+  require(matches == 1, "missing or ambiguous owner encoding callback");
   std::string printed;
   llvm::raw_string_ostream stream(printed);
   native.print(stream);
@@ -274,30 +287,31 @@ int main() {
                     "translation initialized a dialect");
           });
   }
-  cases.run("cached and standalone translation preserve exact carriers", [&] {
-    // Loading the owners directly omits registry extensions. Both paths must
-    // admit precisely the same closed logical and physical identities.
-    MLIRContext standalone;
-    standalone
-        .loadDialect<algebra::AlgebraDialect, data::DataDialect,
-                     crypto::CryptoDialect, poly::PolynomialDialect,
-                     runtime::RuntimeDialect, commitment::CommitmentDialect>();
-    for (const auto &[spelling, native] : nativeCases) {
-      auto bound = take(parseBoundType(spelling, false));
-      auto other = decodeBoundType(&standalone, bound);
-      require(bool(other), "standalone carrier missing");
-      require(take(encodeBoundType(native, false)) ==
-                  take(encodeBoundType(other, false)),
-              "context extension changed logical translation");
-      auto physical = defaultRepresentation(bound);
-      if (!physical) {
-        consumeError(physical.takeError());
-        continue;
-      }
-      roundTrip(standalone, *physical, true);
-      roundTrip(context, *physical, true);
-    }
-  });
+  cases.run(
+      "registered and standalone translation preserve exact carriers", [&] {
+        // Loading the owners directly omits registry extensions. Both paths
+        // must admit precisely the same closed logical and physical identities.
+        MLIRContext standalone;
+        standalone.loadDialect<algebra::AlgebraDialect, data::DataDialect,
+                               crypto::CryptoDialect, poly::PolynomialDialect,
+                               runtime::RuntimeDialect,
+                               commitment::CommitmentDialect>();
+        for (const auto &[spelling, native] : nativeCases) {
+          auto bound = take(parseBoundType(spelling, false));
+          auto other = decodeBoundType(&standalone, bound);
+          require(bool(other), "standalone carrier missing");
+          require(take(encodeBoundType(native, false)) ==
+                      take(encodeBoundType(other, false)),
+                  "context extension changed logical translation");
+          auto physical = defaultRepresentation(bound);
+          if (!physical) {
+            consumeError(physical.takeError());
+            continue;
+          }
+          roundTrip(standalone, *physical, true);
+          roundTrip(context, *physical, true);
+        }
+      });
   cases.run("parallel repeated translation retains context and stage", [&] {
     std::vector<std::future<void>> workers;
     for (unsigned i = 0; i < 4; ++i)
@@ -703,6 +717,183 @@ int main() {
     refuses(
         encodeBoundType(zkc::algebra::FieldType::get(&context, "f7"), false),
         "binding-type-identity");
+  });
+  cases.run(
+      "structural export freezes nested variant bytes and every layout", [&] {
+        auto inner = *encodeVariant({json::Array{"Inner", "phantom"},
+                                     {{"present", {"bool"}}, {"none", {}}}});
+        auto outer = *encodeVariant({"Outer",
+                                     {{"none", {}},
+                                      {"active", {inner}},
+                                      {"inactive", {"field:bls12-381.fr"}}}});
+        auto bound = take(parseBoundType(outer, false));
+        auto logical = decodeBoundType(&context, bound);
+        require(
+            take(encodeBoundType(logical, false)).spelling() == outer,
+            "nested table numbering, nominal identity or arm order changed");
+        auto selected = take(physicalType(
+            bound, "logical.variant/0",
+            {take(defaultRepresentation(take(parseBoundType(inner, false)))),
+             take(parseBoundType("field:bls12-381.fr@blst/fr", true))}));
+        roundTrip(context, selected, true);
+        auto native =
+            cast<runtime::RepresentedType>(decodeBoundType(&context, selected));
+        auto exported = take(encodeBoundType(native, true));
+        require(exported.physicalChildren &&
+                    exported.physicalChildren->size() == 2 &&
+                    exported.physicalChildren->back().representation ==
+                        "blst/fr",
+                "inactive selected representation was replaced by a default");
+        auto children = SmallVector<Type>(native.getChildren());
+        children.pop_back();
+        refuses(encodeBoundType(
+                    runtime::RepresentedType::get(
+                        &context, logical, "logical.variant/0", children),
+                    true),
+                "binding-representation");
+        children.assign(native.getChildren().begin(),
+                        native.getChildren().end());
+        children.back() = runtime::RepresentedType::get(
+            &context, algebra::FieldType::get(&context, "bls12-381.fr"),
+            "foreign/layout", ArrayRef<Type>{});
+        refuses(encodeBoundType(
+                    runtime::RepresentedType::get(
+                        &context, logical, "logical.variant/0", children),
+                    true),
+                "binding-representation");
+      });
+  cases.run("native formation retains its wider variant shape allowance", [&] {
+    auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
+    auto identity = data::importVariantIdentity(&context, "BoundaryWidth");
+    auto boolean = IntegerType::get(&context, 1);
+    for (unsigned count : {32u, 33u}) {
+      SmallVector<data::AlternativeAttr> arms;
+      for (unsigned i = 0; i < count; ++i)
+        arms.push_back(data::AlternativeAttr::get(
+            &context, StringAttr::get(&context, "arm" + std::to_string(i)),
+            ArrayRef<Type>{boolean}));
+      auto native = data::VariantType::get(&context, identity, arms);
+      require(succeeded(verifyLogicalType(emit, native)),
+              "wire width limit leaked into native formation");
+      if (count == 32)
+        roundTrip(context, take(encodeBoundType(native, false)), false);
+      else
+        refuses(encodeBoundType(native, false), "variant-type");
+    }
+    for (unsigned count : {128u, 129u}) {
+      SmallVector<Type> payload(count, boolean);
+      auto arm = data::AlternativeAttr::get(
+          &context, StringAttr::get(&context, "payload"), payload);
+      auto native = data::VariantType::get(&context, identity, {arm});
+      require(succeeded(verifyLogicalType(emit, native)),
+              "wire payload limit leaked into native formation");
+      if (count == 128)
+        roundTrip(context, take(encodeBoundType(native, false)), false);
+      else
+        refuses(encodeBoundType(native, false), "variant-type");
+    }
+  });
+  cases.run(
+      "logical and physical export enforce the exact depth boundary", [&] {
+        auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
+        Type native = IntegerType::get(&context, 1);
+        for (unsigned i = 0; i < 8; ++i)
+          native = data::SequenceType::get(&context, native);
+        roundTrip(context, take(encodeBoundType(native, false)), false);
+        auto physical = defaultPhysicalType(emit, native);
+        require(bool(physical), "native layout refused an admitted depth");
+        roundTrip(context, take(encodeBoundType(physical, true)), true);
+        native = data::SequenceType::get(&context, native);
+        require(succeeded(verifyLogicalType(emit, native)),
+                "wire nesting became a native formation restriction");
+        refuses(encodeBoundType(native, false), "binding-type-limit");
+        physical = defaultPhysicalType(emit, native);
+        require(bool(physical), "native layout inherited the byte depth limit");
+        refuses(encodeBoundType(physical, true), "binding-type-limit");
+      });
+  cases.run(
+      "a formed large variant cannot bypass a nonvariant spelling cap", [&] {
+        auto arm = data::AlternativeAttr::get(
+            &context, StringAttr::get(&context, "none"), {});
+        auto identity =
+            data::importVariantIdentity(&context, std::string(2048, 'a'));
+        auto native = data::VariantType::get(&context, identity, {arm});
+        auto bound = take(encodeBoundType(native, false));
+        require(bound.spelling().size() > 4096,
+                "large variant fixture no longer exercises the spelling cap");
+        roundTrip(context, bound, false);
+        auto sequence = data::SequenceType::get(&context, native);
+        refuses(encodeBoundType(sequence, false), "binding-type-limit");
+      });
+  cases.run("nominal bytes never normalize into another native identity", [&] {
+    auto arm = data::AlternativeAttr::get(
+        &context, StringAttr::get(&context, "none"), {});
+    for (StringRef name :
+         {StringRef("line\nbreak"), StringRef("caf\xc3\xa9")}) {
+      auto identity = data::importVariantIdentity(&context, name.str());
+      auto native = data::VariantType::get(&context, identity, {arm});
+      auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
+      require(succeeded(verifyLogicalType(emit, native)),
+              "native nominal identity inherited the printable byte profile");
+      refuses(encodeBoundType(native, false), "variant-type");
+    }
+  });
+  cases.run("variant table expansion is bounded before byte publication", [&] {
+    json::Value nominal = json::Array{};
+    for (unsigned i = 0; i < 5000; ++i)
+      nominal.getAsArray()->push_back(std::string(1024, 'a'));
+    auto identity = data::importVariantIdentity(&context, nominal);
+    auto arm = data::AlternativeAttr::get(
+        &context, StringAttr::get(&context, "none"), {});
+    auto native = data::VariantType::get(&context, identity, {arm});
+    auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
+    require(succeeded(verifyLogicalType(emit, native)),
+            "table amplification fixture is not natively formed");
+    require(!encodeVariant({nominal, {{"none", {}}}}),
+            "independent byte reader admitted the amplification fixture");
+    refuses(encodeBoundType(native, false), "variant-type");
+  });
+  cases.run(
+      "export failures stay silent and reject foreign physical contexts", [&] {
+        unsigned diagnostics = 0;
+        ScopedDiagnosticHandler capture(&context, [&](Diagnostic &) {
+          ++diagnostics;
+          return success();
+        });
+        MLIRContext other(registry);
+        other.loadAllAvailableDialects();
+        auto foreign = algebra::FieldType::get(&other, "bls12-381.fr");
+        auto physical = runtime::RepresentedType::get(
+            &context, foreign, "arkworks.fr/0", ArrayRef<Type>{});
+        refuses(encodeBoundType(physical, true), "binding-representation");
+        refuses(encodeBoundType(algebra::FieldType::get(&context, "f7"), false),
+                "binding-type-identity");
+        refuses(encodeBoundType(runtime::RepresentedType::get(
+                                    &context, logical, "foreign/layout", {}),
+                                true),
+                "binding-representation");
+        require(diagnostics == 0,
+                "Expected-return type export leaked diagnostics");
+      });
+  cases.run("null nested carriers refuse before adapter observation", [&] {
+    auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
+    ScopedDiagnosticHandler silence(&context,
+                                    [](Diagnostic &) { return success(); });
+    require(!data::SequenceType::getChecked(emit, &context, Type{}) &&
+                !algebra::FixedVectorType::getChecked(emit, &context, Type{},
+                                                      uint64_t(4)),
+            "checked aggregate builder accepted a null child");
+#ifdef NDEBUG
+    // Assert-enabled MLIR builders stop before malformed storage exists.
+    // Public export must still refuse it in the supported release build.
+    for (Type bad :
+         {Type(data::SequenceType::get(&context, Type{})),
+          Type(algebra::FixedVectorType::get(&context, Type{}, 4))}) {
+      refuses(encodeBoundType(bad, false), "binding-type");
+      auto nested = data::SequenceType::get(&context, bad);
+      refuses(encodeBoundType(nested, false), "binding-type-identity");
+    }
+#endif
   });
   cases.run("null carrier and context", [&] {
     refuses(encodeBoundType({}, false), "binding-type");

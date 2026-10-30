@@ -1,10 +1,12 @@
 #include "OracleAnchorStorage.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
 #include <limits>
@@ -15,6 +17,8 @@ namespace {
 namespace pir = protocol_ir;
 Expected<Type> product(MLIRContext *context, json::Value identity,
                        ArrayRef<Type> fields) {
+  if (!context->getLoadedDialect<data::DataDialect>())
+    return error("oracle-storage-type");
   auto nominal = data::importVariantIdentity(context, identity);
   if (!nominal || fields.size() > 128)
     return error("oracle-storage-type-limit");
@@ -33,7 +37,6 @@ struct Planner {
   OracleStorageSelection select;
   OracleAnchorStorage result;
   unsigned remaining = 100000;
-  size_t bytes = 4 * 1024 * 1024;
   Error role(OracleAnchorConstructor &constructor, StringRef owner,
              ArrayRef<OracleStorageField> payload) {
     OracleRoleStorage storage;
@@ -64,20 +67,10 @@ struct Planner {
                 types);
     if (!record)
       return record.takeError();
-    auto bound = encodeBoundType(*record, false);
-    if (!bound)
-      return bound.takeError();
-    auto size = bound->spelling().size();
-    if (size > bytes)
-      return error("oracle-storage-limit");
-    bytes -= size;
-    BoundType sequence{
-        "sequence", {}, {}, {TypeArgument::typeArgument(*bound)}};
-    auto checked = parseBoundType(sequence.spelling(), false);
-    if (!checked)
-      return checked.takeError();
     storage.record = *record;
-    storage.sequence = decodeBoundType(context, *checked);
+    storage.sequence =
+        constructLogicalType([&] { return emitError(program.getLoc()); },
+                             context, {"sequence", {TypeAttr::get(*record)}});
     if (!storage.sequence)
       return error("oracle-storage-type");
     constructor.roles.push_back(std::move(storage));
@@ -153,24 +146,15 @@ struct Planner {
       if (scheme->empty())
         receiverFields.push_back({"data", data});
       else {
-        auto signature =
-            resolveLogicalBinding({"oracle.commit", {*scheme}, ""});
-        if (!signature)
-          return signature.takeError();
-        auto actualData = encodeBoundType(data, false);
-        if (!actualData)
-          return actualData.takeError();
-        if (signature->inputs.size() != 2 || signature->outputs.size() != 2 ||
-            !(signature->inputs[0] == *actualData) ||
-            signature->inputs[1].kind != "index" ||
-            signature->outputs[0].kind != "commitment" ||
-            signature->outputs[1].kind != "opening_state")
-          return error("oracle-storage-scheme");
         auto *context = program.getContext();
-        Type root = decodeBoundType(context, signature->outputs[0]);
-        Type state = decodeBoundType(context, signature->outputs[1]);
-        if (!root || !state)
+        auto signature = resolveLogicalSignature(
+            [&] { return emitError(program.getLoc()); }, context,
+            "oracle.commit", {StringAttr::get(context, *scheme)});
+        if (!signature || signature.getNumInputs() != 2 ||
+            signature.getNumResults() != 2 || signature.getInput(0) != data)
           return error("oracle-storage-scheme");
+        Type root = signature.getResult(0);
+        Type state = signature.getResult(1);
         holderFields.push_back({"opening_state", state});
         receiverFields.push_back({"root", root});
       }
@@ -218,6 +202,12 @@ Expected<Type> oracleReferenceType(pir::OracleKindAttr kind) {
           [&]() { return emitError(UnknownLoc::get(kind.getContext())); },
           kind.getIdentity(), kind.getArguments())))
     return error("oracle-storage-kind");
+  if (!kind.getContext()->getLoadedDialect<data::DataDialect>())
+    return error("oracle-storage-type");
+  // The reference's /0 nominal identity contains canonical interchange type
+  // strings. Encode only at this identity boundary; never decode the carrier
+  // to derive its native fields or oracle associations. Unserializable kinds
+  // cannot be published under this existing reference schema.
   auto data = encodeBoundType(kind.getDataType(), false);
   if (!data)
     return data.takeError();
@@ -237,7 +227,7 @@ Expected<Type> oracleReferenceType(pir::OracleKindAttr kind) {
 Expected<OracleAnchorStorage>
 planOracleAnchorStorage(ModuleOp prepared, StringRef entry,
                         OracleStorageSelection select) {
-  if (!select || !prepared || failed(verify(prepared)) ||
+  if (!select || !prepared || failed(zkc::admitStage(prepared)) ||
       !hasSingleElement(prepared.getBody()->getOperations()))
     return error("oracle-storage-source");
   auto module = dyn_cast<pir::ProtocolModuleOp>(prepared.getBody()->front());
@@ -250,6 +240,16 @@ planOracleAnchorStorage(ModuleOp prepared, StringRef entry,
   Planner planner{program, symbols, select, {entry.str(), {}}};
   if (auto e = planner.block(program.getBody().front(), {}, 1, 64))
     return std::move(e);
+  // Charge expanded native structure across every role, including repeated
+  // uniqued layouts. Canonical byte size belongs to reference/publication
+  // boundaries; it is not a premise for forming a persistent native store.
+  SmallVector<Type> stores;
+  for (const auto &constructor : planner.result.constructors)
+    for (const auto &role : constructor.roles)
+      stores.push_back(role.sequence);
+  if (failed(verifyLogicalTypes([&] { return emitError(program.getLoc()); },
+                                stores)))
+    return error("oracle-storage-limit");
   return std::move(planner.result);
 }
 } // namespace zkc::protocol

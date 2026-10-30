@@ -11,6 +11,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Contracts/Numerical.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -133,7 +134,7 @@ void mutateBody(Operation *op, llvm::function_ref<void(json::Array &)> edit) {
 }
 OwningOpRef<ModuleOp> parse(MLIRContext &context, StringRef text) {
   auto source = parseSourceString<ModuleOp>(text, &context);
-  require(bool(source) && succeeded(verify(*source)),
+  require(bool(source) && succeeded(zkc::admitStage(*source)),
           "numerical source refused");
   return source;
 }
@@ -278,7 +279,7 @@ int main(int argc, char **argv) {
     auto result = take(emitNumericalLanes(
         *admitted.formula, mapped.getArgument(1).getType(),
         payload(operation(*candidate, "vector.length")), LaneResultMode::Map,
-        [&](const protocol::BindingApplication &, ValueRange, Type,
+        [&](const NativeBindingApplication &, ValueRange, Type,
             ArrayRef<Attribute>) {
           ++emitted;
           return Value();
@@ -502,7 +503,7 @@ int main(int argc, char **argv) {
       auto &last = *root[2].getAsArray()->back().getAsArray();
       last[0] = "mul";
     });
-    require(succeeded(verify(*candidate)),
+    require(succeeded(zkc::admitStage(*candidate)),
             "body mismatch failed ordinary candidate admission");
     remaining = 1000000;
     check(remaining, capacity, debit, false);
@@ -528,7 +529,7 @@ int main(int argc, char **argv) {
       }
       require(changed, "missing helper argument in the emitted body");
     });
-    require(succeeded(verify(*candidate)),
+    require(succeeded(zkc::admitStage(*candidate)),
             "helper substitution mutation failed ordinary admission");
     ScopedDiagnosticHandler quiet(&context,
                                   [](Diagnostic &) { return success(); });
@@ -643,7 +644,12 @@ int main(int argc, char **argv) {
       bool semantic = mutation == "body" || mutation == "wiring" ||
                       mutation == "rows" || mutation == "guard" ||
                       mutation == "pin";
-      require(succeeded(verify(*candidate)) == semantic,
+      // Malformed binding signatures and parameters are local verifier
+      // refusals. Same-typed semantic mutants must still admit a complete
+      // stage.
+      auto admitted =
+          semantic ? zkc::admitStage(*candidate) : verify(*candidate);
+      require(succeeded(admitted) == semantic,
               "mutation no longer exercises its intended admission boundary");
       require(failed(compareMap(*source, *candidate)),
               "mutated native expression passed the independent reader");
@@ -690,7 +696,7 @@ int main(int argc, char **argv) {
             *admitted.formula, mapped.getArgument(1).getType(),
             payload(operation(*candidate, "vector.length")),
             LaneResultMode::Map,
-            [&](const protocol::BindingApplication &, ValueRange, Type,
+            [&](const NativeBindingApplication &, ValueRange, Type,
                 ArrayRef<Attribute>) {
               ++emitted;
               return Value();
@@ -752,7 +758,7 @@ int main(int argc, char **argv) {
         unsigned emitted = 0;
         auto result =
             take(emitNumericalLanes(formula, vector, {}, LaneResultMode::Map,
-                                    [&](const protocol::BindingApplication &,
+                                    [&](const NativeBindingApplication &,
                                         ValueRange, Type, ArrayRef<Attribute>) {
                                       ++emitted;
                                       return Value();

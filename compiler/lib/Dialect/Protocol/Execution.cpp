@@ -3,7 +3,7 @@
 #include "zkc/Contracts/Services.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
-#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
@@ -370,7 +370,7 @@ public:
         !llvm::hasSingleElement(root->getRegion(0)))
       return error("interactive-module");
     if (root->hasAttr("source_declarations") &&
-        !root->getAttrOfType<StringAttr>("source_declarations"))
+        !root->getAttrOfType<ArrayAttr>("source_declarations"))
       return error("component-declaration");
     program::Participants participants;
     participants.stage = physical ? program::Participants::Stage::Physical

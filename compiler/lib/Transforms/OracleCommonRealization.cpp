@@ -1,6 +1,7 @@
 #include "OracleCommonPlan.h"
 #include "RealizationEmission.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Support/Refusal.h"
@@ -219,7 +220,7 @@ emitOracleRealization(ModuleOp prepared,
   for (auto declaration : llvm::make_early_inc_range(
            unit.getBody().front().getOps<pir::OracleDefinitionOp>()))
     declaration.erase();
-  if (failed(verify(*result.module)))
+  if (failed(zkc::admitStage(*result.module)))
     return error("oracle-common-formation");
   return result;
 }

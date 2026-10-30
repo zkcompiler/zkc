@@ -131,3 +131,35 @@ unknown fields, forward parents, cycles, invalid paths and mismatched source or
 candidate identities refuse. No acceptance bit or producer certificate field
 exists. This schema makes the checking inputs explicit; independent formal
 interpretation and a relocation theorem remain separate work.
+
+## Native API and command profile
+
+`zkc/Compiler/ApplicationMap.h` exposes `produceApplicationMap` and
+`checkApplicationMap`, taking exact original bytes, exact candidate bytes, the
+entry and an MLIR context. The public commands are:
+
+```text
+zkc-compile protocol-application-map ORIGINAL.mlir PREPARED.mlir --symbol=NAME
+zkc-compile protocol-check-application-map ORIGINAL.mlir PREPARED.mlir MAP.json --symbol=NAME
+```
+
+The implemented edge accepts unsimplified preparation, including protocol and
+pure helper expansion, retained shared helpers, actual input/output role
+restrictions, nested repeats and scoped computations. `zkc-preparation-pipeline`
+with `simplify=false` produces candidates for this profile. The map's independent
+checker also runs native prepared-value comparison and checks retained native
+bodies; equal exported rows cannot hide a changed administrative CFG.
+
+Every association is a whole logical value (`components` is empty), and
+`written` is null because these APIs receive no checked frontend association.
+Role restrictions inserted at application ports are the only supported auxiliary
+rows. Arithmetic folding, CSE, polynomial realization and selected construction
+start insertion need explicit independently checked rules before joining this
+profile. Unsupported candidates refuse, including those that another owning
+native transform can validate. This limit grants no fallback or weaker check.
+
+The source uses the `Original` structured export profile. The candidate uses
+`Prepared`, which admits materialized occurrence sites up to 4096 bytes while
+retaining all other original metadata bounds. This is a bounded view of the
+candidate, not authority for its preparation; the map checker independently
+checks each expanded occurrence and its source-relative path.

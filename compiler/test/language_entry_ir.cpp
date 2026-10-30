@@ -7,6 +7,7 @@
 #include "zkc/Compiler/LanguageInspection.h"
 #include "zkc/Compiler/NativeProof.h"
 #include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Protocol/Contracts.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
@@ -232,7 +233,7 @@ proof Right=Run{
         // the selected name remains formed PIR, but changes the selected
         // decision.
         statement.setTargetAttr(mlir::StringAttr::get(&context, "right"));
-        require(succeeded(mlir::verify(*candidate)),
+        require(succeeded(zkc::admitStage(*candidate)),
                 "second owned target invalid");
         auto selection = policy;
         selection.draws.clear();
@@ -241,7 +242,7 @@ proof Right=Run{
         refuses(compareOriginal(left.entry(), *candidate),
                 "source.correspondence");
         statement.removeTargetAttr();
-        require(succeeded(mlir::verify(*candidate)),
+        require(succeeded(zkc::admitStage(*candidate)),
                 "standalone statement invalid");
         refuses(compareOriginal(left.entry(), *candidate),
                 "source.correspondence");
@@ -548,7 +549,7 @@ proof Right=Run{
         refuses(compareOriginal(checked.entry(), *module),
                 "source.correspondence");
       } else {
-        require(failed(mlir::verify(*module)),
+        require(failed(zkc::admitStage(*module)),
                 "statement disagrees with a retained target");
         refuses(compareOriginal(checked.entry(), *module), "target.admission");
       }

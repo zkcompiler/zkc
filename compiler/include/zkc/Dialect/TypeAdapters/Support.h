@@ -4,6 +4,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/TypeSupport.h"
+#include "zkc/Dialect/BindingTypes.h"
 #include "zkc/Dialect/TypeAdapters.h"
 #include <utility>
 
@@ -91,8 +92,8 @@ template <typename T> struct DomainAdapter {
 };
 
 // A deliberately small applied helper, with explicit typed getters. Nested
-// decode operates on an already admitted subtree; nested encode retains unique
-// matching. Only the public boundary parses/admit-checks the complete value.
+// decode operates on an already admitted subtree; nested encode uses the sole
+// native export boundary, including unique observation and profile checks.
 template <typename T, mlir::Type (T::*Element)() const,
           uint64_t (T::*Length)() const>
 struct TypeNatAdapter {
@@ -109,7 +110,7 @@ struct TypeNatAdapter {
   static std::optional<llvm::SmallVector<mlir::Attribute>>
   arguments(mlir::Type type, llvm::StringRef) {
     auto native = mlir::dyn_cast<T>(type);
-    if (!native)
+    if (!native || !(native.*Element)())
       return std::nullopt;
     mlir::Builder builder(type.getContext());
     return llvm::SmallVector<mlir::Attribute>{
@@ -139,7 +140,7 @@ struct TypeNatAdapter {
     auto native = mlir::dyn_cast<T>(type);
     if (!native)
       return std::nullopt;
-    auto element = encodeLogicalType((native.*Element)());
+    auto element = encodeBoundType((native.*Element)(), false);
     if (!element) {
       llvm::consumeError(element.takeError());
       return std::nullopt;

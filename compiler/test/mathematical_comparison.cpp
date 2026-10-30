@@ -13,6 +13,7 @@
 #include "support/ScopedFixture.h"
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Contracts/RingExpression.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -943,7 +944,7 @@ int main() {
     });
   cases.run("expanded callback fan-out respects native closure capacity", [&] {
     auto source = parseSourceString<ModuleOp>(largeOrderedFold(true), &context);
-    require(source && succeeded(verify(*source)),
+    require(source && succeeded(zkc::admitStage(*source)),
             "unexpanded fan-out source refused");
     // Expanded callbacks together with retained callable bodies exceed the
     // native closure's aggregate instruction ceiling. This checks actual
@@ -960,7 +961,7 @@ int main() {
     std::optional<CapacityCause> cause;
     auto candidate = protocol::prepareScopedFinite(*source, work, copies, bytes,
                                                    cause, {false, false});
-    require(!candidate && capacity && succeeded(verify(*source)),
+    require(!candidate && capacity && succeeded(zkc::admitStage(*source)),
             "oversized expanded body was published or changed its source; "
             "candidate=" +
                 Twine(bool(candidate)) + "; diagnostics=" + refusal);
@@ -1159,7 +1160,8 @@ int main() {
         ValueRange{product->getOperand(0), nested->getResult(0)});
     product->getResult(0).replaceAllUsesWith(zipped->getResult(0));
     product.erase();
-    require(succeeded(verify(*before)), "diagonal domain fixture refused");
+    require(succeeded(zkc::admitStage(*before)),
+            "diagonal domain fixture refused");
     auto after = prepare(*before, {false, false});
     require(corresponds(*before, *after),
             "ordered diagonal traversal was refused");
@@ -1256,7 +1258,7 @@ int main() {
                 });
               });
             }
-            require(succeeded(verify(*before)),
+            require(succeeded(zkc::admitStage(*before)),
                     "dead contraction fixture refused");
             auto after = prepare(*before, {false, false});
             replaceScopedPayload(*after, [&](auto emit, ValueRange args) {

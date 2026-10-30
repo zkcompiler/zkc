@@ -7,6 +7,7 @@
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "zkc/Analysis/Computation.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
@@ -122,7 +123,8 @@ int main() {
         "nested-matrix", "dead-domain"})
     cases.run(name, [&, name] {
       auto module = parseSourceString<ModuleOp>(fixture(name), &context);
-      require(bool(module) && succeeded(verify(*module)), "fixture refused");
+      require(bool(module) && succeeded(zkc::admitStage(*module)),
+              "fixture refused");
       auto c = computation(*module);
       auto view = finite::analyzeComputation(c);
       require(bool(view), "structural view missing");
@@ -151,7 +153,7 @@ int main() {
         "numerical structure ignores policy " + std::to_string(policy),
         [&, policy] {
           auto module = numericalAdditionFixture(context, "sum");
-          require(bool(module) && succeeded(verify(*module)),
+          require(bool(module) && succeeded(zkc::admitStage(*module)),
                   "numerical callback not admitted");
           auto c = computation(*module);
           auto *call = &c.helper->getRegion(0).front().front();
@@ -163,7 +165,8 @@ int main() {
                           builder.getBoolArrayAttr({((policy - 1) & 2) != 0,
                                                     ((policy - 1) & 1) != 0,
                                                     ((policy - 1) & 4) != 0}));
-          require(succeeded(verify(*module)), "valid call policy refused");
+          require(succeeded(zkc::admitStage(*module)),
+                  "valid call policy refused");
           auto before = printed(*module);
           auto view = finite::analyzeComputation(c);
           require(
@@ -199,7 +202,8 @@ int main() {
           require(
               call->getBlock() == &c.helper->getRegion(0).front() &&
                   view->sourceOperation(view->payload.front()) != call &&
-                  printed(*module) == before && succeeded(verify(*module)),
+                  printed(*module) == before &&
+                  succeeded(zkc::admitStage(*module)),
               "analysis changed the original call or lost scalar provenance");
         });
   for (unsigned mutation = 0; mutation < 4; ++mutation)
@@ -207,7 +211,7 @@ int main() {
         "original numerical callback ABI " + std::to_string(mutation),
         [&, mutation] {
           auto module = numericalAdditionFixture(context, "sum");
-          require(bool(module) && succeeded(verify(*module)),
+          require(bool(module) && succeeded(zkc::admitStage(*module)),
                   "numerical ABI control not admitted");
           auto c = computation(*module);
           auto helper = cast<func::FuncOp>(c.helper);
@@ -285,7 +289,7 @@ int main() {
                 failed);
             control.returned(value);
           }
-          require(succeeded(verify(*module)),
+          require(succeeded(zkc::admitStage(*module)),
                   "numerical control barrier refused");
           auto before = printed(*module);
           require(!finite::analyzeComputation(computation(*module)) &&
@@ -294,7 +298,7 @@ int main() {
         });
   cases.run("malformed policies remain selection constraints", [&] {
     auto module = numericalAdditionFixture(context, "sum");
-    require(bool(module) && succeeded(verify(*module)),
+    require(bool(module) && succeeded(zkc::admitStage(*module)),
             "numerical callback not admitted");
     auto c = computation(*module);
     auto *call = &c.helper->getRegion(0).front().front();
@@ -357,7 +361,7 @@ int main() {
         next->addArgument(field, call->getLoc());
         next->addArgument(field, call->getLoc());
         returned(helper)->setOperand(0, next->getArgument(1));
-        require(succeeded(verify(*module)),
+        require(succeeded(zkc::admitStage(*module)),
                 "multi-result numerical source refused");
         c = computation(*module);
         auto before = printed(*module);
@@ -399,7 +403,8 @@ int main() {
     auto right = algebra::ArrayAtOp::create(builder, raw.getLoc(), field, pack,
                                             builder.getI64IntegerAttr(0));
     sum->setOperands({left, right});
-    require(succeeded(verify(*module)), "scoped packed source refused");
+    require(succeeded(zkc::admitStage(*module)),
+            "scoped packed source refused");
     auto before = printed(*module);
     auto c = computation(*module);
     auto view = finite::analyzeComputation(c);
@@ -425,7 +430,8 @@ int main() {
                                            "unused_numerical");
         second->setAttr("policy",
                         builder.getBoolArrayAttr({true, false, false}));
-        require(succeeded(verify(*module)), "repeated calls not admitted");
+        require(succeeded(zkc::admitStage(*module)),
+                "repeated calls not admitted");
         c = computation(*module);
         auto view = finite::analyzeComputation(c);
         require(view && view->numericalCalls().size() == 2 &&
@@ -457,7 +463,7 @@ int main() {
     require(binding, "missing multiplication binding");
     binding->setAttr("implementation",
                      builder.getStringAttr("arkworks/field.mul"));
-    require(succeeded(verify(*module)),
+    require(succeeded(zkc::admitStage(*module)),
             "nested numerical callback not admitted");
     c = computation(*module);
     auto view = finite::analyzeComputation(c);
@@ -502,7 +508,8 @@ int main() {
     auto &body = entry.getBody().front();
     body.back().setOperand(0, body.getArgument(0));
     body.front().erase();
-    require(succeeded(verify(*module)), "alias-only call not admitted");
+    require(succeeded(zkc::admitStage(*module)),
+            "alias-only call not admitted");
     auto owned = computation(*module);
     auto view = finite::analyzeComputation(owned);
     require(view && view->payload.empty() &&
@@ -586,7 +593,7 @@ int main() {
         auto *product =
             c.domain.getBody().front().back().getOperand(0).getDefiningOp();
         product->setOperand(1, product->getOperand(0));
-        require(succeeded(verify(*module)),
+        require(succeeded(zkc::admitStage(*module)),
                 "reused descriptor is not admitted");
         auto view = finite::analyzeComputation(c);
         require(
@@ -606,7 +613,7 @@ int main() {
         auto &body = c.helper->getRegion(0).front();
         OpBuilder builder(&body.back());
         builder.clone(body.front());
-        require(succeeded(verify(*module)),
+        require(succeeded(zkc::admitStage(*module)),
                 "reused nested helper fixture refused");
         auto view = finite::analyzeComputation(c);
         require(view && view->nested.size() == 2, "nested occurrences omitted");
@@ -663,7 +670,7 @@ int main() {
     text.replace(step, StringRef("step=@outside").size(),
                  "step=@inside,predicate=@predicate");
     auto module = parseSourceString<ModuleOp>(text, &context);
-    require(bool(module) && succeeded(verify(*module)),
+    require(bool(module) && succeeded(zkc::admitStage(*module)),
             "shared step predicate closure is not admitted");
     auto c = computation(*module);
     auto view = finite::analyzeComputation(c);
@@ -693,8 +700,8 @@ int main() {
     auto first = parseSourceString<ModuleOp>(fixture("nested-total"), &context);
     auto second =
         parseSourceString<ModuleOp>(fixture("nested-total"), &context);
-    require(bool(first) && bool(second) && succeeded(verify(*first)) &&
-                succeeded(verify(*second)),
+    require(bool(first) && bool(second) && succeeded(zkc::admitStage(*first)) &&
+                succeeded(zkc::admitStage(*second)),
             "nested controls not admitted");
     auto firstComputation = computation(*first),
          secondComputation = computation(*second);
@@ -746,7 +753,7 @@ module { "protocol.module"() ({
 }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir";
     auto module = parseSourceString<ModuleOp>(source, &context);
-    require(bool(module) && succeeded(verify(*module)),
+    require(bool(module) && succeeded(zkc::admitStage(*module)),
             "selected-index source not admitted");
     auto c = computation(*module);
     finite::ComputationWork measured;
@@ -790,7 +797,8 @@ module { "protocol.module"() ({
   cases.run("terminal stops retain structure without successful yields", [&] {
     auto module =
         parseSourceString<ModuleOp>(fixture("predicate-stop"), &context);
-    require(bool(module) && succeeded(verify(*module)), "stop fixture refused");
+    require(bool(module) && succeeded(zkc::admitStage(*module)),
+            "stop fixture refused");
     auto c = computation(*module);
     require(!finite::analyzeComputation(c) && c.scoped && c.scopedSource &&
                 c.states == 1 && c.predicate &&

@@ -9,87 +9,57 @@ Links identify maintained checks, not a claim that they ran for this revision.
 ## Current public interfaces
 
 Artifacts use one current schema with exact tags, record shapes and unknown-field
-validation. Existing tools currently use the versions below. The foundation's
-specified replacement schemas are being implemented; their tags remain `/0`.
-Specification owners define the
-accepted contents; the [maintenance policy](development/maintenance.md#format-versions)
-defines when versions change.
+validation. All owned formats remain at version `0`; the foundation changes their
+contents together with native producers, readers and fixtures. The
+[format policy](development/maintenance.md#format-versions) and
+[interface change list](spec/formats/foundation-interfaces.md) define this cutover.
+A matching `/0` tag does not establish compatibility between development builds.
 
-The [native foundation](spec/ir/native-foundation.md) is being implemented on
-the landed frontend and Common-export-retirement base. Native aggregate types
-now retain structural identities, alternatives and payload types; Host values
-retain typed layouts with named fields and native leaves. Host operations carry
-named fields instead of JSON operation descriptors. Checked Entry bodies now
-emit directly to Func/CF and explicit Exec outcomes. The Host artifact reader
-reconstructs schemas, captures and control from actual SSA; `HostPlan`,
-`entry.body` and `entry.signature` are removed. Only parameter names remain as
-source signature metadata. Source comparison derives its expected artifact
-independently, and reconstructed JSON owns its data beyond the MLIR context.
-The neutral declaration
-inventory now publishes the complete tagged catalog, including numerical
-signature families and nominal resource slots. Its C++ consumers use one
-operation collection; interpreter-profile membership is no longer a declaration
-flag. Per-contract executable wrapper operations and their mapping generator
-are removed. Executable contract calls use `exec.apply`; its symbol and semantic
-role interfaces inspect the referenced declaration and actual scoped ports.
-Physical conversion and table-layout adapters now have declared erasure ports
-and Physical authoring stage in the same catalog; the runtime no longer owns
-parallel adapter-erasure callbacks. Independent installation and actual layout
-checks remain in place. Mathematical operations retain their separate meanings.
-The built-in catalog now has one neutral source and generated C++/ODS and static
-Rust projections.
-Runtime admission now interprets that table instead of hand-maintained signature,
-history and permission copies; native domain support and physical installation
-remain explicit. Native catalog type observations use MLIR type interfaces and
-typed static arguments. Sequence and fixed-vector formation now inspect native
-structure and catalog permissions, independently of byte-format limits. Represented
-type formation now checks native logical children, all variant alternatives and
-exact installed dense layouts. Callable declarations and scoped execution
-operations use this same structural check, including values built directly by
-C++ clients. Installation patterns carry typed arguments and child layouts;
-native matching no longer serializes the caller's type. Finite-domain formation
-also uses native Copy/Drop permissions. Protocol service signatures, logical
-oracle associations and construction-state permissions now inspect native types
-directly. Service authority and role availability remain separate checks; oracle
-shape bounds and complete row types are retained. Target availability and
-byte-publication limits remain separate checks. Native
-relation declarations compare complete native schemas across contexts, including
-nominal identity trees and every ordered alternative, without a type-codec round
-trip. Relation signatures and finite-domain signatures share structural work
-limits across all inputs. Relation-data eligibility remains its explicit closed
-profile, separately from Copy/Drop. Native
-construction callbacks and logical signature derivation now use these typed
-arguments directly, including complete-Type ports, projections and numerical
-masks. Runtime bindings now store typed static arguments and the actual callable
-signature, including scope and outcome; calls implement MLIR's call interface
-and check exact agreement with that signature. Physical choices are carried by
-the actual represented ports, with their string encoding confined to the
-program interchange boundary. Resource capability
-types now retain enum kinds and separate identities; native transcript checks
-consume those fields directly. Native type-use policies inspect typed catalog
-arguments and all aggregate alternatives without encoding and reparsing types.
-Closed message-frame membership and byte-publication limits remain separate.
-Native field literals, selected Ring graphs, source origins and asset references
-now have structured attributes and independent boundary checks. Native parameter
-admission resolves the catalog scope directly, including numerical slots and
-byte-sensitive limits. Default execution calls now carry these attributes;
-producers, independent readers, mathematical signature queries and numerical
-comparison inspect them directly. Program and checked-language boundaries
-explicitly decode or encode their external parameter forms. Pure source index
-constants use exact `ui64` attributes and standard MLIR constant folding and
-materialization. Pure field constants and polynomial domain points now carry
-nominal typed literals; native lowering and independent recipe readers preserve
-them directly. Constant queries and materialization preserve the exact field,
-including binary extension presentations. Other inner neutral conversions still
-await migration. Recursive
-Host layouts use MLIR-generated attribute aliases, preserving maximum supported
-source schema depth without increasing the textual parser's nesting limit. The
-[interface inventory](spec/formats/foundation-interfaces.md) defines the remaining
-source/constructed export, realization-record and application-map
-cutovers. Their replacement emission and complete stage-admission migration
-remain in progress. Current and designed
-schemas share development version `0`. Lean work and validation are outside
-this native unit; native structure does not claim a formal interpretation.
+The [native foundation](spec/ir/native-foundation.md) uses the landed checked
+frontend and Common-export retirement. Checked Entry bodies lower directly to
+Func/CF, Data operations and explicit Exec outcomes. Host schemas, captures and
+control are reconstructed from actual SSA. `HostPlan`, `entry.body`,
+`entry.signature`, generic operation-descriptor JSON and per-contract executable
+wrappers are removed. Recursive typed layouts use MLIR attribute aliases without
+changing semantic depth limits. Native values, field literals, parameters,
+source origins, resource identities and aggregate alternatives retain structured
+attributes; diagnostic locations provide no semantic authority.
+
+One neutral catalog generates C++/ODS and Rust declarations. Typed catalog
+interfaces and kinded attributes drive native type and logical signature
+formation. `runtime.binding` retains the complete callable scope/outcome ABI;
+`exec.apply` uses the standard call interface and checks exact native agreement.
+All represented children, including inactive alternatives, are checked directly.
+CPU installation remains separate from logical formation. Internal target
+selection and oracle/collection recipes retain native types. Neutral byte
+conversion occurs at explicit boundaries through one canonical type exporter;
+the old print/parse cache and synthetic Program admission route are removed.
+The independent Program and runtime admission/comparison remain mandatory.
+
+`admitStage` performs bounded structural preflight, ordinary MLIR verification
+and complete stage admission, including dormant declarations. Module formation
+alone is not stage admission. Production and textual pipelines share stage
+builders and typed target intent; imports, direct APIs and optimizer ingress and
+egress use the same admission. Pass-managed symbol and mathematical facts are
+scoped to the stable symbol-table owner with explicit invalidation dependencies;
+budgeted semantic queries still account for each request.
+
+Source, constructed-participant and realization exports share complete
+[logical type data](spec/formats/logical-types.md) and typed catalog bindings and
+parameters. Source declarations use inherent arrays. The fixed primitive export
+profile is catalog data; membership does not supply executable or formal meaning.
+The [application map](spec/formats/application-map.md) has native producer and
+independent checker APIs and commands for unsimplified preparation. It retains
+applications, actual SSA producers, roles, zero-storage ports, nested regions and
+dormant definitions. Unsupported rewrite rules refuse rather than gain authority
+from auxiliary metadata. Written links remain null without a checked frontend
+association. The original is retained through preparation and realization.
+
+`zkc.program/0` bytes, reached invocation order, outcomes, stops, charging and
+cleanup keep their existing meanings. The foundation changes internal carriers
+and shared export schemas, not the execution backend. Native support and formal
+interpretation remain separate: Lean adaptation and validation are outside this
+unit, and native checks do not establish a formal connection for the new schemas.
 
 | Interface | Contract |
 |---|---|
@@ -182,11 +152,12 @@ before recursive verification. Native readers and comparison accept ABI-sized
 empty call dictionaries while refusing uninterpreted nonempty annotations.
 Numerical import avoids cascading symbol substitutions when reusing a binding;
 direct realization loads the same dialect dependencies as its pass entry.
-Native binding installation checks still use neutral declaration conversion;
-their retirement remains in progress. Structured export
-preserves actual SSA binding positions and checked
-control, and the independent Lean reader exercises fresh branches, loops,
-stops, mathematical calls and ordered finite callbacks. Preparation and
+Native binding installation checks, physical candidate choices, numerical
+recipes and storage permissions inspect native types and kinded attributes.
+Neutral declaration conversion occurs only at explicit program boundaries.
+Structured export preserves actual SSA binding positions and checked control.
+The independent formal reader must separately adopt the foundation's changed
+structured contracts; native checks do not establish that adoption. Preparation and
 participant projection retain the complete scoped/mathematical helper and
 domain closure, with actual-body preservation checks. Projected local calls
 remain Protocol actions and must match their participant's role. Participant
@@ -282,7 +253,7 @@ preparation. Ordered execution and supported bulk alternatives both produce
 scoped execution. The independent reader checks actual callbacks, complete
 domain admission, source policies and fixed implementations.
 The scoped source-closure API admits affine fold state only after the shared
-Program analysis checks exact state-root preservation over actual callbacks.
+native execution analysis checks exact state-root preservation over actual callbacks.
 Controls distinguish fresh replacements, exchanged slots, stopped paths, primitive
 successors and cached analysis limits. Protocol repeat consumers use that shared
 analysis. Scoped vector-reduction controls exercise
@@ -855,7 +826,7 @@ entries, integration and protocol-specific theorems.
 | General finite IR | [Typed domains and total/scoped fold and collect](spec/ir/finite.md) retain static helpers, complete entry admission, exact bound provenance and state dependency closure. Declaration-owned laws, structural SSA views, separate transient equation matches and shared producer emission support checked loop fallback, native sum/product/dot/MSM, elementwise fields and sum/product reductions of accumulator-independent pointwise field expressions. Selected matrix rows and columns use scalar contractions; admitted nested collections use one whole matvec, preserving empty-outer admission. Total callbacks expose ordinary helper calls and fixed pack/projection pairs remaining after canonicalization before optional bulk selection, while retaining the source of that selection for comparison. Nested indexed helpers preserve callback extent/bound premises and exact positional argument identities, including selected matrix axes. Independent readers check actual candidates, including checked original-helper normalization for total finite recipes and `exec.compute`. Bounded DAG sizing and a per-callback structural ceiling preserve later small opportunities without refunding spent work. Optional lane or payload-comparison capacity retains checked ordered fallback; required-reader exhaustion is diagnosed separately. Checked candidate publication is shared. Opt-in decision records distinguish missing evidence, actual capacity, policy and recipe restrictions, ordered retries and nested publication boundaries; preparation and total Math lowering also expose remarks and IR dumps. These observations supply no checking evidence. Generic canonicalization/CSE preserve domain admission. [Handwritten controls](../compiler/test/fixtures/finite/README.md) cover mutations, failures and 2^17 field workloads. Full fixed-array/matrix fallback additionally requires the native checked-access contracts; the source frontend now uses checked adapters into this IR. No Lean-to-native bridge is claimed. |
 | Calls, roles and control | Static application, role projection, structured local control, nested repetition and [conditional completion](compiler/control.md). General dynamic protocol composition remains open. |
 | Structured values | Products, alternatives, extents, checked indexing and [nested immutable data](compiler/mathematics.md), including independently shaped matrices; source sequence elements include contextually packed records, tuples, source arrays and empty products, with explicit packing/unpacking and source comparison; affine and non-Drop elements are excluded. Persistent sequence storage and retained validation support default-budget scoped collection of 16,384 indices and 8,192 two-index records in maintained controls. Whole-value encoding has a separate peak-storage limit; a collection that executes locally can exceed it when exported. |
-| Affine resources and services | Scoped helpers use the shared Program exact-origin analysis through the Protocol adapter. Directly authored scoped controls and fresh native bundles cover exact roots, state successors, participant-local stops, resource custody, entry service aliases and failure cleanup; [resource origins](compiler/resource-origins.md). Equal roots do not prove equal state or independent randomness. |
+| Affine resources and services | Scoped helpers use the shared native execution exact-origin analysis through the Protocol adapter. Directly authored scoped controls and fresh native bundles cover exact roots, state successors, participant-local stops, resource custody, entry service aliases and failure cleanup; [resource origins](compiler/resource-origins.md). Equal roots do not prove equal state or independent randomness. |
 | FRI source library | [Binary FRI](../examples/projects/fri/README.md) over natural-order two-adic cosets, with commitment/fold/query/terminal checks and independent-reference tests. The library retains a checked coset word across folds; the AIR library consumes the authenticated positions and values. An independent Lean model of its verifier with ideal commitments is [complete on codewords and has a round-by-round soundness theorem](../lean/docs/spec/fri-security.md), with interactive bounds in the unique-decoding regime and up to the cube-root proximity radius `1 - (ρ + η)^(1/3)`, also stated over the verifier's residual processes, and transferred to a Fiat–Shamir bound for adaptively chosen initial words with one key for the query block, with [commitments read in the clear](../lean/docs/spec/fri-security.md#fiatshamir-transfer) and with [words committed](../lean/docs/spec/fri-security.md#committed-words) by Merkle trees with one field element per hashed leaf, in one random oracle with the hash calls. The committed bound covers acceptance together with the initial word being far from the code for the extraction at a verifier checkpoint, completed with zero at the entries the extraction misses. The model is a transcription of the library verifier, not the compiled library; the implication from an application's bad event to that checkpoint event, the installed schemes' leaf encoding (tag, codec, width and height), the source's sequential position draws and the compiled verifier remain separate obligations. |
 | Pairing groups | BN254 and BLS12-381 each install G1, G2 and a prime-order target with group arithmetic, `pairing.check`, `pairing.apply`, canonical compressed codecs and native frames; [contract](spec/domains/values.md#pairing-field-capabilities). BLS12-381 G2 uses the 96-byte compressed encoding of the Ethereum consensus specifications. Independent arkworks comparisons and Ethereum ceremony points check arithmetic and encodings; no native adequacy proof. |
 | Resident BLS12-381 provider | `blst/resident/` scalar, vector, G1/G2 and pairing bindings consume typed `blst/fr`, `blst/g1` and `blst/g2` ports. [Automatic Target preferences](compiler/representation.md#resident-providers) select G2 scaling and pairing checks; canonical ports and Contracts defaults remain Arkworks. Direct conversions are separate reached calls. Complete nested sequences, variants, resident field arrays and fixed vectors retain selected children; fixed vectors are local-only. Canonical selected codecs preserve existing encodings. Known variable-time MSM requires trusted execution permission. [Provider scope and resource boundary](../crates/zkc-kernels/README.md#alternative-bls12-381-provider); no resident GT/PCS output or whole-runtime timing guarantee. |

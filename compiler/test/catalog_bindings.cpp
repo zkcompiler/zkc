@@ -1,11 +1,14 @@
+#include "mlir/IR/Verifier.h"
 #include "support/NativeCases.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Implementations.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Interfaces/CatalogType.h"
+#include "llvm/ADT/StringExtras.h"
 #include <set>
 
 using namespace mlir;
@@ -45,7 +48,339 @@ int main() {
     require(llvm::is_contained(codes, "binding-signature"),
             "signature refusal lost its diagnostic identity");
   };
+  OwningOpRef<ModuleOp> installations(
+      ModuleOp::create(builder.getUnknownLoc()));
+  OpBuilder nativeBuilder(installations->getBody(),
+                          installations->getBody()->end());
+  unsigned nextBinding = 0;
+  auto binding = [&](StringRef contract, ArrayRef<Attribute> arguments,
+                     StringRef implementation, ArrayRef<Type> inputs,
+                     ArrayRef<Type> outputs) {
+    return runtime::BindingOp::create(
+        nativeBuilder, installations->getLoc(),
+        "binding_" + std::to_string(nextBinding++), contract,
+        builder.getArrayAttr(arguments), implementation,
+        executableBindingSignature(builder.getFunctionType(inputs, outputs)),
+        ArrayAttr{}, ArrayAttr{});
+  };
+  auto acceptInstallation = [&](runtime::BindingOp declaration,
+                                std::optional<bool> physical = std::nullopt) {
+    codes.clear();
+    auto checked = readNativeBinding(emit, declaration, physical);
+    require(succeeded(checked),
+            "native installation refused: " + llvm::join(codes, ","));
+    require(succeeded(verify(declaration)),
+            "Runtime verifier disagrees with native installation");
+    return *checked;
+  };
+  auto refuseInstallation = [&](runtime::BindingOp declaration,
+                                StringRef code) {
+    codes.clear();
+    require(failed(readNativeBinding(emit, declaration)),
+            "invalid native installation admitted");
+    require(llvm::is_contained(codes, code),
+            "native installation lost its refusal identity: " + code.str() +
+                " actual: " + llvm::join(codes, ","));
+    require(failed(verify(declaration)),
+            "Runtime verifier skipped installation restrictions");
+  };
+  auto represented = [&](Type logical, StringRef representation,
+                         ArrayRef<Type> children = {}) -> Type {
+    auto value = runtime::RepresentedType::getChecked(emit, &context, logical,
+                                                      representation, children);
+    require(bool(value), "invalid native layout fixture");
+    return value;
+  };
   Cases cases;
+  cases.run("native default selection does not load missing type owners", [&] {
+    MLIRContext local(registry);
+    local.loadDialect<algebra::AlgebraDialect>();
+    auto value = algebra::FieldType::get(&local, "bls12-381.fr");
+    auto silent = [&] {
+      auto diagnostic = emitError(UnknownLoc::get(&local));
+      diagnostic.abandon();
+      return diagnostic;
+    };
+    require(!defaultPhysicalType(silent, value) &&
+                !local.getLoadedDialect<runtime::RuntimeDialect>(),
+            "default selection loaded an absent representation owner");
+  });
+  cases.run("native provider selection checks all resolved nominal terms", [&] {
+    auto declaration = binding("field.add", {domain}, "dalek/field.add",
+                               {field, field}, {field});
+    refuseInstallation(declaration, "binding-implementation");
+    declaration.setImplementation("arkworks/field.add");
+    auto logical = acceptInstallation(declaration, false);
+    require(!logical.physical && logical.logicalType == logical.valueType,
+            "logical pin changed its actual ports");
+    declaration.setImplementation("arkworks/field.mul");
+    refuseInstallation(declaration, "binding-implementation");
+    declaration.setImplementation("");
+    acceptInstallation(declaration);
+    auto physical = defaultPhysicalType(emit, field);
+    declaration.setFunctionType(executableBindingSignature(
+        builder.getFunctionType({physical, physical}, {physical})));
+    refuseInstallation(declaration, "binding-stage");
+    declaration.setImplementation("arkworks/field.add");
+    acceptInstallation(declaration, true);
+    require(failed(readNativeBinding(emit, declaration, false)),
+            "explicit logical consumer admitted physical ports");
+  });
+  cases.run("native provider selectors use associated scope terms", [&] {
+    auto descriptor = *protocol::installedImplementations().find(
+        "curve.msm", "dalek/curve.msm");
+    descriptor.identity = "custom/projected-msm";
+    descriptor.providerTerm = 1;
+    descriptor.domains = {"ristretto255.scalar"};
+    auto catalog =
+        take(protocol::ImplementationCatalog::create({descriptor}, {}));
+    auto arguments = builder.getStringAttr("ristretto255.group");
+    auto ports = resolve("curve.msm", {arguments});
+    auto declaration = binding("curve.msm", {arguments}, descriptor.identity,
+                               ports.getInputs(), ports.getResults());
+    require(succeeded(readNativeBinding(emit, declaration, false, catalog)),
+            "provider selector used supplied-argument offsets");
+    auto bls = builder.getStringAttr("bls12-381.g1");
+    ports = resolve("curve.msm", {bls});
+    declaration.setArgumentsAttr(builder.getArrayAttr({bls}));
+    declaration.setFunctionType(executableBindingSignature(ports));
+    codes.clear();
+    require(failed(readNativeBinding(emit, declaration, false, catalog)) &&
+                llvm::is_contained(codes, "binding-implementation"),
+            "projected selector admitted an unsupported domain");
+  });
+  cases.run("exact implementations require every complete physical port", [&] {
+    auto ordinary = defaultPhysicalType(emit, field);
+    auto resident = represented(field, "blst/fr");
+    auto declaration = binding("field.add", {domain}, "blst/resident/field.add",
+                               {resident, resident}, {resident});
+    acceptInstallation(declaration);
+    declaration.setFunctionType(executableBindingSignature(
+        builder.getFunctionType({resident, ordinary}, {resident})));
+    refuseInstallation(declaration, "binding-signature");
+    declaration.setImplementation("arkworks/field.add");
+    refuseInstallation(declaration, "binding-signature");
+  });
+  cases.run("indexed layout overrides preserve port direction and index", [&] {
+    auto ordinary = defaultPhysicalType(emit, vector);
+    auto diagonal = represented(vector, "arkworks.fr-diagonal/0");
+    auto scalar = defaultPhysicalType(emit, field);
+    auto declaration =
+        binding("vector.dot", {domain}, "arkworks-diagonal/vector.dot",
+                {ordinary, diagonal}, {scalar});
+    acceptInstallation(declaration);
+    declaration.setFunctionType(executableBindingSignature(
+        builder.getFunctionType({diagonal, ordinary}, {scalar})));
+    refuseInstallation(declaration, "binding-signature");
+  });
+  cases.run("sequence family retains the selected nested element layout", [&] {
+    auto resident = represented(field, "blst/fr");
+    auto inner = data::SequenceType::get(&context, field);
+    auto innerPhysical = represented(inner, "logical.sequence/0", {resident});
+    auto outer = data::SequenceType::get(&context, inner);
+    auto outerPhysical =
+        represented(outer, "logical.sequence/0", {innerPhysical});
+    auto declaration = binding("sequence.append", {TypeAttr::get(inner)},
+                               "native/sequence.append",
+                               {outerPhysical, innerPhysical}, {outerPhysical});
+    acceptInstallation(declaration);
+    declaration.setFunctionType(
+        executableBindingSignature(builder.getFunctionType(
+            {outerPhysical, defaultPhysicalType(emit, inner)},
+            {outerPhysical})));
+    refuseInstallation(declaration, "binding-signature");
+  });
+  cases.run("dense family binds container scalar and vector layouts", [&] {
+    auto array = algebra::FieldArrayType::get(&context, "bls12-381.fr", 4);
+    auto resident = represented(field, "blst/fr");
+    auto arrayPhysical = represented(array, "blst/field-array", {resident});
+    auto vectorPhysical = represented(vector, "blst/fr");
+    auto declaration = binding("field_array.from_vector", {domain, natural(4)},
+                               "blst/resident/field_array.from_vector",
+                               {vectorPhysical}, {arrayPhysical});
+    acceptInstallation(declaration);
+    declaration.setFunctionType(
+        executableBindingSignature(builder.getFunctionType(
+            {defaultPhysicalType(emit, vector)}, {arrayPhysical})));
+    refuseInstallation(declaration, "binding-signature");
+    declaration.setFunctionType(executableBindingSignature(
+        builder.getFunctionType({defaultPhysicalType(emit, vector)},
+                                {defaultPhysicalType(emit, array)})));
+    refuseInstallation(declaration, "binding-representation");
+    auto fixed = algebra::FixedVectorType::get(&context, field, 4);
+    auto fixedPhysical = represented(fixed, "blst/fixed-vector", {resident});
+    auto dot = binding("fixed_vector.dot", {domain, natural(4)},
+                       "blst/resident/fixed_vector.dot",
+                       {fixedPhysical, fixedPhysical}, {resident});
+    acceptInstallation(dot);
+    dot.setFunctionType(executableBindingSignature(builder.getFunctionType(
+        {fixedPhysical, fixedPhysical}, {defaultPhysicalType(emit, field)})));
+    refuseInstallation(dot, "binding-signature");
+  });
+  cases.run("physical conversion checks both exact endpoints", [&] {
+    auto ordinary = defaultPhysicalType(emit, field);
+    auto resident = represented(field, "blst/fr");
+    auto declaration =
+        binding("representation.convert", {TypeAttr::get(field)},
+                "native/representation.convert", {ordinary}, {resident});
+    acceptInstallation(declaration);
+    declaration.setFunctionType(executableBindingSignature(
+        builder.getFunctionType({resident}, {ordinary})));
+    acceptInstallation(declaration);
+    declaration.setFunctionType(executableBindingSignature(
+        builder.getFunctionType({ordinary}, {ordinary})));
+    refuseInstallation(declaration, "binding-conversion");
+    auto table = poly::MultilinearType::get(&context, "bls12-381.fr");
+    auto lsb = represented(table, "arkworks.mle-lsb/0");
+    auto msb = represented(table, "arkworks.mle-msb/0");
+    auto relayout = binding("table.relayout", {domain},
+                            "arkworks/table.relayout", {lsb}, {msb});
+    acceptInstallation(relayout);
+    relayout.setImplementation("native/representation.convert");
+    refuseInstallation(relayout, "binding-conversion");
+  });
+  cases.run(
+      "observation family admits complete frames independently of suite", [&] {
+        auto suite = builder.getStringAttr("merlin3.bls12-381.fr64be/0");
+        auto payload = data::SequenceType::get(&context, field);
+        auto signature = resolve("transcript.native.indexed.observe.data",
+                                 {suite, TypeAttr::get(payload)});
+        auto state = defaultPhysicalType(emit, signature.getInput(0));
+        auto indices = defaultPhysicalType(emit, signature.getInput(2));
+        auto selected = represented(payload, "logical.sequence/0",
+                                    {represented(field, "blst/fr")});
+        auto declaration =
+            binding("transcript.native.indexed.observe.data",
+                    {suite, TypeAttr::get(payload)},
+                    "arkworks/transcript.native.indexed.observe.data",
+                    {state, selected, indices}, {state});
+        acceptInstallation(declaration);
+        declaration.setImplementation(
+            "dalek/transcript.native.indexed.observe.data");
+        refuseInstallation(declaration, "binding-implementation");
+        declaration.setImplementation(
+            "arkworks/transcript.native.indexed.observe.data");
+        declaration.setArgumentsAttr(
+            builder.getArrayAttr({suite, TypeAttr::get(vector)}));
+        declaration.setFunctionType(
+            executableBindingSignature(builder.getFunctionType(
+                {state, represented(vector, "arkworks.fr-diagonal/0"), indices},
+                {state})));
+        refuseInstallation(declaration, "native-proof-wire-type");
+        auto foreignField = algebra::FieldType::get(&context, "bn254.fr");
+        declaration.setArgumentsAttr(
+            builder.getArrayAttr({suite, TypeAttr::get(foreignField)}));
+        declaration.setFunctionType(
+            executableBindingSignature(builder.getFunctionType(
+                {state, defaultPhysicalType(emit, foreignField), indices},
+                {state})));
+        acceptInstallation(declaration);
+      });
+  cases.run("native admission rechecks forged represented children", [&] {
+    auto sequence = data::SequenceType::get(&context, field);
+    auto ordinary = defaultPhysicalType(emit, field);
+    auto forged = runtime::RepresentedType::get(
+        &context, sequence, "logical.sequence/0", ArrayRef<Type>{vector});
+    auto declaration =
+        binding("sequence.append", {TypeAttr::get(field)},
+                "native/sequence.append", {forged, ordinary}, {forged});
+    refuseInstallation(declaration, "represented-type-formation");
+  });
+  cases.run("observation frames check inactive variant payloads", [&] {
+    auto identity = data::IdentityAttr::get(
+        &context, builder.getArrayAttr({builder.getStringAttr("atom"),
+                                        builder.getStringAttr("Observation")}));
+    auto payload = data::VariantType::get(
+        &context, identity,
+        {data::AlternativeAttr::get(&context, builder.getStringAttr("empty"),
+                                    {}),
+         data::AlternativeAttr::get(&context, builder.getStringAttr("value"),
+                                    {field, vector})});
+    auto suite = builder.getStringAttr("merlin3.bls12-381.fr64be/0");
+    auto signature = resolve("transcript.native.indexed.observe.data",
+                             {suite, TypeAttr::get(payload)});
+    auto state = defaultPhysicalType(emit, signature.getInput(0));
+    auto indices = defaultPhysicalType(emit, signature.getInput(2));
+    auto selected =
+        represented(payload, "logical.variant/0",
+                    {represented(field, "blst/fr"),
+                     represented(vector, "arkworks.fr-diagonal/0")});
+    auto declaration =
+        binding("transcript.native.indexed.observe.data",
+                {suite, TypeAttr::get(payload)},
+                "arkworks/transcript.native.indexed.observe.data",
+                {state, selected, indices}, {state});
+    refuseInstallation(declaration, "native-proof-wire-type");
+    declaration.setFunctionType(
+        executableBindingSignature(builder.getFunctionType(
+            {state, defaultPhysicalType(emit, payload), indices}, {state})));
+    acceptInstallation(declaration);
+  });
+  cases.run("declaration view checks administrative ABI context", [&] {
+    auto declaration =
+        binding("field.add", {domain}, "", {field, field}, {field});
+    MLIRContext foreign(registry);
+    foreign.loadAllAvailableDialects();
+    auto scope = runtime::ScopeType::get(&foreign);
+    auto outcome = exec::OutcomeType::get(&context, {field});
+    declaration.setFunctionType(
+        builder.getFunctionType({scope, field, field}, {outcome}));
+    refuseInstallation(declaration, "binding-signature");
+    declaration.setFunctionType(executableBindingSignature(
+        builder.getFunctionType({field, field}, {field})));
+    declaration.setImplementationAttr(StringAttr::get(&foreign, ""));
+    refuseInstallation(declaration, "binding-signature");
+    declaration.setImplementation("");
+  });
+  cases.run(
+      "native installation does not inherit neutral byte depth limits", [&] {
+        Type logical = field;
+        for (unsigned i = 0; i < 12; ++i)
+          logical = data::SequenceType::get(&context, logical);
+        auto physical = defaultPhysicalType(emit, logical);
+        require(bool(physical), "native default imposed a byte depth limit");
+        auto container = data::SequenceType::get(&context, logical);
+        auto selected =
+            represented(container, "logical.sequence/0", {physical});
+        auto declaration =
+            binding("sequence.append", {TypeAttr::get(logical)},
+                    "native/sequence.append", {selected, physical}, {selected});
+        acceptInstallation(declaration);
+        refuses(protocol::readBinding(declaration), "binding-type-limit");
+      });
+  cases.run(
+      "neutral export checks native formation first and stays silent", [&] {
+        auto declaration =
+            binding("field.add", {domain}, "", {field, field}, {field});
+        auto note = builder.getDictionaryAttr(
+            {builder.getNamedAttr("test.note", builder.getUnitAttr())});
+        declaration.setArgAttrsAttr(builder.getArrayAttr({note, note, note}));
+        acceptInstallation(declaration);
+        codes.clear();
+        refuses(protocol::readBinding(declaration), "binding-attributes");
+        require(codes.empty(),
+                "neutral annotation refusal emitted a diagnostic");
+
+        // Native bodylessness must fail before the independent neutral check
+        // for annotations, even though the callable attributes are otherwise
+        // formed.
+        OperationState state(declaration.getLoc(),
+                             runtime::BindingOp::getOperationName());
+        state.addAttributes(declaration->getAttrs());
+        state.addRegion();
+        auto *malformed = nativeBuilder.create(state);
+        codes.clear();
+        refuses(protocol::readBinding(malformed), "binding-declaration");
+        require(codes.empty(), "native export refusal leaked a diagnostic");
+        malformed->erase();
+
+        declaration.removeArgAttrsAttr();
+        declaration.setImplementation("foreign/field.add");
+        codes.clear();
+        refuses(protocol::readBinding(declaration), "binding-implementation");
+        require(codes.empty(), "native selection refusal leaked a diagnostic");
+        declaration.erase();
+      });
   cases.run("mathematical signature excludes execution bookkeeping", [&] {
     require(resolve("field.add", {domain}) ==
                 builder.getFunctionType({field, field}, {field}),
@@ -152,7 +487,8 @@ int main() {
               "physical adapter lost its declared erasure or stage");
       covered.insert(contract.str());
     }
-    unsigned checked = 0;
+    unsigned checked = 0, logicalSelections = 0, physicalSelections = 0;
+    std::set<std::string> implementations;
     // Sample every installed root identity independently. Neutral resolution is
     // an independent boundary oracle; unsupported codec profiles may refuse
     // there even when mathematical formation succeeds.
@@ -223,6 +559,44 @@ int main() {
         };
         compare(native.getInputs(), neutral->inputs);
         compare(native.getResults(), neutral->outputs);
+        for (const auto &descriptor :
+             protocol::installedImplementations().all()) {
+          if (descriptor.contract != operation.name)
+            continue;
+          auto selected = binding;
+          selected.implementation = descriptor.identity;
+          auto logicalSelection = protocol::resolveBinding(selected, false);
+          auto declaration = runtime::BindingOp::create(
+              nativeBuilder, installations->getLoc(),
+              "binding_" + std::to_string(nextBinding++), operation.name,
+              builder.getArrayAttr(actuals), descriptor.identity,
+              executableBindingSignature(native), ArrayAttr{}, ArrayAttr{});
+          auto nativeSelection = readNativeBinding(emit, declaration, false);
+          bool neutralAccepted = bool(logicalSelection);
+          if (!neutralAccepted)
+            llvm::consumeError(logicalSelection.takeError());
+          require(neutralAccepted == succeeded(nativeSelection),
+                  "native and neutral logical selections disagree: " +
+                      descriptor.identity);
+          ++logicalSelections;
+          auto parameters = protocol::defaultPhysicalArguments(selected);
+          if (!parameters) {
+            llvm::consumeError(parameters.takeError());
+            continue;
+          }
+          selected.physicalArguments = std::move(*parameters);
+          auto physicalSelection = protocol::resolveBinding(selected, true);
+          if (!physicalSelection) {
+            llvm::consumeError(physicalSelection.takeError());
+            continue;
+          }
+          auto imported = take(protocol::importBinding(
+              nativeBuilder, installations->getLoc(),
+              {"binding_" + std::to_string(nextBinding++), selected}, true));
+          acceptInstallation(imported, true);
+          ++physicalSelections;
+          implementations.insert(descriptor.identity);
+        }
         ++checked;
         covered.insert(operation.name);
       }
@@ -231,7 +605,12 @@ int main() {
                 checked >= 1000,
             "installed signature coverage unexpectedly shrank");
     llvm::outs() << "native signatures: " << covered.size() << " contracts, "
-                 << checked << " instances\n";
+                 << checked
+                 << " instances; installation selections: " << logicalSelections
+                 << " logical, " << physicalSelections << " physical, "
+                 << implementations.size() << " implementation identities\n";
+    require(physicalSelections && logicalSelections,
+            "no installed selections were compared");
   });
   return cases.result();
 }

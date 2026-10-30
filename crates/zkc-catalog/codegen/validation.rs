@@ -63,6 +63,83 @@ struct Catalog<'a> {
     members: BTreeMap<(Kind<'a>, &'a str), Kind<'a>>,
 }
 impl<'a> Catalog<'a> {
+    fn consumer_profile(&self, profile: &'a Value) -> Result<()> {
+        let mut constructors = BTreeSet::new();
+        for name in list(&profile["typeConstructors"])? {
+            lookup(&self.types, name)?;
+            require(
+                constructors.insert(string(name)?),
+                "duplicate profile constructor",
+            )?;
+        }
+        let mut validators = BTreeSet::new();
+        for name in list(&profile["parameterValidators"])? {
+            require(
+                validators.insert(string(name)?),
+                "duplicate profile validator",
+            )?;
+        }
+        let mut selected = BTreeSet::new();
+        for entry in list(&profile["operations"])? {
+            let op = lookup(&self.operations, &entry["operation"])?;
+            require(
+                selected.insert(string(&entry["operation"])?),
+                "duplicate profile membership",
+            )?;
+            require(
+                op["signature"]["kind"] == "fixed",
+                "unsupported profile signature family",
+            )?;
+            for field in ["scope", "stage", "signature", "requirements", "parameters"] {
+                require(
+                    entry[field] == op[field],
+                    &format!("consumer operation {field} mismatch"),
+                )?;
+            }
+            require(
+                validators.contains(string(&op["parameters"]["validator"])?),
+                "unsupported profile validator",
+            )?;
+            let mut parameters = Vec::new();
+            for term in list(&op["scope"])? {
+                let result = match string(&term["kind"])? {
+                    "root" => kind(&term["parameter"])?,
+                    "project" => {
+                        let owner = *index(&parameters, &term["parent"])?;
+                        *self
+                            .members
+                            .get(&(owner, string(&term["member"])?))
+                            .ok_or("unknown profile associated member")?
+                    }
+                    "apply" => ("Type", ""),
+                    "natural" => ("Nat", ""),
+                    _ => return Err("unknown profile term".into()),
+                };
+                require(
+                    result.0 != "Type" || term["kind"] == "apply",
+                    "unsupported profile Type term",
+                )?;
+                if term["kind"] == "apply" {
+                    require(
+                        constructors.contains(string(&term["constructor"])?),
+                        "unsupported profile type constructor",
+                    )?;
+                }
+                parameters.push(result);
+            }
+            for field in ["inputs", "outputs"] {
+                for port in list(&op["signature"][field])? {
+                    if let Some(name) = port.get("constructor") {
+                        require(
+                            constructors.contains(string(name)?),
+                            "unsupported profile type constructor",
+                        )?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
     fn check_kind(&self, k: Kind<'_>) -> Result<()> {
         require(
             if k.0 == "Domain" {
@@ -759,6 +836,9 @@ pub(super) fn validate(v: &Value) -> Result<()> {
         catalog
             .operation(op)
             .map_err(|error| format!("{}: {error}", op["name"]))?;
+    }
+    for profile in names(&v["consumerProfiles"])?.values() {
+        catalog.consumer_profile(profile)?;
     }
     Ok(())
 }

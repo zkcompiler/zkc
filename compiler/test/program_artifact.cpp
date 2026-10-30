@@ -605,6 +605,31 @@ module { "protocol.module"() ({
     participant.insert(participant.begin() + 4, llvm::json::Array{});
     refuses(program::decode(artifact), "interactive-record");
   });
+  cases.run("unresolved applications cannot enter participant programs", [&] {
+    for (auto stage : {program::Participants::Stage::Logical,
+                       program::Participants::Stage::Physical}) {
+      auto candidate = original;
+      candidate.stage = stage;
+      auto &body = calculation(candidate).body;
+      body.insert(body.begin(),
+                  {"unresolved", program::LocalApply{"missing", {}, {}}});
+      auto refusal = protocol::admit(candidate);
+      require(bool(refusal) &&
+                  namesIdentifier(llvm::toString(std::move(refusal)),
+                                  "algorithm-call-context"),
+              "participant admission accepted an unresolved application");
+    }
+  });
+  cases.run("local application opcode is not in the byte carrier", [&] {
+    auto artifact = program::encode(original);
+    auto &function =
+        *(*artifact.getAsArray())[2].getAsArray()->front().getAsArray();
+    function[4].getAsArray()->insert(
+        function[4].getAsArray()->begin(),
+        llvm::json::Array{"apply", "invoke", "missing", llvm::json::Array{},
+                          llvm::json::Array{}});
+    refuses(program::decode(artifact), "interactive-instruction");
+  });
   cases.run("participant composition opcode is not in the carrier", [&] {
     auto artifact = program::encode(original);
     auto &participant =

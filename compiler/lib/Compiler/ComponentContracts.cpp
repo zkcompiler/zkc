@@ -563,7 +563,7 @@ struct Deriver {
               live.insert(std::move(projection));
             }
             flow.decision = (tag == "local_call" || tag == "call") &&
-                            array(types[i]) == A{"bool"};
+                            array(types[i]) == A{"apply", "bool", A{}};
             if (tag == "bool.and")
               flow.decision =
                   (operands[0].decision || operands[0].pending.empty()) &&

@@ -1,6 +1,7 @@
 #include "../lib/Conversion/Bindings.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
+#include "support/NativeBindings.h"
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
@@ -133,12 +134,12 @@ program::Participants publish(ModuleOp module, const PhysicalPlan &plan) {
 }
 class NoConversions final : public CandidateCatalog {
 public:
-  Expected<std::vector<std::string>>
-  implementations(const BindingApplication &application) const override {
+  Expected<std::vector<std::string>> implementations(
+      const zkc::NativeBindingApplication &application) const override {
     return installedCandidates().implementations(application);
   }
-  std::vector<BindingApplication>
-  conversions(const BoundType &, const BoundType &) const override {
+  std::vector<zkc::NativeBindingApplication>
+  conversions(mlir::Type, mlir::Type) const override {
     return {};
   }
 };
@@ -207,7 +208,8 @@ int main(int argc, char **argv) {
       cases.run(contract + " " + argument + " preferred and checked", [&] {
         require(take(defaultImplementation(application)) == fallback,
                 "Contracts canonical default changed");
-        require(take(installedCandidates().implementations(application)) ==
+        require(take(installedCandidates().implementations(
+                    nativeRequest(context, application))) ==
                     std::vector<std::string>{preferred, fallback},
                 "target preference or fallback missing");
         auto module =
@@ -279,7 +281,8 @@ int main(int argc, char **argv) {
           contract.str(),
           {contract == "curve.msm" ? "bls12-381.g1" : "bls12-381.fr"},
           ""};
-      require(take(installedCandidates().implementations(app)) ==
+      require(take(installedCandidates().implementations(
+                  nativeRequest(context, app))) ==
                   std::vector<std::string>{"arkworks/" + contract.str()},
               "unmeasured or permission-sensitive automatic choice");
     }
@@ -291,13 +294,14 @@ int main(int argc, char **argv) {
           std::pair{"ristretto255.group", "dalek"}}) {
       BindingApplication app{"curve.scale", {domain}, ""};
       require(
-          take(installedCandidates().implementations(app)) ==
+          take(installedCandidates().implementations(
+              nativeRequest(context, app))) ==
               std::vector<std::string>{std::string(provider) + "/curve.scale"},
           "BLS preference leaked into other domain");
     }
-    refuses(
-        installedCandidates().implementations({"curve.scale", {"missing"}, ""}),
-        "binding-static-identity");
+    refuses(installedCandidates().implementations(
+                nativeRequest(context, {"curve.scale", {"missing"}, ""})),
+            "binding-signature");
   });
   cases.run("optional conversions fall back at the declaration limit", [&] {
     auto module =

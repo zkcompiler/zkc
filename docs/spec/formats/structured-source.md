@@ -1018,6 +1018,14 @@ nonterminators, including outcome packaging, and all domain-body operations. It
 counts actual native definitions rather than export-local derived rows. Neither tool expands calls
 for these counts. Both capacities are independent of runtime fuel; equality of
 their numeric limits does not imply identical admitted source sets.
+The explicitly selected `Prepared` export profile permits instruction and stop
+sites of at most 4096 UTF-8 bytes, matching preparation's expanded occurrence
+limit. The default `Original` profile retains the 512-byte site limit. This
+changes neither ordinary metadata bounds nor the schema or version; it does not
+certify that the input was correctly prepared. Application-map production and
+checking select `Original` for the source and `Prepared` for the candidate and
+independently check the expansion and its site correspondence.
+
 General lexical JSON and region nesting are bounded by 64. Only slot 8 of an
 exact ten-slot protocol-function row in the definitions table is exempt from
 ordinary lexical JSON depth; its origin is strictly decoded using the separate

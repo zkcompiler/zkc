@@ -4,6 +4,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Translation/Language.h"
 using namespace llvm;
@@ -47,7 +48,7 @@ void verify(const ClosedEntry &closed, mlir::MLIRContext &context) {
     throw std::runtime_error(toString(std::move(error)));
   auto bytes = take(emitOriginal(closed, context));
   auto module = mlir::parseSourceString<mlir::ModuleOp>(bytes, &context);
-  require(bool(module) && succeeded(mlir::verify(*module)),
+  require(bool(module) && succeeded(zkc::admitStage(*module)),
           "finite occurrence original did not verify");
   take(compareOriginal(closed, *module));
 }

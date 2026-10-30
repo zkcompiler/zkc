@@ -15,6 +15,7 @@
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Transforms/Mathematical.h"
 #include <filesystem>
 #include <fstream>
@@ -90,6 +91,50 @@ int main(int argc, char **argv) {
   };
   auto ideal = take(selects(""));
   Cases cases;
+  cases.run(
+      "native store planning preserves rows beyond byte-profile depth", [&] {
+        std::string row = "i1";
+        for (unsigned i = 0; i < 12; ++i)
+          row = "!data.sequence<" + row + ">";
+        auto nativeSource = std::string("!Row = ") + row + R"mlir(
+!Data = !data.sequence<!Row>
+!Handle = !protocol.oracle<#protocol.oracle_kind<"table", [!Row]>>
+module { "protocol.module"() ({
+ "protocol.func"() ({ ^entry(%data:!Data,%rows:ui64):
+  %handle = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V"],site="table",shape_names=["rows"],shape_bounds={rows=16:ui64}} : (!Data,ui64)->!Handle
+  "protocol.return"() : ()->()
+ }) {sym_name="main",function_type=(!Data,ui64)->(),roles=["P","V"],input_roles=[["P"],["P","V"]],output_roles=[]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+        auto candidate = parseSourceString<ModuleOp>(nativeSource, &context);
+        require(bool(candidate) && succeeded(verify(*candidate)),
+                "native source refused: " + diagnostics);
+        auto plan = take(planOracleAnchorStorage(
+            *candidate, "main", [](const auto &) -> Expected<std::string> {
+              return std::string();
+            }));
+        require(plan.constructors.size() == 1 &&
+                    plan.constructors[0].roles.size() == 2,
+                "native storage lost its holder/receiver pair");
+        for (const auto &role : plan.constructors[0].roles) {
+          auto sequence = cast<data::SequenceType>(role.sequence);
+          require(sequence.getElementType() == role.record &&
+                      succeeded(verifyLogicalType(
+                          [&] { return emitError(candidate->getLoc()); },
+                          role.sequence)),
+                  "store did not retain its formed native record");
+          auto bytes = encodeBoundType(role.sequence, false);
+          require(!bytes, "native storage widened byte-profile admission");
+          consumeError(bytes.takeError());
+        }
+        // Reference /0 still embeds public type spellings. Planning a native
+        // store grants no serializable reference or executable installation for
+        // this row.
+        auto reference = oracleReferenceType(plan.constructors[0].kind);
+        require(!reference,
+                "native planning widened the reference identity schema");
+        consumeError(reference.takeError());
+      });
   cases.run(
       "fresh constructors survive identical data and recurrent references",
       [&] {
@@ -169,7 +214,8 @@ int main(int argc, char **argv) {
         require(bool(parseBoundType(type.spelling(), false)),
                 "storage is not an ordinary native type");
       }
-    auto payload = data::exportVariantType(cast<data::VariantType>(reference));
+    auto payload =
+        decodeVariant(take(encodeBoundType(reference, false)).spelling());
     require(payload && payload->alternatives.size() == 1 &&
                 payload->alternatives[0].payload ==
                     std::vector<std::string>({"index", "index"}),

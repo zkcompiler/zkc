@@ -3,6 +3,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -349,7 +350,8 @@ int main() {
     cases.run(label, [&] {
       auto candidate = sf::clone(*fused);
       change(*candidate);
-      require(succeeded(verify(*candidate)), "mutation must remain admitted");
+      require(succeeded(zkc::admitStage(*candidate)),
+              "mutation must remain admitted");
       refuses([&] { return compare(*retained, *candidate); });
     });
   };
@@ -377,7 +379,7 @@ int main() {
   cases.run("generated invocation may use an exactly equivalent binding", [&] {
     auto candidate = sf::clone(*fused);
     nth(*candidate, "vector.length").setBinding("length_alias");
-    require(succeeded(verify(*candidate)) &&
+    require(succeeded(zkc::admitStage(*candidate)) &&
                 succeeded(compare(*retained, *candidate)),
             "equivalent resolved contract changed generated semantics");
   });
@@ -388,7 +390,7 @@ int main() {
   cases.run("scoped definition order does not alter resolved bodies", [&] {
     auto candidate = sf::clone(*fused);
     function(*candidate, "reduce")->moveAfter(function(*candidate));
-    require(succeeded(verify(*candidate)) &&
+    require(succeeded(zkc::admitStage(*candidate)) &&
                 succeeded(compare(*retained, *candidate)),
             "scoped symbol-table order changed correspondence");
   });
@@ -421,7 +423,8 @@ int main() {
         take(protocol::algorithmSite({{"reduce", "reduce"}}, "sum", bytes));
     function(*original).walk(
         [&](exec::CollectOp op) { op.setSite(generated); });
-    require(succeeded(verify(*original)), "collision source must be admitted");
+    require(succeeded(zkc::admitStage(*original)),
+            "collision source must be admitted");
     auto candidate = expand(*original);
     require(succeeded(protocol::verifyScopedHelperExpansionPreserved(
                 *original, *candidate)),

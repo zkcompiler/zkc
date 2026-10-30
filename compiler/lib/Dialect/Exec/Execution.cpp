@@ -10,6 +10,7 @@
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/ControlCursor.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/InvocationParameters.h"
@@ -710,12 +711,20 @@ Expected<SourceExecutionClosure> Reader::run(bool mixed) {
                       {"sym_name", "contract", "arguments", "implementation",
                        "function_type", "arg_attrs", "res_attrs"}))
         return error("execution-cfg", "unknown binding attribute");
-      auto decoded = readBinding(binding);
-      if (!decoded)
-        return decoded.takeError();
-      if (auto e = checkBindingDeclaration(decoded->name, decoded->application,
-                                           physical))
-        return std::move(e);
+      std::string code = "binding-signature", detail;
+      ScopedDiagnosticHandler capture(
+          module->getContext(), [&](Diagnostic &diagnostic) {
+            if (detail.empty()) {
+              auto refusals = diagnostics::refusals(diagnostic);
+              if (!refusals.empty())
+                code = refusals.front().code;
+            }
+            detail += diagnostic.str();
+            return success();
+          });
+      if (failed(readNativeBinding([&] { return binding.emitOpError(); },
+                                   binding, physical)))
+        return error(code, detail);
       continue;
     }
     auto function = dyn_cast<func::FuncOp>(op);
