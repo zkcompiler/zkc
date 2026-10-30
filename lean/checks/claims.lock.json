@@ -574,7 +574,7 @@
     "ZkcSecurity.Examples.Generated.Components.SmallSumcheckCompleteness.compiled_ideal_complete": {
       "package": "security",
       "module": "ZkcSecurityExamples.Generated.Components.SmallSumcheckCompleteness",
-      "structural": "0e9e327eec7d3638",
+      "structural": "4a7df411d5b713bf",
       "explicit": "6638b759bdbd84af"
     },
     "ZkcSecurity.Examples.Generated.Components.SmallSumcheckSoundness.charged_meaning": {
@@ -592,7 +592,7 @@
     "ZkcSecurity.Examples.Generated.Components.TwoSumsCompleteness.compiled_ideal_complete": {
       "package": "security",
       "module": "ZkcSecurityExamples.Generated.Components.TwoSumsCompleteness",
-      "structural": "4009f6ce617d1c34",
+      "structural": "e95138d5d83983aa",
       "explicit": "d1ec3ff130616011"
     },
     "ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness.charged_meaning": {
@@ -628,7 +628,7 @@
     "ZkcSecurity.Examples.StructuredSchnorrSigma.fresh_challenge_hvzk": {
       "package": "security",
       "module": "ZkcSecurityExamples.StructuredSchnorrSigma",
-      "structural": "9deebc2a5ee91757",
+      "structural": "d2f4df5689b420ea",
       "explicit": "52cd03d62f4fe6ab"
     },
     "ZkcSecurity.Examples.Subjects.ChaumPedersen.knowledge_soundness": {
@@ -730,7 +730,7 @@
     "ZkcSecurity.Realizations.Gkr.Generated.Completeness.compiled_ideal_complete": {
       "package": "security",
       "module": "ZkcSecurityExamples.Gkr.Generated.Completeness",
-      "structural": "f371ea1848be00c6",
+      "structural": "682d9d524c8829f7",
       "explicit": "5c86b51028569d62"
     },
     "ZkcSecurity.Realizations.Gkr.Generated.Soundness.charged_meaning": {

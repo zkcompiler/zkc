@@ -1454,7 +1454,7 @@ interactive source and absorbed evaluations that are never authenticated against
 the verifier key. Refusing an unsupported program never counts as detecting
 them.
 
-The declaration audit covers `ZkcSecurity.ProgramLogic.Transcript.Obligations` and
+The declaration audit covers `ZkcSecurity.Transformations.FiatShamir.Obligations` and
 `ZkcSecurity.Transformations.FiatShamir.ProviderSimulation`,
 `ZkcSecurityExamples.CommittedOpening`, `TestsSecurity.Counterexamples` and
 `TestsSecurity.ProviderSimulation`, and also
