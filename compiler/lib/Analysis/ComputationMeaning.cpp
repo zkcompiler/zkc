@@ -50,9 +50,7 @@ const protocol::ComputationContract *semantics(Operation *op) {
     if (!binding)
       return nullptr;
     application = std::move(*binding);
-    if (!isa<exec::ApplyOp>(op) &&
-        !protocol::operationSupportsContract(op->getName().getStringRef(),
-                                             application.contract))
+    if (!isa<exec::ApplyOp>(op))
       return nullptr;
     auto attrs = op->getAttrOfType<ArrayAttr>("parameters");
     if (!attrs)

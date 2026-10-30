@@ -6,71 +6,6 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
-include "zkc/Dialect/BoundOperations.td"
-
-def AppendPointOp : BoundOp<PolynomialDialect, "exec.append_point", [OpPolyAppendPoint]>;
-
-def BoundaryOp : BoundOp<PolynomialDialect, "exec.boundary", [OpPolyBoundary]>;
-
-def CoefficientCountOp : BoundOp<PolynomialDialect, "exec.coefficient_count", [OpPolyCoefficientCount]>;
-
-def CoefficientsOp : BoundOp<PolynomialDialect, "exec.coefficients", [OpPolyCoefficients]>;
-
-def CosetEvaluateOp : BoundOp<PolynomialDialect, "exec.coset_evaluate", [OpPolyCosetEvaluate]>;
-
-def CosetEvaluateBatchOp : BoundOp<PolynomialDialect, "exec.coset_evaluate_batch", [OpPolyCosetEvaluateBatch]>;
-
-def CosetEvaluateAtOp : BoundOp<PolynomialDialect, "exec.coset_evaluate_at", [OpPolyCosetEvaluateAt]>;
-
-def CosetExtendOp : BoundOp<PolynomialDialect, "exec.coset_extend", [OpPolyCosetExtend]>;
-
-def CosetInterpolateOp : BoundOp<PolynomialDialect, "exec.coset_interpolate", [OpPolyCosetInterpolate]>;
-
-def DegreeCheckOp : BoundOp<PolynomialDialect, "exec.degree_check", [OpPolyDegreeCheck]>;
-
-def DivideOpeningOp : BoundOp<PolynomialDialect, "exec.divide_opening", [OpPolyDivideOpening]>;
-
-def DomainPointOp : BoundOp<PolynomialDialect, "exec.domain_point", [OpPolyDomainPoint]>;
-
-def DomainPointsOp : BoundOp<PolynomialDialect, "exec.domain_points", [OpPolyDomainPoints]>;
-
-def DomainRootOp : BoundOp<PolynomialDialect, "exec.domain_root", [OpPolyDomainRoot]>;
-
-def EmptyPointOp : BoundOp<PolynomialDialect, "exec.empty_point", [OpPolyEmptyPoint]>;
-
-def EqualityWeightsOp : BoundOp<PolynomialDialect, "exec.equality_weights", [OpPolyEqualityWeights]>;
-
-def EvenOddFoldOp : BoundOp<PolynomialDialect, "exec.even_odd_fold", [OpPolyEvenOddFold]>;
-
-def FoldOp : BoundOp<PolynomialDialect, "exec.fold", [OpPolyFold]>;
-
-def FromCoefficientsOp : BoundOp<PolynomialDialect, "exec.from_coefficients", [OpPolyFromCoefficients]>;
-
-def MLEEvaluateOp : BoundOp<PolynomialDialect, "exec.mle_evaluate", [OpPolyEvaluate]>;
-
-def OpeningQuotientOp : BoundOp<PolynomialDialect, "exec.opening_quotient", [OpPolyOpeningQuotient]>;
-
-def OpeningQuotientSumOp : BoundOp<PolynomialDialect, "exec.opening_quotient_sum", [OpPolyOpeningQuotientSum]>;
-
-def PointFromVectorOp : BoundOp<PolynomialDialect, "exec.point_from_vector", [OpVectorToPoint]>;
-
-def PointToVectorOp : BoundOp<PolynomialDialect, "exec.point_to_vector", [OpVectorFromPoint]>;
-
-def ProductRoundOp : BoundOp<PolynomialDialect, "exec.product_round", [OpPolyProductRound]>;
-
-def ProductSumOp : BoundOp<PolynomialDialect, "exec.product_sum", [OpPolyProductSum]>;
-
-def RoundEvaluateOp : BoundOp<PolynomialDialect, "exec.round_evaluate", [OpPolyRoundEvaluate]>;
-
-def TableArityOp : BoundOp<PolynomialDialect, "exec.table_arity", [OpPolyTableArity]>;
-
-def TableFromVectorOp : BoundOp<PolynomialDialect, "exec.table_from_vector", [OpVectorToTable]>;
-
-def TableToVectorOp : BoundOp<PolynomialDialect, "exec.table_to_vector", [OpVectorFromTable]>;
-
-def UnivariateBoundaryOp : BoundOp<PolynomialDialect, "exec.univariate_boundary", [OpPolyUnivariateBoundary]>;
-
-def UnivariateEvaluateOp : BoundOp<PolynomialDialect, "exec.univariate_evaluate", [OpPolyUnivariateEvaluate]>;
 
 include "zkc/Interfaces/Mathematical.td"
 
@@ -146,14 +81,6 @@ def RealizeOp : Op<PolynomialDialect, "realize", [Symbol, DeclareOpInterfaceMeth
   let hasVerifier = 1;
 }
 // Partial ordered realizations of the negacyclic quotient contracts.
-def QuotientAddOp : BoundOp<PolynomialDialect, "exec.quotient_add", [OpQuotientAdd]>;
-def QuotientSubtractOp : BoundOp<PolynomialDialect, "exec.quotient_subtract", [OpQuotientSubtract]>;
-def QuotientMultiplyOp : BoundOp<PolynomialDialect, "exec.quotient_multiply", [OpQuotientMultiply]>;
-def QuotientNormWithinOp : BoundOp<PolynomialDialect, "exec.quotient_norm_within", [OpQuotientNormWithin]>;
-def QuotientProjectOp : BoundOp<PolynomialDialect, "exec.quotient_project", [OpQuotientProject]>;
-def QuotientNTTOp : BoundOp<PolynomialDialect, "exec.quotient_ntt", [OpQuotientNTT]>;
-def QuotientINTTOp : BoundOp<PolynomialDialect, "exec.quotient_intt", [OpQuotientINTT]>;
-def QuotientPointwiseOp : BoundOp<PolynomialDialect, "exec.quotient_pointwise", [OpQuotientPointwise]>;
 
 // Projection is total reduction. Executable canonical admission is a separate
 // ordered contract; quotient values themselves carry no field cancellation law.

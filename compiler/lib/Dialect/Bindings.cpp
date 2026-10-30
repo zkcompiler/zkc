@@ -5,15 +5,12 @@
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/SymbolTable.h"
 #include "zkc/Contracts/Domains.h"
-#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/TypeAdapters/Support.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/StringSet.h"
-#include <array>
 #include <mutex>
 
 using namespace llvm;
@@ -62,36 +59,6 @@ BindingTypeCache *typeCache(Type type) {
   return builtin ? builtin->getRegisteredInterface<BindingTypeCache>()
                  : nullptr;
 }
-struct ContractAssociation {
-  StringLiteral key;
-  StringLiteral value;
-};
-
-#include "zkc/Dialect/ContractMappings.cpp.inc"
-
-// The installed contract set has static lifetime. Build its membership index
-// once without adding MLIR knowledge or generated adapter data to Contracts.
-bool installedContract(StringRef contract) {
-  static const llvm::StringSet<> installed = [] {
-    llvm::StringSet<> result;
-    for (const auto &application : operationShapes())
-      result.insert(application.key);
-    return result;
-  }();
-  return installed.contains(contract);
-}
-
-auto associationBegin(ArrayRef<ContractAssociation> rows, StringRef key) {
-  return llvm::lower_bound(rows, key, [](const auto &row, StringRef value) {
-    return row.key < value;
-  });
-}
-
-const ContractAssociation *contractAssociation(StringRef key) {
-  ArrayRef<ContractAssociation> rows = contractAssociations;
-  auto found = associationBegin(rows, key);
-  return found != rows.end() && found->key == key ? found : nullptr;
-}
 } // namespace
 
 void registerBindingTypeCache(DialectRegistry &registry) {
@@ -99,25 +66,6 @@ void registerBindingTypeCache(DialectRegistry &registry) {
     if (!builtin->getRegisteredInterface<BindingTypeCache>())
       builtin->addInterfaces<BindingTypeCache>();
   });
-}
-
-StringRef boundOperationName(StringRef contract) {
-  if (!installedContract(contract))
-    return {};
-  if (const auto *exact = contractAssociation(contract))
-    return exact->value;
-  return {};
-}
-
-bool operationSupportsContract(StringRef operationName, StringRef contract) {
-  if (!installedContract(contract))
-    return false;
-  ArrayRef<ContractAssociation> rows = operationAssociations;
-  for (auto found = associationBegin(rows, operationName);
-       found != rows.end() && found->key == operationName; ++found)
-    if (contract == found->value)
-      return true;
-  return false;
 }
 
 Type decodeBoundType(MLIRContext *ctx, const BoundType &t) {
@@ -256,47 +204,6 @@ Expected<protocol::OperationBinding> operationBinding(Operation *user) {
   return readBinding(SymbolTable::lookupSymbolIn(root, reference));
 }
 
-LogicalResult verifyBoundOperation(Operation *op) {
-  auto selected = operationBinding(op);
-  if (!selected)
-    return diagnostics::emit(op->emitOpError(), selected.takeError());
-  auto signature = resolveBinding(selected->application, false);
-  if (!signature)
-    return diagnostics::emit(op->emitOpError(), signature.takeError());
-  if (!operationSupportsContract(op->getName().getStringRef(),
-                                 selected->application.contract))
-    return diagnostics::emit(op->emitOpError(), "binding-operation");
-  auto types = [&](TypeRange actual, ArrayRef<BoundType> expected) {
-    if (actual.size() != expected.size())
-      return false;
-    for (auto [type, target] : zip(actual, expected)) {
-      auto value = encodeBoundType(type, false);
-      if (!value) {
-        consumeError(value.takeError());
-        return false;
-      }
-      if (!(*value == target))
-        return false;
-    }
-    return true;
-  };
-  if (!types(op->getOperandTypes(), signature->inputs) ||
-      !types(op->getResultTypes(), signature->outputs))
-    return diagnostics::emit(op->emitOpError(), "binding-operation-signature");
-  auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
-  if (!parameters)
-    return diagnostics::emit(op->emitOpError(), "binding-parameters");
-  std::vector<std::string> values;
-  for (auto p : parameters) {
-    auto value = dyn_cast<StringAttr>(p);
-    if (!value)
-      return diagnostics::emit(op->emitOpError(), "binding-parameters");
-    values.push_back(value.getValue().str());
-  }
-  if (auto e = checkParameters(selected->application, values))
-    return diagnostics::emit(op->emitOpError(), std::move(e));
-  return success();
-}
 } // namespace zkc::protocol
 
 namespace zkc {

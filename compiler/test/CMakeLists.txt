@@ -390,14 +390,6 @@ add_test(NAME contract-declarations-generation
     -P "${CMAKE_CURRENT_SOURCE_DIR}/contract_declarations_generation.cmake")
 set_tests_properties(contract-declarations-generation PROPERTIES LABELS native)
 add_zkc_test(bindings IR operation-bindings)
-add_zkc_test(contract_mappings Translation operation-contract-mappings)
-add_test(NAME contract-mapping-generation
-  COMMAND ${CMAKE_COMMAND}
-    "-DZKC_TABLEGEN=$<TARGET_FILE:zkc-tblgen>"
-    "-DZKC_TABLEGEN_INCLUDES=${zkc_tablegen_includes}"
-    "-DZKC_MAPPING_TEST_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/contract-mapping-generation"
-    -P "${CMAKE_CURRENT_SOURCE_DIR}/contract_mapping_generation.cmake")
-set_tests_properties(contract-mapping-generation PROPERTIES LABELS native)
 add_zkc_test(relation Relation relation-model)
 add_zkc_test(air Relation air-model)
 add_zkc_test(air_ring_expression Relation air-ring-expression)
@@ -411,7 +403,7 @@ set_tests_properties(clean-air-conformance PROPERTIES LABELS native)
 add_zkc_test(operation_contracts Contracts operation-contracts)
 target_compile_definitions(zkc-operation_contracts-test PRIVATE
   ZKC_HISTORY_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/contracts/history.txt")
-add_zkc_test(linear_interfaces Transforms linear-interfaces)
+add_zkc_test(linear_contracts Transforms linear-contracts)
 add_zkc_test(target_decisions Transforms target-decisions)
 target_link_libraries(zkc-target_decisions-test PRIVATE ZkcTranslation)
 add_zkc_test(domains IR nominal-domains)
@@ -502,7 +494,6 @@ foreach(script ${zkc_scripts})
   set_tests_properties(${name} PROPERTIES ENVIRONMENT "${zkc_script_environment}")
 endforeach()
 
-mlir_target_link_libraries(zkc-contract_mappings-test PRIVATE MLIRParser)
 mlir_target_link_libraries(zkc-target_decisions-test PRIVATE MLIRParser)
 
 add_zkc_test(program_codec Program)

@@ -1,7 +1,7 @@
 # Shared operation contracts
 
-The installed catalog connects exact mathematical contract keys, typed MLIR
-operations and physical implementations. Mathematical meanings belong in the
+The installed catalog connects exact mathematical contract keys, scoped MLIR
+invocations and physical implementations. Mathematical meanings belong in the
 [domain specifications](../spec/README.md); selecting an implementation does not
 change the field, operation or resource contract.
 
@@ -36,7 +36,14 @@ records ownership and consumers; it adds no execution registry or authority.
 | Output allowance and retained backing | `Invocation`, VM storage accounting and provider value contracts; aliases retain their backing, fresh output consumes capacity |
 | Setup authorization, capability generation and resource successors | Provider custody checks at use; a handle or cached validation result cannot replace them |
 
-`exec.apply` represents an installed operation, which may have effects or fail.
+`exec.apply` is the single executable contract invocation. Its `runtime.binding`
+symbol fixes the operation and static specialization; its actual inputs and
+outcome payload carry the logical or represented ports. Symbol-use verification
+requires that declaration in the nearest symbol table. Per-contract executable
+wrapper operations are absent. Total mathematical operations retain separate
+typed identities for algebraic analysis and checked realization.
+
+An installed operation may have effects or fail.
 The runtime's `InstalledOperation` establishes its signature and installation
 facts. Neither grants purity or permits inspecting an operation's implementation
 as if it were source mathematics. PCS, transcript and resource operations retain
@@ -94,9 +101,9 @@ consumer admission stays separate from catalog membership.
 
 The `zkc.contract-declarations/0` inventory distinguishes constructor-application
 ports from an explicit complete-Type port (`{"term": index}`). The latter is
-restricted to the admitted construction operations, including sequence
-elements and observation payloads, with exact static-type and representation
-checks. Source admission does not gain arbitrary operations from
+checked as a scoped Type term, without privileges based on TableGen inheritance.
+Consumers separately admit the supported instances, including sequence elements
+and observation payloads, with exact static-type and representation checks. Source admission does not gain arbitrary operations from
 catalog presence; the [structured observer](../spec/formats/messages.md#transcript-observation)
 owns that boundary.
 
@@ -119,9 +126,9 @@ removes one. Neither is licensed by the other's mathematical determinism. No
 facet grants permission to discard failure, resource consumption, logical work
 or a transcript occurrence. Partial operations remain ordered local work.
 
-Polynomial interpretation conversions belong to `poly`: `point_to_vector`,
-`point_from_vector`, `table_to_vector` and `table_from_vector`. Catalog keys such
-as `vector.from_point` retain their declared meanings independently of IR spelling.
+Polynomial interpretation conversions use the exact declared contracts, such
+as `vector.from_point`, through `exec.apply`. Their input and output types retain
+the distinction between evaluation points, tables and field vectors.
 Coordinate order and Boolean-table shape remain domain obligations even when
 representations share storage.
 
@@ -144,8 +151,10 @@ see [resource origins](resource-origins.md).
 
 ## Representation and assurance
 
-Logical contraction interfaces identify operand/result roles after exact type
-and contract checks. They select neither a backend nor storage layout.
+Logical contraction interfaces on `exec.apply` identify data-input and
+outcome-payload roles after exact type and contract checks. Their indices exclude
+the scope operand and outcome wrapper. An absent facet yields no roles. The
+interfaces select neither a backend nor storage layout.
 [Physical planning](representation.md#checked-physical-decisions) separately
 validates installed alternatives, conversions and all actual uses.
 

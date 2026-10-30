@@ -3,7 +3,6 @@
 include "zkc/Dialect/Data/IR/DataDialect.td"
 include "zkc/Dialect/Types.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-include "zkc/Dialect/BoundOperations.td"
 include "zkc/Interfaces/Mathematical.td"
 include "mlir/IR/SymbolInterfaces.td"
 
@@ -59,20 +58,7 @@ def Data_BoundedMatrixAtOp : Op<DataDialect, "bounded_matrix_at", [Pure, Declare
   let results = (outs AnyType:$output);
   let hasVerifier = 1;
 }
-def EncodingIndexUleb128ExecOp : BoundOp<DataDialect, "exec.encoding_index_uleb128", [OpEncodingIndexUleb128]>;
-def BytesRepeatExecOp : BoundOp<DataDialect, "exec.bytes_repeat", [OpBytesRepeat]>;
-def BytesJoinExecOp : BoundOp<DataDialect, "exec.bytes_join", [OpBytesJoin]>;
-def BytesEmptyExecOp : BoundOp<DataDialect, "exec.bytes_empty", [OpBytesEmpty]>;
-def BytesAppendExecOp : BoundOp<DataDialect, "exec.bytes_append", [OpBytesAppend]>;
-def BytesConcatExecOp : BoundOp<DataDialect, "exec.bytes_concat", [OpBytesConcat]>;
-def BytesSliceExecOp : BoundOp<DataDialect, "exec.bytes_slice", [OpBytesSlice]>;
-def BytesAtExecOp : BoundOp<DataDialect, "exec.bytes_at", [OpBytesAt]>;
-def BytesLengthExecOp : BoundOp<DataDialect, "exec.bytes_length", [OpBytesLength]>;
-def BytesEqualExecOp : BoundOp<DataDialect, "exec.bytes_equal", [OpBytesEqual]>;
-def SequenceEmptyExecOp : BoundOp<DataDialect, "exec.sequence_empty", [OpSequenceEmpty]>;
-def SequenceAppendExecOp : BoundOp<DataDialect, "exec.sequence_append", [OpSequenceAppend]>;
-def SequenceLengthExecOp : BoundOp<DataDialect, "exec.sequence_length", [OpSequenceLength]>;
-def SequenceAtExecOp : BoundOp<DataDialect, "exec.sequence_at", [OpSequenceAt]>;
+
 class DataExpression<string name, list<Trait> traits = []>
     : Op<DataDialect, name, !listconcat([Pure], traits)> {
   let hasVerifier = 1;

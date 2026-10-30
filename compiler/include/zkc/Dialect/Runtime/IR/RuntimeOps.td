@@ -2,7 +2,6 @@
 #define ZKC_DIALECT_RUNTIME_IR_RUNTIMEOPS_TD
 include "zkc/Dialect/Runtime/IR/RuntimeTypes.td"
 include "zkc/Dialect/Exec/IR/ExecTypes.td"
-include "zkc/Dialect/BoundOperations.td"
 include "mlir/IR/SymbolInterfaces.td"
 // Static contract and selected installation identity. Runtime owns this
 // declaration in logical and physical profiles; it grants no invocation-time
@@ -74,6 +73,5 @@ def Runtime_ReleaseBindingsOp : Op<RuntimeDialect, "release_bindings"> {
   let arguments = (ins RuntimeScope:$scope, Variadic<AnyType>:$values);
   let hasVerifier = 1;
 }
-def PrepareQuotientMatrixOp : BoundOp<RuntimeDialect, "prepare_quotient_matrix", [OpQuotientPrepareMatrix]>;
-def QuotientMatvecOp : BoundOp<RuntimeDialect, "quotient_matvec", [OpQuotientMatvec]>;
+
 #endif

@@ -534,7 +534,11 @@ SmallVector<LinearContractionGroup> findExecutionContractions(
     if (!contract || !contract->diagonalMap || !flow.get(op).step)
       continue;
     ++stats.producers;
-    const auto &production = *contract->diagonalMap;
+    auto producer = dyn_cast<DiagonalProducerInterface>(op);
+    auto roles = producer ? producer.getDiagonalProducerRoles() : std::nullopt;
+    if (!roles)
+      continue;
+    const auto &production = *roles;
     auto inputs = flow.inputs(op), outputs = flow.outputs(op);
     if (production.result >= outputs.size() ||
         production.factorsOperand >= inputs.size() ||
@@ -559,7 +563,14 @@ SmallVector<LinearContractionGroup> findExecutionContractions(
         compatible = false;
         break;
       }
-      const auto &roles = *consumer->linearContraction;
+      auto contraction = dyn_cast<DiagonalContractionInterface>(use.operation);
+      auto resolved = contraction ? contraction.getDiagonalContractionRoles()
+                                  : std::nullopt;
+      if (!resolved) {
+        compatible = false;
+        break;
+      }
+      const auto &roles = *resolved;
       auto consumed = flow.inputs(use.operation);
       if (use.operand != roles.valuesOperand ||
           roles.coefficientsOperand >= consumed.size() ||
@@ -2361,8 +2372,8 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
       const auto &binding = plan.bindings[*decision.binding];
       const auto &base = plan.bindings[original->second];
       // Exact contract AND arguments, not merely physical signature equality.
-      // The source verifier also checks its ODS association and parameters.
-      if (!isa<zkc::exec::ApplyOp>(op) && failed(verifyBoundOperation(op)))
+      // The admitted source owns exact invocation ports and parameters.
+      if (!isa<zkc::exec::ApplyOp>(op))
         return error("binding-operation");
       if (!sameLogical(binding.binding.application, base.binding.application))
         return error("binding-operation");

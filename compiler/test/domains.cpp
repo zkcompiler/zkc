@@ -885,9 +885,7 @@ void bn254Domains() {
   protocol::OperationBinding pairing{"check",
                                      {"pairing.check", {"bn254.fr"}, ""}};
   auto logical = accept(resolveBinding(pairing.application, false));
-  require(boundOperationName(pairing.application.contract) ==
-                  "algebra.exec.pairing_check" &&
-              logical.inputs ==
+  require(logical.inputs ==
                   std::vector<BoundType>{{"groups", "bn254.g1", ""},
                                          {"groups", "bn254.g2", ""}} &&
               logical.outputs == std::vector<BoundType>{{"bool", "", ""}},

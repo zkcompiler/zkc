@@ -25,7 +25,7 @@ report which schema they support rather than infer support from the tag.
 | Constructed pair | `zkc.constructed-pair/0` | Both children use the new participant form |
 | Oracle realization | `zkc.oracle-realization/0` | Interned types become structured data; source-relative roots and actual-body checking remain |
 | Application correspondence | `zkc.application-map/0` | New explicit auxiliary association, bound to the actual original and candidate |
-| Shared declarations | `zkc.contract-declarations/0` | Complete structured declaration data and parameter schemas; explicit numerical signature families and resource Slot roots; no retired interpreter-profile bit |
+| Shared declarations | `zkc.contract-declarations/0` | Complete structured declaration data and parameter schemas; explicit numerical signature families and resource Slot roots; complete-Type port formation independent of TableGen inheritance and consumer profiles; no retired interpreter-profile bit |
 | Logical type vocabulary | `zkc.logical-types/0` | Shared typed trees, including complete nominal identities and ordered alternatives |
 | Executable bytes | `zkc.program/0` | Unchanged grammar, layout, canonical spellings and execution meaning |
 

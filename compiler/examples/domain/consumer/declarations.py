@@ -44,7 +44,6 @@ def More : ZKC_Contribution<"installed-check", ["base"], MoreRecords>;
                  "duplicate contribution identifier")
         native = 'include "zkc/Dialect/Installation.td"\n'
         generate("-gen-type-bindings", native)
-        generate("-gen-contract-mappings", native)
         generate("-gen-type-bindings", native +
                  'def Unowned : ZKC_Type<"unowned">;', "no contribution owner")
         extra = added

@@ -1,9 +1,12 @@
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/LinearContraction.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
@@ -35,55 +38,6 @@ void refuse(Error result, StringRef code) {
   require(bool(result), "expected refusal");
   require(toString(std::move(result)) == code, code);
 }
-
-// A test dialect supplies the same narrow optional interfaces under unrelated
-// operation names. The shared analysis knows neither these names nor the real
-// algebra/curve names. Real planner admission still requires installed
-// bindings.
-class ModuleMapOp
-    : public Op<ModuleMapOp, OpTrait::NOperands<2>::Impl, OpTrait::OneResult,
-                DiagonalProducerInterface::Trait> {
-public:
-  using Op::Op;
-  static StringRef getOperationName() { return "extension.map"; }
-  static ArrayRef<StringRef> getAttributeNames() { return {}; }
-  std::optional<DiagonalProducerRoles> getDiagonalProducerRoles() {
-    if ((*this)->hasAttr("unavailable"))
-      return {};
-    if ((*this)->hasAttr("bad_result"))
-      return DiagonalProducerRoles{0, 1, 1};
-    if ((*this)->hasAttr("overlapping_roles"))
-      return DiagonalProducerRoles{1, 1, 0};
-    return DiagonalProducerRoles{0, 1, 0};
-  }
-};
-class ContractOp
-    : public Op<ContractOp, OpTrait::NOperands<2>::Impl, OpTrait::OneResult,
-                DiagonalContractionInterface::Trait> {
-public:
-  using Op::Op;
-  static StringRef getOperationName() { return "extension.contract"; }
-  static ArrayRef<StringRef> getAttributeNames() { return {}; }
-  std::optional<DiagonalContractionRoles> getDiagonalContractionRoles() {
-    if ((*this)->hasAttr("unavailable"))
-      return {};
-    if ((*this)->hasAttr("bad_coefficient"))
-      return DiagonalContractionRoles{2, 1};
-    if ((*this)->hasAttr("swapped_roles"))
-      return DiagonalContractionRoles{1, 0};
-    return DiagonalContractionRoles{0, 1};
-  }
-};
-class ExtensionDialect : public Dialect {
-public:
-  explicit ExtensionDialect(MLIRContext *context)
-      : Dialect(getDialectNamespace(), context,
-                TypeID::get<ExtensionDialect>()) {
-    addOperations<ModuleMapOp, ContractOp>();
-    allowUnknownOperations();
-  }
-  static StringRef getDialectNamespace() { return "extension"; }
-};
 
 void catalogAndCarriers(MLIRContext &ctx) {
   const auto &catalog = installedDomains();
@@ -220,105 +174,85 @@ void catalogAndCarriers(MLIRContext &ctx) {
          "interactive-constant");
 }
 
-void optionalInterfaces(MLIRContext &ctx) {
-  OpBuilder b(&ctx);
-  OwningOpRef<ModuleOp> module(ModuleOp::create(b.getUnknownLoc()));
-  auto field = zkc::algebra::FieldVectorType::get(&ctx, "ristretto255.scalar");
-  auto group = zkc::algebra::GroupVectorType::get(&ctx, "ristretto255.group");
-  auto resultType = zkc::algebra::GroupType::get(&ctx, "ristretto255.group");
+void scopedRoles(MLIRContext &ctx) {
+  OpBuilder builder(&ctx);
+  auto loc = builder.getUnknownLoc();
+  OwningOpRef<ModuleOp> module(ModuleOp::create(loc));
+  builder.setInsertionPointToEnd(module->getBody());
+  for (StringRef contract : {"vector.mul", "vector.dot"})
+    runtime::BindingOp::create(builder, loc, contract, contract,
+                               builder.getStrArrayAttr({"koala-bear"}), "",
+                               ArrayAttr{});
+  auto vector = algebra::FieldVectorType::get(&ctx, "koala-bear");
+  auto field = algebra::FieldType::get(&ctx, "koala-bear");
+  auto scope = runtime::ScopeType::get(&ctx);
   auto function = func::FuncOp::create(
-      b.getUnknownLoc(), "unrelated",
-      b.getFunctionType({field, group, field}, {resultType}));
-  module->push_back(function);
-  auto *block = function.addEntryBlock();
-  b.setInsertionPointToEnd(block);
-  auto op = [&](StringRef name, ValueRange operands, Type result) {
-    OperationState state(b.getUnknownLoc(), name);
-    state.addOperands(operands);
-    state.addTypes(result);
-    return b.create(state);
+      builder, loc, "roles",
+      builder.getFunctionType({scope, vector, vector}, {}));
+  builder.setInsertionPointToEnd(function.addEntryBlock());
+  auto call = [&](StringRef contract, Type output) {
+    OperationState state(loc, exec::ApplyOp::getOperationName());
+    state.addOperands(function.getArguments());
+    state.addTypes(exec::OutcomeType::get(&ctx, {output}));
+    state.addAttribute("binding", FlatSymbolRefAttr::get(&ctx, contract));
+    state.addAttribute("parameters", builder.getArrayAttr({}));
+    state.addAttribute("site", builder.getStringAttr(contract));
+    return cast<exec::ApplyOp>(builder.create(state));
   };
-  auto *producer = op("extension.map",
-                      {block->getArgument(0), block->getArgument(1)}, group);
-  auto *consumer =
-      op("extension.contract", {block->getArgument(2), producer->getResult(0)},
-         resultType);
-  auto ret =
-      func::ReturnOp::create(b, b.getUnknownLoc(), consumer->getResult(0));
-  auto count = [&] {
-    LinearContractionStats stats;
-    return findLinearContractions(function, stats).size();
-  };
-  require(count() == 1,
-          "shared analysis uses interfaces, not known operation names");
-  auto roles =
-      cast<DiagonalProducerInterface>(producer).getDiagonalProducerRoles();
-  require(roles && roles->factorsOperand == 0 && roles->valuesOperand == 1 &&
-              roles->result == 0,
-          "synthetic semantic roles need no binding or installed backend");
-  for (StringRef attribute : {"bad_result", "overlapping_roles"}) {
-    producer->setAttr(attribute, b.getUnitAttr());
-    require(count() == 0, "invalid synthetic producer roles refuse grouping");
-    producer->removeAttr(attribute);
+  auto multiply = call("vector.mul", vector);
+  auto dot = call("vector.dot", field);
+  func::ReturnOp::create(builder, loc);
+  require(succeeded(verify(*module)),
+          "scoped role fixture must be well formed");
+  auto producer = cast<DiagonalProducerInterface>(multiply.getOperation());
+  auto consumer = cast<DiagonalContractionInterface>(dot.getOperation());
+  auto map = producer.getDiagonalProducerRoles();
+  auto contraction = consumer.getDiagonalContractionRoles();
+  require(map && map->factorsOperand == 0 && map->valuesOperand == 1 &&
+              map->result == 0,
+          "producer roles index logical inputs and payload, excluding scope");
+  require(contraction && contraction->coefficientsOperand == 0 &&
+              contraction->valuesOperand == 1,
+          "contraction roles exclude the invocation scope");
+  require(!multiply.getDiagonalContractionRoles() &&
+              !dot.getDiagonalProducerRoles(),
+          "shared interfaces do not invent absent catalog facets");
+  multiply.setParametersAttr(builder.getStrArrayAttr({"1"}));
+  require(!producer.getDiagonalProducerRoles(),
+          "malformed application parameters cannot expose semantic roles");
+  multiply.setParametersAttr(builder.getArrayAttr({}));
+  auto original = multiply.getOutcome().getType();
+  multiply.getOutcome().setType(exec::OutcomeType::get(&ctx, {field}));
+  require(!producer.getDiagonalProducerRoles(),
+          "wrong outcome payload cannot expose producer roles");
+  multiply.getOutcome().setType(original);
+  function.getArgument(1).setType(
+      algebra::FieldVectorType::get(&ctx, "bls12-381.fr"));
+  require(!producer.getDiagonalProducerRoles() &&
+              !consumer.getDiagonalContractionRoles(),
+          "nominal operand mismatch cannot expose semantic roles");
+  function.getArgument(1).setType(vector);
+  multiply.setBindingAttr(FlatSymbolRefAttr::get(&ctx, "missing"));
+  {
+    ScopedDiagnosticHandler silence(&ctx,
+                                    [](Diagnostic &) { return success(); });
+    require(failed(verify(*module)),
+            "missing binding must fail symbol-use verification");
   }
-  for (StringRef attribute : {"bad_coefficient", "swapped_roles"}) {
-    consumer->setAttr(attribute, b.getUnitAttr());
-    require(count() == 0, "invalid synthetic consumer roles refuse grouping");
-    consumer->removeAttr(attribute);
-  }
-  b.setInsertionPoint(ret);
-  auto *second =
-      op("extension.contract", {block->getArgument(2), producer->getResult(0)},
-         resultType);
-  LinearContractionStats shared;
-  auto groups = findLinearContractions(function, shared);
-  require(groups.size() == 1 && groups[0].uses.size() == 2 &&
-              groups[0].uses[0].consumer == consumer &&
-              groups[0].uses[1].consumer == second &&
-              shared.eligiblePairs == 2 && shared.eligibleProducers == 1,
-          "all uses grouped atomically in source order");
-  second->setAttr("unavailable", b.getUnitAttr());
-  require(count() == 0, "one unavailable use disqualifies the whole producer");
-  second->erase();
-  producer->setAttr("unavailable", b.getUnitAttr());
-  require(count() == 0, "missing optional producer choice retains dense");
-  producer->removeAttr("unavailable");
-  consumer->setAttr("unavailable", b.getUnitAttr());
-  require(count() == 0, "missing optional consumer choice retains dense");
-  consumer->removeAttr("unavailable");
-  consumer->setOperand(0, producer->getResult(0));
-  require(count() == 0, "two operand uses in one consumer are not single-use");
-  consumer->setOperand(0, block->getArgument(2));
-  block->getArgument(2).setType(
-      zkc::algebra::FieldVectorType::get(&ctx, "bls12-381.fr"));
-  require(count() == 0, "mixed nominal coefficient domains refuse selection");
-  block->getArgument(2).setType(field);
-  b.setInsertionPoint(consumer);
-  auto *unknown = op("extension.unknown", {producer->getResult(0)}, resultType);
-  require(count() == 0, "unknown extra consumer prevents selection");
-  consumer->setOperand(1, block->getArgument(1));
-  require(count() == 0, "unknown single consumer lacks the optional interface");
-  unknown->erase();
-  consumer->setOperand(1, producer->getResult(0));
-  ret->setOperand(0, producer->getResult(0));
-  require(count() == 0, "function escape is not local single-use");
-  consumer->erase();
-  require(count() == 0,
-          "return-only use cannot select a diagonal representation");
-  auto *extra = new Block;
-  function.getBody().push_back(extra);
-  require(count() == 0,
-          "multi-block control never acquires a local lifetime inference");
+  require(!producer.getDiagonalProducerRoles(),
+          "unresolved binding has no roles");
+  multiply.setBindingAttr(FlatSymbolRefAttr::get(&ctx, "vector.mul"));
+  require(succeeded(verify(*module)) && producer.getDiagonalProducerRoles(),
+          "restored actual invocation resolves its roles again");
 }
 } // namespace
 int main() {
   DialectRegistry registry;
   registerDialects(registry);
-  registry.insert<ExtensionDialect>();
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   catalogAndCarriers(context);
-  optionalInterfaces(context);
-  outs() << "linear interfaces and domain extensions: " << checks
+  scopedRoles(context);
+  outs() << "linear contracts and domain extensions: " << checks
          << " checks passed\n";
 }

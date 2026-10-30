@@ -10,7 +10,6 @@
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
-#include "zkc/Dialect/BoundOperations.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Interfaces/LinearContraction.h"
 #include "zkc/Interfaces/Mathematical.h"

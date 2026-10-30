@@ -93,6 +93,15 @@ if(ZKC_ENABLE_MLIR_LSP)
   install(TARGETS zkc-lsp RUNTIME DESTINATION bin)
 endif()
 
+# Build every installed executable without pulling in the test graph. Optional
+# language servers participate through the same target as the compiler tools.
+add_custom_target(zkc-tools DEPENDS zkc-compile zkc-opt zkc-tblgen)
+foreach(tool zkc-source-lsp zkc-lsp)
+  if(TARGET ${tool})
+    add_dependencies(zkc-tools ${tool})
+  endif()
+endforeach()
+
 include(CMakePackageConfigHelpers)
 # Keep installed tools usable with the selected external LLVM/MLIR package.
 set_target_properties(zkc-compile zkc-opt zkc-tblgen PROPERTIES

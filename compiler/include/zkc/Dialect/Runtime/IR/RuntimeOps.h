@@ -3,7 +3,6 @@
 #include "mlir/Bytecode/BytecodeOpInterface.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/SymbolTable.h"
-#include "zkc/Dialect/BoundOperations.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #define GET_OP_CLASSES

@@ -2,6 +2,7 @@
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 
 using namespace mlir;
 namespace zkc::exec {
@@ -35,6 +36,16 @@ bool kind(Type type, StringRef expected) {
   return bound->kind == expected;
 }
 } // namespace
+LogicalResult ApplyOp::verifySymbolUses(SymbolTableCollection &symbols) {
+  auto *table = SymbolTable::getNearestSymbolTable(*this);
+  auto declaration = table
+                         ? dyn_cast_or_null<runtime::BindingOp>(
+                               symbols.lookupSymbolIn(table, getBindingAttr()))
+                         : runtime::BindingOp();
+  if (!declaration)
+    return diagnostics::emit(emitOpError(), "binding-reference");
+  return success();
+}
 LogicalResult ApplyOp::verify() {
   if (getSite().empty() ||
       !admitted(getInputs().getTypes(), getOutcome().getType().getPayload()))

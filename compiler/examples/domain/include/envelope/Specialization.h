@@ -5,8 +5,9 @@
 #include "mlir/IR/PatternMatch.h"
 
 namespace envelope {
-/// Pattern precondition: admitted logical field additions. Only adjacent,
-/// single-use, left-associated pairs match; no reordering or folding occurs.
+/// Pattern precondition: admitted total mathematical field additions. Only
+/// adjacent, single-use, left-associated pairs match; no reordering or folding
+/// occurs.
 void populateFieldSumSpecializationPatterns(mlir::RewritePatternSet &patterns);
 void populateFieldSumDecompositionPatterns(mlir::RewritePatternSet &patterns);
 

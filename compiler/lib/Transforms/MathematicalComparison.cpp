@@ -501,7 +501,6 @@ primitive(Operation &op, SymbolTable *symbols,
           const llvm::DenseSet<Operation *> *fixedBindings = nullptr) {
   auto inputs = source ? ValueRange(source->inputs) : ports.inputs(&op);
   auto outputs = source ? ValueRange(source->outputs) : ports.outputs(&op);
-  bool scoped = source || ports.isScoped();
   auto reference = op.getAttrOfType<FlatSymbolRefAttr>("binding");
   auto binding =
       reference
@@ -515,10 +514,7 @@ primitive(Operation &op, SymbolTable *symbols,
       !op.getAttrOfType<StringAttr>("site") || op.getAttrs().size() != 3 ||
       (!source && !ports.contains(&op)) ||
       (source ? !source->regions.empty() : ports.bodies(&op) != 0) ||
-      outputs.size() != 1 ||
-      (scoped ? !isa<exec::ApplyOp>(op)
-              : !protocol::operationSupportsContract(
-                    op.getName().getStringRef(), binding.getContract())))
+      outputs.size() != 1 || !isa<exec::ApplyOp>(op))
     return std::nullopt;
   auto decoded = protocol::readBinding(binding);
   if (!decoded) {

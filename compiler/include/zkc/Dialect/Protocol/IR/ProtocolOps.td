@@ -7,9 +7,7 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
-include "zkc/Dialect/BoundOperations.td"
 include "zkc/Dialect/Protocol/IR/OracleOps.td"
-
 
 def AwaitOp : Op<ProtocolDialect, "receive",
     [ParentOneOf<["zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp"]>]> {
@@ -99,9 +97,6 @@ def GuardOp : Op<ProtocolDialect, "guard",
   let assemblyFormat = "$condition attr-dict";
 }
 
-
-
-
 def LocalCallOp : Op<ProtocolDialect, "local_call",
     [ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp", "zkc::protocol_ir::RepeatOp"]>,
      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
@@ -148,7 +143,6 @@ def MathematicalOp : Op<ProtocolDialect, "func",
   let hasRegionVerifier = 1;
 }
 
-
 def ProtocolModuleOp : Op<ProtocolDialect, "module",
     [IsolatedFromAbove, SymbolTable, SingleBlock, NoTerminator]> {
   let arguments = (ins ProtocolProfileAttr:$profile);
@@ -172,14 +166,11 @@ def ParticipantOp : Op<ProtocolDialect, "participant", [Symbol, IsolatedFromAbov
   let hasRegionVerifier = 1;
 }
 
-
 def ParticipantQueryOp : Op<ProtocolDialect, "service_query",
     [MemoryEffects<[MemRead, MemWrite]>, ParentOneOf<["zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp"]>]> {
   let arguments = (ins Variadic<AnyType>:$inputs, StrAttr:$port, StrAttr:$method, StrAttr:$site);
   let results = (outs Variadic<AnyType>:$outputs);
 }
-
-
 
 def QueryOp : Op<ProtocolDialect, "query",
     [MemoryEffects<[MemRead, MemWrite]>, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp"]>]> {
@@ -194,7 +185,6 @@ def RestrictRolesOp : Op<ProtocolDialect, "restrict_roles",
   let results = (outs AnyType:$output);
   let assemblyFormat = "$input attr-dict `:` type($input)";
 }
-
 
 // Pointwise assembly of disjoint role components. Operand i supplies only the
 // component at roles[i]; no value is communicated or compared across roles.

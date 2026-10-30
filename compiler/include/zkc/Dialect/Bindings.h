@@ -6,15 +6,6 @@
 #include "zkc/Contracts/Bindings.h"
 
 namespace zkc::protocol {
-/// Logical IR operation for an installed contract; empty when no mapping
-/// exists.
-llvm::StringRef boundOperationName(llvm::StringRef contract);
-/// Whether an operation's ODS association supports this installed contract.
-/// This is many-to-one: transcript observations share an operation. Unknown
-/// operation names and uninstalled contracts return false. This query does not
-/// validate a binding's arguments, types, parameters, or semantic properties.
-bool operationSupportsContract(llvm::StringRef operationName,
-                               llvm::StringRef contract);
 /// Decode in already loaded dialects; return a null type if one is missing.
 /// This operation never registers or loads dialects into the caller context.
 mlir::Type decodeBoundType(mlir::MLIRContext *, const BoundType &);
@@ -24,7 +15,6 @@ llvm::Expected<BoundType> encodeBoundType(mlir::Type, bool physical);
 /// also check their selected stage and actual invocation ports.
 llvm::Expected<protocol::OperationBinding> readBinding(mlir::Operation *);
 llvm::Expected<protocol::OperationBinding> operationBinding(mlir::Operation *);
-mlir::LogicalResult verifyBoundOperation(mlir::Operation *);
 } // namespace zkc::protocol
 
 #endif

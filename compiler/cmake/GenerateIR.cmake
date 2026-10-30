@@ -90,7 +90,6 @@ file(CONFIGURE OUTPUT include/zkc/Dialect/BuiltinHeaders.h.inc
   CONTENT "${zkc_builtin_headers}" @ONLY)
 file(CONFIGURE OUTPUT include/zkc/Dialect/BuiltinDialects.inc
   CONTENT "${zkc_builtin_classes}" @ONLY)
-include(cmake/ContractMappings.cmake)
 set(LLVM_TARGET_DEFINITIONS
   ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/Installation.td)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/TypeAdapters)

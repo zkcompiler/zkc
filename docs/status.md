@@ -23,11 +23,15 @@ named fields instead of JSON operation descriptors. The neutral declaration
 inventory now publishes the complete tagged catalog, including numerical
 signature families and nominal resource slots. Its C++ consumers use one
 operation collection; interpreter-profile membership is no longer a declaration
-flag. Rust catalog generation and typed invocation remain pending. The
+flag. Per-contract executable wrapper operations and their mapping generator
+are removed. Executable contract calls use `exec.apply`; its symbol and semantic
+role interfaces inspect the referenced declaration and actual scoped ports.
+Mathematical operations retain their separate meanings. Rust catalog generation
+and fully typed invocation arguments remain pending. The
 [interface inventory](spec/formats/foundation-interfaces.md) defines the remaining
 source/constructed export, realization-record and application-map
-cutovers. Their replacement emission, execution-wrapper retirement and
-complete stage-admission migration remain in progress. Current and designed
+cutovers. Their replacement emission and complete stage-admission migration
+remain in progress. Current and designed
 schemas share development version `0`. Lean work and validation are outside
 this native unit; native structure does not claim a formal interpretation.
 

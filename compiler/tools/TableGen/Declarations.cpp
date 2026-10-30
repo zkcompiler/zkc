@@ -334,12 +334,12 @@ void Model::validateOperation(const Record *op) {
   for (auto port : {"inputs", "outputs"}) {
     for (const auto *app : op->getValueAsListOfDefs(port)) {
       if (!app->isSubClassOf("ZKC_Apply")) {
-        require(stage == "Construction" &&
-                    (StringRef(port) == "inputs" ||
-                     op->isSubClassOf("SequenceOperation")) &&
-                    available.count(app) && app->isSubClassOf("ZKC_Root") &&
+        // The catalog describes complete signatures. Consumer profiles decide
+        // which instantiated Type ports they can admit; a TableGen subclass
+        // cannot grant an exception absent from the neutral declaration data.
+        require(available.count(app) &&
                     parameter(app->getValueAsDef("parameter")).first == "Type",
-                op, "direct Type ports require a scoped construction type");
+                op, "direct ports require a scoped Type term");
         continue;
       }
       auto args = app->getValueAsListOfDefs("arguments");
@@ -349,19 +349,6 @@ void Model::validateOperation(const Record *op) {
                          args);
     }
   }
-  auto inputs = op->getValueAsListOfDefs("inputs");
-  for (auto [i, input] : enumerate(inputs))
-    if (!input->isSubClassOf("ZKC_Apply"))
-      // Sequence kernels expose their declared element type directly. Other
-      // complete-type input ports retain the observation-only restriction.
-      require(op->isSubClassOf("SequenceOperation") ||
-                  any_of(op->getValueAsListOfDefs("facets"),
-                         [i = i](const Record *f) {
-                           return f->isSubClassOf("ZKC_Observation") &&
-                                  f->getValueAsInt("payloadInput") ==
-                                      int64_t(i);
-                         }),
-              op, "complete-type port must be an observation payload");
   for (const auto *p : op->getValueAsListOfDefs("requirements")) {
     auto args = p->getValueAsListOfDefs("arguments");
     scoped(args);

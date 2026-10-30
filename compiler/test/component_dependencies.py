@@ -184,6 +184,7 @@ def main():
         "ZkcIR": {ROOT / "lib/Dialect/Protocol/IR/ResourceOrigins.h",
         ROOT / "lib/Dialect/Protocol/IR/OracleAnalysis.h", ROOT / "lib/Dialect/Verification.h", ROOT / "lib/Dialect/DomainVerification.h"},
     }
+    private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Data/IR/Structure.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Analysis/FiniteCardinality.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Dialect/BindingTypeCache.h")
     private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Exec/ExecutionDefinitions.h")

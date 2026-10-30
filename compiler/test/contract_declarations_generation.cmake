@@ -307,24 +307,34 @@ def Wrong : ZKC_Operation<"fixture.wrong", [ElementType, Length],
     [ZKC_Apply<ArrayType, [Length, ElementType]>], []> {
 }
 ]=] "parameter kind or sort mismatch")
-# Complete-Type ports are construction observation inputs, never an untyped
-# escape hatch for common programs or generated result types.
-declaration_case(direct-type-common [=[
+# Complete-Type ports are declaration facts, independent of consumer admission.
+# They retain their scope and kind without privileged TableGen inheritance.
+declaration_case(direct-type-source [=[
 def T : ZKC_Root<"T", TypeParameter>;
-def Bad : ZKC_Operation<"bad.direct", [T], [T], []>;
-]=] "direct Type ports require a scoped construction type")
+def Good : ZKC_Operation<"good.direct", [T], [T], [T]>;
+]=] "")
 declaration_case(direct-type-output [=[
 def T : ZKC_Root<"T", TypeParameter>;
-def Bad : ZKC_Operation<"bad.direct", [T], [], [T]> {
+def Good : ZKC_Operation<"good.direct", [T], [], [T]> {
   let stage = Construction;
 }
-]=] "direct Type ports require a scoped construction type")
-declaration_case(direct-type-unobserved [=[
+]=] "")
+declaration_case(direct-type-unscoped [=[
 def T : ZKC_Root<"T", TypeParameter>;
-def Bad : ZKC_Operation<"bad.direct", [T], [T], []> {
-  let stage = Construction;
-}
-]=] "complete-type port must be an observation payload")
+def Bad : ZKC_Operation<"bad.direct", [], [T], []>;
+]=] "direct ports require a scoped Type term")
+declaration_case(direct-type-domain [=[
+def Bad : ZKC_Operation<"bad.direct", [F], [F], []>;
+]=] "direct ports require a scoped Type term")
+declaration_case(direct-type-natural [=[
+def N : ZKC_Natural<4>;
+def Bad : ZKC_Operation<"bad.direct", [N], [], [N]>;
+]=] "direct ports require a scoped Type term")
+declaration_case(direct-type-projection [=[
+def ElementMember : ZKC_Member<"Element", FDomain, TypeParameter>;
+def T : ZKC_Project<F, ElementMember>;
+def Good : ZKC_Operation<"good.projected", [F,T], [T], [T]>;
+]=] "")
 declaration_case(direct-type-observation [=[
 def T : ZKC_Root<"T", TypeParameter>;
 def State : ZKC_Type<"transcript", [], Affine, 0, 0>;

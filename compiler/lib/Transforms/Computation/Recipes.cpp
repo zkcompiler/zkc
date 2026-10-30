@@ -11,6 +11,7 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Binding.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
@@ -85,7 +86,7 @@ public:
   }
   FlatSymbolRefAttr get(protocol::BindingApplication application,
                         Location location, OpBuilder &builder) {
-    assert(!protocol::boundOperationName(application.contract).empty() &&
+    assert(protocol::operationContracts(application.contract) &&
            "mathematical recipe requires an installed execution contract");
     auto key = std::make_pair(application.contract, application.arguments);
     auto found = bindings.find(key);
@@ -221,10 +222,8 @@ class Recipes {
       // arguments and the shared failure continuation (even on first use).
       if (!reserve(16 + 2 * (state.operands.size() + state.types.size())))
         return SmallVector<Value>(state.types.size());
-      return control.invoke(state.attributes.get("binding")
-                                ? "exec.apply"
-                                : state.name.getStringRef(),
-                            state.types, control.scoped(state.operands),
+      return control.invoke(state.name.getStringRef(), state.types,
+                            control.scoped(state.operands),
                             state.attributes.getAttrs());
     };
     if (isa<poly::ProjectQuotientOp, poly::ObserveQuotientOp,
@@ -241,12 +240,12 @@ class Recipes {
                            : isa<poly::SubtractQuotientOp>(op)
                                ? "quotient.subtract"
                                : "quotient.multiply";
-      if (protocol::boundOperationName(contract).empty() ||
-          protocol::boundOperationName("index.constant").empty())
+      if (!protocol::operationContracts(contract) ||
+          !protocol::operationContracts("index.constant"))
         return failure();
       auto emit = [&](StringRef name, ValueRange operands, Type result,
                       ArrayRef<std::string> parameters, bool root) {
-        OperationState state(op->getLoc(), protocol::boundOperationName(name));
+        OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
         state.addOperands(operands);
         state.addTypes(result);
         auto occurrence =
@@ -278,8 +277,7 @@ class Recipes {
       if (!collection || !collection->get)
         return refuse(op, "no admitted collection access");
       const auto &application = *collection->get;
-      OperationState state(op->getLoc(),
-                           protocol::boundOperationName(application.contract));
+      OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
       state.addOperands(inputs);
       state.addTypes(op->getResultTypes());
       state.addAttribute("site", site);
@@ -306,8 +304,7 @@ class Recipes {
                                  ? "sequence.append"
                                  : "sequence.length";
       application.arguments = {element->spelling()};
-      OperationState state(op->getLoc(),
-                           protocol::boundOperationName(application.contract));
+      OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
       state.addOperands(inputs);
       state.addTypes(op->getResultTypes());
       state.addAttribute("site", site);
@@ -320,15 +317,14 @@ class Recipes {
     if (isa<data::PowerOfTwoOp>(op)) {
       for (StringRef contract :
            {"index.constant", "index.equal", "bool.and", "bool.or"})
-        if (protocol::boundOperationName(contract).empty())
+        if (!protocol::operationContracts(contract))
           return failure();
       auto emit = [&](StringRef contract, ValueRange operands, Type type,
                       ArrayRef<Attribute> parameters = {},
                       bool last = false) -> Value {
         protocol::BindingApplication application;
         application.contract = contract.str();
-        OperationState state(op->getLoc(),
-                             protocol::boundOperationName(contract));
+        OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
         state.addOperands(operands);
         state.addTypes(type);
         auto occurrence =
@@ -386,10 +382,10 @@ class Recipes {
                 ? "bytes.length"
                 : "indices.length";
       }
-      auto name = protocol::boundOperationName(application.contract);
-      if (name.empty())
+      auto *declaration = protocol::operationContracts(application.contract);
+      if (!declaration)
         return failure();
-      OperationState state(op->getLoc(), name);
+      OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
       state.addOperands(operands);
       state.addTypes(op->getResultTypes());
       state.addAttribute("site", site);
@@ -404,13 +400,13 @@ class Recipes {
       application.contract = isa<data::IndexOp>(op)   ? "index.constant"
                              : isa<data::EqualOp>(op) ? "index.equal"
                                                       : "index.less";
-      auto name = protocol::boundOperationName(application.contract);
-      if (name.empty())
+      auto *declaration = protocol::operationContracts(application.contract);
+      if (!declaration)
         return failure();
       SmallVector<Attribute> parameters;
       if (auto constant = dyn_cast<data::IndexOp>(op))
         parameters.push_back(rewriter.getStringAttr(constant.getValue()));
-      OperationState state(op->getLoc(), name);
+      OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
       state.addOperands(inputs);
       state.addTypes(op->getResultTypes());
       state.addAttribute("site", site);
@@ -558,7 +554,7 @@ class Recipes {
           }))
         return refuse(op, "expected scalar Boolean operands");
       for (StringRef contract : {"bool.and", "bool.or", "bool.not"})
-        if (protocol::boundOperationName(contract).empty())
+        if (!protocol::operationContracts(contract))
           return refuse(op, "missing Boolean execution binding");
       auto emit = [&](StringRef contract, ValueRange operands,
                       bool last) -> Value {
@@ -568,8 +564,7 @@ class Recipes {
               symbols.freshSite(control.getFunction(), site.getValue());
         protocol::BindingApplication application;
         application.contract = contract.str();
-        OperationState state(op->getLoc(),
-                             protocol::boundOperationName(contract));
+        OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
         state.addOperands(operands);
         state.addTypes(rewriter.getI1Type());
         state.addAttribute("site", rewriter.getStringAttr(occurrence));
@@ -603,7 +598,7 @@ class Recipes {
       for (StringRef contract :
            {"field.constant", "field_array.at", "field_array.from_vector",
             "vector.empty", "vector.append"})
-        if (protocol::boundOperationName(contract).empty())
+        if (!protocol::operationContracts(contract))
           return failure();
       auto emit = [&](StringRef contract, ArrayRef<std::string> arguments,
                       ValueRange operands, Type output,
@@ -615,8 +610,7 @@ class Recipes {
             contract.str(),
             std::vector<std::string>(arguments.begin(), arguments.end()),
             {}};
-        OperationState state(op->getLoc(),
-                             protocol::boundOperationName(contract));
+        OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
         state.addOperands(operands);
         state.addTypes(output);
         state.addAttribute("site", rewriter.getStringAttr(occurrence));
@@ -660,11 +654,10 @@ class Recipes {
       return success();
     }
     auto application = algebraBinding(op);
-    auto name = protocol::boundOperationName(application.contract);
-    if (application.contract.empty() || name.empty())
+    if (!protocol::operationContracts(application.contract))
       return refuse(op, "no execution recipe for this operation");
     auto reference = symbols.get(application, op->getLoc(), rewriter);
-    OperationState state(op->getLoc(), name);
+    OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
     state.addOperands(inputs);
     state.addTypes(op->getResultTypes());
     state.addAttribute("site", site);

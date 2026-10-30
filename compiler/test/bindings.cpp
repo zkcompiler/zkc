@@ -4,6 +4,7 @@
 #include "support/ContractWitnesses.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/OperationShapes.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
@@ -56,24 +57,12 @@ int main() {
   registerDialects(registry);
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
-  llvm::StringSet<> contracts;
-  for (const auto &kernel : operationShapes()) {
-    require(contracts.insert(kernel.key).second, "unique installed contract");
-    auto operation = boundOperationName(kernel.key);
-    bool scopedOnly = kernel.key == "resource_unit.create" ||
-                      kernel.key == "resource_unit.pass" ||
-                      kernel.key == "resource_unit.consume" ||
-                      kernel.key == "control.require";
-    require(operation.empty() == scopedOnly, kernel.key);
-    if (!scopedOnly)
-      require(context.isOperationRegistered(operation), operation);
-  }
-  require(boundOperationName("uninstalled.contract").empty(),
-          "unknown contracts have no IR mapping");
-  require(boundOperationName("transcript.observe.uninstalled").empty(),
-          "unknown observation types have no IR mapping");
-  require(boundOperationName("table.relayout").empty(),
-          "physical adapters do not acquire logical operations");
+  require(context.isOperationRegistered("exec.apply"),
+          "the installed contract invocation is registered");
+  for (StringRef retired : {"algebra.exec.field_add", "poly.exec.fold",
+                            "crypto.exec.random_draw", "data.exec.sequence_at"})
+    require(!context.isOperationRegistered(retired),
+            "retired execution wrapper is still registered");
   mlir::OperationState state(mlir::UnknownLoc::get(&context),
                              zkc::runtime::BindingOp::getOperationName());
   auto *detached = mlir::Operation::create(state);
@@ -134,11 +123,12 @@ int main() {
     auto type = builder.getI1Type();
     auto fn = mlir::func::FuncOp::create(
         builder, loc, "evaluate",
-        builder.getFunctionType({type, type}, {type}));
+        builder.getFunctionType({runtime::ScopeType::get(&context), type, type},
+                                {exec::OutcomeType::get(&context, {type})}));
     builder.setInsertionPointToEnd(fn.addEntryBlock());
-    mlir::OperationState call(loc, boundOperationName("bool.and"));
+    mlir::OperationState call(loc, exec::ApplyOp::getOperationName());
     call.addOperands(fn.getArguments());
-    call.addTypes(type);
+    call.addTypes(exec::OutcomeType::get(&context, {type}));
     call.addAttribute("binding",
                       mlir::FlatSymbolRefAttr::get(&context, "combine"));
     call.addAttribute("parameters", builder.getArrayAttr({}));

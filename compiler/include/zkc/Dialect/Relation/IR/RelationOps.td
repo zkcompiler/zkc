@@ -6,7 +6,6 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
-include "zkc/Dialect/BoundOperations.td"
 
 def AIRRelationOp : Op<RelationDialect, "air", [Symbol]> {
   let summary = "Finite arithmetic trace constraints with explicit row scopes";
@@ -42,26 +41,17 @@ def R1CSRelationOp : Op<RelationDialect, "r1cs", [Symbol]> {
 // Dense assertion residuals of one present table of an admitted relation
 // bundle asset. The bundle body is admitted by the Host under the digest
 // parameter; the compiler checks the contract and the digest reference.
-def TableRowsOp : BoundOp<RelationDialect, "exec.table_rows", [OpRelationTableRows]>;
+
 // Polynomial view of one present table of an admitted relation bundle asset:
 // derived shape, input descriptors, assertion scopes and point substitutions.
 // The compiler checks static table and carrier premises; actual heights
 // are checked when the height-taking kernels execute.
-def TableShapeOp : BoundOp<RelationDialect, "exec.table_shape", [OpRelationTableShape]>;
-def TableInputOp : BoundOp<RelationDialect, "exec.table_input", [OpRelationTableInput]>;
-def TableScopeOp : BoundOp<RelationDialect, "exec.table_scope", [OpRelationTableScope]>;
-def TablePointOp : BoundOp<RelationDialect, "exec.table_point", [OpRelationTablePoint]>;
-def TablePointsOp : BoundOp<RelationDialect, "exec.table_points", [OpRelationTablePoints]>;
+
 // Metadata and interaction view of one table of an admitted Bundle: widths,
 // declared height policy, interaction descriptors and record substitutions.
 // The compiler checks static table and carrier premises. Height-taking
 // kernels check their actual height at execution; metadata and substitutions
 // require no domain.
-def TableWidthsOp : BoundOp<RelationDialect, "exec.table_widths", [OpRelationTableWidths]>;
-def TablePolicyOp : BoundOp<RelationDialect, "exec.table_policy", [OpRelationTablePolicy]>;
-def TableInteractionsOp : BoundOp<RelationDialect, "exec.table_interactions", [OpRelationTableInteractions]>;
-def TableInteractionOp : BoundOp<RelationDialect, "exec.table_interaction", [OpRelationTableInteraction]>;
-def TableRecordPointsOp : BoundOp<RelationDialect, "exec.table_record_points", [OpRelationTableRecordPoints]>;
 
 // A predicate declaration. A formula reference is metadata, not a call.
 def DeclareOp : Op<RelationDialect, "declare", [Symbol,

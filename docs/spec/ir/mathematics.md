@@ -64,7 +64,7 @@ The following flat operations are total on their verified types:
 returns a vector of the same nominal field. It is total, with the
 [vector restriction meaning](../domains/polynomials.md#total-vector-prefix-restriction),
 and has no attributes. Both operands are ordered mathematical dependencies.
-Its checked Kernel recipe uses `algebra.exec.multilinear_restrict_prefix`
+Its checked execution recipe uses `exec.apply`
 bound to `multilinear.restrict_prefix<F>`, with exactly two vector inputs,
 one vector output and no parameters. The independent recipe reader checks
 that exact binding, field and operand order. Native execution separately
@@ -193,7 +193,7 @@ executable contracts. These Math additions do not extend the executable
 operation catalogue.
 
 The nullary `algebra.group_identity : !algebra.group<"G">` lowers to
-`algebra.exec.group_identity` bound to `curve.identity<G>`. The producer reads
+`exec.apply` bound to `curve.identity<G>`. The producer reads
 `G` from the result type; the independent recipe checker verifies the exact
 contract, nominal group, empty operands/parameters and result. Provider selection
 then applies ordinary group representation restrictions. See the

@@ -52,7 +52,7 @@ boundary with exact type checks and correct symbol scope. Calling a binding is
 not protocol composition or an ordinary mathematical helper application.
 `exec.compute`, finite requests, scope transitions, outcome dispatch and
 publication keep their separate meanings where they are observably distinct.
-Per-contract executable wrapper operations are removed after the cutover;
+Per-contract executable wrapper operations are absent;
 mathematical operation identities remain available to analyses and rewrites.
 
 Structured TypeDef/AttrDef and inherent properties carry complete aggregate,

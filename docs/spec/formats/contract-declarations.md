@@ -73,9 +73,10 @@ Requirement = {capability, arguments}
 `parent` and `arguments` refer to earlier scope terms; roots introduce static
 parameters. Projected kinds come from the named Member, application kinds from
 the named constructor, and natural terms have kind Nat. Logical ports use an
-explicit complete-Type term or constructor application. The complete-Type
-form does not grant arbitrary source operations; the operation stage and
-admitted profile still apply. Requirements are kind-checked capability
+explicit complete-Type term or constructor application. Complete-Type ports are
+kind-checked independently of authoring stage and TableGen class inheritance.
+Consumer profiles separately select supported instantiated signatures; the
+complete-Type form does not grant arbitrary source operations or interpretations. Requirements are kind-checked capability
 applications. The stage is `Source`, `Construction`, `CompilerGenerated` or
 `Physical`. A fixed signature has ordered Port lists. The numerical signature
 is an explicit closed family, rather than a hidden generic-verifier exception:

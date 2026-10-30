@@ -10,6 +10,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
@@ -979,8 +980,8 @@ int main(int argc, char **argv) {
               "changed native result accepted");
     });
   if (checkedAccess) {
-    bool installed = !protocol::boundOperationName("matrix.get").empty() &&
-                     !protocol::boundOperationName("field_array.get").empty();
+    bool installed = protocol::operationContracts("matrix.get") &&
+                     protocol::operationContracts("field_array.get");
     cases.run("checked access prerequisites installed", [&] {
       require(installed, "matrix.get and field_array.get must be integrated");
     });

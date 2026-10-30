@@ -10,6 +10,7 @@
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
+#include "zkc/Interfaces/LinearContraction.h"
 #define GET_OP_CLASSES
 #include "zkc/Dialect/Exec/IR/execOps.h.inc"
 #endif

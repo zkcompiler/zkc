@@ -4,6 +4,7 @@ include "zkc/Dialect/Exec/IR/ExecTypes.td"
 include "zkc/Dialect/Runtime/IR/RuntimeTypes.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
+include "zkc/Interfaces/LinearContraction.td"
 // Logical mathematical invocation. The callee has plain mathematical ports;
 // scope borrowing and returned/stopped outcomes belong to this ordered boundary.
 // Whole-closure admission and actual candidate checking belong to its consumer.
@@ -37,7 +38,10 @@ def Exec_FoldOp : ExecFinite<"fold", "step">;
 def Exec_CollectOp : ExecFinite<"collect", "body">;
 // A reached native instruction uses the active scope. Its outcome includes
 // tick, admission, allocation and output binding, not merely its value result.
-def Exec_ApplyOp : Op<ExecDialect, "apply"> {
+def Exec_ApplyOp : Op<ExecDialect, "apply", [
+    DeclareOpInterfaceMethods<SymbolUserOpInterface>,
+    DeclareOpInterfaceMethods<DiagonalProducerInterface>,
+    DeclareOpInterfaceMethods<DiagonalContractionInterface>]> {
   let arguments = (ins RuntimeScope:$scope, Variadic<AnyType>:$inputs,
     FlatSymbolRefAttr:$binding, StrArrayAttr:$parameters, StrAttr:$site);
   let results = (outs ExecOutcome:$outcome);
