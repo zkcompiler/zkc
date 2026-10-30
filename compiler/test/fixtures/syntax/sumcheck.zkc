@@ -1,0 +1,46 @@
+// Selected 4.1 design example; not production-compiled. This module is within the SumClaim constructor authority.
+module zkc::sumcheck::rounds
+
+use zkc::sumcheck::{Message, Prover, CubeSums, SumClaim, PartialSum}
+use zkc::vector::{Vec, empty, append, length}
+use zkc::poly::{MvPoly, vars, fix_prefix}
+use zkc::security::{reduction, interactive, per_site}
+
+pub protocol Reduce<
+    F: Field, Max: nat, D: nat,
+    M: Message<F, D>, H: Prover<F, D, M, CubeSums<F, D>>
+> roles(P, V)(
+    claim: SumClaim<F, D> @V;
+    rounds: index @(P, V);
+    ghost poly: MvPoly<F, D>;
+    table: H::State @P;
+    coins: Random<F> @V
+) -> (claim: SumClaim<F, D> @V; residual: H::State @P):
+    prefix = claim.point
+    (_, claimed) = unpack(claim)
+    mut point = empty<F>()
+    mut value = claimed
+    mut state = table
+    #[site(rounds)]
+    for _ in 0..rounds roles(P, V) max Max:
+        message <- H::message(state)
+        round <- send message to V
+        guard value == M::boundary(round)
+        #[site(challenge)]
+        challenge_v <- coins.draw()
+        challenge_p <- send challenge_v to P
+        next <- H::update(state, challenge_p)
+        state := next
+        point := append(point, challenge_v)
+        value := M::evaluate(round, challenge_v)
+    return (claim = SumClaim { point: prefix ++ point, value }, residual = state)
+
+spec for Reduce:
+    requires (H::represents(table, fix_prefix(poly, claim.point), vars(poly) - length(claim.point))
+            ∧ length(claim.point) + rounds <= vars(poly) ∧ rounds <= Max)
+    ensures H::represents(out.residual, fix_prefix(poly, out.claim.point), vars(poly) - length(out.claim.point))
+    reduces PartialSum(claim, poly) to PartialSum(out.claim, poly)
+    security: reduction(
+        model = interactive,
+        charge = per_site(sites.rounds.challenge, D / |F|)
+    )

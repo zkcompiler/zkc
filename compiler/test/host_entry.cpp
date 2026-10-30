@@ -36,11 +36,11 @@ void rejects(Error e, StringRef code) {
   require(message.find(code) != std::string::npos,
           "unexpected refusal: " + message);
 }
-constexpr StringLiteral source = R"(module sample;
+constexpr StringLiteral sourceText = R"(module sample;
   fn add(x:index,y:index)->index{return x+y;}
   entry fn Twice(x:index)->index{return add(x,x);}
   entry fn Demo(x:index)->index{return Twice(Twice(x));})";
-CompiledEntry compiled() { return take(compileEntry(original(source))); }
+CompiledEntry compiled() { return take(compileEntry(original(sourceText))); }
 } // namespace
 int main() {
   zkc::test::Cases cases;
@@ -448,7 +448,7 @@ int main() {
       throw std::runtime_error(toString(std::move(e)));
   });
   cases.run("source correspondence catches changed SSA actual operand", [] {
-    auto checked = original(source);
+    auto checked = original(sourceText);
     mlir::DialectRegistry registry;
     registerDialects(registry);
     mlir::MLIRContext context(registry);

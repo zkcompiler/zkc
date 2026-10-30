@@ -33,6 +33,10 @@ public:
   Checker(const Checker &) = delete;
   Checker &operator=(const Checker &) = delete;
   llvm::Error run();
+  llvm::Expected<std::shared_ptr<const AuthoringStorage>> retainAnalysis();
+  std::vector<Diagnostic> *recoveryDiagnostics = nullptr;
+  bool recover(llvm::Error);
+  bool namesReady = false;
   CheckedStorage &output;
   Work &work;
   Semantics types;
@@ -164,7 +168,9 @@ private:
   bool configureSetups(Declaration &, const Declaration &,
                        llvm::ArrayRef<SyntaxSetupSlot>);
   bool collect();
+  bool layoutSpecifications();
   bool imports();
+  bool classifyServices();
   bool prepareNotationSyntax();
   bool prepareOperators();
   std::optional<DeclarationId> member(const Declaration &, DeclarationId,

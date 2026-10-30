@@ -1,0 +1,40 @@
+// Design acceptance slice, parsed/formatted only. The domain-map library,
+// virtual projection and four-owner FRI/STARK admission remain separate gates.
+module examples::fri_layer
+
+use zkc::fri::{Domain, valid_domain, fold_value, fold_table, low, high, inverse_point}
+
+pub oracle def Fold<F: Field, Half: nat>(
+    source: Oracle<table<F, rows = 2 * Half>>,
+    domain: Domain<F>, beta: F, inverse_two: F
+) -> Oracle<table<F, rows = Half>>:
+    requires valid_domain(domain, source)
+    query(position: index):
+        left <- query source at low(domain, position)
+        right <- query source at high(domain, position)
+        return fold_value(left, right, beta, inverse_two, inverse_point(domain, position))
+
+pub protocol Round<F: Field, Half: nat> roles(P, V)(
+    word: Vec<F> @P;
+    domain: Domain<F> @(P, V);
+    inverse_two: F @(P, V);
+    coins: Random<F> @V
+) -> bool @V:
+    source <- send word from P to V as oracle<table<F, rows = 2 * Half>>
+    sampled <- coins.draw()
+    received <- send sampled to P
+    beta = @(P = received, V = sampled)
+    expected <- Fold(source, domain, beta, inverse_two)
+    next_values <- fold_table(word, domain, received)
+    next <- send next_values from P to V as oracle<table<F, rows = Half>>
+    position <- coins.index<Half>()
+    wanted <- query expected at position
+    actual <- query next at position
+    return wanted == actual
+
+spec for Round:
+    requires valid_domain(domain, word)
+    ensures out.result
+    // No security bundle is requested by this single-layer slice.
+    // A complete client also fixes all rounds, terminal degree, query schedule,
+    // public statement, AIR composition and the actual realization selection.

@@ -3,17 +3,30 @@
 using namespace llvm;
 namespace zkc::language::detail {
 bool BodyChecker::repeat(const Expression &expr) {
-  if (!protocol() || !expr.roles || expr.arguments.size() != 1)
+  if (!protocol() || expr.arguments.size() > 1 ||
+      (!syntax.layoutSyntax && (!expr.roles || expr.arguments.size() != 1)))
     return fail("source.mode",
-                "protocol for requires explicit roles(...) max N", expr.span);
+                "protocol loop requires participants and a maximum", expr.span);
   const auto &lower = syntax.expressions[expr.children.front()];
   if (lower.kind != Expression::Kind::Decimal || lower.text != "0")
     return fail("source.bound", "protocol for starts at literal zero",
                 lower.span);
-  auto roles = checker.roles(decl, *expr.roles, expr.span);
+  auto roles = expr.roles ? checker.roles(decl, *expr.roles, expr.span)
+                          : std::optional(allRoles());
   if (!roles || !active(*roles, expr.span))
     return false;
-  auto maximum = checker.type(decl, expr.arguments.front());
+  const auto &upper = syntax.expressions[expr.children[1]];
+  SyntaxType bound;
+  if (expr.arguments.empty()) {
+    if (upper.kind != Expression::Kind::Decimal)
+      return fail("source.bound", "a runtime loop count requires max N",
+                  upper.span);
+    bound.kind = SyntaxType::Kind::Natural;
+    bound.name = upper.text;
+    bound.span = upper.span;
+  } else
+    bound = expr.arguments.front();
+  auto maximum = checker.type(decl, bound);
   if (!maximum)
     return false;
   if (maximum->kind != Type::Kind::Natural)

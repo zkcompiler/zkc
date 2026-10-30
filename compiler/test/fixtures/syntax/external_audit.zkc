@@ -1,0 +1,20 @@
+// Selected 4.1 design example; Project.Security is an authored Lean export dependency.
+module examples::external_audit
+
+use examples::schnorr::Schnorr
+use zkc::algebra::PrimeOrderGroup
+use lean Project.Security as goals
+
+domain G1 = group("bls12-381.g1")
+
+// The application owns this requirement independently of the provider's labels.
+// Its export fixes the target, model, guarantee, assumptions and mandatory links.
+pub spec ApplicationAudit for Schnorr<G1>:
+    security: goals::required_identification(target.statement)
+
+// A generic block is a request schema, instantiated only at a closed subject.
+spec ReusableAudit<G: PrimeOrderGroup> for Schnorr<G>:
+    audit: goals::required_identification(target.statement)
+
+// Selecting a root alone creates no completed security claim.
+spec for Schnorr<G1>

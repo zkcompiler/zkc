@@ -39,7 +39,20 @@ Default-ignorable and bidi-control characters outside comments are illegal code
 tokens and never whitespace. This is not a whole-buffer comment-content ban or
 a guarantee against visually confusable identifiers.
 
-Keywords remain reserved except in explicitly contextual positions. `entry`,
+The retained brace grammar reserves the following case-sensitive words (the
+same exclusion applies to captured module-path components):
+
+```text
+module use pub domain field group math fn protocol roles let return send bool
+true false index type struct enum interface where nat mut if else max match for
+in drop consume require stop opaque Type Field Group Copy Drop completes
+finish_if builtin kernel pow2 formal intrinsic relation spec construction map
+each service predicate requires construct while extern
+```
+
+The layout grammar uses its separately specified
+[contextual word priorities](layout-syntax.md#contextual-words-and-delimiter-decisions).
+In the retained grammar, other special words remain contextual. `entry`,
 `proof`, `operator`, `as`, `primitive`, `notation`, `infixl`, `infixr`, `infix`,
 `prefix` and `postfix` have special meanings in their declaration or import
 grammar; elsewhere they remain available as ordinary names. `effects` introduces

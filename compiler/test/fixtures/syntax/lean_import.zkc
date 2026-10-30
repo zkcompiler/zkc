@@ -1,0 +1,21 @@
+// Selected 4.1 design example; Project.Algebra is a proposed exported dependency.
+module examples::lean_import
+
+use lean Project.Algebra as formal
+
+// An exported formal function is usable here through an admitted Spec projection.
+// This does not supply a native implementation or representation.
+ghost def reference_increment<F: Field>(value: F) -> F:
+    formal::increment<F>(value)
+
+interface Increment<F: Field>:
+    def run(value: F) -> F
+    law matches_reference:
+        ∀ value: F, run(value) == reference_increment(value)
+
+module AddOne<F: Field>: Increment<F>:
+    def run(value):
+        value + 1
+
+// The corresponding Lean law is resolved against the exact generated obligation.
+// A matching exported name or catalogue status alone cannot discharge it.

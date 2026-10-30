@@ -1,6 +1,7 @@
 #include "Checker.h"
 #include "Effects.h"
 #include "zkc/Contracts/Declarations.h"
+#include "zkc/Contracts/Services.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/ScopeExit.h"
 #include <algorithm>
@@ -154,6 +155,9 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   if (depth > work.limits.typeDepth || signatureDepth >= work.limits.typeDepth)
     return types.fail("source.limit", "type declaration depth limit",
                       decl.span);
+  if (signatureState[id.index] == 3)
+    return types.fail("source.dependency",
+                      "signature depends on an invalid declaration", decl.span);
   if (signatureState[id.index] == 1)
     return types.fail("source.cycle", "recursive type or static signature",
                       decl.span);
@@ -189,6 +193,10 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   ++signatureDepth;
   auto restoreDepth = llvm::scope_exit([&] { --signatureDepth; });
   signatureState[id.index] = 1;
+  auto finishState = llvm::scope_exit([&] {
+    if (signatureState[id.index] == 1)
+      signatureState[id.index] = 3;
+  });
   if (decl.parent) {
     if (!signature(*decl.parent, depth + 1))
       return false;
@@ -338,6 +346,10 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   auto fieldList = [&](ArrayRef<SyntaxPort> from, std::vector<TypeField> &to) {
     std::set<std::string> fields;
     for (auto &src : from) {
+      if (!src.roles.empty() || src.oracleHolder)
+        return types.fail(
+            "source.roles",
+            "ordinary fields cannot carry participant annotations", src.span);
       if (!fields.insert(src.name).second)
         return types.fail("source.duplicate", "duplicate field", src.span);
       auto t = type(decl, src.type, depth + 1);
@@ -398,6 +410,11 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     for (bool input : {true, false}) {
       std::set<std::string> names;
       for (auto &src : input ? source.inputs : source.outputs) {
+        if (decl.kind != Declaration::Kind::Protocol &&
+            (!src.roles.empty() || src.oracleHolder))
+          return types.fail("source.roles",
+                            "participant annotations require a protocol port",
+                            src.span);
         if (!names.insert(src.name).second)
           return types.fail("source.duplicate", "duplicate port", src.span);
         if (input && !bindingName(decl, src.name, src.span))
@@ -449,6 +466,14 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
               if (!p.oracle->maximumRows)
                 return false;
             }
+            if (!types.charge(source.oracleShapes.size(), src.span))
+              return false;
+            for (const auto &shape : source.oracleShapes)
+              if (shape.port == src.name) {
+                p.oracle->maximumRows = type(decl, shape.bound, depth + 1);
+                if (!p.oracle->maximumRows)
+                  return false;
+              }
           }
           if (!types.oraclePort(p))
             return false;
@@ -606,12 +631,21 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         !joinEffects(types, *decl.effectAllowance, EffectSummary{}, decl.span))
       return false;
     for (const auto &src : source.services) {
-      if (decl.kind != Declaration::Kind::Protocol ||
-          src.type.kind != SyntaxType::Kind::Name ||
-          src.type.name != "Random" || src.type.arguments.size() != 1 ||
+      if (src.oracleHolder || src.oracleMaximum)
+        return types.fail("source.oracle-port",
+                          "managed services cannot carry oracle custody",
+                          src.span);
+      auto *service = src.serviceConstructor
+                          ? protocol::sourceService(*src.serviceConstructor)
+                          : nullptr;
+      if (decl.kind != Declaration::Kind::Protocol || !service ||
+          service->family != protocol::ServiceFamily::Random ||
+          src.type.arguments.size() != service->parameters ||
           !src.type.labels.empty())
-        return types.fail("source.service",
-                          "expected a Random<Field> managed port", src.span);
+        return types.fail(
+            "source.service",
+            "managed port differs from its installed service signature",
+            src.span);
       if (!bindingName(decl, src.name, src.span) ||
           llvm::any_of(decl.inputs,
                        [&](const auto &p) { return p.name == src.name; }) ||

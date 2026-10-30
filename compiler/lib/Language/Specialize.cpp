@@ -443,6 +443,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         if (!resolveScoped(i, 1))
           return false;
       for (auto &op : body.operations) {
+        if (std::holds_alternative<RoleAssembly>(op.action) &&
+            !types.sharedData(body.values[op.results.front().index].type,
+                              op.span, nullptr))
+          return false;
         if (auto *invoke = std::get_if<ScopedInvoke>(&op.action)) {
           auto selected = resolveScoped(invoke->binding, 1);
           if (!selected)

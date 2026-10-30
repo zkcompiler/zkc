@@ -1,4 +1,5 @@
 #include "WrittenSource.h"
+#include "FormalSourceWriter.h"
 #include "WrittenSourceIndex.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Support/BoundedStream.h"
@@ -9,11 +10,28 @@
 using namespace llvm;
 namespace zkc::language::detail {
 Expected<std::shared_ptr<WrittenSources>>
-retainWrittenHeaders(ArrayRef<SyntaxDeclaration> syntax, Work &work) {
+retainWrittenHeaders(MutableArrayRef<SyntaxDeclaration> syntax, Work &work) {
   // Every header node consumes a token. Charge before copying, including the
   // captured and installation source headers, under the checking work ceiling.
   if (auto error = work.charge(work.tokens))
     return std::move(error);
+  uint32_t next = 0;
+  std::function<Error(SyntaxDeclaration &)> identify =
+      [&](SyntaxDeclaration &declaration) -> Error {
+    if (auto error = work.charge(1, declaration.span))
+      return error;
+    if (next == UINT32_MAX)
+      return failure("source.limit", "written declaration count exceeded",
+                     declaration.span);
+    declaration.writtenDeclaration = next++;
+    for (auto &member : declaration.members)
+      if (auto error = identify(member))
+        return error;
+    return Error::success();
+  };
+  for (auto &module : syntax)
+    if (auto error = identify(module))
+      return std::move(error);
   auto result = std::make_shared<WrittenSources>();
   result->modules.assign(syntax.begin(), syntax.end());
   return result;
@@ -26,14 +44,34 @@ Error retainWrittenBodies(WrittenSources &written,
   auto key = [](Span span) {
     return Key(span.source.index, span.begin, span.end);
   };
-  std::map<Key, const SyntaxDeclaration *> parsed;
+  std::map<uint32_t, const SyntaxDeclaration *> parsed;
+  // A file wrapper can share its only declaration's span; grouped construction
+  // handlers also deliberately share spans. Follow the frozen header link,
+  // never a source location or generated name, to recover each authored body.
   for (auto *source : sources)
-    if (!source->generated)
-      parsed.try_emplace(key(source->span), source);
+    if (!source->generated && source->writtenDeclaration &&
+        !source->bodies.empty() &&
+        !parsed.emplace(*source->writtenDeclaration, source).second)
+      return failure("source.syntax", "ambiguous written body ownership",
+                     source->span);
+  std::map<Key, const FormalSyntax *> formalSources;
+  for (auto *source : sources)
+    for (const auto &formal : source->formalSyntax)
+      formalSources.emplace(key(formal.tree.span(formal.node)), &formal);
   std::function<Error(SyntaxDeclaration &)> finish =
       [&](SyntaxDeclaration &source) -> Error {
+    for (auto &formal : source.formalSyntax) {
+      auto found = formalSources.find(key(formal.tree.span(formal.node)));
+      if (found == formalSources.end())
+        return failure("source.syntax", "formal source was not retained",
+                       formal.tree.span(formal.node));
+      formal = *found->second;
+    }
     if (source.deferredBody) {
-      auto found = parsed.find(key(source.span));
+      if (!source.writtenDeclaration)
+        return failure("source.syntax", "written declaration was not retained",
+                       source.span);
+      auto found = parsed.find(*source.writtenDeclaration);
       if (found == parsed.end() || found->second->deferredBody)
         return failure("source.syntax", "written body was not retained",
                        source.span);
@@ -148,6 +186,8 @@ StringRef syntaxKind(Expression::Kind value) {
     return "oracle_forget_rows";
   case Expression::Kind::MethodCall:
     return "method_call";
+  case Expression::Kind::RoleAssembly:
+    return "role_assembly";
   case Expression::Kind::FinishIf:
     return "finish_if";
   case Expression::Kind::NotationCall:
@@ -378,7 +418,8 @@ private:
     return emit("name", value.span, json::Object{{"name", value.name}});
   }
   json::Value port(const SyntaxPort &value, bool field = false) {
-    json::Object result{{"name", value.name},
+    json::Object result{{"name", value.unnamed ? json::Value(nullptr)
+                                               : json::Value(value.name)},
                         {"roles", strings(value.roles)},
                         {"domain", optionalType(value.domain, "domain")}};
     if (value.oracleHolder) {
@@ -555,17 +596,23 @@ private:
   json::Value body(const SyntaxDeclaration &owner, uint32_t id) {
     const auto &value = owner.bodies.at(id);
     auto statements = list("stmt", value.statements, [&](auto &statement) {
-      json::Object fields{{"mutable", statement.mutableBinding},
-                          {"terminated", statement.terminated},
-                          {"type", optionalType(statement.type, "type")},
-                          {"roles", statement.roles
-                                        ? json::Value(strings(*statement.roles))
-                                        : json::Value(nullptr)},
-                          {"owner", optionalString(statement.owner)},
-                          {"site", optionalString(statement.site)},
-                          {"expression", child("expr", 0, [&] {
-                             return expression(owner, statement.expression);
-                           })}};
+      json::Object fields{
+          {"mutable", statement.mutableBinding},
+          {"evaluation",
+           statement.evaluation == Statement::Evaluation::Legacy
+               ? json::Value(nullptr)
+               : json::Value(statement.evaluation == Statement::Evaluation::Pure
+                                 ? "pure"
+                                 : "ordered")},
+          {"terminated", statement.terminated},
+          {"type", optionalType(statement.type, "type")},
+          {"roles", statement.roles ? json::Value(strings(*statement.roles))
+                                    : json::Value(nullptr)},
+          {"owner", optionalString(statement.owner)},
+          {"site", optionalString(statement.site)},
+          {"expression", child("expr", 0, [&] {
+             return expression(owner, statement.expression);
+           })}};
       fields["binding"] =
           statement.kind == Statement::Kind::Let ||
                   statement.kind == Statement::Kind::Assign
@@ -573,8 +620,11 @@ private:
               : json::Value(nullptr);
       fields["send"] =
           statement.exchange
-              ? json::Value(json::Object{{"from", statement.exchange->first},
-                                         {"to", statement.exchange->second}})
+              ? json::Value(json::Object{
+                    {"from", statement.exchange->first.empty()
+                                 ? json::Value(nullptr)
+                                 : json::Value(statement.exchange->first)},
+                    {"to", statement.exchange->second}})
               : json::Value(nullptr);
       return emit(("stmt." + syntaxKind(statement.kind)).str(), statement.span,
                   std::move(fields));
@@ -592,16 +642,16 @@ private:
     }
     return emit(
         "body", value.span,
-        json::Object{{"notations", list("notation", value.operators,
-                                        [&](auto &n) { return notation(n); })},
-                     {"statements", std::move(statements)},
-                     {"results", std::move(results)},
-                     {"terminal", value.stopped    ? "stop"
-                                  : value.returned ? "return"
-                                                   : "tail"},
-                     {"stop_reason", value.stopped
-                                         ? json::Value(value.stopReason)
-                                         : json::Value(nullptr)}});
+        json::Object{
+            {"notations", list("notation", value.operators,
+                               [&](auto &n) { return notation(n); })},
+            {"statements", std::move(statements)},
+            {"results", std::move(results)},
+            {"terminal", value.stopped                             ? "stop"
+                         : value.returned && !value.implicitResult ? "return"
+                                                                   : "tail"},
+            {"stop_reason", value.stopped ? json::Value(value.stopReason)
+                                          : json::Value(nullptr)}});
   }
   json::Value claimExpression(const ClaimExpression &value) {
     return emit(
@@ -649,13 +699,75 @@ private:
     }
     return emit("requirement", value.span, std::move(result));
   }
+  json::Value formalNode(const FormalSyntax &formal) {
+    if (!formal.authored) {
+      if (!error)
+        error =
+            failure("source.formal-syntax", "formal source was not projected",
+                    formal.tree.span(formal.node));
+      return nullptr;
+    }
+    return writeFormalSource(
+        *formal.authored,
+        [&](StringRef kind, Span span, json::Object fields) {
+          return emit(kind, span, std::move(fields));
+        },
+        [&](StringRef field, unsigned index,
+            std::function<json::Value()> write) {
+          return child(field, index, std::move(write));
+        });
+  }
   json::Value declarationNode(const SyntaxDeclaration &value, StringRef owner,
                               bool anonymous = false) {
     auto previousDeclaration = currentDeclaration;
     currentDeclaration = value.span;
     auto restoreDeclaration =
         scope_exit([&] { currentDeclaration = previousDeclaration; });
+    if (value.section) {
+      json::Array members;
+      for (const auto &member : value.members) {
+        if (member.section)
+          members.push_back(
+              json::Object{{"section", child("section", members.size(), [&] {
+                              return declarationNode(member, owner);
+                            })}});
+        else
+          members.push_back(
+              json::Object{{"owner", (owner + "::" + member.name).str()}});
+      }
+      return emit(
+          "section", value.span,
+          json::Object{
+              {"parameters",
+               list("parameter", value.parameters,
+                    [&](auto &p) {
+                      return emit(
+                          "parameter", p.span,
+                          json::Object{
+                              {"name", p.name},
+                              {"bound",
+                               child("bound", 0,
+                                     [&] { return type(p.constraint); })},
+                              {"permissions", strings(p.writtenPermissions)}});
+                    })},
+              {"members", std::move(members)},
+              {"formal", list("formal", value.formalSyntax, [&](auto &formal) {
+                 return formalNode(formal);
+               })}});
+    }
     json::Object result{
+        {"oracle_shapes",
+         list("oracle_shape", value.oracleShapes,
+              [&](auto &shape) {
+                return emit("oracle_shape", shape.span,
+                            json::Object{{"port", shape.port},
+                                         {"dimension", shape.dimension},
+                                         {"bound", child("bound", 0, [&] {
+                                            return type(shape.bound);
+                                          })}});
+              })},
+        {"formal", list("formal", value.formalSyntax,
+                        [&](auto &formal) { return formalNode(formal); })},
         {"name", anonymous ? json::Value(nullptr) : json::Value(value.name)},
         {"public", value.explicitPublic},
         {"abstract", value.abstract},
@@ -950,7 +1062,12 @@ private:
       const auto &member = value.members[i];
       if (member.anonymous || member.constructionHandler)
         continue;
-      if (member.externalModule)
+      if (member.section)
+        members.push_back(
+            json::Object{{"section", child("section", members.size(), [&] {
+                            return declarationNode(member, owner);
+                          })}});
+      else if (member.externalModule)
         members.push_back(json::Object{
             {"link", child("member", members.size(), [&] {
                return emit("module_link", member.span,
@@ -968,16 +1085,20 @@ private:
   void declaration(const SyntaxDeclaration &value, StringRef owner) {
     if (error)
       return;
-    path.clear();
-    addressOwner = owner.str();
-    nodes = {};
-    declarationNode(value, owner);
-    declarations.push_back(
-        json::Object{{"owner", owner.str()}, {"nodes", std::move(nodes)}});
+    if (!value.section) {
+      path.clear();
+      addressOwner = owner.str();
+      nodes = {};
+      declarationNode(value, owner);
+      declarations.push_back(
+          json::Object{{"owner", owner.str()}, {"nodes", std::move(nodes)}});
+    }
     for (const auto &member : value.members)
       if (!member.anonymous && !member.constructionHandler &&
           !member.externalModule)
-        declaration(member, (owner + "::" + member.name).str());
+        declaration(member, member.section
+                                ? owner.str()
+                                : (owner + "::" + member.name).str());
   }
 };
 } // namespace

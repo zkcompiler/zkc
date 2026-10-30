@@ -144,6 +144,8 @@ void frame(std::string &out, StringRef value) {
   out.append(value.data(), value.size());
 }
 Error Work::charge(uint64_t amount, std::optional<Span> span) {
+  if (cancellation && cancellation->cancelled())
+    return failure("source.cancelled", "source analysis cancelled", span);
   if (amount > limits.work - used)
     return failure("source.limit", "checked work limit exceeded", span);
   used += amount;
@@ -220,9 +222,10 @@ Expected<CapturedProject> capture(std::vector<SourceBuffer> sources,
                                   const CaptureOptions &options) {
   if (auto error = checkLimits(options.limits))
     return std::move(error);
-  if (options.format != "zkc")
-    return detail::failure("source.format",
-                           "expected explicit source format 'zkc'");
+  if (options.format != "zkc" && options.format != "zkc-layout")
+    return detail::failure(
+        "source.format",
+        "expected explicit source format 'zkc' or 'zkc-layout'");
   if (auto error = detail::checkSources(sources, assets, options.limits))
     return std::move(error);
   std::sort(sources.begin(), sources.end(),
@@ -275,6 +278,9 @@ ArrayRef<Asset> CheckedProject::assets() const { return storage->assets; }
 ArrayRef<Declaration> CheckedProject::declarations() const {
   return storage->declarations;
 }
+ArrayRef<PendingSpecification> CheckedProject::pendingSpecifications() const {
+  return storage->pendingSpecifications;
+}
 ArrayRef<Token> CheckedProject::tokens(SourceId id) const {
   return id.index < storage->tokens.size()
              ? ArrayRef<Token>(storage->tokens[id.index])
@@ -314,7 +320,8 @@ Expected<CheckedProject> Analysis::checkedProject() const {
   return detail::failure("source.unchecked",
                          "analysis did not produce a checked project");
 }
-Analysis analyze(const CapturedProject &capture, const Limits &limits) {
+Analysis analyze(const CapturedProject &capture, const Limits &limits,
+                 source::Cancellation cancellation) {
   auto output = std::make_shared<detail::AnalysisStorage>();
   auto checked = std::make_shared<detail::CheckedStorage>(capture);
   auto sources = std::make_shared<std::vector<SourceBuffer>>(
@@ -325,6 +332,7 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits) {
   checked->sources = sources;
   output->sources = sources;
   detail::Work work{limits};
+  work.cancellation = cancellation;
   auto run = [&]() -> Error {
     if (auto error = checkLimits(limits))
       return error;
@@ -341,8 +349,19 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits) {
       checked->assets.push_back(std::move(*value));
     }
     checked->tokens.resize(sources->size());
+    checked->layoutHeaders.resize(sources->size());
+    checked->layoutBodies.resize(sources->size());
     std::vector<detail::SyntaxDeclaration> modules;
     for (unsigned i = 0; i < sources->size(); ++i) {
+      if (capture.format() == "zkc-layout" &&
+          (*sources)[i].origin == SourceOrigin::Captured) {
+        auto syntax = detail::parseLayoutHeaders((*sources)[i], SourceId{i},
+                                                 *checked, work);
+        if (!syntax)
+          return syntax.takeError();
+        modules.push_back(std::move(*syntax));
+        continue;
+      }
       if (auto error =
               detail::lex((*sources)[i], SourceId{i}, work, checked->tokens[i]))
         return error;
@@ -352,8 +371,11 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits) {
         return syntax.takeError();
       modules.push_back(std::move(*syntax));
     }
-    if (auto error = detail::check(std::move(modules), *checked, work))
+    if (auto error =
+            detail::check(std::move(modules), *checked, work, output.get()))
       return error;
+    if (!output->diagnostics.empty())
+      return Error::success();
     checked->installation = installedCatalogIdentity();
     checked->work = work.used;
     checked->declarationCount = work.declarations;
@@ -862,6 +884,10 @@ std::string installedCatalogIdentity() {
   };
   row({"source-name-profile", sourceNameProfileIdentity()});
   row({"prelude", "zkc::prelude", detail::digest(installedPrelude)});
+  for (const auto &service : protocol::sourceServices)
+    row({"source-service", service.module, service.name,
+         std::to_string(static_cast<unsigned>(service.family)),
+         std::to_string(service.parameters)});
   const auto &catalog = protocol::installedDomains();
   for (const auto &domain : catalog.allDomains()) {
     row({"domain", domain.identity, domain.sort, domain.modulus,

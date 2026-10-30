@@ -1,0 +1,29 @@
+// Selected 4.1 design example; laws become obligations, not admitted axioms.
+module examples::interfaces
+
+use zkc::poly::{Poly, from_coefficients, eval}
+
+pub interface Message<F: Field, D: nat>:
+    type Wire: Copy + Drop
+    ghost def polynomial(message: Wire) -> Poly<F, D>
+    def boundary(message: Wire) -> F
+    def evaluate(message: Wire, challenge: F) -> F
+    law boundary_eq:
+        (∀ message: Wire,
+            boundary(message) == eval(polynomial(message), 0) + eval(polynomial(message), 1))
+    law evaluate_eq:
+        (∀ message: Wire, ∀ challenge: F,
+            evaluate(message, challenge) == eval(polynomial(message), challenge))
+
+pub struct EndpointPair<F: Field>:
+    pub at_zero: F
+    pub at_one: F
+
+pub module EndpointPairs<F: Field>: Message<F, 1>:
+    type Wire = EndpointPair<F>
+    ghost def polynomial(message):
+        from_coefficients([message.at_zero, message.at_one - message.at_zero])
+    def boundary(message):
+        message.at_zero + message.at_one
+    def evaluate(message, challenge):
+        (1 - challenge) * message.at_zero + challenge * message.at_one

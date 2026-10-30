@@ -4,6 +4,7 @@
 #include "zkc/Language/SourceTerms.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
+#include "zkc/Syntax/Syntax.h"
 #include "zkc/Translation/Entry.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
@@ -241,6 +242,14 @@ class Comparison {
     auto restore = llvm::scope_exit([&] { remaining = saved; });
     remaining = limits.work;
     using Start = std::pair<unsigned, unsigned>;
+    std::map<Start, const PendingSpecification *> pending;
+    for (const auto &spec : entry.project().pendingSpecifications()) {
+      if (!charge(1) ||
+          !pending
+               .emplace(Start{spec.span.source.index, spec.span.begin}, &spec)
+               .second)
+        return fail("pending specification inventory differs");
+    }
     std::map<Start, const Declaration *> blocks;
     std::map<Start, const SourceClaimBlock *> claimBlocks;
     std::set<unsigned> anonymous;
@@ -287,6 +296,76 @@ class Comparison {
         return fail("source omitted an inline predicate binding");
     auto sources = entry.project().sources();
     for (unsigned module = 0; module < sources.size(); ++module) {
+      if (entry.project().capture().format() == "zkc-layout" &&
+          sources[module].origin == SourceOrigin::Captured) {
+        syntax::Budget budget;
+        budget.bytes = limits.fileBytes;
+        budget.tokens = limits.tokens;
+        budget.tokenBytes = limits.tokenBytes;
+        budget.identifierBytes = limits.identifierBytes;
+        budget.depth = limits.parseDepth;
+        budget.work = remaining;
+        auto tree = syntax::parseHeaders(source::Revision(sources[module]),
+                                         {module}, budget);
+        if (!charge(tree.workUsed()) ||
+            tree.status() != syntax::Status::Complete ||
+            !tree.diagnostics().empty())
+          return fail(
+              "captured layout headers could not be read independently");
+        for (unsigned i = 0; i < tree.nodes().size(); ++i) {
+          if (!charge(1))
+            return false;
+          syntax::NodeId id{i};
+          if (tree.node(id).kind != syntax::Kind::Spec)
+            continue;
+          auto span = tree.span(id);
+          auto found = pending.find({module, span.begin});
+          if (found == pending.end() || !sameSpan(found->second->span, span))
+            return fail("source omitted or changed a pending specification");
+          const auto &spec = *found->second;
+          auto declarations = entry.project().declarations();
+          if (spec.module.index >= declarations.size() ||
+              spec.protocol.index >= declarations.size() ||
+              declarations[spec.protocol.index].kind !=
+                  Declaration::Kind::Protocol)
+            return fail("pending specification has no protocol subject");
+          const auto &owner = declarations[spec.module.index];
+          if (owner.span.source.index != module ||
+              span.begin < owner.span.begin || span.end > owner.span.end)
+            return fail("pending specification escaped its source owner");
+          auto children = tree.children(id);
+          SmallVector<StringRef, 4> head;
+          for (unsigned t = tree.node(id).firstToken;
+               t < tree.node(id).lastToken && head.size() < 3; ++t) {
+            auto token = tree.tokens()[t];
+            if (!token.trivia() && !token.synthetic())
+              head.push_back(tree.text(token));
+          }
+          bool visible = head.front() == "pub";
+          bool named = head[visible ? 2 : 1] != "for";
+          if (named ? tree.text(children.front()) != spec.name
+                    : !spec.name.empty())
+            return fail("pending specification name differs");
+          if (visible != spec.isPublic)
+            return fail("pending specification visibility differs");
+          unsigned subjectIndex = named ? 1 : 0;
+          if (tree.node(children[subjectIndex]).kind ==
+              syntax::Kind::StaticParameters)
+            ++subjectIndex;
+          auto subject = children[subjectIndex];
+          auto subjectText = tree.text(subject);
+          bool localName = tree.node(subject).kind == syntax::Kind::Name &&
+                           !subjectText.contains("::");
+          const auto &protocol = declarations[spec.protocol.index];
+          bool localOwner = !named && localName && protocol.parent &&
+                            protocol.parent->index == spec.module.index;
+          if (localOwner != spec.owner ||
+              (spec.owner && protocol.name != subjectText))
+            return fail("pending specification owner attachment differs");
+          pending.erase(found);
+        }
+        continue;
+      }
       SmallVector<const Token *> tokens;
       for (const auto &token : entry.project().tokens({module})) {
         if (!charge(1))
@@ -375,7 +454,7 @@ class Comparison {
         i = cursor;
       }
     }
-    return (blocks.empty() && claimBlocks.empty()) ||
+    return (blocks.empty() && claimBlocks.empty() && pending.empty()) ||
            fail("source invented a specification or claim block");
   }
   bool protocol(const Declaration &decl, const InterfaceProtocol &actual) {

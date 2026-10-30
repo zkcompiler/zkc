@@ -303,7 +303,9 @@ int runLanguageCompiler(int argc, char **argv) {
     return refuse(error("source.options",
                         "notation visibility options require --notations"));
   if (format.empty())
-    return refuse(error("source.options", "--source-format=zkc is required"));
+    return refuse(error("source.options",
+                        "an explicit --source-format=zkc or "
+                        "--source-format=zkc-layout is required"));
   if (!dumps.empty() && !collectObservations)
     return refuse(error("source.options", "dumps require --observations"));
   if (collectObservations) {
@@ -357,6 +359,44 @@ int runLanguageCompiler(int argc, char **argv) {
     if (!claims)
       return refuse(claims.takeError());
     checked["source_claim_inventory"] = cantFail(json::parse(*claims));
+    if (captured->format() == "zkc-layout") {
+      json::Array pending;
+      for (const auto &spec : project->pendingSpecifications()) {
+        json::Array obligations;
+        for (const auto &obligation : spec.obligations)
+          obligations.push_back(json::Object{
+              {"role", obligation.kind == PendingObligation::Kind::Postcondition
+                           ? "postcondition"
+                           : "request"},
+              {"label", obligation.label ? json::Value(*obligation.label)
+                                         : json::Value(nullptr)},
+              {"ordinal", obligation.ordinal},
+              {"begin", obligation.span.begin},
+              {"end", obligation.span.end},
+              {"companion", obligation.companion
+                                ? json::Value(*obligation.companion)
+                                : json::Value(nullptr)},
+              {"status", "open"},
+              {"reason", "formal elaboration pending"}});
+        pending.push_back(json::Object{
+            {"module",
+             project->declarations()[spec.module.index].qualifiedName},
+            {"protocol",
+             project->declarations()[spec.protocol.index].qualifiedName},
+            {"name",
+             spec.name.empty() ? json::Value(nullptr) : json::Value(spec.name)},
+            {"owner", spec.owner},
+            {"public", spec.isPublic},
+            {"source", spec.span.source.index},
+            {"begin", spec.span.begin},
+            {"end", spec.span.end},
+            {"obligations", std::move(obligations)}});
+      }
+      checked["assurance"] =
+          json::Object{{"status", pending.empty() ? "no-claim" : "open"},
+                       {"outcome", "unresolved"},
+                       {"specifications", std::move(pending)}};
+    }
   }
   if (sourceAst) {
     auto report = inspectWrittenSource(*project, limits);

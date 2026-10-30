@@ -27,6 +27,15 @@ add_zkc_component(Support
   lib/Support/Json.cpp
   lib/Support/LogicalTree.cpp
 )
+include(${CMAKE_CURRENT_LIST_DIR}/Unicode.cmake)
+add_zkc_component(Source
+  lib/Source/Names.cpp
+  lib/Source/Source.cpp
+)
+target_link_libraries(ZkcSource PUBLIC ZkcSupport PRIVATE utf8proc::utf8proc)
+add_dependencies(ZkcSource ZkcSourceNameDataGen)
+target_include_directories(ZkcSource PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
+
 add_zkc_component(Contracts
   lib/Contracts/Declarations.cpp
   lib/Contracts/Generic.cpp
@@ -55,9 +64,17 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/lib/Language/Prelude.zkc" zkc_prelude_sou
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/lib/Language/Prelude.zkc")
 configure_file(lib/Language/Prelude.inc.in generated/Prelude.inc @ONLY)
-include(${CMAKE_CURRENT_LIST_DIR}/Unicode.cmake)
+add_zkc_component(Syntax
+  lib/Syntax/Syntax.cpp
+  lib/Syntax/Lexer.cpp
+  lib/Syntax/Parser.cpp
+  lib/Syntax/Format.cpp
+)
+target_link_libraries(ZkcSyntax PUBLIC ZkcSource)
 add_zkc_component(Language
-  lib/Language/Names.cpp
+  lib/Language/Authoring.cpp
+  lib/Language/Companions.cpp
+  lib/Language/ManagedServices.cpp
   lib/Language/Diagnostics.cpp
   lib/Language/Inspection.cpp
   lib/Language/WrittenSource.cpp
@@ -73,6 +90,15 @@ add_zkc_component(Language
   lib/Language/Natural.cpp
   lib/Language/Project.cpp
   lib/Language/Syntax.cpp
+  lib/Language/LayoutSyntax.cpp
+  lib/Language/LayoutReader.cpp
+  lib/Language/FormalSourceWriter.cpp
+  lib/Language/FormalSource.cpp
+  lib/Language/LayoutDeclarations.cpp
+  lib/Language/LayoutExpressions.cpp
+  lib/Language/LayoutOracles.cpp
+  lib/Language/LayoutBodies.cpp
+  lib/Language/LayoutSpecifications.cpp
   lib/Language/Arguments.cpp
   lib/Language/Elaboration.cpp
   lib/Language/Booleans.cpp
@@ -147,10 +173,8 @@ add_zkc_component(Language
   lib/Language/Control.cpp
   lib/Language/Specialize.cpp
 )
-target_link_libraries(ZkcLanguage PUBLIC ZkcContracts)
-target_link_libraries(ZkcLanguage PRIVATE utf8proc::utf8proc)
+target_link_libraries(ZkcLanguage PUBLIC ZkcContracts ZkcSyntax)
 target_link_libraries(ZkcContracts PRIVATE utf8proc::utf8proc)
-add_dependencies(ZkcLanguage ZkcSourceNameDataGen)
 add_zkc_component(Relation
   lib/Relation/R1CS.cpp
   lib/Relation/R1CSBinary.cpp
@@ -430,7 +454,7 @@ target_link_libraries(ZkcCompiler PUBLIC ZkcTransforms ZkcTranslation)
 target_link_libraries(ZkcDriver PUBLIC ZkcCompiler)
 mlir_target_link_libraries(ZkcCompiler PUBLIC MLIRParser MLIRAsmParser)
 mlir_target_link_libraries(ZkcDriver PUBLIC MLIRParser)
-set(zkc_components ZkcSupport ZkcContracts ZkcLanguage ZkcRelation ZkcProgram ZkcIR ZkcTranslation ZkcTransforms ZkcCompiler ZkcDriver)
+set(zkc_components ZkcSupport ZkcSource ZkcSyntax ZkcContracts ZkcLanguage ZkcRelation ZkcProgram ZkcIR ZkcTranslation ZkcTransforms ZkcCompiler ZkcDriver)
 
 # Record actual target properties for the fast dependency-boundary test.
 set(zkc_component_manifest "")

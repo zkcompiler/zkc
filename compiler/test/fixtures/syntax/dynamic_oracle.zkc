@@ -1,0 +1,26 @@
+// Selected 4.1 design example; library names and source admission are proposed.
+module examples::dynamic_oracle
+
+use zkc::oracle
+
+// Each dynamic dimension names an existing initial index parameter and a bound.
+// Shape remains part of the anchor, not an extra oracle interface leaf.
+#[shape(source.rows, bound = Max)]
+#[shape(rows, value = rows, bound = Max)]
+pub oracle def Prefix<F: Field, Max: nat>(
+    source: Oracle<table<F>>, rows: index
+) -> Oracle<table<F>>:
+    requires rows <= oracle::rows(source)
+    query(position: index):
+        answer <- query source at position
+        return answer
+
+#[shape(source.rows, bound = Max)]
+pub protocol PrefixRead<F: Field, Max: nat> roles(P, V)(
+    source: Oracle<table<F>> @P -> V;
+    rows: index @(P, V);
+    position: index @V
+) -> F @V:
+    prefix <- Prefix<F, Max>(source, rows)
+    answer <- query prefix at position
+    return answer

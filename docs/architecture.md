@@ -64,6 +64,7 @@ judgment.
 | Owner | Home and responsibility |
 |---|---|
 | Support and Contracts | `compiler/include/zkc/Support` and `Contracts`: diagnostics, closed types, domains, ring expressions, operations, effects and implementations |
+| Source and Syntax | `compiler/include/zkc/Source` and `Syntax`: immutable source revisions, lossless layout syntax and formatting |
 | Language | `compiler/include/zkc/Language`: explicit modules/Assets, checked definitions, static application and Entry closure |
 | Relation | `compiler/include/zkc/Relation`: R1CS/AIR data, relation bundles, staged predicates, normalization and evaluation |
 | Program | `compiler/include/zkc/Program`: executable model, codec and structural admission |

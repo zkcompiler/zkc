@@ -31,7 +31,7 @@ Development operations expose their options through `python3 scripts/develop.py 
 
 Outside Nix, provide compatible `CC`, `CXX`, `MLIR_DIR` and, when needed,
 `LLVM_CONFIG`, plus utf8proc 2.12.0 with its CMake package (select it through
-`utf8proc_DIR` or `CMAKE_PREFIX_PATH`). Installed Contracts and Language consumers also need
+`utf8proc_DIR` or `CMAKE_PREFIX_PATH`). Installed Contracts and Source consumers (including Syntax and Language) also need
 this external NFC dependency; they do not need MLIR. See the
 [SDK dependency contract](../../compiler/README.md#installed-package-discovery).
 Recreate a CMake build directory when changing compiler or ABI.
@@ -79,13 +79,17 @@ SDK and Unicode inputs, prepares packages and bindings separately, then builds
 and runs a normal-feature Rust consumer outside the checkout. Its execution
 phase has no compiler or CLI available.
 Every installed C++ SDK component requires the exact LLVM version used to build it.
-Support, Contracts, Program, Relation and Language discover and link without MLIR;
+Support, Source, Syntax, Contracts, Program, Relation and Language discover and link without MLIR;
 IR and its dependent components additionally require MLIR and installed contribution
 dependencies. The SDK does not bundle these external dependencies. Static and
 shared component changes need both linkage checks. Existing outputs can be selected with `ZKC_COMPILER_BIN` and
 `ZKC_NATIVE_BIN` as described in [configuration](configuration.md).
 
 ## Packages and optional work
+
+The optional [source language server](../spec/language/authoring.md) builds with
+`-DZKC_ENABLE_SOURCE_LSP=ON` and serves the development layout language. It has
+its own `zkc-source-lsp` executable and explicit project input map.
 
 ```sh
 nix build                         # installed CLI with its companion compiler

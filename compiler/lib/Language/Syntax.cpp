@@ -1,4 +1,5 @@
 #include "Internal.h"
+#include "OracleSyntax.h"
 #include "zkc/Language/Names.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -310,7 +311,9 @@ private:
   using Position = NotationDescriptor::Position;
   using Association = NotationDescriptor::Association;
   static bool operatorSymbol(StringRef symbol) {
-    if (symbol == "+" || symbol == "-" || symbol == "*" || symbol == "==")
+    if (llvm::any_of(syntax::defaultNotations(), [&](const auto &notation) {
+          return notation.symbol == symbol;
+        }))
       return true;
     auto scalar = decodeSourceScalar(symbol, 0);
     return scalar && scalar->bytes == symbol.size() &&
@@ -1946,16 +1949,12 @@ private:
         auto ports = std::move(d.inputs);
         d.inputs.clear();
         for (auto &port : ports) {
-          bool service = protocol && port.type.kind == SyntaxType::Kind::Name &&
-                         port.type.name == "Random";
           auto &selected = port.domain   ? d.domainInputs
                            : port.scoped ? d.scopedInputs
-                           : service     ? d.services
                                          : d.inputs;
           d.inputOrder.push_back(
               {port.domain   ? Declaration::InputSlot::Kind::Domain
                : port.scoped ? Declaration::InputSlot::Kind::Scoped
-               : service     ? Declaration::InputSlot::Kind::Service
                              : Declaration::InputSlot::Kind::Data,
                unsigned(selected.size())});
           selected.push_back(std::move(port));
@@ -2283,24 +2282,15 @@ private:
       advance();
       if (!expect("."))
         return {};
-      unsigned operands = 1;
-      if (take("data"))
-        value.kind = Expression::Kind::OracleContents;
-      else if (take("rows"))
-        value.kind = Expression::Kind::OracleRows;
-      else if (take("forget_rows"))
-        value.kind = Expression::Kind::OracleForgetRows;
-      else if (take("length"))
-        value.kind = Expression::Kind::OracleSequenceLength;
-      else if (take("append")) {
-        value.kind = Expression::Kind::OracleSequenceAppend;
-        operands = 2;
-      } else if (take("at")) {
-        value.kind = Expression::Kind::OracleSequenceAt;
-        operands = 2;
-      } else if (take("empty")) {
-        value.kind = Expression::Kind::OracleSequenceEmpty;
-        operands = 0;
+      const auto *operation = oracleSyntax(text());
+      if (!operation) {
+        fail("source.oracle-action", "unknown oracle operation");
+        return {};
+      }
+      advance();
+      value.kind = operation->kind;
+      unsigned operands = operation->operands;
+      if (operation->parameters) {
         SyntaxType kind, maximum;
         if (!expect("<") || !type(kind) || !expect(",") || !type(maximum) ||
             !expect(">") || !expect("roles"))
@@ -2309,9 +2299,6 @@ private:
         value.roles.emplace();
         if (!names(*value.roles))
           return {};
-      } else {
-        fail("source.oracle-action", "unknown oracle operation");
-        return {};
       }
       if (!expect("("))
         return {};
@@ -2728,6 +2715,10 @@ private:
       }
       auto infix = notation(text(), Position::Infix);
       if (!infix) {
+        if (notation(text(), Position::Prefix)) {
+          fail("source.syntax", "prefix notation requires an operand position");
+          return {};
+        }
         if (operatorSymbol(text())) {
           fail("source.notation-visibility",
                "no visible infix or postfix notation for " + text());

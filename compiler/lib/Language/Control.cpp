@@ -121,20 +121,20 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
       collectingBranch ? plan->usage.branch(expr.regions.size()) : 0;
   std::optional<Type> resultType =
       loop ? std::optional<Type>(Type(Type::Kind::Unit)) : expected;
-  std::set<std::string> seen;
   for (unsigned ordinal = 0; ordinal < expr.regions.size(); ++ordinal) {
     unsigned index = ordinal;
     if (match) {
       const auto &alt = alternatives[ordinal];
       operation.alternatives.push_back(alt.name);
-      auto found = llvm::find(expr.labels, alt.name);
-      if (found == expr.labels.end()) {
+      const auto &resolved =
+          inference->matchArms.at(uint32_t(&expr - syntax.expressions.data()));
+      auto found = llvm::find(resolved, ordinal);
+      if (found == resolved.end()) {
         fail("source.match", "missing alternative: " + alt.name, expr.span);
         return {};
       }
-      index = found - expr.labels.begin();
-      if (!seen.insert(expr.labels[index]).second ||
-          alt.fields.size() != expr.payloads[index].size()) {
+      index = found - resolved.begin();
+      if (alt.fields.size() != expr.payloads[index].size()) {
         fail("source.match", "alternative payload count differs", expr.span);
         return {};
       }
