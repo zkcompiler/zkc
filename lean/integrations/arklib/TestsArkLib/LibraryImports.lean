@@ -49,6 +49,9 @@ import ZkcArkLib.Knowledge.RegisteredFiniteRecovery
 import ZkcArkLib.Kzg.EvaluationBinding
 import ZkcArkLib.Kzg.OpeningClient
 import ZkcArkLib.Registry
+import ZkcArkLib.Stark.DeepBatching
+import ZkcArkLib.Stark.OutOfDomain
+import ZkcArkLib.Stark.Quotient
 import ZkcArkLib.Sumcheck.Bridge
 import ZkcArkLib.Sumcheck.Domain
 import ZkcArkLib.Sumcheck.Execution
@@ -84,5 +87,8 @@ import TestsArkLib.KzgEvaluationBinding
 import TestsArkLib.MultilinearSumcheck
 import TestsArkLib.RegisteredFiniteRecovery
 import TestsArkLib.ReportControls
+import TestsArkLib.Stark
+import TestsArkLib.StarkAxioms
+import TestsArkLib.StarkUpstreamAudit
 import TestsArkLib.SumcheckFiatShamir
 import TestsArkLib.UpstreamImports

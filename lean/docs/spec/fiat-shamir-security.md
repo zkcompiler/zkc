@@ -10,7 +10,7 @@ compiled Sumcheck, GKR and guessing Entries are instances of that. The
 transcript interface, the transform and replay are core definitions
 (`Zkc.Transcript`). The general theorems are in `ZkcSecurity.FiatShamir`
 (`Interface`, `Typed`, `Keyed`, `Reduction`, `Budget`, `Soundness`, `Decoding`,
-`Sampling`, `Grinding`, `Roles`, `Composition`, `Laws`, `Lifting`, `Binding`,
+`Sampling`, `Grinding`, `BoundedSearch`, `Roles`, `Composition`, `Laws`, `Lifting`, `Binding`,
 `Upstream`, `Realization`, `Obligations`, `ProviderSimulation`), the
 hash-chain provider simulation in `ZkcSecurity.HashChain`, the bound for
 verifiers with committed tables in `ZkcSecurity.Commitment`, the transport
@@ -441,6 +441,30 @@ two coordinates of a uniform pair. `ρ` is `2 ^ -b` for uniform bits and at most
 (`koalaBear_lowBits_pointBound`). At zero difficulty the gate has one value,
 which passes with probability one (`lowBits_zero_difficulty`,
 `prEvent_lowBits_zero_difficulty`), so the gated bound is the ungated one.
+
+**Finite honest search.** `BoundedSearch.run` visits an ordered list of
+candidates, stops at the first accepted decoded value, and returns both the
+candidate/value and the number of attempts actually spent. An exhausted list
+returns `none`. `returned_valid` connects a returned witness to a successful
+trial; `attempts_le` bounds the counter on every structural execution.
+For fresh probabilistic trials, `exhaustion` is the product of their failure
+probabilities. A lower bound `success` on accepting the *complete* trial gives
+exhaustion at most `(1 - success)^N`. Thus decoder refusal is part of the
+completeness bound. `expectedAttempts_eq_sum` gives the actual expected count
+as `sum (failure^j), j < N` for equal failure probabilities, and
+`expectedAttempts_le_sum` gives the corresponding upper bound for varying laws.
+
+These are fresh-trial theorems. Applying them to a cached random oracle needs
+a freshness and simulation theorem for the selected construction. The
+`TestsSecurity.BoundedSearch` control reuses one sampled answer twice and proves
+that its exhaustion probability is one half, while two fresh trials exhaust
+with probability one quarter. No independence follows merely from identical
+marginals or repeated witness evaluation. `queryBound` separately multiplies
+an explicit primitive-call bound per trial by the candidate count; a logical
+gated request need not be one physical hash call. The native search,
+state-advance and exhaustion behavior, zero-difficulty bypass, and multi-block
+provider simulation require their own construction connection. This module
+does not establish those connections.
 
 **Compound sites.** A compound site decodes one answer into several values, for
 example the `s` query positions of a FRI query phase squeezed from one absorbed

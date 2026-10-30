@@ -79,6 +79,38 @@ the admitted source to its checked normal form. That theorem covers the selected
 available-input pattern. Adversarial claims must use the appropriate optional
 input pattern and cannot infer universal input availability from this view.
 
+## Install source presentations and counted loops
+
+`install_source_template association using_pattern pattern` applies the existing
+exact source association. It checks the complete signature and raw typed body,
+then infers the role, context, arguments, captures and full masked return from
+the goal. It computes only visibility and scope side conditions. A missing
+mathematical body equation remains an ordinary Lean goal. The Sumcheck family
+uses this installer for both participants; SmallSumcheck and TwoSums select the
+same reusable family with different bounds.
+
+A counted reference can expose checked zero/successor equations ending in
+`index`, `count` and the complete state. The callback must be independent of the
+remaining count, and the continuation must increment the index by one. The
+installer reads the existing recursion equation and applies the corresponding
+`LoopContracts` theorem; it does not interpret a second loop language.
+
+- `install_source_loop_no using_invariant invariant using_rules [rules]` carries
+  the actual reached history, current index, remaining count and complete-state
+  No invariant.
+- `install_source_loop_pair using_invariant invariant using_rules [rules]`
+  carries both complete honest states and requires the terminal paired relation.
+- `install_source_loop_cost per_iteration price using_rules [rules]` bounds
+  every callback state and reply, independently of No or honest execution.
+
+The author still supplies the invariant, callback mathematics and any budget
+inequality. Missing premises remain typed goals; unsupported continuation or
+frame shapes cannot establish a theorem. Nested loops compose by installing an
+inner loop contract as the outer callback. GKR's output and layer rejection
+proofs now use this shared induction, while retaining their existing polynomial
+and Sumcheck mathematics. This removes repeated induction structure; it does
+not yet eliminate GKR's representation or physical-placement proofs.
+
 ## Bind one component
 
 [`ComponentInterface`](../../Zkc/Obligations/Component.lean) records:

@@ -263,6 +263,10 @@ private def dependencyPolicyJson : String := r##"{
       "proof-tools"
     ],
     [
+      "ZkcTools.ConstructionBindings.TargetPlacement",
+      "proof-tools"
+    ],
+    [
       "ZkcTools.ConstructionBindings.Syntax",
       "proof-tools"
     ],
@@ -296,6 +300,14 @@ private def dependencyPolicyJson : String := r##"{
     ],
     [
       "ZkcTools.StructuredSource.NormalizedRoot",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.PropertyInstallation",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.StructuredSource.CountedShape",
       "proof-tools"
     ],
     [
