@@ -131,6 +131,9 @@ bool emitTypeBindings(raw_ostream &os, const RecordKeeper &records) {
     if (custom && record->getValueAsString("cppArguments").trim().empty())
       PrintFatalError(record,
                       "custom binding requires typed argument observation");
+    if (custom && record->getValueAsString("cppConstruct").trim().empty())
+      PrintFatalError(record,
+                      "custom binding requires typed native construction");
     bindings.push_back({record, logical, owner, std::move(key), direct});
   };
   for (auto *record : records.getAllDerivedDefinitions("ZKC_TypeBinding"))
@@ -229,6 +232,13 @@ bool emitTypeBindings(raw_ostream &os, const RecordKeeper &records) {
       os << ">";
     } else
       os << ", nullptr, nullptr";
+    if (binding.direct)
+      os << ", " << binding.record->getValueAsString("cppHelper")
+         << "::construct";
+    else if (binding.record->isSubClassOf("ZKC_CustomBinding"))
+      os << ", " << binding.record->getValueAsString("cppConstruct");
+    else
+      os << ", nullptr";
     os << "},\n";
   }
   os << "  }};\n  return adapters;\n}\n} // namespace "

@@ -21,5 +21,12 @@ verifyLogicalType(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
 mlir::LogicalResult verifyLogicalTypeApplication(
     llvm::function_ref<mlir::InFlightDiagnostic()> emit,
     mlir::MLIRContext *context, const CatalogTypeApplication &application);
+/// Construct from formed typed arguments using the declared native owner.
+/// Missing loaded types and ambiguous or inexact observations are refusals.
+/// Never loads dialects or encodes a neutral type spelling.
+mlir::Type
+constructLogicalType(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
+                     mlir::MLIRContext *context,
+                     const CatalogTypeApplication &application);
 } // namespace zkc
 #endif

@@ -32,7 +32,10 @@ Runtime admission now interprets that table instead of hand-maintained signature
 history and permission copies; native domain support and physical installation
 remain explicit. Native catalog type observations use MLIR type interfaces and
 typed static arguments. Sequence and fixed-vector formation now inspect native
-structure and catalog permissions, independently of byte-format limits. Other
+structure and catalog permissions, independently of byte-format limits. Native
+construction callbacks and logical signature derivation now use these typed
+arguments directly, including complete-Type ports, projections and numerical
+masks. Runtime binding storage has not yet adopted that derivation. Other
 legacy inner neutral conversions and fully typed MLIR invocation arguments
 remain in progress. The
 [interface inventory](spec/formats/foundation-interfaces.md) defines the remaining

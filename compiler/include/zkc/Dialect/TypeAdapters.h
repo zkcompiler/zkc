@@ -1,6 +1,7 @@
 #ifndef ZKC_DIALECT_TYPE_ADAPTERS_H
 #define ZKC_DIALECT_TYPE_ADAPTERS_H
 
+#include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/TypeSupport.h"
@@ -23,6 +24,9 @@ struct TypeAdapter {
   std::optional<llvm::SmallVector<mlir::Attribute>> (*arguments)(
       mlir::Type, llvm::StringRef constructor);
   void (*attachInterface)(mlir::MLIRContext *, mlir::Dialect *);
+  mlir::Type (*construct)(llvm::function_ref<mlir::InFlightDiagnostic()>,
+                          mlir::MLIRContext *, llvm::StringRef constructor,
+                          llvm::ArrayRef<mlir::Attribute> arguments);
 };
 
 // Direct helper signatures are checked against the logical declaration at each

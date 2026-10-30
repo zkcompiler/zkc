@@ -15,6 +15,13 @@ capabilityArguments(Type type, llvm::StringRef constructor) {
   return llvm::SmallVector<Attribute>{
       StringAttr::get(type.getContext(), identity)};
 }
+Type constructCapability(llvm::function_ref<InFlightDiagnostic()> emit,
+                         MLIRContext *context, llvm::StringRef constructor,
+                         llvm::ArrayRef<Attribute> arguments) {
+  return loadedCheckedType<zkc::runtime::CapabilityType>(
+      emit, context,
+      (constructor + ":" + cast<StringAttr>(arguments[0]).getValue()).str());
+}
 Type decodeCapability(MLIRContext *context, const BoundType &type) {
   return loadedType<zkc::runtime::CapabilityType>(context, type.kind + ":" +
                                                                type.identity);

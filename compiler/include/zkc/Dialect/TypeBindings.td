@@ -23,12 +23,14 @@ class ZKC_DirectBinding<ZKC_Type logical, TypeDef native, string helper,
 // They describe all recognized heads, not arbitrary predicates. Tagged sharing
 // between custom bindings is allowed; runtime encoding must still be unique.
 class ZKC_CustomBinding<ZKC_Type logical, list<string> heads, string decode,
-                        string encode, string arguments, ZKC_TypeAdapterOwner table>
+                        string encode, string arguments, string construct,
+                        ZKC_TypeAdapterOwner table>
     : ZKC_TypeBinding<logical> {
   list<string> nativeHeads = heads;
   string cppDecode = decode;
   string cppEncode = encode;
   string cppArguments = arguments;
+  string cppConstruct = construct;
   ZKC_TypeAdapterOwner owner = table;
 }
 class ZKC_UnavailableBinding<ZKC_Type logical, string explanation>

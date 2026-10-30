@@ -5,6 +5,7 @@
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/TypeAdapters.h"
 #include "zkc/Interfaces/CatalogType.h"
 #include "llvm/ADT/DenseSet.h"
 
@@ -158,5 +159,31 @@ verifyLogicalTypeApplication(llvm::function_ref<InFlightDiagnostic()> emit,
   LogicalTypePermissions permissions;
   return Formation{diagnostic}.inspectApplication(application, context, 0,
                                                   permissions);
+}
+Type constructLogicalType(llvm::function_ref<InFlightDiagnostic()> emit,
+                          MLIRContext *context,
+                          const CatalogTypeApplication &application) {
+  if (failed(verifyLogicalTypeApplication(emit, context, application)))
+    return {};
+  const auto *adapter =
+      protocol::type_adapters::findAdapter(application.constructor);
+  if (!adapter || !adapter->construct) {
+    diagnostics::emit(emit(), "logical-type-construction",
+                      "no unique native constructor");
+    return {};
+  }
+  auto type = adapter->construct(emit, context, application.constructor,
+                                 application.arguments);
+  auto interface = dyn_cast_or_null<CatalogTypeInterface>(type);
+  auto observed = interface ? interface.getCatalogApplication() : std::nullopt;
+  if (!observed || type.getContext() != context ||
+      observed->constructor != application.constructor ||
+      observed->arguments != application.arguments) {
+    diagnostics::emit(
+        emit(), "logical-type-construction",
+        "native type is unavailable or has a different application");
+    return {};
+  }
+  return type;
 }
 } // namespace zkc

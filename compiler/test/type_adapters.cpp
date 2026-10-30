@@ -87,6 +87,9 @@ int main() {
       roundTrip(context, take(parseBoundType(bound.spelling(), false)), false);
       auto native = decodeBoundType(&context, bound);
       auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
+      auto view = cast<CatalogTypeInterface>(native).getCatalogApplication();
+      require(view && constructLogicalType(emit, &context, *view) == native,
+              "native constructor changed the installed logical instance");
       require(succeeded(verifyLogicalType(emit, native)),
               "admitted byte type has no native logical formation");
     });

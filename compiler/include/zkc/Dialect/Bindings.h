@@ -1,9 +1,23 @@
 #ifndef ZKC_DIALECT_BINDINGS_H
 #define ZKC_DIALECT_BINDINGS_H
 
-#include "mlir/IR/Types.h"
+#include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/Diagnostics.h"
 #include "zkc/Contracts/Binding.h"
 #include "zkc/Contracts/Bindings.h"
+
+namespace zkc {
+/// Derive mathematical ports directly from catalog scope and kinded native
+/// static values. Domains use StringAttr, complete types TypeAttr, naturals
+/// ui64 IntegerAttr, and the numerical family a trailing DenseBoolArrayAttr.
+/// This checks logical formation and requirements, not a target installation,
+/// message codec, execution stage, or reached invocation parameters.
+mlir::FunctionType
+resolveLogicalSignature(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
+                        mlir::MLIRContext *context, llvm::StringRef contract,
+                        llvm::ArrayRef<mlir::Attribute> arguments);
+} // namespace zkc
 
 namespace zkc::protocol {
 /// Decode in already loaded dialects; return a null type if one is missing.

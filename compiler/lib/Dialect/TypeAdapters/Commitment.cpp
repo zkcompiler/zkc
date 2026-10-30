@@ -18,6 +18,21 @@ Carrier carrierFor(llvm::StringRef identity) {
 }
 
 template <bool AllowPCS, bool AllowOracle>
+Type constructObject(llvm::function_ref<InFlightDiagnostic()> emit,
+                     MLIRContext *context, llvm::StringRef constructor,
+                     llvm::ArrayRef<Attribute> arguments) {
+  auto scheme = cast<StringAttr>(arguments[0]).getValue();
+  auto carrier = carrierFor(scheme);
+  if (AllowPCS && carrier == Carrier::PCS)
+    return loadedCheckedType<zkc::commitment::PolynomialObjectType>(
+        emit, context, scheme, constructor);
+  if (AllowOracle && carrier == Carrier::Oracle)
+    return loadedCheckedType<zkc::commitment::VectorObjectType>(
+        emit, context, scheme, constructor);
+  return {};
+}
+
+template <bool AllowPCS, bool AllowOracle>
 Type decodeObject(MLIRContext *context, const BoundType &type) {
   auto carrier = carrierFor(type.identity);
   if (AllowPCS && carrier == Carrier::PCS)

@@ -25,6 +25,22 @@ std::optional<llvm::SmallVector<Attribute>> indexArguments(Type type,
     return std::nullopt;
   return llvm::SmallVector<Attribute>{};
 }
+Type constructSequence(llvm::function_ref<InFlightDiagnostic()> emit,
+                       MLIRContext *context, llvm::StringRef,
+                       llvm::ArrayRef<Attribute> arguments) {
+  return loadedCheckedType<zkc::data::SequenceType>(
+      emit, context, cast<TypeAttr>(arguments[0]).getValue());
+}
+Type constructBoolean(llvm::function_ref<InFlightDiagnostic()>,
+                      MLIRContext *context, llvm::StringRef,
+                      llvm::ArrayRef<Attribute>) {
+  return IntegerType::get(context, 1);
+}
+Type constructIndex(llvm::function_ref<InFlightDiagnostic()>,
+                    MLIRContext *context, llvm::StringRef,
+                    llvm::ArrayRef<Attribute>) {
+  return IntegerType::get(context, 64, IntegerType::Unsigned);
+}
 using Shake128Adapter = NullaryAdapter<zkc::crypto::Shake128StateType>;
 using BytesAdapter = NullaryAdapter<zkc::data::BytesType>;
 Type decodeSequence(MLIRContext *context, const BoundType &type) {

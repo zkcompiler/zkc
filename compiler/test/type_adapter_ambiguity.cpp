@@ -56,13 +56,13 @@ std::optional<llvm::SmallVector<Attribute>> floatArguments(Type type,
 namespace zkc::protocol::type_adapters {
 llvm::ArrayRef<llvm::ArrayRef<TypeAdapter>> installedAdapters() {
   static constexpr TypeAdapter first[] = {
-      {"bool", noDecode, boolean, booleanArguments, nullptr},
-      {"index", noDecode, index, nullptr, nullptr},
-      {"fixed_vector", noDecode, Applied::encode, nullptr, nullptr},
-      {"duplicate", noDecode, float32, floatArguments, nullptr}};
+      {"bool", noDecode, boolean, booleanArguments, nullptr, nullptr},
+      {"index", noDecode, index, nullptr, nullptr, nullptr},
+      {"fixed_vector", noDecode, Applied::encode, nullptr, nullptr, nullptr},
+      {"duplicate", noDecode, float32, floatArguments, nullptr, nullptr}};
   static constexpr TypeAdapter second[] = {
-      {"other_bool", noDecode, boolean, booleanArguments, nullptr},
-      {"duplicate", noDecode, never, nullptr, nullptr}};
+      {"other_bool", noDecode, boolean, booleanArguments, nullptr, nullptr},
+      {"duplicate", noDecode, never, nullptr, nullptr, nullptr}};
   static const llvm::ArrayRef<TypeAdapter> tables[] = {first, second};
   return tables;
 }

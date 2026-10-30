@@ -70,6 +70,34 @@ int main() {
             "typed static arguments changed");
     require(succeeded(verifyLogicalType(emit, fixed)), "formed type refused");
   });
+  cases.run(
+      "typed constructors preserve structure and reject unavailable owners",
+      [&] {
+        auto app = CatalogTypeApplication{"fixed_vector",
+                                          {TypeAttr::get(field), nat(4)}};
+        require(constructLogicalType(emit, &context, app) ==
+                    algebra::FixedVectorType::get(&context, field, 4),
+                "native construction changed the typed application");
+        codes.clear();
+        require(!constructLogicalType(emit, &context, {"fixed_vector", {}}) &&
+                    llvm::is_contained(codes, "logical-type-formation"),
+                "constructor bypassed argument formation");
+        MLIRContext minimal(registry);
+        auto diagnostic = [&] { return emitError(UnknownLoc::get(&minimal)); };
+        ScopedDiagnosticHandler handler(&minimal, [&](Diagnostic &diagnostic) {
+          for (const auto &refusal : diagnostics::refusals(diagnostic))
+            codes.push_back(refusal.code);
+          return success();
+        });
+        codes.clear();
+        require(!constructLogicalType(
+                    diagnostic, &minimal,
+                    {"field", {StringAttr::get(&minimal, "koala-bear")}}) &&
+                    llvm::is_contained(codes, "logical-type-construction"),
+                "unloaded native owner acquired a type");
+        require(!minimal.getLoadedDialect<algebra::AlgebraDialect>(),
+                "constructor loaded an unrequested dialect");
+      });
   cases.run("shared builtin carrier does not grant logical identity", [&] {
     require(application(builder.getI1Type()).constructor == "bool",
             "Boolean identity");

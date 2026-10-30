@@ -37,8 +37,12 @@ checking; an interface description or refusal alone does not demonstrate support
 A native type binding supplies typed argument observations separately from its
 public-format encoder and decoder. Direct helpers (`DomainAdapter`,
 `TypeNatAdapter`, `DomainNatAdapter` and `NullaryAdapter`) supply these getters.
-Custom bindings name an observation callback; it returns no application for
-unmatched native carriers. It must preserve complete Type arguments, exact
+Custom bindings name both observation and construction callbacks. Observation
+returns no application for unmatched native carriers. Construction consumes
+already formed typed arguments, checks the native owner's intrinsic invariants
+and returns a type only when that owner is loaded. The public constructor checks
+that the result observes the exact requested application; it never falls back to
+a byte decoder. It must preserve complete Type arguments, exact
 nominal domains and unsigned natural values without printing or parsing them.
 The generated registration checks native heads and logical parameter kinds.
 

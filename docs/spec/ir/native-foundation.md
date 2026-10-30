@@ -41,14 +41,46 @@ The installed invocation is `exec.apply`. Its native signature is:
 ```
 
 The declaration's resolved logical signature and executable scope/outcome
-signature are distinct projections of the same contract. Scope is borrowed
+signature are distinct projections of the same contract. Native signature
+formation evaluates the catalog's ordered static scope directly. Domain and
+Slot roots are `StringAttr`, Type roots are `TypeAttr`, and Nat roots are
+unsigned 64-bit `IntegerAttr`. Associated members use installed nominal facts;
+application terms construct the owning native type from earlier typed terms.
+Complete-Type ports retain the exact native type. The numerical family alone
+has a trailing `DenseBoolArrayAttr` mask, bounded to 1023 positions; its bits
+select scalar/vector operands in order. It does not use a textual binary mask
+or a natural as an alternative encoding.
+
+Signature formation checks logical type formation and catalog requirements.
+It grants neither message-codec support nor an implementation or stage profile.
+A signature may therefore form even when an executable or interchange consumer
+cannot admit it. This distinction also keeps byte-parser bounds out of native
+mathematical port derivation. Scope is borrowed
 according to the execution rules; it is not a mathematical operand or a proof
 token. The call retains the actual ordered operands, structured parameters,
 source occurrence and referenced declaration. Reached validation, charging,
 kernel effects, output validation and retention are part of invocation behavior.
 
+The binding's stored `function_type` is the actual executable signature above.
+Logical ports are derived from the catalog; they are not another independently
+authored signature. At a logical stage, the stored ports must agree exactly
+with that derivation. Physical selection replaces value ports with complete
+represented types; erasing those representations must recover the same logical
+ports. Actual represented ports determine layout choices. Do not retain a
+second string-carried `physical_arguments` schema inside the IR: encoding an
+existing program-byte binding recovers its boundary arguments from the selected
+ports. Selection/admission independently checks applicability of the chosen
+implementation and every represented port.
+
 Use CallableOpInterface, CallOpInterface and SymbolUserOpInterface at this
-boundary with exact type checks and correct symbol scope. Calling a binding is
+boundary with exact type checks and correct symbol scope. The binding is an
+external callable with no callable region. Its argument types include scope;
+its sole result is the typed outcome. The call interface exposes all actual
+operands, including scope. Standard argument/result attribute arrays, when
+present, follow that executable signature. None of these interfaces grants
+inlining, speculation, purity or permission to ignore reached failure.
+`exec.compute` does not acquire this interface by analogy: its mathematical
+helper has a different ABI from the scoped execution boundary. Calling a binding is
 not protocol composition or an ordinary mathematical helper application.
 `exec.compute`, finite requests, scope transitions, outcome dispatch and
 publication keep their separate meanings where they are observably distinct.
@@ -97,7 +129,12 @@ works in a minimal context. MLIR dialect extensions attach models for builtin
 and contributed carriers in a composed registry. Registration does not load an
 unrequested dialect, replace a native type, or grant an execution profile. Typed observations and
 serialization callbacks are distinct; observations never invoke an encoder.
-Missing or ambiguous constructor observations are refused.
+Missing or ambiguous constructor observations are refused. The same native
+inventory supplies typed construction callbacks, distinct from byte decoding.
+Construction validates argument kinds, identities and bounds before calling a
+loaded native owner, then checks that the resulting type observes exactly the
+requested application. It cannot load a missing dialect or infer a carrier
+from a shape. Native owners retain their intrinsic verification obligations.
 
 Logical formation checks argument kinds, declared nominal instances and
 constructor permissions through these observations. Copy and drop permission
