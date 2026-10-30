@@ -6,10 +6,10 @@
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Contracts/NativePolicy.h"
-#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -169,8 +169,7 @@ int main(int argc, char **argv) {
         require(bool(parseBoundType(type.spelling(), false)),
                 "storage is not an ordinary native type");
       }
-    auto payload =
-        decodeVariant(cast<data::VariantType>(reference).getDescriptor());
+    auto payload = data::exportVariantType(cast<data::VariantType>(reference));
     require(payload && payload->alternatives.size() == 1 &&
                 payload->alternatives[0].payload ==
                     std::vector<std::string>({"index", "index"}),

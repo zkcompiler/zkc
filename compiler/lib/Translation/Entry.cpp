@@ -5,6 +5,7 @@
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/Layout.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Printing.h"
 #include "zkc/Support/BoundedStream.h"
@@ -404,15 +405,7 @@ public:
   }
 };
 mlir::Type nativeType(mlir::MLIRContext *context, const json::Value &schema) {
-  auto *object = schema.getAsObject();
-  auto kind = object ? object->getString("kind") : std::nullopt;
-  if (!kind)
-    return {};
-  if (kind == "boolean")
-    return mlir::IntegerType::get(context, 1);
-  if (kind == "Index" || kind == "index")
-    return mlir::IntegerType::get(context, 64);
-  return data::ValueType::get(context, printJson(schema));
+  return data::valueType(data::importLayout(context, schema));
 }
 class Writer {
   mlir::OpBuilder builder;

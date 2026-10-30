@@ -1,7 +1,9 @@
 #include "mlir/Interfaces/CallInterfaces.h"
 #include "mlir/Parser/Parser.h"
+#include "support/VariantFixture.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Commitment/IR/CommitmentDialect.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -16,7 +18,7 @@ int main() {
   DialectRegistry registry;
   registry.insert<relation::RelationDialect, algebra::AlgebraDialect,
                   exec::ExecDialect, data::DataDialect, runtime::RuntimeDialect,
-                  func::FuncDialect>();
+                  commitment::CommitmentDialect, func::FuncDialect>();
   MLIRContext context(registry), otherContext(registry);
   std::string refusal;
   auto handler = [&](Diagnostic &diagnostic) {
@@ -111,7 +113,7 @@ relation.declare @predicate {
                      std::vector<protocol::VariantAlternative> arms) {
     auto encoded = protocol::encodeVariant({name.str(), std::move(arms)});
     require(bool(encoded), "variant fixture failed");
-    return "!data.variant<\"" + encoded.value_or("") + "\">";
+    return zkc::test::variantAssembly(*encoded);
   };
   const std::string record =
       variant("RelationData",

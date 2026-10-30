@@ -3,9 +3,9 @@
 #include "OracleTableRead.h"
 #include "RealizationEmission.h"
 #include "mlir/IR/Verifier.h"
-#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Support/Refusal.h"
@@ -127,18 +127,19 @@ struct Emitter {
           if (!childKind)
             return childKind.takeError();
           std::vector<std::string> fields(4 + previous.size(), "index");
-          auto spelling = encodeVariant(
-              {json::Array{"zkc.oracle.continuation/0",
-                           toHex(storage.entry, true), toHex(result.role, true),
-                           std::to_string(source), std::to_string(ordinal)},
-               {{"Record", std::move(fields)}}});
+          VariantDescriptor descriptor{
+              json::Array{"zkc.oracle.continuation/0",
+                          toHex(storage.entry, true), toHex(result.role, true),
+                          std::to_string(source), std::to_string(ordinal)},
+              {{"Record", std::move(fields)}}};
+          auto spelling = encodeVariant(descriptor);
           if (!spelling)
             return error("oracle-controller-layout");
           if (spelling->size() > metadataRemaining)
             return error("oracle-controller-limit");
           metadataRemaining -= spelling->size();
           Type record =
-              data::VariantType::get(candidate.getContext(), *spelling);
+              data::importVariantType(candidate.getContext(), descriptor);
           auto arena = sequence(record);
           if (!arena)
             return arena.takeError();

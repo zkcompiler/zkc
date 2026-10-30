@@ -15,14 +15,16 @@ Specification owners define the
 accepted contents; the [maintenance policy](development/maintenance.md#format-versions)
 defines when versions change.
 
-The [native foundation](spec/ir/native-foundation.md) is in specification and
-main-only experiment work. Its [interface inventory](spec/formats/foundation-interfaces.md)
-defines the intended catalog, structured types, source/constructed exports,
-realization records and application map before migration. The broad cutover
-starts on main after the native Common-export retirement and frontend stack
-land. No emission of the replacement schemas, wrapper retirement, speedup or
-formal interpretation is claimed yet. Current and designed schemas share
-development version `0`. Lean work and validation are outside this native unit.
+The [native foundation](spec/ir/native-foundation.md) is being implemented on
+the landed frontend and Common-export-retirement base. Native aggregate types
+now retain structural identities, alternatives and payload types; Host values
+retain typed layouts with named fields and native leaves. The
+[interface inventory](spec/formats/foundation-interfaces.md) defines the remaining
+catalog, source/constructed export, realization-record and application-map
+cutovers. Replacement shared-schema emission, execution-wrapper retirement and
+complete stage-admission migration remain in progress. Current and designed
+schemas share development version `0`. Lean work and validation are outside
+this native unit; native structure does not claim a formal interpretation.
 
 | Interface | Contract |
 |---|---|

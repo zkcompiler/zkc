@@ -169,3 +169,15 @@ no file under `lean/`, produces no Lean patch or handoff, and uses no Lean build
 as its landing gate. Formal interpretation follows the published schemas and
 remains separately reported. Native support for a schema never implies that a
 formal consumer already admits it.
+
+## Verification scope
+
+Claims for the paper are relative to the admitted original IR. Frontend
+elaboration into that IR and rendering executable bytes into Lean data are
+named deterministic trust boundaries. Existing native comparisons, byte
+admission and regression controls remain required; naming a trust boundary does
+not authorize deleting them. Security-transforming Fiat–Shamir construction
+and commitment realization retain their independently checked Lean obligations.
+The flagship formal target is the realized compiled verifier, while the native
+path still emits and runs program bytes. Formal STARK-operation lowering and a
+formal byte reader are neither foundation nor subsequent IR delivery gates.

@@ -45,7 +45,7 @@ retains its admitted family set, and Contracts/profile checks retain permission
 authority. Source `[T; N]` remains a structural array with its existing flattened
 ABI; it is distinct from both nominal field arrays and fixed vectors.
 
-Products and sums reuse `!data.variant` and its canonical nominal descriptor.
+Products and sums reuse `!data.variant` with structured nominal identity and ordered payload types.
 One alternative is a product; multiple alternatives form a sum. Payload identity
 includes nested field/group/container identities. Copy/drop/shared permission is
 checked recursively over every alternative. A sum containing an affine payload

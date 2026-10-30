@@ -366,35 +366,23 @@ class RecipeReader {
     }
     if (isa<data::GetOp, data::IsOp>(source)) {
       auto *target = cursor;
-      auto descriptor = protocol::decodeVariant(
-          cast<data::VariantType>(source->getOperand(0).getType())
-              .getDescriptor());
+      auto arms = cast<data::VariantType>(source->getOperand(0).getType())
+                      .getAlternatives();
       auto alternatives = target
                               ? target->getAttrOfType<ArrayAttr>("alternatives")
                               : ArrayAttr();
-      if (!ports.contains(target) || !descriptor || !alternatives ||
+      if (!ports.contains(target) || !alternatives ||
           !isa<exec::MatchOp>(target) || ports.inputs(target) != inputs ||
-          ports.bodies(target) != descriptor->alternatives.size() ||
-          alternatives.size() != descriptor->alternatives.size() ||
+          ports.bodies(target) != arms.size() ||
+          alternatives.size() != arms.size() ||
           ports.outputs(target).size() != 1)
         return {};
-      for (auto [i, arm] : enumerate(descriptor->alternatives)) {
+      for (auto [i, arm] : enumerate(arms)) {
         auto *body = ports.body(target, i);
         auto arguments = ports.arguments(body);
-        if (!body ||
-            alternatives[i] !=
-                StringAttr::get(source->getContext(), arm.label) ||
-            arguments.size() != arm.payload.size())
+        if (!body || alternatives[i] != arm.getLabel() ||
+            TypeRange(arguments) != TypeRange(arm.getPayload()))
           return {};
-        for (auto [argument, spelling] : zip(arguments, arm.payload)) {
-          auto bound = protocol::encodeBoundType(argument.getType(), false);
-          if (!bound) {
-            consumeError(bound.takeError());
-            return {};
-          }
-          if (bound->spelling() != spelling)
-            return {};
-        }
         auto *at = ports.first(body);
         Value expected;
         if (auto get = dyn_cast<data::GetOp>(source)) {
@@ -406,7 +394,7 @@ class RecipeReader {
           if (!isBoolean(at) || ports.outputs(at).size() != 1 ||
               at->getAttrOfType<BoolAttr>("value") !=
                   BoolAttr::get(source->getContext(),
-                                arm.label ==
+                                arm.getLabel().getValue() ==
                                     cast<data::IsOp>(source).getAlternative()))
             return {};
           expected = ports.outputs(at)[0];

@@ -1,8 +1,11 @@
 #include "mlir/AsmParser/AsmParser.h"
+#include "mlir/IR/AttrTypeSubElements.h"
 #include "support/NativeCases.h"
+#include "support/VariantFixture.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/Layout.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/TypeAdapters.h"
 #include "llvm/ADT/StringSet.h"
@@ -23,6 +26,14 @@ public:
       : Dialect(getDialectNamespace(), context,
                 TypeID::get<EmptyAlgebraDialect>()) {}
   static StringRef getDialectNamespace() { return "algebra"; }
+};
+
+class EmptyDataDialect : public Dialect {
+public:
+  explicit EmptyDataDialect(MLIRContext *context)
+      : Dialect(getDialectNamespace(), context,
+                TypeID::get<EmptyDataDialect>()) {}
+  static StringRef getDialectNamespace() { return "data"; }
 };
 
 void roundTrip(MLIRContext &context, const BoundType &bound, bool physical) {
@@ -166,12 +177,12 @@ int main() {
     require(bool(descriptor), "variant fixture refused");
     auto bound = take(parseBoundType(*descriptor, false));
     require(decodeBoundType(&context, bound) ==
-                zkc::data::VariantType::get(&context, *descriptor),
+                zkc::test::variantType(&context, *descriptor),
             "variant native carrier changed");
     roundTrip(context, bound, false);
     roundTrip(context, take(defaultRepresentation(bound)), true);
-    nativeCases.emplace_back(
-        *descriptor, zkc::data::VariantType::get(&context, *descriptor));
+    nativeCases.emplace_back(*descriptor,
+                             zkc::test::variantType(&context, *descriptor));
   });
   cases.run("resource unit physical wrapper", [&] {
     roundTrip(context,
@@ -267,6 +278,14 @@ int main() {
     require(!decodeBoundType(&fresh, {"field", field, {}}),
             "namespace without native type accepted");
   });
+  cases.run("loaded Data namespace without registered variant", [&] {
+    MLIRContext fresh;
+    fresh.loadDialect<EmptyDataDialect>();
+    auto spelling = protocol::encodeVariant({"Choice", {{"empty", {}}}});
+    require(bool(spelling), "invalid boundary fixture");
+    require(!decodeBoundType(&fresh, take(parseBoundType(*spelling, false))),
+            "namespace without registered aggregate accepted");
+  });
   cases.run("unloaded physical wrapper", [&] {
     MLIRContext fresh;
     fresh.loadDialect<zkc::algebra::AlgebraDialect>();
@@ -332,7 +351,6 @@ int main() {
        zkc::commitment::PolynomialObjectType::get(&context, field, "field")},
       {"field as capability",
        zkc::runtime::CapabilityType::get(&context, "field:" + field)},
-      {"variant prefix", zkc::data::VariantType::get(&context, "invalid:")},
       {"signless index", IntegerType::get(&context, 64)},
       {"signed index", IntegerType::get(&context, 64, IntegerType::Signed)},
       {"unsigned boolean",
@@ -477,6 +495,156 @@ int main() {
                 emit, &context, Type(element), uint64_t(1048577)),
             "checked fixed-vector accepted an excessive natural");
   });
+  cases.run(
+      "structural variants preserve complete identity and traversal", [&] {
+        auto field = algebra::FieldType::get(&context, "bls12-381.fr");
+        auto other = algebra::FieldType::get(&context, "koala-bear");
+        auto name = data::importVariantIdentity(
+            &context, json::Array{"Claim", "phantom-A"});
+        auto different = data::importVariantIdentity(
+            &context, json::Array{"Claim", "phantom-B"});
+        auto arm = data::AlternativeAttr::get(
+            &context, StringAttr::get(&context, "present"),
+            ArrayRef<Type>{field});
+        auto empty = data::AlternativeAttr::get(
+            &context, StringAttr::get(&context, "empty"), {});
+        auto value = data::VariantType::get(&context, name, {arm, empty});
+        require(value !=
+                    data::VariantType::get(&context, different, {arm, empty}),
+                "phantom identity was erased");
+        require(value != data::VariantType::get(&context, name, {empty, arm}),
+                "alternative order was erased");
+        bool visited = false;
+        value.walk([&](Type type) { visited |= type == field; });
+        require(visited, "generic MLIR walking cannot see variant payloads");
+        AttrTypeReplacer replacer;
+        replacer.addReplacement(
+            [&](algebra::FieldType type) -> std::optional<Type> {
+              return type == field ? std::optional<Type>(other) : std::nullopt;
+            });
+        auto replaced = cast<data::VariantType>(replacer.replace(Type(value)));
+        require(replaced.getIdentity() == name &&
+                    replaced.getAlternatives()[0].getPayload()[0] == other &&
+                    replaced.getAlternatives()[1].getPayload().empty(),
+                "generic replacement changed identity, order or empty payload");
+        std::string text;
+        raw_string_ostream out(text);
+        Type(value).print(out);
+        require(parseType(text, &context) == value,
+                "structured variant did not roundtrip");
+      });
+  cases.run("malformed structured variants and retired assembly refuse", [&] {
+    ScopedDiagnosticHandler silence(&context,
+                                    [](Diagnostic &) { return success(); });
+    auto emit = [&]() { return mlir::emitError(UnknownLoc::get(&context)); };
+    require(!data::importVariantIdentity(&context, ""),
+            "empty nominal identity atom admitted");
+    auto name = data::importVariantIdentity(&context, "Claim");
+    auto arm = data::AlternativeAttr::get(
+        &context, StringAttr::get(&context, "present"), {});
+    require(
+        !data::VariantType::getChecked(
+            emit, &context, name, ArrayRef<data::AlternativeAttr>{arm, arm}),
+        "duplicate alternatives admitted");
+    require(!data::VariantType::getChecked(emit, &context, name,
+                                           ArrayRef<data::AlternativeAttr>{}),
+            "empty alternatives admitted");
+    require(!data::AlternativeAttr::getChecked(
+                emit, &context, StringAttr::get(&context, "bad label"),
+                ArrayRef<Type>{}),
+            "invalid alternative label admitted");
+    require(!parseType("!data.variant<\"variant:00\">", &context),
+            "retired descriptor assembly still admitted");
+    auto value = data::VariantType::get(&context, name, {arm});
+    bool refused = false;
+    for (unsigned i = 0; i != 8; ++i) {
+      SmallVector<Type> payload(64, value);
+      auto repeated = data::AlternativeAttr::get(
+          &context, StringAttr::get(&context, "repeated"), payload);
+      value = data::VariantType::getChecked(
+          emit, &context, name, ArrayRef<data::AlternativeAttr>{repeated});
+      if (!value) {
+        refused = true;
+        break;
+      }
+    }
+    require(refused, "shared type DAG bypassed expanded-work bound");
+  });
+  cases.run(
+      "logical layouts expose fields, alternatives and native leaves", [&] {
+        auto scalar = [&]() -> llvm::json::Value {
+          return llvm::json::Object{
+              {"kind", "boolean"},
+              {"identity", std::string(64, 'a')},
+              {"type", "bool"},
+              {"custody", false},
+              {"constructible", true},
+              {"permissions", llvm::json::Array{"Copy", "Drop"}},
+              {"fields", llvm::json::Array{}},
+              {"alternatives", llvm::json::Array{}},
+              {"leaves", llvm::json::Array{"bool"}}};
+        };
+        auto record = scalar();
+        auto &object = *record.getAsObject();
+        object["kind"] = "record";
+        object["identity"] = std::string(64, 'b');
+        object["type"] = "Claim";
+        object["fields"] = llvm::json::Array{llvm::json::Object{
+            {"name", "accepted"}, {"offset", 0}, {"schema", scalar()}}};
+        MLIRContext fresh;
+        require(!data::importLayout(&fresh, record),
+                "layout boundary initialized an unregistered dialect");
+        auto layout = data::importLayout(&context, record);
+        require(bool(layout), "formed logical layout refused");
+        auto native = data::valueType(layout);
+        require(isa<data::ValueType>(native) &&
+                    data::valueType(layout.getFields().front().getLayout())
+                        .isInteger(1),
+                "logical field carrier differs");
+        unsigned fields = 0, booleans = 0;
+        native.walk(
+            [&](Attribute attr) { fields += isa<data::LayoutFieldAttr>(attr); },
+            [&](Type type) { booleans += type.isInteger(1); });
+        require(fields == 1 && booleans > 0,
+                "generic traversal missed layout children");
+        std::string assembly;
+        llvm::raw_string_ostream stream(assembly);
+        native.print(stream);
+        require(parseType(assembly, &context) == native,
+                "logical layout did not roundtrip");
+        object["fields"].getAsArray()->front().getAsObject()->operator[](
+            "name") = "other";
+        require(data::valueType(data::importLayout(&context, record)) != native,
+                "field name was erased from logical layout identity");
+        ScopedDiagnosticHandler silence(&context,
+                                        [](Diagnostic &) { return success(); });
+        object["fields"].getAsArray()->front().getAsObject()->operator[](
+            "offset") = 1;
+        require(!data::importLayout(&context, record),
+                "noncontiguous field offset admitted");
+        object["fields"].getAsArray()->front().getAsObject()->operator[](
+            "offset") = 0;
+        object["extra"] = true;
+        require(!data::importLayout(&context, record),
+                "unknown schema member admitted");
+        object.erase("extra");
+        object["permissions"] = llvm::json::Array{"Copy"};
+        require(!data::importLayout(&context, record),
+                "Copy without Drop admitted");
+        require(!parseType("!data.value<\"{}\">", &context),
+                "retired JSON schema parser retained");
+        auto unit = scalar();
+        auto &unitObject = *unit.getAsObject();
+        unitObject["kind"] = "unit";
+        unitObject["type"] = "()";
+        unitObject["leaves"] = llvm::json::Array{};
+        auto empty = data::valueType(data::importLayout(&context, unit));
+        require(bool(empty), "empty logical product refused");
+        assembly.clear();
+        empty.print(stream);
+        require(parseType(assembly, &context) == empty,
+                "empty logical product did not roundtrip");
+      });
   cases.run("explicit unavailable native binding decisions", [&] {
     require(!type_adapters::findAdapter("scalar"),
             "scalar acquired an adapter");

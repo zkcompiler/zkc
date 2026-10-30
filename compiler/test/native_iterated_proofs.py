@@ -82,7 +82,7 @@ with case('distinct field-array shapes retain distinct transcript bindings'):
         text = re.sub(r'!(f|t|p|a|q|state|rng)(?![A-Za-z0-9_.])', lambda m: '!' + prefix + m[1], text)
         text = re.sub(r'@([A-Za-z_][A-Za-z0-9_]*)', lambda m: '@' + prefix + m[1], text)
         text = re.sub(r'sym_name="([^"]+)"', lambda m: 'sym_name="' + prefix + m[1] + '"', text)
-        text = re.sub(r'variant:([0-9a-f]+)', lambda m: 'variant:' + bytes.fromhex(m[1]).replace(b'poly.residual.product', ('poly.residual.' + prefix + 'product').encode()).hex(), text)
+        text = text.replace("poly.residual.product", "poly.residual." + prefix + "product")
         aliases, body = text.split('module { "protocol.module"() ({', 1)
         return aliases, body.rsplit('}) {profile=', 1)[0]
     qa, qb = library('iterated-sumcheck', 'q_')

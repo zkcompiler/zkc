@@ -6,6 +6,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
+#include "support/VariantFixture.h"
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
@@ -210,7 +211,7 @@ void moveInvocationBefore(exec::ApplyOp moved, exec::ApplyOp before) {
   sc::omit(moved, values);
 }
 std::string variantSource(MLIRContext &context, StringRef descriptor) {
-  auto text = "!Tag = !data.variant<\"" + descriptor.str() + "\">\n" +
+  auto text = "!Tag = " + variantAssembly(descriptor) + "\n" +
               R"(!F = !algebra.field<"bls12-381.fr">
 !G = !algebra.group<"bls12-381.g1">
 )" +
@@ -228,7 +229,7 @@ std::string variantSource(MLIRContext &context, StringRef descriptor) {
   builder.setInsertionPointToEnd(work.addEntryBlock());
   auto group = work.getArgument(1).getType();
   auto field = work.getArgument(2).getType();
-  auto variant = data::VariantType::get(&context, descriptor);
+  auto variant = zkc::test::variantType(&context, descriptor);
   exec::ScopedExecutionBuilder control(builder, work);
   auto point = sc::apply(control, builder, "scale", "initial",
                          work.getArguments().drop_front(), {group})[0];

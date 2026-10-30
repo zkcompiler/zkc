@@ -36,8 +36,8 @@ current implementation until cutover. Both use version `0`; the foundation
 change list defines the intended replacement schema, not a second admitted route.
 IR owns the catalog, lowering and
 native contract changes during this unit; frontend owns the checked program.
-The broad migration begins only after main contains the frontend redesign and
-native Common-export retirement. Native interface checks replace cross-session
+The broad migration uses main `abe85f7a7`, which contains the frontend redesign
+and native Common-export retirement. Native interface checks replace cross-session
 review loops for this unit. Formal interpretation is a later independent task.
 
 | Identifier / version | Specification and owner | Producer → consumers | Missing integration |

@@ -1,9 +1,9 @@
 #include "OracleQueryController.h"
 #include "OracleTableRead.h"
 #include "OracleVerificationContext.h"
-#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -124,15 +124,16 @@ Error layout(const OracleVerificationContext &targetContext,
             frame.query != queryIndex || frame.previousKinds != previous)
           return refuse();
         std::vector<std::string> fields(4 + previous.size(), "index");
-        auto descriptor = encodeVariant(
-            {json::Array{"zkc.oracle.continuation/0",
-                         toHex(storage.entry, true), toHex(role, true),
-                         std::to_string(ordinal), std::to_string(queryIndex)},
-             {{"Record", std::move(fields)}}});
-        if (!descriptor || descriptor->size() > metadataRemaining)
+        VariantDescriptor descriptor{
+            json::Array{"zkc.oracle.continuation/0", toHex(storage.entry, true),
+                        toHex(role, true), std::to_string(ordinal),
+                        std::to_string(queryIndex)},
+            {{"Record", std::move(fields)}}};
+        auto spelling = encodeVariant(descriptor);
+        if (!spelling || spelling->size() > metadataRemaining)
           return refuse();
-        metadataRemaining -= descriptor->size();
-        Type record = data::VariantType::get(context, *descriptor);
+        metadataRemaining -= spelling->size();
+        Type record = data::importVariantType(context, descriptor);
         auto arena = sequence(record);
         if (!arena)
           return arena.takeError();

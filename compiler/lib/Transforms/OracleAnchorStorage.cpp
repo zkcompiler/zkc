@@ -1,9 +1,9 @@
 #include "OracleAnchorStorage.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Bindings.h"
-#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
@@ -15,18 +15,17 @@ namespace {
 namespace pir = protocol_ir;
 Expected<Type> product(MLIRContext *context, json::Value identity,
                        ArrayRef<Type> fields) {
-  std::vector<std::string> payload;
-  for (Type type : fields) {
-    auto encoded = encodeBoundType(type, false);
-    if (!encoded)
-      return encoded.takeError();
-    payload.push_back(encoded->spelling());
-  }
-  auto spelling =
-      encodeVariant({std::move(identity), {{"Record", std::move(payload)}}});
-  if (!spelling)
+  auto nominal = data::importVariantIdentity(context, identity);
+  if (!nominal || fields.size() > 128)
     return error("oracle-storage-type-limit");
-  return Type(data::VariantType::get(context, *spelling));
+  auto arm = data::AlternativeAttr::get(
+      context, StringAttr::get(context, "Record"), fields);
+  auto result =
+      data::VariantType::getChecked(UnknownLoc::get(context), context, nominal,
+                                    ArrayRef<data::AlternativeAttr>{arm});
+  if (!result)
+    return error("oracle-storage-type-limit");
+  return Type(result);
 }
 struct Planner {
   pir::MathematicalOp program;

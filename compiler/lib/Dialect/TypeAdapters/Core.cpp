@@ -1,4 +1,5 @@
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/TypeAdapters/Support.h"
 #include "zkc/Dialect/Types.h"
 
@@ -47,15 +48,23 @@ std::optional<BoundType> encodeIndex(Type type, llvm::StringRef constructor) {
   return std::nullopt;
 }
 Type decodeVariantType(MLIRContext *context, const BoundType &type) {
-  return loadedType<zkc::data::VariantType>(context,
-                                            "variant:" + type.identity);
+  auto registered =
+      context ? AbstractType::lookup(zkc::data::VariantType::name, context)
+              : std::nullopt;
+  if (!registered ||
+      registered->get().getTypeID() != zkc::data::VariantType::getTypeID())
+    return {};
+  auto descriptor = decodeVariant("variant:" + type.identity);
+  return descriptor ? zkc::data::importVariantType(context, *descriptor)
+                    : Type{};
 }
 std::optional<BoundType> encodeVariantType(Type type,
                                            llvm::StringRef constructor) {
   if (auto variant = dyn_cast<zkc::data::VariantType>(type)) {
-    auto descriptor = variant.getDescriptor();
-    if (descriptor.consume_front("variant:"))
-      return BoundType{constructor.str(), descriptor.str(), {}};
+    auto descriptor = zkc::data::exportVariantType(variant);
+    auto spelling = descriptor ? encodeVariant(*descriptor) : std::nullopt;
+    if (spelling)
+      return BoundType{constructor.str(), spelling->substr(8), {}};
   }
   return std::nullopt;
 }

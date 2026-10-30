@@ -4,7 +4,7 @@ from pathlib import Path
 from cases import case, counted
 from commands import Commands
 from tools import records
-from variant_codec import descriptor
+from variant_types import variant as descriptor
 OUT = records()
 commands = Commands(OUT)
 FIXTURES = Path(__file__).parent / 'fixtures/mathematical'
@@ -95,7 +95,7 @@ with case('typed Groth16 proof product retains nominal group fields'):
     proof = descriptor('Groth16Proof', [('proof', ['group:bn254.g1', 'group:bn254.g2', 'group:bn254.g1'])])
     source = f'''!g1 = !algebra.group<"bn254.g1">
 !g2 = !algebra.group<"bn254.g2">
-!proof = !data.variant<"{proof}">
+!proof = {proof}
 module {{ "protocol.module"() ({{
  "protocol.func"() ({{ ^entry(%a:!g1,%b:!g2,%c:!g1):
    %p = "data.make"(%a,%b,%c) {{alternative="proof"}} : (!g1,!g2,!g1)->!proof

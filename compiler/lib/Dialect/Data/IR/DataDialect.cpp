@@ -1,7 +1,6 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "zkc/Contracts/TypeProperties.h"
-#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
@@ -121,50 +120,29 @@ SmallVector<unsigned> DimOp::getOperandDependencies(unsigned result) {
 LogicalResult EqualOp::verify() { return success(); }
 LogicalResult LessOp::verify() { return success(); }
 LogicalResult MakeOp::verify() {
-  auto descriptor =
-      protocol::decodeVariant(getOutput().getType().getDescriptor());
-  if (!descriptor)
-    return refuse(*this, "invalid aggregate descriptor");
-  auto arm = llvm::find_if(descriptor->alternatives, [&](const auto &arm) {
-    return arm.label == getAlternative();
+  auto alternatives = getOutput().getType().getAlternatives();
+  auto arm = llvm::find_if(alternatives, [&](auto arm) {
+    return arm.getLabel().getValue() == getAlternative();
   });
-  if (arm == descriptor->alternatives.end() ||
-      arm->payload.size() != getPayload().size())
-    return refuse(*this, "aggregate alternative or payload arity");
-  for (auto [type, spelling] : llvm::zip(getOperandTypes(), arm->payload)) {
-    auto actual = protocol::encodeBoundType(type, false);
-    if (!actual) {
-      llvm::consumeError(actual.takeError());
-      return refuse(*this, "aggregate payload type");
-    }
-    if (actual->spelling() != spelling)
-      return refuse(*this, "aggregate payload identity");
-  }
+  if (arm == alternatives.end() ||
+      TypeRange(arm->getPayload()) != getOperandTypes())
+    return refuse(*this, "aggregate alternative or payload identity");
   return success();
 }
 LogicalResult GetOp::verify() {
-  auto descriptor =
-      protocol::decodeVariant(getInput().getType().getDescriptor());
+  auto alternatives = getInput().getType().getAlternatives();
   auto index = getIndexAttr().getInt();
-  if (!descriptor || descriptor->alternatives.size() != 1 || index < 0 ||
-      uint64_t(index) >= descriptor->alternatives.front().payload.size())
+  if (alternatives.size() != 1 || index < 0 ||
+      uint64_t(index) >= alternatives.front().getPayload().size())
     return refuse(
         *this, "total projection requires one alternative and a valid field");
-  auto actual = protocol::encodeBoundType(getOutput().getType(), false);
-  if (!actual) {
-    llvm::consumeError(actual.takeError());
-    return refuse(*this, "aggregate result type");
-  }
-  if (actual->spelling() != descriptor->alternatives.front().payload[index])
+  if (getOutput().getType() != alternatives.front().getPayload()[index])
     return refuse(*this, "aggregate field identity");
   return success();
 }
 LogicalResult IsOp::verify() {
-  auto descriptor =
-      protocol::decodeVariant(getInput().getType().getDescriptor());
-  if (!descriptor ||
-      !llvm::any_of(descriptor->alternatives, [&](const auto &arm) {
-        return arm.label == getAlternative();
+  if (!llvm::any_of(getInput().getType().getAlternatives(), [&](auto arm) {
+        return arm.getLabel().getValue() == getAlternative();
       }))
     return refuse(*this, "unknown aggregate alternative");
   return success();

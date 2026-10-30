@@ -1,9 +1,9 @@
 #include "OracleCommonPlan.h"
 #include "OracleQueryBlocks.h"
 #include "mlir/IR/Verifier.h"
-#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseSet.h"
@@ -836,19 +836,18 @@ struct PlanBuilder {
     Type type = types.front();
     unsigned value = values.front();
     if (values.size() > 1) {
-      std::vector<std::string> fields;
-      for (Type type : types) {
-        auto bound = encodeBoundType(type, false);
-        if (!bound)
-          return bound.takeError();
-        fields.push_back(bound->spelling());
-      }
-      auto descriptor =
-          encodeVariant({json::Array{"zkc.oracle.query-packet/0", purpose},
-                         {{"Record", fields}}});
-      if (!descriptor)
+      auto *context = builder.getContext();
+      auto identity = data::importVariantIdentity(
+          context, json::Array{"zkc.oracle.query-packet/0", purpose});
+      if (!identity || types.size() > 128)
         return error("oracle-query-block-limit");
-      type = data::VariantType::get(builder.getContext(), *descriptor);
+      auto arm = data::AlternativeAttr::get(
+          context, builder.getStringAttr("Record"), types);
+      type = data::VariantType::getChecked(
+          builder.getUnknownLoc(), context, identity,
+          ArrayRef<data::AlternativeAttr>{arm});
+      if (!type)
+        return error("oracle-query-block-limit");
       OraclePacketRecipe packing;
       static_cast<OracleHelperSignature &>(packing) = local(types, type);
       packing.pack = true;

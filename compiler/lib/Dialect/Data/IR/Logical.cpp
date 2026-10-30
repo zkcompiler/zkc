@@ -1,7 +1,6 @@
 #include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Data/Layout.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Support/Json.h"
-#include "llvm/Support/JSON.h"
 #include <set>
 using namespace mlir;
 namespace zkc::data {
@@ -10,47 +9,30 @@ LogicalResult MatchOp::verify() {
     return diagnostics::emit(emitOpError(), "data-match-formation",
                              "sum alternatives or payload types differ");
   };
-  auto parsed = llvm::json::parse(getInput().getType().getSchema());
-  if (!parsed) {
-    llvm::consumeError(parsed.takeError());
-    return fail();
-  }
-  auto *schema = parsed->getAsObject();
-  auto *alternatives = schema ? schema->getArray("alternatives") : nullptr;
-  if (!alternatives || alternatives->size() != getArms().size() ||
-      getAlternatives().size() != getArms().size() || alternatives->empty())
+  auto layout = getInput().getType().getLayout();
+  auto alternatives = layout.getAlternatives();
+  if (layout.getKind().getValue() != "variant" ||
+      alternatives.size() != getArms().size() ||
+      getAlternatives().size() != getArms().size())
     return fail();
   std::set<StringRef> names;
   for (auto [name, block] : llvm::zip(getAlternatives(), getArms())) {
     auto label = cast<StringAttr>(name).getValue();
     if (!names.insert(label).second)
       return fail();
-    auto found = llvm::find_if(*alternatives, [&](const auto &a) {
-      return a.getAsObject() && a.getAsObject()->getString("name") == label;
+    auto found = llvm::find_if(alternatives, [&](LayoutAlternativeAttr arm) {
+      return arm.getName().getValue() == label;
     });
-    if (found == alternatives->end())
+    if (found == alternatives.end())
       return fail();
-    auto *fields = found->getAsObject()->getArray("fields");
-    if (!fields ||
-        block->getNumArguments() != fields->size() + getCaptures().size())
+    auto fields = found->getFields();
+    if (block->getNumArguments() != fields.size() + getCaptures().size())
       return fail();
     for (auto [field, argument] :
-         llvm::zip(*fields, block->getArguments().take_front(fields->size()))) {
-      auto *value =
-          field.getAsObject() ? field.getAsObject()->get("schema") : nullptr;
-      auto *object = value ? value->getAsObject() : nullptr;
-      auto kind = object ? object->getString("kind") : std::nullopt;
-      if (!kind)
+         llvm::zip(fields, block->getArguments().take_front(fields.size())))
+      if (argument.getType() != valueType(field.getLayout()))
         return fail();
-      Type expected =
-          *kind == "boolean" ? Type(IntegerType::get(getContext(), 1))
-          : (*kind == "Index" || *kind == "index")
-              ? Type(IntegerType::get(getContext(), 64))
-              : Type(ValueType::get(getContext(), zkc::printJson(*value)));
-      if (argument.getType() != expected)
-        return fail();
-    }
-    if (TypeRange(block->getArguments().drop_front(fields->size())) !=
+    if (TypeRange(block->getArguments().drop_front(fields.size())) !=
         getCaptures().getTypes())
       return fail();
   }

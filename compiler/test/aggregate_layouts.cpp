@@ -8,6 +8,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "support/ScopedFixture.h"
+#include "support/VariantFixture.h"
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -360,7 +361,7 @@ std::string inferredSequenceSource(MLIRContext &context, StringRef kind) {
           auto values = sc::apply(control, builder, "append", "append",
                                   {empty, element}, {sequence})[0];
           auto tag = control.invoke(
-              "exec.variant", {data::VariantType::get(&context, descriptor)},
+              "exec.variant", {zkc::test::variantType(&context, descriptor)},
               control.scoped({values}),
               {builder.getNamedAttr("alternative",
                                     builder.getStringAttr("some")),
@@ -445,7 +446,7 @@ std::string independentVariantSource(MLIRContext &context,
         auto empty =
             sc::apply(control, builder, "empty", "empty", {}, {sequence})[0];
         auto tag = control.invoke(
-            "exec.variant", {data::VariantType::get(&context, descriptor)},
+            "exec.variant", {zkc::test::variantType(&context, descriptor)},
             control.scoped({empty}),
             {builder.getNamedAttr("alternative", builder.getStringAttr("left")),
              builder.getNamedAttr("site", builder.getStringAttr("tag"))})[0];
@@ -486,7 +487,7 @@ std::string selectedVariantSource(MLIRContext &context, StringRef descriptor) {
         auto values = sc::apply(control, builder, "append", "append",
                                 {empty, work.getArgument(1)}, {sequence})[0];
         auto tag = control.invoke(
-            "exec.variant", {data::VariantType::get(&context, descriptor)},
+            "exec.variant", {zkc::test::variantType(&context, descriptor)},
             control.scoped({values}),
             {builder.getNamedAttr("alternative", builder.getStringAttr("some")),
              builder.getNamedAttr("site", builder.getStringAttr("tag"))})[0];

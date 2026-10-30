@@ -431,30 +431,14 @@ class Recipes {
     }
     if (isa<data::GetOp, data::IsOp>(op)) {
       auto type = cast<data::VariantType>(op->getOperand(0).getType());
-      auto descriptor = protocol::decodeVariant(type.getDescriptor());
-      if (!descriptor)
-        return failure();
       SmallVector<SmallVector<Type>> payloads;
       SmallVector<Attribute> labels;
-      for (const auto &arm : descriptor->alternatives) {
-        SmallVector<Type> types;
-        for (const auto &spelling : arm.payload) {
-          auto bound = protocol::parseBoundType(spelling, false);
-          if (!bound) {
-            consumeError(bound.takeError());
-            return failure();
-          }
-          auto decoded = protocol::decodeBoundType(op->getContext(), *bound);
-          if (!decoded)
-            return failure();
-          types.push_back(decoded);
-        }
-        payloads.push_back(std::move(types));
-        labels.push_back(rewriter.getStringAttr(arm.label));
-      }
       SmallVector<std::string> alternatives;
-      for (const auto &arm : descriptor->alternatives)
-        alternatives.push_back(arm.label);
+      for (auto arm : type.getAlternatives()) {
+        payloads.emplace_back(arm.getPayload());
+        labels.push_back(arm.getLabel());
+        alternatives.push_back(arm.getLabel().getValue().str());
+      }
       auto outline = [&](unsigned i) {
         OpBuilder::InsertionGuard restore(rewriter);
         auto function = region(payloads[i], op->getResultTypes());
@@ -477,7 +461,9 @@ class Recipes {
                       "exec.boolean", rewriter.getI1Type(), nested.scoped({}),
                       {rewriter.getNamedAttr(
                            "value", rewriter.getBoolAttr(
-                                        descriptor->alternatives[i].label ==
+                                        type.getAlternatives()[i]
+                                            .getLabel()
+                                            .getValue() ==
                                         cast<data::IsOp>(op).getAlternative())),
                        rewriter.getNamedAttr(
                            "site", rewriter.getStringAttr(occurrence))})

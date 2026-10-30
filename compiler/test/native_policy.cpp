@@ -2,6 +2,7 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
+#include "support/VariantFixture.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -277,7 +278,7 @@ int main() {
           {"Type" + std::to_string(i),
            {{"Values", std::vector<std::string>(128, "bool")}}});
       require(bool(spelling), "budget fixture failed");
-      return data::VariantType::get(&context, *spelling);
+      return zkc::test::variantType(&context, *spelling);
     };
     auto repeated = make(0);
     for (unsigned i = 0; i != 100000; ++i)

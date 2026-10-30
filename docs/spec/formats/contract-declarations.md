@@ -203,6 +203,25 @@ Serialized data is at most 64 MiB with JSON depth 64. Existing stricter
 domain/expression/origin limits still apply. Generation must fail for an
 unrepresentable contribution rather than emit a partial projection.
 
+## Consumer profile ownership
+
+Declaration presence and consumer admission are separate decisions. An export
+profile selects exact catalog identities and their applicable parameter and
+structural forms; it cannot be a self-approval bit on an operation declaration.
+Its owner fixes the selection before processing a candidate. Generated
+membership data can replace a hand-maintained operation list, provided generation
+checks declaration references and complete signature/type dependencies. Unknown
+entries and unsupported parameter families refuse rather than acquire meaning
+from a generic serialization callback.
+
+MLIR interfaces expose structural behavior to compiler algorithms; they do not
+replace this selected consumer profile. In particular, implementing a call or
+export interface cannot register a formal interpretation. A formal consumer may
+project the same identities into its installation table, but independently
+supplies meanings, implementation laws and admission evidence. Extending profile
+membership as data is sufficient only when those semantics already exist.
+No broader formal support follows from serializing the complete catalog.
+
 ## Independent behavior
 
 Generated signatures can detect mismatches between declaration and backend

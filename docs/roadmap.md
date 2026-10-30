@@ -65,16 +65,16 @@ these repository specifications, not another session's unlanded implementation:
 
 | Connection | Compiler deliverable | Formal consumer |
 |---|---|---|
-| Written source to admitted meaning | Syntax retained before desugaring, elaboration associations and source/interface binding | Source correspondence checker and its soundness theorem |
+| Written source to admitted original IR | Syntax retained before desugaring, elaboration associations and independent source/interface comparison | Named frontend trust boundary for the paper; stronger source correspondence remains separate |
 | Ideal oracle to realized protocol | Original oracle program, deterministic realization record and actual realized candidate | Realization bridge and scheme-specific security interpretation |
-| Emitted bytes to executable meaning | Exact byte grammar, canonical rules, complete layouts and malformed/canonical fixtures | Independent program-byte reader and its executable connection |
+| Emitted bytes to executable meaning | Exact byte grammar, canonical rules, complete layouts and malformed/canonical fixtures | Byte-to-Lean rendering is a named trust boundary; a formal byte reader is not a delivery gate |
 
 The [contract register](spec/contracts.md) owns this inventory and its current
 producer/consumer gaps. Frontend owns source spelling, companions and source-AST
 contracts; the checked program belongs to frontend, its lowering and the catalog
-to IR. Before the mass migration, main must contain the current connection unit
-that retires the native Common exporter and the frontend redesign stack. Run
-main-only experiments and specification work while those land. IR is the sole
+to IR. Main `abe85f7a7` contains both prerequisites: the native Common-export
+retirement and the complete frontend redesign stack. The migration consumes
+that landed checked-program interface once. IR is the sole
 writer of compiler/catalog/generated registry structure during this unit.
 Lean remains the sole writer of `lean/`; the foundation neither edits it nor
 supplies patches or handoffs, fixes Lean failures, or runs Lean as a landing
@@ -173,17 +173,28 @@ Interned identities keep exact readback and unchanged transcript bytes. Proposal
 remain outside semantic bodies, bound to the original and actual candidate, and
 require independent validation before they support a correspondence claim.
 
-**MLIR execution foundation.** Measure admission and schema-conversion cost before
-selecting the refactor. The existing context-owned type cache is not a cache of
-mutable-program admission. Audit all pass/export/consumer ingress before moving
-whole-program checks out of verifiers; mutation invalidates prior analyses.
-Choose typed per-contract operations or one installed-call form after checking
-special verification, effect/outcome rules and printer-sensitive identities.
-Generate from the neutral contract catalog and preserve canonical external
-spellings. This precedes represented execution so new representations do not
-inherit the current string-schema adapter.
+**MLIR execution foundation.** Main-only probes select typed callable bindings
+and one ordered invocation, structural types and explicit admission. Compiler
+analyses inspect actual SSA and control, with dependency-aware invalidation at
+the enclosing isolated scope. The catalog describes typed contracts; selected
+consumer profiles and independent meanings remain distinct responsibilities.
+Review profile membership, unsupported operations and payload schemas before
+replacing hardcoded export selection. Publish each schema change before its
+producer/reader migration. Remove the executable wrappers and string-schema
+verification; this precedes represented execution.
 
-**STARK support.** Settle AIR asset ownership before introducing encodings;
+**STARK support.** First resolve FRI reuse at the logical protocol boundary.
+Compare a common commit/query component with explicit first-layer claim and
+opening-layout contracts against the existing specialized STARK path. Require
+authentication, query alignment, transcript order and DEEP binding to survive;
+sharing only a fold function is insufficient. Select one shared implementation
+when those obligations and costs are satisfied, while keeping realization
+layouts explicit. The formal flagship target is the realized compiled verifier;
+native compilation still reaches bytes and execution. Fiat–Shamir and commitment
+realization require their full independent Lean checks. Neither formal STARK
+operation lowering nor a formal byte reader is a gate for these IR units.
+
+Settle AIR asset ownership before introducing encodings;
 consume one definition throughout the later Constraint migration. Preserve
 extension basis, row/leaf ordering, public layout, block draws and actual
 acceptance dependence. Exercise one oracle-level argument under ideal,

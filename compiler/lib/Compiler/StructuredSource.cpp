@@ -12,6 +12,7 @@
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
+#include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Operations.h"
@@ -226,26 +227,23 @@ Expected<json::Value> encodeSort(Type type, UsedIdentities &used,
     return json::Array{"sequence", std::move(*element)};
   }
   if (auto product = dyn_cast<data::VariantType>(type)) {
-    auto descriptor = decodeVariant(product.getDescriptor());
-    if (!descriptor || descriptor->alternatives.size() != 1)
+    if (product.getAlternatives().size() != 1)
       return error("structured-source-product");
-    const auto &constructor = descriptor->alternatives.front();
-    std::string identity = printJson(descriptor->nominal);
-    if (identity.size() > 512 || constructor.label.size() > 512 ||
-        constructor.payload.size() > signatureLimit)
+    auto constructor = product.getAlternatives().front();
+    std::string identity =
+        printJson(data::exportVariantIdentity(product.getIdentity()));
+    auto label = constructor.getLabel().getValue();
+    if (identity.size() > 512 || label.size() > 512 ||
+        constructor.getPayload().size() > signatureLimit)
       return error("structured-source-limit");
     json::Array fields;
-    for (const auto &spelling : constructor.payload) {
-      auto bound = parseBoundType(spelling, false);
-      if (!bound)
-        return bound.takeError();
-      auto component = encodeSort(decodeBoundType(type.getContext(), *bound),
-                                  used, depth + 1);
+    for (auto type : constructor.getPayload()) {
+      auto component = encodeSort(type, used, depth + 1);
       if (!component)
         return component.takeError();
       fields.push_back(std::move(*component));
     }
-    return json::Array{"product", std::move(identity), constructor.label,
+    return json::Array{"product", std::move(identity), label,
                        std::move(fields)};
   }
   if (auto service = dyn_cast<protocol_ir::ServiceReferenceType>(type)) {

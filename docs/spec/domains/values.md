@@ -30,7 +30,7 @@ a quotient or representation relation states that relation explicitly.
 
 ## Native MLIR value owners
 
-Data owns `!data.variant<descriptor>`, the exact nominal sum and its ordered
+Data owns structural `!data.variant` types, with nominal identity attributes and ordered
 logical payload types. Runtime owns `!runtime.capability<kind>` and
 `!runtime.represented<logical, representation, [children]>`. The latter retains
 the logical type, exact installed representation and any selected child

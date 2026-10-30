@@ -5,7 +5,7 @@ from pathlib import Path
 from cases import case, counted
 from commands import Commands
 from tools import records
-from variant_codec import descriptor
+from variant_types import variant as descriptor
 
 commands = Commands(records())
 source = (Path(__file__).parent / 'fixtures/structured-source/aggregate-fold.mlir').read_text()
@@ -51,7 +51,7 @@ for name, before, after in [
 with case('multi constructor variants require a separate admitted profile'):
     new = descriptor(['query', 'bls12-381.fr'], [('value', ['bool', 'field:bls12-381.fr']), ('none', [])])
     # A valid unused declaration still belongs to whole-unit admission.
-    unused = f'func.func private @unused(%x:!data.variant<{json.dumps(new)}>)->!data.variant<{json.dumps(new)}> {{ return %x : !data.variant<{json.dumps(new)}> }}'
+    unused = f'func.func private @unused(%x:{new})->{new} {{ return %x : {new} }}'
     export(source.replace('  func.func private @make', unused + '\n  func.func private @make'),
            'structured-source-product')
 

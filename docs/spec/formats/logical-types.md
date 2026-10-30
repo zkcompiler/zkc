@@ -64,8 +64,19 @@ unknown constructors, inconsistent argument kinds and duplicate alternatives
 refuse. No fallback parser accepts a printed MLIR type or the old hex descriptor
 where a structured Type is required.
 
-Data.Value and other compiler-only layout carriers must expose their existing
-logical schema as typed attributes internally. They are not given a public
+Data.Value and other compiler-only layout carriers expose their existing
+logical schema as typed attributes internally. `data.layout` retains the schema
+kind, nominal identity digest, display name, custody and construction flags,
+Copy/Drop permissions, ordered `data.layout_field` children, ordered
+`data.layout_alternative` payloads, and actual MLIR leaf types. Field attributes
+retain names, offsets and child layouts; alternatives retain names and fields.
+Empty products and empty alternative payloads remain explicit in the structure.
+Generic attribute/type traversal visits the children and native leaves. Formation
+checks shape and bounded traversal; it does not grant source construction or
+native installation authority. Display text is retained for source comparison,
+never parsed to reconstruct a type. The external Entry schema keeps its existing
+version-zero grammar; its import is a boundary conversion, not an internal
+string-schema parser. They are not given a public
 type case by this format. A consumer either lowers them through their owning
 logical-layout contract or refuses export; it cannot replace them with an opaque
 string. Physical representation, ordered children and byte layout remain the

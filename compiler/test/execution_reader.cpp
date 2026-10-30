@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/VariantFixture.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -257,8 +258,9 @@ int main() {
       {"ExecutionChoice",
        {{"left", {"field:koala-bear"}}, {"right", {"field:koala-bear"}}}});
   require(bool(variant), "variant fixture descriptor refused");
-  auto matching = change(source, "module {",
-                         "!V = !data.variant<\"" + *variant + "\">\nmodule {");
+  auto matching =
+      change(source, "module {",
+             "!V = " + zkc::test::variantAssembly(*variant) + "\nmodule {");
   begin = matching.find("    %tested = \"exec.test\"");
   end = matching.find("  ^yes:", begin);
   require(begin != std::string::npos && end != std::string::npos,

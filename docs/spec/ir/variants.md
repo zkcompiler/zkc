@@ -56,6 +56,17 @@ variant alternatives. Scoped adaptation uses `exec.variant` and a
 single-arm `exec.match` with a charged identity completion; mathematical adaptation uses
 `data.make` and one `data.get` per ordinary leaf.
 
+## MLIR representation
+
+`!data.variant` stores `#data.identity` and an ordered list of
+`#data.alternative` attributes. Identities are tagged atom/tuple trees, and each
+alternative contains its label and native MLIR payload types. Generic subelement
+walking and type replacement can inspect those children. Identity and alternative
+order remain part of uniquing; a generic replacement mechanism supplies no law
+that permits changing a nominal type. Internal construction and projection compare
+the actual payload types. The former descriptor-string assembly is not accepted.
+Portable serialization below remains an external boundary with its own limits.
+
 ## Portable representation
 
 Logical type spelling is `variant:H`, where `H` is lowercase hexadecimal of

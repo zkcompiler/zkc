@@ -1,4 +1,3 @@
-#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -94,25 +93,23 @@ LogicalResult VariantOp::verify() {
   return success();
 }
 LogicalResult MatchOp::verify() {
-  auto bound = protocol::encodeBoundType(
-      getInput().getType(),
-      isa<runtime::RepresentedType>(getInput().getType()));
-  if (!bound) {
-    llvm::consumeError(bound.takeError());
-    return refuse(*this, "variant dispatch input type");
-  }
-  auto descriptor = protocol::decodeVariant("variant:" + bound->identity);
-  if (getSite().empty() || bound->kind != "variant" || !descriptor ||
-      getArms().size() != descriptor->alternatives.size() ||
+  Type logical = getInput().getType();
+  if (auto represented = dyn_cast<runtime::RepresentedType>(logical))
+    logical = represented.getLogical();
+  auto variant = dyn_cast<data::VariantType>(logical);
+  if (getSite().empty() || !variant ||
+      getArms().size() != variant.getAlternatives().size() ||
       getAlternatives().size() != getArms().size() ||
       getStopped()->getNumArguments() != 1 ||
       !isa<StopType>(getStopped()->getArgument(0).getType()) ||
       !admitted(getCaptures().getTypes(), {getInput().getType()}))
     return refuse(*this, "variant dispatch alternatives or failure edge");
-  for (auto [i, arm] : llvm::enumerate(descriptor->alternatives)) {
-    if (cast<StringAttr>(getAlternatives()[i]).getValue() != arm.label)
+  for (auto [i, arm] : llvm::enumerate(variant.getAlternatives())) {
+    if (cast<StringAttr>(getAlternatives()[i]).getValue() !=
+        arm.getLabel().getValue())
       return refuse(*this, "variant dispatch must preserve declaration order");
-    auto types = data::variantPayloadTypes(getInput().getType(), arm.label);
+    auto types = data::variantPayloadTypes(getInput().getType(),
+                                           arm.getLabel().getValue());
     if (!types) {
       llvm::consumeError(types.takeError());
       return refuse(*this, "variant dispatch payload types");
