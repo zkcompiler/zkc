@@ -21,6 +21,10 @@ std::optional<NativeTypePolicy> nativeTypePolicy(const BoundType &);
 /// this rule excludes physical representations, keys, services and custody.
 /// Recursive work shares the supplied native type budget.
 enum class RelationData { Supported, Unsupported, Limit };
+/// Atomic constructors in the closed immutable relation-data profile. Native
+/// and neutral callers check formation and recurse over all structural children
+/// separately. Copyability alone does not grant membership.
+bool logicalRelationAtom(llvm::StringRef constructor);
 RelationData logicalRelationData(const BoundType &, TypeParseBudget &,
                                  unsigned depth = 0);
 } // namespace zkc::protocol

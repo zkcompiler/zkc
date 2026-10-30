@@ -3,6 +3,7 @@
 #include "support/VariantFixture.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Commitment/IR/CommitmentDialect.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -167,6 +168,88 @@ relation.declare @predicate {
                     std::string::npos,
             "structured identity collision accepted");
   }
+  // Native declaration consistency does not depend on the executable type
+  // codec's smaller nesting profile. Export still applies that boundary.
+  std::string deep = fieldType;
+  for (unsigned i = 0; i < 12; ++i)
+    deep = "!data.sequence<" + deep + ">";
+  auto deepLeft = parse(schema(deep), context);
+  auto deepRight = parse(schema(deep), otherContext);
+  require(deepLeft && deepRight &&
+              succeeded(relation::verifyDeclarationConsistency(
+                  {deepLeft->getOperation(), deepRight->getOperation()})),
+          "native relation admission depended on byte nesting limits");
+  if (deepLeft) {
+    auto declaration = *deepLeft->getOps<relation::DeclareOp>().begin();
+    auto bytes = protocol::encodeBoundType(
+        declaration.getSignature().getInput(0), false);
+    require(!bytes, "native relation admission weakened byte export limits");
+    if (!bytes)
+      llvm::consumeError(bytes.takeError());
+  }
+  auto nominal = [&](bool nested, bool reverse) {
+    llvm::json::Value identity =
+        nested ? llvm::json::Value(llvm::json::Array{
+                     "Family", llvm::json::Array{"Field", "koala-bear"}})
+               : llvm::json::Value(
+                     llvm::json::Array{"Family", "Field", "koala-bear"});
+    std::vector<protocol::VariantAlternative> arms{{"None", {}},
+                                                   {"Some", {"index"}}};
+    if (reverse)
+      std::reverse(arms.begin(), arms.end());
+    auto encoded = protocol::encodeVariant({std::move(identity), arms});
+    require(bool(encoded), "structured nominal fixture refused");
+    return zkc::test::variantAssembly(*encoded);
+  };
+  auto nominalLeft = parse(schema(nominal(true, false)), context);
+  auto nominalRight = parse(schema(nominal(true, false)), otherContext);
+  require(nominalLeft && nominalRight &&
+              succeeded(relation::verifyDeclarationConsistency(
+                  {nominalLeft->getOperation(), nominalRight->getOperation()})),
+          "equal structured nominal identities refused across contexts");
+  for (auto changed : {nominal(false, false), nominal(true, true)}) {
+    auto other = parse(schema(changed), otherContext);
+    require(nominalLeft && other &&
+                failed(relation::verifyDeclarationConsistency(
+                    {nominalLeft->getOperation(), other->getOperation()})),
+            "identity tree shape or alternative order was erased");
+  }
+  // Repetition must count expanded occurrences even when storage is uniqued.
+  auto bounded = parse(declaration, context);
+  auto boundedOp = *bounded->getOps<relation::DeclareOp>().begin();
+  auto identity = data::IdentityAttr::get(
+      &context, ArrayAttr::get(&context, {StringAttr::get(&context, "atom"),
+                                          StringAttr::get(&context, "Wide")}));
+  llvm::SmallVector<mlir::Type> leaves(512, op.getSignature().getInput(0));
+  auto arm = data::AlternativeAttr::get(
+      &context, StringAttr::get(&context, "Record"), leaves);
+  auto wide = data::VariantType::get(&context, identity, {arm});
+  auto signature = [&](mlir::Type type, unsigned count) {
+    llvm::SmallVector<mlir::Type> inputs(count, type);
+    llvm::SmallVector<Attribute> purposes(
+        count, StringAttr::get(&context, "statement"));
+    boundedOp->setAttr("signature",
+                       TypeAttr::get(FunctionType::get(
+                           &context, inputs, {IntegerType::get(&context, 1)})));
+    boundedOp->setAttr("purposes", ArrayAttr::get(&context, purposes));
+    refusal.clear();
+    return boundedOp.verify();
+  };
+  require(succeeded(signature(wide, 2)), "bounded signature refused");
+  require(failed(signature(wide, 600)) &&
+              refusal.find("relation-declaration-signature") !=
+                  std::string::npos,
+          "native relation signature reset its budget per input");
+  require(failed(signature(IntegerType::get(&context, 1), 100001)),
+          "relation input count limit was lost");
+  auto nonlogical =
+      data::AlternativeAttr::get(&context, StringAttr::get(&context, "Record"),
+                                 {IntegerType::get(&context, 64)});
+  auto malformed = data::VariantType::get(&context, identity, {nonlogical});
+  require(failed(signature(malformed, 1)) &&
+              refusal.find("relation-declaration-signature") !=
+                  std::string::npos,
+          "directly constructed malformed native input was admitted");
   for (const auto &type : std::vector<std::string>{
            "i64", "tensor<2x2x" + fieldType + ">", "memref<2xi1>",
            "!algebra.fixed_vector<" + fieldType + ", 3>",

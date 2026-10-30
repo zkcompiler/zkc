@@ -47,6 +47,11 @@ oracle associations and construction-state permissions now inspect native types
 directly. Service authority and role availability remain separate checks; oracle
 shape bounds and complete row types are retained. Target availability and
 byte-publication limits remain separate checks. Native
+relation declarations compare complete native schemas across contexts, including
+nominal identity trees and every ordered alternative, without a type-codec round
+trip. Relation signatures and finite-domain signatures share structural work
+limits across all inputs. Relation-data eligibility remains its explicit closed
+profile, separately from Copy/Drop. Native
 construction callbacks and logical signature derivation now use these typed
 arguments directly, including complete-Type ports, projections and numerical
 masks. Runtime bindings now store typed static arguments and the actual callable

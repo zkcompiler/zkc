@@ -252,6 +252,10 @@ including inactive alternatives. A sequence requires both permissions from its
 element. This check does not install a codec or physical representation.
 Structural inspection bounds expanded occurrences, including repeated uniqued
 children, to 200000, depth below 64, and attribute string bytes to 64 MiB.
+Complete relation and finite-domain signatures share these limits across their
+inputs or items. Relation consistency compares native constructors, typed
+arguments and nominal identity/alternative trees across contexts; its immutable
+data profile is checked separately from general logical formation and Copy/Drop.
 Runtime resource types store an explicit `CapabilityKind` enum and a separate
 nominal identity. Randomness, nonce, transcript and resource-slot tags are
 structurally distinct even when identities coincide. Transcript consumers use

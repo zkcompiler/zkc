@@ -1,6 +1,7 @@
 #ifndef ZKC_DIALECT_TYPEFORMATION_H
 #define ZKC_DIALECT_TYPEFORMATION_H
 #include "mlir/IR/Diagnostics.h"
+#include "mlir/IR/TypeRange.h"
 #include "mlir/IR/Types.h"
 #include "zkc/Interfaces/CatalogType.h"
 namespace zkc {
@@ -16,6 +17,13 @@ mlir::LogicalResult
 verifyLogicalType(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
                   mlir::Type type,
                   LogicalTypePermissions *permissions = nullptr);
+/// Form a complete signature with shared expanded structural limits, including
+/// repeated occurrences of uniqued types. The returned permissions hold for
+/// every value in the range. All types must belong to one MLIR context.
+mlir::LogicalResult
+verifyLogicalTypes(llvm::function_ref<mlir::InFlightDiagnostic()> emit,
+                   mlir::TypeRange types,
+                   LogicalTypePermissions *permissions = nullptr);
 /// Verify a represented value's exact logical instance and ordered physical
 /// children directly. Does not select defaults, authorize an implementation,
 /// or impose byte-profile limits. Also used before interning the parent.

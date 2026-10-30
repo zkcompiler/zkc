@@ -302,16 +302,28 @@ struct Formation {
 LogicalResult verifyLogicalType(llvm::function_ref<InFlightDiagnostic()> emit,
                                 Type type,
                                 LogicalTypePermissions *permissions) {
+  return verifyLogicalTypes(emit, TypeRange{type}, permissions);
+}
+LogicalResult verifyLogicalTypes(llvm::function_ref<InFlightDiagnostic()> emit,
+                                 TypeRange types,
+                                 LogicalTypePermissions *permissions) {
   // Standard MLIR subelement traversal includes inactive alternatives and
   // repeated uniqued children. This is a structural allowance, not a byte cap.
   auto diagnostic = [&] {
     return diagnostics::emit(emit(), "logical-type-formation");
   };
-  if (failed(data::detail::verifyStructure(diagnostic, {}, {type})))
+  SmallVector<Type> roots(types);
+  if (failed(data::detail::verifyStructure(diagnostic, {}, roots)))
     return failure();
   LogicalTypePermissions result;
-  if (failed(Formation{diagnostic}.inspect(type, 0, result)))
-    return failure();
+  Formation formation{diagnostic};
+  for (Type type : types) {
+    LogicalTypePermissions value;
+    if (failed(formation.inspect(type, 0, value)))
+      return failure();
+    result.copy &= value.copy;
+    result.drop &= value.drop;
+  }
   if (permissions)
     *permissions = result;
   return success();

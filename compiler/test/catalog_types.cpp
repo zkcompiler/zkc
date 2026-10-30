@@ -204,5 +204,31 @@ int main() {
     require(failed(data::VariantType::verify(emit, identity, {arm})),
             "uniquing bypassed expanded work limits");
   });
+  cases.run("logical signature formation shares limits and permissions", [&] {
+    LogicalTypePermissions permissions;
+    require(succeeded(verifyLogicalTypes(emit, {}, &permissions)) &&
+                permissions.copy && permissions.drop,
+            "empty logical signature changed permissions");
+    auto rng = runtime::CapabilityType::get(
+        &context, runtime::CapabilityKind::Random, "bls12-381.fr");
+    require(succeeded(verifyLogicalTypes(emit, {rng, field}, &permissions)) &&
+                !permissions.copy && !permissions.drop,
+            "later copyable input reset aggregate permissions");
+    auto wide = variant(SmallVector<Type>(512, field));
+    require(succeeded(verifyLogicalTypes(emit, {wide, wide})),
+            "bounded repeated signature refused");
+    SmallVector<Type> inputs(600, wide);
+    codes.clear();
+    require(failed(verifyLogicalTypes(emit, inputs)) &&
+                llvm::is_contained(codes, "logical-type-formation"),
+            "signature reset its expanded budget per input");
+    require(succeeded(data::DomainType::verify(emit, {wide, wide})) &&
+                failed(data::DomainType::verify(emit, inputs)),
+            "finite domain reset its expanded budget per item");
+    MLIRContext foreign;
+    require(failed(verifyLogicalTypes(
+                emit, {builder.getI1Type(), IntegerType::get(&foreign, 1)})),
+            "signature admitted types from different contexts");
+  });
   return cases.result();
 }

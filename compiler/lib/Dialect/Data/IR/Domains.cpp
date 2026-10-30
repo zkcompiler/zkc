@@ -47,13 +47,11 @@ LogicalResult DomainType::verify(function_ref<InFlightDiagnostic()> emit,
                                  ArrayRef<Type> items) {
   if (items.empty() || items.size() > 1024)
     return emit() << "expected between one and 1024 domain items";
-  for (auto type : items) {
-    LogicalTypePermissions permissions;
-    if (failed(verifyLogicalType(emit, type, &permissions)))
-      return failure();
-    if (!permissions.copy || !permissions.drop)
-      return emit() << "domain items must permit Copy and Drop";
-  }
+  LogicalTypePermissions permissions;
+  if (failed(verifyLogicalTypes(emit, items, &permissions)))
+    return failure();
+  if (!permissions.copy || !permissions.drop)
+    return emit() << "domain items must permit Copy and Drop";
   return success();
 }
 LogicalResult DomainOp::verifyRegions() {
@@ -64,17 +62,20 @@ LogicalResult DomainOp::verifyRegions() {
       getBody().front().getArgumentTypes() != signature.getInputs() ||
       (*this)->getAttrs().size() != 3)
     return refuse(*this, "expected private isolated typed domain declaration");
-  for (auto type : signature.getInputs()) {
-    LogicalTypePermissions permissions;
-    if (failed(verifyLogicalType([&] { return emitOpError(); }, type,
-                                 &permissions)))
-      return failure();
-    if (!permissions.copy || !permissions.drop)
-      return refuse(*this, "domain arguments must be native Copy/Drop values");
-  }
   if (signature.getNumInputs() > 1024 ||
       getBody().front().getOperations().size() > 4096)
     return refuse(*this, "domain declaration exceeds bounded formation work");
+  LogicalTypePermissions permissions;
+  if (failed(verifyLogicalTypes(
+          [&] {
+            auto diagnostic = emitOpError();
+            diagnostic.abandon();
+            return diagnostic;
+          },
+          signature.getInputs(), &permissions)))
+    return refuse(*this, "domain arguments exceed native logical formation");
+  if (!permissions.copy || !permissions.drop)
+    return refuse(*this, "domain arguments must be native Copy/Drop values");
   auto &block = getBody().front();
   auto yield =
       block.empty() ? DomainYieldOp() : dyn_cast<DomainYieldOp>(block.back());
