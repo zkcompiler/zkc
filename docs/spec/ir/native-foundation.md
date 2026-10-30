@@ -272,6 +272,16 @@ queried types; repeated queries may reuse immutable type facts. It neither
 constructs canonical spellings nor uses byte-parser depth as a mathematical
 permission test. Publication still enforces its independent encoding limits.
 
+Protocol formation reads the same native type facts. Oracle table kinds retain
+native row types and derive native Data/Query/Answer associations. The shared
+collection-constructor rule also drives the independent neutral reader;
+formation does not require that a native row fit the public byte grammar.
+Service methods carry typed logical declarations. Native query checks compare
+catalog applications and exact nominal identities; they do not encode actual
+ports to compare strings. Construction state and codec-record slots use native
+formation and Copy/Drop permissions. Service authority, query availability,
+construction ownership and publication remain separate checks.
+
 ## Formation, admission and invalidation
 
 Ordinary MLIR verification establishes structural formation, region/operand

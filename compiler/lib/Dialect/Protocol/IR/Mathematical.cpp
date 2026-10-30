@@ -7,7 +7,6 @@
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
-#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
@@ -16,8 +15,10 @@
 #include "zkc/Dialect/Protocol/Contracts.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Protocol/Origins.h"
+#include "zkc/Dialect/Protocol/Services.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
@@ -561,26 +562,16 @@ public:
                                           .getContract(),
                                       query.getMethod());
           int owner = role(query.getOwnerAttr());
-          auto spelling = [](Type type) {
-            auto logical = protocol::encodeBoundType(type, false);
-            if (!logical) {
-              consumeError(logical.takeError());
-              return std::string();
-            }
-            return logical->spelling();
-          };
           if (!reference || reference.getOwner() != &block || owner < 0 ||
               !env.values.lookup(reference).test(owner) ||
               env.values.lookup(reference).count() != 1 || !method ||
-              query.getInputs().size() != method->inputs.size() ||
-              query.getNumResults() != 1 ||
-              spelling(query.getResult(0).getType()) != method->output ||
+              !protocol_ir::matchesServiceSignature(
+                  query.getInputs().getTypes(), query.getResultTypes(),
+                  *method) ||
               any_of(
-                  zip(query.getInputs(), method->inputs),
-                  [&](auto pair) {
-                    auto [input, expected] = pair;
-                    return spelling(input.getType()) != expected ||
-                           !env.values.lookup(input).test(owner);
+                  query.getInputs(),
+                  [&](Value input) {
+                    return !env.values.lookup(input).test(owner);
                   }))
             return refuse(op, "query requires its singleton owner and the "
                               "installed service signature");

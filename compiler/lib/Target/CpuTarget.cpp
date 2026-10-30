@@ -223,10 +223,7 @@ Error CpuTarget::checkService(StringRef contract) const {
   auto draw = serviceMethod(contract, "draw");
   if (!draw)
     return unavailable(contract);
-  auto logical = parseBoundType(draw->output, false);
-  if (!logical)
-    return logical.takeError();
-  auto physical = defaultRepresentation(*logical);
+  auto physical = defaultRepresentation(draw->output);
   if (!physical)
     return physical.takeError();
   return checkType(*physical);

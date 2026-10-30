@@ -315,25 +315,20 @@ class Admission {
             serviceMethod(def.services.at(query->port), query->method);
         if (!method || query->inputs.size() != method->inputs.size())
           return fail("service-query-signature");
-        auto port = [&](StringRef spelling) -> std::optional<Port> {
-          auto logical = parseBoundType(spelling, false);
-          if (!logical) {
-            consumeError(logical.takeError());
-            return {};
-          }
+        auto port = [&](BoundType logical) -> std::optional<Port> {
           if (physical) {
-            auto selected = defaultRepresentation(*logical);
+            auto selected = defaultRepresentation(logical);
             if (!selected) {
               consumeError(selected.takeError());
               return {};
             }
-            logical = std::move(selected);
+            logical = std::move(*selected);
           }
-          return Port{logical->spelling()};
+          return Port{logical.spelling()};
         };
         std::vector<Port> inputs, expected;
-        for (const auto &spelling : method->inputs) {
-          auto p = port(spelling);
+        for (const auto &type : method->inputs) {
+          auto p = port(type);
           if (!p)
             return fail("service-query-signature");
           expected.push_back(*p);

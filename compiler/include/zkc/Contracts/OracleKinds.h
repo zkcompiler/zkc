@@ -21,6 +21,10 @@ struct OracleKindSignature {
     return std::nullopt;
   }
 };
+/// Collection constructor for an admitted table row. Both native and neutral
+/// readers use this association; each independently checks row formation.
+llvm::StringRef
+oracleTableCollectionConstructor(llvm::StringRef rowConstructor);
 /// Check closed, typed kind arguments without depending on an IR or source
 /// representation. Frontend closure and IR formation share this definition.
 llvm::Expected<OracleKindSignature>

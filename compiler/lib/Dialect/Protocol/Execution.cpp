@@ -200,15 +200,10 @@ class ExecutionModelReader {
                   method = protocol::serviceMethod(contract.getValue(),
                                                    query.getMethod());
             }
-        auto expected = [&](StringRef spelling) -> std::string {
-          auto logical = protocol::parseBoundType(spelling, false);
-          if (!logical) {
-            llvm::consumeError(logical.takeError());
-            return {};
-          }
+        auto expected = [&](const BoundType &logical) -> std::string {
           if (!physical)
-            return logical->spelling();
-          auto selected = protocol::defaultRepresentation(*logical);
+            return logical.spelling();
+          auto selected = protocol::defaultRepresentation(logical);
           if (!selected) {
             llvm::consumeError(selected.takeError());
             return {};

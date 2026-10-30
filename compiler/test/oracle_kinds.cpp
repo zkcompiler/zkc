@@ -4,6 +4,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Contracts/OracleKinds.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolTypes.h"
 #include "zkc/Dialect/Registry.h"
 #include <limits>
@@ -168,6 +169,22 @@ int main() {
     require(!parseAttribute(
                 "#protocol.oracle_kind<\"table\", [" + nested + "]>", &context),
             "nested oracle row escaped logical type depth limits");
+  });
+  cases.run("native oracle formation is independent from byte depth", [&] {
+    Type row = IntegerType::get(&context, 1);
+    for (unsigned i = 0; i < 12; ++i)
+      row = zkc::data::SequenceType::get(&context, row);
+    auto instance = OracleKindAttr::getChecked(
+        [&] { return emitError(UnknownLoc::get(&context)); }, &context,
+        StringRef("table"), ArrayAttr::get(&context, {TypeAttr::get(row)}));
+    require(instance && instance.getAnswerType() == row &&
+                instance.getDataType() ==
+                    zkc::data::SequenceType::get(&context, row),
+            "oracle formation imposed the external type depth limit");
+    auto encoded =
+        zkc::protocol::encodeBoundType(instance.getDataType(), false);
+    require(!encoded, "native oracle formation weakened byte admission");
+    consumeError(encoded.takeError());
   });
   return cases.result();
 }

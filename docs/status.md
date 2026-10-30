@@ -42,8 +42,11 @@ exact installed dense layouts. Callable declarations and scoped execution
 operations use this same structural check, including values built directly by
 C++ clients. Installation patterns carry typed arguments and child layouts;
 native matching no longer serializes the caller's type. Finite-domain formation
-also uses native Copy/Drop permissions. Target availability and byte-publication
-limits remain separate checks. Native
+also uses native Copy/Drop permissions. Protocol service signatures, logical
+oracle associations and construction-state permissions now inspect native types
+directly. Service authority and role availability remain separate checks; oracle
+shape bounds and complete row types are retained. Target availability and
+byte-publication limits remain separate checks. Native
 construction callbacks and logical signature derivation now use these typed
 arguments directly, including complete-Type ports, projections and numerical
 masks. Runtime bindings now store typed static arguments and the actual callable

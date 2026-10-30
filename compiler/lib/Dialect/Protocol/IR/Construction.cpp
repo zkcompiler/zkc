@@ -1,11 +1,10 @@
 #include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/Services.h"
-#include "zkc/Contracts/TypeProperties.h"
-#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringSet.h"
@@ -88,11 +87,12 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
     auto type = dyn_cast<TypeAttr>(attr);
     if (!type)
       return fail("state slots must be types");
-    auto logical = encodeBoundType(type.getValue(), false);
-    if (!logical)
-      return logical.takeError();
+    LogicalTypePermissions permissions;
+    if (failed(verifyLogicalType([&] { return record.emitOpError(); },
+                                 type.getValue(), &permissions)))
+      return fail("state slot requires a formed logical type");
     if (plan.root == ConstructionPlan::Root::Local &&
-        (!duplicable(*logical) || !discardable(*logical)))
+        (!permissions.copy || !permissions.drop))
       return fail("source-created state requires Copy and Drop");
     auto policy = types.get(type.getValue());
     if (!policy || !policy->protocolPort)
@@ -119,7 +119,10 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
                                   plan.suite))
       return fail("host root requires the selected managed transcript state");
   }
-  auto bytes = decodeBoundType(record.getContext(), {"bytes", {}, {}});
+  auto bytes = constructLogicalType([&] { return record.emitOpError(); },
+                                    record.getContext(), {"bytes", {}});
+  if (!bytes)
+    return fail("construction requires a native Bytes owner");
   auto index = IntegerType::get(record.getContext(), 64, IntegerType::Unsigned);
   auto sharedInputs = [&](DenseI64ArrayAttr inputs,
                           SmallVectorImpl<unsigned> &ports,
@@ -170,11 +173,12 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
       auto slot = dyn_cast<TypeAttr>(attr);
       if (!slot)
         return fail("codec Record slots must be types");
-      auto logical = encodeBoundType(slot.getValue(), false);
-      if (!logical)
-        return logical.takeError();
+      LogicalTypePermissions permissions;
+      if (failed(verifyLogicalType([&] { return record.emitOpError(); },
+                                   slot.getValue(), &permissions)))
+        return fail("codec Record slot requires a formed logical type");
       auto policy = types.get(slot.getValue());
-      if (!duplicable(*logical) || !discardable(*logical) || !policy ||
+      if (!permissions.copy || !permissions.drop || !policy ||
           !policy->protocolPort)
         return fail("codec Record requires Copy and Drop protocol data");
       codec.record.push_back(slot.getValue());
