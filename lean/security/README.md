@@ -13,6 +13,11 @@ consumers with explicit experiment and resource assumptions.
 `Commitment.Opening` owns the reusable one-opening family used by joint hash-chain
 security. Declaration namespaces and theorem names are retained across moves.
 
+`Families.Stark` supplies strict constraint and interpolation quotient laws,
+uniform batching tests and typed out-of-domain sampling bounds. Its
+[mathematical contracts](../docs/spec/stark-components.md) state degree,
+distribution and field-size premises. It imports no optional ArkLib modules.
+
 `Examples.Subjects` contains the Schnorr, Schnorr AND, Chaum–Pedersen and Okamoto
 subjects. They and the maintained probability clients/tests are default targets.
 Libraries may not import these leaf subjects. The upstream VCVio module

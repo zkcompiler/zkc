@@ -1,5 +1,16 @@
 # Supported claims
 
+The [independent STARK components](spec/stark-components.md) prove strict
+constraint/DEEP quotient laws, uniform polynomial batching and typed OOD bounds.
+Optional ArkLib adapters reuse proved list-collision and quotienting bounds and
+the two-word affine-line unique-decoding result. A separate proved capacity bound
+also gives many-word power-batch distance preservation for a common target code,
+below the stated generalized Johnson radius, with an explicit ENNReal error and
+a typed common-degree quotient specialization. The general degree-corrected STIR
+combination theorem has a transitive admitted dependency and is excluded from
+the established roots. These are reusable mathematical components; compiled STARK composition,
+IR association, selected parameters and bounded-search provider correspondence remain separate obligations.
+
 The [explicit-table model](spec/table-relations.md) proves complete Boolean
 laws for finite masked membership and exact indexed reads, including duplicate
 and empty cases. Exact body equations and `FormulaLaw` proofs connect the
@@ -46,7 +57,12 @@ nominal simulation and independent reached-action coverage. The common printer
 checks the actual retained Schnorr, Chaum–Pedersen, Okamoto, SmallSumcheck,
 TwoSums and plain aggregate artifacts; a separate fixture covers two component
 applications under nested symbolic repeats. Source libraries and exact checked
-placements are shared. Distinct physical placements are checked separately.
+placements are shared. Explicit parameterized target-body families additionally
+reuse alignment and extent derivations across different physical offsets,
+caller scopes and occurrence contexts. Focused strict-mode roots cover nested
+repeats and retained current history; input read aliasing has a separate
+all-reply application consumer. Arbitrary closed-certificate transport and GKR
+adoption of these families remain outside this placement coverage.
 Public Fiat–Shamir reading and observation coherence follow from the same root
 certificate under the adapter's profile and no-local-service premises. These
 are correspondence results, not cryptographic property receipts or native

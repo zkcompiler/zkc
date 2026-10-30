@@ -3,6 +3,7 @@ module
 public import Zkc.Source.Structured.Template
 public import ZkcSecurity.Realizations.Sumcheck.SourcePairReduction
 public meta import ZkcTools.StructuredSource.Association
+public meta import ZkcTools.StructuredSource.PropertyInstallation
 
 @[expose] public section
 
@@ -73,16 +74,12 @@ theorem validator_invoke (ctx : ProtocolContext) (distinct : RosterDistinct ctx 
         (entryAt args (.there (.there (.there .here))))).bind fun out =>
           .done (staticMask 1 out (reductionSignature installation.reductionName).outputScopes
             (Operands.identity SumcheckVerifierBodies.reduceOutputs)) := by
-  apply installation.reduction.invoke 1 ctx distinct validatorPattern (by dsimp only [reductionSignature]; decide +kernel) args others
+  install_source_template installation.reduction using_pattern validatorPattern
   · cases args with | cons point rest => cases rest with | cons scalar rest =>
       cases rest with | cons count rest => cases rest with | cons service rest =>
         cases rest
         exact SumcheckReductionReference.body_reference model _ program.payload.linked
           (installation.validatorBodies model) _ _ ctx distinct point scalar count service
-  · dsimp only [reductionSignature]
-    decide +kernel
-  · dsimp only [reductionSignature]
-    decide +kernel
 
 def producerReduction (ctx : ProtocolContext) (args : Binders model producerPattern.scope) :=
   (SumcheckVerifierBodies.reduceBody installation.maximum).denote
@@ -99,9 +96,9 @@ theorem producer_invoke (ctx : ProtocolContext) (distinct : RosterDistinct ctx 0
       (producerPattern.fill model args others) =
       (producerReduction installation model ctx args).bind fun out =>
         .done (staticMask 0 out (reductionSignature installation.reductionName).outputScopes
-          (Operands.identity SumcheckVerifierBodies.reduceOutputs)) :=
-  installation.reduction.invoke 0 ctx distinct producerPattern (by dsimp only [reductionSignature]; decide +kernel) args others _ rfl
-    (by dsimp only [reductionSignature]; decide +kernel) (by dsimp only [reductionSignature]; decide +kernel)
+          (Operands.identity SumcheckVerifierBodies.reduceOutputs)) := by
+  install_source_template installation.reduction using_pattern producerPattern
+  rfl
 
 def one (ctx : ProtocolContext) (site : String)
     (raw : Option (List (model.Field field))) (scalar : Option (model.Field field))

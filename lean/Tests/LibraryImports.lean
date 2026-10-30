@@ -71,6 +71,7 @@ import Zkc.Construction.ConnectionRouting
 import Zkc.Construction.ConnectionStaticRoutes
 import Zkc.Construction.ConnectionSubstitution
 import Zkc.Construction.ConnectionTargetExtent
+import Zkc.Construction.ConnectionTargetPlacement
 import Zkc.Construction.ConnectionTargetPrefix
 import Zkc.Construction.ConnectionTranscript
 import Zkc.Construction.Context
@@ -523,6 +524,7 @@ import Tests.ConnectionLibrarySharing
 import Tests.ConnectionNestedApplications
 import Tests.ConnectionObservationPreparation
 import Tests.ConnectionPartialCertificate
+import Tests.ConnectionPlacementMetrics
 import Tests.ConnectionProfileCertificate
 import Tests.ConnectionProjectedRepeat
 import Tests.ConnectionRefusal
@@ -543,6 +545,10 @@ import Tests.ConnectionSharedLibrary
 import Tests.ConnectionSymbolicRepeat
 import Tests.ConnectionSyntax
 import Tests.ConnectionSyntaxImports
+import Tests.ConnectionTargetPlacement
+import Tests.ConnectionTargetPlacementControls
+import Tests.ConnectionTargetPlacementHistory
+import Tests.ConnectionTargetPlacementRoots
 import Tests.Constructed.Generate
 import Tests.Constructed
 import Tests.ConstructedDiagnostics
@@ -1252,6 +1258,7 @@ import ZkcTools.StructuredSource.Bindings.RoleViews
 import ZkcTools.StructuredSource.Bounds
 import ZkcTools.StructuredSource.Composition
 import ZkcTools.StructuredSource.Constructed
+import ZkcTools.StructuredSource.CountedShape
 import ZkcTools.StructuredSource.Discovery.Address
 import ZkcTools.StructuredSource.Discovery.Json
 import ZkcTools.StructuredSource.Discovery.Main
@@ -1271,6 +1278,7 @@ import ZkcTools.StructuredSource.OpenValues
 import ZkcTools.StructuredSource.OriginalRoot
 import ZkcTools.StructuredSource.Presentation.Syntax
 import ZkcTools.StructuredSource.Presentation
+import ZkcTools.StructuredSource.PropertyInstallation
 import ZkcTools.StructuredSource.ReferenceInstallation
 import ZkcTools.StructuredSource.ReferenceLaws
 import ZkcTools.StructuredSource.Root
@@ -1288,4 +1296,5 @@ import ZkcTools.ConstructionBindings.LibraryPlan
 import ZkcTools.ConstructionBindings.Readback
 import ZkcTools.ConstructionBindings.Root
 import ZkcTools.ConstructionBindings.Syntax
+import ZkcTools.ConstructionBindings.TargetPlacement
 import ZkcTools.ConstructionBindings.ViewSyntax

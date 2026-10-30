@@ -354,6 +354,18 @@ def entries : List Entry := [
   ⟨"event.committed-false-acceptance", .event, some `ZkcSecurity.Commitment.FalseAcceptance,
     "The verifier accepts and the statement is false for its tables extracted at the \
     checkpoint of one of its transcript queries."⟩,
+  ⟨"event.committed-pinned-failure", .event,
+    some `ZkcSecurity.Commitment.Application.PinnedFailure,
+    "Acceptance with the application's bad-table predicate at its fixed transcript key, \
+    using extraction before the first query by either party."⟩,
+  ⟨"event.adaptive-paths-far", .event,
+    some `ZkcSecurity.Commitment.AdaptiveOpening.FarPaths,
+    "At least the requested fraction of starts reject after the complete adaptive walk \
+    on one fixed total table."⟩,
+  ⟨"event.adaptive-opening-error", .event,
+    some `ZkcSecurity.Commitment.AdaptiveOpening.ApplicationError,
+    "Actual acceptance while the normalized, default-completed checkpoint extraction \
+    has the requested fraction of rejecting adaptive paths."⟩,
   ⟨"event.unmapped-policy", .event, some `ZkcSecurity.FiatShamir.StatementBinding.Unmapped,
     "A policy statement denotes no model statement."⟩,
   ⟨"event.domain-false-statement", .event,
