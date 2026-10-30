@@ -1,7 +1,7 @@
 module
 
-public import ZkcSecurity.Examples.Generated.Components.SmallSumcheckCompleteness
-public import ZkcSecurity.Examples.Generated.Components.TwoSumsCompleteness
+public import ZkcSecurityExamples.Generated.Components.SmallSumcheckCompleteness
+public import ZkcSecurityExamples.Generated.Components.TwoSumsCompleteness
 public import TestsSecurity.SumcheckSubjectInputs
 
 @[expose] public section

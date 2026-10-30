@@ -33,7 +33,7 @@ def check(selected, lake):
     packages = [PACKAGES[name] for name in select_packages(selected)]
     for name in select_packages(selected):
         check_closure(name, PACKAGES[name][0])
-    pins, graph, source_hashes = {}, {}, {}
+    pins, graph, source_hashes, import_edges = {}, {}, {}, {}
     import hashlib
     toolchain = (ROOT / 'lean-toolchain').read_text()
     for directory, families in packages:
@@ -68,9 +68,10 @@ def check(selected, lake):
             for path in sorted(files):
                 source = path.read_text()
                 owner = '.'.join(path.relative_to(directory).with_suffix('').parts)
-                graph[owner] = headers.imports(source, path)
+                import_edges[owner] = headers.details(source, path)
+                graph[owner] = [entry['module'] for entry in import_edges[owner]]
                 source_hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
-                if owner.startswith(('Zkc.', 'ZkcExamples.', 'ZkcSecurity.', 'ZkcArkLib.')):
+                if owner.startswith(('Zkc.', 'ZkcExamples.', 'ZkcSecurity.', 'ZkcSecurityTools.', 'ZkcSecurityExamples.', 'ZkcArkLib.', 'ZkcArkLibExamples.')):
                     if not (source.startswith('module\n')):
                         raise AssertionError(f'{path}: expected module-system source')
     ownership = []
@@ -91,7 +92,8 @@ def check(selected, lake):
     check_owned_imports(graph)
     dependencies = audit_graph(graph, [family for _, families in packages for family in families])
     return {'status': 'pass', 'toolchain': toolchain.strip(), 'packages': len(packages),
-            'modules': len(graph), 'dependencies': dependencies, 'pins': pins, 'source_sha256': source_hashes}
+            'modules': len(graph), 'dependencies': dependencies, 'pins': pins,
+            'source_sha256': source_hashes, 'import_edges': import_edges}
 
 
 def main():

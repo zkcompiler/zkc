@@ -1,9 +1,9 @@
-import ZkcSecurity.Commitment.Soundness
-import ZkcSecurity.Commitment.Merkle
-import ZkcSecurity.Commitment.HashedLeaves
-import ZkcSecurity.Examples.CommittedOpeningBound
-import ZkcSecurity.Commitment.Opening
-import ZkcArkLib.Examples.CommittedFri
+import ZkcSecurity.Transformations.Commitment.Soundness
+import ZkcSecurity.Transformations.Commitment.Merkle
+import ZkcSecurity.Transformations.Commitment.HashedLeaves
+import ZkcSecurityExamples.CommittedOpeningBound
+import ZkcSecurity.Transformations.Commitment.Opening
+import ZkcArkLibExamples.CommittedFri
 import ZkcTools.DeclarationAudit
 
 /-! Axiom closures of the commitment bridge: every declaration of its modules, including
@@ -28,7 +28,7 @@ the theorems below, passes the declaration audit.
 
 run_cmd do
   ZkcTools.DeclarationAudit.check
-    [`ZkcSecurity.Commitment, `ZkcSecurity.Examples.CommittedOpening,
-     `ZkcSecurity.Examples.CommittedOpeningBound, `ZkcSecurity.Commitment.Opening,
-     `ZkcArkLib.Examples.CommittedFri]
+    [`ZkcSecurity.Transformations.Commitment, `ZkcSecurityExamples.CommittedOpening,
+     `ZkcSecurityExamples.CommittedOpeningBound, `ZkcSecurity.Transformations.Commitment.Opening,
+     `ZkcArkLibExamples.CommittedFri]
     "COMMITMENT-BRIDGE-AUDIT-PASS"

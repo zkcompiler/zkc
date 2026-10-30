@@ -1,10 +1,10 @@
 module
 
 public import TestsSecurity.SourceAdmission.Migration
-public import ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI
-public import ZkcSecurity.Examples.Generated.Components.TwoSumsABI
-public import ZkcSecurity.Examples.Components.SmallSumcheckFormula
-public import ZkcSecurity.Examples.Components.TwoSumsFormula
+public import ZkcSecurityExamples.Generated.Components.SmallSumcheckABI
+public import ZkcSecurityExamples.Generated.Components.TwoSumsABI
+public import ZkcSecurityExamples.Components.SmallSumcheckFormula
+public import ZkcSecurityExamples.Components.TwoSumsFormula
 
 @[expose] public section
 noncomputable section

@@ -1,6 +1,6 @@
 module
 
-public import ZkcExamples.Structured.SumcheckProverPrelude
+public import Zkc.Protocols.Sumcheck.Source.ProverPrelude
 public import ZkcExamples.Structured.SumcheckSourceVerifier
 public import ZkcExamples.Structured.SumcheckSourceContracts
 public import ZkcExamples.Structured.SumcheckReduceVerifier

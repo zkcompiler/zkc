@@ -1,5 +1,5 @@
-import ZkcSecurity.FiatShamir.SampledCompiled
-import ZkcSecurity.Domains.PrimeField
+import ZkcSecurity.Bindings.Transcript.SampledCompiled
+import ZkcSecurity.Bindings.Models.PrimeField
 
 /-! Controls for the actual joint ideal handler. The finite field is an ideal
 interpretation of the matching nominal `f7` contract, not native entropy.

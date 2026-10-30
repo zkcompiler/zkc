@@ -1,6 +1,6 @@
 module
 
-import ZkcSecurity.FiatShamir.OriginalReadback
+import ZkcSecurity.Bindings.Transcript.OriginalReadback
 
 /-! Controls at the original/readback seam. Existing InterleavedReadback tests
 cover unequal query histories/origins and missing typed replies; existing

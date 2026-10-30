@@ -1,4 +1,4 @@
-import ZkcSecurity.Realizations.Oracle.SourceBoundPermutation
+import ZkcSecurity.Bindings.Oracle.SourceBoundPermutation
 import Zkc.Source.Structured.ComponentChecking
 import Zkc.Source.Structured.UnitViews
 import Mathlib.Algebra.Ring.Int.Defs

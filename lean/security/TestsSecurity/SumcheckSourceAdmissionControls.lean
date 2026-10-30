@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Examples.RootProperties.SmallSumcheck.Soundness
+public import ZkcSecurityExamples.RootProperties.SmallSumcheck.Soundness
 
 /-! Checked boundary controls for the actual shared checker and optional Math
 helper. Raw lists have no shape or length premise in the large-dimension case.

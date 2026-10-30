@@ -204,7 +204,7 @@ def claims_module(subject, bound):
     """Only data and generic Lean construction calls; never print a Prop."""
     namespace = subject.get("lean", "namespace")
     require(namespace, f"{subject.name}: source receipts need lean.namespace")
-    imports = ["ZkcSecurity.Tools.ClaimConstruction", *subject.get("lean", "imports", [])]
+    imports = ["ZkcSecurityTools.ClaimConstruction", *subject.get("lean", "imports", [])]
     source = HEADER.format(imports="\n".join(f"public import {name}" for name in dict.fromkeys(imports))
                            + "\n" + "\n".join(f"public meta import {name}" for name in subject.get("lean", "imports", [])),
                            doc="Generated source requests and typed receipts. Regenerate with "

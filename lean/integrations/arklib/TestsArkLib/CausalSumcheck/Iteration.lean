@@ -1,4 +1,4 @@
-import ZkcArkLib.Examples.CausalSumcheck.Iteration
+import ZkcArkLibExamples.CausalSumcheck.Iteration
 import Mathlib.Algebra.Field.ZMod
 
 /-! Discriminating controls for the source owner's shared Sumcheck process.

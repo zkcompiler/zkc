@@ -1,4 +1,4 @@
-import ZkcSecurity.VCVio.StructuredUniform
+import ZkcSecurity.ProgramLogic.Oracle.StructuredUniform
 import Lean
 
 /-! The optional uniform adapter needs semantic records, not source admission. -/

@@ -1,6 +1,6 @@
-import ZkcSecurity.Examples.Generated.SmallSumcheck
-import ZkcSecurity.Examples.Generated.TwoSums
-import ZkcSecurity.Claims.SourceChargeSites
+import ZkcSecurityExamples.Generated.SmallSumcheck
+import ZkcSecurityExamples.Generated.TwoSums
+import ZkcSecurity.Bindings.Subjects.ChargeSites
 
 set_option autoImplicit false
 set_option maxRecDepth 50000

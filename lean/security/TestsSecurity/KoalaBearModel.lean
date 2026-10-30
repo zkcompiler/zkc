@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Domains.KoalaBearModel
+public import ZkcSecurity.Bindings.Models.KoalaBearModel
 public import Zkc.Source.Structured.DomainEvaluation
 
 /-! Nominal admission, operation coherence and characteristic controls for the

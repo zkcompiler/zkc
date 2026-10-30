@@ -1,6 +1,6 @@
 import ZkcTools.StructuredSource.ReferenceInstallation
 import Zkc.Source.Structured.MultilinearReferenceInstallation
-import ZkcExamples.Structured.MultilinearSourceBindings
+import Zkc.Protocols.Multilinear.Source.Bindings
 import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs
 import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
 

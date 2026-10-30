@@ -1,5 +1,5 @@
-import ZkcSecurity.FiatShamir.Binding
-import ZkcSecurity.Endpoint.Binding
+import ZkcSecurity.Transformations.FiatShamir.Binding
+import ZkcSecurity.Bindings.Participants.Binding
 
 /-! Controls for binding codecs and the typed public-value binding event.
 

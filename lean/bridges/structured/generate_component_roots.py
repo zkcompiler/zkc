@@ -20,6 +20,7 @@ LEAN = ROOT / "lean"
 sys.path.insert(0, str(LEAN))
 from bridges.construction import pair  # noqa: E402
 from bridges.structured import snapshot  # noqa: E402
+from support.packages import module_package  # noqa: E402
 
 
 def quoted(value):
@@ -102,8 +103,10 @@ def completeness_selection(root):
     error = (".zero" if root["method"] == "sigma" else
              "{ bound := " + quoted(root["error_bound"]) +
              ", expression := " + quoted(root["error_expression"]) + " }")
-    return ("({ moduleName := " + quoted(f"ZkcSecurity.Examples.Generated.Components.{name}Completeness") +
-            ", subjectModule := " + quoted(f"ZkcSecurity.Examples.Generated.{name}") +
+    return ("({ moduleName := " + quoted(f"ZkcSecurityExamples.Generated.Components.{name}Completeness") +
+            ", namespaceName := " + quoted(f"ZkcSecurity.Examples.Generated.Components.{name}Completeness") +
+            ", subjectModule := " + quoted(f"ZkcSecurityExamples.Generated.{name}") +
+            ", subjectNamespace := " + quoted(f"ZkcSecurity.Examples.Generated.{name}") +
             ", error := " + error + " } : RootCompleteness.Selection)")
 
 
@@ -192,7 +195,7 @@ class Generation:
                     self.dependency_links.add(destination)
 
     def module_path(self, module):
-        package = self.package if module.startswith(("ZkcSecurity.", "TestsSecurity.")) else LEAN
+        package = module_package(module)
         return package.joinpath(*module.split(".")).with_suffix(".lean")
 
     def compile(self, module, source=None, run=False, source_root=None):
@@ -292,7 +295,8 @@ class Generation:
         data = f"ZkcExamples.Structured.Generated.Bindings.{name}Data"
         inputs = data.removesuffix("Data") + "Inputs"
         pair_module = f"ZkcExamples.Construction.Generated.{name}Pair"
-        subject = f"ZkcSecurity.Examples.Generated.{name}"
+        subject = f"ZkcSecurityExamples.Generated.{name}"
+        subject_namespace = f"ZkcSecurity.Examples.Generated.{name}"
         producer = f"ZkcExamples.Structured.Generated.Constructed.{name}Producer"
         validator = producer.removesuffix("Producer") + "Validator"
         connection = f"ZkcExamples.Structured.Generated.Connections.{name}"
@@ -332,7 +336,7 @@ def main : IO Unit := do
   IO.FS.writeFile {quoted(str(paths[connection]))} connection
   IO.FS.writeFile {quoted(str(paths[subject]))} (Root.fixedSubjectSource {{
     connectionModule := {quoted(connection)},
-    moduleName := {quoted(subject)}, sourceModule := {quoted(inputs)},
+    moduleName := {quoted(subject)}, namespaceName := {quoted(subject_namespace)}, sourceModule := {quoted(inputs)},
     originalExpression := {quoted(data+'.snapshot')}, importedExpression := {quoted(inputs+'.imported')},
     pairModule := {quoted(pair_module)}, artifactsExpression := {quoted(pair_module+'.artifacts')},
     modelModule := {quoted(config['model_module'])}, modelExpression := {quoted(config['model'])},
@@ -344,30 +348,32 @@ def main : IO Unit := do
 ''')
         for module in (inputs, producer, validator, connection, subject):
             self.retain(module, paths[module].read_text())
-        self.prepare(["ZkcSecurity.Generation.SubjectABI",
-                      "ZkcSecurity.Generation.SubjectABI.Command"])
-        abi = f"ZkcSecurity.Examples.Generated.Components.{name}ABI"
+        self.prepare(["ZkcSecurityTools.Generation.SubjectABI",
+                      "ZkcSecurityTools.Generation.SubjectABI.Command"])
+        abi = f"ZkcSecurityExamples.Generated.Components.{name}ABI"
+        abi_namespace = f"ZkcSecurity.Examples.Generated.Components.{name}ABI"
         abi_path = directory / "ABI.lean"
-        self.printer("GenerateABI" + name, f'''import ZkcSecurity.Generation.SubjectABI.Command
+        self.printer("GenerateABI" + name, f'''import ZkcSecurityTools.Generation.SubjectABI.Command
 import {subject}
 set_option maxRecDepth 50000
 set_option maxHeartbeats 16000000
 open ZkcSecurity.Generation.SubjectABI
-derive_subject_abi generated for {subject}.subject
-  module {quoted(abi)} from {quoted(subject)}
+derive_subject_abi generated for {subject_namespace}.subject
+  using {{ moduleName := {quoted(abi)}, namespaceName := {quoted(abi_namespace)}, subjectModule := {quoted(subject)}, subjectNamespace := {quoted(subject_namespace)} }}
 def main : IO Unit := IO.FS.writeFile {quoted(str(abi_path))} generated
 ''')
         self.retain(abi, abi_path.read_text())
 
     def prove(self, root, config):
         name = root["name"]
-        self.prepare(["ZkcSecurity.Generation.RootCompleteness"])
-        module = f"ZkcSecurity.Examples.Generated.Components.{name}Completeness"
+        self.prepare(["ZkcSecurityTools.Generation.RootCompleteness"])
+        module = f"ZkcSecurityExamples.Generated.Components.{name}Completeness"
+        namespace = f"ZkcSecurity.Examples.Generated.Components.{name}Completeness"
         output = self.directory / name / "Completeness.lean"
         if root["method"] == "direct":
             self.compile(root["proof_module"])
             proof = root.get("proof_name", root["proof_module"] + ".compiled_ideal_complete")
-            self.printer("GenerateCompleteness" + name, f'''import ZkcSecurity.Generation.RootCompleteness
+            self.printer("GenerateCompleteness" + name, f'''import ZkcSecurityTools.Generation.RootCompleteness
 open ZkcSecurity.Generation
 def main : IO Unit := IO.FS.writeFile {quoted(str(output))} (RootCompleteness.directSource
   {completeness_selection(root)} {quoted(root['proof_module'])} {quoted(proof)}
@@ -377,25 +383,28 @@ def main : IO Unit := IO.FS.writeFile {quoted(str(output))} (RootCompleteness.di
             return
         self.prepare(root.get("method_imports", []))
         self.prepare([
-            "Zkc.Construction.ProcessViewTactic", "ZkcSecurity.Families.Sigma.Algebra",
-            "ZkcSecurity.Families.Sigma.Realization", "ZkcSecurity.Tools.SigmaReadback",
-            "ZkcSecurity.Generation.UniformRoot",
-            "ZkcSecurity.Generation.SigmaCompleteness", "ZkcSecurity.Generation.SigmaCompleteness.Command"])
-        subject = f"ZkcSecurity.Examples.Generated.{name}"
-        self.printer("GenerateCompleteness" + name, f'''import ZkcSecurity.Generation.SigmaCompleteness.Command
+            "ZkcTools.ConstructionBindings.ProcessViewTactic", "ZkcSecurity.Families.Sigma.Algebra",
+            "ZkcSecurity.Bindings.Sigma.Arithmetic", "ZkcSecurityTools.SigmaReadback",
+            "ZkcSecurityTools.Generation.UniformRoot",
+            "ZkcSecurityTools.Generation.SigmaCompleteness", "ZkcSecurityTools.Generation.SigmaCompleteness.Command"])
+        subject = f"ZkcSecurityExamples.Generated.{name}"
+        subject_namespace = f"ZkcSecurity.Examples.Generated.{name}"
+        self.printer("GenerateCompleteness" + name, f'''import ZkcSecurityTools.Generation.SigmaCompleteness.Command
 import {subject}
 set_option maxRecDepth 50000
 set_option maxHeartbeats 16000000
 open ZkcSecurity.Generation
 derive_sigma_completeness generated from {{
-  metadata := SubjectABI.metadata {subject}.subject
+  metadata := SubjectABI.metadata {subject_namespace}.subject
   imports := [{', '.join(map(quoted, root.get('method_imports', [])))}]
   nonvacuityLaw := {('some ' + quoted(root['nonvacuity_law'])) if 'nonvacuity_law' in root else 'none'}
   output := {{
-    moduleName := {quoted(module)}, subjectModule := {quoted(subject)},
+    moduleName := {quoted(module)}, namespaceName := {quoted(namespace)},
+    subjectModule := {quoted(subject)}, subjectNamespace := {quoted(subject_namespace)},
     producerModule := "ZkcExamples.Structured.Generated.Constructed.{name}Producer",
     validatorModule := "ZkcExamples.Structured.Generated.Constructed.{name}Validator",
-    abiModule := "ZkcSecurity.Examples.Generated.Components.{name}ABI",
+    abiModule := "ZkcSecurityExamples.Generated.Components.{name}ABI",
+    abiNamespace := "ZkcSecurity.Examples.Generated.Components.{name}ABI",
     fieldType := {quoted(config['field_type'])}, groupType := {quoted(config['group_type'])},
     sampling := {quoted(config['sampling'])} }} }}
 def main : IO Unit := IO.FS.writeFile {quoted(str(output))} generated
@@ -403,12 +412,12 @@ def main : IO Unit := IO.FS.writeFile {quoted(str(output))} generated
         self.retain(module, output.read_text())
 
     def receipt(self, root, config):
-        self.prepare(["ZkcSecurity.Generation.RootCompleteness"])
+        self.prepare(["ZkcSecurityTools.Generation.RootCompleteness"])
         name = root["name"]
-        subject = f"ZkcSecurity.Examples.Generated.{name}"
+        subject = f"ZkcSecurityExamples.Generated.{name}"
         module = subject + "CompletenessClaims"
         output = self.directory / name / "CompletenessClaims.lean"
-        self.printer("GenerateReceipt" + name, f'''import ZkcSecurity.Generation.RootCompleteness
+        self.printer("GenerateReceipt" + name, f'''import ZkcSecurityTools.Generation.RootCompleteness
 open ZkcSecurity.Generation
 def main : IO Unit := IO.FS.writeFile {quoted(str(output))} (RootCompleteness.claimsSource
   {completeness_selection(root)} {{

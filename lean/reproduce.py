@@ -48,9 +48,10 @@ def build_inputs(root, with_arklib=False, with_clean=False, with_security=False)
     files.append(root / 'clients/Main.lean')
     if with_security or with_arklib:
         optional = root / SECURITY
-        files.append(root / 'clients/Security.lean')
+        files.extend(root / 'clients' / name for name in
+                     ('Security.lean', 'SecurityTheory.lean', 'SecurityTools.lean'))
         files.extend(optional / name for name in ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
-        for directory in ('ZkcSecurity', 'TestsSecurity'):
+        for directory in ('ZkcSecurity', 'ZkcSecurityTools', 'ZkcSecurityExamples', 'TestsSecurity'):
             files.extend((optional / directory).rglob('*.lean'))
     if with_arklib:
         files.append(root / 'clients/ArkLib.lean')
@@ -60,7 +61,7 @@ def build_inputs(root, with_arklib=False, with_clean=False, with_security=False)
         files.extend(path for name in ('compatibility.json', 'compatibility.patch')
                      if (path := optional / name).is_file())
         files.extend(optional / name for name in ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
-        for directory in ('ZkcArkLib', 'TestsArkLib'):
+        for directory in ('ZkcArkLib', 'ZkcArkLibExamples', 'TestsArkLib'):
             files.extend((optional / directory).rglob('*.lean'))
     if with_clean:
         optional = root / CLEAN

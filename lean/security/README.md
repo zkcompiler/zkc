@@ -1,22 +1,59 @@
-# Reusable security
+# Security theory and its consumers
 
-`zkc_security` provides `ZkcSecurity` and `TestsSecurity` over the probability-free
-core. Its package closure contains VCVio, PolyFun and CompPoly, with the shared
-[pinned baseline](../docs/dependencies.md), and excludes ArkLib and Clean.
+`zkc_security` is the probability-bearing package above deterministic `zkc`.
+It adds the pinned VCVio, PolyFun and CompPoly dependencies; ArkLib and Clean
+remain independent optional packages. See the [dependency baseline](../docs/dependencies.md).
 
-`ZkcSecurity.VCVio` preserves full execution distributions, reachable-state
-replacement, Sigma composition and Schnorr simulation. `Families` owns generic
-Schnorr-family mathematics and quantitative Sumcheck consumers; deterministic
-execution and pointwise completeness remain in core. `FiatShamir`, `Commitment`,
-`HashChain`, `Stage` and `Endpoint` supply reusable security interfaces and
-consumers with explicit experiment and resource assumptions.
-`Commitment.Opening` owns the reusable one-opening family used by joint hash-chain
-security. Declaration namespaces and theorem names are retained across moves.
+Three library roots have different responsibilities:
 
-`Examples.Subjects` contains the Schnorr, Schnorr AND, Chaum–Pedersen and Okamoto
-subjects. They and the maintained probability clients/tests are default targets.
-Libraries may not import these leaf subjects. The upstream VCVio module
-`VCVio.Schemes.Schnorr.SigmaProtocol` is reusable mathematics from the pinned provider.
+- `ZkcSecurity`: reusable definitions and kernel-checked theorems.
+- `ZkcSecurityTools`: elaborators, tactics and source generators. Their proposals
+  establish nothing until Lean checks the resulting term.
+- `ZkcSecurityExamples`: closed subjects, selected generated artifacts and their
+  applications. Theory and reusable tools cannot import this root.
+
+`TestsSecurity` audits all three roots and exercises accepted and refused cases.
+All three libraries and the tests are default Lake targets. These are source
+boundaries within one package, so they do not introduce additional dependency pins.
+
+The theory has six areas:
+
+| Area | Responsibility |
+| --- | --- |
+| `Mathematics` | Probability, algebra and reusable oracle results |
+| `ProgramLogic` | Charged derivations, process properties and transcript games |
+| `Families` | Abstract protocol mathematics, independent of a selected source |
+| `Transformations` | Fiat–Shamir, commitments, hash chains and stage composition |
+| `Bindings` | Source-template installations, representations and actual participant connections |
+| `Claims` | Fixed request meanings, resolution, receipts and separately owned proof methods |
+
+An abstract family, a source-template installation and a closed Entry are
+separate reuse units. A binding may fix the implementation of a reusable
+component while quantifying over its checked definitions, model and layout.
+That does not make it a closed subject. A proof that inspects one generated
+payload belongs in `ZkcSecurityExamples`.
+
+For example, the [Sumcheck facade](ZkcSecurity/Families/Sumcheck.lean) exports the
+mathematical contract. Table/source installations live under
+`Bindings/Sumcheck`, GKR installations under `Bindings/Gkr`, and the concrete
+SmallSumcheck, TwoSums and GKR clients under `ZkcSecurityExamples`. New protocols
+reuse a family contract and an existing installation when their mathematics
+and source template match. A different implementation supplies checked body
+associations and representation laws; a different family supplies its mathematics.
+See the [component authoring guide](../docs/development/component-authoring.md).
+
+Knowledge requests depend on lower transcript operations and the request-fixed
+extraction profile. Sigma justification and endpoint assembly live in
+`Claims/Methods/Knowledge.lean`. A proof method cannot change the requested
+extractor or the actual verifier experiment. Commitment application claims
+also retain the connection from an application failure to the designated
+checkpoint and its actual verifier query log.
+
+Import paths identify source ownership. Existing declaration namespaces and
+mathematical theorem names are retained; they are not alternate import routes.
+No forwarding modules are provided at the retired paths. The source-header
+audit records public, meta and import-all edges. Standalone theory and tactic
+clients test the exported interfaces outside this package.
 
 From the repository root:
 
@@ -27,30 +64,8 @@ python3 common/tests/run.py lean-security
 nix build .#security
 ```
 
-`checks/check_library.py --integration security` checks imports, exact package
-closure and nonoverlapping module roots. The independent declaration audit
-checks types, proof bodies, stored private/generated declarations and axiom
-closures. `ZkcSecurity.Registry` registers generic schemas and endpoints;
-optional schemas live in [the ArkLib package](../integrations/arklib/README.md).
-These models do not by themselves prove native correspondence or unspecified
-cryptographic assumptions. See [architecture](../docs/architecture.md) and
-[formal support](../docs/support.md).
-
-The actual plain aggregate table consumer is configured by
-[`Generation/TableMembership.lean`](ZkcSecurity/Generation/TableMembership.lean).
-With current core/security dependencies already checked (including
-`Generation.SubjectABI.Command`, `Generation.OriginalEndpoint`,
-`Claims.Completeness`, `Claims.CompiledSoundness`, `Endpoint.DomainSafety` and
-`Tools.ClaimConstruction`), run from this directory under the prepared Lean
-environment:
-
-```sh
-python3 checks/check_table_membership.py /tmp/zkc-table-claims
-```
-
-The driver fixes `LEAN_NUM_THREADS=2`, uses the supplied `LEAN_PATH`, and writes
-only its output directory. It regenerates and compares the ABI/endpoint twice,
-then checks the actual subject, method, canonical requests, receipts and
-positive/refusal controls. Its `manifest.json` records commands, generated versus
-authored source hashes, byte/line counts and results. This is a compiled-ideal
-claim, without a native byte correspondence or baseline acceptance.
+The [architecture](../docs/architecture.md) documents the complete dependency
+graph and the boundaries enforced by both source and declaration audits. These
+formal models do not by themselves establish native correspondence or an
+unspecified cryptographic assumption. Consult [formal support](../docs/support.md)
+for the scope of each maintained result.

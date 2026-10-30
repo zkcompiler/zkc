@@ -1,4 +1,4 @@
-import ZkcArkLib.Examples.Variants
+import ZkcArkLibExamples.Variants
 import ZkcArkLib.Sumcheck.Multilinear
 
 /-! Independent reuse across imported source forms and external consumers. -/

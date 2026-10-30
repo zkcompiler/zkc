@@ -63,9 +63,9 @@ INTEGRATIONS = {
 # declaration that heads a premise of one of its theorems.
 EXTRA = {
     "security": ["run_cmd ZkcTools.DeclarationAudit.checkRegistry ZkcSecurity.Registry.audited "
-               "[`ZkcSecurity] \"REGISTRY-AUDIT-PASS\"\n"],
+               "[`ZkcSecurity, `ZkcSecurityTools, `ZkcSecurityExamples] \"REGISTRY-AUDIT-PASS\"\n"],
     "arklib": ["run_cmd ZkcTools.DeclarationAudit.checkRegistry (ZkcSecurity.Registry.audited ++ ZkcArkLib.Registry.audited) "
-               "[`ZkcArkLib] \"ARKLIB-REGISTRY-AUDIT-PASS\"\n"],
+               "[`ZkcArkLib, `ZkcArkLibExamples] \"ARKLIB-REGISTRY-AUDIT-PASS\"\n"],
 }
 
 
@@ -83,7 +83,9 @@ def main():
     selected = [] if args.main_only else args.integration or sorted(INTEGRATIONS)
     for name in select_packages(selected)[1:]:
         library, tests, marker = INTEGRATIONS[name]
-        outputs.update(expected(PACKAGES[name][0], library, tests, marker=marker,
+        examples = {"security": ["ZkcSecurityExamples"], "arklib": ["ZkcArkLibExamples"]}.get(name, [])
+        tools = ["ZkcSecurityTools"] if name == "security" else []
+        outputs.update(expected(PACKAGES[name][0], library, tests, examples=examples, tools=tools, marker=marker,
                                 extra=EXTRA.get(name, ()),
                                 audit_imports=("TestsSecurity.LibraryImports",) if name == "arklib" else ()))
     for path, text in outputs.items():

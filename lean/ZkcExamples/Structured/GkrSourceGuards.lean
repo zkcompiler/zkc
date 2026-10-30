@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.GkrSourceViews
-public import ZkcExamples.Structured.PrimitiveLibrary
+public import Zkc.Protocols.Multilinear.Source.PrimitiveLibrary
 public import Zkc.Source.Structured.BodyBindings
 public import Zkc.Source.TypedABI
 

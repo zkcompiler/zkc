@@ -1,7 +1,7 @@
-import ZkcSecurity.Tools.PairConstruction
-import ZkcSecurity.Tools.SigmaReadback
-import ZkcSecurity.Claims.SubjectABI
-import ZkcSecurity.Claims.PrimitiveDependencies
+import ZkcSecurityTools.PairConstruction
+import ZkcSecurityTools.SigmaReadback
+import ZkcSecurity.Bindings.Subjects.ABI
+import ZkcSecurity.Bindings.Subjects.PrimitiveDependencies
 import Zkc.Source.Structured.UnitViews
 import Mathlib.Algebra.Ring.Int.Defs
 

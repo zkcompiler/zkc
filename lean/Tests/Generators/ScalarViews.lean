@@ -1,7 +1,7 @@
 import ZkcTools.StructuredSource.Bindings.RoleViews
 import ZkcTools.StructuredSource.Bindings.Helpers
 import Zkc.Source.Structured.Format
-import ZkcExamples.Structured.SumcheckPendingBodies
+import Zkc.Protocols.Sumcheck.Source.PendingBodies
 /-! Source and display-name selections for scalar participant presentations,
 with separate typed mathematical library associations. The generic normalizer
 and RoleViews own every operation, role mask, callback, application and complete
@@ -57,11 +57,11 @@ def pendingPatterns : List (String × Helper × String) := [
   ("atPrefix", SumcheckPendingBodies.atPrefixHelper, "SumcheckPendingBodies.atPrefixBody")]
 
 def librarySource (program : Program) (name : String) : Except String String := do
-  let mut text := "module\n\npublic import " ++ name ++ "\npublic import ZkcExamples.Structured.SumcheckPendingLaws\n\n@[expose] public section\n\n/-! Checked associations of the mathematical library with the admitted source. -/\nnamespace " ++ name ++ "Library\nopen Zkc.Source Zkc.Source.Structured ZkcExamples.Structured\nopen " ++ name ++ "\nset_option maxRecDepth 50000\nset_option maxHeartbeats 8000000\nvariable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]\n\n"
+  let mut text := "module\n\npublic import " ++ name ++ "\npublic import Zkc.Protocols.Sumcheck.Source.PendingLaws\n\n@[expose] public section\n\n/-! Checked associations of the mathematical library with the admitted source. -/\nnamespace " ++ name ++ "Library\nopen Zkc.Source Zkc.Source.Structured ZkcExamples.Structured\nopen " ++ name ++ "\nset_option maxRecDepth 50000\nset_option maxHeartbeats 8000000\nvariable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]\n\n"
   for (localName, helper, body) in pendingPatterns do
     let [(_, index)] := program.payload.definitions.zipIdx.filter (fun (definition, _) => definition.helper == helper)
       | throw "scalar-library-helper-selection"
-    text := text ++ (← helperAssociationSource program localName index
+    text := text ++ (← helperTemplateAssociationSource program localName index
       "(plainHelpers (F := F) (G := G) payload).closed" "(.silent _)")
     text := text ++ "theorem " ++ localName ++ "_pattern : " ++ localName ++ "Body = " ++ body ++ " := by kernel_rfl\n\n" ++
       "theorem " ++ localName ++ "_body : BodyIn payload.definitions SumcheckPendingBodies." ++ localName ++ "Helper " ++ body ++ " :=\n  ⟨" ++ localName ++ "Definition, List.get_mem _ _, rfl, by kernel_rfl⟩\n\n"

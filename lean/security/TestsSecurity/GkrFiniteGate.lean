@@ -1,4 +1,4 @@
-import ZkcSecurity.Examples.Components.GkrFiniteCalls
+import ZkcSecurityExamples.Components.GkrFiniteCalls
 import TestsSecurity.GkrRoundsReference
 
 set_option autoImplicit false

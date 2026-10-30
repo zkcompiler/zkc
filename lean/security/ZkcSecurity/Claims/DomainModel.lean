@@ -1,8 +1,8 @@
 module
 
-public import ZkcSecurity.Claims.DomainSubject
+public import ZkcSecurity.Bindings.Subjects.Domain
 public import ZkcSecurity.Claims.Resolution
-public import Zkc.Source.Structured.DomainLaws
+public import ZkcSecurity.Bindings.Models.Capabilities
 
 @[expose] public section
 
@@ -12,14 +12,6 @@ by SampleableType at the actual event-dependent reply types. -/
 set_option autoImplicit false
 namespace ZkcSecurity.Claims.Domain
 open Zkc.Claims Zkc.Source.Structured Zkc.Construction
-
-structure Capabilities (model : DomainModel) (snapshot : Snapshot) where
-  algebra : DomainLaws snapshot.catalogue model
-  characteristic : CharacteristicLaws snapshot.catalogue model.toFieldModel
-  finite : ∀ identity, snapshot.catalogue.identitySort identity = some .field →
-    Fintype (model.Field identity)
-  samples : ∀ event : Zkc.Construction.Domain.Event model.toCarriers,
-    SampleableType (Zkc.Construction.Domain.Raw event)
 
 def Capabilities.cardinality {model : DomainModel} {snapshot : Snapshot}
     (capabilities : Capabilities model snapshot) (identity : String) : Except Incomplete Nat :=

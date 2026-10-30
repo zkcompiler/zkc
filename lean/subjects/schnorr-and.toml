@@ -20,8 +20,8 @@ data = "lean/ZkcExamples/Construction/SchnorrAndProofData.lean"
 bodies = "lean/ZkcExamples/Construction/SchnorrAndProofBodies.lean"
 participant = "lean/ZkcExamples/Construction/SchnorrAndProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/SchnorrAndArtifact.lean"
-artifacts = "lean/security/ZkcSecurity/Examples/Subjects/SchnorrAnd/Artifacts.lean"
-claims = "lean/security/ZkcSecurity/Examples/Subjects/SchnorrAnd/Claims.lean"
+artifacts = "lean/security/ZkcSecurityExamples/Subjects/SchnorrAnd/Artifacts.lean"
+claims = "lean/security/ZkcSecurityExamples/Subjects/SchnorrAnd/Claims.lean"
 interactive_data = "lean/ZkcExamples/Structured/SchnorrAndData.lean"
 interactive_bodies = "lean/ZkcExamples/Structured/SchnorrAndBodies.lean"
 interactive_views = "lean/ZkcExamples/Structured/SchnorrAndViews.lean"
@@ -51,4 +51,4 @@ interactive_entry = "interactive"
 
 [lean]
 namespace = "ZkcSecurity.Examples.Subjects.SchnorrAnd"
-imports = ["ZkcSecurity.Examples.Subjects.SchnorrAnd.Registration"]
+imports = ["ZkcSecurityExamples.Subjects.SchnorrAnd.Registration"]

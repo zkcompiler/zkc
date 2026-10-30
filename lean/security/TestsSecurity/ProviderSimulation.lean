@@ -1,4 +1,4 @@
-import ZkcSecurity.FiatShamir.ProviderSimulation
+import ZkcSecurity.Transformations.FiatShamir.ProviderSimulation
 
 /-! Controls for the provider simulator laws.
 

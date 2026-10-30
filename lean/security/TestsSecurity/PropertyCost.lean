@@ -1,4 +1,4 @@
-import ZkcSecurity.Obligations.RepeatedComponent
+import ZkcSecurity.ProgramLogic.RepeatedComponent
 import Tests.Obligations
 
 set_option autoImplicit false

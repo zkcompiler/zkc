@@ -2,8 +2,8 @@ module
 
 public import Zkc.Claims.Registry
 public import Zkc.Source.Structured.DomainLaws
-public import ZkcSecurity.Claims.AuthoredPair
-public import ZkcSecurity.Claims.PrimitiveDependencies
+public import ZkcSecurity.Bindings.Subjects.HonestPair
+public import ZkcSecurity.Bindings.Subjects.PrimitiveDependencies
 
 @[expose] public section
 

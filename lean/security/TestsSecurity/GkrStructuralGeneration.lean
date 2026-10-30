@@ -1,7 +1,7 @@
 import ZkcExamples.Structured.Generated.Connections.Gkr
-import ZkcSecurity.Realizations.Gkr.CanonicalCompleteness
-import ZkcSecurity.Realizations.Gkr.CanonicalSoundness
-import ZkcSecurity.Realizations.Gkr.LayoutVariant
+import ZkcSecurityExamples.Gkr.CanonicalCompleteness
+import ZkcSecurityExamples.Gkr.CanonicalSoundness
+import ZkcSecurityExamples.Gkr.LayoutVariant
 
 /-! The actual pair uses the shared root connection. Physical layout changes
 remain distinct formal artifacts; no alternate native identity is asserted. -/

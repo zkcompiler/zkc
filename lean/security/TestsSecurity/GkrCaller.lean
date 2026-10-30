@@ -1,5 +1,5 @@
-import ZkcSecurity.Examples.Components.GkrCallerSetup
-import ZkcSecurity.Examples.Components.GkrCallerResidual
+import ZkcSecurityExamples.Components.GkrCallerSetup
+import ZkcSecurityExamples.Components.GkrCallerResidual
 import Zkc.Source.Structured.ReplyScript
 
 set_option autoImplicit false

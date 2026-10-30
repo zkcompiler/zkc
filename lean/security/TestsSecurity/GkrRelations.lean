@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Realizations.Gkr.Relations
+public import ZkcSecurity.Bindings.Gkr.Relations
 public import TestsSecurity.GkrEncoding
 
 @[expose] public section

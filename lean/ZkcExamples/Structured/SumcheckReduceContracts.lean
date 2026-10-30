@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.SumcheckReduceAssociations
-public import ZkcExamples.Structured.SumcheckUnitContracts
+public import Zkc.Protocols.Sumcheck.Source.UnitContracts
 
 @[expose] public section
 namespace ZkcExamples.Structured.SumcheckReduceContracts

@@ -1,8 +1,8 @@
-import ZkcSecurity.Realizations.Gkr.Canonical
-import ZkcSecurity.Domains.PrimeField
-import ZkcSecurity.Generation.SubjectABI
-import ZkcSecurity.Generation.RootCompleteness
-import ZkcSecurity.Generation.OriginalEndpoint
+import ZkcSecurityExamples.Gkr.Canonical
+import ZkcSecurity.Bindings.Models.PrimeField
+import ZkcSecurityTools.Generation.SubjectABI
+import ZkcSecurityTools.Generation.RootCompleteness
+import ZkcSecurityTools.Generation.OriginalEndpoint
 
 /-! Concrete GKR request selection. All mechanical syntax uses the shared
 subject, ABI, completeness and soundness printers. The generated modules are
@@ -30,17 +30,20 @@ run_cmd do
     let reduced ← Lean.Meta.withTransparency .all <| Lean.Meta.reduce (Lean.mkConst ``ZkcExamples.Construction.Generated.GkrPair.artifacts)
     Lean.Meta.evalExpr Zkc.Construction.AuthoredPair.Artifacts
       (Lean.mkConst ``Zkc.Construction.AuthoredPair.Artifacts) reduced
-  let modulePrefix := "ZkcSecurity.Realizations.Gkr.Generated."
+  let modulePrefix := "ZkcSecurityExamples.Gkr.Generated."
+  let namespacePrefix := "ZkcSecurity.Realizations.Gkr.Generated."
   let subject := modulePrefix ++ "Subject"
+  let subjectNamespace := namespacePrefix ++ "Subject"
   let fixed : FixedSubjectOutput := {
     connectionModule := "ZkcExamples.Structured.Generated.Connections.Gkr"
     moduleName := subject
-    sourceModule := "ZkcSecurity.Realizations.Gkr.Canonical"
+    namespaceName := subjectNamespace
+    sourceModule := "ZkcSecurityExamples.Gkr.Canonical"
     originalExpression := "ZkcSecurity.Realizations.Gkr.Canonical.original"
     importedExpression := "ZkcSecurity.Realizations.Gkr.Canonical.imported"
     pairModule := "ZkcExamples.Construction.Generated.GkrPair"
     artifactsExpression := "ZkcExamples.Construction.Generated.GkrPair.artifacts"
-    modelModule := "ZkcSecurity.Domains.PrimeField"
+    modelModule := "ZkcSecurity.Bindings.Models.PrimeField"
     modelExpression := "ZkcSecurity.Domains.PrimeField.blsScalarModel"
     targetName := "circuit_outputs"
     originalExportExpression := quoted "sha256:624ace13f9ec65913feab37af7f567746f268585252e9c3bb0708e61e84a70dd"
@@ -51,10 +54,12 @@ run_cmd do
   let sampling := "ZkcSecurity.Domains.PrimeField.rawSampleable Zkc.Source.Structured.blsModulus"
   let capabilities := "ZkcSecurity.Domains.PrimeField.blsCapabilities original (by decide +kernel)"
   let selection : RootCompleteness.Selection := {
-    moduleName := modulePrefix ++ "Completeness", subjectModule := subject, error := .zero }
+    moduleName := modulePrefix ++ "Completeness", namespaceName := namespacePrefix ++ "Completeness",
+    subjectModule := subject, subjectNamespace, error := .zero }
   let soundness : OriginalEndpoint.Output := {
-    moduleName := modulePrefix ++ "Soundness", subjectModule := subject
-    methodModule := "ZkcSecurity.Realizations.Gkr.CanonicalSoundness"
+    moduleName := modulePrefix ++ "Soundness", namespaceName := namespacePrefix ++ "Soundness",
+    subjectModule := subject, subjectNamespace
+    methodModule := "ZkcSecurityExamples.Gkr.CanonicalSoundness"
     sampling, capabilities
     schedule := "ZkcSecurity.Realizations.Gkr.CanonicalSoundness.schedule"
     validatorCost := "ZkcSecurity.Realizations.Gkr.CanonicalSoundness.validatorCost"
@@ -63,15 +68,16 @@ run_cmd do
       "ZkcSecurity.Realizations.Gkr.CanonicalSoundness.scalar_bound"⟩ }
   let registration : DomainClaimLibraryOutput := {
     moduleName := subject ++ "SoundnessRegistration"
+    namespaceName := subjectNamespace ++ "SoundnessRegistration"
     imports := [subject, soundness.moduleName]
-    subjectExpression := subject ++ ".validatorSubject"
-    artifactsExpression := subject ++ ".validatorArtifacts"
-    capabilitiesExpression := soundness.moduleName ++ ".capabilities"
+    subjectExpression := subjectNamespace ++ ".validatorSubject"
+    artifactsExpression := subjectNamespace ++ ".validatorArtifacts"
+    capabilitiesExpression := soundness.namespaceName ++ ".capabilities"
     applicationParameter := some "application"
-    theoremMethods := [("fs.keyed_soundness", 0, soundness.moduleName ++ ".scalar_meaning"),
-      ("fs.keyed_charged", 0, soundness.moduleName ++ ".charged_meaning")]
+    theoremMethods := [("fs.keyed_soundness", 0, soundness.namespaceName ++ ".scalar_meaning"),
+      ("fs.keyed_charged", 0, soundness.namespaceName ++ ".charged_meaning")]
     theoremNormalization := ["schedule", "validatorCost", "scalarBound"].map
-      (soundness.moduleName ++ "." ++ ·) ++
+      (soundness.namespaceName ++ "." ++ ·) ++
       ["schedule", "validatorCost", "scalarBound"].map
         ("ZkcSecurity.Realizations.Gkr.CanonicalSoundness." ++ ·) ++
       ["schedule", "price", "priceBound", "validatorCost", "scalarBound"].map
@@ -80,9 +86,10 @@ run_cmd do
   let sources := [
     (subject, fixedSubjectSource fixed),
     (modulePrefix ++ "ABI", ← require <| SubjectABI.source metadata {
-      moduleName := modulePrefix ++ "ABI", subjectModule := subject }),
+      moduleName := modulePrefix ++ "ABI", namespaceName := namespacePrefix ++ "ABI",
+      subjectModule := subject, subjectNamespace }),
     (selection.moduleName, RootCompleteness.directSource selection
-      "ZkcSecurity.Realizations.Gkr.CanonicalCompleteness"
+      "ZkcSecurityExamples.Gkr.CanonicalCompleteness"
       "ZkcSecurity.Realizations.Gkr.CanonicalCompleteness.compiled_ideal_complete" sampling),
     (subject ++ "CompletenessClaims", RootCompleteness.claimsSource selection { capabilities }),
     (soundness.moduleName, ← require <| OriginalEndpoint.soundnessSource metadata artifacts.validator soundness),

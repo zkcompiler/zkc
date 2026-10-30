@@ -13,11 +13,18 @@ connects these laws to the maintained admitted programs, including the exact
 round-count refusal behavior and residual observations.
 
 `ZkcArkLib.Fri` and `ZkcArkLib.Gkr` adapt the upstream family theorems.
+`ZkcArkLib.Stark` adapts the proved STIR list-collision and quotienting results,
+with exact polynomial equalities, a two-word affine-line proximity theorem, and
+a many-word power-batch distance bound for a common target code. The latter uses
+the proved capacity bound below its generalized Johnson radius and includes
+typed common-degree quotient words and an explicit ENNReal error.
+The [STARK component contracts](../../docs/spec/stark-components.md) identify the
+admitted dependency of general upstream combination, which these adapters avoid.
 `ZkcArkLib.FiatShamir.Upstream` imports ArkLib's round-by-round security;
 `FiatShamir.Realization` and the dependent clients remain here.
 `Examples.Subjects.Guess` and `Examples.Subjects.Sumcheck` keep their artifact,
 contract, evidence and claim files together. `ZkcArkLib.Registry` registers
-optional schemas; record readers combine it with `ZkcSecurity.Registry` and
+optional schemas; record readers combine it with `ZkcSecurity.Claims.Registry` and
 reject collisions. Generic security does not depend on this package.
 
 From the repository root:

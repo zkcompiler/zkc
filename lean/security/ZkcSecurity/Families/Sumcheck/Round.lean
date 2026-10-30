@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Families.Sumcheck.Reference
-public import ZkcSecurity.Algebra.Polynomial
+public import ZkcSecurity.Mathematics.Algebra.Polynomial
 public import VCVio.EvalDist.ProbabilityBounds
 
 @[expose] public section

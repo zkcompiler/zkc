@@ -1,4 +1,4 @@
-import ZkcSecurity.FiatShamir.HonestCompiled
+import ZkcSecurity.Bindings.Transcript.HonestCompiled
 import Mathlib.Data.ZMod.Basic
 
 /-! Actual constructed instruction controls. The small participants below are

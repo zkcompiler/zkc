@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Source.PublicProperties
+public import ZkcSecurity.Bindings.Source.PublicProperties
 public import ZkcSecurity.Families.Sumcheck.Round
 
 @[expose] public section

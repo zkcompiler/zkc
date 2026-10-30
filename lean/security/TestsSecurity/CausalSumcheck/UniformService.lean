@@ -1,4 +1,4 @@
-import ZkcSecurity.Examples.CausalSumcheck.UniformService
+import ZkcSecurityExamples.CausalSumcheck.UniformService
 
 /-! Focused controls for the concrete uniform service. These are action and
 short-script equations, not an independent Sumcheck round or source-security

@@ -1,7 +1,7 @@
 module
 
 public import TestsSecurity.SourceAdmission.HistoricalPolicy
-public import ZkcSecurity.Claims.SubjectABI
+public import ZkcSecurity.Bindings.Subjects.ABI
 
 @[expose] public section
 

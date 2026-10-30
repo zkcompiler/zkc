@@ -1,7 +1,7 @@
 module
 
-import ZkcSecurity.Examples.RootProperties.SmallSumcheck.Soundness
-import ZkcSecurity.Examples.RootProperties.TwoSums.Soundness
+import ZkcSecurityExamples.RootProperties.SmallSumcheck.Soundness
+import ZkcSecurityExamples.RootProperties.TwoSums.Soundness
 
 #print axioms ZkcExamples.Structured.Generated.Connections.SmallSumcheck.producer
 #print axioms ZkcExamples.Structured.Generated.Connections.SmallSumcheck.validator

@@ -1,7 +1,7 @@
 module
 
-public import ZkcSecurity.FiatShamir.DomainReduction
-public meta import ZkcSecurity.Tools.ComponentBridge
+public import ZkcSecurity.Bindings.Transcript.DomainReduction
+public meta import ZkcSecurityTools.ComponentBridge
 
 @[expose] public section
 

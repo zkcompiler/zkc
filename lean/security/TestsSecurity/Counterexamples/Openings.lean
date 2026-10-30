@@ -1,5 +1,5 @@
-import ZkcSecurity.FiatShamir.Obligations
-import ZkcSecurity.Examples.CommittedOpening
+import ZkcSecurity.Transformations.FiatShamir.Obligations
+import ZkcSecurityExamples.CommittedOpening
 import TestsSecurity.Counterexamples.Support
 import Mathlib.Data.ZMod.Basic
 

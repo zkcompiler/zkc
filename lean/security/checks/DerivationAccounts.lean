@@ -1,6 +1,6 @@
-import ZkcSecurity.Generation.SumcheckAccounts
-import ZkcSecurity.Examples.Generated.SmallSumcheckSoundnessClaims
-import ZkcSecurity.Examples.Generated.TwoSumsSoundnessClaims
+import ZkcSecurityExamples.Generation.SumcheckAccounts
+import ZkcSecurityExamples.Generated.SmallSumcheckSoundnessClaims
+import ZkcSecurityExamples.Generated.TwoSumsSoundnessClaims
 import Tests.ProofAccount
 
 /-! Private bodies remain available to the one shared application inspector.
@@ -20,7 +20,7 @@ run_cmd do
   let mut accounts := #[]
   let roots ← ZkcSecurity.Generation.Roots.evaluateSelections
   for root in roots do
-    let receipt := (root.subjectModule ++ "SoundnessClaims.request1Receipt").toName
+    let receipt := (root.subjectNamespace ++ "SoundnessClaims.request1Receipt").toName
     accounts := accounts.push (← liftTermElabM <| ZkcSecurity.Generation.SumcheckAccounts.measure root receipt)
     liftTermElabM do
       Tests.ProofAccount.expectRefusal "stale source" "catalogue snapshot differs" <|

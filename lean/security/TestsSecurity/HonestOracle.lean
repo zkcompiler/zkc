@@ -1,4 +1,4 @@
-import ZkcSecurity.FiatShamir.Honest
+import ZkcSecurity.ProgramLogic.Honest.Honest
 
 /-! One cached key is correlated across phases; resetting the cache instead
 samples twice. These are concrete experiment controls, not native receipts. -/

@@ -4,7 +4,7 @@ public import ZkcExamples.Executable.SumcheckFamilyBudget
 public import ZkcExamples.Executable.SumcheckMessages
 public import Zkc.Executable.DomainSuccessRules
 public import Zkc.Construction.Uniform.DomainIteration
-public meta import Zkc.Construction.ArtifactBindingTactic
+public meta import ZkcTools.ConstructionBindings.ArtifactBindingTactic
 
 @[expose] public section
 

@@ -3,6 +3,7 @@ module
 public import Zkc.Construction.ConnectionCertificate
 public import Zkc.Construction.ConnectionInstallation
 public import ZkcTools.ConstructionBindings.Readback
+public meta import ZkcTools.ConstructionBindings.TargetPlacement
 public meta import ZkcTools.ConstructionBindings.Syntax
 public meta import Lean.Elab.Tactic
 
@@ -294,6 +295,17 @@ private partial def staticStep (goal : MVarId) : TacticM Unit := goal.withContex
     setGoals [goal]
     evalTactic (← `(tactic| derive_source_readback))
     return
+  if type.isAppOf ``ConnectionCertificate.GuardReadback then
+    for rule in [``ConnectionCertificate.GuardReadback.boolean,
+        ``ConnectionCertificate.GuardReadback.comparison] do
+      let saved ← saveState
+      try
+        for pending in ← applyRule goal rule do staticGoal pending
+        return
+      catch error =>
+        if error.isRuntime || error.isInterrupt then throw error
+        saved.restore
+    throwError "alignment-guard-placement-readback"
   if type.isAppOf ``ConnectionCertificate.HistoryReadback then
     let args := type.getAppArgs
     let frame ← listEntries args[1]!
@@ -633,6 +645,7 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
         let constructor ← mkConstWithFreshMVarLevels rule
         let mut type ← inferType constructor
         let mut fields := #[]
+        let mut namedFields : Array (Name × Expr) := #[]
         for index in [:100] do
           let .forallE name domain body _ := type | break
           let value ← if index < 4 then pure args[index]!
@@ -646,28 +659,48 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
             let got ← whnf actual.getAppArgs.back!
             throwError "alignment-application-field {name}: wanted={wanted}, got={got}"
           fields := fields.push value
+          namedFields := namedFields.push (name, value)
           type := body.instantiate1 value
         tracePhase "application assemble"
         let pending ← goal.apply (mkAppN constructor fields) {newGoals := .all}
         tracePhase "application assembled"
         let mut alignments := []
+        let mut extents := []
         let mut statics := []
         for pending in pending do
           let pendingType ← whnf (← instantiateMVars (← pending.getType))
           if pendingType.isAppOf ``ConnectionTargetExtent.Extent then
-            tracePhase "application extent"
-            deriveExtent pending
-            tracePhase "application extent complete"
+            extents := extents ++ [pending]
           else if pendingType.isAppOf ``ConnectionCertificate.Alignment then alignments := alignments ++ [pending]
           else statics := statics ++ [pending]
         match alignments with
         | body :: tails =>
-          checkedBody body (derive cache (some search))
+          let entry ← mkAppM ``ConnectionLibrary.Library.entry #[library, callee]
+          let field := fun name => (namedFields.find? (·.1 == name)).get!.2
+          let entered ← mkAppM ``ProtocolContext.enter #[args[1]!, site, roles]
+          let placement ← mkAppOptM ``ConnectionTargetPlacement.Placement.mk
+            #[some key, some entered, some scope, some arguments, some args[11]!, some layout,
+              some (field `calleeOutputs), some (field `calleeHistory), some selection, some spine,
+              some (field `extent)]
+          match ← TargetPlacement.propose body entry placement staticGoal with
+          | some placed =>
+            let extent ← mkAppM ``ConnectionTargetPlacement.CheckedBody.physicalExtent #[placed.body]
+            for pending in extents do
+              unless ← isDefEq (← inferType extent) (← pending.getType) do
+                throwError "alignment-reusable-body-extent"
+              pending.assign extent
+            tracePhase s!"reused body {placed.family}: proposal_ns={placed.proposalNanos}"
+          | none =>
+            if (← getOptions).getBool `zkc.connection.requireReusableBodies false then
+              throwError "alignment-reusable-body-refused"
+            for pending in extents do deriveExtent pending
+            checkedBody body (derive cache (some search))
           for pending in statics do unless ← pending.isAssigned do staticGoal pending
           for alignment in tails do derive cache discovery alignment
         | [] => throwError "alignment-application-body-missing"
         return
       catch error =>
+        if error.isRuntime || error.isInterrupt then throw error
         saved.restore
         if let .internal id _ := error then
           if id == discoveredCutException then
@@ -1011,7 +1044,7 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
           catch _ => throwError "alignment-loop-state-readback-mismatch"
         else
           try staticGoal remaining
-          catch _ => throwError "alignment-loop-count-scope-profile-or-return-mismatch"
+          catch error => throwError "alignment-loop-count-scope-profile-or-return-mismatch: {error.toMessageData}"
       for tail in tails do derive cache discovery tail
       return
     throwError "alignment-unsupported-target"

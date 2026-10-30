@@ -1,4 +1,4 @@
-import ZkcSecurity.Generation.SigmaCompleteness
+import ZkcSecurityTools.Generation.SigmaCompleteness
 
 /-! Generator refusal is distinct from decoding a logical oracle type. -/
 open Zkc.Source.Structured ZkcSecurity.Generation.SigmaCompleteness

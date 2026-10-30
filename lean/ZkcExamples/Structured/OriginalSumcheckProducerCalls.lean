@@ -1,7 +1,7 @@
 module
 
-public import ZkcExamples.Structured.OriginalSumcheckCalls
-public import ZkcExamples.Structured.NormalFormSteps
+public import Zkc.Protocols.Sumcheck.Source.Calls
+public import Zkc.Source.Structured.NormalForm.Steps
 
 @[expose] public section
 

@@ -10,7 +10,7 @@ set_option autoImplicit false
 noncomputable section
 namespace TestsSecurity.RootComposition.Four.Source
 open Zkc.Source Zkc.Source.Structured NormalForm
-open ZkcSecurity.Families.Sumcheck
+open ZkcSecurity.Families.Sumcheck ZkcSecurity.Realizations.Sumcheck
 
 def honestProducerArguments : Binders (ringModel Rat Rat)
     (Zkc.Source.Structured.NormalizedRoot.pattern program 0).scope :=

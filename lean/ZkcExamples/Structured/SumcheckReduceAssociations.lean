@@ -2,9 +2,9 @@ module
 
 public import Zkc.Source.Structured.UnitViews
 public import ZkcExamples.Structured.SumcheckReduceLaws
-public import ZkcExamples.Structured.SumcheckHelperBodies
-public import ZkcExamples.Structured.SumcheckPendingLaws
-public import ZkcExamples.Structured.MapPrefixContracts
+public import Zkc.Protocols.Sumcheck.Source.HelperBodies
+public import Zkc.Protocols.Sumcheck.Source.PendingLaws
+public import Zkc.Protocols.Multilinear.Source.MapPrefixContracts
 public import ZkcExamples.Structured.SumcheckReductionNormalForms
 
 @[expose] public section

@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.MapPrefixTable
-public import ZkcExamples.Structured.MapPrefixLaws
+public import Zkc.Protocols.Multilinear.Source.MapPrefixLaws
 
 @[expose] public section
 

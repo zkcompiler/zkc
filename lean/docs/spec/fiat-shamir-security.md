@@ -10,13 +10,13 @@ compiled Sumcheck, GKR and guessing Entries are instances of that. The
 transcript interface, the transform and replay are core definitions
 (`Zkc.Transcript`). The general theorems are in `ZkcSecurity.FiatShamir`
 (`Interface`, `Typed`, `Keyed`, `Reduction`, `Budget`, `Soundness`, `Decoding`,
-`Sampling`, `Grinding`, `Roles`, `Composition`, `Laws`, `Lifting`, `Binding`,
+`Sampling`, `Grinding`, `BoundedSearch`, `Roles`, `Composition`, `Laws`, `Lifting`, `Binding`,
 `Upstream`, `Realization`, `Obligations`, `ProviderSimulation`), the
 hash-chain provider simulation in `ZkcSecurity.HashChain`, the bound for
 verifiers with committed tables in `ZkcSecurity.Commitment`, the transport
-between oracle key forms in `ZkcSecurity.Oracle.Keys`, and the
+between oracle key forms in `ZkcSecurity.Transformations.Oracle.Keys`, and the
 [stage relations](#stage-relations) that compose them in `ZkcSecurity.Stage`;
-the Sumcheck instance is `ZkcArkLib.Examples.SumcheckFiatShamir`.
+the Sumcheck instance is `ZkcArkLibExamples.SumcheckFiatShamir`.
 
 ## Typed query sites
 
@@ -273,7 +273,7 @@ a postcondition `Post history value` on returned values in place of rejection
   certificates of law interfaces (`UniformCertificate.toReduction`).
 
 Reductions over the common participant actions with a uniform error
-(`ZkcSecurity.FiatShamir.Reduction`, from which the plain GKR verifier's
+(`ZkcSecurity.ProgramLogic.Transcript.Reduction`, from which the plain GKR verifier's
 certificate is assembled) become charged reductions
 (`ZkcSecurity.FiatShamir.Reduction.typed`).
 
@@ -377,7 +377,7 @@ factorizations from which joint laws of pairs and blocks follow.
 
 ### Law records
 
-A law record `LawRecord Raw Value` (`ZkcSecurity.FiatShamir.Laws`) is the
+A law record `LawRecord Raw Value` (`ZkcSecurity.Transformations.FiatShamir.Laws`) is the
 proof-bearing realized law of a request class, stated on the raw answer: a
 decoder `decode : Raw → Option Value`, a coefficient `factor` and a slack
 `slack` in `[0, ∞]` with `Realized decode factor slack` against the uniform law
@@ -442,6 +442,30 @@ two coordinates of a uniform pair. `ρ` is `2 ^ -b` for uniform bits and at most
 which passes with probability one (`lowBits_zero_difficulty`,
 `prEvent_lowBits_zero_difficulty`), so the gated bound is the ungated one.
 
+**Finite honest search.** `BoundedSearch.run` visits an ordered list of
+candidates, stops at the first accepted decoded value, and returns both the
+candidate/value and the number of attempts actually spent. An exhausted list
+returns `none`. `returned_valid` connects a returned witness to a successful
+trial; `attempts_le` bounds the counter on every structural execution.
+For fresh probabilistic trials, `exhaustion` is the product of their failure
+probabilities. A lower bound `success` on accepting the *complete* trial gives
+exhaustion at most `(1 - success)^N`. Thus decoder refusal is part of the
+completeness bound. `expectedAttempts_eq_sum` gives the actual expected count
+as `sum (failure^j), j < N` for equal failure probabilities, and
+`expectedAttempts_le_sum` gives the corresponding upper bound for varying laws.
+
+These are fresh-trial theorems. Applying them to a cached random oracle needs
+a freshness and simulation theorem for the selected construction. The
+`TestsSecurity.BoundedSearch` control reuses one sampled answer twice and proves
+that its exhaustion probability is one half, while two fresh trials exhaust
+with probability one quarter. No independence follows merely from identical
+marginals or repeated witness evaluation. `queryBound` separately multiplies
+an explicit primitive-call bound per trial by the candidate count; a logical
+gated request need not be one physical hash call. The native search,
+state-advance and exhaustion behavior, zero-difficulty bypass, and multi-block
+provider simulation require their own construction connection. This module
+does not establish those connections.
+
 **Compound sites.** A compound site decodes one answer into several values, for
 example the `s` query positions of a FRI query phase squeezed from one absorbed
 prefix. Its error is the joint escape probability of the block under the uniform
@@ -465,7 +489,7 @@ site errors along every prover query and validator path
 
 In the history class the request is the last event of its TranscriptQuery, so
 the raw answer type of a key is a function of its last event
-(`ZkcSecurity.FiatShamir.Lifting`). `Typed.ByLast Raw key` is `Raw` of the key's
+(`ZkcSecurity.ProgramLogic.Transcript.Lifting`). `Typed.ByLast Raw key` is `Raw` of the key's
 last event, and `Unit` at the empty key, which no query reaches; it is uniform
 when every `Raw event` is (`ByLast.sampleable`). At a key `preceding ++ [event]`
 the answer reads as a value of `Raw event` (`ByLast.read`), with the same
@@ -516,7 +540,7 @@ probabilities, below the bound `11 / 15`.
 
 `Typed.Determined` quantifies over every statement the prover can output,
 malformed ones included, so a codec that discharges it is injective and
-prefix-free on the whole statement type (`ZkcSecurity.FiatShamir.Binding`). The
+prefix-free on the whole statement type (`ZkcSecurity.Transformations.FiatShamir.Binding`). The
 typed public values and binding events are part of the construction model
 (`Zkc.Construction.Binding`), whose transcript events include a typed
 public-value binding event (`Zkc.Construction.Event.publicBinding`). A
@@ -589,7 +613,7 @@ unmapped statements, and the rejection it then requires fails.
 Statement determination is the first of four binding obligations. The other
 three are typed obligation structures, each with its claim and its status
 (`ObligationStatus`: a proof, or a reported assumption that cites an entry of
-the obligation's own category in the registry `ZkcSecurity.Registry`, found by
+the obligation's own category in the registry `ZkcSecurity.Claims.Registry`, found by
 its identifier with `registryEntry`):
 
 - **Collision-bounded identity** (`CollisionBoundedIdentity`): a collision game
@@ -701,7 +725,7 @@ realizes a related returned verdict. `Realizes.certificate` makes the
 participant residuals that realize a doomed process-form residual a
 `Typed.Certificate` over the participant interface with field challenges.
 
-`ZkcArkLib.Examples.CompiledGuessFiatShamir` uses it to reach compiled code.
+`ZkcArkLibExamples.CompiledGuessFiatShamir` uses it to reach compiled code.
 The guessing fixture's `example::Proof` Entry
 (`lean/bridges/construction/fixtures/guess.zkc`) receives a guess, draws a field
 challenge, delivers it and accepts when the guess plus the public offset is the
@@ -932,7 +956,7 @@ acceptance of the image implies acceptance of the transform's outcome.
 
 ## The compiled Sumcheck proof Entry
 
-`ZkcArkLib.Examples.CompiledSumcheckFiatShamir` composes these theorems with
+`ZkcArkLibExamples.CompiledSumcheckFiatShamir` composes these theorems with
 the transcript-construction and
 [participant projection](participant-projection.md#property-consumers-and-receipts)
 rules. Its subject is the compiled verifier itself: `compiledVerifier challenge
@@ -992,7 +1016,7 @@ bound `3 / 5`.
 
 ## The plain GKR verifier
 
-`ZkcArkLib.Examples.GkrFiatShamir` bounds the transform of
+`ZkcArkLibExamples.GkrFiatShamir` bounds the transform of
 `ZkcExamples.Structured.GkrVerifier.verifier`, the verifier of the
 [GKR library](../../../libraries/protocols/polynomial/gkr/README.md) for a statement already decoded
 to tables: the claimed outputs and the inputs as tables of the width, and each
@@ -1039,7 +1063,7 @@ expensive site, so `soundness` bounds acceptance by
 
 ## The compiled GKR proof Entry
 
-`ZkcArkLib.Examples.CompiledGkrFiatShamir` states the bound for the compiled
+`ZkcArkLibExamples.CompiledGkrFiatShamir` states the bound for the compiled
 `example::Proof` verifier of the GKR example. `compiledVerifier challenge inputs
 outputs add mul layers selector width initial proof` is the ideal interpretation
 of the exported validator `GkrProof.participant`, as for Sumcheck, on the raw
@@ -1086,7 +1110,7 @@ adaptive statement choice and no executable meaning of this Entry is covered.
 
 ## Canonical nominal GKR pair
 
-`ZkcSecurity.Realizations.Gkr.Generated.Subject` fixes the actual authored pair,
+`ZkcSecurityExamples.Gkr.Generated.Subject` fixes the actual authored pair,
 the retained `circuit_outputs` target, the validator's acceptance output and
 typed public binding. `Canonical.holds_all` identifies the target with independent
 circuit evaluation for every typed public statement. Circuit admission is a
@@ -1148,7 +1172,7 @@ simulations and the joint experiment of a committed opening.
 
 ### Formal readings
 
-`ZkcSecurity.FiatShamir.Obligations` reads each obligation over abstract
+`ZkcSecurity.Transformations.FiatShamir.Obligations` reads each obligation over abstract
 carriers: a context `C` of the data present at one point of an execution and a
 projection `scope : C → K` that keeps its admitted part.
 
@@ -1303,7 +1327,7 @@ the concrete experiment exceeds its probability in the experiment where a
 lazily sampling simulator over the history oracle answers the adversary by at
 most the probability of the bad event (`concrete_le`, through an
 identical-until-bad coupling of simulations with different states,
-`ZkcSecurity.VCVio.UntilBad`), and the bad event has probability at most
+`ZkcSecurity.Mathematics.Oracle.UntilBad`), and the bad event has probability at most
 `(q + V)² / |S|` for `q` adversary calls and `V` verifier calls, initialization
 included (`concrete_le_simulated`).
 
@@ -1315,7 +1339,7 @@ persist. A request answered privately joins an attempt when a later answer
 reaches its state, as the
 [shared contract](../../../docs/spec/ir/construction-obligations.md#provider-simulations-and-their-query-cost)
 allows; that divergence from the concrete hash is the prediction case of the bad
-event. Deferred sampling (`ZkcSecurity.VCVio.Deferral`) shows that the lazily
+event. Deferred sampling (`ZkcSecurity.Mathematics.Oracle.Deferral`) shows that the lazily
 sampling simulation has the law of the translation through `chainSimulator`
 (`simulatedExperiment_eq_translated`), and `simulation` is the `Simulation`
 instance with one family, cost `q`, the verifier's calls as expansion and loss
@@ -1341,7 +1365,7 @@ decoders are modelled ones, remain obligations.
 
 ### The committed-opening experiment
 
-`ZkcSecurity.Examples.CommittedOpening` states the joint security experiment of
+`ZkcSecurityExamples.CommittedOpening` states the joint security experiment of
 a protocol with commitment metadata, transcript binding, one challenge and one
 authenticated opening; its bound is a proposition, proved for a total
 straight-line extractor in
@@ -1673,7 +1697,7 @@ one (`keptFrame`).
 A verifier with committed tables deployed over a
 [native hash-chain suite](../../../docs/spec/ir/construction.md#native-hash-chain-suites)
 calls one byte hash for its transcript and for its Merkle trees.
-`ZkcSecurity.HashChain.Joint` states the frame of that deployment and composes it
+`ZkcSecurity.Transformations.HashChain.Joint` states the frame of that deployment and composes it
 with the commitment stage.
 
 **Namespaces from bytes.** A Merkle tree with hashed leaves makes leaf calls on
@@ -1876,7 +1900,8 @@ pruning. The loss is the prover's pathwise weighted budget plus the original
 validator's charge, the supremum over statements for adaptive statements.
 
 Fixed-statement knowledge soundness goes through the generic Sigma bridge
-(`ZkcSecurity.Endpoint.Sigma`). A one-challenge transcript shape gives the
+(`ZkcSecurity.Transformations.FiatShamir.Knowledge`), over the operational
+interfaces in `Transformations.FiatShamir.Transcript`. A one-challenge transcript shape gives the
 commitment's message events in order (any number, zero included), the
 challenge occurrence, and checked encoders and decoders of commitments and typed
 proofs. Routing sends a history that ends in a commitment's events and the

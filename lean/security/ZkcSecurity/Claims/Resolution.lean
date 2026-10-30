@@ -8,7 +8,7 @@ public import ZkcSecurity.Claims.Premise
 public import ZkcSecurity.Claims.Knowledge
 public import ZkcSecurity.Claims.StageLinks
 public import ZkcSecurity.Claims.Parameters
-public import ZkcSecurity.Claims.PrimitiveDependencies
+public import ZkcSecurity.Bindings.Subjects.PrimitiveDependencies
 
 @[expose] public section
 

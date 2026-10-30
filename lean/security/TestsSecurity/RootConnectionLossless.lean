@@ -2,7 +2,7 @@ module
 
 public import TestsSecurity.RootConnectionPublicDraw
 public import TestsSecurity.RootConnectionControls
-public import ZkcSecurity.FiatShamir.RootConnectionLossless
+public import ZkcSecurity.Claims.Methods.RootConnectionLossless
 
 @[expose] public section
 

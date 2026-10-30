@@ -1,4 +1,4 @@
-import ZkcSecurity.Examples.Components.GkrRoundsGateRealization
+import ZkcSecurityExamples.Components.GkrRoundsGateRealization
 import TestsSecurity.GkrRoundsReference
 import Mathlib.Tactic.NormNum
 

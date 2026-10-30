@@ -1,7 +1,7 @@
-import ZkcSecurity.Generation.Roots.Catalogue
-import ZkcSecurity.Generation.SigmaCompleteness
-import ZkcSecurity.Generation.SubjectABI
-import ZkcSecurity.Generation.SumcheckSourceHelpers
+import ZkcSecurityExamples.Generation.Roots.Catalogue
+import ZkcSecurityTools.Generation.SigmaCompleteness
+import ZkcSecurityTools.Generation.SubjectABI
+import ZkcSecurityTools.Generation.SumcheckSourceHelpers
 
 /-! Controls for generation refusals; no root configuration is owned by tests. -/
 namespace TestsSecurity.GenerateRootControls

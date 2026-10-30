@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Examples.Components.KoalaBearSumcheckRoot
+public import ZkcSecurityExamples.Components.KoalaBearSumcheckRoot
 
 @[expose] public section
 

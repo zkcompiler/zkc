@@ -1,6 +1,6 @@
 module
 
-import Zkc.Construction.ArtifactBindingTactic
+import ZkcTools.ConstructionBindings.ArtifactBindingTactic
 import Zkc.Construction.OriginalComponentReduction
 
 /-! An independent component client checks automatic bind composition. The

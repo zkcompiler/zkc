@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Protocols.Sumcheck.Verifier
-public import ZkcSecurity.Probability.UniformTape
+public import ZkcSecurity.Mathematics.Probability.UniformTape
 public import Mathlib.Tactic.FieldSimp
 public import Mathlib.Tactic.Positivity.Finset
 

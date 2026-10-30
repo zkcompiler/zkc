@@ -97,21 +97,25 @@ def main : IO Unit := do
 
 def endpoint_shells(generation, subject, pair):
     """Select existing theorems at the common consumers' fixed propositions."""
-    component = "ZkcSecurity.Examples.Generated.Components.FourSums"
+    component = "ZkcSecurityExamples.Generated.Components.FourSums"
+    component_namespace = "ZkcSecurity.Examples.Generated.Components.FourSums"
+    subject_namespace = "ZkcSecurity.Examples.Generated.FourSums"
     proof = "TestsSecurity.RootComposition.Four.Endpoints"
     outputs = [component + "Completeness", subject + "CompletenessClaims",
                component + "Soundness", subject + "SoundnessRegistration"]
     declarations = f'''
 run_cmd do
   let metadata ← Lean.Elab.Command.liftTermElabM do
-    let expression ← Lean.Elab.Term.elabTerm (← `(SubjectABI.metadata {subject}.subject)) none
+    let expression ← Lean.Elab.Term.elabTerm (← `(SubjectABI.metadata {subject_namespace}.subject)) none
     Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
     let reduced ← Lean.Meta.withTransparency .all <| Lean.Meta.reduce (← Lean.instantiateMVars expression)
     Lean.Meta.evalExpr SubjectABI.Metadata (Lean.mkConst ``SubjectABI.Metadata) reduced
   let completeness : RootCompleteness.Selection := {{
-    moduleName := {quoted(outputs[0])}, subjectModule := {quoted(subject)}, error := .zero }}
+    moduleName := {quoted(outputs[0])}, namespaceName := {quoted(component_namespace + "Completeness")},
+    subjectModule := {quoted(subject)}, subjectNamespace := {quoted(subject_namespace)}, error := .zero }}
   let soundness : OriginalEndpoint.Output := {{
-    moduleName := {quoted(outputs[2])}, subjectModule := {quoted(subject)},
+    moduleName := {quoted(outputs[2])}, namespaceName := {quoted(component_namespace + "Soundness")},
+    subjectModule := {quoted(subject)}, subjectNamespace := {quoted(subject_namespace)},
     methodModule := "TestsSecurity.RootComposition.FourSoundness",
     sampling := "ZkcSecurity.Domains.PrimeField.rawSampleable blsModulus",
     capabilities := {quoted(proof + '.Soundness.claimCapabilities')},
@@ -122,14 +126,14 @@ run_cmd do
   let .ok soundnessText := OriginalEndpoint.soundnessSource metadata {pair}.Validator.participant soundness
     | Lean.throwError "common original endpoint refused"
   let registration : ZkcTools.StructuredSource.Root.DomainClaimLibraryOutput := {{
-    moduleName := {quoted(outputs[3])}, imports := [{quoted(subject)}, {quoted(outputs[2])}],
-    subjectExpression := {quoted(subject + '.validatorSubject')},
-    artifactsExpression := {quoted(subject + '.validatorArtifacts')},
-    capabilitiesExpression := {quoted(outputs[2] + '.capabilities')},
+    moduleName := {quoted(outputs[3])}, namespaceName := {quoted(subject_namespace + "SoundnessRegistration")}, imports := [{quoted(subject)}, {quoted(outputs[2])}],
+    subjectExpression := {quoted(subject_namespace + '.validatorSubject')},
+    artifactsExpression := {quoted(subject_namespace + '.validatorArtifacts')},
+    capabilitiesExpression := {quoted(component_namespace + 'Soundness.capabilities')},
     applicationParameter := some "application",
-    theoremMethods := [("fs.keyed_soundness", 0, {quoted(outputs[2] + '.scalar_meaning')}),
-      ("fs.keyed_charged", 0, {quoted(outputs[2] + '.charged_meaning')})],
-    theoremNormalization := {quoted([outputs[2] + '.' + name for name in ['schedule', 'validatorCost', 'scalarBound']] + [proof + '.Soundness.' + name for name in ['schedule', 'price', 'priceBound', 'budget', 'validatorCost', 'scalarBound']] + ['ZkcSecurity.Claims.CompiledSoundness.uniformSchedule'])} }}
+    theoremMethods := [("fs.keyed_soundness", 0, {quoted(component_namespace + 'Soundness.scalar_meaning')}),
+      ("fs.keyed_charged", 0, {quoted(component_namespace + 'Soundness.charged_meaning')})],
+    theoremNormalization := {quoted([component_namespace + 'Soundness.' + name for name in ['schedule', 'validatorCost', 'scalarBound']] + [proof + '.Soundness.' + name for name in ['schedule', 'price', 'priceBound', 'budget', 'validatorCost', 'scalarBound']] + ['ZkcSecurity.Claims.CompiledSoundness.uniformSchedule'])} }}
   let sources : List (String × String) := [
     ({quoted(outputs[0])}, RootCompleteness.directSource completeness
       "TestsSecurity.RootComposition.FourEndpoints" {quoted(proof + '.compiled_ideal_complete')}
@@ -140,8 +144,8 @@ run_cmd do
     ({quoted(outputs[3])}, ZkcTools.StructuredSource.Root.domainClaimLibrarySource registration)]
   Lean.Elab.Command.elabCommand (← `(def $(Lean.mkIdent `sources) : List (String × String) := $(Lean.quote sources)))
 '''
-    generation.emit("EndpointShells", ["ZkcSecurity.Generation.RootCompleteness",
-                    "ZkcSecurity.Generation.OriginalEndpoint", subject, pair],
+    generation.emit("EndpointShells", ["ZkcSecurityTools.Generation.RootCompleteness",
+                    "ZkcSecurityTools.Generation.OriginalEndpoint", subject, pair],
                     "  for (name, text) in sources do emit name (.ok text)", outputs,
                     "open ZkcSecurity.Generation\n" + declarations)
 
@@ -163,8 +167,10 @@ def check(args):
     pair = f"ZkcExamples.Construction.Generated.{name}Pair"
     mathematics = f"ZkcExamples.Structured.Generated.Mathematics.{name}"
     connection = f"ZkcExamples.Structured.Generated.Connections.{name}"
-    subject = f"ZkcSecurity.Examples.Generated.{name}"
-    abi = f"ZkcSecurity.Examples.Generated.Components.{name}ABI"
+    subject = f"ZkcSecurityExamples.Generated.{name}"
+    subject_namespace = f"ZkcSecurity.Examples.Generated.{name}"
+    abi = f"ZkcSecurityExamples.Generated.Components.{name}ABI"
+    abi_namespace = f"ZkcSecurity.Examples.Generated.Components.{name}ABI"
     source_module = "TestsSecurity.RootComposition.FourSource"
     result_file = generation.directory / "acceptance.json"
     result_file.unlink(missing_ok=True)
@@ -194,7 +200,7 @@ def main : IO Unit := do
     source_record.write_text(json.dumps({module: generation.cache[module]
                                        for module in source_modules}, indent=2) + "\n")
     # Preserve the common renderer's exact requests before resolving them.
-    request_module, requests = source_request_module(subject, generation.directory / name)
+    request_module, requests = source_request_module(subject, subject_namespace, generation.directory / name)
     request_path = generation.directory / "unresolved-requests" / (request_module + ".lean")
     request_path.parent.mkdir(exist_ok=True)
     request_path.write_text(requests)
@@ -221,7 +227,7 @@ def main : IO Unit := do
         # Current source-path selection supplies charges, subject and target data.
         identities = json.loads((generation.directory / name / "identities.json").read_text())
         path = generation.directory / "Subject.lean"
-        generation.printer("Subject", f'''import ZkcSecurity.Generation.Roots.Catalogue
+        generation.printer("Subject", f'''import ZkcSecurityExamples.Generation.Roots.Catalogue
 import {inputs}
 import {pair}
 open ZkcSecurity.Generation ZkcTools.StructuredSource.Root
@@ -230,6 +236,7 @@ def selection : Roots.Selection := {{
  name := {quoted(name)}, snapshot := {data}.snapshot, helpers := [],
  artifacts := {pair}.artifacts, target := "totals",
  mathematics := {{
+   moduleName := {quoted(config['model_module'])}
    model := {quoted(config['model'])}
    fieldType := {quoted(config['field_type'])}
    groupType := {quoted(config['group_type'])}
@@ -249,11 +256,11 @@ def main : IO Unit := do
 ''')
         generation.retain(subject, path.read_text())
         abi_path = generation.directory / "ABI.lean"
-        generation.printer("ABI", f'''import ZkcSecurity.Generation.SubjectABI.Command
+        generation.printer("ABI", f'''import ZkcSecurityTools.Generation.SubjectABI.Command
 import {subject}
 open ZkcSecurity.Generation.SubjectABI
 set_option maxRecDepth 10000
-derive_subject_abi generated for {subject}.subject module {quoted(abi)} from {quoted(subject)}
+derive_subject_abi generated for {subject_namespace}.subject using {{ moduleName := {quoted(abi)}, namespaceName := {quoted(abi_namespace)}, subjectModule := {quoted(subject)}, subjectNamespace := {quoted(subject_namespace)} }}
 def main : IO Unit := IO.FS.writeFile {quoted(str(abi_path))} generated
 ''')
         generation.retain(abi, abi_path.read_text())

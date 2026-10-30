@@ -23,7 +23,7 @@ def modules(selection: str) -> tuple[str, ...]:
     """Physical output names only; generation and body selection belong to Lean."""
     if selection == "Gkr":
         binding = "ZkcExamples.Structured.Generated.Bindings.GkrRounds"
-        return (binding, binding + "Callbacks", binding + "Gate", binding + "Caller",
+        return ("Zkc.Protocols.Gkr.Source.RoundHelpers", binding, binding + "Callbacks", binding + "Gate", binding + "Caller",
                 "ZkcExamples.Structured.Generated.Presentations.Gkr")
     if selection not in SELECTIONS:
         raise ValueError(f"unknown source selection: {selection}")
@@ -57,10 +57,14 @@ def main() -> None:
                     stem = Path("ZkcExamples/Structured/Generated/Bindings/GkrRounds")
                     suffixes = {".lean": ".lean", ".callbacks.lean": "Callbacks.lean",
                                 ".template.lean": "Gate.lean", ".caller.lean": "Caller.lean"}
-                    expected_bindings = {Path(str(stem) + suffix) for suffix in suffixes}
+                    template_path = Path("Zkc/Protocols/Gkr/Source/RoundHelpers.lean")
+                    expected_bindings = {Path(str(stem) + suffix) for suffix in suffixes} | {template_path}
                     actual_bindings = {p.relative_to(bindings) for p in Path(bindings).rglob("*.lean")}
                     if actual_bindings != expected_bindings:
                         raise SystemExit("source-views: unexpected GKR binding output inventory")
+                    target = Path(directory) / template_path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes((Path(bindings) / template_path).read_bytes())
                     for printed, shipped in suffixes.items():
                         target = Path(directory) / (str(stem) + shipped)
                         target.parent.mkdir(parents=True, exist_ok=True)

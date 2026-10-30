@@ -351,7 +351,7 @@ theorems = [
 subject = "Canonical GKR pair"
 result = '''
 The actual compiled GKR pair has perfect completeness and adaptive scalar and charged soundness for the fixed registered circuit-output relation over the BLS scalar field, with width and layer count at most four. Completeness uses the actual producer-computed proof under the independent honest-input contract; soundness covers every typed validator input, including malformed tables. Both properties reuse the full nominal validator simulation, preserving all replies, stops, frames and transcript state. The scalar bound is `4 * (Q + 40) / |F|`, with price `4 / |F|` at each selected challenge and total validator cost `160 / |F|`. These are compiled-ideal meanings; they do not establish native byte execution, zero knowledge or commitment security'''
-owners = [["GKR canonical claims", "security/ZkcSecurity/Realizations/Gkr/README.md"], ["Formal support", "docs/support.md"]]
+owners = [["GKR canonical claims", "security/ZkcSecurityExamples/Gkr/README.md"], ["Formal support", "docs/support.md"]]
 theorems = [
   "ZkcSecurity.Realizations.Gkr.Generated.Completeness.compiled_ideal_complete",
   "ZkcSecurity.Realizations.Gkr.Generated.Soundness.scalar_meaning",

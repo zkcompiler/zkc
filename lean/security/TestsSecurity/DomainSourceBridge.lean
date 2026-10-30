@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.FiatShamir.DomainViewReading
+public import ZkcSecurity.Bindings.Transcript.DomainViewReading
 public import ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator
 
 @[expose] public section

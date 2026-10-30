@@ -1,5 +1,5 @@
-import ZkcSecurity.Realizations.Gkr.Generated.SubjectCompletenessClaims
-import ZkcSecurity.Realizations.Gkr.Generated.SubjectSoundnessClaims
+import ZkcSecurityExamples.Gkr.Generated.SubjectCompletenessClaims
+import ZkcSecurityExamples.Gkr.Generated.SubjectSoundnessClaims
 
 /-! The same actual source pair and fixed registered circuit-output target
 supply universal soundness and actual-producer completeness receipts. -/

@@ -1,4 +1,4 @@
-import ZkcSecurity.Realizations.Gkr.SourceAdmission
+import ZkcSecurityExamples.Gkr.SourceAdmission
 import ZkcExamples.Structured.GkrInputInvocation
 
 set_option autoImplicit false

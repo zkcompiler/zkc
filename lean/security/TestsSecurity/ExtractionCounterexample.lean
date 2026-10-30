@@ -1,5 +1,7 @@
-import ZkcSecurity.Endpoint.Extraction
+import ZkcSecurity.Transformations.FiatShamir.Replay
+import ZkcSecurity.Bindings.Extraction.Layout
 import Mathlib.Data.ZMod.Basic
+import Mathlib.Algebra.Field.ZMod
 open OracleComp OracleSpec ZkcSecurity.Endpoint.Extraction
 
 /-! A total-relation control for the actual generic replay implementation.

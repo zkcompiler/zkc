@@ -989,6 +989,29 @@ iteration count is unrolled. The same constructors serve producer and validator
 roles, plain delivery, Fiat–Shamir delivery and supported private services.
 Unknown shapes refuse rather than become semantic assumptions.
 
+`ConnectionTargetPlacement.CheckedBody` supports a body checked once with
+placement parameters. It retains the existing alignment and physical-extent
+judgments, indexed by the exact library entry and selected earlier library.
+Its `Placement` fixes typed inputs, caller layout, static application context,
+symbolic dynamic frames, selected returns, output/history locations and actual
+target prefix. A registered family can admit different physical offsets,
+input read aliases and enclosing scopes through finite typed readbacks and
+occurrence checks. Fresh writes and immutable captures follow the original
+alignment rules. The existing substitution and frame-renaming laws retain their
+authority; this adds no semantic callback or alternative simulation rule.
+
+The proposer matches all those indices and supplies the shared family's
+alignment and extent projections to the existing `application` or
+`applicationRetainedHistory` constructor. It separately checks exact source-entry
+identity because equality of normalized forms is insufficient. The family body
+is referenced, rather than re-created at each occurrence. This mechanism requires
+an explicitly checked parameterized family; it is not universal relocation of
+arbitrary closed certificates. Unsupported placements use the original prover,
+or explicitly refuse when `zkc.connection.requireReusableBodies` is enabled.
+The strict-mode tests exercise a guard, stopping helper and all-reply receive
+under nested symbolic loops, read-only input aliasing, and retained current
+history. They do not establish GKR adoption or a native catalog association.
+
 Internal applications carry a finite typed return selection. The
 `ConnectionReturnProjection.form_denote` theorem proves that projecting a
 callee changes only its successful return leaves: sends, queries, helper and

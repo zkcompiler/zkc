@@ -1,6 +1,6 @@
-import ZkcSecurity.Examples.Subjects.Schnorr.Claims
-import ZkcArkLib.Examples.Subjects.Guess.Claims
-import ZkcArkLib.Examples.Subjects.Sumcheck.Claims
+import ZkcSecurityExamples.Subjects.Schnorr.Claims
+import ZkcArkLibExamples.Subjects.Guess.Claims
+import ZkcArkLibExamples.Subjects.Sumcheck.Claims
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.Field.ZMod
 

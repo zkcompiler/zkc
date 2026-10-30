@@ -1,5 +1,7 @@
 module
 
+public meta import ZkcTools.ConstructionBindings.ArtifactBindingTactic
+
 public import ZkcExamples.Executable.DeferredRoundsFacts
 public import ZkcExamples.Executable.DeferredRoundsDomainNormalization
 public import Zkc.Executable.ByteParticipantTransport

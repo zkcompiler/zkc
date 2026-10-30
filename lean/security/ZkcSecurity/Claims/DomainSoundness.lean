@@ -1,9 +1,9 @@
 module
 
 public import ZkcSecurity.Claims.DomainModel
-public import ZkcSecurity.FiatShamir.HonestCompiled
-public import ZkcSecurity.FiatShamir.DomainBinding
-public import ZkcSecurity.FiatShamir.DomainReduction
+public import ZkcSecurity.Bindings.Transcript.HonestCompiled
+public import ZkcSecurity.Bindings.Transcript.DomainBinding
+public import ZkcSecurity.Bindings.Transcript.DomainReduction
 
 @[expose] public section
 

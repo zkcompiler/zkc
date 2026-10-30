@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Families.Sumcheck.Process
-public import ZkcSecurity.Obligations.Derivation
+public import ZkcSecurity.ProgramLogic.Derivation
 
 @[expose] public section
 

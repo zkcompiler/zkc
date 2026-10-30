@@ -1,6 +1,6 @@
 import Zkc.Source.Structured.NormalForm.Presentation
 import ZkcExamples.Structured.ChaumPedersenViews
-import ZkcExamples.Structured.SumcheckRoundNormalForms
+import Zkc.Protocols.Sumcheck.Source.RoundNormalForms
 
 /-! Controls for the normalizer. The migrated generated modules are the
 positive controls; these cases show that the kernel refuses a form literal

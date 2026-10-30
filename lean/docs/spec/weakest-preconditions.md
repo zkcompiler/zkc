@@ -18,7 +18,7 @@ module never installs a process-wide instance.
 | Pathwise cost | History and remaining `ENNReal` credit | At least the continuation's reserved credit | `True` at the cost boundary |
 | Concrete execution | Complete handler state and preceding event trace | Actual returned value, final state and trace | Explicit reason, final state and trace |
 
-`ZkcSecurity.Obligations.WeakestPrecondition` owns the first two interpretations.
+`ZkcSecurity.ProgramLogic.WeakestPrecondition` owns the first two interpretations.
 Its charged WP is definitionally equal to `Interface.Charged` at the soundness
 stop boundary. `triple_iff_derivation` proves equivalence to the existence of the
 existing `Derivation`; `ofTriple` retrieves that proof object. This use of choice

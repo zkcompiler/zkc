@@ -1,8 +1,8 @@
 module
 
 public import ZkcExamples.Structured.Generated.Bindings.FourSumsInputs
-public import ZkcSecurity.Realizations.Sumcheck.SourceFamilyRoots
-public import ZkcSecurity.Realizations.Sumcheck.SourceFamilyPair
+public import ZkcSecurity.Bindings.Sumcheck.SourceFamilyRoots
+public import ZkcSecurity.Bindings.Sumcheck.SourceFamilyPair
 public meta import ZkcTools.StructuredSource.ReferenceInstallation
 public meta import ZkcTools.StructuredSource.InferReferenceInstallation
 public meta import ZkcTools.StructuredSource.NormalizedRoot

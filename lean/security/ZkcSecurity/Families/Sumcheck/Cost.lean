@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Families.Sumcheck.Derivation
-public import ZkcSecurity.FiatShamir.Budget
+public import ZkcSecurity.ProgramLogic.Transcript.Budget
 public import Zkc.Transcript.ReturnBudget
 
 @[expose] public section

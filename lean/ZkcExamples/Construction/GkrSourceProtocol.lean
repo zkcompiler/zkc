@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.GkrSourceVerifier
-public import ZkcExamples.Structured.GkrVerifierProcess
+public import Zkc.Protocols.Gkr.Source.VerifierProcess
 public import ZkcExamples.Structured.Generated.Presentations.Gkr
 public import Zkc.Construction.Compiled
 public import ZkcExamples.Construction.GkrProofParticipant

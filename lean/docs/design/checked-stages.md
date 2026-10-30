@@ -87,7 +87,7 @@ GKR's canonical consumers use the common generated root connection. The old
 GKR-specific certificate generator and duplicate validator view are deleted;
 its remaining source mathematics/presentation is counted separately. No full
 connection for the retained alternate-layout syntax control is claimed. See the
-[connection owner](../../security/ZkcSecurity/Realizations/Gkr/README.md).
+[connection owner](../../security/ZkcSecurityExamples/Gkr/README.md).
 
 Property builders reuse the source anchor and connection while consuming
 mathematical reference, honest, No/escape and cost laws. Successful structural

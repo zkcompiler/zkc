@@ -23,7 +23,14 @@ def main : IO Unit := do
         let errors ← messages.toList.mapM fun message => message.toString
         pure <| Json.mkObj [("error", toJson (String.intercalate "\n" errors))]
       else
-        pure <| Json.mkObj [("imports", toJson ((Elab.HeaderSyntax.imports header false).map (·.module.toString)))]
+        let imports := Elab.HeaderSyntax.imports header false
+        let details := imports.map fun entry => Json.mkObj [
+          ("module", toJson entry.module.toString),
+          ("public", toJson entry.isExported),
+          ("meta", toJson entry.isMeta),
+          ("all", toJson entry.importAll)]
+        pure <| Json.mkObj [("imports", toJson (imports.map (·.module.toString))),
+          ("import_details", toJson details)]
     catch error => pure <| Json.mkObj [("error", toJson error.toString)]
     output.putStrLn result.compress
     output.flush

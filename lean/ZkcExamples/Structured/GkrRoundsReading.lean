@@ -1,9 +1,9 @@
 module
 
 public import ZkcExamples.Structured.Generated.Presentations.Gkr
-public import ZkcExamples.Structured.SumcheckVerifierHelpers
+public import Zkc.Protocols.Sumcheck.Source.VerifierHelpers
 public import ZkcExamples.Structured.GkrSourceLaws
-public import ZkcExamples.Structured.GkrVerifierProcess
+public import Zkc.Protocols.Gkr.Source.VerifierProcess
 public import Zkc.Source.Structured.CommonAdapter
 
 @[expose] public section

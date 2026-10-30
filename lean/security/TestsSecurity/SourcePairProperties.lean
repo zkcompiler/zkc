@@ -1,8 +1,8 @@
 module
 
-public import ZkcSecurity.Source.RootPair
-public import ZkcSecurity.Realizations.Sumcheck.SourcePairReduction
-public import ZkcSecurity.Realizations.Sumcheck.SourceRootReference
+public import ZkcSecurity.Bindings.Source.RootPair
+public import ZkcSecurity.Bindings.Sumcheck.SourcePairReduction
+public import ZkcSecurityExamples.Sumcheck.SourceRootReference
 
 @[expose] public section
 

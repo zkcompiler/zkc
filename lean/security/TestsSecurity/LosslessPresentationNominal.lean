@@ -1,6 +1,6 @@
 module
 
-import ZkcSecurity.FiatShamir.NominalField
+import ZkcSecurity.Bindings.Transcript.NominalField
 
 set_option autoImplicit false
 namespace TestsSecurity.LosslessPresentationNominal
