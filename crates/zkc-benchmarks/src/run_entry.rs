@@ -333,7 +333,7 @@ mod tests {
         let package = json!({"format":"zkc.entry/0","original":"original",
             "interface":interface.to_string(),"artifact":artifact.to_string(),"assets":[],
             "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
-                "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true}}).to_string();
+                "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": zkc::entry::OracleSelection::default()}}).to_string();
         let path = directory.join("function.zkpkg");
         std::fs::write(&path, &package).unwrap();
         let arguments = directory.join("arguments.json");

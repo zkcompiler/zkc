@@ -5,6 +5,7 @@
 #include "DomainClosure.h"
 #include "Effects.h"
 #include "FiniteContracts.h"
+#include "OracleDefinitions.h"
 #include "Semantics.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Services.h"
@@ -126,6 +127,17 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
       if (!types.charge(call->operands.size() + call->arguments.size() +
                             call->scopedArguments.size() +
                             call->domainArguments.size() + 1,
+                        op.span))
+        return false;
+      for (const auto &argument : call->arguments)
+        if (!types.chargeType(argument, op.span))
+          return false;
+      if (call->module && !types.chargeType(*call->module, op.span))
+        return false;
+    } else if (const auto *call =
+                   std::get_if<OracleInstantiation>(&op.action)) {
+      if (!types.charge(call->operands.size() + call->arguments.size() +
+                            call->receivers.size() + 1,
                         op.span))
         return false;
       for (const auto &argument : call->arguments)
@@ -276,7 +288,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           return false;
         if (!types.permissions(value.type, value.span))
           return false;
-        if (mode != Body::Mode::Math &&
+        if (mode != Body::Mode::Math && mode != Body::Mode::Oracle &&
             !(mode == Body::Mode::Protocol
                   ? types.protocolValue(value.type, value.span)
                   : types.executableType(value.type, value.span)))
@@ -597,7 +609,19 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                               "closed oracle send bound differs from kind",
                               op.span);
         }
-        if (auto *application = std::get_if<ProtocolApplication>(&op.action)) {
+        if (auto *construction = std::get_if<OracleInstantiation>(&op.action)) {
+          DeclarationId target = construction->callee;
+          if (!closeCallable(target, construction->module,
+                             construction->arguments, bindings, op.span))
+            return false;
+          auto instance = instantiate(target, construction->arguments,
+                                      depth + 1, {}, {}, {});
+          if (!instance)
+            return false;
+          construction->callee = *instance;
+          height = std::max(height, heights.at(instance->index) + 1);
+        } else if (auto *application =
+                       std::get_if<ProtocolApplication>(&op.action)) {
           for (auto &argument : application->arguments)
             if (!closeType(argument, bindings, op.span))
               return false;
@@ -617,7 +641,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           if (!closeCallable(target, call->module, call->arguments, bindings,
                              op.span))
             return false;
-          if (body.mode == Body::Mode::Math &&
+          if ((body.mode == Body::Mode::Math ||
+               body.mode == Body::Mode::Oracle) &&
               declarations[target.index].kind == Declaration::Kind::Math &&
               declarations[target.index].finiteDefinition &&
               !declarations[target.index].abstract) {
@@ -1008,7 +1033,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                    source.span);
         return {};
       }
-      auto mode = source.kind == Declaration::Kind::Protocol
+      auto mode = source.kind == Declaration::Kind::Oracle ? Body::Mode::Oracle
+                  : source.kind == Declaration::Kind::Protocol
                       ? Body::Mode::Protocol
                   : (source.kind == Declaration::Kind::Local ||
                      source.kind == Declaration::Kind::EntryFunction)
@@ -1159,6 +1185,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           !types.charge(source.effectAllowance->dependencies.size() + 1,
                         source.span))
         return {};
+      unsigned height = 1;
       Declaration result = source;
       if (source.effectAllowance) {
         std::vector<EffectSummary> effects;
@@ -1230,6 +1257,22 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
               !types.oraclePort(port))
             return {};
         }
+      if (result.oracleDefinition) {
+        auto definition = closeOracleDefinition(types, *result.oracleDefinition,
+                                                bindings, result.span);
+        if (!definition)
+          return {};
+        // The predicate never recursively instantiates its owner. Publish the
+        // reverse closed link here after obtaining its independent instance.
+        auto predicate =
+            instantiate(definition->admissibility, args, depth + 1, {}, {}, {});
+        if (!predicate)
+          return {};
+        height = std::max(height, heights.at(predicate->index) + 1);
+        definition->admissibility = *predicate;
+        declarations[predicate->index].oraclePredicateOwner = id;
+        result.oracleDefinition = std::move(definition);
+      }
       if (result.primitive)
         for (auto &argument : result.primitive->arguments)
           if (!closeType(argument, bindings, result.span))
@@ -1265,7 +1308,6 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         if (clause.decision && !types.selectedType(result, *clause.decision))
           return {};
       }
-      unsigned height = 1;
       if (result.body) {
         assert(result.body->mode == mode && "declaration body mode changed");
         auto body = std::make_shared<Body>(*result.body);
@@ -1454,6 +1496,9 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           rule.handler = *handler;
         }
       }
+      if (result.oracleDefinition &&
+          !checkOracleDefinition(types, declarations, result))
+        return {};
       result.scopedInputs.clear();
       result.domainInputs.clear();
       result.inputOrder.clear();
@@ -1568,6 +1613,13 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
               decl.span, {previous.span});
       }
     }
+    // Dormant closed definitions are part of the selected source closure too.
+    // Open templates were checked eagerly and cannot have monomorphic SSA.
+    for (unsigned i = 0; i < templates; ++i)
+      if (declarations[i].kind == Declaration::Kind::Oracle &&
+          declarations[i].parameters.empty() &&
+          !instantiate(DeclarationId{i}, {}, 1, {}, {}, {}))
+        return false;
     declarations[selected.index].target = *instance;
     for (auto id : generatedTemplates)
       declarations[id.index].body.reset();

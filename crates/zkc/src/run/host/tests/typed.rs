@@ -229,7 +229,7 @@ fn typed_requests_preserve_structure_capacity_and_resource_refusals() {
     inputs.setups.clear();
 
     let mut limits = HostLimits::default();
-    limits.capacity.values.live_bytes = 512;
+    limits.capacity.values.live_bytes = 2 * Value::Bool(false).retained_bytes() - 1;
     let bounded = self::host(&raw, limits);
     assert_eq!(refusal(&bounded, &inputs), "artifact-input-bytes-limit");
     let mut limits = HostLimits::default();

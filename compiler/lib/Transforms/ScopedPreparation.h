@@ -19,8 +19,12 @@ namespace zkc::protocol {
 // nested callback. Independent checking does not consult this producer choice.
 // Shared matching/checking work is never replenished on retry. fixedBindings
 // borrows original binding declarations fixed by validated physical requests.
-// With a selection context, emit one attempt and report its checking outcome;
-// the enclosing physical transaction owns retry and discard accounting.
+// A containing physical transaction may defer correspondence to its independent
+// validation owner; it must check the actual retained candidate before
+// returning any plan. Admission and construction remain immediate. Standalone
+// calls keep immediate correspondence. With a selection context, emit one
+// attempt and report its checking outcome; the enclosing physical transaction
+// owns retry and discard accounting.
 mlir::OwningOpRef<mlir::ModuleOp> prepareScopedFinite(
     mlir::ModuleOp, mathematical::RealizationWork &, uint64_t &copy,
     uint64_t &siteBytes, std::optional<CapacityCause> &capacity,
@@ -30,6 +34,7 @@ mlir::OwningOpRef<mlir::ModuleOp> prepareScopedFinite(
     mathematical::VerificationDecision *outcome = nullptr,
     const mathematical::MathematicalRecipes &recipes =
         mathematical::mathematicalRecipes(),
-    mathematical::RealizationTrace *trace = nullptr);
+    mathematical::RealizationTrace *trace = nullptr,
+    bool deferCorrespondence = false);
 } // namespace zkc::protocol
 #endif

@@ -28,7 +28,7 @@ macro_rules! entry_options {
     ($($extra:expr),* $(,)?) => {
         entry_options!(@inspection Opt::new("--report=DIRECTORY"), Opt::new("--dump=PHASES"), Opt::new("--cache=DIRECTORY"), Opt::new("--profile=NAME"), Opt::new("--no-simplify"),
             Opt::new("--release-storage"), Opt::new("--fuse-vector-reductions"), Opt::new("--fuse-collect-fold"), Opt::new("--no-finite-bulk"),
-            Opt::new("--no-calculation-batching"), $($extra),*)
+            Opt::new("--no-calculation-batching"), Opt::new("--oracle-realization=JSON"), $($extra),*)
     };
 }
 const ENTRY: &str = "Select ENTRY by unique short or qualified name. With no name, execution selects the\nsole Entry of the required kind. Use project discovery, --project or explicit modules.
@@ -79,7 +79,7 @@ Use inspect for API, placement and notation inventories.\nChecking does not exec
             Opt::new("--report=DIRECTORY"), Opt::new("--dump=PHASES"), Opt::new("--cache=DIRECTORY"), Opt::new("--profile=NAME"), Opt::new("--no-simplify"),
             Opt::new("--release-storage"),
             Opt::new("--fuse-vector-reductions"), Opt::new("--fuse-collect-fold"), Opt::new("--no-finite-bulk"),
-            Opt::new("--no-calculation-batching"),
+            Opt::new("--no-calculation-batching"), Opt::new("--oracle-realization=JSON"),
         ],
         description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.
 Select generic runs with closed arguments, e.g. 'Schnorr<G>'.
@@ -802,6 +802,60 @@ mod tests {
         ] {
             assert!(command(name).is_none());
             assert_eq!(run(name, &[])["code"], "unknown-command");
+        }
+    }
+    #[test]
+    fn oracle_selection_is_unique_and_only_available_with_source_compilation() {
+        let text = zkc::entry::OracleSelection::default()
+            .canonical_json()
+            .unwrap();
+        let flag = format!("--oracle-realization={text}");
+        for name in ["compile", "run", "prove", "verify", "bindings"] {
+            let spec = command(name).unwrap();
+            assert_eq!(
+                spec.parse(std::slice::from_ref(&flag))
+                    .unwrap()
+                    .value("--oracle-realization"),
+                Some(text.as_str())
+            );
+            for invalid in [
+                vec![flag.clone(), flag.clone()],
+                args(&["--oracle-realization"]),
+                args(&["--oracle-realization="]),
+            ] {
+                assert_eq!(spec.parse(&invalid).err().unwrap().code, "cli-option");
+            }
+            if name != "compile" {
+                let report = run(
+                    name,
+                    &[
+                        flag.clone(),
+                        "--package=/missing.zkpkg".into(),
+                        format!("--sha256={}", "0".repeat(64)),
+                    ],
+                );
+                assert_eq!(report["code"], "cli-usage", "{name}");
+                assert_eq!(report["phase"], "arguments", "{name}");
+            }
+        }
+        for name in [
+            "check",
+            "inspect",
+            "prepare",
+            "bundle run",
+            "bundle prove",
+            "bundle verify",
+        ] {
+            assert_eq!(
+                command(name)
+                    .unwrap()
+                    .parse(std::slice::from_ref(&flag))
+                    .err()
+                    .unwrap()
+                    .code,
+                "cli-option",
+                "{name}"
+            );
         }
     }
 }

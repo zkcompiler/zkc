@@ -18,6 +18,14 @@ void buildExecutionPipeline(mlir::OpPassManager &, bool simplify = false,
                             bool fixPolynomials = false,
                             MathematicalSelectionPolicy = {},
                             mathematical::RealizationTrace * = nullptr);
+/// Close the participant deployment by one checked scoped expansion and helper
+/// pruning, then form executable computations. Use for native compilation and
+/// the full textual participant pipeline, not standalone mathematical
+/// rewriting.
+void buildClosedExecutionPipeline(mlir::OpPassManager &, bool simplify = false,
+                                  bool fixPolynomials = false,
+                                  MathematicalSelectionPolicy = {},
+                                  mathematical::RealizationTrace * = nullptr);
 struct PhysicalPipelineOptions {
   protocol::Assignments selections;
   llvm::SmallVector<target::FunctionPortSelection> functionPorts;

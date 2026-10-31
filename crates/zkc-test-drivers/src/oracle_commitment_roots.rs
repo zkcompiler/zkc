@@ -1,7 +1,9 @@
 //! Common oracle roots use the selected scheme and preserve receiver shape custody.
 use std::path::Path;
 use zkc_cpu::merkle::Scheme;
-use zkc_cpu::{CpuBackend, Domain, EntryPolicy, KoalaBear, KoalaBearExt4, Policy, Value, Variant};
+use zkc_cpu::{
+    CpuBackend, Domain, EntryPolicy, KoalaBear, KoalaBearExt4, Policy, Sequence, Value, Variant,
+};
 use zkc_kernels::plonky3::{
     merkle::{commit, poseidon2::Quartic},
     oracle::Shape,
@@ -188,6 +190,18 @@ impl Hooks<CpuBackend> for QueryMessages {
         let response = exchange.site.contains("opening_response");
         let expected = if request { ("V", "P") } else { ("P", "V") };
         assert_eq!((exchange.sender, exchange.receiver), expected);
+        let packet = if request || response {
+            let decoded = backend("V")
+                .decode_native_value(exchange.ty, bytes)
+                .unwrap();
+            let Value::Sequence(packet) = decoded else {
+                panic!("non-sequence opening packet")
+            };
+            assert_eq!(packet.len(), 1, "PerQuery packet capacity is one");
+            Some(packet)
+        } else {
+            None
+        };
         if self.fault == "proof" && response {
             let mut changed = bytes.to_vec();
             *changed.last_mut().unwrap() ^= 1;
@@ -200,10 +214,8 @@ impl Hooks<CpuBackend> for QueryMessages {
             ))
             || (response && matches!(self.fault, "row" | "response_constructor"))
         {
-            let decoded = backend("V")
-                .decode_native_value(exchange.ty, bytes)
-                .unwrap();
-            let Value::Variant(value) = decoded else {
+            let component = packet.as_ref().unwrap().get(0).unwrap();
+            let Value::Variant(value) = component else {
                 panic!("non-variant opening")
             };
             let mut payload = value.payload().to_vec();
@@ -224,8 +236,11 @@ impl Hooks<CpuBackend> for QueryMessages {
                 }
                 _ => unreachable!(),
             }
-            Some(Value::Variant(
-                Variant::new(exchange.ty.clone(), alternative, payload).unwrap(),
+            let changed = Value::Variant(
+                Variant::new(component.physical_type(), alternative, payload).unwrap(),
+            );
+            Some(Value::Sequence(
+                Sequence::new(exchange.ty.clone(), vec![changed], &Policy::default()).unwrap(),
             ))
         } else if self.fault == "root" && exchange.site.contains("deliver") {
             Some(Value::MerkleDigest(
@@ -444,7 +459,8 @@ fn virtual_trials(directory: &Path) -> usize {
                     assert!(matches!(report.outcome, Outcome::ParticipantStopped { .. }));
                     assert!(verifier.outputs.is_empty());
                 }
-                // Duplicates and unused answers remain separate reached openings.
+                // PerQuery capacity one keeps duplicates and unused answers as
+                // separate reached openings, including across virtual children.
                 // An invalid later mapped query (including a zero-query child)
                 // retains the first opening; authentication failure stops there.
                 let expected = if only || position >= 8 {
@@ -631,15 +647,11 @@ impl Hooks<CpuBackend> for BatchMessages {
         let decoded = backend("V")
             .decode_native_value(exchange.ty, bytes)
             .unwrap();
-        let Value::Variant(outer) = &decoded else {
-            panic!("non-variant packet")
+        let Value::Sequence(packet) = decoded else {
+            panic!("non-sequence opening packet")
         };
-        let packet = matches!(outer.payload().first(), Some(Value::Variant(_)));
-        let mut components = if packet {
-            outer.payload().to_vec()
-        } else {
-            vec![decoded.clone()]
-        };
+        assert!(!packet.is_empty(), "empty opening packet was exchanged");
+        let mut components: Vec<_> = packet.iter().cloned().collect();
         if request {
             self.requests.push(
                 components
@@ -665,9 +677,17 @@ impl Hooks<CpuBackend> for BatchMessages {
         }
         let inject = !self.injected
             && match self.fault {
-                "request-position" | "request-instance" | "unknown-constructor" => request,
-                "row" | "proof" => response,
-                "response-swap" => response && packet,
+                "request-position"
+                | "request-instance"
+                | "request-constructor"
+                | "unknown-constructor" => request,
+                "row"
+                | "last-row"
+                | "proof"
+                | "response-constructor"
+                | "response-empty"
+                | "response-extra" => response,
+                "response-swap" | "response-short" => response && components.len() > 1,
                 "" => false,
                 _ => panic!("unknown fault"),
             };
@@ -680,20 +700,41 @@ impl Hooks<CpuBackend> for BatchMessages {
             *changed.last_mut().unwrap() ^= 1;
             return Ok(Some(changed));
         }
-        if self.fault == "response-swap" {
-            let last = components.len() - 1;
-            components.swap(0, last);
+        if matches!(
+            self.fault,
+            "response-swap" | "response-empty" | "response-short" | "response-extra"
+        ) {
+            match self.fault {
+                "response-swap" => {
+                    let last = components.len() - 1;
+                    components.swap(0, last);
+                }
+                "response-empty" => components.clear(),
+                "response-short" => {
+                    components.pop().unwrap();
+                }
+                "response-extra" => components.push(components.last().unwrap().clone()),
+                _ => unreachable!(),
+            }
         } else {
-            let ty = components[0].physical_type();
-            let Value::Variant(value) = &components[0] else {
+            let ordinal = if self.fault == "last-row" {
+                components.len() - 1
+            } else {
+                0
+            };
+            let ty = components[ordinal].physical_type();
+            let Value::Variant(value) = &components[ordinal] else {
                 unreachable!()
             };
             let mut payload = value.payload().to_vec();
+            let mut alternative = value.alternative();
             match self.fault {
                 "request-position" => payload[2] = Value::Index(1),
                 "request-instance" => payload[1] = Value::Index(99),
+                "request-constructor" => payload[0] = Value::Index(1),
                 "unknown-constructor" => payload[0] = Value::Index(99),
-                "row" => {
+                "response-constructor" => alternative = 1 - alternative,
+                "row" | "last-row" => {
                     let Value::KoalaBearExt4Vector(row) = &payload[0] else {
                         panic!("bad row")
                     };
@@ -701,15 +742,11 @@ impl Hooks<CpuBackend> for BatchMessages {
                 }
                 _ => unreachable!(),
             }
-            components[0] = Value::Variant(Variant::new(ty, value.alternative(), payload).unwrap());
+            components[ordinal] = Value::Variant(Variant::new(ty, alternative, payload).unwrap());
         }
-        let changed = if packet {
-            Value::Variant(
-                Variant::new(exchange.ty.clone(), outer.alternative(), components).unwrap(),
-            )
-        } else {
-            components.pop().unwrap()
-        };
+        let changed = Value::Sequence(
+            Sequence::new(exchange.ty.clone(), components, &Policy::default()).unwrap(),
+        );
         Ok(Some(backend("V").encode_native_value(&changed).unwrap()))
     }
 }
@@ -722,6 +759,7 @@ fn batch_trials(directory: &Path) -> usize {
         "invalid-first",
         "invalid-later",
         "guard",
+        "guarded-position",
     ] {
         let bundle = Bundle::admit(
             &std::fs::read(directory.join(format!("batch-{mode}.bundle"))).unwrap(),
@@ -730,20 +768,52 @@ fn batch_trials(directory: &Path) -> usize {
             BundleLimits::default(),
         )
         .unwrap();
-        for (position, allow, fault) in [
-            (0, true, ""),
-            (7, true, ""),
-            (8, true, ""),
+        let mut trials: Vec<_> = (0..=8).map(|position| (position, true, "")).collect();
+        trials.extend([
             (u64::MAX, true, ""),
             (0, false, ""),
+            (7, false, ""),
             (8, false, ""),
             (0, true, "row"),
+            (0, true, "last-row"),
             (0, true, "proof"),
             (0, true, "response-swap"),
+            (0, true, "response-constructor"),
+            (0, true, "response-empty"),
+            (0, true, "response-short"),
+            (0, true, "response-extra"),
             (0, true, "request-position"),
             (0, true, "request-instance"),
+            (0, true, "request-constructor"),
             (0, true, "unknown-constructor"),
-        ] {
+        ]);
+        if mode == "invalid-later" {
+            // A later domain cut must retain and authenticate the valid prefix.
+            for position in [8, u64::MAX] {
+                for fault in [
+                    "row",
+                    "proof",
+                    "response-constructor",
+                    "response-empty",
+                    "response-extra",
+                    "request-position",
+                    "request-instance",
+                    "request-constructor",
+                    "unknown-constructor",
+                ] {
+                    trials.push((position, true, fault));
+                }
+            }
+        }
+        if matches!(mode, "invalid-first" | "guarded-position") {
+            // Neither a failed first domain nor its explicit source guard may
+            // reach an exchange, even with a configured transport fault.
+            trials.extend([(8, true, "proof"), (8, true, "unknown-constructor")]);
+        }
+        if mode == "guard" {
+            trials.extend([(0, false, "row"), (0, false, "proof")]);
+        }
+        for (position, allow, fault) in trials {
             // Identical data yields equal roots. It must still be impossible to
             // swap the two constructors' response alternatives.
             let data = || Value::KoalaBearExt4Vector((0..8).map(scalar).collect::<Vec<_>>().into());
@@ -770,7 +840,8 @@ fn batch_trials(directory: &Path) -> usize {
                 &mut messages,
             )
             .unwrap();
-            let valid = !matches!(mode, "invalid-first" | "invalid-later") || position < 8;
+            let valid = !matches!(mode, "invalid-first" | "invalid-later" | "guarded-position")
+                || position < 8;
             let complete = allow && valid && fault.is_empty();
             assert_eq!(
                 matches!(report.outcome, Outcome::Completed),
@@ -780,10 +851,19 @@ fn batch_trials(directory: &Path) -> usize {
             );
             let verifier = report.roles.iter().find(|r| r.role == "V").unwrap();
             if complete {
-                let x = if mode == "invalid-first" { position } else { 0 };
+                let x = if matches!(mode, "invalid-first" | "guarded-position") {
+                    position
+                } else {
+                    0
+                };
                 let y = if mode == "invalid-later" { position } else { 4 };
+                let z = if mode == "guarded-position" {
+                    position
+                } else {
+                    0
+                };
                 assert_eq!(verifier.outputs.len(), 5);
-                for (value, expected) in verifier.outputs.iter().zip([x, y, 0, 0, 1]) {
+                for (value, expected) in verifier.outputs.iter().zip([x, y, z, 0, 1]) {
                     assert!(
                         matches!(value, Value::KoalaBearExt4Field(actual) if *actual==scalar(expected))
                     );
@@ -791,16 +871,36 @@ fn batch_trials(directory: &Path) -> usize {
             } else {
                 assert!(matches!(report.outcome, Outcome::ParticipantStopped { .. }));
                 assert!(verifier.outputs.is_empty());
+                let Outcome::ParticipantStopped { role } = &report.outcome else {
+                    unreachable!()
+                };
+                let expected_role = if messages.injected
+                    && matches!(fault, "request-instance" | "unknown-constructor")
+                {
+                    "P"
+                } else {
+                    "V"
+                };
+                assert_eq!(
+                    report.roles[*role].role, expected_role,
+                    "{mode}/{position}/{allow}/{fault}"
+                );
             }
             let a = |position| (0, 0, position);
             let b = (1, 0, 0);
             let mut expected = match mode {
                 "paired" | "reversed" => vec![vec![a(0), b]],
                 "individual" => vec![vec![a(0), a(4), b]],
-                "invalid-first" if !valid => vec![],
-                "invalid-first" => vec![vec![a(position)], vec![a(4), b]],
+                "invalid-first" | "guarded-position" if !valid => vec![],
+                // First use retains the actual logical position on the wire.
+                // Antipodal aliases share a leaf, but distinct anchors do not.
+                "invalid-first" | "guarded-position" if position % 4 == 0 => {
+                    vec![vec![a(position), b]]
+                }
+                "invalid-first" | "guarded-position" => vec![vec![a(position), a(4), b]],
                 "invalid-later" if !valid => vec![vec![a(0)]],
-                "invalid-later" => vec![vec![a(0)], vec![a(position)], vec![a(0), b]],
+                "invalid-later" if position % 4 == 0 => vec![vec![a(0), b]],
+                "invalid-later" => vec![vec![a(0), a(position), b]],
                 "guard" if !allow => vec![vec![a(0)]],
                 "guard" => vec![vec![a(0)], vec![a(4), b]],
                 _ => unreachable!(),
@@ -809,9 +909,14 @@ fn batch_trials(directory: &Path) -> usize {
                 if complete {
                     expected.push(vec![a(1)]);
                 }
+            } else if expected.is_empty() {
+                assert!(
+                    !messages.injected,
+                    "{mode}/{position}/{fault} reached no opening"
+                );
             } else {
                 assert!(messages.injected, "{mode}/{fault} was not injected");
-                let reached = if fault == "response-swap" {
+                let reached = if matches!(fault, "response-swap" | "response-short") {
                     expected.iter().position(|batch| batch.len() > 1).unwrap() + 1
                 } else {
                     1

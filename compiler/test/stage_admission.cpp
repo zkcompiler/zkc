@@ -177,7 +177,7 @@ int main() {
                                        NumericalExpressionMode::VectorOnly};
     PassManager first(&context), second(&context);
     buildProjectionPipeline(first, false, policy);
-    buildExecutionPipeline(first, false, false, policy);
+    buildClosedExecutionPipeline(first, false, false, policy);
     PhysicalPipelineOptions physical;
     physical.mathematics = policy;
     physical.releaseStorage = true;

@@ -208,9 +208,9 @@ fn storage<F>(
                 args,
                 field(expected),
                 Limits {
-                    output: 512,
+                    output: zkc_cpu::VALUE_SLOT_BYTES,
                     // Inline reductions reserve final scalar storage only.
-                    memory: 512,
+                    memory: zkc_cpu::VALUE_SLOT_BYTES,
                     work: setup + n as u64 * if operation == "vector.dot" { 4 } else { 2 },
                 },
             );
@@ -310,7 +310,7 @@ fn reached_refusals_preserve_each_operations_shape_and_output_order() {
         ..Policy::default()
     };
     for operation in ["vector.add", "vector.sub", "vector.mul", "vector.dot"] {
-        for available in [0, 512] {
+        for available in [0, zkc_cpu::VALUE_SLOT_BYTES] {
             let mut controlled = Controlled::new(backend(unavailable));
             controlled.output_limit = Some(available);
             let (result, observed) = one(
@@ -319,7 +319,7 @@ fn reached_refusals_preserve_each_operations_shape_and_output_order() {
                 &[],
                 vec![bls(&[2, 5, 11]), bls(&[3, 7])],
             );
-            let error = if operation == "vector.dot" && available < 512 {
+            let error = if operation == "vector.dot" && available < zkc_cpu::VALUE_SLOT_BYTES {
                 "exhausted:output-bytes"
             } else {
                 "refused:length-mismatch"
@@ -363,9 +363,24 @@ fn reached_refusals_preserve_each_operations_shape_and_output_order() {
             vec!["3"],
             352,
         ),
-        ("vector.sum", vec![bls(&[2, 5, 11])], vec![], 512),
-        ("vector.product", vec![bls(&[2, 5, 11])], vec![], 512),
-        ("vector.dot", vec![bls(&[2, 5, 11]); 2], vec![], 512),
+        (
+            "vector.sum",
+            vec![bls(&[2, 5, 11])],
+            vec![],
+            zkc_cpu::VALUE_SLOT_BYTES,
+        ),
+        (
+            "vector.product",
+            vec![bls(&[2, 5, 11])],
+            vec![],
+            zkc_cpu::VALUE_SLOT_BYTES,
+        ),
+        (
+            "vector.dot",
+            vec![bls(&[2, 5, 11]); 2],
+            vec![],
+            zkc_cpu::VALUE_SLOT_BYTES,
+        ),
     ] {
         for (available, error) in [
             (output - 1, "exhausted:output-bytes"),

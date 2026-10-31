@@ -9,7 +9,8 @@ namespace zkc {
 namespace {
 bool boolean(Type type) { return type.isSignlessInteger(1); }
 bool selectedData(Type type) {
-  return boolean(type) || isa<algebra::FieldType, algebra::GroupType>(type);
+  return boolean(type) || type.isUnsignedInteger(64) ||
+         isa<algebra::FieldType, algebra::GroupType>(type);
 }
 
 std::optional<MathematicalIdentity> arithIdentity(Operation *op) {

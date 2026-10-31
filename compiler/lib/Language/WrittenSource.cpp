@@ -77,6 +77,7 @@ Error retainWrittenBodies(WrittenSources &written,
                        source.span);
       source.expressions = found->second->expressions;
       source.bodies = found->second->bodies;
+      source.oracleDefinition = found->second->oracleDefinition;
       source.deferredBody.reset();
     }
     for (auto &member : source.members)
@@ -263,6 +264,8 @@ StringRef syntaxKind(Declaration::Kind value) {
     return "math";
   case Declaration::Kind::Local:
     return "local";
+  case Declaration::Kind::Oracle:
+    return "oracle";
   case Declaration::Kind::Protocol:
     return "protocol";
   case Declaration::Kind::Construction:
@@ -762,6 +765,7 @@ private:
                 return emit("oracle_shape", shape.span,
                             json::Object{{"port", shape.port},
                                          {"dimension", shape.dimension},
+                                         {"value", optionalString(shape.value)},
                                          {"bound", child("bound", 0, [&] {
                                             return type(shape.bound);
                                           })}});
@@ -773,6 +777,7 @@ private:
         {"abstract", value.abstract},
         {"external_module", value.externalModule},
         {"sealed", value.sealed},
+        {"logical", value.logical},
         {"resource",
          !value.resource
              ? json::Value(nullptr)
@@ -1054,6 +1059,26 @@ private:
                                 : "RawBytes");
       result["construction"] = std::move(construction);
     }
+    if (value.oracleDefinition) {
+      const auto &oracle = *value.oracleDefinition;
+      result["oracle_definition"] = json::Object{
+          {"query_parameter",
+           child("query_parameter", 0,
+                 [&] {
+                   remember(value.span,
+                            {LexicalNode::Kind::OracleQueryParameter, 0});
+                   return port(oracle.queryParameter);
+                 })},
+          {"requires",
+           list("requires", oracle.predicates, [&](const auto &clause) {
+             return emit("requires", clause.span,
+                         json::Object{{"label", optionalString(clause.label)},
+                                      {"condition", child("condition", 0, [&] {
+                                         return expression(value,
+                                                           clause.condition);
+                                       })}});
+           })}};
+    }
     result["body"] = value.bodies.empty()
                          ? json::Value(nullptr)
                          : child("body", 0, [&] { return body(value, 0); });
@@ -1079,8 +1104,8 @@ private:
             json::Object{{"owner", (owner + "::" + member.name).str()}});
     }
     result["members"] = std::move(members);
-    return emit(("declaration." + syntaxKind(value.kind)).str(), value.span,
-                std::move(result));
+    StringRef kind = value.logical ? "logical_record" : syntaxKind(value.kind);
+    return emit(("declaration." + kind).str(), value.span, std::move(result));
   }
   void declaration(const SyntaxDeclaration &value, StringRef owner) {
     if (error)

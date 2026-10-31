@@ -109,7 +109,7 @@ fn check(group: &str, expected: Value, zero: Value, scalar: Value, empty: Option
 fn ristretto_identity() {
     check(
         "ristretto255.group",
-        Value::RistrettoGroup(zkc_cpu::RistrettoPoint::identity()),
+        Value::RistrettoGroup((zkc_cpu::RistrettoPoint::identity()).into()),
         support::field(true, 0),
         support::field(true, 7),
         Some((support::vector(true, &[]), support::groups(true, &[]))),
@@ -119,7 +119,7 @@ fn ristretto_identity() {
 fn edwards_identity() {
     check(
         "edwards25519.prime",
-        Value::EdwardsGroup(zkc_cpu::EdwardsPrime::identity()),
+        Value::EdwardsGroup((zkc_cpu::EdwardsPrime::identity()).into()),
         support::field(true, 0),
         support::field(true, 7),
         Some((
@@ -136,7 +136,7 @@ fn edwards_native_frames_preserve_subgroup_and_vector_boundaries() {
     let hex: String = raw.iter().map(|b| format!("{b:02x}")).collect();
     let readable = serde_json::json!({"bytes": hex});
     for (value, input, offset) in [
-        (Value::EdwardsGroup(point), readable.clone(), 6),
+        (Value::EdwardsGroup((point).into()), readable.clone(), 6),
         (
             Value::EdwardsGroups(vec![point, point].into()),
             serde_json::json!([readable, readable]),
@@ -173,7 +173,7 @@ fn edwards_native_frames_preserve_subgroup_and_vector_boundaries() {
 fn bls_g1_identity() {
     check(
         "bls12-381.g1",
-        Value::Curve(G1::identity()),
+        Value::Curve((G1::identity()).into()),
         support::field(false, 0),
         support::field(false, 7),
         Some((support::vector(false, &[]), support::groups(false, &[]))),
@@ -196,7 +196,7 @@ fn bn254_g1_identity() {
 fn bn254_g2_identity() {
     check(
         "bn254.g2",
-        Value::Bn254G2(Bn254G2::identity()),
+        Value::Bn254G2((Bn254G2::identity()).into()),
         Value::Bn254Field(0.into()),
         Value::Bn254Field(7.into()),
         Some((
@@ -209,7 +209,7 @@ fn bn254_g2_identity() {
 fn bls12_381_g2_identity() {
     check(
         "bls12-381.g2",
-        Value::Bls12381G2(Bls12381G2::identity()),
+        Value::Bls12381G2((Bls12381G2::identity()).into()),
         Value::Field(Scalar::from(0u64)),
         Value::Field(Scalar::from(7u64)),
         Some((
@@ -243,7 +243,7 @@ fn bls12_381_target_identity_is_multiplicative_one() {
 }
 #[test]
 fn bn254_target_identity_is_multiplicative_one() {
-    let identity = Value::Bn254Gt(Bn254Gt::identity());
+    let identity = Value::Bn254Gt(std::sync::Arc::new(Bn254Gt::identity()));
     check(
         "bn254.gt",
         identity.clone(),

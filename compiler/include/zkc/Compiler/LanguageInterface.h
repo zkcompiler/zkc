@@ -16,31 +16,47 @@ struct InterfaceOracle {
 };
 struct InterfaceOraclePort {
   unsigned holder;
+  /// Forbidden at a logical record root; each direct field owns its bound.
   std::optional<uint64_t> maximumRows;
 };
 struct InterfaceSchema;
 struct InterfaceField {
   std::string name;
+  /// Body offset: handles count once, including within logical records.
   unsigned offset = 0;
   std::shared_ptr<const InterfaceSchema> schema;
+  /// JSON fields have exactly name, offset and schema. An unsized direct
+  /// handle field of a logical record additionally requires maximum_rows,
+  /// encoded as a canonical unsigned 64-bit decimal string (including "0").
+  /// Every other field omits that member, including statically sized handles.
+  std::optional<uint64_t> maximumRows = {};
 };
 struct InterfaceAlternative {
   std::string name;
   std::vector<InterfaceField> fields;
 };
 /// Logical metadata read without consulting the source layout builder.
+/// A logical_record retains every field in declaration order, has empty
+/// leaves and alternatives, Copy/Drop permissions, and false custody and
+/// constructible. It has no oracle, maximum or data_schema member. Its port
+/// carries holder and expanded native indices, and omits maximum_rows.
 struct InterfaceSchema {
   Type::Kind kind = Type::Kind::Unit;
   std::string identity, type;
   Permissions permissions;
   bool custody = false;
   bool constructible = false;
+  /// Ordinary native data only. Logical records and handles have no aggregate
+  /// carrier; their complete representation is given by fields / oracleData.
   std::vector<std::string> leaves;
   std::vector<InterfaceField> fields;
   std::vector<InterfaceAlternative> alternatives;
-  /// Present only for a logical handle. Such a schema has no native data
-  /// leaves.
+  /// Present only for a logical handle or bounded handle sequence. Such a
+  /// schema has no native data leaves.
   std::optional<InterfaceOracle> oracle;
+  /// Present only for a bounded handle sequence, including zero capacity.
+  std::optional<uint64_t> maximum;
+  /// Holder projection: K::Data for a singleton, sequence<K::Data> otherwise.
   std::shared_ptr<const InterfaceSchema> oracleData;
 };
 struct InterfacePort {

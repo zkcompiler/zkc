@@ -79,7 +79,12 @@ from pathlib import Path
 Path({str(arguments)!r}).write_text(json.dumps(sys.argv[1:]))
 for a in sys.argv[1:]:
     if a.startswith('--observations='): Path(a.split('=',1)[1]).write_text(json.dumps({{'completed':True}}))
-print('{{"options":{{}}}}')
+selection=json.loads(next(a.split('=',1)[1] for a in sys.argv if a.startswith('--oracle-realization=')))
+options={{'simplify':'--no-simplify' not in sys.argv,'finite_bulk':'--no-finite-bulk' not in sys.argv,
+         'release_storage':'--release-storage' in sys.argv,'fuse_vector_reductions':'--fuse-vector-reductions' in sys.argv,
+         'fuse_collect_fold':'--fuse-collect-fold' in sys.argv,'calculation_batching':'--no-calculation-batching' not in sys.argv,
+         'oracle_realization':selection}}
+print(json.dumps({{'options':options}}))
 ''')
     compiler.chmod(0o755)
     args = SimpleNamespace(source=root, compiler=compiler, timeout=5,
@@ -123,7 +128,12 @@ import json,sys
 from pathlib import Path
 for a in sys.argv[1:]:
     if a.startswith('--observations='): Path(a.split('=',1)[1]).write_text(json.dumps({{'completed':True}}))
-print('{{"options":{{}}}}')
+selection=json.loads(next(a.split('=',1)[1] for a in sys.argv if a.startswith('--oracle-realization=')))
+options={{'simplify':'--no-simplify' not in sys.argv,'finite_bulk':'--no-finite-bulk' not in sys.argv,
+         'release_storage':'--release-storage' in sys.argv,'fuse_vector_reductions':'--fuse-vector-reductions' in sys.argv,
+         'fuse_collect_fold':'--fuse-collect-fold' in sys.argv,'calculation_batching':'--no-calculation-batching' not in sys.argv,
+         'oracle_realization':selection}}
+print(json.dumps({{'options':options}}))
 ''')
     compiler.chmod(0o755)
     args = SimpleNamespace(source=root, compiler=compiler, timeout=10, compiler_option=[])

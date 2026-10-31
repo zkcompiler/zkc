@@ -47,9 +47,18 @@ bool evaluate(func::FuncOp function,
       result = std::get<uint64_t>(arg(0)) == std::get<uint64_t>(arg(1));
     else if (contract == "bool.and")
       result = std::get<bool>(arg(0)) && std::get<bool>(arg(1));
-    else if (contract == "bool.or")
-      result = std::get<bool>(arg(0)) || std::get<bool>(arg(1));
-    else
+    else if (contract == "index.wrapping_sub")
+      result = uint64_t((__uint128_t(std::get<uint64_t>(arg(0))) +
+                         (__uint128_t(1) << 64) - std::get<uint64_t>(arg(1))) %
+                        (__uint128_t(1) << 64));
+    else if (contract == "index.bit_and")
+      result = std::get<uint64_t>(arg(0)) & std::get<uint64_t>(arg(1));
+    else if (contract == "index.logical_shift_right") {
+      auto count = std::get<uint64_t>(arg(1));
+      result = count < 64 ? uint64_t(__uint128_t(std::get<uint64_t>(arg(0))) /
+                                     (__uint128_t(1) << count))
+                          : uint64_t(0);
+    } else
       throw std::runtime_error("unexpected execution contract " +
                                contract.str());
     values[step.outputs.front()] = result;
@@ -106,6 +115,18 @@ int main() {
         require(!evaluate(function, body, symbols, n, r),
                 "oversized exponent accepted");
   });
+  cases.run("small words and nonpowers with two distant set bits", [&] {
+    for (uint64_t n = 0; n < 256; ++n)
+      for (unsigned r = 0; r <= 65; ++r)
+        require(evaluate(function, body, symbols, n, r) ==
+                    (r < 8 && n == (uint64_t(1) << r)),
+                "small word predicate changed");
+    for (unsigned high = 1; high < 64; ++high)
+      for (unsigned low = 0; low < high; ++low)
+        require(!evaluate(function, body, symbols,
+                          (uint64_t(1) << high) | (uint64_t(1) << low), high),
+                "shift alone accepted a second set bit");
+  });
   cases.run("independent recipe reader rejects a changed constant", [&] {
     require(succeeded(computation::verifyEntryRecipes(*numerical, *candidate,
                                                       "power")),
@@ -124,6 +145,21 @@ int main() {
                                                    "power")),
             "independent recipe reader accepted a changed exponent");
     constant.setParametersAttr(parameters);
+  });
+  cases.run("independent reader rejects a swapped shift count", [&] {
+    auto shift =
+        scopedFinite::application(function, "index.logical_shift_right");
+    auto left = shift->getOperand(1), right = shift->getOperand(2);
+    shift->setOperand(1, right);
+    shift->setOperand(2, left);
+    require(succeeded(verify(*candidate)), "shift swap lost formation");
+    ScopedDiagnosticHandler silence(&context,
+                                    [](Diagnostic &) { return success(); });
+    require(failed(computation::verifyEntryRecipes(*numerical, *candidate,
+                                                   "power")),
+            "independent reader accepted the wrong exponent operand");
+    shift->setOperand(1, left);
+    shift->setOperand(2, right);
   });
   return cases.result();
 }

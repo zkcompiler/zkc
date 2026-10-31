@@ -6,7 +6,7 @@ pub(crate) fn apply(args: &[Value], policy: &Policy, available: usize) -> Result
         return Err(refused("kernel-operands"));
     };
     // Match the ordinary scalar-result preflight before shape-dependent work.
-    policy.output(512, available)?;
+    policy.output(crate::VALUE_SLOT_BYTES, available)?;
     super::arithmetic::equal_len(a.len(), b.len())?;
     let mut even = Scalar::from(0);
     let mut odd = Scalar::from(0);

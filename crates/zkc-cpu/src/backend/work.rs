@@ -3,7 +3,7 @@
 use crate::Value;
 
 /// Charge for one scalar, index or handle operand, as for an inline value.
-const HANDLE: usize = 512;
+const HANDLE: usize = crate::VALUE_SLOT_BYTES;
 
 pub(super) enum ReadExtent {
     Full,

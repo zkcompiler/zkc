@@ -122,6 +122,57 @@ Expected<Natural> NaturalArithmetic::multiply(const Natural &a,
     }
   return result;
 }
+Expected<std::pair<Natural, Natural>>
+NaturalArithmetic::cancelCommonTerms(const Natural &a, const Natural &b) {
+  // Charge every input identity before comparing keys, including terms that
+  // disappear. Insertion separately charges the retained residuals.
+  if (auto e = charge(1))
+    return std::move(e);
+  for (const auto *value : {&a, &b}) {
+    if (auto e = charge(value->terms().size()))
+      return std::move(e);
+    if (value->terms().size() > termLimit)
+      return error("source.limit", "natural term limit exceeded");
+    for (const auto &[factors, coefficient] : value->terms()) {
+      if (auto e = charge(factors.size() + 1))
+        return std::move(e);
+      if (factors.size() > factorLimit)
+        return error("source.limit", "natural monomial degree limit exceeded");
+      for (const auto &factor : factors)
+        if (auto e = charge(factor.name.size() + factor.member.size() + 1))
+          return std::move(e);
+    }
+  }
+  std::pair<Natural, Natural> result;
+  auto left = a.terms().begin(), right = b.terms().begin();
+  while (left != a.terms().end() || right != b.terms().end()) {
+    if (right == b.terms().end() ||
+        (left != a.terms().end() && left->first < right->first)) {
+      if (auto e = insert(result.first, left->first, left->second))
+        return std::move(e);
+      ++left;
+    } else if (left == a.terms().end() || right->first < left->first) {
+      if (auto e = insert(result.second, right->first, right->second))
+        return std::move(e);
+      ++right;
+    } else {
+      // Compare before subtracting. Never cross-add coefficients: even two
+      // representable inputs can overflow such an intermediate sum.
+      if (left->second > right->second) {
+        if (auto e =
+                insert(result.first, left->first, left->second - right->second))
+          return std::move(e);
+      } else if (right->second > left->second) {
+        if (auto e = insert(result.second, right->first,
+                            right->second - left->second))
+          return std::move(e);
+      }
+      ++left;
+      ++right;
+    }
+  }
+  return result;
+}
 Expected<Natural> NaturalArithmetic::powerOfTwo(const Natural &exponent) {
   if (auto e = charge(exponent.terms().size() + 1))
     return std::move(e);

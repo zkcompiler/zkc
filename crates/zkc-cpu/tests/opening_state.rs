@@ -759,7 +759,7 @@ fn retention_includes_original_capacity_and_key_and_preflights_both_commit_outpu
         }
         assert_eq!(b.inner.active_frames(), 0);
     }
-    let proof_required = 512 + 256 + 192;
+    let proof_required = zkc_cpu::VALUE_SLOT_BYTES + 256 + 192;
     let (failed, backend) = run(
         &open_program(),
         OutputLimit {

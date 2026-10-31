@@ -1,6 +1,7 @@
 //! Independently authored Program and deployment: the verifier returns the
 //! second received Boolean. Public input binding is a separate Host property.
 use super::*;
+mod reconstructed;
 
 fn deployment() -> Json {
     let boolean = "bool@native.bool/0";
@@ -76,7 +77,8 @@ fn deployment() -> Json {
             [second, "bool", "zkcv.bool/0"]
         ],
         [],
-        []
+        [],
+        r#"{"authentication":"per-query","format":"zkc.oracle-selection/0","order":"unrestricted","roots":{"entries":[],"kind":"exact"}}"#
     ]);
     let mut result = json!([
         "zkc.native-proof/0",
@@ -96,7 +98,17 @@ fn deployment() -> Json {
             ],
             ["V", "v", [["2", "bool"]], [["3", "bool"]], [], "0"]
         ],
-        ["true", "false", "false", "true", "false", "true"],
+        [
+            "true",
+            "false",
+            "false",
+            "true",
+            "false",
+            "true",
+            crate::entry::OracleSelection::default()
+                .canonical_json()
+                .unwrap()
+        ],
         [[first, "first"], [second, "second"]]
     ]);
     seal(&mut result);
@@ -111,6 +123,125 @@ fn seal(value: &mut Json) {
 fn admit(value: &Json) -> Result<NativeDeployment> {
     let bytes = serde_json::to_vec(value).unwrap();
     NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+}
+
+fn normalized_selection(entries: Json) -> String {
+    json!({"authentication":"per-query", "format":"zkc.oracle-selection/0",
+        "order":"unrestricted", "roots":{"entries":entries,"kind":"exact"}})
+    .to_string()
+}
+
+fn selection_root(path: u32) -> Json {
+    json!({"entry":"main", "path":[path], "scheme":"",
+        "grouping":"individual", "order":"natural"})
+}
+
+#[test]
+fn descriptor_requires_exactly_nine_fields() {
+    let mut old = deployment();
+    old[2].as_array_mut().unwrap().pop();
+    seal(&mut old);
+    assert!(admit(&old).is_err());
+    let mut extra = deployment();
+    extra[2].as_array_mut().unwrap().push(json!([]));
+    seal(&mut extra);
+    assert!(admit(&extra).is_err());
+    assert_eq!(deployment()[2].as_array().unwrap().len(), 9);
+    admit(&deployment()).unwrap();
+}
+
+#[test]
+fn normalized_selection_requires_strict_exact_canonical_inventory() {
+    let valid = normalized_selection(json!([selection_root(0)]));
+    let parsed: Json = serde_json::from_str(&valid).unwrap();
+    for bad in [
+        String::new(),
+        "{}".into(),
+        "[]".into(),
+        "null".into(),
+        crate::entry::OracleSelection::default()
+            .canonical_json()
+            .unwrap(),
+        format!(" {valid}"),
+        serde_json::to_string_pretty(&parsed).unwrap(),
+        valid.replace("per-query", "per\\u002dquery"),
+        valid.replace("zkc.oracle-selection/0", "zkc.oracle-selection/1"),
+        valid.replacen('{', "{\"unknown\":[],", 1),
+        valid.replacen('{', "{\"authentication\":\"per-query\",", 1),
+        valid.replace("\"scheme\":\"\"", "\"scheme\":\"\",\"sch\\u0065me\":\"\""),
+        valid.replace("[0]", "[-0]"),
+        valid.replace("[0]", "[]"),
+        valid.replace("[0]", "[4294967296]"),
+        normalized_selection(json!([selection_root(0), selection_root(0)])),
+        normalized_selection(json!([selection_root(1), selection_root(0)])),
+    ] {
+        let mut value = deployment();
+        value[2][8] = json!(bad);
+        seal(&mut value);
+        assert_eq!(admit(&value).unwrap_err(), "native-proof-oracle-selection");
+    }
+    for field in ["format", "roots", "order", "authentication"] {
+        let mut partial = parsed.clone();
+        partial.as_object_mut().unwrap().remove(field);
+        let mut value = deployment();
+        value[2][8] = json!(partial.to_string());
+        seal(&mut value);
+        assert_eq!(admit(&value).unwrap_err(), "native-proof-oracle-selection");
+    }
+}
+
+#[test]
+fn uniform_request_checks_every_table_and_global_selection_rule() {
+    let roots = json!([selection_root(0), selection_root(1)]);
+    let baseline: Json = serde_json::from_str(&normalized_selection(roots)).unwrap();
+    let mut value = deployment();
+    value[2][8] = json!(baseline.to_string());
+    seal(&mut value);
+    admit(&value).unwrap(); // Completeness requires source, which is absent here.
+    for (field, changed) in [
+        ("scheme", "selected/0"),
+        ("grouping", "antipodal-pairs"),
+        ("order", "bit-reversed"),
+    ] {
+        let mut normalized = baseline.clone();
+        normalized["roots"]["entries"][1][field] = json!(changed);
+        // Non-default layout is legal with an explicit scheme, but still must
+        // agree with the requested uniform table for every root.
+        normalized["roots"]["entries"][1]["scheme"] = json!("selected/0");
+        value[2][8] = json!(normalized.to_string());
+        seal(&mut value);
+        assert_eq!(admit(&value).unwrap_err(), "native-proof-oracle-selection");
+    }
+    for (field, changed) in [
+        ("order", "after-final-draw"),
+        ("authentication", "atomic-blocks"),
+    ] {
+        let mut normalized = baseline.clone();
+        normalized[field] = json!(changed);
+        value[2][8] = json!(normalized.to_string());
+        seal(&mut value);
+        assert_eq!(admit(&value).unwrap_err(), "native-proof-oracle-selection");
+    }
+}
+
+#[test]
+fn exact_request_rejects_partial_extraneous_and_changed_root_inventory() {
+    let canonical = normalized_selection(json!([selection_root(0), selection_root(1)]));
+    let mut value = deployment();
+    value[7][6] = json!(canonical);
+    value[2][8] = json!(canonical);
+    seal(&mut value);
+    admit(&value).unwrap();
+    for roots in [
+        json!([]),
+        json!([selection_root(0)]),
+        json!([selection_root(0), selection_root(1), selection_root(2)]),
+        json!([selection_root(0), selection_root(2)]),
+    ] {
+        value[2][8] = json!(normalized_selection(roots));
+        seal(&mut value);
+        assert_eq!(admit(&value).unwrap_err(), "native-proof-oracle-selection");
+    }
 }
 
 #[test]
@@ -707,7 +838,7 @@ fn ring_work_limit_cannot_raise_the_host_ceiling() {
 }
 
 #[test]
-fn deployment_compilation_choices_have_exact_boolean_shape() {
+fn deployment_compilation_choices_have_exact_seven_string_shape() {
     let original = deployment();
     for choices in [
         json!([]),
@@ -715,7 +846,11 @@ fn deployment_compilation_choices_have_exact_boolean_shape() {
         json!(["true", "false", "false"]),
         json!(["true", "false", "false", "true"]),
         json!(["true", "false", "false", "true", "false"]),
+        json!(["true", "false", "false", "true", "false", "true"]),
         json!(["true", "false", "false", "true", "false", "true", "false"]),
+        json!([
+            "true", "false", "false", "true", "false", "true", "false", "false"
+        ]),
         json!(["true", "false", false, "true", "false", "true"]),
         json!(["true", "false", "false", "true", "false", "invalid"]),
         json!({"collectFoldFusion": false}),
@@ -724,7 +859,7 @@ fn deployment_compilation_choices_have_exact_boolean_shape() {
         changed[7] = choices;
         assert!(admit(&changed).is_err());
     }
-    for index in 0..6 {
+    for index in 0..7 {
         for value in [
             json!(false),
             json!(0),
@@ -756,13 +891,113 @@ fn deployment_compilation_choices_have_exact_boolean_shape() {
                     changed[7][3] = json!(if finite { "true" } else { "false" });
                     changed[7][4] = json!(if collect_fold { "true" } else { "false" });
                     changed[7][5] = json!(if batching { "true" } else { "false" });
-                    assert_eq!(
-                        admit(&changed).unwrap().choices,
-                        [true, false, fuse, finite, collect_fold, batching]
+                    let mut expected: Vec<_> = [true, false, fuse, finite, collect_fold, batching]
+                        .map(|value| value.to_string())
+                        .into();
+                    expected.push(
+                        crate::entry::OracleSelection::default()
+                            .canonical_json()
+                            .unwrap(),
                     );
+                    let admitted = admit(&changed).unwrap();
+                    assert_eq!(admitted.choices.as_slice(), expected);
+                    assert_eq!(admitted.source_interface().choices.as_slice(), expected);
                 }
             }
         }
+    }
+}
+
+#[test]
+fn deployment_preserves_canonical_requested_selection_without_source_coverage_claims() {
+    use crate::entry::{
+        OracleAuthentication, OracleRoots, OracleSelection, OracleTableRealization,
+    };
+    let exact = OracleSelection::parse(
+        r#"{"format":"zkc.oracle-selection/0","roots":{"kind":"exact","entries":[{"entry":"検証","path":[2,0],"scheme":"selected/0","grouping":"antipodal-pairs","order":"bit-reversed"},{"entry":"main","path":[0],"scheme":"","grouping":"individual","order":"natural"}]},"order":"after-final-draw","authentication":"atomic-blocks"}"#,
+    )
+    .unwrap();
+    for selection in [
+        OracleSelection::default(),
+        OracleSelection {
+            roots: OracleRoots::Exact(vec![]),
+            ..Default::default()
+        },
+        OracleSelection {
+            roots: OracleRoots::Uniform(OracleTableRealization {
+                scheme: "selected/0".into(),
+                ..Default::default()
+            }),
+            authentication: OracleAuthentication::AtomicBlocks,
+            ..Default::default()
+        },
+        exact,
+    ] {
+        let mut changed = deployment();
+        let canonical = selection.canonical_json().unwrap();
+        changed[7][6] = json!(canonical);
+        let mut normalized = selection;
+        if matches!(normalized.roots, OracleRoots::Uniform(_)) {
+            normalized.roots = OracleRoots::Exact(vec![]);
+        }
+        changed[2][8] = json!(normalized.canonical_json().unwrap());
+        seal(&mut changed);
+        // The Host checks requested/normalized consistency. It has no prepared
+        // source inventory to establish completeness or scheme installation.
+        let admitted = admit(&changed).unwrap();
+        let expected = [
+            "true", "false", "false", "true", "false", "true", &canonical,
+        ]
+        .map(str::to_owned);
+        assert_eq!(admitted.choices, expected);
+        assert_eq!(admitted.source_interface().choices, &expected);
+    }
+}
+
+#[test]
+fn deployment_selection_requires_strict_typed_canonical_json() {
+    let canonical = crate::entry::OracleSelection::default()
+        .canonical_json()
+        .unwrap();
+    let root =
+        r#"{"entry":"main","path":[0],"scheme":"","grouping":"individual","order":"natural"}"#;
+    let exact = format!(
+        r#"{{"format":"zkc.oracle-selection/0","roots":{{"kind":"exact","entries":[{root}]}},"order":"unrestricted","authentication":"per-query"}}"#
+    );
+    for malformed in [
+        String::new(),
+        "{}".into(),
+        "[]".into(),
+        "null".into(),
+        canonical.replace("zkc.oracle-selection/0", "zkc.oracle-selection/1"),
+        canonical.replacen('{', "{\"unknown\":0,", 1),
+        canonical.replacen('{', "{\"format\":\"zkc.oracle-selection/0\",", 1),
+        canonical.replace("\"scheme\":\"\"", "\"scheme\":\"\",\"sch\\u0065me\":\"\""),
+        canonical.replace("\"scheme\":\"\"", "\"scheme\":null"),
+        canonical.replace("\"scheme\":\"\"", "\"scheme\":\"\\ud800\""),
+        canonical.replace("\"uniform\"", "\"unknown\""),
+        canonical.replace("\"individual\"", "\"unknown\""),
+        canonical.replace("\"natural\"", "\"unknown\""),
+        canonical.replace("\"unrestricted\"", "\"unknown\""),
+        canonical.replace("\"per-query\"", "\"unknown\""),
+        canonical.replace("\"individual\"", "\"antipodal-pairs\""),
+        exact.replace(root, &format!("{root},{root}")),
+        exact.replace("[0]", "[]"),
+        exact.replace("[0]", "[-0]"),
+        exact.replace("[0]", "[1.0]"),
+        exact.replace("[0]", "[4294967296]"),
+        format!("{canonical}{{}}"),
+        "[".repeat(33) + &"]".repeat(33),
+        " ".repeat(1024 * 1024 + 1),
+        // Valid requests still refuse noncanonical artifact representation.
+        format!(" {canonical}"),
+        canonical.replace("per-query", "per\\u002dquery"),
+        serde_json::to_string_pretty(&serde_json::from_str::<Json>(&canonical).unwrap()).unwrap(),
+        exact,
+    ] {
+        let mut changed = deployment();
+        changed[7][6] = json!(malformed);
+        assert_eq!(admit(&changed).err().unwrap(), "native-proof-choices");
     }
 }
 

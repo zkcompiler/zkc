@@ -74,7 +74,7 @@ pub(crate) fn apply(
         }
         ("arkworks-diagonal/vector.dot", [Vector(w), FrDiagonal(d)]) => {
             equal_len(w.len(), d.backing.len())?;
-            p.output(512, i.max_output_bytes)?;
+            p.output(crate::VALUE_SLOT_BYTES, i.max_output_bytes)?;
             Field(
                 w.iter()
                     .zip(d.factors.iter())
@@ -91,12 +91,18 @@ pub(crate) fn apply(
         }
         ("dalek-diagonal/curve.msm", [RistrettoVector(w), RistrettoDiagonal(d)]) => {
             equal_len(w.len(), d.backing.len())?;
-            p.output(512, i.max_output_bytes)?;
+            p.output(
+                crate::Value::shared_group_retained_bytes(),
+                i.max_output_bytes,
+            )?;
             // Iterator carries exact checked length. No variable-time scalar API.
-            RistrettoGroup(crate::RistrettoPoint::multiscalar_mul(
-                w.iter().zip(d.factors.iter()).map(|(w, f)| w * f),
-                d.backing.iter(),
-            ))
+            RistrettoGroup(
+                crate::RistrettoPoint::multiscalar_mul(
+                    w.iter().zip(d.factors.iter()).map(|(w, f)| w * f),
+                    d.backing.iter(),
+                )
+                .into(),
+            )
         }
         _ => return Err(refused("kernel-operands")),
     };

@@ -55,8 +55,9 @@ Expected<json::Value> encode(const Type &type, unsigned &remaining,
   if (type.kind == K::Builtin || type.kind == K::Formal)
     return json::Array{type.kind == K::Builtin ? "builtin" : "formal",
                        type.domain, std::move(arguments)};
-  if (type.kind == K::Record || type.kind == K::Variant ||
-      type.kind == K::Associated || type.kind == K::Module)
+  if (type.kind == K::Record || type.kind == K::LogicalRecord ||
+      type.kind == K::Variant || type.kind == K::Associated ||
+      type.kind == K::Module)
     return json::Array{"nominal", typeKindName(type.kind), type.domain,
                        std::move(arguments)};
   return error("source.static-term", "unsupported static term");

@@ -3,6 +3,7 @@
 #include "State.h"
 #include "zkc/Contracts/Bindings.h"
 #include <functional>
+#include <set>
 namespace zkc::language::detail {
 Type parameterType(const Parameter &);
 bool valueType(const Type &);
@@ -115,6 +116,11 @@ public:
   /// Ordinary total shared data, excluding custody and owner-local carriers.
   bool sharedData(const Type &, Span, const Declaration *, unsigned = 1);
   bool oraclePort(const Port &);
+  /// Validate a direct field's optional per-element row maximum. Symbolic
+  /// kinds defer sized/unsized selection until substitution.
+  bool oracleField(const TypeField &);
+  /// Restricted nominal formation, cached by complete instantiated type.
+  bool logicalRecord(const Type &, Span);
   bool mathematicalData(const Type &, Span, const Declaration * = nullptr,
                         unsigned = 1);
   /// Structural projection only; bounds and access are checked after inference.
@@ -150,6 +156,7 @@ private:
   std::map<std::string, std::pair<DeclarationId, unsigned>> parameters;
   std::function<bool(DeclarationId)> complete;
   unsigned normalizationDepth = 0;
+  std::set<std::string> checkedLogicalRecords;
 };
 llvm::Error specialize(std::vector<Declaration> &, llvm::ArrayRef<Asset>,
                        Work &, DeclarationId,

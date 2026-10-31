@@ -170,7 +170,7 @@ fn package(doc: &Value, artifact: &Value) -> Package {
     let frame = json!({"format":"zkc.entry/0","original":"original",
         "interface":doc.to_string(),"artifact":artifact.to_string(),
         "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
-            "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true},
+            "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()},
         "assets":[]})
     .to_string();
     Package::capture(

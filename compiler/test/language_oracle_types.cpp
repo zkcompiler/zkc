@@ -186,7 +186,12 @@ int main() {
         zkc::test::refuses(layouts.packed(oracle), "source.sequence");
         uint64_t budget = 100000;
         LayoutIdentities identities(budget);
-        zkc::test::refuses(identities.get(*layout), "source.oracle-boundary");
+        auto identity = take(identities.get(*layout));
+        require(!identity.empty() && take(identities.get(*layout)) == identity,
+                "logical oracle layout has no stable schema identity");
+        auto fieldLayout = take(layouts.get(declaration(project, "F").domain));
+        require(take(identities.get(*fieldLayout)) != identity,
+                "logical oracle identity aliases its answer payload");
         Type aggregate(Type::Kind::Array);
         aggregate.arguments = {oracle};
         for (uint64_t size : {0, 1}) {

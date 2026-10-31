@@ -53,6 +53,7 @@ int main() {
     check(domainType("Hash", "h"), R"(["domain","Hash","h"])");
     check(assetType("Ring", "r"), R"(["asset","Ring","r"])");
     for (auto [kind, name] : {std::pair{K::Record, "record"},
+                              {K::LogicalRecord, "logical_record"},
                               {K::Variant, "variant"},
                               {K::Associated, "associated"},
                               {K::Module, "module"}}) {

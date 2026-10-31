@@ -375,7 +375,7 @@ mod tests {
         let frame = json!({"format":"zkc.entry/0","original":"original",
             "interface":document.to_string(),"artifact":artifact,"assets":[],
             "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
-                "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true}}).to_string();
+                "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": zkc::entry::OracleSelection::default()}}).to_string();
         Package::capture(
             frame.as_bytes(),
             &Sha256::digest(frame.as_bytes()).into(),

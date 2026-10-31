@@ -6,7 +6,7 @@ namespace zkc::language::detail {
 /// Private parser coordinates. Inspection translates them through the frozen
 /// written tree; no parser token, expression index or BindingId is serialized.
 struct LexicalNode {
-  enum class Kind { Expression, Pattern, Input } kind;
+  enum class Kind { Expression, Pattern, Input, OracleQueryParameter } kind;
   unsigned index;
 };
 struct LexicalReference {

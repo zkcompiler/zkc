@@ -185,9 +185,9 @@ pub(crate) fn apply(
     let mut total = 0usize;
     for &width in widths {
         // Zero denotes a scalar port: the native value carrier charges
-        // 512 bytes for an index/bool, not one eight-byte vector element.
+        // one universal slot for an index/bool, not one eight-byte vector element.
         let bytes = if width == 0 {
-            512
+            crate::VALUE_SLOT_BYTES
         } else {
             p.vector_width(width, 8)?;
             size(width, 8)?
@@ -345,7 +345,7 @@ mod tests {
             "exhausted:output-bytes"
         );
         assert_eq!(fresh.spent, 0);
-        // State = 424 bytes, scalar = 512. An intermediate cap must fail
+        // State = 424 bytes plus one scalar slot. An intermediate cap must fail
         // before the permutation, not only during adapter output validation.
         let state = packed(&openvm::Duplex::new());
         assert_eq!(
@@ -354,7 +354,7 @@ mod tests {
                 &[state],
                 &[],
                 &Policy::default(),
-                800,
+                424 + crate::VALUE_SLOT_BYTES - 1,
                 &mut fresh
             )
             .unwrap_err()

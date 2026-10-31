@@ -71,7 +71,7 @@ pub(crate) fn apply(
         Ok(Bytes(out.into()))
     };
     let scalar = |value| {
-        policy.output(512, available)?;
+        policy.output(crate::VALUE_SLOT_BYTES, available)?;
         Ok(value)
     };
     let output = match (name, args) {
@@ -319,7 +319,16 @@ mod tests {
             )
             .is_err()
         );
-        assert!(apply("bytes.length", &[bytes(&[])], &[], &Policy::default(), 511).is_err());
+        assert!(
+            apply(
+                "bytes.length",
+                &[bytes(&[])],
+                &[],
+                &Policy::default(),
+                crate::VALUE_SLOT_BYTES - 1
+            )
+            .is_err()
+        );
     }
 
     #[test]

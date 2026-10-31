@@ -55,6 +55,10 @@ add_zkc_test(service_signatures IR service-signatures)
 mlir_target_link_libraries(zkc-service_signatures-test PRIVATE MLIRAsmParser)
 add_zkc_test(oracle_kinds IR oracle-kinds)
 mlir_target_link_libraries(zkc-oracle_kinds-test PRIVATE MLIRParser)
+add_zkc_test(oracle_selection Transforms oracle-selection)
+target_compile_definitions(zkc-oracle_selection-test PRIVATE
+  ZKC_ORACLE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles")
+mlir_target_link_libraries(zkc-oracle_selection-test PRIVATE MLIRParser)
 add_zkc_test(oracle_realization Transforms oracle-realization)
 add_zkc_test(oracle_observations Transforms oracle-observations)
 mlir_target_link_libraries(zkc-oracle_observations-test PRIVATE MLIRParser)
@@ -65,8 +69,25 @@ add_zkc_test(oracle_commitment_roots Compiler oracle-commitment-roots)
 target_compile_definitions(zkc-oracle_commitment_roots-test PRIVATE
   ZKC_ORACLE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles")
 add_zkc_test(oracle_virtual_functions Compiler oracle-virtual-functions)
+add_zkc_test(oracle_query_blocks Transforms oracle-query-blocks)
+mlir_target_link_libraries(zkc-oracle_query_blocks-test PRIVATE MLIRParser)
 add_zkc_test(oracle_query_capacity Transforms oracle-query-capacity)
 add_zkc_test(oracle_query_controller Compiler oracle-query-controller)
+add_zkc_test(oracle_query_demand Compiler oracle-query-demand)
+target_compile_definitions(zkc-oracle_query_demand-test PRIVATE
+  ZKC_ORACLE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles")
+add_zkc_test(oracle_query_batch Compiler oracle-query-batch)
+target_compile_definitions(zkc-oracle_query_batch-test PRIVATE
+  ZKC_ORACLE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles")
+add_zkc_test(oracle_query_window Compiler oracle-query-window)
+target_compile_definitions(zkc-oracle_query_window-test PRIVATE
+  ZKC_ORACLE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles")
+add_zkc_test(oracle_query_packet Compiler oracle-query-packet)
+target_compile_definitions(zkc-oracle_query_packet-test PRIVATE
+  ZKC_ORACLE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles")
+add_zkc_test(oracle_query_response Compiler oracle-query-response)
+target_compile_definitions(zkc-oracle_query_response-test PRIVATE
+  ZKC_ORACLE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles")
 add_zkc_test(realized_protocol Transforms realized-protocol)
 target_compile_definitions(zkc-realized_protocol-test PRIVATE
   ZKC_REALIZED_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles")
@@ -153,6 +174,14 @@ mlir_target_link_libraries(zkc-structured_reference-test PRIVATE MLIRParser)
 add_zkc_test(finite_cardinality Contracts finite-cardinality)
 add_zkc_test(mathematical_fact_analysis IR mathematical-fact-analysis)
 mlir_target_link_libraries(zkc-mathematical_fact_analysis-test PRIVATE
+  MLIRParser MLIRPass)
+add_zkc_test(interaction_analysis IR interaction-analysis)
+mlir_target_link_libraries(zkc-interaction_analysis-test PRIVATE
+  MLIRParser MLIRPass)
+add_zkc_test(successful_continuations Transforms successful-continuations)
+target_include_directories(zkc-successful_continuations-test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../lib/Transforms)
+mlir_target_link_libraries(zkc-successful_continuations-test PRIVATE
   MLIRParser MLIRPass)
 add_zkc_test(language_mathematical_facts Language language-mathematical-facts)
 add_zkc_test(language_usage_plan Language language-usage-plan)
@@ -322,6 +351,10 @@ zkc_source_project(zkc-language_scoped_ir-test
 add_zkc_test(language_reductions Language language-reductions)
 add_zkc_test(language_reduction_ir Compiler language-reduction-ir)
 mlir_target_link_libraries(zkc-language_reduction_ir-test PRIVATE MLIRParser)
+add_zkc_test(language_finite_product_state Compiler language-finite-product-state)
+mlir_target_link_libraries(zkc-language_finite_product_state-test PRIVATE MLIRParser)
+zkc_source_project(zkc-language_finite_product_state-test
+  "${PROJECT_SOURCE_DIR}/../libraries/protocols/polynomial/fri/zkc.toml")
 mlir_target_link_libraries(zkc-language_boolean-test PRIVATE MLIRParser)
 add_zkc_test(language_capabilities Compiler language-capabilities)
 add_zkc_test(language_inference Compiler language-inference)
@@ -332,6 +365,12 @@ add_zkc_test(language_notation_inspection Language language-notation-inspection)
 add_zkc_test(language_api_inspection Language language-api-inspection)
 add_zkc_test(language_written_source Language language-written-source)
 add_zkc_test(source_instances Language source-instances)
+add_zkc_test(mathematical_selection Compiler mathematical-selection)
+mlir_target_link_libraries(zkc-mathematical_selection-test PRIVATE MLIRParser)
+zkc_source_project(zkc-mathematical_selection-test
+  "${PROJECT_SOURCE_DIR}/../libraries/core/algebra/zkc.toml")
+add_zkc_test(oracle_companion_keys Language oracle-companion-keys)
+add_zkc_test(language_oracle_predicate_scope Language language-oracle-predicate-scope)
 zkc_source_project(zkc-source_instances-test
   "${PROJECT_SOURCE_DIR}/../examples/projects/fri/zkc.toml")
 add_zkc_test(source_bindings Language source-bindings)
@@ -347,6 +386,9 @@ add_zkc_test(language_admission Compiler language-admission)
 add_zkc_test(language_placement Compiler language-placement)
 add_zkc_test(language_types Compiler language-types)
 add_zkc_test(language_oracle_types Language language-oracle-types)
+add_zkc_test(language_logical_records Compiler language-logical-records)
+add_zkc_test(language_logical_record_layout Compiler language-logical-record-layout)
+add_zkc_test(language_logical_record_contracts Compiler language-logical-record-contracts)
 add_zkc_test(language_oracle_ports Compiler language-oracle-ports)
 add_zkc_test(language_oracle_actions Compiler language-oracle-actions)
 add_zkc_test(language_oracle_sequence Compiler language-oracle-sequence)
@@ -382,6 +424,14 @@ add_zkc_test(native_preservation Compiler)
 mlir_target_link_libraries(zkc-native_preservation-test PRIVATE MLIRParser)
 add_test(NAME native-preservation COMMAND zkc-native_preservation-test
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/schnorr-services.mlir")
+add_zkc_test(native_proof_origins Compiler native-proof-origins)
+mlir_target_link_libraries(zkc-native_proof_origins-test PRIVATE MLIRParser)
+target_compile_definitions(zkc-native_proof_origins-test PRIVATE
+  ZKC_ORACLE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles")
+add_zkc_test(native_request_reconstruction Compiler)
+mlir_target_link_libraries(zkc-native_request_reconstruction-test PRIVATE MLIRParser)
+add_test(NAME native-request-reconstruction COMMAND zkc-native_request_reconstruction-test
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles/query-blocks.mlir")
 add_zkc_test(native_proof Compiler)
 mlir_target_link_libraries(zkc-native_proof-test PRIVATE MLIRParser)
 add_test(NAME native-proof-construction COMMAND zkc-native_proof-test
@@ -612,6 +662,12 @@ add_zkc_test(host_entry Compiler host-entry)
 mlir_target_link_libraries(zkc-host_entry-test PRIVATE MLIRParser)
 
 add_zkc_test(language_entry_functions Language language-entry-functions)
+add_zkc_test(total_index_recipe Transforms total-index-recipe)
+mlir_target_link_libraries(zkc-total_index_recipe-test PRIVATE MLIRParser)
+add_zkc_test(language_total_index Compiler language-total-index)
+mlir_target_link_libraries(zkc-language_total_index-test PRIVATE MLIRParser)
+zkc_source_project(zkc-language_total_index-test
+  "${PROJECT_SOURCE_DIR}/../libraries/core/collections/zkc.toml")
 add_zkc_test(power_of_two_recipe Transforms power-of-two-recipe)
 mlir_target_link_libraries(zkc-power_of_two_recipe-test PRIVATE MLIRParser)
 add_zkc_test(language_source_terms Compiler language-source-terms)
@@ -651,3 +707,7 @@ add_zkc_test(application_map Compiler application-map)
 mlir_target_link_libraries(zkc-application_map-test PRIVATE MLIRParser)
 target_compile_definitions(zkc-application_map-test PRIVATE
   ZKC_APPLICATION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+
+add_zkc_test(language_virtual_oracles Language language-virtual-oracles)
+add_zkc_test(language_virtual_translation Compiler language-virtual-translation)
+mlir_target_link_libraries(zkc-language_virtual_translation-test PRIVATE MLIRParser)

@@ -100,6 +100,36 @@ SmallVector<unsigned> PowerOfTwoOp::getOperandDependencies(unsigned result) {
   return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
 }
 LogicalResult PowerOfTwoOp::verify() { return success(); }
+std::optional<MathematicalIdentity>
+IndexWrappingAddOp::getMathematicalIdentity() {
+  return MathematicalIdentity::IndexWrappingAdd;
+}
+SmallVector<unsigned>
+IndexWrappingAddOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
+}
+std::optional<MathematicalIdentity>
+IndexWrappingSubtractOp::getMathematicalIdentity() {
+  return MathematicalIdentity::IndexWrappingSubtract;
+}
+SmallVector<unsigned>
+IndexWrappingSubtractOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
+}
+std::optional<MathematicalIdentity> IndexBitAndOp::getMathematicalIdentity() {
+  return MathematicalIdentity::IndexBitAnd;
+}
+SmallVector<unsigned> IndexBitAndOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
+}
+std::optional<MathematicalIdentity>
+IndexLogicalShiftRightOp::getMathematicalIdentity() {
+  return MathematicalIdentity::IndexLogicalShiftRight;
+}
+SmallVector<unsigned>
+IndexLogicalShiftRightOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
+}
 std::optional<MathematicalIdentity> DimOp::getMathematicalIdentity() {
   if (getAxis() == 0 && isa<algebra::FieldVectorType>(getInput().getType()))
     return MathematicalIdentity::VectorLength;

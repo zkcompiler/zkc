@@ -312,21 +312,21 @@ fn dormant_constants_do_not_validate_backend_attributes_before_reach() {
 fn repeated_observation(fail: bool, budget_case: usize) -> (Usage, Option<Stop>) {
     let literal_limit = budget_case == 1 || (!fail && budget_case == 3);
     let (instructions, total_value_bytes, logical_bytes) = if literal_limit {
-        (9, 5632, 1536)
+        (9, 11, 3)
     } else {
         match (fail, budget_case) {
-            (false, 0) => (12, 6144, 2048),
-            (false, 2) | (true, 3) => (11, 6144, 2048),
-            (true, 0) => (11, 6144, 3072),
-            (true, 2) => (10, 6144, 2048),
+            (false, 0) => (12, 12, 4),
+            (false, 2) | (true, 3) => (11, 12, 4),
+            (true, 0) => (11, 12, 6),
+            (true, 2) => (10, 12, 4),
             _ => panic!("unknown observation"),
         }
     };
     let usage = Usage {
         instructions,
         iterations: 4,
-        total_value_bytes,
-        logical_bytes,
+        total_value_bytes: total_value_bytes * zkc_cpu::VALUE_SLOT_BYTES,
+        logical_bytes: logical_bytes * zkc_cpu::VALUE_SLOT_BYTES as u64,
         ..Usage::default()
     };
     if !fail && budget_case == 0 {

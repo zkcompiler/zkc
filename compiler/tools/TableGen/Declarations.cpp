@@ -527,9 +527,9 @@ void Model::validateFacets(const Record *op) {
       if (rule == "Multiply" || rule == "Divide")
         port(r, "otherInput", false);
     } else {
-      require(kind == "PublicReplay" || kind == "AcceptanceGuard" ||
-                  kind == "Conjunction" || kind == "SourceHistory" ||
-                  kind == "ManagedHistory",
+      require(kind == "PublicReplay" || kind == "DeterministicData" ||
+                  kind == "AcceptanceGuard" || kind == "Conjunction" ||
+                  kind == "SourceHistory" || kind == "ManagedHistory",
               op, "unsupported semantic facet");
       if (kind == "AcceptanceGuard")
         require(inputs.size() == 1 && outputs.empty() &&
@@ -627,6 +627,8 @@ void emitFacets(raw_ostream &os, const Record *op) {
       emitMathematicalFacet(os, op, r);
     else if (kind == "PublicReplay")
       os << "c.publicReplay = true;\n";
+    else if (kind == "DeterministicData")
+      os << "c.deterministicData = true;\n";
     else if (kind == "AcceptanceGuard")
       os << "c.acceptanceGuard = true;\n";
     else if (kind == "Conjunction")

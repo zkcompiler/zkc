@@ -20,7 +20,7 @@ fn field(value: u64) -> Value {
 }
 
 fn group(value: u64) -> Value {
-    Value::Curve(G1::generator().scale(Scalar::from(value)))
+    Value::Curve((G1::generator().scale(Scalar::from(value))).into())
 }
 
 fn runner(bytes: &[u8], role: &str, inputs: Vec<Value>) -> Runner<CpuBackend> {
@@ -127,7 +127,7 @@ fn main() {
         vec![group(1), field(13), group(13), field(17)],
     );
     assert!(
-        matches!(send(&mut prover), Value::Curve(p) if p == G1::generator().scale(Scalar::from(17u64)))
+        matches!(send(&mut prover), Value::Curve(p) if *p == G1::generator().scale(Scalar::from(17u64)))
     );
     receive(&mut prover, field(19));
     expect_field(send(&mut prover), 264);

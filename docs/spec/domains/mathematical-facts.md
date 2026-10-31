@@ -30,11 +30,12 @@ Adapters distinguish established premises from operations still to execute:
 | Reached fact | A property established by successful admission at a particular program point |
 | Ordered admission obligation | A program action that remains subject to control flow and failure order |
 
-The current kernel accepts formation and result premises. Reached facts need a
-control-flow adapter and a query policy that distinguishes them from formation
-assumptions; they are not admitted by the current API. Ordered obligations do
+The context-free kernel accepts formation and result premises. The separate
+[successful-continuation adapter](../ir/interactions.md#successful-continuations)
+interprets the supported reached guards at an exact participant-relative point;
+its result is not an unconditional formation premise. Ordered obligations do
 not become facts merely by appearing in IR. A successful shape result does not
-authorize erasing, moving or deduplicating a Local guard. A callee's formation
+authorize erasing, moving or deduplicating an execution guard. A callee's formation
 premises cannot discharge its caller's obligations by assuming them there.
 Adapters establish type, axis, premise consistency and reachability before
 asking the shared kernel for consequences.
@@ -54,8 +55,9 @@ of a loop that never executes. A consumer requiring a loop invariant must
 establish it for entry and every applicable transition.
 
 Changing a value, helper body, binding or relevant declaration invalidates its
-analysis. Pass-managed SSA analysis is owned by the enclosing symbol closure;
-function-local analysis cannot inspect concurrently mutable sibling bodies.
+analysis. Pass-managed SSA analysis is owned by the containing module; its
+inspected symbol dependency closure is distinct from that owner. Function-local
+analysis cannot inspect concurrently mutable sibling bodies.
 Analysis-manager invalidation does not make a borrowed view safe after mutation
 inside a pass. Manual users must discard or rebuild it before querying again.
 Clones and candidate programs have their own subjects and independently

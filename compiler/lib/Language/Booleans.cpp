@@ -25,6 +25,11 @@ bool BodyChecker::mathematicalExpression(uint32_t id, unsigned depth) {
     [[fallthrough]];
   case K::NotationCall:
   case K::Call: {
+    // index<N>() is a checked built-in mathematical constant, not a
+    // declaration in the inferred callee map. Ordinary expression checking
+    // still validates its static natural and exact empty argument list.
+    if (expr.kind == K::Call && !expr.binding && expr.text == "index")
+      break;
     if (expr.binding) {
       auto binding = scoped.find(*expr.binding);
       if (binding == scoped.end() ||

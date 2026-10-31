@@ -301,32 +301,26 @@ class RecipeReader {
       return value;
     }
     if (isa<data::PowerOfTwoOp>(source)) {
-      // Read each constant and SSA edge independently of recipe production.
-      // Doubling stays within ui64 through the final representable power.
-      Value result;
-      uint64_t power = 1;
-      for (unsigned exponent = 0; exponent < 64; ++exponent) {
-        auto exponentValue = natural(exponent);
-        auto powerValue = natural(power);
-        auto r = take("index.constant", {}, {}, {exponentValue});
-        auto n = take("index.constant", {}, {}, {powerValue});
-        if (!r || !n)
-          return {};
-        auto equalR = take("index.equal", {inputs[1], r});
-        auto equalN = take("index.equal", {inputs[0], n});
-        if (!equalR || !equalN)
-          return {};
-        auto current = take("bool.and", {equalR, equalN});
-        if (!current)
-          return {};
-        result = exponent == 0 ? current : take("bool.or", {result, current});
-        if (!result)
-          return {};
-        if (exponent < 63)
-          power *= 2;
-      }
-      return result;
+      // Read the complete circuit and every association from actual SSA.
+      // No producer normalization or mathematical predicate receipt is used.
+      auto zero = take("index.constant", {}, {}, {natural(0)});
+      auto one = take("index.constant", {}, {}, {natural(1)});
+      if (!zero || !one)
+        return {};
+      auto predecessor = take("index.wrapping_sub", {inputs[0], one});
+      if (!predecessor)
+        return {};
+      auto lowerBits = take("index.bit_and", {inputs[0], predecessor});
+      auto shifted = take("index.logical_shift_right", {inputs[0], inputs[1]});
+      if (!lowerBits || !shifted)
+        return {};
+      auto singleBit = take("index.equal", {lowerBits, zero});
+      auto position = take("index.equal", {shifted, one});
+      if (!singleBit || !position)
+        return {};
+      return take("bool.and", {singleBit, position});
     }
+
     if (auto dim = dyn_cast<data::DimOp>(source)) {
       auto collection = cast<CollectionTypeInterface>(dim.getInput().getType());
       auto axis = dim.getAxisAttr().getInt();
@@ -359,6 +353,14 @@ class RecipeReader {
     if (isa<data::EqualOp, data::LessOp>(source))
       return take(isa<data::EqualOp>(source) ? "index.equal" : "index.less",
                   inputs);
+    if (isa<data::IndexWrappingAddOp>(source))
+      return take("index.wrapping_add", inputs);
+    if (isa<data::IndexWrappingSubtractOp>(source))
+      return take("index.wrapping_sub", inputs);
+    if (isa<data::IndexBitAndOp>(source))
+      return take("index.bit_and", inputs);
+    if (isa<data::IndexLogicalShiftRightOp>(source))
+      return take("index.logical_shift_right", inputs);
     auto isBoolean = [&](Operation *op) {
       return ports.contains(op) && isa<exec::BooleanOp>(op);
     };
@@ -432,34 +434,18 @@ class RecipeReader {
       return ports.outputs(target)[0];
     }
     if (isa<arith::SelectOp>(source)) {
-      auto *target = cursor;
-      auto operands = ports.inputs(target);
-      if (!ports.contains(target) || !isa<exec::TestOp>(target) ||
-          ports.outputs(target).size() != 1 || operands.size() < 2 ||
-          operands.size() > 3 || operands[0] != inputs[0] ||
-          ports.bodies(target) != 2)
-        return {};
-      llvm::DenseSet<Value> captures;
-      for (Value value : operands.drop_front())
-        if ((value != inputs[1] && value != inputs[2]) ||
-            !captures.insert(value).second)
-          return {};
-      for (unsigned index = 0; index != 2; ++index) {
-        auto *body = ports.body(target, index);
-        auto *yield = ports.first(body);
-        auto arguments = ports.arguments(body);
-        if (!isYield(yield) || ports.inputs(yield).size() != 1 ||
-            ports.next(yield))
-          return {};
-        auto selected = llvm::find(arguments, ports.inputs(yield)[0]);
-        auto position = std::distance(arguments.begin(), selected);
-        if (selected == arguments.end() ||
-            unsigned(position + 1) >= operands.size() ||
-            operands[position + 1] != inputs[index + 1])
-          return {};
-      }
-      cursor = ports.next(cursor);
-      return ports.outputs(target)[0];
+      auto type = source->getResult(0).getType();
+      if (type.isSignlessInteger(1))
+        return take("bool.select", inputs);
+      if (type.isUnsignedInteger(64))
+        return take("index.select", inputs);
+      if (auto field = dyn_cast<algebra::FieldType>(type))
+        return take("field.select", inputs,
+                    {StringAttr::get(source->getContext(), field.getDomain())});
+      if (auto group = dyn_cast<algebra::GroupType>(type))
+        return take("curve.select", inputs,
+                    {StringAttr::get(source->getContext(), group.getDomain())});
+      return {};
     }
     if (isa<arith::AndIOp, arith::OrIOp>(source))
       return take(isa<arith::AndIOp>(source) ? "bool.and" : "bool.or", inputs);

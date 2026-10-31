@@ -224,7 +224,8 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             [],
             [],
             [],
-            []
+            [],
+            r#"{"authentication":"per-query","format":"zkc.oracle-selection/0","order":"unrestricted","roots":{"entries":[],"kind":"exact"}}"#
         ]);
         let output_map = if returned {
             json!([["0", unit.logical().spelling()], ["1", "bool"]])
@@ -242,7 +243,17 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                 ["P", "prover", [], output_map, [], ""],
                 ["V", "verifier", [], [["0", "bool"]], [], "0"]
             ],
-            ["true", "false", "false", "true", "false", "true"],
+            [
+                "true",
+                "false",
+                "false",
+                "true",
+                "false",
+                "true",
+                crate::entry::OracleSelection::default()
+                    .canonical_json()
+                    .unwrap()
+            ],
             []
         ])
         .to_string();

@@ -58,17 +58,24 @@ compile-time allowances, including discarded candidate construction.
 Numerical preparation transfers its private candidate into recipe emission;
 it does not take another whole-context snapshot merely to change ownership.
 Correspondence still reads the unchanged original subject. Failed attempts
-discard the private candidate and retain their charged work.
+discard the private candidate and retain their charged work. Whole-context finite
+and numerical comparisons belong to one independent validation owner outside the
+retry loop. Construction rejected by physical feasibility need not reconstruct
+another context solely for comparison. A retained numerical payload must pass
+both source-to-finite and finite-to-selected checks, including dormant declarations.
+The validation allowance is not recreated on retry.
 
 Physical lowering separates three steps:
 
 1. Retain the numerical candidate and propose binding implementations, physical
    ports and direct conversions for its actual operations. Keep explicit
    application choices fixed and record any selected storage releases.
-2. Independently check numerical correspondence with the original mathematical subject,
-   then validate physical decisions against installed Contracts and actual SSA
-   uses in the candidate, including release positions and lifetimes. Only
-   validation constructs a checked plan.
+2. Establish independent numerical correspondence with the original mathematical
+   subject before retaining the private immutable payload. Validate physical
+   decisions against installed Contracts and actual SSA uses in that payload,
+   including release positions and lifetimes. Revalidating public physical
+   choices does not repeat mathematical reconstruction of an unchanged private
+   payload. Only physical validation constructs a checked plan.
 3. Clone the retained candidate, apply the checked decisions, independently check
    the actual physical output and publish once. Materialization performs no
    numerical selection or catalog search.

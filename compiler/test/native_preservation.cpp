@@ -311,9 +311,10 @@ int main(int argc, char **argv) {
             "delivery mutant must be formed on both sides");
     auto e =
         zkc::detail::verifyNativeTranscript(*before, *after, policy, events);
-    require(bool(e) && namesIdentifier(toString(std::move(e)),
-                                       "native-transcript-correspondence"),
-            "mismatched removed challenge delivery accepted");
+    require(bool(e), "mismatched removed challenge delivery accepted");
+    auto diagnostic = toString(std::move(e));
+    require(namesIdentifier(diagnostic, "native-request-reconstruction"),
+            diagnostic);
   });
   cases.run("nested message-only loops cannot hide missing absorption", [&] {
     auto input = parseSourceString<ModuleOp>(loopFixture, &context);
@@ -381,6 +382,107 @@ int main(int argc, char **argv) {
                                        "native-transcript-correspondence"),
             "incomplete event list hid nested absorption");
   });
+  for (bool existingCapture : {false, true})
+    cases.run(
+        existingCapture ? "reuse exact authored coordinate capture"
+                        : "append missing coordinate capture",
+        [&] {
+          std::string text = loopFixture.str();
+          if (existingCapture) {
+            auto replace = [&](StringRef from, StringRef to) {
+              auto at = text.find(from.str());
+              require(at != std::string::npos,
+                      "coordinate fixture substitution");
+              text.replace(at, from.size(), to.str());
+            };
+            replace("\"protocol.repeat\"(%N,%X) ({ ^inner(%j:ui64,%Y:!f):",
+                    "\"protocol.repeat\"(%N,%X,%i) ({ "
+                    "^inner(%j:ui64,%Y:!f,%outerIndex:ui64):");
+            replace(
+                "%seen = protocol.exchange %Y "
+                "{site=\"message\",sender=\"P\",receiver=\"V\"} : !f",
+                "%seen = protocol.exchange %outerIndex "
+                "{site=\"message\",sender=\"P\",receiver=\"V\"} : ui64\n"
+                "    %equal = \"data.index_equal\"(%seen,%outerIndex) : "
+                "(ui64,ui64)->i1\n"
+                "    protocol.guard %equal {owner=\"V\",site=\"same_index\"}");
+            replace("carried_roles=[]} : (ui64,!f)->()",
+                    "carried_roles=[]} : (ui64,!f,ui64)->()");
+          }
+          auto input = parseSourceString<ModuleOp>(text, &context);
+          require(bool(input), "coordinate fixture parse");
+          auto selected = take(parseNativeProofPolicy(
+              R"(["zkc.native-proof-policy/0","main","P","V","0","merlin3.bls12-381.fr64be/0",["2"],["0","1"],[["draw","challenge"]],"zkc.framed/0","",[]])"));
+          auto construction = take(constructNativeProof(*input, selected));
+          SmallVector<zkc::detail::NativeTranscriptEvent> facts;
+          auto &sequence =
+              *(*construction.descriptor.getAsArray())[3].getAsArray();
+          unsigned index = 0;
+          input->walk<WalkOrder::PreOrder>([&](Operation *op) {
+            auto query = dyn_cast<pir::QueryOp>(op);
+            auto exchange = dyn_cast<pir::ExchangeOp>(op);
+            if (!exchange && !query)
+              return;
+            unsigned depth = 0;
+            for (auto *parent = op->getParentOp(); parent;
+                 parent = parent->getParentOp())
+              depth += isa<pir::RepeatOp>(parent);
+            auto origin =
+                (*sequence[index++].getAsArray())[1].getAsString()->str();
+            facts.push_back({op->getAttrOfType<StringAttr>("site").str(),
+                             origin,
+                             query ? query.getResult(0).getType()
+                                   : exchange.getInput().getType(),
+                             bool(query), depth, std::nullopt});
+          });
+          auto before =
+              OwningOpRef<ModuleOp>(cast<ModuleOp>((*input)->clone()));
+          PassManager project(&context);
+          project.addPass(protocol::createProjectProtocolPass(false));
+          require(succeeded(project.run(*before)), "coordinate projection");
+          if (auto error = zkc::detail::verifyNativeTranscript(
+                  *before, *construction.module, selected, facts))
+            throw std::runtime_error(toString(std::move(error)));
+          for (bool simplify : {false, true}) {
+            NativeProofOptions options{
+                printJson(encodeNativeProofPolicy(selected)), simplify, false};
+            take(compileNativeProof(text, "coordinates.mlir", options,
+                                    registry));
+          }
+          for (bool duplicate : {false, true}) {
+            auto altered = OwningOpRef<ModuleOp>(
+                cast<ModuleOp>((*construction.module)->clone()));
+            bool changed = false;
+            altered->walk([&](pir::LocalCallOp call) {
+              auto loop = call->getParentOfType<pir::ProtocolLoopOp>();
+              if (changed || !loop || loop.getSite() != "inner" ||
+                  !call.getSite().starts_with("_transcript_"))
+                return;
+              require(call.getNumOperands() >= 3,
+                      "coordinate observation inputs");
+              if (duplicate) {
+                Value value = loop.getInputs().back();
+                loop->insertOperands(loop.getNumOperands(), value);
+                loop.getBody().front().addArgument(value.getType(),
+                                                   loop.getLoc());
+              } else {
+                call->setOperand(call.getNumOperands() - 2,
+                                 call.getInputs().back());
+              }
+              changed = true;
+            });
+            require(changed && succeeded(verify(*altered)),
+                    "coordinate mutation must remain formed");
+            auto error = zkc::detail::verifyNativeTranscript(*before, *altered,
+                                                             selected, facts);
+            require(bool(error) &&
+                        namesIdentifier(toString(std::move(error)),
+                                        "native-transcript-correspondence"),
+                    duplicate
+                        ? "extra coordinate binding accepted"
+                        : "inner coordinate substituted for outer accepted");
+          }
+        });
   auto buffer = MemoryBuffer::getFile(argv[1]);
   require(bool(buffer), "read fixture bytes");
   StringRef text = (*buffer)->getBuffer();

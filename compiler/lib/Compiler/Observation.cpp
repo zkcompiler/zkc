@@ -3,6 +3,7 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassInstrumentation.h"
 #include "mlir/Pass/PassManager.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Transforms/PassStatistics.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -11,6 +12,7 @@
 #include <chrono>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <set>
 using namespace llvm;
 using namespace mlir;
@@ -134,17 +136,32 @@ public:
 class Instrumentation : public PassInstrumentation {
   CompilationObservation &owner;
   std::mutex mutex;
-  std::map<std::pair<Pass *, Operation *>, Clock::time_point> starts;
+  struct Start {
+    Clock::time_point time;
+    std::optional<protocol_ir::Profile> profile;
+  };
+  std::map<std::pair<Pass *, Operation *>, Start> starts;
   json::Array &passes;
   uint64_t &dropped;
+  static std::optional<protocol_ir::Profile> profile(Operation *op) {
+    auto module = dyn_cast<ModuleOp>(op);
+    if (!module || !hasSingleElement(*module.getBody()))
+      return std::nullopt;
+    auto unit =
+        dyn_cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
+    if (unit && unit.getProfileAttr())
+      return unit.getProfile();
+    return std::nullopt;
+  }
   void finish(Pass *pass, Operation *op, bool completed) {
     std::lock_guard<std::mutex> lock(mutex);
     auto key = std::make_pair(pass, op);
     auto found = starts.find(key);
     if (found == starts.end())
       return;
+    auto start = found->second;
     auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
-                       Clock::now() - found->second)
+                       Clock::now() - start.time)
                        .count();
     starts.erase(found);
     if (passes.size() == 4096) {
@@ -160,7 +177,8 @@ class Instrumentation : public PassInstrumentation {
                      {"statistics", readPassStatistics(*pass)},
                      {"statistics_enabled", passStatisticsEnabled()}});
     // These are module passes, so no parallel child mutation can race a dump.
-    if (completed && pass->getArgument() == "zkc-lower-math")
+    if (completed && start.profile == protocol_ir::Profile::Participant &&
+        profile(op) == protocol_ir::Profile::Exec)
       if (auto module = dyn_cast<ModuleOp>(op))
         owner.phase("exec", module);
   }
@@ -171,7 +189,7 @@ public:
       : owner(owner), passes(passes), dropped(dropped) {}
   void runBeforePass(Pass *p, Operation *op) override {
     std::lock_guard<std::mutex> lock(mutex);
-    starts[{p, op}] = Clock::now();
+    starts[{p, op}] = {Clock::now(), profile(op)};
   }
   void runAfterPass(Pass *p, Operation *op) override { finish(p, op, true); }
   void runAfterPassFailed(Pass *p, Operation *op) override {

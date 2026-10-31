@@ -1,8 +1,5 @@
 #include "OracleQueryBlocks.h"
-#include "OracleLayout.h"
-#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Support/Refusal.h"
-#include <algorithm>
 using namespace mlir;
 using namespace llvm;
 namespace zkc::protocol {
@@ -14,136 +11,47 @@ Error charge(unsigned &remaining) {
   --remaining;
   return Error::success();
 }
-Expected<Value> origin(Value value, unsigned &remaining) {
-  while (value) {
+} // namespace
+Expected<OracleQueryWindowSelection>
+selectOracleQueryWindow(pir::OracleQueryOp first,
+                        OracleAuthentication authentication,
+                        const OracleQueryCapacity &capacity,
+                        DominanceInfo &dominance, unsigned &remaining) {
+  if (!first || !first.getOwner() ||
+      !first->getParentOfType<pir::MathematicalOp>() ||
+      (authentication != OracleAuthentication::PerQuery &&
+       authentication != OracleAuthentication::AtomicBlocks))
+    return error("oracle-query-block-source");
+  OracleQueryWindowSelection result;
+  auto *operation = first.getOperation();
+  while (operation && result.queries.size() < 32) {
     if (auto e = charge(remaining))
       return std::move(e);
-    if (auto view = value.getDefiningOp<pir::RestrictRolesOp>())
-      value = view.getInput();
-    else if (auto view = value.getDefiningOp<pir::OracleForgetShapeOp>())
-      value = view.getInput();
-    else if (auto arg = dyn_cast<BlockArgument>(value)) {
-      auto loop = dyn_cast<pir::RepeatOp>(arg.getOwner()->getParentOp());
-      if (!loop || arg.getArgNumber() <= uint64_t(loop.getCarried()))
-        break;
-      value = loop.getInputs()[arg.getArgNumber()];
-    } else
+    auto query = dyn_cast<pir::OracleQueryOp>(operation);
+    if (!query || query.getOwner() != first.getOwner())
       break;
-  }
-  return value;
-}
-Expected<std::optional<uint64_t>> literal(Value value, unsigned &remaining) {
-  auto source = origin(value, remaining);
-  if (!source)
-    return source.takeError();
-  if (auto constant = source->getDefiningOp<data::IndexOp>())
-    return std::optional<uint64_t>(constant.getValue());
-  return std::optional<uint64_t>();
-}
-Expected<std::vector<unsigned>> path(Operation *operation,
-                                     unsigned &remaining) {
-  std::vector<unsigned> result;
-  while (operation && !isa<pir::MathematicalOp>(operation)) {
-    if (result.size() >= 64)
-      return error("oracle-query-block-limit");
-    unsigned position = 0;
-    for (auto &sibling : *operation->getBlock()) {
+    // Compare actual SSA against the first source occurrence. In particular,
+    // a preceding answer, loop-carried alias or freshly selected handle cannot
+    // be replaced by a structurally similar earlier value.
+    bool available = true;
+    for (Value operand : query->getOperands()) {
       if (auto e = charge(remaining))
         return std::move(e);
-      if (&sibling == operation)
-        break;
-      ++position;
+      available &= dominance.properlyDominates(operand, first);
     }
-    result.push_back(position);
-    operation = operation->getParentOp();
-  }
-  if (!operation)
-    return error("oracle-query-block-source");
-  std::reverse(result.begin(), result.end());
-  return result;
-}
-} // namespace
-Expected<std::optional<OracleDirectQuery>>
-admitOracleDirectQuery(pir::OracleQueryOp query,
-                       const OracleAnchorStorage &storage,
-                       unsigned &remaining) {
-  auto anchor = origin(query.getHandle(), remaining);
-  auto position = origin(query.getPosition(), remaining);
-  if (!anchor)
-    return anchor.takeError();
-  if (!position)
-    return position.takeError();
-  auto *definition = anchor->getDefiningOp();
-  if (!definition || !isa<pir::OracleSendOp, pir::OracleInputOp>(definition))
-    return std::optional<OracleDirectQuery>();
-  auto location = path(definition, remaining);
-  if (!location)
-    return location.takeError();
-  unsigned ordinal = 0;
-  for (; ordinal < storage.constructors.size(); ++ordinal) {
-    if (auto e = charge(remaining))
-      return std::move(e);
-    if (storage.constructors[ordinal].path == *location)
+    if (!available)
       break;
+    uint64_t leaves = capacity.queries.lookup(query).leaves;
+    if (leaves > 1048576 || result.leaves > 1048576 - leaves)
+      return error("oracle-query-block-limit");
+    result.leaves += leaves;
+    result.queries.push_back(query);
+    if (authentication == OracleAuthentication::PerQuery)
+      break;
+    operation = operation->getNextNode();
   }
-  if (ordinal == storage.constructors.size())
-    return std::optional<OracleDirectQuery>(); // component rebinding
-  const auto &constructor = storage.constructors[ordinal];
-  if (constructor.kind.getIdentity() != "table" || constructor.scheme.empty() ||
-      constructor.holder == *query.getOwner())
-    return std::optional<OracleDirectQuery>();
-  auto dimensions = constructor.kind.getShapeDimensions();
-  if (dimensions.size() != 1 || dimensions.front().name != "rows")
-    return std::optional<OracleDirectQuery>();
-  std::optional<uint64_t> rows = dimensions.front().extent;
-  if (!rows)
-    if (auto send = dyn_cast<pir::OracleSendOp>(definition)) {
-      auto value = literal(send.getShapeOperand("rows"), remaining);
-      if (!value)
-        return value.takeError();
-      rows = *value;
-    }
-  if (!rows || !*rows)
-    return std::optional<OracleDirectQuery>();
-  auto constant = literal(*position, remaining);
-  if (!constant)
-    return constant.takeError();
-  bool valid = *constant && **constant < *rows;
-  if (!valid)
-    if (auto draw = position->getDefiningOp<pir::QueryOp>()) {
-      if (draw.getMethod() == "index" && draw.getOwner() == *query.getOwner() &&
-          draw.getInputs().size() == 1) {
-        auto bound = literal(draw.getInputs().front(), remaining);
-        if (!bound)
-          return bound.takeError();
-        valid = *bound && **bound > 0 && **bound <= *rows;
-      }
-    }
-  if (!valid)
-    return std::optional<OracleDirectQuery>();
-  return std::optional<OracleDirectQuery>(
-      {query, ordinal, *anchor, *position, *rows, *constant});
-}
-Expected<bool> shareOracleOpening(const OracleDirectQuery &left,
-                                  const OracleDirectQuery &right,
-                                  ArrayRef<OracleTableRealization> choices) {
-  if (left.anchor != right.anchor || left.constructor != right.constructor ||
-      left.rows != right.rows)
-    return false;
-  if (left.position == right.position)
-    return true;
-  if (!left.literal || !right.literal)
-    return false;
-  const auto &choice = choices[left.constructor];
-  auto layout =
-      OracleTableLayout::create(left.rows, choice.grouping, choice.order);
-  if (!layout)
-    return layout.takeError();
-  auto a = layout->locate(*left.literal), b = layout->locate(*right.literal);
-  if (!a)
-    return a.takeError();
-  if (!b)
-    return b.takeError();
-  return a->leaf == b->leaf;
+  if (result.queries.empty())
+    return error("oracle-query-block-source");
+  return result;
 }
 } // namespace zkc::protocol

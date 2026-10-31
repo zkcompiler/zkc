@@ -113,9 +113,9 @@ mod tests {
         let samples = [
             Value::Field(Scalar::from(7)),
             Value::Vector(vec![Scalar::from(0), Scalar::from(7)].into()),
-            Value::Curve(G1::generator()),
+            Value::Curve((G1::generator()).into()),
             Value::Groups(vec![G1::identity(), G1::generator()].into()),
-            Value::Bls12381G2(Bls12381G2::generator()),
+            Value::Bls12381G2((Bls12381G2::generator()).into()),
             Value::Bls12381G2Vector(vec![Bls12381G2::identity(), Bls12381G2::generator()].into()),
         ];
         for suite in [

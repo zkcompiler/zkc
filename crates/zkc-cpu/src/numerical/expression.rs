@@ -345,7 +345,7 @@ impl<S: StructuredFamily> Plan<S> {
             policy.vector_width(rows, size_of::<S>())?;
             size(rows, size_of::<S>())?
         } else {
-            512
+            crate::VALUE_SLOT_BYTES
         };
         policy.output(retained, max_output_bytes)?;
         let call = Call::new(policy, max_output_bytes);
@@ -555,7 +555,7 @@ mod tests {
                 let retained = if map {
                     size(rows, size_of::<S>()).unwrap()
                 } else {
-                    512
+                    crate::VALUE_SLOT_BYTES
                 };
                 // Independent scalar-floor formula, including typed views and
                 // staging/final overlap. Do not discover this value by probing.
@@ -596,7 +596,7 @@ mod tests {
                 let retained = if map {
                     size(rows, size_of::<S>()).unwrap()
                 } else {
-                    512
+                    crate::VALUE_SLOT_BYTES
                 };
                 let row_bytes = 4 * size_of::<S>();
                 let minimum = row_bytes

@@ -1,80 +1,109 @@
-# Query-domain maps and the shared catalog
+# Total query-position maps
 
-Binary FRI needs a map from a selected source position to its two natural-order
-coset positions. The current library computes it with checked `index.div`,
-`index.mod` and `index.add`. Those operations may stop; their presence in the
-installed catalog does not admit them inside a total virtual-oracle query body.
+Virtual oracle mathematics computes candidate positions. It does not certify
+that a position belongs to an oracle's actual domain. The ordered query checks
+that domain at the reached occurrence. Keeping these judgments separate permits
+ordinary total mathematics without moving a source failure across authentication.
 
-The selected next boundary is a bounded domain-map family tied to an immutable
-actual shape. Keep the general checked index operations unchanged. Implementing
-this mathematical family is a joint IR/Lean unit, after the existing-family
-probe, rather than a parser alias or a new runtime arithmetic engine.
+The selected foundation is a small total unsigned-word vocabulary on the
+existing `ui64` index carrier. FRI pairing is library mathematics over that
+vocabulary. Checked `index.add`, `index.sub`, `index.div` and `index.mod` keep
+their stopping behavior and remain outside total virtual query functions.
 
-## Evidence from the existing four faces
+## Arithmetic contract
 
-| Face | Existing owner | What is established |
-| --- | --- | --- |
-| Frontend | Ordinary library declarations and resolved operator bindings | The retained source profile resolves division, remainder and addition to exact checked contracts. Layout library primitive declarations still need their projection before library migration. |
-| IR | Neutral contract declarations and admitted local calls | The actual compiled helper retains checked arithmetic and ordered guards; it is not a mathematical helper. |
-| Execution | Independent native index installation | Eighty actual Host cases, with simplification on and off, cover even shapes, every position in small domains, u64 boundary values, and refusal without results for empty/odd/out-of-range inputs. |
-| Lean | Existing `Structured.PrimitiveLaws` | Six compiled equations establish half positivity, low/high ranges, reconstruction, conditional native remainder/addition results and natural coset pairing. They reuse the existing primitive laws. |
+All operands and results are unsigned 64-bit words. The selected operations are
+wrapping addition and subtraction modulo `2^64`, bitwise conjunction, and logical
+right shift. A shift count at least 64 returns zero. Ordinary selection chooses
+one of two indices. These definitions cover every input; there are no overflow
+flags, implicit shape premises or poison values.
 
-The probe checks a library operation family, not a newly installed primitive.
-Its Lean equations are about the independent model under explicit premises;
-they are not a source-elaboration or native-kernel simulation. The runtime
-cases use the retained source profile because the layout library primitive
-adapter is not installed. No broader catalog migration follows merely from
-matching names or successful examples.
+The existing data dialect owns these operations because the logical carrier is
+`ui64`. Upstream integer arithmetic uses signless integer operands; raw oversized
+shifts and division by zero do not have the required all-input meaning. A later
+represented arithmetic lowering may use standard `arith` operations with the
+necessary guards, but an unchecked cast or unqualified arithmetic admission is
+not that lowering. See the [MLIR Arith specification](https://mlir.llvm.org/docs/Dialects/ArithOps/).
 
-## Shape-bound semantics
+The shared catalog names each exact mathematical identity, source intrinsic and
+selected execution contract. Normal recipe production, independent reading and
+native accounting apply. A catalog declaration does not manufacture a kernel,
+a proof or a claim that an external formal reader supports the operation.
 
-Let the actual immutable row count be `n`, with `0 < n < 2^64` and `n` even.
-Let `h = n / 2`. The closed map family has the equations
-`low(i) = i % h` and `high(i) = low(i) + h`. Both outputs are representable and
-inside the source domain for every representable `i`. When `i < n`, one of the
-two outputs equals `i`. The reached oracle query must still check `i < n`
-before using a map; total arithmetic is not authority to query out of bounds.
+## Power-of-two pairing
 
-Admission must bind the shape parameter to the same actual anchor used by the
-query. A static maximum is only a resource bound and cannot stand in for `n`.
-Source mutation, another anchor, a changed actual shape or a different capture
-invalidates the association. Dynamic shape checks happen at the defined ordered
-boundary; moving them into a pure helper would change refusal behavior.
+For an actual captured row count `n` and candidate position `i`, define:
 
-For natural multiplicative coset order, with `g^h = -1`, the points at `low`
-and `high` are opposites. This algebraic premise is separate from integer range
-formation: an even array length does not establish a valid two-adic domain.
-The total fold keeps explicit inverse-two and inverse-point values and needs
-their laws separately. The [FRI paper, section 2.1](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.ICALP.2018.14)
-explains the domain reduction and paired-query consistency test; zkc's concrete
-natural-order convention belongs to its library and formal model.
+```text
+h    = logical_shift_right(n, 1)
+low  = bit_and(i, wrapping_sub(h, 1))
+high = wrapping_add(low, h)
+```
 
-## Alternatives and decision
+For `n >= 2` a power of two, these are exactly `i % h` and `i % h + h`.
+Both are below `n`; when `i < n`, one member of the pair is `i`. The largest
+representable power-of-two row count is `2^63`.
 
-| Alternative | Assessment |
+Outside those premises the expressions still have defined word results. At
+`n = 0` or `n = 1`, both outputs equal `i`. At `n = 6`, the outputs are not the
+modulo-three pairing. No invalid shape thereby becomes a valid FRI domain.
+The source profile performs its ordered configuration checks and retains the
+mathematical premises separately.
+
+For natural multiplicative coset order, the additional law `g^h = -1` makes the
+paired points opposites. Nonzero shift, characteristic unequal to two, generator
+order, inverse laws and successive domain squaring remain separate assumptions.
+An even array length proves none of them. The [FRI paper](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.ICALP.2018.14)
+provides the low-degree testing construction; its proximity theorem is not a
+consequence of native arithmetic tests.
+
+## Actual shape association
+
+Read the row count from the exact source handle before virtual instantiation:
+
+```text
+n = oracle.rows(source)
+h = logical_shift_right(n, 1)
+folded = Fold(source, n, h, other_captures...)
+```
+
+The result shape selects `h` through the definition's named `shape_arguments`.
+The independent source comparison checks actual source handles, dimension reads,
+capture operands and helper bodies. Admissibility retains the equality between
+captured source rows and the source data extent; `shape_arguments` alone does
+not prove that equality. A maximum is a resource bound, not an actual extent.
+
+A general virtual definition may accept arbitrary ordinary captures and remain
+total. Its FRI interpretation still requires its admissibility premises. Two
+anchors with equal row counts may use the same numerical map; authentication
+and observation correspondence continue to depend on the actual queried anchor.
+No descriptor repeating anchor identity and shape supplies extra authority.
+
+## Alternatives reviewed
+
+| Alternative | Decision |
 | --- | --- |
-| Admit general checked arithmetic as Math | Rejected: zero division and overflow remain observable failures. |
-| Add unrestricted dependent integer refinements | More general than this boundary needs; it would require a solver, export language and independent proof reconstruction before the first map. |
-| Use only static bit masks | Insufficient for dynamic actual shapes and general even-domain tests; it also hides ordering assumptions. |
-| Precompute a virtual table or create a constant anchor per query | Changes the virtual definition, identity, work and reached-query behavior. |
-| Closed shape-bound map family, lowered to existing checked operations | Selected: narrow total equations, explicit shape premises, reuse of execution and Lean laws, extensible to separately declared map families. |
+| Treat checked index operations as total after a written `requires` | Rejected: writing a premise does not restrict the helper's argument space or remove native failures. |
+| Closed positive/even shape value with restricted formation | Sound with a complete formation/use checker; unnecessary for all-input word mathematics. |
+| Total piecewise modulo map for every even domain | Sound if the divisor is sanitized before remainder; not needed by the selected power-of-two FRI profile. |
+| General total word operations with library pairing | Selected: one existing carrier, explicit all-input semantics and reusable mathematical operations. |
+| Migrate every index consumer to signless `i64` in this unit | Deferred: broader than this requirement and not justified solely by avoiding four data operations. |
 
-The family descriptor should name the frontend library declaration, logical
-signature and shape dependency, existing execution recipe, and Lean definition
-with its law identifiers. Consumers continue to validate independently. Reuse
-the existing TableGen contract machinery; do not create another cross-language
-schema framework or generate proof authority from a `total` flag.
+The earlier checked-arithmetic domain-map probe remains evidence about that
+library and its explicit premises. It is not the production foundation selected
+here. The previous joint IR/Lean installation gate no longer applies: native
+implementation and exported meanings are owned here; formal support is reported
+independently and never inferred from successful native execution.
 
-Before installation, require a source/export representation for the exact shape
-association, IR mathematical admission, independent actual-body checking, native
-boundary cases and Lean reconstruction of the range premises. The frontend may
-then resolve the ordinary library name through the catalog. No new language
-keyword, general arithmetic-purity rule or runtime oracle object is required.
+## Validation boundary
 
-## Acceptance scope
+Check zero, one, odd and even nonpower shapes, powers through `2^63`, maximum
+words, and shift counts `0`, `1`, `63`, `64`, and maximum. Exhaustive small valid
+domains compare library pairing with independent modulo formulas. Mutations
+must change actual captured shape, handle, predicate, query order or helper body
+and be rejected by the relevant independent reader.
 
-The shared FRI/STARK acceptance test remains open until the complete layout
-client, virtual definition, realization and formal admission consume the same
-source/configuration. A successful map probe or a single fold layer does not
-pass that test. Report frontend, IR, Lean and runtime results separately, using
-the [contract register](../spec/contracts.md#shared-oracle-stack-acceptance-boundary).
+The complete source virtual definition, checked realization and maintained
+FRI/STARK callers remain the integration boundary. An arithmetic probe does not
+complete that boundary. The [contract register](../spec/contracts.md#shared-oracle-stack-acceptance-boundary)
+separates frontend, IR, runtime and formal evidence.

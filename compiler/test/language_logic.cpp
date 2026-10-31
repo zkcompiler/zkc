@@ -116,14 +116,19 @@ int main() {
       expression = "true && (" + expression + ")";
     refuses(check("fn f(){return " + expression + ";}"), "source.limit");
   });
-  cases.run("protocol operands reject control and primitive calls", [] {
-    for (StringRef operand : {"{stop \"abort\";}", "{let r=send P->P(x);r}",
-                              "{for _ in 0..n roles(P) max 2 {}true}",
-                              "{consume x;true}", "index<0>()==n"})
+  cases.run("protocol short-circuit operands reject ordered control", [] {
+    for (StringRef operand :
+         {"{stop \"abort\";}", "{let r=send P->P(x);r}",
+          "{for _ in 0..n roles(P) max 2 {}true}", "{consume x;true}"})
       refuses(check("protocol Run roles(P)(x:bool@P,n:index@P)->(r:bool@P){"
                     "return false&&" +
                     operand.str() + ";}"),
               "source.mode");
+    // The index constant is now total mathematical syntax and can appear in
+    // a protocol Boolean expression without introducing an ordered call.
+    compile("protocol Run roles(P)(n:index@P)->(r:bool@P){"
+            "return false&&(index<0>()==n);}"
+            "entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }");
     // Negation has no skipped operand, so an ordered call remains ordered.
     compile("fn f(x:bool){require x;return x;}"
             "protocol Run roles(P)(x:bool@P)->(r:bool@P){return !f(x);}entry "

@@ -24,6 +24,7 @@ void mapBodyValues(Body &body, const std::function<ValueId(ValueId)> &map) {
           using T = std::decay_t<decltype(action)>;
           if constexpr (std::is_same_v<T, MathValue> ||
                         std::is_same_v<T, HelperCall> ||
+                        std::is_same_v<T, OracleInstantiation> ||
                         std::is_same_v<T, HostInvocation> ||
                         std::is_same_v<T, BulkApplication> ||
                         std::is_same_v<T, ProtocolApplication> ||
@@ -53,6 +54,8 @@ void mapBodyValues(Body &body, const std::function<ValueId(ValueId)> &map) {
             action.rows = map(action.rows);
           } else if constexpr (std::is_same_v<T, OracleQuery>) {
             action.handle = map(action.handle);
+            action.position = map(action.position);
+          } else if constexpr (std::is_same_v<T, OracleSourceQuery>) {
             action.position = map(action.position);
           } else if constexpr (std::is_same_v<T, OracleSequenceAppend>) {
             action.prefix = map(action.prefix);

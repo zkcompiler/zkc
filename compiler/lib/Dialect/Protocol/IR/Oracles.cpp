@@ -1,7 +1,25 @@
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "llvm/ADT/StringSet.h"
 using namespace mlir;
 namespace zkc::protocol_ir {
+OracleKindAttr getOracleFamilyKind(Type type) {
+  if (!type)
+    return {};
+  if (auto handle = dyn_cast<OracleHandleType>(type))
+    return handle.getKind();
+  if (auto sequence = dyn_cast<OracleSequenceType>(type))
+    return sequence.getKind();
+  return {};
+}
+Type getOracleFamilyDataType(Type type) {
+  auto kind = getOracleFamilyKind(type);
+  if (!kind || !kind.getDataType())
+    return {};
+  if (isa<OracleSequenceType>(type))
+    return data::SequenceType::get(type.getContext(), kind.getDataType());
+  return kind.getDataType();
+}
 LogicalResult OracleSendOp::verify() {
   auto kind = getHandle().getType().getKind();
   if (!kind.getDataType() || getData().getType() != kind.getDataType())
@@ -90,17 +108,19 @@ LogicalResult OracleSequenceAtOp::verify() {
   return success();
 }
 LogicalResult OracleInputOp::verify() {
-  auto kind = getHandle().getType().getKind();
-  if (getAnchor().getType() != getHandle().getType() ||
-      getData().getType() != kind.getDataType())
-    return emitOpError("input components must preserve the kind and data type");
+  auto kind = getOracleFamilyKind(getHandle().getType());
+  if (!kind || getAnchor().getType() != getHandle().getType() ||
+      getData().getType() != getOracleFamilyDataType(getHandle().getType()))
+    return emitOpError("input components must preserve the complete oracle "
+                       "type and holder data type");
   return kind.verifyShapeBounds([&] { return emitOpError(); },
                                 getShapeBounds());
 }
 LogicalResult OracleComponentsOp::verify() {
   if (getAnchor().getType() != getHandle().getType() ||
-      getData().getType() != getHandle().getType().getKind().getDataType())
-    return emitOpError("components must preserve the kind and data type");
+      getData().getType() != getOracleFamilyDataType(getHandle().getType()))
+    return emitOpError("components must preserve the complete oracle type "
+                       "and holder data type");
   return success();
 }
 } // namespace zkc::protocol_ir

@@ -44,6 +44,19 @@ egress use the same admission. Pass-managed symbol and mathematical facts are
 scoped to the stable symbol-table owner with explicit invalidation dependencies;
 budgeted semantic queries still account for each request.
 
+The module-owned [interaction view](spec/ir/interactions.md) retains actual
+Protocol functions, virtual definitions, applications and symbolic repeats.
+Oracle observations and query-capacity analysis share this extraction while
+keeping separate transfer rules. Successful-continuation analysis interprets
+same-participant guards over exact unsigned comparisons at an actual point,
+including invariant captures. It checks SSA dominance, preserves zero-trip and
+stopped paths, and supplies reached bound queries independently of batching.
+Unchecked Booleans, foreign participants, carried initializers and unexpanded
+callee guards supply no such evidence. Dynamic query windows use answer-free
+discovery, whole-prefix authentication and ordered replay. Their independent
+reader checks the actual generated bodies, complete source query order and
+failure prefixes. General local success summaries remain outside this profile.
+
 Source, constructed-participant and realization exports share complete
 [logical type data](spec/formats/logical-types.md) and typed catalog bindings and
 parameters. Source declarations use inherent arrays. The fixed primitive export
@@ -632,12 +645,13 @@ now checked for every logical query owner, both during emission and independent
 readback against the frozen source. It includes index and field draws, keeps
 participant continuations separate and uses one bounded analysis budget. This
 permits authentication after the last draw. Authentication granularity is a
-separate requested policy. Checked atomic blocks group consecutive base-table
-queries only when exact source facts prove their domain checks succeed. They
-share duplicate and same-leaf openings for the same actual anchor, retain every
-logical query and authenticate all answers before releasing any source answer.
-Unknown domains and barriers retain singleton blocks. General virtual/FRI
-batching, deferred proofs and a simulation theorem remain separate obligations. Private
+separate requested policy. Checked atomic blocks traverse consecutive dynamic
+base and virtual queries through answer-free discovery. Reached successful-domain
+facts permit extension; uncertain domain checks and source barriers end the
+window. The controller retains every logical query, authenticates the complete
+response prefix, then replays the source answers in order. It does not authorize
+cross-guard sharing, omitted siblings or a different refusal order. A formal
+simulation theorem remains a separate obligation. Private
 anchor-storage planning retains fresh constructor/instance references, actual
 repeat coordinates and role-specific payloads as ordinary sequences and records.
 Independent readers check generated append allocations and reference-tagged
@@ -674,14 +688,16 @@ within each check; mutations always require a fresh check. Returned oracle resul
 keep their original reference positions and append mapped immutable stores only at
 their receiving roles. Aliases share support stores; nested calls and recurrence
 retain actual anchors and final store snapshots. These private interface maps do
-not enable cross-entry graph import. Logical anchor-clause interpretation and native proof integration remain
+not enable cross-entry graph import. Logical anchor-clause interpretation remains
 pending; the supported Merkle communication profile is described below.
 The private realization owner consumes a prepared source, validates the complete
 serialized record against both modules and retains the frozen pair. Inspection
 returns independent clones; changed snapshots do not inherit checked authority.
-Joint run compilation now consumes this owner before projection and keeps the
-complete edge in the final Compilation. Native scheduling reads the represented
-common interface; proof construction still refuses logical oracle sources.
+Joint run and proof compilation consume this same owner before projection and
+keep the complete edge in the final Compilation. Native scheduling reads the
+represented common interface. Proof construction independently checks the
+realization and any reconstructed verifier requests; it has no second oracle
+realizer.
 Ordinary modules pass through an exact identity edge with an empty oracle inventory. The independently checked table-read primitive
 stops before an out-of-domain read for field, group, index and sequence-backed
 rows. Its generated clients enter the physical pipeline; native controls check
@@ -711,9 +727,9 @@ is invented. The [record contract](spec/formats/oracle-realization.md#common-ope
 specifies this capability boundary. Native controls cover input/send queries,
 every valid position, corrupted requests/roots/rows/proofs, duplicate and unused
 openings, equal-typed constructor substitutions, heterogeneous scheme dispatch,
-and trailing zero-query domain failures. Mixed local/remote or multi-holder
-routing, dynamic virtual batching and native proof publication remain pending.
-Fixed base-query blocks retain the checked batching profile described above.
+and trailing zero-query domain failures. Dynamic virtual packets preserve exact
+constructor, instance, shape, position and response alternatives. Mixed
+local/remote or multi-holder routing remains outside this communication profile.
 The private whole-stage reader consumes a version-zero
 [realization record](spec/formats/oracle-realization.md), the prepared original
 and the actual candidate. It reads independently parsed candidates, checks exact
@@ -733,8 +749,9 @@ bytes grants no authority. It is not a Lean simulation.
 Empty sequence observations need no allocated anchor. Unreachable queries and
 shape views have a complete refusing controller without an invented store;
 indexing still stops at its original occurrence and preserves earlier delivery.
-Controller roles must belong to the original entry roster. Complete Merkle query
-realization and native proof publication remain pending.
+Controller roles must belong to the original entry roster. Native proof
+publication retains generated origin associations, selected schemes/layouts and
+the independently checked request-reconstruction relation.
 
 Common oracle ports pair actual holder data and receiver handles through inputs,
 returns and applications, with explicit shapes and independent preparation checks.
@@ -750,18 +767,31 @@ kind/handle aliases, static kind parameters, forward associated types and closed
 logical layouts are checked, including specialization and ordinary-data boundary
 refusals. Source oracle ports retain their explicit holder, receivers and static
 maximum through paired input, call and return elaboration. The independent
-source interface reader checks logical kind descriptors and actual input pairs;
-source correspondence checks the complete role substitution and result mapping.
+source interface readers check logical kind descriptors, restricted record and
+sequence metadata, exact component slot counts and actual input pairs. Native
+Entry binding still refuses logical values at selected external ports; internal
+metadata does not create a graph-import codec. Source correspondence checks the
+complete role substitution and result mapping.
 Source send/query/data/rows/refinement actions preserve the explicit holder,
 ordered query events and packed answer layouts through independent comparison.
 Layout role assembly explicitly selects existing components of ordinary shared
 data. It lowers to the IR-owned assembly operation and participates in actual
 source comparison, role substitution and participant projection. Unsupported
 expression role suffixes refuse instead of being ignored.
+Checked oracle inspection exposes one bounded `oracle-admissibility` companion
+address for the complete generated Formula, retaining authored clauses and
+generated source bounds. Closed source instances retain template/instance lookup
+addresses and every construction's typed actual substitution, custody and nested
+body path, independently of optional security selection. These unresolved
+occurrences are checking proposals; lookup does not supply proof evidence or
+extend formal oracle admission. See the [companion contract](spec/language/companions.md#virtual-oracle-admissibility).
 Bounded source sequences retain explicit families, persistent loop state and
-dynamic selected anchors. Virtual source spelling remains with the frontend
-redesign. The proposals' semantic interpretation and checked realization remain
-in progress. Formation does not enable execution.
+dynamic selected anchors. Both explicitly selected source formats check virtual
+definitions and instantiations through one typed query plan; lowering and
+independent comparison retain total maps, ordered queries, shapes and predicates.
+Checked native realization implements the admitted communication profile above.
+Admissibility proposals still require independent semantic discharge; formation
+and native execution do not establish those predicates or a security theorem.
 
 Checked notation inspection is available through
 `inspectNotations` with `NotationInspectionOptions.includePrivate` and
@@ -835,7 +865,7 @@ entries, integration and protocol-specific theorems.
 | Calls, roles and control | Static application, role projection, structured local control, nested repetition and [conditional completion](compiler/control.md). General dynamic protocol composition remains open. |
 | Structured values | Products, alternatives, extents, checked indexing and [nested immutable data](compiler/mathematics.md), including independently shaped matrices; source sequence elements include contextually packed records, tuples, source arrays and empty products, with explicit packing/unpacking and source comparison; affine and non-Drop elements are excluded. Persistent sequence storage and retained validation support default-budget scoped collection of 16,384 indices and 8,192 two-index records in maintained controls. Whole-value encoding has a separate peak-storage limit; a collection that executes locally can exceed it when exported. |
 | Affine resources and services | Scoped helpers use the shared native execution exact-origin analysis through the Protocol adapter. Directly authored scoped controls and fresh native bundles cover exact roots, state successors, participant-local stops, resource custody, entry service aliases and failure cleanup; [resource origins](compiler/resource-origins.md). Equal roots do not prove equal state or independent randomness. |
-| FRI source library | [Binary FRI](../examples/projects/fri/README.md) over natural-order two-adic cosets, with commitment/fold/query/terminal checks and independent-reference tests. The library retains a checked coset word across folds; the AIR library consumes the authenticated positions and values. An independent Lean model of its verifier with ideal commitments is [complete on codewords and has a round-by-round soundness theorem](../lean/docs/spec/fri-security.md), with interactive bounds in the unique-decoding regime and up to the cube-root proximity radius `1 - (ρ + η)^(1/3)`, also stated over the verifier's residual processes, and transferred to a Fiat–Shamir bound for adaptively chosen initial words with one key for the query block, with [commitments read in the clear](../lean/docs/spec/fri-security.md#fiatshamir-transfer) and with [words committed](../lean/docs/spec/fri-security.md#committed-words) by Merkle trees with one field element per hashed leaf, in one random oracle with the hash calls. The committed bound covers acceptance together with the initial word being far from the code for the extraction at a verifier checkpoint, completed with zero at the entries the extraction misses. The model is a transcription of the library verifier, not the compiled library; the implication from an application's bad event to that checkpoint event, the installed schemes' leaf encoding (tag, codec, width and height), the source's sequential position draws and the compiled verifier remain separate obligations. |
+| FRI source library | [Binary FRI](../examples/projects/fri/README.md) has one logical `Commit` and private checker shared by `Query`, `QueryAssociated` and `LowDegree`. Its private state retains bounded actual/virtual handle sequences and exact coset geometry. Terminal coefficients have exact length after checked padding, with strict degree below `2^(TerminalLog+Rounds)`. [Same-source execution tests](../common/tests/protocol/test_fri_realizations.py) select clear tables, quartic Poseidon2 individual leaves and quartic Keccak paired/reversed leaves while preserving the retained source and interface. Authentication packets preserve all logical child reads and verify complete selected leaves. The AIR caller consumes the authenticated positions and initial values. An independent Lean model of its verifier with ideal commitments is [complete on codewords and has a round-by-round soundness theorem](../lean/docs/spec/fri-security.md), with interactive bounds in the unique-decoding regime and up to the cube-root proximity radius `1 - (ρ + η)^(1/3)`, also stated over the verifier's residual processes, and transferred to a Fiat–Shamir bound for adaptively chosen initial words with one key for the query block, with [commitments read in the clear](../lean/docs/spec/fri-security.md#fiatshamir-transfer) and with [words committed](../lean/docs/spec/fri-security.md#committed-words) by Merkle trees with one field element per hashed leaf, in one random oracle with the hash calls. The committed bound covers acceptance together with the initial word being far from the code for the extraction at a verifier checkpoint, completed with zero at the entries the extraction misses. The model targets an independently transcribed FRI verifier; correspondence to the current shared source and its compiled code is not established. The implication from an application's bad event to that checkpoint event, the installed schemes' leaf encoding (tag, codec, width and height) and the source's sequential position draws remain separate obligations. |
 | Pairing groups | BN254 and BLS12-381 each install G1, G2 and a prime-order target with group arithmetic, `pairing.check`, `pairing.apply`, canonical compressed codecs and native frames; [contract](spec/domains/values.md#pairing-field-capabilities). BLS12-381 G2 uses the 96-byte compressed encoding of the Ethereum consensus specifications. Independent arkworks comparisons and Ethereum ceremony points check arithmetic and encodings; no native adequacy proof. |
 | Resident BLS12-381 provider | `blst/resident/` scalar, vector, G1/G2 and pairing bindings consume typed `blst/fr`, `blst/g1` and `blst/g2` ports. [Automatic Target preferences](compiler/representation.md#resident-providers) select G2 scaling and pairing checks; canonical ports and Contracts defaults remain Arkworks. Direct conversions are separate reached calls. Complete nested sequences, variants, resident field arrays and fixed vectors retain selected children; fixed vectors are local-only. Canonical selected codecs preserve existing encodings. Known variable-time MSM requires trusted execution permission. [Provider scope and resource boundary](../crates/zkc-kernels/README.md#alternative-bls12-381-provider); no resident GT/PCS output or whole-runtime timing guarantee. |
 | Resident BN254 provider | Explicit `halo2curves-axiom/resident/` field/vector, G1/G2, MSM and `pairing.check` bindings consume six typed flat ports at `halo2curves-axiom/bn254.fr`, `/bn254.g1` and `/bn254.g2`. Native and compiler author positive operation inventories independently. Checked mathematical-byte conversions preserve canonical ports and BN254 codecs, including readable JSON. MSM requires variable-time authority for operands `[0,1]`; pairing preparation is invocation-local with kernel work/workspace admission. No automatic Target preference, Halo GT/PCS/FFT/matrix/field-array route, recoverable upstream OOM claim or whole-runtime timing guarantee. Provider selection uses existing physical proposals; compiled source controls cover canonical, resident, mixed-provider, G2 and bulk paths. |
@@ -858,7 +888,7 @@ entries, integration and protocol-specific theorems.
 | BabyBear and Goldilocks | The [registered residue family](spec/domains/values.md#registered-residue-fields) includes `baby-bear`, `baby-bear.ext4-binomial11`, `goldilocks` and `goldilocks.ext2-binomial7`: exact characteristic and base facts, five value representations, full-width canonical literals, scalar/vector/matrix message eligibility, Ring and Bundle carriers, canonical coordinate words, and base-subgroup cosets through logs 27 and 32. Goldilocks uses eight-byte coordinates and has no Montgomery32 byte operations. Explicit extension RNG/Merlin suites and field-appropriate Poseidon2 row commitments support the generic AIR/FRI library. Independent C++ inventory/root controls and [source integration controls](../common/tests/kernels/test_plonky3_fields.py) cover nonbase coordinates, high constants, malformed inputs and cross-family refusal. Native and source tests exercise the complete path, including identical proof bytes at one and four workers and refusal of changed statements or claims. |
 | Binary fields | [`gf2-64.pentanomial-4-3-1`](spec/domains/values.md#binary-fields), `F_2[x]/(x^64 + x^4 + x^3 + x + 1)`, and its cubic extension `gf2-64.pentanomial-4-3-1.ext3-trinomial1` by `y^3 + y + 1` are installed through Plonky3 0.8.0's `Poly64` and `Poly192`: field, vector, polynomial, round and sparse-matrix kernels, the base embedding, [bit-pattern literals](spec/domains/values.md#bit-pattern-literals) for `field.constant` and `vector.constant`, canonical wire frames (field 73 and 76, vector 74 and 77, matrix 75 and 78), a hexadecimal readable form and the little-endian [bit-pattern byte codecs](spec/realization/external-constructions.md#binary-bit-patterns). Backend tests compare Plonky3 with an independent shift-and-add reference that also checks the field orders, and run every installed binary kernel to confirm that none reaches Plonky3's halving, which panics in characteristic two; a [`.zkc` Entry test](../common/tests/kernels/test_binary_fields.py) compares kernel results, constants and codecs with the same arithmetic in Python and checks compile-time refusal of two-adic domains, folding, Montgomery codecs and decimal constants above one. Relation bundles over these fields refuse in both readers, the Ring bulk kernels are not installed for them, and pointwise maps over them run. C++, Rust admission and backend signatures agree in the contract conformance probes. There is no random service, transcript suite, row-commitment scheme or Lean admission for these fields. |
 | Hash-based proof primitives | KoalaBear [coordinate-word codecs](spec/realization/external-constructions.md#coordinate-words): canonical and Montgomery little-endian encodings for `koala-bear` and its installed extensions, with whole-element vector decoders that reject words at or above the modulus. The [word-codec kernel test](../common/tests/kernels/test_field_words.py) compares them with integer arithmetic through `.zkc` Entries; backend tests compare Montgomery words with Plonky3 0.8.0's serializer. [Bit-reversal permutations](spec/domains/vectors.md) of elements and of whole rows of flat row-major tables are installed for every field family and [checked through `.zkc` Entries](../common/tests/kernels/test_bit_reversal.py) against independent digit reversal. The batched [width-16 Poseidon2 permutation](spec/domains/permutations.md) over KoalaBear uses Plonky3 0.8.0's default parameters with external-work accounting; backend tests compare it with the upstream known answer, p3-poseidon2's generic round functions and an integer implementation, and a [`.zkc` test](../common/tests/kernels/test_poseidon2.py) checks batching and refusal. [Digest-generic Merkle schemes](spec/domains/oracles.md#digest-generic-merkle-schemes) carry fixed-width digest bytes, so another leaf hash and compression is an instance rather than new carriers; the installed Poseidon2 instances over `koala-bear` rows and quartic-extension rows add `MultiOpening`: `oracle.open_many`/`oracle.check_many` with Plonky3's pruned proofs. Backend tests compare roots, rows and pruned proofs with Plonky3 0.8.0's `MerkleTreeMmcs` (and `ExtensionMmcs` for quartic rows) and with a reference model that makes every permutation call explicit, including short, long, altered, duplicate and wrong-root proofs, and a [native proof test](../common/tests/protocol/test_merkle_multi_opening.py) opens positions of both instances through a Fiat–Shamir proof. Each tree commits one table, so tables of different heights cannot share a tree; Merkle commitment, opening and checking charge no permutation work; and no operation exposes a root's digest words as field elements, so a challenger cannot absorb a root as field data. A quartic table and its flattened base table have the same root and proof, so a transcript that absorbs a root must also bind its scheme. Additional explicit Poseidon2 instances commit BabyBear base/quartic and Goldilocks base/quadratic rows; their [parameters and digest widths](spec/domains/oracles.md#poseidon2-instances) remain separate from arithmetic installation. The KoalaBear octic extension has no Poseidon2 row instance. |
-| Parameterized STARK library | [`stark::single_table::TableArgument`](../libraries/arguments/stark/README.md#parameterized-single-table-argument) proves one present table of a relation Bundle, generic over a `Configuration` module that fixes the base and extension fields, the challenge derivation, the row-commitment instances and the data layout. Its order is trace commitment, constraint-composition challenge, quotient commitment, one out-of-domain point, evaluation claims and identity check, DEEP batching, FRI commitments and final polynomial, every query position, and then all openings: one pruned multi-opening of the trace rows, of the quotient rows and of each FRI layer, whose leaves hold both fold siblings and whose own values the verifier reconstructs. Configurations select KoalaBear/quartic, BabyBear/quartic or Goldilocks/quadratic arithmetic with explicit Poseidon2 Merkle trees and natural row order. KoalaBear uses octic Merlin draws projected in source; the other configurations draw directly in their extensions. [Tests](../common/tests/protocol/test_stark_library.py) prove Clean and Plonky3 AIRs, a configuration column, generated recurrences up to 256 rows and 100 queries, and two further configurations (bit-reversed rows; one FRI value per leaf), and refuse altered messages, changed statements, wrong openings and two dishonest provers; the `stark` benchmark family measures the `air` family's shapes. One table without interactions; no proof-of-work grinding; query positions are separate index draws; no soundness theorem for the composition, its sampling or its Fiat–Shamir transform. The older octic Keccak profile remains as a regression fixture and for the three-table argument. |
+| Parameterized STARK library | [`stark::single_table::TableArgument`](../libraries/arguments/stark/README.md#parameterized-single-table-argument) implements a protocol for the assertions of one present relation table. `Configuration` owns the base/extension fields, challenge conversion and outer trace/quotient row commitments. The one shared logical FRI component owns its commit/query protocol; deployment separately selects its table schemes, leaf grouping and order. After trace commitment, composition challenge, quotient commitment, OOD claims and identity, the caller batches its DEEP word, calls shared `Commit`, opens outer rows at the sampled positions, and calls `QueryAssociated` on the same state. FRI authenticates the initial value before association and each complete fold before its chain or terminal equality. Outer rows retain pruned multi-openings; FRI uses checked dynamic packets and does not retain the former specialized sibling-omission implementation. KoalaBear/quartic, BabyBear/quartic and Goldilocks/quadratic configurations remain explicit. No proof-size or throughput parity with the removed implementation is claimed. The [integration suite](../common/tests/protocol/test_stark_library.py) covers field conversion, generated AIRs, outer row permutations, authentication and dishonest prover controls. The caller's unadjusted DEEP degree slack remains a [separate reduction obligation](roadmap.md#deliver-the-ir-architecture-in-dependency-order). One table without interactions; no grinding or soundness theorem for this composition, sampling or Fiat–Shamir transform. |
 | Host applications | Named Entry inputs/results, joint bundles, proof jobs, explicit immutable data/prover-material reuse and callable Rust bindings through the common Hosts; [Entry guide](runtime/entries.md). |
 
 Setup input associations and authorized incoming PCS values follow the

@@ -314,12 +314,21 @@ public:
         stack.push_back(std::move(*pending));
         continue;
       }
-      auto type =
-          types.projectedType(owner, body.values[stack.back().first].type,
-                              stack.back().second, span);
-      if (!type)
-        return {};
-      if (auto size = staticExtent(*type, 0)) {
+      std::optional<Type> type = body.values[stack.back().first].type;
+      for (auto index : stack.back().second) {
+        // A caller can project a generic result after substituting a product
+        // for its type parameter. The template summary has no fixed extent
+        // below that opaque parameter; ordinary call typing checks the actual
+        // projection. Forwarded input selectors remain valid independently.
+        if (type->kind == Type::Kind::Parameter) {
+          type.reset();
+          break;
+        }
+        type = types.projectedType(owner, std::move(*type), {index}, span);
+        if (!type)
+          return {};
+      }
+      if (auto size = type ? staticExtent(*type, 0) : nullptr) {
         // Formation owns fixed extents. Never infer a relation from an
         // unchecked symbolic collection count, including through wrappers.
         result.shape = {};

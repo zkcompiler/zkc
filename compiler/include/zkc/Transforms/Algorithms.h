@@ -21,6 +21,17 @@ expandScopedHelpers(mlir::ModuleOp source,
 mlir::LogicalResult verifyScopedHelperExpansionPreserved(
     mlir::ModuleOp source, mlir::ModuleOp candidate,
     std::vector<AlgorithmOrigin> *origins = nullptr);
+/// Drop scoped helper definitions unreachable from the complete participant
+/// declaration context. Every non-scoped declaration is a root, including
+/// projection metadata. Both modules are admitted; retained declarations are
+/// compared independently and must be unchanged and in their original order.
+/// This operation is restricted to the participant profile: role-free function
+/// exports are not subject to participant reachability.
+mlir::OwningOpRef<mlir::ModuleOp>
+pruneParticipantHelpers(mlir::ModuleOp source);
+mlir::LogicalResult
+verifyParticipantHelperPruningPreserved(mlir::ModuleOp source,
+                                        mlir::ModuleOp candidate);
 /// One retained primitive occurrence after scoped expansion. Path consists of
 /// (call site, callee) pairs, relative to the enclosing invocation.
 struct AlgorithmOrigin {

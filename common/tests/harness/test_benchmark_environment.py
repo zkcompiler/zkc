@@ -210,6 +210,11 @@ def test_saved_native_measurements_require_owner_evidence(env, fixture):
     from bench.io import MeasurementError
     from bench.results import validate_manifest
     document = deepcopy(json.loads((Path(__file__).parent/'fixtures/benchmark-evidence.json').read_text())[fixture])
+    # Reuse archived worker payloads solely as CPU-owner evidence. Their old
+    # STARK envelope has no current oracle policy and cannot attest a deployment.
+    for row in [*document['matrix'], *document['results']]:
+        if row['case'].startswith('stark-'):
+            row['case'] = 'worker-host-control'
     validate_manifest(document)
     del document['results'][0]['worker']['process']['cpu_workers']
     with pytest.raises(MeasurementError, match='shared CPU context'):

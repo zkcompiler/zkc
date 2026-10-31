@@ -72,7 +72,7 @@ fn dynamic_group_access_preserves_order_domains_bounds_and_output_charges() {
                 vec![groups(d, &[1])]
             };
             let mut controlled = Controlled::new(backend(Policy::default()));
-            controlled.output_limit = Some(511); // Existing curve scalar-result preflight.
+            controlled.output_limit = Some(zkc_cpu::VALUE_SLOT_BYTES - 1); // Existing curve scalar-result preflight.
             assert_eq!(
                 one(controlled, b.clone(), &[], args.clone()).0.unwrap_err(),
                 "exhausted:output-bytes"
@@ -143,7 +143,7 @@ fn eager_composition_does_not_mask_group_failure_or_skip_the_second_predicate() 
         assert_eq!(controlled.outputs.len(), 3);
     }
     let mut controlled = Controlled::new(backend(Policy::default()));
-    controlled.output_limit = Some(255); // Bool retains the existing 256-byte value charge.
+    controlled.output_limit = Some(zkc_cpu::VALUE_SLOT_BYTES - 1);
     assert_eq!(
         one(
             controlled,

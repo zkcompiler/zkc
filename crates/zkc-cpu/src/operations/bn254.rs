@@ -94,11 +94,11 @@ fn execute(name: &str, args: &[Value], available: usize, p: &Policy) -> Result<V
     };
     let result = match name {
         "poly.domain_root" => {
-            p.output(512, available)?;
+            p.output(crate::VALUE_SLOT_BYTES, available)?;
             Value::Bn254Field(domain(ix(0)?, F::one(), p)?.generator())
         }
         "poly.domain_point" => {
-            p.output(512, available)?;
+            p.output(crate::VALUE_SLOT_BYTES, available)?;
             let d = domain(ix(1)?, f(0)?, p)?;
             let j = ix(2)?;
             if j >= d.size() {

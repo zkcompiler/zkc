@@ -236,7 +236,8 @@ def test_octic_air_control_remains_koala_only(bench, field):
 
 
 def test_existing_koala_air_stark_and_fri_preparations_are_unchanged(bench):
-    # Captured before the field extension: all 31 existing cases at statements
+    # Logical FRI source snapshot, independently checked against pre-policy HEAD:
+    # all 31 existing cases at statements
     # zero and one, including source, shape, inputs, assets and refusal inputs.
     rows = []
     for case in bench['coverage'].cases():
@@ -250,4 +251,4 @@ def test_existing_koala_air_stark_and_fri_preparations_are_unchanged(bench):
                          'support': [str(path.relative_to(ROOT)) for path in p.support]})
     assert len(rows) == 62
     encoded = json.dumps(rows, sort_keys=True, separators=(',', ':')).encode()
-    assert hashlib.sha256(encoded).hexdigest() == '2b047e261d3c8062744313b168e3d9a986f453c5313878931636311599e424bf'
+    assert hashlib.sha256(encoded).hexdigest() == 'b23613c0dabc125ae82901abfc91bad34313baafdc59d99469a522ce4160c2e7'

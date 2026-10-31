@@ -71,9 +71,9 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
   trace.eventLimit = 4096;
   if (observations)
     observations->instrument(pipeline);
-  buildExecutionPipeline(pipeline, simplify, fixPolynomials,
-                         mathematicalSelection,
-                         observations ? &trace : nullptr);
+  buildClosedExecutionPipeline(pipeline, simplify, fixPolynomials,
+                               mathematicalSelection,
+                               observations ? &trace : nullptr);
   if (stages)
     for (auto &pass : pipeline.getPasses())
       stages->push_back(pass.getArgument().str());
@@ -187,11 +187,29 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
     options.observations->decisions(*result->module, preparationTrace);
   if (!preparation || diagnostics.hasErrors())
     return diagnostics.failure();
+  // Library declarations have already been admitted and expanded into actual
+  // callers. Only explicit deployment roots acquire external oracle ingress.
+  // Keep every companion whose bytes the correspondence report will publish.
+  SmallVector<std::string> companionEntries;
+  if (options.polynomialRequirements) {
+    auto entries =
+        polynomialRequirementEntries(*options.polynomialRequirements);
+    if (!entries)
+      return diagnostics.failure(entries.takeError());
+    companionEntries = std::move(*entries);
+  }
+  SmallVector<StringRef> entries{options.entry};
+  for (const auto &entry : companionEntries)
+    if (!is_contained(entries, StringRef(entry)))
+      entries.push_back(entry);
+  if (failed(preparation->selectEntries(entries)) || diagnostics.hasErrors())
+    return diagnostics.failure();
   auto realization = mathematical::RealizedProtocol::realize(
       std::move(*preparation), options.oracleRealization);
   if (!realization)
     return diagnostics.failure(realization.takeError());
-  result->realization.emplace(std::move(*realization));
+  result->realization =
+      std::make_shared<mathematical::RealizedProtocol>(std::move(*realization));
   // Native scheduling consumes the actual represented interface. The original
   // logical clauses remain owned alongside the checked edge through
   // publication.
@@ -340,15 +358,17 @@ compileNativeProof(StringRef text, StringRef filename,
   if (!policy) {
     auto selected = selectNativeProofDraws(
         *original, std::get<NativeProofSelection>(options.policy).policy,
-        options.mathematicalSelection);
+        options.mathematicalSelection, options.oracleRealization);
     if (!selected)
       return diagnostics.failure(selected.takeError());
     policy = std::move(*selected);
   }
   auto constructed =
-      constructNativeProof(*original, *policy, options.mathematicalSelection);
+      constructNativeProof(*original, *policy, options.mathematicalSelection,
+                           options.oracleRealization);
   if (!constructed)
     return diagnostics.failure(constructed.takeError());
+  result->realization = std::move(constructed->realization);
   result->module = std::move(constructed->module);
   if (options.observations)
     options.observations->phase("participant", *result->module);
@@ -436,6 +456,10 @@ compileNativeProof(StringRef text, StringRef filename,
   auto digest = [](StringRef bytes) {
     return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
   };
+  auto oracleSelection =
+      protocol::encodeOracleRealizationPolicy(options.oracleRealization);
+  if (!oracleSelection)
+    return diagnostics.failure(oracleSelection.takeError());
   json::Value deployment(json::Array{
       "zkc.native-proof/0", digest(text), constructed->descriptor,
       digest(*descriptorBytes), candidate, digest(candidate), std::move(maps),
@@ -446,7 +470,8 @@ compileNativeProof(StringRef text, StringRef filename,
                                                               : "false",
           options.mathematicalSelection.finiteBulk ? "true" : "false",
           options.mathematicalSelection.collectFoldFusion ? "true" : "false",
-          options.mathematicalSelection.calculationBatching ? "true" : "false"},
+          options.mathematicalSelection.calculationBatching ? "true" : "false",
+          printJson(*oracleSelection)},
       json::Array(constructed->wireSites)});
   auto encoded = printJson(deployment);
   if (encoded.size() > 16 * 1024 * 1024)

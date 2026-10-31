@@ -103,23 +103,23 @@ std::optional<Diagnostic> diagnose(Error error, std::optional<Span> fallback) {
   return result;
 }
 bool isUnsupported(StringRef name) {
-  static const std::set<StringRef> words = {
-      "service", "predicate", "requires", "construct", "while", "extern"};
+  static const std::set<StringRef> words = {"service", "predicate", "construct",
+                                            "while", "extern"};
   return words.count(name);
 }
 bool isReserved(StringRef name) {
   static const std::set<StringRef> words = {
-      "module",    "use",       "pub",       "domain",   "field",
-      "group",     "math",      "fn",        "protocol", "roles",
-      "let",       "return",    "send",      "bool",     "true",
-      "false",     "index",     "type",      "struct",   "enum",
-      "interface", "where",     "nat",       "mut",      "if",
-      "else",      "max",       "match",     "for",      "in",
-      "drop",      "consume",   "require",   "stop",     "opaque",
-      "Type",      "Field",     "Group",     "Copy",     "Drop",
-      "completes", "finish_if", "builtin",   "kernel",   "pow2",
-      "formal",    "intrinsic", "relation",  "spec",     "construction",
-      "map",       "each",      "OracleKind"};
+      "module",    "use",       "pub",        "domain",   "field",
+      "group",     "math",      "fn",         "protocol", "roles",
+      "let",       "return",    "send",       "bool",     "true",
+      "false",     "index",     "type",       "struct",   "enum",
+      "interface", "where",     "nat",        "mut",      "if",
+      "else",      "max",       "match",      "for",      "in",
+      "drop",      "consume",   "require",    "stop",     "opaque",
+      "Type",      "Field",     "Group",      "Copy",     "Drop",
+      "completes", "finish_if", "builtin",    "kernel",   "pow2",
+      "formal",    "intrinsic", "relation",   "spec",     "construction",
+      "map",       "each",      "OracleKind", "requires"};
   return words.count(name) || isUnsupported(name);
 }
 bool isIdentifier(StringRef name) { return isSourceIdentifier(name); }

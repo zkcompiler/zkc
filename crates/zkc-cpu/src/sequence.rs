@@ -6,7 +6,7 @@ use zkc_runtime::vm::{
     OperationSignature, PhysicalType, Retained, Value as RuntimeValue,
 };
 
-const _: () = assert!(std::mem::size_of::<Value>() <= 512);
+use crate::VALUE_SLOT_BYTES;
 
 /// Cumulative sequence traversal allowance. Failed calls never refund work.
 pub(crate) struct Budget {
@@ -86,7 +86,7 @@ const LEAF_WIDTH: usize = 4;
 const BRANCH_WIDTH: usize = 16;
 const NODE_HEADER: usize = 256;
 const CHILD_SLOT: usize = 32;
-const VALUE_SLOT: usize = 512;
+
 const _: () = assert!(std::mem::size_of::<Node>() <= CHILD_SLOT);
 
 fn add(a: usize, b: usize) -> Result<usize> {
@@ -129,7 +129,9 @@ impl Node {
         match self {
             Self::Leaf(values) => Backing::of(
                 values,
-                NODE_HEADER + values.len() * VALUE_SLOT + values.iter().map(inline).sum::<usize>(),
+                NODE_HEADER
+                    + values.len() * VALUE_SLOT_BYTES
+                    + values.iter().map(inline).sum::<usize>(),
             ),
             Self::Branch(children) => {
                 Backing::of(children, NODE_HEADER + children.len() * CHILD_SLOT)
@@ -206,7 +208,7 @@ impl Node {
     fn append_cost(&self, len: usize, height: usize, value: &Value) -> Result<(usize, usize)> {
         match self {
             Self::Leaf(values) => {
-                let slots = mul(add(values.len(), 1)?, VALUE_SLOT)?;
+                let slots = mul(add(values.len(), 1)?, VALUE_SLOT_BYTES)?;
                 let payload = values
                     .iter()
                     .try_fold(inline(value), |n, v| add(n, inline(v)))?;
@@ -233,10 +235,10 @@ impl Node {
 fn singleton_cost(value: &Value, height: usize) -> Result<(usize, usize)> {
     Ok((
         add(
-            add(NODE_HEADER + VALUE_SLOT, inline(value))?,
+            add(NODE_HEADER + VALUE_SLOT_BYTES, inline(value))?,
             mul(height, NODE_HEADER + CHILD_SLOT)?,
         )?,
-        add(VALUE_SLOT, mul(height, CHILD_SLOT)?)?,
+        add(VALUE_SLOT_BYTES, mul(height, CHILD_SLOT)?)?,
     ))
 }
 struct Iter<'a> {
@@ -265,7 +267,7 @@ impl<'a> Iterator for Iter<'a> {
 impl ExactSizeIterator for Iter<'_> {}
 impl Sequence {
     pub fn new(physical_type: PhysicalType, values: Vec<Value>, policy: &Policy) -> Result<Self> {
-        policy.vector_width(add(values.len(), 1)?, VALUE_SLOT)?;
+        policy.vector_width(add(values.len(), 1)?, VALUE_SLOT_BYTES)?;
         if physical_type.representation() != zkc_runtime::vm::Representation::Sequence {
             return Err(refused("sequence-representation"));
         }
@@ -276,7 +278,7 @@ impl Sequence {
         let mut count = 1;
         let mut bytes = add(
             add(NODE_HEADER, physical_type.descriptor_bytes())?,
-            add(tree_overhead(len)?, mul(len, VALUE_SLOT)?)?,
+            add(tree_overhead(len)?, mul(len, VALUE_SLOT_BYTES)?)?,
         )?;
         let mut resource_free = true;
         for value in &values {
@@ -287,9 +289,9 @@ impl Sequence {
             bytes = add(bytes, value.retained_bytes())?;
             resource_free &= value.is_resource_free();
         }
-        policy.vector_width(count, VALUE_SLOT)?;
+        policy.vector_width(count, VALUE_SLOT_BYTES)?;
         // The caller's Vec and the exact leaf allocations coexist transiently.
-        policy.output(add(bytes, mul(len, VALUE_SLOT)?)?, usize::MAX)?;
+        policy.output(add(bytes, mul(len, VALUE_SLOT_BYTES)?)?, usize::MAX)?;
         let mut height = 0;
         let mut level = values
             .chunks(LEAF_WIDTH)
@@ -315,15 +317,16 @@ impl Sequence {
         })
     }
     pub(crate) fn retained_parts(&self, shared: &mut dyn FnMut(Backing) -> bool) -> usize {
-        if shared(self.backing())
-            && let Some(top) = &self.root.top
-        {
-            top.retained_parts(shared);
+        if shared(self.backing()) {
+            self.root.physical_type.visit_descriptor_backings(shared);
+            if let Some(top) = &self.root.top {
+                top.retained_parts(shared);
+            }
         }
         0
     }
     fn root_bytes(&self) -> usize {
-        NODE_HEADER + self.root.physical_type.descriptor_bytes()
+        NODE_HEADER
     }
     fn backing(&self) -> Backing {
         Backing::of(&self.root, self.root_bytes())
@@ -372,7 +375,7 @@ impl Sequence {
         self.root.bytes
     }
     pub(crate) fn validate(&self, policy: &Policy) -> Result<()> {
-        policy.vector_width(self.root.nodes, VALUE_SLOT)?;
+        policy.vector_width(self.root.nodes, VALUE_SLOT_BYTES)?;
         policy.output(self.root.bytes, usize::MAX)
     }
     pub(crate) fn validate_children(
@@ -412,7 +415,7 @@ impl Sequence {
             .and_then(|(bytes, _)| u64::try_from(bytes).ok())
     }
     pub(crate) fn access_work(&self) -> u64 {
-        (2 * VALUE_SLOT + self.root.height * CHILD_SLOT) as u64
+        (2 * VALUE_SLOT_BYTES + self.root.height * CHILD_SLOT) as u64
     }
     fn appended(&self, value: &Value, policy: &Policy, allowance: usize) -> Result<Self> {
         let expected = self
@@ -426,10 +429,13 @@ impl Sequence {
         let len = add(self.len(), 1)?;
         let overhead = tree_overhead(len)? - tree_overhead(self.len())?;
         let bytes = add(
-            add(add(self.root.bytes, VALUE_SLOT)?, value.retained_bytes())?,
+            add(
+                add(self.root.bytes, VALUE_SLOT_BYTES)?,
+                value.retained_bytes(),
+            )?,
             overhead,
         )?;
-        policy.vector_width(count, VALUE_SLOT)?;
+        policy.vector_width(count, VALUE_SLOT_BYTES)?;
         policy.output(bytes, usize::MAX)?;
         let (fresh, scratch) = self.append_cost(value)?;
         policy.output(add(fresh, scratch)?, allowance)?;
@@ -665,7 +671,9 @@ mod tests {
         let shared_bytes: usize = parts(&outer).iter().sum();
         assert_eq!(
             outer.retained_bytes() - shared_bytes,
-            64 * nested.retained_bytes()
+            // The outer logical descriptor and its physical child both share
+            // the inner logical metadata with the nested value.
+            64 * nested.retained_bytes() + 2 * nested.physical_type().logical().descriptor_bytes()
         );
         let original = outer.clone();
         let next = outer.appended(&inner, &policy, usize::MAX).unwrap();

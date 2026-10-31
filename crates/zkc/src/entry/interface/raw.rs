@@ -1,6 +1,8 @@
 //! Strict decoded carrier records. Only an authenticated package and validated
 //! Interface may supply their constructor permissions to an execution adapter.
 use serde::{Deserialize, Deserializer};
+mod logical;
+pub use logical::{Oracle, OracleArgument, Present, Unsigned};
 
 // A nullable field is required in the carrier. serde's ordinary Option default
 // would also accept an omitted field, unlike the compiler's exact object schema.
@@ -98,6 +100,10 @@ pub(in crate::entry) struct Port {
     pub index: u32,
     pub native: Vec<u32>,
     pub schema: Schema,
+    #[serde(default)]
+    pub holder: Present<String>,
+    #[serde(default)]
+    pub maximum_rows: Present<Option<Unsigned>>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(remote = "Self")]
@@ -120,9 +126,22 @@ pub enum Kind {
     Tuple,
     Array,
     Record,
+    #[serde(rename = "logical_record")]
+    LogicalRecord,
     Variant,
     Associated,
     Builtin,
+    Oracle,
+    #[serde(rename = "oracle_sequence")]
+    OracleSequence,
+}
+impl Kind {
+    pub fn is_handle(self) -> bool {
+        matches!(self, Self::Oracle | Self::OracleSequence)
+    }
+    pub fn is_logical(self) -> bool {
+        self.is_handle() || self == Self::LogicalRecord
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 #[serde(remote = "Self")]
@@ -144,6 +163,12 @@ pub struct Schema {
     pub fields: Vec<Field>,
     pub alternatives: Vec<Alternative>,
     pub leaves: Vec<String>,
+    #[serde(default)]
+    pub oracle: Present<Oracle>,
+    #[serde(default)]
+    pub data_schema: Present<Box<Schema>>,
+    #[serde(default)]
+    pub maximum: Present<Unsigned>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(remote = "Self")]
@@ -152,6 +177,8 @@ pub struct Field {
     pub name: String,
     pub offset: u32,
     pub schema: Schema,
+    #[serde(default)]
+    pub maximum_rows: Present<Unsigned>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(remote = "Self")]
@@ -173,7 +200,8 @@ pub(in crate::entry) enum Direction {
 pub(in crate::entry) struct Selector {
     pub direction: Direction,
     pub port: u32,
-    pub role: String,
+    #[serde(deserialize_with = "present_optional")]
+    pub role: Option<String>,
     pub path: Vec<u32>,
 }
 #[derive(Debug, Deserialize)]

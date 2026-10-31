@@ -173,6 +173,25 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     }
   }
   auto &source = *sources[id.index];
+  if (decl.logical && decl.kind != Declaration::Kind::Record)
+    return types.fail("source.oracle-aggregate",
+                      "logical annotation requires a struct", decl.span);
+  if (decl.logical && decl.resource)
+    return types.fail("source.resource",
+                      "logical records require Copy and Drop", decl.span);
+  std::map<std::string, const SyntaxOracleShape *> shapes;
+  for (const auto &shape : source.oracleShapes) {
+    if (decl.kind == Declaration::Kind::Oracle)
+      continue;
+    if (!types.charge(shape.port.size() + shape.dimension.size() + 1,
+                      shape.span))
+      return false;
+    if (shape.value || shape.dimension != "rows" ||
+        !shapes.emplace(shape.port, &shape).second)
+      return types.fail("source.oracle-shape", "invalid or duplicate row bound",
+                        shape.span);
+  }
+  std::set<std::string> usedShapes;
   if ((decl.resource || decl.sealed) &&
       decl.kind == Declaration::Kind::Associated &&
       isDomainSort(decl.associatedSort))
@@ -208,6 +227,12 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         output.declarations[decl.parent->index].permissionBounds;
     decl.capabilityBounds =
         output.declarations[decl.parent->index].capabilityBounds;
+  }
+  if (source.oraclePredicate) {
+    if (!oraclePredicateSignature(decl))
+      return false;
+    signatureState[id.index] = 2;
+    return true;
   }
   if (decl.kind == Declaration::Kind::Entry && !decl.parameters.empty())
     return types.fail("source.entry",
@@ -358,17 +383,37 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       if (!valueType(*t))
         return types.fail("source.type", "field cannot contain a static term",
                           src.span);
-      if (isOracleHandle(*t))
+      if (!decl.logical && isLogicalValue(*t))
         return types.fail("source.oracle-aggregate",
                           "logical oracle handles require protocol ports or "
                           "their bounded sequence",
                           src.span);
-      to.push_back({src.name, *t, src.isPublic, src.span});
+      TypeField field{src.name, *t, src.isPublic, src.span};
+      if (decl.logical) {
+        auto shape = shapes.find(src.name);
+        if (shape != shapes.end()) {
+          field.maximumRows = type(decl, shape->second->bound, depth + 1);
+          if (!field.maximumRows)
+            return false;
+          usedShapes.insert(src.name);
+        }
+        if (!types.oracleField(field) ||
+            (!isOracleHandle(*t) && !types.sharedData(*t, src.span, &decl)))
+          return false;
+      }
+      to.push_back(std::move(field));
     }
     return true;
   };
   if (!fieldList(source.fields, decl.fields))
     return false;
+  if (decl.logical && llvm::none_of(decl.fields, [](const auto &field) {
+        return isOracleHandle(field.type);
+      }))
+    return types.fail(
+        "source.oracle-aggregate",
+        "logical record requires a direct oracle handle or sequence",
+        decl.span);
   std::set<std::string> labels;
   for (auto &src : source.alternatives) {
     if (!labels.insert(src.name).second)
@@ -393,6 +438,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       decl.kind == Declaration::Kind::EntryFunction ||
       decl.kind == Declaration::Kind::DomainFunction ||
       decl.kind == Declaration::Kind::Protocol ||
+      decl.kind == Declaration::Kind::Oracle ||
       decl.kind == Declaration::Kind::Relation) {
     // Construction handlers receive their ports from the selected protocol
     // occurrence before their ordinary Local body is checked.
@@ -434,7 +480,13 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         if (!valueType(*t))
           return types.fail("source.type", "port cannot contain a static term",
                             src.span);
+        if (decl.kind != Declaration::Kind::Protocol &&
+            decl.kind != Declaration::Kind::Oracle && isLogicalValue(*t))
+          return types.fail("source.oracle-boundary",
+                            "logical protocol values require protocol ports",
+                            src.span);
         if (decl.kind != Declaration::Kind::Math &&
+            decl.kind != Declaration::Kind::Oracle &&
             !(decl.kind == Declaration::Kind::Protocol
                   ? types.protocolValue(*t, src.span)
                   : types.executableType(*t, src.span)))
@@ -466,14 +518,17 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
               if (!p.oracle->maximumRows)
                 return false;
             }
-            if (!types.charge(source.oracleShapes.size(), src.span))
-              return false;
-            for (const auto &shape : source.oracleShapes)
-              if (shape.port == src.name) {
-                p.oracle->maximumRows = type(decl, shape.bound, depth + 1);
-                if (!p.oracle->maximumRows)
-                  return false;
-              }
+            auto shape = shapes.find(src.name);
+            if (shape != shapes.end()) {
+              if (p.oracle->maximumRows)
+                return types.fail("source.oracle-shape", "duplicate row bound",
+                                  src.span);
+              p.oracle->maximumRows =
+                  type(decl, shape->second->bound, depth + 1);
+              if (!p.oracle->maximumRows)
+                return false;
+              usedShapes.insert(src.name);
+            }
           }
           if (!types.oraclePort(p))
             return false;
@@ -497,6 +552,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       if (!valueType(*item))
         return types.fail("source.finite-domain", "domain item must be data",
                           src.span);
+      if (!types.executableType(*item, src.span))
+        return false;
       if (!types.requireUsage(*item, Usage::Copy, src.span, &decl,
                               "source.finite-domain",
                               "domain items require Copy"))
@@ -510,6 +567,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       if (!valueType(*decl.domainResult))
         return types.fail("source.finite-domain", "domain result must be data",
                           decl.span);
+      if (!types.executableType(*decl.domainResult, decl.span))
+        return false;
       if (!types.requireUsage(*decl.domainResult, Usage::Copy, decl.span, &decl,
                               "source.finite-domain",
                               "domain result items require Copy"))
@@ -679,13 +738,24 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                         "scoped callbacks or an effect allowance",
                         decl.span);
   }
+  if (decl.kind == Declaration::Kind::Oracle && !oracleSignature(decl, depth))
+    return false;
   if (decl.kind == Declaration::Kind::Protocol &&
       !configureSetups(decl, decl, source.setups))
     return false;
   if (!dataRequirements(decl))
     return false;
+  if (decl.kind == Declaration::Kind::Oracle && !decl.dataPreconditions.empty())
+    return types.fail(
+        "source.oracle-signature",
+        "query totality cannot depend on constructor preconditions", decl.span);
   if (decl.kind == Declaration::Kind::Relation && !relation(decl))
     return false;
+  if (usedShapes.size() != shapes.size())
+    return types.fail(
+        "source.oracle-shape",
+        "shape must select one direct logical field or custody port",
+        decl.span);
   signatureState[id.index] = 2;
   return true;
 }
@@ -712,6 +782,7 @@ bool Checker::representations() {
             if (!visit(child, span, depth + 1))
               return false;
         } else if (type.kind == Type::Kind::Record ||
+                   type.kind == Type::Kind::LogicalRecord ||
                    type.kind == Type::Kind::Associated) {
           auto *decl = types.typeDeclaration(type);
           if (!decl || !decl->abstract) {

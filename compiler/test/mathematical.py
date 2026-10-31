@@ -71,7 +71,12 @@ def execute(carrier, role, inputs, replies=()):
                     if not local[op[4][0]]:
                         raise Stop("backend:rejected:require")
                     continue
-                a, b = (local[v] for v in op[4])
+                arguments = [local[v] for v in op[4]]
+                if contract in ("bool.select", "field.select", "index.select", "curve.select"):
+                    condition, left, right = arguments
+                    local[op[5][0]] = left if condition else right
+                    continue
+                a, b = arguments
                 if contract in ("field.add", "curve.add"):
                     result = (a + b) % FIELD
                 elif contract in ("field.mul", "curve.scale"):

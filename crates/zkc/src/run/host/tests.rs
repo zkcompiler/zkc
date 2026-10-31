@@ -338,7 +338,7 @@ fn key_files_are_authenticated_and_captured_before_execution() {
 fn all_native_wire_charges_precede_payload_decoding() {
     let (raw, input) = fixture("bool");
     let mut limits = HostLimits::default();
-    limits.capacity.values.live_bytes = 512;
+    limits.capacity.values.live_bytes = 2 * Value::Bool(false).retained_bytes() - 1;
     let host = host(&raw, limits);
     crate::host::admission::DECODE_COUNT.set(0);
     assert!(

@@ -141,6 +141,13 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
       return {};
     return emit(Construct{{*value}, {}}, type, {}, expr.span);
   }
+  if (callee.kind == Declaration::Kind::Oracle)
+    return instantiateOracle(expr, depth);
+  if (oracleMode() && callee.kind != Declaration::Kind::Math) {
+    fail("source.oracle-body", "oracle queries call only total mathematics",
+         expr.span);
+    return {};
+  }
   if (callee.kind != Declaration::Kind::Math &&
       callee.kind != Declaration::Kind::Local &&
       callee.kind != Declaration::Kind::EntryFunction) {

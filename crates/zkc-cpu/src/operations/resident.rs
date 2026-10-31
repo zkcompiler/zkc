@@ -234,7 +234,7 @@ fn conversion_output(
         return Err(crate::exhausted("group-limit"));
     }
     if width == 0 {
-        Ok(512)
+        Ok(crate::VALUE_SLOT_BYTES)
     } else {
         crate::value::size(len, width)
     }
@@ -255,7 +255,11 @@ pub(crate) fn convert_value(
         return Err(crate::refused("kernel-operands"));
     }
     let (len, width) = shape(value);
-    let retained = conversion_output(value, len, width, policy)?;
+    let retained = if width == 0 {
+        crate::Value::fixed_retained_bytes(&signature.outputs[0])
+    } else {
+        conversion_output(value, len, width, policy)?
+    };
     policy.output(retained, invocation.max_output_bytes)?;
     let call = crate::numerical::Call::new(policy, invocation.max_output_bytes);
     call.work_items(len.max(1), 4096, 1)?;

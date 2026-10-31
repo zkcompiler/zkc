@@ -2,6 +2,7 @@
 from dataclasses import replace
 import hashlib
 import json
+import re
 from pathlib import Path
 
 from .io import Journal, digest, require, write_json
@@ -42,15 +43,18 @@ def compile_program(args, output, capture, manifest, case, program):
     observation = directory/'compilation.json'
     record = Journal(directory/'compile', args.timeout).command(
         [args.compiler, 'language-package', '--source-format=zkc', f'--entry={program.entry}',
-         *args.compiler_option, *flags, f'--observations={observation}'],
+         *args.compiler_option, program.oracle_policy.flag(), *flags, f'--observations={observation}'],
         cwd=root, stdout=package)
-    validate_published(json.loads(package.read_text())["options"], getattr(args, "configuration", None))
+    published = json.loads(package.read_text())['options']
+    validate_published(published, getattr(args, 'configuration', None), program.oracle_policy,
+                       compiler_options=args.compiler_option)
     capture.add(package)
     capture.add(observation)
     require(json.loads(observation.read_text()).get('completed') is True, 'compiler observation is incomplete')
     manifest.setdefault('compilation', {})[case.identifier] = [{'wall_seconds': record['wall_seconds'],
                                                                'sha256': digest(package), 'bytes': package.stat().st_size,
-                                                               'published_options': json.loads(package.read_text())['options'],
+                                                               'published_options': published,
+                                                               'oracle_realization': program.oracle_policy.record(),
                                                                'observation': str(observation), 'observation_instrumented': True}]
     return directory, package
 
@@ -65,7 +69,8 @@ def prepare_case(args, output, capture, manifest, case):
     if program.proof:
         for index in range(1, args.input_count):
             other = case.generate(args.source.resolve(), directory, index, timeout=args.timeout)
-            require(other.source == program.source and other.assets == program.assets, 'changing input changed the program')
+            require(other.source == program.source and other.assets == program.assets
+                    and other.oracle_policy == program.oracle_policy, 'changing input changed the program')
             inputs.extend(other.inputs)
         require(args.input_count == 1 or (args.iterations == 1 and args.samples % args.input_count == 0
                 and args.warmups % args.input_count == 0), 'changing inputs require complete sample/warmup cycles with --iterations 1')
@@ -87,6 +92,7 @@ def prepare_case(args, output, capture, manifest, case):
     manifest['contracts'][case.identifier] = {
         'protocol': case.name, 'category': case.category, 'dimensions': case.shape, 'proof_format': proof_format,
         'operation_mix': case.mix, 'oracle': program.oracle, 'inputs': identities,
+        'oracle_realization': program.oracle_policy.record(),
         'source_sha256': hashlib.sha256(program.source.encode()).hexdigest(),
         'assets_sha256': hashlib.sha256(json.dumps(program.assets, sort_keys=True).encode()).hexdigest(),
         'ingress_policy': args.ingress,
@@ -100,6 +106,7 @@ def prepare_case(args, output, capture, manifest, case):
     }
     boundary = 'admitted_entry_call' if program.proof else 'admitted_function_call'
     base = {'package': str(package), 'sha256': digest(package), 'ingress': args.ingress}
+    control = None
     if not program.proof:
         backend = base | {'kind': 'run', 'arguments': files[0]['arguments'], 'check': {'kind': 'acceptance', 'role': 'P'}}
         job = Job(case.identifier, 'zkc', 'run', args.worker, backend, directory/'unused', boundary, execution_counts=args.execution_counts)
@@ -121,18 +128,58 @@ def prepare_case(args, output, capture, manifest, case):
         def check(*unused):
             return None
     else:
-        jobs, check = proof_jobs(args, capture, directory, case.identifier, base, files, program, proof_format)
+        control = {}
+        jobs, check = proof_jobs(args, capture, directory, case.identifier, base, files, program, proof_format,
+                                 semantic_control=control)
+        manifest['contracts'][case.identifier]['semantic_control'] = {
+            key: value for key, value in control.items() if key not in ('function', 'report')}
     contract = manifest['contracts'][case.identifier]
     contract['boundaries'] = {j.implementation: j.boundary for j in jobs}
     manifest['checks'].append({'case': case.identifier, 'status': 'passed', 'directory': str(directory),
-                               'oracle': program.oracle, 'proof_validation': 'same stack, every timed output' if program.proof else None})
+                               'oracle': program.oracle, 'semantic_control': control,
+                               'proof_validation': 'same stack, every timed output' if program.proof else None})
     if program.proof and args.preparation == 'both':
         manifest.setdefault('comparisons', []).extend({'case': case.identifier, 'operation': op,
             'numerator': 'unprepared', 'denominator': 'zkc'} for op in ('prove', 'verify'))
     return jobs, check
 
 
-def proof_jobs(args, capture, directory, name, base, files, program, proof_format):
+def check_prover_stop(args, capture, directory, base, first, program):
+    """Require the precise source-local rejection of the first disallowed degree."""
+    module, name = program.invalid_witness_stop
+    origin = 's' + ''.join(f'{len(part.encode())}h{part.encode().hex()}'
+                           for part in (*module.split('::'), name))
+    symbol, found = None, []
+    original = json.loads(Path(base['package']).read_text())['original']
+    for line in original.splitlines():
+        header = re.search(r'"(?:protocol|func|local)\.func"\(\) <\{.*sym_name = "(\w+)"', line)
+        if header:
+            symbol = header[1]
+        retained = re.match(r'^\}\) \{runtime\.origin = \["(\w+)", \[\]\]\}', line.strip())
+        if retained and retained[1] == origin:
+            found.append(symbol)
+    require(len(found) == 1 and found[0] is not None, 'missing exact prover rejection origin')
+    witness, proof = directory/'invalid-witness.json', directory/'invalid-witness.proof'
+    write_json(witness, program.invalid_witness)
+    capture.add(witness)
+    require(not proof.exists(), 'invalid-witness proof already exists')
+    report, record = Journal(directory/'prover-stop', args.timeout).report(
+        [args.runtime, '--json', 'prove', f'--package={base["package"]}', f'--sha256={base["sha256"]}',
+         f'--public={first["public"]}', f'--witness={witness}', f'--output={proof}'],
+        cwd=directory, status='refused', refused=True)
+    stop = report.get('execution', {}).get('stop')
+    require(report.get('format') == 'zkc.entry-result/0' and report.get('phase') == 'execution'
+            and report.get('code') == 'artifact-stopped:Explicit("reject")' and isinstance(stop, dict)
+            and stop.get('role') == 'role00000000' and stop.get('kind') == 'Explicit("reject")'
+            and isinstance(stop.get('local'), dict) and stop['local'].get('function') == found[0]
+            and not proof.exists(),
+            'invalid witness did not stop at the exact prover padding guard without a proof')
+    return {'stage': 'prover', 'code': 'artifact-stopped:Explicit("reject")', 'role': stop['role'],
+            'source_function': f'{module}::{name}', 'function': found[0], 'proof_published': False,
+            'report': record['stdout']}
+
+
+def proof_jobs(args, capture, directory, name, base, files, program, proof_format, *, semantic_control=None):
     require(proof_format in ('raw.bytes/0', 'zkc.framed/0'), 'unknown proof format for refusal controls')
     backend = base | {'kind': 'host', 'inputs': files, 'preparation': True, 'preparation_entries': args.preparation_entries,
                       'preparation_bytes': args.preparation_bytes}
@@ -160,7 +207,12 @@ def proof_jobs(args, capture, directory, name, base, files, program, proof_forma
         mutations.append(('changed', first | {'public': str(path)}, False))
     if len(files) > 1:
         mutations.append(('swapped', files[1] | {'proof': first['proof']}, False))
-    if program.invalid_witness is not None:
+    if program.invalid_witness_stop is not None:
+        require(program.invalid_witness is not None, 'prover stop needs an invalid witness')
+        outcome = check_prover_stop(args, capture, directory, base, first, program)
+        if semantic_control is not None:
+            semantic_control.update(outcome)
+    elif program.invalid_witness is not None:
         path = directory/'invalid-witness.json'
         write_json(path, program.invalid_witness)
         capture.add(path)
@@ -168,13 +220,17 @@ def proof_jobs(args, capture, directory, name, base, files, program, proof_forma
         result = execute_job(replace(prototype, backend=backend | {'inputs': [invalid]}),
                              directory/'produce-invalid', CONTROL, args.timeout)
         path = Path(result['proof']['path'])
+        capture.add(path)
+        mutations.append(('semantic', first | {'proof': str(path)}, False))
     elif program.mutate_proof is not None:
         path = directory/'invalid-response.proof'
         path.write_bytes(program.mutate_proof(Path(first['proof']).read_bytes()))
+        capture.add(path)
+        mutations.append(('semantic', first | {'proof': str(path)}, False))
     else:
         raise ValueError('proof workload needs a semantic negative control')
-    capture.add(path)
-    mutations.append(('semantic', first | {'proof': str(path)}, False))
+    if semantic_control is not None and not semantic_control:
+        semantic_control.update({'stage': 'verifier', 'class': 'verification'})
     jobs = []
     policies = [('zkc', True), ('unprepared', False)] if args.preparation == 'both' else [
         ('zkc' if args.preparation == 'enabled' else 'unprepared', args.preparation == 'enabled')]

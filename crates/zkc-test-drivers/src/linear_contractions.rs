@@ -107,7 +107,7 @@ fn main() {
         match actual {
             Value::Field(value) if !group => assert_eq!(*value, Scalar::from(coefficient)),
             Value::RistrettoGroup(value) if group => assert_eq!(
-                *value,
+                **value,
                 RISTRETTO_BASEPOINT_POINT * RistrettoScalar::from(coefficient)
             ),
             _ => panic!("unexpected contraction result: {actual:?}"),

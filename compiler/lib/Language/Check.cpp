@@ -62,7 +62,7 @@ Error Checker::run() {
     if (error)
       return error;
   }
-  if (!layoutSpecifications())
+  if (!prepareOraclePredicates() || !layoutSpecifications())
     return types.takeError();
   if (!recoveryDiagnostics || recoveryDiagnostics->empty()) {
     if (auto error = retainWrittenBodies(**written, sources, work))
@@ -71,7 +71,8 @@ Error Checker::run() {
   }
   for (auto &decl : output.declarations)
     if (!decl.abstract && !sources[decl.id.index]->explicitRequirements &&
-        (decl.kind == Declaration::Kind::Math ||
+        (decl.kind == Declaration::Kind::Oracle ||
+         decl.kind == Declaration::Kind::Math ||
          decl.kind == Declaration::Kind::Local ||
          decl.kind == Declaration::Kind::EntryFunction ||
          decl.kind == Declaration::Kind::DomainFunction ||
@@ -159,9 +160,11 @@ Error Checker::run() {
   for (auto &decl : output.declarations)
     if (decl.kind == Declaration::Kind::Record ||
         decl.kind == Declaration::Kind::Variant) {
-      Type nominal(decl.kind == Declaration::Kind::Record ? Type::Kind::Record
-                                                          : Type::Kind::Variant,
-                   decl.qualifiedName);
+      Type nominal(
+          decl.kind == Declaration::Kind::Record
+              ? (decl.logical ? Type::Kind::LogicalRecord : Type::Kind::Record)
+              : Type::Kind::Variant,
+          decl.qualifiedName);
       for (const auto &parameter : decl.parameters)
         nominal.arguments.push_back(parameterType(parameter));
       if (!types.permissions(nominal, decl.span, &decl))
@@ -193,7 +196,8 @@ Error Checker::run() {
         }
   for (unsigned i = 0; i < sources.size(); ++i) {
     auto &decl = output.declarations[i];
-    if ((decl.kind == Declaration::Kind::Math ||
+    if ((decl.kind == Declaration::Kind::Oracle ||
+         decl.kind == Declaration::Kind::Math ||
          decl.kind == Declaration::Kind::Local ||
          decl.kind == Declaration::Kind::EntryFunction ||
          decl.kind == Declaration::Kind::DomainFunction ||
@@ -260,7 +264,8 @@ bool Checker::collect() {
             return false;
         using K = Declaration::Kind;
         uint64_t extra =
-            source.kind == K::Protocol ? 3 + 2 * uint64_t(source.roles.size())
+            source.kind == K::Oracle     ? 1
+            : source.kind == K::Protocol ? 3 + 2 * uint64_t(source.roles.size())
             : source.kind == K::Entry && source.entryKind == EntryKind::Proof
                 ? 9
                 : 0;
@@ -284,7 +289,15 @@ bool Checker::collect() {
           source.members.push_back(std::move(child));
           return source.members.back();
         };
-        if (source.kind == K::Protocol) {
+        if (source.kind == K::Oracle) {
+          SyntaxDeclaration predicate;
+          predicate.name = "__oracle_admissibility";
+          predicate.kind = K::Relation;
+          predicate.span = source.span;
+          predicate.oraclePredicate = true;
+          predicate.relation.emplace();
+          source.members.push_back(std::move(predicate));
+        } else if (source.kind == K::Protocol) {
           for (auto member : {"Inputs", "RunResult"}) {
             auto &product = add(member, K::Record);
             for (const auto &role : source.roles) {
@@ -376,6 +389,7 @@ bool Checker::collect() {
     decl.completes = source.completes;
     decl.permissions = source.permissions;
     decl.resource = source.resource;
+    decl.logical = source.logical;
     decl.sealed = source.sealed || source.resource.has_value();
     if (source.effects)
       decl.effectAllowance = EffectSummary{*source.effects};

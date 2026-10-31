@@ -165,9 +165,12 @@ fn schnorr_inputs() -> Inputs {
     BTreeMap::from([
         (
             "Alice".into(),
-            vec![Value::Curve(g), field(3), Value::Curve(y)],
+            vec![Value::Curve(g.into()), field(3), Value::Curve(y.into())],
         ),
-        ("Bob".into(), vec![Value::Curve(g), Value::Curve(y)]),
+        (
+            "Bob".into(),
+            vec![Value::Curve(g.into()), Value::Curve(y.into())],
+        ),
     ])
 }
 fn schnorr(directory: &Path) {
@@ -209,7 +212,7 @@ fn schnorr(directory: &Path) {
                 .add(&g.scale(Scalar::from(3)).scale(Scalar::from(11)))
         );
         for ((_, actual), expected) in audit.messages.iter().zip([
-            Value::Curve(g.scale(Scalar::from(5))),
+            Value::Curve((g.scale(Scalar::from(5))).into()),
             field(11),
             field(38),
         ]) {
@@ -223,7 +226,7 @@ fn schnorr(directory: &Path) {
     for (site, value) in [
         (
             "commitment",
-            Value::Curve(G1::generator().scale(Scalar::from(6))),
+            Value::Curve((G1::generator().scale(Scalar::from(6))).into()),
         ),
         ("challenge", field(12)),
         ("response", field(39)),

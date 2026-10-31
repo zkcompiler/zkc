@@ -83,6 +83,7 @@ def test_oracle_query_batches(toolchain, directory, journal):
     artifacts = directory / "batches"
     for mode in (
         "paired", "individual", "reversed", "invalid-first", "invalid-later", "guard",
+        "guarded-position",
     ):
         journal.run([
             toolchain.tool("compiler", "test/zkc-oracle_commitment_roots-test"),

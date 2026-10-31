@@ -434,8 +434,8 @@ fn exact_output_affordability_is_checked_before_consumption() {
 
 #[test]
 fn runner_reserves_the_conservative_bound_and_settles_the_actual_reply() {
-    // Two ingress indices each retain 512 bytes before the query reservation.
-    let frontier = MAX_REPLY + 1024;
+    // Two ingress indices retain their inline slots before the query reservation.
+    let frontier = MAX_REPLY + 2 * zkc_cpu::VALUE_SLOT_BYTES;
     for (live_bytes, total_bytes, accepted) in [
         (frontier - 1, frontier, false),
         (frontier, frontier - 1, false),
@@ -456,7 +456,10 @@ fn runner_reserves_the_conservative_bound_and_settles_the_actual_reply() {
         assert_eq!(probe.calls, usize::from(accepted));
         if accepted {
             assert!(matches!(outcome, Outcome::Reply(_)));
-            assert_eq!(usage.total_value_bytes, 1024 + 8 * 3 + 256);
+            assert_eq!(
+                usage.total_value_bytes,
+                2 * zkc_cpu::VALUE_SLOT_BYTES + 8 * 3 + 256
+            );
             assert_state(registry.observe(&root).unwrap(), 1, 1, 0);
         } else {
             assert!(matches!(outcome, Outcome::Stopped(StopKind::Limit)));

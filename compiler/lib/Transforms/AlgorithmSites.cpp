@@ -1,6 +1,7 @@
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/Base64.h"
 #include "llvm/Support/SHA256.h"
 
 using namespace llvm;
@@ -32,8 +33,23 @@ Expected<std::string> algorithmSite(const protocol::Assignments &path,
     append(callee);
   }
   append(site);
-  if (result.size() > 128)
-    return "lc_h_" + toHex(SHA256::hash(arrayRefFromStringRef(result)), true);
+  // Keep the full 256-bit digest; only its reversible textual encoding is
+  // compact. The length-delimited source path is still the digest input and
+  // remains independently recoverable through the origin record.
+  constexpr size_t compactSize =
+      5 + 43; // Prefix + unpadded base64url(SHA-256).
+  if (result.size() > compactSize) {
+    std::string digest =
+        encodeBase64(SHA256::hash(arrayRefFromStringRef(result)));
+    for (char &c : digest) {
+      if (c == '+')
+        c = '-';
+      else if (c == '/')
+        c = '_';
+    }
+    digest.resize(43); // A 32-byte digest has one trailing padding character.
+    return "lc_h_" + digest;
+  }
   return result;
 }
 } // namespace zkc::protocol

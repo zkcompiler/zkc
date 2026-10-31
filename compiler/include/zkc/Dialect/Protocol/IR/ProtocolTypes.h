@@ -7,4 +7,11 @@
 #define GET_TYPEDEF_CLASSES
 #include "zkc/Dialect/Protocol/IR/protocolTypes.h.inc"
 
+namespace zkc::protocol_ir {
+// Shape observations for the closed handle/sequence family. These do not
+// establish custody, availability or admission; other types return null.
+OracleKindAttr getOracleFamilyKind(mlir::Type type);
+mlir::Type getOracleFamilyDataType(mlir::Type type);
+} // namespace zkc::protocol_ir
+
 #endif

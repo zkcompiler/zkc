@@ -66,8 +66,6 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
         Some((5, 7))
     } else if *ty == Value::Field(crate::Scalar::from(0)).physical_type() {
         Some((1, 38))
-    } else if *ty == Value::Curve(crate::G1::identity()).physical_type() {
-        Some((9, 54))
     } else if *ty == Value::Index(0).physical_type() {
         Some((31, 14))
     } else if crate::field_array::supports_type(ty) {
@@ -90,6 +88,7 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
         use zkc_runtime::vm::{Identity::*, Type::*};
         match (ty.kind(), ty.logical().identity()) {
             (Field, Bn254Fr) => Some((40, 38)),
+            (Group, Bls12381G1) => Some((9, 54)),
             (Group, Bn254G1) => Some((46, 38)),
             (Group, Bn254Gt) => Some((50, 390)),
             (Group, Bn254G2) => Some((48, 70)),
@@ -373,11 +372,10 @@ impl CpuBackend {
         let (tag, width) = fixed_header(ty, bytes)?;
         self.policy().wire(width).map_err(|_| Limit)?;
         if tag != 64 {
-            // Installed fixed scalar/group wrappers retain 512 bytes, except the
-            // 1024-byte BLS12-381 target. Reject insufficient capacity before
+            // Fixed leaves include any separate group backing. Reject insufficient capacity before
             // canonical/subgroup decoding; fixed arrays reserve their
             // shape-dependent backing below.
-            let retained = if tag == 53 { 1024 } else { 512 };
+            let retained = Value::fixed_retained_bytes(ty);
             self.policy()
                 .output(retained, usize::MAX)
                 .map_err(|_| Limit)?;
@@ -404,7 +402,7 @@ impl CpuBackend {
                     .map(Value::BlstField)
                     .map_err(|_| Invalid(DecodeReason::Scalar)),
                 9 => kernel::G1::from_bytes(&bytes[6..])
-                    .map(Value::BlstG1)
+                    .map(|point| Value::BlstG1(point.into()))
                     .map_err(|_| Invalid(DecodeReason::Group)),
                 51 => kernel::G2::from_bytes(&bytes[6..])
                     .map(|p| Value::BlstG2(std::sync::Arc::new(p)))
@@ -470,12 +468,13 @@ impl CpuBackend {
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
             9 => Value::Curve(
-                crate::G1::from_bytes(&bytes[6..]).map_err(|_| Invalid(DecodeReason::Group))?,
+                (crate::G1::from_bytes(&bytes[6..]).map_err(|_| Invalid(DecodeReason::Group))?)
+                    .into(),
             ),
-            50 => Value::Bn254Gt(
+            50 => Value::Bn254Gt(std::sync::Arc::new(
                 crate::Bn254Gt::from_bytes(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Group))?,
-            ),
+            )),
             40 => Value::Bn254Field(
                 zkc_kernels::arkworks::bn254::decode_scalar(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
@@ -485,12 +484,14 @@ impl CpuBackend {
                     .map_err(|_| Invalid(DecodeReason::Group))?,
             ),
             48 => Value::Bn254G2(
-                crate::Bn254G2::from_bytes(&bytes[6..])
-                    .map_err(|_| Invalid(DecodeReason::Group))?,
+                (crate::Bn254G2::from_bytes(&bytes[6..])
+                    .map_err(|_| Invalid(DecodeReason::Group))?)
+                .into(),
             ),
             51 => Value::Bls12381G2(
-                crate::Bls12381G2::from_bytes(&bytes[6..])
-                    .map_err(|_| Invalid(DecodeReason::Group))?,
+                (crate::Bls12381G2::from_bytes(&bytes[6..])
+                    .map_err(|_| Invalid(DecodeReason::Group))?)
+                .into(),
             ),
             53 => Value::Bls12381Gt(std::sync::Arc::new(
                 crate::Bls12381Gt::from_bytes(&bytes[6..])
@@ -512,7 +513,9 @@ impl CpuBackend {
                 .ok_or(Invalid(DecodeReason::Scalar))?,
             ),
             68 => Value::EdwardsGroup(
-                crate::EdwardsPrime::from_bytes(&bytes[6..]).ok_or(Invalid(DecodeReason::Group))?,
+                (crate::EdwardsPrime::from_bytes(&bytes[6..])
+                    .ok_or(Invalid(DecodeReason::Group))?)
+                .into(),
             ),
             16 => {
                 let compressed = curve25519_dalek::ristretto::CompressedRistretto(
@@ -524,7 +527,7 @@ impl CpuBackend {
                 if point.compress() != compressed {
                     return Err(Invalid(DecodeReason::Group));
                 }
-                Value::RistrettoGroup(point)
+                Value::RistrettoGroup((point).into())
             }
             _ => unreachable!("closed native frame"),
         };

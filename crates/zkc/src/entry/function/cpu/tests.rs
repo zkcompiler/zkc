@@ -97,7 +97,7 @@ fn capture(doc: &Json) -> Package {
 }
 fn package(interface: &Json, artifact: &str) -> Package {
     let bytes=json!({"format":"zkc.entry/0","original":"original","interface":interface.to_string(),"artifact":artifact,"assets":[],
-        "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true}}).to_string();
+        "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()}}).to_string();
     Package::capture(
         bytes.as_bytes(),
         &Sha256::digest(bytes.as_bytes()).into(),
@@ -2008,7 +2008,7 @@ fn standalone_outputs_keep_owner_policy_without_native_measurement() {
     use crate::execution::Capacity;
     use zkc_runtime::vm::{Backend, ExecutionLedger, Value as RuntimeValue, WorkBudget};
     let group = schema("group", "Group", json!(["group:bls12-381.g1"]));
-    let native = zkc_cpu::Value::Curve(zkc_cpu::G1::generator());
+    let native = zkc_cpu::Value::Curve((zkc_cpu::G1::generator()).into());
     let capacity = Capacity {
         groups: 0,
         ..Capacity::default()

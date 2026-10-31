@@ -17,6 +17,9 @@ using namespace zkc;
 using namespace zkc::protocol;
 using namespace zkc::test;
 namespace {
+std::vector<OracleRootSelection> &exactRoots(OracleRealizationPolicy &policy) {
+  return std::get<std::vector<OracleRootSelection>>(policy.roots);
+}
 constexpr StringLiteral scheme =
     "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0";
 std::string source(bool input, bool fixed, bool query = false) {
@@ -212,7 +215,8 @@ int main(int argc, char **argv) {
         // The record cannot authorize a change to the requested scheme/layout.
         refused(checkOracleRealization(*prepared, *candidate.module, record));
         auto changed = policy;
-        changed.roots->front().realization.order = OracleLeafOrder::BitReversed;
+        exactRoots(changed).front().realization.order =
+            OracleLeafOrder::BitReversed;
         refused(checkOracleRealization(*prepared, *candidate.module, record,
                                        changed));
         changed = policy;
@@ -267,13 +271,12 @@ int main(int argc, char **argv) {
         refused(checkOracleRealization(*prepared, *copy, record, policy));
         copy = parseSourceString<ModuleOp>(print(*candidate.module), &context);
         changed = false;
-        copy->walk([&](protocol_ir::ExchangeOp exchange) {
-          if (!exchange.getSite().contains("opening_request"))
+        copy->walk([&](exec::VariantOp request) {
+          if (request.getSite() != "window_request")
             return;
-          auto request = exchange.getInput().getDefiningOp<data::MakeOp>();
-          require(bool(request) && request.getNumOperands() == 3,
+          require(request.getPayload().size() == 3,
                   "missing request coordinates");
-          request->setOperand(1, request.getOperand(2));
+          request.getPayloadMutable()[1].set(request.getPayload()[2]);
           changed = true;
         });
         require(changed && succeeded(verify(*copy)),
@@ -292,23 +295,23 @@ int main(int argc, char **argv) {
       });
       runCase(name + " exact selection coverage", [&] {
         auto bad = policy;
-        bad.roots->clear();
+        exactRoots(bad).clear();
         refuses(emitOracleRealization(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->push_back(root);
+        exactRoots(bad).push_back(root);
         refuses(emitOracleRealization(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().path[0] += 1;
+        exactRoots(bad).front().path[0] += 1;
         refuses(emitOracleRealization(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().entry = "missing";
+        exactRoots(bad).front().entry = "missing";
         refuses(emitOracleRealization(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().realization.scheme.clear();
+        exactRoots(bad).front().realization.scheme.clear();
         refuses(emitOracleRealization(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
@@ -316,28 +319,29 @@ int main(int argc, char **argv) {
         refuses(resolveOracleRealizationSelection(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().path.clear();
+        exactRoots(bad).front().path.clear();
         refuses(resolveOracleRealizationSelection(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().path.assign(65, 0);
+        exactRoots(bad).front().path.assign(65, 0);
         refuses(resolveOracleRealizationSelection(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().realization.grouping =
+        exactRoots(bad).front().realization.grouping =
             static_cast<OracleLeafGrouping>(99);
         refuses(resolveOracleRealizationSelection(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().realization.order = static_cast<OracleLeafOrder>(99);
+        exactRoots(bad).front().realization.order =
+            static_cast<OracleLeafOrder>(99);
         refuses(resolveOracleRealizationSelection(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().realization.scheme =
+        exactRoots(bad).front().realization.scheme =
             "rows.merkle-poseidon2-16.koala-bear/0";
         refuses(emitOracleRealization(*prepared, bad), "oracle-storage-scheme");
         bad = policy;
-        bad.roots->resize(100001);
+        exactRoots(bad).resize(100001);
         refuses(resolveOracleRealizationSelection(*prepared, bad),
                 "oracle-realization-selection-limit");
       });
@@ -420,9 +424,11 @@ int main(int argc, char **argv) {
       checked(checkOracleRealization(*prepared, *copy, record, policy));
       bool changed = false;
       copy->walk([&](exec::ApplyOp op) {
-        if (!op.getSite().ends_with("_request_constructor"))
+        if (!op.getSite().ends_with("_request_constructor_equal"))
           return;
-        op->setOperand(2, op.getOperand(1));
+        require(op.getInputs().size() == 2,
+                "missing constructor comparison inputs");
+        op.getInputsMutable()[1].set(op.getInputs()[0]);
         changed = true;
       });
       require(changed && succeeded(verify(*copy)),
@@ -478,7 +484,7 @@ int main(int argc, char **argv) {
     auto candidate = take(emitOracleRealization(*prepared, policy));
     auto record =
         take(serializeOracleRealization(*prepared, candidate, policy));
-    std::reverse(policy.roots->begin(), policy.roots->end());
+    std::reverse(exactRoots(policy).begin(), exactRoots(policy).end());
     checked(
         checkOracleRealization(*prepared, *candidate.module, record, policy));
     require(take(serializeOracleRealization(*prepared, candidate, policy)) ==
@@ -548,7 +554,7 @@ int main(int argc, char **argv) {
                                    edge->record, policy));
   });
   for (StringRef mode : {"paired", "individual", "reversed", "invalid-first",
-                         "invalid-later", "guard"})
+                         "invalid-later", "guard", "guarded-position"})
     runCase("batch-" + mode, [&] {
       std::ifstream file(std::filesystem::path(ZKC_ORACLE_FIXTURES) /
                          "query-blocks.mlir");
@@ -568,6 +574,17 @@ int main(int argc, char **argv) {
         replace("  %y = ",
                 "  \"protocol.guard\"(%allow) "
                 "{owner=\"V\",site=\"early_barrier\"} : (i1)->()\n  %y = ");
+      if (mode == "guarded-position") {
+        replace("  %x = ",
+                "  %within = \"data.index_less\"(%position,%rows) : "
+                "(ui64,ui64)->i1\n"
+                "  \"protocol.guard\"(%within) "
+                "{owner=\"V\",site=\"position_bound\"} : (i1)->()\n  %x = ");
+        replace("%x = \"protocol.oracle_query\"(%a,%zero)",
+                "%x = \"protocol.oracle_query\"(%a,%position)");
+        replace("%z = \"protocol.oracle_query\"(%a,%zero)",
+                "%z = \"protocol.oracle_query\"(%a,%position)");
+      }
       auto original = parseSourceString<ModuleOp>(text, &context);
       require(bool(original), "batch fixture did not parse");
       auto owner = mathematical::PreparedProtocol::prepare(*original);
@@ -577,7 +594,7 @@ int main(int argc, char **argv) {
       policy.order = OracleQueryOrder::AfterFinalDraw;
       policy.authentication = OracleAuthentication::AtomicBlocks;
       policy.roots = take(resolveOracleRealizationSelection(*prepared, policy));
-      for (auto &root : *policy.roots)
+      for (auto &root : exactRoots(policy))
         root.realization = {scheme.str(),
                             mode == "individual"
                                 ? OracleLeafGrouping::Individual
@@ -597,65 +614,46 @@ int main(int argc, char **argv) {
                          ->front()
                          .getAsObject()
                          ->getArray("query_blocks");
-      unsigned count = (mode == "invalid-first" || mode == "guard") ? 3
-                       : mode == "invalid-later"                    ? 4
-                                                                    : 2;
+      unsigned count = mode == "guard" ? 3 : 2;
       require(blocks && blocks->size() == count,
               "wrong batch barrier partition");
-      if (count == 2) {
-        auto *groups =
-            blocks->front().getAsObject()->getArray("request_groups");
-        std::vector<unsigned> wanted = mode == "individual"
-                                           ? std::vector<unsigned>{0, 1, 0, 2}
-                                           : std::vector<unsigned>{0, 0, 0, 1};
-        require(groups && groups->size() == wanted.size(),
-                "logical query coverage changed");
-        for (auto [actual, expected] : zip(*groups, wanted))
-          require(actual.getAsUINT64() == expected, "wrong physical sharing");
-        (*groups)[3] = 0;
-        std::string changed;
-        raw_string_ostream(changed) << encoded;
-        refused(checkOracleRealization(*prepared, *copy, changed, policy));
-      }
+      auto &firstBlock = *blocks->front().getAsObject();
+      auto *queries = firstBlock.getArray("queries");
+      require(queries && queries->size() == (mode == "guard" ? 1u : 4u),
+              "logical source occurrence coverage changed");
+      require(firstBlock.get("packet_capacity")->getAsUINT64() ==
+                      (mode == "guard" ? 3u : 4u) &&
+                  !firstBlock.get("request_groups"),
+              "dynamic packet bound or record schema differs");
+      firstBlock["packet_capacity"] = 1;
+      std::string changedRecord;
+      raw_string_ostream(changedRecord) << encoded;
+      refused(checkOracleRealization(*prepared, *copy, changedRecord, policy));
       bool mutated = false;
       copy->walk([&](protocol_ir::LocalCallOp call) {
-        if (!mutated && call.getSite().contains("unpack_opening_request") &&
-            call->getNumResults() > 1) {
-          auto first = call->getResult(0), second = call->getResult(1);
-          first.replaceAllUsesWith(second);
+        if (!mutated && call.getSite().contains("opening_group") &&
+            call->getNumResults() == 2 && !call.getInputs().empty()) {
+          call->getResult(0).replaceAllUsesWith(call.getInputs()[0]);
           mutated = true;
         }
       });
       require(mutated && succeeded(verify(*copy)),
-              "request-slot mutation must preserve formation");
+              "physical request substitution must preserve formation");
       refused(checkOracleRealization(*prepared, *copy, record, policy));
       if (mode == "paired") {
-        for (bool packing : {true, false}) {
+        for (unsigned field : {1u, 2u}) {
           auto packetCopy =
               parseSourceString<ModuleOp>(print(*candidate.module), &context);
           bool changed = false;
-          packetCopy->walk([&](Operation *op) {
-            if (changed)
+          packetCopy->walk([&](exec::VariantOp pack) {
+            if (changed || !pack.getSite().ends_with("_key") ||
+                pack.getPayload().size() != 3)
               return;
-            if (packing) {
-              auto pack = dyn_cast<exec::VariantOp>(op);
-              if (!pack || pack.getSite() != "packet" ||
-                  pack.getPayload().size() < 2)
-                return;
-              op->setOperand(1, pack.getPayload()[1]);
-            } else {
-              auto complete = dyn_cast<exec::CompleteOp>(op);
-              auto helper = op->getParentOfType<func::FuncOp>();
-              if (!complete || !helper ||
-                  !helper.getSymName().contains("_fields_") ||
-                  op->getNumOperands() < 3)
-                return;
-              op->setOperand(1, op->getOperand(2));
-            }
+            pack->setOperand(1 + field, pack.getPayload()[field - 1]);
             changed = true;
           });
           require(changed && succeeded(verify(*packetCopy)),
-                  "packet payload mutation must preserve formation");
+                  "physical key mutation must preserve formation");
           refused(
               checkOracleRealization(*prepared, *packetCopy, record, policy));
         }

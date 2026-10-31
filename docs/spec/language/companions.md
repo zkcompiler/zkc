@@ -31,7 +31,7 @@ capture, installation and Lean dependency environment. These artifact digests
 are mandatory context, but are excluded from the reusable lookup string so that
 editing a body does not require renaming an authored theorem.
 
-Roles are `postcondition`, `request`, `source-correspondence`,
+Roles are `postcondition`, `request`, `oracle-admissibility`, `source-correspondence`,
 `implementation-law`, `realization-correspondence` or `stage-link`. These labels
 classify obligations; they do not register new semantic links. A stage link's
 actual identifier must be admitted by Lean's registry. Additional roles require
@@ -43,6 +43,32 @@ clauses. Inserting or reordering an unlabeled clause can change its key. The
 fixed expected type is rechecked even when a key survives an edit. A changed
 postcondition cannot inherit a proof merely because its ordinal is unchanged.
 
+### Virtual-oracle admissibility
+
+An oracle definition has one `oracle-admissibility` address for its complete
+generated Formula predicate, with `local_key = ["ordinal", "0"]` and no label.
+The owner is the authored oracle's canonical qualified name. Closed selection
+uses the oracle constructor's actual instance symbol, rather than the generated
+Formula's symbol. The checked instance inventory binds this selection to its
+template and exact static arguments, including nominal source types.
+
+The whole predicate includes every ordered authored `requires` clause and
+every generated source row-bound conjunct. This also covers definitions with
+only generated bounds or an empty conjunction. Authored labels and ordinals
+remain inspection metadata. Clause-level keys would require a separate coverage
+and conjunction-assembly contract for generated bounds and empty predicates;
+using the existing Formula avoids a second semantic authority.
+
+The definition address alone is not a construction obligation. Each retained
+construction contributes an unresolved occurrence with the actual source
+anchors and ordinary captures. The [source-instance export](source-ast.md#closed-source-instances)
+retains these occurrences independently of optional security selection. A loop
+body occurrence represents each reached construction under that loop's context;
+its row is not a theorem about every iteration. Consumers fix the full Formula
+application and its context before lookup and check its exact expected type,
+nominal specialization and actual input substitution. Reusing an address after
+editing a predicate never reuses proof evidence without that check.
+
 ## Obligation inventory
 
 Every declared `ensures` contributes a mandatory postcondition obligation.
@@ -51,6 +77,8 @@ explicit clause label or membership in another security bundle. `requires`
 contributes a premise of its owner's obligations; `target` and `reduces` supply
 relation data interpreted by their registered request families. They do not
 silently become a claim of security on their own.
+Within an oracle definition, `requires` instead contributes to the generated
+admissibility predicate whose construction occurrences are mandatory, as above.
 
 The frontend's pending inventory is an authored obligation inventory, not a set
 of elaborated propositions. Each item retains its role, optional label, ordinal,

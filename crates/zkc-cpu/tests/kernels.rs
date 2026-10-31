@@ -58,7 +58,7 @@ fn every_field_polynomial_kernel_matches_hand_calculation() {
     assert_eq!(scalar(&out[0]), Scalar::from(279u64));
     let Value::Round(q) = &out[1] else { panic!() };
     // (2+3r)(11+6r) + (3+4r)(13+6r)
-    assert_eq!(*q, [61u64, 115, 42].map(Scalar::from));
+    assert_eq!(**q, [61u64, 115, 42].map(Scalar::from));
     assert_eq!(scalar(&out[2]), Scalar::from(459u64));
     let Value::Table(t) = &out[3] else { panic!() };
     assert_eq!(t.logical_values().unwrap(), [8u64, 11].map(Scalar::from));
@@ -491,7 +491,7 @@ fn all_public_codecs_roundtrip_and_type_length_and_count_fail_closed() {
         Value::Bool(true),
         table(&[1, 2, 3, 4]),
         point(&[5, 6]),
-        Value::Round([1u64, 2, 3].map(Scalar::from)),
+        Value::Round(([1u64, 2, 3].map(Scalar::from)).into()),
     ] {
         if !zkc_cpu::has_native_wire(&v.physical_type()) {
             assert!(backend.encode_native_value(&v).is_err());

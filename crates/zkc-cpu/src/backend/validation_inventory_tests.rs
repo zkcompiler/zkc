@@ -192,17 +192,25 @@ macro_rules! collection_tests {
                         "exhausted:output-bytes"
                     );
                 }
-                // Inline values keep the historical conservative charge and
-                // remain independent of collection element ceilings.
-                for value in [Value::$f(ONE), Value::$r([ONE; 3])] {
-                    assert_eq!(value.retained_bytes(), 512);
-                    assert_eq!(
-                        value.retained_parts(&mut |_| panic!("inline value has no backing")),
-                        512
-                    );
-                    assert_eq!(value.validation_backing(), None);
+                // Fixed values remain independent of collection element ceilings.
+                // The wide octic round owns immutable backing; other rounds
+                // and every scalar fit inline.
+                for value in [Value::$f(ONE), Value::$r([ONE; 3].into())] {
+                    let shared = matches!(&value, Value::KoalaBearExt8Round(_));
+                    let bytes = if shared { 256 } else { crate::VALUE_SLOT_BYTES };
+                    assert_eq!(value.retained_bytes(), bytes);
+                    if shared {
+                        let original = backing(&value, bytes);
+                        assert_eq!(backing(&value.clone(), bytes), original);
+                    } else {
+                        assert_eq!(
+                            value.retained_parts(&mut |_| panic!("inline value has no backing")),
+                            bytes
+                        );
+                        assert_eq!(value.validation_backing(), None);
+                    }
                     core(Policy {
-                        max_value_bytes: 512,
+                        max_value_bytes: bytes,
                         max_table_elements: 0,
                         ..Policy::default()
                     })
@@ -210,7 +218,7 @@ macro_rules! collection_tests {
                     .unwrap();
                     assert_eq!(
                         core(Policy {
-                            max_value_bytes: 511,
+                            max_value_bytes: bytes - 1,
                             ..Policy::default()
                         })
                         .validate(&value)

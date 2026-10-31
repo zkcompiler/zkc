@@ -29,7 +29,7 @@ fn package(interface: &Json, operations: Json, arguments: Json, returns: Json) -
     serde_json::to_vec(&json!({"format":"zkc.entry/0","original":"checked source",
         "interface":interface.to_string(),"artifact":artifact.to_string(),"assets":[],
         "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
-        "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true}}))
+        "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": zkc::entry::OracleSelection::default()}}))
     .unwrap()
 }
 fn boolean_package(required: bool) -> Vec<u8> {

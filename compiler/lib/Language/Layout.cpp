@@ -31,9 +31,14 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
     hash.frame(allowed ? "1" : "0");
   hash.frame(std::to_string(layout.leaves.size()));
   for (const auto &leaf : layout.leaves) {
-    if (leaf.oracle())
-      return error("source.oracle-boundary",
-                   "relation data schema contains an oracle handle");
+    if (const auto *oracle = leaf.oracle()) {
+      hash.frame("oracle");
+      hash.frame(oracle->kind.identity);
+      for (const auto &argument : oracle->kind.arguments)
+        hash.frame(argument.spelling());
+      hash.frame(oracle->maximum ? std::to_string(*oracle->maximum) : "");
+      continue;
+    }
     if (!leaf.data())
       return error("source.formal", "relation schema contains a formal leaf");
     hash.frame(*leaf.data());
@@ -43,6 +48,10 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
     for (const auto &field : fields) {
       hash.frame(field.name);
       hash.frame(std::to_string(field.offset));
+      if (field.maximumRows) {
+        hash.frame("maximum_rows");
+        hash.frame(std::to_string(*field.maximumRows));
+      }
       auto child = get(*field.layout);
       if (!child)
         return child.takeError();
@@ -138,8 +147,9 @@ Expected<PackedLayout> Layouts::packed(const Type &type) {
   return pack(*flat);
 }
 Expected<PackedLayout> Layouts::pack(std::shared_ptr<const Layout> flat) {
-  if (!isSequenceElement(flat->type) || flat->formal || flat->custody ||
-      !flat->permissions.copy || !flat->permissions.drop)
+  if (isLogicalValue(flat->type) || !isSequenceElement(flat->type) ||
+      flat->formal || flat->custody || !flat->permissions.copy ||
+      !flat->permissions.drop)
     return error("source.sequence",
                  "sequence element requires executable Copy and Drop data");
   using K = Type::Kind;
@@ -194,17 +204,130 @@ Layouts::kernelArguments(StringRef contract, ArrayRef<Type> arguments) {
       });
 }
 Error Layouts::charge(uint64_t n) { return state->work.charge(n); }
+Expected<LayoutSlice> ProtocolPortLayout::select(ArrayRef<unsigned> path,
+                                                 bool anchor) const {
+  if (!body)
+    return error("source.layout", "protocol layout has no source body");
+  auto selected = body;
+  unsigned bodyOffset = 0;
+  for (auto index : path) {
+    if (selected->custody || selected->type.kind == Type::Kind::Associated ||
+        selected->type.kind == Type::Kind::Variant ||
+        index >= selected->fields.size())
+      return error("source.layout", "selector is not a source product path");
+    bodyOffset += selected->fields[index].offset;
+    selected = selected->fields[index].layout;
+  }
+  if (bodyOffset >= nativeOffsets.size())
+    return error("source.layout", "selector body offset is out of bounds");
+  unsigned offset = nativeOffsets[bodyOffset];
+  if (anchor) {
+    if (selected->type.kind != Type::Kind::Oracle || !selected->oracleData ||
+        selected->leaves.size() != 1)
+      return error("source.layout", "anchor requires a singleton oracle field");
+    return LayoutSlice{offset + 1, selected->oracleData};
+  }
+  if (isLogicalValue(selected->type))
+    return error("source.layout", "logical selection requires an anchor");
+  return LayoutSlice{offset, std::move(selected)};
+}
+Expected<ProtocolPortLayout> Layouts::protocolPort(const Port &port) {
+  auto body = get(port.type);
+  if (!body)
+    return body.takeError();
+  if (isLogicalValue(port.type) != port.oracle.has_value() ||
+      (port.type.kind == Type::Kind::LogicalRecord && port.oracle->maximumRows))
+    return error("source.oracle-port",
+                 "logical port family or row bound differs");
+  ProtocolPortLayout result{*body, {}, {0}};
+  std::vector<unsigned> path;
+  std::function<Error(const Layout &, unsigned, std::optional<uint64_t>,
+                      unsigned)>
+      visit = [&](const Layout &value, unsigned base,
+                  std::optional<uint64_t> maximum, unsigned depth) -> Error {
+    if (depth > limits.typeDepth)
+      return error("source.limit", "protocol layout depth exceeded");
+    if (auto e = charge(1 + path.size()))
+      return e;
+    if (isOracleHandle(value.type)) {
+      if (value.leaves.size() != 1 || !value.leaves[0].oracle() ||
+          !value.oracleData || value.oracleData->leaves.size() != 1 ||
+          !value.oracleData->leaves[0].data() ||
+          value.leaves[0]
+                  .oracle()
+                  ->kind.signature.staticShape("rows")
+                  .has_value() == maximum.has_value())
+        return error("source.layout",
+                     "logical field data or row bound differs");
+      result.leaves.push_back({value.leaves[0], base, result.size(), path,
+                               value.oracleData, maximum});
+      result.nativeOffsets.push_back(result.size() + 2);
+      return Error::success();
+    }
+    if (!value.fields.empty()) {
+      if (value.custody) {
+        result.leaves.push_back(
+            {value.leaves[0], base, result.size(), path, {}, {}});
+        result.nativeOffsets.push_back(result.size() + 1);
+      }
+      for (unsigned i = 0; i < value.fields.size(); ++i) {
+        const auto &field = value.fields[i];
+        path.push_back(i);
+        auto e = visit(*field.layout, base + field.offset, field.maximumRows,
+                       depth + 1);
+        path.pop_back();
+        if (e)
+          return e;
+      }
+    } else {
+      for (unsigned i = 0; i < value.leaves.size(); ++i) {
+        if (value.leaves[i].oracle())
+          return error("source.layout", "oracle lacks a direct source field");
+        result.leaves.push_back(
+            {value.leaves[i], base + i, result.size(), path, {}, {}});
+        result.nativeOffsets.push_back(result.size() + 1);
+      }
+    }
+    return Error::success();
+  };
+  std::optional<uint64_t> maximum;
+  if (port.oracle && port.oracle->maximumRows) {
+    if (port.oracle->maximumRows->kind != Type::Kind::Natural ||
+        !port.oracle->maximumRows->dimension.isClosed())
+      return error("source.layout", "port row maximum is not a closed natural");
+    maximum = port.oracle->maximumRows->dimension.closedValue();
+  }
+  if (auto e = visit(**body, 0, maximum, 1))
+    return std::move(e);
+  if (result.leaves.size() != (*body)->leaves.size() ||
+      result.size() > limits.aggregateLeaves)
+    return error("source.limit", "expanded protocol layout exceeds leaf limit");
+  for (unsigned i = 0; i < result.leaves.size(); ++i)
+    if (result.leaves[i].bodyOffset != i)
+      return error("source.layout", "protocol body leaf order differs");
+  return result;
+}
 Expected<LayoutSlice> Layouts::select(const Declaration &decl,
                                       const SpecificationSelector &selector) {
-  auto slice = select(selector.output ? decl.outputs : decl.inputs,
-                      selector.port, selector.path);
-  if (!slice || !selector.anchor)
-    return slice;
-  if (!selector.path.empty() || !slice->layout->oracleData ||
-      slice->layout->oracleData->leaves.size() != 1)
-    return error("source.layout", "invalid logical anchor data layout");
-  ++slice->offset;
-  slice->layout = slice->layout->oracleData;
+  auto ports = selector.output ? ArrayRef(decl.outputs) : ArrayRef(decl.inputs);
+  if (selector.port >= ports.size() || selector.path.size() > limits.typeDepth)
+    return error("source.layout", "selector port is out of bounds");
+  auto port = protocolPort(ports[selector.port]);
+  if (!port)
+    return port.takeError();
+  auto slice = port->select(selector.path, selector.anchor);
+  if (!slice)
+    return slice.takeError();
+  uint64_t offset = slice->offset;
+  for (unsigned i = 0; i < selector.port; ++i) {
+    auto before = protocolPort(ports[i]);
+    if (!before)
+      return before.takeError();
+    offset += before->size();
+  }
+  if (offset > std::numeric_limits<unsigned>::max())
+    return error("source.limit", "selector offset exceeds native bounds");
+  slice->offset = static_cast<unsigned>(offset);
   return slice;
 }
 Expected<LayoutSlice> Layouts::selectInput(const Declaration &decl,
@@ -216,33 +339,23 @@ Expected<LayoutSlice> Layouts::select(ArrayRef<Port> ports, unsigned port,
   if (port >= ports.size() || path.size() > limits.typeDepth)
     return error("source.layout", "logical selector is out of bounds");
   uint64_t offset = 0;
-  std::shared_ptr<const Layout> selected;
-  for (unsigned i = 0; i <= port; ++i) {
-    if (auto error = charge(1))
-      return std::move(error);
-    auto layout = get(ports[i].type);
-    if (!layout)
-      return layout.takeError();
-    if (i == port)
-      selected = *layout;
-    else
-      offset += ports[i].oracle ? 2 : (*layout)->leaves.size();
+  for (unsigned i = 0; i < port; ++i) {
+    auto before = protocolPort(ports[i]);
+    if (!before)
+      return before.takeError();
+    offset += before->size();
   }
-  for (auto field : path) {
-    if (auto error = charge(1))
-      return std::move(error);
-    if (selected->custody || selected->type.kind == Type::Kind::Associated ||
-        selected->type.kind == Type::Kind::Variant ||
-        field >= selected->fields.size())
-      return error("source.layout",
-                   "logical selector is not a product projection");
-    offset += selected->fields[field].offset;
-    selected = selected->fields[field].layout;
-  }
+  auto observed = protocolPort(ports[port]);
+  if (!observed)
+    return observed.takeError();
+  auto slice = observed->select(path);
+  if (!slice)
+    return slice.takeError();
+  offset += slice->offset;
   if (offset > std::numeric_limits<unsigned>::max())
     return error("source.limit",
                  "logical selector offset exceeds native bounds");
-  return LayoutSlice{static_cast<unsigned>(offset), std::move(selected)};
+  return LayoutSlice{static_cast<unsigned>(offset), slice->layout};
 }
 Expected<Type> Layouts::substitute(const Type &type,
                                    const std::map<std::string, Type> &bindings,
@@ -314,14 +427,17 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
   auto *decl = state->types->typeDeclaration(type);
   if (decl && decl->generated)
     result->generatedIdentity = decl->generated->identity;
-  if ((type.kind == K::Record &&
-       (!decl || decl->kind != Declaration::Kind::Record)) ||
+  if (((type.kind == K::Record || type.kind == K::LogicalRecord) &&
+       (!decl || decl->kind != Declaration::Kind::Record ||
+        decl->logical != (type.kind == K::LogicalRecord))) ||
       (type.kind == K::Variant &&
        (!decl || decl->kind != Declaration::Kind::Variant)) ||
       (type.kind == K::Associated &&
        (!decl || decl->kind != Declaration::Kind::Associated || !decl->parent)))
     return error("source.layout", "nominal type declaration differs");
   std::map<std::string, Type> bindings;
+  if (type.kind == K::LogicalRecord && !state->types->logicalRecord(type, {}))
+    return state->types->takeError();
   if (decl) {
     const auto *owner = decl;
     const auto *args = &type.arguments;
@@ -350,13 +466,25 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
   }
   auto addField = [&](StringRef name, const Type &field,
                       std::vector<LayoutField> &fields,
-                      std::vector<LayoutLeaf> &leaves) -> Error {
+                      std::vector<LayoutLeaf> &leaves,
+                      const std::optional<Type> &maximumRows = {}) -> Error {
     auto closed = substitute(field, bindings, depth + 1);
     if (!closed)
       return closed.takeError();
-    if (isOracleHandle(*closed))
+    if (closed->kind == K::LogicalRecord ||
+        (isOracleHandle(*closed) && type.kind != K::LogicalRecord))
       return error("source.oracle-aggregate",
                    "ordinary aggregates cannot contain oracle handles");
+    std::optional<uint64_t> maximum;
+    if (maximumRows) {
+      auto bound = substitute(*maximumRows, bindings, depth + 1);
+      if (!bound)
+        return bound.takeError();
+      if (bound->kind != K::Natural || !bound->dimension.isClosed())
+        return error("source.layout",
+                     "logical field row maximum is not closed");
+      maximum = bound->dimension.closedValue();
+    }
     auto layout = build(*closed, depth + 1);
     if (!layout)
       return layout.takeError();
@@ -368,7 +496,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
       if (auto e = charge(leaf.cost()))
         return e;
     result->formal |= (*layout)->formal;
-    fields.push_back({name.str(), *layout, unsigned(leaves.size())});
+    fields.push_back({name.str(), *layout, unsigned(leaves.size()), maximum});
     leaves.insert(leaves.end(), (*layout)->leaves.begin(),
                   (*layout)->leaves.end());
     return Error::success();
@@ -395,15 +523,19 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
                      "oracle sequence maximum remains symbolic");
       maximum = type.arguments[1].dimension.closedValue();
     }
-    if (type.kind == K::Oracle) {
-      auto data = oracleMember(type.arguments.front(), "Data");
-      if (!data)
-        return data.takeError();
-      auto layout = build(*data, depth + 1);
-      if (!layout)
-        return layout.takeError();
-      result->oracleData = *layout;
+    auto data = oracleMember(type.arguments.front(), "Data");
+    if (!data)
+      return data.takeError();
+    if (type.kind == K::OracleSequence) {
+      auto sequence = builtinType("sequence", {*data});
+      if (!sequence)
+        return sequence.takeError();
+      data = std::move(sequence);
     }
+    auto dataLayout = build(*data, depth + 1);
+    if (!dataLayout)
+      return dataLayout.takeError();
+    result->oracleData = *dataLayout;
     result->leaves = {OracleLayout{std::move(*kind), maximum}};
   } else if (type.kind == K::Formal) {
     auto formed = formalType(type.domain, type.arguments);
@@ -460,7 +592,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
       auto element = substitute(type.arguments.front(), bindings, depth + 1);
       if (!element)
         return element.takeError();
-      if (isOracleHandle(*element))
+      if (isLogicalValue(*element))
         return error("source.oracle-aggregate",
                      "empty arrays cannot erase oracle handles");
       auto layout = build(*element, depth + 1);
@@ -472,10 +604,11 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
       if (auto e = addField(std::to_string(i), type.arguments.front(),
                             result->fields, result->leaves))
         return e;
-  } else if (type.kind == K::Record && decl) {
+  } else if ((type.kind == K::Record || type.kind == K::LogicalRecord) &&
+             decl) {
     for (auto &field : decl->fields) {
-      if (auto e =
-              addField(field.name, field.type, result->fields, result->leaves))
+      if (auto e = addField(field.name, field.type, result->fields,
+                            result->leaves, field.maximumRows))
         return e;
     }
   } else if (type.kind == K::Associated && decl && !decl->abstract) {

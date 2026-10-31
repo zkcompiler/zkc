@@ -105,6 +105,9 @@ pub(super) fn collect(
     schema: &Schema,
     leaves: &mut impl Iterator<Item = NativeValue>,
 ) -> Result<Value> {
+    if schema.kind.is_logical() {
+        return Err("entry-output-custody".into());
+    }
     Ok(match schema.kind {
         Kind::Unit => Value::Unit,
         Kind::Tuple => Value::Tuple(collect_sequence(&schema.fields, leaves)?),

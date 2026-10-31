@@ -45,7 +45,8 @@ impl CpuBackend {
                 vec![Field(a.product_boolean_sum(b).map_err(ark)?)]
             }
             ("poly.product_round", [TableMsb(a), TableMsb(b)]) => {
-                vec![Round(a.round_product(b).map_err(ark)?)]
+                p.output(Value::shared_round_retained_bytes(), i.max_output_bytes)?;
+                vec![Round(a.round_product(b).map_err(ark)?.into())]
             }
             ("poly.fold", [TableMsb(t), Field(r)]) => {
                 let len = t.physical_values().len() / 2;
@@ -75,7 +76,8 @@ impl CpuBackend {
                 vec![Field(a.product_boolean_sum(b).map_err(ark)?)]
             }
             ("poly.product_round", [Table(a), Table(b)]) => {
-                vec![Round(a.round_product(b).map_err(ark)?)]
+                p.output(Value::shared_round_retained_bytes(), i.max_output_bytes)?;
+                vec![Round(a.round_product(b).map_err(ark)?.into())]
             }
             ("poly.fold", [Table(t), Field(r)]) => {
                 let len = t.physical_values().len() / 2;
@@ -135,7 +137,7 @@ impl CpuBackend {
             ("pcs.open", [OpeningState(state), Point(point)]) => {
                 p.output(
                     size(state.commitment().metadata().arity(), 192)?
-                        .checked_add(512)
+                        .checked_add(crate::VALUE_SLOT_BYTES)
                         .ok_or_else(|| exhausted("output-bytes"))?,
                     i.max_output_bytes,
                 )?;

@@ -9,18 +9,22 @@ use zkc_cpu::{Policy, Scalar, Value};
 fn ordered_search_admits_its_complete_result_before_work() {
     let policy = Policy {
         max_numerical_work: 4,
-        max_numerical_bytes: 512,
+        max_numerical_bytes: zkc_cpu::VALUE_SLOT_BYTES,
         ..Policy::default()
     };
     for (policy, allowance, expected) in [
-        (policy, 512, None),
-        (policy, 511, Some("exhausted:output-bytes")),
+        (policy, zkc_cpu::VALUE_SLOT_BYTES, None),
+        (
+            policy,
+            zkc_cpu::VALUE_SLOT_BYTES - 1,
+            Some("exhausted:output-bytes"),
+        ),
         (
             Policy {
-                max_numerical_bytes: 511,
+                max_numerical_bytes: zkc_cpu::VALUE_SLOT_BYTES - 1,
                 ..policy
             },
-            512,
+            zkc_cpu::VALUE_SLOT_BYTES,
             Some("exhausted:numerical-bytes"),
         ),
         (
@@ -28,7 +32,7 @@ fn ordered_search_admits_its_complete_result_before_work() {
                 max_numerical_work: 3,
                 ..policy
             },
-            512,
+            zkc_cpu::VALUE_SLOT_BYTES,
             Some("exhausted:numerical-work"),
         ),
         (
@@ -37,7 +41,7 @@ fn ordered_search_admits_its_complete_result_before_work() {
                 max_numerical_bytes: 0,
                 ..policy
             },
-            511,
+            zkc_cpu::VALUE_SLOT_BYTES - 1,
             Some("exhausted:output-bytes"),
         ),
     ] {

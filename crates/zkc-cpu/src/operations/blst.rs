@@ -119,8 +119,8 @@ super::resident::group_family!(
     G1Vector,
     BlstG1,
     BlstG1Vector,
-    |v| v,
-    |v: &kernel::G1| *v,
+    Arc::new,
+    |v: &Arc<kernel::G1>| **v,
     scaling
 );
 
@@ -151,10 +151,11 @@ pub(crate) fn apply(
         arithmetic::equal_len(left.len(), right.len())?;
         policy.typed_groups::<kernel::G1>(left.len())?;
         policy.typed_groups::<kernel::G2>(right.len())?;
-        policy.output(512, invocation.max_output_bytes)?;
+        let retained = Value::fixed_retained_bytes(&invocation.binding.signature().outputs[0]);
+        policy.output(retained, invocation.max_output_bytes)?;
         let call = crate::numerical::Call::new(policy, invocation.max_output_bytes);
         call.work_items(left.len(), 8192, 8192)?;
-        let output = call.scalar(512)?;
+        let output = call.scalar(retained)?;
         let _workspace = call.reserve_workspace::<u8>(kernel::PAIRING_WORKSPACE_BYTES)?;
         return Ok(vec![output.finish(|| {
             Ok(Value::Bool(
@@ -176,16 +177,17 @@ pub(crate) fn apply(
             }
             _ => return Err(refused("kernel-operands")),
         };
-        policy.output(512, invocation.max_output_bytes)?;
+        let retained = Value::fixed_retained_bytes(&invocation.binding.signature().outputs[0]);
+        policy.output(retained, invocation.max_output_bytes)?;
         let call = crate::numerical::Call::new(policy, invocation.max_output_bytes);
         call.work_items(len, 256, 1)?;
-        let output = call.scalar(512)?;
+        let output = call.scalar(retained)?;
         let _workspace =
             call.reserve_workspace::<u8>(kernel::msm_workspace_bytes(len).map_err(failure)?)?;
         return Ok(vec![output.finish(|| {
             Ok(match args {
                 [Value::BlstVector(s), Value::BlstG1Vector(p)] => {
-                    Value::BlstG1(p.msm(s).map_err(failure)?)
+                    Value::BlstG1(p.msm(s).map_err(failure)?.into())
                 }
                 [Value::BlstVector(s), Value::BlstG2Vector(p)] => {
                     Value::BlstG2(Arc::new(p.msm(s).map_err(failure)?))
@@ -243,12 +245,14 @@ pub(crate) fn convert(
             Ok(match value {
                 Value::Field(s) => Value::BlstField(bridge::import_scalar(*s).map_err(failure)?),
                 Value::BlstField(s) => Value::Field(bridge::export_scalar(*s).map_err(failure)?),
-                Value::Curve(p) => Value::BlstG1(bridge::import_g1(*p).map_err(failure)?),
-                Value::BlstG1(p) => Value::Curve(bridge::export_g1(*p).map_err(failure)?),
+                Value::Curve(p) => Value::BlstG1(bridge::import_g1(**p).map_err(failure)?.into()),
+                Value::BlstG1(p) => Value::Curve((bridge::export_g1(**p).map_err(failure)?).into()),
                 Value::Bls12381G2(p) => {
-                    Value::BlstG2(Arc::new(bridge::import_g2(*p).map_err(failure)?))
+                    Value::BlstG2(Arc::new(bridge::import_g2(**p).map_err(failure)?))
                 }
-                Value::BlstG2(p) => Value::Bls12381G2(bridge::export_g2(**p).map_err(failure)?),
+                Value::BlstG2(p) => {
+                    Value::Bls12381G2((bridge::export_g2(**p).map_err(failure)?).into())
+                }
                 Value::Vector(v) => Value::BlstVector(Arc::new(
                     kernel::ScalarVector::try_from_fn(v.len(), |i| bridge::import_scalar(v[i]))
                         .map_err(failure)?,

@@ -67,23 +67,67 @@ checkLowering(mlir::ModuleOp original, mlir::ModuleOp candidate,
     hasComputations |=
         (mathematical::isComputationUnit(op) || isa<exec::ComputeOp>(op));
   });
+  llvm::DenseMap<Operation *, func::FuncOp> entries;
+  SmallVector<OwningOpRef<mlir::ModuleOp>> units;
+  bool frontier = false;
   if (hasComputations) {
+    SmallVector<exec::ComputeOp> calls;
+    source.walk([&](exec::ComputeOp call) { calls.push_back(call); });
+    SymbolTableCollection symbols;
+    for (auto call : calls) {
+      auto raw = resolveInvocation(call, symbols);
+      if (!raw)
+        return failure();
+      auto unit = dyn_cast<mlir::ModuleOp>(raw->getParentOp());
+      OwningOpRef<mlir::ModuleOp> closed;
+      if (!unit || !mathematical::isComputationUnit(unit)) {
+        closed = closeComputation(raw, work.numericalCheckCopy);
+        if (!closed) {
+          outcome = {mathematical::VerificationObservation::RequiredCapacity,
+                     "numerical closure copy capacity",
+                     CapacityCause{WorkOwner::AlgorithmExpansion}};
+          return failure();
+        }
+        unit = *closed;
+      }
+      llvm::DenseSet<Operation *> generated;
+      capacity.reset();
+      auto normalized =
+          normalizeUnit(unit, work.numericalCheckCopy, generated, &capacity);
+      if (!normalized) {
+        if (capacity)
+          outcome = {mathematical::VerificationObservation::RequiredCapacity,
+                     "numerical unit normalization capacity", capacity};
+        return failure();
+      }
+      if (!generated.empty()) {
+        frontier = true;
+        break;
+      }
+      entries[call] = mathematical::getComputationEntry(*normalized);
+      units.push_back(std::move(normalized));
+    }
+  }
+  if (frontier) {
     // Reconstruct and check mathematical normalization/frontier only. No
     // executable emitter, selected menu or producer receipt enters this edge.
     std::optional<CapacityCause> capacity;
-    normalized = prepareComputationRealization(source, &work.numericalCheckCopy,
-                                               &capacity);
+    normalized = prepareComputationRealization(source, work.numericalCheckCopy,
+                                               work, &capacity);
     if (!normalized) {
       if (capacity)
         outcome = {mathematical::VerificationObservation::RequiredCapacity,
-                   "numerical normalization copy capacity", capacity};
+                   capacity->owner == WorkOwner::AlgorithmChecking
+                       ? "numerical normalization checking capacity"
+                       : "numerical normalization copy capacity",
+                   capacity};
       return failure();
     }
     source = *normalized;
   }
   auto subject = cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
   return verifyScopedNumericalContext(subject, after, before, policy, work,
-                                      outcome);
+                                      outcome, frontier ? nullptr : &entries);
 }
 } // namespace
 LogicalResult verifyComputationRealization(mlir::ModuleOp original,

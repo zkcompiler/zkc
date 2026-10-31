@@ -6,7 +6,8 @@ namespace zkc::mathematical {
 // holder data and a receiver component or authenticate any commitment.
 struct OraclePortPair {
   unsigned data, anchor;
-  protocol_ir::OracleKindAttr kind;
+  // The complete logical type retains both the family and sequence capacity.
+  mlir::Type type;
   mlir::StringAttr holder;
   mlir::ArrayAttr receivers;
 };

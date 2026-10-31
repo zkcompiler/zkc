@@ -92,6 +92,13 @@ BodyChecker::application(const Expression &expr) {
              "oracle argument holder differs from mapped port", expr.span);
         return {};
       }
+      if (type->kind == Type::Kind::LogicalRecord &&
+          components(*value).roles != mappedRoles(port)) {
+        fail("source.oracle-role",
+             "logical record argument must retain its complete role family",
+             expr.span);
+        return {};
+      }
       operands[slot.index] = *value;
     }
   }

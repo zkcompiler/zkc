@@ -8,7 +8,8 @@ import statistics
 
 from .io import require, write_json
 from .observations import validate_counts, summarize_counts
-from .configuration import flags, SETTINGS
+from .configuration import flags, validate_candidate, validate_published
+from .oracle_policy import validate_workload, read_policy
 
 FORMAT = 'zkc.benchmark/0'
 INGRESS = ('json', 'wire', 'native', 'prepared')
@@ -274,12 +275,25 @@ def validate_manifest(manifest):
         'invalid compiler options')
     configuration = manifest.get('configuration')
     if configuration is not None:
-        keys = SETTINGS.keys()
-        require(isinstance(configuration, dict) and set(configuration) == {'profile','values','origins'}, 'invalid build configuration')
-        require(isinstance(configuration['profile'], str) and configuration['profile'], 'invalid configuration profile')
+        validate_candidate(configuration)
         require(flags(configuration['values']) == options, 'compiler options differ from configuration')
-        require(isinstance(configuration['origins'], dict) and set(configuration['origins']) == keys
-                and all(isinstance(v, str) and v for v in configuration['origins'].values()), 'invalid configuration origins')
+    contracts = manifest.get('contracts', {})
+    for record in [*matrix, *results]:
+        family = next((name for name in ('fri', 'air', 'stark', 'machine')
+                       if record['case'].startswith(name + '-')), None)
+        if family is not None:
+            contract = contracts.get(record['case'])
+            require(isinstance(contract, dict) and contract.get('protocol') == family,
+                    'missing FRI/STARK oracle workload contract')
+    for name, contract in manifest.get('contracts', {}).items():
+        if contract.get('category') is not None or contract.get('protocol') in ('fri', 'air', 'stark', 'machine'):
+            validate_workload(contract, manifest.get('compilation', {}).get(name),
+                              require_control=manifest['status'] == 'passed',
+                              control_receipts=[check.get('semantic_control') for check in manifest.get('checks', [])
+                                                if check.get('case') == name and check.get('status') == 'passed'])
+            for compilation in manifest['compilation'][name]:
+                validate_published(compilation['published_options'], configuration,
+                                   read_policy(contract['oracle_realization']), compiler_options=options)
     for job in matrix:
         validate_backend(job.get('backend'), manifest['ingress'], job.get('boundary'), job['operation'])
     successful = manifest['status'] == 'passed'
@@ -453,6 +467,9 @@ def summarize(manifest):
         row = {'case': case, 'implementation': implementation, 'operation': operation,
                'ingress': backend['ingress'] if backend.get('kind') in ('host', 'run') else 'reference defaults',
                'processes': len(results), 'status': 'failed'}
+        contract = manifest.get('contracts', {}).get(case, {})
+        if 'oracle_realization' in contract:
+            row['oracle_realization'] = contract['oracle_realization']
         # Missing workers, later correctness failures and changed inputs invalidate timings.
         if manifest['status'] == 'passed' and len(results) == manifest['processes'] and all(
                 r['status'] == 'passed' for r in results):

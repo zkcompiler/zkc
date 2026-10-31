@@ -1,5 +1,5 @@
-//! Checked logical u64 indices. These are independent of field characteristic
-//! and host pointer size; arithmetic never wraps and division by zero refuses.
+//! Logical u64 indices, independent of field characteristic and pointer size.
+//! Ordinary arithmetic is checked; explicitly named word operations are total.
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
@@ -17,9 +17,15 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     // Native advertisements are independent of the runtime admission catalogue.
     let (inputs, outputs, attributes): (&[Type], &[Type], _) = match binding.contract.as_str() {
         "index.constant" => (&[], &[Index], Unsigned64),
-        "index.add" | "index.sub" | "index.mul" | "index.div" | "index.mod" => {
-            (&[Index, Index], &[Index], NoAttributes)
-        }
+        "index.add"
+        | "index.sub"
+        | "index.mul"
+        | "index.div"
+        | "index.mod"
+        | "index.wrapping_add"
+        | "index.wrapping_sub"
+        | "index.bit_and"
+        | "index.logical_shift_right" => (&[Index, Index], &[Index], NoAttributes),
         "index.equal" | "index.less" => (&[Index, Index], &[Bool], NoAttributes),
         "indices.empty" => (&[], &[Indices], NoAttributes),
         "indices.append" => (&[Indices, Index], &[Indices], NoAttributes),
@@ -91,6 +97,12 @@ pub(crate) fn apply(
         ),
         ("index.equal", [Index(a), Index(b)]) => Bool(a == b),
         ("index.less", [Index(a), Index(b)]) => Bool(a < b),
+        ("index.wrapping_add", [Index(a), Index(b)]) => Index(a.wrapping_add(*b)),
+        ("index.wrapping_sub", [Index(a), Index(b)]) => Index(a.wrapping_sub(*b)),
+        ("index.bit_and", [Index(a), Index(b)]) => Index(a & b),
+        ("index.logical_shift_right", [Index(a), Index(b)]) => {
+            Index(if *b < 64 { a >> b } else { 0 })
+        }
         ("indices.empty", []) => {
             policy.output(size(0, 8)?, available)?;
             Indices(Vec::new().into())
@@ -130,6 +142,13 @@ pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
     ("native/index.mod", "index.mod"),
     ("native/index.equal", "index.equal"),
     ("native/index.less", "index.less"),
+    ("native/index.wrapping_add", "index.wrapping_add"),
+    ("native/index.wrapping_sub", "index.wrapping_sub"),
+    ("native/index.bit_and", "index.bit_and"),
+    (
+        "native/index.logical_shift_right",
+        "index.logical_shift_right",
+    ),
     ("native/indices.empty", "indices.empty"),
     ("native/indices.append", "indices.append"),
     ("native/indices.at", "indices.at"),
