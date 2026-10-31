@@ -8,6 +8,8 @@ use std::{
 use zkc_kernels::arkworks::bls12_381::Scalar;
 use zkc_runtime::vm::{Frame, FrameExit, FrameKind, Identity, Type, Value as RuntimeValue};
 
+pub(crate) mod index_block;
+
 /// Host-selected service authority scope. An instance restriction is exact:
 /// a differently named child must receive a separately scoped resource or an
 /// explicitly instance-unrestricted resource from the host.
@@ -356,15 +358,12 @@ impl Resources {
         origin: &[u8],
         value: &[u8],
     ) -> Result<Capability> {
-        let slot = self.consume(f, t, Type::Transcript)?;
-        let State::Transcript(transcript, _) = &mut slot.state else {
-            unreachable!("validated kind")
-        };
-        transcript.append_message(b"origin", origin);
-        transcript.append_message(b"value", value);
-        let mut next = t.clone();
-        next.generation = slot.generation;
-        Ok(next)
+        self.transcript_transition(f, t, |transcript, _| {
+            transcript.append_message(b"origin", origin);
+            transcript.append_message(b"value", value);
+            Ok(())
+        })
+        .map(|(_, next)| next)
     }
     pub fn transcript_challenge_value(
         &mut self,
@@ -372,36 +371,32 @@ impl Resources {
         t: &Capability,
         origin: &[u8],
     ) -> Result<(Value, Capability)> {
-        let slot = self.consume(f, t, Type::Transcript)?;
-        let State::Transcript(transcript, suite) = &mut slot.state else {
-            unreachable!("validated kind")
-        };
-        transcript.append_message(b"origin", origin);
-        let mut block = || {
-            let mut bytes = [0; 64];
-            transcript.challenge_bytes(b"challenge", &mut bytes);
-            bytes
-        };
-        let value = match suite {
-            Identity::Merlin3KoalaBearExt8
-            | Identity::Merlin3BabyBearExt4
-            | Identity::Merlin3GoldilocksExt2
-            | Identity::HashChainKeccak256KoalaBearExt8 => {
-                crate::sampling::value(suite.scalar_field().expect("installed suite"), block)?
-            }
-            Identity::Merlin3Fr64Be
-            | Identity::Spongefish080KeccakFr64Be
-            | Identity::HashChainKeccak256Fr64Be => Value::Field(
-                zkc_kernels::arkworks::bls12_381::scalar_from_wide_be(&block()),
-            ),
-            Identity::Merlin3Ristretto64Le => {
-                Value::RistrettoField(crate::RistrettoScalar::from_bytes_mod_order_wide(&block()))
-            }
-            _ => unreachable!("issued suite"),
-        };
-        let mut next = t.clone();
-        next.generation = slot.generation;
-        Ok((value, next))
+        self.transcript_transition(f, t, |transcript, suite| {
+            transcript.append_message(b"origin", origin);
+            let mut block = || {
+                let mut bytes = [0; 64];
+                transcript.challenge_bytes(b"challenge", &mut bytes);
+                bytes
+            };
+            Ok(match suite {
+                Identity::Merlin3KoalaBearExt8
+                | Identity::Merlin3BabyBearExt4
+                | Identity::Merlin3GoldilocksExt2
+                | Identity::HashChainKeccak256KoalaBearExt8
+                | Identity::HashChainKeccak256KoalaBearExt4 => {
+                    crate::sampling::value(suite.scalar_field().expect("installed suite"), block)?
+                }
+                Identity::Merlin3Fr64Be
+                | Identity::Spongefish080KeccakFr64Be
+                | Identity::HashChainKeccak256Fr64Be => Value::Field(
+                    zkc_kernels::arkworks::bls12_381::scalar_from_wide_be(&block()),
+                ),
+                Identity::Merlin3Ristretto64Le => Value::RistrettoField(
+                    crate::RistrettoScalar::from_bytes_mod_order_wide(&block()),
+                ),
+                _ => unreachable!("issued suite"),
+            })
+        })
     }
 
     /// UniformIndex(bound) from the transcript. Invalid bounds refuse before
@@ -418,17 +413,32 @@ impl Resources {
             return Err(refused("transcript-suite"));
         }
         crate::sampling::index_bound(bound)?;
+        self.transcript_transition(f, t, |transcript, _| {
+            transcript.append_message(b"origin", origin);
+            transcript.append_message(b"bound", &bound.to_le_bytes());
+            let mut bytes = [0; 64];
+            transcript.challenge_bytes(b"index", &mut bytes);
+            Ok(Value::Index(crate::sampling::index(&bytes, bound)?))
+        })
+    }
+
+    // Authenticate and consume the current state before applying its numerical
+    // transition. A failed transition never issues a successor; consumption and
+    // its reached failure state retain the scalar resource contract.
+    fn transcript_transition<T>(
+        &mut self,
+        f: &Frame,
+        t: &Capability,
+        apply: impl FnOnce(&mut crate::transcript::Transcript, Identity) -> Result<T>,
+    ) -> Result<(T, Capability)> {
         let slot = self.consume(f, t, Type::Transcript)?;
-        let State::Transcript(transcript, _) = &mut slot.state else {
+        let State::Transcript(transcript, suite) = &mut slot.state else {
             unreachable!("validated kind")
         };
-        transcript.append_message(b"origin", origin);
-        transcript.append_message(b"bound", &bound.to_le_bytes());
-        let mut bytes = [0; 64];
-        transcript.challenge_bytes(b"index", &mut bytes);
+        let value = apply(transcript, *suite)?;
         let mut next = t.clone();
         next.generation = slot.generation;
-        Ok((Value::Index(crate::sampling::index(&bytes, bound)?), next))
+        Ok((value, next))
     }
 
     pub fn draw_index(
@@ -458,6 +468,7 @@ impl Resources {
             Identity::Bn254Fr => State::Bn254Rng(Box::new(RandomSource::from_os()?)),
             Identity::Bls12381Fr => State::Rng(Source::Os(Box::new(RandomSource::from_os()?))),
             Identity::KoalaBearExt8
+            | Identity::KoalaBearExt4
             | Identity::BabyBearExt4
             | Identity::GoldilocksExt2
             | Identity::Ristretto255Scalar => {
@@ -1049,6 +1060,40 @@ impl Resources {
         let mut next = t.clone();
         next.generation = slot.generation;
         Ok((Value::Index(crate::sampling::index(&bytes, bound)?), next))
+    }
+    /// The lease has checked the request and allocated the full output. Consume
+    /// exactly once, then obtain one fresh 64-byte block for each ordered index.
+    pub(crate) fn draw_managed_indices(
+        &mut self,
+        owner: &str,
+        t: &Capability,
+        bound: u64,
+        mut output: Vec<u64>,
+    ) -> Result<(Value, Capability)> {
+        use rand::Rng;
+        if !self.frames.is_empty() {
+            return Err(refused("service-resource-context"));
+        }
+        self.validate(t, Type::Rng)?;
+        let slot = self.slots.get_mut(&t.id).expect("validated root");
+        if !matches!(&slot.domain, Custody::Service(actual) if actual == owner) {
+            return Err(refused("service-owner"));
+        }
+        if !matches!(slot.state, State::ExtensionRng(..)) {
+            return Err(refused("query-rng"));
+        }
+        let slot = Self::consume_slot(slot)?;
+        let State::ExtensionRng(_, rng) = &mut slot.state else {
+            unreachable!("checked state")
+        };
+        crate::sampling::indices(&mut output, bound, || {
+            let mut bytes = [0; 64];
+            rng.fill_bytes(&mut bytes);
+            bytes
+        })?;
+        let mut next = t.clone();
+        next.generation = slot.generation;
+        Ok((Value::Indices(output.into()), next))
     }
     pub fn commit_nonce(&mut self, f: &Frame, t: &Capability) -> Result<(Scalar, Capability)> {
         if t.identity != Identity::Bls12381Fr {

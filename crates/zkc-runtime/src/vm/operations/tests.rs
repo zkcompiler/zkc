@@ -470,6 +470,9 @@ matrix.row_dot 0
 matrix.column_dot 0
 transcript.native.indexed.challenge 1
 transcript.native.indexed.index 1
+transcript.native.indexed.indices 1
+transcript.native.indexed.indices.search 1
+transcript.native.indexed.indices.gated 1
 transcript.native.indexed.observe.data 1
 transcript.observe 1
 transcript.challenge 1
@@ -666,4 +669,80 @@ fn physical_installation_cannot_invent_a_contract() {
         Registry::assemble(&[&OWNER]).err().unwrap().detail,
         "undeclared-logical-contract"
     );
+}
+
+#[test]
+fn index_blocks_require_explicit_keccak_installation_and_exact_ports() {
+    for suite in [
+        "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",
+        "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
+        "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
+        "hash-chain.keccak256.bls12-381.fr64be/0",
+    ] {
+        let identity = Identity::parse(suite).unwrap();
+        for (contract, inputs, outputs, rule) in [
+            (
+                "transcript.native.indexed.indices",
+                vec!["transcript", "indices"],
+                vec!["indices", "transcript"],
+                AttributeRule::NativeIndexBlock,
+            ),
+            (
+                "transcript.native.indexed.indices.search",
+                vec!["transcript", "indices"],
+                vec!["indices", "index", "transcript"],
+                AttributeRule::NativeGatedIndexBlock,
+            ),
+            (
+                "transcript.native.indexed.indices.gated",
+                vec!["transcript", "index", "indices"],
+                vec!["indices", "transcript"],
+                AttributeRule::NativeGatedIndexBlock,
+            ),
+        ] {
+            let binding = OperationBinding {
+                contract: contract.into(),
+                arguments: vec![suite.into()],
+                implementation: format!("plonky3/{contract}"),
+                physical_arguments: vec![],
+            };
+            if !identity.has_index_block_transcript() {
+                assert!(binding.logical_signature().is_err());
+                assert!(binding.signature().is_err());
+                continue;
+            }
+            let signature = binding.signature().unwrap();
+            assert_eq!(signature.attributes, rule);
+            assert_eq!(
+                signature
+                    .inputs
+                    .iter()
+                    .map(|t| t.kind().name())
+                    .collect::<Vec<_>>(),
+                inputs
+            );
+            assert_eq!(
+                signature
+                    .outputs
+                    .iter()
+                    .map(|t| t.kind().name())
+                    .collect::<Vec<_>>(),
+                outputs
+            );
+            assert!(
+                signature
+                    .inputs
+                    .iter()
+                    .chain(&signature.outputs)
+                    .filter(|t| t.kind() == Type::Transcript)
+                    .all(|t| t.logical().identity() == identity)
+            );
+            let mut unknown = binding.clone();
+            unknown.implementation = format!("native/{contract}");
+            assert!(unknown.signature().is_err());
+            let mut unknown = binding;
+            unknown.arguments.push("3".into());
+            assert!(unknown.signature().is_err());
+        }
+    }
 }

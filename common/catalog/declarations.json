@@ -268,7 +268,25 @@
       ]
     },
     {
+      "name": "IndexBlockRandomness",
+      "parameters": [
+        {
+          "kind": "Domain",
+          "sort": "Field"
+        }
+      ]
+    },
+    {
       "name": "IndexTranscript",
+      "parameters": [
+        {
+          "kind": "Domain",
+          "sort": "Transcript"
+        }
+      ]
+    },
+    {
+      "name": "IndexBlockTranscript",
       "parameters": [
         {
           "kind": "Domain",
@@ -559,6 +577,16 @@
       "module": "zkc::oracle",
       "name": "VectorCommitment",
       "predicate": "VectorCommitment"
+    },
+    {
+      "module": "zkc::random",
+      "name": "IndexBlockRandomness",
+      "predicate": "IndexBlockRandomness"
+    },
+    {
+      "module": "zkc::transcript",
+      "name": "IndexBlockTranscript",
+      "predicate": "IndexBlockTranscript"
     }
   ],
   "families": [
@@ -1827,6 +1855,206 @@
               0
             ],
             "constructor": "transcript"
+          }
+        ]
+      },
+      "stage": "Construction"
+    },
+    {
+      "facets": [
+        {
+          "kind": "History",
+          "stateInput": 0,
+          "stateOutput": 1
+        }
+      ],
+      "name": "transcript.native.indexed.indices.gated",
+      "parameters": {
+        "validator": "NativeIndexBlock",
+        "minimum": 4,
+        "maximum": 4
+      },
+      "requirements": [
+        {
+          "capability": "IndexBlockTranscript",
+          "arguments": [
+            0
+          ]
+        }
+      ],
+      "scope": [
+        {
+          "kind": "root",
+          "name": "T",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Transcript"
+          }
+        }
+      ],
+      "signature": {
+        "inputs": [
+          {
+            "constructor": "transcript",
+            "arguments": [
+              0
+            ]
+          },
+          {
+            "constructor": "index",
+            "arguments": []
+          },
+          {
+            "constructor": "indices",
+            "arguments": []
+          }
+        ],
+        "kind": "fixed",
+        "outputs": [
+          {
+            "constructor": "indices",
+            "arguments": []
+          },
+          {
+            "constructor": "transcript",
+            "arguments": [
+              0
+            ]
+          }
+        ]
+      },
+      "stage": "Construction"
+    },
+    {
+      "facets": [
+        {
+          "kind": "History",
+          "stateInput": 0,
+          "stateOutput": 2
+        }
+      ],
+      "name": "transcript.native.indexed.indices.search",
+      "parameters": {
+        "validator": "NativeIndexBlock",
+        "minimum": 4,
+        "maximum": 4
+      },
+      "requirements": [
+        {
+          "capability": "IndexBlockTranscript",
+          "arguments": [
+            0
+          ]
+        }
+      ],
+      "scope": [
+        {
+          "kind": "root",
+          "name": "T",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Transcript"
+          }
+        }
+      ],
+      "signature": {
+        "inputs": [
+          {
+            "constructor": "transcript",
+            "arguments": [
+              0
+            ]
+          },
+          {
+            "constructor": "indices",
+            "arguments": []
+          }
+        ],
+        "kind": "fixed",
+        "outputs": [
+          {
+            "constructor": "indices",
+            "arguments": []
+          },
+          {
+            "constructor": "index",
+            "arguments": []
+          },
+          {
+            "constructor": "transcript",
+            "arguments": [
+              0
+            ]
+          }
+        ]
+      },
+      "stage": "Construction"
+    },
+    {
+      "facets": [
+        {
+          "kind": "Sampling",
+          "domain": "IndexBlock",
+          "provider": "Transcript",
+          "stateInput": 0,
+          "stateOutput": 1,
+          "valueOutput": 0,
+          "boundInput": null
+        },
+        {
+          "kind": "History",
+          "stateInput": 0,
+          "stateOutput": 1
+        }
+      ],
+      "name": "transcript.native.indexed.indices",
+      "parameters": {
+        "validator": "NativeIndexBlock",
+        "minimum": 3,
+        "maximum": 3
+      },
+      "requirements": [
+        {
+          "capability": "IndexBlockTranscript",
+          "arguments": [
+            0
+          ]
+        }
+      ],
+      "scope": [
+        {
+          "kind": "root",
+          "name": "T",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Transcript"
+          }
+        }
+      ],
+      "signature": {
+        "inputs": [
+          {
+            "constructor": "transcript",
+            "arguments": [
+              0
+            ]
+          },
+          {
+            "constructor": "indices",
+            "arguments": []
+          }
+        ],
+        "kind": "fixed",
+        "outputs": [
+          {
+            "constructor": "indices",
+            "arguments": []
+          },
+          {
+            "constructor": "transcript",
+            "arguments": [
+              0
+            ]
           }
         ]
       },

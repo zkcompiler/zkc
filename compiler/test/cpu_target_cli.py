@@ -162,7 +162,7 @@ with case('Protocol IR proof driver receives the same target'):
     path = FIXTURES / 'mathematical/relation-r1cs.mlir'
     policy = OUT / 'policy.json'
     policy.write_text(json.dumps(['zkc.native-proof-policy/0', 'main', 'P', 'V',
-                                  '1', '', [], ['0', '1'], [], 'zkc.framed/0', '']))
+                                  '1', '', [], ['0', '1'], [], 'zkc.framed/0', '', []]))
     args = [compiler, 'protocol-proof', path, policy]
     baseline = commands.run(args)
     assert commands.run([*args, full]) == baseline

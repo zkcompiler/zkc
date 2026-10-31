@@ -1,0 +1,20 @@
+module sample;
+domain E = field("koala-bear.ext4-binomial3");
+fn yes() -> bool { return true; }
+protocol Blocks<N: nat, Q: nat> roles(P,V)(rounds: index @(P,V), coins: Random<E> @V)
+    -> (accepted: bool @V) {
+  for i in 0..rounds roles(P,V) max 3 {
+    let positions = coins.indices(N,Q);
+    let delivered = send V -> P(positions);
+    let echo = send P -> V(delivered);
+  }
+  let accepted @V = yes();
+  return (accepted = accepted);
+}
+proof Proof = Blocks<8,5> {
+  prover P;
+  verifier V;
+  public { rounds };
+  accept accepted;
+  construction fiat_shamir("hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0", coins);
+}

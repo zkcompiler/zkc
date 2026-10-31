@@ -841,6 +841,18 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                 "selected index domain must be a positive u64 natural",
                 op.span);
           query->bound = bound.dimension;
+          if (query->count) {
+            Type count(Type::Kind::Natural);
+            count.dimension = *query->count;
+            count.symbolic = !query->count->isClosed();
+            if (!closeType(count, bindings, op.span))
+              return false;
+            if (!protocol::uniformIndexBound(count.dimension.closedValue()))
+              return types.fail("source.service",
+                                "selected index count must be positive",
+                                op.span);
+            query->count = count.dimension;
+          }
         } else if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
           Type maximum(Type::Kind::Natural);
           maximum.dimension = repeat->maximum;

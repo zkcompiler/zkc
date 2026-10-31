@@ -321,6 +321,9 @@ impl CpuBackend {
         setups: crate::SetupRegistry,
         cpu: crate::CpuExecution,
     ) -> Result<Self> {
+        if policy.max_search_attempts > 1 << 24 {
+            return Err(crate::refused("search-attempt-limit"));
+        }
         Ok(Self {
             installation: crate::CpuInstallation::default(),
             cpu,
@@ -526,11 +529,13 @@ impl Backend for CpuBackend {
             || self
                 .service_support(invocation.port.contract, invocation.method)
                 .is_none()
-            || invocation.max_output_bytes < 512
+            || (invocation.method != "indices" && invocation.max_output_bytes < 512)
         {
             return Err(crate::refused("service-query-context"));
         }
-        self.core.policy.output(512, invocation.max_output_bytes)?;
+        if invocation.method != "indices" {
+            self.core.policy.output(512, invocation.max_output_bytes)?;
+        }
         let services = self
             .services
             .as_ref()
@@ -538,6 +543,13 @@ impl Backend for CpuBackend {
         match (invocation.method, arguments) {
             ("draw", []) => services.draw(&invocation.port.name),
             ("index", [Value::Index(bound)]) => services.index(&invocation.port.name, *bound),
+            ("indices", [Value::Index(bound), Value::Index(count)]) => services.indices(
+                &invocation.port.name,
+                *bound,
+                *count,
+                &self.core.policy,
+                invocation.max_output_bytes,
+            ),
             _ => Err(crate::refused("service-query-context")),
         }
         .map(|value| vec![value])

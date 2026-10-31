@@ -3,6 +3,7 @@ use super::*;
 use crate::execution::{Capacity, InputValue};
 use crate::files::read_regular;
 use serde_json::{Value as Json, json};
+use zkc_format::proof::MAX_PROOF_BYTES;
 type Result<T> = std::result::Result<T, String>;
 const INPUT_LIMIT: usize = 16 * 1024 * 1024;
 use crate::files::Outputs;

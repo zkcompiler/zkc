@@ -60,6 +60,11 @@ const SERVICES: &[(ServiceContract, &str, &str)] = &[
         "random.koala-bear.ext8-binomial3/0",
         "field:koala-bear.ext8-binomial3@plonky3.koala-bear.ext8-binomial3/0",
     ),
+    (
+        ServiceContract::RandomKoalaBearExt4,
+        "random.koala-bear.ext4-binomial3/0",
+        "field:koala-bear.ext4-binomial3@plonky3.koala-bear.ext4-binomial3/0",
+    ),
 ];
 struct Adapter {
     inner: CpuBackend,
@@ -330,16 +335,19 @@ fn index_program(contract: &str, inputs: serde_json::Value) -> Vec<u8> {
 
 #[test]
 fn index_queries_have_one_bound_and_refuse_invalid_bounds_before_consumption() {
-    let octic = SERVICES[3].1;
+    for &(service, contract, _) in &SERVICES[3..] {
+        check_index_queries(service, contract);
+    }
+}
+
+fn check_index_queries(service: ServiceContract, contract: &str) {
     let backend = native();
     let index = PhysicalType::parse("index@native.index/0").unwrap();
-    let support = backend
-        .service_support(ServiceContract::RandomExtensionField, "index")
-        .unwrap();
+    let support = backend.service_support(service, "index").unwrap();
     assert_eq!(support.signature.inputs, std::slice::from_ref(&index));
     assert_eq!(support.signature.outputs, [index]);
     zkc_runtime::vm::Program::decode(
-        &index_program(octic, json!(["n"])),
+        &index_program(contract, json!(["n"])),
         zkc_cpu::cpu_contracts(),
     )
     .and_then(|program| {
@@ -349,8 +357,8 @@ fn index_queries_have_one_bound_and_refuse_invalid_bounds_before_consumption() {
     .unwrap();
     for (contract, inputs, code) in [
         (SERVICES[0].1, json!(["n"]), ErrorCode::Type),
-        (octic, json!([]), ErrorCode::Signature),
-        (octic, json!(["n", "n"]), ErrorCode::Signature),
+        (contract, json!([]), ErrorCode::Signature),
+        (contract, json!(["n", "n"]), ErrorCode::Signature),
     ] {
         let error = zkc_runtime::vm::Program::decode(
             &index_program(contract, inputs),
@@ -365,14 +373,12 @@ fn index_queries_have_one_bound_and_refuse_invalid_bounds_before_consumption() {
     }
     for (bound, accepted) in [(8u64, true), (1, true), (6, false), (0, false)] {
         let registry = ServiceRegistry::new(Policy::default());
-        let root = registry
-            .issue_random_for("Alice", ServiceContract::RandomExtensionField, 3)
-            .unwrap();
+        let root = registry.issue_random_for("Alice", service, 3).unwrap();
         let backend = native()
             .with_services(registry.clone(), [("rng".into(), root.clone())].into())
             .unwrap();
         let admitted = zkc_runtime::vm::Program::decode(
-            &index_program(octic, json!(["n"])),
+            &index_program(contract, json!(["n"])),
             zkc_cpu::cpu_contracts(),
         )
         .and_then(|program| {

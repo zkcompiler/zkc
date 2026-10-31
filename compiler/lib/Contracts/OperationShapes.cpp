@@ -6,6 +6,7 @@
 #include "zkc/Contracts/Numerical.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 
 using namespace llvm;
 namespace zkc::protocol {
@@ -87,6 +88,24 @@ Error checkParametersImpl(StringRef key, llvm::ArrayRef<std::string> parameters,
     if (digest.size() != 64 || !all_of(digest, [](char c) {
           return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
         }))
+      return error("interactive-kernel-parameters");
+    return Error::success();
+  }
+  if (validator == ParameterValidator::NativeIndexBlock) {
+    if (auto e = checkNativeOrigin(parameters.front(), "query", "indices"))
+      return e;
+    SmallVector<uint64_t> values;
+    for (StringRef text : ArrayRef(parameters).drop_front()) {
+      uint64_t value;
+      if (text.empty() || (text.size() > 1 && text.front() == '0') ||
+          !all_of(text, [](char c) { return c >= '0' && c <= '9'; }) ||
+          text.getAsInteger(10, value))
+        return error("interactive-kernel-parameters");
+      values.push_back(value);
+    }
+    auto n = values[0], q = values[1];
+    if (!n || n > (uint64_t(1) << 63) || (n & (n - 1)) || !q || q > 1048576 ||
+        (values.size() == 3 && values[2] > 64))
       return error("interactive-kernel-parameters");
     return Error::success();
   }

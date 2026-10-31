@@ -297,6 +297,7 @@ def project(catalog):
                         "Field": "FieldSample",
                         "FieldVector": "VectorSample",
                         "BoundedIndex": "IndexSample",
+                        "IndexBlock": "IndexBlockSample",
                     }[f["domain"]],
                     str(f["boundInput"] if f["boundInput"] is not None else -1),
                 ]

@@ -147,6 +147,9 @@ sequence.length 0
 table.relayout 0
 transcript.native.indexed.challenge 1
 transcript.native.indexed.index 1
+transcript.native.indexed.indices 1
+transcript.native.indexed.indices.gated 1
+transcript.native.indexed.indices.search 1
 transcript.native.indexed.observe.data 1
 transcript.observe 1
 transcript.challenge 1

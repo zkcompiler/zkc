@@ -6,7 +6,7 @@ use super::super::{
 };
 use crate::{
     execution::{Capacity, InputSource},
-    host::io,
+    io,
 };
 use std::{
     collections::BTreeMap,
@@ -110,7 +110,7 @@ impl Documents {
         };
         self.decoder.decode(group, bytes, Some(&mut resolver))
     }
-    pub fn protect(&self, outputs: &mut crate::host::publication::Outputs) -> Result<(), String> {
+    pub fn protect(&self, outputs: &mut crate::io::publication::Outputs) -> Result<(), String> {
         for metadata in &self.files {
             outputs.protect_metadata(metadata)?;
         }

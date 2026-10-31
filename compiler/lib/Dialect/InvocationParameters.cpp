@@ -84,10 +84,34 @@ LogicalResult verifyParameters(llvm::function_ref<InFlightDiagnostic()> emit,
       !arity(profile, parameters.size()))
     return refuse();
   auto validator = profile.schema.validator;
+  if (validator == ParameterValidator::NativeIndexBlock) {
+    auto origin = dyn_cast<runtime::NativeOriginAttr>(parameters[0]);
+    if (!origin ||
+        failed(runtime::NativeOriginAttr::verify(
+            emit, origin.getEntry(), origin.getPath(), origin.getEvent())))
+      return refuse("interactive-native-origin");
+    auto query = dyn_cast<runtime::QueryOriginAttr>(origin.getEvent());
+    if (!query || query.getMethod() != "indices")
+      return refuse("interactive-native-origin");
+    SmallVector<uint64_t> values;
+    for (auto parameter : parameters.getValue().drop_front()) {
+      auto value = dyn_cast<IntegerAttr>(parameter);
+      if (!value || !value.getType().isUnsignedInteger(64))
+        return refuse();
+      values.push_back(value.getValue().getZExtValue());
+    }
+    auto n = values[0], q = values[1];
+    if (!n || n > (uint64_t(1) << 63) || (n & (n - 1)) || !q || q > 1048576 ||
+        (values.size() == 3 && values[2] > 64))
+      return refuse();
+    return success();
+  }
+
   for (Attribute parameter : parameters) {
     if (!parameter || parameter.getContext() != context)
       return refuse();
     switch (validator) {
+    case ParameterValidator::NativeIndexBlock:
     case ParameterValidator::None:
       return refuse();
     case ParameterValidator::FieldLiteral:
@@ -228,7 +252,8 @@ decodeInvocationParameters(StringRef contract, ArrayAttr arguments,
   if (failed(selected) || !arity(*selected, parameters.size()))
     return zkc::error("interactive-kernel-parameters");
   SmallVector<Attribute> attributes;
-  for (StringRef parameter : parameters) {
+  for (auto [position, parameterText] : llvm::enumerate(parameters)) {
+    StringRef parameter = parameterText;
     switch (selected->schema.validator) {
     case ParameterValidator::None:
       return zkc::error("interactive-kernel-parameters");
@@ -249,6 +274,18 @@ decodeInvocationParameters(StringRef contract, ArrayAttr arguments,
       attributes.push_back(*asset);
       break;
     }
+    case ParameterValidator::NativeIndexBlock:
+      if (position) {
+        uint64_t value;
+        if (parameter.empty() ||
+            (parameter.size() > 1 && parameter.front() == '0') ||
+            !all_of(parameter, isDigit) || parameter.getAsInteger(10, value))
+          return zkc::error("expected-natural");
+        attributes.push_back(IntegerAttr::get(
+            IntegerType::get(context, 64, IntegerType::Unsigned), value));
+        break;
+      }
+      [[fallthrough]];
     case ParameterValidator::NativeOrigin: {
       auto origin = decodeNativeOriginTemplate(parameter);
       if (!origin)

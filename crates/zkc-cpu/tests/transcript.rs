@@ -4,10 +4,11 @@ use common::*;
 use serde_json::{Value as Json, json};
 use zkc_cpu::Value;
 use zkc_cpu::*;
+use zkc_format::logical;
 use zkc_kernels::arkworks::bls12_381::Keys;
 use zkc_runtime::vm::Identity;
 use zkc_runtime::vm::Value as _;
-use zkc_runtime::{logical, vm::*};
+use zkc_runtime::vm::*;
 
 // Independently written fixture encoder; does not use the runtime logical codec.
 fn tree(v: &Json) -> Vec<u8> {

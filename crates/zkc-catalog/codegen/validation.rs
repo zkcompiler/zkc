@@ -249,6 +249,13 @@ impl<'a> Catalog<'a> {
             "ScatterIndices" => (1, None),
             "MatrixShape" => (2, Some(2)),
             "MatrixVector" => (3, Some(3)),
+            "NativeIndexBlock" => {
+                if string(&op["name"])? == "transcript.native.indexed.indices" {
+                    (3, Some(3))
+                } else {
+                    (4, Some(4))
+                }
+            }
             _ => (1, Some(1)),
         };
         let maximum = if schema["maximum"].is_null() {
@@ -365,6 +372,7 @@ impl<'a> Catalog<'a> {
                         match string(&f["domain"])? {
                             "Field" => "field",
                             "FieldVector" => "vector",
+                            "IndexBlock" => "indices",
                             _ => "index",
                         },
                     )?;

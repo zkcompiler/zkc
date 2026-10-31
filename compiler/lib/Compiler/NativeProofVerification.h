@@ -18,6 +18,9 @@ struct NativeTranscriptEvent {
   /// Present only for a child construction start, including an empty input
   /// list.
   std::optional<llvm::SmallVector<mlir::Type>> startInputs = std::nullopt;
+  std::optional<uint64_t> count = std::nullopt;
+  std::optional<unsigned> difficulty = std::nullopt;
+  std::string witnessSite = {};
 };
 llvm::Error verifyNativeEntrySelection(mlir::ModuleOp prepared,
                                        mlir::ModuleOp selected,

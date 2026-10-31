@@ -141,7 +141,7 @@ fn root(bases: &Value, publics: &Value, context: &str, backend: &CpuBackend) -> 
     use zkc_test_support::hex;
     // A bounded TEST root with explicit statement and configuration bytes;
     // The proof Host supplies the admitted source and descriptor in execution.
-    zkc_runtime::logical::encode_tree(&json!([
+    zkc_format::logical::encode_tree(&json!([
         "DLEQ-test-root",
         "source-fixture",
         "descriptor-fixture",

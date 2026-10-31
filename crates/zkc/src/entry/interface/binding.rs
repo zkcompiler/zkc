@@ -36,16 +36,10 @@ impl BoundInterface {
                 E::NativeBinding,
             )?;
             for ((_, ty), (_, actual)) in inputs.iter().zip(&entry.inputs) {
-                require(
-                    self.logical_type(ty) == Some(actual.logical()),
-                    E::NativeBinding,
-                )?;
+                require(*ty == actual.logical().spelling(), E::NativeBinding)?;
             }
             for ((_, ty), actual) in outputs.iter().zip(&entry.outputs) {
-                require(
-                    self.logical_type(ty) == Some(actual.logical()),
-                    E::NativeBinding,
-                )?;
+                require(*ty == actual.logical().spelling(), E::NativeBinding)?;
             }
             let services: Vec<_> = self.services(role).collect();
             require(services.len() == entry.services.len(), E::NativeBinding)?;
@@ -102,6 +96,9 @@ impl BoundInterface {
                 && native.acceptance == proof.acceptance
                 && native.suite == suite
                 && native.construction == proof.construction.as_deref().unwrap_or("")
+                // The current source interface has no gate-selection field.
+                // Gated deployments require the explicit whole-artifact API.
+                && native.gates.is_empty()
                 && native.format == proof.format
                 && native.services == services
                 && native.roles.len()
@@ -169,10 +166,7 @@ impl BoundInterface {
     ) -> Result<()> {
         require(expected.len() == actual.len(), E::NativeBinding)?;
         for ((index, ty), (at, actual)) in expected.iter().zip(actual) {
-            require(
-                *index == at && self.logical_type(ty) == Some(actual),
-                E::NativeBinding,
-            )?;
+            require(*index == at && *ty == actual.spelling(), E::NativeBinding)?;
         }
         Ok(())
     }

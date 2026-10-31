@@ -87,8 +87,8 @@ fn variant() -> (Value, NativeValue) {
 }
 
 fn seal(artifact: &mut Value) {
-    artifact[3] = json!(crate::host::inputs::hash(
-        &zkc_runtime::logical::encode_tree(&artifact[2]).unwrap(),
+    artifact[3] = json!(crate::io::bytes::hash(
+        &zkc_format::logical::encode_tree(&artifact[2]).unwrap(),
     ));
     artifact[5] = json!(digest(artifact[4].as_str().unwrap()));
 }
@@ -134,8 +134,8 @@ fn fixture(source: &Value, ty: &PhysicalType) -> (Value, Value) {
             ty.spelling()
         ]),
     );
-    let origin = crate::host::inputs::hex(
-        &zkc_runtime::logical::encode_tree(&json!([
+    let origin = crate::io::bytes::hex(
+        &zkc_format::logical::encode_tree(&json!([
             "zkc.native-origin-template/0",
             "main",
             [],
@@ -911,7 +911,7 @@ fn selected_public_positional_byte_transport_uses_the_admitted_selection() {
         let (_, artifact) = fixture(&source, &value.physical_type());
         let host = deployment(&artifact).unwrap();
         let encode = |value| {
-            crate::host::inputs::hex(
+            crate::io::bytes::hex(
                 PreparedData::from_value(value, Capacity::default())
                     .unwrap()
                     .canonical_bytes(),
@@ -931,7 +931,7 @@ fn selected_public_positional_byte_transport_uses_the_admitted_selection() {
                 "zkc.native-proof-inputs/0",
                 [["role00000000", "0", yes], ["role00000000", "2", selected]],
                 role,
-                crate::host::inputs::hex(b"selected public"),
+                crate::io::bytes::hex(b"selected public"),
                 [],
                 "0"
             ])

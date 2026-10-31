@@ -4,7 +4,7 @@ use crate::entry::outputs::FunctionResultEncoder;
 use crate::entry::{InvocationBinding, InvocationContext, ProofContext, RunContext};
 use crate::entry::{RoleInputs, SetupAuthority};
 use crate::files::Outputs;
-use crate::host::inputs::read_regular as read;
+use crate::io::bytes::read_regular as read;
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 use std::{
@@ -292,7 +292,7 @@ impl Invocations {
             return Ok(result);
         };
         result.document = Some(path.into());
-        let value = crate::host::document::read(
+        let value = crate::io::document::read(
             &read(path, files::MAX_REQUEST_BYTES)?,
             files::MAX_REQUEST_BYTES,
         )?;
@@ -376,7 +376,7 @@ impl Invocations {
                     if transcript_budget.is_some_and(|n| n > crate::entry::DEFAULT_DRAW_BUDGET) {
                         return Err("native-proof-budget".into());
                     }
-                    let context = crate::host::inputs::unhex(&json!(context))?;
+                    let context = crate::io::bytes::unhex(&json!(context))?;
                     (
                         authority,
                         setups,

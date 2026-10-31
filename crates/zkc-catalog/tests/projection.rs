@@ -478,3 +478,48 @@ fn physical_adapters_declare_erasure_and_no_mathematical_rewrite_facet() {
         assert_eq!(inputs.len(), 1);
     }
 }
+
+#[test]
+fn native_index_blocks_have_distinct_product_and_search_contracts() {
+    use zkc_catalog::{ParameterValidator, SamplingDomain};
+    let block = zkc_catalog::operation("transcript.native.indexed.indices").unwrap();
+    assert_eq!(
+        block.parameters.validator,
+        ParameterValidator::NativeIndexBlock
+    );
+    assert_eq!(block.parameters.minimum, 3);
+    assert!(block.facets.iter().any(|facet| matches!(
+        facet,
+        Facet::Sampling {
+            domain: SamplingDomain::IndexBlock,
+            bound_input: None,
+            ..
+        }
+    )));
+    for (name, successor) in [
+        ("transcript.native.indexed.indices.search", 2),
+        ("transcript.native.indexed.indices.gated", 1),
+    ] {
+        let op = zkc_catalog::operation(name).unwrap();
+        assert_eq!(op.parameters.minimum, 4);
+        assert!(
+            matches!(op.facets, [Facet::History { state_input: 0, state_output }] if *state_output == successor)
+        );
+    }
+    for (name, field, value) in [
+        ("transcript.native.indexed.indices", "minimum", json!(4)),
+        (
+            "transcript.native.indexed.indices.search",
+            "maximum",
+            json!(3),
+        ),
+    ] {
+        let mut invalid = source();
+        operation(&mut invalid, name)["parameters"][field] = value;
+        assert!(check(&invalid).is_err(), "{name}/{field}");
+    }
+    let mut scalar = source();
+    operation(&mut scalar, "transcript.native.indexed.indices")["facets"][0]["domain"] =
+        json!("BoundedIndex");
+    assert!(check(&scalar).is_err());
+}

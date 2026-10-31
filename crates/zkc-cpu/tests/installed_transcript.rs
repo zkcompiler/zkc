@@ -21,7 +21,7 @@ fn token(value: &Value) -> &Capability {
     token
 }
 fn root() -> Vec<u8> {
-    zkc_runtime::logical::encode_tree(&json!(["installed-transcript-fixture"])).unwrap()
+    zkc_format::logical::encode_tree(&json!(["installed-transcript-fixture"])).unwrap()
 }
 fn attributes(suite: Identity, message: bool) -> Vec<String> {
     let event = if message {
@@ -38,7 +38,7 @@ fn attributes(suite: Identity, message: bool) -> Vec<String> {
         ])
     };
     vec![zkc_test_support::hex(
-        &zkc_runtime::logical::encode_tree(&json!([
+        &zkc_format::logical::encode_tree(&json!([
             "zkc.native-origin-template/0",
             "main",
             [],
@@ -434,6 +434,7 @@ fn selected_installed_observations_preserve_canonical_bytes_successors_and_repea
         Identity::Spongefish080KeccakFr64Be,
         Identity::HashChainKeccak256Fr64Be,
         Identity::HashChainKeccak256KoalaBearExt8,
+        Identity::HashChainKeccak256KoalaBearExt4,
     ] {
         for (default, selected_type) in samples() {
             let bytes = codec.encode_native_value(&default).unwrap();

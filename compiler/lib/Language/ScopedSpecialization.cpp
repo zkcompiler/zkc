@@ -676,7 +676,8 @@ class SpecializationCheck {
                      action.owner == value.owner;
             else if constexpr (std::is_same_v<T, ServiceQuery>) {
               if (action.service.index != value.service.index ||
-                  bool(action.bound) != bool(value.bound))
+                  bool(action.bound) != bool(value.bound) ||
+                  bool(action.count) != bool(value.count))
                 return false;
               if (!action.bound)
                 return true;
@@ -684,7 +685,15 @@ class SpecializationCheck {
               term.dimension = *action.bound;
               term.symbolic = !term.dimension.isClosed();
               auto bound = type(term, subst, op.span);
-              return bound && bound->dimension == *value.bound;
+              if (!bound || bound->dimension != *value.bound)
+                return false;
+              if (action.count) {
+                term.dimension = *action.count;
+                term.symbolic = !term.dimension.isClosed();
+                auto count = type(term, subst, op.span);
+                return count && count->dimension == *value.count;
+              }
+              return true;
             } else if constexpr (std::is_same_v<T, ProtocolCompletion>)
               return map(action.condition).index == value.condition.index &&
                      action.owner == value.owner &&

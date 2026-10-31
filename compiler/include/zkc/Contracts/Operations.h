@@ -57,7 +57,7 @@ admitComputationContract(const BindingApplication &,
                          llvm::ArrayRef<std::string> parameters = {});
 
 enum class RandomnessProvider { Entropy, Transcript };
-enum class SampleDomain { Field, FieldVector, BoundedIndex };
+enum class SampleDomain { Field, FieldVector, BoundedIndex, IndexBlock };
 
 /// Port roles for an installed sampling operation. These facts describe
 /// structural dataflow, not independence, uniformity, or Fiat-Shamir security.

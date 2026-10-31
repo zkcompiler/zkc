@@ -1,11 +1,11 @@
 //! Independent setup-selector admission over checked logical schemas.
 use super::{InterfaceError as E, Result, identifier, raw, require, schemas::Schemas, validate};
 use std::collections::BTreeSet;
-use zkc_runtime::vm::Type;
 
 #[derive(Debug)]
 pub(in crate::entry) struct Setup {
     pub name: String,
+    #[cfg(feature = "cpu")]
     pub native_name: String,
     pub inputs: BTreeSet<usize>,
     pub verifier_keys: BTreeSet<usize>,
@@ -25,12 +25,12 @@ pub(super) fn check(
             if needs_setup {
                 expected.insert(*native as usize);
             }
-            if kind == Type::ProverKey
+            if kind == "prover_key"
                 && let raw::Job::Proof { verifier, .. } = &document.job
             {
                 require(!port.roles.contains(verifier), E::Selection)?;
             }
-            if kind == Type::VerifierKey {
+            if kind == "verifier_key" {
                 require(
                     port.schema.kind == raw::Kind::Builtin && port.native.len() == 1,
                     E::Selection,
@@ -45,7 +45,7 @@ pub(super) fn check(
     let mut names = BTreeSet::new();
     let mut covered = BTreeSet::new();
     let mut result = Vec::new();
-    for (index, slot) in document.setups.iter().enumerate() {
+    for slot in &document.setups {
         schemas.charge(1 + slot.name.len() + slot.inputs.len())?;
         require(
             identifier(&slot.name) && names.insert(&slot.name) && !slot.inputs.is_empty(),
@@ -53,7 +53,8 @@ pub(super) fn check(
         )?;
         let mut setup = Setup {
             name: slot.name.clone(),
-            native_name: crate::source_names::native_setup_name(index as u32),
+            #[cfg(feature = "cpu")]
+            native_name: crate::source_names::native_setup_name(result.len() as u32),
             inputs: BTreeSet::new(),
             verifier_keys: BTreeSet::new(),
         };

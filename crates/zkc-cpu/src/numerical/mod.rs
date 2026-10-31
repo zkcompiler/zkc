@@ -21,6 +21,35 @@ impl Call {
             }),
         }
     }
+    /// A private retained search nonce shares this call's work and memory.
+    /// Its allowance supplements the already checked public result ceiling.
+    pub(crate) fn with_search_nonce(policy: &Policy, available: usize) -> Result<Self> {
+        let outputs = available
+            .min(policy.max_value_bytes)
+            .checked_add(8)
+            .ok_or_else(|| exhausted("output-bytes"))?;
+        Ok(Self {
+            scope: numerical::Call::new(numerical::Limits {
+                work: policy.max_numerical_work,
+                memory: policy.max_numerical_bytes,
+                outputs,
+            }),
+        })
+    }
+    pub(crate) fn search_nonce(
+        &self,
+        input: &zkc_kernels::transcript::search::NonceInput<'_>,
+        attempts: u64,
+        difficulty: u8,
+    ) -> Result<Option<u64>> {
+        use zkc_kernels::transcript::search::{Error, ZeroBits, search_nonce};
+        search_nonce(&self.scope, input, 0, attempts, ZeroBits::LowLe(difficulty))
+            .outcome
+            .map_err(|error| match error {
+                Error::Numerical(error) => failure(error),
+                _ => crate::refused("index-block-search"),
+            })
+    }
     pub(crate) fn work(&self, units: u64) -> Result<()> {
         self.scope.work(units).map_err(failure)
     }
@@ -105,7 +134,7 @@ impl<T> Output<'_, T> {
     pub(crate) fn as_mut_slice(&mut self) -> &mut [T] {
         self.0.as_mut_slice()
     }
-    pub(crate) fn finish(self, freeze: impl FnOnce(Vec<T>) -> Result<Value>) -> Result<Value> {
+    pub(crate) fn finish<V>(self, freeze: impl FnOnce(Vec<T>) -> Result<V>) -> Result<V> {
         self.0.finish(freeze)
     }
 }

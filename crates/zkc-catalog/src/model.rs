@@ -149,6 +149,7 @@ pub enum ParameterValidator {
     ScatterIndices,
     NumericalExpression,
     NativeOrigin,
+    NativeIndexBlock,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -170,6 +171,7 @@ pub enum SamplingDomain {
     Field,
     FieldVector,
     BoundedIndex,
+    IndexBlock,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

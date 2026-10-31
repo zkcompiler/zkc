@@ -2754,7 +2754,9 @@ dependencies = [
  "tempfile",
  "toml",
  "unicode-normalization",
+ "zkc-catalog",
  "zkc-cpu",
+ "zkc-format",
  "zkc-kernels",
  "zkc-runtime",
  "zkc-test-support",
@@ -2797,6 +2799,7 @@ dependencies = [
  "tempfile",
  "zkc",
  "zkc-cpu",
+ "zkc-format",
  "zkc-kernels",
  "zkc-runtime",
  "zkc-test-support",
@@ -2825,8 +2828,19 @@ dependencies = [
  "sha3 0.12.0",
  "shake",
  "spongefish 0.8.0",
+ "zkc-format",
  "zkc-kernels",
  "zkc-runtime",
+ "zkc-test-support",
+]
+
+[[package]]
+name = "zkc-format"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
  "zkc-test-support",
 ]
 
@@ -2879,6 +2893,7 @@ dependencies = [
  "serde_json",
  "sha2 0.11.0",
  "zkc-catalog",
+ "zkc-format",
  "zkc-test-support",
 ]
 
@@ -2909,6 +2924,7 @@ dependencies = [
  "spongefish 0.8.0",
  "zkc",
  "zkc-cpu",
+ "zkc-format",
  "zkc-kernels",
  "zkc-runtime",
  "zkc-test-support",

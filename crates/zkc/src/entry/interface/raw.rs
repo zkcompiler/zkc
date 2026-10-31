@@ -61,19 +61,19 @@ pub(in crate::entry) enum Job {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub(in crate::entry) enum Construction {
     Authored {
-        format: zkc_runtime::host::wire::ProofFormat,
+        format: zkc_format::proof::ProofFormat,
     },
     Derived {
         symbol: String,
         #[serde(deserialize_with = "present_optional")]
         suite: Option<String>,
         services: Vec<u32>,
-        format: zkc_runtime::host::wire::ProofFormat,
+        format: zkc_format::proof::ProofFormat,
     },
     FiatShamir {
         suite: String,
         services: Vec<u32>,
-        format: zkc_runtime::host::wire::ProofFormat,
+        format: zkc_format::proof::ProofFormat,
     },
 }
 #[derive(Debug, Deserialize)]

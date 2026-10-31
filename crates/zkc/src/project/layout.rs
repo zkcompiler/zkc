@@ -72,7 +72,7 @@ fn portable_name(entry: &str, suffix: &str) -> Result<String> {
         format!(
             "{}-{}",
             protocol.replace("::", "."),
-            crate::host::inputs::hex(&Sha256::digest(entry.as_bytes()))
+            crate::io::bytes::hex(&Sha256::digest(entry.as_bytes()))
         )
     };
     let name = format!("{stem}{suffix}");

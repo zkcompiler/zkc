@@ -146,7 +146,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     let [field, length] = binding.arguments.as_slice() else {
         return None;
     };
-    let length = zkc_runtime::logical::natural_index(length).ok()?;
+    let length = zkc_format::logical::natural_index(length).ok()?;
     let fixed = match binding.physical_arguments.as_slice() {
         [] => PhysicalType::default_for(
             LogicalType::fixed_vector(LogicalType::parse(&format!("field:{field}")).ok()?, length)

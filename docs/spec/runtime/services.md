@@ -8,15 +8,16 @@ It defines a native execution contract. The [mathematical source profile](../lan
 
 `!protocol.service_ref<Contract>` is a reference to one managed service root.
 Installed contracts are `random.bls12-381.fr/0`, `random.bn254.fr/0`,
-`random.ristretto255.scalar/0`, `random.koala-bear.ext8-binomial3/0`,
+`random.ristretto255.scalar/0`, `random.koala-bear.ext4-binomial3/0`,
+`random.koala-bear.ext8-binomial3/0`,
 `random.baby-bear.ext4-binomial11/0` and
 `random.goldilocks.ext2-binomial7/0`.
-These six RNG distributions/providers are the complete registered service
+These seven RNG distributions/providers are the complete registered service
 surface. Arbitrary user-defined request/reply families require a future extension.
 Each has method `draw`, no arguments, and one result in its named field under
 that field's default representation. A contract whose field has the catalog
 fact `IndexRandomness` also has method `index`; this holds for the KoalaBear
-octic, BabyBear quartic and Goldilocks quadratic services. The base fields have no installed random
+quartic and octic, BabyBear quartic and Goldilocks quadratic services. The base fields have no installed random
 service. The contract fixes the distribution signature; it does not authenticate
 a root or prove an independence law. A reference is an entry input with exactly one owner. Several inputs may
 refer to the same root. Copying a reference preserves identity and does not copy,
@@ -30,6 +31,26 @@ The admitted operations are:
 %n = "data.index"() {value=32 : ui64} : () -> ui64
 %i = "protocol.query"(%octic, %n) {method="index", owner="Alice", site="position"}
   : (!protocol.service_ref<"random.koala-bear.ext8-binomial3/0">, ui64) -> ui64
+```
+
+The four residue-field roots also declare `indices(N,Q) -> indices` under the
+separate `IndexBlockRandomness` fact. N and Q are positive static u64 constants.
+The ideal block is the ordered product UniformIndex(N)^Q, retaining duplicates.
+The installed CPU service admits power-of-two N through 2^63 and Q through 2^20,
+subject to the configured collection/output ceilings. It reads one fresh provider
+word per sample and consumes one service request, not Q root transitions.
+Whole-output reservation and argument checks precede root consumption. Service
+admission reserves a conservative maximum block reply through the existing
+provider-support interface; smaller replies settle their actual retained size.
+Native transcript blocks have their own explicit installation and
+[byte contract](../formats/native-index-block.md). Scalar index support alone
+does not install either block consumer.
+
+For example, in a protocol body whose `coins` service belongs to V:
+
+```zkc
+let positions = coins.indices(16, 4);
+let delivered = send V -> P(positions);
 ```
 
 `draw` draws one field element. `index` draws one sample of UniformIndex(N),
@@ -74,7 +95,8 @@ construction's pinned older permutation or byte schedule.
 References are used directly by queries. They cannot be selected, restricted,
 passed to mathematical helpers, exchanged, returned, or bound as statement data.
 Static [protocol applications](../ir/composition.md) pass existing references with exact contracts and mapped owners. `draw` has no data arguments and exactly one field reply;
-`index` has its static bound and exactly one index reply. Other distributions,
+`index` has its static bound and exactly one index reply; `indices` has a static
+bound/count and one ordered indices reply. Other distributions,
 dynamic bounds,
 reference results, ownership transfer,
 asynchronous providers and other service contracts require explicit extensions.

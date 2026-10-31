@@ -1,8 +1,8 @@
 //! One source-owned ordering for argument adapters and native ABI comparison.
 //! This view contains no native artifact facts and confers no setup authority.
+use super::syntax::Leaf;
 use super::{Interface, InterfaceError as E, Result, raw, validate};
 use std::collections::{BTreeMap, BTreeSet};
-use zkc_runtime::vm::{LogicalType, Type};
 
 #[derive(Debug)]
 pub(in crate::entry) struct RolePorts {
@@ -16,16 +16,19 @@ pub(in crate::entry) struct RolePorts {
 pub(in crate::entry) struct ProofPorts {
     pub prover: usize,
     pub verifier: usize,
+    #[cfg(feature = "cpu")]
     pub acceptance: usize,
+    #[cfg(any(feature = "cpu", test))]
     pub completion: Option<usize>,
     pub suite: Option<String>,
+    #[cfg(feature = "cpu")]
     pub construction: Option<String>,
-    pub format: zkc_runtime::host::wire::ProofFormat,
+    pub format: zkc_format::proof::ProofFormat,
     pub replaced_services: Vec<usize>,
 }
 #[derive(Clone, Copy, Debug, Default)]
 struct Input {
-    key: Option<Type>,
+    key: Option<&'static str>,
     /// Offset and length in the native public argument vector, including units.
     public: Option<(usize, usize)>,
 }
@@ -40,7 +43,7 @@ pub(super) struct Ports {
 #[derive(Clone, Copy)]
 pub(in crate::entry) struct InputPort<'a> {
     pub definition: &'a raw::Port,
-    pub key: Option<Type>,
+    pub key: Option<&'static str>,
     pub public: Option<(usize, usize)>,
 }
 impl std::ops::Deref for InputPort<'_> {
@@ -51,7 +54,7 @@ impl std::ops::Deref for InputPort<'_> {
 }
 impl InputPort<'_> {
     pub fn named(&self) -> bool {
-        self.key != Some(Type::VerifierKey)
+        self.key != Some("verifier_key")
     }
     pub fn private(&self) -> bool {
         self.named() && self.public.is_none()
@@ -61,7 +64,7 @@ impl Ports {
     pub fn new(
         document: &raw::Interface,
         selected: usize,
-        types: &BTreeMap<String, LogicalType>,
+        types: &BTreeMap<String, Leaf>,
         setups: &[super::Setup],
     ) -> Result<Self> {
         let protocol = &document.protocols[selected];
@@ -97,8 +100,8 @@ impl Ports {
                 && port.native.len() == 1
                 && slots.contains(&(port.native[0] as usize))
             {
-                let kind = types[&port.schema.leaves[0]].kind();
-                matches!(kind, Type::VerifierKey | Type::ProverKey).then_some(kind)
+                let kind = types[&port.schema.leaves[0]].head;
+                matches!(kind, "verifier_key" | "prover_key").then_some(kind)
             } else {
                 None
             };
@@ -125,13 +128,13 @@ impl Ports {
                 for &i in public {
                     let i = i as usize;
                     // Public statement data cannot import private key custody.
-                    super::require(inputs[i].key != Some(Type::ProverKey), E::Selection)?;
+                    super::require(inputs[i].key != Some("prover_key"), E::Selection)?;
                     let len = protocol.inputs[i].native.len();
                     inputs[i].public = Some((offset, len));
                     offset += len;
                     public_ports.push(i);
                 }
-                let (suite, replaced_services, format, selected) = match construction.as_ref() {
+                let (suite, replaced_services, format, _selected) = match construction.as_ref() {
                     raw::Construction::Authored { format } => (None, Vec::new(), *format, None),
                     raw::Construction::FiatShamir {
                         suite,
@@ -155,16 +158,21 @@ impl Ports {
                         Some(symbol.clone()),
                     ),
                 };
+                let _acceptance = validate::select(protocol, acceptance)?.1[0] as usize;
+                let _completion = completion
+                    .as_ref()
+                    .map(|s| validate::select(protocol, s).map(|(_, n)| n[0] as usize))
+                    .transpose()?;
                 Some(ProofPorts {
                     prover: indices[prover.as_str()],
                     verifier: indices[verifier.as_str()],
-                    acceptance: validate::select(protocol, acceptance)?.1[0] as usize,
-                    completion: completion
-                        .as_ref()
-                        .map(|s| validate::select(protocol, s).map(|(_, n)| n[0] as usize))
-                        .transpose()?,
+                    #[cfg(feature = "cpu")]
+                    acceptance: _acceptance,
+                    #[cfg(any(feature = "cpu", test))]
+                    completion: _completion,
                     suite,
-                    construction: selected,
+                    #[cfg(feature = "cpu")]
+                    construction: _selected,
                     format,
                     replaced_services,
                 })
@@ -194,6 +202,7 @@ impl Interface {
             .iter()
             .map(|role| (role.native_name.as_str(), role.name.as_str()))
     }
+    #[cfg(feature = "cpu")]
     pub fn proof_role(&self, operation: crate::entry::ProofOperation) -> Option<&str> {
         let proof = self.proof()?;
         let index = match operation {
@@ -241,7 +250,7 @@ impl Interface {
         role: &'a RolePorts,
     ) -> impl Iterator<Item = InputPort<'a>> {
         self.input_ports(role)
-            .filter(|p| !self.is_source_data(*p) && p.key != Some(Type::VerifierKey))
+            .filter(|p| !self.is_source_data(*p) && p.key != Some("verifier_key"))
     }
     pub(in crate::entry) fn named_inputs<'a>(
         &'a self,

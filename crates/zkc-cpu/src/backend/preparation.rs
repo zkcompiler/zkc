@@ -150,6 +150,9 @@ mod tests {
         backend.core.policy = policy;
         backend.core.policy.max_numerical_bytes -= 1;
         assert!(!backend.replay(before, before));
+        backend.core.policy = policy;
+        backend.core.policy.max_search_attempts -= 1;
+        assert!(!backend.replay(before, before));
     }
 
     #[test]

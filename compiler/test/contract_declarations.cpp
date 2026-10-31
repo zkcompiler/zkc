@@ -1,6 +1,7 @@
 #include "support/ContractWitnesses.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
+#include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -198,6 +199,79 @@ int main() {
             draw.scope.terms[1].parent == 0 &&
             type(draw.outputs[0], "field", {1}),
         "transcript challenge projection lost");
+
+  // Product-law blocks retain one logical indices result and static N/Q.
+  const auto &block = signature("transcript.native.indexed.indices");
+  check(block.inputs.size() == 2 && block.outputs.size() == 2 &&
+            type(block.inputs[1], "indices", {}) &&
+            type(block.outputs[0], "indices", {}),
+        "block collapsed into a scalar index");
+  requires("transcript.native.indexed.indices", "IndexBlockTranscript");
+  for (StringRef operation : {"transcript.native.indexed.indices.search",
+                              "transcript.native.indexed.indices.gated"}) {
+    const auto *facets = operationContracts(operation);
+    check(facets && facets->history && !facets->sampling &&
+              !facets->publicReplay,
+          "gated construction acquired ideal sampling or public preparation");
+  }
+  auto origin = encodeNativeOriginTemplate(
+      "entry", {},
+      {"query", "source", "positions", "input_0",
+       "random.koala-bear.ext4-binomial3/0", "indices", "V"});
+  check(bool(origin), "block origin formation");
+  if (origin) {
+    for (StringRef operation : {"transcript.native.indexed.indices",
+                                "transcript.native.indexed.indices.search",
+                                "transcript.native.indexed.indices.gated"}) {
+      std::vector<std::string> parameters{*origin, "9223372036854775808",
+                                          "1048576"};
+      if (!operation.ends_with(".indices"))
+        parameters.push_back("64");
+      success(checkParameters(operation, parameters),
+              "maximum block parameters");
+      auto invalid = parameters;
+      for (auto [slot, value] : {std::pair{1u, "0"},
+                                 {1u, "3"},
+                                 {1u, "18446744073709551615"},
+                                 {1u, "08"},
+                                 {2u, "0"},
+                                 {2u, "1048577"}}) {
+        invalid = parameters;
+        invalid[slot] = value;
+        refusal(checkParameters(operation, invalid),
+                "interactive-kernel-parameters");
+      }
+      if (parameters.size() == 4) {
+        invalid = parameters;
+        invalid[3] = "65";
+        refusal(checkParameters(operation, invalid),
+                "interactive-kernel-parameters");
+        invalid[3] = "0";
+        success(checkParameters(operation, invalid),
+                "canonical zero difficulty");
+      }
+      invalid = parameters;
+      invalid.pop_back();
+      refusal(checkParameters(operation, invalid),
+              "interactive-kernel-parameters");
+      invalid = parameters;
+      invalid.push_back("0");
+      refusal(checkParameters(operation, invalid),
+              "interactive-kernel-parameters");
+      auto scalar = encodeNativeOriginTemplate(
+          "entry", {},
+          {"query", "source", "positions", "input_0",
+           "random.koala-bear.ext4-binomial3/0", "index", "V"});
+      if (scalar) {
+        invalid = parameters;
+        invalid[0] = *scalar;
+        refusal(checkParameters(operation, invalid),
+                "interactive-native-origin");
+      } else
+        consumeError(scalar.takeError());
+    }
+  } else
+    consumeError(origin.takeError());
 
   // Stage and export policy are separate from common carrier formation.
   check(authoringStage("poly.univariate_evaluate") == AuthoringStage::Source &&

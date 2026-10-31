@@ -35,6 +35,7 @@ impl EntryError {
             path: None,
         }
     }
+    #[cfg(feature = "cpu")]
     pub(crate) fn input(error: super::inputs::InputError) -> Self {
         Self {
             phase: EntryPhase::Request,
@@ -61,6 +62,7 @@ impl From<EntryError> for String {
         error.code
     }
 }
+#[cfg(feature = "cpu")]
 pub(super) type EntryResult<T> = Result<T, EntryError>;
 
 impl From<super::PackageError> for EntryError {

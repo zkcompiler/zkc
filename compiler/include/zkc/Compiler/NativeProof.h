@@ -23,6 +23,8 @@ struct NativeProofPolicy {
   std::vector<unsigned> services;
   std::vector<unsigned> publicInputs;
   std::vector<std::pair<std::string, std::string>> draws;
+  /// Explicit selected block occurrences; absence selects an ungated block.
+  std::vector<std::pair<std::string, unsigned>> gates;
 };
 llvm::Expected<NativeProofPolicy> parseNativeProofPolicy(llvm::StringRef text);
 llvm::json::Value encodeNativeProofPolicy(const NativeProofPolicy &policy);
@@ -49,9 +51,10 @@ struct NativeProofConstruction {
 llvm::Expected<NativeProofConstruction>
 constructNativeProof(mlir::ModuleOp source, const NativeProofPolicy &policy,
                      MathematicalSelectionPolicy mathematicalSelection = {});
-/// Construct with an independent projected-to-constructed postcondition, then
-/// compare the entire supplied candidate, including SSA and retained records,
-/// ignoring locations. Source policy/occurrence admission remains a premise.
+/// Independently check the supplied candidate against the projected source,
+/// then construct and compare the entire candidate, including SSA and retained
+/// records, ignoring locations. Source policy/occurrence admission remains a
+/// premise.
 llvm::Error
 checkNativeProof(mlir::ModuleOp source, mlir::ModuleOp candidate,
                  const NativeProofPolicy &policy,

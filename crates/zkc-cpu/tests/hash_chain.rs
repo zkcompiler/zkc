@@ -8,11 +8,12 @@ mod support;
 use p3_field::{BasedVectorSpace, PrimeField32};
 use serde_json::{Value as Json, json};
 use support::*;
-use zkc_cpu::{Capability, KoalaBear, KoalaBearExt8, Policy, Value};
+use zkc_cpu::{Capability, KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{Backend, Identity, OperationBinding, Program};
 
 const BLS: Identity = Identity::HashChainKeccak256Fr64Be;
+const QUARTIC: Identity = Identity::HashChainKeccak256KoalaBearExt4;
 const OCTIC: Identity = Identity::HashChainKeccak256KoalaBearExt8;
 
 fn vectors() -> Json {
@@ -23,6 +24,9 @@ fn vectors() -> Json {
     .unwrap()
 }
 fn vector(suite: Identity) -> Json {
+    if suite == QUARTIC {
+        return serde_json::from_str(include_str!("common/quartic-hash-chain.json")).unwrap();
+    }
     vectors()["suites"]
         .as_array()
         .unwrap()
@@ -42,6 +46,9 @@ fn root() -> Vec<u8> {
     ]))
 }
 fn contract(suite: Identity) -> &'static str {
+    if suite == QUARTIC {
+        return "random.koala-bear.ext4-binomial3/0";
+    }
     if suite == OCTIC {
         "random.koala-bear.ext8-binomial3/0"
     } else {
@@ -83,6 +90,9 @@ fn attributes(suite: Identity, kind: &str) -> Vec<String> {
     vec![zkc_test_support::hex(&origin(suite, kind, true))]
 }
 fn seven(suite: Identity) -> Value {
+    if suite == QUARTIC {
+        return Value::KoalaBearExt4Field(KoalaBearExt4::from(KoalaBear::new(7)));
+    }
     if suite == OCTIC {
         Value::KoalaBearExt8Field(KoalaBearExt8::from(KoalaBear::new(7)))
     } else {
@@ -90,6 +100,9 @@ fn seven(suite: Identity) -> Value {
     }
 }
 fn payload(suite: Identity) -> &'static str {
+    if suite == QUARTIC {
+        return "field:koala-bear.ext4-binomial3";
+    }
     if suite == OCTIC {
         "field:koala-bear.ext8-binomial3"
     } else {
@@ -142,7 +155,7 @@ fn program_for(suite: Identity) -> Vec<u8> {
     ];
     let mut outputs = challenge.signature().unwrap().outputs;
     let mut returns = vec!["c".to_string(), "t2".to_string()];
-    if suite == OCTIC {
+    if suite.has_index_transcript() {
         let index = binding_for(suite, "transcript.native.indexed.index");
         let signature = index.signature().unwrap();
         inputs.push(signature.inputs[1].clone());
@@ -165,13 +178,16 @@ fn program_for(suite: Identity) -> Vec<u8> {
     program(&bindings, &inputs, ops, &outputs, &returns)
 }
 fn coordinates(value: &Value) -> Vec<u32> {
-    let Value::KoalaBearExt8Field(x) = value else {
-        panic!("octic challenge")
+    let coefficients = match value {
+        Value::KoalaBearExt8Field(x) => {
+            <KoalaBearExt8 as BasedVectorSpace<KoalaBear>>::as_basis_coefficients_slice(x)
+        }
+        Value::KoalaBearExt4Field(x) => {
+            <KoalaBearExt4 as BasedVectorSpace<KoalaBear>>::as_basis_coefficients_slice(x)
+        }
+        _ => panic!("extension challenge"),
     };
-    <KoalaBearExt8 as BasedVectorSpace<KoalaBear>>::as_basis_coefficients_slice(x)
-        .iter()
-        .map(|c| c.as_canonical_u32())
-        .collect()
+    coefficients.iter().map(|c| c.as_canonical_u32()).collect()
 }
 
 #[test]
@@ -188,7 +204,7 @@ fn reference_keccak_and_fixture_inputs_agree_with_these_encodings() {
         "4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45"
     );
     let b = backend(Policy::default());
-    for suite in [BLS, OCTIC] {
+    for suite in [BLS, OCTIC, QUARTIC] {
         let v = vector(suite);
         assert_eq!(v["root"], zkc_test_support::hex(&root()));
         assert_eq!(
@@ -227,19 +243,22 @@ fn native_kernels_reproduce_the_reference_answers() {
         assert_eq!(b.observe(&handle).unwrap().generation, 2);
     }
 
-    let octic = vector(OCTIC);
-    let p = program_for(OCTIC);
-    let t = b.issue_transcript_for(OCTIC, domain(), 3, &root()).unwrap();
-    let (out, b) = run_program(b, &p, vec![t, seven(OCTIC), Value::Index(256)]);
-    let out = out.unwrap();
-    let expected: Vec<u32> = serde_json::from_value(octic["challenge"].clone()).unwrap();
-    assert_eq!(coordinates(&out[0]), expected);
-    let Value::Index(position) = out[1] else {
-        panic!("UniformIndex(256)")
-    };
-    assert_eq!(position, octic["index"].as_u64().unwrap());
-    assert_eq!(token(&out[2]).identity(), OCTIC);
-    assert_eq!(b.active_frames(), 0);
+    for suite in [OCTIC, QUARTIC] {
+        let octic = vector(suite);
+        let p = program_for(suite);
+        let t = b.issue_transcript_for(suite, domain(), 3, &root()).unwrap();
+        let (out, next) = run_program(b, &p, vec![t, seven(suite), Value::Index(256)]);
+        b = next;
+        let out = out.unwrap();
+        let expected: Vec<u32> = serde_json::from_value(octic["challenge"].clone()).unwrap();
+        assert_eq!(coordinates(&out[0]), expected);
+        let Value::Index(position) = out[1] else {
+            panic!("UniformIndex(256)")
+        };
+        assert_eq!(position, octic["index"].as_u64().unwrap());
+        assert_eq!(token(&out[2]).identity(), suite);
+        assert_eq!(b.active_frames(), 0);
+    }
 }
 
 #[test]
@@ -271,6 +290,11 @@ fn nominal_identity_provider_and_index_capability() {
     for (suite, field, provider) in [
         (BLS, Identity::Bls12381Fr, "arkworks"),
         (OCTIC, Identity::KoalaBearExt8, "plonky3"),
+        (
+            Identity::HashChainKeccak256KoalaBearExt4,
+            Identity::KoalaBearExt4,
+            "plonky3",
+        ),
     ] {
         assert_eq!(Identity::parse(suite.name()).unwrap(), suite);
         assert_eq!(suite.transcript(), Some(suite));
@@ -283,18 +307,19 @@ fn nominal_identity_provider_and_index_capability() {
         );
     }
     assert!(OCTIC.has_index_transcript());
+    assert!(QUARTIC.has_index_transcript());
     assert!(!BLS.has_index_transcript());
     // Another byte hash is another installed instance, not a parameter.
     for name in [
         "hash-chain.sha256.bls12-381.fr64be/0",
-        "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",
+        "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/1",
         "hash-chain.keccak256.koala-bear/0",
         "hash-chain.keccak256.ristretto255.scalar64le/0",
     ] {
         assert!(Identity::parse(name).is_err(), "{name}");
     }
     let b = backend(Policy::default());
-    for suite in [BLS, OCTIC] {
+    for suite in [BLS, OCTIC, QUARTIC] {
         for contract in [
             "transcript.native.indexed.challenge",
             "transcript.native.indexed.observe.data",
@@ -317,11 +342,13 @@ fn nominal_identity_provider_and_index_capability() {
     // UniformIndex transitions exist only where the challenge field has
     // index randomness.
     for contract in ["transcript.native.indexed.index", "transcript.index"] {
-        let valid = binding_for(OCTIC, contract);
-        assert_eq!(
-            b.binding_signature(&valid),
-            Some(valid.signature().unwrap())
-        );
+        for suite in [OCTIC, QUARTIC] {
+            let valid = binding_for(suite, contract);
+            assert_eq!(
+                b.binding_signature(&valid),
+                Some(valid.signature().unwrap())
+            );
+        }
         let refused = binding_for(BLS, contract);
         assert!(refused.signature().is_err(), "{contract}");
         let mut plonky = refused.clone();
@@ -342,7 +369,7 @@ fn refusals_leave_no_successor() {
         r.push(0);
         r
     }] {
-        for suite in [BLS, OCTIC] {
+        for suite in [BLS, OCTIC, QUARTIC] {
             let err = b
                 .issue_transcript_for(suite, domain(), 2, &bad)
                 .unwrap_err();
@@ -415,4 +442,52 @@ fn the_octic_challenge_is_an_exact_coordinate_draw() {
     let expected: Vec<u32> = serde_json::from_value(octic["challenge"].clone()).unwrap();
     assert_eq!(words, expected);
     assert!(words.iter().all(|w| *w < 2_130_706_433));
+}
+
+#[test]
+fn quartic_transcript_refusals_preserve_consumption_and_separate_octic_authority() {
+    for budget in [2, 3] {
+        let mut b = backend(Policy::default());
+        for bound in [0, 3, 255] {
+            let t = b
+                .issue_transcript_for(QUARTIC, domain(), 3, &root())
+                .unwrap();
+            let handle = token(&t).clone();
+            let (out, next) = run_program(
+                b,
+                &program_for(QUARTIC),
+                vec![t, seven(QUARTIC), Value::Index(bound)],
+            );
+            b = next;
+            assert_eq!(out.unwrap_err(), "refused:query-bound");
+            assert_eq!(b.observe(&handle).unwrap().generation, 2);
+        }
+        let t = b
+            .issue_transcript_for(QUARTIC, domain(), budget, &root())
+            .unwrap();
+        let handle = token(&t).clone();
+        let (out, b) = run_program(
+            b,
+            &program_for(QUARTIC),
+            vec![t, seven(QUARTIC), Value::Index(256)],
+        );
+        assert_eq!(out.is_ok(), budget == 3);
+        assert_eq!(b.observe(&handle).unwrap().generation, 3);
+        assert_eq!(b.active_frames(), 0);
+    }
+    let mut b = backend(Policy::default());
+    let wrong = b.issue_transcript_for(OCTIC, domain(), 3, &root()).unwrap();
+    let program = Program::decode(&program_for(QUARTIC), zkc_cpu::cpu_contracts()).unwrap();
+    program.check_installation(&b).unwrap();
+    assert!(
+        Runner::new(
+            &program,
+            "main",
+            "P",
+            "session",
+            b,
+            vec![wrong, seven(QUARTIC), Value::Index(256)]
+        )
+        .is_err()
+    );
 }

@@ -943,7 +943,7 @@ std::string installedCatalogIdentity() {
     rows.push_back(std::move(value));
   }
   for (const auto &service : protocol::randomServices)
-    for (StringRef method : {"draw", "index"})
+    for (StringRef method : {"draw", "index", "indices"})
       if (auto signature = protocol::serviceMethod(service.contract, method)) {
         std::string value;
         for (StringRef field :

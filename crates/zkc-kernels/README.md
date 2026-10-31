@@ -21,6 +21,7 @@ publication. The VM and kernels do not depend on each other.
 | `plonky3` | Registered prime/extension and binary fields, transforms, selected hashes and Merkle commitments |
 | `dalek` | Ristretto255 scalar/group arithmetic and checked Edwards25519 points |
 | `interop` | Exact pinned external constructions and their source provenance |
+| `transcript` | Pure Keccak hash-chain state and byte framing, without live capability authority |
 | `cpu` | Shared application-owned workers for typed numerical phases |
 
 Concrete types are imported from their provider and mathematical family. There
@@ -60,7 +61,7 @@ selection.
 
 ## CPU execution
 
-The KoalaBear base/octic Keccak Merkle adapter uses the pinned hasher's SIMD
+The KoalaBear base/quartic/octic Keccak Merkle adapter uses the pinned hasher's SIMD
 lanes for independent leaves and parent nodes. Canonical leaf bytes, node tags,
 roots and paths are unchanged. Optional encoded staging is bounded to 32 KiB
 per task; wide rows or failed reservations use scalar streaming. This is
@@ -142,3 +143,22 @@ rejects each coordinate at or above the exact modulus. Decimal naturals embed
 in coordinate zero, preserving every u64 bit; they are not packed extension
 representations. Montgomery words are available only for explicitly supported
 31-bit bases. Field support alone installs no hash or commitment profile.
+
+`plonky3::sampling::residue` consumes caller-supplied 64-byte blocks using bounded
+coordinate rejection. It preserves ascending basis order and discards unused
+bytes after completing an element. The caller owns entropy or transcript state;
+the sampler does not select or install a randomness suite.
+
+`transcript::KeccakChain` implements the exact version-zero hash-chain framing
+and request-length binding. Its clonable snapshots are numerical state only.
+The backend admits binding roots, retains live transcript custody and publishes
+successors. A pure helper's availability does not install a suite, a resource
+operation or a proof construction.
+
+`transcript::search::search_nonce` searches a checked finite interval using a
+borrowed chain snapshot and explicit witness/request bytes. It binds the final
+answer length, evaluates the witness absorption and request block separately,
+and returns work/frontier receipts on success and refusal. Managed scratch is
+bounded independently of the interval and answer length. The caller must recheck
+live custody and the adopted request before publishing a successor; search
+installs no protocol-level grinding policy.

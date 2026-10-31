@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
   require(bool(source), "source parse");
   auto original = print(*source);
   auto policy = parseNativeProofPolicy(
-      R"(["zkc.native-proof-policy/0", "main", "Alice", "Bob", "0", "merlin3.bls12-381.fr64be/0", ["4"], ["0", "2"], [["draw_challenge", "challenge"]], "zkc.framed/0", ""])");
+      R"(["zkc.native-proof-policy/0", "main", "Alice", "Bob", "0", "merlin3.bls12-381.fr64be/0", ["4"], ["0", "2"], [["draw_challenge", "challenge"]], "zkc.framed/0", "", []])");
   if (!policy) {
     errs() << toString(policy.takeError());
     return 1;

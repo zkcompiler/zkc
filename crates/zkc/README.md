@@ -4,6 +4,16 @@ Applications depend on `zkc` and execute authenticated packages through reusable
 Hosts. Generated Rust bindings call the SDK directly. Already compiled packages
 need neither the compiler nor the `zkc` executable at execution time.
 
+Native proof admission consumes one current version-zero schema: a twelve-field
+policy with explicit per-occurrence gates and an eight-field descriptor with
+construction-owned witness records. Gates bind the selected source query,
+bound, count and difficulty; witness records bind the executable index slot and
+codec. The complete descriptor, public statement and caller context enter the
+existing invocation binding. Regenerate affected packages when this schema changes.
+Explicit gate selection uses the pinned `NativeDeployment` API. Source-bound
+`ProofEntry` admission requires empty gates until its source interface represents
+that selection.
+
 ## Compile and generate bindings
 
 Source compilation requires an installed `zkc-compile`; command-line preparation
@@ -127,12 +137,21 @@ application.
 
 ## Memory and optional adapters
 
-Default features include `parallel`, `files` and `project`. With
-`default-features = false`, the SDK retains package admission, typed calls,
-bounded memory documents and result encoding, with inline numerical execution.
-`files` adds bounded file I/O and confined references; `project` adds manifests
-and the compiler subprocess service and implies `files`. Neither adapter is
-required to execute an authenticated package.
+Default features are `cpu`, `project` and `parallel`. With
+`default-features = false`, the SDK retains package capture, source-interface
+inspection and input schemas without linking the VM, CPU backend or numerical
+kernels. Capture and metadata checks do not admit a program for execution.
+
+| Feature | Adds |
+|---|---|
+| `files` | Bounded file I/O and atomic artifact publication |
+| `project` | Manifests, source capture and the compiler subprocess service; implies `files` |
+| `cpu` | Native admission, typed execution, proof and joint Hosts, memory input decoding and result encoding |
+| `parallel` | Bounded CPU workers; implies `cpu` |
+
+Use `features = ["cpu"]` with defaults disabled for in-memory inline execution.
+Add `files` for confined file references; project compilation is optional when
+an authenticated package is already available.
 
 `entry::memory::ProofCallOptions` and `ProofEntry::preflight_memory_call` use the
 same schema decoder, setup authority and proof Host as file calls. An explicit
@@ -291,8 +310,10 @@ of their returned package uses the same admission APIs as precompiled inputs.
 | `execution` | CPU contexts, capacity, immutable prepared data and authenticated prover material |
 | `run`, `proof` | Native deployments, setup/public authority and typed execution reports |
 
-The CLI owns argument grammar and command reports. Portable scheduling and
-framing live in `zkc-runtime::host`; native adaptation lives in `zkc-cpu`.
+The CLI owns argument grammar and command reports. Canonical trees, proof framing
+and immutable binding serialization live in `zkc-format`. Scheduling, live
+reservations and metered transport live in `zkc-runtime::host`; native adaptation
+lives in `zkc-cpu`.
 The [generated consumer](../../common/tests/protocol/test_rust_sdk.py) and
 [staged SDK consumer](../../common/tests/check_rust_sdk.py) build independent
 normal-feature applications and execute outside the checkout without compiler
@@ -301,8 +322,9 @@ or CLI on `PATH`. See [test selection](../../common/tests/README.md#selecting-ch
 ## Portable execution
 
 The SDK's default `parallel` feature forwards bounded CPU execution to the
-native backend and kernels. A dependency with `default-features = false`
-executes numerical phases inline and accepts only `CpuExecution::new(1)`.
+native backend and kernels. A dependency with `default-features = false,
+features = ["cpu"]` executes numerical phases inline and accepts only
+`CpuExecution::new(1)`.
 Cargo features are additive; all consumers in that build must preserve the
 nonparallel selection. The [browser adapter](../zkc-web/README.md) supplies a
 small in-memory proof API and browser entropy without changing package bytes

@@ -181,9 +181,13 @@ impl NativeDomain {
             (Identity::Bls12381Fr, Commitment | Proof | ProverKey | VerifierKey | OpeningState) => {
                 (Identity::MultilinearKzgBls12381, R::Pcs)
             }
-            (Identity::KoalaBearExt8 | Identity::BabyBearExt4 | Identity::GoldilocksExt2, Rng) => {
-                (self.field, R::Resource)
-            }
+            (
+                Identity::KoalaBearExt8
+                | Identity::KoalaBearExt4
+                | Identity::BabyBearExt4
+                | Identity::GoldilocksExt2,
+                Rng,
+            ) => (self.field, R::Resource),
             (Identity::Bls12381Fr | Identity::Ristretto255Scalar, Rng | Nonce) => {
                 (self.field, R::Resource)
             }
@@ -220,6 +224,11 @@ pub struct NativeTranscript {
     pub provider: &'static str,
 }
 pub const TRANSCRIPTS: &[NativeTranscript] = &[
+    NativeTranscript {
+        suite: Identity::HashChainKeccak256KoalaBearExt4,
+        domain: KOALA_BEAR_EXT4,
+        provider: "plonky3",
+    },
     NativeTranscript {
         suite: Identity::Merlin3BabyBearExt4,
         domain: BABY_BEAR_EXT4,

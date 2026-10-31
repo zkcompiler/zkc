@@ -100,8 +100,8 @@ contract change, not the most recent documentation-only registration.
 | Layout requests and authored site selection | [Layout syntax](language/layout-syntax.md), [site defaults](language/layout-execution.md) | Frontend / Language | Lossless syntax and native projection → written occurrences and pending obligations | Partial: source association retained; typed request generation and independent checking pending | Selects existing meanings; adds no assurance stage | [#186](https://github.com/zkcompiler/zkc/pull/186) |
 | Retired proposal `zkc.lean-interface/0` | [Shared interfaces plan](../roadmap.md#shared-interfaces-before-implementation) | Frontend / Language | Existing declarations and bound requests → frontend resolution | Retired proposal: extend existing transports; no parallel format is admitted | None | — |
 | Restricted logical aggregates; version unassigned | [Logical aggregate plan](../roadmap.md#shared-interfaces-before-implementation) | IR / Protocol | Future frontend claim views → Protocol formation and Lean reader | Designed: typed field paths and role components; ordinary data/codec boundaries continue to exclude handles | None | — |
-| Block/gated request wire; version unassigned | [Block requests and gating](../roadmap.md#block-requests-and-gating), [current transcript bytes](ir/construction.md) | IR / Construction | Future construction emission → runtime kernel and Lean simulation | Designed: request bytes, refusal state and accounting require joint review before installation | No registered gate premise | — |
-| Installed transcript and Merkle suites | [Transcripts](ir/construction.md), [Merkle schemes](domains/oracles.md), [services](runtime/services.md) | Runtime / Providers | [Backend registry](../../crates/zkc-cpu/src/backend/registry.rs) → Contracts selection, native invocation, Lean installed vocabulary | Partial: installed native instances are explicit; flagship quartic Keccak and Lean coverage pending | Kernel interpretation remains explicit | [#174](https://github.com/zkcompiler/zkc/pull/174) |
+| Native index blocks and gated requests, version 0 | [Request bytes](formats/native-index-block.md), [construction](ir/construction.md#native-index-blocks) | IR / Construction | Native construction → independent actual-body and Rust readers, CPU bounded search/check, SDK transport | Native compiler/runtime integration; independent Lean adaptation remains open | No registered gate premise or Fiat–Shamir theorem | — |
+| Installed transcript and Merkle suites | [Transcripts](ir/construction.md), [Merkle schemes](domains/oracles.md), [services](runtime/services.md) | Runtime / Providers | [Backend registry](../../crates/zkc-cpu/src/backend/registry.rs) → Contracts selection, native invocation, Lean installed vocabulary | Native quartic Keccak rows, randomness and hash-chain transcript installed; independent Lean coverage remains separate | Kernel interpretation remains explicit | [#174](https://github.com/zkcompiler/zkc/pull/174) |
 
 For designed rows, the linked roadmap is a delivery contract, not a wire
 specification. Their owner supplies a repository specification and code paths
@@ -241,9 +241,14 @@ not pass it.
   execution and data codecs. Oracle execution, realization-stage/link registration,
   independent realization-record interpretation and its simulation remain open.
   Unknown profiles remain refused.
-- Runtime installs quartic Keccak rows and the agreed grinding operation, and
-  validates actual request bytes, authority, resource accounting and failure
-  successors. An installed signature alone does not prove its implementation.
+- Runtime installs quartic Keccak rows, its randomness service and hash-chain
+  transcript. A compiled row-opening proof has native/browser byte agreement;
+  this does not establish the shared FRI/STARK client. Explicit native index-block
+  policies emit bounded prover search, a construction-owned witness slot and the
+  verifier gate check. Independent readers check actual helper/transport order;
+  CPU checks bytes, authority, accounting and failure successors. Source proof
+  declarations do not yet configure gating, and Lean interpretation remains open.
+  An installed signature alone does not prove its implementation.
 
 Report these four results separately against the same source and configuration.
 The same logical client under ideal, Poseidon2-Merkle and Keccak-Merkle choices

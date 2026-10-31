@@ -269,8 +269,12 @@ directories instead of the default pair. Each fixture can also provide
 `inputs.json` (an array of `{name, path}`). Paths identify material files read
 by the Node test driver. The selected native example must consume the same
 optional files for cross-verification. Additional fixtures use ordinary
-admission, binding and proof calls; witness-specific negative controls remain
-with the existing Schnorr and FRI fixtures.
+admission, binding and proof calls. The benchmark fixture generator's
+`--case quartic-keccak` builds a row-opening proof over the exact KoalaBear
+quartic Keccak scheme and hash-chain transcript; select it with
+`ZKC_BROWSER_FIXTURES=quartic-keccak`. This fixture checks every field coordinate,
+exact native/browser proof bytes, and the same negative controls as Schnorr and
+FRI. It is an engine/codec check, not a full STARK or security result.
 
 Worker envelope and trap-reporting controls also run without Wasm or a browser:
 

@@ -339,6 +339,10 @@ const DomainCatalog &installedDomains() {
         "hash-chain.keccak256.bls12-381.fr64be/0";
     const std::string chainExtensionTranscript =
         "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0";
+    const std::string chainQuarticTranscript =
+        "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0";
+    const std::string rowQuartic =
+        "rows.merkle-keccak256.koala-bear.ext4-binomial3/0";
     const std::string rowBase = "rows.merkle-keccak256.koala-bear/0";
     const std::string rowExtension =
         "rows.merkle-keccak256.koala-bear.ext8-binomial3/0";
@@ -365,9 +369,12 @@ const DomainCatalog &installedDomains() {
         // These sampling profiles explicitly support UniformIndex. Neither
         // field arithmetic nor a draw-only random service implies this fact.
         if (field.identity == "koala-bear.ext8-binomial3" ||
+            field.identity == "koala-bear.ext4-binomial3" ||
             field.identity == "baby-bear.ext4-binomial11" ||
-            field.identity == "goldilocks.ext2-binomial7")
+            field.identity == "goldilocks.ext2-binomial7") {
           capabilities.push_back("IndexRandomness");
+          capabilities.push_back("IndexBlockRandomness");
+        }
         if (!randomServiceContract(field.identity).empty()) {
           logicalTypes.push_back({"rng", field.identity.str()});
           representations.push_back(
@@ -458,7 +465,13 @@ const DomainCatalog &installedDomains() {
          {chainExtensionTranscript,
           "Transcript",
           {{"ChallengeField", extension}},
-          {"FieldTranscript", "IndexTranscript", "Transcript"}},
+          {"FieldTranscript", "IndexTranscript", "IndexBlockTranscript",
+           "Transcript"}},
+         {chainQuarticTranscript,
+          "Transcript",
+          {{"ChallengeField", quartic}},
+          {"FieldTranscript", "IndexTranscript", "IndexBlockTranscript",
+           "Transcript"}},
          {chainTranscript,
           "Transcript",
           {{"ChallengeField", field}},
@@ -467,6 +480,10 @@ const DomainCatalog &installedDomains() {
          {rowExtension,
           "Commitment",
           {{"ValueField", extension}},
+          {"VectorCommitment"}},
+         {rowQuartic,
+          "Commitment",
+          {{"ValueField", quartic}},
           {"VectorCommitment"}},
          {poseidonRows,
           "Commitment",
@@ -590,6 +607,7 @@ const DomainCatalog &installedDomains() {
          {"transcript", extensionTranscript},
          {"transcript", chainTranscript},
          {"transcript", chainExtensionTranscript},
+         {"transcript", chainQuarticTranscript},
          {"commitment", pcs},
          {"proof", pcs},
          {"prover_key", pcs},
@@ -601,10 +619,15 @@ const DomainCatalog &installedDomains() {
          {"commitments", rowBase},
          {"opening_states", rowBase},
          {"commitment", rowExtension},
+         {"commitment", rowQuartic},
          {"proof", rowExtension},
+         {"proof", rowQuartic},
          {"opening_state", rowExtension},
+         {"opening_state", rowQuartic},
          {"commitments", rowExtension},
+         {"commitments", rowQuartic},
          {"opening_states", rowExtension},
+         {"opening_states", rowQuartic},
          {"commitment", poseidonRows},
          {"proof", poseidonRows},
          {"opening_state", poseidonRows},
@@ -622,10 +645,16 @@ const DomainCatalog &installedDomains() {
           rowBase},
          {"zkcv.commitment.rows-merkle-keccak256.koala-bear.ext8-binomial3/0",
           "commitment", rowExtension},
+         {"zkcv.commitment.rows-merkle-keccak256.koala-bear.ext4-binomial3/0",
+          "commitment", rowQuartic},
          {"zkcv.proof.rows-merkle-keccak256.koala-bear.ext8-binomial3/0",
           "proof", rowExtension},
+         {"zkcv.proof.rows-merkle-keccak256.koala-bear.ext4-binomial3/0",
+          "proof", rowQuartic},
          {"zkcv.commitments.rows-merkle-keccak256.koala-bear.ext8-binomial3/0",
           "commitments", rowExtension},
+         {"zkcv.commitments.rows-merkle-keccak256.koala-bear.ext4-binomial3/0",
+          "commitments", rowQuartic},
          {"zkcv.commitment.rows-merkle-poseidon2-16.koala-bear/0", "commitment",
           poseidonRows},
          {"zkcv.proof.rows-merkle-poseidon2-16.koala-bear/0", "proof",
@@ -710,10 +739,15 @@ const DomainCatalog &installedDomains() {
          {"plonky3.merkle-roots/0", "commitments", rowBase, true, ""},
          {"plonky3.merkle-states/0", "opening_states", rowBase, true, ""},
          {"plonky3.merkle-root/0", "commitment", rowExtension, true, ""},
+         {"plonky3.merkle-root/0", "commitment", rowQuartic, true, ""},
          {"plonky3.merkle-path/0", "proof", rowExtension, true, ""},
+         {"plonky3.merkle-path/0", "proof", rowQuartic, true, ""},
          {"plonky3.merkle-state/0", "opening_state", rowExtension, true, ""},
+         {"plonky3.merkle-state/0", "opening_state", rowQuartic, true, ""},
          {"plonky3.merkle-roots/0", "commitments", rowExtension, true, ""},
+         {"plonky3.merkle-roots/0", "commitments", rowQuartic, true, ""},
          {"plonky3.merkle-states/0", "opening_states", rowExtension, true, ""},
+         {"plonky3.merkle-states/0", "opening_states", rowQuartic, true, ""},
          {"plonky3.merkle-digest/0", "commitment", poseidonRows, true, ""},
          {"plonky3.merkle-proof/0", "proof", poseidonRows, true, ""},
          {"plonky3.merkle-tree/0", "opening_state", poseidonRows, true, ""},
@@ -798,6 +832,7 @@ const DomainCatalog &installedDomains() {
          {"host.resource/0", "transcript", spongefish, true, ""},
          {"host.resource/0", "transcript", chainTranscript, true, ""},
          {"host.resource/0", "transcript", chainExtensionTranscript, true, ""},
+         {"host.resource/0", "transcript", chainQuarticTranscript, true, ""},
          {"arkworks.multilinear-pcs/0", "commitment", pcs, true, ""},
          {"arkworks.multilinear-pcs/0", "proof", pcs, true, ""},
          {"arkworks.multilinear-pcs/0", "prover_key", pcs, true, ""},
@@ -825,8 +860,10 @@ const DomainCatalog &installedDomains() {
          {extensionTranscript, "plonky3"},
          {chainTranscript, "arkworks"},
          {chainExtensionTranscript, "plonky3"},
+         {chainQuarticTranscript, "plonky3"},
          {rowBase, "plonky3"},
          {rowExtension, "plonky3"},
+         {rowQuartic, "plonky3"},
          {poseidonRows, "plonky3"},
          {poseidonQuarticRows, "plonky3"}});
     if (!result)

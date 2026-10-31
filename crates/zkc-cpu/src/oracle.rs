@@ -12,31 +12,90 @@ use zkc_runtime::vm::{
     OperationSignature, PhysicalType, Type,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Domain {
-    Base,
-    Extension,
+// Each nominal Keccak carrier uses the same typed tree and resource policy.
+macro_rules! domains {
+    ($($domain:ident => ($identity:ident, $field:ident, $element:ty, $vector:ident, $root:literal, $path:literal)),+ $(,)?) => {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum Domain { $($domain),+ }
+        impl Domain {
+            pub fn identity(self) -> Identity {
+                match self { $(Self::$domain => Identity::$identity),+ }
+            }
+            pub(crate) fn from_identity(identity: Identity) -> Option<Self> {
+                match identity { $(Identity::$identity => Some(Self::$domain),)+ _ => None }
+            }
+            fn field(self) -> Identity {
+                match self { $(Self::$domain => Identity::$field),+ }
+            }
+            pub(crate) fn tag(self, kind: Type) -> Option<u8> {
+                match (self, kind) {
+                    $((Self::$domain, Type::Commitment) => Some($root),
+                      (Self::$domain, Type::Proof) => Some($path),)+
+                    _ => None,
+                }
+            }
+        }
+        #[derive(Clone, Debug)]
+        pub enum State { $($domain(Arc<tree::State<$element>>)),+ }
+        impl State {
+            pub fn domain(&self) -> Domain {
+                match self { $(Self::$domain(_) => Domain::$domain),+ }
+            }
+            pub fn retained_bytes(&self) -> Result<usize> {
+                match self { $(Self::$domain(s) => s.shape().retained_bytes::<$element>()),+ }
+                    .map_err(failure)
+            }
+            /// The committed table and tree, shared by every handle to this state.
+            pub(crate) fn backing(&self) -> Result<Backing> {
+                let bytes = self.retained_bytes()?;
+                Ok(match self { $(Self::$domain(s) => Backing::of(s, bytes)),+ })
+            }
+            /// Bytes one opening reads: the selected row and its authentication path.
+            pub(crate) fn opening_bytes(&self) -> Result<usize> {
+                let (shape, element) = match self {
+                    $(Self::$domain(s) => (s.shape(), std::mem::size_of::<$element>())),+
+                };
+                size(shape.width(), element)?
+                    .checked_add(size(shape.depth(), 32)?)
+                    .ok_or_else(|| exhausted("size-overflow"))
+            }
+        }
+        fn commit_state(domain: Domain, values: &Value, width: usize, policy: &Policy, available: usize) -> Result<Vec<Value>> {
+            match (domain, values) {
+                $((Domain::$domain, Value::$vector(values)) => {
+                    let shape = shape(width, values.len(), policy)?;
+                    let bytes = shape.retained_bytes::<$element>().map_err(failure)?;
+                    policy.output(bytes.checked_add(512).ok_or_else(|| exhausted("size-overflow"))?, available)?;
+                    let (root, state) = tree::commit(values.to_vec(), shape, policy.max_value_bytes).map_err(failure)?;
+                    Ok(vec![Value::OracleRoot(domain, root), Value::OracleState(State::$domain(Arc::new(state)))])
+                },)+
+                _ => Err(refused("oracle-operands")),
+            }
+        }
+        fn open_state(state: &State, at: usize, policy: &Policy, available: usize) -> Result<Vec<Value>> {
+            policy.output(state.opening_bytes()?, available)?;
+            Ok(match state {
+                $(State::$domain(s) => {
+                    let (row, path) = s.open(at).map_err(failure)?;
+                    vec![Value::$vector(row.into()), Value::OraclePath(state.domain(), path.into())]
+                }),+
+            })
+        }
+        #[allow(clippy::too_many_arguments)]
+        fn check_row(domain: Domain, root: Digest, width: usize, height: usize, at: usize, row: &Value, path: &[Digest], policy: &Policy) -> Result<bool> {
+            match (domain, row) {
+                $((Domain::$domain, Value::$vector(row)) => check(root, width, height, at, row, path, policy),)+
+                _ => Err(refused("oracle-operands")),
+            }
+        }
+    };
+}
+domains! {
+    Base => (MerkleKoalaBear, KoalaBear, crate::KoalaBear, KoalaBearVector, 33, 34),
+    Extension => (MerkleKoalaBearExt8, KoalaBearExt8, crate::KoalaBearExt8, KoalaBearExt8Vector, 35, 36),
+    Quartic => (MerkleKoalaBearExt4, KoalaBearExt4, crate::KoalaBearExt4, KoalaBearExt4Vector, 79, 80),
 }
 impl Domain {
-    pub fn identity(self) -> Identity {
-        match self {
-            Self::Base => Identity::MerkleKoalaBear,
-            Self::Extension => Identity::MerkleKoalaBearExt8,
-        }
-    }
-    fn from_identity(identity: Identity) -> Option<Self> {
-        match identity {
-            Identity::MerkleKoalaBear => Some(Self::Base),
-            Identity::MerkleKoalaBearExt8 => Some(Self::Extension),
-            _ => None,
-        }
-    }
-    fn field(self) -> Identity {
-        match self {
-            Self::Base => Identity::KoalaBear,
-            Self::Extension => Identity::KoalaBearExt8,
-        }
-    }
     fn physical(self, kind: Type) -> Option<PhysicalType> {
         let identity = match kind {
             Type::Index | Type::Bool => Identity::None,
@@ -44,45 +103,6 @@ impl Domain {
             _ => self.identity(),
         };
         PhysicalType::default_for(LogicalType::new(kind, identity).ok()?).ok()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum State {
-    Base(Arc<tree::State<crate::KoalaBear>>),
-    Extension(Arc<tree::State<crate::KoalaBearExt8>>),
-}
-impl State {
-    pub fn domain(&self) -> Domain {
-        match self {
-            Self::Base(_) => Domain::Base,
-            Self::Extension(_) => Domain::Extension,
-        }
-    }
-    pub fn retained_bytes(&self) -> Result<usize> {
-        match self {
-            Self::Base(s) => s.shape().retained_bytes::<crate::KoalaBear>(),
-            Self::Extension(s) => s.shape().retained_bytes::<crate::KoalaBearExt8>(),
-        }
-        .map_err(failure)
-    }
-    /// The committed table and tree, shared by every handle to this state.
-    pub(crate) fn backing(&self) -> Result<Backing> {
-        let bytes = self.retained_bytes()?;
-        Ok(match self {
-            Self::Base(s) => Backing::of(s, bytes),
-            Self::Extension(s) => Backing::of(s, bytes),
-        })
-    }
-    /// Bytes one opening reads: the selected row and its authentication path.
-    pub(crate) fn opening_bytes(&self) -> Result<usize> {
-        let (shape, element) = match self {
-            Self::Base(s) => (s.shape(), std::mem::size_of::<crate::KoalaBear>()),
-            Self::Extension(s) => (s.shape(), std::mem::size_of::<crate::KoalaBearExt8>()),
-        };
-        size(shape.width(), element)?
-            .checked_add(size(shape.depth(), 32)?)
-            .ok_or_else(|| exhausted("size-overflow"))
     }
 }
 
@@ -233,72 +253,11 @@ pub(crate) fn apply(
         .ok_or_else(|| refused("oracle-domain"))?;
     let available = invocation.max_output_bytes;
     let outputs = match (name, args) {
-        ("oracle.commit", [Value::KoalaBearVector(values), width]) if domain == Domain::Base => {
-            let s = shape(index(width)?, values.len(), policy)?;
-            let bytes = s.retained_bytes::<crate::KoalaBear>().map_err(failure)?;
-            policy.output(
-                bytes
-                    .checked_add(512)
-                    .ok_or_else(|| exhausted("size-overflow"))?,
-                available,
-            )?;
-            let (root, state) =
-                tree::commit(values.to_vec(), s, policy.max_value_bytes).map_err(failure)?;
-            vec![
-                Value::OracleRoot(domain, root),
-                Value::OracleState(State::Base(Arc::new(state))),
-            ]
-        }
-        ("oracle.commit", [Value::KoalaBearExt8Vector(values), width])
-            if domain == Domain::Extension =>
-        {
-            let s = shape(index(width)?, values.len(), policy)?;
-            let bytes = s
-                .retained_bytes::<crate::KoalaBearExt8>()
-                .map_err(failure)?;
-            policy.output(
-                bytes
-                    .checked_add(512)
-                    .ok_or_else(|| exhausted("size-overflow"))?,
-                available,
-            )?;
-            let (root, state) =
-                tree::commit(values.to_vec(), s, policy.max_value_bytes).map_err(failure)?;
-            vec![
-                Value::OracleRoot(domain, root),
-                Value::OracleState(State::Extension(Arc::new(state))),
-            ]
+        ("oracle.commit", [values, width]) => {
+            commit_state(domain, values, index(width)?, policy, available)?
         }
         ("oracle.open", [Value::OracleState(state), at]) if state.domain() == domain => {
-            let at = index(at)?;
-            match state {
-                State::Base(s) => {
-                    policy.output(
-                        size(s.shape().width(), 4)?
-                            .checked_add(size(s.shape().depth(), 32)?)
-                            .ok_or_else(|| exhausted("size-overflow"))?,
-                        available,
-                    )?;
-                    let (row, path) = s.open(at).map_err(failure)?;
-                    vec![
-                        Value::KoalaBearVector(row.into()),
-                        Value::OraclePath(domain, path.into()),
-                    ]
-                }
-                State::Extension(s) => {
-                    policy.output(
-                        size(s.shape().width(), 32)?
-                            .checked_add(size(s.shape().depth(), 32)?)
-                            .ok_or_else(|| exhausted("size-overflow"))?,
-                        available,
-                    )?;
-                    let (row, path) = s.open(at).map_err(failure)?;
-                    vec![
-                        Value::KoalaBearExt8Vector(row.into()),
-                        Value::OraclePath(domain, path.into()),
-                    ]
-                }
-            }
+            open_state(state, index(at)?, policy, available)?
         }
         (
             "oracle.check",
@@ -313,15 +272,7 @@ pub(crate) fn apply(
         ) if *d == domain && *p == domain => {
             policy.output(512, available)?;
             let (width, height, at) = (index(width)?, index(height)?, index(at)?);
-            let valid = match row {
-                Value::KoalaBearVector(row) if domain == Domain::Base => {
-                    check(*root, width, height, at, row, path, policy)?
-                }
-                Value::KoalaBearExt8Vector(row) if domain == Domain::Extension => {
-                    check(*root, width, height, at, row, path, policy)?
-                }
-                _ => return Err(refused("oracle-operands")),
-            };
+            let valid = check_row(domain, *root, width, height, at, row, path, policy)?;
             vec![Value::Bool(valid)]
         }
         ("commitments.empty", []) => {
@@ -394,15 +345,6 @@ pub(crate) fn apply(
     Ok(outputs)
 }
 
-fn tag(domain: Domain, kind: Type) -> Option<u8> {
-    match (domain, kind) {
-        (Domain::Base, Type::Commitment) => Some(33),
-        (Domain::Base, Type::Proof) => Some(34),
-        (Domain::Extension, Type::Commitment) => Some(35),
-        (Domain::Extension, Type::Proof) => Some(36),
-        _ => None,
-    }
-}
 pub(crate) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> {
     let (domain, kind, hashes): (_, _, &[Digest]) = match value {
         Value::OracleRoot(d, root) => (*d, Type::Commitment, std::slice::from_ref(root)),
@@ -420,7 +362,7 @@ pub(crate) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
         policy.wire(bytes)?;
         let mut out = crate::operations::arithmetic::reserve(bytes)?;
         out.extend_from_slice(b"ZKCV\x00");
-        out.push(tag(domain, kind).expect("public oracle kind"));
+        out.push(domain.tag(kind).expect("public oracle kind"));
         if kind != Type::Commitment {
             out.extend((hashes.len() as u32).to_le_bytes());
         }

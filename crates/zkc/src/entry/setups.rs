@@ -23,7 +23,7 @@ impl SetupAuthority {
         if bytes.len() > 64 * 1024 {
             return Err("entry-request-limit".into());
         }
-        let value = crate::host::document::read(bytes, 64 * 1024)?;
+        let value = crate::io::document::read(bytes, 64 * 1024)?;
         let value: AuthorityDocument =
             serde_json::from_value(value).map_err(|_| "entry-request-format")?;
         if value.format != "zkc.entry-setups/0" {
@@ -33,7 +33,7 @@ impl SetupAuthority {
             keys: value
                 .keys
                 .into_iter()
-                .map(|(name, pin)| Ok((name, crate::host::inputs::digest(&pin)?)))
+                .map(|(name, pin)| Ok((name, crate::io::bytes::digest(&pin)?)))
                 .collect::<Result<_>>()?,
         })
     }

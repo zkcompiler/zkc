@@ -20,7 +20,10 @@ fn resolve(
     if binding.contract == "random.index"
         && !matches!(
             domain.field,
-            Identity::KoalaBearExt8 | Identity::BabyBearExt4 | Identity::GoldilocksExt2
+            Identity::KoalaBearExt8
+                | Identity::KoalaBearExt4
+                | Identity::BabyBearExt4
+                | Identity::GoldilocksExt2
         )
     {
         return None;

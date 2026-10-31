@@ -105,10 +105,11 @@ windows and limits when called. Point substitution requires no domain.
 Admission establishes executable structure, not compiler correctness or protocol
 security. See [the VM module guide](src/vm/README.md).
 
-General helpers retain separate owners:
+Canonical logical trees, occurrence descriptors and lazy proof framing live in
+[`zkc-format`](../zkc-format/README.md); runtime consumers add admission and
+resource authority. Other runtime helpers:
 
 - `attempt` and `iteration`: bounded generic retry and iteration controllers.
-- `logical`: canonical trees and domain-separated transcript occurrences.
 - `ring`: typed ring-arena admission and degree/read analysis.
 - `relation`: deterministic multi-table and staged relation carriers, admission
   and bounded reference evaluation through caller-supplied field arithmetic.

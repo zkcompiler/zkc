@@ -198,7 +198,7 @@ The compiler's policy is an exact array (JSON spelling carries no identity):
 ```text
 ["zkc.native-proof-policy/0", entry, producer, validator, acceptance,
  suite, services, public_inputs, [[query_site, delivery_site], ...], format,
- construction]
+ construction, [[query_site, difficulty], ...]]
 ```
 
 `construction` is empty for the installed native or authored path. Otherwise it
@@ -214,8 +214,15 @@ authored execution; native selection requires a supported suite, one selected
 service and 1–64 draws. A programmable selection requires a nonempty service set
 and permits 0–64 draws. Local factories use an empty suite. A managed root
 absorbs the canonical invocation at issuance; this does not establish that
-custom handlers use it correctly. Each draw pair selects a `draw` or `index`
+custom handlers use it correctly. Each draw pair selects a `draw`, `index` or `indices`
 query on one selected authority, preserving that query's actual contract.
+The final array selects gated `indices` occurrences. Its sites are unique,
+must occur in the selected draw list, and have canonical decimal difficulty
+from 0 through 64. An absent site uses the ungated block equation; an explicit
+zero still carries a zero witness. Scalar queries, unknown sites and custom
+handlers cannot acquire gates through this array. The
+[index-block contract](native-index-block.md) defines the exact request,
+witness and failure behavior. This required field is empty for other policies.
 Selectors use prepared static occurrence sites; native labels retain original
 authored paths. No timing or security premise follows from this policy.
 
@@ -239,18 +246,29 @@ The immutable compiler descriptor is:
 ["zkc.native-proof-descriptor/0", policy, "zkc.native-origin/0",
  [event, ...],
  [[validator, original_port, logical_type, codec], ...],
- [[message_origin_hex, logical_type, codec], ...], construction_plan]
+ [[message_origin_hex, logical_type, codec], ...], construction_plan,
+ [[query_origin_hex, witness_site, "index", "native.index/0"], ...]]
 event = ["query", origin_hex] | ["index", origin_hex, bound] | ["message", origin_hex]
+      | ["indices", origin_hex, bound, count]
+      | ["gated-indices", origin_hex, bound, count, difficulty]
       | ["start", origin_hex, [logical_input_type, ...]]
 ```
 
 `query` is a field challenge and `index` a UniformIndex transition; their origins
-name the service methods `draw` and `index` respectively. `bound` is the canonical
+name the service methods `draw` and `index` respectively. Both block events name
+the method `indices`. They preserve the complete bound and count; gated events
+also bind difficulty. `bound` is the canonical
 positive u64 domain fixed by the query. Native adapters additionally require a
 power of two from 1 through 2^63 and absorb that bound. Explicit handlers receive
 the bound and own its observation and sampling algorithm. A reader
 refuses any other row width, a noncanonical or invalid bound, and a kind whose
-origin method differs. Events and messages follow original source order. Public ports follow original
+origin method differs. Witness rows follow gated event order. Each names a real
+producer Emit and validator Await at `gate.<query_site>` immediately around its
+role-specific search or check call. The transport map binds that slot to the
+query origin. Witnesses are construction-owned transport, not source message
+observations, and are excluded from the message rows. Repeated occurrences use
+the same static slot and retain actual repeat coordinates in the request.
+Events and messages follow original source order. Public ports follow original
 input order. The descriptor includes the complete selected logical policy,
 origin tag, event labels and nominal wire codecs. Candidate implementation
 names and generated helper symbols are absent from the native baseline, whose

@@ -1,7 +1,7 @@
 //! Optional local reuse of complete compilation outputs under captured inputs.
 //! No witness, provider, session or mutable IR is retained here.
 use super::{CompilationRequest, CompilationResult, Compiler, Error, Project};
-use crate::{entry::Package, host::io};
+use crate::{entry::Package, io};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File, OpenOptions},
@@ -108,7 +108,7 @@ impl CompilationCache {
             pin[64] == b'\n'
                 && std::str::from_utf8(&pin[..64])
                     .ok()
-                    .and_then(|text| crate::host::inputs::digest(text).ok())
+                    .and_then(|text| crate::io::bytes::digest(text).ok())
                     == Some(digest)
         });
         if !authenticated {
@@ -145,7 +145,7 @@ impl CompilationCache {
         frame(&mut key, request.selection.name.unwrap_or("").as_bytes());
         frame(&mut key, format!("{:?}", request.selection.kind).as_bytes());
         frame_options(&mut key, &request.options)?;
-        let key = crate::host::inputs::hex(&key.finalize());
+        let key = crate::io::bytes::hex(&key.finalize());
         let path = self.directory.join(format!("{key}.zkcache"));
         // Bounded striped writer locks prevent partial/interleaved publication;
         // a concurrent compiler can recompute without waiting on another build.
@@ -169,7 +169,7 @@ impl CompilationCache {
         if compiler.capabilities()? != identity {
             return Err("source-compiler-changed".into());
         }
-        let mut bytes = crate::host::inputs::hex(result.package.identity()).into_bytes();
+        let mut bytes = crate::io::bytes::hex(result.package.identity()).into_bytes();
         bytes.push(b'\n');
         bytes.extend_from_slice(result.package.bytes());
         let retained = if writing && result.diagnostics.is_none() {

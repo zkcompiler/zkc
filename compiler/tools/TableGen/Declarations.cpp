@@ -374,12 +374,20 @@ void Model::validateOperation(const Record *op, bool consumer) {
       {"GatherIndices", {0, -1}},
       {"ScatterIndices", {1, -1}},
       {"NumericalExpression", {1, 1}},
-      {"NativeOrigin", {1, 1}}};
+      {"NativeOrigin", {1, 1}},
+      {"NativeIndexBlock", {3, 4}}};
   auto found = schemas.find(name(parameters).str());
   require(found != schemas.end() &&
-              found->second ==
-                  std::make_pair(parameters->getValueAsInt("minimum"),
-                                 parameters->getValueAsInt("maximum")),
+              (name(parameters) == "NativeIndexBlock"
+                   ? parameters->getValueAsInt("minimum") ==
+                             (name(op) == "transcript.native.indexed.indices"
+                                  ? 3
+                                  : 4) &&
+                         parameters->getValueAsInt("maximum") ==
+                             parameters->getValueAsInt("minimum")
+                   : found->second ==
+                         std::make_pair(parameters->getValueAsInt("minimum"),
+                                        parameters->getValueAsInt("maximum"))),
           op, "unsupported parameter validator or bounds");
   const auto assetFormat = parameters->getValueAsString("assetFormat");
   require(name(parameters) == "AssetIdentity"
@@ -462,7 +470,7 @@ void Model::validateFacets(const Record *op) {
       require(provider == "Entropy" || provider == "Transcript", op,
               "unknown sampling provider");
       require(domain == "Field" || domain == "FieldVector" ||
-                  domain == "BoundedIndex",
+                  domain == "BoundedIndex" || domain == "IndexBlock",
               op, "unknown sample domain");
       auto state = provider == "Entropy" ? "rng" : "transcript";
       require(sameType(port(r, "stateInput", false, state),
@@ -471,6 +479,7 @@ void Model::validateFacets(const Record *op) {
       port(r, "valueOutput", true,
            domain == "Field"         ? "field"
            : domain == "FieldVector" ? "vector"
+           : domain == "IndexBlock"  ? "indices"
                                      : "index");
       require(r->getValueAsInt("valueOutput") !=
                   r->getValueAsInt("stateOutput"),
@@ -1042,10 +1051,19 @@ json::Object operationInterfaceJSON(const Record *op) {
 }
 void Model::validateConsumerProfiles() {
   uniqueNames(consumerProfiles, "consumer profile");
-  const std::set<StringRef> supportedValidators{
-      "None",          "Natural",       "Extent",         "FieldLiteral",
-      "FieldLiterals", "MatrixShape",   "MatrixIdentity", "AssetIdentity",
-      "MatrixVector",  "GatherIndices", "ScatterIndices", "NativeOrigin"};
+  const std::set<StringRef> supportedValidators{"None",
+                                                "Natural",
+                                                "Extent",
+                                                "FieldLiteral",
+                                                "FieldLiterals",
+                                                "MatrixShape",
+                                                "MatrixIdentity",
+                                                "AssetIdentity",
+                                                "MatrixVector",
+                                                "GatherIndices",
+                                                "ScatterIndices",
+                                                "NativeOrigin",
+                                                "NativeIndexBlock"};
   std::set<const Record *> selectedEntries;
   for (const auto *profile : consumerProfiles) {
     require(!name(profile).empty(), profile, "empty consumer profile identity");

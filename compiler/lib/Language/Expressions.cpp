@@ -1,6 +1,7 @@
 #include "BodyCheck.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Language/Builtins.h"
 #include "llvm/Support/SaveAndRestore.h"
 #include <algorithm>
 #include <cassert>
@@ -97,13 +98,14 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
   } else if (expr.kind == K::Map) {
     result = bulk(expr, depth);
   } else if (expr.kind == K::MethodCall) {
-    bool index = expr.text == "index";
-    if (!protocol() || (expr.text != "draw" && !index) ||
+    bool index = expr.text == "index", block = expr.text == "indices";
+    if (!protocol() || (expr.text != "draw" && !index && !block) ||
         expr.children.size() != 1 ||
-        expr.arguments.size() != (index ? 1u : 0u)) {
+        expr.arguments.size() != (block   ? 2u
+                                  : index ? 1u
+                                          : 0u)) {
       fail("source.service",
-           "managed query requires service.draw() or service.index<N>() in "
-           "protocol mode",
+           "managed query requires draw(), index<N>() or indices(N,Q)",
            expr.span);
       return {};
     }
@@ -113,32 +115,49 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
     const auto &port = body.services[root->index];
     if (!active({port.owner}, expr.span))
       return {};
-    if (!index) {
+    if (!index && !block) {
       result =
           emit(ServiceQuery{*root, {}}, port.field, {port.owner}, expr.span);
     } else {
-      // UniformIndex uses the installed bit sampler, which is distinct from
-      // reducing a field element; the field must grant IndexRandomness.
-      if (!checker.types.entails(
-              &decl,
-              CapabilityBound{"IndexRandomness", {port.field}, expr.span},
-              "source.service"))
+      if (!checker.types.entails(&decl,
+                                 CapabilityBound{block ? "IndexBlockRandomness"
+                                                       : "IndexRandomness",
+                                                 {port.field},
+                                                 expr.span},
+                                 "source.service"))
         return {};
       auto bound = checker.type(decl, expr.arguments.front());
       if (!bound)
         return {};
-      if (bound->kind != T::Natural) {
-        fail("source.service", "index domain must be a static natural",
-             expr.span);
+      auto positive = [&](const Type &value) {
+        return value.kind == T::Natural &&
+               (!value.dimension.isClosed() ||
+                protocol::uniformIndexBound(value.dimension.closedValue()));
+      };
+      if (!positive(*bound)) {
+        fail("source.service",
+             "index domain must be a positive static u64 natural", expr.span);
         return {};
       }
-      if (bound->dimension.isClosed() &&
-          !protocol::uniformIndexBound(bound->dimension.closedValue())) {
-        fail("source.service", "index domain must be a positive u64 natural",
-             expr.span);
+      std::optional<Natural> count;
+      if (block) {
+        auto selected = checker.type(decl, expr.arguments[1]);
+        if (!selected || !positive(*selected)) {
+          if (selected)
+            fail("source.service",
+                 "index count must be a positive static u64 natural",
+                 expr.span);
+          return {};
+        }
+        count = selected->dimension;
+      }
+      auto output = block ? builtinType("indices", {})
+                          : llvm::Expected<Type>(Type(T::Index));
+      if (!output) {
+        consumeError(output.takeError());
         return {};
       }
-      result = emit(ServiceQuery{*root, bound->dimension}, Type(T::Index),
+      result = emit(ServiceQuery{*root, bound->dimension, count}, *output,
                     {port.owner}, expr.span);
     }
   } else if (expr.kind == K::Name) {

@@ -22,6 +22,9 @@ pub struct Policy {
     pub max_value_bytes: usize,
     /// Accumulated conservative loop/field-operation units in one numerical call.
     pub max_numerical_work: u64,
+    /// Finite honest nonce search interval, starting at zero. Difficulty zero
+    /// bypasses search. Backend construction enforces the hard 2^24 ceiling.
+    pub max_search_attempts: u64,
     /// Live managed scratch, staging payload and final storage in one numerical call.
     /// Requested storage only; excludes unmanaged provider allocations and allocator RSS.
     pub max_numerical_bytes: usize,
@@ -41,6 +44,7 @@ impl Default for Policy {
             max_wire_bytes: 16 << 20,
             max_value_bytes: 64 << 20,
             max_numerical_work: 1 << 26,
+            max_search_attempts: 1 << 20,
             max_numerical_bytes: 256 << 20,
             max_setup_cells: 16 << 16,
             max_capabilities: 4096,

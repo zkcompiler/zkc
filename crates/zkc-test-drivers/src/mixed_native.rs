@@ -216,7 +216,7 @@ fn custody_boundaries(directory: &str) {
                     ]
                 }
                 "mixed-transcript" => {
-                    let root = zkc_runtime::logical::encode_tree(&serde_json::json!([
+                    let root = zkc_format::logical::encode_tree(&serde_json::json!([
                         "mixed-custody-root"
                     ]))
                     .unwrap();
