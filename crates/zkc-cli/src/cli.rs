@@ -813,7 +813,7 @@ mod tests {
         for name in ["compile", "run", "prove", "verify", "bindings"] {
             let spec = command(name).unwrap();
             assert_eq!(
-                spec.parse(&[flag.clone()])
+                spec.parse(std::slice::from_ref(&flag))
                     .unwrap()
                     .value("--oracle-realization"),
                 Some(text.as_str())
@@ -849,7 +849,7 @@ mod tests {
             assert_eq!(
                 command(name)
                     .unwrap()
-                    .parse(&[flag.clone()])
+                    .parse(std::slice::from_ref(&flag))
                     .err()
                     .unwrap()
                     .code,

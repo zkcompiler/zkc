@@ -6,9 +6,9 @@ use crate::project::{
 };
 
 pub(super) enum Target {
-    Project(Source),
+    Project(Box<Source>),
     Package {
-        package: Package,
+        package: Box<Package>,
         path: String,
         pin: String,
     },
@@ -55,14 +55,14 @@ impl Target {
             report["mode"] = json!("package");
             report["package_sha256"] = json!(hex(package.identity()));
             Ok(Self::Package {
-                package,
+                package: Box::new(package),
                 path: path.into(),
                 pin: expected.into(),
             })
         } else {
             let source = Source::load(args)?;
             source.describe(report);
-            Ok(Self::Project(source))
+            Ok(Self::Project(Box::new(source)))
         }
     }
     pub fn inspect(&self, name: Option<&str>, report: &mut Json) -> Result<CheckedInterface> {
@@ -94,7 +94,7 @@ impl Target {
         report: &mut Json,
     ) -> Result<Package> {
         let package = match self {
-            Self::Package { package, .. } => package.clone(),
+            Self::Package { package, .. } => package.as_ref().clone(),
             Self::Project(source) => source.compile(Selection { name, kind }, report)?,
         };
         let view = CheckedInterface::read(&package)?;
