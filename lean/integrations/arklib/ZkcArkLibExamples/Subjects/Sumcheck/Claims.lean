@@ -17,7 +17,7 @@ set_option maxHeartbeats 2000000
 /-- Exact source request; attachment and method are separate. -/
 def request0Data : Wire.Request :=
 {
-  subject := ⟨"sha256:2570cea125278771a8451ddc403d67d3cd7080315e457c4adc175a89508e1356", "zkl_ba110e6c2c5207ba20905eec0c37f2bbf16736574645c8de8dee0d5abb5f2071", .executableBytes, [⟨"constructed-participant", "sha256:319f01c59dea31eafdcc8512da7a195a34173c5ffbfd558c91d56b9093ba3108"⟩, ⟨"verifier-program", "sha256:0f3306f658c7e5ece5da8ffd6b4df2df6f213a4dc8cba3404ad010b09fb2530d"⟩]⟩
+  subject := ⟨"sha256:2570cea125278771a8451ddc403d67d3cd7080315e457c4adc175a89508e1356", "zkl_ba110e6c2c5207ba20905eec0c37f2bbf16736574645c8de8dee0d5abb5f2071", .executableBytes, [⟨"constructed-participant", "sha256:319f01c59dea31eafdcc8512da7a195a34173c5ffbfd558c91d56b9093ba3108"⟩, ⟨"verifier-program", "sha256:655e03d730eaf11e700b4f7a3c1b5c325832b425bdd5c45ab24b74feb7d36a85"⟩]⟩
   property := ⟨"soundness", 0⟩
   parameters := none
   model := ⟨⟨"models.fiat_shamir", 0⟩, [(some "level", (.reference "levels.bytes")), (some "statement", (.reference "statements.adaptive")), (some "oracle", (.application "oracles.random" (some 0) [(none, (.reference "construction.provider"))])), (some "queries", (.reference "Q")), (some "budget_symbol", (.reference "Q")), (some "validator_cost", (.binary .div (.natural 2) (.application "cardinality" none [(none, (.reference "bls12-381.fr"))]))), (some "application", (.reference "application"))]⟩
