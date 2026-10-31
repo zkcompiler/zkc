@@ -116,7 +116,7 @@ Bindings retain their explicit implementation choice and field identity:
 scalars, and `plonky3` supports the
 [registered residue fields](values.md#registered-residue-fields) and the
 [binary fields](values.md#binary-fields) GF(2^64) and its cubic extension.
-Native scalar output preflight reserves the existing 512-byte retained charge
+Native scalar output preflight reserves the 128-byte CPU retained charge
 before arithmetic or shape/index checks, including zero results. Insufficient
 per-value or invocation output allowance reports `exhausted:output-bytes`.
 The result has no shared vector backing; operands retain their full logical
@@ -345,7 +345,6 @@ order; duplicate values are allowed. Inputs and repeated aliases are immutable.
 This authored operation does not assert constant-time behavior or preserve the
 resource-exhaustion prefix of a source loop.
 
-The native handler checks input extent and the conservative 512-byte index
+The native handler checks input extent and the 128-byte CPU index
 result allowance, then admits `length(values)+1` numerical work units and
-512 managed bytes
-before scanning. It creates no mask, temporary vector or retained lookup table.
+128 managed bytes before scanning. It creates no mask, temporary vector or retained lookup table.

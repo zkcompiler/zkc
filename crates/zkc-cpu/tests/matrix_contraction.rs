@@ -300,7 +300,8 @@ fn contractions_reserve_only_one_scalar_even_for_empty_or_large_selected_dimensi
             let (rows, columns) = if row { (65536, 0) } else { (0, 65536) };
             let p = Policy {
                 max_table_elements: 1,
-                max_value_bytes: zkc_cpu::VALUE_SLOT_BYTES,
+                // The empty vector input owns its 256-byte header.
+                max_value_bytes: 256,
                 ..Policy::default()
             };
             assert_value(

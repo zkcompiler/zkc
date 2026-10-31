@@ -95,7 +95,7 @@ fn cases(len: usize) -> Vec<Case> {
             BlstVector,
             BlstG1Vector,
             BlstG1,
-            |v| v,
+            Arc::new,
             |n: usize| 256 * n as u64 + 1
         ),
         msm!(

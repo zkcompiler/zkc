@@ -65,7 +65,7 @@ fn cases(len: usize) -> Vec<Case> {
                 .collect::<Vec<_>>()
                 .into(),
         ),
-        Value::Bls12381G2(Bls12381G2::generator()),
+        Value::Bls12381G2((Bls12381G2::generator()).into()),
         Value::Bls12381G2Vector(vec![Bls12381G2::generator(); len].into()),
         Value::Bn254Field(Bn254Scalar::from(19)),
         Value::Bn254Vector(
@@ -89,7 +89,7 @@ fn cases(len: usize) -> Vec<Case> {
                 .collect::<Vec<_>>()
                 .into(),
         ),
-        Value::Bn254G2(Bn254G2::generator()),
+        Value::Bn254G2((Bn254G2::generator()).into()),
         Value::Bn254G2Vector(vec![Bn254G2::generator(); len].into()),
     ] {
         let source = ordinary.physical_type();

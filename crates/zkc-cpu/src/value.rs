@@ -8,7 +8,7 @@ use zkc_runtime::vm::{
 };
 
 /// Conservative storage for every CPU value slot, including inactive variants.
-pub const VALUE_SLOT_BYTES: usize = 256;
+pub const VALUE_SLOT_BYTES: usize = 128;
 const _: () = assert!(std::mem::size_of::<Value>() <= VALUE_SLOT_BYTES);
 
 /// Explicit per-value, numerical-call, transport and service-store ceilings.
@@ -174,7 +174,7 @@ value_inventory! {
     ResourceUnit(crate::resource::LogicalUnit),
     BlstField(zkc_kernels::blst::bls12_381::Scalar),
     BlstVector(Arc<zkc_kernels::blst::bls12_381::ScalarVector>),
-    BlstG1(zkc_kernels::blst::bls12_381::G1),
+    BlstG1(Arc<zkc_kernels::blst::bls12_381::G1>),
     BlstG1Vector(Arc<zkc_kernels::blst::bls12_381::G1Vector>),
     /// Shared projective G2 keeps cloning inert and the universal slot bounded.
     BlstG2(Arc<zkc_kernels::blst::bls12_381::G2>),
@@ -193,11 +193,11 @@ value_inventory! {
     Bn254Matrix(crate::matrix::SparseCoo<crate::Bn254Scalar>),
     Bn254G1(crate::Bn254G1),
     Bn254G1Vector(crate::Buffer<crate::Bn254G1>),
-    Bn254G2(crate::Bn254G2),
+    Bn254G2(Arc<crate::Bn254G2>),
     /// Shared target group keeps the universal value slot bounded.
     Bn254Gt(Arc<crate::Bn254Gt>),
     Bn254G2Vector(crate::Buffer<crate::Bn254G2>),
-    Bls12381G2(crate::Bls12381G2),
+    Bls12381G2(Arc<crate::Bls12381G2>),
     Bls12381G2Vector(crate::Buffer<crate::Bls12381G2>),
     /// Boxed: twelve base-field coefficients would exceed the inline value bound.
     Bls12381Gt(Arc<crate::Bls12381Gt>),
@@ -273,9 +273,9 @@ value_inventory! {
     RistrettoVector(crate::Buffer<crate::RistrettoScalar>),
     RistrettoPolynomial(crate::Buffer<crate::RistrettoScalar>),
     RistrettoRound([crate::RistrettoScalar; 3]),
-    EdwardsGroup(crate::EdwardsPrime),
+    EdwardsGroup(Arc<crate::EdwardsPrime>),
     EdwardsGroups(crate::Buffer<crate::EdwardsPrime>),
-    RistrettoGroup(crate::RistrettoPoint),
+    RistrettoGroup(Arc<crate::RistrettoPoint>),
     RistrettoGroups(crate::Buffer<crate::RistrettoPoint>),
     FrDiagonal(Arc<crate::diagonal::Diagonal<Scalar, Scalar>>),
     RistrettoDiagonal(
@@ -302,9 +302,35 @@ value_inventory! {
 }
 
 impl Value {
+    /// Complete immutable point backing, including the payload and Arc wrapper.
+    pub(crate) const fn shared_group_retained_bytes() -> usize {
+        const {
+            assert!(
+                std::mem::size_of::<crate::Bn254G2>() + 2 * std::mem::size_of::<usize>() <= 512
+            );
+            assert!(
+                std::mem::size_of::<crate::Bls12381G2>() + 2 * std::mem::size_of::<usize>() <= 512
+            );
+            assert!(
+                std::mem::size_of::<crate::EdwardsPrime>() + 2 * std::mem::size_of::<usize>()
+                    <= 512
+            );
+            assert!(
+                std::mem::size_of::<crate::RistrettoPoint>() + 2 * std::mem::size_of::<usize>()
+                    <= 512
+            );
+            assert!(
+                std::mem::size_of::<zkc_kernels::blst::bls12_381::G1>()
+                    + 2 * std::mem::size_of::<usize>()
+                    <= 512
+            );
+        }
+        512
+    }
+
     /// Complete immutable target backing, including wrapper and Arc allowance.
     pub(crate) const fn bn254_gt_retained_bytes() -> usize {
-        VALUE_SLOT_BYTES + std::mem::size_of::<crate::Bn254Gt>()
+        256 + std::mem::size_of::<crate::Bn254Gt>()
     }
 
     /// Fixed leaf profiles; shared large group payloads have separate storage.
@@ -312,11 +338,16 @@ impl Value {
         match (ty.kind(), ty.logical().identity()) {
             (Type::Group, Identity::Bn254Gt) => Self::bn254_gt_retained_bytes(),
             (Type::Group, Identity::Bls12381Gt) => 1024,
-            (Type::Group, Identity::Bn254G2 | Identity::Bls12381G2)
-                if crate::operations::resident::is_resident(ty) =>
-            {
-                512
+            (Type::Group, Identity::Bls12381G1) if crate::operations::blst::is_resident(ty) => {
+                Self::shared_group_retained_bytes()
             }
+            (
+                Type::Group,
+                Identity::Bn254G2
+                | Identity::Bls12381G2
+                | Identity::Edwards25519Prime
+                | Identity::Ristretto255Group,
+            ) => Self::shared_group_retained_bytes(),
             (Type::Field | Type::Round | Type::Bool | Type::Index | Type::Group, _) => {
                 VALUE_SLOT_BYTES
             }
@@ -1037,6 +1068,7 @@ impl Value {
             Self::HaloG1Vector(v) => Backing::of(v, bytes),
             Self::BlstG2Vector(v) => Backing::of(v, bytes),
             Self::HaloG2Vector(v) => Backing::of(v, bytes),
+            Self::BlstG1(v) => Backing::of(v, bytes),
             Self::BlstG2(v) => Backing::of(v, bytes),
             Self::HaloG2(v) => Backing::of(v, bytes),
             Self::Bn254Vector(v) | Self::Bn254Polynomial(v) => v.backing(bytes),
@@ -1063,6 +1095,11 @@ impl Value {
             Self::ProverKey(k) => Backing::of(k, bytes),
             Self::VerifierKey(k) => Backing::of(k, bytes),
             Self::Commitment(c) => Backing::of(c, bytes),
+            Self::Bn254G2(v) => Backing::of(v, bytes),
+            Self::Bls12381G2(v) => Backing::of(v, bytes),
+            Self::EdwardsGroup(v) => Backing::of(v, bytes),
+            Self::RistrettoGroup(v) => Backing::of(v, bytes),
+
             Self::Sequence(_)
             | Self::Variant(_)
             | Self::FieldArray(_)
@@ -1075,12 +1112,9 @@ impl Value {
             | Self::HaloField(_)
             | Self::BlstField(_)
             | Self::HaloG1(_)
-            | Self::BlstG1(_)
             | Self::Bn254Field(_)
             | Self::Bn254Round(_)
             | Self::Bn254G1(_)
-            | Self::Bn254G2(_)
-            | Self::Bls12381G2(_)
             | Self::OracleRoot(..)
             | Self::Index(_)
             | Self::KoalaBearExt8Field(_)
@@ -1103,8 +1137,6 @@ impl Value {
             | Self::KoalaBearRound(_)
             | Self::RistrettoField(_)
             | Self::RistrettoRound(_)
-            | Self::EdwardsGroup(_)
-            | Self::RistrettoGroup(_)
             | Self::Field(_)
             | Self::Round(_)
             | Self::Bool(_)
@@ -1637,7 +1669,7 @@ impl RuntimeValue for Value {
             Self::Bn254Gt(_) => Ok(Self::bn254_gt_retained_bytes()),
             Self::Bls12381Gt(_) => Ok(1024),
             // Shared resident G2 payloads exceed an inline slot.
-            Self::HaloG2(_) | Self::BlstG2(_) | Self::Commitment(_) => Ok(512),
+            Self::BlstG1(_) | Self::HaloG2(_) | Self::BlstG2(_) | Self::Commitment(_) => Ok(512),
             Self::Indices(v) => size(v.storage_capacity(), 8),
             Self::Bytes(v) => size(v.len(), 1),
             Self::Shake128State(_) => Ok(crate::hash::Shake128State::RETAINED_BYTES),
@@ -1696,15 +1728,16 @@ impl RuntimeValue for Value {
             Self::Proof(p) => payload_bytes(Type::Proof, p.metadata().arity()),
             Self::ProverKey(k) => prover_key_bytes(k.metadata().arity()),
             Self::VerifierKey(k) => payload_bytes(Type::VerifierKey, k.metadata().arity()),
+            Self::Bn254G2(_)
+            | Self::Bls12381G2(_)
+            | Self::EdwardsGroup(_)
+            | Self::RistrettoGroup(_) => Ok(Self::shared_group_retained_bytes()),
             Self::HaloField(_)
             | Self::BlstField(_)
             | Self::HaloG1(_)
-            | Self::BlstG1(_)
             | Self::Bn254Field(_)
             | Self::Bn254Round(_)
             | Self::Bn254G1(_)
-            | Self::Bn254G2(_)
-            | Self::Bls12381G2(_)
             | Self::KoalaBearExt8Round(_)
             | Self::KoalaBearExt8Field(_)
             | Self::KoalaBearExt4Round(_)
@@ -1725,8 +1758,6 @@ impl RuntimeValue for Value {
             | Self::KoalaBearRound(_)
             | Self::RistrettoField(_)
             | Self::RistrettoRound(_)
-            | Self::EdwardsGroup(_)
-            | Self::RistrettoGroup(_)
             | Self::Field(_)
             | Self::Round(_)
             | Self::Bool(_)
@@ -1994,7 +2025,12 @@ mod custody_traversal_tests {
         ))
         .unwrap();
         Value::pack_variant(
-            zkc_runtime::vm::PhysicalType::default_for(logical.clone()).unwrap(),
+            zkc_runtime::vm::PhysicalType::aggregate(
+                logical,
+                zkc_runtime::vm::Representation::Variant,
+                values.iter().map(RuntimeValue::physical_type).collect(),
+            )
+            .unwrap(),
             1,
             values,
         )
@@ -2121,7 +2157,12 @@ mod retained_parts_tests {
         ))
         .unwrap();
         Value::pack_variant(
-            zkc_runtime::vm::PhysicalType::default_for(logical.clone()).unwrap(),
+            zkc_runtime::vm::PhysicalType::aggregate(
+                logical,
+                zkc_runtime::vm::Representation::Variant,
+                values.iter().map(RuntimeValue::physical_type).collect(),
+            )
+            .unwrap(),
             1,
             values,
         )
@@ -2140,6 +2181,31 @@ mod retained_parts_tests {
             )
             .unwrap(),
         )
+    }
+
+    #[test]
+    fn large_point_aliases_share_allocations_but_equal_points_do_not() {
+        let constructors: [fn() -> Value; 5] = [
+            || Value::Bn254G2(crate::Bn254G2::generator().into()),
+            || Value::Bls12381G2(crate::Bls12381G2::generator().into()),
+            || Value::EdwardsGroup(crate::EdwardsPrime::generator().into()),
+            || Value::RistrettoGroup(crate::RistrettoPoint::default().into()),
+            || Value::BlstG1(zkc_kernels::blst::bls12_381::G1::generator().into()),
+        ];
+        for make in constructors {
+            let value = make();
+            let alias = value.clone();
+            let independent = make();
+            assert_eq!(parts(&value).0, 0);
+            assert_eq!(charged(&value), 512);
+            assert_eq!(Value::fixed_retained_bytes(&value.physical_type()), 512);
+            assert_eq!(parts(&value), parts(&alias));
+            assert_ne!(parts(&value), parts(&independent));
+            let repeated = pack("Repeated", vec![value.clone(), alias]);
+            let distinct = pack("Distinct", vec![value, independent]);
+            assert_eq!(charged(&repeated) + 512, repeated.retained_bytes());
+            assert_eq!(charged(&distinct), distinct.retained_bytes());
+        }
     }
 
     #[test]
@@ -2228,7 +2294,7 @@ mod retained_parts_tests {
         assert_eq!(
             charged(&aliases)
                 + fixed_vector.retained_bytes()
-                + fixed.physical_type().logical().descriptor_bytes(),
+                + fixed.physical_type().descriptor_bytes(),
             aliases.retained_bytes()
         );
         // Repeated allocations inside one value are charged once.

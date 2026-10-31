@@ -324,9 +324,11 @@ pub(crate) fn convert(
                 Value::Bn254G1(p) => Value::HaloG1(bridge::import_g1(*p).map_err(failure)?),
                 Value::HaloG1(p) => Value::Bn254G1(bridge::export_g1(*p).map_err(failure)?),
                 Value::Bn254G2(p) => {
-                    Value::HaloG2(Arc::new(bridge::import_g2(*p).map_err(failure)?))
+                    Value::HaloG2(Arc::new(bridge::import_g2(**p).map_err(failure)?))
                 }
-                Value::HaloG2(p) => Value::Bn254G2(bridge::export_g2(**p).map_err(failure)?),
+                Value::HaloG2(p) => {
+                    Value::Bn254G2((bridge::export_g2(**p).map_err(failure)?).into())
+                }
                 Value::Bn254Vector(v) => Value::HaloVector(Arc::new(
                     kernel::ScalarVector::try_from_fn(v.len(), |i| bridge::import_scalar(v[i]))
                         .map_err(failure)?,

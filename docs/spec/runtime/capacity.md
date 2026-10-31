@@ -73,10 +73,14 @@ partitions that charge into storage owned by one binding, such as an inline
 scalar, and the immutable allocations it shares. A shared allocation's charge
 includes the inline storage it holds, such as a collection's element slots.
 
-The CPU adapter reserves 256 bytes per inline value or collection value slot,
+The CPU adapter reserves 128 bytes per inline value or collection value slot,
 with a compile-time bound on the complete native value enum. BN254 target-group
 values use shared immutable backing: their charge includes the 384-byte target
-and a 256-byte wrapper allowance. Aliases retain that allocation once; equal
+and a 256-byte wrapper allowance. BN254 and BLS12-381 G2, Edwards, Ristretto
+and resident blst G1 points use immutable backing with a complete 512-byte
+profile. A variant is a shared complete node with an owned exact-length active
+payload; its 256-byte header allowance bounds the node and Arc counters.
+Aliases retain each actual allocation once; equal
 independent targets retain distinct allocations. Capability handles retain their
 512-byte profile, and larger shared group payloads retain their own profiles.
 These storage charges do not change canonical wire bytes or execution quotas.
@@ -175,7 +179,7 @@ refunded on release or unwind.
 
 For shared execution, trusted Value adapters advertise constructor allocation
 bounds before scalar/variant construction. The generic scalar default is 512
-bytes; the CPU adapter supplies its 256-byte inline bound. The
+bytes; the CPU adapter supplies its 128-byte inline bound. The
 variant default covers its descriptor, conservative payload slots and full
 payload charges. Larger adapters must override these bounds. Insufficient
 capacity refuses before the constructor runs, even if the actual value might

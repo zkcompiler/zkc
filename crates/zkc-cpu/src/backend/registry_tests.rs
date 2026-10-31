@@ -510,10 +510,10 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         320,
     );
     check(
-        Value::BlstG1(blst::G1::generator()),
+        Value::BlstG1(blst::G1::generator().into()),
         Type::Group,
         I::Bls12381G1,
-        crate::VALUE_SLOT_BYTES,
+        512,
     );
     check(
         Value::BlstG1Vector(Arc::new(
@@ -769,10 +769,14 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         ($point:expr, $identity:ident, $point_variant:ident, $vector_variant:ident, $width:expr) => {{
             let point = $point;
             check(
-                Value::$point_variant(point),
+                Value::$point_variant(point.into()),
                 Type::Group,
                 I::$identity,
-                crate::VALUE_SLOT_BYTES,
+                if matches!(I::$identity, I::Bls12381G1 | I::Bn254G1) {
+                    crate::VALUE_SLOT_BYTES
+                } else {
+                    512
+                },
             );
             check(
                 Value::$vector_variant([point; 2].into()),

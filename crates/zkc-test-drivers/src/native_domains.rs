@@ -102,7 +102,7 @@ fn main() {
                 vec![
                     Value::Bn254Field(Bn254Scalar::from(size)),
                     Value::Bn254G1(Bn254G1::generator()),
-                    Value::Bn254G2(Bn254G2::generator()),
+                    Value::Bn254G2(Bn254G2::generator().into()),
                     Value::KoalaBearField(KoalaBear::new(size as u32)),
                     Value::KoalaBearExt8Field(extension),
                 ]
@@ -130,9 +130,9 @@ fn main() {
                     panic!("group");
                 };
                 vec![
-                    Value::RistrettoGroup(base),
+                    Value::RistrettoGroup(base.clone()),
                     Value::RistrettoField(RistrettoScalar::from(size)),
-                    Value::RistrettoGroup(base * RistrettoScalar::from(size)),
+                    Value::RistrettoGroup((*base * RistrettoScalar::from(size)).into()),
                 ]
             };
             let producer = inputs(&envelope, &values, true);

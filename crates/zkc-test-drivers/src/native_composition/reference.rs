@@ -220,7 +220,7 @@ pub fn check_g2_ingress() {
     assert!(wrong.is_on_curve());
     let mut wire = b"ZKCV\x00\x30".to_vec();
     wrong.serialize_compressed(&mut wire).unwrap();
-    let ty = Value::Bn254G2(Bn254G2::generator()).physical_type();
+    let ty = Value::Bn254G2((Bn254G2::generator()).into()).physical_type();
     assert_eq!(
         codec().decode_native_value(&ty, &wire).unwrap_err(),
         zkc_cpu::NativeWireError::Invalid(zkc_runtime::vm::DecodeReason::Group)

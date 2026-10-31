@@ -192,7 +192,8 @@ fn retained_input_traversal_charges_only_the_examined_edge() {
 #[test]
 fn collection_budget_failures_release_all_carried_storage() {
     let (program, _) = collected(true);
-    // Both byte ceilings refuse append before its new storage is allocated.
+    // Byte ceilings refuse either backend append or local value construction
+    // before its new storage is allocated.
     // Instruction, iteration and traversal quotas retain separate boundaries.
     let limits = [
         (
@@ -211,7 +212,7 @@ fn collection_budget_failures_release_all_carried_storage() {
             },
             WorkBudget::default(),
             u64::MAX,
-            "exhausted:output-bytes",
+            "Limit",
         ),
         (
             ValueBudget::default(),

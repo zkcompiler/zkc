@@ -606,7 +606,7 @@ fn additional_domains_keep_exact_canonical_frames_and_typed_errors() {
     let values = [
         Value::Bn254Field(Bn254Scalar::from(19)),
         Value::Bn254G1(Bn254G1::generator()),
-        Value::Bn254G2(Bn254G2::generator()),
+        Value::Bn254G2((Bn254G2::generator()).into()),
         Value::KoalaBearField(KoalaBear::new(19)),
         Value::KoalaBearExt8Field(KoalaBearExt8::from([
             KoalaBear::new(1),
@@ -619,7 +619,7 @@ fn additional_domains_keep_exact_canonical_frames_and_typed_errors() {
             KoalaBear::new(8),
         ])),
         Value::RistrettoField(RistrettoScalar::from(19u64)),
-        Value::RistrettoGroup(curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT),
+        Value::RistrettoGroup((curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT).into()),
     ];
     for value in &values {
         let ty = value.physical_type();

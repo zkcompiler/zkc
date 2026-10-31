@@ -144,7 +144,7 @@ fn qap(n: usize, change: &str) -> Vec<Value> {
                 .collect::<Vec<_>>()
                 .into(),
         ),
-        Value::Bn254G2(Bn254G2::generator()),
+        Value::Bn254G2(Bn254G2::generator().into()),
         Value::Bn254Field(F::from(match change {
             "zero_shift" => 0,
             "overlap" => 1,
@@ -176,7 +176,7 @@ fn air(n: usize, change: &str) -> Vec<Value> {
 fn target(n: usize) -> Vec<Value> {
     vec![
         Value::Bn254G1(Bn254G1::generator()),
-        Value::Bn254G2(Bn254G2::generator()),
+        Value::Bn254G2(Bn254G2::generator().into()),
         Value::Bn254Field(F::from(13)),
         Value::Index(n as u64),
     ]

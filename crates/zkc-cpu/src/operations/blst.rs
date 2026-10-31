@@ -119,8 +119,8 @@ super::resident::group_family!(
     G1Vector,
     BlstG1,
     BlstG1Vector,
-    |v| v,
-    |v: &kernel::G1| *v,
+    Arc::new,
+    |v: &Arc<kernel::G1>| **v,
     scaling
 );
 
@@ -187,7 +187,7 @@ pub(crate) fn apply(
         return Ok(vec![output.finish(|| {
             Ok(match args {
                 [Value::BlstVector(s), Value::BlstG1Vector(p)] => {
-                    Value::BlstG1(p.msm(s).map_err(failure)?)
+                    Value::BlstG1(p.msm(s).map_err(failure)?.into())
                 }
                 [Value::BlstVector(s), Value::BlstG2Vector(p)] => {
                     Value::BlstG2(Arc::new(p.msm(s).map_err(failure)?))
@@ -245,12 +245,14 @@ pub(crate) fn convert(
             Ok(match value {
                 Value::Field(s) => Value::BlstField(bridge::import_scalar(*s).map_err(failure)?),
                 Value::BlstField(s) => Value::Field(bridge::export_scalar(*s).map_err(failure)?),
-                Value::Curve(p) => Value::BlstG1(bridge::import_g1(*p).map_err(failure)?),
-                Value::BlstG1(p) => Value::Curve(bridge::export_g1(*p).map_err(failure)?),
+                Value::Curve(p) => Value::BlstG1(bridge::import_g1(*p).map_err(failure)?.into()),
+                Value::BlstG1(p) => Value::Curve(bridge::export_g1(**p).map_err(failure)?),
                 Value::Bls12381G2(p) => {
-                    Value::BlstG2(Arc::new(bridge::import_g2(*p).map_err(failure)?))
+                    Value::BlstG2(Arc::new(bridge::import_g2(**p).map_err(failure)?))
                 }
-                Value::BlstG2(p) => Value::Bls12381G2(bridge::export_g2(**p).map_err(failure)?),
+                Value::BlstG2(p) => {
+                    Value::Bls12381G2((bridge::export_g2(**p).map_err(failure)?).into())
+                }
                 Value::Vector(v) => Value::BlstVector(Arc::new(
                     kernel::ScalarVector::try_from_fn(v.len(), |i| bridge::import_scalar(v[i]))
                         .map_err(failure)?,

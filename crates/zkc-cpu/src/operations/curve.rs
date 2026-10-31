@@ -426,7 +426,7 @@ impl Family for RistrettoPoint {
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::RistrettoGroup(v) = v {
-            Ok(*v)
+            Ok(**v)
         } else {
             Err(refused("kernel-operands"))
         }
@@ -453,7 +453,7 @@ impl Family for RistrettoPoint {
         }
     }
     fn value(v: Self) -> Value {
-        Value::RistrettoGroup(v)
+        Value::RistrettoGroup((v).into())
     }
     fn values(v: Vec<Self>) -> Value {
         Value::RistrettoGroups(v.into())
@@ -494,7 +494,7 @@ impl Family for crate::EdwardsPrime {
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::EdwardsGroup(v) = v {
-            Ok(*v)
+            Ok(**v)
         } else {
             Err(refused("kernel-operands"))
         }
@@ -521,7 +521,7 @@ impl Family for crate::EdwardsPrime {
         }
     }
     fn value(v: Self) -> Value {
-        Value::EdwardsGroup(v)
+        Value::EdwardsGroup((v).into())
     }
     fn values(v: Vec<Self>) -> Value {
         Value::EdwardsGroups(v.into())
@@ -534,7 +534,7 @@ impl Family for crate::EdwardsPrime {
     }
 }
 macro_rules! bn_group {
-    ($t:ty,$one:ident,$many:ident) => {
+    ($t:ty,$one:ident,$many:ident,$wrap:expr,$read:expr) => {
         impl Group for $t {
             type Scalar = crate::Bn254Scalar;
             type Error = zkc_kernels::arkworks::Error;
@@ -563,7 +563,7 @@ macro_rules! bn_group {
             }
             fn point(v: &Value) -> Result<Self> {
                 if let Value::$one(v) = v {
-                    Ok(*v)
+                    Ok(($read)(v))
                 } else {
                     Err(refused("kernel-operands"))
                 }
@@ -590,7 +590,7 @@ macro_rules! bn_group {
                 }
             }
             fn value(v: Self) -> Value {
-                Value::$one(v)
+                Value::$one(($wrap)(v))
             }
             fn values(v: Vec<Self>) -> Value {
                 Value::$many(v.into())
@@ -604,8 +604,20 @@ macro_rules! bn_group {
         }
     };
 }
-bn_group!(crate::Bn254G1, Bn254G1, Bn254G1Vector);
-bn_group!(crate::Bn254G2, Bn254G2, Bn254G2Vector);
+bn_group!(
+    crate::Bn254G1,
+    Bn254G1,
+    Bn254G1Vector,
+    |v| v,
+    |v: &crate::Bn254G1| *v
+);
+bn_group!(
+    crate::Bn254G2,
+    Bn254G2,
+    Bn254G2Vector,
+    Arc::new,
+    |v: &Arc<crate::Bn254G2>| **v
+);
 impl Group for crate::Bls12381G2 {
     type Scalar = Scalar;
     type Error = zkc_kernels::arkworks::Error;
@@ -633,7 +645,7 @@ impl Family for crate::Bls12381G2 {
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::Bls12381G2(v) = v {
-            Ok(*v)
+            Ok(**v)
         } else {
             Err(refused("kernel-operands"))
         }
@@ -660,7 +672,7 @@ impl Family for crate::Bls12381G2 {
         }
     }
     fn value(v: Self) -> Value {
-        Value::Bls12381G2(v)
+        Value::Bls12381G2((v).into())
     }
     fn values(v: Vec<Self>) -> Value {
         Value::Bls12381G2Vector(v.into())

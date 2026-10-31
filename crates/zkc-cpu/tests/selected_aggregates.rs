@@ -204,7 +204,7 @@ fn complete_inactive_layout_and_nested_resident_children_survive_pack_and_access
             vec![
                 Value::BlstField(kernel::Scalar::ONE),
                 Value::BlstVector(resident(&[3])),
-                Value::BlstG1(kernel::G1::generator()),
+                Value::BlstG1(kernel::G1::generator().into()),
                 Value::BlstG2(Arc::new(kernel::G2::generator()))
             ]
         )
@@ -404,7 +404,7 @@ fn nested_frames_preserve_every_selected_resident_leaf_without_conversion() {
             vec![
                 Value::BlstField(kernel::Scalar::from(13)),
                 Value::BlstVector(resident(&[2, 7])),
-                Value::BlstG1(kernel::G1::generator()),
+                Value::BlstG1(kernel::G1::generator().into()),
                 Value::BlstG1Vector(Arc::new(
                     kernel::G1Vector::try_from_fn(2, |_| Ok(kernel::G1::generator())).unwrap(),
                 )),
@@ -793,7 +793,7 @@ fn native_match_preserves_every_resident_payload_port_and_empty_alternative() {
         let args = vec![
             Value::BlstField(kernel::Scalar::from(3)),
             Value::BlstVector(resident(&[5, 7])),
-            Value::BlstG1(kernel::G1::generator()),
+            Value::BlstG1(kernel::G1::generator().into()),
             Value::BlstG2(Arc::new(kernel::G2::generator())),
         ];
         let runner = Runner::new(&program, "main", "P", "session", backend(), args)

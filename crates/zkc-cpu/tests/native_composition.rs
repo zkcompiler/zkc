@@ -227,7 +227,7 @@ fn pairing_result_uses_ordinary_group_contracts() {
     let paired = call(
         "pairing.apply",
         "bn254.fr",
-        vec![Value::Bn254G1(g1), Value::Bn254G2(g2)],
+        vec![Value::Bn254G1(g1), Value::Bn254G2(g2.into())],
     );
     let scaled = call(
         "curve.scale",
@@ -257,7 +257,7 @@ fn pairing_preparation_obeys_value_capacity() {
             "bn254.fr",
             vec![
                 Value::Bn254G1(Bn254G1::generator()),
-                Value::Bn254G2(Bn254G2::generator()),
+                Value::Bn254G2(Bn254G2::generator().into()),
             ],
         ),
         ("curve.generator", "bn254.gt", vec![]),

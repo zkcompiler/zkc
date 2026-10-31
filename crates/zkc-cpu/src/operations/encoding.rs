@@ -546,7 +546,10 @@ pub(crate) fn apply(
             "encoding.group_from_compressed" | "encoding.group_decode_cofactor",
             [Value::Bytes(bytes)],
         ) if identity == Identity::Edwards25519Prime => {
-            policy.output(2 * crate::VALUE_SLOT_BYTES, available)?;
+            policy.output(
+                Value::shared_group_retained_bytes() + crate::VALUE_SLOT_BYTES,
+                available,
+            )?;
             budget.charge_units(if name == "encoding.group_decode_cofactor" {
                 2048
             } else {
@@ -559,11 +562,11 @@ pub(crate) fn apply(
             };
             Ok(vec![
                 Value::Bool(point.is_some()),
-                Value::EdwardsGroup(point.unwrap_or_else(crate::EdwardsPrime::identity)),
+                Value::EdwardsGroup(point.unwrap_or_else(crate::EdwardsPrime::identity).into()),
             ])
         }
         ("encoding.cryptonote_map", [Value::Bytes(bytes)]) => {
-            policy.output(crate::VALUE_SLOT_BYTES, available)?;
+            policy.output(Value::shared_group_retained_bytes(), available)?;
             let input: [u8; 32] = bytes
                 .as_ref()
                 .try_into()
@@ -571,7 +574,8 @@ pub(crate) fn apply(
             budget.charge_units(2048)?;
             Ok(vec![Value::EdwardsGroup(
                 zkc_kernels::interop::monero::cryptonote_map(input)
-                    .ok_or_else(|| refused("edwards-map"))?,
+                    .ok_or_else(|| refused("edwards-map"))?
+                    .into(),
             )])
         }
         ("encoding.group_compressed", [Value::Bls12381G2(point)]) => {
@@ -584,11 +588,14 @@ pub(crate) fn apply(
         ("encoding.group_from_compressed", [Value::Bytes(bytes)])
             if identity == Identity::Bls12381G2 =>
         {
-            policy.output(2 * crate::VALUE_SLOT_BYTES, available)?;
+            policy.output(
+                Value::shared_group_retained_bytes() + crate::VALUE_SLOT_BYTES,
+                available,
+            )?;
             let point = crate::Bls12381G2::from_bytes(bytes).ok();
             Ok(vec![
                 Value::Bool(point.is_some()),
-                Value::Bls12381G2(point.unwrap_or_else(crate::Bls12381G2::identity)),
+                Value::Bls12381G2(point.unwrap_or_else(crate::Bls12381G2::identity).into()),
             ])
         }
         ("encoding.group_compressed", [Value::Curve(point)]) => {
@@ -880,8 +887,8 @@ mod tests {
                     .into(),
                 ),
                 vec![
-                    Value::EdwardsGroup(crate::EdwardsPrime::identity()),
-                    Value::EdwardsGroup(crate::EdwardsPrime::generator()),
+                    Value::EdwardsGroup(crate::EdwardsPrime::identity().into()),
+                    Value::EdwardsGroup(crate::EdwardsPrime::generator().into()),
                 ],
             ),
         ];
@@ -1051,27 +1058,30 @@ mod tests {
         use crate::EdwardsPrime as G;
         use curve25519_dalek::constants::{ED25519_BASEPOINT_POINT, EIGHT_TORSION};
         for point in [G::identity(), G::generator(), -G::generator()] {
-            let raw = dalek("encoding.group_compressed", &[Value::EdwardsGroup(point)]);
+            let raw = dalek(
+                "encoding.group_compressed",
+                &[Value::EdwardsGroup((point).into())],
+            );
             assert!(
                 matches!(dalek("encoding.group_from_compressed", &raw).as_slice(),
-                [Value::Bool(true), Value::EdwardsGroup(v)] if *v == point)
+                [Value::Bool(true), Value::EdwardsGroup(v)] if **v == point)
             );
         }
         for torsion in EIGHT_TORSION.iter().skip(1) {
             let raw = bytes(&(ED25519_BASEPOINT_POINT + torsion).compress().to_bytes());
             assert!(
                 matches!(dalek("encoding.group_from_compressed", std::slice::from_ref(&raw)).as_slice(),
-                [Value::Bool(false), Value::EdwardsGroup(v)] if *v == G::identity())
+                [Value::Bool(false), Value::EdwardsGroup(v)] if **v == G::identity())
             );
             assert!(
                 matches!(dalek("encoding.group_decode_cofactor", &[raw]).as_slice(),
-                [Value::Bool(true), Value::EdwardsGroup(v)] if *v == G::generator().scale(8u64.into()))
+                [Value::Bool(true), Value::EdwardsGroup(v)] if **v == G::generator().scale(8u64.into()))
             );
         }
         for raw in [vec![], vec![0; 31], vec![0; 33], vec![255; 32]] {
             assert!(
                 matches!(dalek("encoding.group_decode_cofactor", &[bytes(&raw)]).as_slice(),
-                [Value::Bool(false), Value::EdwardsGroup(v)] if *v == G::identity())
+                [Value::Bool(false), Value::EdwardsGroup(v)] if **v == G::identity())
             );
         }
     }
@@ -1264,11 +1274,14 @@ mod tests {
     fn g2_codec_round_trips_and_rejects_malformed_encodings() {
         let generator = crate::Bls12381G2::generator();
         for value in [generator, crate::Bls12381G2::identity(), generator.neg()] {
-            let encoded = g2("encoding.group_compressed", &[Value::Bls12381G2(value)]);
+            let encoded = g2(
+                "encoding.group_compressed",
+                &[Value::Bls12381G2((value).into())],
+            );
             assert!(matches!(&encoded[0], Value::Bytes(b) if b.len() == 96));
             assert!(
                 matches!(g2("encoding.group_from_compressed", &encoded).as_slice(),
-                [Value::Bool(true), Value::Bls12381G2(p)] if *p == value)
+                [Value::Bool(true), Value::Bls12381G2(p)] if **p == value)
             );
         }
         let identity = crate::Bls12381G2::identity().to_bytes().unwrap();
@@ -1287,7 +1300,7 @@ mod tests {
         ] {
             assert!(
                 matches!(g2("encoding.group_from_compressed", &[bytes(&invalid)]).as_slice(),
-                [Value::Bool(false), Value::Bls12381G2(p)] if *p == crate::Bls12381G2::identity())
+                [Value::Bool(false), Value::Bls12381G2(p)] if **p == crate::Bls12381G2::identity())
             );
         }
     }

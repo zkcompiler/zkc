@@ -403,7 +403,7 @@ impl CpuBackend {
                     .map(Value::BlstField)
                     .map_err(|_| Invalid(DecodeReason::Scalar)),
                 9 => kernel::G1::from_bytes(&bytes[6..])
-                    .map(Value::BlstG1)
+                    .map(|point| Value::BlstG1(point.into()))
                     .map_err(|_| Invalid(DecodeReason::Group)),
                 51 => kernel::G2::from_bytes(&bytes[6..])
                     .map(|p| Value::BlstG2(std::sync::Arc::new(p)))
@@ -484,12 +484,14 @@ impl CpuBackend {
                     .map_err(|_| Invalid(DecodeReason::Group))?,
             ),
             48 => Value::Bn254G2(
-                crate::Bn254G2::from_bytes(&bytes[6..])
-                    .map_err(|_| Invalid(DecodeReason::Group))?,
+                (crate::Bn254G2::from_bytes(&bytes[6..])
+                    .map_err(|_| Invalid(DecodeReason::Group))?)
+                .into(),
             ),
             51 => Value::Bls12381G2(
-                crate::Bls12381G2::from_bytes(&bytes[6..])
-                    .map_err(|_| Invalid(DecodeReason::Group))?,
+                (crate::Bls12381G2::from_bytes(&bytes[6..])
+                    .map_err(|_| Invalid(DecodeReason::Group))?)
+                .into(),
             ),
             53 => Value::Bls12381Gt(std::sync::Arc::new(
                 crate::Bls12381Gt::from_bytes(&bytes[6..])
@@ -511,7 +513,9 @@ impl CpuBackend {
                 .ok_or(Invalid(DecodeReason::Scalar))?,
             ),
             68 => Value::EdwardsGroup(
-                crate::EdwardsPrime::from_bytes(&bytes[6..]).ok_or(Invalid(DecodeReason::Group))?,
+                (crate::EdwardsPrime::from_bytes(&bytes[6..])
+                    .ok_or(Invalid(DecodeReason::Group))?)
+                .into(),
             ),
             16 => {
                 let compressed = curve25519_dalek::ristretto::CompressedRistretto(
@@ -523,7 +527,7 @@ impl CpuBackend {
                 if point.compress() != compressed {
                     return Err(Invalid(DecodeReason::Group));
                 }
-                Value::RistrettoGroup(point)
+                Value::RistrettoGroup((point).into())
             }
             _ => unreachable!("closed native frame"),
         };

@@ -145,7 +145,7 @@ fn cases_with_len(len: usize) -> Vec<Case> {
             BlstG1Vector,
             BlstVector,
             BlstField,
-            |v| v,
+            Arc::new,
             0
         ),
         case!(

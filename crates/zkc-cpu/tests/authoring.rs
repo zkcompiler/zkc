@@ -281,8 +281,9 @@ fn random_vector_crosses_into_group_kernel_with_one_resource_authority() {
             support::assert_value(
                 &outputs[0],
                 &Value::RistrettoGroup(
-                    curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT
-                        * RistrettoScalar::from(76u64),
+                    (curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT
+                        * RistrettoScalar::from(76u64))
+                    .into(),
                 ),
             );
             let Value::Rng(next) = &outputs[1] else {

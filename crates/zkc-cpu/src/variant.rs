@@ -6,10 +6,14 @@ use zkc_runtime::vm::{Backing, PhysicalType, Value as RuntimeValue, VariantDescr
 
 #[derive(Clone, Debug)]
 pub struct Variant {
+    node: Arc<VariantNode>,
+}
+#[derive(Debug)]
+struct VariantNode {
     physical_type: PhysicalType,
     descriptor: Arc<VariantDescriptor>,
     alternative: usize,
-    payload: Arc<[Value]>,
+    payload: Box<[Value]>,
     /// Charge of the payload allocation: header, payload slots and
     /// storage the payload keeps inline. Payload allocations are separate.
     spine: usize,
@@ -46,13 +50,15 @@ impl Variant {
             .unwrap_or(usize::MAX);
         let resource_free = payload.iter().all(Value::is_resource_free);
         let value = Self {
-            physical_type,
-            descriptor,
-            alternative,
-            payload: payload.into(),
-            spine,
-            retained,
-            resource_free,
+            node: Arc::new(VariantNode {
+                physical_type,
+                descriptor,
+                alternative,
+                payload: payload.into(),
+                spine,
+                retained,
+                resource_free,
+            }),
         };
         value.validate()?;
         Ok(value)
@@ -61,42 +67,44 @@ impl Variant {
     /// payload's own allocations.
     pub(crate) fn retained_parts(&self, shared: &mut dyn FnMut(Backing) -> bool) -> usize {
         if shared(self.spine()) {
-            self.physical_type.visit_descriptor_backings(shared);
-            for value in self.payload.iter() {
+            self.node.physical_type.visit_descriptor_backings(shared);
+            for value in self.node.payload.iter() {
                 value.retained_parts(shared);
             }
         }
         0
     }
     fn spine(&self) -> Backing {
-        Backing::of(&self.payload, self.spine)
+        Backing::of(&self.node, self.node.spine)
     }
     /// Contents fix validation only when no capability can be retired later.
     pub(crate) fn validation_backing(&self) -> Option<Backing> {
-        self.resource_free.then(|| self.spine())
+        self.node.resource_free.then(|| self.spine())
     }
     pub(crate) fn is_resource_free(&self) -> bool {
-        self.resource_free
+        self.node.resource_free
     }
     pub(crate) fn physical_type(&self) -> &PhysicalType {
-        &self.physical_type
+        &self.node.physical_type
     }
     pub fn descriptor(&self) -> &Arc<VariantDescriptor> {
-        &self.descriptor
+        &self.node.descriptor
     }
     pub fn alternative(&self) -> usize {
-        self.alternative
+        self.node.alternative
     }
     pub fn payload(&self) -> &[Value] {
-        &self.payload
+        &self.node.payload
     }
     pub(crate) fn validate(&self) -> Result<()> {
         let arm = self
+            .node
             .physical_type
-            .variant_payload(self.alternative)
+            .variant_payload(self.node.alternative)
             .ok_or_else(|| refused("variant-alternative"))?;
-        if self.payload.len() != arm.len()
+        if self.node.payload.len() != arm.len()
             || self
+                .node
                 .payload
                 .iter()
                 .zip(arm)
@@ -108,11 +116,11 @@ impl Variant {
     }
     pub(crate) fn retained_bytes(&self) -> usize {
         // Stable physical-profile charge: descriptor, active storage, leaves.
-        // Arc payload storage has exact length; no inactive value is allocated.
+        // Owned payload storage has exact length; no inactive value is allocated.
         const {
-            assert!(std::mem::size_of::<Self>() <= 256);
+            assert!(std::mem::size_of::<VariantNode>() + 2 * std::mem::size_of::<usize>() <= 256);
         }
-        self.retained
+        self.node.retained
     }
     pub(crate) fn storage_bytes(
         physical_type: &PhysicalType,

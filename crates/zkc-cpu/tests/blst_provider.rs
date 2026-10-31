@@ -342,7 +342,7 @@ fn resident_g1_g2_and_pairing_closure_matches_arkworks() {
         let domain = if g2 { "bls12-381.g2" } else { "bls12-381.g1" };
         let point = |n| {
             if g2 {
-                Value::Bls12381G2(Bls12381G2::generator().scale(Scalar::from(n)))
+                Value::Bls12381G2((Bls12381G2::generator().scale(Scalar::from(n))).into())
             } else {
                 Value::Curve(G1::generator().scale(Scalar::from(n)))
             }
@@ -439,8 +439,8 @@ fn selected_codecs_match_canonical_language_and_reject_invalid_encodings() {
         Value::Field(Scalar::from(9)),
         Value::Curve(G1::identity()),
         Value::Curve(G1::generator()),
-        Value::Bls12381G2(Bls12381G2::identity()),
-        Value::Bls12381G2(Bls12381G2::generator()),
+        Value::Bls12381G2((Bls12381G2::identity()).into()),
+        Value::Bls12381G2((Bls12381G2::generator()).into()),
         vector(&[]),
         vector(&[0, 1, 7]),
         Value::Groups(vec![G1::identity(), G1::generator()].into()),
@@ -606,7 +606,7 @@ fn explicit_conversions_are_bidirectional_and_preserve_wire() {
         vector(&[0, 1, 19]),
         Value::Curve(G1::generator()),
         Value::Groups(vec![G1::identity(), G1::generator()].into()),
-        Value::Bls12381G2(Bls12381G2::generator()),
+        Value::Bls12381G2((Bls12381G2::generator()).into()),
         Value::Bls12381G2Vector(vec![Bls12381G2::generator()].into()),
     ] {
         let source = value.physical_type();
@@ -641,10 +641,12 @@ fn explicit_conversions_are_bidirectional_and_preserve_wire() {
                 Value::BlstG2Vector(v) => Some(v.len() * std::mem::size_of::<Bls12381G2>()),
                 _ => None,
             };
-            let scalar_bytes = match (&input, importing) {
-                (Value::Bls12381G2(_) | Value::Bn254G2(_), true) => 512,
-                (Value::BlstG2(_) | Value::HaloG2(_), true) => unreachable!(),
-                _ => zkc_cpu::VALUE_SLOT_BYTES,
+            let scalar_bytes = if matches!(&input, Value::Bls12381G2(_) | Value::BlstG2(_))
+                || (importing && matches!(&input, Value::Curve(_)))
+            {
+                512
+            } else {
+                zkc_cpu::VALUE_SLOT_BYTES
             };
             let retained = payload.map_or(scalar_bytes, |bytes| bytes + 256);
             let memory = if !importing && payload.is_some() {
@@ -846,7 +848,7 @@ fn selected_codecs_reject_noncanonical_scalars_and_wrong_subgroups_at_each_bulk_
     }
     for value in [
         Value::Curve(G1::identity()),
-        Value::Bls12381G2(Bls12381G2::identity()),
+        Value::Bls12381G2((Bls12381G2::identity()).into()),
     ] {
         let ty = physical(value.ty(), value.physical_type().logical().identity());
         let mut bytes = b.encode_native_value(&value).unwrap();
@@ -1079,7 +1081,7 @@ fn granting_g1_msm_does_not_grant_g2_or_weaken_operand_premises() {
     ];
     let (result, _) = run(backend, &g1, &[], args, 1);
     assert!(
-        matches!(result.unwrap().as_slice(), [Value::BlstG1(point)] if *point == kernel::G1::identity())
+        matches!(result.unwrap().as_slice(), [Value::BlstG1(point)] if **point == kernel::G1::identity())
     );
 }
 

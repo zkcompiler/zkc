@@ -75,7 +75,7 @@ value; sharing does not reduce this per-value bound. The full charge includes:
 - 256 root bytes and the complete physical descriptor estimate;
 - 256 bytes per tree node;
 - 32 bytes per branch child slot;
-- 512 bytes per element slot and each element's full retained charge.
+- 128 bytes per CPU element slot and each element's full retained charge.
 
 Runner [retained-value ledgers](../runtime/capacity.md#retained-values-and-logical-work)
 count each live root, tree node and nested element allocation once. Inline
