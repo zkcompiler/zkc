@@ -1495,6 +1495,45 @@ fn independent_block_carriers_admit_each_endpoint_and_zero_difficulty() {
 }
 
 #[test]
+fn custom_plans_cannot_claim_native_index_block_adapters() {
+    for bits in [None, Some(0), Some(4)] {
+        let mut f = block_fixture(bits);
+        let adapters: Vec<_> = ["observe", "challenge", "delivery"]
+            .into_iter()
+            .zip(&f.events)
+            .map(|(name, event)| json!([name, "native", [event.origin]]))
+            .collect();
+        f.plan = ConstructionPlan::read(&json!([
+            "zkc.construction-plan/0",
+            "Custom",
+            "host",
+            [format!("transcript:{BLOCK_SUITE}")],
+            "",
+            ["", []],
+            adapters,
+            []
+        ]))
+        .unwrap();
+        assert_eq!(f.admit(None).unwrap_err().0, "native-proof-index-block");
+        for operation in [NativeProofOperation::Prove, NativeProofOperation::Verify] {
+            let mut selected = block_fixture(bits).selected(operation);
+            selected.plan = f.plan.clone();
+            if bits.is_some() {
+                if operation == NativeProofOperation::Prove {
+                    selected.program[2].as_array_mut().unwrap().remove(1);
+                } else {
+                    selected.program[2].as_array_mut().unwrap().pop();
+                }
+            }
+            assert_eq!(
+                selected.admit(Some(operation)).unwrap_err().0,
+                "native-proof-index-block"
+            );
+        }
+    }
+}
+
+#[test]
 fn block_parameter_carriers_refuse_malformed_and_out_of_domain_values() {
     let valid = block_fixture(Some(4));
     let contracts = crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose());

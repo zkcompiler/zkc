@@ -206,7 +206,9 @@ protocol Blocks roles(P,V)(coins: Random<E> @V) -> (positions: Indices @P) {
 def test_applied_source_blocks_keep_distinct_witness_slots(toolchain, journal, directory, all_gated):
     fixture = Path(__file__).resolve().parents[3] / 'compiler/test/fixtures/language/index_block.zkc'
     source = directory / 'applied.zkc'
-    source.write_text(fixture.read_text().replace('protocol Blocks', 'protocol Child').replace(
+    source.write_text(fixture.read_text().replace(
+        '    let delivered', '    let checkpoint @P = yes();\n    let delivered').replace(
+        'protocol Blocks', 'protocol Child').replace(
         'proof Proof', '''
 protocol Blocks<N: nat, Q: nat> roles(V,P)(rounds: index @(P,V), coins: Random<E> @V)
     -> (accepted: bool @V) {

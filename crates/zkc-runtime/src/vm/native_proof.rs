@@ -1199,10 +1199,13 @@ impl NativeProofEntry {
                 return Err(refuse("native-proof-duplicate-origin"));
             }
             if let Some(count) = event.count {
-                if !matches!(
-                    event.contract.as_str(),
-                    "transcript.native.indexed.indices" | "transcript.native.indexed.indices.gated"
-                ) || !(1..=1 << 20).contains(&count)
+                if plan.is_some()
+                    || !matches!(
+                        event.contract.as_str(),
+                        "transcript.native.indexed.indices"
+                            | "transcript.native.indexed.indices.gated"
+                    )
+                    || !(1..=1 << 20).contains(&count)
                     || event
                         .bound
                         .is_none_or(|bound| !bound.is_power_of_two() || bound > 1 << 63)

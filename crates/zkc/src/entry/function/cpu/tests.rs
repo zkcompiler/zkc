@@ -118,6 +118,42 @@ fn refusal(doc: &Json, code: &str) {
     let e = admit(doc).err().expect("must refuse");
     assert_eq!(e.code(), code, "{e:?}");
 }
+
+#[test]
+fn compact_source_schemas_cannot_exceed_the_native_descriptor_cache_limit() {
+    for count in [6, 9] {
+        let schemas: Vec<_> = (0..count)
+            .map(|i| {
+                let inner = json!(["inner", [["A", vec!["bool"; 128]]]]);
+                let outer = json!([format!("outer{i}"), [["B", vec![inner; 64]]]]);
+                let spelling = format!(
+                    "sequence<{}>",
+                    zkc_test_support::variants::encode_tree(outer)
+                );
+                schema("builtin", &spelling, json!([spelling]))
+            })
+            .collect();
+        let names: Vec<_> = (0..count).map(|i| format!("p{i}")).collect();
+        let parameters = names
+            .iter()
+            .zip(schemas)
+            .map(|(name, schema)| (name.as_str(), schema))
+            .collect();
+        let operations = json!([{
+            "op":"construct", "alternative":"", "operands":[],
+            "results":[definition(count, unit())]
+        }]);
+        let doc = document(parameters, unit(), operations, json!([count]));
+        // Source inspection remains independent of native cache layout.
+        FunctionInterface::read(&capture(&doc)).unwrap();
+        if count == 6 {
+            admit(&doc).unwrap();
+        } else {
+            refusal(&doc, "entry-interface-limit");
+        }
+    }
+}
+
 fn calculation() -> Json {
     let field = schema(
         "field",

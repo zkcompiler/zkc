@@ -816,6 +816,75 @@ Expected<NativeProofPolicy> parseNativeProofPolicy(StringRef text) {
   return readProofPolicy(text, false);
 }
 namespace {
+using ActionPositions =
+    llvm::DenseMap<std::pair<Attribute, Attribute>, unsigned>;
+
+// Generated actions can join endpoints at different source positions. Order
+// their metadata from the actual participant bodies, retaining the global order
+// of source actions. This changes neither body nor its ordered failure
+// behavior.
+Expected<ArrayAttr> orderConstructedActions(Builder &builder,
+                                            const ActionPositions &positions,
+                                            ArrayRef<Attribute> actions,
+                                            ArrayAttr source) {
+  llvm::DenseMap<Attribute, unsigned> bySite;
+  llvm::DenseMap<Attribute, SmallVector<std::pair<unsigned, unsigned>>>
+      byParticipant;
+  SmallVector<SmallVector<unsigned>> successors(actions.size());
+  SmallVector<unsigned> incoming(actions.size(), 0);
+  auto edge = [&](unsigned before, unsigned after) {
+    successors[before].push_back(after);
+    ++incoming[after];
+  };
+  for (auto [index, item] : enumerate(actions)) {
+    auto action = cast<DictionaryAttr>(item);
+    auto site = action.getAs<StringAttr>("site");
+    if (!bySite.try_emplace(site, index).second)
+      return error("native-proof-construction-order");
+    for (auto target : action.getAs<ArrayAttr>("targets")) {
+      auto participant = cast<DictionaryAttr>(target).get("participant");
+      auto found = positions.find({participant, site});
+      if (found == positions.end())
+        return error("native-proof-construction-order");
+      byParticipant[participant].emplace_back(found->second, index);
+    }
+  }
+  std::optional<unsigned> previous;
+  for (auto item : source) {
+    auto found = bySite.find(cast<DictionaryAttr>(item).get("site"));
+    if (found == bySite.end())
+      continue;
+    if (previous)
+      edge(*previous, found->second);
+    previous = found->second;
+  }
+  for (auto &[participant, occurrences] : byParticipant) {
+    llvm::sort(occurrences);
+    for (unsigned i = 1; i < occurrences.size(); ++i) {
+      if (occurrences[i - 1].first == occurrences[i].first)
+        return error("native-proof-construction-order");
+      edge(occurrences[i - 1].second, occurrences[i].second);
+    }
+  }
+  // Prefer the existing order whenever the constraints leave a choice.
+  std::set<unsigned> ready;
+  for (auto [index, count] : enumerate(incoming))
+    if (!count)
+      ready.insert(index);
+  SmallVector<Attribute> ordered;
+  while (!ready.empty()) {
+    unsigned next = *ready.begin();
+    ready.erase(ready.begin());
+    ordered.push_back(actions[next]);
+    for (unsigned successor : successors[next])
+      if (!--incoming[successor])
+        ready.insert(successor);
+  }
+  if (ordered.size() != actions.size())
+    return error("native-proof-construction-order");
+  return builder.getArrayAttr(ordered);
+}
+
 class Emitter {
   pir::ProtocolModuleOp module;
   const NativeProofPolicy &policy;
@@ -1459,43 +1528,41 @@ public:
           }))
         return error("native-proof-event-chain");
     }
-    auto rewrite = [&](auto &&self, ArrayAttr source) -> ArrayAttr {
+    ActionPositions positions;
+    for (auto participant :
+         module.getBody().front().getOps<pir::ParticipantOp>()) {
+      unsigned next = 0;
+      auto reference = FlatSymbolRefAttr::get(participant);
+      participant.walk<WalkOrder::PreOrder>([&](Operation *op) {
+        if (auto site = op->getAttrOfType<StringAttr>("site"))
+          positions.try_emplace({reference, site}, next++);
+      });
+    }
+    auto rewrite = [&](auto &&self, ArrayAttr source) -> Expected<ArrayAttr> {
       SmallVector<Attribute> actions;
       for (auto item : source) {
         auto action = cast<DictionaryAttr>(item);
         auto site = action.getAs<StringAttr>("site").str();
         if (auto body = action.getAs<ArrayAttr>("body")) {
           NamedAttrList edited(action);
-          edited.set("body", self(self, body));
+          auto nested = self(self, body);
+          if (!nested)
+            return nested.takeError();
+          edited.set("body", *nested);
           action = edited.getDictionary(module.getContext());
         }
         if (!queries.count(site) && !deliveries.count(site) &&
             !startRules.count(site))
           actions.push_back(action);
-        auto inserted = addedActions[site];
-        if (auto event = events.find(site);
-            event != events.end() && event->second->difficulty) {
-          auto order = [&](Attribute attr) {
-            auto row = cast<DictionaryAttr>(attr);
-            if (row.getAs<StringAttr>("kind").getValue() == "protocol.exchange")
-              return 1;
-            auto target =
-                cast<DictionaryAttr>(row.getAs<ArrayAttr>("targets")[0]);
-            auto endpoint = symbols.lookup<pir::ParticipantOp>(
-                target.getAs<FlatSymbolRefAttr>("participant").getValue());
-            return endpoint.getRole() == policy.producer ? 0 : 2;
-          };
-          llvm::stable_sort(inserted, [&](Attribute a, Attribute b) {
-            return order(a) < order(b);
-          });
-        }
-        append_range(actions, inserted);
+        append_range(actions, addedActions[site]);
       }
-      return builder.getArrayAttr(actions);
+      return orderConstructedActions(builder, positions, actions, source);
     };
     SmallVector<Attribute> actionList(addedActions[""]);
-    append_range(actionList,
-                 rewrite(rewrite, original.getAs<ArrayAttr>("actions")));
+    auto rewritten = rewrite(rewrite, original.getAs<ArrayAttr>("actions"));
+    if (!rewritten)
+      return rewritten.takeError();
+    append_range(actionList, *rewritten);
     auto actions = builder.getArrayAttr(actionList);
     SmallVector<Attribute> states;
     for (Type type : stateTypes)

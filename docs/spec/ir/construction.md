@@ -57,6 +57,11 @@ that contract's field; `index` takes its constant UniformIndex bound and returns
 one index. Query result domains need not match the provider's state domain.
 Native fallback rules still require the installed suite's query domain.
 
+Generated action metadata follows both actual participant bodies and preserves
+the global order of retained source actions. A construction that cannot satisfy
+both orders refuses with `native-proof-construction-order`; it does not move
+source calls, guards or stops to accommodate a witness exchange.
+
 Each selected query has one delivery using its exact SSA result: derived values
 and `protocol.restrict_roles` wrappers refuse. Pairing is checked in the same
 source block after unsimplified static expansion, retaining the authored call

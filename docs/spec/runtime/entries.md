@@ -30,8 +30,9 @@ at 200,000 before typed decoding. Scalar tokens have at most ten bytes; encoded
 string tokens have at most six times 256 KiB. Decoded strings retain their owning
 name/type limits. Schema depth is at most 32, each aggregate has at most 1,024
 leaves, and validation has a cumulative work allowance of 1,000,000. Native leaf
-parsing retains its own structural bounds; cached descriptors have an additional
-16 MiB total retained charge. Work bounds apply independently to each admission
+parsing retains its own structural bounds. Portable schema summaries and the CPU's
+reconstructed native descriptor cache each have a 16 MiB total retained charge.
+Work bounds apply independently to each admission
 algorithm; a caller may also lower the compiler's phase limits. Unknown and
 duplicate fields refuse. The bounded tree format retains self-contained schemas;
 identities permit descriptor reuse without introducing cyclic schema references.

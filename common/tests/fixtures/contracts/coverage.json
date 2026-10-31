@@ -241,6 +241,9 @@
     "transcript": [
       "transcript.native.indexed.challenge",
       "transcript.native.indexed.index",
+      "transcript.native.indexed.indices",
+      "transcript.native.indexed.indices.gated",
+      "transcript.native.indexed.indices.search",
       "transcript.observe",
       "transcript.challenge",
       "transcript.index"

@@ -67,6 +67,28 @@ for bits in [0, 8, 64]:
         assert [event[1], slot] in deployment[8]
         assert len(re.findall(r'schema = "' + re.escape(slot) + r'"', candidate)) == 2
 
+for owners in [('P',), ('V',), ('P', 'V'), ('V', 'P')]:
+    for bits in [0, 6]:
+        with case(f'gated construction preserves intervening {owners} calls at difficulty {bits}'):
+            name = 'intervening-' + ''.join(owners) + f'-{bits}'
+            calls = '\n'.join(f'    let checkpoint{index} @{owner} = yes();'
+                              for index, owner in enumerate(owners))
+            text = SOURCE.replace('    let delivered', calls + '\n    let delivered')
+            base = json.loads(language(text, name))[2][1]
+            original = commands.run([compiler, 'language-emit', '--source-format=zkc',
+                                     '--entry=sample::Proof', f'--module=sample={OUT / (name + ".zkc")}'])
+            (OUT / f'{name}.source.mlir').write_text(original)
+            if owners == ('V', 'P'):
+                # The witness would require P's later call before V's earlier
+                # call. Refuse rather than reorder retained source effects.
+                base[11] = [[site, str(bits)] for site, _ in base[8]]
+                policy = OUT / f'{name}.policy'
+                policy.write_text(json.dumps(base))
+                commands.run([compiler, 'protocol-proof', OUT / f'{name}.source.mlir', policy],
+                             refuses='native-proof-construction-order')
+            else:
+                construct(bits, base, f'{name}.source.mlir', name)
+
 with case("source distribution admits positive bounds outside native selection"):
     path = source(SOURCE.replace("Blocks<8,5>", "Blocks<3,1048577>"), "general")
     commands.run([compiler, "language-check", "--source-format=zkc",

@@ -202,14 +202,21 @@ pub(super) fn admit(
     {
         intern(s, &mut schema_pool);
     }
+    let mut descriptor_bytes = 0usize;
     let types = validator
         .schemas
         .finish()
         .into_keys()
         .map(|spelling| {
-            LogicalType::parse(&spelling)
-                .map(|ty| (spelling, ty))
-                .map_err(|e| EntryError::new(EntryPhase::Admission, e))
+            let ty = LogicalType::parse(&spelling)
+                .map_err(|e| EntryError::new(EntryPhase::Admission, e))?;
+            // Portable schema summaries do not retain native descriptors.
+            // Bound the CPU's independently reconstructed cache as well.
+            descriptor_bytes = descriptor_bytes
+                .checked_add(ty.descriptor_bytes())
+                .filter(|bytes| *bytes <= 16 * 1024 * 1024)
+                .ok_or_else(|| EntryError::new(EntryPhase::Interface, "entry-interface-limit"))?;
+            Ok((spelling, ty))
         })
         .collect::<Result<_>>()?;
     drop(validator.calls);
