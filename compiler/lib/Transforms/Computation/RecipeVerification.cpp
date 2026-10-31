@@ -301,32 +301,26 @@ class RecipeReader {
       return value;
     }
     if (isa<data::PowerOfTwoOp>(source)) {
-      // Read each constant and SSA edge independently of recipe production.
-      // Doubling stays within ui64 through the final representable power.
-      Value result;
-      uint64_t power = 1;
-      for (unsigned exponent = 0; exponent < 64; ++exponent) {
-        auto exponentValue = natural(exponent);
-        auto powerValue = natural(power);
-        auto r = take("index.constant", {}, {}, {exponentValue});
-        auto n = take("index.constant", {}, {}, {powerValue});
-        if (!r || !n)
-          return {};
-        auto equalR = take("index.equal", {inputs[1], r});
-        auto equalN = take("index.equal", {inputs[0], n});
-        if (!equalR || !equalN)
-          return {};
-        auto current = take("bool.and", {equalR, equalN});
-        if (!current)
-          return {};
-        result = exponent == 0 ? current : take("bool.or", {result, current});
-        if (!result)
-          return {};
-        if (exponent < 63)
-          power *= 2;
-      }
-      return result;
+      // Read the complete circuit and every association from actual SSA.
+      // No producer normalization or mathematical predicate receipt is used.
+      auto zero = take("index.constant", {}, {}, {natural(0)});
+      auto one = take("index.constant", {}, {}, {natural(1)});
+      if (!zero || !one)
+        return {};
+      auto predecessor = take("index.wrapping_sub", {inputs[0], one});
+      if (!predecessor)
+        return {};
+      auto lowerBits = take("index.bit_and", {inputs[0], predecessor});
+      auto shifted = take("index.logical_shift_right", {inputs[0], inputs[1]});
+      if (!lowerBits || !shifted)
+        return {};
+      auto singleBit = take("index.equal", {lowerBits, zero});
+      auto position = take("index.equal", {shifted, one});
+      if (!singleBit || !position)
+        return {};
+      return take("bool.and", {singleBit, position});
     }
+
     if (auto dim = dyn_cast<data::DimOp>(source)) {
       auto collection = cast<CollectionTypeInterface>(dim.getInput().getType());
       auto axis = dim.getAxisAttr().getInt();

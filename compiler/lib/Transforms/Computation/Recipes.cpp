@@ -315,7 +315,8 @@ class Recipes {
     }
     if (isa<data::PowerOfTwoOp>(op)) {
       for (StringRef contract :
-           {"index.constant", "index.equal", "bool.and", "bool.or"})
+           {"index.constant", "index.equal", "index.wrapping_sub",
+            "index.bit_and", "index.logical_shift_right", "bool.and"})
         if (!protocol::operationContracts(contract))
           return failure();
       auto emit = [&](StringRef contract, ValueRange operands, Type type,
@@ -335,23 +336,27 @@ class Recipes {
                            symbols.get(application, op->getLoc(), rewriter));
         return emitState(state).front();
       };
-      Value result;
-      // Enumerating the 64 representable powers implements
-      // r < 64 && n == (1 << r), without introducing checked arithmetic.
-      for (unsigned exponent = 0; exponent < 64; ++exponent) {
-        auto constant = [&](uint64_t value) {
-          return emit("index.constant", {}, inputs[0].getType(),
-                      {rewriter.getIntegerAttr(
-                          rewriter.getIntegerType(64, false), value)});
-        };
-        auto r = constant(exponent), n = constant(uint64_t(1) << exponent);
-        auto equalR = emit("index.equal", {inputs[1], r}, rewriter.getI1Type());
-        auto equalN = emit("index.equal", {inputs[0], n}, rewriter.getI1Type());
-        auto current = emit("bool.and", {equalR, equalN}, rewriter.getI1Type());
-        result = exponent == 0 ? current
-                               : emit("bool.or", {result, current},
-                                      rewriter.getI1Type(), {}, exponent == 63);
-      }
+      // A positive word has one set bit iff n & (n-1) is zero. Its
+      // total shift by r is one exactly at that bit; counts >= 64 yield
+      // zero. This also excludes n=0 without a partial operation.
+      auto indexType = inputs[0].getType();
+      auto constant = [&](uint64_t value) {
+        return emit("index.constant", {}, indexType,
+                    {rewriter.getIntegerAttr(rewriter.getIntegerType(64, false),
+                                             value)});
+      };
+      auto zero = constant(0), one = constant(1);
+      auto predecessor =
+          emit("index.wrapping_sub", {inputs[0], one}, indexType);
+      auto lowerBits =
+          emit("index.bit_and", {inputs[0], predecessor}, indexType);
+      auto shifted =
+          emit("index.logical_shift_right", {inputs[0], inputs[1]}, indexType);
+      auto singleBit =
+          emit("index.equal", {lowerBits, zero}, rewriter.getI1Type());
+      auto position = emit("index.equal", {shifted, one}, rewriter.getI1Type());
+      auto result = emit("bool.and", {singleBit, position},
+                         rewriter.getI1Type(), {}, true);
       replace(result);
       return success();
     }
