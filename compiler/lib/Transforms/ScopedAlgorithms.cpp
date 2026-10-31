@@ -747,8 +747,8 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
     };
     OwningOpRef<ModuleOp> candidate;
     if (speculative) {
-      ScopedDiagnosticHandler quiet(source.getContext(),
-                                    [](Diagnostic &) { return success(); });
+      zkc::diagnostics::ScopedThreadDiagnosticHandler quiet(
+          source.getContext(), [](Diagnostic &) { return success(); });
       candidate = propose();
     } else
       candidate = propose();

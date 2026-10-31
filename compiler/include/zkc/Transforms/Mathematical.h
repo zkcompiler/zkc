@@ -23,6 +23,9 @@ struct ApplicationStart {
 /// Selected
 /// application starts are semantic construction inputs, not pass options.
 /// Expansion and correspondence check each selection before publication.
+/// Initializes preparation dialects in the source context. Make the first
+/// direct call before sharing a lazy context across concurrent invocations;
+/// pass wrappers preload the same dependencies before parallel execution.
 mlir::OwningOpRef<mlir::ModuleOp>
 prepareProtocol(mlir::ModuleOp source, bool simplify = true,
                 MathematicalSelectionPolicy policy = {},
@@ -50,6 +53,8 @@ llvm::Error checkFormulaDefinitions(mlir::ModuleOp, uint64_t &remaining);
 /// sufficient capacity. Does not prove native kernel implementations.
 mlir::LogicalResult verifyPolynomialRecipesPreserved(mlir::ModuleOp original,
                                                      mlir::ModuleOp candidate);
+/// Expand an admitted source transactionally, initializing the same dialects
+/// as preparation. Initialize a lazy context before concurrent direct calls.
 mlir::LogicalResult expandPolynomialRecipes(mlir::ModuleOp module);
 
 /// Independently read original scoped execution against the actual scoped

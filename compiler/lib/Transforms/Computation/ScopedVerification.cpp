@@ -178,8 +178,18 @@ class ScopedReader {
         }
         continue;
       }
-      if (!cursor || op->getName() != cursor->getName() ||
-          op->getAttrDictionary() != cursor->getAttrDictionary() ||
+      if (!cursor || op->getName() != cursor->getName())
+        return refuse("ordered scoped context, site or result changed");
+      NamedAttrList expected(op->getAttrs()), observed(cursor->getAttrs());
+      if (isa<exec::MatchOp>(op)) {
+        // Native storage sizes can change when actual captures alias. Both
+        // readers validate the segments; the logical operands and every arm's
+        // formal association are independently compared below.
+        expected.erase("successor_operand_segments");
+        observed.erase("successor_operand_segments");
+      }
+      if (expected.getDictionary(op->getContext()) !=
+              observed.getDictionary(op->getContext()) ||
           step.outputs.size() != ports.outputs(cursor).size() ||
           !equal(ValueRange(step.outputs).getTypes(),
                  ports.outputs(cursor).getTypes()) ||
@@ -302,6 +312,16 @@ verifyScopedNumericalContext(protocol_ir::ProtocolModuleOp original,
                              mathematical::VerificationDecision &outcome) {
   if (original->getAttrDictionary() != candidate->getAttrDictionary())
     return failure();
+  std::optional<CapacityCause> capacity;
+  if (!chargeCopy(original, work.numericalContextChecking, &capacity) ||
+      !chargeCopy(candidate, work.numericalContextChecking, &capacity)) {
+    if (!capacity)
+      capacity = CapacityCause{WorkOwner::AlgorithmChecking};
+    capacity->owner = WorkOwner::AlgorithmChecking;
+    outcome = {mathematical::VerificationObservation::RequiredCapacity,
+               "scoped numerical context inspection capacity", capacity};
+    return failure();
+  }
   auto source = protocol::readSourceExecutionClosure(original);
   // Finite requests remain pending until physical selection. This edge
   // accounts for their actual operands, attributes and unchanged mathematical
@@ -313,12 +333,6 @@ verifyScopedNumericalContext(protocol_ir::ProtocolModuleOp original,
       diagnostics::emit(original.emitOpError(), source.takeError());
     if (!actual)
       diagnostics::emit(candidate.emitOpError(), actual.takeError());
-    return failure();
-  }
-  if (!chargeCopy(original, work.numericalContextChecking) ||
-      !chargeCopy(candidate, work.numericalContextChecking)) {
-    outcome = {mathematical::VerificationObservation::RequiredCapacity,
-               "scoped numerical context copy capacity"};
     return failure();
   }
   return ScopedReader(original, candidate, declarations, *source, **actual,

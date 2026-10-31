@@ -87,8 +87,8 @@ OwningOpRef<ModuleOp> normalizeSelectionCallback(Computation &computation,
   {
     // Required helper expansion diagnoses failure. Here failure only declines
     // an optional proposal; the untouched ordered path owns any real refusal.
-    ScopedDiagnosticHandler quiet(root->getContext(),
-                                  [](Diagnostic &) { return success(); });
+    zkc::diagnostics::ScopedThreadDiagnosticHandler quiet(
+        root->getContext(), [](Diagnostic &) { return success(); });
     if (succeeded(mathematical::chargeHelperOperations(
             computation.helper, operations, slots, &structural, &outcome))) {
       scratch = cast<func::FuncOp>(computation.helper->clone());

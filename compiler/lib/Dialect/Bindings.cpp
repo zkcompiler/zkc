@@ -228,15 +228,16 @@ Expected<protocol::OperationBinding> readBinding(Operation *op) {
   if (!op)
     return error("binding-declaration-context");
   std::string code = "binding-signature", detail;
-  ScopedDiagnosticHandler capture(op->getContext(), [&](Diagnostic &value) {
-    if (detail.empty()) {
-      auto refusals = diagnostics::refusals(value);
-      if (!refusals.empty())
-        code = refusals.front().code;
-    }
-    detail += value.str();
-    return success();
-  });
+  zkc::diagnostics::ScopedThreadDiagnosticHandler capture(
+      op->getContext(), [&](Diagnostic &value) {
+        if (detail.empty()) {
+          auto refusals = diagnostics::refusals(value);
+          if (!refusals.empty())
+            code = refusals.front().code;
+        }
+        detail += value.str();
+        return success();
+      });
   auto native = readNativeBinding([&] { return op->emitOpError(); }, op);
   if (failed(native))
     return error(code, detail);

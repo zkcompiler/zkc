@@ -1,3 +1,4 @@
+#include "../lib/Transforms/PreparedProtocol.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
@@ -5,11 +6,13 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Operations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/TypeAdapters.h"
 #include "zkc/Interfaces/Mathematical.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 
 using namespace mlir;
@@ -207,10 +210,109 @@ module { "protocol.module"() ({
       input_roles=[["P"], ["P"]], output_roles=[["P"]]} : () -> ()
 }) {profile=#protocol.profile<protocol>} : () -> () }
 )mlir";
+
+// The evaluate signature mentions no Data type and no output execution dialect.
+// Parser verification still needs Polynomial's declared Data dependency.
+constexpr StringLiteral polynomialRecipe = R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+!T = !poly.multilinear<"bls12-381.fr">
+!P = !poly.point<"bls12-381.fr">
+module { "protocol.module"() ({
+  "poly.recipe"() ({ ^slots(%a: !F, %b: !F):
+    %product = algebra.field_multiply %a, %b : (!F, !F) -> !F
+    "poly.recipe_yield"(%product) : (!F) -> ()
+  }) {sym_name="product", degree=2:i64} : () -> ()
+  "poly.realize"() {sym_name="evaluate", recipe=@product, kind="evaluate",
+      function_type=(!P, !T, !T) -> !F} : () -> ()
+  "protocol.func"() ({ ^entry(%point: !P, %a: !T, %b: !T):
+    %r = "protocol.local_call"(%point, %a, %b)
+        {callee=@evaluate, role="P", site="evaluate"} : (!P, !T, !T) -> !F
+    "protocol.return"(%r) : (!F) -> ()
+  }) {sym_name="main", function_type=(!P, !T, !T) -> !F, roles=["P"],
+      input_roles=[["P"], ["P"], ["P"]], output_roles=[["P"]]} : () -> ()
+}) {profile=#protocol.profile<protocol>} : () -> () }
+)mlir";
+
+std::string printed(ModuleOp module) {
+  std::string text;
+  llvm::raw_string_ostream(text) << module;
+  return text;
+}
+
+void checkRealizedRecipe(ModuleOp module, MLIRContext &context) {
+  require(succeeded(verify(module)) && succeeded(zkc::admitStage(module)),
+          "recipe realization produced an invalid closure");
+  require(!count(module, "poly.recipe") && !count(module, "poly.realize") &&
+              count(module, "runtime.binding") && count(module, "func.func") &&
+              count(module, "exec.apply"),
+          "recipe was not expanded into actual scoped execution");
+  require(!context.getLoadedDialect("tensor") &&
+              !context.getLoadedDialect("linalg"),
+          "preparation loaded unrelated numerical dialects");
+}
 } // namespace
 
 int main() {
   Cases cases;
+  cases.run("verify polynomial-only arithmetic in a lazy context", [&] {
+    withSource<poly::PolynomialDialect, func::FuncDialect>(
+        R"mlir(module {
+          func.func @add(%a: !poly.polynomial<"bls12-381.fr", 1>,
+                         %b: !poly.polynomial<"bls12-381.fr", 1>)
+              -> !poly.polynomial<"bls12-381.fr", 1> {
+            %r = "poly.add"(%a, %b) : (!poly.polynomial<"bls12-381.fr", 1>,
+                                      !poly.polynomial<"bls12-381.fr", 1>)
+                -> !poly.polynomial<"bls12-381.fr", 1>
+            return %r : !poly.polynomial<"bls12-381.fr", 1>
+          }
+        })mlir",
+        [&](ModuleOp module, MLIRContext &context) {
+          require(context.getLoadedDialect<algebra::AlgebraDialect>() &&
+                      succeeded(verify(module)),
+                  "Polynomial did not initialize its derived field storage");
+        });
+  });
+  for (StringRef entry : {"prepareProtocol", "PreparedProtocol", "expansion",
+                          "prepare pass", "project pass"})
+    cases.run("lazy polynomial recipe through " + entry, [&] {
+      withSource<algebra::AlgebraDialect, poly::PolynomialDialect>(
+          polynomialRecipe, [&](ModuleOp module, MLIRContext &context) {
+            require(context.getLoadedDialect<data::DataDialect>(),
+                    "Polynomial did not load its verification dependency");
+            for (StringRef name : {"runtime", "exec", "func", "cf", "arith"})
+              require(!context.getLoadedDialect(name),
+                      "input unexpectedly loaded " + name);
+            auto before = printed(module);
+            if (entry == "prepareProtocol") {
+              auto candidate = mathematical::prepareProtocol(module, false);
+              require(bool(candidate), "direct preparation refused the recipe");
+              checkRealizedRecipe(*candidate, context);
+              require(printed(module) == before,
+                      "direct preparation changed its source");
+            } else if (entry == "PreparedProtocol") {
+              auto prepared = mathematical::PreparedProtocol::prepare(module);
+              require(bool(prepared), "owned preparation refused the recipe");
+              auto candidate = prepared->snapshot();
+              checkRealizedRecipe(*candidate, context);
+              require(printed(module) == before &&
+                          printed(*prepared->originalSnapshot()) == before,
+                      "owned preparation changed its original snapshot");
+            } else {
+              if (entry == "expansion")
+                require(
+                    succeeded(mathematical::expandPolynomialRecipes(module)),
+                    "direct expansion refused the recipe");
+              else
+                runChecked(module,
+                           entry == "prepare pass"
+                               ? protocol::createPrepareProtocolPass(false)
+                               : protocol::createProjectProtocolPass(false),
+                           {"algebra", "data", "poly", "protocol", "runtime",
+                            "exec", "func", "cf", "arith"});
+              checkRealizedRecipe(module, context);
+            }
+          });
+    });
   for (bool projection : {false, true})
     cases.run(
         projection ? "project a range fold without input algebra"
@@ -361,9 +463,10 @@ int main() {
                 runChecked(module, std::move(pass), {"algebra", "poly"});
                 require(
                     !count(module, "poly.fix") &&
-                        !context.getLoadedDialect<data::DataDialect>() &&
+                        context.getLoadedDialect<data::DataDialect>() &&
                         !context.getLoadedDialect<func::FuncDialect>(),
-                    "polynomial rewrite did not remain in its input dialects");
+                    "polynomial rewrite lost its verification dependency or "
+                    "loaded execution dialects");
                 require(eliminate ? !count(module, "poly.evaluate") &&
                                         count(module, "algebra.array_at")
                                   : count(module, "poly.fix_table"),

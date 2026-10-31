@@ -156,10 +156,16 @@ ScopedExecutionBuilder::match(Value input, ValueRange captures, TypeRange types,
     arms.push_back(block(payload));
   }
   Values inputs{scope, input};
-  append_range(inputs, captures);
+  SmallVector<int32_t> segments{0};
+  for (size_t i = 0; i < alternatives.size(); ++i) {
+    append_range(inputs, captures);
+    segments.push_back(captures.size());
+  }
   make("exec.match", {}, inputs,
        {text("site", site),
-        builder.getNamedAttr("alternatives", strings(builder, alternatives))},
+        builder.getNamedAttr("alternatives", strings(builder, alternatives)),
+        builder.getNamedAttr("successor_operand_segments",
+                             builder.getDenseI32ArrayAttr(segments))},
        arms);
   for (auto [i, alternative] : enumerate(alternatives)) {
     builder.setInsertionPointToEnd(arms[i + 1]);

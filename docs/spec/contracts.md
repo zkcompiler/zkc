@@ -4,7 +4,7 @@ This register assigns one semantic owner to each shared contract and records its
 producers, consumers and delivery boundary. The linked specifications own the
 exact definitions. Registration is not implementation, semantic admission or a
 proof. The [foundation interface inventory](formats/foundation-interfaces.md)
-lists the upcoming schema changes. All formats remain at version `0`; current
+lists the current cutover and planned schema boundaries. All formats remain at version `0`; current
 and designed schemas are distinguished by their stated support, not a version
 bump. No compatibility reader is introduced.
 
@@ -49,6 +49,7 @@ review loops for this unit. Formal interpretation is a later independent task.
 | `zkc.oracle-realization/0` | [Cutover](formats/foundation-interfaces.md#realization-and-application-records), IR / Transforms | Realization producer → native actual-body reader, independent interpretation | Native structured type inventory and actual-body reader implemented; independent interpretation unsupported |
 | `zkc.application-map/0` | [Application map](formats/application-map.md), IR / Transforms | Source/candidate association → native comparison, independent correspondence reader | Producer and independent actual-candidate checker implemented for unsimplified preparation; no correspondence theorem or simplified-rewrite profile implied |
 | Outcome, stop, budget meaning | [Native foundation](ir/native-foundation.md#outcomes-observations-and-budgets), IR / Execution | Typed invocation → compiler admission and native VM/providers | Typed route implemented; existing reached schedule, stops and budgets retained |
+| Native successor operands | [Execution branches](ir/execution.md#structural-branch-interfaces-and-admitted-execution), IR / Data and Exec | Native builders and source emitter → BranchOpInterface clients, source readers and correspondence checks | Independent forwarded segments implemented; generic CFG publication still requires semantic binding, custody and budget correspondence beyond structural formation |
 | Stage admission and target selection | [Stage pipelines](ir/native-foundation.md#stage-pipelines-and-target-selection), IR / Compiler | Shared stage builder and selected installation → API, textual pipeline, import and publication | Shared stage builders, typed selection and complete native admission; catalog availability does not establish an installed backend |
 | `zkc.program/0` | [Retained byte language](formats/foundation-interfaces.md#executable-byte-language), IR / Program | Compiler → independent C++/Rust readers and other target consumers | Byte meaning unchanged; structural native adapter and independent byte readers retained |
 

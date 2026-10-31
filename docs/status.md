@@ -99,6 +99,14 @@ also owns the shared `runtime.binding` declaration for logical and physical
 ordered execution. Local, Plan and Kernel are not registered dialects. See
 [native MLIR value owners](spec/domains/values.md#native-mlir-value-owners).
 
+The Match and outcome branch interfaces support independent mutation of every
+edge's forwarded operands, including standard dead-argument elimination and
+block merging at the structural level. Host and native execution admission
+still require common source captures and explicit scope/outcome structure;
+generic CFG rewrites do not by themselves establish executable correspondence.
+Numerical schedule comparison reads actual native SCF and CFG associations,
+including dormant definitions, without passing through the byte-export model.
+
 Standard Func/CF with explicit Exec outcomes and Runtime scopes is the default
 route for source emission, participant preparation, numerical realization,
 physical selection, publication and artifact comparison. The reconstruction

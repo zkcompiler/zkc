@@ -19,6 +19,18 @@ checkLowering(mlir::ModuleOp original, mlir::ModuleOp candidate,
               mathematical::VerificationDecision &outcome, bool maps) {
   outcome = {mathematical::VerificationObservation::Mismatch,
              "numerical lowering differs"};
+  if (!original || !candidate)
+    return failure();
+  std::optional<CapacityCause> capacity;
+  if (!chargeCopy(original, work.numericalCheckCopy, &capacity) ||
+      !chargeCopy(candidate, work.numericalCheckCopy, &capacity)) {
+    if (!capacity)
+      capacity = CapacityCause{WorkOwner::AlgorithmChecking};
+    capacity->owner = WorkOwner::AlgorithmChecking;
+    outcome = {mathematical::VerificationObservation::RequiredCapacity,
+               "numerical admission inspection capacity", capacity};
+    return failure();
+  }
   if (failed(zkc::admitStage(original)) || failed(zkc::admitStage(candidate)))
     return failure();
   if (original->getAttrDictionary() != candidate->getAttrDictionary() ||

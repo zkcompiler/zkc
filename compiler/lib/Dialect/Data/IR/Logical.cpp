@@ -70,10 +70,12 @@ LogicalResult MatchOp::verify() {
   auto alternatives = layout.getAlternatives();
   if (layout.getKind().getValue() != "variant" ||
       alternatives.size() != getArms().size() ||
-      getAlternatives().size() != getArms().size())
+      getAlternatives().size() != getArms().size() ||
+      getForwarded().size() != getArms().size())
     return fail();
   std::set<StringRef> names;
-  for (auto [name, block] : llvm::zip(getAlternatives(), getArms())) {
+  for (auto [index, name, block] :
+       llvm::enumerate(getAlternatives(), getArms())) {
     auto label = cast<StringAttr>(name).getValue();
     if (!names.insert(label).second)
       return fail();
@@ -83,22 +85,31 @@ LogicalResult MatchOp::verify() {
     if (found == alternatives.end())
       return fail();
     auto fields = found->getFields();
-    if (block->getNumArguments() != fields.size() + getCaptures().size())
+    auto forwarded = getForwarded()[index];
+    if (block->getNumArguments() != fields.size() + forwarded.size())
       return fail();
     for (auto [field, argument] :
          llvm::zip(fields, block->getArguments().take_front(fields.size())))
       if (argument.getType() != valueType(field.getLayout()))
         return fail();
     if (TypeRange(block->getArguments().drop_front(fields.size())) !=
-        getCaptures().getTypes())
+        forwarded.getTypes())
       return fail();
   }
   return success();
 }
 SuccessorOperands MatchOp::getSuccessorOperands(unsigned index) {
-  auto count = getArms()[index]->getNumArguments();
-  return SuccessorOperands(
-      count >= getCaptures().size() ? count - getCaptures().size() : 0,
-      getCapturesMutable());
+  if (index >= getForwarded().size())
+    return SuccessorOperands(MutableOperandRange(*this, getNumOperands(), 0));
+  unsigned produced = 0;
+  if (index < getAlternatives().size()) {
+    auto label = cast<StringAttr>(getAlternatives()[index]).getValue();
+    for (auto arm : getInput().getType().getLayout().getAlternatives())
+      if (arm.getName().getValue() == label) {
+        produced = arm.getFields().size();
+        break;
+      }
+  }
+  return SuccessorOperands(produced, getForwardedMutable()[index]);
 }
 } // namespace zkc::data

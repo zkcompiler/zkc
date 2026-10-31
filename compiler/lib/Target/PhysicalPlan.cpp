@@ -15,6 +15,7 @@
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/Variant.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -1777,10 +1778,11 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     };
     SmallVector<Diagnostic> preparationDiagnostics;
     if (speculative) {
-      ScopedDiagnosticHandler quiet(module.getContext(), [&](Diagnostic &d) {
-        preparationDiagnostics.push_back(std::move(d));
-        return success();
-      });
+      zkc::diagnostics::ScopedThreadDiagnosticHandler quiet(
+          module.getContext(), [&](Diagnostic &d) {
+            preparationDiagnostics.push_back(std::move(d));
+            return success();
+          });
       refusal = prepare();
     } else
       refusal = prepare();

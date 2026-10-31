@@ -1012,8 +1012,8 @@ module @difference attributes {exec.computation} {
   for (bool requested : {false, true})
     cases.run(
         requested
-            ? "bounded computation preparation applies pins without a source "
-              "clone"
+            ? "bounded computation preparation pins fit its construction "
+              "envelope"
             : "bounded computation preparation retains large ordered context",
         [&] {
           auto module = executable(scalarSource, context);
@@ -1022,10 +1022,17 @@ module @difference attributes {exec.computation} {
           uint64_t sourceCost = 0;
           module->walk([&](Operation *op) {
             sourceCost += 1 + op->getNumOperands() + op->getNumResults();
+            for (auto &region : op->getRegions()) {
+              ++sourceCost;
+              for (auto &block : region)
+                sourceCost += 1 + block.getNumArguments();
+            }
           });
-          // Includes complete context checking, the selected candidate and
-          // final preflight. Repeated unused source snapshots do not fit.
-          uint64_t copies = 8 * sourceCost;
+          // Count complete structural inventories, including control blocks
+          // and their ports. The envelope covers construction plus context
+          // comparison; the remaining balance must not fit an extra snapshot.
+          // Independent verification has its own separately bounded account.
+          uint64_t copies = 7 * sourceCost;
           protocol::Assignments requests;
           if (requested)
             requests.emplace_back("context_add", "arkworks/field.add");
@@ -1044,8 +1051,8 @@ module @difference attributes {exec.computation} {
           };
           auto plan = take(proposePhysical(*module, installedCandidates(),
                                            requests, options));
-          require(preflights == 1 && copies < 8 * sourceCost,
-                  "required candidate copying was not settled once");
+          require(preflights == 1 && copies < sourceCost,
+                  "construction envelope permits an extra source snapshot");
           const auto &binding = bindingFor(plan, "field.add");
           require(binding.fixed == requested &&
                       binding.binding.application.implementation ==

@@ -10,7 +10,7 @@ module {
 "runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 "runtime.binding"() {sym_name="multiply",contract="field.mul",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
     func.func @inspect(%arg0: !runtime.scope, %arg1: !mode) -> !exec.outcome<(ui64, !f, ui64)> attributes {no_inline, runtime.origin = ["inspect", []]} {
-      "exec.match"(%arg0, %arg1)[^bb2, ^bb3, ^bb4, ^bb5] <{alternatives = ["none", "plain", "scaled"], site = "mode_10"}> : (!runtime.scope, !mode) -> ()
+      "exec.match"(%arg0, %arg1)[^bb2, ^bb3, ^bb4, ^bb5] <{alternatives = ["none", "plain", "scaled"], site = "mode_10", successor_operand_segments = array<i32: 0, 0, 0, 0 >}> : (!runtime.scope, !mode) -> ()
     ^bb1(%0: ui64, %1: !f, %2: ui64):  // 3 preds: ^bb8, ^bb11, ^bb14
       %3 = "exec.returned"(%0, %1, %2) : (ui64, !f, ui64) -> !exec.outcome<(ui64, !f, ui64)>
       return %3 : !exec.outcome<(ui64, !f, ui64)>

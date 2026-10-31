@@ -4,9 +4,36 @@
 #include "mlir/IR/Diagnostics.h"
 #include "llvm/Support/Error.h"
 #include <string>
+#include <thread>
+#include <utility>
 #include <vector>
 
 namespace zkc::diagnostics {
+/// Capture or observe diagnostics from a synchronous service on this thread.
+/// MLIR handlers belong to the context: sibling invocations can emit while
+/// this scope is active, even at the same location. Forward their diagnostics
+/// without calling the service's handler or touching its invocation state.
+/// Nested scopes retain MLIR's usual last-registered-first dispatch. This is
+/// not a collector for work delegated to other threads; such work needs its
+/// own scopes, or a caller-owned collector for the complete execution context.
+class ScopedThreadDiagnosticHandler {
+  mlir::ScopedDiagnosticHandler handler;
+
+public:
+  template <typename Handler>
+  ScopedThreadDiagnosticHandler(mlir::MLIRContext *context, Handler &&callback)
+      : handler(context, [thread = std::this_thread::get_id(),
+                          callback = std::forward<Handler>(callback)](
+                             mlir::Diagnostic &diagnostic) mutable {
+          if (std::this_thread::get_id() != thread)
+            return mlir::failure();
+          return callback(diagnostic);
+        }) {}
+  ScopedThreadDiagnosticHandler(const ScopedThreadDiagnosticHandler &) = delete;
+  ScopedThreadDiagnosticHandler &
+  operator=(const ScopedThreadDiagnosticHandler &) = delete;
+};
+
 struct RefusalInfo {
   std::string code;
   /// Complete owned detail supplied at emission.

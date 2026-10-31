@@ -17,7 +17,7 @@ module { "protocol.module"() ({
 "runtime.binding"() {sym_name="field_add",contract="field.add",arguments=["bls12-381.fr"],implementation="",function_type=(!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>} : ()->()
 relation.declare @relation {kind="external",key="example/air-data",revision="0",signature=(!config,!v,!trace)->i1,purposes=["parameter","statement","witness"]}
     func.func @validate(%arg0: !runtime.scope, %arg1: !config, %arg2: !v, %arg3: !trace) -> !exec.outcome<(i1)> attributes {no_inline, runtime.origin = ["validate", []]} {
-      "exec.match"(%arg0, %arg1, %arg2, %arg3)[^bb2, ^bb3] <{alternatives = ["coefficients"], site = "configuration"}> : (!runtime.scope, !config, !v, !trace) -> ()
+      "exec.match"(%arg0, %arg1, %arg2, %arg3)[^bb2, ^bb3] <{alternatives = ["coefficients"], site = "configuration", successor_operand_segments = array<i32: 0, 2 >}> : (!runtime.scope, !config, !v, !trace) -> ()
     ^bb1(%0: i1):  // pred: ^bb6
       %1 = "exec.returned"(%0) : (i1) -> !exec.outcome<(i1)>
       return %1 : !exec.outcome<(i1)>

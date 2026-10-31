@@ -651,6 +651,10 @@ class Admission {
           op, {"kind", "site", "selection", "callee", "operandSegmentSizes"});
     case Kind::CondBranch:
       return attributes(op, {"operandSegmentSizes"});
+    case Kind::Dispatch:
+      if (op.getNumOperands() != 1)
+        return error("structured-reference-unsupported", "dispatch forwarding");
+      return attributes(op, {"successor_operand_segments"});
     case Kind::Guard:
       return attributes(op, {"site", "owner"});
     case Kind::Restrict:

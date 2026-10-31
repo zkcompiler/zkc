@@ -24,7 +24,7 @@ MLIRContext *contextOf(const NativeBindingApplication &application) {
 }
 struct NativeDiagnostics {
   std::string code = "binding-signature", detail;
-  ScopedDiagnosticHandler capture;
+  zkc::diagnostics::ScopedThreadDiagnosticHandler capture;
   explicit NativeDiagnostics(MLIRContext *context)
       : capture(context, [&](Diagnostic &diagnostic) {
           if (detail.empty()) {

@@ -254,6 +254,7 @@ def main():
         ROOT / "lib/Transforms/MathematicalComparison.h",
         ROOT / "lib/Transforms/MathematicalValues.h",
         ROOT / "lib/Transforms/PreparedProtocol.h",
+        ROOT / "lib/Transforms/PreparationDialects.h",
         ROOT / "lib/Transforms/RealizedProtocol.h",
         ROOT / "lib/Transforms/ProtocolApplications.h"
     }

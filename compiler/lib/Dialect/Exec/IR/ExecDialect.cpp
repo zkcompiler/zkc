@@ -65,18 +65,27 @@ LogicalResult ReturnOp::verify() {
   return success();
 }
 LogicalResult DispatchOp::verify() {
+  if (getForwarded().size() != 2)
+    return refuse(*this,
+                  "outcome dispatch requires one operand segment per edge");
+  SmallVector<Type> returned(getOutcome().getType().getPayload());
+  llvm::append_range(returned, getForwarded()[0].getTypes());
+  SmallVector<Type> stopped{StopType::get(getContext())};
+  llvm::append_range(stopped, getForwarded()[1].getTypes());
   if (getReturned() == getStopped() ||
-      getReturned()->getArgumentTypes() !=
-          TypeRange(getOutcome().getType().getPayload()) ||
-      getStopped()->getNumArguments() != 1 ||
-      !isa<StopType>(getStopped()->getArgument(0).getType()))
+      getReturned()->getArgumentTypes() != TypeRange(returned) ||
+      getStopped()->getArgumentTypes() != TypeRange(stopped))
     return refuse(*this,
                   "outcome edges must bind returned payload or terminal stop");
   return success();
 }
 SuccessorOperands DispatchOp::getSuccessorOperands(unsigned index) {
+  // Interface verification precedes the custom verifier. Keep malformed
+  // segment inventories diagnosable without indexing past their storage.
+  if (index >= getForwarded().size())
+    return SuccessorOperands(MutableOperandRange(*this, getNumOperands(), 0));
   return SuccessorOperands(
       index == 0 ? getOutcome().getType().getPayload().size() : 1,
-      MutableOperandRange(*this, 0, 0));
+      getForwardedMutable()[index]);
 }
 } // namespace zkc::exec

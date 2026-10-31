@@ -123,11 +123,22 @@ also constrains traversal/mutation under parallel execution. Optional trace and
 statistics observers are caller-owned synchronous instrumentation, not a shared
 analysis cache or an authorization channel.
 
+Internal synchronous diagnostic captures and speculative suppressors handle
+only the installing thread's emissions and forward diagnostics from sibling
+invocations. A context-wide collector belongs to the owner of the entire
+execution context, including any worker diagnostics it must collect.
+
 Direct transformation APIs initialize the same dialect dependencies as their
 pass wrappers, before parallel execution. Registered dialects need not already
 be loaded. Symbol import uses collision-safe substitutions even when an existing
 binding is reused; fresh final names alone do not prevent a replacement from
 rewriting references introduced by another replacement.
+
+Dialect dependencies also cover types and attributes constructed by verifiers,
+so parsing in a lazily loaded context is sufficient. Internal diagnostic
+capture is local to the invoking thread; unrelated diagnostics on a shared
+context must pass through to their owner. A transformation cannot suppress a
+sibling invocation's required error while testing an optional proposal.
 
 A producer works on a private candidate; a separate comparison checks that
 candidate against the retained source before publication. Analysis results bind
@@ -144,10 +155,10 @@ spelling when the admitted semantics permit equivalent structure. Conversely,
 do not silently enlarge the theorem or implementation profile to accept an
 upstream rewrite that the reader does not understand.
 
-### Complete the infrastructure before widening optimization
+### Infrastructure before widening optimization
 
-The remaining foundation work makes explicit stage admission and one stage
-pipeline builder common to direct, textual and production routes. An admitted
+Explicit stage admission and one stage pipeline builder are common to direct,
+textual and production routes. An admitted
 profile names its operation vocabulary, semantic attributes, premises and
 comparison relation; enabling an entire standard dialect is too coarse.
 

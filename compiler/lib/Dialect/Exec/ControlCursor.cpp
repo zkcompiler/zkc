@@ -63,8 +63,8 @@ bool ControlCursor::dispatch(Value outcome,
                              llvm::SmallVectorImpl<Value> &payload,
                              Block *customFailure) {
   auto edge = dyn_cast_or_null<DispatchOp>(take());
-  if (!edge || !edge->getAttrs().empty() || edge.getOutcome() != outcome ||
-      !atEnd() ||
+  if (!edge || !attrs(edge, {"successor_operand_segments"}) ||
+      edge.getNumOperands() != 1 || edge.getOutcome() != outcome || !atEnd() ||
       !(customFailure ? edge.getStopped() == customFailure
                       : failure(edge.getStopped())) ||
       !enter(edge.getReturned()))
@@ -143,10 +143,12 @@ bool ControlCursor::match(Value input, ValueRange captures,
                           RegionCheck body, SmallVectorImpl<Value> &results) {
   Value scope = function.getArgument(0);
   auto match = dyn_cast_or_null<exec::MatchOp>(take());
-  if (!match || !attrs(match, {"site", "alternatives"}) ||
+  if (!match ||
+      !attrs(match, {"site", "alternatives", "successor_operand_segments"}) ||
       match.getScope() != scope || match.getSite() != site || !atEnd() ||
       !failure(match.getStopped()) || match.getInput() != input ||
-      match.getCaptures() != captures ||
+      match.getForwarded().size() != alternatives.size() + 1 ||
+      !match.getForwarded()[0].empty() ||
       match.getArms().size() != alternatives.size())
     return false;
   Block *join = nullptr;
@@ -154,7 +156,7 @@ bool ControlCursor::match(Value input, ValueRange captures,
     auto *arm = match.getArms()[i];
     if (cast<StringAttr>(match.getAlternatives()[i]).getValue() !=
             alternative ||
-        !enter(arm))
+        match.getForwarded()[i + 1] != captures || !enter(arm))
       return false;
     SmallVector<Value> values;
     if (!region("match", site, alternative, arm->getArguments(), body, i,

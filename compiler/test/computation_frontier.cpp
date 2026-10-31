@@ -98,9 +98,12 @@ origins(mlir::ModuleOp before) {
 }
 void accepts(mlir::ModuleOp before, mlir::ModuleOp after) {
   uint64_t remaining = 100000;
+  std::optional<CapacityCause> capacity =
+      CapacityCause{WorkOwner::AlgorithmExpansion};
   require(succeeded(computation::verifyComputationFrontier(
-              before, after, origins(before), remaining)),
+              before, after, origins(before), remaining, &capacity)),
           "valid frontier rejected");
+  require(!capacity, "valid frontier retained a capacity cause");
 }
 void forwardingReturns(mlir::ModuleOp module) {
   auto first = wrapper(module, "first");
@@ -154,6 +157,29 @@ void rejects(mlir::ModuleOp candidate,
       });
   require(failed(check()), "mutated frontier accepted");
   require(identifier, "frontier refusal lost diagnostic identifier");
+}
+void capacityBoundary(mlir::ModuleOp candidate,
+                      llvm::function_ref<LogicalResult(
+                          uint64_t &, std::optional<CapacityCause> *)>
+                          check) {
+  uint64_t remaining = 100000;
+  std::optional<CapacityCause> capacity =
+      CapacityCause{WorkOwner::AlgorithmExpansion};
+  require(succeeded(check(remaining, &capacity)) && !capacity,
+          "capacity measurement failed or retained a stale cause");
+  auto consumed = 100000 - remaining;
+  require(consumed > 1, "capacity fixture did not consume work");
+  remaining = consumed;
+  require(succeeded(check(remaining, &capacity)) && remaining == 0 && !capacity,
+          "exact checking allowance rejected or classified as capacity");
+  remaining = consumed - 1;
+  rejects(candidate, [&] { return check(remaining, &capacity); });
+  require(capacity && capacity->owner == WorkOwner::AlgorithmChecking &&
+              capacity->requested && capacity->available == remaining &&
+              *capacity->requested == remaining + 1,
+          "one-short checking refusal lost its exact failed debit");
+  remaining = consumed - 1;
+  rejects(candidate, [&] { return check(remaining, nullptr); });
 }
 computation::ComputationNormalizationRewrite rewrite(mlir::ModuleOp source,
                                                      mlir::ModuleOp candidate) {
@@ -210,6 +236,186 @@ int main() {
       require(succeeded(verify(function)), "CFG fixture is not valid SSA");
     return result;
   };
+  cases.run("normalization context exact and one-short allowance", [&] {
+    auto before = fixture(context, "frontier-before.mlir");
+    auto after = fixture(context, "frontier-before.mlir");
+    auto record = rewrite(*before, *after);
+    capacityBoundary(*after, [&](uint64_t &remaining, auto *capacity) {
+      return computation::verifyComputationNormalizationContext(
+          *before, *after, {record}, remaining, capacity);
+    });
+  });
+  cases.run(
+      "frontier exact and one-short allowance including backtracking", [&] {
+        auto before = fixture(context, "frontier-before.mlir");
+        auto after = fixture(context, "frontier-after.mlir");
+        auto evidence = origins(*before);
+        capacityBoundary(*after, [&](uint64_t &remaining, auto *capacity) {
+          return computation::verifyComputationFrontier(
+              *before, *after, evidence, remaining, capacity);
+        });
+        uint64_t remaining = 1;
+        std::optional<CapacityCause> capacity;
+        rejects(*after, [&] {
+          return computation::verifyComputationFrontier(
+              *before, *after, evidence, remaining, &capacity);
+        });
+        auto first = evidence.front().entry;
+        uint64_t requested =
+            1 + first->getAttrs().size() + first->getNumRegions();
+        require(capacity && capacity->owner == WorkOwner::AlgorithmChecking &&
+                    capacity->requested == requested &&
+                    capacity->available == 1 && remaining == 1,
+                "entry checking refusal lost a positive remaining balance");
+      });
+  cases.run("preparation shares copy and context allowance cumulatively", [&] {
+    // No numerical calls: the transaction consists of one source copy and
+    // its independent context comparison, without helper or recipe work.
+    auto source = cfgFixture();
+    uint64_t copyRemaining = 100000, contextRemaining = 100000;
+    require(computation::chargeCopy(*source, copyRemaining),
+            "preparation copy measurement failed");
+    require(succeeded(computation::verifyComputationNormalizationContext(
+                *source, *source, {}, contextRemaining)),
+            "preparation context measurement failed");
+    uint64_t remaining = 200000 - copyRemaining - contextRemaining;
+    std::optional<CapacityCause> capacity;
+    auto prepared = computation::prepareComputationRealization(
+        *source, &remaining, &capacity);
+    require(bool(prepared) && remaining == 0 && !capacity,
+            "preparation split or reset the cumulative allowance");
+    capacityBoundary(*source, [&](uint64_t &work, auto *cause) {
+      return success(bool(
+          computation::prepareComputationRealization(*source, &work, cause)));
+    });
+  });
+  cases.run("frontier return mismatch at zero balance", [&] {
+    auto before = fixture(context, "frontier-before.mlir");
+    auto after = fixture(context, "frontier-after.mlir");
+    auto result =
+        cast<func::ReturnOp>(entry(*after, "second_unit").front().back());
+    auto a = result.getOperand(1), b = result.getOperand(2);
+    result.setOperand(1, b);
+    result.setOperand(2, a);
+    auto evidence = origins(*before);
+    uint64_t remaining = 100000;
+    std::optional<CapacityCause> capacity;
+    auto check = [&] {
+      return computation::verifyComputationFrontier(*before, *after, evidence,
+                                                    remaining, &capacity);
+    };
+    rejects(*after, check);
+    require(!capacity, "return mismatch classified as capacity");
+    remaining = 100000 - remaining;
+    rejects(*after, check);
+    require(remaining == 0 && !capacity,
+            "exhausted balance obscured exact return mismatch");
+  });
+  for (bool frontier : {false, true}) {
+    auto check = [&](mlir::ModuleOp before, mlir::ModuleOp after,
+                     uint64_t &remaining, auto *capacity) {
+      if (frontier)
+        return computation::verifyComputationFrontier(before, after, {},
+                                                      remaining, capacity);
+      return computation::verifyComputationNormalizationContext(
+          before, after, {}, remaining, capacity);
+    };
+    cases.run(
+        "semantic mismatch at zero balance, frontier=" + Twine(frontier), [&] {
+          auto before = cfgFixture(), after = cfgFixture();
+          (*after)->setAttr("changed_context", UnitAttr::get(&context));
+          uint64_t remaining = 100000;
+          std::optional<CapacityCause> capacity =
+              CapacityCause{WorkOwner::AlgorithmChecking, 1, 0};
+          rejects(*after,
+                  [&] { return check(*before, *after, remaining, &capacity); });
+          require(!capacity, "semantic mismatch classified as capacity");
+          remaining = 100000 - remaining;
+          rejects(*after,
+                  [&] { return check(*before, *after, remaining, &capacity); });
+          require(remaining == 0 && !capacity,
+                  "zero balance alone classified a mismatch as capacity");
+          after->getBody()->clear();
+          rejects(*after,
+                  [&] { return check(*before, *after, remaining, &capacity); });
+          require(!capacity, "shape mismatch inferred capacity");
+        });
+    for (unsigned depth : {64, 65})
+      cases.run(
+          "context depth " + Twine(depth) + ", frontier=" + Twine(frontier),
+          [&] {
+            auto before = cfgFixture();
+            auto *block = &owner(*before).getBody().front();
+            // The outer module and protocol owner occupy depths 0/1.
+            for (unsigned i = 1; i < depth; ++i) {
+              auto nested = mlir::ModuleOp::create(before->getLoc());
+              block->push_back(nested);
+              block = nested.getBody();
+            }
+            OwningOpRef<mlir::ModuleOp> after(
+                cast<mlir::ModuleOp>(before->clone()));
+            uint64_t remaining = 100000;
+            std::optional<CapacityCause> capacity;
+            if (depth == 64) {
+              require(succeeded(check(*before, *after, remaining, &capacity)) &&
+                          !capacity,
+                      "exact context depth rejected");
+              return;
+            }
+            rejects(*after, [&] {
+              return check(*before, *after, remaining, &capacity);
+            });
+            require(capacity &&
+                        capacity->owner == WorkOwner::AlgorithmChecking &&
+                        !capacity->requested && !capacity->available &&
+                        remaining > 0,
+                    "context depth refusal lost capacity classification");
+            if (!frontier) {
+              remaining = 100000;
+              rejects(*before, [&] {
+                return success(bool(computation::prepareComputationRealization(
+                    *before, &remaining, &capacity)));
+              });
+              require(capacity &&
+                          capacity->owner == WorkOwner::AlgorithmChecking,
+                      "preparation lost context depth capacity");
+            }
+          });
+  }
+  for (unsigned depth : {64, 65})
+    cases.run("frontier ambiguity depth " + Twine(depth), [&] {
+      auto before = fixture(context, "frontier-before.mlir");
+      auto evidence = origins(*before);
+      auto second = entry(*before, "second_unit");
+      auto *product = &second.front().front();
+      OpBuilder builder(product);
+      // Each identical retained generated product opens a retention branch
+      // because the first cut already supplies an exact reusable producer.
+      for (unsigned i = 1; i < depth; ++i)
+        evidence.back().polynomialGenerated.push_back(builder.clone(*product));
+      OwningOpRef<mlir::ModuleOp> after(cast<mlir::ModuleOp>(before->clone()));
+      uint64_t remaining = 100000;
+      std::optional<CapacityCause> capacity;
+      auto check = [&] {
+        return computation::verifyComputationFrontier(*before, *after, evidence,
+                                                      remaining, &capacity);
+      };
+      if (depth == 64)
+        require(succeeded(check()) && !capacity,
+                "exact frontier ambiguity depth rejected");
+      else {
+        rejects(*after, check);
+        require(capacity && capacity->owner == WorkOwner::AlgorithmChecking &&
+                    !capacity->requested && !capacity->available &&
+                    remaining > 0,
+                "speculative frontier depth refusal lost capacity");
+        remaining = 100000;
+        rejects(*after, [&] {
+          return computation::verifyComputationFrontier(
+              *before, *after, evidence, remaining, nullptr);
+        });
+      }
+    });
   cases.run(
       "normalization preserves full CFG and non-dominance block order", [&] {
         auto before = cfgFixture(), after = cfgFixture();
@@ -524,10 +730,12 @@ int main() {
       auto after = fixture(context, "frontier-after.mlir");
       mutate(*after);
       uint64_t remaining = 100000;
+      std::optional<CapacityCause> capacity;
       rejects(*after, [&] {
         return computation::verifyComputationFrontier(
-            *before, *after, origins(*before), remaining);
+            *before, *after, origins(*before), remaining, &capacity);
       });
+      require(!capacity, "frontier mutation classified as capacity");
     });
   };
   negative("failure packaging must match the extended root outcome",
@@ -689,11 +897,16 @@ int main() {
     auto before = fixture(context, "frontier-before.mlir");
     auto after = fixture(context, "frontier-after.mlir");
     uint64_t remaining = 0;
+    std::optional<CapacityCause> capacity;
     rejects(*after, [&] {
       return computation::verifyComputationFrontier(
-          *before, *after, origins(*before), remaining);
+          *before, *after, origins(*before), remaining, &capacity);
     });
     require(remaining == 0, "comparison budget underflow");
+    require(capacity && capacity->owner == WorkOwner::AlgorithmChecking &&
+                capacity->requested && *capacity->requested > 0 &&
+                capacity->available == 0,
+            "exhausted comparison lost its failed request");
   });
   cases.run("explicit normalization callee rewrite", [&] {
     auto before = fixture(context, "frontier-before.mlir");

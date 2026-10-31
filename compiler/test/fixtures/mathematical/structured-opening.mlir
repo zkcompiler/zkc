@@ -81,7 +81,7 @@ module { "protocol.module"() ({
       return %4 : !exec.outcome<(!message)>
     }
     func.func @check_message(%arg0: !runtime.scope, %arg1: !message, %arg2: !vk, %arg3: !c, %arg4: !p) -> !exec.outcome<(!f, i1)> attributes {no_inline, runtime.origin = ["check_message", []]} {
-      "exec.match"(%arg0, %arg1, %arg2, %arg3, %arg4)[^bb2, ^bb3, ^bb4] <{alternatives = ["none", "some"], site = "presence"}> : (!runtime.scope, !message, !vk, !c, !p) -> ()
+      "exec.match"(%arg0, %arg1, %arg2, %arg3, %arg4, %arg2, %arg3, %arg4)[^bb2, ^bb3, ^bb4] <{alternatives = ["none", "some"], site = "presence", successor_operand_segments = array<i32: 0, 3, 3 >}> : (!runtime.scope, !message, !vk, !c, !p, !vk, !c, !p) -> ()
     ^bb1(%0: !f, %1: i1):  // 2 preds: ^bb7, ^bb10
       %2 = "exec.returned"(%0, %1) : (!f, i1) -> !exec.outcome<(!f, i1)>
       return %2 : !exec.outcome<(!f, i1)>

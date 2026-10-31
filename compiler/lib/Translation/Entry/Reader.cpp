@@ -291,9 +291,17 @@ class Reader {
         append_range(outputs, next->getArguments());
       } else if (auto match = mlir::dyn_cast<data::MatchOp>(raw)) {
         auto *next = takeBlock();
-        if (!next || !attributes(match, {"alternatives"}) ||
+        if (!next ||
+            !attributes(match,
+                        {"alternatives", "successor_operand_segments"}) ||
+            match.getArms().empty() ||
+            match.getForwarded().size() != match.getArms().size() ||
             cursor != current->end())
           return fail("Host match has invalid control metadata");
+        auto captures = match.getForwarded()[0];
+        for (auto forwarded : match.getForwarded())
+          if (forwarded != captures)
+            return fail("Host match arms disagree on source captures");
         SmallVector<mlir::Block *> arms;
         for (auto target : match.getArms()) {
           auto *arm = takeBlock();
@@ -317,7 +325,8 @@ class Reader {
         operation["op"] = "match";
         operation["alternatives"] = std::move(names);
         operation["regions"] = std::move(regions);
-        append_range(inputs, match->getOperands());
+        inputs.push_back(match.getInput());
+        append_range(inputs, captures);
         advance(next);
         append_range(outputs, next->getArguments());
       } else {
@@ -383,7 +392,8 @@ class Reader {
           auto dispatch = mlir::dyn_cast_or_null<exec::DispatchOp>(take());
           auto *next = takeBlock();
           if (!dispatch || !next || raw->getNumResults() != 1 ||
-              !bare(dispatch) || dispatch.getOutcome() != raw->getResult(0) ||
+              !bare(dispatch) || dispatch.getNumOperands() != 1 ||
+              dispatch.getOutcome() != raw->getResult(0) ||
               dispatch.getReturned() != next ||
               dispatch.getStopped() != failure || cursor != current->end())
             return fail("Host call did not dispatch its exact outcome");
