@@ -40,7 +40,7 @@ class RepeatSuite(OpenSuite):
 
     source_scope = (
         "Git-free source owners: main Lake package namespaces; structured bridge, Lean checks/support, "
-        "scripts and common test support; native compiler include/lib/tools/test/cmake and shared Unicode inputs; selected "
+        "scripts and common test support; native compiler include/lib/tools/test/cmake, shared catalog and Unicode inputs; selected "
         "authored project module closures and retained subjects. External packages, optional Lean "
         "integrations, hidden/private/experiment directories and build caches excluded; "
         "native executables are retained separately, not rebuilt from this archive.")
@@ -71,6 +71,8 @@ class RepeatSuite(OpenSuite):
         paths.update(owned_sources(bridge, {".py", ".md", ".json", ".mlir", ".zkc", ".toml"}))
         # Shared renderers and native Entry adapters are source dependencies.
         paths.update(owned_sources(ROOT / "lean/bridges/common", {".py"}))
+        # The strict schema reader loads the neutral declarations at runtime.
+        paths.update(owned_sources(ROOT / "common/catalog", {".py", ".json", ".md"}))
         for tree in ("include", "lib", "tools", "test", "cmake"):
             paths.update(owned_sources(ROOT / "compiler" / tree,
                 {".cpp", ".h", ".td", ".def", ".inc", ".cmake", ".in", ".txt",
