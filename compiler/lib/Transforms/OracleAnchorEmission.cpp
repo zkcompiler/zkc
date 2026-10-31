@@ -98,9 +98,6 @@ Expected<func::FuncOp> emitOracleAnchorLookup(ModuleOp candidate,
     return error("oracle-storage-lookup");
   const auto &layout = plan.constructors[constructor];
   const auto &storage = layout.roles[role];
-  auto reference = oracleReferenceType(layout.kind);
-  if (!reference)
-    return reference.takeError();
   OpBuilder builder(candidate.getContext());
   auto loc = candidate.getLoc();
   auto index =
@@ -134,52 +131,39 @@ Expected<func::FuncOp> emitOracleAnchorLookup(ModuleOp candidate,
     return result;
   };
   auto helper =
-      function("record", TypeRange{*reference, storage.sequence}, false);
+      function("record", TypeRange{index, index, storage.sequence}, false);
   mathematical::RealizationEmitter bindings(unit, "_oracle_lookup_binding_");
   builder.setInsertionPointToEnd(&helper.getBody().front());
   exec::ScopedExecutionBuilder control(builder, helper);
-  auto loaded = control.match(
-      helper.getArgument(1), helper.getArgument(2), fields, {"Record"},
-      "reference", [&](unsigned) {
-        auto selected = function(
-            "reference", TypeRange{index, index, storage.sequence}, true);
-        builder.setInsertionPointToEnd(&selected.getBody().front());
-        exec::ScopedExecutionBuilder body(builder, selected);
-        auto apply = [&](StringRef contract, ArrayRef<Attribute> arguments,
-                         TypeRange outputs, ValueRange inputs, StringRef site,
-                         ArrayRef<Attribute> parameters = {}) {
-          auto binding = bindings.binding(
-              builder, loc,
-              {contract.str(), SmallVector<Attribute>(arguments), ""});
-          return body.invoke(
-              "exec.apply", outputs, body.scoped(inputs),
-              {builder.getNamedAttr("binding", binding),
-               builder.getNamedAttr("parameters",
-                                    builder.getArrayAttr(parameters)),
-               builder.getNamedAttr("site", builder.getStringAttr(site))});
-        };
-        auto expected = apply("index.constant", {}, index, {}, "constructor",
-                              {builder.getIntegerAttr(index, constructor)})
-                            .front();
-        auto matches = apply("index.equal", {}, builder.getI1Type(),
-                             {selected.getArgument(1), expected}, "belongs_to")
-                           .front();
-        apply("control.require", {}, {}, matches, "admit_reference");
-        auto value =
-            apply("sequence.at", {TypeAttr::get(storage.record)},
-                  storage.record,
-                  {selected.getArgument(3), selected.getArgument(2)}, "lookup")
-                .front();
-        auto values =
-            body.match(value, {}, fields, {"Record"}, "record", [&](unsigned) {
-              auto unpacked = function("fields", fields, true);
-              builder.setInsertionPointToEnd(&unpacked.getBody().front());
-              exec::ScopedExecutionBuilder unpack(builder, unpacked);
-              unpack.complete(unpacked.getArguments().drop_front());
-              return unpacked;
-            });
-        body.complete(values);
-        return selected;
+  auto apply = [&](StringRef contract, ArrayRef<Attribute> arguments,
+                   TypeRange outputs, ValueRange inputs, StringRef site,
+                   ArrayRef<Attribute> parameters = {}) {
+    auto binding = bindings.binding(
+        builder, loc, {contract.str(), SmallVector<Attribute>(arguments), ""});
+    return control.invoke(
+        "exec.apply", outputs, control.scoped(inputs),
+        {builder.getNamedAttr("binding", binding),
+         builder.getNamedAttr("parameters", builder.getArrayAttr(parameters)),
+         builder.getNamedAttr("site", builder.getStringAttr(site))});
+  };
+  auto expected = apply("index.constant", {}, index, {}, "constructor",
+                        {builder.getIntegerAttr(index, constructor)})
+                      .front();
+  auto matches = apply("index.equal", {}, builder.getI1Type(),
+                       {helper.getArgument(1), expected}, "belongs_to")
+                     .front();
+  apply("control.require", {}, {}, matches, "admit_reference");
+  auto value =
+      apply("sequence.at", {TypeAttr::get(storage.record)}, storage.record,
+            {helper.getArgument(3), helper.getArgument(2)}, "lookup")
+          .front();
+  auto loaded =
+      control.match(value, {}, fields, {"Record"}, "record", [&](unsigned) {
+        auto unpacked = function("fields", fields, true);
+        builder.setInsertionPointToEnd(&unpacked.getBody().front());
+        exec::ScopedExecutionBuilder unpack(builder, unpacked);
+        unpack.complete(unpacked.getArguments().drop_front());
+        return unpacked;
       });
   control.returned(loaded);
   return helper;

@@ -196,10 +196,9 @@ struct Reader {
   Value opening(Cursor &c, ValueRange inputs, unsigned ordinal) {
     const auto &arm = model.arms[ordinal];
     std::string prefix = "constructor_" + std::to_string(arm.constructor) + "_";
-    auto reference = c.pack(arm.reference, "Record", inputs.take_front(2),
-                            prefix + "anchor");
-    auto stored = c.call(arm.holderLookup, {reference, inputs[3 + ordinal]},
-                         prefix + "load_anchor");
+    auto stored =
+        c.call(arm.holderLookup, {inputs[0], inputs[1], inputs[3 + ordinal]},
+               prefix + "load_anchor");
     auto opened = c.call(
         arm.open, {stored[arm.openingState], stored[arm.holderRows], inputs[2]},
         prefix + "open");

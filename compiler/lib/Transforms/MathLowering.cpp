@@ -396,7 +396,10 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
     auto expanded = protocol::expandScopedHelpers(source);
     if (!expanded)
       return signalPassFailure();
-    OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*expanded)->clone()));
+    auto reachable = protocol::pruneParticipantHelpers(*expanded);
+    if (!reachable)
+      return signalPassFailure();
+    OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*reachable)->clone()));
     auto unit =
         cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
     OutlineSymbols symbols(unit);
@@ -404,7 +407,7 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
       return signalPassFailure();
     unit.setProfile(protocol_ir::Profile::Exec);
     if (failed(zkc::admitStage(*candidate)) ||
-        failed(verifyProjectionPreserved(*expanded, *candidate, policy)))
+        failed(verifyProjectionPreserved(*reachable, *candidate, policy)))
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());
     source.getBodyRegion().takeBody(candidate->getBodyRegion());

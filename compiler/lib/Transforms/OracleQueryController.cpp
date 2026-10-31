@@ -303,10 +303,7 @@ struct Emitter {
   Values load(Control &c, unsigned constructor, Value tag, Value instance,
               Value store) {
     auto &item = result.constructors[constructor];
-    auto type =
-        cantFail(oracleReferenceType(storage.constructors[item.source].kind));
-    auto reference = pack(c, type, {tag, instance}, "anchor");
-    return call(c, item.lookup, {reference, store}, "load_anchor");
+    return call(c, item.lookup, {tag, instance, store}, "load_anchor");
   }
   unsigned field(unsigned constructor, StringRef name) {
     const auto &item = result.constructors[constructor];
@@ -446,39 +443,45 @@ struct Emitter {
           c.returned(values);
         });
   }
+  // Branch regions belong to this one callable. Do not route every tree edge
+  // through another helper call carrying the complete controller state.
   func::FuncOp dispatch(StringRef label, unsigned selector,
                         ArrayRef<std::pair<unsigned, func::FuncOp>> cases,
-                        TypeRange formals, TypeRange outputs) {
+                        TypeRange formals, TypeRange outputs,
+                        bool region = false, StringRef prefix = {}) {
     return function(
-        label, formals, outputs, false, [&](Control &c, ValueRange inputs) {
+        label, formals, outputs, region, [&](Control &c, ValueRange inputs) {
+          auto finish = [&](ValueRange values) {
+            if (region)
+              c.complete(values);
+            else
+              c.returned(values);
+          };
           if (cases.empty()) {
-            c.reject("refused", "no_constructor");
+            c.reject("refused", prefix.str() + "no_constructor");
             return;
           }
           if (cases.size() == 1) {
-            equal(c, inputs[selector], cases.front().first, "selected");
-            c.returned(call(c, cases.front().second, inputs, "case"));
+            equal(c, inputs[selector], cases.front().first,
+                  prefix.str() + "selected");
+            finish(
+                call(c, cases.front().second, inputs, prefix.str() + "case"));
             return;
           }
           auto middle = cases.size() / 2;
-          auto pivot = number(c, cases[middle].first, "pivot");
-          auto left =
-              compare(c, "index.less", inputs[selector], pivot, "partition");
+          auto pivot = number(c, cases[middle].first, prefix.str() + "pivot");
+          auto left = compare(c, "index.less", inputs[selector], pivot,
+                              prefix.str() + "partition");
           auto values = c.conditional(
-              left, inputs, outputs, "dispatch", [&](unsigned branch) {
+              left, inputs, outputs, prefix.str() + "dispatch",
+              [&](unsigned branch) {
                 auto subset = branch == 0 ? cases.take_front(middle)
                                           : cases.drop_front(middle);
-                auto selected =
-                    dispatch(label, selector, subset, formals, outputs);
-                return function(
-                    "dispatch_region", formals, outputs, true,
-                    [&](Control &body, ValueRange captures) {
-                      body.complete(
-                          call(body, selected, captures,
-                               "selected_branch_" + std::to_string(branch)));
-                    });
+                return dispatch(label, selector, subset, formals, outputs, true,
+                                prefix.str() +
+                                    (branch == 0 ? "left_" : "right_"));
               });
-          c.returned(values);
+          finish(values);
         });
   }
   func::FuncOp dispatch(StringRef label, unsigned selector,
@@ -622,26 +625,22 @@ struct Emitter {
     auto entering = dispatch("enter_dispatch", Controller::Constructor, enters);
     auto returning =
         dispatch("return_dispatch", Controller::Continuation, returns);
-    auto step = function(
-        "step", allTypes(), result.state, false,
-        [&](Control &c, ValueRange inputs) {
-          auto zero = number(c, Controller::Enter, "enter_phase");
-          auto enteringPhase = compare(
-              c, "index.equal", inputs[Controller::Phase], zero, "phase");
-          auto next = c.conditional(
-              enteringPhase, inputs, result.state, "step",
-              [&](unsigned branch) {
-                return function("step_region", allTypes(), result.state, true,
-                                [&](Control &body, ValueRange captures) {
-                                  body.complete(call(
-                                      body, branch == 0 ? entering : returning,
-                                      captures,
-                                      branch == 0 ? "enter_transition"
-                                                  : "return_transition"));
-                                });
-              });
-          c.returned(next);
-        });
+    auto step = [&](Control &c, ValueRange inputs) {
+      auto zero = number(c, Controller::Enter, "enter_phase");
+      auto enteringPhase =
+          compare(c, "index.equal", inputs[Controller::Phase], zero, "phase");
+      auto next = c.conditional(
+          enteringPhase, inputs, result.state, "step", [&](unsigned branch) {
+            return function(
+                "step_region", allTypes(), result.state, true,
+                [&](Control &body, ValueRange captures) {
+                  body.complete(call(
+                      body, branch == 0 ? entering : returning, captures,
+                      branch == 0 ? "enter_transition" : "return_transition"));
+                });
+          });
+      return next;
+    };
     result.advance = function(
         "advance", allTypes(), result.state, false,
         [&](Control &c, ValueRange inputs) {
@@ -663,8 +662,7 @@ struct Emitter {
                 return function(
                     "advance_iteration", inputs, outputs, true,
                     [&](Control &body, ValueRange captured) {
-                      auto values =
-                          call(body, step, captured.drop_front(), "step");
+                      auto values = step(body, captured.drop_front());
                       auto threshold = number(body, Controller::Request,
                                               "iteration_suspension_phase");
                       auto proceed =

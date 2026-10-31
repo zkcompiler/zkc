@@ -363,10 +363,7 @@ struct Reader {
   Values load(Cursor &c, unsigned constructor, Value tag, Value instance,
               Value store) {
     auto &item = controller.constructors[constructor];
-    auto reference =
-        cantFail(oracleReferenceType(storage.constructors[item.source].kind));
-    auto handle = c.pack(reference, {tag, instance}, "anchor");
-    return c.call(item.lookup, {handle, store}, "load_anchor");
+    return c.call(item.lookup, {tag, instance, store}, "load_anchor");
   }
   Values parameters(unsigned constructor, ValueRange record, Value position) {
     Values inputs;
@@ -548,40 +545,35 @@ struct Reader {
   }
   void dispatch(func::FuncOp function, unsigned selector,
                 ArrayRef<unsigned> cases, TypeRange formals, TypeRange outputs,
-                llvm::function_ref<void(unsigned, func::FuncOp)> leaf) {
-    body(function, formals, outputs, false, [&](Cursor &c, ValueRange inputs) {
+                llvm::function_ref<void(unsigned, func::FuncOp)> leaf,
+                bool region = false, StringRef prefix = {}) {
+    body(function, formals, outputs, region, [&](Cursor &c, ValueRange inputs) {
       if (cases.empty()) {
-        c.reject("refused", "no_constructor");
+        c.reject("refused", prefix.str() + "no_constructor");
         return;
       }
       if (cases.size() == 1) {
-        c.equalTo(inputs[selector], cases.front(), "selected");
+        c.equalTo(inputs[selector], cases.front(), prefix.str() + "selected");
         func::FuncOp selected;
-        auto values = c.local(inputs, outputs, "case", selected);
+        auto values = c.local(inputs, outputs, prefix.str() + "case", selected);
         if (valid)
           leaf(cases.front(), selected);
-        c.finish(values);
+        c.finish(values, region);
         return;
       }
       auto middle = cases.size() / 2;
-      auto pivot = c.number(cases[middle], "pivot");
-      auto left = c.compare("index.less", inputs[selector], pivot, "partition");
+      auto pivot = c.number(cases[middle], prefix.str() + "pivot");
+      auto left = c.compare("index.less", inputs[selector], pivot,
+                            prefix.str() + "partition");
       auto values = c.conditional(
-          left, inputs, outputs, "dispatch",
-          [&](unsigned branch, func::FuncOp region) {
-            body(region, formals, outputs, true,
-                 [&](Cursor &c, ValueRange captured) {
-                   func::FuncOp selected;
-                   auto result = c.local(
-                       captured, outputs,
-                       "selected_branch_" + std::to_string(branch), selected);
-                   auto subset = branch == 0 ? cases.take_front(middle)
-                                             : cases.drop_front(middle);
-                   dispatch(selected, selector, subset, formals, outputs, leaf);
-                   c.finish(result, true);
-                 });
+          left, inputs, outputs, prefix.str() + "dispatch",
+          [&](unsigned branch, func::FuncOp selected) {
+            auto subset = branch == 0 ? cases.take_front(middle)
+                                      : cases.drop_front(middle);
+            dispatch(selected, selector, subset, formals, outputs, leaf, true,
+                     prefix.str() + (branch == 0 ? "left_" : "right_"));
           });
-      c.finish(values);
+      c.finish(values, region);
     });
   }
   void dispatch(func::FuncOp function, unsigned selector,
@@ -610,46 +602,41 @@ struct Reader {
            c.finish(expected);
          });
   }
-  void step(func::FuncOp function) {
-    body(function, allTypes(), model.state, false,
-         [&](Cursor &c, ValueRange inputs) {
-           auto zero = c.number(0, "enter_phase");
-           auto entering =
-               c.compare("index.equal", inputs[Demand::Phase], zero, "phase");
-           auto result = c.conditional(
-               entering, inputs, model.state, "step",
-               [&](unsigned branch, func::FuncOp region) {
-                 body(region, allTypes(), model.state, true,
-                      [&](Cursor &body, ValueRange captured) {
-                        func::FuncOp transition;
-                        auto result =
-                            body.local(captured, model.state,
-                                       branch == 0 ? "enter_transition"
-                                                   : "return_transition",
-                                       transition);
-                        if (branch == 0) {
-                          SmallVector<unsigned> cases;
-                          for (const auto &item : controller.constructors)
-                            cases.push_back(item.source);
-                          dispatch(transition, Demand::Constructor, cases,
-                                   [&](unsigned source, func::FuncOp leaf) {
-                                     auto item =
-                                         find_if(controller.constructors,
-                                                 [&](const auto &item) {
-                                                   return item.source == source;
-                                                 });
-                                     enter(leaf,
-                                           item -
-                                               controller.constructors.begin());
-                                   });
-                        } else
-                          returned(transition);
-                        body.finish(result, true);
-                      });
+  Values step(Cursor &c, ValueRange inputs) {
+    auto zero = c.number(0, "enter_phase");
+    auto entering =
+        c.compare("index.equal", inputs[Demand::Phase], zero, "phase");
+    auto result = c.conditional(
+        entering, inputs, model.state, "step",
+        [&](unsigned branch, func::FuncOp region) {
+          body(region, allTypes(), model.state, true,
+               [&](Cursor &body, ValueRange captured) {
+                 func::FuncOp transition;
+                 auto result = body.local(captured, model.state,
+                                          branch == 0 ? "enter_transition"
+                                                      : "return_transition",
+                                          transition);
+                 if (branch == 0) {
+                   SmallVector<unsigned> cases;
+                   for (const auto &item : controller.constructors)
+                     cases.push_back(item.source);
+                   dispatch(
+                       transition, Demand::Constructor, cases,
+                       [&](unsigned source, func::FuncOp leaf) {
+                         auto item = find_if(controller.constructors,
+                                             [&](const auto &item) {
+                                               return item.source == source;
+                                             });
+                         enter(leaf, item - controller.constructors.begin());
+                       });
+                 } else
+                   returned(transition);
+                 body.finish(result, true);
                });
-           c.finish(result);
-         });
+        });
+    return result;
   }
+
   void advance() {
     body(model.advance, allTypes(), model.state, false,
          [&](Cursor &c, ValueRange inputs) {
@@ -669,11 +656,7 @@ struct Reader {
                         append_range(outputs, model.state);
                         body(region, inputs, outputs, true,
                              [&](Cursor &body, ValueRange captures) {
-                               func::FuncOp transition;
-                               auto values =
-                                   body.local(captures.drop_front(),
-                                              model.state, "step", transition);
-                               step(transition);
+                               auto values = step(body, captures.drop_front());
                                auto threshold =
                                    body.number(2, "iteration_suspension_phase");
                                auto proceed = body.compare(

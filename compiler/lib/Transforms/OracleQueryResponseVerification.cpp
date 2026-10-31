@@ -72,7 +72,7 @@ bool layout(const OracleVerificationContext &context,
     auto resume = signature(arm.resume);
     if (!lookup || !authenticate || !resume || lookup.getNumResults() > 512 ||
         !equal(lookup.getInputs(),
-               Types{arm.reference, model.receiverStores[arm.receiverSlot]}) ||
+               Types{index, index, model.receiverStores[arm.receiverSlot]}) ||
         arm.root >= lookup.getNumResults() ||
         arm.receiverRows >= lookup.getNumResults() ||
         lookup.getResult(arm.receiverRows) != index ||
@@ -324,7 +324,8 @@ struct Reader {
                                 alternatives(), "authenticate_response",
                                 [&](unsigned ordinal, func::FuncOp selected) {
                                   const auto &arm = model.arms[ordinal];
-                                  Types types(arm.opened.begin(), arm.opened.end());
+                                  Types types(arm.opened.begin(),
+                                              arm.opened.end());
                                   append_range(types, Types(3, index));
                                   append_range(types, model.receiverStores);
                                   body(selected, types, response.answer, true,
@@ -336,12 +337,9 @@ struct Reader {
                                          requireNumber(
                                              c, a[2], arm.constructor,
                                              prefix + "request_constructor");
-                                         auto reference = c.pack(
-                                             arm.reference, "Record",
-                                             a.slice(2, 2), prefix + "anchor");
                                          auto stored =
                                              c.call(arm.receiverLookup,
-                                                    {reference,
+                                                    {a[2], a[3],
                                                      a[5 + arm.receiverSlot]},
                                                     prefix + "load_anchor");
                                          auto answer =

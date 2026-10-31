@@ -80,9 +80,8 @@ struct Emitter {
       auto authenticate = signature(arm.authenticate);
       auto resume = signature(arm.resume);
       if (!lookup || !authenticate || !resume ||
-          !equal(
-              lookup.getInputs(),
-              Types{arm.reference, model.receiverStores[arm.receiverSlot]}) ||
+          !equal(lookup.getInputs(),
+                 Types{index, index, model.receiverStores[arm.receiverSlot]}) ||
           arm.root >= lookup.getNumResults() ||
           arm.receiverRows >= lookup.getNumResults() ||
           lookup.getResult(arm.receiverRows) != index ||
@@ -239,13 +238,10 @@ struct Emitter {
                                       std::to_string(arm.constructor) + "_";
                                   requireNumber(selected, a[2], arm.constructor,
                                                 prefix + "request_constructor");
-                                  auto reference =
-                                      pack(selected, arm.reference, "Record",
-                                           a.slice(2, 2), prefix + "anchor");
-                                  auto stored =
-                                      call(selected, arm.receiverLookup,
-                                           {reference, a[5 + arm.receiverSlot]},
-                                           prefix + "load_anchor");
+                                  auto stored = call(
+                                      selected, arm.receiverLookup,
+                                      {a[2], a[3], a[5 + arm.receiverSlot]},
+                                      prefix + "load_anchor");
                                   auto answer = call(selected, arm.authenticate,
                                                      {stored[arm.root],
                                                       stored[arm.receiverRows],

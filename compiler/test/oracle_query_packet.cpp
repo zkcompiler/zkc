@@ -335,9 +335,9 @@ struct Execution {
   }
   Datum key(const Datum &request, ArrayRef<Datum> stores) {
     const auto &selected = arm(request);
-    auto reference = Datum::record({request.items[0], request.items[1]});
-    auto stored = run(selected.receiverLookup,
-                      {reference, stores[selected.receiverSlot]});
+    auto stored =
+        run(selected.receiverLookup, {request.items[0], request.items[1],
+                                      stores[selected.receiverSlot]});
     auto position = run(input.merkle[selected.constructor].position,
                         {stored[selected.receiverRows], request.items[2]});
     return Datum::record({request.items[0], request.items[1], position[1]});
@@ -874,8 +874,8 @@ int main(int argc, char **argv) {
       if (attack == 0) {
         parameter(prefix + "tag", input.exchange.arms[1].constructor);
       } else if (attack == 1) {
-        auto op = cast<exec::VariantOp>(site(input, prefix + "reference"));
-        op.getPayloadMutable()[1].set(op.getPayload()[0]);
+        auto op = call(prefix + "lookup");
+        op.setOperand(2, op.getOperand(1));
       } else if (attack >= 2 && attack <= 4) {
         auto op = cast<exec::VariantOp>(site(input, prefix + "key"));
         unsigned field = attack - 2;
@@ -887,7 +887,7 @@ int main(int argc, char **argv) {
         op.setOperand(attack == 5 ? 1 : 2, op.getOperand(attack == 5 ? 2 : 1));
       } else if (attack == 7) {
         auto op = call(prefix + "lookup");
-        auto store = op.getOperand(2).getType();
+        auto store = op.getOperand(3).getType();
         insertBefore(op, [&](exec::ScopedExecutionBuilder &c, OpBuilder &b) {
           mathematical::RealizationEmitter bindings(unit(*input.candidate),
                                                     "_packet_attack_binding_");
@@ -902,7 +902,7 @@ int main(int argc, char **argv) {
               {b.getNamedAttr("binding", binding),
                b.getNamedAttr("parameters", b.getArrayAttr({})),
                b.getNamedAttr("site", b.getStringAttr("packet_wrong_store"))});
-          op.setOperand(2, replacement[0]);
+          op.setOperand(3, replacement[0]);
         });
       } else if (attack == 8) {
         auto op = cast<exec::RangeOp>(site(input, "packet_scan"));
@@ -1019,8 +1019,8 @@ int main(int argc, char **argv) {
           }
         });
       } else if (attack == 31) {
-        auto op = cast<exec::VariantOp>(site(input, prefix + "reference"));
-        op.getPayloadMutable()[0].set(op.getPayload()[1]);
+        auto op = call(prefix + "lookup");
+        op.setOperand(1, op.getOperand(2));
       } else if (attack == 32) {
         auto op = apply("packet_same_leaf");
         OpBuilder b(&context);

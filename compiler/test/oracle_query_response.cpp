@@ -103,8 +103,8 @@ Input emitted(MLIRContext &context, bool sameKind = false) {
   Input input;
   // This is the existing source fixture with a recurrent virtual and two
   // distinct committed base constructors, including an unused child answer.
-  auto path = std::filesystem::path(ZKC_ORACLE_FIXTURES) /
-              "query-constructors.mlir";
+  auto path =
+      std::filesystem::path(ZKC_ORACLE_FIXTURES) / "query-constructors.mlir";
   std::ifstream fixture(path);
   require(bool(fixture), "cannot read constructor source fixture");
   std::string text((std::istreambuf_iterator<char>(fixture)), {});
@@ -479,8 +479,8 @@ int main(int argc, char **argv) {
         auto function = op->getParentOfType<func::FuncOp>();
         op.getInputsMutable()[0].set(function.getArgument(4));
       } else if (mutation == 1) {
-        auto op = cast<exec::VariantOp>(site(input, prefix + "anchor"));
-        op.getPayloadMutable()[1].set(op.getPayload()[0]);
+        auto op = call("load_anchor");
+        op.setOperand(2, op.getOperand(1));
       } else if (mutation == 2) {
         auto op = call("authenticate");
         auto function = op->getParentOfType<func::FuncOp>();

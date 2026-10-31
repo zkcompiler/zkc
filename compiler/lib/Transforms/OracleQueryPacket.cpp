@@ -109,9 +109,8 @@ struct Emitter {
       auto position = signature(merkle[arm.constructor].position);
       auto authenticate = signature(arm.authenticate);
       if (!lookup || !position || !authenticate ||
-          !equal(
-              lookup.getInputs(),
-              Types{arm.reference, model.receiverStores[arm.receiverSlot]}) ||
+          !equal(lookup.getInputs(),
+                 Types{index, index, model.receiverStores[arm.receiverSlot]}) ||
           arm.receiverRows >= lookup.getNumResults() ||
           lookup.getResult(arm.receiverRows) != index ||
           !equal(position.getInputs(), Types(2, index)) ||
@@ -150,8 +149,7 @@ struct Emitter {
     // scoped execution budget; its loop body is emitted only once. Retained
     // physical keys, requests, responses and occurrence groups grow linearly.
     uint64_t operations = 1024 + 512 * model.arms.size();
-    uint64_t slotsNeeded = operations * (width + 16) +
-                           capacity * (width + 24);
+    uint64_t slotsNeeded = operations * (width + 16) + capacity * (width + 24);
     if (operations > work.operations || slotsNeeded > work.slots)
       return error("oracle-packet-limit");
     work.operations -= operations;
@@ -268,10 +266,9 @@ struct Emitter {
   Value keyArm(Control &c, ValueRange a, unsigned ordinal) {
     const auto &arm = model.arms[ordinal];
     auto prefix = "packet_constructor_" + std::to_string(arm.constructor) + "_";
-    auto reference =
-        pack(c, arm.reference, a.take_front(2), prefix + "reference");
-    auto stored = call(c, arm.receiverLookup,
-                       {reference, a[3 + arm.receiverSlot]}, prefix + "lookup");
+    auto stored =
+        call(c, arm.receiverLookup, {a[0], a[1], a[3 + arm.receiverSlot]},
+             prefix + "lookup");
     auto position = call(c, merkle[arm.constructor].position,
                          {stored[arm.receiverRows], a[2]}, prefix + "position");
     return pack(c, result.key, {a[0], a[1], position[1]}, prefix + "key");

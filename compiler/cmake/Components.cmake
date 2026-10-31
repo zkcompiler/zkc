@@ -317,6 +317,7 @@ add_zkc_component(Transforms
   lib/Conversion/Storage.cpp
   lib/Conversion/Participants.cpp
   lib/Transforms/AlgorithmSites.cpp
+  lib/Transforms/ParticipantHelpers.cpp
   lib/Transforms/ScopedAlgorithms.cpp
   lib/Transforms/ScopedAlgorithmVerification.cpp
   lib/Transforms/Mathematical.cpp

@@ -210,7 +210,8 @@ void noAnswers(ModuleOp candidate, const OracleQueryController &controller,
   std::set<std::string> positions, visited;
   for (const auto &item : controller.constructors)
     for (const auto &query : item.functions.queries)
-      positions.insert(SymbolTable::getSymbolName(query.position).getValue().str());
+      positions.insert(
+          SymbolTable::getSymbolName(query.position).getValue().str());
   std::function<void(func::FuncOp)> visit = [&](func::FuncOp function) {
     if (!visited.insert(function.getSymName().str()).second)
       return;
@@ -267,7 +268,7 @@ void emptyStore(ModuleOp candidate) {
   auto call =
       cast<func::CallOp>(operation(candidate, "load_anchor", "func.call"));
   auto owner = call->getParentOfType<func::FuncOp>();
-  auto store = call.getOperand(2);
+  auto store = call.getOperand(3);
   auto element = cast<data::SequenceType>(store.getType()).getElementType();
   auto *previous = call->getBlock();
   auto *continuation = previous->splitBlock(call->getIterator());
@@ -287,7 +288,7 @@ void emptyStore(ModuleOp candidate) {
                                         builder.getStringAttr("empty_store"))})
           .front();
   cf::BranchOp::create(builder, call.getLoc(), continuation, ValueRange{});
-  call.setOperand(2, empty);
+  call.setOperand(3, empty);
 }
 } // namespace
 int main() {

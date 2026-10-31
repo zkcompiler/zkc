@@ -7,6 +7,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -128,6 +129,73 @@ int main() {
                 *source, *expanded)),
             "valid expansion refused");
   });
+  auto participant = copy(*expanded);
+  run(*participant, protocol::createProjectProtocolPass(false));
+  auto pruned = protocol::pruneParticipantHelpers(*participant);
+  require(bool(pruned), "participant helper pruning refused");
+  cases.run("participant roots retain only reachable scoped helpers", [&] {
+    auto unit = cast<protocol_ir::ProtocolModuleOp>(pruned->getBody()->front());
+    require(!SymbolTable::lookupSymbolIn(unit, "identity") &&
+                SymbolTable::lookupSymbolIn(unit, "both"),
+            "dead helper retained or called root deleted");
+    require(succeeded(protocol::verifyParticipantHelperPruningPreserved(
+                *participant, *pruned)),
+            "valid helper pruning refused");
+    require(bool(function(*participant, "identity")), "pruning mutated source");
+    auto again = protocol::pruneParticipantHelpers(*pruned);
+    require(bool(again) &&
+                OperationEquivalence::isEquivalentTo(
+                    *pruned, *again, OperationEquivalence::IgnoreLocations),
+            "helper pruning is not idempotent");
+  });
+  auto pruneNegative = [&](StringRef name,
+                           llvm::function_ref<void(ModuleOp)> mutate) {
+    cases.run(name, [&] {
+      auto changed = copy(*pruned);
+      mutate(*changed);
+      ScopedDiagnosticHandler silence(&context,
+                                      [](Diagnostic &) { return success(); });
+      require(failed(protocol::verifyParticipantHelperPruningPreserved(
+                  *participant, *changed)),
+              "unsound helper pruning accepted");
+    });
+  };
+  pruneNegative("pruning cannot remove a reachable helper",
+                [&](ModuleOp m) { function(m, "both").erase(); });
+  pruneNegative("pruning cannot modify retained helper semantics",
+                [&](ModuleOp m) {
+                  auto *op = primitive(function(m, "both"), "bool.and");
+                  op->setOperand(2, op->getOperand(1));
+                });
+  pruneNegative("pruning cannot delete projection metadata", [&](ModuleOp m) {
+    m.walk([](protocol_ir::ProjectionOp op) { op.erase(); });
+  });
+  pruneNegative("pruning cannot add a helper", [&](ModuleOp m) {
+    auto fn = function(m, "both");
+    auto extra = cast<func::FuncOp>(fn->clone());
+    extra.setSymName("new_helper");
+    fn->getBlock()->push_back(extra);
+  });
+  cases.run("pruning retains transitive helper uses before expansion", [&] {
+    auto original = copy(*source);
+    run(*original, protocol::createProjectProtocolPass(false));
+    auto retained = protocol::pruneParticipantHelpers(*original);
+    require(bool(retained) && bool(function(*retained, "identity")),
+            "transitive helper use was lost");
+  });
+  cases.run("invalid dead helpers are refused before pruning", [&] {
+    auto invalid = copy(*participant);
+    function(*invalid, "identity")->removeAttr("runtime.origin");
+    ScopedDiagnosticHandler silence(&context,
+                                    [](Diagnostic &) { return success(); });
+    require(!protocol::pruneParticipantHelpers(*invalid),
+            "pruning erased an invalid source helper before admission");
+  });
+  cases.run("role-free and original protocol exports are not pruning subjects",
+            [&] {
+              require(!protocol::pruneParticipantHelpers(*expanded),
+                      "pruning accepted original exported functions");
+            });
   cases.run("bounded local occurrence names", [&] {
     uint64_t bytes = 1024;
     auto shortName = protocol::algorithmSite({{"a", "b"}}, "s", bytes);

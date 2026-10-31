@@ -118,7 +118,8 @@
       "pairing.apply",
       "vector.equal",
       "vector.find_last",
-      "multilinear.restrict_prefix"
+      "multilinear.restrict_prefix",
+      "field.select"
     ],
     "group": [
       "encoding.groups_compressed",
@@ -144,7 +145,8 @@
       "curve.at",
       "curve.get",
       "curve.length",
-      "curve.commit"
+      "curve.commit",
+      "curve.select"
     ],
     "commitment": [
       "oracle.commit",
@@ -215,7 +217,13 @@
       "quotient.intt",
       "quotient.pointwise",
       "quotient.prepare_matrix",
-      "quotient.matvec"
+      "quotient.matvec",
+      "bool.select",
+      "index.select",
+      "index.bit_and",
+      "index.logical_shift_right",
+      "index.wrapping_add",
+      "index.wrapping_sub"
     ],
     "resource": [
       "resource_unit.create",

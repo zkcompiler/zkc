@@ -219,10 +219,9 @@ struct Emitter {
   Value opening(Control &c, ValueRange inputs, unsigned ordinal) {
     const auto &arm = model.arms[ordinal];
     std::string prefix = "constructor_" + std::to_string(arm.constructor) + "_";
-    auto reference = pack(c, arm.reference, "Record", inputs.take_front(2),
-                          prefix + "anchor");
-    auto held = call(c, arm.holderLookup, {reference, inputs[3 + ordinal]},
-                     prefix + "load_anchor");
+    auto held =
+        call(c, arm.holderLookup, {inputs[0], inputs[1], inputs[3 + ordinal]},
+             prefix + "load_anchor");
     auto row = call(c, arm.open,
                     {held[arm.openingState], held[arm.holderRows], inputs[2]},
                     prefix + "open");

@@ -476,8 +476,7 @@ module { "protocol.module"() ({
       auto unit =
           cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
       auto closure = take(readSourceExecutionClosure(unit));
-      auto &root = closure.bodies.at(helper.getSymName().str());
-      auto selected = root[0].regions[0];
+      auto selected = helper;
       auto &body = closure.bodies.at(selected.getSymName().str());
       Builder builder(&context);
       if (mutation == 0) {
@@ -590,12 +589,10 @@ module { "protocol.module"() ({
       references.push_back(allocated.getOutputs()[0]);
       store = allocated.getOutputs()[1];
     }
-    auto reference = data::MakeOp::create(
-        builder, loc, references[0].getType(),
-        ValueRange{body->getArgument(2), body->getArgument(3)}, "Record");
     auto loaded = protocol_ir::LocalCallOp::create(
         builder, loc, scopedDataSignature(lookup).getResults(),
-        ValueRange{reference, store}, lookup.getSymName(), "lookup", "P");
+        ValueRange{body->getArgument(2), body->getArgument(3), store},
+        lookup.getSymName(), "lookup", "P");
     auto first = data::GetOp::create(builder, loc, index, references[0], 1);
     auto second = data::GetOp::create(builder, loc, index, references[1], 1);
     protocol_ir::MathematicalReturnOp::create(builder, loc,

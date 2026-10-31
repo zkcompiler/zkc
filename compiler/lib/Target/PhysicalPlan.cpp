@@ -339,7 +339,8 @@ public:
     if (!logical)
       return logical.takeError();
     if (!numerical.chargeCatalog())
-      return error("finite-analysis-limit");
+      return error("finite-analysis-limit",
+                   "physical binding selection exhausted catalog work");
     // A generated declaration may stop being shared when one occurrence
     // changes recipe. Keep each source owner's alias to the same monotone
     // cursor, rather than keying a new cursor by the smaller current use set.
@@ -356,7 +357,8 @@ public:
     SmallVector<size_t> merge;
     for (const auto &key : keys) {
       if (!numerical.chargeCatalog())
-        return error("finite-analysis-limit");
+        return error("finite-analysis-limit",
+                     "physical binding alias lookup exhausted catalog work");
       auto found = implementationCoordinates.find(key);
       if (found == implementationCoordinates.end())
         continue;
@@ -371,7 +373,8 @@ public:
       if (!candidates)
         return candidates.takeError();
       if (!numerical.chargeCatalog(candidates->size()))
-        return error("finite-analysis-limit");
+        return error("finite-analysis-limit",
+                     "physical candidate inventory exhausted catalog work");
       implementations.push_back({application,
                                  {owners.begin(), owners.end()},
                                  authored.str(),
@@ -394,7 +397,8 @@ public:
     auto &entry = implementations[id];
     for (; entry.next < entry.candidates.size(); ++entry.next) {
       if (!numerical.chargeCatalog())
-        return error("finite-analysis-limit");
+        return error("finite-analysis-limit",
+                     "physical implementation search exhausted catalog work");
       auto selected = application;
       selected.implementation = entry.candidates[entry.next];
       auto descriptor = installedImplementations().find(
@@ -450,7 +454,8 @@ public:
       auto &entry = implementations[id];
       if (entry.next + 1 < entry.candidates.size()) {
         if (!numerical.chargeCatalog())
-          return error("finite-analysis-limit");
+          return error("finite-analysis-limit",
+                       "physical implementation retry exhausted catalog work");
         ++entry.next;
         advanced = true;
         // Capacity concerns the complete plan. Advance its automatic
@@ -467,10 +472,12 @@ chooseConversion(Type from, Type to, const CandidateCatalog &catalog,
                  mathematical::NumericalSelection &selection,
                  const CpuTarget &cpuTarget) {
   if (!selection.chargeCatalog())
-    return error("finite-analysis-limit");
+    return error("finite-analysis-limit",
+                 "physical conversion search exhausted catalog work");
   auto candidates = catalog.conversions(from, to);
   if (!selection.chargeCatalog(candidates.size()))
-    return error("finite-analysis-limit");
+    return error("finite-analysis-limit",
+                 "physical conversion inventory exhausted catalog work");
   for (auto candidate : candidates) {
     // A catalog suggestion can name an uninstalled adapter. Decline that
     // suggestion; authored bindings and explicit pins were admitted separately.
@@ -960,7 +967,9 @@ class Proposer {
       return e;
     while (!pending.empty()) {
       if (!selection.numerical.chargeCatalog())
-        return error("finite-analysis-limit");
+        return error(
+            "finite-analysis-limit",
+            "physical representation propagation exhausted catalog work");
       auto *op = pending.front();
       pending.pop_front();
       queued.erase(op);
@@ -1329,7 +1338,8 @@ public:
     // bindings have no cursor; numerical retry retains the reported slice.
     for (auto [index, binding] : enumerate(plan.bindings)) {
       if (!selection.numerical.chargeCatalog())
-        return error("finite-analysis-limit");
+        return error("finite-analysis-limit",
+                     "physical capacity attribution exhausted catalog work");
       if (!binding.fixed && !binding.origin)
         failure.bindings.push_back(index);
     }
@@ -1344,7 +1354,8 @@ public:
     execution = std::move(*admitted);
     for (auto [index, op] : enumerate(operations)) {
       if (!selection.numerical.chargeCatalog())
-        return error("finite-analysis-limit");
+        return error("finite-analysis-limit",
+                     "physical operation inventory exhausted catalog work");
       if (auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding"))
         bindingUses[ref.getValue().str()].push_back(index);
     }
@@ -1366,7 +1377,8 @@ public:
       bool authoredUse = false;
       for (auto index : bindingUses[binding->name]) {
         if (!selection.numerical.chargeCatalog())
-          return error("finite-analysis-limit");
+          return error("finite-analysis-limit",
+                       "physical binding provenance exhausted catalog work");
         auto occurrenceOwners = selection.numerical.owners(operations[index]);
         authoredUse |= occurrenceOwners.empty();
         append_range(owners, occurrenceOwners);
@@ -1455,7 +1467,9 @@ public:
         for (const auto &implementation :
              catalog.diagonalImplementations(clone.binding.application)) {
           if (!selection.numerical.chargeCatalog()) {
-            contractionError = error("finite-analysis-limit");
+            contractionError =
+                error("finite-analysis-limit",
+                      "physical contraction search exhausted catalog work");
             return false;
           }
           auto candidate = clone.binding.application;
@@ -1856,7 +1870,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
                                       WorkOwner::AlgorithmOriginBytes);
         } else
           return error("computation-realization", numericalOutcome.detail);
-        refusal = error("finite-analysis-limit");
+        refusal = error("finite-analysis-limit", numericalOutcome.detail);
       }
       auto candidateRoot =
           cast<zkc::protocol_ir::ProtocolModuleOp>(selected.getBody()->front());

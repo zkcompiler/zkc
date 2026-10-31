@@ -12,24 +12,27 @@ namespace {
 class Structure {
   static constexpr size_t byteLimit = artifactByteLimit;
   std::string problem;
+  std::string detail;
   size_t nodes = 0;
   bool projected = false;
   bool nativeIR = false;
 
-  void fail(StringRef code) {
-    if (problem.empty())
+  void fail(StringRef code, StringRef reason = {}) {
+    if (problem.empty()) {
       problem = code.str();
+      detail = reason.str();
+    }
   }
   size_t add(size_t a, size_t b) {
     if (a > byteLimit || b > byteLimit - a) {
-      fail("source-limit");
+      fail("source-limit", "compact program exceeds artifact byte limit");
       return byteLimit + 1;
     }
     return a + b;
   }
   void node() {
     if (++nodes > artifactNodeLimit)
-      fail("source-limit");
+      fail("source-limit", "program exceeds artifact node limit");
   }
   size_t text(StringRef value) {
     node();
@@ -58,7 +61,7 @@ class Structure {
   template <typename T, typename F> size_t list(const T &values, F f) {
     node();
     if (values.size() > 32768) {
-      fail("source-limit");
+      fail("source-limit", "program container exceeds 32768 elements");
       return byteLimit + 1;
     }
     size_t bytes = 2 + (values.empty() ? 0 : values.size() - 1);
@@ -231,7 +234,7 @@ public:
   explicit Structure(bool allowNativeIR = false) : nativeIR(allowNativeIR) {}
   template <typename T> Error run(const T &value) {
     measure(value);
-    return problem.empty() ? Error::success() : error(problem);
+    return problem.empty() ? Error::success() : error(problem, detail);
   }
 };
 } // namespace

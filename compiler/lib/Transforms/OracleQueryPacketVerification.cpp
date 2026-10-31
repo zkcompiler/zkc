@@ -93,7 +93,7 @@ bool layout(const OracleVerificationContext &context,
     auto authenticate = signature(arm.authenticate);
     if (!lookup || !position || !authenticate || lookup.getNumResults() > 480 ||
         !equal(lookup.getInputs(),
-               Types{arm.reference, model.receiverStores[arm.receiverSlot]}) ||
+               Types{index, index, model.receiverStores[arm.receiverSlot]}) ||
         arm.receiverRows >= lookup.getNumResults() ||
         lookup.getResult(arm.receiverRows) != index ||
         !equal(position.getInputs(), Types(2, index)) ||
@@ -375,10 +375,8 @@ struct Reader {
   Value keyArm(Cursor &c, ValueRange a, unsigned ordinal) {
     const auto &arm = model.arms[ordinal];
     auto prefix = "packet_constructor_" + std::to_string(arm.constructor) + "_";
-    auto reference =
-        c.pack(arm.reference, "Record", a.take_front(2), prefix + "reference");
     auto stored =
-        c.call(arm.receiverLookup, {reference, a[3 + arm.receiverSlot]},
+        c.call(arm.receiverLookup, {a[0], a[1], a[3 + arm.receiverSlot]},
                prefix + "lookup");
     auto position =
         c.call(merkle[arm.constructor].position,

@@ -977,6 +977,17 @@ actions. Every resulting candidate must pass closed admission and the frozen
 interface postcondition.
 
 `zkc-lower-math` first applies independently checked scoped helper substitution.
+It then removes scoped helper definitions unreachable from the participant
+context, using MLIR symbol references. Every other declaration is a live root,
+including all entries, participants, bindings, mathematical definitions,
+relations and projection metadata. The independent pruning checker admits both
+actual modules and requires the candidate to be an unchanged, ordered
+subsequence of the source declarations, with only scoped definitions omitted.
+Candidate admission rules out any retained reference to an omitted definition.
+Invalid dormant helpers therefore cannot escape source admission. This edge
+applies only to the participant profile; it cannot remove role-free exported
+functions. Pruning does not change any executed operation or resource charge.
+
 It then produces `exec` with retained mathematical computation units. For every local
 action or finish cut, it finds total dependencies not previously computed and
 schedules them in dependency order with source-order tie breaking. Work starts

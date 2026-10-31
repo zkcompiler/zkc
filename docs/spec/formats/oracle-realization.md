@@ -441,6 +441,16 @@ queries. The state header retains the most recently produced answer index.
 Returning to a virtual parent reads each child's own index from its kind's arena
 in source query order. The reader checks those actual SSA references, arena
 appends and loads; a record's kind or index claim cannot authorize substitution.
+Anchor lookup takes the actual constructor tag and instance coordinates directly,
+checks the tag before indexing the selected immutable store, and returns the
+record fields in their declared order. Internal callers do not reconstruct and
+immediately deconstruct a handle record. Dispatch is a balanced tree of scoped
+conditional regions in one callable; each leaf checks the exact selected tag.
+The bounded advance loop owns its transition body directly. Independent readers
+check these bodies, guards, case partitions and complete state transfers. None
+of these representation choices changes logical custody or authorizes using a
+static possible constructor in place of an actual reference.
+
 The evaluator remains responsible for source-ordered domains and answers.
 Dynamic demand windows use its checked request/resume transitions only after
 complete prefix authentication; answer arenas do not grant independent
