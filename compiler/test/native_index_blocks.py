@@ -27,7 +27,12 @@ def language(text, name="block", refuses=None):
 
 with case("source generates a logical block in both selected endpoints"):
     deployment = json.loads(language(SOURCE))
-    assert len(deployment[2]) == 8 and len(deployment[2][1]) == 12
+    assert len(deployment[2]) == 9 and len(deployment[2][1]) == 12
+    assert json.loads(deployment[2][8]) == {
+        "format": "zkc.oracle-selection/0",
+        "roots": {"kind": "exact", "entries": []},
+        "order": "unrestricted", "authentication": "per-query",
+    }
     sequence = deployment[2][3]
     event = next(e for e in sequence if e[0] == "indices")
     assert event[2:] == ["8", "5"] and deployment[2][7] == []

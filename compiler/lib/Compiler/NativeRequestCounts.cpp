@@ -1,4 +1,3 @@
-#include "../Transforms/OracleCommonRealization.h"
 #include "../Transforms/RealizedProtocol.h"
 #include "NativeRequest.h"
 #include "mlir/IR/OperationSupport.h"
@@ -31,17 +30,11 @@ readNativeRequestCounts(const mathematical::RealizedProtocol &owner,
           &ordinary->getBody()->front(), projected,
           OperationEquivalence::IgnoreLocations))
     return refuse();
-  auto selection =
-      protocol::parseOracleRealizationPolicy(owner.normalizedSelection());
-  if (!selection)
-    return selection.takeError();
-  // The existing independent realization reader checks actual allocation
+  // Construction of the immutable owner uses the independent realization
+  // reader to check actual allocation
   // order, child lookup operands, stored construction counts, multiplicity,
   // overflow bounds and the per-block ceiling calculation. The record below
   // supplies association only, after those actual-body premises have passed.
-  if (auto e = protocol::checkOracleRealization(
-          *source, *common, owner.realizationRecord(), *selection))
-    return std::move(e);
   auto record = json::parse(owner.realizationRecord());
   auto *object = record ? record->getAsObject() : nullptr;
   auto *entries = object ? object->getArray("entries") : nullptr;

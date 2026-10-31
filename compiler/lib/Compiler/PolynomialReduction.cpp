@@ -1,4 +1,5 @@
 #include "zkc/Compiler/PolynomialReduction.h"
+#include "../Transforms/PreparedProtocol.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
@@ -628,8 +629,8 @@ polynomialRequirementEntries(StringRef text) {
   SmallVector<std::string> entries;
   std::set<std::string> seen;
   for (const auto &requirement : *requirements)
-    for (const auto &entry : {requirement.reduction, requirement.terminal,
-                              requirement.composition})
+    for (const auto &entry :
+         {requirement.reduction, requirement.terminal, requirement.composition})
       if (!entry.empty() && seen.insert(entry).second)
         entries.push_back(entry);
   return entries;
@@ -668,10 +669,19 @@ checkPolynomialReductions(ModuleOp original, ModuleOp candidate, StringRef text,
   // The public independent-candidate API also checks the actual original
   // program after unsimplified projection. A correct substitute candidate
   // cannot make an incorrect authored verifier receive this report.
-  OwningOpRef<ModuleOp> projected(cast<ModuleOp>(original->clone()));
-  PassManager preparation(original.getContext());
-  buildProjectionPipeline(preparation, false, mathematicalSelection);
-  if (failed(preparation.run(*projected)))
+  // Deployment may retain a subset of authored entries. Independently admit
+  // and expand the complete original, then select exactly the candidate's
+  // roots. Required component entries are checked below; unselected siblings
+  // do not acquire a deployment interface merely by sharing a source module.
+  auto preparation =
+      mathematical::PreparedProtocol::prepare(original, mathematicalSelection);
+  SmallVector<StringRef> selected;
+  for (auto entry : target.getBody().front().getOps<pir::ProtocolEntryOp>())
+    selected.push_back(entry.getSymName());
+  if (!preparation || failed(preparation->selectEntries(selected)))
+    return error("polynomial-correspondence-source");
+  auto projected = std::move(*preparation).project(false);
+  if (!projected)
     return error("polynomial-correspondence-source");
   auto expected = cast<pir::ProtocolModuleOp>(projected->getBody()->front());
   // Symbol-name equality in a participant is insufficient when a referenced

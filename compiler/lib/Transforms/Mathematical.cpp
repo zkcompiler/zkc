@@ -1299,7 +1299,12 @@ OwningOpRef<ModuleOp> PreparedProtocol::execute() && {
   // projection, relation, construction or deployment declarations. Refuse a
   // role-bearing source rather than silently discarding its obligations.
   if (owner.getProfile() != protocol_ir::Profile::Protocol ||
-      owner->getAttrs().size() != 1 ||
+      any_of(owner->getAttrs(),
+             [](NamedAttribute attr) {
+               return attr.getName() != "profile" &&
+                      !(attr.getName() == "source_declarations" &&
+                        isa<ArrayAttr>(attr.getValue()));
+             }) ||
       any_of(owner.getBody().front(), [](Operation &op) {
         return !isa<func::FuncOp, data::DomainOp, runtime::BindingOp>(op);
       })) {
@@ -1316,9 +1321,13 @@ OwningOpRef<ModuleOp> PreparedProtocol::execute() && {
   auto after =
       cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
   after.setProfile(protocol_ir::Profile::Exec);
+  NamedAttrList expectedAttributes(before->getAttrs());
+  expectedAttributes.set("profile", after.getProfileAttr());
   // The only new edge is profile selection. Compare every actual declaration
   // in order; helper substitution was checked against the prepared source.
   if (failed(zkc::admitStage(*candidate)) ||
+      expectedAttributes.getDictionary(owner.getContext()) !=
+          after->getAttrDictionary() ||
       expanded->getOperation()->getAttrDictionary() !=
           candidate->getOperation()->getAttrDictionary() ||
       before.getBody().front().getOperations().size() !=
