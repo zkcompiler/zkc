@@ -199,6 +199,9 @@ public:
       if (!function || !isScopedExecutionFunction(function) ||
           function->hasAttr("runtime.region"))
         continue;
+      // Byte-language values are scoped to one callable, including its nested
+      // control regions. Unrelated definitions need no shared name counter.
+      next = 0;
       program::Function record;
       record.name = function.getSymName().str();
       auto origin = function->getAttrOfType<ArrayAttr>("runtime.origin");

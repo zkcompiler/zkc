@@ -136,8 +136,16 @@ int main() {
     protocol::Assignments path{{std::string(80, 'a'), std::string(80, 'b')}};
     auto longName = protocol::algorithmSite(path, "s", bytes);
     require(bool(longName) && StringRef(*longName).starts_with("lc_h_") &&
-                longName->size() == 69,
+                longName->size() == 48,
             "long occurrence was not compacted");
+    auto boundary = protocol::algorithmSite({}, std::string(42, 'x'), bytes);
+    require(bool(boundary) && boundary->size() == 48 &&
+                !StringRef(*boundary).starts_with("lc_h_"),
+            "equal-length source encoding should remain literal");
+    auto compact = protocol::algorithmSite({}, std::string(43, 'x'), bytes);
+    require(bool(compact) &&
+                *compact == "lc_h_9JxM4NkMxX7a3w2yCuaAuor0ydWHG9NKhLFplUxxuUM",
+            "compact occurrence is not the complete unpadded base64url digest");
     path[0].second.back() = 'c';
     auto other = protocol::algorithmSite(path, "s", bytes);
     require(bool(other) && *other != *longName, "different local paths alias");

@@ -81,7 +81,8 @@ name establishes correspondence.
 An expanded occurrence retains its enclosing function, ordered call/callee path
 and original leaf site. The encoding is `lc` followed by
 `_BYTE_LENGTH_COMPONENT` for every path component and the leaf. Encodings longer
-than 128 bytes use `lc_h_` followed by the lowercase hexadecimal SHA-256 digest;
+than 48 bytes use `lc_h_` followed by the unpadded base64url encoding of the
+complete SHA-256 digest (43 characters, alphabet `A-Z a-z 0-9 - _`);
 the complete path remains in the independently recovered origin record. The
 encoder charges the complete pre-digest length before constructing the string.
 
