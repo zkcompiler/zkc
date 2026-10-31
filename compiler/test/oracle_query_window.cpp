@@ -107,7 +107,8 @@ void checkModel(const Input &input) {
 Input emitted(MLIRContext &context, unsigned variant = 0,
               uint64_t packetCapacity = 2) {
   Input input;
-  auto path = std::filesystem::path(ZKC_ORACLE_FIXTURES) / "query-constructors.mlir";
+  auto path =
+      std::filesystem::path(ZKC_ORACLE_FIXTURES) / "query-constructors.mlir";
   std::ifstream fixture(path);
   require(bool(fixture), "cannot read window source fixture");
   std::string text((std::istreambuf_iterator<char>(fixture)), {});
@@ -274,7 +275,8 @@ void constant(Input &input, StringRef name, uint64_t value) {
 }
 void insertBefore(
     Operation *before,
-    llvm::function_ref<void(exec::ScopedExecutionBuilder &, OpBuilder &)> emit) {
+    llvm::function_ref<void(exec::ScopedExecutionBuilder &, OpBuilder &)>
+        emit) {
   auto owner = before->getParentOfType<func::FuncOp>();
   auto *head = before->getBlock();
   auto *tail = head->splitBlock(Block::iterator(before));
@@ -465,12 +467,15 @@ void effects(const Input &input) {
     visit(entry);
     require(calls == expected, "window omitted a required call");
   };
-  inspect(input.window.collect, {func::FuncOp(input.demand.advance).getSymName().str(),
-                                 func::FuncOp(input.demand.consume).getSymName().str()});
-  inspect(input.window.replay, {func::FuncOp(input.receiver.advance).getSymName().str(),
-                                func::FuncOp(input.response.resume).getSymName().str()});
-  inspect(input.window.finish, {func::FuncOp(input.receiver.advance).getSymName().str(),
-                                func::FuncOp(input.receiver.finish).getSymName().str()});
+  inspect(input.window.collect,
+          {func::FuncOp(input.demand.advance).getSymName().str(),
+           func::FuncOp(input.demand.consume).getSymName().str()});
+  inspect(input.window.replay,
+          {func::FuncOp(input.receiver.advance).getSymName().str(),
+           func::FuncOp(input.response.resume).getSymName().str()});
+  inspect(input.window.finish,
+          {func::FuncOp(input.receiver.advance).getSymName().str(),
+           func::FuncOp(input.receiver.finish).getSymName().str()});
 }
 // Optional production compiler client for this primitive, with caller-supplied
 // stores and authenticated answers. It deliberately makes no complete-window
@@ -639,7 +644,8 @@ int main(int argc, char **argv) {
                              "resume before advance",
                              "wrong region captures"};
   for (auto [mutation, name] : enumerate(mutations))
-    cases.run("actual window mutation: " + Twine(name), [&, mutation = mutation] {
+    cases.run("actual window mutation: " + Twine(name), [&,
+                                                         mutation = mutation] {
       auto input = emitted(context);
       auto call = [&](StringRef name) {
         return cast<func::CallOp>(site(input, name));

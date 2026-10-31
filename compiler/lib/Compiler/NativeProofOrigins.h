@@ -16,8 +16,9 @@ struct NativeSourceOrigin {
 };
 // The record is read only through its immutable checked owner. Generated
 // occurrences acquire source associations, never authority from helper names.
-llvm::Expected<llvm::StringMap<NativeSourceOrigin>> realizedNativeOrigins(
-    const mathematical::RealizedProtocol &, llvm::StringRef entry,
-    const llvm::StringMap<NativeSourceOrigin> &authored);
+llvm::Expected<llvm::StringMap<NativeSourceOrigin>>
+realizedNativeOrigins(const mathematical::RealizedProtocol &,
+                      llvm::StringRef entry,
+                      const llvm::StringMap<NativeSourceOrigin> &authored);
 } // namespace zkc::detail
 #endif

@@ -241,7 +241,8 @@ int main(int argc, char **argv) {
         auto &ops = *at(snapshot, {7, 2, 9, 1}).getAsArray();
         require(ops.size() == 13, "oracle operation lost");
         require(at(ops[0], {0}) ==
-                    J(A{"oracle_input", "P", A{"V"}, A{"oracle", "table", (*kind().getAsArray())[1]}, A{}}),
+                    J(A{"oracle_input", "P", A{"V"},
+                        A{"oracle", "table", (*kind().getAsArray())[1]}, A{}}),
                 "input binding changed");
         require(at(ops[1], {0}) ==
                     J(A{"oracle_send", "P", A{"V"}, kind(), A{"rows"}, A{}}),

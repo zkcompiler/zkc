@@ -85,7 +85,8 @@ bool layout(const OracleVerificationContext &context,
     return type && equal(type.getInputs(), inputs) &&
            equal(type.getResults(), outputs);
   };
-  Types discovery(demand.state.begin(), demand.state.end()), evaluation(controller.state.begin(), controller.state.end());
+  Types discovery(demand.state.begin(), demand.state.end()),
+      evaluation(controller.state.begin(), controller.state.end());
   append_range(discovery, controller.stores);
   append_range(evaluation, controller.stores);
   auto initialized = signature(controller.initialize);

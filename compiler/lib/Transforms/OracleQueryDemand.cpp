@@ -8,6 +8,8 @@
 #include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/SaveAndRestore.h"
+#include <map>
 using namespace mlir;
 using namespace llvm;
 namespace zkc::protocol {
@@ -27,6 +29,7 @@ struct Emitter {
   Location loc;
   Type index, scope;
   mathematical::RealizationEmitter bindings;
+  std::map<uint64_t, Value> *constants = nullptr;
   unsigned next = 0, rootKind = 0;
   Emitter(ModuleOp candidate, const OracleAnchorStorage &storage,
           const OracleQueryController &controller)
@@ -162,6 +165,11 @@ struct Emitter {
                                             builder.getArrayAttr({})}));
     builder.setInsertionPointToEnd(helper.addEntryBlock());
     Control control(builder, helper);
+    // A helper's successful path is a linear chain of scoped outcomes.
+    // Outlined branches and iterations get separate tables: no literal is
+    // reused across their scopes or before its successful definition.
+    std::map<uint64_t, Value> literals;
+    SaveAndRestore savedConstants(constants, &literals);
     emit(control, helper.getArguments().drop_front());
     return helper;
   }
@@ -178,9 +186,14 @@ struct Emitter {
          builder.getNamedAttr("site", builder.getStringAttr(site))});
   }
   Value number(Control &c, uint64_t value, StringRef site) {
-    return apply(c, "index.constant", index, {}, site, {},
-                 {builder.getIntegerAttr(index, value)})
-        .front();
+    auto found = constants->find(value);
+    if (found != constants->end())
+      return found->second;
+    auto literal = apply(c, "index.constant", index, {}, site, {},
+                         {builder.getIntegerAttr(index, value)})
+                       .front();
+    constants->emplace(value, literal);
+    return literal;
   }
   Value compare(Control &c, StringRef contract, Value a, Value b,
                 StringRef site) {
@@ -440,9 +453,11 @@ struct Emitter {
   }
   // Branch regions belong to this one callable. Do not route every tree edge
   // through another helper call carrying the complete controller state.
+  enum class DispatchCheck { Explicit, Anchor };
   func::FuncOp dispatch(StringRef label, unsigned selector,
                         ArrayRef<std::pair<unsigned, func::FuncOp>> cases,
                         TypeRange formals, TypeRange outputs,
+                        DispatchCheck check = DispatchCheck::Explicit,
                         bool region = false, StringRef prefix = {}) {
     return function(
         label, formals, outputs, region, [&](Control &c, ValueRange inputs) {
@@ -457,8 +472,11 @@ struct Emitter {
             return;
           }
           if (cases.size() == 1) {
-            equal(c, inputs[selector], cases.front().first,
-                  prefix.str() + "selected");
+            // Anchor leaves check this actual selector before loading their
+            // record. Other selectors require an explicit discriminator here.
+            if (check == DispatchCheck::Explicit)
+              equal(c, inputs[selector], cases.front().first,
+                    prefix.str() + "selected");
             finish(
                 call(c, cases.front().second, inputs, prefix.str() + "case"));
             return;
@@ -472,16 +490,17 @@ struct Emitter {
               [&](unsigned branch) {
                 auto subset = branch == 0 ? cases.take_front(middle)
                                           : cases.drop_front(middle);
-                return dispatch(label, selector, subset, formals, outputs, true,
-                                prefix.str() +
-                                    (branch == 0 ? "left_" : "right_"));
+                return dispatch(
+                    label, selector, subset, formals, outputs, check, true,
+                    prefix.str() + (branch == 0 ? "left_" : "right_"));
               });
           finish(values);
         });
   }
   func::FuncOp dispatch(StringRef label, unsigned selector,
-                        ArrayRef<std::pair<unsigned, func::FuncOp>> cases) {
-    return dispatch(label, selector, cases, allTypes(), result.state);
+                        ArrayRef<std::pair<unsigned, func::FuncOp>> cases,
+                        DispatchCheck check = DispatchCheck::Explicit) {
+    return dispatch(label, selector, cases, allTypes(), result.state, check);
   }
   void emitInitialize(pir::OracleKindAttr root) {
     auto reference = cantFail(oracleReferenceType(root));
@@ -510,7 +529,8 @@ struct Emitter {
     SmallVector<std::pair<unsigned, func::FuncOp>> enters;
     for (auto [i, item] : enumerate(controller.constructors))
       enters.push_back({item.source, enter(i)});
-    auto entering = dispatch("enter_dispatch", Demand::Constructor, enters);
+    auto entering = dispatch("enter_dispatch", Demand::Constructor, enters,
+                             DispatchCheck::Anchor);
     auto returning = returned();
     auto step = [&](Control &c, ValueRange inputs) {
       auto zero = number(c, Demand::Enter, "enter_phase");

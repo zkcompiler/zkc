@@ -13,6 +13,7 @@
 #include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
+#include <map>
 using namespace mlir;
 using namespace llvm;
 namespace zkc::protocol {
@@ -195,6 +196,7 @@ struct Reader {
     Reader &reader;
     ArrayRef<SourceExecutionStep> steps;
     unsigned offset = 0;
+    std::map<uint64_t, Value> constants{};
     const SourceExecutionStep *take(StringRef operation, StringRef site) {
       if (!reader.valid)
         return nullptr;
@@ -242,9 +244,16 @@ struct Reader {
       return values;
     }
     Value number(uint64_t value, StringRef site) {
-      return apply("index.constant", reader.index, {}, site, {},
-                   {std::to_string(value)})
-          .front();
+      // Only a previously read exact constant in this successful body may
+      // be reused. Each outlined body has a fresh cursor and literal table.
+      auto found = constants.find(value);
+      if (found != constants.end())
+        return found->second;
+      auto literal = apply("index.constant", reader.index, {}, site, {},
+                           {std::to_string(value)})
+                         .front();
+      constants.emplace(value, literal);
+      return literal;
     }
     Value compare(StringRef contract, Value left, Value right, StringRef site) {
       return apply(contract, reader.boolean, {left, right}, site).front();
@@ -578,9 +587,11 @@ struct Reader {
           c.finish(values);
         });
   }
+  enum class DispatchCheck { Explicit, Anchor };
   void dispatch(func::FuncOp function, unsigned selector,
                 ArrayRef<unsigned> cases, TypeRange formals, TypeRange outputs,
                 llvm::function_ref<void(unsigned, func::FuncOp)> leaf,
+                DispatchCheck check = DispatchCheck::Explicit,
                 bool region = false, StringRef prefix = {}) {
     body(function, formals, outputs, region, [&](Cursor &c, ValueRange inputs) {
       if (cases.empty()) {
@@ -588,7 +599,10 @@ struct Reader {
         return;
       }
       if (cases.size() == 1) {
-        c.equalTo(inputs[selector], cases.front(), prefix.str() + "selected");
+        // The Anchor policy is chosen below only for independently checked
+        // leaves whose actual lookup checks this exact constructor selector.
+        if (check == DispatchCheck::Explicit)
+          c.equalTo(inputs[selector], cases.front(), prefix.str() + "selected");
         func::FuncOp selected;
         auto values = c.local(inputs, outputs, prefix.str() + "case", selected);
         if (valid)
@@ -605,16 +619,17 @@ struct Reader {
           [&](unsigned branch, func::FuncOp selected) {
             auto subset = branch == 0 ? cases.take_front(middle)
                                       : cases.drop_front(middle);
-            dispatch(selected, selector, subset, formals, outputs, leaf, true,
-                     prefix.str() + (branch == 0 ? "left_" : "right_"));
+            dispatch(selected, selector, subset, formals, outputs, leaf, check,
+                     true, prefix.str() + (branch == 0 ? "left_" : "right_"));
           });
       c.finish(values, region);
     });
   }
   void dispatch(func::FuncOp function, unsigned selector,
                 ArrayRef<unsigned> cases,
-                llvm::function_ref<void(unsigned, func::FuncOp)> leaf) {
-    dispatch(function, selector, cases, allTypes(), model.state, leaf);
+                llvm::function_ref<void(unsigned, func::FuncOp)> leaf,
+                DispatchCheck check = DispatchCheck::Explicit) {
+    dispatch(function, selector, cases, allTypes(), model.state, leaf, check);
   }
   void metadata(StringRef fieldName, ArrayRef<func::FuncOp> functions) {
     Types dispatchTypes{index, index};
@@ -641,22 +656,23 @@ struct Reader {
              append_range(identity, inputs.drop_front());
              func::FuncOp select;
              auto value = c.local(identity, index, "select_count", select);
-             dispatch(select, 0, cases, dispatchTypes, index,
-                      [&](unsigned source, func::FuncOp leaf) {
-                        auto found =
-                            find_if(model.constructors, [&](const auto &item) {
-                              return item.source == source;
-                            });
-                        unsigned constructor =
-                            found - model.constructors.begin();
-                        body(leaf, dispatchTypes, index, false,
-                             [&](Cursor &c, ValueRange arguments) {
-                               auto record = load(c, constructor, arguments[0],
-                                                  arguments[1],
-                                                  arguments[2 + constructor]);
-                               c.finish(record[field(constructor, fieldName)]);
-                             });
-                      });
+             dispatch(
+                 select, 0, cases, dispatchTypes, index,
+                 [&](unsigned source, func::FuncOp leaf) {
+                   auto found =
+                       find_if(model.constructors, [&](const auto &item) {
+                         return item.source == source;
+                       });
+                   unsigned constructor = found - model.constructors.begin();
+                   body(leaf, dispatchTypes, index, false,
+                        [&](Cursor &c, ValueRange arguments) {
+                          auto record =
+                              load(c, constructor, arguments[0], arguments[1],
+                                   arguments[2 + constructor]);
+                          c.finish(record[field(constructor, fieldName)]);
+                        });
+                 },
+                 DispatchCheck::Anchor);
              c.finish(value);
            });
     }
@@ -715,14 +731,16 @@ struct Reader {
                  if (branch == 0) {
                    for (auto item : model.constructors)
                      cases.push_back(item.source);
-                   dispatch(selected, Controller::Constructor, cases,
-                            [&](unsigned source, func::FuncOp leaf) {
-                              auto found = find_if(
-                                  model.constructors, [&](const auto &item) {
-                                    return item.source == source;
-                                  });
-                              enter(leaf, found - model.constructors.begin());
-                            });
+                   dispatch(
+                       selected, Controller::Constructor, cases,
+                       [&](unsigned source, func::FuncOp leaf) {
+                         auto found =
+                             find_if(model.constructors, [&](const auto &item) {
+                               return item.source == source;
+                             });
+                         enter(leaf, found - model.constructors.begin());
+                       },
+                       DispatchCheck::Anchor);
                  } else {
                    for (unsigned i = 0; i <= model.continuations.size(); ++i)
                      cases.push_back(i);
@@ -941,7 +959,8 @@ struct Reader {
                             });
                         c.finish(result);
                       });
-               });
+               },
+               DispatchCheck::Anchor);
            c.finish(result);
          });
   }
@@ -1028,7 +1047,8 @@ struct Reader {
                                               leaf,
                                               found -
                                                   model.constructors.begin());
-                                        });
+                                        },
+                                        DispatchCheck::Anchor);
                                   body.finish(values, true);
                                 });
                           });

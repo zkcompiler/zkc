@@ -8,8 +8,8 @@
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Inspection.h"
-#include "zkc/Transforms/Mathematical.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Transforms/Mathematical.h"
 using namespace llvm;
 using namespace zkc;
 using namespace zkc::language;
@@ -60,8 +60,10 @@ const char *selectionSubject = R"(
 } // namespace
 int main() {
   zkc::test::Cases cases;
-  cases.run("production compiles the selected caller with internal sequence ports", [] {
-    auto source = original(R"(
+  cases.run(
+      "production compiles the selected caller with internal sequence ports",
+      [] {
+        auto source = original(R"(
     protocol Forward<K:OracleKind,M:nat> roles(B,A)
       (words:Oracles<K,M>@A->B)->(out:Oracles<K,M>@A->B){return(out=words);}
     protocol Run roles(P,V)(a:O@P->V,i:index@(P,V))->(out:F@V){
@@ -70,23 +72,27 @@ int main() {
       let received=Forward<Fixed<F,16>,2> roles(V,P)(words);
       let chosen=oracle.at(received,i);let out@V=query chosen at 0;return(out=out);
     })");
-    mlir::DialectRegistry registry;
-    RunOptions options;
-    options.entry = source.entry().protocol().symbol;
-    auto compiled = take(compileRun(source.bytes(), "sequence-ports.mlir",
-                                    options, registry));
-    auto edge = compiled.compilation.oracleRealizationSnapshot();
-    require(bool(edge), "production discarded its checked realization");
-    auto unit = *edge->original->getOps<protocol_ir::ProtocolModuleOp>().begin();
-    require(llvm::hasSingleElement(
+        mlir::DialectRegistry registry;
+        RunOptions options;
+        options.entry = source.entry().protocol().symbol;
+        auto compiled = take(compileRun(source.bytes(), "sequence-ports.mlir",
+                                        options, registry));
+        auto edge = compiled.compilation.oracleRealizationSnapshot();
+        require(bool(edge), "production discarded its checked realization");
+        auto unit =
+            *edge->original->getOps<protocol_ir::ProtocolModuleOp>().begin();
+        require(
+            llvm::hasSingleElement(
                 unit.getBody().front().getOps<protocol_ir::MathematicalOp>()),
             "internal sequence helper was realized as an external entry");
-    auto bundle = take(json::parse(compiled.bundle));
-    require(bundle.getAsObject()->getString("entry") == options.entry,
-            "wrong deployment entry was published");
-  });
-  cases.run("sequence ports preserve reordered role mapping and dynamic selection", [] {
-    auto source = original(R"(
+        auto bundle = take(json::parse(compiled.bundle));
+        require(bundle.getAsObject()->getString("entry") == options.entry,
+                "wrong deployment entry was published");
+      });
+  cases.run(
+      "sequence ports preserve reordered role mapping and dynamic selection",
+      [] {
+        auto source = original(R"(
     protocol Forward<K:OracleKind,M:nat> roles(B,A)
       (words:Oracles<K,M>@A->B)->(out:Oracles<K,M>@A->B){return(out=words);}
     protocol Run roles(P,V)(a:O@P->V,b:O@P->V,i:index@(P,V))->(out:F@V){
@@ -95,49 +101,53 @@ int main() {
       let received=Forward<Fixed<F,16>,2> roles(V,P)(words);
       let chosen=oracle.at(received,i);let out@V=query chosen at 0;return(out=out);
     })");
-    require(source.bytes().contains("protocol.oracle_components") &&
-                source.bytes().contains("!data.sequence<") &&
-                source.bytes().contains("protocol.oracle_sequence_at"),
-            "sequence interface lost its pair or dynamic selection");
-    auto view = take(readInterface(source.bytes(), source.interfaceJson()));
-    if (auto error = compareInterface(source.entry(), view))
-      throw std::runtime_error(toString(std::move(error)));
-    for (StringRef mutation : {"capacity", "missing-capacity", "wrong-data"}) {
-      auto changed = take(json::parse(source.interfaceJson()));
-      bool found = false;
-      for (auto &declaration : *changed.getAsObject()->getArray("protocols")) {
-        for (auto &input : *declaration.getAsObject()->getArray("inputs")) {
-          auto *schema = input.getAsObject()->getObject("schema");
-          if (schema->getString("kind") != "oracle_sequence")
-            continue;
-          if (mutation == "capacity")
-            (*schema)["maximum"] = "3";
-          else if (mutation == "missing-capacity")
-            schema->erase("maximum");
-          else
-            schema->getObject("data_schema")->getArray("leaves")->front() =
-                "index";
-          found = true;
-          break;
+        require(source.bytes().contains("protocol.oracle_components") &&
+                    source.bytes().contains("!data.sequence<") &&
+                    source.bytes().contains("protocol.oracle_sequence_at"),
+                "sequence interface lost its pair or dynamic selection");
+        auto view = take(readInterface(source.bytes(), source.interfaceJson()));
+        if (auto error = compareInterface(source.entry(), view))
+          throw std::runtime_error(toString(std::move(error)));
+        for (StringRef mutation :
+             {"capacity", "missing-capacity", "wrong-data"}) {
+          auto changed = take(json::parse(source.interfaceJson()));
+          bool found = false;
+          for (auto &declaration :
+               *changed.getAsObject()->getArray("protocols")) {
+            for (auto &input : *declaration.getAsObject()->getArray("inputs")) {
+              auto *schema = input.getAsObject()->getObject("schema");
+              if (schema->getString("kind") != "oracle_sequence")
+                continue;
+              if (mutation == "capacity")
+                (*schema)["maximum"] = "3";
+              else if (mutation == "missing-capacity")
+                schema->erase("maximum");
+              else
+                schema->getObject("data_schema")->getArray("leaves")->front() =
+                    "index";
+              found = true;
+              break;
+            }
+            if (found)
+              break;
+          }
+          require(found, "missing exported sequence port");
+          refuses(readInterface(source.bytes(), printJson(changed)),
+                  "source.interface");
         }
-        if (found)
-          break;
-      }
-      require(found, "missing exported sequence port");
-      refuses(readInterface(source.bytes(), printJson(changed)),
-              "source.interface");
-    }
-  });
-  cases.run("empty sequence crosses an internal boundary without an anchor", [] {
-    original(R"(
+      });
+  cases.run("empty sequence crosses an internal boundary without an anchor",
+            [] {
+              original(R"(
     protocol Empty roles(A,B)()->(out:Oracles<Fixed<F,16>,0>@A->B){
       let out=oracle.empty<Fixed<F,16>,0> roles(A,B)();return(out=out);}
     protocol Run roles(P,V)()->(n:index@(P,V)){
       let words=Empty roles(P,V)();let n=oracle.length(words);return(n=n);
     })");
-  });
-  cases.run("sequence transport retains duplicate occurrences and loop carries", [] {
-    original(R"(
+            });
+  cases.run("sequence transport retains duplicate occurrences and loop carries",
+            [] {
+              original(R"(
     protocol Forward roles(A,B)(words:Oracles<Fixed<F,16>,3>@A->B)
       ->(out:Oracles<Fixed<F,16>,3>@A->B){return(out=words);}
     protocol Run roles(P,V)(a:O@P->V,n:index@(P,V))->(out:F@V){
@@ -146,25 +156,26 @@ int main() {
       let received=Forward roles(P,V)(words);
       let chosen=oracle.at(received,0);let out@V=query chosen at 0;return(out=out);
     })");
-  });
+            });
   cases.run("sequence ports require a custody arrow", [] {
     refuses(check(R"(
     protocol Invalid roles(P,V)(words:Oracles<Fixed<F,16>,2>@(P,V))
       ->(n:index@(P,V)){let n=oracle.length(words);return(n=n);})"),
-      "source.oracle-port");
+            "source.oracle-port");
   });
   cases.run("sequence capacity remains part of the port type", [] {
     refuses(check(R"(
     protocol Invalid roles(P,V)(words:Oracles<Fixed<F,16>,2>@P->V)
       ->(out:Oracles<Fixed<F,16>,3>@P->V){return(out=words);})"),
-      "source.type");
+            "source.type");
   });
-  cases.run("sequence return cannot change the holder within the same family", [] {
-    refuses(check(R"(
+  cases.run("sequence return cannot change the holder within the same family",
+            [] {
+              refuses(check(R"(
     protocol Invalid roles(P,V)(words:Oracles<Fixed<F,16>,2>@P->V)
       ->(out:Oracles<Fixed<F,16>,2>@V->P){return(out=words);})"),
-      "source.oracle-role");
-  });
+                      "source.oracle-role");
+            });
   cases.run("runtime selection retains the selected actual anchor", [] {
     auto source = original(selectionSubject);
     require(source.bytes().contains("protocol.oracle_sequence_at") &&

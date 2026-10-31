@@ -43,12 +43,13 @@ Expected<OracleTableRealization> readTable(const json::Object &object) {
   return table;
 }
 json::Object tableObject(const OracleTableRealization &table) {
-  return json::Object{{"scheme", table.scheme},
-          {"grouping", table.grouping == OracleLeafGrouping::Individual
-                           ? "individual"
-                           : "antipodal-pairs"},
-          {"order", table.order == OracleLeafOrder::Natural ? "natural"
-                                                            : "bit-reversed"}};
+  return json::Object{
+      {"scheme", table.scheme},
+      {"grouping", table.grouping == OracleLeafGrouping::Individual
+                       ? "individual"
+                       : "antipodal-pairs"},
+      {"order",
+       table.order == OracleLeafOrder::Natural ? "natural" : "bit-reversed"}};
 }
 } // namespace
 Error validateOracleRealizationPolicy(const OracleRealizationPolicy &policy) {

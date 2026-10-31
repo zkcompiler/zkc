@@ -469,7 +469,7 @@ module { "protocol.module"() ({
             }
         });
   }
-  for (unsigned mutation = 0; mutation < 7; ++mutation)
+  for (unsigned mutation = 0; mutation < 8; ++mutation)
     cases.run(Twine("well-formed lookup mutation ") + Twine(mutation), [&] {
       OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(prepared->clone()));
       auto helper = take(emitOracleAnchorLookup(*candidate, ideal, 2, 0));
@@ -515,6 +515,11 @@ module { "protocol.module"() ({
         auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
             call, call.getBindingAttr());
         binding.setContract("index.less");
+      }
+      if (mutation == 7) {
+        auto equality = cast<exec::ApplyOp>(body[1].operation);
+        // Self-equality must not replace the remaining constructor guard.
+        equality.getInputsMutable()[1].set(equality.getInputs()[0]);
       }
       require(succeeded(verify(*candidate)),
               "lookup mutation failed only formation: " + diagnostics);

@@ -22,8 +22,7 @@ struct OracleQuerySchedule {
 // to accept a candidate. This never emits or reads producer metadata.
 llvm::Expected<OracleQuerySchedule> planOracleQuerySchedule(
     mlir::ModuleOp prepared, llvm::StringRef entry,
-    const OracleCommonRequirements &,
-    llvm::ArrayRef<OracleCommonController>,
+    const OracleCommonRequirements &, llvm::ArrayRef<OracleCommonController>,
     llvm::ArrayRef<OracleMerkleFunctions>, OracleAuthentication);
 } // namespace zkc::protocol
 #endif

@@ -2,8 +2,8 @@
 #define ZKC_TRANSFORMS_ORACLECOMMONREALIZATION_H
 #include "OracleMerkle.h"
 #include "OracleQueryBatch.h"
-#include "OracleQueryPacket.h"
 #include "OracleQueryController.h"
+#include "OracleQueryPacket.h"
 #include "OracleRealizationSelection.h"
 namespace zkc::protocol {
 struct OracleCommonController {

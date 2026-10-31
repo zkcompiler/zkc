@@ -47,9 +47,10 @@ pir::MathematicalOp program(ModuleOp module, StringRef entry) {
               : pir::MathematicalOp();
 }
 } // namespace
-Expected<StringMap<NativeSourceOrigin>> realizedNativeOrigins(
-    const mathematical::RealizedProtocol &realization, StringRef entry,
-    const StringMap<NativeSourceOrigin> &authored) {
+Expected<StringMap<NativeSourceOrigin>>
+realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
+                      StringRef entry,
+                      const StringMap<NativeSourceOrigin> &authored) {
   auto original = realization.originalSnapshot();
   auto candidate = realization.candidateSnapshot();
   auto before = program(original.get(), entry);
@@ -189,7 +190,8 @@ Expected<StringMap<NativeSourceOrigin>> realizedNativeOrigins(
         }
         if (auto message = dyn_cast<pir::ExchangeOp>(op)) {
           auto *sourceOp = sourceOperations.at(*path);
-          bool delivery = *purpose == "deliver" && isa<pir::OracleSendOp>(sourceOp);
+          bool delivery =
+              *purpose == "deliver" && isa<pir::OracleSendOp>(sourceOp);
           bool opening = (*purpose == "opening_request" ||
                           *purpose == "opening_response") &&
                          isa<pir::OracleQueryOp>(sourceOp) && !queries.empty();
@@ -202,8 +204,9 @@ Expected<StringMap<NativeSourceOrigin>> realizedNativeOrigins(
             "zkc.oracle-native-occurrence/0", entry, *purpose, *role,
             realization.normalizedSelection(), std::move(*source),
             std::move(queries), std::move(capacity)});
-        origin.protocol = "zkc.oracle." +
-                          toHex(SHA256::hash(arrayRefFromStringRef(provenance)), true);
+        origin.protocol =
+            "zkc.oracle." +
+            toHex(SHA256::hash(arrayRefFromStringRef(provenance)), true);
         origin.site = site.str();
         // Keep full authored loop prefixes so generated and authored events
         // inside one loop identify the same frame. The reserved namespace
@@ -215,18 +218,25 @@ Expected<StringMap<NativeSourceOrigin>> realizedNativeOrigins(
                  StringRef(step[1]).starts_with("zkc.oracle.");
         });
         if (!generatedParent)
-          if (auto sourceSite = sourceOperations.at(*path)->getAttrOfType<StringAttr>("site")) {
+          if (auto sourceSite =
+                  sourceOperations.at(*path)->getAttrOfType<StringAttr>(
+                      "site")) {
             auto sourceOrigin = authored.find(sourceSite.getValue());
             if (sourceOrigin != authored.end())
               origin.steps = sourceOrigin->second.steps;
           }
         if (auto message = dyn_cast<pir::ExchangeOp>(op))
-          origin.event = {"message", origin.protocol, origin.site, origin.site,
-                          message.getSender().str(), message.getReceiver().str()};
+          origin.event = {"message",
+                          origin.protocol,
+                          origin.site,
+                          origin.site,
+                          message.getSender().str(),
+                          message.getReceiver().str()};
         else
           origin.event = {"repeat", origin.protocol, origin.site};
       }
-      if (result.size() >= 2048 || !result.try_emplace(site.getValue(), origin).second)
+      if (result.size() >= 2048 ||
+          !result.try_emplace(site.getValue(), origin).second)
         return error("native-proof-origin-limit");
       if (auto repeat = dyn_cast<pir::RepeatOp>(op)) {
         Steps child(origin.steps);
@@ -235,7 +245,7 @@ Expected<StringMap<NativeSourceOrigin>> realizedNativeOrigins(
           return e;
       } else {
         auto encoded = protocol::encodeNativeOriginTemplate(entry, origin.steps,
-                                                             origin.event);
+                                                            origin.event);
         if (!encoded)
           return encoded.takeError();
         if (!encodedOrigins.insert(*encoded).second)

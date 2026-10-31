@@ -611,15 +611,17 @@ module { "protocol.module"() ({
     auto count = [&] {
       auto current = owner->snapshot();
       auto unit = *current->getOps<ProtocolModuleOp>().begin();
-      return std::distance(unit.getBody().front().getOps<MathematicalOp>().begin(),
-                           unit.getBody().front().getOps<MathematicalOp>().end());
+      return std::distance(
+          unit.getBody().front().getOps<MathematicalOp>().begin(),
+          unit.getBody().front().getOps<MathematicalOp>().end());
     };
     require(failed(owner->selectEntries({})) && count() == 2 &&
                 failed(owner->selectEntries({"absent"})) && count() == 2 &&
                 failed(owner->selectEntries({"example", "example"})) &&
                 count() == 2,
             "invalid deployment selection changed its prepared owner");
-    require(succeeded(owner->selectEntries({"example", "relay"})) && count() == 2,
+    require(succeeded(owner->selectEntries({"example", "relay"})) &&
+                count() == 2,
             "explicit companion entry was lost");
     require(succeeded(owner->selectEntries({"example"})) && count() == 1,
             "expanded internal declaration became a deployment root");

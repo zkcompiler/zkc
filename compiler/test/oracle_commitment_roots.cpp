@@ -622,7 +622,7 @@ int main(int argc, char **argv) {
       require(queries && queries->size() == (mode == "guard" ? 1u : 4u),
               "logical source occurrence coverage changed");
       require(firstBlock.get("packet_capacity")->getAsUINT64() ==
-                  (mode == "guard" ? 3u : 4u) &&
+                      (mode == "guard" ? 3u : 4u) &&
                   !firstBlock.get("request_groups"),
               "dynamic packet bound or record schema differs");
       firstBlock["packet_capacity"] = 1;
@@ -654,7 +654,8 @@ int main(int argc, char **argv) {
           });
           require(changed && succeeded(verify(*packetCopy)),
                   "physical key mutation must preserve formation");
-          refused(checkOracleRealization(*prepared, *packetCopy, record, policy));
+          refused(
+              checkOracleRealization(*prepared, *packetCopy, record, policy));
         }
       }
       auto invalid = parseSourceString<ModuleOp>(print(*prepared), &context);

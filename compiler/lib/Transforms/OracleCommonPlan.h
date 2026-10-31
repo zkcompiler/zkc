@@ -2,8 +2,8 @@
 #define ZKC_TRANSFORMS_ORACLECOMMONPLAN_H
 #include "NativeBindingApplication.h"
 #include "OracleCommonRealization.h"
-#include "OracleQueryExchange.h"
 #include "OracleQueryCapacity.h"
+#include "OracleQueryExchange.h"
 #include <memory>
 #include <optional>
 namespace zkc::protocol {
@@ -35,7 +35,8 @@ struct OracleLocalRecipe : OracleHelperSignature {
   std::vector<unsigned> results;
 };
 using OracleCommonLocal = OracleLocalRecipe;
-inline const OracleHelperSignature &localSignature(const OracleCommonLocal &local) {
+inline const OracleHelperSignature &
+localSignature(const OracleCommonLocal &local) {
   return local;
 }
 // Generated identifiers use the program grammar. Full source coordinates stay
@@ -77,15 +78,13 @@ llvm::Expected<std::vector<std::string>> oracleEntries(mlir::ModuleOp);
 llvm::Expected<OracleCommonRequirements>
 oracleRequirements(mlir::ModuleOp prepared, llvm::StringRef entry,
                    llvm::ArrayRef<OracleRootSelection> selections);
-llvm::Expected<OracleCommonPlan>
-planOracleCommon(mlir::ModuleOp prepared, llvm::StringRef entry,
-                 const OracleCommonRequirements &,
-                 llvm::ArrayRef<OracleCommonController>,
-                 llvm::ArrayRef<std::vector<mlir::func::FuncOp>> allocators,
-                 llvm::ArrayRef<OracleMerkleFunctions> merkle,
-                 OracleAuthentication authentication,
-                 llvm::ArrayRef<OracleCommonRemote>,
-                 llvm::ArrayRef<OracleCommonBatch>);
+llvm::Expected<OracleCommonPlan> planOracleCommon(
+    mlir::ModuleOp prepared, llvm::StringRef entry,
+    const OracleCommonRequirements &, llvm::ArrayRef<OracleCommonController>,
+    llvm::ArrayRef<std::vector<mlir::func::FuncOp>> allocators,
+    llvm::ArrayRef<OracleMerkleFunctions> merkle,
+    OracleAuthentication authentication, llvm::ArrayRef<OracleCommonRemote>,
+    llvm::ArrayRef<OracleCommonBatch>);
 // Internal parsed-model reader. Only the record reader publishes its result.
 class OracleVerificationContext;
 llvm::Error checkOracleRealizationModel(

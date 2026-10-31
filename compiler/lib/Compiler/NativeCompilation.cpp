@@ -192,7 +192,8 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
   // Keep every companion whose bytes the correspondence report will publish.
   SmallVector<std::string> companionEntries;
   if (options.polynomialRequirements) {
-    auto entries = polynomialRequirementEntries(*options.polynomialRequirements);
+    auto entries =
+        polynomialRequirementEntries(*options.polynomialRequirements);
     if (!entries)
       return diagnostics.failure(entries.takeError());
     companionEntries = std::move(*entries);
@@ -207,8 +208,8 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
       std::move(*preparation), options.oracleRealization);
   if (!realization)
     return diagnostics.failure(realization.takeError());
-  result->realization = std::make_shared<mathematical::RealizedProtocol>(
-      std::move(*realization));
+  result->realization =
+      std::make_shared<mathematical::RealizedProtocol>(std::move(*realization));
   // Native scheduling consumes the actual represented interface. The original
   // logical clauses remain owned alongside the checked edge through
   // publication.

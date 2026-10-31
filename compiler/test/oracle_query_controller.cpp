@@ -601,7 +601,13 @@ module { "protocol.module"() ({
             exchangeInputs("stopped_advancing");
             break;
           case 12:
-            constant("answer_kind", "1");
+            // The answer kind reuses the exact checked literal. A same-type
+            // input is not evidence for that value, even in a formed body.
+            controller.resume[0].walk([&](exec::ReturnOp returned) {
+              returned.getValuesMutable()[OracleQueryController::Kind].set(
+                  controller.resume[0].getArgument(
+                      1 + OracleQueryController::Phase));
+            });
             break;
           case 13:
             constant("return", "3");

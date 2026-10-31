@@ -22,9 +22,11 @@ module { "protocol.module"() ({
   %rows = "data.index"() {value=16:ui64} : ()->ui64
   %word = "protocol.oracle_send"(%data,%rows) {sender="P",receivers=["V","W"],shape_names=["rows"],shape_bounds={},site="word"} : (!D,ui64)->!H
   %a = "protocol.oracle_query"(%word,%position) {owner="V",site="first"} : (!H,ui64)->ui64
-)mlir" + between.str() + R"mlir(
-  %b = "protocol.oracle_query"(%word,)mlir" + second.str() +
-         R"mlir() {owner=")mlir" + owner.str() + R"mlir(",site="second"} : (!H,ui64)->ui64
+)mlir" + between.str() +
+         R"mlir(
+  %b = "protocol.oracle_query"(%word,)mlir" +
+         second.str() + R"mlir() {owner=")mlir" + owner.str() +
+         R"mlir(",site="second"} : (!H,ui64)->ui64
   "protocol.return"(%a) : (ui64)->()
  }) {sym_name="main",function_type=(!D,ui64)->ui64,roles=["P","V","W"],input_roles=[["P"],["V","W"]],output_roles=[["V"]]} : ()->()
  }) {profile=#protocol.profile<protocol>} : ()->() }
@@ -36,7 +38,8 @@ OwningOpRef<ModuleOp> parse(MLIRContext &context, StringRef text) {
     diagnostic += message.str();
     return success();
   });
-  auto module = parseSourceString<ModuleOp>(text, ParserConfig(&context, false));
+  auto module =
+      parseSourceString<ModuleOp>(text, ParserConfig(&context, false));
   require(bool(module) && succeeded(admitStage(*module)), diagnostic);
   return module;
 }
@@ -59,8 +62,8 @@ int main() {
     DominanceInfo dominance(*module);
     unsigned remaining = 1000;
     auto selected = take(selectOracleQueryWindow(
-        actual.front(), OracleAuthentication::AtomicBlocks, capacity,
-        dominance, remaining));
+        actual.front(), OracleAuthentication::AtomicBlocks, capacity, dominance,
+        remaining));
     require(selected.queries.size() == 2 && selected.leaves == 2 &&
                 selected.queries[0] == actual[0] &&
                 selected.queries[1] == actual[1],
@@ -83,16 +86,17 @@ int main() {
     DominanceInfo dominance(*module);
     unsigned remaining = 1000;
     auto selected = take(selectOracleQueryWindow(
-        queries(*module).front(), OracleAuthentication::AtomicBlocks,
-        capacity, dominance, remaining));
+        queries(*module).front(), OracleAuthentication::AtomicBlocks, capacity,
+        dominance, remaining));
     require(selected.queries.size() == 1,
             "adaptive position crossed its answer dependency");
   });
-  for (StringRef barrier : {
-           R"(%same = "data.index"() {value=0:ui64} : ()->ui64)",
-           R"(%ok = arith.constant true
+  for (
+      StringRef barrier :
+      {R"(%same = "data.index"() {value=0:ui64} : ()->ui64)",
+       R"(%ok = arith.constant true
               protocol.guard %ok {owner="V",site="guard"})",
-           R"(%sent = protocol.exchange %a {sender="V",receiver="P",site="message"} : ui64)"})
+       R"(%sent = protocol.exchange %a {sender="V",receiver="P",site="message"} : ui64)"})
     cases.run("an intervening operation ends the source window", [&] {
       auto module = parse(context, source("%position", barrier));
       auto capacity = take(analyzeOracleQueryCapacity(*module, "main"));
@@ -109,22 +113,23 @@ int main() {
     DominanceInfo dominance(*module);
     unsigned remaining = 1000;
     auto selected = take(selectOracleQueryWindow(
-        queries(*module).front(), OracleAuthentication::AtomicBlocks,
-        capacity, dominance, remaining));
+        queries(*module).front(), OracleAuthentication::AtomicBlocks, capacity,
+        dominance, remaining));
     require(selected.queries.size() == 1, "receiver boundary crossed");
   });
-  cases.run("exhausted work refuses rather than selecting a shorter window", [&] {
-    auto module = parse(context, source());
-    auto capacity = take(analyzeOracleQueryCapacity(*module, "main"));
-    DominanceInfo dominance(*module);
-    for (unsigned budget : {0u, 1u, 3u, 5u}) {
-      auto remaining = budget;
-      refuses(selectOracleQueryWindow(
-                  queries(*module).front(), OracleAuthentication::AtomicBlocks,
-                  capacity, dominance, remaining),
-              "oracle-query-block-limit");
-    }
-  });
+  cases.run(
+      "exhausted work refuses rather than selecting a shorter window", [&] {
+        auto module = parse(context, source());
+        auto capacity = take(analyzeOracleQueryCapacity(*module, "main"));
+        DominanceInfo dominance(*module);
+        for (unsigned budget : {0u, 1u, 3u, 5u}) {
+          auto remaining = budget;
+          refuses(selectOracleQueryWindow(queries(*module).front(),
+                                          OracleAuthentication::AtomicBlocks,
+                                          capacity, dominance, remaining),
+                  "oracle-query-block-limit");
+        }
+      });
   cases.run("capacity overflow is a compilation refusal", [&] {
     auto module = parse(context, source());
     auto actual = queries(*module);
@@ -132,9 +137,9 @@ int main() {
     capacity.queries[actual[0]].leaves = 1048576;
     DominanceInfo dominance(*module);
     unsigned remaining = 1000;
-    refuses(selectOracleQueryWindow(
-                actual[0], OracleAuthentication::AtomicBlocks, capacity,
-                dominance, remaining),
+    refuses(selectOracleQueryWindow(actual[0],
+                                    OracleAuthentication::AtomicBlocks,
+                                    capacity, dominance, remaining),
             "oracle-query-block-limit");
   });
   return cases.result();

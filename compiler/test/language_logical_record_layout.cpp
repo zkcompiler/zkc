@@ -82,9 +82,9 @@ void accepted(const CheckedOriginal &source, bool structured = true) {
   withModule(source, [&](mlir::ModuleOp module) {
     take(compareOriginal(source.entry(), module));
     if (!structured) {
-      refuses(protocol::exportStructuredSource(
-                  source.bytes(), run(source.entry()).symbol,
-                  *module.getContext()),
+      refuses(protocol::exportStructuredSource(source.bytes(),
+                                               run(source.entry()).symbol,
+                                               *module.getContext()),
               "structured-source-product");
       return;
     }

@@ -33,6 +33,8 @@ LogicalResult refuse(Operation *op, StringRef detail) {
 
 LogicalResult verifyParticipantHelperPruningPreserved(ModuleOp source,
                                                       ModuleOp candidate) {
+  if (!source || !candidate)
+    return failure();
   auto before = participantUnit(source), after = participantUnit(candidate);
   if (!before || !after ||
       source->getAttrDictionary() != candidate->getAttrDictionary() ||

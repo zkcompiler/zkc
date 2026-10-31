@@ -97,7 +97,8 @@ struct Emitter {
       return type && equal(type.getInputs(), inputs) &&
              equal(type.getResults(), outputs);
     };
-    Types demandInputs(demand.state.begin(), demand.state.end()), controllerInputs(controller.state.begin(), controller.state.end());
+    Types demandInputs(demand.state.begin(), demand.state.end()),
+        controllerInputs(controller.state.begin(), controller.state.end());
     append_range(demandInputs, controller.stores);
     append_range(controllerInputs, controller.stores);
     auto initial = signature(controller.initialize);

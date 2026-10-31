@@ -30,10 +30,12 @@ bool compatible(const OracleQueryExchange &left,
   return true;
 }
 } // namespace
-Expected<OracleQuerySchedule> planOracleQuerySchedule(
-    ModuleOp source, StringRef entry, const OracleCommonRequirements &requirements,
-    ArrayRef<OracleCommonController> controllers,
-    ArrayRef<OracleMerkleFunctions> merkle, OracleAuthentication authentication) {
+Expected<OracleQuerySchedule>
+planOracleQuerySchedule(ModuleOp source, StringRef entry,
+                        const OracleCommonRequirements &requirements,
+                        ArrayRef<OracleCommonController> controllers,
+                        ArrayRef<OracleMerkleFunctions> merkle,
+                        OracleAuthentication authentication) {
   auto unit = cast<pir::ProtocolModuleOp>(source.getBody()->front());
   auto program = dyn_cast_or_null<pir::MathematicalOp>(
       SymbolTable::lookupSymbolIn(unit, entry));
@@ -42,17 +44,19 @@ Expected<OracleQuerySchedule> planOracleQuerySchedule(
   OracleQuerySchedule result;
   DominanceInfo dominance(source);
   unsigned remaining = 100000;
-  auto controller = [&](StringRef role, pir::OracleKindAttr kind)
-      -> std::optional<unsigned> {
+  auto controller = [&](StringRef role,
+                        pir::OracleKindAttr kind) -> std::optional<unsigned> {
     for (auto [i, item] : enumerate(controllers))
-      if (item.role == role && item.access == OracleControllerAccess::Available &&
+      if (item.role == role &&
+          item.access == OracleControllerAccess::Available &&
           sameOracleReferenceKind(item.kind, kind))
         return unsigned(i);
     return std::nullopt;
   };
-  auto remote = [&](pir::OracleQueryOp query)
-      -> Expected<std::optional<unsigned>> {
-    auto receiver = controller(*query.getOwner(), query.getHandle().getType().getKind());
+  auto remote =
+      [&](pir::OracleQueryOp query) -> Expected<std::optional<unsigned>> {
+    auto receiver =
+        controller(*query.getOwner(), query.getHandle().getType().getKind());
     if (!receiver)
       return error("oracle-common-helper");
     const auto &body = controllers[*receiver].body;
@@ -84,7 +88,8 @@ Expected<OracleQuerySchedule> planOracleQuerySchedule(
     return std::optional<unsigned>(unsigned(result.remotes.size() - 1));
   };
   std::function<Error(Block &, std::vector<unsigned>, unsigned)> visit;
-  visit = [&](Block &block, std::vector<unsigned> prefix, unsigned depth) -> Error {
+  visit = [&](Block &block, std::vector<unsigned> prefix,
+              unsigned depth) -> Error {
     if (!depth)
       return error("oracle-query-block-limit");
     unsigned skipped = 0;
@@ -128,7 +133,8 @@ Expected<OracleQuerySchedule> planOracleQuerySchedule(
         coordinate.back() += batch.queries.size();
         batch.queries.push_back(std::move(coordinate));
         batch.remotes.push_back(**item);
-        batch.leaves += requirements.queryCapacity.queries.lookup(candidate).leaves;
+        batch.leaves +=
+            requirements.queryCapacity.queries.lookup(candidate).leaves;
       }
       if (batch.queries.empty() || batch.leaves >= 1048576)
         return error("oracle-query-block-limit");

@@ -40,7 +40,8 @@ Expected<CheckedProject> checkLayout(StringRef source) {
     return captured.takeError();
   return analyze(*captured).checkedProject();
 }
-const Declaration &findDeclaration(const CheckedProject &project, StringRef name) {
+const Declaration &findDeclaration(const CheckedProject &project,
+                                   StringRef name) {
   auto declaration = llvm::find_if(project.declarations(), [&](const auto &d) {
     return d.qualifiedName == name;
   });
@@ -287,23 +288,22 @@ protocol Run roles(P,V)(h:O@P->V)->(out:O@P->V){
   for (StringRef body : {"let state=Secret{word:h,note:0};return(out=state);",
                          "let word=state.word;return(out=state);"}) {
     bool constructing = body.starts_with("let state=");
-    cases.run(
-        constructing ? "private cross-module constructor"
-                     : "private cross-module projection",
-        [=] {
-          auto captured = take(capture(
-              {{"lib", R"(module lib;
+    cases.run(constructing ? "private cross-module constructor"
+                           : "private cross-module projection",
+              [=] {
+                auto captured = take(capture(
+                    {{"lib", R"(module lib;
 pub type O=builtin("oracle",builtin("oracle.table",bool,16));
 #[logical] pub struct Secret{word:O,pub note:index})",
-                "lib.zkc"},
-               {"m",
-                "module m;use lib::{Secret,O};protocol Run roles(P,V)(" +
-                    std::string(constructing ? "h:O@P->V"
-                                             : "state:Secret@P->V") +
-                    ")->(out:Secret@P->V){" + body.str() + "}",
-                "m.zkc"}}));
-          refuses(analyze(captured).checkedProject(), "source.private");
-        });
+                      "lib.zkc"},
+                     {"m",
+                      "module m;use lib::{Secret,O};protocol Run roles(P,V)(" +
+                          std::string(constructing ? "h:O@P->V"
+                                                   : "state:Secret@P->V") +
+                          ")->(out:Secret@P->V){" + body.str() + "}",
+                      "m.zkc"}}));
+                refuses(analyze(captured).checkedProject(), "source.private");
+              });
   }
   cases.run("source inspection retains logical declaration and field shapes",
             [] {
