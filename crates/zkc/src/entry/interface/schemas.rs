@@ -1,15 +1,7 @@
+use super::syntax::Leaf;
 use super::{InterfaceError as E, Result, hash, identifier, raw::*, require, text};
-use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use zkc_runtime::vm::{Identity, LogicalType, Type};
 
-struct Leaf {
-    ty: LogicalType,
-    shared: bool,
-    constructible: bool,
-    needs_setup: bool,
-    source_identity: Option<String>,
-}
 pub(in crate::entry) struct Schemas<'a> {
     remaining: usize,
     retained: usize,
@@ -29,52 +21,39 @@ impl<'a> Schemas<'a> {
         self.remaining = self.remaining.checked_sub(count).ok_or(E::Limit)?;
         Ok(())
     }
-    pub(super) fn setup_properties(&self, spelling: &str) -> Result<(Type, bool)> {
+    pub(super) fn setup_properties(&self, spelling: &str) -> Result<(&'static str, bool)> {
         self.leaves
             .get(spelling)
-            .map(|leaf| (leaf.ty.kind(), leaf.needs_setup))
+            .map(|leaf| (leaf.head, leaf.needs_setup))
             .ok_or(E::Schema)
     }
-    pub(in crate::entry) fn finish(self) -> BTreeMap<String, LogicalType> {
+    pub(in crate::entry) fn finish(self) -> BTreeMap<String, Leaf> {
         self.leaves
             .into_iter()
-            .map(|(s, l)| (s.to_owned(), l.ty))
+            .map(|(s, l)| (s.to_owned(), l))
             .collect()
     }
     fn leaf(&mut self, spelling: &'a str) -> Result<&Leaf> {
         self.charge(spelling.len() + 1)?;
         text(spelling, 256 * 1024)?;
         if !self.leaves.contains_key(spelling) {
-            let ty = LogicalType::parse(spelling).map_err(|_| E::Schema)?;
-            require(ty.spelling() == spelling, E::Schema)?;
+            let leaf = Leaf::parse(spelling, &mut self.remaining)?;
             self.retained = self
                 .retained
-                .checked_add(ty.descriptor_bytes())
+                .checked_add(
+                    spelling.len()
+                        + 256
+                        + leaf
+                            .alternatives
+                            .iter()
+                            .map(|(label, payload)| {
+                                label.len() + payload.iter().map(|s| s.len() + 32).sum::<usize>()
+                            })
+                            .sum::<usize>(),
+                )
                 .ok_or(E::Limit)?;
             require(self.retained <= 16 * 1024 * 1024, E::Limit)?;
-            let shared = shared(&ty, &mut self.remaining)?;
-            let constructible = constructible(&ty, &mut self.remaining)?;
-            let needs_setup = needs_setup(&ty, &mut self.remaining)?;
-            let source_identity = ty.variant_descriptor().and_then(|d| {
-                let nominal = d.nominal_identity().ok()?;
-                let values = nominal.as_array()?;
-                if values.len() != 2 || values[0].as_str()? != "zkc.language" {
-                    return None;
-                }
-                let key =
-                    crate::source_names::decode_nominal_identity(values[1].as_str()?, 256 * 1024)?;
-                (!key.is_empty()).then(|| crate::host::inputs::hex(&Sha256::digest(key.as_bytes())))
-            });
-            self.leaves.insert(
-                spelling,
-                Leaf {
-                    ty,
-                    shared,
-                    constructible,
-                    needs_setup,
-                    source_identity,
-                },
-            );
+            self.leaves.insert(spelling, leaf);
         }
         Ok(&self.leaves[spelling])
     }
@@ -118,8 +97,8 @@ impl<'a> Schemas<'a> {
             for permission in &schema.permissions {
                 require(
                     match permission {
-                        Copy => leaf.ty.is_duplicable(),
-                        Drop => leaf.ty.is_discardable(),
+                        Copy => leaf.copy,
+                        Drop => leaf.drop,
                     },
                     E::Schema,
                 )?;
@@ -147,31 +126,20 @@ impl<'a> Schemas<'a> {
                 leaf.source_identity.as_deref() == Some(schema.identity.as_str()),
                 E::Schema,
             )?;
-            let descriptor = leaf.ty.variant_descriptor().ok_or(E::Schema)?.clone();
-            require(
-                schema.alternatives.len() == descriptor.alternatives().len(),
-                E::Schema,
-            )?;
+            let alternatives = leaf.alternatives.clone();
+            require(schema.alternatives.len() == alternatives.len(), E::Schema)?;
             let mut names = BTreeSet::new();
-            for (index, (actual, expected)) in schema
-                .alternatives
-                .iter()
-                .zip(descriptor.alternatives())
-                .enumerate()
+            for (index, (actual, expected)) in
+                schema.alternatives.iter().zip(&alternatives).enumerate()
             {
                 require(
                     identifier(&actual.name)
                         && names.insert(&actual.name)
-                        && expected.label()
-                            == crate::source_names::native_alternative_name(index as u32),
+                        && expected.0 == crate::source_names::native_alternative_name(index as u32),
                     E::Schema,
                 )?;
-                let payload: Vec<_> = expected
-                    .payload()
-                    .iter()
-                    .map(LogicalType::spelling)
-                    .collect();
-                self.fields(&actual.fields, &payload, 0, depth, &schema.permissions)?;
+                let payload = &expected.1;
+                self.fields(&actual.fields, payload, 0, depth, &schema.permissions)?;
             }
         } else if !schema.fields.is_empty() {
             self.fields(
@@ -187,10 +155,7 @@ impl<'a> Schemas<'a> {
                 && let Some(leaf) = schema.leaves.first()
             {
                 require(
-                    !matches!(
-                        self.leaves[leaf.as_str()].ty.kind(),
-                        Type::Variant | Type::ResourceUnit
-                    ),
+                    !matches!(self.leaves[leaf.as_str()].head, "variant" | "resource_unit"),
                     E::Schema,
                 )?;
             }
@@ -255,7 +220,7 @@ impl<'a> Schemas<'a> {
                 && schema
                     .leaves
                     .iter()
-                    .all(|leaf| self.leaves[leaf.as_str()].shared),
+                    .all(|leaf| self.leaves[leaf.as_str()].participants),
             E::Schema,
         )
     }
@@ -284,33 +249,33 @@ impl<'a> Schemas<'a> {
             Kind::Unit => s.fields.is_empty() && s.leaves.is_empty(),
             _ => {
                 s.fields.is_empty() && s.leaves.len() == 1 && {
-                    let kind = self.leaves[s.leaves[0].as_str()].ty.kind();
+                    let kind = self.leaves[s.leaves[0].as_str()].head;
                     match s.kind {
-                        Kind::Boolean => kind == Type::Bool,
-                        Kind::Index => kind == Type::Index,
-                        Kind::Field => kind == Type::Field,
-                        Kind::Group => kind == Type::Group,
+                        Kind::Boolean => kind == "bool",
+                        Kind::Index => kind == "index",
+                        Kind::Field => kind == "field",
+                        Kind::Group => kind == "group",
                         Kind::Builtin => matches!(
                             kind,
-                            Type::Vector
-                                | Type::Matrix
-                                | Type::Groups
-                                | Type::Indices
-                                | Type::Bytes
-                                | Type::Shake128State
-                                | Type::Polynomial
-                                | Type::Table
-                                | Type::Point
-                                | Type::Round
-                                | Type::Sequence
-                                | Type::FieldArray
-                                | Type::Commitment
-                                | Type::Commitments
-                                | Type::Proof
-                                | Type::ProverKey
-                                | Type::VerifierKey
-                                | Type::OpeningState
-                                | Type::OpeningStates
+                            "vector"
+                                | "matrix"
+                                | "groups"
+                                | "indices"
+                                | "bytes"
+                                | "shake128_state"
+                                | "polynomial"
+                                | "table"
+                                | "point"
+                                | "round"
+                                | "sequence"
+                                | "field_array"
+                                | "commitment"
+                                | "commitments"
+                                | "proof"
+                                | "prover_key"
+                                | "verifier_key"
+                                | "opening_state"
+                                | "opening_states"
                         ),
                         _ => false,
                     }
@@ -341,100 +306,23 @@ fn same_schema(a: &Schema, b: &Schema) -> bool {
             .zip(&b.alternatives)
             .all(|(a, b)| a.name == b.name && same_fields(&a.fields, &b.fields))
 }
-// Participant-family admission is independent of usage and decoding.
-// A copyable setup key, for example, remains participant-local.
-fn shared(ty: &LogicalType, remaining: &mut usize) -> Result<bool> {
-    *remaining = remaining.checked_sub(1).ok_or(E::Limit)?;
-    if let Some(element) = ty.sequence_element() {
-        return Ok(ty.is_duplicable() && shared(element, remaining)?);
+/// Source constructor authority is independent of native decoding.
+pub(in crate::entry) fn check_import(schema: &Schema) -> std::result::Result<(), String> {
+    if schema.custody || !schema.constructible {
+        return Err("entry-input-constructor".into());
     }
-    if let Some(descriptor) = ty.variant_descriptor() {
-        let mut result = ty.is_duplicable();
-        for ty in descriptor.alternatives().iter().flat_map(|a| a.payload()) {
-            result &= shared(ty, remaining)?;
-        }
-        return Ok(result);
-    }
-    Ok(matches!(
-        ty.kind(),
-        Type::Bool
-            | Type::Field
-            | Type::Group
-            | Type::FieldArray
-            | Type::Index
-            | Type::Indices
-            | Type::Bytes
-            | Type::Vector
-            | Type::Matrix
-            | Type::Groups
-            | Type::Polynomial
-            | Type::Table
-            | Type::Point
-            | Type::Round
-            | Type::Commitment
-            | Type::Commitments
-            | Type::Proof
-    ))
-}
-
-fn needs_setup(ty: &LogicalType, remaining: &mut usize) -> Result<bool> {
-    *remaining = remaining.checked_sub(1).ok_or(E::Limit)?;
-    if matches!(ty.kind(), Type::ProverKey | Type::VerifierKey)
-        || ty.identity() == Identity::MultilinearKzgBls12381
+    for field in schema
+        .fields
+        .iter()
+        .chain(schema.alternatives.iter().flat_map(|a| &a.fields))
     {
-        return Ok(true);
+        check_import(&field.schema)?;
     }
-    if let Some(element) = ty.sequence_element() {
-        return needs_setup(element, remaining);
-    }
-    if let Some(variant) = ty.variant_descriptor() {
-        for arm in variant.alternatives() {
-            for field in arm.payload() {
-                if needs_setup(field, remaining)? {
-                    return Ok(true);
-                }
-            }
-        }
-    }
-    Ok(false)
+    Ok(())
 }
-
-// Native decoder authority is distinct from the installed message codec.
-// Source metadata may restrict this authority further for opaque types.
-fn constructible(ty: &LogicalType, remaining: &mut usize) -> Result<bool> {
-    *remaining = remaining.checked_sub(1).ok_or(E::Limit)?;
-    if let Some(element) = ty.sequence_element() {
-        return constructible(element, remaining);
+pub(in crate::entry) fn check_export(schema: &Schema) -> std::result::Result<(), String> {
+    if schema.custody || !schema.permissions.contains(&Permission::Copy) {
+        return Err("entry-output-custody".into());
     }
-    if let Some((element, _)) = ty.fixed_vector_parts() {
-        return constructible(element, remaining);
-    }
-    if let Some(descriptor) = ty.variant_descriptor() {
-        for child in descriptor.alternatives().iter().flat_map(|a| a.payload()) {
-            if !constructible(child, remaining)? {
-                return Ok(false);
-            }
-        }
-        return Ok(true);
-    }
-    Ok(matches!(
-        ty.kind(),
-        Type::Bool
-            | Type::Index
-            | Type::Field
-            | Type::Group
-            | Type::FieldArray
-            | Type::Vector
-            | Type::Matrix
-            | Type::Groups
-            | Type::Indices
-            | Type::Bytes
-            | Type::Polynomial
-            | Type::Table
-            | Type::Point
-            | Type::Round
-            | Type::Commitment
-            | Type::Commitments
-            | Type::Proof
-    ))
+    Ok(())
 }

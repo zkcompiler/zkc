@@ -1,5 +1,5 @@
 //! Setup checks shared by native invocation hosts. Authority maps stay with each host.
-use super::inputs::Result;
+use crate::io::bytes::Result;
 use std::{collections::BTreeMap, sync::Arc};
 use zkc_kernels::arkworks::bls12_381::{Bounds, VerifierKey};
 use zkc_runtime::vm::{ExecutionLedger, LiveReservation, LogicalType, Type};

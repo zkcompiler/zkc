@@ -1,5 +1,5 @@
 //! Explicit source inputs. Imports never perform filesystem discovery.
-use crate::host::io;
+use crate::io;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},

@@ -61,7 +61,7 @@ try {
       options: await optionalJSON('options.json', {}),
       authority: authority == null ? [] : Array.from(new TextEncoder().encode(JSON.stringify(authority))),
       setups: await materialBindings('setups.json', 'slot'), inputs: await materialBindings('inputs.json', 'name'),
-      variant, legacyControls: ['schnorr', 'fri-1024'].includes(name) };
+      variant, fullControls: ['schnorr', 'fri-1024', 'quartic-keccak'].includes(name) };
     await writeFile(resolve(dir, 'native-before.proof'), new Uint8Array(input.proof));
     const result = await page.evaluate(async input => {
       const { ProofClient } = await import('./client.mjs');
@@ -112,7 +112,7 @@ try {
       }
       const malformed = await call('prove', { ...input, public: new TextEncoder().encode('{') });
       const fixtureControls = {};
-      if (input.legacyControls) {
+      if (input.fullControls) {
         const missing = JSON.parse(new TextDecoder().decode(input.witness));
         const first = Object.keys(missing).sort()[0]; missing[first] = null;
         const referenced = JSON.parse(new TextDecoder().decode(input.public));
@@ -120,6 +120,9 @@ try {
         fixtureControls.reference = await call('prove', { ...input, public: new TextEncoder().encode(JSON.stringify(referenced)) });
         fixtureControls.unfilled = await call('prove', { ...input, witness: new TextEncoder().encode(JSON.stringify(missing)) });
         fixtureControls.truncated = await call('verify', { ...input, proof: input.proof.slice(0, 5) });
+        const trailing = new Uint8Array(input.proof.length + 1); trailing.set(input.proof);
+        fixtureControls.trailing = await call('verify', { ...input, proof: trailing });
+        fixtureControls.context = await call('verify', { ...input, context: new Uint8Array([1]) });
       }
       await call('dispose');
       const disposed = await call('prove', input);
@@ -127,7 +130,7 @@ try {
       client = new ProofClient({ timeoutMs: 120000, compiledModule: client.compiledModule, variant: client.variant });
       await client.ready;
       const wrong_pin = await call('admit', { ...admission, pin: badpin });
-      if (input.legacyControls) {
+      if (input.fullControls) {
         const limited_admission = await call('admit', admission);
         fixtureControls.limited = limited_admission.error ? limited_admission : await call('prove', { ...input, budget: 0 });
       }
@@ -153,14 +156,14 @@ try {
     assert.equal(result.controls.malformed.error, 'entry-request-format');
     assert.equal(result.controls.malformed.refusal.path, 'public');
     assert.equal(result.controls.malformed.fatal, false);
-    if (input.legacyControls) {
+    if (input.fullControls) {
       assert.equal(result.controls.reference.error, 'entry-input-reference');
       assert.match(result.controls.reference.refusal.path, /^public\./);
       for (const c of ['malformed', 'unfilled', 'reference']) {
         assert.equal(result.controls[c].error, before.controls[c].error);
         assert.deepEqual(result.controls[c].refusal, before.controls[c].refusal);
       }
-      for (const c of ['truncated', 'limited']) {
+      for (const c of ['truncated', 'trailing', 'context', 'limited']) {
         assert.equal(result.controls[c].report.success, before.controls[c].report.success);
         assert.equal(result.controls[c].report.accepted, before.controls[c].report.accepted);
         assert.equal(result.controls[c].report.error, before.controls[c].report.error);
@@ -174,6 +177,13 @@ try {
       assert.equal(result.controls.truncated.report.error, 'proof-truncated');
       assert.deepEqual(result.controls.truncated.proof, []);
       assert.equal(result.controls.truncated.outputs, undefined);
+      for (const [control, code] of [['trailing', 'proof-trailing'], ['context', 'proof-header']]) {
+        assert.equal(result.controls[control].report?.success, false);
+        assert.equal(result.controls[control].report?.accepted, null);
+        assert.equal(result.controls[control].report.error, code);
+        assert.deepEqual(result.controls[control].proof, []);
+        assert.equal(result.controls[control].outputs, undefined);
+      }
       assert.equal(result.controls.limited.report?.success, false, JSON.stringify(result.controls.limited));
     }
     assert.match(result.controls.disposed.error, /web-client-disposed/);
@@ -182,7 +192,9 @@ try {
     const after = native();
     await writeFile(resolve(dir, 'native-after.proof'), await readFile(resolve(dir, 'native.proof')));
     assert.equal(JSON.parse(after.browser_cross_verify).accepted, true);
-    if (name === 'fri-1024') assert.deepEqual(result.trials[0].proved.proof, input.proof);
+    if (['fri-1024', 'quartic-keccak'].includes(name)) {
+      for (const trial of result.trials) assert.deepEqual(trial.proved.proof, input.proof);
+    }
     results.cases.push({ name, pin, native_before: before, native_after: after, browser: result });
   }
   await writeFile(resolve(fixtureDirectory, 'browser-results.json'), JSON.stringify(results, null, 2) + '\n');

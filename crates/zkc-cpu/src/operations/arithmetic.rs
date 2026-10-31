@@ -76,7 +76,7 @@ pub(crate) fn dot<S: Family>(a: &[S], b: &[S], call: &crate::numerical::Call) ->
 pub(crate) fn natural(attrs: &[String], i: usize) -> Result<usize> {
     attrs
         .get(i)
-        .and_then(|a| zkc_runtime::logical::natural_index(a).ok())
+        .and_then(|a| zkc_format::logical::natural_index(a).ok())
         .and_then(|n| usize::try_from(n).ok())
         .ok_or_else(|| refused("kernel-attributes"))
 }

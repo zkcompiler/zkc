@@ -192,18 +192,18 @@ impl CpuCall {
                     .ok_or_else(|| refused("kernel-attributes"))?;
             }
             AttributeRule::NaturalIndex if attributes.len() == 1 => {
-                zkc_runtime::logical::natural_index(&attributes[0])
+                zkc_format::logical::natural_index(&attributes[0])
                     .map_err(|_| refused("kernel-attributes"))?;
             }
             AttributeRule::NaturalIndices
                 if attributes
                     .iter()
-                    .all(|a| zkc_runtime::logical::natural_index(a).is_ok()) => {}
+                    .all(|a| zkc_format::logical::natural_index(a).is_ok()) => {}
             AttributeRule::ScatterShape
                 if !attributes.is_empty()
                     && attributes
                         .iter()
-                        .all(|a| zkc_runtime::logical::natural_index(a).is_ok()) => {}
+                        .all(|a| zkc_format::logical::natural_index(a).is_ok()) => {}
             AttributeRule::ResidueLiterals(field) => {
                 for literal in attributes {
                     crate::operations::field::decode_literal(field, std::slice::from_ref(literal))?;
@@ -240,13 +240,13 @@ impl CpuCall {
             AttributeRule::MatrixDimensions
                 if attributes.len() == 2
                     && attributes.iter().all(|a| {
-                        zkc_runtime::logical::natural_index(a).is_ok_and(|n| n <= 65536)
+                        zkc_format::logical::natural_index(a).is_ok_and(|n| n <= 65536)
                     }) => {}
             AttributeRule::MatrixShape
                 if attributes.len() == 3
                     && attributes
                         .iter()
-                        .all(|a| zkc_runtime::logical::natural_index(a).is_ok())
+                        .all(|a| zkc_format::logical::natural_index(a).is_ok())
                     && matches!(attributes[2].as_str(), "0" | "1") => {}
             AttributeRule::Binary64Literals => {
                 for literal in attributes {
@@ -261,8 +261,14 @@ impl CpuCall {
                 }
             }
             AttributeRule::NativeMessageTemplate => {
-                zkc_runtime::logical::native_origin_template(attributes, "message")
+                zkc_format::logical::native_origin_template(attributes, "message")
                     .map_err(|_| refused("kernel-attributes"))?;
+            }
+            AttributeRule::NativeIndexBlock | AttributeRule::NativeGatedIndexBlock => {
+                crate::resource::index_block::Parameters::parse(
+                    attributes,
+                    rule == AttributeRule::NativeGatedIndexBlock,
+                )?;
             }
             // The query's source method separates field and index transitions.
             AttributeRule::NativeChallengeTemplate | AttributeRule::NativeIndexTemplate => {
@@ -271,7 +277,7 @@ impl CpuCall {
                 } else {
                     "draw"
                 };
-                zkc_runtime::logical::native_query_template(attributes, method)
+                zkc_format::logical::native_query_template(attributes, method)
                     .map_err(|_| refused("kernel-attributes"))?;
             }
 

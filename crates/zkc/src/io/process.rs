@@ -93,7 +93,7 @@ pub(crate) fn capture(
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use crate::host::io::{ReadError, read_regular};
+    use crate::io::{ReadError, read_regular};
     use std::process::Output;
     fn run(script: &str, limit: usize, stderr: bool) -> Result<Output, Error> {
         let dir = tempfile::tempdir().unwrap();

@@ -612,7 +612,7 @@ fn matrix_transcript_codec_binds_canonical_bytes_and_refuses_cross_suite_payload
         for coefficient in [5, 6] {
             let m = matrix(d, 2, 3, &[(0, 0, coefficient), (1, 2, 7)]);
             let mut b = backend(Policy::default());
-            let root = zkc_runtime::logical::encode_tree(&json!(["matrix-root"])).unwrap();
+            let root = zkc_format::logical::encode_tree(&json!(["matrix-root"])).unwrap();
             let t = b
                 .issue_transcript_for(suite, support::domain(), 2, &root)
                 .unwrap();

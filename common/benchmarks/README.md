@@ -837,6 +837,12 @@ The row commitment controls cross-verify scalar/batched root/path proofs across
 variants; they do not have an independent root oracle. Source equality checks
 and conversions remain inside the SDK call.
 
+`quartic-keccak` combines the exact KoalaBear quartic row scheme and hash-chain
+challenge suite in one row-opening proof. All four coordinates are nonzero.
+The manual browser roundtrip checks exact native/browser proof bytes and
+context, framing, input and budget refusals; this does not establish a complete
+STARK client or a cryptographic security claim.
+
 External prepared fixtures use one exact case document, with paths relative to
 that document (and statement/material paths relative to the case directory):
 

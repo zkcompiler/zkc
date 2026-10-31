@@ -333,7 +333,7 @@ void installedInventory() {
       {"koala-bear.ext8-binomial3",
        {"field", "vector", "polynomial", "round", "matrix", "rng"}},
       {"koala-bear.ext4-binomial3",
-       {"field", "vector", "polynomial", "round", "matrix"}},
+       {"field", "vector", "polynomial", "round", "matrix", "rng"}},
       {"gf2-64.pentanomial-4-3-1",
        {"field", "vector", "polynomial", "round", "matrix"}},
       {"gf2-64.pentanomial-4-3-1.ext3-trinomial1",
@@ -353,12 +353,17 @@ void installedInventory() {
       {"hash-chain.keccak256.bls12-381.fr64be/0", {"transcript"}},
       {"hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
        {"transcript"}},
+      {"hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",
+       {"transcript"}},
       {"multilinear.kzg.bls12-381/0",
        {"commitment", "proof", "prover_key", "verifier_key", "opening_state"}},
       {"rows.merkle-keccak256.koala-bear/0",
        {"commitment", "proof", "opening_state", "commitments",
         "opening_states"}},
       {"rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+       {"commitment", "proof", "opening_state", "commitments",
+        "opening_states"}},
+      {"rows.merkle-keccak256.koala-bear.ext4-binomial3/0",
        {"commitment", "proof", "opening_state", "commitments",
         "opening_states"}},
       {"rows.merkle-poseidon2-16.koala-bear/0",
@@ -387,7 +392,7 @@ void installedInventory() {
   for (const auto &type : catalog.allLogicalTypes())
     require(actual.emplace(type.kind, type.domain).second,
             "logical inventory contains no duplicate instances");
-  require(pairs.size() == 143 && actual == pairs,
+  require(pairs.size() == 150 && actual == pairs,
           "the complete installed logical inventory is unchanged");
 
   std::vector<std::string> identities{"", "missing"};
@@ -443,8 +448,11 @@ void installedInventory() {
       {"merlin3.koala-bear.ext8-binomial3.rejection31le/0", "plonky3"},
       {"hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
        "plonky3"},
+      {"hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",
+       "plonky3"},
       {"rows.merkle-keccak256.koala-bear/0", "plonky3"},
       {"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "plonky3"},
+      {"rows.merkle-keccak256.koala-bear.ext4-binomial3/0", "plonky3"},
       {"rows.merkle-poseidon2-16.koala-bear/0", "plonky3"},
       {"rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0", "plonky3"},
       {"rows.merkle-poseidon2-16.baby-bear/0", "plonky3"},
@@ -593,20 +601,19 @@ void installedBindings() {
       {"Commitment", "multilinear.kzg.bls12-381/0"},
       {"Transcript", "merlin3.bls12-381.fr64be/0"}};
   for (const auto &operation : zkc::test::genericWitnessOperations()) {
-    const bool oracle =
-        any_of(operation.signature.requirements, [](const auto &predicate) {
-          return predicate.relation == "VectorCommitment";
-        });
-    const bool multiOpening =
-        any_of(operation.signature.requirements, [](const auto &predicate) {
-          return predicate.relation == "MultiOpening";
-        });
+    auto requiresFact = [&](StringRef fact) {
+      return any_of(
+          operation.signature.requirements,
+          [&](const auto &predicate) { return predicate.relation == fact; });
+    };
+    const bool oracle = requiresFact("VectorCommitment");
+    const bool multiOpening = requiresFact("MultiOpening");
     const bool embedding =
         operation.name == "field.embed" || operation.name == "vector.embed";
-    const bool twoAdic =
-        any_of(operation.signature.requirements, [](const auto &predicate) {
-          return predicate.relation == "TwoAdicField";
-        });
+    const bool twoAdic = requiresFact("TwoAdicField");
+    const bool indexRandomness =
+        requiresFact("IndexRandomness") || requiresFact("IndexBlockRandomness");
+    const bool blockTranscript = requiresFact("IndexBlockTranscript");
     protocol::OperationBinding binding{"test", {operation.name, {}, ""}};
     for (auto [i, term] : enumerate(operation.signature.scope.terms))
       if (!term.parent && !term.arguments &&
@@ -619,11 +626,14 @@ void installedBindings() {
                 ? "rows.merkle-poseidon2-16.koala-bear/0"
             : sort == "Commitment" && oracle
                 ? "rows.merkle-keccak256.koala-bear/0"
-            : sort == "Field" && (embedding || operation.name == "random.index")
+            : sort == "Field" && (embedding || indexRandomness)
                 ? "koala-bear.ext8-binomial3"
             : sort == "Field" && (operation.name == "pairing.check" ||
                                   operation.name == "pairing.apply")
                 ? "bn254.fr"
+            : sort == "Transcript" && blockTranscript
+                ? "hash-chain.keccak256.koala-bear.ext8-binomial3."
+                  "rejection31le/0"
             : sort == "Transcript" &&
                     (operation.name == "transcript.native.indexed.index" ||
                      operation.name == "transcript.index")

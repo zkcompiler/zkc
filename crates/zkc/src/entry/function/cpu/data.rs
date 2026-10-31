@@ -40,11 +40,11 @@ impl TypedValue {
     pub fn schema(&self) -> &Schema {
         &self.schema
     }
-    pub fn into_value(self) -> super::super::Value {
+    pub fn into_value(self) -> crate::entry::Value {
         self.to_value()
     }
-    pub(super) fn to_value(&self) -> super::super::Value {
-        use super::super::Value;
+    pub(super) fn to_value(&self) -> crate::entry::Value {
+        use crate::entry::Value;
         match self.payload.as_ref() {
             Payload::Unit => Value::Unit,
             Payload::Native(v) => v.clone().into(),
@@ -359,22 +359,22 @@ pub(super) fn collect(
 pub(super) fn import(
     host: &EntryHost,
     s: &Schema,
-    v: super::super::Value,
+    v: crate::entry::Value,
     ledger: &ExecutionLedger,
 ) -> DataResult<TypedValue> {
-    super::super::value::check_import(s)?;
+    crate::entry::interface::schemas::check_import(s)?;
     host.cpu.enter(|| load_ingress(host, s, v, ledger))
 }
 fn load_ingress(
     host: &EntryHost,
     s: &Schema,
-    v: super::super::Value,
+    v: crate::entry::Value,
     ledger: &ExecutionLedger,
 ) -> DataResult<TypedValue> {
     let _planning = charge(ledger, metadata(s))?;
 
     let mut inputs = Vec::new();
-    super::super::value::flatten(s, v, &mut inputs)?;
+    crate::entry::value::flatten(s, v, &mut inputs)?;
     let backend = backend(
         host.options.limits.capacity,
         host.cpu.clone(),
@@ -402,8 +402,8 @@ fn load_ingress(
     }
     Ok(result)
 }
-pub(super) fn duplicate(value: &super::super::Value) -> super::super::Value {
-    use super::super::Value;
+pub(super) fn duplicate(value: &crate::entry::Value) -> crate::entry::Value {
+    use crate::entry::Value;
     match value {
         Value::Leaf(v) => Value::Leaf(duplicate_input(v)),
         Value::Unit => Value::Unit,
@@ -489,7 +489,7 @@ pub(super) fn metadata(s: &Schema) -> usize {
 pub(super) fn from_output(
     host: &EntryHost,
     schema: &Schema,
-    value: super::super::Value,
+    value: crate::entry::Value,
     ledger: &ExecutionLedger,
 ) -> DataResult<TypedValue> {
     fn bound(
@@ -497,10 +497,10 @@ pub(super) fn from_output(
         backend: &CpuBackend,
         ledger: &ExecutionLedger,
         s: &Schema,
-        v: &super::super::Value,
+        v: &crate::entry::Value,
         mut leaves: Option<&mut Vec<zkc_cpu::NativeInputSize>>,
     ) -> DataResult<usize> {
-        use super::super::Value;
+        use crate::entry::Value;
         let add = |a: usize, b: usize| {
             a.checked_add(b)
                 .ok_or_else(|| "entry-host-output-limit".to_owned())
@@ -598,10 +598,10 @@ pub(super) fn from_output(
     fn collect_owned(
         host: &EntryHost,
         s: &Schema,
-        v: super::super::Value,
+        v: crate::entry::Value,
         live: Arc<LiveReservation>,
     ) -> DataResult<TypedValue> {
-        use super::super::Value;
+        use crate::entry::Value;
         let payload = match (s.kind, v) {
             (SchemaKind::Unit, Value::Unit) => Payload::Unit,
             (SchemaKind::Tuple, Value::Tuple(v)) | (SchemaKind::Array, Value::Array(v)) => {
@@ -710,8 +710,8 @@ pub(super) fn from_output(
 
 /// Conservative ownership of descriptions retained by application contexts.
 /// File descriptors retain no file contents until bounded native loading.
-pub(super) fn description_bytes(value: &super::super::Value) -> usize {
-    use super::super::Value;
+pub(super) fn description_bytes(value: &crate::entry::Value) -> usize {
+    use crate::entry::Value;
     let children = match value {
         Value::Unit => 0,
         Value::Leaf(input) => match input {

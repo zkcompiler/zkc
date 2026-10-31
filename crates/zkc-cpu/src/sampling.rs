@@ -4,37 +4,23 @@
 #[cfg(test)]
 use crate::{KoalaBear, KoalaBearExt8};
 use crate::{Result, exhausted, refused};
+#[cfg(test)]
 use p3_field::PrimeCharacteristicRing;
 
 pub(crate) fn residue<E: zkc_kernels::plonky3::residue::Residue>(
-    mut block: impl FnMut() -> [u8; 64],
+    block: impl FnMut() -> [u8; 64],
 ) -> Result<E> {
-    use p3_field::PrimeField64;
-    use zkc_kernels::plonky3::residue::PrimeWord;
-    let mut coordinates = [E::Base::ZERO; 8];
-    let mut count = 0;
-    for _ in 0..16 {
-        let bytes = block();
-        for word in bytes.chunks_exact(E::Base::WORD_BYTES) {
-            let mut input = [0; 8];
-            input[..word.len()].copy_from_slice(word);
-            let candidate = u64::from_le_bytes(input) & E::Base::CANDIDATE_MASK;
-            if candidate < E::Base::ORDER_U64 {
-                coordinates[count] = E::Base::from_u64(candidate);
-                count += 1;
-                if count == E::DIMENSION {
-                    return E::from_basis_coefficients_slice(&coordinates[..count])
-                        .ok_or_else(|| refused("challenge-coordinates"));
-                }
-            }
-        }
-    }
-    Err(exhausted("challenge-rejection-limit"))
+    use zkc_kernels::plonky3::sampling::{self, Error};
+    sampling::residue(block).map_err(|error| match error {
+        Error::Coordinates => refused("challenge-coordinates"),
+        Error::Exhausted => exhausted("challenge-rejection-limit"),
+    })
 }
 pub(crate) fn installed(field: zkc_runtime::vm::Identity) -> bool {
     matches!(
         field,
         zkc_runtime::vm::Identity::KoalaBearExt8
+            | zkc_runtime::vm::Identity::KoalaBearExt4
             | zkc_runtime::vm::Identity::BabyBearExt4
             | zkc_runtime::vm::Identity::GoldilocksExt2
     )
@@ -57,10 +43,33 @@ pub(crate) fn index_bound(bound: u64) -> Result<()> {
     Ok(())
 }
 
+pub(crate) const MAX_INDEX_COUNT: usize = 1 << 20;
+
+pub(crate) fn index_count(count: u64) -> Result<usize> {
+    if !(1..=MAX_INDEX_COUNT as u64).contains(&count) {
+        return Err(refused("query-count"));
+    }
+    usize::try_from(count).map_err(|_| refused("query-count"))
+}
+
 /// Power-of-two bounds make this an exact uniform map from uniform 64-bit words.
 pub(crate) fn index(bytes: &[u8; 64], bound: u64) -> Result<u64> {
     index_bound(bound)?;
     Ok(u64::from_le_bytes(bytes[..8].try_into().expect("eight bytes")) & (bound - 1))
+}
+
+/// Each ordered sample uses a fresh provider block, including when bound is one.
+pub(crate) fn indices(
+    output: &mut [u64],
+    bound: u64,
+    mut block: impl FnMut() -> [u8; 64],
+) -> Result<()> {
+    index_bound(bound)?;
+    index_count(output.len() as u64)?;
+    for position in output {
+        *position = index(&block(), bound)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -197,4 +206,72 @@ mod tests {
             assert!(index(&[0; 64], bound).is_err());
         }
     }
+
+    #[test]
+    fn index_blocks_preserve_order_duplicates_and_one_fresh_block_per_sample() {
+        let mut words = [513u64, 7, 513].into_iter();
+        let mut output = [0; 3];
+        indices(&mut output, 65_536, || {
+            let mut bytes = [255; 64];
+            bytes[..8].copy_from_slice(&words.next().expect("fresh block").to_le_bytes());
+            bytes
+        })
+        .unwrap();
+        assert_eq!(output, [513, 7, 513]);
+        assert!(words.next().is_none());
+        let mut calls = 0;
+        indices(&mut output, 1, || {
+            calls += 1;
+            [255; 64]
+        })
+        .unwrap();
+        assert_eq!(output, [0; 3]);
+        assert_eq!(calls, 3);
+        assert!(indices(&mut output, 3, || panic!("invalid bound")).is_err());
+        assert!(indices(&mut [], 8, || panic!("invalid count")).is_err());
+        for count in [0, (MAX_INDEX_COUNT + 1) as u64, u64::MAX] {
+            assert_eq!(index_count(count).unwrap_err().code, "refused:query-count");
+        }
+    }
+}
+
+#[cfg(test)]
+mod quartic_tests {
+    use super::*;
+    use crate::KoalaBearExt4;
+    use p3_field::{BasedVectorSpace, PrimeField32};
+    #[test]
+    fn quartic_rejection_preserves_exact_word_order_and_bounded_exhaustion() {
+        let mut bytes = [255; 64];
+        for (slot, word) in bytes.as_chunks_mut::<4>().0.iter_mut().zip([
+            2_130_706_433u32,
+            0x8000_0001,
+            0x0403_0201,
+            2_130_706_432,
+            3,
+        ]) {
+            slot.copy_from_slice(&word.to_le_bytes());
+        }
+        let Value::KoalaBearExt4Field(value) =
+            super::value(zkc_runtime::vm::Identity::KoalaBearExt4, || bytes).unwrap()
+        else {
+            panic!("quartic challenge")
+        };
+        assert_eq!(
+            <KoalaBearExt4 as BasedVectorSpace<KoalaBear>>::as_basis_coefficients_slice(&value)
+                .iter()
+                .map(|c| c.as_canonical_u32())
+                .collect::<Vec<_>>(),
+            vec![1, 67_305_985, 2_130_706_432, 3]
+        );
+        let mut calls = 0;
+        let error = super::value(zkc_runtime::vm::Identity::KoalaBearExt4, || {
+            calls += 1;
+            [255; 64]
+        })
+        .unwrap_err();
+        assert_eq!(calls, 16);
+        assert_eq!(error.code, "exhausted:challenge-rejection-limit");
+    }
+    use crate::Value;
 }

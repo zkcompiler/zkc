@@ -13,6 +13,7 @@ struct ConstructionSite {
   Type payload;
   std::optional<Natural> bound;
   bool proofMessage = false;
+  bool indexBlock = false;
 };
 struct ConstructionCall {
   std::vector<std::string> path;
@@ -354,7 +355,8 @@ bool Checker::constructions() {
           if (!payload)
             return false;
           sites.push_back({ConstructionRule::Kind::Query, std::move(path),
-                           validPath, std::move(*payload), query->bound});
+                           validPath, std::move(*payload), query->bound, false,
+                           query->count.has_value()});
         }
       }
       return true;
@@ -607,6 +609,11 @@ bool Checker::constructions() {
               "source.construction",
               "selector names no occurrence of this kind and authority",
               source.span);
+        if (site->indexBlock)
+          return types.fail("source.construction",
+                            "index blocks require the native transcript "
+                            "transition rather than a custom query handler",
+                            source.span);
         rule.payload = site->payload;
         if (protocol::isCodecRule(rule.kind)) {
           if (!result.codec || !site->proofMessage)

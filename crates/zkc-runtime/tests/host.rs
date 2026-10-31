@@ -3,6 +3,7 @@
 mod support;
 use serde_json::json;
 use support::{BOOL, BYTES, Fault, Host, TestValue, Unmeasured};
+use zkc_format::proof::{FormatError, MAX_PROOF_BYTES, ProofFormat};
 use zkc_runtime::{
     host::{
         joint::*,

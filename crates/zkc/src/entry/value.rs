@@ -1,6 +1,6 @@
 //! Logical application values. Layout and constructor authority come from the
 //! authenticated source interface, never from a caller-supplied type spelling.
-use super::interface::raw::{Field, Kind, Permission, Schema};
+use super::interface::raw::{Field, Kind, Schema};
 use crate::execution::InputValue;
 use std::collections::BTreeMap;
 use zkc_cpu::Value as NativeValue;
@@ -31,21 +31,6 @@ impl From<InputValue> for Value {
     }
 }
 
-/// External input must have construction authority at every nested layer.
-/// Packing an existing typed field does not grant authority to fabricate it.
-pub(super) fn check_import(schema: &Schema) -> Result<()> {
-    if schema.custody || !schema.constructible {
-        return Err("entry-input-constructor".into());
-    }
-    for field in schema
-        .fields
-        .iter()
-        .chain(schema.alternatives.iter().flat_map(|a| &a.fields))
-    {
-        check_import(&field.schema)?;
-    }
-    Ok(())
-}
 pub(super) fn flatten(schema: &Schema, value: Value, out: &mut Vec<InputValue>) -> Result<()> {
     match (schema.kind, value) {
         (Kind::Unit, Value::Unit) => Ok(()),
@@ -114,12 +99,6 @@ fn flatten_fields(
     Ok(())
 }
 
-pub(super) fn check_export(schema: &Schema) -> Result<()> {
-    if schema.custody || !schema.permissions.contains(&Permission::Copy) {
-        return Err("entry-output-custody".into());
-    }
-    Ok(())
-}
 /// The bound native ABI has already checked output types and slices. Only
 /// complete successful returns are reconstructed through this function.
 pub(super) fn collect(

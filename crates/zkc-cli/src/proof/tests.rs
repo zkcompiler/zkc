@@ -1,7 +1,7 @@
 use crate::files::hex;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
-use zkc_runtime::logical;
+use zkc_format::logical;
 fn hash(bytes: &[u8]) -> String {
     hex(&Sha256::digest(bytes))
 }
@@ -68,7 +68,8 @@ fn deployment() -> Json {
             ["2"],
             [],
             "zkc.framed/0",
-            ""
+            "",
+            []
         ],
         "zkc.native-origin/0",
         [["message", first], ["message", second]],
@@ -77,6 +78,7 @@ fn deployment() -> Json {
             [first, "bool", "zkcv.bool/0"],
             [second, "bool", "zkcv.bool/0"]
         ],
+        [],
         []
     ]);
     let mut result = json!([

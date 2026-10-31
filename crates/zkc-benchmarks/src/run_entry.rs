@@ -141,14 +141,7 @@ pub fn run(
         None
     } else {
         let start = Instant::now();
-        let owner = Owner::function(
-            decode()?,
-            &group,
-            entry.interface(),
-            ingress,
-            capacity,
-            entry.cpu(),
-        )?;
+        let owner = Owner::new(decode()?, &group, ingress, capacity, entry.cpu())?;
         entry
             .check_inputs(make_request(&entry, owner.share()?))
             .map_err(|e| format!("benchmark-ingress: input admission: {e}"))?;

@@ -28,6 +28,10 @@ use zkc::entry::{
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert!(!zkc::EXECUTION_COUNTS_ENABLED);
+    assert_eq!(
+        zkc::entry::AttemptOptions::default().proof_bytes,
+        zkc::proof::MAX_PROOF_BYTES
+    );
     let bytes = include_bytes!("numerical.zkpkg");
     let host = numerical::admit(bytes, Default::default(), Default::default())?;
     let arguments =

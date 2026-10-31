@@ -57,6 +57,11 @@ that contract's field; `index` takes its constant UniformIndex bound and returns
 one index. Query result domains need not match the provider's state domain.
 Native fallback rules still require the installed suite's query domain.
 
+Generated action metadata follows both actual participant bodies and preserves
+the global order of retained source actions. A construction that cannot satisfy
+both orders refuses with `native-proof-construction-order`; it does not move
+source calls, guards or stops to accommodate a witness exchange.
+
 Each selected query has one delivery using its exact SSA result: derived values
 and `protocol.restrict_roles` wrappers refuse. Pairing is checked in the same
 source block after unsimplified static expansion, retaining the authored call
@@ -322,7 +327,10 @@ A selected `index` query becomes `transcript.native.indexed.index`:
 ```
 
 It requires the suite fact `IndexTranscript(T)`; the installed suites with that
-fact are `merlin3.koala-bear.ext8-binomial3.rejection31le/0` and
+fact are `merlin3.koala-bear.ext8-binomial3.rejection31le/0`,
+`merlin3.baby-bear.ext4-binomial11.rejection31le/0`,
+`merlin3.goldilocks.ext2-binomial7.rejection64le/0`,
+`hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0` and
 `hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0`. The bound must be
 a power of two from 1 through 2^63; otherwise the transition refuses before
 consuming the state. Otherwise it consumes the state and, in order:
@@ -356,6 +364,7 @@ instance with its own identity rather than a parameter of an existing one.
 | Suite | `H` | Challenge field | Field decoder | `IndexTranscript` |
 |---|---|---|---|---|
 | `hash-chain.keccak256.bls12-381.fr64be/0` | Keccak-256 | `bls12-381.fr` | `fr64be` | no |
+| `hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0` | Keccak-256 | `koala-bear.ext4-binomial3` | `rejection31le` | yes |
 | `hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0` | Keccak-256 | `koala-bear.ext8-binomial3` | `rejection31le` | yes |
 
 Keccak-256 is the original Keccak submission's 256-bit instance (rate 136 bytes,
@@ -413,10 +422,11 @@ The managed source methods use the source label in place of the occurrence.
   distance `r/2^512` of uniform; it is not an exact draw.
 - `rejection31le` reads each 64-byte answer as sixteen little-endian 32-bit
   words, clears the top bit of each and accepts a word below the KoalaBear
-  modulus `p` as the next coordinate, in basis order. It stops when all eight
-  coordinates are accepted, and stops with `exhausted:challenge-rejection-limit`
+  modulus `p` as the next coordinate, in basis order. It stops when the suite's
+  extension degree is filled (four coordinates for quartic, eight for octic),
+  and stops with `exhausted:challenge-rejection-limit`
   after sixteen answers. Rejected words are never reduced modulo `p`. Given
-  uniform answers, an accepted value is exactly uniform on the octic extension.
+  uniform answers, an accepted value is exactly uniform on the named extension.
 - The UniformIndex sampler is the
   [installed power-of-two sampler](../runtime/services.md#uniformindex-realization)
   applied to the `index` answer.
@@ -574,3 +584,63 @@ local-control API, using that role's count and bound. It establishes no peer
 count agreement. An authored verifier must validate any semantic count condition
 needed by its protocol. Proof exhaustion and ordinary stops retain their existing
 meaning. The joint driver continues to use its separate count-agreement policy.
+
+## Native index blocks
+
+`Random<F>.indices(N,Q)` is a source product request with two positive checked
+u64 static naturals and one logical `Indices` result. Its source law is
+`UniformIndex(N)^Q`, preserving order, exact Q and duplicates. General source
+bounds need not be powers of two. `IndexBlockRandomness(F)` is a separate
+service fact; a block is not a scalar BoundedIndex. Source and participant
+queries carry method `indices`, two constant index inputs N/Q and one indices
+output. Generic specialization independently checks positivity.
+
+Native selection restricts N/Q to the domain in the
+[native block format](../formats/native-index-block.md). It uses explicit
+`draws` pairs to select each source query and the exact value delivered to the
+producer, in source order. The required twelfth native policy field, `gates`,
+is an array of `[query_site, canonical_decimal_bits]` pairs, unique by site,
+with bits in [0,64]. Unknown, unselected or nonblock sites refuse with
+`native-proof-gate-selection`; malformed policy rows refuse with
+`native-proof-policy`. An absent row selects the ungated block; a row with zero
+selects a gated slot with canonical witness zero. There is one current strict
+12-field `zkc.native-proof-policy/0`, including an explicit empty gates array;
+old-length policies refuse. Difficulty never comes from runtime operands.
+Selected native blocks use the direct native construction. Explicit custom
+construction plans, including query handlers and record codecs, refuse with
+`native-proof-index-block`; source query-handler declarations for blocks refuse
+with `source.construction`. They do not gain the block contract from an annotation
+or a native base selector.
+Source-bound proof declarations currently select ungated blocks. Explicit gate
+selection uses an authenticated native deployment policy until the source
+interface represents that selection; a source-bound package cannot add gates
+absent from its declaration.
+
+The producer replaces the selected delivery receive with a typed bounded-search
+helper and an actual `protocol.send` of its returned witness. The verifier
+replaces the selected query with an actual `protocol.receive` followed by the
+typed check helper. Both roles then perform the ordinary selected delivery
+observation. These are ordinary scoped `exec.apply` calls through
+`runtime.binding`; there is no special runner. A gate does not change the
+source protocol's message list. Witness transport belongs to construction and
+is not a transcript observation.
+
+The current strict `zkc.native-proof-descriptor/0` has eight fields: tag, policy,
+origin format, sequence, public bindings, messages, construction plan, witnesses.
+An ungated sequence record is `["indices", origin, N, Q]`; a gated record is
+`["gated-indices", origin, N, Q, b]`, with decimal strings. Each gated static
+occurrence has one witness row `[origin, "gate." + query_site, "index",
+"native.index/0"]`, in sequence order. Deployment wireSites includes
+`[origin, witness_site]` in proof transport order. A source slot collision
+refuses. Repeats reuse the static slot and supply their actual repeat
+coordinates. Origins use source service, owner and occurrence paths, never
+generated helper names.
+
+Independent actual-body correspondence checks both search/check helper
+signatures, bindings, parameter carriers, exact SSA use, state successors,
+coordinates, witness schema/slot/peer and control order. Full candidate
+comparison remains an additional check. The independent Rust deployment reader
+must authenticate the descriptor, operation parameters and complete transport
+slot coverage against the actual native program; a descriptor hash alone is
+not source authority. Lean is an independently maintained pending consumer;
+these native checks supply no formal grinding or compound-query theorem.

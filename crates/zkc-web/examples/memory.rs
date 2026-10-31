@@ -100,6 +100,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "truncated": observation(session.verify(&public, &result.proof()[..result.proof().len().min(5)], &[], None)),
         "limited": observation(session.prove(&public, &witness, &[], Some(0))),
     });
+    let mut trailing = result.proof();
+    trailing.push(0);
+    controls["trailing"] = observation(session.verify(&public, &trailing, &[], None));
+    controls["context"] = observation(session.verify(&public, &result.proof(), &[1], None));
     let mut unfilled: Json = serde_json::from_slice(&witness)?;
     if let Some(first) = unfilled
         .as_object()

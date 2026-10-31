@@ -57,6 +57,16 @@ substitute. `producer()` and `validator()` return optional admitted endpoints;
 binding. Those identities do not authorize execution. The caller authenticates
 the descriptor and its correspondence to each present role's wire layout.
 
+Native index blocks use explicit Keccak hash-chain installations for KoalaBear
+quartic and octic suites. Admission checks the full-u64 power-of-two bound,
+exact block count, optional gate difficulty and repeat coordinates. Search and
+checking have distinct operation signatures. Each gated occurrence owns one
+`gate.<source query site>` index witness slot: the producer sends the search
+output and the verifier receives it immediately before checking. Witnesses do
+not become transcript observations or ordinary participant data. The independent
+proof walk checks their direction, exact SSA association, ordering and coverage.
+Custom construction handlers for block sampling currently refuse explicitly.
+
 Operation-specific codec admission requires only the selected direction's
 helpers and validates every retained codec declaration. Proof execution uses
 `Program::check_role_installation` and `Runner::new_for_role_with_ledger` to link

@@ -1,5 +1,5 @@
 //! Only validated immutable key material crosses invocation boundaries.
-use super::inputs::Result;
+use crate::io::bytes::Result;
 use std::sync::Arc;
 use zkc_cpu::Value;
 use zkc_kernels::arkworks::bls12_381::{ProverKey, VerifierKey};
@@ -90,7 +90,7 @@ impl ProverMaterial {
         installation: &zkc_cpu::CpuInstallation,
     ) -> Result<Self> {
         capacity.validate()?;
-        let bytes = super::inputs::read_regular(path, capacity.wire_bytes).map_err(|e| {
+        let bytes = crate::io::bytes::read_regular(path, capacity.wire_bytes).map_err(|e| {
             if e == "artifact-byte-limit" {
                 "native-capacity-wire".into()
             } else {

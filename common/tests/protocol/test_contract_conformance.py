@@ -123,7 +123,7 @@ def required_atomic_types():
         "bn254.fr": "field vector polynomial round matrix rng",
         "koala-bear": "field vector polynomial round matrix",
         "koala-bear.ext8-binomial3": "field vector polynomial round matrix rng",
-        "koala-bear.ext4-binomial3": "field vector polynomial round matrix",
+        "koala-bear.ext4-binomial3": "field vector polynomial round matrix rng",
         "gf2-64.pentanomial-4-3-1": "field vector polynomial round matrix",
         "gf2-64.pentanomial-4-3-1.ext3-trinomial1": "field vector polynomial round matrix",
         "bls12-381.g1": "group groups",
@@ -133,6 +133,7 @@ def required_atomic_types():
         "bn254.g2": "group groups",
         "multilinear.kzg.bls12-381/0": "commitment proof opening_state prover_key verifier_key",
         "rows.merkle-keccak256.koala-bear/0": "commitment proof opening_state commitments opening_states",
+        "rows.merkle-keccak256.koala-bear.ext4-binomial3/0": "commitment proof opening_state commitments opening_states",
         "rows.merkle-keccak256.koala-bear.ext8-binomial3/0": "commitment proof opening_state commitments opening_states",
         "rows.merkle-poseidon2-16.koala-bear/0": "commitment proof opening_state commitments opening_states",
         "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0":
@@ -142,10 +143,11 @@ def required_atomic_types():
         "spongefish0.8.0.keccak.bls12-381.fr64be/0": "transcript",
         "merlin3.koala-bear.ext8-binomial3.rejection31le/0": "transcript",
         "hash-chain.keccak256.bls12-381.fr64be/0": "transcript",
+        "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0": "transcript",
         "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0": "transcript",
     }
     result = {(kind, domain) for domain, kinds in families.items() for kind in kinds.split()}
-    assert len(result) == 92
+    assert len(result) == 99
     return result
 
 
@@ -307,6 +309,8 @@ def candidates(inventory):
                         "commitment:rows.merkle-keccak256.koala-bear/0",
                         "proof:rows.merkle-keccak256.koala-bear/0",
                         "proof:rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+                        "commitment:rows.merkle-keccak256.koala-bear.ext4-binomial3/0",
+                        "proof:rows.merkle-keccak256.koala-bear.ext4-binomial3/0",
                         "opening_state:rows.merkle-keccak256.koala-bear/0",
                         "commitments:rows.merkle-keccak256.koala-bear/0",
                         "commitment:rows.merkle-poseidon2-16.koala-bear/0",
@@ -322,7 +326,6 @@ def candidates(inventory):
         for arguments, provider in choices:
             assert provider, (name, arguments, "no explicit catalog provider")
             rows.append((operation, arguments, f"{provider}/{name}"))
-    # Field, oracle and transcript additions produce 2,320 closed candidates.
     # Enumerate each operation's domain sort rather than all parameter products.
     assert len(rows) < 2560, "review enumeration growth; avoid combinatorial testing"
     return rows
@@ -659,6 +662,14 @@ def test_explicit_semantic_witnesses(drivers, directory):
          ["hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"],
          ["transcript:hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0", "index", "indices"],
          ["index", "transcript:hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"]),
+        *(("transcript.native.indexed.indices" + suffix, [suite],
+           ["transcript:" + suite, *witness, "indices"],
+           ["indices", *result_witness, "transcript:" + suite])
+          for suite in (
+              "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",
+              "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0")
+          for suffix, witness, result_witness in (
+              ("", [], []), (".gated", ["index"], []), (".search", [], ["index"]))),
     ]
     requests = [binding(name, args) for name, args, _, _ in witnesses]
     expected = [{"accepted": True, "physical": False, "inputs": inputs, "outputs": outputs}
@@ -699,6 +710,11 @@ def test_unknowns_and_malformed_arguments(drivers, directory):
             # A field-only suite has no UniformIndex transition.
             ("transcript.native.indexed.index", ["hash-chain.keccak256.bls12-381.fr64be/0"]),
             ("transcript.index", ["hash-chain.keccak256.bls12-381.fr64be/0"]),
+            *(("transcript.native.indexed.indices" + suffix, [suite])
+              for suffix in ("", ".gated", ".search")
+              for suite in ("merlin3.bls12-381.fr64be/0",
+                            "hash-chain.keccak256.bls12-381.fr64be/0",
+                            "unknown.suite")),
             ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0",
                                                       "field_array<bls12-381.g1,4>"]),
             ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0",

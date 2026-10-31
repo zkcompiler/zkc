@@ -90,7 +90,7 @@ authorized. There is no implicit receive-site setup selector.
 
 `resource.rs` owns fresh affine RNG, nonce and transcript capabilities, their
 bounded counters, domain separation, generations and retirement. Local frames
-receive explicit operand views. `random` owns advancing OS-seeded sources; mathematical kernels accept caller-owned RNGs. `services` binds the six registered random
+receive explicit operand views. `random` owns advancing OS-seeded sources; mathematical kernels accept caller-owned RNGs. `services` binds the seven registered random
 sampling service contracts to Host-owned providers. It does not install arbitrary
 request/reply service families. Attempts retain backend custody and completed
 resource effects. `retire` revokes an issued slot outside active frames without
@@ -286,8 +286,8 @@ Shared backing is charged in full. Matrix kernels retain their local sparse
 nonzero limit; native transport also enforces the current aggregate data limit.
 
 Generated transcripts use only `transcript.native.indexed.observe.data`,
-`transcript.native.indexed.challenge` and, for installed residue Merlin and octic hash-chain
-suites, `transcript.native.indexed.index`. Explicit templates and coordinates encode
+`transcript.native.indexed.challenge` and, for installed residue Merlin and quartic
+and octic hash-chain suites, `transcript.native.indexed.index`. Explicit templates and coordinates encode
 `zkc.native-origin/0`; executor frame names do not enter these occurrences.
 Generic observations accept the current native message-data grammar, including
 supported cross-domain data. The observation binding accepts either no physical

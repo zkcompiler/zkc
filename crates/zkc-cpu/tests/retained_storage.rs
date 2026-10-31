@@ -7,7 +7,7 @@ mod support;
 use support::one;
 
 use serde_json::{Value as Json, json};
-use zkc_cpu::{CpuBackend, KoalaBear, KoalaBearExt8, Policy, Value, oracle::Domain};
+use zkc_cpu::{CpuBackend, KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Value, oracle::Domain};
 use zkc_runtime::vm::{
     Action, Identity, LogicalType, OperationBinding, PhysicalType, StopKind, Type, Usage,
     ValueBudget, WorkBudget,
@@ -21,12 +21,14 @@ fn size(n: usize, width: usize) -> usize {
 fn element_bytes(domain: Domain) -> usize {
     match domain {
         Domain::Base => std::mem::size_of::<KoalaBear>(),
+        Domain::Quartic => std::mem::size_of::<KoalaBearExt4>(),
         Domain::Extension => std::mem::size_of::<KoalaBearExt8>(),
     }
 }
 fn field(domain: Domain) -> Identity {
     match domain {
         Domain::Base => Identity::KoalaBear,
+        Domain::Quartic => Identity::KoalaBearExt4,
         Domain::Extension => Identity::KoalaBearExt8,
     }
 }
@@ -488,6 +490,9 @@ fn openings(domains: &[(Domain, usize, usize)], count: u64) -> (Vec<u8>, Vec<Val
         values.extend([
             match domain {
                 Domain::Base => Value::KoalaBearField(KoalaBear::new(3)),
+                Domain::Quartic => {
+                    Value::KoalaBearExt4Field(KoalaBearExt4::from(KoalaBear::new(3)))
+                }
                 Domain::Extension => {
                     Value::KoalaBearExt8Field(KoalaBearExt8::from(KoalaBear::new(3)))
                 }
@@ -546,6 +551,9 @@ fn captured_multiwidth_states_are_retained_once_and_openings_charge_their_extent
         (Domain::Base, 1024, 8),
         (Domain::Base, 1024, 16),
         (Domain::Extension, 4096, 4),
+        (Domain::Quartic, 1024, 1),
+        (Domain::Quartic, 1024, 4),
+        (Domain::Quartic, 4096, 8),
     ] {
         let e = element_bytes(domain);
         let vector = size(height * width, e);
@@ -638,7 +646,7 @@ fn mixed_base_and_extension_commitments_use_their_own_element_widths() {
 
 #[test]
 fn row_commitment_preflights_height_times_width_before_allocation() {
-    for domain in [Domain::Base, Domain::Extension] {
+    for domain in [Domain::Base, Domain::Extension, Domain::Quartic] {
         // Exactly at the element ceiling succeeds for every width.
         for width in [1usize, 4, 8] {
             let height = (1 << 14) / width;
@@ -721,7 +729,7 @@ fn retained_regression_opens_65536_extension_rows_64_times_under_default_budgets
 
 #[test]
 fn row_check_preflights_claimed_height_times_width_without_allocation() {
-    for domain in [Domain::Base, Domain::Extension] {
+    for domain in [Domain::Base, Domain::Extension, Domain::Quartic] {
         let committed = one(
             backend(1 << 16),
             OperationBinding {
@@ -733,6 +741,9 @@ fn row_check_preflights_claimed_height_times_width_without_allocation() {
             &[],
             vec![
                 match domain {
+                    Domain::Quartic => Value::KoalaBearExt4Vector(
+                        vec![KoalaBearExt4::from(KoalaBear::new(1)); 8].into(),
+                    ),
                     Domain::Base => Value::KoalaBearVector(vec![KoalaBear::new(1); 8].into()),
                     Domain::Extension => Value::KoalaBearExt8Vector(
                         vec![KoalaBearExt8::from(KoalaBear::new(1)); 8].into(),

@@ -24,6 +24,7 @@ MERLIN = 'merlin3.bls12-381.fr64be/0'
 MERLIN_OCTIC = 'merlin3.koala-bear.ext8-binomial3.rejection31le/0'
 CHAIN = 'hash-chain.keccak256.bls12-381.fr64be/0'
 CHAIN_OCTIC = 'hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0'
+CHAIN_QUARTIC = 'hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0'
 
 
 def test_reference_keccak_reproduces_published_answers_and_the_sha3_permutation():
@@ -42,6 +43,13 @@ def test_reference_keccak_reproduces_published_answers_and_the_sha3_permutation(
 
 def test_backend_vector_fixture_is_the_reference_output():
     assert VECTORS.read_text() == reference.render(reference.vectors())
+
+
+def test_quartic_backend_vector_is_the_independent_reference_output():
+    vector = reference.vectors([(reference.QUARTIC_SUITE,
+                                'random.koala-bear.ext4-binomial3/0',
+                                reference.QUARTIC_SEVEN, 4)])['suites'][0]
+    assert vector == json.loads((ROOT / 'crates/zkc-cpu/tests/common/quartic-hash-chain.json').read_text())
 
 
 def test_chain_inputs_parse_uniquely():
@@ -188,9 +196,7 @@ NOT_INSTALLED = 'construction requires an installed suite and matching verifier 
     ('bls12-381.fr', CHAIN_OCTIC, DIFFERENT_FIELD),
     # Another byte hash is a separate installation, not a parameter.
     ('bls12-381.fr', 'hash-chain.sha256.bls12-381.fr64be/0', NOT_INSTALLED),
-    # The quartic extension has no random service and no suite.
-    ('koala-bear.ext4-binomial3', 'hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0',
-     NOT_INSTALLED),
+    ('koala-bear.ext4-binomial3', CHAIN_OCTIC, DIFFERENT_FIELD),
 ])
 def test_unsupported_suite_selections_refuse(toolchain, journal, directory, field, suite, reason):
     source = directory / 'main.zkc'
@@ -202,6 +208,7 @@ def test_unsupported_suite_selections_refuse(toolchain, journal, directory, fiel
 
 
 @pytest.mark.parametrize('field,suite', [('bls12-381.fr', CHAIN),
+                                         ('koala-bear.ext4-binomial3', CHAIN_QUARTIC),
                                          ('koala-bear.ext8-binomial3', CHAIN_OCTIC)])
 def test_echoed_challenges_match_and_a_changed_echo_is_rejected(toolchain, journal, directory, field, suite):
     source = directory / 'main.zkc'

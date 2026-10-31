@@ -156,7 +156,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     if field != "bls12-381.fr" {
         return None;
     }
-    let length = zkc_runtime::logical::natural_index(length).ok()?;
+    let length = zkc_format::logical::natural_index(length).ok()?;
     let array = match binding.physical_arguments.as_slice() {
         [] => {
             PhysicalType::default_for(LogicalType::field_array(Identity::Bls12381Fr, length).ok()?)
@@ -252,7 +252,7 @@ pub(crate) fn apply(
             let [index] = invocation.attributes else {
                 return Err(refused("field-array-index"));
             };
-            let index = zkc_runtime::logical::natural_index(index)
+            let index = zkc_format::logical::natural_index(index)
                 .map_err(|_| refused("field-array-index"))?;
             let index = usize::try_from(index).map_err(|_| refused("field-array-index"))?;
             policy.output(512, invocation.max_output_bytes)?;

@@ -2655,9 +2655,10 @@ private:
         projection.span = span;
         // `index` is reserved, so `.index` can only name the managed method,
         // whose static arguments precede its call.
-        bool method = at("index");
+        bool blockMethod = at("indices");
+        bool method = at("index") || blockMethod;
         if (method) {
-          projection.text = "index";
+          projection.text = blockMethod ? "indices" : "index";
           advance();
           if (take("<")) {
             do {
@@ -2669,7 +2670,25 @@ private:
             if (!expect(">"))
               return {};
           }
-          if (!at("(")) {
+          if (blockMethod) {
+            if (!projection.arguments.empty()) {
+              fail("source.syntax",
+                   "indices expects its static naturals in parentheses");
+              return {};
+            }
+            if (!expect("("))
+              return {};
+            projection.kind = Expression::Kind::MethodCall;
+            if (!at(")"))
+              do {
+                SyntaxType argument;
+                if (!type(argument, depth + 1))
+                  return {};
+                projection.arguments.push_back(std::move(argument));
+              } while (take(","));
+            if (!expect(")"))
+              return {};
+          } else if (!at("(")) {
             fail("source.syntax", "index requires a method call");
             return {};
           }
@@ -2678,7 +2697,7 @@ private:
           advance();
         } else if (!name(projection.text))
           return {};
-        if (take("(")) {
+        if (!blockMethod && take("(")) {
           projection.kind = Expression::Kind::MethodCall;
           if (!at(")"))
             do {

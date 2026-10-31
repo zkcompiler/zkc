@@ -181,6 +181,7 @@ fn policy_is_copied_and_new_limits_participate_in_equality() {
     let original = Policy::default();
     assert_eq!(original.max_numerical_work, 1 << 26);
     assert_eq!(original.max_numerical_bytes, 256 << 20);
+    assert_eq!(original.max_search_attempts, 1 << 20);
     let mut changed = original;
     let call = Call::new(&changed, 256);
     changed.max_numerical_work = 0;
@@ -188,8 +189,74 @@ fn policy_is_copied_and_new_limits_participate_in_equality() {
     changed = original;
     changed.max_numerical_bytes = 0;
     assert_ne!(original, changed);
+    changed = original;
+    changed.max_search_attempts = 0;
+    assert_ne!(original, changed);
     call.work(1).unwrap();
     call.scratch(1, 0u8).unwrap();
+}
+
+#[test]
+fn search_private_nonce_retains_its_allowance_and_failure_keeps_accepted_work() {
+    use zkc_kernels::transcript::{KeccakChain, search::NonceInput};
+    let chain = KeccakChain::bind("numerical-accounting-fixture", b"root");
+    let input = NonceInput {
+        chain: &chain,
+        witness_label: b"gate-witness",
+        prefix: b"ZKCV\0\x1f",
+        suffix: b"",
+        request_label: b"gated-indices",
+        total_output_bytes: 8 + 8 * 9,
+    };
+    let retained = 8 * 9 + 1280;
+    let p = Policy {
+        max_numerical_work: 128,
+        max_value_bytes: retained,
+        ..policy(1 << 16)
+    };
+    let plain = Call::new(&p, retained);
+    let result = plain.output(9, 0u64, retained).unwrap();
+    assert_eq!(
+        code(plain.search_nonce(&input, 1, 1)),
+        "exhausted:output-bytes"
+    );
+    assert_eq!(plain.scope.usage().work, 0);
+    drop(result);
+
+    let call = Call::with_search_nonce(&p, retained).unwrap();
+    let result = call.output(9, 0u64, retained).unwrap();
+    let raw = call.scratch(80, 0u8).unwrap();
+    call.work(7).unwrap();
+    assert!(call.search_nonce(&input, 32, 1).unwrap().is_some());
+    let usage = call.scope.usage();
+    assert!(usage.work > 7);
+    assert_eq!(usage.outputs, retained + 8);
+    assert_eq!(usage.memory, retained + 8 * 9 + 80 + 8);
+    assert_eq!(code(call.work(128)), "exhausted:numerical-work");
+    assert_eq!(call.scope.usage(), usage);
+    drop(raw);
+    drop(result);
+    assert_eq!(call.scope.usage().outputs, 8);
+    assert_eq!(call.scope.usage().memory, 8);
+    assert_eq!(call.scope.usage().work, usage.work);
+
+    // Lazy helper workspace refusal follows its first admitted batch charge.
+    let p = Policy {
+        max_numerical_bytes: retained + 8,
+        ..p
+    };
+    let failed = Call::with_search_nonce(&p, retained).unwrap();
+    let result = failed.scalar(retained).unwrap();
+    assert_eq!(
+        code(failed.search_nonce(&input, 1, 1)),
+        "exhausted:numerical-bytes"
+    );
+    assert!(failed.scope.usage().work > 0);
+    assert_eq!(failed.scope.usage().memory, retained);
+    assert_eq!(failed.scope.usage().outputs, retained);
+    drop(result);
+    assert_eq!(failed.scope.usage().memory, 0);
+    assert!(failed.scope.usage().work > 0);
 }
 
 #[test]
@@ -325,7 +392,7 @@ fn failed_finish_does_not_return_partial_output_and_releases_reservations() {
     call.work(3).unwrap();
     let mut output = call.output(3, 0u8, 259).unwrap();
     output.as_mut_slice()[0] = input[0];
-    let result = output.finish(|data| {
+    let result: Result<Value> = output.finish(|data| {
         assert_eq!(data, [4, 0, 0]);
         Err(refused("numerical-test"))
     });
@@ -376,7 +443,7 @@ fn failed_initialization_and_freeze_unwind_release_reservations() {
     assert!(
         std::panic::catch_unwind(AssertUnwindSafe(|| {
             let output = call.output(2, 0u8, 258).unwrap();
-            let _ = output.finish(|_| panic!("freeze failure"));
+            let _: Result<Value> = output.finish(|_| panic!("freeze failure"));
         }))
         .is_err()
     );

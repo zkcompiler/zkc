@@ -75,15 +75,15 @@ impl InputSource {
             }
         }
     }
-    pub(crate) fn read(&self, limit: usize) -> Result<Vec<u8>, super::io::ReadError> {
+    pub(crate) fn read(&self, limit: usize) -> Result<Vec<u8>, crate::io::ReadError> {
         match &self.0 {
             Source::Bytes(bytes) => {
                 if bytes.len() > limit {
-                    return Err(super::io::ReadError::Limit);
+                    return Err(crate::io::ReadError::Limit);
                 }
                 let mut captured = Vec::new();
                 captured.try_reserve_exact(bytes.len()).map_err(|_| {
-                    super::io::ReadError::Io(std::io::Error::other("input allocation"))
+                    crate::io::ReadError::Io(std::io::Error::other("input allocation"))
                 })?;
                 captured.extend_from_slice(bytes);
                 Ok(captured)
@@ -92,17 +92,17 @@ impl InputSource {
             Source::File(file) => {
                 let mut file = file
                     .lock()
-                    .map_err(|_| super::io::ReadError::Io(std::io::Error::other("input lock")))?;
+                    .map_err(|_| crate::io::ReadError::Io(std::io::Error::other("input lock")))?;
                 file.seek(SeekFrom::Start(0))
-                    .map_err(super::io::ReadError::Io)?;
-                super::io::read_from(&mut *file, limit)
+                    .map_err(crate::io::ReadError::Io)?;
+                crate::io::read_from(&mut *file, limit)
             }
         }
     }
     /// Capture under a byte ceiling and independently expected wire digest.
     pub fn read_verified(&self, sha256: &[u8; 32], limit: usize) -> Result<Vec<u8>, String> {
         let bytes = self.read(limit).map_err(|e| match e {
-            super::io::ReadError::Limit => "entry-input-reference-byte-limit",
+            crate::io::ReadError::Limit => "entry-input-reference-byte-limit",
             _ => "entry-input-reference",
         })?;
         Self::verify(&bytes, sha256)?;
@@ -155,10 +155,7 @@ mod tests {
         let path = directory.path().join("input");
         std::fs::write(&path, b"original").unwrap();
         let input = InputSource::new(File::open(&path).unwrap()).unwrap();
-        assert!(matches!(
-            input.read(7),
-            Err(super::super::io::ReadError::Limit)
-        ));
+        assert!(matches!(input.read(7), Err(crate::io::ReadError::Limit)));
         std::fs::rename(&path, directory.path().join("old")).unwrap();
         std::fs::write(&path, b"replacement").unwrap();
         assert_eq!(input.read(8).unwrap(), b"original");

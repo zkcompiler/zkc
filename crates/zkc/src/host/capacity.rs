@@ -1,5 +1,6 @@
 //! Application-selected operational ceilings, separate from proof semantics.
-use super::{admission::LoadLimits, inputs::*};
+use super::admission::LoadLimits;
+use crate::io::bytes::*;
 use serde_json::{Value as Json, json};
 use zkc_cpu::Policy;
 use zkc_runtime::vm::{Limits, ValueBudget, WorkBudget};

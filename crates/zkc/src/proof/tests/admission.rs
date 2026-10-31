@@ -65,7 +65,8 @@ fn deployment() -> Json {
             ["2"],
             [],
             "zkc.framed/0",
-            ""
+            "",
+            []
         ],
         "zkc.native-origin/0",
         [["message", first], ["message", second]],
@@ -74,6 +75,7 @@ fn deployment() -> Json {
             [first, "bool", "zkcv.bool/0"],
             [second, "bool", "zkcv.bool/0"]
         ],
+        [],
         []
     ]);
     let mut result = json!([

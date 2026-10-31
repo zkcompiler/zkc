@@ -84,6 +84,7 @@ inline bool nativeMessageAtom(llvm::StringRef kind, llvm::StringRef identity) {
           (identity == "multilinear.kzg.bls12-381/0" ||
            identity == "rows.merkle-keccak256.koala-bear/0" ||
            identity == "rows.merkle-keccak256.koala-bear.ext8-binomial3/0" ||
+           identity == "rows.merkle-keccak256.koala-bear.ext4-binomial3/0" ||
            identity == "rows.merkle-poseidon2-16.baby-bear/0" ||
            identity == "rows.merkle-poseidon2-16.baby-bear.ext4-binomial11/0" ||
            identity == "rows.merkle-poseidon2-8.goldilocks/0" ||

@@ -165,11 +165,18 @@ struct MetadataVerifier {
         continue;
       }
       bool index = contract == "transcript.native.indexed.index";
+      bool block = contract == "transcript.native.indexed.indices" ||
+                   contract == "transcript.native.indexed.indices.search" ||
+                   contract == "transcript.native.indexed.indices.gated";
       if ((contract != "transcript.native.indexed.challenge" &&
-           contract != "transcript.native.indexed.observe.data" && !index) ||
+           contract != "transcript.native.indexed.observe.data" && !index &&
+           !block) ||
           !coordinates || index != bool(bound))
         return refuse(record, "invalid inserted transcript helper");
-      unsigned ordinary = contract.ends_with(".observe.data") ? 2 : 1;
+      unsigned ordinary =
+          contract.ends_with(".observe.data") || contract.ends_with(".gated")
+              ? 2
+              : 1;
       {
         if (inputs.size() != ordinary + unsigned(index) + 1 ||
             (index && inputs[1] != bound) || inputs.back() != coordinates ||
@@ -673,6 +680,19 @@ struct MetadataVerifier {
               return refuse(record, "changed retained construction action");
             }
             actualRetained.push_back(original);
+            continue;
+          }
+          if (action.getAs<StringAttr>("kind") ==
+              StringAttr::get(record.getContext(), "protocol.exchange")) {
+            // Construction-owned witnesses are ordinary participant transport.
+            // Source correspondence separately fixes their query, SSA and
+            // order.
+            if (!site.getValue().starts_with("gate.") ||
+                !keys(action, {"site", "kind", "targets"}))
+              return refuse(record, "invalid construction witness");
+            auto targets = action.getAs<ArrayAttr>("targets");
+            if (!targets || targets.size() != 2)
+              return refuse(record, "invalid construction witness");
             continue;
           }
           if (action.getAs<StringAttr>("kind") !=

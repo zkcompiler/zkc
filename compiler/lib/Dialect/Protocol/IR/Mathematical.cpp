@@ -577,12 +577,13 @@ public:
                               "installed service signature");
           // The domain is fixed before sampling: a prover message or other
           // runtime value cannot choose the UniformIndex bound.
-          if (query.getMethod() == "index") {
-            auto bound =
-                query.getInputs().front().getDefiningOp<data::IndexOp>();
-            if (!bound || !protocol::uniformIndexBound(bound.getValue()))
-              return refuse(op, "index query requires a positive constant "
-                                "unsigned 64-bit bound");
+          if (query.getMethod() == "index" || query.getMethod() == "indices") {
+            for (auto input : query.getInputs()) {
+              auto bound = input.getDefiningOp<data::IndexOp>();
+              if (!bound || !protocol::uniformIndexBound(bound.getValue()))
+                return refuse(op, "index query requires a positive constant "
+                                  "unsigned 64-bit bound/count");
+            }
           }
           BitVector available(count);
           available.set(owner);

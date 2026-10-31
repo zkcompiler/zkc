@@ -1124,6 +1124,7 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
         I::Bls12381Fr,
         I::Bn254Fr,
         I::KoalaBearExt8,
+        I::KoalaBearExt4,
         I::Ristretto255Scalar,
     ] {
         values.push(native.issue_rng_for(field, domain.clone(), 1).unwrap());
@@ -1138,6 +1139,7 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
         I::Spongefish080KeccakFr64Be,
         I::HashChainKeccak256Fr64Be,
         I::HashChainKeccak256KoalaBearExt8,
+        I::HashChainKeccak256KoalaBearExt4,
     ] {
         values.push(
             native
@@ -1777,6 +1779,8 @@ fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_ab
         &["merlin3.bls12-381.fr64be/0"],
         &["merlin3.ristretto255.scalar64le/0"],
         &["merlin3.koala-bear.ext8-binomial3.rejection31le/0"],
+        &["hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"],
+        &["hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"],
         &["spongefish0.8.0.keccak.bls12-381.fr64be/0"],
         &["merlin3.bls12-381.fr64be/0", "field:bls12-381.fr"],
         &[

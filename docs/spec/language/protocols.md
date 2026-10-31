@@ -308,12 +308,21 @@ body closes. The service field must satisfy `zkc::random::IndexRandomness`, as
 a closed fact or a declared or inferred generic requirement. The result is available only
 at the service owner and the query is ordered like `draw()`. It emits a
 `data.index` constant immediately followed by a `protocol.query` with method
-`index`; source correspondence compares both. Other distributions, runtime
+`index`; source correspondence compares both. Runtime
 bounds and rejection sampling are not source methods. Services cannot enter
 ordinary types, aggregate fields, messages, local functions or return values.
 An application supplies each managed binding by position or by parameter name.
 Each field and mapped owner must match. Repeating a binding passes the same
 reference to both ports.
+
+`coins.indices(N,Q)` samples an ordered `Indices` block with law
+`UniformIndex(N)^Q`. Both arguments are positive static u64 naturals, checked
+again when a generic body closes. It requires `IndexBlockRandomness` for the
+service field, separately from scalar index support. The whole block is one
+ordered query at the service owner; duplicates are retained. The
+[installed service contract](../runtime/services.md#uniformindex-realization)
+restricts its bound and count. Native proof selection and optional grinding
+follow the [construction contract](../ir/construction.md#native-index-blocks).
 
 `require @V condition;` requires a Boolean available at V. False stops V at that
 ordered occurrence; it does not produce a Boolean result or establish knowledge

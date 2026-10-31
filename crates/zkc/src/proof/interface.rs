@@ -2,7 +2,7 @@
 //! the Host interface to independently admitted participant signatures; they do
 //! not establish source/compiler correspondence or grant setup authority.
 use super::{Port, RoleMap, index, input_kind, wire_codec, wire_type};
-use crate::host::inputs::{Result, array, list, text};
+use crate::io::bytes::{Result, array, list, text};
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
 use zkc_runtime::vm::{ConstructionPlan, LogicalType, PhysicalType, Program, Type};
@@ -19,11 +19,13 @@ pub(super) struct DeploymentPolicy<'a> {
     pub(super) format: super::ProofFormat,
     public_selection: &'a Json,
     pub(super) draw_count: usize,
-    replaced_services: Vec<usize>,
+    pub(super) draws: Vec<(&'a str, &'a str)>,
+    pub(super) gates: BTreeMap<&'a str, u8>,
+    pub(super) replaced_services: Vec<usize>,
 }
 impl<'a> DeploymentPolicy<'a> {
     pub(super) fn read(value: &'a Json) -> Result<Self> {
-        let policy = array(value, 11)?;
+        let policy = array(value, 12)?;
         if text(&policy[0])? != "zkc.native-proof-policy/0" {
             return Err("native-proof-policy".into());
         }
@@ -59,8 +61,11 @@ impl<'a> DeploymentPolicy<'a> {
             return Err("native-proof-policy".into());
         }
         let mut selected_sites = std::collections::BTreeSet::new();
+        let mut draw_sites = Vec::new();
         for draw in draws {
-            for site in array(draw, 2)? {
+            let pair = array(draw, 2)?;
+            draw_sites.push((text(&pair[0])?, text(&pair[1])?));
+            for site in pair {
                 let site = text(site)?;
                 if site.is_empty()
                     || site.len() > 4096
@@ -69,6 +74,24 @@ impl<'a> DeploymentPolicy<'a> {
                 {
                     return Err("native-proof-policy".into());
                 }
+            }
+        }
+        let rows = list(&policy[11])?;
+        if rows.len() > 64 || !rows.is_empty() && suite.is_none() {
+            return Err("native-proof-gates".into());
+        }
+        let mut gates = BTreeMap::new();
+        for row in rows {
+            let row = array(row, 2)?;
+            let site = text(&row[0])?;
+            let bits = text(&row[1])?;
+            let bits =
+                zkc_format::logical::natural_index(bits).map_err(|_| "native-proof-gates")?;
+            if bits > 64
+                || !draw_sites.iter().any(|(query, _)| *query == site)
+                || gates.insert(site, bits as u8).is_some()
+            {
+                return Err("native-proof-gates".into());
             }
         }
         Ok(Self {
@@ -81,6 +104,8 @@ impl<'a> DeploymentPolicy<'a> {
             format,
             public_selection: &policy[7],
             draw_count: draws.len(),
+            draws: draw_sites,
+            gates,
             replaced_services,
         })
     }

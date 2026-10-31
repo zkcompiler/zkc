@@ -84,7 +84,7 @@ pub(super) fn execute(
         )
     })?;
     if invocation.results.is_some() {
-        interface.check_result_encoding()?;
+        host.check_result_encoding()?;
     }
     report["phase"] = json!("inputs");
     let path = invocation.inputs.get("arguments");

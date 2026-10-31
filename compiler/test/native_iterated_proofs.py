@@ -21,8 +21,8 @@ def policy(family, suite):
     if family == 'nested':
         draws = [[expanded(expanded('segment', step), site) for site in ('draw_challenge', 'challenge')]
                  for step in ('first', 'second')]
-        return ['zkc.native-proof-policy/0', 'main', 'P', 'V', '0', suite, ['5'], ['0', '1', '3'], draws, "zkc.framed/0", ""]
-    return ['zkc.native-proof-policy/0', 'main', 'P', 'V', '0', suite, ['4'], ['1', '2', '3'], [['draw', 'challenge']], "zkc.framed/0", ""]
+        return ['zkc.native-proof-policy/0', 'main', 'P', 'V', '0', suite, ['5'], ['0', '1', '3'], draws, "zkc.framed/0", "", []]
+    return ['zkc.native-proof-policy/0', 'main', 'P', 'V', '0', suite, ['4'], ['1', '2', '3'], [['draw', 'challenge']], "zkc.framed/0", "", []]
 
 for family, fixture in [('sumcheck', 'iterated-sumcheck'), ('cubic', 'cubic-sumcheck'), ('nested', 'nested-schnorr')]:
     source = (FIXTURES / (fixture + '.mlir')).read_text()
@@ -96,7 +96,7 @@ with case('distinct field-array shapes retain distinct transcript bindings'):
     source = qa + ca + 'module { "protocol.module"() ({' + qb + cb + main + '}) {profile=#protocol.profile<protocol>} : ()->() }'
     src = OUT / 'mixed_shapes.mlir'; src.write_text(source)
     p = ['zkc.native-proof-policy/0','main','P','V','0',SUITES[0],['5'],['1','2','3','4'],
-         [[expanded(call,site) for site in ('draw','challenge')] for call in ('quadratic','cubic')], "zkc.framed/0", ""]
+         [[expanded(call,site) for site in ('draw','challenge')] for call in ('quadratic','cubic')], "zkc.framed/0", "", []]
     pol = OUT / 'mixed_shapes.policy'; pol.write_text(json.dumps(p))
     result = json.loads(commands.run([compiler,'protocol-proof',src,pol]))
     program = json.loads(result[4])

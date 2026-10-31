@@ -96,7 +96,7 @@ fn execute(directory: &Path, suffix: &str, mode: Mode, outer: u64, inner: u64, g
     let rng = native
         .issue_rng_for(Identity::Bls12381Fr, domain(), rng_budget)
         .unwrap();
-    let root = zkc_runtime::logical::encode_tree(&serde_json::json!(["origin-test"])).unwrap();
+    let root = zkc_format::logical::encode_tree(&serde_json::json!(["origin-test"])).unwrap();
     let transcript = native
         .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), transcript_budget, &root)
         .unwrap();

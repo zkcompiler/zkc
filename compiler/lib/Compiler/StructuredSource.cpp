@@ -315,8 +315,7 @@ Expected<json::Array> encodeSorts(TypeRange types, UsedIdentities &used,
 // Rows of the used identities, closed under associated members, in catalogue
 // order: ["nominal", identity, sort, [[member, identity]...], [capability...],
 // modulus or null]. Services: ["service", contract, sampled field,
-// [method...]], with "index" exactly where the sampled field has
-// IndexRandomness.
+// [method...]], with the installed methods from the service contract.
 Error collectStaticDomains(const json::Value &term, UsedIdentities &used) {
   // The shared origin reader has already checked shape and traversal limits.
   const auto &tree = *term.getAsArray();
@@ -374,8 +373,9 @@ json::Value catalogueSlot(const UsedIdentities &used) {
     if (!used.services.contains(service.contract))
       continue;
     json::Array methods{"draw"};
-    if (serviceMethod(service.contract, "index"))
-      methods.push_back("index");
+    for (StringRef method : {"index", "indices"})
+      if (serviceMethod(service.contract, method))
+        methods.push_back(method);
     services.push_back(json::Array{"service", service.contract, service.field,
                                    std::move(methods)});
   }

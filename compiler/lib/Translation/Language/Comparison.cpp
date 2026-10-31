@@ -1292,16 +1292,29 @@ class Comparator {
             return false;
           if (!attributes(*bound, {"value"}) ||
               !natural(*bound, "value", query->bound->closedValue()) ||
-              !types(bound->getResultTypes(), leaves))
+              !bound->getResult(0).getType().isUnsignedInteger(64))
             return fail("index query domain differs");
           operands.push_back(bound->getResult(0));
+        }
+        if (query->count) {
+          if (!query->count->isClosed())
+            return fail("index count is not closed");
+          auto *count = next(block, cursor, op.span, "data.index", {}, 1);
+          if (!count || !attributes(*count, {"value"}) ||
+              !natural(*count, "value", query->count->closedValue()) ||
+              !count->getResult(0).getType().isUnsignedInteger(64))
+            return fail("index query count differs");
+          operands.push_back(count->getResult(0));
         }
         auto *actual =
             next(block, cursor, op.span, "protocol.query", operands, 1);
         if (!actual)
           return false;
         if (!attributes(*actual, {"method", "owner", "site"}) ||
-            !string(*actual, "method", query->bound ? "index" : "draw") ||
+            !string(*actual, "method",
+                    query->count   ? "indices"
+                    : query->bound ? "index"
+                                   : "draw") ||
             !string(*actual, "owner", nativeRoleName(port.owner)) ||
             !string(*actual, "site", site))
           return fail("managed query method, owner or occurrence differs");

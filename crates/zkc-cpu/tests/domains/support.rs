@@ -383,7 +383,7 @@ impl Backend for Controlled {
 /// The tagged, length-prefixed encoding these fixtures are written in.
 ///
 /// Independent of the production codec on purpose, which is why it is here
-/// rather than imported from `zkc_runtime::logical` -- and written once,
+/// rather than imported from `zkc_format::logical` -- and written once,
 /// because independence is from that codec rather than from itself.
 pub fn tree(v: &Json) -> Vec<u8> {
     match v {

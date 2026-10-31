@@ -54,7 +54,7 @@ what actually landed. The completion criteria below belong inside those units.
 |---|---|
 | Catalog and MLIR execution foundation | Publish shared schema changes at version `0`, measure the main baseline, select typed invocation and structured types, generate neutral catalog projections, migrate all affected native code and remove replaced routes in one PR |
 | Virtual batching and FRI | Build on the landed foundation and existing table/Merkle realization. Complete dynamic virtual query blocks, ordered domain/failure prefixes and the same-subject FRI client. Consume the specified checked index family and runtime-owned quartic Keccak; keep formal realization closure separately reported |
-| STARK compiler support | Complete block-draw and gated-request emission, witness codec slot and record consumption; exercise the common frontend FRI/STARK acceptance client under selected transcript/extension fields, realizations and layouts |
+| STARK compiler support | Use the installed native block/gate emission, witness codec slot and independent record consumption; add source proof configuration and exercise the common frontend FRI/STARK acceptance client under selected transcript/extension fields, realizations and layouts |
 | Represented execution | Canonical logical collection ownership across Data/Algebra, Residue and Codec semantics, private buffer contracts and admitted Arith/Vector/Bufferization lowering; compare native kernels and transparent schedules |
 | Constraints and semantic consumers | One assignment-level owner, source-to-encoding adequacy, lookup/multiset and chronological-memory consumers, exact statement/witness maps and actual commitment/terminal connections |
 
@@ -159,12 +159,12 @@ targets without a dependency need.
 
 Construction owns the generated request layout and witness slot; runtime owns
 the kernel and bounded search; Lean owns the primitive-query interpretation.
-Settle fixed-metadata order, final request length, nonoverlapping gate/index
-windows, occurrence coordinates, zero-difficulty elision, verifier rejection
-successor and all speculative/replayed work before installing the operation.
-Publish the agreed byte contract in the repository and test independent byte
-vectors against both compiler and runtime. The current scalar-index transcript
-ABI grants no implicit block/gated capability.
+The [native index-block contract](spec/formats/native-index-block.md) fixes
+metadata order, final request length, nonoverlapping gate/index windows, occurrence
+coordinates, zero-difficulty elision, verifier rejection successor and accepted
+search/replay work. Native construction and CPU consumers implement that contract
+with independent byte controls. Source proof configuration and Lean interpretation
+remain separate work. Scalar index support grants no implicit block/gated capability.
 
 The common acceptance configuration is KoalaBear with its quartic extension
 and Keccak Merkle rows. Runtime supplies that exact row instance. Lean must
@@ -350,7 +350,7 @@ checks in the protocol.
 
 ## Extend on demonstrated demand
 
-The current service registry supports six RNG distributions/providers. Arbitrary
+The current service registry supports seven RNG distributions/providers. Arbitrary
 user-defined request/reply families need a separately designed contract and
 implementation when a concrete client requires them.
 

@@ -1,6 +1,6 @@
 //! Source-authenticated application binding for an independently installed backend.
 //! Execution uses the Runtime joint Host; this module only binds its source ABI.
-use super::{BoundInterface, Interface, Package, value};
+use super::{BoundInterface, Interface, Package};
 use zkc_runtime::{
     host::{joint, wire::WireBackend},
     vm::Contracts,
@@ -38,10 +38,10 @@ impl BackendRun {
                 return Err("entry-backend-services".into());
             }
             for port in interface.input_ports(role) {
-                value::check_import(&port.schema)?;
+                crate::entry::interface::schemas::check_import(&port.schema)?;
             }
             for port in interface.output_ports(role) {
-                value::check_export(&port.schema)?;
+                crate::entry::interface::schemas::check_export(&port.schema)?;
             }
         }
         let bundle = joint::Bundle::admit(
@@ -51,7 +51,7 @@ impl BackendRun {
             limits,
         )
         .map_err(|e| e.to_string())?;
-        let identity = crate::host::inputs::hex(package.authenticated_artifact().identity());
+        let identity = crate::io::bytes::hex(package.authenticated_artifact().identity());
         interface
             .check_run_bundle(&bundle, &identity)
             .map_err(|e| e.to_string())?;

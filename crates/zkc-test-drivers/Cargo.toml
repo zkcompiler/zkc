@@ -7,6 +7,7 @@ publish = false
 autobins = false
 
 [dependencies]
+zkc-format.workspace = true
 ark-std = { workspace = true, features = ["getrandom"] }
 ark-bls12-381.workspace = true
 ark-bn254.workspace = true

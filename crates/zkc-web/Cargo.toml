@@ -10,7 +10,7 @@ description = "In-memory browser proof adapter over the zkc SDK"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-zkc = { workspace = true, default-features = false }
+zkc = { workspace = true, default-features = false, features = ["cpu"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 wasm-bindgen = "=0.2.129"

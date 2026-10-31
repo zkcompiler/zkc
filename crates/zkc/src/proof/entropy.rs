@@ -1,5 +1,5 @@
 //! Invocation entropy issuance. Deterministic tapes exist only in test builds.
-use crate::host::inputs::Result;
+use crate::io::bytes::Result;
 use zkc_cpu::{
     CpuBackend, Domain, Value,
     services::{ServiceReference, ServiceRegistry},

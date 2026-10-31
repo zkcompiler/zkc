@@ -141,7 +141,7 @@ and authority requirements to the shared executable.
 
 Domain and kernel contributions remain explicit extensions: declarations need
 their own interpretation, physical implementation, registration and consumer
-checks. The native service registry is currently closed to six RNG contracts
+checks. The native service registry is currently closed to seven RNG contracts
 and their providers. An installed domain or kernel does not add an arbitrary
 request/reply service family; that requires a future service extension.
 
@@ -206,9 +206,10 @@ Keep layout identities fixed when selecting a subset. A backend with different
 value or execution contracts implements the VM backend separately; selecting
 another CPU provider combination requires no new crate.
 
-The memory-only SDK build uses `default-features = false`. Its `files` adapter
-adds bounded filesystem sources and publication; `project` adds project and
-compiler integration and implies `files`. The browser's `zkc-web` adapter reuses
+The memory-only execution SDK uses `default-features = false, features = ["cpu"]`.
+Without `cpu`, the SDK provides portable capture and source metadata. Its `files`
+adapter adds bounded filesystem sources and publication; `project` adds project
+and compiler integration and implies `files`. The browser's `zkc-web` adapter reuses
 the memory path and owns Workers, entropy integration and JS/Wasm byte custody.
 Keep mathematical work in kernels and execution in the common VM. See the
 [browser engine guide](../../crates/zkc-web/README.md) for build variants and

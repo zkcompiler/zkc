@@ -8,6 +8,7 @@ pub mod packing;
 pub mod polynomial;
 pub mod poseidon2;
 pub mod residue;
+pub mod sampling;
 pub mod words;
 
 use crate::field::{Error, Result};

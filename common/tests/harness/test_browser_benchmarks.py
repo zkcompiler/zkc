@@ -120,6 +120,19 @@ def test_goldilocks_extension_oracle_and_distinct_fixture(browser):
     assert program.proof is True
 
 
+def test_quartic_keccak_fixture_uses_every_coordinate_and_derived_challenges(browser):
+    fixtures = importlib.import_module('bench.browser_fixtures')
+    program = fixtures.quartic_keccak()
+    values = program.inputs[0]['witness']['values']
+    public = program.inputs[0]['public']
+    assert len(values) == int(public['width']) * int(public['height'])
+    assert all(len(value) == 4 and all(int(c) > 0 for c in value) for value in values)
+    assert public['expected'] == values[:int(public['width'])]
+    assert program.proof and 'construction authored' not in program.source
+    assert 'rows.merkle-keccak256.koala-bear.ext4-binomial3/0' in program.source
+    assert 'hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0' in program.source
+
+
 def test_proof_identity_capture_keeps_process_wall_time(browser, tmp_path, monkeypatch):
     path, _ = prepared(browser, tmp_path)
     web = tmp_path/'web'

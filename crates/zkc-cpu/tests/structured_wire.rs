@@ -522,7 +522,8 @@ fn nested_fixed_arrays_keep_empty_shape_and_full_retained_charge() {
 #[test]
 fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
     use std::sync::Arc;
-    use zkc_runtime::{logical as encoding, vm::Identity};
+    use zkc_format::logical as encoding;
+    use zkc_runtime::vm::Identity;
     let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
         1,
         &mut ark_std::rand::thread_rng(),

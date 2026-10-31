@@ -94,8 +94,9 @@ catalogue := [nominal-rows, service-rows]
 A nominal row is the native row: its sort (`Field`, `Group`, `Commitment` or
 `Transcript`), its associated members, its capability facts in native order
 and, for a field, its modulus as a canonical decimal string. A service row
-names the field the service samples and its methods: `draw`, and `index`
-exactly when that field has `IndexRandomness`. The exporter writes the rows of
+names the field the service samples and its methods: `draw`, `index` when that
+field has `IndexRandomness`, and `indices` when it has `IndexBlockRandomness`.
+The exporter writes the rows of
 whatever the native catalogue admits; an importer admits only identities whose
 rows agree with its own catalogue (the
 [formal admission contract](../../../lean/docs/spec/structured-source.md#domain-catalogue)

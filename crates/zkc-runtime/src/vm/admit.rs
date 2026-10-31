@@ -307,18 +307,43 @@ fn attributes(
             Ok(())
         }
         AttributeRule::NativeMessageTemplate
-            if crate::logical::native_origin_template(attrs, "message").is_ok() =>
+            if zkc_format::logical::native_origin_template(attrs, "message").is_ok() =>
         {
             Ok(())
         }
         AttributeRule::NativeChallengeTemplate
-            if crate::logical::native_query_template(attrs, "draw").is_ok() =>
+            if zkc_format::logical::native_query_template(attrs, "draw").is_ok() =>
         {
             Ok(())
         }
         AttributeRule::NativeIndexTemplate
-            if crate::logical::native_query_template(attrs, "index").is_ok() =>
+            if zkc_format::logical::native_query_template(attrs, "index").is_ok() =>
         {
+            Ok(())
+        }
+        AttributeRule::NativeIndexBlock | AttributeRule::NativeGatedIndexBlock => {
+            let gated = rule == AttributeRule::NativeGatedIndexBlock;
+            if attrs.len() != if gated { 4 } else { 3 } {
+                return Err(err(ErrorCode::Attributes, "native-index-block-parameters"));
+            }
+            zkc_format::logical::native_query_template(&attrs[..1], "indices")
+                .map_err(|_| err(ErrorCode::Attributes, "native-index-block-origin"))?;
+            let mut values = Vec::with_capacity(attrs.len() - 1);
+            for value in &attrs[1..] {
+                natural_syntax(value)?;
+                values.push(
+                    value
+                        .parse::<u64>()
+                        .map_err(|_| err(ErrorCode::Attributes, "native-index-block-parameters"))?,
+                );
+            }
+            if !values[0].is_power_of_two()
+                || values[0] > 1 << 63
+                || !(1..=1 << 20).contains(&values[1])
+                || gated && values[2] > 64
+            {
+                return Err(err(ErrorCode::Attributes, "native-index-block-parameters"));
+            }
             Ok(())
         }
 

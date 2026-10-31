@@ -1161,7 +1161,10 @@ class ExpressionInference {
     case K::MethodCall: {
       auto field = service(expr.children.front());
       if (field)
-        constrain(result.type, expr.text == "index" ? Type(T::Index) : *field,
+        constrain(result.type,
+                  expr.text == "index"     ? Type(T::Index)
+                  : expr.text == "indices" ? *builtinType("indices", {})
+                                           : *field,
                   expr.span);
       break;
     }

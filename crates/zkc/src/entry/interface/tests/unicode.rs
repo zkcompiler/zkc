@@ -600,11 +600,13 @@ pub(in crate::entry) fn proof_fixture() -> (Value, String) {
             ["0"],
             [],
             "zkc.framed/0",
-            ""
+            "",
+            []
         ],
         "zkc.native-origin/0",
         [],
         [["role00000000", "0", "bool", "zkcv.bool/0"]],
+        [],
         [],
         []
     ]);
@@ -612,7 +614,7 @@ pub(in crate::entry) fn proof_fixture() -> (Value, String) {
         "zkc.native-proof/0",
         digest("original"),
         descriptor,
-        crate::host::inputs::hash(&zkc_runtime::logical::encode_tree(&descriptor).unwrap()),
+        crate::io::bytes::hash(&zkc_format::logical::encode_tree(&descriptor).unwrap()),
         candidate,
         digest(&candidate),
         [
@@ -799,8 +801,8 @@ fn unicode_setup_material_is_injected_into_both_independent_proof_requests() {
         vk,
         "zkc.native-verifier-key/0"
     ]));
-    artifact[3] = json!(crate::host::inputs::hash(
-        &zkc_runtime::logical::encode_tree(&artifact[2]).unwrap()
+    artifact[3] = json!(crate::io::bytes::hash(
+        &zkc_format::logical::encode_tree(&artifact[2]).unwrap()
     ));
     artifact[6][0][2]
         .as_array_mut()
@@ -1025,8 +1027,8 @@ fn proof_file_preparation_checks_selected_codecs_before_setup_material() {
         vk,
         "zkc.native-verifier-key/0"
     ]));
-    artifact[3] = json!(crate::host::inputs::hash(
-        &zkc_runtime::logical::encode_tree(&artifact[2]).unwrap()
+    artifact[3] = json!(crate::io::bytes::hash(
+        &zkc_format::logical::encode_tree(&artifact[2]).unwrap()
     ));
     artifact[6][0][2]
         .as_array_mut()
@@ -1358,7 +1360,7 @@ fn memory_bindings_share_digest_checks_and_document_budgets() {
         panic!()
     };
     let reference =
-        json!({"公開":{"file":"statement","sha256":crate::host::inputs::hash(bytes)}}).to_string();
+        json!({"公開":{"file":"statement","sha256":crate::io::bytes::hash(bytes)}}).to_string();
     let mut bindings: BTreeMap<String, Arc<Vec<u8>>> = [("statement".into(), bytes.clone())].into();
     let execute = |bindings: &BTreeMap<String, Arc<Vec<u8>>>| {
         host.preflight_memory_call(

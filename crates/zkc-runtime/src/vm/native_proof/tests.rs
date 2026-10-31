@@ -112,7 +112,7 @@ impl Fixture {
         let observe = event(false);
         let query = event(true);
         let mut delivery = event(false);
-        delivery.origin = crate::logical::encode_tree(&json!([
+        delivery.origin = zkc_format::logical::encode_tree(&json!([
             "zkc.native-origin-template/0",
             "main",
             [],
@@ -504,7 +504,7 @@ fn event(query: bool) -> NativeTranscriptEvent {
     } else {
         json!(["message", "Round", "message", "message", "P", "V"])
     };
-    let bytes = crate::logical::encode_tree(&json!([
+    let bytes = zkc_format::logical::encode_tree(&json!([
         "zkc.native-origin-template/0",
         "main",
         [],
@@ -520,6 +520,8 @@ fn event(query: bool) -> NativeTranscriptEvent {
         origin: bytes.iter().map(|b| format!("{b:02x}")).collect(),
         payload: (!query).then(|| super::super::LogicalType::parse("bool").unwrap()),
         bound: None,
+        count: None,
+        difficulty: None,
         start_inputs: None,
     }
 }
@@ -716,7 +718,7 @@ fn custom_child_starts_and_queries_retain_selected_ports() {
     let state = [PhysicalType::parse(BOOL).unwrap()];
     custom_helper(query, &state, &[event(true)], "main", "V").unwrap();
     let mut wrong_query = event(true);
-    let origin = crate::logical::encode_tree(&json!([
+    let origin = zkc_format::logical::encode_tree(&json!([
         "zkc.native-origin-template/0",
         "main",
         [],
@@ -734,7 +736,7 @@ fn custom_child_starts_and_queries_retain_selected_ports() {
     .unwrap();
     wrong_query.origin = origin.iter().map(|b| format!("{b:02x}")).collect();
     assert!(custom_helper(query, &state, &[wrong_query], "main", "V").is_err());
-    let origin = crate::logical::encode_tree(&json!([
+    let origin = zkc_format::logical::encode_tree(&json!([
         "zkc.native-origin-template/0",
         "main",
         [],
@@ -747,6 +749,8 @@ fn custom_child_starts_and_queries_retain_selected_ports() {
         origin: origin.iter().map(|b| format!("{b:02x}")).collect(),
         payload: None,
         bound: None,
+        count: None,
+        difficulty: None,
         start_inputs: Some(vec![field.logical().clone()]),
     };
     let function = &program.program.functions["selected_start"];
@@ -1365,4 +1369,427 @@ fn verifier_executes_without_opposite_runtime_dependencies_and_checks_all_reache
     .err()
     .unwrap();
     assert_eq!(failure.backend.frames, 0);
+}
+
+const BLOCK_SUITE: &str = "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0";
+
+// Closed independently authored carriers test Rust admission. The compiler's
+// actual source producer is exercised separately by the integration owner.
+fn block_fixture(difficulty: Option<u8>) -> Fixture {
+    fn replace(value: &mut Json, from: &str, to: &str) {
+        match value {
+            Json::String(text) if text == from => *text = to.into(),
+            Json::Array(values) => values.iter_mut().for_each(|v| replace(v, from, to)),
+            _ => (),
+        }
+    }
+    let mut f = Fixture::native();
+    let state = format!("transcript:{BLOCK_SUITE}@host.resource/0");
+    replace(&mut f.program, STATE, &state);
+    replace(&mut f.program, SUITE, BLOCK_SUITE);
+    replace(&mut f.program, FIELD, "indices@native.indices/0");
+    replace(
+        &mut f.program,
+        "arkworks/transcript.native.indexed.observe.data",
+        "plonky3/transcript.native.indexed.observe.data",
+    );
+    let old_origin = f.events[1].origin.clone();
+    let bytes =
+        zkc_format::logical::native_query_template(std::slice::from_ref(&old_origin), "draw")
+            .unwrap();
+    let mut tree = zkc_format::logical::decode_tree(&bytes).unwrap();
+    tree[4][4] = json!("random.koala-bear.ext4-binomial3/0");
+    tree[4][5] = json!("indices");
+    let origin: String = zkc_format::logical::encode_tree(&tree)
+        .unwrap()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    replace(&mut f.program, &old_origin, &origin);
+    f.events[1].origin = origin;
+    f.events[1].contract = if difficulty.is_some() {
+        "transcript.native.indexed.indices.gated"
+    } else {
+        "transcript.native.indexed.indices"
+    }
+    .into();
+    f.events[1].bound = Some(1 << 63);
+    f.events[1].count = Some(3);
+    f.events[1].difficulty = difficulty;
+    f.events[2].payload = Some(super::super::LogicalType::parse("indices").unwrap());
+    f.suite = Some(BLOCK_SUITE);
+    f.program[1][2][1] = json!(f.events[1].contract);
+    f.program[1][2][3] = json!(format!("plonky3/{}", f.events[1].contract));
+    f.program[1][3][2][1] = json!("indices");
+    let mut attributes = vec![
+        json!(f.events[1].origin),
+        json!((1u64 << 63).to_string()),
+        json!("3"),
+    ];
+    if let Some(bits) = difficulty {
+        attributes.push(json!(bits.to_string()));
+    }
+    f.program[2][1][4][1][3] = json!(attributes);
+    if difficulty.is_some() {
+        f.program[2][1][2]
+            .as_array_mut()
+            .unwrap()
+            .push(json!(["w", "index@native.index/0"]));
+        f.program[2][1][4][1][4] = json!(["t", "w", "coords"]);
+        let mut search = f.program[2][1].clone();
+        search[1] = json!("search");
+        search[2] = json!([["t", state]]);
+        search[3] = json!(["indices@native.indices/0", "index@native.index/0", state]);
+        search[4][1][2] = json!("op_search");
+        search[4][1][4] = json!(["t", "coords"]);
+        search[4][1][5] = json!(["c", "w", "next"]);
+        search[4][2][1] = json!(["c", "w", "next"]);
+        f.program[2].as_array_mut().unwrap().push(search);
+        f.program[1].as_array_mut().unwrap().push(json!([
+            "op_search",
+            "transcript.native.indexed.indices.search",
+            [BLOCK_SUITE],
+            "plonky3/transcript.native.indexed.indices.search",
+            []
+        ]));
+        f.program[3][0][6][2][2] = json!("search");
+        f.program[3][0][6][2][4] = json!(["c", "w", "t2"]);
+        f.program[3][0][6]
+            .as_array_mut()
+            .unwrap()
+            .insert(3, json!(["send", "gate.draw", "gate.draw", "V", "w"]));
+        f.program[3][1][6][2][3] = json!(["t1", "w"]);
+        f.program[3][1][6].as_array_mut().unwrap().insert(
+            2,
+            json!([
+                "receive",
+                "gate.draw",
+                "gate.draw",
+                "P",
+                "w",
+                "index@native.index/0"
+            ]),
+        );
+    }
+    f
+}
+
+#[test]
+fn independent_block_carriers_admit_each_endpoint_and_zero_difficulty() {
+    for bits in [None, Some(0), Some(4), Some(64)] {
+        block_fixture(bits).admit(None).unwrap();
+        for operation in [NativeProofOperation::Prove, NativeProofOperation::Verify] {
+            let mut f = block_fixture(bits).selected(operation);
+            // The ordinary carrier retains the other endpoint's helper. Prune
+            // its dormant definition; endpoint artifacts contain only their own.
+            if bits.is_some() {
+                if operation == NativeProofOperation::Prove {
+                    f.program[2].as_array_mut().unwrap().remove(1);
+                } else {
+                    f.program[2].as_array_mut().unwrap().pop();
+                }
+            }
+            f.admit(Some(operation)).unwrap();
+        }
+    }
+}
+
+#[test]
+fn custom_plans_cannot_claim_native_index_block_adapters() {
+    for bits in [None, Some(0), Some(4)] {
+        let mut f = block_fixture(bits);
+        let adapters: Vec<_> = ["observe", "challenge", "delivery"]
+            .into_iter()
+            .zip(&f.events)
+            .map(|(name, event)| json!([name, "native", [event.origin]]))
+            .collect();
+        f.plan = ConstructionPlan::read(&json!([
+            "zkc.construction-plan/0",
+            "Custom",
+            "host",
+            [format!("transcript:{BLOCK_SUITE}")],
+            "",
+            ["", []],
+            adapters,
+            []
+        ]))
+        .unwrap();
+        assert_eq!(f.admit(None).unwrap_err().0, "native-proof-index-block");
+        for operation in [NativeProofOperation::Prove, NativeProofOperation::Verify] {
+            let mut selected = block_fixture(bits).selected(operation);
+            selected.plan = f.plan.clone();
+            if bits.is_some() {
+                if operation == NativeProofOperation::Prove {
+                    selected.program[2].as_array_mut().unwrap().remove(1);
+                } else {
+                    selected.program[2].as_array_mut().unwrap().pop();
+                }
+            }
+            assert_eq!(
+                selected.admit(Some(operation)).unwrap_err().0,
+                "native-proof-index-block"
+            );
+        }
+    }
+}
+
+#[test]
+fn block_parameter_carriers_refuse_malformed_and_out_of_domain_values() {
+    let valid = block_fixture(Some(4));
+    let contracts = crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose());
+    for (position, values) in [
+        (
+            1,
+            vec![
+                "0",
+                "3",
+                "9223372036854775809",
+                "18446744073709551616",
+                "01",
+                "-1",
+            ],
+        ),
+        (2, vec!["0", "1048577", "01", "1.0"]),
+        (3, vec!["65", "00", "-1"]),
+    ] {
+        for value in values {
+            let mut f = valid.program.clone();
+            f[2][1][4][1][3][position] = json!(value);
+            assert_eq!(
+                Program::decode(f.to_string().as_bytes(), &contracts)
+                    .unwrap_err()
+                    .code,
+                crate::vm::ErrorCode::Attributes,
+                "{position}: {value}"
+            );
+        }
+    }
+    for change in [0, 1] {
+        let mut f = valid.program.clone();
+        let attrs = f[2][1][4][1][3].as_array_mut().unwrap();
+        if change == 0 {
+            attrs.pop();
+        } else {
+            attrs.push(json!("0"));
+        }
+        assert_eq!(
+            Program::decode(f.to_string().as_bytes(), &contracts)
+                .unwrap_err()
+                .code,
+            crate::vm::ErrorCode::Attributes
+        );
+    }
+}
+
+#[test]
+fn block_admission_binds_count_bound_difficulty_and_witness_placement() {
+    for parameter in 1..=3 {
+        let mut f = block_fixture(Some(4));
+        f.program[2][1][4][1][3][parameter] = json!(match parameter {
+            1 => "8",
+            2 => "2",
+            _ => "3",
+        });
+        assert!(f.admit(None).is_err(), "parameter {parameter}");
+    }
+    let mut f = block_fixture(Some(4));
+    f.program[3][0][6].as_array_mut().unwrap().swap(3, 4);
+    assert_eq!(f.admit(None).unwrap_err().0, "native-proof-witness-order");
+    let mut f = block_fixture(Some(4));
+    f.program[3][1][6].as_array_mut().unwrap().swap(1, 2);
+    assert_eq!(f.admit(None).unwrap_err().0, "native-proof-witness-input");
+    let mut f = block_fixture(Some(4));
+    for endpoint in 0..2 {
+        f.program[3][endpoint][6][if endpoint == 0 { 3 } else { 2 }][2] = json!("wrong-schema");
+    }
+    assert!(f.admit(None).is_err());
+    let mut f = block_fixture(Some(4));
+    f.events[1].difficulty = Some(3);
+    assert!(f.admit(None).is_err());
+}
+
+#[test]
+fn block_origin_roles_suite_and_repeat_coordinates_are_independent_checks() {
+    fn replace(value: &mut Json, from: &str, to: &str) {
+        match value {
+            Json::String(text) if text == from => *text = to.into(),
+            Json::Array(values) => values.iter_mut().for_each(|v| replace(v, from, to)),
+            _ => (),
+        }
+    }
+    for mutation in 0..3 {
+        let mut f = block_fixture(Some(4));
+        let old = f.events[1].origin.clone();
+        let mut origin = zkc_format::logical::decode_tree(
+            &zkc_format::logical::native_query_template(std::slice::from_ref(&old), "indices")
+                .unwrap(),
+        )
+        .unwrap();
+        match mutation {
+            0 => origin[1] = json!("another-entry"),
+            1 => origin[4][6] = json!("P"),
+            _ => origin[4][4] = json!("random.koala-bear.ext8-binomial3/0"),
+        }
+        let new: String = zkc_format::logical::encode_tree(&origin)
+            .unwrap()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        replace(&mut f.program, &old, &new);
+        f.events[1].origin = new;
+        assert!(f.admit(None).is_err(), "origin mutation {mutation}");
+    }
+    let mut f = block_fixture(Some(4));
+    for event in &mut f.events {
+        let old = event.origin.clone();
+        let mut origin = zkc_format::logical::decode_tree(
+            &zkc_format::logical::native_origin_template(
+                std::slice::from_ref(&old),
+                if event.payload.is_some() {
+                    "message"
+                } else {
+                    "query"
+                },
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        origin[2] = json!([["repeat", "Round", "rounds"]]);
+        event.origin = zkc_format::logical::encode_tree(&origin)
+            .unwrap()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        replace(&mut f.program, &old, &event.origin);
+    }
+    f.program[1].as_array_mut().unwrap().extend([
+        json!(["append", "indices.append", [], "native/indices.append", []]),
+        json!([
+            "constant",
+            "index.constant",
+            [],
+            "native/index.constant",
+            []
+        ]),
+    ]);
+    for function in f.program[2].as_array_mut().unwrap().iter_mut() {
+        function[2]
+            .as_array_mut()
+            .unwrap()
+            .push(json!(["i", "index@native.index/0"]));
+        *function[4][1][4]
+            .as_array_mut()
+            .unwrap()
+            .last_mut()
+            .unwrap() = json!("coords1");
+        function[4].as_array_mut().unwrap().insert(
+            1,
+            json!([
+                "op",
+                "coordinate",
+                "append",
+                [],
+                ["coords", "i"],
+                ["coords1"]
+            ]),
+        );
+    }
+    f.program[2].as_array_mut().unwrap().push(json!([
+        "function",
+        "round_count",
+        [],
+        ["index@native.index/0"],
+        [
+            ["op", "count", "constant", ["2"], [], ["n"]],
+            ["return", ["n"]]
+        ],
+        ["round_count", []]
+    ]));
+    for endpoint in 0..2 {
+        let body = f.program[3][endpoint][6].as_array_mut().unwrap();
+        let mut inner = std::mem::take(body);
+        inner.pop();
+        // Each event helper receives the current repeat induction operand.
+        for action in &mut inner {
+            if action[0] == "local" {
+                action[3].as_array_mut().unwrap().push(json!("i"));
+            }
+        }
+        inner.push(json!(["yield", ["t3"]]));
+        *body = vec![
+            json!(["local", "round_count", "round_count", [], ["n"]]),
+            json!([
+                "loop",
+                "rounds",
+                ["value", "n", "2", "i"],
+                [["t", "root_t"]],
+                if endpoint == 0 {
+                    vec!["candidate"]
+                } else {
+                    vec![]
+                },
+                inner,
+                ["final_t"]
+            ]),
+            json!([
+                "return",
+                if endpoint == 0 {
+                    vec!["final_t"]
+                } else {
+                    vec!["public", "final_t"]
+                }
+            ]),
+        ];
+        f.program[3][endpoint][4][2 - endpoint][0] = json!("root_t");
+    }
+    f.admit(None).unwrap();
+    // Both the actual helper's coordinates and the invocation's induction
+    // operand are checked, independently of equal index types.
+    f.program[2][1][4][1][4][1] = json!("w");
+    assert_eq!(
+        f.admit(None).unwrap_err().0,
+        "native-proof-helper-coordinates"
+    );
+}
+
+#[test]
+fn block_witness_slots_follow_nested_source_applications() {
+    fn replace(value: &mut Json, from: &str, to: &str) {
+        match value {
+            Json::String(text) if text == from => *text = to.into(),
+            Json::Array(values) => values.iter_mut().for_each(|v| replace(v, from, to)),
+            _ => (),
+        }
+    }
+    let mut f = block_fixture(Some(0));
+    for event in &mut f.events {
+        let old = event.origin.clone();
+        let kind = if event.payload.is_some() {
+            "message"
+        } else {
+            "query"
+        };
+        let mut origin = zkc_format::logical::decode_tree(
+            &zkc_format::logical::native_origin_template(std::slice::from_ref(&old), kind).unwrap(),
+        )
+        .unwrap();
+        origin[2] = json!([["apply", "Root", "a"], ["apply", "Middle", "b"]]);
+        event.origin = zkc_format::logical::encode_tree(&origin)
+            .unwrap()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        replace(&mut f.program, &old, &event.origin);
+    }
+    assert_eq!(
+        native_origin_site(&f.events[1].origin, "query").unwrap(),
+        "apply_11_apply_1_a_b_draw"
+    );
+    assert!(f.admit(None).is_err()); // The raw local gate slot cannot alias the application.
+    replace(
+        &mut f.program,
+        "gate.draw",
+        "gate.apply_11_apply_1_a_b_draw",
+    );
+    f.admit(None).unwrap();
 }

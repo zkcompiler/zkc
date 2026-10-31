@@ -318,6 +318,16 @@ with case('other-installed-identities-export-their-rows'):
     assert services == [['service', 'random.bn254.fr/0', 'bn254.fr', ['draw']]]
     assert [row[1] for row in nominals] == ['bn254.fr', 'bn254.g1', 'bn254.g2', 'bn254.gt']
 
+with case('block-capable-services-export-all-installed-methods'):
+    for identity in ['koala-bear.ext4-binomial3', 'koala-bear.ext8-binomial3',
+                     'baby-bear.ext4-binomial11', 'goldilocks.ext2-binomial7']:
+        contract = f'random.{identity}/0'
+        source = simple().replace('^entry(%flag:i1)', f'^entry(%flag:i1,%service:!protocol.service_ref<"{contract}">)').replace(
+            'function_type=(i1)->i1', f'function_type=(i1,!protocol.service_ref<"{contract}">)->i1').replace(
+            'input_roles=[["P"]]', 'input_roles=[["P"],["P"]]')
+        _, services = export(source)[9]
+        assert services == [['service', contract, identity, ['draw', 'index', 'indices']]]
+
 with case('binary-and-extension-identities-export-their-rows'):
     # Rows are native data whatever the characteristic: a binary field records
     # its characteristic as its modulus, and an extension exports its base.
@@ -334,7 +344,8 @@ with case('binary-and-extension-identities-export-their-rows'):
     assert {row[1] for row in nominals} == {'koala-bear.ext4-binomial3', 'koala-bear'}
     extension = next(row for row in nominals if row[1] == 'koala-bear.ext4-binomial3')
     assert extension[3:] == [[['BaseField', 'koala-bear']],
-                               ['TwoAdicField', 'Field', 'CommRing', 'CharacteristicNotTwo', 'ExtensionField'],
+                               ['TwoAdicField', 'Field', 'CommRing', 'CharacteristicNotTwo',
+                                'ExtensionField', 'IndexRandomness', 'IndexBlockRandomness'],
                                '2130706433']
 
 with case('field-embedding-retains-nominal-binding-and-ports'):

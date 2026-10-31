@@ -1128,7 +1128,7 @@ class Emitter {
             return false;
           }
           auto *bound = make(
-              "data.index", resultTypes, {},
+              "data.index", {builder.getIntegerType(64, false)}, {},
               {attr("value",
                     builder.getIntegerAttr(builder.getIntegerType(64, false),
                                            query->bound->closedValue()))});
@@ -1136,8 +1136,24 @@ class Emitter {
             return false;
           operands.push_back(bound->getResult(0));
         }
+        if (query->count) {
+          if (!query->count->isClosed()) {
+            failure = error("source.service", "index count is not closed");
+            return false;
+          }
+          auto *count = make(
+              "data.index", {builder.getIntegerType(64, false)}, {},
+              {attr("value",
+                    builder.getIntegerAttr(builder.getIntegerType(64, false),
+                                           query->count->closedValue()))});
+          if (!count)
+            return false;
+          operands.push_back(count->getResult(0));
+        }
         auto *actual = make("protocol.query", resultTypes, operands,
-                            {text("method", query->bound ? "index" : "draw"),
+                            {text("method", query->count   ? "indices"
+                                            : query->bound ? "index"
+                                                           : "draw"),
                              text("owner", nativeRoleName(port.owner)),
                              text("site", site)});
         if (!actual)

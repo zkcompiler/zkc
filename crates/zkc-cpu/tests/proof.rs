@@ -1,5 +1,6 @@
 use serde_json::json;
 use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, Value};
+use zkc_format::proof::{MAX_PROOF_BYTES, ProofFormat};
 use zkc_runtime::host::proof::*;
 use zkc_runtime::host::wire::*;
 use zkc_runtime::interpreter::Runner;

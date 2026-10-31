@@ -298,9 +298,10 @@ struct HostInvocation {
 };
 struct ServiceQuery {
   ServiceId service;
-  /// The static UniformIndex domain size of an `index` query; absent for
-  /// `draw`. Closed values are powers of two no greater than 2^63.
+  /// Positive source domain; native constructions separately restrict it.
   std::optional<Natural> bound;
+  /// Positive product-law count; present only for an indices request.
+  std::optional<Natural> count = std::nullopt;
 };
 struct Require {
   ValueId condition;

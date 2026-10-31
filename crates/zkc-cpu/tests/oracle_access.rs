@@ -2,7 +2,7 @@
 mod support;
 use p3_field::{BasedVectorSpace, PrimeCharacteristicRing};
 use support::{backend, one};
-use zkc_cpu::{KoalaBear, KoalaBearExt8, Policy, Value, oracle::Domain};
+use zkc_cpu::{KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Value, oracle::Domain};
 use zkc_runtime::vm::{
     Backend, Identity, LogicalType, OperationBinding, PhysicalType, Type, Value as RuntimeValue,
 };
@@ -28,6 +28,16 @@ fn vector(domain: Domain, n: usize) -> Value {
                 .collect::<Vec<_>>()
                 .into(),
         ),
+        Domain::Quartic => Value::KoalaBearExt4Vector(
+            (0..n)
+                .map(|i| {
+                    KoalaBearExt4::from_basis_coefficients_fn(|j| {
+                        KoalaBear::from_usize(3 * i + j + 1)
+                    })
+                })
+                .collect::<Vec<_>>()
+                .into(),
+        ),
         Domain::Extension => Value::KoalaBearExt8Vector(
             (0..n)
                 .map(|i| {
@@ -42,7 +52,7 @@ fn vector(domain: Domain, n: usize) -> Value {
 }
 #[test]
 fn authenticated_rows_collections_and_shape_are_independent_of_polynomials() {
-    for domain in [Domain::Base, Domain::Extension] {
+    for domain in [Domain::Base, Domain::Extension, Domain::Quartic] {
         for (width, height) in [(1, 1), (2, 3), (3, 8)] {
             let committed = run(
                 domain,
@@ -128,7 +138,7 @@ fn authenticated_rows_collections_and_shape_are_independent_of_polynomials() {
 }
 #[test]
 fn wire_nominality_canonicality_and_preimport_accounting() {
-    for domain in [Domain::Base, Domain::Extension] {
+    for domain in [Domain::Base, Domain::Extension, Domain::Quartic] {
         let committed = run(
             domain,
             "oracle.commit",
@@ -256,7 +266,7 @@ fn bad_coordinates_and_resource_ceiling_refuse_before_allocation() {
 #[test]
 fn cpu_contracts_agree_with_admission_without_promoting_row_authentication_to_pcs() {
     let b = backend(Policy::default());
-    for d in [Domain::Base, Domain::Extension] {
+    for d in [Domain::Base, Domain::Extension, Domain::Quartic] {
         for name in [
             "oracle.commit",
             "oracle.open",

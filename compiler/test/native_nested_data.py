@@ -13,7 +13,7 @@ manifest = []
 for family, public in [("batched-openings", ["2", "3", "4"]),
                        ("ragged-matrices", ["1", "2", "3"])]:
     source = fixtures / f"{family}.mlir"
-    policy_data = ["zkc.native-proof-policy/0", "main", "P", "V", "0", "", [], public, [], "zkc.framed/0", ""]
+    policy_data = ["zkc.native-proof-policy/0", "main", "P", "V", "0", "", [], public, [], "zkc.framed/0", "", []]
     policy = OUT / f"{family}.policy"
     policy.write_text(json.dumps(policy_data))
     for suffix, options in [("", ()), ("_plain", ("--no-simplify",)),
@@ -52,7 +52,7 @@ module { "protocol.module"() ({
    "protocol.return"(%ok) : (i1)->()
  }) {sym_name="main",function_type=(!m,ui64,ui64)->i1,roles=["P","V"],input_roles=[["P"],["V"],["V"]],output_roles=[["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }''')
-policy_data = ["zkc.native-proof-policy/0", "main", "P", "V", "0", "", [], ["1", "2"], [], "zkc.framed/0", ""]
+policy_data = ["zkc.native-proof-policy/0", "main", "P", "V", "0", "", [], ["1", "2"], [], "zkc.framed/0", "", []]
 policy = OUT / "matrix.policy"
 policy.write_text(json.dumps(policy_data))
 for suffix, options in [("", ()), ("_plain", ("--no-simplify",)), ("_release", ("--release-storage",))]:
@@ -91,7 +91,7 @@ for i, suite in enumerate(["merlin3.bls12-381.fr64be/0", "spongefish0.8.0.keccak
         name = f"observed_{i}{suffix}"
         with case(name):
             policy = OUT / f"{name}.policy"
-            policy.write_text(json.dumps(["zkc.native-proof-policy/0", "main", "P", "V", "0", suite, ["1"], [], [["draw", "challenge"]], "zkc.framed/0", ""]))
+            policy.write_text(json.dumps(["zkc.native-proof-policy/0", "main", "P", "V", "0", suite, ["1"], [], [["draw", "challenge"]], "zkc.framed/0", "", []]))
             deployment = commands.run([compiler, "protocol-proof", observed, policy, *options])
             (OUT / f"{name}.deployment").write_text(deployment)
             manifest.append(dict(name=name, family="observed"))
@@ -106,7 +106,7 @@ module { "protocol.module"() ({
  }) {sym_name="main",function_type=(!s,i1)->i1,roles=["P","V"],input_roles=[["P"],["V"]],output_roles=[["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }''')
     policy = OUT / "missing-setup.policy"
-    policy.write_text(json.dumps(["zkc.native-proof-policy/0", "main", "P", "V", "0", "", [], ["1"], [], "zkc.framed/0", ""]))
+    policy.write_text(json.dumps(["zkc.native-proof-policy/0", "main", "P", "V", "0", "", [], ["1"], [], "zkc.framed/0", "", []]))
     commands.run([compiler, "protocol-proof", source, policy], refuses="native-proof-setup-coverage")
 
 # Total data operations lower through checked native kernels. Invalid indexing

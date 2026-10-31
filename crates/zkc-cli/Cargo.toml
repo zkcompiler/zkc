@@ -9,6 +9,7 @@ name = "zkc"
 path = "src/main.rs"
 
 [dependencies]
+zkc-format.workspace = true
 zkc.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
