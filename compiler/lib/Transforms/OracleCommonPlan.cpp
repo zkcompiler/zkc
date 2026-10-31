@@ -340,7 +340,7 @@ struct PlanBuilder {
       TypeRange carriedTypes, ArrayRef<unsigned> seeds, ArrayRef<unsigned> path,
       StringRef purpose,
       llvm::function_ref<Expected<IDs>(OracleCommonBlock &, unsigned,
-                                 ArrayRef<unsigned>, ArrayRef<unsigned>)>
+                                       ArrayRef<unsigned>, ArrayRef<unsigned>)>
           visit) {
     // Common repeat has its own finite native bound. Do not narrow a logical
     // uint64 capacity into its signed attribute or silently truncate traversal.
@@ -963,10 +963,12 @@ struct PlanBuilder {
       heldStores.push_back(found->second);
     }
     IDs discovery, evaluation;
-    for (auto [remoteIndex, coordinate] : zip(selection.remotes, selection.queries)) {
+    for (auto [remoteIndex, coordinate] :
+         zip(selection.remotes, selection.queries)) {
       const auto &remote = remotes[remoteIndex];
       const auto &body = controllers[remote.receiver].body;
-      auto query = dyn_cast_or_null<pir::OracleQueryOp>(sourceOperation(coordinate));
+      auto query =
+          dyn_cast_or_null<pir::OracleQueryOp>(sourceOperation(coordinate));
       if (!query || body.role != receiver.role)
         return error("oracle-query-block-source");
       auto rootStores = stores(body);
@@ -977,8 +979,9 @@ struct PlanBuilder {
       auto arguments = inputs(query->getOperands());
       if (!arguments)
         return arguments.takeError();
-      auto demand = call(block, remote.demand.initialize, receiver.role, *arguments,
-                         site(coordinate, "query_discovery_initialize", receiver.role));
+      auto demand =
+          call(block, remote.demand.initialize, receiver.role, *arguments,
+               site(coordinate, "query_discovery_initialize", receiver.role));
       if (!demand)
         return demand.takeError();
       auto state = call(block, body.initialize, receiver.role, *arguments,
@@ -994,9 +997,11 @@ struct PlanBuilder {
     std::vector<std::string> owners{receiver.role, holder.role};
     for (unsigned role = 0; role < owners.size(); ++role) {
       IDs leaves;
-      for (auto [remoteIndex, coordinate] : zip(selection.remotes, selection.queries)) {
+      for (auto [remoteIndex, coordinate] :
+           zip(selection.remotes, selection.queries)) {
         const auto &remote = remotes[remoteIndex];
-        const auto &body = controllers[role ? remote.holder : remote.receiver].body;
+        const auto &body =
+            controllers[role ? remote.holder : remote.receiver].body;
         auto query = cast<pir::OracleQueryOp>(sourceOperation(coordinate));
         auto roles = handleRoles(query.getHandle());
         if (!roles)
@@ -1023,16 +1028,17 @@ struct PlanBuilder {
         total = apply(rounds, {"index.add", {}, ""}, index, {total, i}).front();
       auto bound = number(rounds, selection.leaves + 1);
       require(rounds, apply(rounds, {"index.less", {}, ""}, builder.getI1Type(),
-                             {total, bound}).front());
+                            {total, bound})
+                          .front());
       // ceil(total / capacity): per-query capacity is one; the atomic capacity
       // covers the complete block. The guarded total is below the native bound,
       // so adding capacity-1 cannot overflow ui64.
       auto offset = number(rounds, schedule.capacity - 1);
-      auto numerator = apply(rounds, {"index.add", {}, ""}, index,
-                              {total, offset}).front();
+      auto numerator =
+          apply(rounds, {"index.add", {}, ""}, index, {total, offset}).front();
       auto width = number(rounds, schedule.capacity);
-      rounds.results = apply(rounds, {"index.div", {}, ""}, index,
-                               {numerator, width});
+      rounds.results =
+          apply(rounds, {"index.div", {}, ""}, index, {numerator, width});
       auto count = call(block, rounds, owners[role], leaves,
                         site(path, "query_round_count", owners[role]));
       if (!count)
@@ -1054,32 +1060,44 @@ struct PlanBuilder {
       region->arguments.push_back(id());
     auto slice = [&](unsigned offset, unsigned size) {
       return IDs(region->arguments.begin() + offset,
-                  region->arguments.begin() + offset + size);
+                 region->arguments.begin() + offset + size);
     };
     auto loopDemand = slice(1, discovery.size());
     auto loopEvaluation = slice(1 + discovery.size(), evaluation.size());
     auto loopStores = slice(1 + stateTypes.size(), captures->size());
-    auto loopHeld = slice(1 + stateTypes.size() + captures->size(), heldStores.size());
+    auto loopHeld =
+        slice(1 + stateTypes.size() + captures->size(), heldStores.size());
     IDs collecting(loopDemand);
-    append_range(collecting, loopEvaluation);
     append_range(collecting, loopStores);
-    auto collected = call(*region, batch.body.collect, receiver.role, collecting,
-                          site(path, "query_collect", receiver.role));
+    auto collected =
+        call(*region, batch.body.collect, receiver.role, collecting,
+             site(path, "query_collect", receiver.role));
     if (!collected)
       return collected.takeError();
     if (collected->size() != discovery.size() + 1 + selection.remotes.size())
       return error("oracle-common-helper");
     unsigned requests = (*collected)[discovery.size()];
+    IDs checking{requests};
+    append_range(checking, loopEvaluation);
+    append_range(checking, loopStores);
+    auto available =
+        call(*region, batch.body.checkAvailable, receiver.role, checking,
+             site(path, "query_check_available", receiver.role));
+    if (!available)
+      return available.takeError();
+    if (!available->empty())
+      return error("oracle-common-helper");
     IDs grouping{requests};
     append_range(grouping, loopStores);
     auto grouped = call(*region, first.packet.group, receiver.role, grouping,
                         site(path, "opening_group", receiver.role));
     if (!grouped)
       return grouped.takeError();
-    auto sent = make(*region, "protocol.exchange", first.packet.requestSequence,
-                     {(*grouped)[0]}, attrs({text("sender", receiver.role),
-                        text("receiver", holder.role),
-                        text("site", site(path, "opening_request", holder.role))}));
+    auto sent = make(
+        *region, "protocol.exchange", first.packet.requestSequence,
+        {(*grouped)[0]},
+        attrs({text("sender", receiver.role), text("receiver", holder.role),
+               text("site", site(path, "opening_request", holder.role))}));
     if (!sent)
       return sent.takeError();
     IDs opening{sent->front()};
@@ -1088,23 +1106,25 @@ struct PlanBuilder {
                        site(path, "opening_dispatch", holder.role));
     if (!opened)
       return opened.takeError();
-    auto returned = make(*region, "protocol.exchange", first.packet.responseSequence,
-                         *opened, attrs({text("sender", holder.role),
-                         text("receiver", receiver.role),
-                         text("site", site(path, "opening_response", receiver.role))}));
+    auto returned = make(
+        *region, "protocol.exchange", first.packet.responseSequence, *opened,
+        attrs({text("sender", holder.role), text("receiver", receiver.role),
+               text("site", site(path, "opening_response", receiver.role))}));
     if (!returned)
       return returned.takeError();
-    IDs authenticationInputs{requests, (*grouped)[0], (*grouped)[1], returned->front()};
+    IDs authenticationInputs{requests, (*grouped)[0], (*grouped)[1],
+                             returned->front()};
     append_range(authenticationInputs, loopStores);
-    auto authenticated = call(*region, first.packet.authenticate, receiver.role,
-                              authenticationInputs,
-                              site(path, "opening_authenticate", receiver.role));
+    auto authenticated = call(
+        *region, first.packet.authenticate, receiver.role, authenticationInputs,
+        site(path, "opening_authenticate", receiver.role));
     if (!authenticated)
       return authenticated.takeError();
     IDs replaying(loopEvaluation);
     replaying.push_back(requests);
     replaying.push_back(authenticated->front());
-    append_range(replaying, ArrayRef(*collected).drop_front(discovery.size() + 1));
+    append_range(replaying,
+                 ArrayRef(*collected).drop_front(discovery.size() + 1));
     append_range(replaying, loopStores);
     auto replayed = call(*region, batch.body.replay, receiver.role, replaying,
                          site(path, "query_replay", receiver.role));
@@ -1120,15 +1140,23 @@ struct PlanBuilder {
     append_range(loopInputs, evaluation);
     append_range(loopInputs, *captures);
     append_range(loopInputs, heldStores);
-    SmallVector<Attribute> carried(stateTypes.size(), builder.getStrArrayAttr({receiver.role}));
+    SmallVector<Attribute> carried(stateTypes.size(),
+                                   builder.getStrArrayAttr({receiver.role}));
     uint64_t maximum = authentication == OracleAuthentication::AtomicBlocks
-                           ? 1 : std::max(uint64_t(1), selection.leaves);
-    auto final = make(block, "protocol.repeat", stateTypes, loopInputs,
+                           ? 1
+                           : std::max(uint64_t(1), selection.leaves);
+    auto final = make(
+        block, "protocol.repeat", stateTypes, loopInputs,
         attrs({text("site", site(path, "query_requests", receiver.role)),
-               builder.getNamedAttr("carried", builder.getI64IntegerAttr(stateTypes.size())),
-               builder.getNamedAttr("maximum", builder.getI64IntegerAttr(maximum)),
-               builder.getNamedAttr("roles", builder.getStrArrayAttr({holder.role, receiver.role})),
-               builder.getNamedAttr("carried_roles", builder.getArrayAttr(carried))}), region);
+               builder.getNamedAttr(
+                   "carried", builder.getI64IntegerAttr(stateTypes.size())),
+               builder.getNamedAttr("maximum",
+                                    builder.getI64IntegerAttr(maximum)),
+               builder.getNamedAttr("roles", builder.getStrArrayAttr(
+                                                 {holder.role, receiver.role})),
+               builder.getNamedAttr("carried_roles",
+                                    builder.getArrayAttr(carried))}),
+        region);
     if (!final)
       return final.takeError();
     IDs finishing(final->begin() + discovery.size(), final->end());
@@ -1277,7 +1305,8 @@ struct PlanBuilder {
         if (answers->size() != batch->queries.size())
           return error("oracle-common-helper");
         for (auto [coordinate, answer] : zip(batch->queries, *answers)) {
-          auto originalQuery = dyn_cast_or_null<pir::OracleQueryOp>(sourceOperation(coordinate));
+          auto originalQuery =
+              dyn_cast_or_null<pir::OracleQueryOp>(sourceOperation(coordinate));
           if (!originalQuery)
             return error("oracle-query-block-source");
           values[originalQuery.getAnswer()] = answer;
@@ -1668,15 +1697,13 @@ oracleRequirements(ModuleOp source, StringRef entry,
     return std::move(failure);
   return result;
 }
-Expected<OracleCommonPlan>
-planOracleCommon(ModuleOp source, StringRef entry,
-                 const OracleCommonRequirements &requirements,
-                 ArrayRef<OracleCommonController> controllers,
-                 ArrayRef<std::vector<func::FuncOp>> allocators,
-                 ArrayRef<OracleMerkleFunctions> merkle,
-                 OracleAuthentication authentication,
-                 ArrayRef<OracleCommonRemote> remotes,
-                 ArrayRef<OracleCommonBatch> batches) {
+Expected<OracleCommonPlan> planOracleCommon(
+    ModuleOp source, StringRef entry,
+    const OracleCommonRequirements &requirements,
+    ArrayRef<OracleCommonController> controllers,
+    ArrayRef<std::vector<func::FuncOp>> allocators,
+    ArrayRef<OracleMerkleFunctions> merkle, OracleAuthentication authentication,
+    ArrayRef<OracleCommonRemote> remotes, ArrayRef<OracleCommonBatch> batches) {
   if (allocators.size() != requirements.storage.constructors.size() ||
       merkle.size() != allocators.size() ||
       requirements.realizations.size() != allocators.size())
@@ -1687,15 +1714,16 @@ planOracleCommon(ModuleOp source, StringRef entry,
   auto unit = cast<pir::ProtocolModuleOp>(source.getBody()->front());
   auto program =
       cast<pir::MathematicalOp>(SymbolTable::lookupSymbolIn(unit, entry));
-  auto schedule = planOracleQuerySchedule(source, entry, requirements, controllers,
-                                           merkle, authentication);
+  auto schedule = planOracleQuerySchedule(source, entry, requirements,
+                                          controllers, merkle, authentication);
   if (!schedule)
     return schedule.takeError();
   if (remotes.size() != schedule->remotes.size() ||
       batches.size() != schedule->batches.size())
     return error("oracle-common-helper");
   for (auto [actual, expected] : zip(remotes, schedule->remotes))
-    if (actual.receiver != expected.receiver || actual.holder != expected.holder)
+    if (actual.receiver != expected.receiver ||
+        actual.holder != expected.holder)
       return error("oracle-common-helper");
   return PlanBuilder(source, program, requirements, controllers, allocators,
                      merkle, authentication, *schedule, remotes, batches)

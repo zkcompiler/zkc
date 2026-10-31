@@ -71,10 +71,18 @@ transcript state and mutable or affine data. Each replica uses its own caller's
 administrative scope; scope tokens and outcomes are not copied as ordinary
 data. Partial deterministic operations retain their refusal behavior.
 
-The initial implementation reproduces complete needed calls, including the
-collector's evaluator-dependent empty-round failure branch. It does not remove
-that branch merely because successful requests are answer-free. Avoiding such
-producer work requires a separately checked refinement of stopped outcomes.
+Reconstruction reproduces complete needed calls. Checked oracle realization
+separates demand-only request collection from the verifier's zero-result
+availability check. The collector takes only demand state and stores; the
+distinct check takes its actual request result, original evaluator state and
+the same stores. Before grouping or exchange, an empty prefix runs the original
+ordered finishes and impossible-empty refusal; a nonempty prefix has no effect.
+Both helper bodies and the actual common call order and operands are checked
+under the [query-batch contract](../formats/oracle-realization.md#checked-query-batches).
+The verifier retains the complete check. It supplies no producer request data,
+so it introduces no evaluator dependency solely for request reconstruction.
+This refinement changes generated Local boundaries; it does not prune stopping
+instructions from an existing partial deterministic call.
 
 The original validator's calls, guards, authentication, replay and acceptance
 stay in order. Extra producer work is charged and may stop or exhaust earlier.

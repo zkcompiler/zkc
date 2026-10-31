@@ -86,7 +86,7 @@ struct Layout {
       append_range(evaluator, controller.state);
       // The maximum includes borrowed scope, all replay offsets, the complete
       // collect payload, and the conditional predicate plus closed captures.
-      if (std::max({demand.size() + evaluator.size() + stores.size() + 1,
+      if (std::max({demand.size() + stores.size() + 1,
                     evaluator.size() + roots.size() + stores.size() + 3,
                     demand.size() + roots.size() + 1,
                     evaluator.size() + stores.size() + 2}) > 512)
@@ -115,8 +115,12 @@ struct Layout {
            equal(actual.evaluatorState, evaluator) &&
            actual.requestSequence == requests &&
            actual.answerSequence == answerSequence && actual.collect &&
-           actual.replay && actual.finish && actual.collect != actual.replay &&
-           actual.collect != actual.finish && actual.replay != actual.finish;
+           actual.checkAvailable && actual.replay && actual.finish &&
+           actual.collect != actual.checkAvailable &&
+           actual.checkAvailable != actual.replay &&
+           actual.checkAvailable != actual.finish &&
+           actual.collect != actual.replay && actual.collect != actual.finish &&
+           actual.replay != actual.finish;
   }
 };
 
@@ -270,14 +274,12 @@ struct Reader {
   }
   void collect() {
     Types inputs(layout.demand);
-    append_range(inputs, layout.evaluator);
     append_range(inputs, layout.stores);
     Types outputs(layout.demand);
     outputs.push_back(layout.requests);
     append_range(outputs, Types(roots.size(), index));
     body(actual.collect, inputs, outputs, false, [&](Cursor &c, ValueRange a) {
-      auto storeArgs =
-          a.drop_front(layout.demand.size() + layout.evaluator.size());
+      auto storeArgs = a.drop_front(layout.demand.size());
       auto element = cast<data::SequenceType>(layout.requests).getElementType();
       auto requests =
           c.apply("sequence.empty", layout.requests, {}, "batch_empty_requests",
@@ -301,40 +303,51 @@ struct Reader {
             c.length(layout.requests, requests, site("batch_end", i)));
         first += count;
       }
-      auto empty = c.apply("index.equal", boolean, {ends.back(), zero},
-                           "batch_is_empty")[0];
-      Types captures(layout.evaluator);
-      append_range(captures, layout.stores);
-      c.conditional(
-          empty, a.drop_front(layout.demand.size()), "batch_empty_round",
-          [&](unsigned branch, func::FuncOp function) {
-            body(function, captures, {}, true,
-                 [&](Cursor &b, ValueRange original) {
-                   if (branch == 0) {
-                     unsigned offset = 0;
-                     for (auto [i, root] : enumerate(roots)) {
-                       unsigned count = root.controller->state.size();
-                       Values args(original.slice(offset, count));
-                       append_range(
-                           args, original.drop_front(layout.evaluator.size()));
-                       b.call(root.window->finish, args,
-                              site("batch_empty_finish", i));
-                       offset += count;
-                     }
-                     auto zero = b.number(0, "batch_empty_zero");
-                     auto impossible =
-                         b.apply("index.less", boolean, {zero, zero},
-                                 "batch_impossible_empty")[0];
-                     b.apply("control.require", {}, impossible,
-                             "batch_reject_empty");
-                   }
-                   b.finish({}, true);
-                 });
-          });
       expected.push_back(requests);
       append_range(expected, ends);
       c.finish(expected);
     });
+  }
+  void checkAvailable() {
+    Types inputs{layout.requests};
+    append_range(inputs, layout.evaluator);
+    append_range(inputs, layout.stores);
+    body(
+        actual.checkAvailable, inputs, {}, false, [&](Cursor &c, ValueRange a) {
+          auto size = c.length(layout.requests, a[0], "batch_available_length");
+          auto zero = c.number(0, "batch_available_zero");
+          auto empty = c.apply("index.equal", boolean, {size, zero},
+                               "batch_is_empty")[0];
+          Types captures(layout.evaluator);
+          append_range(captures, layout.stores);
+          c.conditional(
+              empty, a.drop_front(), "batch_empty_round",
+              [&](unsigned branch, func::FuncOp function) {
+                body(function, captures, {}, true,
+                     [&](Cursor &b, ValueRange original) {
+                       if (branch == 0) {
+                         unsigned offset = 0;
+                         for (auto [i, root] : enumerate(roots)) {
+                           unsigned count = root.controller->state.size();
+                           Values args(original.slice(offset, count));
+                           append_range(args, original.drop_front(
+                                                  layout.evaluator.size()));
+                           b.call(root.window->finish, args,
+                                  site("batch_empty_finish", i));
+                           offset += count;
+                         }
+                         auto zero = b.number(0, "batch_empty_zero");
+                         auto impossible =
+                             b.apply("index.less", boolean, {zero, zero},
+                                     "batch_impossible_empty")[0];
+                         b.apply("control.require", {}, impossible,
+                                 "batch_reject_empty");
+                       }
+                       b.finish({}, true);
+                     });
+              });
+          c.finish({});
+        });
   }
   void replay() {
     Types inputs(layout.evaluator);
@@ -395,6 +408,7 @@ Error checkOracleQueryBatch(const OracleVerificationContext &context,
     return error("oracle-batch-body");
   Reader reader(context, roots, actual, layout);
   reader.collect();
+  reader.checkAvailable();
   reader.replay();
   reader.finish();
   return reader.valid ? Error::success() : error("oracle-batch-body");

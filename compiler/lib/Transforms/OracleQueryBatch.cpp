@@ -97,7 +97,7 @@ struct Emitter {
       append_range(result.evaluatorState, controller.state);
       // Bound all additions before constructing function signatures or CFG.
       size_t d = result.demandState.size(), e = result.evaluatorState.size();
-      if (std::max({d + e + stores.size() + 1,
+      if (std::max({d + stores.size() + 1,
                     e + 2 + roots.size() + stores.size() + 1,
                     d + 1 + roots.size(), e + stores.size() + 2}) > 512)
         return error("oracle-batch-capacity");
@@ -125,8 +125,7 @@ struct Emitter {
     // Width includes scope on calls, the conditional decision and captures,
     // replay's two sequences and every root offset, and collect's full return.
     size_t width = std::max(
-        {result.demandState.size() + result.evaluatorState.size() +
-             stores.size() + 1,
+        {result.demandState.size() + stores.size() + 1,
          result.evaluatorState.size() + roots.size() + stores.size() + 3,
          result.demandState.size() + roots.size() + 1,
          result.evaluatorState.size() + stores.size() + 2});
@@ -203,15 +202,13 @@ struct Emitter {
   }
   void collect() {
     Types inputs(result.demandState.begin(), result.demandState.end());
-    append_range(inputs, result.evaluatorState);
     append_range(inputs, stores);
     Types outputs(result.demandState.begin(), result.demandState.end());
     outputs.push_back(result.requestSequence);
     append_range(outputs, Types(roots.size(), index));
     result.collect = function(
         "collect", inputs, outputs, false, [&](Control &c, ValueRange a) {
-          auto storeArgs = a.drop_front(result.demandState.size() +
-                                        result.evaluatorState.size());
+          auto storeArgs = a.drop_front(result.demandState.size());
           auto element =
               cast<data::SequenceType>(result.requestSequence).getElementType();
           auto requests =
@@ -235,10 +232,24 @@ struct Emitter {
             ends.push_back(length(c, requests, site("batch_end", i)));
             offset += count;
           }
-          auto empty = apply(c, "index.equal", boolean, {ends.back(), zero},
+          updated.push_back(requests);
+          append_range(updated, ends);
+          c.returned(updated);
+        });
+  }
+  void checkAvailable() {
+    Types inputs{result.requestSequence};
+    append_range(inputs, result.evaluatorState);
+    append_range(inputs, stores);
+    result.checkAvailable = function(
+        "check_available", inputs, {}, false, [&](Control &c, ValueRange a) {
+          auto size = length(c, a[0], "batch_available_length");
+          auto zero = number(c, 0, "batch_available_zero");
+          auto empty = apply(c, "index.equal", boolean, {size, zero},
                              "batch_is_empty")[0];
-          auto captures = a.drop_front(result.demandState.size());
-          Types captureTypes(result.evaluatorState.begin(), result.evaluatorState.end());
+          auto captures = a.drop_front();
+          Types captureTypes(result.evaluatorState.begin(),
+                             result.evaluatorState.end());
           append_range(captureTypes, stores);
           c.conditional(
               empty, captures, {}, "batch_empty_round", [&](unsigned branch) {
@@ -266,9 +277,7 @@ struct Emitter {
                       body.complete({});
                     });
               });
-          updated.push_back(requests);
-          append_range(updated, ends);
-          c.returned(updated);
+          c.returned({});
         });
   }
   void replay() {
@@ -353,6 +362,7 @@ emitOracleQueryBatch(ModuleOp candidate, ArrayRef<OracleQueryBatchRoot> roots,
   if (auto e = emitter.plan(*context, work))
     return std::move(e);
   emitter.collect();
+  emitter.checkAvailable();
   emitter.replay();
   emitter.finish();
   uint64_t operationsRemaining = emitter.operationAllowance;

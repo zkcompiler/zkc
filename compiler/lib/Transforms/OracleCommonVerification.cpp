@@ -343,6 +343,7 @@ Error checkOracleRealizationModel(
               checkOracleQueryBatch(targetContext, batchRoots, actual.body))
         return e;
       root(actual.body.collect);
+      root(actual.body.checkAvailable);
       root(actual.body.replay);
       root(actual.body.finish);
     }

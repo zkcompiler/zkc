@@ -337,21 +337,31 @@ Each `batches` row is exactly `{remotes, body}`. `remotes` is the ordered list o
 indexes into the entry's remote inventory, one per source root occurrence;
 repeated indexes retain distinct occurrences. `body` has exactly
 `{demand_state, evaluator_state, request_sequence, answer_sequence, collect,
-replay, finish}`. State vectors concatenate each selected root's state in source
-order. Request and answer sequences and the immutable ordered store types must
+check_available, replay, finish}`. This is the single current `/0` shape; the
+former helper inventory is not accepted. State vectors concatenate each selected
+root's state in source order. Request and answer sequences and the immutable ordered store types must
 agree across roots. All helper signatures borrow scope and return explicit
 outcomes, and must fit native source execution's width limit of 512.
 The batch reader consumes windows already independently checked by its caller.
 
 The common body initializes demand and evaluator states with each root's exact
 source reference and position and binds the actual immutable stores. The batch
-`collect` helper traverses root windows in order, carrying one request sequence
-and a blocked flag. It returns all updated demand states, that sequence and
+`collect` helper takes only demand state and stores and traverses root windows
+in order, carrying one request sequence and a blocked flag. It returns all
+updated demand states, that sequence and
 one unsigned end offset per root. End offsets retain empty and repeated ranges.
-Normal discovery does not evaluate answers. On an empty positive round,
-`collect` finishes every root on its original evaluator state in source order
-before rejecting an impossible successful empty round. The first actual source
-failure propagates before that internal guard, and no empty packet is sent.
+Discovery has no evaluator inputs and does not evaluate answers. Immediately
+after collection and before grouping or exchange, the verifier calls the
+distinct `check_available` helper with the actual collected request sequence,
+original evaluator states and the same stores. This helper returns no data.
+It tests the actual sequence length against zero. On an empty positive round,
+it finishes every root on its original evaluator state in source order before
+rejecting an impossible successful empty round. The first actual source failure
+propagates before that internal guard, and no empty packet is sent. On a
+nonempty prefix the helper has no effect. The batch reader independently checks
+both complete helper bodies, exact signatures, captures and ordered finishes;
+the common reader requires the actual check call with exact operands in this
+position. An unused correct helper cannot replace it.
 
 For a nonempty round, the common body calls the actual packet grouping helper,
 sends the physical requests, dispatches the holder opening, receives responses

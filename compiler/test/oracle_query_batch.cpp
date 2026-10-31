@@ -112,7 +112,8 @@ void checkModels(const Input &input, ModuleOp prepared) {
 Fixture emitted(MLIRContext &context, uint64_t capacity = 2,
                 bool emptyVirtual = false) {
   Fixture fixture;
-  auto path = std::filesystem::path(ZKC_ORACLE_FIXTURES) / "query-constructors.mlir";
+  auto path =
+      std::filesystem::path(ZKC_ORACLE_FIXTURES) / "query-constructors.mlir";
   std::ifstream file(path);
   require(bool(file), "cannot read batch source fixture");
   std::string text((std::istreambuf_iterator<char>(file)), {});
@@ -242,8 +243,8 @@ void rebind(Input &input) {
           &root.window.collect, &root.window.replay, &root.window.finish})
       bind(*helper);
   }
-  for (auto *helper :
-       {&input.batch.collect, &input.batch.replay, &input.batch.finish})
+  for (auto *helper : {&input.batch.collect, &input.batch.checkAvailable,
+                       &input.batch.replay, &input.batch.finish})
     bind(*helper);
 }
 Input copyInput(const Input &original, MLIRContext &context, bool bind = true) {
@@ -397,15 +398,28 @@ void effects(const Input &input) {
   require(calls(input.batch.replay) == replay,
           "replay advances beyond its root segments");
   require(calls(input.batch.finish) == finish, "finish changes source order");
-  unsigned decisions = 0;
+  SmallVector<Type> collectionInputs(input.batch.demandState.begin(),
+                                     input.batch.demandState.end());
+  append_range(collectionInputs, input.entries.front().controller.stores);
+  require(equal(scopedDataSignature(input.batch.collect).getInputs(),
+                collectionInputs),
+          "collection retains evaluator inputs");
+  require(scopedDataSignature(input.batch.checkAvailable).getNumResults() == 0,
+          "availability check returns request dependencies");
   for (const auto &step :
        closure.bodies.at(func::FuncOp(input.batch.collect).getSymName().str()))
+    require(!isa<exec::TestOp>(step.operation),
+            "collection retains the evaluator-dependent empty branch");
+  unsigned decisions = 0;
+  for (const auto &step : closure.bodies.at(
+           func::FuncOp(input.batch.checkAvailable).getSymName().str()))
     if (isa<exec::TestOp>(step.operation)) {
       ++decisions;
       require(step.regions.size() == 2 && calls(step.regions[0]) == finish &&
                   calls(step.regions[1]).empty(),
               "empty-only evaluator calls were lost");
-      auto &empty = closure.bodies.at(func::FuncOp(step.regions[0]).getSymName().str());
+      auto &empty =
+          closure.bodies.at(func::FuncOp(step.regions[0]).getSymName().str());
       require(empty.size() == input.entries.size() + 4 &&
                   isa<exec::ApplyOp>(empty[empty.size() - 2].operation),
               "empty failure guard does not follow every finish");
@@ -458,7 +472,9 @@ int main() {
         take(emitOracleQueryBatch(*input.candidate, roots, input.work));
     auto again =
         take(emitOracleQueryBatch(*input.candidate, roots, input.work));
-    require(single.collect != again.collect && single.replay != again.replay &&
+    require(single.collect != again.collect &&
+                single.checkAvailable != again.checkAvailable &&
+                single.replay != again.replay &&
                 input.work.operations < before.operations &&
                 input.work.slots < before.slots,
             "batch reset work or reused helper names");
@@ -504,7 +520,7 @@ int main() {
                              "last end guard checks previous root",
                              "omitted last end guard",
                              "omitted empty guard",
-                             "early finish during discovery",
+                             "finish before emptiness decision",
                              "finish on nonempty branch",
                              "extra call",
                              "discovery stores",
@@ -529,7 +545,12 @@ int main() {
                              "empty root finish order",
                              "empty guard precedes source finish",
                              "public root window helper",
-                             "batch helper marked as region"};
+                             "batch helper marked as region",
+                             "missing availability helper",
+                             "substituted availability helper",
+                             "availability length from another sequence",
+                             "availability emptiness is tautological",
+                             "public availability helper"};
   for (auto [mutation, name] : enumerate(mutations))
     cases.run("batch mutation: " + Twine(name), [&, mutation = mutation] {
       auto input = copyInput(base, context);
@@ -591,8 +612,8 @@ int main() {
         omitGuard(input, mutation == 13 ? "batch_admit_last_end"
                                         : "batch_reject_empty");
       else if (mutation == 15) {
-        auto *before = site(input, "batch_collect_0");
-        auto a = input.batch.collect.getArguments().drop_front(1 + d);
+        auto *before = site(input, "batch_available_length");
+        auto a = input.batch.checkAvailable.getArguments().drop_front(2);
         auto args = evaluation(input, a, 0);
         insertBefore(before, [&](Control &c, OpBuilder &b) {
           invoke(c, b, input.entries[0].window.finish, args,
@@ -664,7 +685,7 @@ int main() {
             ->setOperand(d + 2,
                          returned(input.batch.collect)->getOperand(d + 1));
       else if (mutation == 36) {
-        input.batch.collect.walk([&](runtime::EnterScopeOp enter) {
+        input.batch.checkAvailable.walk([&](runtime::EnterScopeOp enter) {
           if (enter.getSite() == "batch_empty_round")
             enter.getInputsMutable()[OracleQueryController::Position].set(
                 enter.getInputs()[OracleQueryController::Instance]);
@@ -699,8 +720,37 @@ int main() {
         });
       } else if (mutation == 39)
         input.entries[0].window.collect.setPublic();
-      else
+      else if (mutation == 40)
         input.batch.collect->setAttr("runtime.region", UnitAttr::get(&context));
+      else if (mutation == 41) {
+        input.batch.checkAvailable = {};
+        refused(checkBatch(input));
+        return;
+      } else if (mutation == 42) {
+        input.batch.checkAvailable = input.batch.finish;
+        refused(checkBatch(input));
+        return;
+      } else if (mutation == 43) {
+        auto op = apply("batch_available_length");
+        insertBefore(op, [&](Control &c, OpBuilder &b) {
+          mathematical::RealizationEmitter bindings(
+              unit(*input.candidate), "_batch_empty_sequence_binding_");
+          auto element = cast<data::SequenceType>(input.batch.requestSequence)
+                             .getElementType();
+          auto binding = bindings.binding(
+              b, op.getLoc(), {"sequence.empty", {TypeAttr::get(element)}, ""});
+          auto empty = c.invoke(
+              "exec.apply", input.batch.requestSequence, c.scoped({}),
+              {b.getNamedAttr("binding", binding),
+               b.getNamedAttr("parameters", b.getArrayAttr({})),
+               b.getNamedAttr("site", b.getStringAttr("unrelated_empty"))})[0];
+          op.getInputsMutable()[0].set(empty);
+        });
+      } else if (mutation == 44) {
+        auto op = apply("batch_is_empty");
+        op.getInputsMutable()[0].set(op.getInputs()[1]);
+      } else
+        input.batch.checkAvailable.setPublic();
       rejects(input);
     });
 
@@ -775,13 +825,17 @@ int main() {
     require(!current, "misplaced helper admitted a batch context");
     consumeError(current.takeError());
   });
-  cases.run("aggregate width refuses before source execution assertions", [&] {
+  cases.run("batch root and aggregate widths refuse before construction", [&] {
     auto input = copyInput(base, context);
     auto first = input.roots()[0];
-    size_t perRoot =
-        first.demand->state.size() + first.controller->state.size();
-    unsigned admitted = (511 - first.controller->stores.size()) / perRoot;
-    require(admitted > 0 && admitted < 32,
+    size_t stores = first.controller->stores.size();
+    // Demand collection and receiver evaluation have separate signatures.
+    // The receiver replay also carries the request/answer/cursor ports.
+    unsigned admitted =
+        std::min({size_t(32), size_t(511 - stores) / first.demand->state.size(),
+                  size_t(509 - stores) / (first.controller->state.size() + 1),
+                  size_t(511) / (first.demand->state.size() + 1)});
+    require(admitted > 0 && admitted <= 32,
             "test must reach the aggregate width boundary");
     SmallVector<OracleQueryBatchRoot> roots(admitted, first);
     auto widest =
@@ -793,7 +847,7 @@ int main() {
     roots.push_back(first);
     refuses(emitOracleQueryBatch(*input.candidate, roots, input.work),
             "oracle-batch-capacity");
-    roots.resize(32, first);
+    roots.resize(33, first);
     refuses(emitOracleQueryBatch(*input.candidate, roots, input.work),
             "oracle-batch-capacity");
     require(print(*input.candidate) == frozen &&

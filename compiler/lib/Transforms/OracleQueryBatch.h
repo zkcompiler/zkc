@@ -19,12 +19,13 @@ struct OracleQueryBatch {
   mlir::Type requestSequence, answerSequence;
   // All signatures below borrow scope and return an explicit outcome. Shared
   // immutable stores occur once, in the checked controllers' common order.
-  // collect(demandState..., evaluatorState..., stores...)
+  // collect(demandState..., stores...)
   //   -> (updated demandState..., requests, end0:ui64, ..., endN-1:ui64).
+  // checkAvailable(requests, evaluatorState..., stores...) -> ().
   // replay(evaluatorState..., requests, answers, end0, ..., endN-1, stores...)
   //   -> updated evaluatorState....
   // finish(evaluatorState..., stores...) -> one exact logical answer per root.
-  mlir::func::FuncOp collect, replay, finish;
+  mlir::func::FuncOp collect, checkAvailable, replay, finish;
 };
 
 // roots has 1..32 entries in source window order. All windows have the same
@@ -34,7 +35,10 @@ struct OracleQueryBatch {
 // source occurrence and binds exact store identity; this primitive checks only
 // their composition and does not reread each window's closure.
 //
-// Normal discovery never evaluates answers. An empty prefix finishes every root
+// Collection never takes evaluator state or evaluates answers. The caller must
+// invoke checkAvailable immediately after collect, before grouping or exchange.
+// It returns no data and has no effect for a nonempty request sequence.
+// An empty prefix finishes every root
 // on its ORIGINAL evaluator state, in source order, before
 // control.require(false) diagnoses an impossible empty positive round. Any
 // source failure propagates first. No empty packet is exchanged. CommonPlan

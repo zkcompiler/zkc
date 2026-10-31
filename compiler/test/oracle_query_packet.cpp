@@ -126,7 +126,8 @@ Input emitted(MLIRContext &context, bool sameKind = false,
   input.order = order;
   // This is the existing source fixture with a recurrent virtual and two
   // distinct committed base constructors, including an unused child answer.
-  auto path = std::filesystem::path(ZKC_ORACLE_FIXTURES) / "query-constructors.mlir";
+  auto path =
+      std::filesystem::path(ZKC_ORACLE_FIXTURES) / "query-constructors.mlir";
   std::ifstream fixture(path);
   require(bool(fixture), "cannot read constructor source fixture");
   std::string text((std::istreambuf_iterator<char>(fixture)), {});
@@ -421,6 +422,10 @@ struct Execution {
             value = bool(a) && bool(b);
           else if (contract == "bool.not")
             value = !a;
+          else if (contract == "index.wrapping_sub")
+            value = a - b;
+          else if (contract == "index.bit_and")
+            value = a & b;
           else if (contract == "index.add") {
             if (b > std::numeric_limits<uint64_t>::max() - a)
               throw ModelStop();

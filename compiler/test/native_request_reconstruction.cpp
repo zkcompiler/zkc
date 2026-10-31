@@ -496,12 +496,11 @@ void direct(Cases &cases, ModuleOp source, const NativeProofPolicy &p,
         },
         "native-transcript-correspondence");
     mutate(
-        "receiver store changed to earlier same-type store",
+        "oracle store changed to earlier same-type store",
         [](ModuleOp m) {
           bool changed = false;
-          participant(m, "P").walk([&](pir::LocalCallOp call) {
-            if (changed || !call.getSite().starts_with("_transcript_") ||
-                call.getCallee().starts_with("_transcript_"))
+          m.walk([&](pir::LocalCallOp call) {
+            if (changed || !call.getCallee().starts_with("_oracle_"))
               return;
             for (auto [i, input] : enumerate(call.getInputs())) {
               if (!isa<data::SequenceType>(input.getType()))
@@ -518,7 +517,7 @@ void direct(Cases &cases, ModuleOp source, const NativeProofPolicy &p,
               }
             }
           });
-          require(changed, "actual receiver store versions required");
+          require(changed, "actual oracle store versions required");
         },
         "native-transcript-correspondence");
     mutate("all authentication before answer replay", [](ModuleOp m) {

@@ -102,6 +102,7 @@ contract change, not the most recent documentation-only registration.
 | Retired proposal `zkc.lean-interface/0` | [Shared interfaces plan](../roadmap.md#shared-interfaces-before-implementation) | Frontend / Language | Existing declarations and bound requests → frontend resolution | Retired proposal: extend existing transports; no parallel format is admitted | None | — |
 | Restricted logical aggregates; version unassigned | [Logical aggregate plan](../roadmap.md#shared-interfaces-before-implementation) | IR / Protocol | Future frontend claim views → Protocol formation and Lean reader | Designed: typed field paths and role components; ordinary data/codec boundaries continue to exclude handles | None | — |
 | Native index blocks and gated requests, version 0 | [Request bytes](formats/native-index-block.md), [construction](ir/construction.md#native-index-blocks) | IR / Construction | Native construction → independent actual-body and Rust readers, CPU bounded search/check, SDK transport | Native compiler/runtime integration; independent Lean adaptation remains open | No registered gate premise or Fiat–Shamir theorem | — |
+| CPU retained-value profile | [Native capacity](runtime/capacity.md#retained-values-and-logical-work), Runtime / CPU | CPU value constructors, preflight and codecs → VM retention and shared execution ledgers | 256-byte inline slots; BN254 target groups use charged immutable backing; capability and larger shared group profiles remain separate | Native resource accounting only; no new formal claim | [#193](https://github.com/zkcompiler/zkc/pull/193) |
 | Installed transcript and Merkle suites | [Transcripts](ir/construction.md), [Merkle schemes](domains/oracles.md), [services](runtime/services.md) | Runtime / Providers | [Backend registry](../../crates/zkc-cpu/src/backend/registry.rs) → Contracts selection, native invocation, Lean installed vocabulary | Native quartic Keccak rows, randomness and hash-chain transcript installed; independent Lean coverage remains separate | Kernel interpretation remains explicit | [#174](https://github.com/zkcompiler/zkc/pull/174) |
 
 For designed rows, the linked roadmap is a delivery contract, not a wire
@@ -220,6 +221,15 @@ program semantics: artifact identity and the fixed expected proposition still
 change. No mapping above is inferred from equal spans or string prefixes.
 
 ## Shared oracle-stack acceptance boundary
+
+The native [query-batch record](formats/oracle-realization.md#checked-query-batches)
+uses the single `/0` helper inventory including mandatory `check_available`.
+The compiler producer and exact record reader migrate together. Independent
+batch and complete Common readers check demand/store-only collection and the
+verifier's actual zero-result empty-prefix check before grouping or exchange.
+The [request reconstruction contract](ir/verifier-requests.md) continues to
+require complete needed Local calls; this boundary split grants no partial-call
+pruning and changes no runtime carrier or independent formal model.
 
 The common acceptance client is FRI/STARK written in the agreed frontend
 language, using KoalaBear with its quartic extension and Keccak Merkle rows.

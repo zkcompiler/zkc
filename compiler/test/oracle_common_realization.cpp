@@ -1,10 +1,13 @@
 #include "../lib/Transforms/OracleCommonRealization.h"
+#include "../lib/Transforms/RealizedProtocol.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "zkc/Compiler/NativeProof.h"
 #include "zkc/Compiler/Observation.h"
 #include "zkc/Compiler/Run.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Registry.h"
@@ -15,6 +18,7 @@
 #include "llvm/Support/JSON.h"
 #include <filesystem>
 #include <fstream>
+#include <set>
 using namespace mlir;
 using namespace llvm;
 using namespace zkc;
@@ -69,6 +73,116 @@ func::FuncOp helper(ModuleOp module, func::FuncOp original) {
       SymbolTable::lookupSymbolIn(unit, original.getSymName()));
   require(bool(found), "fresh candidate lost helper");
   return found;
+}
+// Follow actual call/region references from each constructed participant. A
+// declaration remaining in the shared module says nothing about role work.
+std::set<std::string> reachableHelpers(ModuleOp module, StringRef role) {
+  auto unit = cast<pir::ProtocolModuleOp>(module.getBody()->front());
+  SmallVector<Operation *> pending;
+  for (auto participant : unit.getBody().front().getOps<pir::ParticipantOp>())
+    if (participant.getRole() == role)
+      pending.push_back(participant);
+  require(pending.size() == 1, "missing constructed participant");
+  std::set<std::string> result;
+  while (!pending.empty()) {
+    auto uses = SymbolTable::getSymbolUses(pending.pop_back_val());
+    require(bool(uses), "cannot read actual helper references");
+    for (const auto &use : *uses)
+      if (auto function = dyn_cast_or_null<func::FuncOp>(
+              SymbolTable::lookupSymbolIn(unit, use.getSymbolRef())))
+        if (result.insert(function.getSymName().str()).second)
+          pending.push_back(function);
+  }
+  return result;
+}
+void requestIsolation(Cases &cases, MLIRContext &context) {
+  cases.run("native requests exclude verifier evaluator closures", [&] {
+    auto source = parseSourceString<ModuleOp>(fixtureText("query-constructors"),
+                                              &context);
+    require(bool(source), "request isolation source");
+    auto unit = cast<pir::ProtocolModuleOp>(source->getBody()->front());
+    auto program =
+        *unit.getBody().front().getOps<pir::MathematicalOp>().begin();
+    auto &body = program.getBody().front();
+    OpBuilder b(&context);
+    auto random =
+        pir::ServiceReferenceType::get(&context, "random.bls12-381.fr/0");
+    auto coins = body.addArgument(random, program.getLoc());
+    auto first = *body.getOps<pir::OracleQueryOp>().begin();
+    b.setInsertionPoint(first);
+    auto draw = pir::QueryOp::create(
+        b, program.getLoc(), algebra::FieldType::get(&context, "bls12-381.fr"),
+        coins, ValueRange{}, "draw", "V", "draw");
+    pir::ExchangeOp::create(b, program.getLoc(), draw.getResult(0), "challenge",
+                            "V", "P");
+    auto returned = cast<pir::MathematicalReturnOp>(body.back());
+    b.setInsertionPoint(returned);
+    auto ok = algebra::FieldEqualOp::create(b, program.getLoc(), b.getI1Type(),
+                                            returned.getOperand(0),
+                                            returned.getOperand(0));
+    returned->setOperands(ValueRange{ok.getResult()});
+    SmallVector<Type> inputs(program.getFunctionType().getInputs());
+    inputs.push_back(random);
+    program.setFunctionType(b.getFunctionType(inputs, {b.getI1Type()}));
+    SmallVector<Attribute> owners(program.getInputRoles().begin(),
+                                  program.getInputRoles().end());
+    owners[3] = b.getStrArrayAttr({"P", "V"});
+    owners.push_back(b.getStrArrayAttr({"V"}));
+    program.setInputRolesAttr(b.getArrayAttr(owners));
+    program.setOutputRolesAttr(b.getArrayAttr({b.getStrArrayAttr({"V"})}));
+    NativeProofPolicy policy;
+    policy.entry = "main";
+    policy.producer = "P";
+    policy.validator = "V";
+    policy.suite = "merlin3.bls12-381.fr64be/0";
+    policy.services = {5};
+    policy.publicInputs = {2, 3, 4};
+    policy.draws = {{"draw", "challenge"}};
+    OracleRealizationPolicy oracle;
+    oracle.authentication = OracleAuthentication::PerQuery;
+    auto prepared = mathematical::prepareProtocol(*source, false);
+    require(bool(prepared), "request isolation preparation");
+    auto roots = take(resolveOracleRealizationSelection(*prepared, oracle));
+    for (auto [i, root] : enumerate(roots))
+      root.realization = {
+          i == 0 ? "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"
+                 : "rows.merkle-keccak256.koala-bear/0",
+          OracleLeafGrouping::Individual, OracleLeafOrder::Natural};
+    oracle.roots = std::move(roots);
+    auto built = take(constructNativeProof(*source, policy, {}, oracle));
+    checked(checkNativeProof(*source, *built.module, policy, {}, oracle));
+    auto producer = reachableHelpers(*built.module, "P");
+    auto verifier = reachableHelpers(*built.module, "V");
+    auto record = take(json::parse(built.realization->realizationRecord()));
+    auto &entry =
+        *record.getAsObject()->getArray("entries")->front().getAsObject();
+    for (auto &row : *entry.getArray("batches")) {
+      auto &batch = *row.getAsObject()->getObject("body");
+      auto collect = batch.getString("collect")->str();
+      require(producer.count(collect) && verifier.count(collect),
+              "actual collect was not reconstructed");
+      for (StringRef field : {"check_available", "replay", "finish"}) {
+        auto name = batch.getString(field)->str();
+        require(!producer.count(name) && verifier.count(name),
+                "verifier-only evaluator helper is a producer dependency: " +
+                    name);
+      }
+    }
+    for (auto &row : *entry.getArray("remotes")) {
+      auto &window = *row.getAsObject()->getObject("window");
+      for (StringRef field : {"replay", "finish"}) {
+        auto name = window.getString(field)->str();
+        require(!producer.count(name) && verifier.count(name),
+                "root evaluator remains a producer dependency: " + name);
+      }
+      auto authenticate = row.getAsObject()
+                              ->getObject("packet")
+                              ->getString("authenticate")
+                              ->str();
+      require(!producer.count(authenticate) && verifier.count(authenticate),
+              "packet authentication remains a producer request dependency");
+    }
+  });
 }
 // These are whole-candidate checks: every mutation is read from a fresh parsed
 // candidate under the frozen original, without reusing producer-owned handles.
@@ -243,6 +357,77 @@ void dynamicWindows(Cases &cases, MLIRContext &context) {
     changeRecord("missing fresh helper", [&](auto &row) {
       (*row.getArray("batches")->front().getAsObject()->getObject(
           "body"))["collect"] = "absent";
+    });
+    changeRecord("old batch helper inventory", [&](auto &row) {
+      row.getArray("batches")->front().getAsObject()->getObject("body")->erase(
+          "check_available");
+    });
+    changeRecord("missing availability helper", [&](auto &row) {
+      (*row.getArray("batches")->front().getAsObject()->getObject(
+          "body"))["check_available"] = "absent";
+    });
+    mutate("missing actual availability check", [&](ModuleOp fresh) {
+      commonCall(fresh, "query_check_available")->erase();
+    });
+    mutate("availability check after grouping", [&](ModuleOp fresh) {
+      commonCall(fresh, "query_check_available")
+          ->moveAfter(commonCall(fresh, "opening_group"));
+    });
+    mutate("availability check after exchange", [&](ModuleOp fresh) {
+      pir::ExchangeOp exchange;
+      fresh.walk([&](pir::ExchangeOp op) {
+        if (!exchange && op.getSite().ends_with("_opening_request"))
+          exchange = op;
+      });
+      require(bool(exchange), "missing request exchange");
+      commonCall(fresh, "query_check_available")->moveAfter(exchange);
+    });
+    mutate(
+        "substituted check beside unused correct helper", [&](ModuleOp fresh) {
+          auto good = helper(fresh, entry.batches.front().body.checkAvailable);
+          auto bad = cast<func::FuncOp>(good->clone());
+          bad.setSymName("substituted_availability_check");
+          Builder builder(&context);
+          bad->setAttr(
+              "runtime.origin",
+              builder.getArrayAttr({builder.getStringAttr(bad.getSymName()),
+                                    builder.getArrayAttr({})}));
+          good->getBlock()->push_back(bad);
+          commonCall(fresh, "query_check_available")
+              ->setAttr("callee", FlatSymbolRefAttr::get(bad));
+        });
+    mutate("availability request substitution", [&](ModuleOp fresh) {
+      auto check = commonCall(fresh, "query_check_available");
+      auto group = commonCall(fresh, "opening_group");
+      check->moveAfter(group);
+      check.getInputsMutable()[0].set(group.getResult(0));
+    });
+    mutate("availability evaluator root substitution", [&](ModuleOp fresh) {
+      auto check = commonCall(fresh, "query_check_available");
+      unsigned state =
+          entry.controllers[entry.remotes.front().receiver].body.state.size();
+      check.getInputsMutable()[1].set(check.getInputs()[1 + state]);
+    });
+    mutate("availability store substitution", [&](ModuleOp fresh) {
+      auto check = commonCall(fresh, "query_check_available");
+      auto original = cast<BlockArgument>(check.getInputs().back());
+      auto repeat = check->getParentOfType<pir::RepeatOp>();
+      auto incoming = repeat.getInputs()[original.getArgNumber()];
+      Value stale;
+      for (auto &op : *repeat->getBlock()) {
+        if (&op == repeat.getOperation())
+          break;
+        for (Value value : op.getResults())
+          if (!stale && value != incoming &&
+              value.getType() == incoming.getType())
+            stale = value;
+      }
+      require(bool(stale), "missing distinct immutable store");
+      auto &body = repeat.getBody().front();
+      body.addArgument(stale.getType(), check.getLoc());
+      repeat->insertOperands(repeat->getNumOperands(), stale);
+      check.getInputsMutable()[check.getInputs().size() - 1].set(
+          body.getArguments().back());
     });
     mutate("wrong source position", [&](ModuleOp fresh) {
       auto call = commonCall(fresh, "query_initialize");
@@ -528,6 +713,7 @@ module { "protocol.module"() ({
     refused(checkOracleRealization(*prepared, *fresh, record, policy),
             "oracle-common-body");
   });
+  requestIsolation(cases, context);
 }
 } // namespace
 int main(int argc, char **argv) {

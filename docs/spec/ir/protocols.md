@@ -215,9 +215,13 @@ require a positive power-of-two `N` and `q < N`. Individual grouping has width
 `W = 1`; antipodal grouping requires `N >= 2`, has `W = 2` and places logical
 rows `i` and `i + N/2` in one leaf. With `H = N/W`, the slot is `q/H` and the
 logical leaf is `q % H`. Optional bit reversal permutes exactly `log2(H)` leaf
-bits after grouping and preserves the order within each leaf. Shape checking and
-bit reversal use ordinary checked index operations and an early-ending scoped
-loop; no field conversion or new runtime primitive defines the query index.
+bits after grouping and preserves the order within each leaf. Positive rows and
+paired divisibility establish `H > 0`. Before leaf and slot arithmetic,
+power-of-two admission checks `H & H.wrapping_sub(1) == 0` using total `ui64`
+index operations. Natural order returns directly; bit reversal alone uses an
+early-ending scoped loop. No field conversion or new runtime primitive defines
+the query index. Invalid nonpower heights stop at the generated `admit_power`
+guard, replacing the former loop's repeated `admit_span` check.
 
 Commit preparation requires exactly `N` field values, transposes the two halves
 for antipodal grouping and then applies the chosen leaf permutation. The selected

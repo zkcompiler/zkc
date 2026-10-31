@@ -28,8 +28,8 @@ LogicalResult verifyRecordedType(Type type) {
   if (auto handle = dyn_cast<protocol_ir::OracleHandleType>(type))
     return protocol_ir::OracleHandleType::verify(emit, handle.getKind());
   if (auto sequence = dyn_cast<protocol_ir::OracleSequenceType>(type))
-    return protocol_ir::OracleSequenceType::verify(
-        emit, sequence.getKind(), sequence.getMaximum());
+    return protocol_ir::OracleSequenceType::verify(emit, sequence.getKind(),
+                                                   sequence.getMaximum());
   return verifyLogicalType(emit, type);
 }
 // A closed schema, with one canonical intern table for complete source types.
@@ -389,6 +389,7 @@ struct Codec {
       object.field("request_sequence", value.requestSequence);
       object.field("answer_sequence", value.answerSequence);
       object.field("collect", value.collect);
+      object.field("check_available", value.checkAvailable);
       object.field("replay", value.replay);
       object.field("finish", value.finish);
     });
