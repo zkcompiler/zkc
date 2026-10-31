@@ -205,7 +205,7 @@ pub protocol Commit<C: Configuration, LogSize: nat, TerminalLog: nat,
 pub protocol Positions<C: Configuration, LogSize: nat, TerminalLog: nat,
                        Rounds: nat, Queries: nat> roles(P,V)
     (state: State<C,LogSize,TerminalLog,Rounds,Queries> @P->V)
-    -> (positions: Indices @(P,V)) {
+    -> (positions: Indices @(P,V)) where () {
   let positions = state.positions;
   return (positions = positions);
 }
@@ -214,7 +214,7 @@ pub protocol Positions<C: Configuration, LogSize: nat, TerminalLog: nat,
 pub protocol Initial<C: Configuration, LogSize: nat, TerminalLog: nat,
                      Rounds: nat, Queries: nat> roles(P,V)
     (state: State<C,LogSize,TerminalLog,Rounds,Queries> @P->V)
-    -> (initial: Oracle<FieldTable<C::Value>> @P->V) {
+    -> (initial: Oracle<FieldTable<C::Value>> @P->V) where () {
   let initial = state.initial;
   return (initial = initial);
 }
