@@ -457,7 +457,7 @@ int main() {
         expected.push_back("zkc-simplify-participant");
       if (fix)
         expected.push_back("zkc-fix-polynomial-factors");
-      expected.push_back("zkc-lower-math");
+      expected.push_back("zkc-lower-closed-participant");
       expected.push_back("zkc-select-physical");
       auto *passes = compiled->getAsObject()->getArray("post_analysis_passes");
       require(passes && *passes == expected,
