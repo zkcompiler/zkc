@@ -1,0 +1,8 @@
+format = "zkc.project/0"
+
+[modules]
+reusable_aggregate = "two-batches.zkc"
+batch_opening = "../../bridges/construction/fixtures/batch-opening.zkc"
+
+[dependencies]
+traversal = "../../../libraries/core/traversal"

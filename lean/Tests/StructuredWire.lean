@@ -6,16 +6,20 @@ tests deliberately do not import admission or assign meanings to declarations. -
 set_option autoImplicit false
 
 namespace Tests.StructuredWire
-open Lean Zkc.Source.Structured
+open Lean Zkc.Source Zkc.Source.Structured
 
 private def arr (values : List Json) : Json := .arr values.toArray
 private def strings (values : List String) : Json := arr (values.map Json.str)
 private def numbers (values : List Nat) : Json := arr (values.map toJson)
 private def empty : Json := arr []
 private def digest : String := "sha256:" ++ String.ofList (List.replicate 64 '0')
-private def boolTy : Json := strings ["bool"]
-private def fieldTy : Json := strings ["field", scalarDomain]
-private def groupTy : Json := strings ["group", groupDomain]
+private def app (name : String) (arguments : List Json := []) : Json :=
+  arr [.str "apply", .str name, arr arguments]
+private def domainType (name sort identity : String) : Json :=
+  app name [strings ["domain", sort, identity]]
+private def boolTy : Json := app "bool"
+private def fieldTy : Json := domainType "field" "Field" scalarDomain
+private def groupTy : Json := domainType "group" "Group" groupDomain
 private def serviceTy : Json := strings ["service", scalarServiceContract]
 
 private def ports : Json := arr [
@@ -70,7 +74,7 @@ private def otherRoot : Json := arr [
   arr [.str "other", empty], body]
 
 private def domainFields : List Json := [
-  .str "domain", .str "items", arr [strings ["vector", scalarDomain]],
+  .str "domain", .str "items", arr [domainType "vector" "Field" scalarDomain],
   arr [arr [.str "indices", toJson (0 : Nat), toJson (0 : Nat)]], toJson (0 : Nat)]
 
 private def finiteFields : List Json := [
@@ -120,9 +124,24 @@ private def hasError {α : Type} (result : Except String α) (code : String) : B
   | .error actual => actual == code
   | .ok _ => false
 
-example : Format.type (strings ["group", groupDomain]) = .ok (.group groupDomain) := rfl
+example : Format.type groupTy = .ok (.group groupDomain) := by
+  have shape : LogicalFormat.checkTypeAt 64 groupTy = .ok () := by
+    rw [LogicalFormat.checkTypeAt]
+    change LogicalFormat.checkArgumentsAt 63 [.domain "Group"]
+      [strings ["domain", "Group", groupDomain]] = .ok ()
+    rw [LogicalFormat.checkArgumentsAt]
+    change (do
+      let (actual, _) ← LogicalFormat.domain (strings ["domain", "Group", groupDomain])
+      if actual != "Group" then throw "logical-argument-kind"
+      LogicalFormat.checkArgumentsAt 63 [] []) = Except.ok ()
+    rw [LogicalFormat.checkArgumentsAt]
+    rfl
+  simp only [Format.type, Format.typeAt, shape]
+  rfl
 example : Format.type (strings ["service", scalarServiceContract]) =
-    .ok (.service scalarServiceContract) := rfl
+    .ok (.service scalarServiceContract) := by
+  simp only [Format.type, Format.typeAt, LogicalFormat.checkWork, LogicalFormat.checkTypeAt]
+  rfl
 example : Format.descriptor (strings ["group.scale", groupDomain, scalarDomain]) =
     .ok (.groupScale groupDomain scalarDomain) := rfl
 example : Format.descriptor (arr [.str "statement", .str "Proof", strings ["V", "P"],
@@ -214,13 +233,13 @@ private def run : IO Unit := do
         (Format.descriptor (.arr (fields.push .null))) "structured-operation-unsupported")
       check s!"descriptor-missing: {op.compress}" (hasError
         (Format.descriptor (arr (fields.toList.take (fields.size - 1)))) "structured-operation-unsupported")
-  for ty in [boolTy, strings ["index"], fieldTy, strings ["vector", scalarDomain], groupTy, serviceTy] do
+  for ty in [boolTy, app "index", fieldTy, domainType "vector" "Field" scalarDomain, groupTy, serviceTy] do
     check s!"type-valid: {ty.compress}" (succeeds (Format.type ty))
     if let .arr fields := ty then
       check s!"type-extra: {ty.compress}" (hasError
-        (Format.type (.arr (fields.push .null))) "structured-type-unsupported")
+        (Format.type (.arr (fields.push .null))) "logical-type")
       check s!"type-missing: {ty.compress}" (hasError
-        (Format.type (arr (fields.toList.take (fields.size - 1)))) "structured-type-unsupported")
+        (Format.type (arr (fields.toList.take (fields.size - 1)))) "logical-type")
 
   for (label, fields, decoder, code) in [
       ("function", rootFields, fun j => succeeds (Format.definition j), "structured-definition"),
@@ -247,13 +266,13 @@ private def run : IO Unit := do
     "structured-relation-static-arguments")
 
   for (label, value, code) in [
-      ("unknown-type", strings ["tuple"], "structured-type-unsupported"),
-      ("service-empty", strings ["service", ""], "structured-string"),
-      ("field-empty", strings ["field", ""], "structured-string"),
-      ("type-not-array", .str "bool", "structured-array")] do
+      ("unknown-type", app "missing", "logical-constructor"),
+      ("service-empty", strings ["service", ""], "logical-string"),
+      ("field-empty", domainType "field" "Field" "", "logical-string"),
+      ("type-not-array", .str "bool", "logical-array")] do
     check label (hasError (Format.type value) code)
   -- Identities are strings; admission resolves them against catalogue rows.
-  for value in [strings ["group", scalarDomain], strings ["field", groupDomain],
+  for value in [domainType "group" "Group" scalarDomain, domainType "field" "Field" groupDomain,
       strings ["service", "random.bls12-381.fr/1"], strings ["service", "random.other/0"]] do
     check s!"type-identity-decoded: {value.compress}" (succeeds (Format.type value))
 
@@ -352,7 +371,8 @@ private def run : IO Unit := do
       ("relations-capacity", envelope [] (List.replicate 129 (arr relationFields)) []),
       ("definitions-capacity", envelope [] [] (List.replicate 129 (arr rootFields))),
       ("unused-relation-purpose", envelope [] [arr (relationFields.set 9 (strings ["bad"]))] [arr rootFields]),
-      ("unused-helper-type", envelope [] [] [arr rootFields, arr (mathFields.set 4 (arr [strings ["unknown"]]))])
+      ("unused-helper-type", envelope [] [] [arr rootFields, arr (mathFields.set 4
+        (arr [domainType "matrix" "Field" scalarDomain]))])
     ] do
     let expected := if label == "unused-relation-purpose" then "structured-relation-purpose"
       else if label == "unused-helper-type" then "structured-type-unsupported"

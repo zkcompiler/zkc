@@ -1,6 +1,7 @@
 # Optional ArkLib adapters
 
-The `zkc_arklib` Lake package owns the `ZkcArkLib` and `TestsArkLib` module roots.
+The `zkc_arklib` Lake package owns the `ZkcArkLib`, `ZkcArkLibExamples` and
+`TestsArkLib` module roots.
 It depends on core and [generic security](../../security/README.md), with the
 [shared pinned baseline and declared compatibility patch](../../docs/dependencies.md).
 Module paths changed; existing declaration namespaces and theorem names remain.
@@ -8,7 +9,7 @@ Module paths changed; existing declaration namespaces and theorem names remain.
 `ZkcArkLib.Sumcheck` connects the deterministic zkc verifier to ArkLib and
 preserves arbitrary causal strategies and complete executions.
 `Sumcheck.Multilinear.Causal` owns stop-aware joint phases and their bounds,
-independently of authored source syntax. `ZkcArkLib.Examples.CausalSumcheck`
+independently of authored source syntax. `ZkcArkLibExamples.CausalSumcheck`
 connects these laws to the maintained admitted programs, including the exact
 round-count refusal behavior and residual observations.
 

@@ -285,7 +285,7 @@ def formLiteralWith (callbackName : (spec : RepeatSpec) →
   | _, .repeat spec site callback count state captures next => app ".repeat" [repeatText spec,
       quoted site, (callbackName spec callback).getD (regionText callback), compLiteral count, compsLiteral state, compsLiteral captures, formLiteralWith callbackName next]
   | Δ, .apply callee signature roles site args next =>
-    let argsType := app "Values" [app "Argument" [listText (laws.map lawText), listText (Δ.map slotText)],
+    let argsType := app "Zkc.Source.Values" [app "Zkc.Source.Structured.NormalForm.Argument" [listText (laws.map lawText), listText (Δ.map slotText)],
       listText ((calleeAt callees callee).pattern.scope.map slotText)]
     -- `change` exposes the dependent scope before elaborating heterogeneous
     -- arguments; a type ascription alone does not unfold a callee's pattern.

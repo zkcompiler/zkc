@@ -171,4 +171,12 @@ example : Certificate routing {} [] 0 1 source presentPattern [.data 2] none [] 
 #guard_msgs (substring := true) in
 example : Derivation routing {} [] [] [] 0 [] [] none [] ([.unused] : Layout [.component .boolean]) (.split (.input .here) (.done .nil) (.halt .incomplete)) (fun _ => Domain.View.empty) := by derive_connection_alignment
 
+-- A symbolic cell has no application operands. Presence inference must skip
+-- it and check both source branches, without indexing a nonexistent operand.
+example (cell : Cell [.component .boolean]) :
+    Derivation routing {} [] [] [] 0 [] [] none [] [cell]
+      (.split (.input .here) (.done .nil) (.done .nil))
+      (fun _ => Domain.View.empty) := by
+  derive_connection_alignment
+
 end Tests.ConnectionPartialCertificate

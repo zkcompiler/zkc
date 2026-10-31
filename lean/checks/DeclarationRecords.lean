@@ -398,6 +398,55 @@ def naturalJson (expression : Expr) : MetaM Json := do
 def field (structureName fieldName : Name) (value : Expr) : MetaM Expr :=
   mkAppM (structureName ++ fieldName) #[value]
 
+/-- Only the defining module's import closure may supply data anchors. A larger
+reporting environment must not change the observations re-extracted from one
+receipt's stored module. This is a module graph, not a proof dependency walk. -/
+def anchorModules (env : Environment) (root : Name) : Std.HashSet Name := Id.run do
+  let some index := env.getModuleIdxFor? root | return {}
+  let indices : Std.HashMap Name Nat := Id.run do
+    let mut result := {}
+    for i in [:env.header.modules.size] do
+      result := result.insert env.header.modules[i]!.module i
+    return result
+  let mut pending := [env.header.modules[index.toNat]!.module]
+  let mut seen := {}
+  while !pending.isEmpty do
+    let name := pending.head!
+    pending := pending.tail!
+    if seen.contains name then continue
+    seen := seen.insert name
+    if let some i := indices[name]? then
+      pending := (env.header.moduleData[i]!.imports.toList.map (·.module)) ++ pending
+  return seen
+
+/-- Named, closed data declarations definitionally equal to an actual fixed
+subject value. Artifact adapters may compute a record through generic projections;
+the wrapper's syntactic head is not its data owner. Compare complete values,
+including instructions and source bodies, rather than names or digest fields.
+No proof dependency, theorem premise, or proposed method selects these anchors. -/
+def dataAnchors (root typeName : Name) (value : Expr) : MetaM Json := do
+  let value ← instantiateMVars value
+  if value.hasMVar then return Json.arr #[]
+  let env ← getEnv
+  let modules := anchorModules env root
+  let mut names : Array Name := #[]
+  for (name, info) in env.constants.map₁.toList do
+    unless info.levelParams.isEmpty && info.type.isConstOf typeName do continue
+    unless info matches .defnInfo _ do continue
+    let some index := env.getModuleIdxFor? name | continue
+    unless modules.contains env.header.modules[index.toNat]!.module do continue
+    if (privateToUserName? name |>.getD name).isInternal then continue
+    if (declRangeExt.find? env name).isNone then continue
+    let saved ← saveState
+    let matched ← try
+      withTransparency .all <| isDefEq value (mkConst name)
+    catch error =>
+      if error.isRuntime || error.isInterrupt then throw error
+      pure false
+    saved.restore
+    if matched then names := names.push name
+  return toJson ((names.qsort Name.lt).map (·.toString))
+
 def identifierJson (value : Expr) : MetaM Json := do
   return Json.mkObj [("name", Json.str (← literalString (← field `Zkc.Claims.Identifier `name value))),
     ("version", ← naturalJson (← field `Zkc.Claims.Identifier `version value))]
@@ -812,7 +861,8 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
       let original ← field `ZkcSecurity.Endpoint.Artifacts `original art
       let participant ← field `ZkcSecurity.Endpoint.Artifacts `participant art
       pure (Json.mkObj [("subject_head", nameJson (headName subject)),
-        ("artifacts_head", nameJson (headName art)),
+        ("original_anchors", ← dataAnchors info.name `Zkc.Source.Structured.Snapshot original),
+        ("participant_anchors", ← dataAnchors info.name `Zkc.Construction.Participant participant),
         ("original_source", Json.str (← literalString (← field `Zkc.Source.Structured.Snapshot `source original))),
         ("original_entry", Json.str (← literalString (← field `Zkc.Source.Structured.Snapshot `entry original))),
         ("participant_source", Json.str (← literalString (← field `Zkc.Construction.Participant `source participant))),
@@ -825,7 +875,8 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
         let original ← field `ZkcSecurity.Endpoint.Domain.Artifacts `original art
         let participant ← field `ZkcSecurity.Endpoint.Domain.Artifacts `participant art
         pure (Json.mkObj [("subject_head", nameJson (headName subject)),
-          ("artifacts_head", nameJson (headName art)),
+          ("original_anchors", ← dataAnchors info.name `Zkc.Source.Structured.Snapshot original),
+          ("participant_anchors", ← dataAnchors info.name `Zkc.Construction.Participant participant),
           ("original_source", Json.str (← literalString (← field `Zkc.Source.Structured.Snapshot `source original))),
           ("original_entry", Json.str (← literalString (← field `Zkc.Source.Structured.Snapshot `entry original))),
           ("participant_source", Json.str (← literalString (← field `Zkc.Construction.Participant `source participant))),
@@ -837,7 +888,9 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
         let producer ← field `Zkc.Construction.AuthoredPair.Artifacts `producer artifacts
         let validator ← field `Zkc.Construction.AuthoredPair.Artifacts `validator artifacts
         pure (Json.mkObj [("subject_head", nameJson (headName subject)),
-          ("artifacts_head", nameJson (headName artifacts)),
+          ("original_anchors", ← dataAnchors info.name `Zkc.Source.Structured.Snapshot original),
+          ("producer_anchors", ← dataAnchors info.name `Zkc.Construction.Participant producer),
+          ("participant_anchors", ← dataAnchors info.name `Zkc.Construction.Participant validator),
           ("original_source", Json.str (← literalString (← field `Zkc.Source.Structured.Snapshot `source original))),
           ("original_entry", Json.str (← literalString (← field `Zkc.Source.Structured.Snapshot `entry original))),
           ("producer_source", Json.str (← literalString (← field `Zkc.Construction.Participant `source producer))),

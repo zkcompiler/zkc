@@ -52,9 +52,9 @@ sys.path.append(str(LEAN))
 sys.path.append(str(ROOT / "scripts"))
 
 from bridges.common.lean_render import (  # noqa: E402
-    ALLOWED_AXIOMS, Refused, Runner, axioms_allowed, digest, file_digest, now, printed_axioms,
+    ALLOWED_AXIOMS, Refused, Runner, axioms_allowed, digest, encode_tree, file_digest, now, printed_axioms,
     regenerate, require, strip_header)
-from bridges.construction import render as constructed  # noqa: E402
+from bridges.construction import pair, render as constructed  # noqa: E402
 from bridges.executable import render as executable  # noqa: E402
 from bridges.pipeline import compile as pipeline_compile, evidence, glue, manifest, mutations, runtime  # noqa: E402
 from bridges.pipeline.source_claims import canonical  # noqa: E402
@@ -199,6 +199,8 @@ class Driver(Runner):
         data, participant = subject.module_name("data"), subject.module_name("participant")
         self.generated(subject, "data", structured.render(artifacts["original"], data), modules)
         self.generated(subject, "participant", constructed.render(artifacts["exported"], participant), modules)
+        if subject.generated("pair"):
+            self.generated(subject, "pair", pair.render(artifacts["pair"], subject.module_name("pair")), modules)
         # Presentations read the refreshed source and precede every consumer.
         self.source_views(subject, record)
         entry = glue.Entry(artifacts["original"], artifacts["exported"], artifacts["interface"])
@@ -224,6 +226,8 @@ class Driver(Runner):
             constructed_candidate_text="sha256:" + digest(artifacts["candidate"].encode()),
             constructed_export="sha256:" + digest(artifacts["export_text"].encode()),
             deployment="sha256:" + digest(artifacts["deployment_text"].encode()))
+        if subject.generated("pair"):
+            record["artifacts"]["constructed_pair"] = "sha256:" + digest(artifacts["pair_text"].encode())
         if executable_profile:
             record["artifacts"].update(program="sha256:" + digest(artifacts["program"]),
                                        package="sha256:" + digest(artifacts["package_bytes"]))
@@ -256,7 +260,7 @@ class Driver(Runner):
         def templates(instructions):
             for item in mutations.nested(instructions):
                 if mutations.bound(item, mutations.OBSERVE) or mutations.bound(item, mutations.CHALLENGE):
-                    yield list(bytes.fromhex(dict(item[1])["parameters"][1][0]))
+                    yield list(encode_tree(mutations.template_tree(item)))
 
         parts = [f"import {glue_module}", "import Zkc.Construction.Encoding",
                  "import ZkcTools.ConstructionBindings.Admission", "import Tests.ConnectionRefusal",

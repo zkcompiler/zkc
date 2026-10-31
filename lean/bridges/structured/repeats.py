@@ -635,13 +635,13 @@ def wire_controls(suite, identity, effect, masked, nested_service):
         ("count-type", [1, 0], 1, "structured-protocol-signature"),
         ("count-absent", [1], [], "structured-protocol-signature"),
         ("carried-arity", [0, 1], 2, "structured-protocol-signature"),
-        ("output-type", [2], [["index"]], "structured-protocol-signature"),
+        ("output-type", [2], [["apply", "index", []]], "structured-protocol-signature"),
         ("output-arity", [2], [], "structured-protocol-signature"),
         ("no-region", [3], [], "structured-protocol-region"),
         ("two-regions", [3], loop[3]*2, "structured-protocol-region"),
-        ("region-input-type", [3, 0, 0, 0], ["bool"], "structured-protocol-signature"),
-        ("region-extra-input", [3, 0, 0], loop[3][0][0]+[["field", FIELD]], "structured-protocol-signature"),
-        ("region-result-type", [3, 0, 1], [["bool"]], "structured-protocol-signature"),
+        ("region-input-type", [3, 0, 0, 0], ["apply", "bool", []], "structured-protocol-signature"),
+        ("region-extra-input", [3, 0, 0], loop[3][0][0]+[["apply", "field", [["domain", "Field", FIELD]]]], "structured-protocol-signature"),
+        ("region-result-type", [3, 0, 1], [["apply", "bool", []]], "structured-protocol-signature"),
         ("yield-type", [3, 0, 2, 2], ["yield", [0]], "structured-formation"),
         ("yield-arity", [3, 0, 2, 2], ["yield", []], "structured-formation"),
         ("callback-return", [3, 0, 2, 2], ["return", [1]], "structured-protocol-terminator"),
@@ -700,7 +700,7 @@ def wire_controls(suite, identity, effect, masked, nested_service):
             bad, _ = fresh(); definition(bad, "main")[6][2][slot] = ["Q"]
             refuse(f"wire-{name}-max{maximum}", bad, code)
         bad, row = fresh(masked)
-        row[3][0][2][1] = [[["restrict", ["Q"]], [2], [FIELD_TYPE], [], ""]]
+        row[3][0][2][1] = [[["restrict", ["Q"]], [2], [["apply", "field", [["domain", "Field", FIELD]]]], [], ""]]
         row[3][0][2][2] = ["yield", [0]]
         refuse(f"wire-yield-scope-max{maximum}", bad, "structured-repeat-yield-scope")
 
@@ -708,15 +708,15 @@ def wire_controls(suite, identity, effect, masked, nested_service):
         row[3][0][2][1] = [[["statement", "missing", ["P"], 0, None], [2], [], [], ""]]
         refuse(f"wire-statement-placement-max{maximum}", bad, "structured-statement-placement")
         bad, row = fresh()
-        row[3][0][2][1] = [[["bool.constant", True], [], [["bool"]], [], ""],
+        row[3][0][2][1] = [[["bool.constant", True], [], [["apply", "bool", []]], [], ""],
                            [["guard", "Q"], [0], [], [], "escape"]]
         row[3][0][2][2] = ["yield", [2]]
         refuse(f"wire-callback-owner-widening-max{maximum}", bad, "structured-repeat-role")
         bad, row = fresh()
         row[3][0][2][1] = [
-            [["index.constant", "0"], [], [["index"]], [], ""],
+            [["index.constant", "0"], [], [["apply", "index", []]], [], ""],
             [["protocol_repeat", 0, 0, ["P", "Q"], []], [0], [],
-             [[[["index"]], [], ["block", [], ["yield", []]]]], "inner"]]
+             [[[["apply", "index", []]], [], ["block", [], ["yield", []]]]], "inner"]]
         row[3][0][2][2] = ["yield", [2]]
         refuse(f"wire-nested-roster-max{maximum}", bad, "structured-repeat-role")
 
@@ -730,7 +730,7 @@ def wire_controls(suite, identity, effect, masked, nested_service):
         refuse(f"wire-callback-application-roster-max{maximum}", bad, "structured-repeat-role")
         for target, code in [("missing", "structured-unknown-helper"), ("main", "structured-protocol-cycle")]:
             bad, row = fresh()
-            row[3][0][2][1] = [[["protocol_apply", target, ["P", "Q"]], [0, 1, 2], [FIELD_TYPE], [], "call"]]
+            row[3][0][2][1] = [[["protocol_apply", target, ["P", "Q"]], [0, 1, 2], [["apply", "field", [["domain", "Field", FIELD]]]], [], "call"]]
             row[3][0][2][2] = ["yield", [0]]
             if target == "main":
                 definition(bad, "main")[6][1] = ["P"]
@@ -739,7 +739,7 @@ def wire_controls(suite, identity, effect, masked, nested_service):
 
         # A repeat header and its callback share one static site namespace.
         bad, row = fresh()
-        row[3][0][2][1] = [[["bool.constant", True], [], [["bool"]], [], ""],
+        row[3][0][2][1] = [[["bool.constant", True], [], [["apply", "bool", []]], [], ""],
                            [["guard", "P"], [0], [], [], "loop"]]
         row[3][0][2][2] = ["yield", [2]]
         refuse(f"wire-header-callback-collision-max{maximum}", bad, "structured-duplicate-site")
@@ -754,7 +754,7 @@ def wire_controls(suite, identity, effect, masked, nested_service):
             if header:
                 row[4] = collision
             else:
-                row[3][0][2][1] += [[["bool.constant", True], [], [["bool"]], [], ""],
+                row[3][0][2][1] += [[["bool.constant", True], [], [["apply", "bool", []]], [], ""],
                                     [["guard", "P"], [0], [], [], collision]]
             refuse(f"wire-generated-collision-{header}-max{maximum}", bad,
                    "structured-effective-site-collision")

@@ -60,7 +60,15 @@ example (extension base : String)
 example : catalogue.requireDraw "random.koala-bear.ext8-binomial3/0" octicIdentity = .ok () := by decide
 example : catalogue.requireDraw randomService baseIdentity = .error "structured-service-contract" := by decide
 example : catalogue.findService "random.koala-bear/0" = .error "structured-service-contract" := by decide
-example : (catalogue.findService randomService).map Service.methods = .ok ["draw", "index"] := by decide
+example : (catalogue.findService randomService).map Service.methods =
+    .ok ["draw", "index", "indices"] := by decide
+example : catalogue.require octicIdentity .field "IndexBlockRandomness" = .ok () := by decide
+example : catalogue.require baseIdentity .field "IndexBlockRandomness" =
+    .error "structured-domain-capability" := by decide
+example : catalogue.checkService ⟨randomService, octicIdentity, ["draw", "index"]⟩ =
+    .error "structured-catalogue-service" := by decide
+example : catalogue.findService "random.koala-bear.ext4-binomial3/0" =
+    .error "structured-service-contract" := by decide
 example : catalogue.require baseIdentity .field "IndexRandomness" =
     .error "structured-domain-capability" := by decide
 example : catalogue.require octicIdentity .field "PrimeField" =

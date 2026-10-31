@@ -38,15 +38,19 @@ def main (args : List String) : IO Unit := do
   (← IO.getStdout).flush
   let signature : Signature := ⟨[⟨embedding.helper, .returns [], []⟩], false, true,
     (program.payload.definitions.filter (·.helper != embedding.helper)).map (·.helper), []⟩
-  let modulePrefix := "ZkcSecurity.Examples.Components.KoalaBearSumcheckGenerated"
+  let modulePrefix := "ZkcSecurityExamples.Components.KoalaBearSumcheckGenerated"
+  let namespacePrefix := "ZkcSecurity.Examples.Components.KoalaBearSumcheckGenerated"
   IO.println "rendering typed inputs"
   (← IO.getStdout).flush
-  let mut sources := [(modulePrefix ++ ".Inputs", Bindings.inputsSource program (modulePrefix ++ ".Inputs") (modulePrefix ++ ".Data"))]
-  for (definition, index, label) in [(round, 0, "Round"), (root, 1, "Root")] do
+  let mut sources := [(modulePrefix ++ ".Inputs",
+    Bindings.inputsSource program (modulePrefix ++ ".Inputs") (modulePrefix ++ ".Data")
+      (namespacePrefix ++ ".Inputs") (namespacePrefix ++ ".Data.snapshot"))]
+  for (index, label) in [(0, "Round"), (1, "Root")] do
     for role in [0, 1] do
       let moduleName := modulePrefix ++ "." ++ label ++ (if role == 0 then "Producer" else "Verifier")
       let output : OriginalRoot.TemplateOutput := {
-        moduleName, sourceModule := modulePrefix ++ ".Inputs", programExpression := modulePrefix ++ ".Inputs.program"
+        moduleName, namespaceName := namespacePrefix ++ "." ++ label ++ (if role == 0 then "Producer" else "Verifier")
+        sourceModule := modulePrefix ++ ".Inputs", programExpression := namespacePrefix ++ ".Inputs.program"
         definitionIndex := index, role
         signature := { signature with callees := (program.payload.protocols.take index).map fun callee =>
           ⟨callee.signature, role, Bindings.optionalPattern callee.inputs, []⟩ } }

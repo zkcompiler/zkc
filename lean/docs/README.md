@@ -20,6 +20,8 @@ that all native behavior already has a Lean model.
 - [Structured import](spec/structured-source.md): checked original protocol-stage
   programs with shared helpers, participants, services, retained contracts,
   protocol applications and repeats.
+- [Logical source decoding](spec/structured-source-foundation.md): complete type
+  trees, nominal identities and independently checked primitive signatures.
 - [Exact tables](spec/table-relations.md): complete Boolean membership and indexed-read evaluator laws.
 - [Selected data codecs](spec/data-codecs.md): executable partial encoding,
   canonical acceptance, compositional framing and nominal batch payloads.

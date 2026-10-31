@@ -8,8 +8,8 @@ namespace ZkcSecurity.Examples.Components.KoalaBearSumcheckGenerated.Pair.Produc
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:7c0c43bc08d7590a28585b31af693e92b8c1c1342337755e30ce8d9088f09a6a"
-  candidate := "sha256:a1ddfc1485b29258e74c1a288c2191b1dfd7098b00d74cc23e784491b93cb5f5"
+  source := "sha256:58d9f720d2e530b34f23366aae4907b511c2cc70b5b772c9fced7cc65549b831"
+  candidate := "sha256:ed9858172e768f10fb53b8667d41b5d1805e8c5ba70479110a93d67ab4862fa1"
   policy := ⟨"s14h6d697865645f73756d636865636b4h526f6f74", "role00000000", "role00000001", 0, "merlin3.koala-bear.ext8-binomial3.rejection31le/0", [3], [0, 1, 2], [("apply_16_label_726f756e64_label_6368616c6c656e6765", "apply_16_label_726f756e64_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_0"
   inputs := [.data (.field "koala-bear"), .data (.field "koala-bear"), .transcript "merlin3.koala-bear.ext8-binomial3.rejection31le/0"]
@@ -35,8 +35,8 @@ namespace ZkcSecurity.Examples.Components.KoalaBearSumcheckGenerated.Pair.Valida
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:7c0c43bc08d7590a28585b31af693e92b8c1c1342337755e30ce8d9088f09a6a"
-  candidate := "sha256:a1ddfc1485b29258e74c1a288c2191b1dfd7098b00d74cc23e784491b93cb5f5"
+  source := "sha256:58d9f720d2e530b34f23366aae4907b511c2cc70b5b772c9fced7cc65549b831"
+  candidate := "sha256:ed9858172e768f10fb53b8667d41b5d1805e8c5ba70479110a93d67ab4862fa1"
   policy := ⟨"s14h6d697865645f73756d636865636b4h526f6f74", "role00000000", "role00000001", 0, "merlin3.koala-bear.ext8-binomial3.rejection31le/0", [3], [0, 1, 2], [("apply_16_label_726f756e64_label_6368616c6c656e6765", "apply_16_label_726f756e64_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.field "koala-bear"), .data (.field "koala-bear"), .data (.field "koala-bear"), .transcript "merlin3.koala-bear.ext8-binomial3.rejection31le/0"]

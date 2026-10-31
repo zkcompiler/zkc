@@ -72,8 +72,9 @@ theorem nativeBinaryRows_justified : nativeBinaryRows.Justified := by
 /-- Native transcript and commitment rows, which structured units never
 export: hash-chain suites challenging in the BLS12-381 scalar field and in the
 KoalaBear octic extension, and a multilinear commitment. Their members name
-field rows, and an octic random service offers `index` because that field has
-`IndexRandomness`. -/
+field rows. The octic random service lists `index` and `indices` because the
+field independently has `IndexRandomness` and `IndexBlockRandomness`. These
+rows are metadata, not interpretations of block sampling or gates. -/
 private def transcriptRows : Catalogue where
   nominals := blsCatalogue.nominals ++ [
     { identity := "koala-bear", sort := .field, members := [],
@@ -81,22 +82,47 @@ private def transcriptRows : Catalogue where
       modulus := some 2130706433 },
     { identity := "koala-bear.ext8-binomial3", sort := .field, members := [("BaseField", "koala-bear")],
       capabilities := ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo",
-        "ExtensionField", "IndexRandomness"],
+        "ExtensionField", "IndexRandomness", "IndexBlockRandomness"],
       modulus := some 2130706433 },
     { identity := "hash-chain.keccak256.bls12-381.fr64be/0", sort := .transcript,
       members := [("ChallengeField", blsScalar)], capabilities := ["FieldTranscript", "Transcript"],
       modulus := none },
     { identity := "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
       sort := .transcript, members := [("ChallengeField", "koala-bear.ext8-binomial3")],
-      capabilities := ["FieldTranscript", "IndexTranscript", "Transcript"], modulus := none },
+      capabilities := ["FieldTranscript", "IndexTranscript", "IndexBlockTranscript", "Transcript"], modulus := none },
     { identity := "multilinear.kzg.bls12-381/0", sort := .commitment,
       members := [("ValueField", blsScalar), ("PointField", blsScalar), ("EvaluationField", blsScalar)],
       capabilities := ["MultilinearOpening"], modulus := none }]
   services := [
     { contract := "random.koala-bear.ext8-binomial3/0", sampled := "koala-bear.ext8-binomial3",
-      methods := ["draw", "index"] }]
+      methods := ["draw", "index", "indices"] }]
 
 example : code transcriptRows.check = "" := by decide +kernel
+example : capabilitySort "IndexBlockRandomness" = some .field := rfl
+example : capabilitySort "IndexBlockTranscript" = some .transcript := rfl
+
+-- Native octic metadata agrees exactly with the selected environment.
+private def nativeOcticRows : Catalogue where
+  nominals := transcriptRows.nominals.filter fun row =>
+    ["koala-bear", "koala-bear.ext8-binomial3"].contains row.identity
+  services := transcriptRows.services
+
+example : code nativeOcticRows.check = "" := by decide +kernel
+example : code (nativeOcticRows.agrees admittedCatalogue) = "" := by decide +kernel
+
+-- Previously exported octic rows are internally consistent but no longer agree.
+private def staleOcticRows : Catalogue where
+  nominals := nativeOcticRows.nominals.map fun row =>
+    { row with capabilities := row.capabilities.filter (· != "IndexBlockRandomness") }
+  services := [
+    { contract := "random.koala-bear.ext8-binomial3/0",
+      sampled := "koala-bear.ext8-binomial3", methods := ["draw", "index"] }]
+
+example : code staleOcticRows.check = "" := by decide +kernel
+example : code (staleOcticRows.agrees admittedCatalogue) = "structured-catalogue-mismatch" := by
+  decide +kernel
+example : code (({ nativeOcticRows with services := staleOcticRows.services } : Catalogue).agrees
+    admittedCatalogue) = "structured-catalogue-mismatch" := by decide +kernel
 -- A transcript's challenge field must be a field row.
 example : code (Catalogue.check ⟨[⟨"t", .transcript, [("ChallengeField", "g")], ["Transcript"], none⟩,
     ⟨"g", .group, [], ["Group"], none⟩], [], []⟩) = "structured-catalogue-member" := by decide +kernel
@@ -150,6 +176,32 @@ example : code (rows [fieldRow "f"] [⟨"random.f/0", "f", ["draw", "index"]⟩]
 example : code (rows [fieldRow "f" ["Field", "IndexRandomness"]]
     [⟨"random.f/0", "f", ["draw", "index"]⟩]).check = "" := by decide +kernel
 
+-- Scalar and block capabilities select methods independently, in fixed order.
+private def serviceRows (capabilities methods : List String) : Catalogue :=
+  rows [fieldRow "f" ("Field" :: capabilities)] [⟨"random.f/0", "f", methods⟩]
+
+example : code (serviceRows [] ["draw"]).check = "" := by decide +kernel
+example : code (serviceRows ["IndexBlockRandomness"] ["draw", "indices"]).check = "" := by
+  decide +kernel
+example : code (serviceRows ["IndexRandomness", "IndexBlockRandomness"]
+    ["draw", "index", "indices"]).check = "" := by decide +kernel
+example : code (serviceRows [] ["draw", "indices"]).check = "structured-catalogue-service" := by
+  decide +kernel
+example : code (serviceRows ["IndexRandomness"] ["draw", "index", "indices"]).check =
+    "structured-catalogue-service" := by decide +kernel
+example : code (serviceRows ["IndexBlockRandomness"] ["draw", "index", "indices"]).check =
+    "structured-catalogue-service" := by decide +kernel
+example : code (serviceRows ["IndexBlockRandomness"] ["draw"]).check =
+    "structured-catalogue-service" := by decide +kernel
+example : ([["draw", "index"], ["draw", "indices", "index"],
+    ["draw", "index", "indices", "indices"], ["draw", "index", "indices", "unknown"]].all
+    fun methods => code (serviceRows ["IndexRandomness", "IndexBlockRandomness"] methods).check ==
+      "structured-catalogue-service") = true := by decide +kernel
+example : code (rows [fieldRow "f" ["IndexBlockTranscript"]]).check =
+    "structured-catalogue-capability" := by decide +kernel
+example : code (rows [⟨"t", .transcript, [], ["IndexBlockRandomness"], none⟩]).check =
+    "structured-catalogue-capability" := by decide +kernel
+
 -- A row that differs from the environment's row for its identity.
 example : code ((rows [fieldRow blsScalar (modulus := some blsModulus)]).agrees
     admittedCatalogue) = "structured-catalogue-mismatch" := by decide +kernel
@@ -161,6 +213,10 @@ private def unit (type : Ty) (catalogue : Catalogue) : Snapshot :=
     some ⟨["P"], [["P"]], [["P"]]⟩, [], some (.protocol ⟨"main", []⟩), .block [] (.ret [0])⟩], [⟨"main", []⟩], catalogue, {}⟩
 
 example : code (check (unit (.field blsScalar) blsRows)) = "" := by decide +kernel
+example : code (check (unit (.field "koala-bear.ext8-binomial3") nativeOcticRows)) = "" := by
+  decide +kernel
+example : code (check (unit (.field "koala-bear.ext8-binomial3") staleOcticRows)) =
+    "structured-catalogue-mismatch" := by decide +kernel
 -- The binary unit is well formed; the environment does not list its rows.
 example : code (check (unit (.field "gf2-128") binaryRows)) = "structured-catalogue-unknown" := by
   decide +kernel

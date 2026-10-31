@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Construction.ConnectionCertificate
+public import Zkc.Construction.ConnectionFrameLookup
 
 @[expose] public section
 
@@ -65,12 +65,35 @@ def CheckedBody.place {payload : UnitPayload} {key : CalleeKey}
     CheckedBody entry routing selection actual :=
   association ▸ body
 
-theorem calculationCells_length {scope : Scope} {types : List Ty}
-    (values : Values (Comp [] scope) types) :
-    (ConnectionComputation.cells values).length = types.length := by
-  induction values with
-  | nil => rfl
-  | cons _ _ ih => exact congrArg Nat.succ ih
+/-- A finite separation check remains data even when the history option is
+symbolic. It states exactly the retained application's existing side condition. -/
+def historySeparationCheck (outputs : List Original.Location) : Option Nat → Bool
+  | none => true
+  | some reference => !outputs.contains (.data reference)
+
+theorem historySeparationCheck_sound (outputs : List Original.Location) (history : Option Nat)
+    (checked : historySeparationCheck outputs history = true) :
+    match (generalizing := false) history with
+    | none => True
+    | some reference => .data reference ∉ outputs := by
+  cases history with
+  | none => trivial
+  | some reference => simpa [historySeparationCheck, List.contains_iff_mem] using checked
+
+/-- The received value occupies the first fresh cell after the entire caller
+layout. This is valid for arbitrary prefixes, aliases and symbolic frames. -/
+theorem receiveLayout_fresh {scope : Scope} (layout : Layout scope) (ty : Ty) :
+    (ConnectionCertificate.receiveLayout layout ty)[layout.length]? =
+      some (.data (.present (.var .here))) := by
+  simp [ConnectionCertificate.receiveLayout]
+
+/-- A fresh physical cell is justified by the actual prefix length, even when
+normalization has expanded the constructors that produced that prefix. -/
+theorem appendedCell {scope : Scope} (caller : Layout scope) (cell : Cell scope)
+    (reference : Nat) (offset : caller.length = reference) :
+    (caller ++ [cell])[reference]? = some cell := by
+  rw [← offset]
+  simp
 
 /-- A total auxiliary calculation extends storage with the normalizer's own
 terms. It does not change source binders, occurrence paths or dynamic frames. -/
@@ -107,7 +130,7 @@ def CheckedBody.prependCalculation {payload : UnitPayload} {key : CalleeKey}
           placement.layout.length + operation.op.results.length := by
         change (placement.layout ++ ConnectionComputation.cells
           (NormalForm.calculation operation.op total terms)).length = _
-        rw [List.length_append, calculationCells_length]
+        rw [List.length_append, ConnectionFrameLookup.calculationCells_length]
       have extent := body.physicalExtent
       rw [size] at extent
       simpa only [Placement.afterCalculation, Placement.prependCalculation,

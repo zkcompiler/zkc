@@ -12,10 +12,16 @@ open Zkc.Source Zkc.Source.Structured ZkcTools.StructuredSource.Discovery
 /-- Discovery preserves both table and prefix operands and the restricted table result. -/
 example : opJson (.multilinearRestrictPrefix "bls12-381.fr") = Lean.Json.mkObj [
     ("constructor", Lean.toJson "multilinearRestrictPrefix"),
-    ("arguments", Lean.toJson ([Lean.Json.arr #[.str "vector", .str "bls12-381.fr"],
-      Lean.Json.arr #[.str "vector", .str "bls12-381.fr"]] : List Lean.Json)),
-    ("results", Lean.toJson ([Lean.Json.arr #[.str "vector", .str "bls12-381.fr"]] : List Lean.Json)),
-    ("helpers", Lean.toJson ([] : List String)), ("parameters", .null)] := rfl
+    ("arguments", Lean.toJson ([Lean.Json.arr #[.str "apply", .str "vector",
+      .arr #[.arr #[.str "domain", .str "Field", .str "bls12-381.fr"]]],
+      Lean.Json.arr #[.str "apply", .str "vector",
+      .arr #[.arr #[.str "domain", .str "Field", .str "bls12-381.fr"]]]] : List Lean.Json)),
+    ("results", Lean.toJson ([Lean.Json.arr #[.str "apply", .str "vector",
+      .arr #[.arr #[.str "domain", .str "Field", .str "bls12-381.fr"]]]] : List Lean.Json)),
+    ("helpers", Lean.toJson ([] : List String)), ("parameters", .null)] := by
+  simp only [opJson, Op.arguments, Op.results, Op.helpers, List.map_cons, List.map_nil,
+    ZkcTools.StructuredSource.wireType.eq_5, ZkcTools.StructuredSource.wireDomainApplication,
+    ZkcTools.StructuredSource.wireApplication]
 
 private def raw : RawRegion Ty Op :=
   .letOp (.fieldAdd "bls12-381.fr") [0, 1] [.field "bls12-381.fr"] .nil

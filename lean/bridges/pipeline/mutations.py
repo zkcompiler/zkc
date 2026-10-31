@@ -40,7 +40,8 @@ import re
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from bridges.common.lean_render import decode_tree, encode_tree  # noqa: E402
+from bridges.common import schema  # noqa: E402
+from bridges.common.lean_render import record, require  # noqa: E402
 
 OBSERVE = "transcript.native.indexed.observe.data"
 CHALLENGE = "transcript.native.indexed.challenge"
@@ -79,7 +80,10 @@ def kind(name, stage, property_, expected, construction_accepts=False):
 # The constructed participant export
 
 def bound(item, contract):
-    return item[0] == "exec.apply" and len(item[2]) == 3 and item[2][0] == contract
+    if item[0] != "exec.apply":
+        return False
+    binding = schema.binding(item[2])
+    return bool(binding) and binding[0] == contract
 
 
 def nested(instructions):
@@ -108,28 +112,52 @@ def loops(instructions, scope):
         scope += len(item[4])
 
 
-def environments(exported):
+def environments(exported, identities=False):
     """The exported types in scope at each instruction, by instruction identity:
     the inputs and earlier results, and in a loop body the loop's block
-    arguments after the environment at the loop."""
+    arguments after the environment at the loop. With `identities`, retain the
+    lexical binder identities instead of their types, including sibling scopes."""
     scopes = {}
+
+    def slots(owner, types):
+        return [(id(owner), index) for index in range(len(types))] if identities else list(types)
 
     def visit(instructions, environment):
         for item in instructions:
             scopes[id(item)] = list(environment)
-            for arguments, body, _ in item[5]:
-                visit(body, environment + list(arguments))
-            environment = environment + list(item[4])
-    visit(exported[7], list(exported[5]))
+            for region in item[5]:
+                arguments, body, _ = region
+                visit(body, environment + slots(region, arguments))
+            environment = environment + slots(item, item[4])
+    visit(exported[7], slots(exported, exported[5]))
     return scopes
 
 
+def template_parameter(item):
+    attributes = schema.attributes(item[1])
+    tag, values = record(attributes["parameters"], 2)
+    require(tag == "array", "expected invocation parameter array")
+    (value,) = record(values, 1)
+    tag, parameter = record(value, 2)
+    require(tag == "parameter", "expected invocation parameter")
+    schema.origin_hex(parameter)
+    return parameter
+
+
 def template_tree(item):
-    return decode_tree(bytes.fromhex(dict(item[1])["parameters"][1][0]))[0]
+    return copy.deepcopy(template_parameter(item)[1])
 
 
 def set_template(item, tree):
-    dict(item[1])["parameters"][1][0] = encode_tree(tree).hex()
+    schema.origin_hex(["origin", tree])
+    template_parameter(item)[1] = copy.deepcopy(tree)
+
+
+def callee_name(item):
+    tag, components = schema.attributes(item[1])["callee"]
+    require(tag == "symbol", "expected helper symbol")
+    (name,) = record(components, 1)
+    return name
 
 
 def mutated(exported, change):
@@ -173,10 +201,12 @@ def observe_reads_input(exported):
 def observe_repeats_value(exported):
     def edit(value):
         scopes = environments(value)
+        binders = environments(value, identities=True)
         found = [item for item in nested(value[7]) if bound(item, OBSERVE)]
         for index, later in enumerate(found):
             for earlier in found[:index]:
                 if earlier[3][1] != later[3][1] and earlier[3][1] < len(scopes[id(later)]) \
+                        and binders[id(earlier)][earlier[3][1]] == binders[id(later)][earlier[3][1]] \
                         and scopes[id(earlier)][earlier[3][1]] == scopes[id(later)][later[3][1]]:
                     later[3][1] = earlier[3][1]
                     return True
@@ -313,12 +343,33 @@ def native_domain_separator(candidate, exported):
     challenge = next((item for item in nested(exported[7]) if bound(item, CHALLENGE)), None)
     if challenge is None or not exported[3][8]:
         return []
-    hex_text = dict(challenge[1])["parameters"][1][0]
-    tree, _ = decode_tree(bytes.fromhex(hex_text))
+    tree = template_tree(challenge)
+    actual = native_origin(tree)
     tree[4][2] = exported[3][8][0][1]
-    if candidate.count(hex_text) != 1:
+    changed = native_origin(tree)
+    if actual == changed or candidate.count(actual) != 1:
         return []
-    return [candidate.replace(hex_text, encode_tree(tree).hex())]
+    return [candidate.replace(actual, changed)]
+
+
+def native_origin(tree):
+    """Spell a validated origin in the current native attribute syntax."""
+    schema.origin_hex(["origin", tree])
+
+    def quoted(value):
+        return '"' + ''.join(f'\\{ord(char):02X}' if char in ('"', '\\') else char
+                             for char in value) + '"'
+
+    _, entry, steps, _, event = tree
+    path = ""
+    if steps:
+        path = " path[" + ", ".join(f"<{kind}, {quoted(protocol)}, {quoted(site)}>"
+                                   for kind, protocol, site in steps) + "]"
+    arguments = list(map(quoted, event[1:]))
+    if event[0] == "query":
+        arguments[2] = event[3][6:]
+    return (f"#runtime.origin<{quoted(entry)}{path}, "
+            f"#runtime.{event[0]}_origin<" + ", ".join(arguments) + ">>")
 
 
 def function_block(lines, name):
@@ -337,17 +388,18 @@ def native_helper_constant(candidate, exported):
     calls = [item for item in exported[7] if item[0] in ("protocol.local_call", "func.call")]
     if not calls:
         return []
-    callee = dict(calls[-1][1])["callee"][1]
+    callee = callee_name(calls[-1])
     lines = candidate.splitlines(keepends=True)
     block = function_block(lines, callee)
     if block is None:
         return []
     first, last = block
     body = "".join(lines[first:last + 1])
-    match = re.search(r'parameters = \["([0-9]+)"\]', body)
+    match = re.search(r'parameters = \[([0-9]+) : ui64\]', body)
     if match is None:
         return []
-    changed = body[:match.start()] + f'parameters = ["{int(match[1]) + 1}"]' + body[match.end():]
+    number = (int(match[1]) + 1) % (1 << 64)
+    changed = body[:match.start(1)] + str(number) + body[match.end(1):]
     return ["".join(lines[:first]) + changed + "".join(lines[last + 1:])]
 
 
@@ -449,7 +501,7 @@ def helper_names(exported):
     """The helpers the constructed validator calls: their program functions are
     read by the lowering rule only for their sorts and freedom from transcript
     operations, and prepared separately."""
-    return {dict(item[1])["callee"][1] for item in nested(exported[7]) if item[0] in ("protocol.local_call", "func.call")}
+    return {callee_name(item) for item in nested(exported[7]) if item[0] in ("protocol.local_call", "func.call")}
 
 
 def calculations(program, participant, exported):

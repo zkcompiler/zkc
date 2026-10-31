@@ -1,67 +1,93 @@
 #!/usr/bin/env python3
 """Strict-reader controls for recursive nominal construction data and profiles."""
-import importlib.util
-import json
+from copy import deepcopy
 from pathlib import Path
 import sys
+import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "lean"))
-from bridges.common.lean_render import Refused  # noqa: E402
 from bridges.construction import render  # noqa: E402
 
-spec = importlib.util.spec_from_file_location("fixture_variant", ROOT / "common/tests/support/variant_codec.py")
-variant = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(variant)
+FIELD = ["apply", "field", [["domain", "Field", "koala-bear"]]]
+IDENTITY = ["tuple", [["atom", "example.Opening"], ["atom", "phantom.F"]]]
+PRODUCT = ["variant", IDENTITY, [["opening", [FIELD, FIELD]]]]
 
 
-def refused(label, action):
-    try:
-        action()
-    except (Refused, ValueError):
-        return
-    raise AssertionError("reader accepted " + label)
+def sequence(element):
+    return ["apply", "sequence", [["type", element]]]
 
 
-def require(condition, label):
-    if not condition:
-        raise AssertionError("reader " + label)
+class PlainReader(unittest.TestCase):
+    def test_recursive_nominal_data(self):
+        term, kind = render.sort(sequence(PRODUCT))
+        self.assertEqual(kind, ("data", ["sequence", ["product",
+            '["example.Opening","phantom.F"]', "opening", [["field", "koala-bear"]] * 2]]))
+        self.assertIn('.sequence (.product "[\\"example.Opening\\",\\"phantom.F\\"]" "opening"', term)
 
+    def test_nominal_phantom_and_constructor_identity(self):
+        baseline = render.sort(sequence(PRODUCT))
+        mutations = [lambda p: p[1][1][0].__setitem__(1, "other.Opening"),
+                     lambda p: p[1][1][1].__setitem__(1, "phantom.G"),
+                     lambda p: p[1][1].reverse(),
+                     lambda p: p[2][0].__setitem__(0, "other_constructor")]
+        for mutate in mutations:
+            changed = deepcopy(PRODUCT)
+            mutate(changed)
+            with self.subTest(product=changed):
+                term, kind = render.sort(sequence(changed))
+                self.assertNotEqual(term, baseline[0])
+                self.assertNotEqual(kind, baseline[1])
+        # Atoms containing JSON text cannot alias tuple identities.
+        atom = ["variant", ["atom", '["example.Opening","phantom.F"]'], PRODUCT[2]]
+        self.assertNotEqual(render.sort(sequence(atom)), baseline)
 
-def main():
-    descriptor = variant.descriptor("example.Opening", [("opening", ["field:koala-bear", "field:koala-bear"])])
-    spelling = '!data.sequence<!data.variant<"' + descriptor + '">>'
-    term, kind = render.sort(spelling)
-    require(kind[0] == "data" and '.sequence (.product "\\\"example.Opening\\\"" "opening"' in term,
-            "lost the nominal sequence")
-    other = variant.descriptor("other.Opening", [("opening", ["field:koala-bear", "field:koala-bear"])])
-    require(render.sort('!data.sequence<!data.variant<"' + other + '">>') != (term, kind),
-            "merged distinct nominal identities")
-    # Canonical node tables have no unreachable or duplicate nodes.
-    value = json.loads(bytes.fromhex(descriptor[8:]))
-    value[1].append("unused")
-    noncanonical = "variant:" + json.dumps(value, separators=(",", ":")).encode().hex()
-    refused("noncanonical product", lambda: render.sort('!data.variant<"' + noncanonical + '">'))
-    service = variant.descriptor("example.Private", [("private", ["service:random.koala-bear/0"])])
-    refused("nested service", lambda: render.sort('!data.sequence<!data.variant<"' + service + '">>'))
-    sum_type = variant.descriptor("example.Sum", [("left", []), ("right", [])])
-    refused("multiple constructors", lambda: render.sort('!data.variant<"' + sum_type + '">'))
-    refused("retired variant namespace", lambda: render.sort('!local.variant<"' + descriptor + '">'))
-    refused("trailing type suffix", lambda: render.sort(spelling + "garbage"))
-    refused("unsupported capability", lambda: render.sort('!data.sequence<!runtime.capability<"private">>'))
-    plain = ["zkc.native-proof-policy/0", "entry", "P", "V", "0", "", [], ["0"], [], "zkc.framed/0", ""]
-    render.policy(plain)
-    forged = list(plain)
-    forged[6] = ["1"]
-    refused("plain replacement service", lambda: render.policy(forged))
-    forged = list(plain)
-    forged[8] = [["query", "delivery"]]
-    refused("plain draw schedule", lambda: render.policy(forged))
-    fake = [render.FORMAT, "sha256:" + "0" * 64, "sha256:" + "1" * 64, plain, "V",
-            ['!runtime.capability<"transcript:invented">'], ["i1"], [], [], []]
-    refused("plain transcript ABI", lambda: render.render_declaration(fake, "ForgedPlain"))
-    print("plain construction reader: 3 positive, 9 refusal controls passed")
+    def test_hidden_capabilities_refuse(self):
+        handles = [["service", "random.koala-bear/0"],
+                   ["oracle", "table", [["type", FIELD]]],
+                   ["apply", "transcript", [["domain", "Transcript", "private"]]]]
+        for handle in handles:
+            hidden = ["variant", IDENTITY, [["opening", [FIELD, sequence(handle)]]]]
+            with self.subTest(handle=handle), self.assertRaisesRegex(ValueError, "handle"):
+                render.sort(sequence(hidden))
+
+    def test_multiple_constructors_refuse(self):
+        with self.assertRaisesRegex(ValueError, "multi-alternative"):
+            render.sort(["variant", IDENTITY, [["left", []], ["right", []]]])
+
+    def test_malformed_type_controls(self):
+        malformed = [sequence(PRODUCT) + ["extra"],
+                     ["apply", "sequence", [["nat", "1"]]],
+                     ["variant", ["tuple", ["phantom.F"]], PRODUCT[2]],
+                     ["variant", IDENTITY, [["opening", []], ["opening", []]]],
+                     ["variant", IDENTITY, [["opening", [FIELD + ["extra"]]]]],
+                     '!data.sequence<!data.variant<"retired">>',
+                     '!local.variant<"retired">',
+                     ["apply", "runtime.capability", []]]
+        for value in malformed:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                render.sort(value)
+
+    def test_plain_policy_refuses_challenge_replacement(self):
+        plain = ["zkc.native-proof-policy/0", "entry", "P", "V", "0", "", [], ["0"], [], "zkc.framed/0", "", []]
+        self.assertEqual(render.policy(plain),
+                         '⟨"entry", "P", "V", 0, "", [], [0], [], "zkc.framed/0", ""⟩')
+        with self.assertRaisesRegex(ValueError, "array of size 12"):
+            render.policy(plain[:-1])
+        for gates in [None, False, "", {}, [["query", "0"]], [["query", "1"]], [[]]]:
+            with self.subTest(gates=gates), self.assertRaisesRegex(ValueError, "policy gates"):
+                render.policy(plain[:-1] + [gates])
+        for index, value in [(6, ["1"]), (8, [["query", "delivery"]])]:
+            forged = deepcopy(plain)
+            forged[index] = value
+            with self.subTest(index=index), self.assertRaisesRegex(ValueError, "replacement"):
+                render.policy(forged)
+        fake = [render.FORMAT, "sha256:" + "0" * 64, "sha256:" + "1" * 64, plain, "V",
+                [["apply", "transcript", [["domain", "Transcript", "invented"]]]],
+                [["apply", "bool", []]], [], [], []]
+        with self.assertRaisesRegex(ValueError, "plain-profile-abi"):
+            render.render_declaration(fake, "ForgedPlain")
 
 
 if __name__ == "__main__":
-    main()
+    unittest.main()

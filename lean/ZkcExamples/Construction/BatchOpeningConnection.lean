@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Construction.BatchOpening
-public import Zkc.Source.Structured.Laws
+public import ZkcExamples.Structured.BatchOpeningConnection
 public import Zkc.Construction.DomainExecutionLaws
 
 @[expose] public section
@@ -19,122 +19,18 @@ namespace ZkcExamples.Construction.BatchOpeningConnection
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open BatchOpeningBodies BatchOpening
 
-namespace Associations
-structured_associations BatchOpening
-  [checkOpening, batchStep, batchValues, formula, mathematicalAdmission, checkBatch]
-end Associations
-open Associations
+open Zkc.Protocols.TableMembership
 
-abbrev Opening (F : Type) := F × (F × Unit)
-abbrev Batch (F : Type) := List (Opening F)
+abbrev Batch (F : Type) := BatchSource.Batch F
 
 def decision {F : Type} [DecidableEq F] (point value : F) (batch : Batch F) : Bool :=
   batch.all fun record => decide (record.1 = point) && decide (record.2.1 = value)
 
-abbrev batchFold : FoldSpec :=
-  ⟨DomainSpec.elements ("finite_" ++ batchValuesHelper.name ++ "_s3_domain") [.sequence openingTy]
-      (.sequence openingTy) .here,
-    [.boolean], [.field "koala-bear", .field "koala-bear"], batchStepHelper.name, "", .math⟩
-
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-abbrev meanings : Meanings F G := closedMeanings unit.definitions
 abbrev model := ringModel F G
 abbrev carriers := uniformCarriers F G
-
-theorem checkOpening_equation (valid : Bool) (point value expectedPoint expectedValue : F) :
-    invoke (meanings (F := F) (G := G)) checkOpeningHelper
-      (.cons valid (.cons point (.cons value (.cons expectedPoint (.cons expectedValue .nil))))) =
-      .done (.cons (valid && decide (point = expectedPoint) && decide (value = expectedValue)) .nil) := by
-  rw [checkOpening_association.invoke unit.linked]
-  rfl
-
-theorem batchStep_equation (batch : Batch F) (valid : Bool) (record : Opening F)
-    (point value : F) :
-    invoke (meanings (F := F) (G := G)) batchStepHelper
-      (.cons valid (.cons record (.cons batch (.cons point (.cons value .nil))))) =
-      .done (.cons (valid && decide (record.1 = point) && decide (record.2.1 = value)) .nil) := by
-  rw [batchStep_association.invoke unit.linked]
-  change (invoke (meanings (F := F) (G := G)) checkOpeningHelper
-    (.cons valid (.cons record.1 (.cons record.2.1 (.cons point (.cons value .nil)))))).bind _ = _
-  rw [checkOpening_equation]
-  rfl
-
-omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-private theorem batch_fold (batch : Batch F) (point value : F) (valid : Bool) :
-    batch.foldl (fun (state : Values (assignment F G) [.boolean]) record =>
-      Values.cons (state.get .here && decide (record.1 = point) && decide (record.2.1 = value)) .nil)
-      (.cons valid .nil) = .cons (valid && decision point value batch) .nil := by
-  induction batch generalizing valid with
-  | nil => simp [decision]
-  | cons record rest ih =>
-      rw [List.foldl_cons, ih]
-      simp only [decision, List.all_cons]
-      congr 1
-      simp only [Values.get, Bool.and_assoc]
-
-theorem batchValues_bounded (point value : F) (batch : Batch F)
-    (bounded : batch.length < indexLimit) :
-    invoke (meanings (F := F) (G := G)) batchValuesHelper (.cons point (.cons value (.cons batch .nil))) =
-      .done (.cons (decision point value batch) .nil) := by
-  rw [batchValues_association.invoke unit.linked]
-  change (Evaluation.denoteFold (meanings (F := F) (G := G)) batchFold
-    ((Values.cons batch Values.nil).append
-      ((Values.cons true Values.nil).append (.cons point (.cons value .nil))))).bind _ = _
-  have admitted : batchFold.domain.admit (carriers := uniformCarriers F G) (Values.cons batch
-      (Values.nil : Values (assignment F G) [])) =
-      .returned (batch.map fun record => .cons record .nil) := by
-    rw [DomainSpec.admit_elements]
-    exact ite_eq_left bounded
-  have folded := Evaluation.denoteFold_reference_map meanings batchFold
-    (.cons batch .nil) (.cons true .nil) (.cons point (.cons value .nil)) batch
-    (fun record => .cons record .nil) admitted
-    (fun (state : Values (assignment F G) [.boolean]) record =>
-      Values.cons (state.get .here && decide (record.1 = point) && decide (record.2.1 = value)) .nil)
-    (fun _ => True) trivial (by
-      intro state record _ _
-      cases state with | cons valid rest => ?_
-      cases rest
-      constructor
-      · exact (Evaluation.foldTransition_unfiltered _ batchFold rfl _ _ _ _).trans
-          (batchStep_equation batch valid record point value)
-      · trivial)
-  erw [folded, batch_fold (G := G) batch point value true]
-  rfl
-
-theorem batchValues_exhausted (point value : F) (batch : Batch F)
-    (unbounded : ¬batch.length < indexLimit) :
-    invoke (meanings (F := F) (G := G)) batchValuesHelper (.cons point (.cons value (.cons batch .nil))) =
-      .halt .exhausted := by
-  rw [batchValues_association.invoke unit.linked]
-  change (Evaluation.denoteFold (meanings (F := F) (G := G)) batchFold
-    ((Values.cons batch Values.nil).append
-      ((Values.cons true Values.nil).append (.cons point (.cons value .nil))))).bind _ = _
-  rw [Evaluation.denoteFold_pack]
-  have exhausted : batchFold.domain.admit (carriers := uniformCarriers F G) (Values.cons batch
-      (Values.nil : Values (assignment F G) [])) = .stopped .exhausted := by
-    rw [DomainSpec.admit_elements]
-    exact ite_eq_right unbounded
-  rw [exhausted]
-  rfl
-
-/-- One all-answer equation, with the real finite-fold exhaustion branch. -/
-theorem check_equation (point value : F) (batch : Batch F) :
-    invoke (meanings (F := F) (G := G)) checkBatchHelper (.cons point (.cons value (.cons batch .nil))) =
-      if batch.length < indexLimit then .done (.cons (decision point value batch) .nil)
-      else .halt .exhausted := by
-  rw [checkBatch_association.invoke unit.linked]
-  change (invoke (meanings (F := F) (G := G)) mathematicalAdmissionHelper
-    (.cons point (.cons value (.cons batch .nil)))).bind _ = _
-  rw [mathematicalAdmission_association.invoke unit.linked]
-  change ((invoke (meanings (F := F) (G := G)) batchValuesHelper
-    (.cons point (.cons value (.cons batch .nil)))).bind _).bind _ = _
-  by_cases bounded : batch.length < indexLimit
-  · rw [ite_eq_left bounded, batchValues_bounded point value batch bounded]
-    rfl
-  · rw [ite_eq_right bounded, batchValues_exhausted point value batch bounded]
-    rfl
 
 def inputs (point value : F) : Domain.Environment (carriers (F := F) (G := G)) :=
   [.data (.field "koala-bear" point), .data (.field "koala-bear" value)]
@@ -156,7 +52,8 @@ theorem helper_equation (point value : F) (batch : Batch F) :
       if batch.length < indexLimit then .done (.cons (decision point value batch) .nil)
       else .halt .exhausted := by
     rw [Domain.Binding.helperTable_ringModel]
-    exact check_equation point value batch
+    exact BatchSource.check_equation unit.linked
+      ZkcExamples.Structured.BatchOpeningConnection.installedBodies point value batch
   have law := Domain.Binding.callHelper_of_invoke_not_refused (model (F := F) (G := G)) program
     checkBatchHelper (.cons point (.cons value (.cons batch .nil))) _ invoked
     (by split <;> intro impossible <;> cases impossible) (received point value batch) (by kernel_rfl)

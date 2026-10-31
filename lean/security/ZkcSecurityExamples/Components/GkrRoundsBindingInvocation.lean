@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurityExamples.Components.GkrRoundsBinding
+public import ZkcSecurity.Bindings.Gkr.RoundsSourceTemplate
 
 @[expose] public section
 noncomputable section
@@ -21,28 +22,48 @@ open GkrRoundsRealization
 variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-def initial {n : Nat} (raw : RawState F) (reference : GkrRoundsReference.State F n) (claim : F) : State F n :=
-  ⟨reference, raw, [], claim⟩
+/-- Complete entry selection is checked independently of its operational law. -/
+def source_entry : Template.Association payload
+    (ZkcSecurity.Bindings.Gkr.RoundsSourceTemplate.signature definition0.name)
+    (ZkcSecurity.Bindings.Gkr.RoundsSourceTemplate.body 4) := by
+  refine ⟨definition0, definition0_member, ?_, ?_⟩ <;> kernel_rfl
 
-theorem inside (ctx : ProtocolContext) : (spec.roles.map ctx.roles).contains (ctx.roles 1) = true := by
-  simp
+/-- The actual entry cannot select a different operational maximum under
+an unchanged source body, even when its complete ABI still matches. -/
+theorem source_maximum_exact (maximum : Nat)
+    (same : definition0.raw =
+      (ZkcSecurity.Bindings.Gkr.RoundsSourceTemplate.body maximum).erase) : maximum = 4 := by
+  exact ZkcSecurity.Bindings.Gkr.RoundsSourceTemplate.maximum_eq_of_body_eq
+    (same.symm.trans source_entry.body_eq)
 
-omit [Field F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-theorem mask_entry (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
-    (a m l r point : Option (List F)) (claim : Option F) :
-    maskValues (ctx.roles 1) (ctx.mapScopes spec.stateScopes)
-      (.cons a (.cons m (.cons l (.cons r (.cons none (.cons point (.cons claim .nil)))))) :
-        Values (Component (assignment F G)) spec.state) =
-      .cons none (.cons none (.cons none (.cons none (.cons none (.cons point (.cons claim .nil)))))) := by
-  change (Values.cons (Participant.restrict ([ctx.roles 0].contains (ctx.roles 1)) a)
-    (.cons (Participant.restrict ([ctx.roles 0].contains (ctx.roles 1)) m)
-      (.cons (Participant.restrict ([ctx.roles 0].contains (ctx.roles 1)) l)
-        (.cons (Participant.restrict ([ctx.roles 0].contains (ctx.roles 1)) r)
-          (.cons (Participant.restrict ([ctx.roles 0].contains (ctx.roles 1)) none)
-            (.cons (Participant.restrict ([ctx.roles 1].contains (ctx.roles 1)) point)
-              (.cons (Participant.restrict ([ctx.roles 1].contains (ctx.roles 1)) claim) .nil)))))) :
-      Values (Component (assignment F G)) spec.state) = _
-  simp [Participant.restrict, Ne.symm (distinct 0 (by decide) (by decide))]
+/-- The generic source installer is applied to the original admitted entry,
+including absent private inputs and the complete declaration output mask. -/
+theorem source_invocation (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
+    (input : Values (Component (assignment F G)) definition0.inputs) :
+    invokeProtocol (payload.plainProtocolTable F G) definition0.signature ctx (ctx.roles 1) input =
+      ZkcSecurity.Bindings.Gkr.RoundsSourceTemplate.view payload.definitions definition0.name 4 ctx input := by
+  exact ZkcSecurity.Bindings.Gkr.RoundsSourceTemplate.invocation
+    payload definition0.name 4 source_entry ctx distinct input
+
+/-- The original generated process uses the installed callback template.
+This bridge reuses the source normalizer rather than its generated readable view. -/
+theorem source_process (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
+    (a m l r point : Option (List F)) (claim : Option F) (count service : Option Nat) :
+    protocol0Role1Process (F := F) (G := G) ctx a m l r point claim count service =
+      ZkcSecurity.Bindings.Gkr.RoundsInvocationInstallation.process payload.definitions 4
+        ctx a m l r point claim count service := by
+  have callback : (Runs.uniform (helpers payload) (payload.plainProtocolTable F G)
+      ctx (ctx.roles 1)).callback spec
+      Zkc.Protocols.Gkr.Source.HelperBodies.roundsCallbackBody =
+        ZkcSecurity.Bindings.Gkr.RoundsVerifierInstallation.callbackBody (G := G)
+          payload.definitions ctx := by
+    funext input
+    exact ZkcSecurity.Bindings.Gkr.RoundsSourceTemplate.callback_source
+      payload.definitions (payload.plainProtocolTable F G) ctx distinct input
+  dsimp only [Zkc.Protocols.Gkr.Source.HelperBodies.roundsCallbackBody, spec, repeatSpec] at callback
+  unfold protocol0Role1Process
+  rw [callback]
+  rfl
 
 /-- Direct imported whole-Process equation. Mathematical representation facts
 are intentionally absent: this binding is shared by both property consumers. -/
@@ -52,27 +73,17 @@ theorem verifier_binding (ctx : ProtocolContext) (distinct : RosterDistinct ctx 
     protocol0Role1Process (F := F) (G := G) ctx a m l r (some []) (some claim) (some count) (some service) =
       ((program service).remaining count ctx (initial raw reference claim)).bind
         (fun final => .done (carried (G := G) final)) := by
-  rw [protocol0Role1_readable ctx distinct]
-  unfold protocol0Role1ReadableProcess
-  rw [GkrRoundsBindingHelpers.owned_rounds_open]
-  simp only [PIR.Process.bind, Values.get, Runs.uniform]
-  rw [repeat_admitted spec ctx (ctx.roles 1) _ _ _ count (inside ctx) bounded]
-  rw [mask_entry ctx distinct]
-  change (actualRemaining (G := G) service ctx count 0 (initial raw reference claim)).bind _ = _
-  rw [remaining_binding service ctx distinct]
-  simp only [PIR.Process.bind_assoc, carried, runtime, PIR.Process.bind, Values.get,
-    GkrRoundsBindingHelpers.owned_rounds_close]
+  rw [source_process ctx distinct]
+  exact ZkcSecurity.Bindings.Gkr.RoundsInvocationInstallation.verifier_binding
+    payload.linked GkrRoundsBindingHelpers.bodies 4 ctx distinct a m l r claim service count bounded raw reference
 
 /-- Missing or excessive source counts stop before any receive or query. -/
 theorem missing_count (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
     (a m l r point : Option (List F)) (claim : Option F) (service : Option Nat) :
     protocol0Role1Process (F := F) (G := G) ctx a m l r point claim none service = .halt .incomplete := by
-  rw [protocol0Role1_readable ctx distinct]
-  unfold protocol0Role1ReadableProcess
-  rw [GkrRoundsBindingHelpers.owned_rounds_open]
-  cases point <;> cases claim <;> simp only [PIR.Process.bind, Values.get, Runs.uniform]
-  rw [repeat_missing_count spec ctx (ctx.roles 1) _ _ _ (inside ctx)]
-  rfl
+  rw [source_process ctx distinct]
+  exact ZkcSecurity.Bindings.Gkr.RoundsInvocationInstallation.missing_count
+    payload.linked GkrRoundsBindingHelpers.bodies 4 ctx distinct a m l r point claim service
 
 theorem above_maximum (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
     (a m l r point : Option (List F)) (claim : Option F) (service : Option Nat)
@@ -81,12 +92,9 @@ theorem above_maximum (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2
       match point, claim with
       | some _, some _ => .halt .refused
       | _, _ => .halt .incomplete := by
-  rw [protocol0Role1_readable ctx distinct]
-  unfold protocol0Role1ReadableProcess
-  rw [GkrRoundsBindingHelpers.owned_rounds_open]
-  cases point <;> cases claim <;> simp only [PIR.Process.bind, Values.get, Runs.uniform]
-  rw [repeat_above_maximum spec ctx (ctx.roles 1) _ _ _ count (inside ctx) large]
-  rfl
+  rw [source_process ctx distinct]
+  exact ZkcSecurity.Bindings.Gkr.RoundsInvocationInstallation.above_maximum
+    payload.linked GkrRoundsBindingHelpers.bodies 4 ctx distinct a m l r point claim service count large
 
 /-- Zero rounds retains the complete Pending input and does not demand a
 service handle. Missing Pending components still stop at the linear boundary.
@@ -99,11 +107,8 @@ theorem zero (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
         .done (.cons none (.cons none (.cons none (.cons none (.cons none
           (.cons (some point) (.cons (some claim) .nil)))))))
       | _, _ => .halt .incomplete := by
-  rw [protocol0Role1_readable ctx distinct]
-  unfold protocol0Role1ReadableProcess
-  rw [GkrRoundsBindingHelpers.owned_rounds_open]
-  cases point <;> cases claim <;> simp only [PIR.Process.bind, Values.get, Runs.uniform]
-  rw [repeat_zero spec ctx (ctx.roles 1) _ _ _ (inside ctx), mask_entry ctx distinct]
-  simp only [Values.get, GkrRoundsBindingHelpers.owned_rounds_close, PIR.Process.bind]
+  rw [source_process ctx distinct]
+  exact ZkcSecurity.Bindings.Gkr.RoundsInvocationInstallation.zero
+    payload.linked GkrRoundsBindingHelpers.bodies 4 ctx distinct a m l r point claim service
 
 end ZkcSecurity.Examples.Components.GkrRoundsBinding

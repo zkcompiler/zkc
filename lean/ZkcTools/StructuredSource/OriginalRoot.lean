@@ -26,6 +26,7 @@ def uniqueIndex {α : Type} [BEq α] (candidates : List α) (selected : α) : Ex
 nominal model. Mathematical helper results remain indexed checked arguments. -/
 structure TemplateOutput where
   moduleName : String
+  namespaceName : String := moduleName
   sourceModule : String
   programExpression : String
   definitionIndex : Nat
@@ -45,7 +46,7 @@ def templateSource (program : Program) (output : TemplateOutput) : Except String
   unless NormalForms.callsMatch form do throw "original-root-template-calls"
   return "module\n\npublic import " ++ output.sourceModule ++
     "\npublic import Zkc.Source.Structured.Bindings.Template\n\n@[expose] public section\n" ++
-    "namespace " ++ output.moduleName ++
+    "namespace " ++ output.namespaceName ++
     "\nopen Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm Zkc.Source.Structured.Bindings\n" ++
     "set_option maxRecDepth 50000\nset_option maxHeartbeats 8000000\nnoncomputable section\n" ++
     "abbrev program : Program := " ++ output.programExpression ++ "\n" ++
@@ -71,6 +72,6 @@ def templateSource (program : Program) (output : TemplateOutput) : Except String
       "invokeProtocol (program.payload.plainProtocolTableOn model) definition.signature =\n    " ++
       "definition.denoteWithOn model (.silent _) (participantActionsOn model.toCarriers) " ++
       "(helperTables model) (capture model) .silent := by kernel_rfl\n" ++
-    "end\nend " ++ output.moduleName ++ "\n"
+    "end\nend " ++ output.namespaceName ++ "\n"
 
 end ZkcTools.StructuredSource.OriginalRoot

@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.Bindings.Gkr.RoundsRealization
 public import ZkcSecurityExamples.Components.GkrRoundsProcesses
+public import ZkcSecurity.Bindings.Gkr.RoundsSourceRealization
 public import Zkc.Polynomial.Multilinear.ListRestriction
 
 @[expose] public section
@@ -29,60 +30,23 @@ variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
 theorem fix_success {n : Nat} (xs : List F) (s : Table F (n + 1))
     (decoded : ofList? (n + 1) xs = some s) (capacity : 2 ^ n < indexLimit) (r : F) :
     fix (G := G) xs r = .done (.cons (restrictValues xs r) .nil) := by
-  have shape : xs.length = 2 * 2 ^ n := by
-    rw [ofList?_length xs s decoded, Nat.pow_succ, Nat.mul_comm]
-  obtain ⟨low, high⟩ := restrictValues_halves_length xs shape
-  rw [fix, split_success xs s decoded]
-  simp only [PIR.Process.bind, Values.get]
-  change invoke table interpolationsHelper
-    (.cons (xs.take (xs.length / 2)) (.cons (xs.drop (xs.length / 2)) (.cons r .nil))) = _
-  exact map_interpolate _ _ r (by omega) (by omega)
+  exact ZkcSecurity.Bindings.Gkr.RoundsSourceRealization.fix_success payload.linked bodies xs s decoded capacity r
 
 theorem fixGates_success {n : Nat} (raw : RawState F) (s : State F (n + 1))
     (decoded : Decodes raw s) (capacity : 2 ^ n < indexLimit) (r : F) :
     invoke (table (G := G)) gateRestrictionHelper (raw.values.append (.cons r .nil)) =
       .done (raw.restrict r).values := by
-  change invoke table gateRestrictionHelper (.cons raw.add (.cons raw.mul (.cons raw.left (.cons raw.right (.cons r .nil))))) = _
-  rw [fixGates_equation]
-  simp only [fixGates, fix_success _ _ decoded.1 capacity,
-    fix_success _ _ decoded.2.1 capacity, fix_success _ _ decoded.2.2.1 capacity,
-    fix_success _ _ decoded.2.2.2 capacity, PIR.Process.bind, Values.get, RawState.restrict, RawState.values]
+  exact ZkcSecurity.Bindings.Gkr.RoundsSourceRealization.fixGates_success payload.linked bodies raw s decoded capacity r
 
 theorem round_success {n : Nat} (raw : RawState F) (s : State F (n + 1))
     (decoded : Decodes raw s) (capacity : 2 ^ n < indexLimit) :
     invoke (table (G := G)) roundMessageHelper raw.values =
       .done (.cons (message s).constant (.cons (message s).linear (.cons (message s).quadratic .nil))) := by
-  have da0 := decode_low_half raw.add s.add decoded.1
-  have da1 := decode_high_half raw.add s.add decoded.1
-  have dm0 := decode_low_half raw.mul s.mul decoded.2.1
-  have dm1 := decode_high_half raw.mul s.mul decoded.2.1
-  have dl0 := decode_low_half raw.left s.left decoded.2.2.1
-  have dl1 := decode_high_half raw.left s.left decoded.2.2.1
-  have dr0 := decode_low_half raw.right s.right decoded.2.2.2
-  have dr1 := decode_high_half raw.right s.right decoded.2.2.2
-  change invoke table roundMessageHelper (.cons raw.add (.cons raw.mul (.cons raw.left (.cons raw.right .nil)))) = _
-  rw [round_equation]
-  unfold round
-  rw [split_success _ _ decoded.1, split_success _ _ decoded.2.1,
-    split_success _ _ decoded.2.2.1, split_success _ _ decoded.2.2.2]
-  simp only [PIR.Process.bind, get_there, Values.get]
-  simp only [ofList?_length _ _ da0, ofList?_length _ _ da1,
-    ofList?_length _ _ dm0, ofList?_length _ _ dm1,
-    ofList?_length _ _ dl0, ofList?_length _ _ dl1,
-    ofList?_length _ _ dr0, ofList?_length _ _ dr1,
-    mapped, Evaluation.mapShape, Evaluation.mapShapeRemaining, capacity, ite_true,
-    Finite.admitThen, PIR.Process.bind, Values.get]
-  rw [values_sum _ _ _ _ _ _ _ _ da0 dm0 dl0 dr0,
-    values_sum _ _ _ _ _ _ _ _ da1 dm1 dl1 dr1,
-    quadratics_sum _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ da0 da1 dm0 dm1 dl0 dl1 dr0 dr1,
-    message_coefficients]
+  exact ZkcSecurity.Bindings.Gkr.RoundsSourceRealization.round_success payload.linked bodies raw s decoded capacity
 
-/-- The exact all-present helper table in the generated Rounds binding. -/
 theorem generated_table : (helpers (F := F) (G := G) payload).closed = table :=
   Evaluation.ComponentTables.closed_fold (.silent _) _ _
 
-/-- This is the actual local-call seam of both generated participant views.
-Every absent input is incomplete; an inactive owner skips the call. -/
 theorem owned_round (self owner : Nat)
     (args : Values (Component (assignment F G)) roundMessageHelper.inputs) :
     Participant.owned self owner
@@ -94,20 +58,10 @@ theorem owned_round (self owner : Nat)
           (values.get (.there (.there .here)))
           (values.get (.there (.there (.there .here))))).bind fun out => .done out.present
     else .done (Values.absent (assignment F G) roundMessageHelper.outputs) := by
-  unfold Participant.owned
-  split
-  · cases sequenced : RoleFamily.sequence args with
-    | none => rfl
-    | some values =>
-      cases values with
-      | cons a rest => cases rest with
-        | cons m rest => cases rest with
-          | cons l rest => cases rest with
-            | cons r rest => cases rest
-                             change (invoke (helpers payload).closed roundMessageHelper _).bind _ = _
-                             rw [generated_table, round_equation]
-                             rfl
-  · rfl
+  change Participant.owned self owner
+    (invoke (helpers (F := F) (G := G) payload).closed roundMessageHelper) args = _
+  rw [generated_table]
+  exact ZkcSecurity.Bindings.Gkr.RoundsSourceRealization.owned_round payload.linked bodies self owner args
 
 theorem owned_fixGates (self owner : Nat)
     (args : Values (Component (assignment F G)) gateRestrictionHelper.inputs) :
@@ -120,21 +74,10 @@ theorem owned_fixGates (self owner : Nat)
           (values.get (.there (.there .here))) (values.get (.there (.there (.there .here))))
           (values.get (.there (.there (.there (.there .here)))))).bind fun out => .done out.present
     else .done (Values.absent (assignment F G) gateRestrictionHelper.outputs) := by
-  unfold Participant.owned
-  split
-  · cases sequenced : RoleFamily.sequence args with
-    | none => rfl
-    | some values =>
-      cases values with
-      | cons a rest => cases rest with
-        | cons m rest => cases rest with
-          | cons l rest => cases rest with
-            | cons r rest => cases rest with
-              | cons challenge rest => cases rest
-                                       change (invoke (helpers payload).closed gateRestrictionHelper _).bind _ = _
-                                       rw [generated_table, fixGates_equation]
-                                       rfl
-  · rfl
+  change Participant.owned self owner
+    (invoke (helpers (F := F) (G := G) payload).closed gateRestrictionHelper) args = _
+  rw [generated_table]
+  exact ZkcSecurity.Bindings.Gkr.RoundsSourceRealization.owned_fixGates payload.linked bodies self owner args
 
 end
 end ZkcSecurity.Examples.Components.GkrRoundsRealization

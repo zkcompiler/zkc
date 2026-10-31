@@ -12,6 +12,9 @@ transcript-construction rule's deployment checks inside the loop. -/
 set_option maxRecDepth 50000
 set_option maxHeartbeats 16000000
 set_option linter.unusedTactic false
+-- Exercise the same checked-family mode as the generated production roots.
+set_option zkc.connection.generateReusableBodies true
+set_option zkc.connection.requireReusableBodies true
 namespace Tests.SumcheckConnectionControls
 open Zkc.Construction ZkcExamples.Construction
 

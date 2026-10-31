@@ -12,6 +12,7 @@ from pathlib import Path
 import sys
 
 from check import ROOT, Suite, definition, write_json
+from bridges.common.schema import interpreted_type
 
 
 class AggregateSuite(Suite):
@@ -19,8 +20,9 @@ class AggregateSuite(Suite):
         return ("compiler", "lean")
 
     def evaluate(self, subject, label, values, expected):
-        query = definition(subject[2], subject[2][3])[4][0][1]
-        products = [["product", query[1], query[2],
+        query = definition(subject[2], subject[2][3])[4][0][2][0][1]
+        product = interpreted_type(query)
+        products = [["product", product[1], product[2],
                      [["bool", active], ["field", "bls12-381.fr", str(value)]]]
                     for active, value in values]
         request = subject[1].parent / (label + ".inputs.json")
@@ -54,16 +56,16 @@ def run_cases(suite):
     definition(bad, "make")[9][1][0][0][1] = "other"
     mutations.append(("wrong-constructor", bad, "structured-product-constructor"))
     bad = copy.deepcopy(data)
-    definition(bad, "step")[4][1][1] = "other"
+    definition(bad, "step")[4][1][1] = ["atom", "other"]
     mutations.append(("same-shape-wrong-identity", bad, None))
     bad = copy.deepcopy(data)
-    definition(bad, "step")[4][1][3].reverse()
+    definition(bad, "step")[4][1][2][0][1].reverse()
     mutations.append(("swapped-components", bad, None))
     bad = copy.deepcopy(data)
-    definition(bad, "make")[5][0][3][1] = ["service", "random.bls12-381.fr/0"]
+    definition(bad, "make")[5][0][2][0][1][1] = ["service", "random.bls12-381.fr/0"]
     mutations.append(("dormant-service-component", bad, "structured-header"))
     bad = copy.deepcopy(data)
-    definition(bad, "make")[5][0][3][1] = ["field", "missing"]
+    definition(bad, "make")[5][0][2][0][1][1] = ["apply", "field", [["domain", "Field", "missing"]]]
     mutations.append(("dormant-unknown-domain", bad, None))
     for label, snapshot, code in mutations:
         suite.case(label, lambda n=label, s=snapshot, c=code: suite.refuse_snapshot(n, s, c))

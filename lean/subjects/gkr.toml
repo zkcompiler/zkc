@@ -15,6 +15,7 @@ original_source = "lean/bridges/structured/fixtures/gkr-source.mlir"
 original_export = "lean/bridges/structured/fixtures/gkr-source.json"
 data = "lean/ZkcExamples/Structured/GkrSourceData.lean"
 participant = "lean/ZkcExamples/Construction/GkrProofParticipant.lean"
+pair = "lean/ZkcExamples/Construction/Generated/GkrPair.lean"
 glue = "lean/ZkcExamples/Construction/GkrArtifact.lean"
 claims = "lean/security/ZkcSecurityExamples/Gkr/Generated/SubjectSoundnessClaims.lean"
 

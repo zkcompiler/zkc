@@ -30,3 +30,13 @@ run_elab do
   let wrong ← assemble #[⟨"Counter.base", #[← `(term| 3)]⟩] expected #[good]
   unless (match wrong with | .refused _ _ => true | _ => false) do
     throwError "a default hid an ill-typed explicit companion"
+  let unknown ← mkFreshExprMVar (mkSort .zero)
+  let refused ← try
+    let _ ← assemble #[] unknown #[good]
+    pure false
+  catch error =>
+    if error.isRuntime || error.isInterrupt then throw error
+    pure ((← error.toMessageData.toString).contains
+      "requires the complete expected type before proof selection")
+  unless refused && !(← unknown.mvarId!.isAssigned) do
+    throwError "proof selection chose the requested proposition"

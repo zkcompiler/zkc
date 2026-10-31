@@ -26,7 +26,7 @@ def retain(path, content, write):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(encoded)
     if not path.is_file() or path.read_bytes() != encoded:
-        raise ValueError(f"stale retained fixture: {path.relative_to(ROOT)}")
+        raise ValueError(f"stale retained fixture: {path}")
 
 
 def authored(runner, compiler, stem):
@@ -74,6 +74,8 @@ def main():
     parser.add_argument("--optimizer", type=Path, help="the matching native optimizer, for inlining fixtures")
     parser.add_argument("--fixture", action="append", help="select a manifest fixture or finite state fixture")
     parser.add_argument("--write-fixtures", action="store_true")
+    parser.add_argument("--artifact-root", type=Path, default=ROOT,
+                        help="mirror repository-relative artifacts under this root")
     parser.add_argument("--output", type=Path, required=True, help="command receipts and fresh exports")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
@@ -83,6 +85,8 @@ def main():
     selected = args.fixture or stems
     if set(selected) - set(stems):
         parser.error("unknown fixture selection")
+    if args.artifact_root.resolve() != ROOT and set(selected) & set(fixture_stems("inlining")):
+        parser.error("inlining fixtures require the owning repository artifact root")
     if set(selected) & set(fixture_stems("inlining")) and args.optimizer is None:
         parser.error("inlining regeneration requires --optimizer")
     runner = Runner()
@@ -108,7 +112,8 @@ def main():
             if stem not in ("total-state", "unit-state"):
                 targets.append((FIXTURES / f"{stem}.mlir", source))
             for path, content in targets:
-                retain(path, content, args.write_fixtures)
+                target = args.artifact_root.resolve() / path.relative_to(ROOT)
+                retain(target, content, args.write_fixtures)
             results.append(dict(fixture=stem, source_sha256=digest(source.encode()),
                                 export_sha256=digest(exported.encode()),
                                 files={str(path.relative_to(ROOT)): digest(content.encode())

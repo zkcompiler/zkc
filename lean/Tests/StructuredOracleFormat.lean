@@ -31,11 +31,11 @@ private def run : IO Unit := do
   test "group table data" ((OracleKind.table (.group "g") none).data == .groups "g")
   test "query and answer" (kind.query == .index && kind.answer == .field "koala-bear")
   for value in ["-1", "01", "+1", "18446744073709551616"] do
-    test "canonical capacity" (!(Format.type (.arr #[.str "oracle_sequence", wireOracleKind kind,
+    test "canonical capacity" (!(Format.type (.arr #[.str "oracle_sequence", .str "table", wireOracleArguments (.field "koala-bear") (some 16),
       .str value])).isOk)
-  test "capacity requires string" (!(Format.type (.arr #[.str "oracle_sequence", wireOracleKind kind,
+  test "capacity requires string" (!(Format.type (.arr #[.str "oracle_sequence", .str "table", wireOracleArguments (.field "koala-bear") (some 16),
     toJson (4 : Nat)])).isOk)
-  test "unknown kind" (!(Format.type (.arr #[.str "oracle", .arr #[.str "univariate", .arr #[]]])).isOk)
+  test "unknown kind" (!(Format.type (.arr #[.str "oracle", .str "univariate", .arr #[]])).isOk)
   test "nested handle is restricted" ((Ty.sequence (.oracle kind)).isHandle)
   test "oracle is not service" (!(Ty.oracle kind).isService)
   test "oracle type has no ordinary admission"
@@ -116,9 +116,9 @@ private def run : IO Unit := do
     test "all twelve exact descriptor cases" (Format.descriptor json == .ok (.oracle expected))
     if let .arr fields := json then
       test "all twelve reject unknown fields" (!(Format.descriptor (.arr (fields.push .null))).isOk)
-  let deepest := (List.range 61).foldl (fun type _ => Ty.sequence type) (.oracle kind)
-  test "kind and row consume the type depth budget" ((Format.type (wireType deepest)).isOk)
-  test "nested kind cannot bypass the type depth budget"
+  let deepest := (List.range 19).foldl (fun type _ => Ty.sequence type) (.oracle kind)
+  test "kind and row fit the expanded depth budget" ((Format.type (wireType deepest)).isOk)
+  test "nested kind cannot bypass the expanded depth budget"
     (!(Format.type (wireType (.sequence deepest))).isOk)
   test "logical handle cannot acquire scalar codec support"
     (!(Zkc.Construction.dataType (.oracle kind)) &&

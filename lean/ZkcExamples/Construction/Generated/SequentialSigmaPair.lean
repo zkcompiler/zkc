@@ -9,7 +9,7 @@ open Zkc.Construction
 
 def participant : Participant where
   source := "sha256:6b6b8fdffdb9eb2c66464d0a2f4b0b496e11c955c3ff40cf9dca6834c82472e6"
-  candidate := "sha256:6ed8f51241c9c0d5352c1ad1adf620a4e274ca86e9443df358d0340555a0f886"
+  candidate := "sha256:8f3ce95d10f0f04971f51c08588ddbdaa2701c7370b412d143a0679ebf8571c0"
   policy := ⟨"s7h6578616d706c6515h53657175656e7469616c5369676d61", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [6], [0, 1, 2, 3], [("apply_2_s0_label_6368616c6c656e6765", "apply_2_s0_label_64656c6976657279_0"), ("apply_2_s2_label_6368616c6c656e6765", "apply_2_s2_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_0"
   inputs := [.data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"]
@@ -57,7 +57,7 @@ open Zkc.Construction
 
 def participant : Participant where
   source := "sha256:6b6b8fdffdb9eb2c66464d0a2f4b0b496e11c955c3ff40cf9dca6834c82472e6"
-  candidate := "sha256:6ed8f51241c9c0d5352c1ad1adf620a4e274ca86e9443df358d0340555a0f886"
+  candidate := "sha256:8f3ce95d10f0f04971f51c08588ddbdaa2701c7370b412d143a0679ebf8571c0"
   policy := ⟨"s7h6578616d706c6515h53657175656e7469616c5369676d61", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [6], [0, 1, 2, 3], [("apply_2_s0_label_6368616c6c656e6765", "apply_2_s0_label_64656c6976657279_0"), ("apply_2_s2_label_6368616c6c656e6765", "apply_2_s2_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .transcript "merlin3.bls12-381.fr64be/0"]

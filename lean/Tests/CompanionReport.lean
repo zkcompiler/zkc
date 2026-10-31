@@ -39,6 +39,85 @@ run_elab do
 -- Generated scaffolding really parses and elaborates, including keyword names.
 def Generated.Sumcheck.entry : Prop := True
 
+/-- The hypothesis must remain visible even though the conclusion's expression
+does not contain its proof variable. -/
+def Generated.withPremise : Prop := ∀ (α : Type) (x : α), x = x → x = x
+def Generated.withoutPremise : Prop := ∀ (α : Type) (x : α), x = x
+
+universe u v
+section GeneratedGoal
+variable (unused : Type v) (α : Type u) [Inhabited α] (premise : True)
+include premise
+
+companion_goal Generated.polymorphic in
+theorem generatedPolymorphic {β : Type v} (x : β) (h : x = x) : x = x := by
+  run_tac Lean.Elab.Tactic.withMainContext do
+    validateGoal (← Lean.Elab.Tactic.getMainTarget) ``Generated.polymorphic
+  have _included := premise
+  exact h
+end GeneratedGoal
+
+/-- error: companion_goal requires a single theorem or definition -/
+#guard_msgs in
+companion_goal unsupportedGoal in
+example : True := True.intro
+
+/-- error: companion_goal requires an explicit independently fixed type -/
+#guard_msgs in
+companion_goal inferredGoal in
+def inferredValue := 1
+
+open Lean Elab Command Term Meta in
+run_elab do
+  let expected ← mkFreshExprMVar (some (mkSort .zero))
+  let refused ← try
+    validateGoal expected ``Generated.withPremise
+    pure false
+  catch _ => pure true
+  unless refused do throwError "an unresolved expected proposition was accepted"
+
+-- A dependent let is retained as a let, rather than an extra proof premise.
+open Lean Elab Command Term Meta in
+run_elab do
+  let goal ← whnf (mkConst ``Generated.withPremise)
+  forallTelescope goal fun binders _ => do
+    withLetDecl `copy (← inferType binders[1]!) binders[1]! fun copy => do
+      let expected ← mkEq copy binders[1]!
+      let row ← report {
+        identity := "ReportControl/dependent-let", responsibility := "mathematics", expected }
+        (.openObligation "missing lemma" #[])
+      let .ok context := (row.getObjVal? "context").bind Json.getArr?
+        | throwError "missing dependent-let context"
+      unless context.size == 4 && (context.back!.getObjVal? "value").toOption != some Json.null do
+        throwError "a dependent let was lost from the full telescope"
+      unless (row.getObjValAs? String "closed_expected_type").toOption.any (·.contains "let") do
+        throwError "a let dependency was replaced by an unconstrained parameter"
+
+open Lean Elab Command Term Meta in
+run_elab do
+  let goal ← whnf (mkConst ``Generated.withPremise)
+  forallTelescope goal fun binders expected => do
+    let request : Obligation := {
+      identity := "ReportControl/dependent-premise"
+      responsibility := "family mathematics"
+      expected
+      goal := some ``Generated.withPremise }
+    let record ← report request (.openObligation "author lemma required" #[])
+    let .ok context := (record.getObjVal? "context").bind Json.getArr?
+      | throwError "missing reported local telescope"
+    unless context.size == binders.size && context.size == 3 do
+      throwError "the report dropped a dependent parameter or premise"
+    unless (record.getObjValAs? String "goal_declaration").toOption ==
+        some "Generated.withPremise" do
+      throwError "the checked goal declaration was omitted"
+    let refused ← try
+      let _ ← report { request with goal := some ``Generated.withoutPremise }
+        (.openObligation "author lemma required" #[])
+      pure false
+    catch _ => pure true
+    unless refused do
+      throwError "a generated goal with a different premise telescope was accepted"
+
 open Lean Elab Command Term Meta in
 run_cmd do
   let wanted : Stub := { first with declaration := .str .anonymous "match" }

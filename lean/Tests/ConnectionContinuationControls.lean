@@ -19,7 +19,8 @@ open Tests.ConnectionContinuationMutation
 
 def missingRoutes : Original.Routing := {Small.validatorRouting with messages := []}
 example : True := by
-  expect_connection_refusal "missing retained routes" because "alignment-route-request-history-coordinate-or-operand-mismatch"
+  -- The actual callee is already installed; its finite route premises refuse.
+  expect_connection_refusal "missing retained routes" because "alignment-reusable-body-refused"
     have refused : RootCertificate Small.program missingRoutes 1 Small.validatorArtifact := by
       derive_root_connection_with_library
         target (fun model => ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.body model Small.program Small.context)

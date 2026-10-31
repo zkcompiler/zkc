@@ -13,9 +13,26 @@ set_option autoImplicit false
 namespace Zkc.Construction.ConnectionComputation
 open Zkc.Source Zkc.Source.Structured NormalForm ConnectionFrame
 
+/-- Project the tuple spine without inspecting the term in its head. -/
+def firstTerm {scope : Scope} {ty : Ty} {types : List Ty}
+    (terms : Terms [] scope (ty :: types)) : Term [] scope ty :=
+  Terms.casesOn (motive_2 := fun index _ => match index with
+    | [] => PUnit | head :: _ => Term [] scope head) terms
+    PUnit.unit fun head _ => head
+
+/-- Drop the tuple head without evaluating it. -/
+def laterTerms {scope : Scope} {ty : Ty} {types : List Ty}
+    (terms : Terms [] scope (ty :: types)) : Terms [] scope types :=
+  Terms.casesOn (motive_2 := fun index _ => match index with
+    | [] => PUnit | _ :: tail => Terms [] scope tail) terms
+    PUnit.unit fun _ tail => tail
+
+/-- Recursion follows the type-list spine. Operand inference therefore does
+not need to evaluate unknown term heads or dependent pattern-match casts. -/
 def components {scope : Scope} : {types : List Ty} → Terms [] scope types → Values (Comp [] scope) types
-  | _, .nil => .nil
-  | _, .cons head tail => .cons (.present head) (components tail)
+  | [], _ => .nil
+  | _ :: _, terms => .cons (.present (firstTerm terms)) (components (laterTerms terms))
+termination_by structural types => types
 
 theorem components_eval {model : DomainModel} {scope : Scope} (binders : Binders model scope) :
     {types : List Ty} → (terms : Terms [] scope types) →
@@ -23,7 +40,8 @@ theorem components_eval {model : DomainModel} {scope : Scope} (binders : Binders
       (Terms.eval (LawResults.empty model) terms binders).present
   | _, .nil => rfl
   | _, .cons head tail => by
-    simp only [components, Comps.eval, Comp.eval, Terms.eval, Values.present, components_eval binders tail]
+    simp only [components, firstTerm, laterTerms, Comps.eval, Comp.eval, Terms.eval,
+      Values.present, components_eval binders tail]
 
 def cells {scope : Scope} : {types : List Ty} → Values (Comp [] scope) types → Layout scope
   | _, .nil => []

@@ -12,7 +12,7 @@ namespace ZkcExamples.Structured.SumcheckClaimOriginalData
 open Zkc.Source.Structured
 
 def snapshot : Snapshot where
-  source := "sha256:a5eaa973fd16dc3f0fe8de15944267fa905c5dccae5760ad21e5b42dc90749ef"
+  source := "sha256:391963cbeed4fe34fc3162590e3d3a49a7d7a6089193d1a8b7e90aacfa470b1d"
   entry := "s14h73756d636865636b5f636c61696d5h436c61696d"
   domains := []
   relations := []

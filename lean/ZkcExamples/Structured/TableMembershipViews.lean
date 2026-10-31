@@ -1,6 +1,8 @@
 module
 
 public import Zkc.Source.Structured.UnitViews
+public import Zkc.Source.Structured.BodyBindings
+public import Zkc.Protocols.TableMembership.SourceLaws
 public import ZkcExamples.Structured.TableMembershipData
 public import ZkcExamples.Structured.TableMembershipBodies
 
@@ -23,5 +25,10 @@ structured_associations TableMembershipViews
   [containsDecision, containsStep, contains, queryDecision, queryStep,
     membership, realization, formula, checkMembership]
 end Associations
+
+/-- Install the reusable helper closure on this exact admitted source. -/
+theorem installedBodies : Zkc.Protocols.TableMembership.Source.Bodies
+    unit.definitions "koala-bear" names := by
+  bind_structured_bodies
 
 end ZkcExamples.Structured.TableMembershipViews

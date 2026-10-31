@@ -283,9 +283,10 @@ def Instruction.callsOf : Instruction → List (String × List ValueSort)
 end
 
 
-/-- The native deployment policy exactly as exported: entry, producer and
+/-- The supported projection of a native deployment policy: entry, producer and
 validator roles, acceptance index, suite, replaced services, public inputs,
-ordered query/delivery site pairs, framing and construction selector. -/
+ordered query/delivery site pairs, framing and construction selector. The reader
+requires the final wire gates array to be empty before omitting it here. -/
 structure Policy where
   entry : String
   producer : String

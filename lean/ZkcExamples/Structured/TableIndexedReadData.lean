@@ -12,7 +12,7 @@ namespace ZkcExamples.Structured.TableIndexedReadData
 open Zkc.Source.Structured
 
 def snapshot : Snapshot where
-  source := "sha256:7ec0564c319b04a54f32e492ad3b10a3cae5a497c6afc2b24dc5bbfbb358e0d1"
+  source := "sha256:752ba020b0d5a6ad383aba2aee5f3f000368253fd11bcd7aaf05296a751b7644"
   entry := "zkl_4597680e78fa47047d8f8fcedcf8fe295ebd02cf0856991e260e9130a8d2ea87"
   domains := [⟨"finite_zkl_513fafc86f60e415471e1286479cbd64b87fc18d657412194e4e0974b61e260a_s4_domain", [.vector "koala-bear"], [.indices 0 0], 0⟩]
   relations := [⟨"zkl_4a7527ef14d9b3ec64519e018a58da326ed309327b8561291731722a15176757", .publicDef, "zkc.language.formula/0", "zkl_4a7527ef14d9b3ec64519e018a58da326ed309327b8561291731722a15176757", "ae9fe16a4a5ff9b0b0dea1491f4b761b2cb11e19451a102fb23355c2e24c644d", [.vector "koala-bear", .index, .field "koala-bear"], [.boolean], ["parameter", "statement", "statement"], some ("zkf_eeb8bf15a7659bce5aa909302f5a359e054778ba70f159e4c02088dc98b55444"), []⟩]

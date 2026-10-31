@@ -1,5 +1,10 @@
 module
 
+public import Zkc.Protocols.Sigma.SourceInstallation
+public meta import ZkcTools.StructuredSource.InferReferenceInstallation
+public import ZkcExamples.Structured.Generated.Bindings.SchnorrRandomizedInputs
+public import ZkcExamples.Structured.Generated.Bindings.SchnorrAndRandomizedInputs
+public import ZkcExamples.Structured.ChaumPedersenViews
 public import ZkcExamples.Structured.SchnorrInteractive
 public import ZkcExamples.Structured.SchnorrVariantsBodies
 public import ZkcExamples.Structured.SchnorrHelpersData
@@ -189,3 +194,165 @@ theorem early_no_contract :
   exact early_not_corresponding (F := F) (0 : G) 0 0 (claimed.realizes 0 0 0).process_eq
 
 end ZkcExamples.Structured.SchnorrVariants
+
+/-! One reusable installation on three actual admitted sources. The generated
+root certificates remain the owners of constructed source correspondence. -/
+namespace ZkcExamples.Structured.SchnorrVariants.Installations
+open Zkc.Source Zkc.Source.Structured Zkc.Protocols.Sigma.Source
+open ZkcExamples.Structured.Generated.Bindings
+set_option maxRecDepth 10000
+noncomputable section
+
+def domains : Domains := ⟨"bls12-381.g1", "bls12-381.fr"⟩
+
+def singleSites : Sites :=
+  ⟨"s0", "s2", "label_636f6d6d69746d656e74_0", "",
+    "label_6368616c6c656e6765", "label_64656c6976657279_0", "label_726573706f6e7365_0", ""⟩
+
+def independentSites : Sites :=
+  ⟨"s0", "s2", "label_66697273745f636f6d6d69746d656e74_0", "label_7365636f6e645f636f6d6d69746d656e74_0",
+    "label_6368616c6c656e6765", "label_64656c6976657279_0",
+    "label_66697273745f726573706f6e7365_0", "label_7365636f6e645f726573706f6e7365_0"⟩
+
+def sharedSites : Sites := { independentSites with response := "label_726573706f6e7365_0" }
+
+def randomizedMetadata : Metadata :=
+  ⟨SchnorrRandomizedInputs.protocol0Signature.name,
+    "role00000000", "role00000001", (some "zkl_dcbf81f97f37c181fef011e003f8b5e033842ddeccb04c1dea551fb7bf94978f")⟩
+
+/-- Body inference chooses names only after the complete nominal signature and
+mathematical body have been fixed. -/
+def randomizedRelation : {name : String //
+    BodyIn SchnorrRandomizedInputs.program.payload.definitions
+      (relationHelper domains name) (relationBody domains)} := by
+  infer_reference_installation
+
+/-- Exact source identity and the full typed tree authorize this installation. -/
+def randomizedAssociation : Template.Association SchnorrRandomizedInputs.program.payload
+    (singleSignature domains randomizedMetadata) (singleBody domains randomizedMetadata singleSites) :=
+  ⟨SchnorrRandomizedInputs.protocol0Definition, by structured_mem, rfl, rfl⟩
+
+/-- The same source equation serves arbitrary optional inputs and every reply.
+Hidden inputs remain arbitrary at the call boundary and are masked by scope. -/
+theorem randomized_installed (model : DomainModel) (role : Nat) (ctx : ProtocolContext)
+    (distinct : NormalForm.RosterDistinct ctx role 2)
+    (pattern : NormalForm.InputPattern (singleSignature domains randomizedMetadata).inputs)
+    (visible : InputVisibility.patternVisible role pattern
+      (singleSignature domains randomizedMetadata).inputScopes = true)
+    (arguments : NormalForm.Binders model pattern.scope)
+    (others : Values (Component model.Value) pattern.absentTypes) :
+    invokeProtocol (Occurrence.table model SchnorrRandomizedInputs.program.payload)
+      (singleSignature domains randomizedMetadata) ctx (ctx.roles role)
+      (pattern.fill model arguments others) =
+    (singleView model domains randomizedMetadata singleSites Occurrence.actions ctx (ctx.roles role)
+      (pattern.environment model arguments)).bind fun out =>
+        .done (NormalForm.staticMask role out [[1]] (Operands.identity [Ty.boolean])) := by
+  exact single_install model domains randomizedMetadata singleSites randomizedAssociation
+    role ctx distinct pattern visible arguments others
+
+/-- The selected helper computes the separately fixed relation, for any domain
+model. This is a full outcome equation, without a security conclusion. -/
+theorem randomized_relation (model : DomainModel)
+    (arguments : Values model.Value (relationHelper domains randomizedRelation.val).inputs) :
+    invoke (SchnorrRandomizedInputs.program.payload.definitions.foldl
+      (Evaluation.extendMeaningsOn model SiteObservations.closed) [])
+      (relationHelper domains randomizedRelation.val) arguments =
+        primitiveOutcome ((relationLaw model domains).reference arguments) :=
+  ReferenceLaw.invoke (helper := relationHelper domains randomizedRelation.val)
+    (relationLaw model domains) _ SchnorrRandomizedInputs.program.payload.linked
+    randomizedRelation.property arguments trivial
+
+def randomizedAndMetadata : Metadata :=
+  ⟨SchnorrAndRandomizedInputs.protocol0Signature.name,
+    "role00000000", "role00000001", (some "zkl_c0ba4fcd9fc5cad717b8a516be11f316ea8ea6ce0d721ba5e44a7408e5d76479")⟩
+
+/-- Body inference chooses names only after the complete nominal signature and
+mathematical body have been fixed. -/
+def randomizedAndRelation : {name : String //
+    BodyIn SchnorrAndRandomizedInputs.program.payload.definitions
+      (independentHelper domains name) (independentRelationBody domains)} := by
+  infer_reference_installation
+
+/-- Exact source identity and the full typed tree authorize this installation. -/
+def randomizedAndAssociation : Template.Association SchnorrAndRandomizedInputs.program.payload
+    (independentSignature domains randomizedAndMetadata) (independentBody domains randomizedAndMetadata independentSites) :=
+  ⟨SchnorrAndRandomizedInputs.protocol0Definition, by structured_mem, rfl, rfl⟩
+
+/-- The same source equation serves arbitrary optional inputs and every reply.
+Hidden inputs remain arbitrary at the call boundary and are masked by scope. -/
+theorem randomizedAnd_installed (model : DomainModel) (role : Nat) (ctx : ProtocolContext)
+    (distinct : NormalForm.RosterDistinct ctx role 2)
+    (pattern : NormalForm.InputPattern (independentSignature domains randomizedAndMetadata).inputs)
+    (visible : InputVisibility.patternVisible role pattern
+      (independentSignature domains randomizedAndMetadata).inputScopes = true)
+    (arguments : NormalForm.Binders model pattern.scope)
+    (others : Values (Component model.Value) pattern.absentTypes) :
+    invokeProtocol (Occurrence.table model SchnorrAndRandomizedInputs.program.payload)
+      (independentSignature domains randomizedAndMetadata) ctx (ctx.roles role)
+      (pattern.fill model arguments others) =
+    (independentView model domains randomizedAndMetadata independentSites Occurrence.actions ctx (ctx.roles role)
+      (pattern.environment model arguments)).bind fun out =>
+        .done (NormalForm.staticMask role out [[1]] (Operands.identity [Ty.boolean])) := by
+  exact independent_install model domains randomizedAndMetadata independentSites randomizedAndAssociation
+    role ctx distinct pattern visible arguments others
+
+/-- The selected helper computes the separately fixed relation, for any domain
+model. This is a full outcome equation, without a security conclusion. -/
+theorem randomizedAnd_relation (model : DomainModel)
+    (arguments : Values model.Value (independentHelper domains randomizedAndRelation.val).inputs) :
+    invoke (SchnorrAndRandomizedInputs.program.payload.definitions.foldl
+      (Evaluation.extendMeaningsOn model SiteObservations.closed) [])
+      (independentHelper domains randomizedAndRelation.val) arguments =
+        primitiveOutcome ((independentLaw model domains).reference arguments) :=
+  ReferenceLaw.invoke (helper := independentHelper domains randomizedAndRelation.val)
+    (independentLaw model domains) _ SchnorrAndRandomizedInputs.program.payload.linked
+    randomizedAndRelation.property arguments trivial
+
+def chaumPedersenMetadata : Metadata :=
+  ⟨ChaumPedersenViews.program.payload.entry.signature.name,
+    "role00000000", "role00000001", none⟩
+
+/-- Body inference chooses names only after the complete nominal signature and
+mathematical body have been fixed. -/
+def chaumPedersenRelation : {name : String //
+    BodyIn ChaumPedersenViews.program.payload.definitions
+      (sharedHelper domains name) (sharedRelationBody domains)} := by
+  infer_reference_installation
+
+/-- Exact source identity and the full typed tree authorize this installation. -/
+def chaumPedersenAssociation : Template.Association ChaumPedersenViews.program.payload
+    (sharedSignature domains chaumPedersenMetadata) (sharedBody domains chaumPedersenMetadata sharedSites) :=
+  ⟨ChaumPedersenViews.interactiveDefinition, by structured_mem, rfl, rfl⟩
+
+/-- The same source equation serves arbitrary optional inputs and every reply.
+Hidden inputs remain arbitrary at the call boundary and are masked by scope. -/
+theorem chaumPedersen_installed (model : DomainModel) (role : Nat) (ctx : ProtocolContext)
+    (distinct : NormalForm.RosterDistinct ctx role 2)
+    (pattern : NormalForm.InputPattern (sharedSignature domains chaumPedersenMetadata).inputs)
+    (visible : InputVisibility.patternVisible role pattern
+      (sharedSignature domains chaumPedersenMetadata).inputScopes = true)
+    (arguments : NormalForm.Binders model pattern.scope)
+    (others : Values (Component model.Value) pattern.absentTypes) :
+    invokeProtocol (Occurrence.table model ChaumPedersenViews.program.payload)
+      (sharedSignature domains chaumPedersenMetadata) ctx (ctx.roles role)
+      (pattern.fill model arguments others) =
+    (sharedView model domains chaumPedersenMetadata sharedSites Occurrence.actions ctx (ctx.roles role)
+      (pattern.environment model arguments)).bind fun out =>
+        .done (NormalForm.staticMask role out [[1]] (Operands.identity [Ty.boolean])) := by
+  exact shared_install model domains chaumPedersenMetadata sharedSites chaumPedersenAssociation
+    role ctx distinct pattern visible arguments others
+
+/-- The selected helper computes the separately fixed relation, for any domain
+model. This is a full outcome equation, without a security conclusion. -/
+theorem chaumPedersen_relation (model : DomainModel)
+    (arguments : Values model.Value (sharedHelper domains chaumPedersenRelation.val).inputs) :
+    invoke (ChaumPedersenViews.program.payload.definitions.foldl
+      (Evaluation.extendMeaningsOn model SiteObservations.closed) [])
+      (sharedHelper domains chaumPedersenRelation.val) arguments =
+        primitiveOutcome ((sharedLaw model domains).reference arguments) :=
+  ReferenceLaw.invoke (helper := sharedHelper domains chaumPedersenRelation.val)
+    (sharedLaw model domains) _ ChaumPedersenViews.program.payload.linked
+    chaumPedersenRelation.property arguments trivial
+
+end
+end ZkcExamples.Structured.SchnorrVariants.Installations

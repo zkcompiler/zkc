@@ -83,7 +83,8 @@ def test_source_views_require_every_fresh_module_build(driver_module, tmp_path, 
 
 
 
-def test_construction_views_follow_fresh_source_and_precede_consumers(driver_module, tmp_path, monkeypatch):
+@pytest.mark.parametrize("with_pair", [False, True])
+def test_construction_views_follow_fresh_source_and_precede_consumers(driver_module, tmp_path, monkeypatch, with_pair):
     monkeypatch.setattr(driver_module, "ROOT", tmp_path)
     manifest = tmp_path / "subject.toml"
     manifest.write_text("construction fixture")
@@ -91,24 +92,25 @@ def test_construction_views_follow_fresh_source_and_precede_consumers(driver_mod
         name="construction", path=manifest, modules={}, construction_namespace="Example",
         profile=lambda name: name == "construction", table=lambda name: {},
         get=lambda table, key, default=None: default,
-        generated=lambda key: key == "glue",
+        generated=lambda key: key == "glue" or (with_pair and key == "pair"),
         module_name=lambda key: {"data": "Example.Data", "participant": "Example.Participant",
-                                 "glue": "Example.Glue"}.get(key))
+                                 "glue": "Example.Glue", "pair": "Example.Pair"}.get(key))
     artifacts = dict(source=b"source", original_text="original", original=[], exported=[None, None, "candidate"],
                      interface={}, candidate="candidate", export_text="export", deployment_text="deployment",
-                     policy={}, source_claims={"native_export_digest": "digest"})
+                     policy={}, source_claims={"native_export_digest": "digest"}, pair=[], pair_text="pair")
     driver, _ = recording(driver_module, tmp_path, write=True)
     driver.args.compiler = "unused"
     order = []
     monkeypatch.setattr(driver_module.pipeline_compile, "proof_entry", lambda *_: artifacts)
     monkeypatch.setattr(driver_module.structured, "render", lambda *_: "fresh source data")
     monkeypatch.setattr(driver_module.constructed, "render", lambda *_: "fresh participant data")
+    monkeypatch.setattr(driver_module.pair, "render", lambda *_: "fresh pair data")
     monkeypatch.setattr(driver_module.glue, "Entry", lambda *_: object())
     monkeypatch.setattr(driver_module.glue, "construction_glue", lambda *_: "consumer")
     monkeypatch.setattr(driver, "generated", lambda subject, key, text, record: order.append(key))
 
     def views(subject, record):
-        assert order == ["data", "participant"]
+        assert order == ["data", "participant"] + (["pair"] if with_pair else [])
         order.append("views")
 
     monkeypatch.setattr(driver, "source_views", views)
@@ -117,7 +119,8 @@ def test_construction_views_follow_fresh_source_and_precede_consumers(driver_mod
     monkeypatch.setattr(driver, "native_refusals", lambda *_: None)
     monkeypatch.setattr(driver, "claims", lambda *_: order.append("claims"))
     driver.subject(subject)
-    assert order == ["data", "participant", "views", "glue", "build:Example.Glue", "construction", "claims"]
+    assert order == ["data", "participant"] + (["pair"] if with_pair else []) + [
+        "views", "glue", "build:Example.Glue", "construction", "claims"]
 
 def test_source_views_late_build_failure_cannot_record_acceptance(driver_module, tmp_path, monkeypatch):
     monkeypatch.setattr(driver_module, "ROOT", tmp_path)
@@ -352,3 +355,36 @@ def test_receipt_attribution_does_not_relax_axiom_check(driver_module, tmp_path,
     monkeypatch.setattr(driver_module, "printed_axioms", lambda _: {"Example.receipt": ["sorryAx"]})
     with pytest.raises(CheckFailed, match="axioms:Example.receipt"):
         driver.receipt_axioms([subject])
+
+
+@pytest.mark.parametrize("changed_body", [False, True])
+def test_pair_validator_matches_complete_independent_export(driver_module, tmp_path, monkeypatch, changed_body):
+    capture = driver_module.pipeline_compile
+    source = "original source"
+    identity = capture.digest(source.encode())
+    policy = ["policy", "entry"]
+    participant = ["participant", "sha256:" + identity, "candidate", policy, "V", ["body"]]
+    paired = json.loads(json.dumps(participant))
+    if changed_body:
+        paired[-1] = ["different-body"]  # All digest fields still match.
+    outputs = {"language-emit": source,
+               "language-interface": json.dumps({"original": identity}),
+               "language-bundle": json.dumps(["deployment", identity, ["policy", policy]]),
+               "protocol-construct-proof": "candidate",
+               "protocol-constructed-participant": json.dumps(participant),
+               "protocol-constructed-pair": json.dumps(["pair", [], paired]),
+               "protocol-structured": json.dumps(["original", None, "sha256:" + identity])}
+    driver, _ = recording(driver_module, tmp_path)
+    driver.run = lambda arguments, **_: SimpleNamespace(stdout=outputs[arguments[1]])
+    subject = SimpleNamespace(name="test", compiler_options=[], module_arguments=lambda: [],
+        get=lambda table, key, default=None: "entry" if (table, key) == ("entries", "proof") else default,
+        generated=lambda key: key == "pair")
+    monkeypatch.setattr(capture.pair, "decode", lambda data: (data[1], data[2]))
+    if changed_body:
+        from bridges.common.lean_render import CheckFailed
+        with pytest.raises(CheckFailed, match="pair-validator"):
+            capture.proof_artifacts(driver, subject, "compiler", tmp_path / "capture")
+    else:
+        result = capture.proof_artifacts(driver, subject, "compiler", tmp_path / "capture")
+        assert result["pair"][2] == result["exported"]
+        assert (tmp_path / "capture/pair.json").read_text() == result["pair_text"]

@@ -1,5 +1,6 @@
 import Zkc.Source.Structured.Import
 import Zkc.Source.Structured.PrimitiveLaws
+import ZkcTools.StructuredSource.WireTypes
 import Mathlib.Data.ZMod.Basic
 
 /-! Independent direct-constructor and wire controls. These authored controls
@@ -17,7 +18,7 @@ private def snapshot (bindings : List Binding) (defs : List Definition := [root]
     contractDefinitions.filterMap (fun definition =>
       if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows, {}⟩)
 private def binding (contract : String) (arguments : List String := []) : Binding :=
-  ⟨"primitive", contract, arguments, ""⟩
+  ⟨"primitive", contract, arguments, "", none⟩
 private def localHelper (op : Descriptor) (inputs outputs : List Ty) (site : String := "exec")
     (regions : List WireRegion := []) (kind : Kind := .local) : Definition :=
   .function ⟨"work", kind, .privateDef, inputs, outputs, none, [],
@@ -32,8 +33,12 @@ private def admits (bindings : List Binding) (defs : List Definition := [root]) 
   (check (snapshot bindings defs)).isOk
 private def arr (values : List Json) : Json := .arr values.toArray
 private def strings (values : List String) : Json := arr (values.map Json.str)
-private def bindingWire (b : Binding) : Json := arr [
-  .str "binding", .str b.name, .str b.contract, strings b.arguments, .str b.implementation]
+private def bindingWire (b : Binding) : Json :=
+  let (inputs, outputs) := (bindingSignature b.contract (b.arguments.headD "")).toOption.getD ([], [])
+  arr [.str "binding", .str b.name, .str b.contract,
+    arr (b.arguments.map fun name => strings ["domain", "Field", name]), .str b.implementation,
+    arr (inputs.map ZkcTools.StructuredSource.wireType),
+    arr (outputs.map ZkcTools.StructuredSource.wireType)]
 
 private def catalogue : List (String × List String × Primitive) := [
   ("index.constant", [], .indexConstant 0),
@@ -138,8 +143,10 @@ private def run : IO Unit := do
   test "wire-unused-bad-binding" (!(Format.snapshot (arr (envelope.set 6
     (arr [bindingWire (binding "vector.product" [scalarDomain])])))).isOk)
   test "wire-no-short-binding" (!(Format.binding (strings ["binding", "b", "index.add"])).isOk)
+  test "wire-no-old-binding" (!(Format.binding (arr [
+    .str "binding", .str "b", .str "index.add", arr [], .str ""])).isOk)
   test "wire-no-extra-binding" (!(Format.binding (arr [
-    .str "binding", .str "b", .str "index.add", arr [], .str "", .str "extra"])).isOk)
+    .str "binding", .str "b", .str "index.add", arr [], .str "", arr [], arr [], .str "extra"])).isOk)
   test "wire-no-execute-tag" (!(Format.descriptor (arr [
     .str "execute", .str "exec.apply", .str "b", arr []])).isOk)
   test "wire-exec-arity" (!(Format.descriptor (strings ["exec", "exec.apply", "b"])).isOk)

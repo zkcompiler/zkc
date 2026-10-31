@@ -19,7 +19,9 @@ row's sort and naming an identity of the member's sort; unique capability
 facts, each declared for the row's sort; and the pairing association of a
 `PairingField` row. Nothing here assumes a characteristic: a characteristic-two
 field and an extension field without `PrimeField` are well-formed rows.
-Refusals name the failed condition. -/
+Refusals name the failed condition. Capability and method metadata does not
+install an operation interpretation; index-block requests and gates remain
+outside the supported structured profile. -/
 
 set_option autoImplicit false
 namespace Zkc.Source.Structured
@@ -61,11 +63,12 @@ def memberSort : DomainSort → String → Option DomainSort
 /-- The sort of the rows a capability fact applies to (native single-sort
 `ZKC_Capability` declarations). -/
 def capabilitySort : String → Option DomainSort
-  | "CharacteristicNotTwo" | "CommRing" | "ExtensionField" | "Field" | "IndexRandomness"
+  | "CharacteristicNotTwo" | "CommRing" | "ExtensionField" | "Field"
+  | "IndexRandomness" | "IndexBlockRandomness"
   | "PairingField" | "PrimeField" | "TwoAdicField" => some .field
   | "Group" | "ScalarAction" => some .group
   | "MultilinearOpening" | "MultiOpening" | "VectorCommitment" => some .commitment
-  | "FieldTranscript" | "IndexTranscript" | "Transcript" => some .transcript
+  | "FieldTranscript" | "IndexTranscript" | "IndexBlockTranscript" | "Transcript" => some .transcript
   | _ => none
 
 /-- A nominal domain identity. The modulus of a field row is its
@@ -86,8 +89,9 @@ def Nominal.holds (nominal : Nominal) (capability : String) : Bool :=
   nominal.capabilities.contains capability
 
 /-- A random service: its contract, the field it samples and its query
-methods. `draw` returns one element of the sampled field; `index` takes a bound
-and needs `IndexRandomness` on that field. -/
+methods. `draw` returns one element of the sampled field; `index` needs
+`IndexRandomness` and `indices` independently needs `IndexBlockRandomness` on
+that field. Listing a method does not supply its interpretation. -/
 structure Service where
   contract : String
   sampled : String
@@ -171,12 +175,14 @@ def checkNominal (catalogue : Catalogue) (nominal : Nominal) : Except String Uni
   if nominal.holds "PairingField" && !catalogue.pairingValid nominal then
     throw "structured-catalogue-pairing"
 
-/-- A service samples a field row of the catalogue, offers `draw` and offers
-`index` exactly when that field has `IndexRandomness`. -/
+/-- A service samples a field row of the catalogue. Its exact ordered methods
+are `draw`, then `index` when the field has `IndexRandomness`, then `indices`
+when it has `IndexBlockRandomness`; the two capability facts are independent. -/
 def checkService (catalogue : Catalogue) (service : Service) : Except String Unit := do
   if !identityValid service.contract then throw "structured-catalogue-identity"
   let field ← catalogue.expect service.sampled .field |>.mapError fun _ => "structured-catalogue-service"
-  let methods := if field.holds "IndexRandomness" then ["draw", "index"] else ["draw"]
+  let methods := ["draw"] ++ (if field.holds "IndexRandomness" then ["index"] else []) ++
+    (if field.holds "IndexBlockRandomness" then ["indices"] else [])
   if service.methods != methods then throw "structured-catalogue-service"
 
 /-- Internal consistency, as the native catalogue constructor checks it. -/
@@ -281,9 +287,9 @@ def koalaBearCatalogue : Catalogue where
     { identity := "koala-bear.ext8-binomial3", sort := .field,
       members := [("BaseField", "koala-bear")],
       capabilities := ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo",
-        "ExtensionField", "IndexRandomness"], modulus := some 2130706433 }]
+        "ExtensionField", "IndexRandomness", "IndexBlockRandomness"], modulus := some 2130706433 }]
   services := [{ contract := "random.koala-bear.ext8-binomial3/0",
-                 sampled := "koala-bear.ext8-binomial3", methods := ["draw", "index"] }]
+                 sampled := "koala-bear.ext8-binomial3", methods := ["draw", "index", "indices"] }]
   types := [("field", "koala-bear"), ("vector", "koala-bear"),
     ("field", "koala-bear.ext8-binomial3"), ("vector", "koala-bear.ext8-binomial3")]
 

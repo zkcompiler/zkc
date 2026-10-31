@@ -417,7 +417,7 @@ def test_parameter_coverage_requires_all_emitted_comparisons(api, receipt_case, 
 def security_admission(api, case):
     interpreted_stage(api, case, "compiled-ideal")
     case[2]["detail"]["type_head"] = api.ADMITTED_RECEIPT_TYPE
-    case[3]["subject"] = {"artifacts_head": "Demo.artifacts"}
+    case[3]["subject"] = {"original_anchors": ["Demo.artifacts"], "participant_anchors": ["Demo.artifacts"]}
     case[3]["admission"] = {"security_subject": True, "associated": True,
         "association": "typed-certificate", "certificate_checked": True,
         "subject_checked": True, "model_status": "admitted"}
@@ -574,7 +574,7 @@ def consumer_case(api, receipt_case, scoped_report, monkeypatch):
                  quantity_kind="scalar", exported_capabilities=[], capability_consumer="soundness@0",
                  registry_checks={key: True for key in ("lookup", "property_definition", "property_export", "model_export")},
                  application_coverage={"mode": "fixed-statement", "checked": True})
-    proof["subject"] = {"artifacts_head": "Demo.artifacts", "original_entry": "demo"}
+    proof["subject"] = {"original_anchors": ["Demo.artifacts"], "participant_anchors": ["Demo.artifacts"], "original_entry": "demo"}
     proof["admission"] = {"security_subject": True, "associated": True,
         "association": "typed-certificate", "certificate_checked": True,
         "subject_checked": True, "model_status": "admitted"}
@@ -948,7 +948,7 @@ def security_kernel_records(tmp_path_factory):
     prefix = "TestsSecurity.ClaimReporting."
     names = ["idealData", "HigherOrder.unattributedReceipt", "Canonical.checkedReceipt",
              "HigherOrder.extraPremiseReceipt", "omittedReceipt", "replacedModelReceipt", "artifacts",
-             "extensionIdealData", "foreignSourceReceipt"]
+             "extensionIdealData", "foreignSourceReceipt", "original", "participant"]
     payload = {"format": "zkc.receipt-audit-input/0", "operation": "extract",
                "records": [{"name": prefix + name, "module": "TestsSecurity.ClaimReporting"} for name in names]}
     result = subprocess.run(["lake", "env", str(root / ".lake/build/bin/declaration-records"),
@@ -1222,3 +1222,38 @@ def test_receipt_search_paths_follow_actual_providers(modules, expected, monkeyp
                "mappings": [{"request_declaration": row["name"]} for row in rows]}
     assert set(api._receipt_provider_groups(payload)) | {"main"} == expected
     assert set(declarations.PACKAGES) >= expected
+
+
+@pytest.mark.parametrize("key", ["original_anchors", "participant_anchors", "producer_anchors"])
+def test_composed_subject_requires_each_attached_data_anchor(api, consumer_case, key):
+    manifest, records, evidence, required = consumer_case
+    receipt = records.get("Demo.request0Receipt")["detail"]["claim_data"]["receipt"]
+    receipt["subject"].update(original_source="same-source", participant_source="same-source",
+                              producer_source="same-source", producer_anchors=["Demo.artifacts"])
+    evidence["artifacts"]["source"] = "same-source"
+    # Keep the mock source identities aligned, then vary data ownership only.
+    # Full equality is exercised independently by TestDataAnchors.
+    positive = api.build(manifest, records, consumer_requirements=required)
+    assert positive["status"] == "certified", positive
+    receipt["subject"][key] = []
+    refused = api.build(manifest, records, consumer_requirements=required)
+    assert refused["status"] == "open", refused
+
+
+def test_composed_subject_rejects_unattached_equal_data(api, consumer_case, monkeypatch):
+    manifest, records, _, required = consumer_case
+    assert api.build(manifest, records, consumer_requirements=required)["status"] == "certified"
+    owner = api.owned_module_path
+    monkeypatch.setattr(api, "owned_module_path",
+        lambda name: api.ROOT / "Unattached.lean" if name == "Unattached.Data" else owner(name))
+    records.by_name["Demo.artifacts"]["module"] = "Unattached.Data"
+    assert api.build(manifest, records, consumer_requirements=required)["status"] == "open"
+
+
+def test_actual_data_anchor_extraction():
+    root = Path(__file__).resolve().parents[3] / "lean"
+    subprocess.run(["lake", "build", "declaration-records", "Tests.ArtifactDataAnchors"],
+                   cwd=root, check=True, capture_output=True, text=True)
+    result = subprocess.run(["lake", "env", "lean", "checks/TestDataAnchors.lean"],
+                            cwd=root, check=True, capture_output=True, text=True)
+    assert "PASS: generic projections; complete data equality; fixed module closure" in result.stdout
