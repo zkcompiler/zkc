@@ -270,3 +270,11 @@ single passing implementation establishes cryptographic or resource equivalence.
 The runtime owns the SDK source-format cutover. Frontend syntax support does
 not switch production defaults. The source/request connection and host/editor
 consumers must satisfy their owning contracts before that switch.
+
+The scalar-selection addition keeps the current `/0` declaration and program
+formats: four exact operation rows (`bool.select`, `index.select`,
+`field.select<F>`, `curve.select<G>`) implement the existing mathematical
+`arith.select` profile. Catalog projections, native installation, independent
+recipe readback and CPU advertisement change together. See [value meanings](domains/values.md#total-scalar-selection)
+and [mathematical realization](ir/mathematics.md#scalar-selection-realization).
+Independent formal consumer admission is not enlarged by these native rows.

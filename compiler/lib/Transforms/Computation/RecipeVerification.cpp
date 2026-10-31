@@ -434,34 +434,18 @@ class RecipeReader {
       return ports.outputs(target)[0];
     }
     if (isa<arith::SelectOp>(source)) {
-      auto *target = cursor;
-      auto operands = ports.inputs(target);
-      if (!ports.contains(target) || !isa<exec::TestOp>(target) ||
-          ports.outputs(target).size() != 1 || operands.size() < 2 ||
-          operands.size() > 3 || operands[0] != inputs[0] ||
-          ports.bodies(target) != 2)
-        return {};
-      llvm::DenseSet<Value> captures;
-      for (Value value : operands.drop_front())
-        if ((value != inputs[1] && value != inputs[2]) ||
-            !captures.insert(value).second)
-          return {};
-      for (unsigned index = 0; index != 2; ++index) {
-        auto *body = ports.body(target, index);
-        auto *yield = ports.first(body);
-        auto arguments = ports.arguments(body);
-        if (!isYield(yield) || ports.inputs(yield).size() != 1 ||
-            ports.next(yield))
-          return {};
-        auto selected = llvm::find(arguments, ports.inputs(yield)[0]);
-        auto position = std::distance(arguments.begin(), selected);
-        if (selected == arguments.end() ||
-            unsigned(position + 1) >= operands.size() ||
-            operands[position + 1] != inputs[index + 1])
-          return {};
-      }
-      cursor = ports.next(cursor);
-      return ports.outputs(target)[0];
+      auto type = source->getResult(0).getType();
+      if (type.isSignlessInteger(1))
+        return take("bool.select", inputs);
+      if (type.isUnsignedInteger(64))
+        return take("index.select", inputs);
+      if (auto field = dyn_cast<algebra::FieldType>(type))
+        return take("field.select", inputs,
+                    {StringAttr::get(source->getContext(), field.getDomain())});
+      if (auto group = dyn_cast<algebra::GroupType>(type))
+        return take("curve.select", inputs,
+                    {StringAttr::get(source->getContext(), group.getDomain())});
+      return {};
     }
     if (isa<arith::AndIOp, arith::OrIOp>(source))
       return take(isa<arith::AndIOp>(source) ? "bool.and" : "bool.or", inputs);

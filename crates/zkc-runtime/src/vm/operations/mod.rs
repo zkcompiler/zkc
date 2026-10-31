@@ -18,6 +18,7 @@ mod quotient;
 mod random;
 mod relation;
 mod representation;
+mod selection;
 mod support;
 mod table;
 mod transcript;
@@ -411,6 +412,7 @@ pub(super) fn standard_registry() -> Registry {
         &external::CONTRIBUTION,
         &field::CONTRIBUTION,
         &index::CONTRIBUTION,
+        &selection::CONTRIBUTION,
         &matrix::CONTRIBUTION,
         &numerical::CONTRIBUTION,
         &oracle::CONTRIBUTION,

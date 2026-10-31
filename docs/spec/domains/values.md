@@ -475,3 +475,18 @@ its own. The residual state of each participant therefore holds no unit that it
 neither consumed nor returned. This implicit affine
 disposal is frame bookkeeping and adds no primitive request/response event. Explicit `resource_unit.consume` still
 has its own operation observation.
+
+## Total scalar selection
+
+`bool.select`, `index.select`, `field.select<F>` and `curve.select<G>` consume
+`(condition, yes, no)` and return `yes` when the Boolean condition is true,
+otherwise `no`. Both alternatives are already computed values of the exact
+same scalar type and nominal domain. These operations have no invocation
+parameters, do not evaluate a branch, and supply no resource or domain authority.
+The native implementations preserve the selected value under the ordinary
+input validation, physical-type and output/retention accounting rules. Group
+values may share immutable backing. No constant-time guarantee is implied.
+
+The closed scalar signatures deliberately exclude capabilities, arbitrary
+containers and unconstrained type parameters. Their meaning is independent of
+the physical representation selected for a separately compiled artifact.

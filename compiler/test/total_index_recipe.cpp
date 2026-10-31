@@ -153,8 +153,10 @@ int main() {
       "word recipes and ui64 selection survive independent comparison", [&] {
         auto closure = parse(context);
         // Recipe selection consumes the checked, expanded entry. The earlier
-        // readback case separately covers calls and the complete helper closure.
-        auto source = computationRecipeSource(*closure, "word", "lowered_entry");
+        // readback case separately covers calls and the complete helper
+        // closure.
+        auto source =
+            computationRecipeSource(*closure, "word", "lowered_entry");
         auto before = scopedFinite::clone(*source);
         mathematical::RealizationWork work;
         auto output = realizeComputationEntry(*source, "words", {}, work);
@@ -163,7 +165,7 @@ int main() {
                                                               "words")),
                 "total word recipe failed independent validation");
         auto owner = computationRecipeOutput(*output);
-        require(scopedFinite::applications(owner).size() == 5,
+        require(scopedFinite::applications(owner).size() == 6,
                 "word recipe lost unused arithmetic or changed its expansion");
         require(OperationEquivalence::isEquivalentTo(
                     *source, *before, OperationEquivalence::IgnoreLocations),
@@ -200,24 +202,52 @@ int main() {
           }
         }
         auto candidate = scopedFinite::clone(*output);
-        bool changed = false;
-        candidate->walk([&](exec::CompleteOp returned) {
-          auto function = returned->getParentOfType<func::FuncOp>();
-          if (!changed && function->hasAttr("runtime.region") &&
-              function.getNumArguments() == 3 &&
-              returned.getValues().size() == 1) {
-            // Both captured alternatives are ui64; selecting the other argument
-            // preserves native formation while changing the source mathematics.
-            returned->setOperand(
-                1, function.getArgument(
-                       returned.getValues()[0] == function.getArgument(1) ? 2
-                                                                          : 1));
-            changed = true;
-          }
-        });
-        require(changed && succeeded(verify(*candidate)),
+        auto select = scopedFinite::application(
+            computationRecipeOutput(*candidate), "index.select");
+        auto yes = select.getInputs()[1], no = select.getInputs()[2];
+        select->setOperand(2, no);
+        select->setOperand(3, yes);
+        require(succeeded(verify(*candidate)),
                 "selection mutation lost native formation");
         mismatch(*source, *candidate);
       });
+  for (auto [type, contract] :
+       {std::pair<StringRef, StringRef>{"i1", "bool.select"},
+        {"ui64", "index.select"},
+        {"!algebra.field<\"bls12-381.fr\">", "field.select"},
+        {"!algebra.group<\"bls12-381.g1\">", "curve.select"}}) {
+    cases.run(
+        "scalar selection has one independently checked application: " + type,
+        [&, type = type, contract = contract] {
+          auto text = (Twine("module @selection attributes {exec.computation} "
+                             "{func.func @entry(%c:i1,%a:") +
+                       type + ",%b:" + type + ")->" + type +
+                       " {%s=arith.select %c,%a,%b : " + type +
+                       " return %s : " + type + "}}")
+                          .str();
+          auto source = parseSourceString<ModuleOp>(text, &context);
+          require(bool(source), "scalar selection source failed formation");
+          mathematical::RealizationWork work;
+          auto output = realizeComputationEntry(*source, "words", {}, work);
+          require(output && succeeded(computation::verifyEntryRecipes(
+                                *source, *output, "words")),
+                  "scalar selection recipe failed independent verification");
+          auto owner = computationRecipeOutput(*output);
+          require(scopedFinite::applications(owner).size() == 1,
+                  "scalar selection expanded beyond one operation");
+          unsigned functions = 0;
+          owner.walk([&](func::FuncOp) { ++functions; });
+          require(functions == 1, "scalar selection retained outlined arms");
+          auto candidate = scopedFinite::clone(*output);
+          auto apply = scopedFinite::application(
+              computationRecipeOutput(*candidate), contract);
+          auto yes = apply.getInputs()[1], no = apply.getInputs()[2];
+          apply->setOperand(2, no);
+          apply->setOperand(3, yes);
+          require(succeeded(verify(*candidate)),
+                  "selection permutation lost native formation");
+          mismatch(*source, *candidate);
+        });
+  }
   return cases.result();
 }

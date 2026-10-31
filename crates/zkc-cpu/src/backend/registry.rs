@@ -288,6 +288,11 @@ pub(crate) fn installed() -> Result<&'static Registry> {
                 quotient,
             )?;
             r.pure_family(
+                crate::operations::selection::IMPLEMENTATIONS,
+                Signature::Custom(crate::operations::selection::signature),
+                selection,
+            )?;
+            r.pure_family(
                 crate::operations::indices::IMPLEMENTATIONS,
                 Signature::Custom(crate::operations::indices::signature),
                 indices,
@@ -611,6 +616,9 @@ fn quotient(b: &mut CpuBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Ve
         &b.core.policy,
         i.max_output_bytes,
     )
+}
+fn selection(b: &mut CpuBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+    crate::operations::selection::apply(args, &b.core.policy, i.max_output_bytes)
 }
 fn indices(b: &mut CpuBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::operations::indices::apply(

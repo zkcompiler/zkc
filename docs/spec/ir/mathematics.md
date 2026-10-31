@@ -405,3 +405,12 @@ additionally require a declared challenge experiment; action order alone does
 not establish uniformity. New native Lean interpretation, private PCS terminals
 and dynamic protocol composition are deferred. Static native applications and
 selected composed entry checking are specified in [composition](composition.md).
+
+### Scalar selection realization
+
+Admitted `arith.select` over Boolean, unsigned index, nominal field or nominal
+group values lowers to one exact `bool.select`, `index.select`, `field.select`
+or `curve.select` invocation. The independent recipe reader compares the
+condition, ordered alternatives and domain arguments against actual source SSA.
+This replaces the outlined conditional recipe for the complete admitted scalar
+profile. Source conditionals retain their separate scoped execution meaning.

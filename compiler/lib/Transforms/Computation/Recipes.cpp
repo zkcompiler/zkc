@@ -31,7 +31,6 @@
 #include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/ScopeExit.h"
-#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringSet.h"
 #include <map>
 
@@ -213,7 +212,7 @@ class Recipes {
     // Scalar inspection and emitted execution have separate costs. Ordinary
     // primitives allocate one invocation/dispatch pair; only control recipes
     // need the larger scope/transfer envelope in addition to their outlines.
-    if (isa<data::GetOp, data::IsOp, arith::SelectOp>(op) &&
+    if (isa<data::GetOp, data::IsOp>(op) &&
         !reserve(64 + 16 * (inputs.size() + op->getNumResults())))
       return failure();
     control.setLocation(op->getLoc());
@@ -526,26 +525,25 @@ class Recipes {
         return refuse(op, "arithmetic identity has no lowering recipe");
     }
     if (isa<arith::SelectOp>(op)) {
-      llvm::SetVector<Value> captures;
-      captures.insert(inputs[1]);
-      captures.insert(inputs[2]);
-      SmallVector<Value> captured(captures.begin(), captures.end());
-      auto outline = [&](unsigned i) {
-        OpBuilder::InsertionGuard restore(rewriter);
-        auto function =
-            region(ValueRange(captured).getTypes(), op->getResultTypes());
-        if (!function)
-          return func::FuncOp();
-        rewriter.setInsertionPointToEnd(&function.front());
-        exec::ScopedExecutionBuilder nested(rewriter, function,
-                                            control.getLoopForm());
-        unsigned selected = std::distance(captures.begin(),
-                                          llvm::find(captures, inputs[i + 1]));
-        nested.complete(function.getArgument(1 + selected));
-        return function;
-      };
-      replace(control.conditional(inputs[0], captured, op->getResultTypes(),
-                                  site.getValue(), outline));
+      NativeBindingApplication selection;
+      auto type = op->getResult(0).getType();
+      if (auto field = dyn_cast<algebra::FieldType>(type)) {
+        selection.contract = "field.select";
+        selection.arguments = {rewriter.getStringAttr(field.getDomain())};
+      } else if (auto group = dyn_cast<algebra::GroupType>(type)) {
+        selection.contract = "curve.select";
+        selection.arguments = {rewriter.getStringAttr(group.getDomain())};
+      } else
+        selection.contract =
+            type.isSignlessInteger(1) ? "bool.select" : "index.select";
+      OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
+      state.addOperands(inputs);
+      state.addTypes(type);
+      state.addAttribute("site", site);
+      state.addAttribute("parameters", rewriter.getArrayAttr({}));
+      state.addAttribute("binding",
+                         symbols.get(selection, op->getLoc(), rewriter));
+      replace(emitState(state));
       return success(valid);
     }
     if (auto constant = dyn_cast<arith::ConstantOp>(op)) {

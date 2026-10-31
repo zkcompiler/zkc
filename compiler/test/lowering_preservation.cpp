@@ -311,24 +311,12 @@ int main() {
     auto first = scopedFinite::applications(function).front();
     scopedComputation::duplicateInvocation(first, function, "extra");
   });
-  mutation("changed selection arm", [&](ModuleOp module) {
+  mutation("changed selection operands", [&](ModuleOp module) {
     auto function = callee(calculations(module)[1]);
-    auto closure =
-        take(protocol::readSourceExecutionClosure(function->getParentOp()));
-    bool changed = false;
-    for (const auto &step : closure.bodies.at(function.getSymName().str())) {
-      if (!isa<exec::TestOp>(step.operation) || step.outputs.size() != 1)
-        continue;
-      require(step.regions.size() == 2, "missing selection arms");
-      auto arm = cast<func::FuncOp>(step.regions[0]);
-      auto complete = cast<exec::CompleteOp>(
-          closure.bodies.at(arm.getSymName().str()).back().operation);
-      auto argument = cast<BlockArgument>(complete.getValues()[0]);
-      complete->setOperand(1, arm.getArgument(3 - argument.getArgNumber()));
-      changed = true;
-      break;
-    }
-    require(changed, "no select in fixture");
+    auto select = scopedFinite::applications(function, "bool.select").front();
+    auto yes = select.getInputs()[1], no = select.getInputs()[2];
+    select->setOperand(2, no);
+    select->setOperand(3, yes);
   });
   mutation("wrong literal", [&](ModuleOp module) {
     unsigned changed = 0;

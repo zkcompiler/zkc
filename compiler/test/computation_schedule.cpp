@@ -2,6 +2,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/IRMapping.h"
 #include "support/NumericalLoops.h"
+#include "support/ScopedFinite.h"
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -81,19 +82,20 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
-  cases.run("Boolean and variant recipes use scoped control directly", [&] {
-    auto original = controls(context);
-    auto unit = cast<mlir::ModuleOp>(original->getBody()->front());
-    auto selected = schedule(unit);
-    for (llvm::StringRef name : {"exec.variant", "exec.match", "exec.test"})
-      require(!operations(*selected, name).empty(),
-              "missing direct scoped control");
-    scheduleAccepts(unit, *selected);
-    auto actual = consume(*selected);
-    accepts(unit, *actual);
-  });
+  cases.run("scalar selection uses data while variants retain scoped control",
+            [&] {
+              auto original = controls(context);
+              auto unit = cast<mlir::ModuleOp>(original->getBody()->front());
+              auto selected = schedule(unit);
+              for (llvm::StringRef name : {"exec.variant", "exec.match"})
+                require(!operations(*selected, name).empty(),
+                        "missing direct scoped control");
+              scheduleAccepts(unit, *selected);
+              auto actual = consume(*selected);
+              accepts(unit, *actual);
+            });
   for (StringRef mutation : {"Boolean value", "variant label", "match children",
-                             "conditional children", "result order"})
+                             "selection operands", "result order"})
     cases.run("native schedule comparison refuses admitted " + mutation, [&] {
       auto original = controls(context);
       auto unit = cast<mlir::ModuleOp>(original->getBody()->front());
@@ -108,17 +110,13 @@ int main() {
         operations(*actual, "exec.variant")
             .front()
             ->setAttr("alternative", builder.getStringAttr("right"));
-      else if (mutation == "match children" ||
-               mutation == "conditional children") {
+      else if (mutation == "match children") {
         auto closure =
             take(protocol::readSourceExecutionClosure(owner(*actual)));
         func::FuncOp left, right;
         for (const auto &[name, body] : closure.bodies)
           for (const auto &step : body)
-            if ((mutation == "match children"
-                     ? isa<exec::MatchOp>(step.operation)
-                     : isa<exec::TestOp>(step.operation)) &&
-                !left) {
+            if (isa<exec::MatchOp>(step.operation) && !left) {
               require(step.regions.size() == 2, "missing conditional children");
               left = step.regions[0];
               right = step.regions[1];
@@ -130,6 +128,11 @@ int main() {
           else if (call.getCallee() == right.getSymName())
             call.setCallee(left.getSymName());
         });
+      } else if (mutation == "selection operands") {
+        auto select = scopedFinite::application(owner(*actual), "bool.select");
+        auto yes = select.getInputs()[1], no = select.getInputs()[2];
+        select->setOperand(2, no);
+        select->setOperand(3, yes);
       } else {
         auto *returned = operations(function(*actual), "exec.returned").front();
         auto first = returned->getOperand(0), last = returned->getOperand(2);
@@ -184,7 +187,7 @@ int main() {
       scheduleAccepts(unit, *selected);
     });
   cases.run(
-      "scoped scalar branches remain outlined within finite traversal", [&] {
+      "scalar data and scoped variants compose within finite traversal", [&] {
         auto unit = source(context, "elements");
         auto callback = helper(*unit, "body");
         auto returned = cast<func::ReturnOp>(callback.front().back());
@@ -210,7 +213,7 @@ int main() {
                 "conditional callback is malformed");
         auto local = realize(*unit);
         auto scheduled = schedule(*unit);
-        for (StringRef name : {"exec.test", "exec.match", "exec.variant"}) {
+        for (StringRef name : {"exec.match", "exec.variant"}) {
           auto nested = operations(*scheduled, name);
           require(llvm::any_of(nested,
                                [](Operation *op) {

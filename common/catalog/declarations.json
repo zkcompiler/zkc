@@ -14059,6 +14059,206 @@
         ]
       },
       "stage": "Source"
+    },
+    {
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
+      "name": "bool.select",
+      "parameters": {
+        "maximum": 0,
+        "minimum": 0,
+        "validator": "None"
+      },
+      "requirements": [],
+      "scope": [],
+      "signature": {
+        "inputs": [
+          {
+            "arguments": [],
+            "constructor": "bool"
+          },
+          {
+            "arguments": [],
+            "constructor": "bool"
+          },
+          {
+            "arguments": [],
+            "constructor": "bool"
+          }
+        ],
+        "kind": "fixed",
+        "outputs": [
+          {
+            "arguments": [],
+            "constructor": "bool"
+          }
+        ]
+      },
+      "stage": "Source"
+    },
+    {
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
+      "name": "index.select",
+      "parameters": {
+        "maximum": 0,
+        "minimum": 0,
+        "validator": "None"
+      },
+      "requirements": [],
+      "scope": [],
+      "signature": {
+        "inputs": [
+          {
+            "arguments": [],
+            "constructor": "bool"
+          },
+          {
+            "arguments": [],
+            "constructor": "index"
+          },
+          {
+            "arguments": [],
+            "constructor": "index"
+          }
+        ],
+        "kind": "fixed",
+        "outputs": [
+          {
+            "arguments": [],
+            "constructor": "index"
+          }
+        ]
+      },
+      "stage": "Source"
+    },
+    {
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
+      "name": "field.select",
+      "parameters": {
+        "maximum": 0,
+        "minimum": 0,
+        "validator": "None"
+      },
+      "requirements": [
+        {
+          "arguments": [
+            0
+          ],
+          "capability": "Field"
+        }
+      ],
+      "scope": [
+        {
+          "kind": "root",
+          "name": "F",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Field"
+          }
+        }
+      ],
+      "signature": {
+        "inputs": [
+          {
+            "arguments": [],
+            "constructor": "bool"
+          },
+          {
+            "arguments": [
+              0
+            ],
+            "constructor": "field"
+          },
+          {
+            "arguments": [
+              0
+            ],
+            "constructor": "field"
+          }
+        ],
+        "kind": "fixed",
+        "outputs": [
+          {
+            "arguments": [
+              0
+            ],
+            "constructor": "field"
+          }
+        ]
+      },
+      "stage": "Source"
+    },
+    {
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
+      "name": "curve.select",
+      "parameters": {
+        "maximum": 0,
+        "minimum": 0,
+        "validator": "None"
+      },
+      "requirements": [
+        {
+          "arguments": [
+            0
+          ],
+          "capability": "Group"
+        }
+      ],
+      "scope": [
+        {
+          "kind": "root",
+          "name": "G",
+          "parameter": {
+            "kind": "Domain",
+            "sort": "Group"
+          }
+        }
+      ],
+      "signature": {
+        "inputs": [
+          {
+            "arguments": [],
+            "constructor": "bool"
+          },
+          {
+            "arguments": [
+              0
+            ],
+            "constructor": "group"
+          },
+          {
+            "arguments": [
+              0
+            ],
+            "constructor": "group"
+          }
+        ],
+        "kind": "fixed",
+        "outputs": [
+          {
+            "arguments": [
+              0
+            ],
+            "constructor": "group"
+          }
+        ]
+      },
+      "stage": "Source"
     }
   ],
   "rules": [
