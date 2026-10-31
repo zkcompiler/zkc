@@ -635,20 +635,43 @@ bool Semantics::assumptions(const Declaration &caller,
   auto l = substitute(lhs, bindings, span), r = substitute(rhs, bindings, span);
   if (!l || !r)
     return false;
-  if (l->dimension.isClosed() && r->dimension.isClosed())
-    return l->dimension.closedValue() <= r->dimension.closedValue() ||
+  auto cancel =
+      [&](const Natural &left,
+          const Natural &right) -> std::optional<std::pair<Natural, Natural>> {
+    auto before = naturals.remainingWork();
+    auto result = naturals.cancelCommonTerms(left, right);
+    if (!result) {
+      accept(result.takeError(), span);
+      return {};
+    }
+    if (!charge(before - naturals.remainingWork(), span))
+      return {};
+    return std::move(*result);
+  };
+  auto requested = cancel(l->dimension, r->dimension);
+  if (!requested)
+    return false;
+  const auto &[requestedLeft, requestedRight] = *requested;
+  if (requestedLeft.isClosed() && requestedRight.isClosed())
+    return requestedLeft.closedValue() <= requestedRight.closedValue() ||
            fail("source.bound", "natural requirement is false", span);
-  if (l->dimension == r->dimension)
+  if (requestedLeft == requestedRight)
     return true;
   for (auto &given : caller.bounds) {
     if (!charge(1, span))
       return false;
-    if (given.rhs == r->dimension &&
-        (given.lhs == l->dimension ||
-         (given.lhs.isClosed() && l->dimension.isClosed() &&
-          given.lhs.closedValue() >= l->dimension.closedValue())))
+    auto available = cancel(given.lhs, given.rhs);
+    if (!available)
+      return false;
+    const auto &[givenLeft, givenRight] = *available;
+    if (givenRight == requestedRight &&
+        (givenLeft == requestedLeft ||
+         (givenLeft.isClosed() && requestedLeft.isClosed() &&
+          givenLeft.closedValue() >= requestedLeft.closedValue())))
       return true;
   }
+  // Cancellation is only a comparison view. Preserve the substituted source
+  // obligation when collecting an inferred contract.
   return (inferNatural &&
           inferNatural(caller, {l->dimension, r->dimension, span})) ||
          fail("source.bound", "contract does not establish natural bound", span,

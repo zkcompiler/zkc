@@ -399,8 +399,9 @@ void depthAndAggregateBounds() {
           "source.limit");
 }
 void reviewControls() {
-  for (StringRef feature : {"service", "predicate", "requires", "construct"})
+  for (StringRef feature : {"service", "predicate", "construct"})
     sourceRefuses("module m; " + feature.str() + " X;", "source.unsupported");
+  sourceRefuses("module m; requires X;", "source.syntax");
   sourceRefuses("module m; math fn f<F>() -> bool {return true;}",
                 "source.syntax");
   sourceRefuses("module m; domain F=field(\"missing\");", "source.domain");
@@ -903,6 +904,105 @@ void selectedClosure() {
   )");
   must(compileEntry(privateState));
 }
+void naturalBoundCancellation() {
+  const std::string friCall = R"(module m;
+fn commit<Size:nat,Final:nat,Rounds:nat>(x:bool)->bool
+    where Final+Rounds+1<=Size {return x;}
+fn caller<LogFinal:nat,Rounds:nat,LogBlowup:nat>(x:bool)->bool
+    where 1<=LogBlowup {
+  return commit<LogFinal+Rounds+LogBlowup,LogFinal,Rounds>(x);
+}
+)";
+  auto fri = check(friCall);
+  Limits limit;
+  limit.work = fri.checkedWork();
+  check(friCall, limit);
+  --limit.work;
+  sourceRefuses(friCall, "source.limit", limit);
+  sourceRefuses(replace(friCall, "where 1<=LogBlowup", "where ()"),
+                "source.bound");
+  sourceRefuses(replace(friCall, "LogFinal+Rounds+LogBlowup,LogFinal,Rounds",
+                        "LogFinal+LogBlowup,LogFinal,Rounds"),
+                "source.bound");
+
+  auto fixture = [](StringRef requested, StringRef given) {
+    return "module m;fn need<N:nat,M:nat,B:nat,C:nat>(x:bool)->bool where " +
+           requested.str() +
+           " {return x;}"
+           "fn caller<N:nat,M:nat,B:nat,C:nat>(x:bool)->bool where " +
+           given.str() + " {return need<N,M,B,C>(x);}";
+  };
+  for (auto [requested, given] : {
+           std::make_pair("1<=B", "1<=B"),
+           std::make_pair("N+M+1<=N+M+B", "N*M+2<=N*M+B"),
+           std::make_pair("N*M+N*N+1<=N*N+N*M+B", "2<=B"),
+           std::make_pair("N+M<=N+M", "()"),
+           std::make_pair("N+M+1<=N+M+2", "()"),
+           std::make_pair("pow2(N)+M+1<=pow2(N)+M+B", "2<=B"),
+           std::make_pair("3*N+1<=2*N+M", "N+1<=M"),
+           std::make_pair("1<=B", "18446744073709551615*N+2<="
+                                  "18446744073709551615*N+B"),
+           std::make_pair("18446744073709551615*N+1<="
+                          "18446744073709551614*N+B",
+                          "N+1<=B"),
+       })
+    check(fixture(requested, given));
+  for (auto [requested, given] : {
+           std::make_pair("N+M+2<=N+M+1", "()"),
+           std::make_pair("N+M+1<=N+M+B", "()"),
+           std::make_pair("N+M+2<=N+M+B", "1<=B"),
+           std::make_pair("N+M+1<=N+M+C", "1<=B"),
+           std::make_pair("1<=B", "N<=N*B"),
+           std::make_pair("1<=B", "N*0<=B*0"),
+           std::make_pair("N<=N*B", "1<=B"),
+           std::make_pair("1<=B", "1<=C,C<=B"),
+           std::make_pair("N+M<=B", "N+M<=C,C<=B"),
+           std::make_pair("pow2(N)+1<=N+B", "1<=B"),
+       })
+    sourceRefuses(fixture(requested, given), "source.bound");
+
+  // Inference must record the source inequality after substitution, including
+  // both shared terms, rather than its reduced comparison view.
+  auto inferred = check(replace(fixture("N+M+1<=N+M+B", "()"), "where ()", ""));
+  const auto &caller = *llvm::find_if(inferred.declarations(), [](auto &decl) {
+    return decl.qualifiedName == "m::caller";
+  });
+  NaturalArithmetic arithmetic;
+  auto n = must(Natural::atom(caller.parameters[0].atom));
+  auto m = must(Natural::atom(caller.parameters[1].atom));
+  auto b = must(Natural::atom(caller.parameters[2].atom));
+  auto shared = must(arithmetic.add(n, m));
+  require(caller.bounds.size() == 1 && caller.bounds[0].inferred &&
+              caller.bounds[0].lhs ==
+                  must(arithmetic.add(shared, Natural::constant(1))) &&
+              caller.bounds[0].rhs == must(arithmetic.add(shared, b)),
+          "inference lost the original substituted inequality");
+
+  auto missing = fixture("N+M+1<=N+M+B", "()");
+  auto analysis = analyze(must(capture({{"m", missing, "bounds.zkc"}})));
+  require(analysis.diagnostics().size() == 1, "missing bound diagnostic lost");
+  const auto &diagnostic = analysis.diagnostics().front();
+  require(diagnostic.code == "source.bound" && diagnostic.primary &&
+              !diagnostic.related.empty(),
+          "bound diagnostic lost its code or source locations");
+  auto span = *diagnostic.primary;
+  require(StringRef(missing).slice(span.begin, span.end).contains("need"),
+          "bound diagnostic no longer identifies the call");
+
+  // Successful natural admission leaves field and participant checks active.
+  sourceRefuses(friCall + R"(
+domain F=field("bls12-381.fr");domain G=field("bn254.fr");
+math fn mixed(x:F,y:G)->F{return x+y;}
+)",
+                "source.operator");
+  sourceRefuses(friCall + R"(
+protocol Run roles(P,V)(x:bool@P)->(r:bool@V){
+  let y=caller<0,3,2>(x);
+  let z=send V->P(y);return(r=z);
+}
+)",
+                "source.roles");
+}
 void bounds() {
   Limits limits;
   limits.files = 1;
@@ -1005,6 +1105,12 @@ void bounds() {
 } // namespace
 int main(int argc, char **argv) {
   InitLLVM initialization(argc, argv);
+  if (argc == 2 && StringRef(argv[1]) == "--natural-bound-cancellation") {
+    stage = "naturalBoundCancellation";
+    naturalBoundCancellation();
+    outs() << "natural bound cancellation checks passed\n";
+    return 0;
+  }
   stage = "reviewedSourceBoundaries";
   reviewedSourceBoundaries();
   stage = "participantCompletion";
@@ -1021,6 +1127,8 @@ int main(int argc, char **argv) {
   sourceControls();
   stage = "bounds";
   bounds();
+  stage = "naturalBoundCancellation";
+  naturalBoundCancellation();
   stage = "nameResolution";
   nameResolution();
   stage = "specializationSnapshotBounds";
