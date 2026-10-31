@@ -291,7 +291,7 @@ fn groups_pairing_codecs_nominal_separation_and_memory_limits() {
         f(123),
         vecf(&[1, 2]),
         Value::Bn254Polynomial(vec![F::one()].into()),
-        Value::Bn254Round([F::one(); 3]),
+        Value::Bn254Round(([F::one(); 3]).into()),
         Value::Bn254G1(a),
         Value::Bn254G2((b).into()),
         a2,

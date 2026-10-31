@@ -567,7 +567,7 @@ mod tests {
                 ])
                 .unwrap(),
             ),
-            Value::Curve(crate::G1::identity()),
+            Value::Curve(crate::G1::identity().into()),
             Value::Bn254G1(crate::Bn254G1::identity()),
             Value::Bn254G2(crate::Bn254G2::identity().into()),
             Value::Bls12381G2(crate::Bls12381G2::generator().into()),

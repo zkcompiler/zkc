@@ -66,8 +66,6 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
         Some((5, 7))
     } else if *ty == Value::Field(crate::Scalar::from(0)).physical_type() {
         Some((1, 38))
-    } else if *ty == Value::Curve(crate::G1::identity()).physical_type() {
-        Some((9, 54))
     } else if *ty == Value::Index(0).physical_type() {
         Some((31, 14))
     } else if crate::field_array::supports_type(ty) {
@@ -90,6 +88,7 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
         use zkc_runtime::vm::{Identity::*, Type::*};
         match (ty.kind(), ty.logical().identity()) {
             (Field, Bn254Fr) => Some((40, 38)),
+            (Group, Bls12381G1) => Some((9, 54)),
             (Group, Bn254G1) => Some((46, 38)),
             (Group, Bn254Gt) => Some((50, 390)),
             (Group, Bn254G2) => Some((48, 70)),
@@ -469,7 +468,8 @@ impl CpuBackend {
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
             9 => Value::Curve(
-                crate::G1::from_bytes(&bytes[6..]).map_err(|_| Invalid(DecodeReason::Group))?,
+                (crate::G1::from_bytes(&bytes[6..]).map_err(|_| Invalid(DecodeReason::Group))?)
+                    .into(),
             ),
             50 => Value::Bn254Gt(std::sync::Arc::new(
                 crate::Bn254Gt::from_bytes(&bytes[6..])

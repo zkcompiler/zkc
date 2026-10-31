@@ -70,7 +70,7 @@ macro_rules! family {
             }
             fn round(v: &Value) -> Result<&[Self]> {
                 if let Value::$round(v) = v {
-                    Ok(v)
+                    Ok(v.as_slice())
                 } else {
                     Err(refused("kernel-operands"))
                 }

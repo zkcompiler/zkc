@@ -52,7 +52,7 @@ fn cases(len: usize) -> Vec<Case> {
             &Policy::default(),
         )
         .unwrap(),
-        Value::Curve(G1::generator()),
+        Value::Curve((G1::generator()).into()),
         Value::Groups(
             (0..len)
                 .map(|i| {

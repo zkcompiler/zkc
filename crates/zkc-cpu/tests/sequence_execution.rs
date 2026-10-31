@@ -212,7 +212,7 @@ fn collection_budget_failures_release_all_carried_storage() {
             },
             WorkBudget::default(),
             u64::MAX,
-            "Limit",
+            "exhausted:output-bytes",
         ),
         (
             ValueBudget::default(),

@@ -8,7 +8,7 @@ use zkc_runtime::vm::{
 
 #[derive(Clone, Debug)]
 pub struct FieldArray {
-    physical_type: PhysicalType,
+    physical_type: Arc<PhysicalType>,
     storage: Storage,
 }
 #[derive(Clone, Debug)]
@@ -19,7 +19,7 @@ enum Storage {
 impl FieldArray {
     pub fn new(physical_type: PhysicalType, elements: crate::Buffer<Scalar>) -> Result<Self> {
         let value = Self {
-            physical_type,
+            physical_type: Arc::new(physical_type),
             storage: Storage::Ark(elements),
         };
         value.validate()?;
@@ -31,7 +31,7 @@ impl FieldArray {
         elements: Arc<zkc_kernels::blst::bls12_381::ScalarVector>,
     ) -> Result<Self> {
         let value = Self {
-            physical_type,
+            physical_type: Arc::new(physical_type),
             storage: Storage::Blst(elements),
         };
         value.validate()?;
@@ -120,7 +120,16 @@ impl FieldArray {
         })
     }
 }
+// This conservative owned allowance includes the shared immutable layout
+// wrapper as well as the inline view; recursive descriptors remain separately
+// accounted. Cloning a view cannot make layout storage uncharged.
 const DESCRIPTOR_BYTES: usize = 1024;
+const _: () = assert!(
+    std::mem::size_of::<PhysicalType>()
+        + std::mem::size_of::<FieldArray>()
+        + 2 * std::mem::size_of::<usize>()
+        <= DESCRIPTOR_BYTES
+);
 pub(crate) fn bytes(length: usize) -> Result<usize> {
     crate::value::size(length, 32)?
         .checked_add(DESCRIPTOR_BYTES)

@@ -200,9 +200,12 @@ fn value(ty: &Json, v: &Json) -> Result<Value> {
         ));
     }
     if *ty == json!(["group", "bls12-381.g1"]) {
-        return Ok(Value::Curve(G1::generator().scale(
-            zkc_kernels::arkworks::bls12_381::parse_decimal(string(v)?).map_err(harness)?,
-        )));
+        return Ok(Value::Curve(
+            (G1::generator().scale(
+                zkc_kernels::arkworks::bls12_381::parse_decimal(string(v)?).map_err(harness)?,
+            ))
+            .into(),
+        ));
     }
     Err(unsupported(
         "value relation supports bool, BLS12-381 Fr and G1 labels",

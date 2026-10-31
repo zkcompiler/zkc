@@ -631,10 +631,17 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
                 256 + 2 * $width,
             );
             check(
-                Value::$round([scalar; 3]),
+                Value::$round([scalar; 3].into()),
                 Type::Round,
                 I::$identity,
-                crate::VALUE_SLOT_BYTES,
+                if matches!(
+                    I::$identity,
+                    I::Bls12381Fr | I::Bn254Fr | I::Ristretto255Scalar | I::KoalaBearExt8
+                ) {
+                    256
+                } else {
+                    crate::VALUE_SLOT_BYTES
+                },
             );
             let matrix = crate::matrix::from_entries(1, 1, &[(0, 0, scalar)], &policy).unwrap();
             check(
@@ -772,7 +779,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
                 Value::$point_variant(point.into()),
                 Type::Group,
                 I::$identity,
-                if matches!(I::$identity, I::Bls12381G1 | I::Bn254G1) {
+                if matches!(I::$identity, I::Bn254G1) {
                     crate::VALUE_SLOT_BYTES
                 } else {
                     512
@@ -1665,9 +1672,12 @@ fn every_alternative_executes_and_preserves_the_original_result() {
             ],
             "poly.empty_point" => vec![],
             "poly.append_point" => vec![Value::Point([scalar(3)].into()), Value::Field(scalar(4))],
-            "poly.boundary" => vec![Value::Round([1, 2, 3].map(scalar))],
+            "poly.boundary" => vec![Value::Round([1, 2, 3].map(scalar).into())],
             "poly.round_evaluate" => {
-                vec![Value::Round([1, 2, 3].map(scalar)), Value::Field(scalar(4))]
+                vec![
+                    Value::Round([1, 2, 3].map(scalar).into()),
+                    Value::Field(scalar(4)),
+                ]
             }
             "vector.from_table" => vec![table(&[1, 2, 3, 5])],
             "vector.to_table" => vec![vector(&[1, 2, 3, 5])],
@@ -1717,7 +1727,7 @@ fn every_alternative_executes_and_preserves_the_original_result() {
         let normalize = |v: Value| match v {
             Value::TableMsb(t) => Value::Table(Arc::new(t.to_lsb(&policy.ark_bounds()).unwrap())),
             Value::Point(v) | Value::Polynomial(v) => Value::Vector(v),
-            Value::Round(v) => Value::Vector(v.into()),
+            Value::Round(v) => Value::Vector(v.as_slice().into()),
             other => other,
         };
         let encode = |v: Value| native().encode_native_value(&normalize(v)).unwrap();
@@ -2018,6 +2028,7 @@ fn residue_field_and_profile_instances_have_independently_expected_ports() {
         record(&["field.neg", "field.inverse"], &[Field], &[Field], A::None);
         record(&["field.equal"], &[Field, Field], &[Bool], A::None);
         record(&["field.from_index"], &[Index], &[Field], A::None);
+        record(&["field.select"], &[Bool, Field, Field], &[Field], A::None);
         record(
             &["vector.constant"],
             &[],

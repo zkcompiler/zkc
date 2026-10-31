@@ -358,7 +358,7 @@ impl Family for G1 {
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::Curve(v) = v {
-            Ok(*v)
+            Ok(**v)
         } else {
             Err(refused("kernel-operands"))
         }
@@ -385,7 +385,7 @@ impl Family for G1 {
         }
     }
     fn value(v: Self) -> Value {
-        Value::Curve(v)
+        Value::Curve((v).into())
     }
     fn values(v: Vec<Self>) -> Value {
         Value::Groups(v.into())

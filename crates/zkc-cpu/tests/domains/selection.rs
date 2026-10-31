@@ -139,7 +139,7 @@ fn scalar_selection_refuses_wrong_owners_nominals_parameters_and_ports() {
                 continue;
             }
             let bytes = program(
-                &[binding.clone()],
+                std::slice::from_ref(&binding),
                 &inputs,
                 vec![json!([
                     "op",

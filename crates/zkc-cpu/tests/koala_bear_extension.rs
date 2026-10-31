@@ -269,7 +269,7 @@ fn shared_vector_polynomial_round_and_matrix_kernels() {
         &call("poly.univariate_evaluate", &[], vec![poly, field(X)])[0],
         &field([4, 0, 0, 0, 0, 0, 0, 0]),
     );
-    let round = Value::KoalaBearExt8Round([scalar(ONE), scalar(X7), KoalaBearExt8::ZERO]);
+    let round = Value::KoalaBearExt8Round(([scalar(ONE), scalar(X7), KoalaBearExt8::ZERO]).into());
     assert_value(
         &call("poly.round_evaluate", &[], vec![round, field(X)])[0],
         &field([4, 0, 0, 0, 0, 0, 0, 0]),
@@ -328,7 +328,7 @@ fn canonical_coordinate_wire_is_exact_and_domain_separated() {
         field(a),
         vector(&[a, X]),
         Value::KoalaBearExt8Polynomial([scalar(a), scalar(X)].into()),
-        Value::KoalaBearExt8Round([scalar(a), scalar(X), scalar(X7)]),
+        Value::KoalaBearExt8Round([scalar(a), scalar(X), scalar(X7)].into()),
         Value::koala_bear_ext8_matrix(2, 2, &[(0, 1, scalar(a))], &Policy::default()).unwrap(),
     ];
     for (value, tag) in values.into_iter().zip(26..=30) {

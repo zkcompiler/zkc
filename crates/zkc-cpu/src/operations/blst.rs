@@ -245,8 +245,8 @@ pub(crate) fn convert(
             Ok(match value {
                 Value::Field(s) => Value::BlstField(bridge::import_scalar(*s).map_err(failure)?),
                 Value::BlstField(s) => Value::Field(bridge::export_scalar(*s).map_err(failure)?),
-                Value::Curve(p) => Value::BlstG1(bridge::import_g1(*p).map_err(failure)?.into()),
-                Value::BlstG1(p) => Value::Curve(bridge::export_g1(**p).map_err(failure)?),
+                Value::Curve(p) => Value::BlstG1(bridge::import_g1(**p).map_err(failure)?.into()),
+                Value::BlstG1(p) => Value::Curve((bridge::export_g1(**p).map_err(failure)?).into()),
                 Value::Bls12381G2(p) => {
                     Value::BlstG2(Arc::new(bridge::import_g2(**p).map_err(failure)?))
                 }

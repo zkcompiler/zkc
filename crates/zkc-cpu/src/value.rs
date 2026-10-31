@@ -8,7 +8,7 @@ use zkc_runtime::vm::{
 };
 
 /// Conservative storage for every CPU value slot, including inactive variants.
-pub const VALUE_SLOT_BYTES: usize = 128;
+pub const VALUE_SLOT_BYTES: usize = 80;
 const _: () = assert!(std::mem::size_of::<Value>() <= VALUE_SLOT_BYTES);
 
 /// Explicit per-value, numerical-call, transport and service-store ceilings.
@@ -189,7 +189,7 @@ value_inventory! {
     Bn254Field(crate::Bn254Scalar),
     Bn254Vector(crate::Buffer<crate::Bn254Scalar>),
     Bn254Polynomial(crate::Buffer<crate::Bn254Scalar>),
-    Bn254Round([crate::Bn254Scalar; 3]),
+    Bn254Round(Arc<[crate::Bn254Scalar; 3]>),
     Bn254Matrix(crate::matrix::SparseCoo<crate::Bn254Scalar>),
     Bn254G1(crate::Bn254G1),
     Bn254G1Vector(crate::Buffer<crate::Bn254G1>),
@@ -227,7 +227,7 @@ value_inventory! {
     KoalaBearExt8Field(crate::KoalaBearExt8),
     KoalaBearExt8Vector(crate::Buffer<crate::KoalaBearExt8>),
     KoalaBearExt8Polynomial(crate::Buffer<crate::KoalaBearExt8>),
-    KoalaBearExt8Round([crate::KoalaBearExt8; 3]),
+    KoalaBearExt8Round(Arc<[crate::KoalaBearExt8; 3]>),
     KoalaBearExt4Matrix(crate::matrix::SparseCoo<crate::KoalaBearExt4>),
     BabyBearMatrix(crate::matrix::SparseCoo<crate::BabyBear>),
     BabyBearExt4Matrix(crate::matrix::SparseCoo<crate::BabyBearExt4>),
@@ -272,7 +272,7 @@ value_inventory! {
     RistrettoField(crate::RistrettoScalar),
     RistrettoVector(crate::Buffer<crate::RistrettoScalar>),
     RistrettoPolynomial(crate::Buffer<crate::RistrettoScalar>),
-    RistrettoRound([crate::RistrettoScalar; 3]),
+    RistrettoRound(Arc<[crate::RistrettoScalar; 3]>),
     EdwardsGroup(Arc<crate::EdwardsPrime>),
     EdwardsGroups(crate::Buffer<crate::EdwardsPrime>),
     RistrettoGroup(Arc<crate::RistrettoPoint>),
@@ -285,7 +285,7 @@ value_inventory! {
     Table(Arc<Table>),
     TableMsb(Arc<zkc_kernels::arkworks::bls12_381::MsbTable>),
     Point(crate::Buffer<Scalar>),
-    Round([Scalar; 3]),
+    Round(Arc<[Scalar; 3]>),
     Bool(bool),
     Rng(Capability),
     Commitment(Arc<Commitment>),
@@ -297,7 +297,7 @@ value_inventory! {
     VerifierKey(Arc<VerifierKey>),
     Nonce(Capability),
     Transcript(Capability),
-    Curve(zkc_kernels::arkworks::bls12_381::G1),
+    Curve(Arc<zkc_kernels::arkworks::bls12_381::G1>),
     Groups(crate::Buffer<zkc_kernels::arkworks::bls12_381::G1>),
 }
 
@@ -305,6 +305,12 @@ impl Value {
     /// Complete immutable point backing, including the payload and Arc wrapper.
     pub(crate) const fn shared_group_retained_bytes() -> usize {
         const {
+            assert!(
+                std::mem::size_of::<crate::G1>()
+                    + 2 * std::mem::size_of::<usize>()
+                    + VALUE_SLOT_BYTES
+                    <= 512
+            );
             assert!(
                 std::mem::size_of::<crate::Bn254G2>() + 2 * std::mem::size_of::<usize>() <= 512
             );
@@ -328,6 +334,37 @@ impl Value {
         512
     }
 
+    /// Wide immutable three-coefficient rounds include the allocation and wrapper.
+    pub(crate) const fn shared_round_retained_bytes() -> usize {
+        const {
+            assert!(
+                std::mem::size_of::<[Scalar; 3]>()
+                    + 2 * std::mem::size_of::<usize>()
+                    + VALUE_SLOT_BYTES
+                    <= 256
+            );
+            assert!(
+                std::mem::size_of::<[crate::Bn254Scalar; 3]>()
+                    + 2 * std::mem::size_of::<usize>()
+                    + VALUE_SLOT_BYTES
+                    <= 256
+            );
+            assert!(
+                std::mem::size_of::<[crate::RistrettoScalar; 3]>()
+                    + 2 * std::mem::size_of::<usize>()
+                    + VALUE_SLOT_BYTES
+                    <= 256
+            );
+            assert!(
+                std::mem::size_of::<[crate::KoalaBearExt8; 3]>()
+                    + 2 * std::mem::size_of::<usize>()
+                    + VALUE_SLOT_BYTES
+                    <= 256
+            );
+        }
+        256
+    }
+
     /// Complete immutable target backing, including wrapper and Arc allowance.
     pub(crate) const fn bn254_gt_retained_bytes() -> usize {
         256 + std::mem::size_of::<crate::Bn254Gt>()
@@ -343,11 +380,19 @@ impl Value {
             }
             (
                 Type::Group,
-                Identity::Bn254G2
+                Identity::Bls12381G1
+                | Identity::Bn254G2
                 | Identity::Bls12381G2
                 | Identity::Edwards25519Prime
                 | Identity::Ristretto255Group,
             ) => Self::shared_group_retained_bytes(),
+            (
+                Type::Round,
+                Identity::Bls12381Fr
+                | Identity::Bn254Fr
+                | Identity::Ristretto255Scalar
+                | Identity::KoalaBearExt8,
+            ) => Self::shared_round_retained_bytes(),
             (Type::Field | Type::Round | Type::Bool | Type::Index | Type::Group, _) => {
                 VALUE_SLOT_BYTES
             }
@@ -853,7 +898,8 @@ impl Value {
         }
     }
 
-    /// Upper bound for a successfully decoded canonical public wire value.
+    /// Upper bound for a successfully decoded BLS12-381 canonical public wire value.
+    /// Other nominal domains and representations require the typed bound below.
     /// No parsing or allocation occurs. Wire length includes the ZKCV envelope.
     /// This is not validation: callers must still decode and check the actual
     /// retained charge (notably storage capacity for tables). Invalid/truncated
@@ -1029,6 +1075,11 @@ impl Value {
     fn leaf_backing(&self) -> Option<Backing> {
         let bytes = self.retained_bytes();
         Some(match self {
+            Self::Curve(v) => Backing::of(v, bytes),
+            Self::KoalaBearExt8Round(v) => Backing::of(v, bytes),
+            Self::RistrettoRound(v) => Backing::of(v, bytes),
+            Self::Bn254Round(v) => Backing::of(v, bytes),
+            Self::Round(v) => Backing::of(v, bytes),
             Self::OraclePath(_, p) | Self::OracleRoots(_, p) => Backing::of(p, bytes),
             Self::OracleState(s) => s.backing().ok()?,
             Self::MerkleDigest(_, d) | Self::MerkleProof(_, d) | Self::MerkleDigests(_, d) => {
@@ -1113,12 +1164,10 @@ impl Value {
             | Self::BlstField(_)
             | Self::HaloG1(_)
             | Self::Bn254Field(_)
-            | Self::Bn254Round(_)
             | Self::Bn254G1(_)
             | Self::OracleRoot(..)
             | Self::Index(_)
             | Self::KoalaBearExt8Field(_)
-            | Self::KoalaBearExt8Round(_)
             | Self::KoalaBearExt4Field(_)
             | Self::BabyBearField(_)
             | Self::BabyBearExt4Field(_)
@@ -1136,14 +1185,11 @@ impl Value {
             | Self::KoalaBearField(_)
             | Self::KoalaBearRound(_)
             | Self::RistrettoField(_)
-            | Self::RistrettoRound(_)
             | Self::Field(_)
-            | Self::Round(_)
             | Self::Bool(_)
             | Self::Rng(_)
             | Self::Nonce(_)
-            | Self::Transcript(_)
-            | Self::Curve(_) => return None,
+            | Self::Transcript(_) => return None,
         })
     }
     pub(crate) fn capability(&self) -> Option<&Capability> {
@@ -1613,6 +1659,11 @@ impl RuntimeValue for Value {
     fn retained_bytes(&self) -> usize {
         // Conservative retained Rust payload, counting shared backing in full.
         match self {
+            Self::Curve(_) => Ok(Self::shared_group_retained_bytes()),
+            Self::Round(_)
+            | Self::Bn254Round(_)
+            | Self::RistrettoRound(_)
+            | Self::KoalaBearExt8Round(_) => Ok(Self::shared_round_retained_bytes()),
             Self::Rng(_) | Self::Nonce(_) | Self::Transcript(_) => {
                 Ok(Self::capability_retained_bytes())
             }
@@ -1736,9 +1787,7 @@ impl RuntimeValue for Value {
             | Self::BlstField(_)
             | Self::HaloG1(_)
             | Self::Bn254Field(_)
-            | Self::Bn254Round(_)
             | Self::Bn254G1(_)
-            | Self::KoalaBearExt8Round(_)
             | Self::KoalaBearExt8Field(_)
             | Self::KoalaBearExt4Round(_)
             | Self::BabyBearRound(_)
@@ -1757,12 +1806,9 @@ impl RuntimeValue for Value {
             | Self::KoalaBearField(_)
             | Self::KoalaBearRound(_)
             | Self::RistrettoField(_)
-            | Self::RistrettoRound(_)
             | Self::Field(_)
-            | Self::Round(_)
             | Self::Bool(_)
-            | Self::Index(_)
-            | Self::Curve(_) => Ok(VALUE_SLOT_BYTES),
+            | Self::Index(_) => Ok(VALUE_SLOT_BYTES),
         }
         .unwrap_or(usize::MAX)
     }
@@ -1823,7 +1869,9 @@ fn payload_bytes(ty: Type, elements: usize) -> Result<usize> {
         Type::Indices => size(elements, 8),
         Type::Bytes => size(elements, 1),
         Type::Shake128State => Ok(crate::hash::Shake128State::RETAINED_BYTES),
-        Type::Field | Type::Round | Type::Group | Type::Bool | Type::Index => Ok(VALUE_SLOT_BYTES),
+        Type::Field | Type::Bool | Type::Index => Ok(VALUE_SLOT_BYTES),
+        Type::Round => Ok(Value::shared_round_retained_bytes()),
+        Type::Group => Ok(Value::shared_group_retained_bytes()),
         Type::QuotientMatrix => Err(refused("nonserializable")),
         Type::Groups | Type::VerifierKey => size(elements, 128),
         Type::Proof => size(elements, 192),
@@ -1973,8 +2021,8 @@ mod admission_size_tests {
         let mut values = vec![
             Value::Field(Scalar::from(1)),
             Value::Bool(true),
-            Value::Curve(crate::G1::generator()),
-            Value::Round([Scalar::from(1); 3]),
+            Value::Curve(crate::G1::generator().into()),
+            Value::Round([Scalar::from(1); 3].into()),
         ];
         for rank in 0..=3 {
             values.push(Value::table(&vec![Scalar::from(1); 1 << rank], &policy).unwrap());
@@ -2185,7 +2233,8 @@ mod retained_parts_tests {
 
     #[test]
     fn large_point_aliases_share_allocations_but_equal_points_do_not() {
-        let constructors: [fn() -> Value; 5] = [
+        let constructors: [fn() -> Value; 6] = [
+            || Value::Curve(crate::G1::generator().into()),
             || Value::Bn254G2(crate::Bn254G2::generator().into()),
             || Value::Bls12381G2(crate::Bls12381G2::generator().into()),
             || Value::EdwardsGroup(crate::EdwardsPrime::generator().into()),
@@ -2204,6 +2253,34 @@ mod retained_parts_tests {
             let repeated = pack("Repeated", vec![value.clone(), alias]);
             let distinct = pack("Distinct", vec![value, independent]);
             assert_eq!(charged(&repeated) + 512, repeated.retained_bytes());
+            assert_eq!(charged(&distinct), distinct.retained_bytes());
+        }
+    }
+
+    #[test]
+    fn wide_round_aliases_share_allocations_but_equal_rounds_do_not() {
+        let constructors: [fn() -> Value; 4] = [
+            || Value::Round([Scalar::from(1); 3].into()),
+            || Value::Bn254Round([crate::Bn254Scalar::from(1); 3].into()),
+            || Value::RistrettoRound([crate::RistrettoScalar::from(1u64); 3].into()),
+            || {
+                Value::KoalaBearExt8Round(
+                    [crate::KoalaBearExt8::from(crate::KoalaBear::new(1)); 3].into(),
+                )
+            },
+        ];
+        for make in constructors {
+            let value = make();
+            let alias = value.clone();
+            let independent = make();
+            assert_eq!(parts(&value).0, 0);
+            assert_eq!(charged(&value), 256);
+            assert_eq!(Value::fixed_retained_bytes(&value.physical_type()), 256);
+            assert_eq!(parts(&value), parts(&alias));
+            assert_ne!(parts(&value), parts(&independent));
+            let repeated = pack("RepeatedRounds", vec![value.clone(), alias]);
+            let distinct = pack("DistinctRounds", vec![value, independent]);
+            assert_eq!(charged(&repeated) + 256, repeated.retained_bytes());
             assert_eq!(charged(&distinct), distinct.retained_bytes());
         }
     }

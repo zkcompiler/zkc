@@ -2008,7 +2008,7 @@ fn standalone_outputs_keep_owner_policy_without_native_measurement() {
     use crate::execution::Capacity;
     use zkc_runtime::vm::{Backend, ExecutionLedger, Value as RuntimeValue, WorkBudget};
     let group = schema("group", "Group", json!(["group:bls12-381.g1"]));
-    let native = zkc_cpu::Value::Curve(zkc_cpu::G1::generator());
+    let native = zkc_cpu::Value::Curve((zkc_cpu::G1::generator()).into());
     let capacity = Capacity {
         groups: 0,
         ..Capacity::default()

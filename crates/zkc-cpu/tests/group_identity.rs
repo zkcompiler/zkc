@@ -173,7 +173,7 @@ fn edwards_native_frames_preserve_subgroup_and_vector_boundaries() {
 fn bls_g1_identity() {
     check(
         "bls12-381.g1",
-        Value::Curve(G1::identity()),
+        Value::Curve((G1::identity()).into()),
         support::field(false, 0),
         support::field(false, 7),
         Some((support::vector(false, &[]), support::groups(false, &[]))),

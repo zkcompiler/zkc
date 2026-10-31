@@ -156,7 +156,7 @@ fn groups_pairings_and_target_arithmetic() {
     let paired = call(
         "pairing.apply",
         "bls12-381.fr",
-        vec![Value::Curve(a), Value::Bls12381G2(b.into())],
+        vec![Value::Curve(a.into()), Value::Bls12381G2(b.into())],
     );
     let Value::Bls12381Gt(target) = &paired[0] else {
         panic!("target")
@@ -229,7 +229,7 @@ fn native_frames_round_trip_and_reject_damage() {
     }
     // A G1 frame is not a G2 frame, even for the shared scalar field.
     let g1 = backend
-        .encode_native_value(&Value::Curve(G1::generator()))
+        .encode_native_value(&Value::Curve((G1::generator()).into()))
         .unwrap();
     assert!(
         backend

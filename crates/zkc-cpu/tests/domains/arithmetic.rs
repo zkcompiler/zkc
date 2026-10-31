@@ -243,9 +243,9 @@ fn scalar_vector_and_polynomial_contracts_have_both_field_meanings() {
             &field(d, 0),
         );
         let round = if d {
-            Value::RistrettoRound([2u64, 3, 4].map(RistrettoScalar::from))
+            Value::RistrettoRound(([2u64, 3, 4].map(RistrettoScalar::from)).into())
         } else {
-            Value::Round([2, 3, 4].map(Scalar::from))
+            Value::Round(([2, 3, 4].map(Scalar::from)).into())
         };
         assert_value(
             &call(d, "poly.boundary", &[], vec![round.clone()])[0],

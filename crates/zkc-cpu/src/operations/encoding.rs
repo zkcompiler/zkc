@@ -606,13 +606,16 @@ pub(crate) fn apply(
             )])
         }
         ("encoding.group_from_compressed", [Value::Bytes(bytes)]) => {
-            policy.output(2 * crate::VALUE_SLOT_BYTES, available)?;
+            policy.output(
+                Value::shared_group_retained_bytes() + crate::VALUE_SLOT_BYTES,
+                available,
+            )?;
             // Exact width, subgroup validation and canonical re-encoding are
             // owned by the checked group adapter; no transcript state is touched.
             let point = G1::from_bytes(bytes).ok();
             Ok(vec![
                 Value::Bool(point.is_some()),
-                Value::Curve(point.unwrap_or_else(G1::identity)),
+                Value::Curve(point.unwrap_or_else(G1::identity).into()),
             ])
         }
         _ => Err(refused("encoding-operands")),
@@ -873,7 +876,10 @@ mod tests {
                 "encoding.group_compressed",
                 Identity::Bls12381G1,
                 Value::Groups(vec![G1::identity(), G1::generator()].into()),
-                vec![Value::Curve(G1::identity()), Value::Curve(G1::generator())],
+                vec![
+                    Value::Curve(G1::identity().into()),
+                    Value::Curve(G1::generator().into()),
+                ],
             ),
             (
                 "encoding.groups_compressed",
@@ -1207,10 +1213,10 @@ mod tests {
     #[test]
     fn group_decoder_rejects_malformed_encodings_without_failing_the_kernel() {
         for value in [G1::generator(), G1::identity(), G1::generator().neg()] {
-            let encoded = run("encoding.group_compressed", &[Value::Curve(value)]);
+            let encoded = run("encoding.group_compressed", &[Value::Curve((value).into())]);
             assert!(
                 matches!(run("encoding.group_from_compressed", &encoded).as_slice(),
-                [Value::Bool(true), Value::Curve(p)] if *p == value)
+                [Value::Bool(true), Value::Curve(p)] if **p == value)
             );
         }
         let mut bad_infinity = G1::identity().to_bytes().unwrap();
@@ -1242,9 +1248,25 @@ mod tests {
         ] {
             assert!(
                 matches!(run("encoding.group_from_compressed", &[bytes(&invalid)]).as_slice(),
-                [Value::Bool(false), Value::Curve(p)] if *p == G1::identity())
+                [Value::Bool(false), Value::Curve(p)] if **p == G1::identity())
             );
         }
+        let encoded = bytes(&G1::generator().to_bytes().unwrap());
+        let required = Value::shared_group_retained_bytes() + crate::VALUE_SLOT_BYTES;
+        let decoded = apply(
+            "encoding.group_from_compressed",
+            Identity::Bls12381G1,
+            &[encoded],
+            &[],
+            &Policy::default(),
+            required,
+            &mut Default::default(),
+        )
+        .unwrap();
+        assert!(
+            matches!(decoded.as_slice(), [Value::Bool(true), Value::Curve(p)]
+            if **p == G1::generator())
+        );
         assert!(
             apply(
                 "encoding.group_from_compressed",
@@ -1252,7 +1274,7 @@ mod tests {
                 &[bytes(&[0; 48])],
                 &[],
                 &Policy::default(),
-                2 * crate::VALUE_SLOT_BYTES - 1,
+                Value::shared_group_retained_bytes() + crate::VALUE_SLOT_BYTES - 1,
                 &mut Default::default()
             )
             .is_err()

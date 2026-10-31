@@ -43,7 +43,7 @@ fn samples() -> Vec<Value> {
     vec![
         Value::Field(Scalar::from(7)),
         Value::Vector(vec![Scalar::from(0), Scalar::from(7)].into()),
-        Value::Curve(G1::generator()),
+        Value::Curve(G1::generator().into()),
         Value::Groups(vec![G1::identity(), G1::generator()].into()),
         Value::Bls12381G2(Bls12381G2::generator().into()),
         Value::Bls12381G2Vector(vec![Bls12381G2::identity(), Bls12381G2::generator()].into()),
@@ -375,7 +375,7 @@ fn resident_limits_remain_capacity_failures_with_an_unconsumed_receive() {
 #[test]
 fn permission_does_not_replace_backend_support_or_transient_value_validation() {
     let codec = native("P");
-    let ark = Value::Curve(G1::generator());
+    let ark = Value::Curve((G1::generator()).into());
     let ty = selected(&ark);
     let resident = codec
         .decode_wire(&ty, &codec.encode_wire(&ark).unwrap())

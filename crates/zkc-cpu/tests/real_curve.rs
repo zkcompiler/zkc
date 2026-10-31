@@ -115,8 +115,8 @@ fn public_curve_kernels_and_vector_bounds_run_through_runner() {
     );
     let (out, _) = run(&bytes, real(), vec![f(7)]);
     let out = out.unwrap();
-    let Value::Curve(p) = out[0] else { panic!() };
-    assert_eq!(p, G1::generator().scale(Scalar::from(8)));
+    let Value::Curve(p) = &out[0] else { panic!() };
+    assert_eq!(**p, G1::generator().scale(Scalar::from(8)));
     assert!(matches!(out[2], Value::Bool(true)));
     let bad = prog(
         &[("points", "groups")],
@@ -181,7 +181,7 @@ fn public_curve_kernels_and_vector_bounds_run_through_runner() {
             &run(
                 &b,
                 backend,
-                vec![groups(&[1]), Value::Curve(G1::identity())]
+                vec![groups(&[1]), Value::Curve(G1::identity().into())]
             )
             .0
             .unwrap_err()
@@ -192,7 +192,7 @@ fn public_curve_kernels_and_vector_bounds_run_through_runner() {
 #[test]
 fn public_codecs_are_exact_and_nominally_typed() {
     let b = real();
-    let g = Value::Curve(G1::generator());
+    let g = Value::Curve((G1::generator()).into());
     let wire = b.encode_native_value(&g).unwrap();
     assert_eq!(&wire[..6], b"ZKCV\x00\x09");
     assert_eq!(wire.len(), 54);
@@ -208,7 +208,7 @@ fn public_codecs_are_exact_and_nominally_typed() {
     assert!(b.decode_native_value(&f(1).physical_type(), &wire).is_err());
     for value in [
         g,
-        Value::Curve(G1::identity()),
+        Value::Curve((G1::identity()).into()),
         groups(&[]),
         groups(&[0, 1, 7]),
     ] {

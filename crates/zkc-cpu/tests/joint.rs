@@ -673,7 +673,7 @@ fn native_standalone_group_messages_do_not_consume_collection_capacity() {
         )
         .unwrap()
     };
-    let point = Value::Curve(zkc_cpu::G1::generator());
+    let point = Value::Curve((zkc_cpu::G1::generator()).into());
     let bundle = Bundle::admit(
         message_bundle(&point.physical_type().spelling())
             .to_string()

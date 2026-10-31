@@ -344,7 +344,7 @@ fn resident_g1_g2_and_pairing_closure_matches_arkworks() {
             if g2 {
                 Value::Bls12381G2((Bls12381G2::generator().scale(Scalar::from(n))).into())
             } else {
-                Value::Curve(G1::generator().scale(Scalar::from(n)))
+                Value::Curve((G1::generator().scale(Scalar::from(n))).into())
             }
         };
         let points = |n| {
@@ -437,8 +437,8 @@ fn selected_codecs_match_canonical_language_and_reject_invalid_encodings() {
     for value in [
         Value::Field(Scalar::from(0)),
         Value::Field(Scalar::from(9)),
-        Value::Curve(G1::identity()),
-        Value::Curve(G1::generator()),
+        Value::Curve((G1::identity()).into()),
+        Value::Curve((G1::generator()).into()),
         Value::Bls12381G2((Bls12381G2::identity()).into()),
         Value::Bls12381G2((Bls12381G2::generator()).into()),
         vector(&[]),
@@ -536,7 +536,10 @@ fn variable_time_permission_is_explicit_and_no_ark_fallback_is_installed() {
             "P",
             "session",
             backend,
-            vec![Value::Curve(G1::generator()), Value::Field(Scalar::from(1))]
+            vec![
+                Value::Curve(G1::generator().into()),
+                Value::Field(Scalar::from(1))
+            ]
         )
         .is_err()
     );
@@ -604,7 +607,7 @@ fn explicit_conversions_are_bidirectional_and_preserve_wire() {
     for value in [
         Value::Field(Scalar::from(19)),
         vector(&[0, 1, 19]),
-        Value::Curve(G1::generator()),
+        Value::Curve((G1::generator()).into()),
         Value::Groups(vec![G1::identity(), G1::generator()].into()),
         Value::Bls12381G2((Bls12381G2::generator()).into()),
         Value::Bls12381G2Vector(vec![Bls12381G2::generator()].into()),
@@ -641,9 +644,10 @@ fn explicit_conversions_are_bidirectional_and_preserve_wire() {
                 Value::BlstG2Vector(v) => Some(v.len() * std::mem::size_of::<Bls12381G2>()),
                 _ => None,
             };
-            let scalar_bytes = if matches!(&input, Value::Bls12381G2(_) | Value::BlstG2(_))
-                || (importing && matches!(&input, Value::Curve(_)))
-            {
+            let scalar_bytes = if matches!(
+                &input,
+                Value::Bls12381G2(_) | Value::BlstG2(_) | Value::Curve(_) | Value::BlstG1(_)
+            ) {
                 512
             } else {
                 zkc_cpu::VALUE_SLOT_BYTES
@@ -826,7 +830,7 @@ fn selected_codecs_reject_noncanonical_scalars_and_wrong_subgroups_at_each_bulk_
     for (value, malformed) in [
         (Value::Field(Scalar::from(1)), modulus.clone()),
         (vector(&[1, 2, 3]), modulus),
-        (Value::Curve(G1::generator()), wrong_g1.clone()),
+        (Value::Curve((G1::generator()).into()), wrong_g1.clone()),
         (Value::Groups(vec![G1::generator(); 3].into()), wrong_g1),
     ] {
         let ty = physical(value.ty(), value.physical_type().logical().identity());
@@ -847,7 +851,7 @@ fn selected_codecs_reject_noncanonical_scalars_and_wrong_subgroups_at_each_bulk_
         }
     }
     for value in [
-        Value::Curve(G1::identity()),
+        Value::Curve((G1::identity()).into()),
         Value::Bls12381G2((Bls12381G2::identity()).into()),
     ] {
         let ty = physical(value.ty(), value.physical_type().logical().identity());

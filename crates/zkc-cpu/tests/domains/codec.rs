@@ -17,7 +17,7 @@ fn new_codecs_are_domain_distinct_exact_and_canonical() {
         (17, groups(true, &[1, 2])),
         (
             18,
-            Value::RistrettoRound([1u64, 2, 3].map(RistrettoScalar::from)),
+            Value::RistrettoRound([1u64, 2, 3].map(RistrettoScalar::from).into()),
         ),
     ];
     for (tag, v) in values {
@@ -207,7 +207,7 @@ fn fixed_native_bytes_and_local_only_values_do_not_depend_on_decoder_agreement()
             assert_eq!(b.encode_native_value(&v).unwrap(), expected);
         }
     }
-    let round = Value::RistrettoRound([1u64, 2, 3].map(RistrettoScalar::from));
+    let round = Value::RistrettoRound(([1u64, 2, 3].map(RistrettoScalar::from)).into());
     assert!(b.encode_native_value(&round).is_err());
     let generator = call(true, "curve.generator", &[], vec![]).remove(0);
     let hex = zkc_test_support::hex(&b.encode_native_value(&generator).unwrap());
