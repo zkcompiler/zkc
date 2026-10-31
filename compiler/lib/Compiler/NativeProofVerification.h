@@ -1,5 +1,6 @@
 #ifndef ZKC_LIB_COMPILER_NATIVE_PROOF_VERIFICATION_H
 #define ZKC_LIB_COMPILER_NATIVE_PROOF_VERIFICATION_H
+#include "NativeRequest.h"
 #include "zkc/Compiler/NativeProof.h"
 #include "zkc/Dialect/Protocol/Construction.h"
 #include <cstdint>
@@ -21,6 +22,9 @@ struct NativeTranscriptEvent {
   std::optional<uint64_t> count = std::nullopt;
   std::optional<unsigned> difficulty = std::nullopt;
   std::string witnessSite = {};
+  /// Deterministic V-to-P transport admitted by the actual-body value relation;
+  /// it remains an observation but does not consume a selected challenge.
+  bool reconstructed = false;
 };
 llvm::Error verifyNativeEntrySelection(mlir::ModuleOp prepared,
                                        mlir::ModuleOp selected,
@@ -30,6 +34,7 @@ llvm::Error verifyNativeTranscript(
     const NativeProofPolicy &policy,
     llvm::ArrayRef<NativeTranscriptEvent> events,
     const protocol::ConstructionPlan *construction = nullptr,
-    llvm::ArrayRef<protocol::ConstructionInvocation> invocations = {});
+    llvm::ArrayRef<protocol::ConstructionInvocation> invocations = {},
+    const mathematical::RealizedProtocol *realization = nullptr);
 } // namespace zkc::detail
 #endif

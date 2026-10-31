@@ -10,6 +10,17 @@ parameter rules, history facets and type permissions. Consumers still check actu
 admission, domain capabilities, installation and effects. Mathematical facets
 state obligations; they are neither implementation evidence nor generated proofs.
 
+`Facet::DeterministicData` projects the explicit nullary `DeterministicData`
+catalog facet. It relates equal complete logical inputs and parameters to equal
+normal results or the same logical stop for an installed exact admitted
+interpretation. Partial operations retain their stops; the facet grants no
+totality, speculation, budget equality or private-service authority. Consumers
+still admit exact bindings and closed functions, recursively check immutable
+data, and establish selected implementations independently of the unselected
+interpretation. `Facet::PublicReplay` remains a separate restricted total
+public-construction contract. Unknown or unclassified operations gain neither
+fact.
+
 `CATALOG.consumer_profiles` and the exact-name `consumer_profile` /
 `consumer_profile_operation` queries expose explicit owner-fixed enrollment and
 kinded formal roots. The generator checks each entry against its independently

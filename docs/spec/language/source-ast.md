@@ -356,7 +356,8 @@ removes the parser, source-correspondence or structured-denotation trusted links
 
 `inspectSourceInstances` exports `zkc.source-instances/0`, with `format`, `capture`,
 `installation` and `instances`. Each retained closed instance has `symbol`,
-`template`, `statics`, `scoped`, `domains` and `layout`. The symbol is an actual
+`template`, `statics`, `scoped`, `domains`, `layout` and `oracle_obligations`.
+Oracle instances additionally have `oracle_definition`. The symbol is an actual
 closed declaration name. No consumer decodes its hash to establish source origin.
 
 A declaration template has `kind: "declaration"`, its canonical `owner`, a
@@ -389,6 +390,57 @@ These are declaration substitutions. A finite operation can carry a closed
 domain and callback directly without instantiating a declaration with domain
 or scoped arguments; the presence of finite operations does not imply nonempty
 `domains` or `scoped` here.
+
+`oracle_definition` retains the checked oracle plan: `source_count`,
+`query_parameter` (`name`, `type`, constructor-excluded `input` slot), `answer`,
+`admissibility` (qualified source name), `admissibility_id` (checked declaration
+index), `admissibility_symbol` (actual Formula symbol), `admissibility_inputs`,
+`admissibility_companions`, `predicates`, `source_bounds`, `result_shape` and
+ordered `queries`. Input entries have `name` and diagnostic `type` spelling.
+Authored predicate entries have `ordinal`, nullable `label`, checked Formula
+`condition` value index, `begin` and `end`. Source bounds have `source`,
+`dimension` and `maximum`; result shapes have `dimension`, `input` and `maximum`.
+Queries have `source`, `position`, `answer` and nullable `site`. Type and bound
+spellings describe the plan; consumers check actual source terms and the Formula
+body independently. Declaration and public API inspection expose the same plan
+for templates as well.
+
+`admissibility_companions` contains `template` and `instance`. The first is the
+whole-predicate [companion address](companions.md#virtual-oracle-admissibility);
+the second selects this closed oracle's symbol, or is null for an open template
+in declaration/API inspection. These are definition addresses, never evidence.
+Requested component, serialization and work limits apply at export; an identity
+failure refuses the whole export without partial output or placeholder keys.
+
+Every instance has an `oracle_obligations` array, empty when its body contains
+no oracle constructions. The traversal emits every retained construction in
+body order, entering nested regions at their enclosing operation. Each row has
+`path`, `source`, nullable `site`, `definition`, `admissibility`, `companions`,
+`substitution`, `holder`, `receivers`, `results` and `status: "unresolved"`.
+`definition` selects the actual oracle instance; `admissibility` selects its
+actual generated Formula symbol. `companions` is that definition's
+`admissibility_companions` object. A repeated construction can share both lookup
+addresses while retaining its own obligation. Definitions without constructions
+have addresses but create no occurrence rows.
+
+`path` is a nonempty sequence `[operation, region, operation, ...]` starting in
+the enclosing instance body. A repeat's only region is numbered zero; local
+control regions use retained order. `source` has `module`, `begin` and `end`.
+`holder` and ordered `receivers` use the enclosing checked declaration's role
+indices. `results` are construction result value indices in the selected body.
+Region depth and traversal share the requested expression-depth and work limits.
+
+`substitution` retains constructor order. Each entry has `input`, `value`,
+`type` and `projection`. `input` selects the Formula input; `value` selects an
+actual value in the body selected by `path`; `type` is its complete closed
+source-term encoding. Direct source inputs use `projection: "data"`: the value
+is a logical source handle whose Data supplies that Formula input, retaining the
+anchor's exact custody and immutable shape. Remaining ordinary captures use
+`projection: "value"`. There is no query-parameter argument to admissibility.
+These are source SSA indices, not structured-IR operand indices. Consumers check
+region capture mappings, exact types, nominal statics and the actual Formula
+application independently. Publication is unconditional on optional security
+checking and neither proves the application nor inserts a runtime guard.
 
 The combined source artifact adds `instances` and `instance_rows`. The former is
 this document; the latter contains one `{instance,rows}` entry per instance.

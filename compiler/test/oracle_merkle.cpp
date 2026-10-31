@@ -166,74 +166,183 @@ int main(int argc, char **argv) {
                                        order))
           throw std::runtime_error(toString(std::move(e)));
       });
-      for (unsigned mutation = 0; mutation < 10; ++mutation)
+      // Reparse every candidate and resolve its actual helper tuple afresh.
+      // This tests the independent body reader, including missing declarations.
+      auto rejectActual = [&](ModuleOp candidate,
+                              const OracleMerkleFunctions &helpers,
+                              bool formed = true) {
+        if (formed)
+          require(succeeded(verify(candidate)),
+                  "mutation only failed formation");
+        std::string text;
+        raw_string_ostream stream(text);
+        candidate.print(stream);
+        auto parsed = parseSourceString<ModuleOp>(text, &context);
+        require(bool(parsed), "mutated Merkle candidate did not parse");
+        auto unit =
+            cast<protocol_ir::ProtocolModuleOp>(parsed->getBody()->front());
+        auto find = [&](func::FuncOp helper) {
+          return dyn_cast_or_null<func::FuncOp>(
+              SymbolTable::lookupSymbolIn(unit, helper.getSymName()));
+        };
+        OracleMerkleFunctions actual{find(helpers.position),
+                                     find(helpers.commit), find(helpers.open),
+                                     find(helpers.authenticate)};
+        auto refused =
+            checkOracleMerkle(*parsed, actual, kind, scheme, grouping, order);
+        require(bool(refused), "mutated actual Merkle body passed");
+        require(
+            namesIdentifier(toString(std::move(refused)), "oracle-merkle-body"),
+            "wrong refusal");
+      };
+      auto mutateApply = [&](StringRef label, StringRef site,
+                             llvm::function_ref<void(exec::ApplyOp)> mutate) {
+        cases.run("independent rejection " + name + " " + label, [&] {
+          auto candidate = fresh(context);
+          auto helpers =
+              take(emitOracleMerkle(*candidate, kind, scheme, grouping, order));
+          unsigned changed = 0;
+          candidate->walk([&](exec::ApplyOp op) {
+            if (op.getSite() == site) {
+              ++changed;
+              mutate(op);
+            }
+          });
+          require(changed != 0, "mutation did not change any actual operation");
+          rejectActual(*candidate, helpers);
+        });
+      };
+      auto swap = [](exec::ApplyOp op, unsigned a, unsigned b) {
+        auto inputs = SmallVector<Value>(op.getInputs());
+        std::swap(inputs[a], inputs[b]);
+        op.getInputsMutable().assign(inputs);
+      };
+      auto forgeTrue = [&](exec::ApplyOp op) {
+        OpBuilder builder(op);
+        OperationState constant(op.getLoc(), "exec.boolean");
+        constant.addOperands(op.getScope());
+        constant.addTypes(op.getOutcome().getType());
+        constant.addAttribute("value", builder.getBoolAttr(true));
+        constant.addAttribute("site", op.getSiteAttr());
+        auto *replacement = builder.create(constant);
+        op->replaceAllUsesWith(replacement->getResults());
+        op.erase();
+      };
+      auto removeGuard = [](exec::ApplyOp op) {
+        OpBuilder builder(op);
+        OperationState complete(op.getLoc(), "exec.returned");
+        complete.addTypes(op.getOutcome().getType());
+        auto *replacement = builder.create(complete);
+        op->replaceAllUsesWith(replacement->getResults());
+        op.erase();
+      };
+      mutateApply("query domain reversed", "in_domain",
+                  [&](exec::ApplyOp op) { swap(op, 0, 1); });
+      mutateApply("row positivity reversed", "nonempty",
+                  [&](exec::ApplyOp op) { swap(op, 0, 1); });
+      mutateApply("wrong wrapping subtraction operands", "height_predecessor",
+                  [&](exec::ApplyOp op) { swap(op, 0, 1); });
+      mutateApply("wrong height bit mask", "height_bits",
+                  [&](exec::ApplyOp op) {
+                    auto inputs = SmallVector<Value>(op.getInputs());
+                    inputs[1] = inputs[0];
+                    op.getInputsMutable().assign(inputs);
+                  });
+      mutateApply("forged power predicate", "power_of_two", forgeTrue);
+      mutateApply("vacuous power equality", "power_of_two",
+                  [&](exec::ApplyOp op) {
+                    auto inputs = SmallVector<Value>(op.getInputs());
+                    inputs[0] = inputs[1];
+                    op.getInputsMutable().assign(inputs);
+                  });
+      for (StringRef guard : {"admit_rows", "admit_query", "admit_power"})
+        mutateApply("missing " + guard.str(), guard, removeGuard);
+      if (grouping == OracleLeafGrouping::AntipodalPairs) {
+        mutateApply("missing paired divisibility", "admit_pairs", removeGuard);
+        mutateApply("forged paired divisibility", "paired", forgeTrue);
+      }
+      mutateApply("authentication width and height swapped", "authenticate",
+                  [&](exec::ApplyOp op) { swap(op, 1, 2); });
+      mutateApply("authentication height and leaf swapped", "authenticate",
+                  [&](exec::ApplyOp op) { swap(op, 2, 3); });
+      mutateApply("slot dividend and divisor swapped", "slot",
+                  [&](exec::ApplyOp op) { swap(op, 0, 1); });
+      mutateApply("wrong leaf width", "width", [&](exec::ApplyOp op) {
+        op.setParametersAttr(ArrayAttr::get(
+            &context,
+            {IntegerAttr::get(
+                IntegerType::get(&context, 64, IntegerType::Unsigned), 3)}));
+      });
+      mutateApply("unbound data length", "actual_rows",
+                  [](exec::ApplyOp op) { op.setSite("unbound_data"); });
+      mutateApply("forged authentication predicate", "authenticate", forgeTrue);
+      mutateApply("missing authentication guard", "admit_opening", removeGuard);
+      cases.run("independent rejection " + name + " wrong authentication call",
+                [&] {
+                  auto candidate = fresh(context);
+                  auto helpers = take(emitOracleMerkle(*candidate, kind, scheme,
+                                                       grouping, order));
+                  unsigned changed = 0;
+                  helpers.authenticate.walk([&](func::CallOp op) {
+                    if (op.getCallee() != helpers.position.getSymName())
+                      return;
+                    auto args = SmallVector<Value>(op.getOperands());
+                    require(args.size() == 3, "expected scope, rows and query");
+                    std::swap(args[1], args[2]);
+                    op.getOperandsMutable().assign(args);
+                    ++changed;
+                  });
+                  require(changed == 1, "expected actual position call");
+                  rejectActual(*candidate, helpers);
+                });
+      cases.run(
+          "independent rejection " + name + " missing position body", [&] {
+            auto candidate = fresh(context);
+            auto helpers = take(
+                emitOracleMerkle(*candidate, kind, scheme, grouping, order));
+            // A valid unused copy cannot replace the actual helper.
+            OpBuilder builder(helpers.position);
+            auto decoy = cast<func::FuncOp>(builder.clone(*helpers.position));
+            decoy.setSymName("unused_correct_position");
+            helpers.position.getBody().dropAllReferences();
+            helpers.position.getBody().getBlocks().clear();
+            rejectActual(*candidate, helpers, false);
+          });
+      if (order == OracleLeafOrder::BitReversed) {
+        mutateApply("reversed loop terminates early", "more_bits",
+                    [&](exec::ApplyOp op) { swap(op, 0, 1); });
+        mutateApply("reversed low bit has wrong dividend", "low_bit",
+                    [&](exec::ApplyOp op) { swap(op, 0, 1); });
+        mutateApply("reversed shift has wrong accumulator", "shift_reversed",
+                    [&](exec::ApplyOp op) {
+                      auto inputs = SmallVector<Value>(op.getInputs());
+                      inputs[0] = inputs[1];
+                      op.getInputsMutable().assign(inputs);
+                    });
+        mutateApply(
+            "reversed append uses subtraction", "append_bit",
+            [&](exec::ApplyOp op) {
+              auto binding =
+                  SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+                      op, op.getBindingAttr());
+              binding.setContract("index.wrapping_sub");
+            });
         cases.run(
-            "well-formed body mutation " + name + " " +
-                std::to_string(mutation),
-            [&] {
+            "independent rejection " + name + " missing reversal body", [&] {
               auto candidate = fresh(context);
               auto helpers = take(
                   emitOracleMerkle(*candidate, kind, scheme, grouping, order));
+              func::FuncOp iteration;
               candidate->walk([&](exec::ApplyOp op) {
-                auto swap = [&](unsigned a, unsigned b) {
-                  auto values = SmallVector<Value>(op.getInputs());
-                  std::swap(values[a], values[b]);
-                  op.getInputsMutable().assign(values);
-                };
-                if (mutation == 0 && op.getSite() == "in_domain")
-                  swap(0, 1);
-                if (mutation == 1 && op.getSite() == "authenticate")
-                  swap(1, 2);
-                if (mutation == 2 && op.getSite() == "authenticate")
-                  swap(2, 3);
-                if (mutation == 3 && op.getSite() == "slot")
-                  swap(0, 1);
-                if (mutation == 4 && op.getSite() == "width")
-                  op.setParametersAttr(ArrayAttr::get(
-                      &context,
-                      {IntegerAttr::get(
-                          IntegerType::get(&context, 64, IntegerType::Unsigned),
-                          3)}));
-                if (mutation == 5 && op.getSite() == "even_span") {
-                  auto binding =
-                      SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
-                          op, op.getBindingAttr());
-                  binding.setContract("index.less");
-                }
-                if (mutation == 7 && op.getSite() == "actual_rows")
-                  op.setSite("unbound_data");
-                if (mutation == 8 && op.getSite() == "more_bits")
-                  swap(0, 1);
-                if (mutation == 9 && op.getSite() == "authenticate") {
-                  // Preserve a well-formed guard, but replace its
-                  // authentication predicate by true. Formation alone cannot
-                  // catch this.
-                  OpBuilder builder(op);
-                  OperationState constant(op.getLoc(), "exec.boolean");
-                  constant.addOperands(op.getScope());
-                  constant.addTypes(op.getOutcome().getType());
-                  constant.addAttribute("value", builder.getBoolAttr(true));
-                  constant.addAttribute("site", op.getSiteAttr());
-                  auto *replacement = builder.create(constant);
-                  op->replaceAllUsesWith(replacement->getResults());
-                  op.erase();
-                }
+                if (op.getSite() == "low_bit")
+                  iteration = op->getParentOfType<func::FuncOp>();
               });
-              if (mutation == 6)
-                helpers.authenticate.walk([&](func::CallOp op) {
-                  auto args = SmallVector<Value>(op.getOperands());
-                  std::swap(args[1], args[2]);
-                  op.getOperandsMutable().assign(args);
-                });
-              require(succeeded(verify(*candidate)),
-                      "mutation only failed formation");
-              auto refused = checkOracleMerkle(*candidate, helpers, kind,
-                                               scheme, grouping, order);
-              require(bool(refused), "mutated Merkle body passed");
-              require(namesIdentifier(toString(std::move(refused)),
-                                      "oracle-merkle-body"),
-                      "wrong refusal");
+              require(bool(iteration), "missing actual reversal helper");
+              iteration.getBody().dropAllReferences();
+              iteration.getBody().getBlocks().clear();
+              rejectActual(*candidate, helpers, false);
             });
+      }
     }
   cases.run("invalid selection", [&] {
     auto candidate = fresh(context);

@@ -8,7 +8,7 @@ use zkc_runtime::vm::{
 
 #[derive(Clone, Debug)]
 pub struct FieldArray {
-    physical_type: PhysicalType,
+    physical_type: Arc<PhysicalType>,
     storage: Storage,
 }
 #[derive(Clone, Debug)]
@@ -19,7 +19,7 @@ enum Storage {
 impl FieldArray {
     pub fn new(physical_type: PhysicalType, elements: crate::Buffer<Scalar>) -> Result<Self> {
         let value = Self {
-            physical_type,
+            physical_type: Arc::new(physical_type),
             storage: Storage::Ark(elements),
         };
         value.validate()?;
@@ -31,7 +31,7 @@ impl FieldArray {
         elements: Arc<zkc_kernels::blst::bls12_381::ScalarVector>,
     ) -> Result<Self> {
         let value = Self {
-            physical_type,
+            physical_type: Arc::new(physical_type),
             storage: Storage::Blst(elements),
         };
         value.validate()?;
@@ -98,12 +98,14 @@ impl FieldArray {
         Ok(())
     }
     pub(crate) fn retained_bytes(&self) -> Result<usize> {
+        let backing = self.backing()?;
         self.owned_bytes()
-            .checked_add(self.backing()?.bytes())
+            .checked_add(self.physical_type.descriptor_bytes())
+            .and_then(|bytes| bytes.checked_add(backing.bytes()))
             .ok_or_else(|| exhausted("output-bytes"))
     }
     pub(crate) fn owned_bytes(&self) -> usize {
-        DESCRIPTOR_BYTES.saturating_add(self.physical_type.descriptor_bytes())
+        DESCRIPTOR_BYTES
     }
     /// The identity and charge match the dynamic vector's shared carrier.
     pub(crate) fn backing(&self) -> Result<Backing> {
@@ -118,7 +120,16 @@ impl FieldArray {
         })
     }
 }
+// This conservative owned allowance includes the shared immutable layout
+// wrapper as well as the inline view; recursive descriptors remain separately
+// accounted. Cloning a view cannot make layout storage uncharged.
 const DESCRIPTOR_BYTES: usize = 1024;
+const _: () = assert!(
+    std::mem::size_of::<PhysicalType>()
+        + std::mem::size_of::<FieldArray>()
+        + 2 * std::mem::size_of::<usize>()
+        <= DESCRIPTOR_BYTES
+);
 pub(crate) fn bytes(length: usize) -> Result<usize> {
     crate::value::size(length, 32)?
         .checked_add(DESCRIPTOR_BYTES)
@@ -255,14 +266,14 @@ pub(crate) fn apply(
             let index = zkc_format::logical::natural_index(index)
                 .map_err(|_| refused("field-array-index"))?;
             let index = usize::try_from(index).map_err(|_| refused("field-array-index"))?;
-            policy.output(512, invocation.max_output_bytes)?;
+            policy.output(crate::VALUE_SLOT_BYTES, invocation.max_output_bytes)?;
             array
                 .get(index)
                 .ok_or_else(|| refused("field-array-index"))?
         }
         ("field_array.get", [Value::FieldArray(array), Value::Index(index)]) => {
             let index = usize::try_from(*index).map_err(|_| refused("field-array-index"))?;
-            policy.output(512, invocation.max_output_bytes)?;
+            policy.output(crate::VALUE_SLOT_BYTES, invocation.max_output_bytes)?;
             array
                 .get(index)
                 .ok_or_else(|| refused("field-array-index"))?

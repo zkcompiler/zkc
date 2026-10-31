@@ -58,6 +58,28 @@ what actually landed. The completion criteria below belong inside those units.
 | Represented execution | Canonical logical collection ownership across Data/Algebra, Residue and Codec semantics, private buffer contracts and admitted Arith/Vector/Bufferization lowering; compare native kernels and transparent schedules |
 | Constraints and semantic consumers | One assignment-level owner, source-to-encoding adequacy, lookup/multiset and chronological-memory consumers, exact statement/witness maps and actual commitment/terminal connections |
 
+Extend compiler analyses with concrete consumers inside those units. The
+interaction view and participant-relative scalar observations now serve oracle
+scheduling, capacity and source association. Further successful-return summaries
+need an explicit relation for Local results and stops; induction bounds need
+zero-trip and backedge rules; adaptive oracle queries need an observation relation
+that permits their answer dependencies. Add these with independent negative
+controls. Do not infer them from ordinary provenance or register generic control
+interfaces before their participant semantics are defined. Current
+successful-point bounds remain a query API, not a license for batching to erase
+source guards.
+
+The STARK follow-up must also settle the reduction's degree claim independently
+of FRI's bound. The parameterized single-table caller currently tests its
+unadjusted DEEP word at degree `< n`. A column of degree exactly `n` can yield
+an opening quotient of degree `n-1`, so that subcheck alone does not establish
+the intended column degree `< n`. Before claiming that extraction bound, choose
+and validate a caller-owned degree adjustment or supply an argument for the
+weaker bound. A fresh adjustment challenge changes that caller's transcript;
+it must not change generic FRI's absolute strict-degree meaning. The octic and
+bundle callers already have explicit adjustments, with separate aggregate-bound
+limitations described in the [STARK library](../libraries/arguments/stark/README.md).
+
 ### Shared interfaces before implementation
 
 Publish each cross-layer interface against landed sources, including its

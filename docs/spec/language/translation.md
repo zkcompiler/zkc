@@ -71,8 +71,9 @@ layout, independently of the selected Entry. The logical source interface is
 an independently checked projection of that inventory. Only a selected proof
 target adds the existing entry statement, which must agree with a retained
 target. Oracle selectors use the kind's complete Data schema and the anchor
-index of the paired common port. In the logical interface their `role` is null
-and `path` is empty; ordinary selectors retain a role name. An oracle schema has
+index of the paired common port. In the logical interface their `role` is null;
+`path` is empty for a whole singleton port or selects a direct singleton field
+of a logical record. Ordinary selectors retain a role name. An oracle schema has
 an exact required `data_schema`, checked recursively against the kind's native
 Data association and against the relation formal's complete logical schema.
 The selected statement follows only the retained input-pair bindings, and its

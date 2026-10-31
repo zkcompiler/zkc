@@ -115,23 +115,25 @@ def OracleVirtualOp : Op<ProtocolDialect, "oracle_virtual",
                        StrAttr:$holder, StrArrayAttr:$receivers);
   let results = (outs OracleHandle:$handle);
 }
-// One logical port has data at the holder and an anchor at its receivers.
+// One logical port has data at the holder and handles at its receivers, either
+// one handle or a bounded ordered sequence with one data projection per handle.
 // Entry initialization and shape checks are retained even for an unused port.
 // At application boundaries this binds the same anchor, never a fresh send.
 def OracleInputOp : Op<ProtocolDialect, "oracle_input",
     [MemoryEffects<[MemRead, MemWrite]>,
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp"]>]> {
-  let arguments = (ins AnyType:$data, OracleHandle:$anchor,
+  let arguments = (ins AnyType:$data, AnyTypeOf<[OracleHandle, OracleSequence]>:$anchor,
     StrAttr:$holder, StrArrayAttr:$receivers, DictionaryAttr:$shape_bounds);
-  let results = (outs OracleHandle:$handle);
+  let results = (outs AnyTypeOf<[OracleHandle, OracleSequence]>:$handle);
   let hasVerifier = 1;
 }
 
 // A pure component view, with exact holder/receiver roles and no new anchor.
 def OracleComponentsOp : Op<ProtocolDialect, "oracle_components",
     [Pure, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp"]>]> {
-  let arguments = (ins OracleHandle:$handle, StrAttr:$holder, StrArrayAttr:$receivers);
-  let results = (outs AnyType:$data, OracleHandle:$anchor);
+  let arguments = (ins AnyTypeOf<[OracleHandle, OracleSequence]>:$handle,
+                       StrAttr:$holder, StrArrayAttr:$receivers);
+  let results = (outs AnyType:$data, AnyTypeOf<[OracleHandle, OracleSequence]>:$anchor);
   let hasVerifier = 1;
 }
 

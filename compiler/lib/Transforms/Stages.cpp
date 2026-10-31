@@ -21,6 +21,16 @@ void buildExecutionPipeline(mlir::OpPassManager &pm, bool simplify,
     pm.addPass(protocol::createFixPolynomialFactorsPass());
   pm.addPass(protocol::createLowerMathPass(policy, trace));
 }
+void buildClosedExecutionPipeline(mlir::OpPassManager &pm, bool simplify,
+                                  bool fixPolynomials,
+                                  MathematicalSelectionPolicy policy,
+                                  mathematical::RealizationTrace *trace) {
+  if (simplify)
+    pm.addPass(protocol::createSimplifyParticipantPass());
+  if (fixPolynomials)
+    pm.addPass(protocol::createFixPolynomialFactorsPass());
+  pm.addPass(protocol::createLowerClosedParticipantPass(policy, trace));
+}
 void buildPhysicalPipeline(mlir::OpPassManager &pm,
                            const PhysicalPipelineOptions &options) {
   pm.addPass(protocol::createSelectPhysicalPass(

@@ -264,7 +264,7 @@ fn runner(
 ) -> Runner<CpuBackend> {
     let native = backend(policy);
     program.check_installation(&native).unwrap();
-    let mut point = Value::Curve(G1::generator().scale(Scalar::from(7)));
+    let mut point = Value::Curve((G1::generator().scale(Scalar::from(7))).into());
     let mut scalar = Value::Field(Scalar::from(3));
     if mode != "ports" {
         point = selected(point, "group:bls12-381.g1@blst/g1");
@@ -316,7 +316,7 @@ fn returned(runner: &mut Runner<CpuBackend>, mode: &str, branch: bool, trips: u6
         coefficient *= if mode == "branch" { 5 } else { 3 };
     }
     coefficient *= (if mode == "loop" { 5_u64 } else { 3_u64 }).pow(trips as u32);
-    let expected = Value::Curve(G1::generator().scale(Scalar::from(coefficient)));
+    let expected = Value::Curve((G1::generator().scale(Scalar::from(coefficient))).into());
     assert_eq!(
         runner.backend().encode_native_value(&values[0]).unwrap(),
         runner.backend().encode_native_value(&expected).unwrap()

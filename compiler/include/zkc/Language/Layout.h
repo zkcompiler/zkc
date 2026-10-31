@@ -64,6 +64,8 @@ struct LayoutField {
   std::string name;
   std::shared_ptr<const Layout> layout;
   unsigned offset = 0;
+  /// Row bound of this direct logical field, after generic substitution.
+  std::optional<uint64_t> maximumRows = {};
 };
 struct LayoutAlternative {
   std::string name;
@@ -84,7 +86,8 @@ struct Layout {
   bool constructible = false;
   /// Includes formal element meaning even when an array has zero leaves.
   bool formal = false;
-  /// Kind-associated data schema, never a serialized handle leaf.
+  /// Kind-associated data schema of a direct handle or sequence. Logical
+  /// record roots have no aggregate oracle data schema.
   std::shared_ptr<const Layout> oracleData;
 };
 /// Full logical schemas, including nominal identity and member names, are
@@ -100,6 +103,29 @@ public:
 struct LayoutSlice {
   unsigned offset;
   std::shared_ptr<const Layout> layout;
+};
+/// One body leaf and its declaration-ordered protocol ABI expansion. Paths
+/// index source fields, including private fields; they grant no access rights.
+struct ProtocolPortLeaf {
+  LayoutLeaf leaf;
+  unsigned bodyOffset = 0, nativeOffset = 0;
+  std::vector<unsigned> path;
+  /// Present for a handle or sequence; never for an aggregate root.
+  std::shared_ptr<const Layout> oracleData;
+  std::optional<uint64_t> maximumRows = {};
+  unsigned nativeSize() const { return leaf.oracle() ? 2 : 1; }
+};
+/// A bounded observation of a source layout, not an executable representation.
+/// Ordinary leaves retain their port roles; each oracle expands to holder data
+/// followed by its receiver anchor. Body offsets always count one per handle.
+struct ProtocolPortLayout {
+  std::shared_ptr<const Layout> body;
+  std::vector<ProtocolPortLeaf> leaves;
+  /// Prefix map from body offsets (including the end) to ABI offsets.
+  std::vector<unsigned> nativeOffsets{0};
+  unsigned size() const { return nativeOffsets.back(); }
+  llvm::Expected<LayoutSlice> select(llvm::ArrayRef<unsigned>,
+                                     bool anchor = false) const;
 };
 /// Contextual single-value carrier. Products use one alternative whose payload
 /// is exactly flat->leaves in order, including the empty payload for unit.
@@ -121,6 +147,7 @@ public:
   Layouts &operator=(const Layouts &) = delete;
   llvm::Expected<std::shared_ptr<const Layout>> get(const Type &);
   llvm::Expected<PackedLayout> packed(const Type &);
+  llvm::Expected<ProtocolPortLayout> protocolPort(const Port &);
   /// Resolve a closed kind through the shared Contracts owner and the exact row
   /// layout.
   llvm::Expected<OracleKindLayout> oracleKind(const Type &);

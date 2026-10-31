@@ -322,7 +322,7 @@ fn resident_g1_g2_and_pairing_closure_matches_arkworks() {
         let domain = if g2 { "bn254.g2" } else { "bn254.g1" };
         let point = |n| {
             if g2 {
-                Value::Bn254G2(Bn254G2::generator().scale(Scalar::from(n)))
+                Value::Bn254G2((Bn254G2::generator().scale(Scalar::from(n))).into())
             } else {
                 Value::Bn254G1(G1::generator().scale(Scalar::from(n)))
             }
@@ -419,8 +419,8 @@ fn selected_codecs_match_canonical_language_and_reject_invalid_encodings() {
         Value::Bn254Field(Scalar::from(9)),
         Value::Bn254G1(G1::identity()),
         Value::Bn254G1(G1::generator()),
-        Value::Bn254G2(Bn254G2::identity()),
-        Value::Bn254G2(Bn254G2::generator()),
+        Value::Bn254G2((Bn254G2::identity()).into()),
+        Value::Bn254G2((Bn254G2::generator()).into()),
         vector(&[]),
         vector(&[0, 1, 7]),
         Value::Bn254G1Vector(vec![G1::identity(), G1::generator()].into()),
@@ -583,7 +583,7 @@ fn explicit_conversions_are_bidirectional_and_preserve_wire() {
         vector(&[0, 1, 19]),
         Value::Bn254G1(G1::generator()),
         Value::Bn254G1Vector(vec![G1::identity(), G1::generator()].into()),
-        Value::Bn254G2(Bn254G2::generator()),
+        Value::Bn254G2((Bn254G2::generator()).into()),
         Value::Bn254G2Vector(vec![Bn254G2::generator()].into()),
     ] {
         let source = value.physical_type();
@@ -618,7 +618,12 @@ fn explicit_conversions_are_bidirectional_and_preserve_wire() {
                 Value::HaloG2Vector(v) => Some(v.len() * std::mem::size_of::<Bn254G2>()),
                 _ => None,
             };
-            let retained = payload.map_or(512, |bytes| bytes + 256);
+            let scalar_bytes = if matches!(&input, Value::Bn254G2(_) | Value::HaloG2(_)) {
+                512
+            } else {
+                zkc_cpu::VALUE_SLOT_BYTES
+            };
+            let retained = payload.map_or(scalar_bytes, |bytes| bytes + 256);
             let memory = if !importing && payload.is_some() {
                 2 * retained
             } else {
@@ -1082,7 +1087,7 @@ fn canonical_readable_ingress_and_capacity_preflight_choose_selected_carriers() 
         Value::Bn254Field(Scalar::from(19)),
         vector(&[0, 1, 19]),
         Value::Bn254G1(G1::generator()),
-        Value::Bn254G2(Bn254G2::generator()),
+        Value::Bn254G2((Bn254G2::generator()).into()),
         Value::Bn254G1Vector(vec![G1::identity(), G1::generator()].into()),
         Value::Bn254G2Vector(vec![Bn254G2::identity(), Bn254G2::generator()].into()),
     ] {
@@ -1323,13 +1328,18 @@ fn kernel_work_workspace_and_output_boundaries_refuse_before_execution() {
                 kernel::pairing_workspace_bytes(2).unwrap(),
             )
         };
-        let memory = 512 + scratch;
+        let output = if domain == "bn254.g2" {
+            512
+        } else {
+            zkc_cpu::VALUE_SLOT_BYTES
+        };
+        let memory = output + scratch;
         let declaration = binding(name, domain, true);
         for (work_limit, memory_limit, output_limit, error) in [
-            (work, memory, 512, None),
-            (work - 1, memory, 512, Some("exhausted:numerical-work")),
-            (work, memory - 1, 512, Some("exhausted:numerical-bytes")),
-            (work, memory, 511, Some("exhausted:output-bytes")),
+            (work, memory, output, None),
+            (work - 1, memory, output, Some("exhausted:numerical-work")),
+            (work, memory - 1, output, Some("exhausted:numerical-bytes")),
+            (work, memory, output - 1, Some("exhausted:output-bytes")),
         ] {
             let native = backend(
                 Policy {
@@ -1380,7 +1390,7 @@ fn noncanonical_infinity_aliases_refuse_for_scalar_and_bulk_groups() {
     let native = backend(Policy::default(), cpu_contracts());
     for ordinary in [
         Value::Bn254G1(G1::identity()),
-        Value::Bn254G2(Bn254G2::identity()),
+        Value::Bn254G2((Bn254G2::identity()).into()),
         Value::Bn254G1Vector(vec![G1::identity()].into()),
         Value::Bn254G2Vector(vec![Bn254G2::identity()].into()),
     ] {

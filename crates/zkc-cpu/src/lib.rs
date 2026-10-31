@@ -43,7 +43,7 @@ pub use codec::{
 pub use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar as RistrettoScalar};
 pub use resource::{Capability, CapabilityObservation, Domain, LogicalUnit};
 pub use setups::SetupRegistry;
-pub use value::{Policy, Value};
+pub use value::{Policy, VALUE_SLOT_BYTES, Value};
 pub use zkc_kernels::cpu::CpuExecution;
 pub use zkc_kernels::{
     arkworks::{

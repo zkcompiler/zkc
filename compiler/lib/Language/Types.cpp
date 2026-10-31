@@ -39,6 +39,9 @@ bool isOracleHandle(const Type &type) {
   return type.kind == Type::Kind::Oracle ||
          type.kind == Type::Kind::OracleSequence;
 }
+bool isLogicalValue(const Type &type) {
+  return isOracleHandle(type) || type.kind == Type::Kind::LogicalRecord;
+}
 StringRef oracleConstructor(const Type &type) {
   switch (type.kind) {
   case Type::Kind::OracleKind:
@@ -69,6 +72,8 @@ StringRef typeKindName(Type::Kind kind) {
     return "array";
   case Type::Kind::Record:
     return "record";
+  case Type::Kind::LogicalRecord:
+    return "logical_record";
   case Type::Kind::Variant:
     return "variant";
   case Type::Kind::Parameter:

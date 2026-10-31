@@ -267,8 +267,9 @@ fn codec_preflight_matches_cached_retained_storage_at_the_exact_peak_limit() {
         ],
     );
     let bytes = roundtrip(&value);
-    // The shared leaf scan reserves an extra four wire widths for the index.
-    let retained = value.retained_bytes() + 4 * 14;
+    // The conservative leaf scan reserves a 512-byte leaf wrapper plus
+    // four wire widths; inline CPU indices themselves occupy a smaller slot.
+    let retained = value.retained_bytes() + (512 - zkc_cpu::VALUE_SLOT_BYTES) + 4 * 14;
     let peak = (2 * retained).max(retained + 3 * bytes.len());
     for (limit, accepted) in [(peak, true), (peak - 1, false)] {
         let policy = Policy {

@@ -185,7 +185,7 @@ fn residue_words<E: Registered>(
             Ok(vec![Value::Bytes(bytes.into())])
         }
         ("encoding.field_from_le" | "encoding.field_from_montgomery_le", [Value::Bytes(bytes)]) => {
-            policy.output(1024, available)?;
+            policy.output(2 * crate::VALUE_SLOT_BYTES, available)?;
             let value = words::decode::<E>(bytes, form);
             Ok(vec![
                 Value::Bool(value.is_some()),
@@ -197,14 +197,17 @@ fn residue_words<E: Registered>(
             [Value::Bytes(bytes)],
         ) => {
             if !words::valid_elements::<E>(bytes) {
-                policy.output(512usize.saturating_add(size(0, element)?), available)?;
+                policy.output(
+                    crate::VALUE_SLOT_BYTES.saturating_add(size(0, element)?),
+                    available,
+                )?;
                 return Ok(vec![Value::Bool(false), E::vector_value(Vec::new())]);
             }
             let count = bytes.len() / width;
             policy.vector_width(count, element)?;
             policy.output(
                 size(count, element)?
-                    .checked_add(512)
+                    .checked_add(crate::VALUE_SLOT_BYTES)
                     .ok_or_else(|| crate::exhausted("size-overflow"))?,
                 available,
             )?;
@@ -321,7 +324,7 @@ fn bit_patterns<E: BitPattern>(
             Ok(vec![Value::Bytes(bytes.into())])
         }
         ("encoding.field_from_le", [Value::Bytes(bytes)]) => {
-            policy.output(1024, available)?;
+            policy.output(2 * crate::VALUE_SLOT_BYTES, available)?;
             let value = E::decode(bytes);
             Ok(vec![
                 Value::Bool(value.is_some()),
@@ -330,14 +333,17 @@ fn bit_patterns<E: BitPattern>(
         }
         ("encoding.fields_from_le", [Value::Bytes(bytes)]) => {
             if !bytes.len().is_multiple_of(width) {
-                policy.output(512usize.saturating_add(size(0, element)?), available)?;
+                policy.output(
+                    crate::VALUE_SLOT_BYTES.saturating_add(size(0, element)?),
+                    available,
+                )?;
                 return Ok(vec![Value::Bool(false), E::vector_value(Vec::new().into())]);
             }
             let count = bytes.len() / width;
             policy.vector_width(count, element)?;
             policy.output(
                 size(count, element)?
-                    .checked_add(512)
+                    .checked_add(crate::VALUE_SLOT_BYTES)
                     .ok_or_else(|| crate::exhausted("size-overflow"))?,
                 available,
             )?;
@@ -479,7 +485,7 @@ pub(crate) fn apply(
             Ok(vec![Value::Bool(valid), Value::Vector(values.into())])
         }
         ("encoding.field_from_be", [Value::Bytes(bytes)]) => {
-            policy.output(1024, available)?;
+            policy.output(2 * crate::VALUE_SLOT_BYTES, available)?;
             let value = if let Ok(mut bytes) = <[u8; 32]>::try_from(bytes.as_ref()) {
                 bytes.reverse();
                 zkc_kernels::arkworks::bls12_381::decode_scalar(&bytes).ok()
@@ -492,7 +498,7 @@ pub(crate) fn apply(
             ])
         }
         ("encoding.field_reduce_be", [Value::Bytes(bytes)]) => {
-            policy.output(512, available)?;
+            policy.output(crate::VALUE_SLOT_BYTES, available)?;
             budget.charge_units((bytes.len() as u64).saturating_mul(2))?;
             // Horner reduction reads the input directly: no input-sized copy.
             let radix = Scalar::from(256u64);
@@ -507,7 +513,7 @@ pub(crate) fn apply(
             Ok(vec![Value::Bytes(value.to_bytes().as_slice().into())])
         }
         ("encoding.field_from_le", [Value::Bytes(bytes)]) => {
-            policy.output(1024, available)?;
+            policy.output(2 * crate::VALUE_SLOT_BYTES, available)?;
             let value = <[u8; 32]>::try_from(bytes.as_ref()).ok().and_then(|b| {
                 Option::<crate::RistrettoScalar>::from(
                     crate::RistrettoScalar::from_canonical_bytes(b),
@@ -519,7 +525,7 @@ pub(crate) fn apply(
             ])
         }
         ("encoding.field_reduce_le", [Value::Bytes(bytes)]) => {
-            policy.output(512, available)?;
+            policy.output(crate::VALUE_SLOT_BYTES, available)?;
             budget.charge_units((bytes.len() as u64).saturating_mul(2))?;
             let radix = crate::RistrettoScalar::from(256u64);
             let value = bytes
@@ -540,7 +546,10 @@ pub(crate) fn apply(
             "encoding.group_from_compressed" | "encoding.group_decode_cofactor",
             [Value::Bytes(bytes)],
         ) if identity == Identity::Edwards25519Prime => {
-            policy.output(1024, available)?;
+            policy.output(
+                Value::shared_group_retained_bytes() + crate::VALUE_SLOT_BYTES,
+                available,
+            )?;
             budget.charge_units(if name == "encoding.group_decode_cofactor" {
                 2048
             } else {
@@ -553,11 +562,11 @@ pub(crate) fn apply(
             };
             Ok(vec![
                 Value::Bool(point.is_some()),
-                Value::EdwardsGroup(point.unwrap_or_else(crate::EdwardsPrime::identity)),
+                Value::EdwardsGroup(point.unwrap_or_else(crate::EdwardsPrime::identity).into()),
             ])
         }
         ("encoding.cryptonote_map", [Value::Bytes(bytes)]) => {
-            policy.output(512, available)?;
+            policy.output(Value::shared_group_retained_bytes(), available)?;
             let input: [u8; 32] = bytes
                 .as_ref()
                 .try_into()
@@ -565,7 +574,8 @@ pub(crate) fn apply(
             budget.charge_units(2048)?;
             Ok(vec![Value::EdwardsGroup(
                 zkc_kernels::interop::monero::cryptonote_map(input)
-                    .ok_or_else(|| refused("edwards-map"))?,
+                    .ok_or_else(|| refused("edwards-map"))?
+                    .into(),
             )])
         }
         ("encoding.group_compressed", [Value::Bls12381G2(point)]) => {
@@ -578,11 +588,14 @@ pub(crate) fn apply(
         ("encoding.group_from_compressed", [Value::Bytes(bytes)])
             if identity == Identity::Bls12381G2 =>
         {
-            policy.output(1024, available)?;
+            policy.output(
+                Value::shared_group_retained_bytes() + crate::VALUE_SLOT_BYTES,
+                available,
+            )?;
             let point = crate::Bls12381G2::from_bytes(bytes).ok();
             Ok(vec![
                 Value::Bool(point.is_some()),
-                Value::Bls12381G2(point.unwrap_or_else(crate::Bls12381G2::identity)),
+                Value::Bls12381G2(point.unwrap_or_else(crate::Bls12381G2::identity).into()),
             ])
         }
         ("encoding.group_compressed", [Value::Curve(point)]) => {
@@ -593,13 +606,16 @@ pub(crate) fn apply(
             )])
         }
         ("encoding.group_from_compressed", [Value::Bytes(bytes)]) => {
-            policy.output(1024, available)?;
+            policy.output(
+                Value::shared_group_retained_bytes() + crate::VALUE_SLOT_BYTES,
+                available,
+            )?;
             // Exact width, subgroup validation and canonical re-encoding are
             // owned by the checked group adapter; no transcript state is touched.
             let point = G1::from_bytes(bytes).ok();
             Ok(vec![
                 Value::Bool(point.is_some()),
-                Value::Curve(point.unwrap_or_else(G1::identity)),
+                Value::Curve(point.unwrap_or_else(G1::identity).into()),
             ])
         }
         _ => Err(refused("encoding-operands")),
@@ -860,7 +876,10 @@ mod tests {
                 "encoding.group_compressed",
                 Identity::Bls12381G1,
                 Value::Groups(vec![G1::identity(), G1::generator()].into()),
-                vec![Value::Curve(G1::identity()), Value::Curve(G1::generator())],
+                vec![
+                    Value::Curve(G1::identity().into()),
+                    Value::Curve(G1::generator().into()),
+                ],
             ),
             (
                 "encoding.groups_compressed",
@@ -874,8 +893,8 @@ mod tests {
                     .into(),
                 ),
                 vec![
-                    Value::EdwardsGroup(crate::EdwardsPrime::identity()),
-                    Value::EdwardsGroup(crate::EdwardsPrime::generator()),
+                    Value::EdwardsGroup(crate::EdwardsPrime::identity().into()),
+                    Value::EdwardsGroup(crate::EdwardsPrime::generator().into()),
                 ],
             ),
         ];
@@ -1045,27 +1064,30 @@ mod tests {
         use crate::EdwardsPrime as G;
         use curve25519_dalek::constants::{ED25519_BASEPOINT_POINT, EIGHT_TORSION};
         for point in [G::identity(), G::generator(), -G::generator()] {
-            let raw = dalek("encoding.group_compressed", &[Value::EdwardsGroup(point)]);
+            let raw = dalek(
+                "encoding.group_compressed",
+                &[Value::EdwardsGroup((point).into())],
+            );
             assert!(
                 matches!(dalek("encoding.group_from_compressed", &raw).as_slice(),
-                [Value::Bool(true), Value::EdwardsGroup(v)] if *v == point)
+                [Value::Bool(true), Value::EdwardsGroup(v)] if **v == point)
             );
         }
         for torsion in EIGHT_TORSION.iter().skip(1) {
             let raw = bytes(&(ED25519_BASEPOINT_POINT + torsion).compress().to_bytes());
             assert!(
                 matches!(dalek("encoding.group_from_compressed", std::slice::from_ref(&raw)).as_slice(),
-                [Value::Bool(false), Value::EdwardsGroup(v)] if *v == G::identity())
+                [Value::Bool(false), Value::EdwardsGroup(v)] if **v == G::identity())
             );
             assert!(
                 matches!(dalek("encoding.group_decode_cofactor", &[raw]).as_slice(),
-                [Value::Bool(true), Value::EdwardsGroup(v)] if *v == G::generator().scale(8u64.into()))
+                [Value::Bool(true), Value::EdwardsGroup(v)] if **v == G::generator().scale(8u64.into()))
             );
         }
         for raw in [vec![], vec![0; 31], vec![0; 33], vec![255; 32]] {
             assert!(
                 matches!(dalek("encoding.group_decode_cofactor", &[bytes(&raw)]).as_slice(),
-                [Value::Bool(false), Value::EdwardsGroup(v)] if *v == G::identity())
+                [Value::Bool(false), Value::EdwardsGroup(v)] if **v == G::identity())
             );
         }
     }
@@ -1191,10 +1213,10 @@ mod tests {
     #[test]
     fn group_decoder_rejects_malformed_encodings_without_failing_the_kernel() {
         for value in [G1::generator(), G1::identity(), G1::generator().neg()] {
-            let encoded = run("encoding.group_compressed", &[Value::Curve(value)]);
+            let encoded = run("encoding.group_compressed", &[Value::Curve((value).into())]);
             assert!(
                 matches!(run("encoding.group_from_compressed", &encoded).as_slice(),
-                [Value::Bool(true), Value::Curve(p)] if *p == value)
+                [Value::Bool(true), Value::Curve(p)] if **p == value)
             );
         }
         let mut bad_infinity = G1::identity().to_bytes().unwrap();
@@ -1226,9 +1248,25 @@ mod tests {
         ] {
             assert!(
                 matches!(run("encoding.group_from_compressed", &[bytes(&invalid)]).as_slice(),
-                [Value::Bool(false), Value::Curve(p)] if *p == G1::identity())
+                [Value::Bool(false), Value::Curve(p)] if **p == G1::identity())
             );
         }
+        let encoded = bytes(&G1::generator().to_bytes().unwrap());
+        let required = Value::shared_group_retained_bytes() + crate::VALUE_SLOT_BYTES;
+        let decoded = apply(
+            "encoding.group_from_compressed",
+            Identity::Bls12381G1,
+            &[encoded],
+            &[],
+            &Policy::default(),
+            required,
+            &mut Default::default(),
+        )
+        .unwrap();
+        assert!(
+            matches!(decoded.as_slice(), [Value::Bool(true), Value::Curve(p)]
+            if **p == G1::generator())
+        );
         assert!(
             apply(
                 "encoding.group_from_compressed",
@@ -1236,7 +1274,7 @@ mod tests {
                 &[bytes(&[0; 48])],
                 &[],
                 &Policy::default(),
-                1023,
+                Value::shared_group_retained_bytes() + crate::VALUE_SLOT_BYTES - 1,
                 &mut Default::default()
             )
             .is_err()
@@ -1258,11 +1296,14 @@ mod tests {
     fn g2_codec_round_trips_and_rejects_malformed_encodings() {
         let generator = crate::Bls12381G2::generator();
         for value in [generator, crate::Bls12381G2::identity(), generator.neg()] {
-            let encoded = g2("encoding.group_compressed", &[Value::Bls12381G2(value)]);
+            let encoded = g2(
+                "encoding.group_compressed",
+                &[Value::Bls12381G2((value).into())],
+            );
             assert!(matches!(&encoded[0], Value::Bytes(b) if b.len() == 96));
             assert!(
                 matches!(g2("encoding.group_from_compressed", &encoded).as_slice(),
-                [Value::Bool(true), Value::Bls12381G2(p)] if *p == value)
+                [Value::Bool(true), Value::Bls12381G2(p)] if **p == value)
             );
         }
         let identity = crate::Bls12381G2::identity().to_bytes().unwrap();
@@ -1281,7 +1322,7 @@ mod tests {
         ] {
             assert!(
                 matches!(g2("encoding.group_from_compressed", &[bytes(&invalid)]).as_slice(),
-                [Value::Bool(false), Value::Bls12381G2(p)] if *p == crate::Bls12381G2::identity())
+                [Value::Bool(false), Value::Bls12381G2(p)] if **p == crate::Bls12381G2::identity())
             );
         }
     }

@@ -16,13 +16,18 @@ def browser(monkeypatch):
 def prepared(browser, tmp_path):
     fixture = tmp_path/'input'
     fixture.mkdir()
-    (fixture/'entry.zkpkg').write_text(json.dumps({'artifact': '["fixture"]'}))
+    from bench.oracle_policy import OraclePolicy
+    from bench.configuration import SETTINGS
+    options = {k.replace('-', '_'): v for k, (v, _) in SETTINGS.items()}
+    options['oracle_realization'] = OraclePolicy().selection()
+    (fixture/'entry.zkpkg').write_text(json.dumps({'artifact': '["fixture"]', 'options': options}))
     (fixture/'pin.txt').write_text(browser.digest(fixture/'entry.zkpkg'))
     (fixture/'public.json').write_text('{"x":"1"}')
     (fixture/'witness.json').write_text('{"secret":"2"}')
     path = tmp_path/'cases.json'
     path.write_text(json.dumps({'format': browser.CASE_FORMAT, 'cases': [
-        {'name': 'example', 'directory': 'input', 'providers': ['plonky3']}]}))
+        {'name': 'example', 'directory': 'input', 'providers': ['plonky3'],
+         'oracle_realization': OraclePolicy().record()}]}))
     return path, fixture
 
 
@@ -166,3 +171,33 @@ def test_proof_identity_capture_keeps_process_wall_time(browser, tmp_path, monke
     result = json.loads((output/'manifest.json').read_text())
     assert result['results'][0]['process_wall_seconds'] == 1.25
     assert result['status'] == 'passed'
+
+
+@pytest.mark.parametrize('location', ['candidate', 'package', 'saved'])
+def test_browser_fri_policy_cannot_silently_default_to_clear(browser, tmp_path, location):
+    from bench.oracle_policy import OCTIC_KECCAK, OraclePolicy
+    path, fixture = prepared(browser, tmp_path)
+    document = json.loads(path.read_text())
+    candidate = document['cases'][0]
+    candidate['name'] = 'fri-8'
+    candidate['oracle_realization'] = OCTIC_KECCAK.record()
+    package = json.loads((fixture/'entry.zkpkg').read_text())
+    package['options']['oracle_realization'] = OCTIC_KECCAK.selection()
+    if location == 'candidate':
+        candidate['oracle_realization'] = OraclePolicy().record()
+    elif location == 'package':
+        package['options']['oracle_realization'] = OraclePolicy().selection()
+    (fixture/'entry.zkpkg').write_text(json.dumps(package))
+    (fixture/'pin.txt').write_text(browser.digest(fixture/'entry.zkpkg'))
+    path.write_text(json.dumps(document))
+    if location == 'saved':
+        cases = browser.prepare_cases(path, tmp_path/'out', browser.Capture(tmp_path/'capture'))
+        assert cases[0]['oracle_realization'] == OCTIC_KECCAK.record()
+        cases[0]['published_options']['oracle_realization'] = OraclePolicy().selection()
+        manifest = {'format': browser.FORMAT, 'observation': 'browser', 'status': 'failed',
+                    'results': [], 'cases': cases}
+        with pytest.raises(__import__('bench.io', fromlist=['MeasurementError']).MeasurementError, match='published oracle selection'):
+            browser.validate_manifest(manifest)
+    else:
+        with pytest.raises(__import__('bench.io', fromlist=['MeasurementError']).MeasurementError, match='oracle'):
+            browser.prepare_cases(path, tmp_path/'out', browser.Capture(tmp_path/'capture'))

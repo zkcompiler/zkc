@@ -804,6 +804,37 @@ impl LogicalType {
             .as_ref()
             .map_or(0, |v| v.retained_bytes())
             .saturating_add(self.structural.as_ref().map_or(0, |s| s.retained_bytes()))
+            .saturating_add(self.resource_domain.as_ref().map_or(0, |_| 256))
+    }
+    /// Actual immutable descriptor custody. Returning false skips descendants,
+    /// as required by both retention and release of a shared allocation graph.
+    /// These identities describe storage, never evidence for value validity.
+    pub fn visit_descriptor_backings(&self, shared: &mut dyn FnMut(super::Backing) -> bool) {
+        if let Some(node) = &self.structural
+            && shared(super::Backing::of(node, node.own_retained_bytes()))
+        {
+            for argument in node.arguments() {
+                if let super::TypeArgument::Type(child) = argument {
+                    child.visit_descriptor_backings(shared);
+                }
+            }
+        }
+        if let Some(node) = &self.variant
+            && shared(super::Backing::of(node, node.own_retained_bytes()))
+        {
+            for child in node.alternatives().iter().flat_map(|arm| arm.payload()) {
+                child.visit_descriptor_backings(shared);
+            }
+        }
+        if let Some(node) = &self.resource_domain {
+            const {
+                assert!(
+                    std::mem::size_of::<super::ResourceDomain>() + 2 * std::mem::size_of::<usize>()
+                        <= 256
+                );
+            }
+            shared(super::Backing::of(node, 256));
+        }
     }
     pub(super) fn parse_nested(
         spelling: &str,

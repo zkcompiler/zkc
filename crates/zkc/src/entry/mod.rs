@@ -4,6 +4,12 @@
 //! additionally admit the native program, bind its interface and admit the
 //! packaged expression assets its program references; retained MLIR is a
 //! compiler-checked subject, not an interpreter input for this host.
+pub mod oracle_selection;
+pub use oracle_selection::{
+    OracleAuthentication, OracleLeafGrouping, OracleLeafOrder, OracleQueryOrder,
+    OracleRootSelection, OracleRoots, OracleSelection, OracleSelectionError,
+    OracleTableRealization,
+};
 mod decode;
 mod package;
 #[cfg(feature = "cpu")]

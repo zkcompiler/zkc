@@ -678,7 +678,7 @@ fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
     for value in [
         table(&[1, 2]),
         point(&[3]),
-        Value::Round([Scalar::from(1); 3]),
+        Value::Round(([Scalar::from(1); 3]).into()),
     ] {
         let binding = OperationBinding {
             contract: "transcript.native.indexed.observe.data".into(),
@@ -697,7 +697,7 @@ fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
         zkc_cpu::Value::Bool(false),
         zkc_cpu::Value::Commitment(std::sync::Arc::new(original.commitment().clone())),
         zkc_cpu::Value::Proof(std::sync::Arc::new(proof)),
-        zkc_cpu::Value::Curve(G1::identity()),
+        zkc_cpu::Value::Curve(G1::identity().into()),
         zkc_cpu::Value::groups(&[G1::generator()], &policy).unwrap(),
     ];
     for value in values {

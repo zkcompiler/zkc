@@ -12,28 +12,23 @@ import re
 from typing import NamedTuple
 
 from source_modules import library_modules
+from test_fri import COMMIT_GUARDS, CHECK_GUARDS, emitted_guard_sites
 
 import pytest
 
-from test_air_stark import (EXAMPLE, FIXTURE, P, ROOT, STARK, TABLE, frames, inputs,
+from test_air_stark import (EXAMPLE, FIXTURE, FRI_REALIZATION, P, ROOT, STARK, TABLE, check_air_frames, frames, inputs,
                             request, scalar, unpack, vector)
 
 POLYNOMIAL = ROOT / 'libraries/relations/air/polynomial.zkc'
 FRI = ROOT / 'libraries/protocols/polynomial/fri/lib.zkc'
-# The guards of TableArgument and of LowDegree in source order, each named by
+# The guards of TableArgument and shared FRI in source order, each named by
 # its native owner and the number of loops around it, as the FRI tests name theirs.
 # Both source rosters are (P,V), so their native owners have ordinals 0 and 1.
 TABLE_GUARDS = [('profile', 'role00000001', 0), ('prover_profile', 'role00000000', 0),
                 ('identity', 'role00000001', 0), ('fri', 'role00000001', 0),
                 ('trace', 'role00000001', 1), ('quotient', 'role00000001', 1),
                 ('deep', 'role00000001', 1)]
-FRI_GUARDS = [('schedule', 'role00000001', 0), ('input', 'role00000000', 0),
-              ('final_degree', 'role00000001', 0), ('low', 'role00000001', 2),
-              ('high', 'role00000001', 2), ('chain', 'role00000001', 2),
-              ('terminal', 'role00000001', 1)]
-GUARD = re.compile(r'"protocol\.guard"\(%\d+(?:#\d+)?\) <\{owner = "(\w+)", site = "(s\d+)"\}>')
-APPLY = re.compile(r'"protocol\.apply"\(.*\) <\{callee = @(\w+), roles = \[[^\]]*\], site = "(s\d+)"\}>')
-FUNCTION = re.compile(r'"(protocol|func)\.func"\(\) <\{.*sym_name = "(\w+)"')
+FUNCTION = re.compile(r'"(?:protocol|func|local)\.func"\(\) <\{.*sym_name = "(\w+)"')
 ORIGIN = re.compile(r'^\}\) \{runtime\.origin = \["(\w+)", \[\]\]\}')
 
 
@@ -45,47 +40,18 @@ class Variant(NamedTuple):
 
 
 def emitted_sites(emitted):
-    """The guard chains of TableArgument and LowDegree, read from the emitted program.
-
-    A verifier stop names the chain of source sites from the entry's apply of
-    TableArgument down to the guard, so each guard is keyed by that chain.
-    Both protocols must keep the library's guard shape, which also shows that
-    a prover-only variant left the verifier's checks in place.
-    """
-    functions, symbols, regions, current, symbol = {}, {}, [], None, None
+    """Read exact table/Commit/Check guard chains and retained local origins."""
+    symbols, symbol = {}, None
     for line in emitted.splitlines():
         text = line.strip()
         header = FUNCTION.search(text)
         if header:
-            symbol = header.group(2)
-            if header.group(1) == 'protocol':
-                current = functions[symbol] = {'guards': [], 'applies': []}
+            symbol = header[1]
         origin = ORIGIN.match(text)
         if origin:
-            symbols[origin.group(1)] = symbol
-        guard = GUARD.search(text)
-        if guard:
-            current['guards'].append((guard.group(1), guard.group(2), regions.count('repeat')))
-        applied = APPLY.search(text)
-        if applied:
-            current['applies'].append(applied.groups())
-        if text.endswith('({'):
-            regions.append('repeat' if '"protocol.repeat"' in text else 'other')
-        elif text.startswith('})'):
-            regions.pop()
-    assert not regions
-
-    def shaped(callee, expected):
-        return ([(owner, depth) for owner, _, depth in functions[callee]['guards']]
-                == [(owner, depth) for _, owner, depth in expected])
-    (entry,) = [f for f in functions.values() if not f['guards'] and len(f['applies']) == 1]
-    ((table, table_site),) = entry['applies']
-    assert shaped(table, TABLE_GUARDS)
-    ((fri, fri_site),) = [a for a in functions[table]['applies'] if shaped(a[0], FRI_GUARDS)]
-    guards = {name: f'{table_site}_{site}' for (name, _, _), (_, site, _)
-              in zip(TABLE_GUARDS, functions[table]['guards'], strict=True)}
-    guards.update({'fri.' + name: f'{table_site}_{fri_site}_{site}' for (name, _, _), (_, site, _)
-                   in zip(FRI_GUARDS, functions[fri]['guards'], strict=True)})
+            symbols[origin[1]] = symbol
+    guards = emitted_guard_sites(emitted, {'': TABLE_GUARDS,
+        'fri.': COMMIT_GUARDS, 'fri.check.': CHECK_GUARDS})
     return guards, symbols
 
 
@@ -131,12 +97,12 @@ def build(toolchain, journal, directory, name, *, main=None, asset=None, edits=(
         path = where / f'{module}.zkc'
         path.write_text(text)
         overrides[module] = path
-    arguments = library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', overrides=overrides)
+    arguments = library_modules('arguments/stark/single_table/koala_bear_octic', overrides=overrides)
     label, bundle = asset or ('recurrence', FIXTURE / 'bundle.json')
     arguments.append(f'--asset={label}=relation-bundle-json={bundle}')
     package = where / 'Proof.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                           *arguments, 'air_stark_example::Proof', f'--output={package}'])
+                           *arguments, FRI_REALIZATION, 'air_stark_example::Proof', f'--output={package}'])
     emitted = journal.run([toolchain.compiler, 'language-emit', '--source-format=zkc',
                            '--entry=air_stark_example::Proof', *arguments])
     return Variant(package, report['package_sha256'], *emitted_sites(emitted))
@@ -149,8 +115,21 @@ def prove(toolchain, journal, variant, name, public, private):
     proof = variant.package.with_name(name + '.bin')
     made = journal.json([toolchain.runtime, '--json', 'prove', f'--package={variant.package}', f'--sha256={variant.pin}', *producer, f'--output={proof}'])
     assert made['status'] == 'produced'
-    assert len(frames(proof.read_bytes())) == 8 + 16 * public['query_count']
+    check_air_frames(proof.read_bytes(), public['query_count'])
     return proof
+
+
+def refused_at_padding(toolchain, journal, variant, name, public, private):
+    producer = request(journal, f'{variant.package.parent.name}-{name}-producer', public, private)
+    proof = variant.package.with_name(name + '.bin')
+    report = journal.json([toolchain.runtime, '--json', 'prove', f'--package={variant.package}',
+                           f'--sha256={variant.pin}', *producer, f'--output={proof}'],
+                          refuses='artifact-stopped')
+    assert not proof.exists()
+    stop = report['execution']['stop']
+    assert report['status'] == 'refused' and stop['role'] == 'role00000000'
+    assert stop['kind'] == 'Explicit("reject")'
+    assert stop['local']['function'] == local_symbol(variant, 'fri', 'padded')
 
 
 def verify(toolchain, journal, variant, name, public, proof, *, refuses=None):
@@ -166,6 +145,15 @@ TRUNCATION = ('air::polynomial',
               '  require boolean::negate(less(capacity, actual));\n'
               '  let padded = concat(coefficients, fill<F>(0, capacity - actual));',
               '  let padded = zkc::vector::slice(concat(coefficients, fill<F>(0, capacity)), 0, capacity);')
+
+
+# Allow an intentionally dishonest prover to produce the bare claim-lie proof
+# so the verifier's earlier identity guard remains directly observable.
+TRUNCATED_TERMINAL = ('fri',
+    '  require !less(count, length(coefficients));\n'
+    '  return concat(coefficients, fill<F>(0, count - length(coefficients)));',
+    '  return if less(count, length(coefficients)) { zkc::vector::slice(coefficients, 0, count) }\n'
+    '    else { concat(coefficients, fill<F>(0, count - length(coefficients))) };')
 
 
 def test_false_trace_with_truncated_quotient_stops_at_identity(toolchain, journal, directory):
@@ -257,7 +245,9 @@ def test_witness_claim_lie_consistent_at_zeta_stops_at_fri_degree(toolchain, jou
     # identity at zeta. Moving the same difference into the first chunk claim
     # keeps that identity balanced, so the lie survives until the DEEP
     # quotient of the committed column against the wrong claim is no longer
-    # a polynomial of low degree: FRI's terminal degree check stops it.
+    # a polynomial of low degree. FRI's prover padding guard stops it
+    # before sending a terminal message. The bare variant bypasses padding
+    # explicitly so V's earlier identity guard remains reachable.
     bundle = json.loads((FIXTURE / 'bundle.json').read_text())
     assert bundle[3][0][6][0] == ['read', 0, '0', 0]
     helpers = 'bump_slot, compensate' if compensated else 'bump_slot'
@@ -269,13 +259,17 @@ def test_witness_claim_lie_consistent_at_zeta_stops_at_fri_degree(toolchain, jou
                       QUOTIENT_CLAIMS.replace('let proposed_quotient @P', 'let honest_quotient @P')
                       + '\n  let proposed_quotient @P = compensate<Extension,Table,B>('
                       'honest_quotient, honest, proposed, heightP, zetaP, alphaP);'))
+    if not compensated:
+        edits.append(TRUNCATED_TERMINAL)
     variant = build(toolchain, journal, directory, 'lying', edits=edits,
                     appended=[('air::table', COMPENSATION)])
     public, private = inputs()
-    proof = prove(toolchain, journal, variant, 'lying', public, private)
-    checked = verify(toolchain, journal, variant, 'lying', public, proof, refuses='artifact-stopped')
-    expected = ('fri.final_degree', []) if compensated else ('identity', [])
-    assert rejected(checked, variant.guards) == expected
+    if compensated:
+        refused_at_padding(toolchain, journal, variant, 'lying', public, private)
+    else:
+        proof = prove(toolchain, journal, variant, 'lying', public, private)
+        checked = verify(toolchain, journal, variant, 'lying', public, proof, refuses='artifact-stopped')
+        assert rejected(checked, variant.guards) == ('identity', [])
 
 
 # One cyclic table of height 8 with a single witness column w and a public
@@ -389,16 +383,14 @@ def test_degree_adjustment_rejects_committed_column_of_degree_height(toolchain, 
                         ('honest-unadjusted', UNADJUSTED)]:
         variant = build(toolchain, journal, directory, name, main=COLUMN_MAIN, asset=('column', bundle),
                         edits=edits, appended=helpers if name.startswith('lifted') else [])
-        proof = prove(toolchain, journal, variant, name, public, private)
-        roots[name] = frames(proof.read_bytes())[0]
         if name == 'lifted':
-            checked = verify(toolchain, journal, variant, name, public, proof, refuses='artifact-stopped')
-            assert rejected(checked, variant.guards) == ('fri.final_degree', [])
+            refused_at_padding(toolchain, journal, variant, name, public, private)
         else:
+            proof = prove(toolchain, journal, variant, name, public, private)
+            roots[name] = frames(proof.read_bytes())[0]
             assert verify(toolchain, journal, variant, name, public, proof)['status'] == 'accepted'
     # The trace root is sent before any challenge, so it depends only on the
     # committed column: the lifted column is a different commitment, and the
     # removed factor changes nothing about what is committed.
     assert roots['honest'] == roots['honest-unadjusted']
-    assert roots['lifted'] == roots['lifted-unadjusted']
-    assert roots['honest'] != roots['lifted']
+    assert roots['honest'] != roots['lifted-unadjusted']

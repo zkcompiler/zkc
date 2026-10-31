@@ -55,9 +55,9 @@ fn inputs(envelope: &Json, producing: bool, tag: usize, count: usize) -> Json {
     let value = |port: &Json| {
         let port: usize = port.as_str().unwrap().parse().unwrap();
         let value = match port {
-            0 => Value::Curve(G1::generator()),
+            0 => Value::Curve((G1::generator()).into()),
             1 => Value::Field(Scalar::from(3)),
-            2 => Value::Curve(G1::generator().scale(Scalar::from(3))),
+            2 => Value::Curve((G1::generator().scale(Scalar::from(3))).into()),
             5 => batch(tag, count),
             6 => Value::Index(count as u64),
             7 => Value::Field(Scalar::from(

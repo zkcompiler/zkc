@@ -39,6 +39,21 @@ int main() {
     for (bool simplify : {false, true})
       take(compileEntry(original, {simplify, false}));
   });
+  cases.run("protocol Boolean operands include static index constants", [&] {
+    auto project = take(check(R"(
+      protocol Generic<N:nat> roles(P)(n:index@P)->(r:bool@P) {
+        return (r=n==index<N>() && !(n==index<0>()));
+      }
+      protocol Run roles(P)(n:index@P)->(r:bool@P) {
+        return (r=n==index<7>() && !(n==index<0>()));
+      }
+      entry fn Demo(inputs:Run::Inputs) { return Run::run(inputs); }
+    )"));
+    auto input = take(prepareOriginal(
+        take(zkc::test::closeProtocolDeployment(project, "sample::Demo"))));
+    for (bool simplify : {false, true})
+      take(compileEntry(input, {simplify, false}));
+  });
   cases.run("same-type Boolean identity mutation", [&] {
     mlir::DialectRegistry registry;
     zkc::registerDialects(registry);

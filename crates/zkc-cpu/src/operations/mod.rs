@@ -10,6 +10,7 @@ pub(crate) mod literal;
 pub(crate) mod pairwise;
 pub(crate) mod quotient;
 pub(crate) mod resources;
+pub(crate) mod selection;
 
 pub(crate) mod encoding;
 

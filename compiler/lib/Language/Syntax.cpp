@@ -75,14 +75,15 @@ Error lex(const SourceBuffer &source, SourceId sourceId, Work &work,
                        Span{sourceId, uint32_t(begin), uint32_t(offset)});
     } else {
       kind = TokenKind::Punctuation;
-      if (offset < text.size() && ((c == ':' && text[offset] == ':') ||
-                                   (c == '-' && text[offset] == '>') ||
-                                   (c == '=' && text[offset] == '=') ||
-                                   (c == '=' && text[offset] == '>') ||
-                                   (c == '<' && text[offset] == '=') ||
-                                   (c == '&' && text[offset] == '&') ||
-                                   (c == '|' && text[offset] == '|') ||
-                                   (c == '.' && text[offset] == '.')))
+      if (offset < text.size() &&
+          ((c == ':' && text[offset] == ':') ||
+           (c == '-' && text[offset] == '>') ||
+           (c == '=' && text[offset] == '=') ||
+           (c == '=' && text[offset] == '>') ||
+           (c == '<' && (text[offset] == '=' || text[offset] == '-')) ||
+           (c == '&' && text[offset] == '&') ||
+           (c == '|' && text[offset] == '|') ||
+           (c == '.' && text[offset] == '.')))
         ++offset;
       else if (!StringRef(";,:(){}@=+-*/^<>[]!.#").contains(c))
         return failure("source.token", "unsupported source character",
@@ -288,7 +289,10 @@ private:
     if (auto pending = declaration.deferredBody) {
       cursor = pending->begin;
       previousEnd = current().span.begin;
-      if (!body(declaration, pending->protocol, false, pending->depth))
+      if (!(declaration.kind == Declaration::Kind::Oracle
+                ? oracleDefinitionBody(declaration, pending->depth)
+                : bool(body(declaration, pending->protocol, false,
+                            pending->depth))))
         return false;
       if (cursor != pending->end)
         return fail("source.syntax", "body differs from its declaration range");
@@ -1488,8 +1492,31 @@ private:
           return {};
         }
         d.sealed = true;
+      } else if (take("logical")) {
+        if (d.logical) {
+          fail("source.oracle-aggregate",
+               "logical annotation was already specified");
+          return {};
+        }
+        d.logical = true;
+      } else if (take("shape")) {
+        SyntaxOracleShape shape;
+        shape.span = d.span;
+        if (!expect("(") || !name(shape.port) || !expect(".") ||
+            !name(shape.dimension) || !expect(","))
+          return {};
+        if (take("value")) {
+          shape.value.emplace();
+          if (!expect("=") || !name(*shape.value) || !expect(","))
+            return {};
+        }
+        if (!expect("bound") || !expect("=") || !type(shape.bound) ||
+            !expect(")"))
+          return {};
+        shape.span.end = previousEnd;
+        d.oracleShapes.push_back(std::move(shape));
       } else {
-        fail("source.resource", "expected affine, linear, or sealed attribute");
+        fail("source.resource", "unknown native type attribute");
         return {};
       }
       if (!expect("]"))
@@ -1892,6 +1919,28 @@ private:
       else if (!moduleHeader(d) || !expect("{") || !moduleBody(d, depth) ||
                !expect("}"))
         return {};
+    } else if (take("oracle")) {
+      d.kind = Declaration::Kind::Oracle;
+      d.oracleDefinition.emplace();
+      if (member || !expect("def") || !name(d.name) ||
+          !parameters(d.parameters) || !ports(d.inputs, false) ||
+          !expect("->")) {
+        if (!diagnostic)
+          fail("source.oracle-definition",
+               "oracle definitions need a constructor signature");
+        return {};
+      }
+      for (unsigned i = 0; i < d.inputs.size(); ++i)
+        d.inputOrder.push_back({Declaration::InputSlot::Kind::Data, i});
+      SyntaxPort result;
+      result.name = "result";
+      result.span = current().span;
+      if (!type(result.type) || !requirements(d))
+        return {};
+      d.outputs.push_back(std::move(result));
+      // Header parsing uses the same bounded balanced-body deferral.
+      if (!body(d, false, false, depth + 1))
+        return {};
     } else if (take("interface")) {
       if (member) {
         fail("source.syntax", "nested interfaces are not interface members");
@@ -2026,6 +2075,10 @@ private:
           d.primitive = std::move(identity);
       } else if (!body(d, protocol, false, 1))
         return {};
+    }
+    if (d.logical && d.kind != Declaration::Kind::Record) {
+      fail("source.oracle-aggregate", "logical annotation requires a struct");
+      return {};
     }
     if ((d.resource || d.sealed) && d.kind != Declaration::Kind::Record &&
         d.kind != Declaration::Kind::Variant &&
@@ -2261,6 +2314,26 @@ private:
              "expected matching notation closer " + delimited->closing);
         return {};
       }
+    } else if (take("@")) {
+      value.kind = Expression::Kind::RoleAssembly;
+      if (!expect("("))
+        return {};
+      if (at(")")) {
+        fail("source.roles", "role assembly requires at least one component");
+        return {};
+      }
+      do {
+        std::string role;
+        if (!name(role) || !expect("="))
+          return {};
+        auto component = expression(decl, depth + 1);
+        if (!component)
+          return {};
+        value.labels.push_back(std::move(role));
+        value.children.push_back(*component);
+      } while (take(",") && !at(")"));
+      if (!expect(")"))
+        return {};
     } else if (oracleQueryPrefix()) {
       advance();
       if (minimum) {
@@ -2856,8 +2929,37 @@ private:
     result.span.end = previousEnd;
     return result;
   }
+  bool oracleDefinitionBody(SyntaxDeclaration &decl, unsigned depth) {
+    if (!expect("{"))
+      return false;
+    decl.bodies.emplace_back(); // Reserve the query root before predicates.
+    while (take("requires")) {
+      SyntaxOraclePredicate predicate;
+      predicate.span = current().span;
+      if (current().kind == TokenKind::Word && look(1) == ":") {
+        predicate.label.emplace();
+        if (!name(*predicate.label) || !expect(":"))
+          return false;
+      }
+      auto condition = expression(decl, depth + 1);
+      if (!condition || !expect(";"))
+        return false;
+      predicate.condition = *condition;
+      predicate.span.end = previousEnd;
+      decl.oracleDefinition->predicates.push_back(std::move(predicate));
+    }
+    std::vector<SyntaxPort> query;
+    if (!expect("query") || !ports(query, false) || query.size() != 1) {
+      if (!diagnostic)
+        fail("source.oracle-query", "query needs exactly one typed parameter");
+      return false;
+    }
+    decl.oracleDefinition->queryParameter = std::move(query.front());
+    return bool(body(decl, false, false, depth + 1, true)) && expect("}");
+  }
   std::optional<uint32_t> body(SyntaxDeclaration &decl, bool protocol,
-                               bool region, unsigned depth) {
+                               bool region, unsigned depth,
+                               bool reservedRoot = false) {
     if (headersOnly) {
       const auto begin = cursor;
       if (!expect("{"))
@@ -2881,8 +2983,9 @@ private:
     }
     if (!bounded(depth) || !expect("{"))
       return {};
-    uint32_t id = decl.bodies.size();
-    decl.bodies.emplace_back();
+    uint32_t id = reservedRoot ? 0 : decl.bodies.size();
+    if (!reservedRoot)
+      decl.bodies.emplace_back();
     SyntaxBody b;
     b.span = current().span;
     b.region = region;
@@ -2984,8 +3087,9 @@ private:
       Statement s;
       s.span = current().span;
       if (take("#")) {
-        if (!protocol) {
-          fail("source.site", "site labels belong to protocol statements");
+        if (!protocol && decl.kind != Declaration::Kind::Oracle) {
+          fail("source.site",
+               "site labels belong to protocol or oracle statements");
           return {};
         }
         std::string label;
@@ -3032,7 +3136,9 @@ private:
             return {};
           }
         }
-        if (!expect("="))
+        if (take("<-"))
+          s.evaluation = Statement::Evaluation::Ordered;
+        else if (!expect("="))
           return {};
       } else if (take("drop"))
         s.kind = Statement::Kind::Drop;

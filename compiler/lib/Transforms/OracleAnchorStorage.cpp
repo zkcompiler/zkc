@@ -97,8 +97,14 @@ struct Planner {
       // existing reference; only a root binding allocates an input constructor.
       if (!argument || argument.getOwner() != &program.getBody().front())
         return Error::success();
+      // Sequence ports are internal references. Host ingress has no sequence
+      // constructor or external graph representation in this profile.
+      auto handle =
+          dyn_cast<pir::OracleHandleType>(input.getHandle().getType());
+      if (!handle)
+        return error("oracle-common-interface");
       constructor.constructor = OracleAnchorConstructor::Kind::Input;
-      constructor.kind = input.getHandle().getType().getKind();
+      constructor.kind = handle.getKind();
       constructor.holder = input.getHolder().str();
       receivers = input.getReceivers();
     } else if (auto send = dyn_cast<pir::OracleSendOp>(op)) {

@@ -74,8 +74,8 @@ pub(super) fn run(bytes: &[u8], mode: &str) {
             if mode.starts_with("g2-") {
                 let point = ark::G2::generator();
                 (
-                    vec![Value::Bn254G2(point), Value::Bn254Field(scalar)],
-                    Value::Bn254G2(point.scale(factor).neg()),
+                    vec![Value::Bn254G2(point.into()), Value::Bn254Field(scalar)],
+                    Value::Bn254G2((point.scale(factor).neg()).into()),
                 )
             } else {
                 let point = ark::G1::generator();

@@ -149,7 +149,7 @@ Expected<Type> formalType(StringRef name, ArrayRef<Type> arguments) {
 Expected<Type> builtinType(StringRef name, ArrayRef<Type> arguments) {
   if (name == "oracle.table") {
     if ((arguments.size() != 1 && arguments.size() != 2) ||
-        isStaticOnly(arguments[0]) || isOracleHandle(arguments[0]) ||
+        isStaticOnly(arguments[0]) || isLogicalValue(arguments[0]) ||
         arguments[0].kind == K::Formal ||
         (arguments.size() == 2 && arguments[1].kind != K::Natural))
       return error(

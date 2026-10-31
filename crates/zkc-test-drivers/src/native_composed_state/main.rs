@@ -39,7 +39,7 @@ fn inputs(envelope: &Json, producing: bool, n: u64, a: &[Scalar], g: &[G1]) -> J
         let value = match port.as_str().unwrap() {
             "0" => Value::Index(n),
             "1" => Value::Groups(g.to_vec().into()),
-            "2" => Value::Curve(reference::msm(&a[..statement_len], &g[..statement_len])),
+            "2" => Value::Curve((reference::msm(&a[..statement_len], &g[..statement_len])).into()),
             "3" => Value::Vector(a.to_vec().into()),
             p => panic!("unexpected input {p}"),
         };

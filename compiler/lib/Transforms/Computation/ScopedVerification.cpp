@@ -27,6 +27,7 @@ class ScopedReader {
   mathematical::VerificationDecision &outcome;
   llvm::DenseSet<Operation *> usedBindings, visitedFunctions;
   uint64_t &remaining, &bytes;
+  const llvm::DenseMap<Operation *, func::FuncOp> *entries;
 
   LogicalResult refuse(StringRef reason) {
     if (outcome.outcome !=
@@ -40,7 +41,8 @@ class ScopedReader {
   bool charge(uint64_t cost) {
     if (cost > remaining) {
       outcome = {mathematical::VerificationObservation::RequiredCapacity,
-                 "scoped numerical context comparison capacity"};
+                 "scoped numerical context comparison capacity",
+                 CapacityCause{WorkOwner::AlgorithmChecking, cost, remaining}};
       return false;
     }
     remaining -= cost;
@@ -138,7 +140,8 @@ class ScopedReader {
       }
       if (auto compute = dyn_cast<exec::ComputeOp>(op)) {
         SymbolTableCollection symbols;
-        auto entry = compute.resolveCallee(symbols);
+        auto entry = entries ? entries->lookup(compute.getOperation())
+                             : compute.resolveCallee(symbols);
         auto policy = effectiveSelectionPolicy(compute, fallback);
         if (!entry || failed(policy))
           return refuse("unresolved source computation");
@@ -241,12 +244,13 @@ public:
                const ScopedCandidate &actual,
                MathematicalSelectionPolicy fallback,
                mathematical::RealizationWork &work,
-               mathematical::VerificationDecision &outcome)
+               mathematical::VerificationDecision &outcome,
+               const llvm::DenseMap<Operation *, func::FuncOp> *entries)
       : original(original), candidate(candidate), source(source),
         actual(actual), ports(&actual), targetSymbols(candidate),
         originalDeclarations(declarations), fallback(fallback), work(work),
         outcome(outcome), remaining(work.numericalContextChecking),
-        bytes(work.numericalCheckSiteBytes) {}
+        bytes(work.numericalCheckSiteBytes), entries(entries) {}
   LogicalResult run() {
     bool retainedFinite = false;
     candidate.walk([&](Operation *op) {
@@ -303,13 +307,13 @@ public:
   }
 };
 } // namespace
-LogicalResult
-verifyScopedNumericalContext(protocol_ir::ProtocolModuleOp original,
-                             protocol_ir::ProtocolModuleOp candidate,
-                             protocol_ir::ProtocolModuleOp declarations,
-                             MathematicalSelectionPolicy policy,
-                             mathematical::RealizationWork &work,
-                             mathematical::VerificationDecision &outcome) {
+LogicalResult verifyScopedNumericalContext(
+    protocol_ir::ProtocolModuleOp original,
+    protocol_ir::ProtocolModuleOp candidate,
+    protocol_ir::ProtocolModuleOp declarations,
+    MathematicalSelectionPolicy policy, mathematical::RealizationWork &work,
+    mathematical::VerificationDecision &outcome,
+    const llvm::DenseMap<Operation *, func::FuncOp> *entries) {
   if (original->getAttrDictionary() != candidate->getAttrDictionary())
     return failure();
   std::optional<CapacityCause> capacity;
@@ -336,7 +340,7 @@ verifyScopedNumericalContext(protocol_ir::ProtocolModuleOp original,
     return failure();
   }
   return ScopedReader(original, candidate, declarations, *source, **actual,
-                      policy, work, outcome)
+                      policy, work, outcome, entries)
       .run();
 }
 } // namespace zkc::computation

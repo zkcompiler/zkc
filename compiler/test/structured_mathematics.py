@@ -43,7 +43,27 @@ with case('checked bundles bind original requirements and concrete connector'):
             assert report['requirements_sha256'] == hashlib.sha256(report['requirement_source'].encode()).hexdigest()
             # The digest uses the exact compiler serialization before wrapping.
             bundle_text = commands.source('protocol-bundle', source, f'--entry={entry}', *flags).strip()
-            assert json.loads(bundle_text) == json.loads(result['bundle'])
+            plain, checked_bundle = json.loads(bundle_text), json.loads(result['bundle'])
+            plain_program = json.loads(plain.pop('candidate'))
+            checked_program = json.loads(checked_bundle.pop('candidate'))
+            assert plain == checked_bundle
+            assert plain_program[0] == checked_program[0]
+            # Checked publication retains both required component entries;
+            # standalone deployment retains just its selected entry. Generated
+            # binding/function names depend on that closure. Compare the public
+            # interface here; actual bodies are covered by correspondence and
+            # the independently admitted mutations below.
+            def interface(program):
+                participants = {item[1]: item for item in program[3]}
+                selected = next(item for item in program[4] if item[1] == entry)
+                return [[role, participants[name][2:4],
+                         [port[1] for port in participants[name][4]],
+                         participants[name][5]] for role, name in selected[2]]
+            assert interface(plain_program) == interface(checked_program)
+            bindings = [item[1:] for item in checked_program[1]]
+            assert all(item[1:] in bindings for item in plain_program[1])
+            assert {item[1] for item in plain_program[4]} == {entry}
+            assert {item[1] for item in checked_program[4]} == {'reduction', 'terminal'}
             assert report['bundle_sha256'] == hashlib.sha256(result['bundle'].encode()).hexdigest()
             [record] = report['requirements']
             assert record['connector'] == [[i, i] for i in range(5)]
@@ -87,6 +107,16 @@ def check_candidate(text, refuses=None):
 
 with case('honest independently supplied participant'):
     assert json.loads(check_candidate(candidate))['requirements'][0]['arity'] == 2
+
+with case('deployment selection cannot omit a required component entry'):
+    # Project a well-formed reduced deployment, including its matching
+    # projection descriptor, instead of leaving a dangling entry reference.
+    prefix, terminal = source.rsplit('"protocol.func"()', 1)
+    assert 'sym_name="terminal"' in terminal
+    closing = source[source.rindex('}) {profile='):]
+    reduction_only = commands.verified(prefix + closing, None,
+                                        '--zkc-project-protocol=simplify=false')
+    check_candidate(reduction_only, refuses='polynomial-correspondence-interface')
 
 mutations = [
     ('claim substitution', '%7 = algebra.field_equal %6, %arg2', '%7 = algebra.field_equal %6, %0'),

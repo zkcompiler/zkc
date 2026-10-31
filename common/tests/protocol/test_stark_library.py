@@ -3,7 +3,7 @@
 `stark::single_table::TableArgument` is generic over a `stark::configurations::contract::
 Configuration`; these tests run it with `stark::configurations::koala_bear_quartic::Poseidon2`
 (KoalaBear trace, quartic extension, Poseidon2 Merkle trees with pruned
-multi-openings, natural layout with both fold siblings in one FRI leaf,
+multi-openings for natural outer rows,
 challenges derived from the octic KoalaBear Merlin suite) and with a second,
 bit-reversed configuration written here. The AIRs are relation Bundles exported
 by the Plonky3 and Clean adapters and a generated quadratic recurrence.
@@ -18,25 +18,41 @@ from pathlib import Path
 import pytest
 
 from input_files import input_files
+from message_frames import children, replace_child, tag, with_children
+from oracle_deployment import table_realization
 from source_modules import library_modules
 
 ROOT = Path(__file__).resolve().parents[3]
 PROJECT = ROOT / 'examples/projects/stark'
 EXISTING = ROOT / 'examples/projects/fibonacci'
 LIBRARY = ROOT / 'libraries/arguments/stark'
+FRI = ROOT / 'libraries/protocols/polynomial/fri/lib.zkc'
 RECURRENCE = ROOT / 'compiler/adapters/plonky3/fixtures/recurrence'
 SUITE = 'merlin3.koala-bear.ext8-binomial3.rejection31le/0'
 P = 2130706433
+QUARTIC_SCHEME = 'rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0'
+OCTIC_SCHEME = 'rows.merkle-keccak256.koala-bear.ext8-binomial3/0'
+QUARTIC_REALIZATION = table_realization(QUARTIC_SCHEME)
+OCTIC_REALIZATION = table_realization(OCTIC_SCHEME)
 
 # ZKCV value-frame tags (docs/spec/formats/messages.md).
 BASE_VECTOR, QUARTIC_VECTOR, ROOT_FRAME, PROOF_FRAME = 20, 22, 71, 72
+TABLE_GUARDS = [(name, role, 0) for name, role in (
+    ('admissible_v', 'role00000001'), ('admissible_p', 'role00000000'),
+    ('trace_length', 'role00000000'), ('outside_v', 'role00000001'),
+    ('outside_p', 'role00000000'), ('identity', 'role00000001'),
+    ('trace_opening', 'role00000001'), ('quotient_opening', 'role00000001'))]
 
 
 def frames(proof):
+    assert proof[:8] == b'ZKCPRF00' and len(proof) >= 40
     offset, result = 40, []
     while offset < len(proof):
+        assert offset + 8 <= len(proof)
         count = int.from_bytes(proof[offset:offset + 8], 'little')
+        assert count >= 6 and offset + 8 + count <= len(proof)
         result.append(proof[offset + 8:offset + 8 + count])
+        tag(result[-1])
         offset += count + 8
     assert offset == len(proof)
     return result
@@ -48,18 +64,44 @@ def replace_frame(proof, position, value):
     return proof[:40] + b''.join(len(m).to_bytes(8, 'little') + m for m in messages)
 
 
-def tag(frame):
-    assert frame[:5] == b'ZKCV\x00'
-    return frame[5]
+def frame_inventory(frame):
+    """Describe observed canonical framing without inferring a query layout."""
+    kind = tag(frame)
+    result = {'tag': kind, 'bytes': len(frame)}
+    if kind in (65, 69):
+        result['alternative' if kind == 65 else 'count'] = int.from_bytes(frame[6:10], 'little')
+        result['children'] = [frame_inventory(child) for child in children(frame)]
+    elif kind in (BASE_VECTOR, QUARTIC_VECTOR, 27, 34, 36, 68, PROOF_FRAME):
+        result['count'] = int.from_bytes(frame[6:10], 'little')
+    return result
+
+
+def wire_profile(proof):
+    messages = frames(proof)
+    payload_bytes = sum(map(len, messages))
+    assert len(proof) == 40 + 8 * len(messages) + payload_bytes
+    return {'bytes': len(proof), 'messages': len(messages), 'payload_bytes': payload_bytes,
+            'header_bytes': 40, 'length_bytes': 8 * len(messages),
+            'frames': [frame_inventory(frame) for frame in messages]}
+
+
+def mutable_leaves(frame, path=()):
+    """Visit every scalar-bearing leaf without assuming aggregate offsets."""
+    if tag(frame) in (65, 69):
+        for index, child in enumerate(children(frame)):
+            yield from mutable_leaves(child, (*path, index))
+    else:
+        yield path, frame
 
 
 def altered(frame):
-    """The frame with its first canonical word incremented modulo p, or None
-    when it has no word (an empty pruned proof). Framing stays canonical."""
+    """Increment one canonical field word; empty pruned proofs have no word."""
     start = {BASE_VECTOR: 10, QUARTIC_VECTOR: 10, ROOT_FRAME: 6, PROOF_FRAME: 10}[tag(frame)]
     if len(frame) < start + 4:
+        assert tag(frame) == PROOF_FRAME and vector_count(frame, PROOF_FRAME, 32) == 0
         return None
     word = int.from_bytes(frame[start:start + 4], 'little')
+    assert word < P
     return frame[:start] + ((word + 1) % P).to_bytes(4, 'little') + frame[start + 4:]
 
 
@@ -75,30 +117,32 @@ def edited(directory, source, edits, name):
 
 
 class Package:
-    def __init__(self, toolchain, journal, directory, command, name):
+    def __init__(self, toolchain, journal, directory, command, name, realization=None):
         self.tools, self.journal, self.directory, self.name = toolchain, journal, directory, name
         self.path = directory / f'{name}.zkpkg'
         report = journal.json([toolchain.runtime, '--json', 'compile',
                                f'--compiler={toolchain.compiler}', *command,
+                               *([realization] if realization is not None else []),
                                f'--output={self.path}'])
         self.pin = report['package_sha256']
         self.runs = 0
 
     @classmethod
-    def project(cls, toolchain, journal, directory, project, entry, flags=()):
+    def project(cls, toolchain, journal, directory, project, entry, flags=(), *,
+                realization=QUARTIC_REALIZATION):
         return cls(toolchain, journal, directory,
                    [f'--project={project}/zkc.toml', f'example::{entry}', *flags],
-                   f'{project.name}-{entry}')
+                   f'{project.name}-{entry}', realization)
 
     @classmethod
     def source(cls, toolchain, journal, directory, source, assets, *, overrides=None,
-               flags=(), name='variant', modules=()):
+               flags=(), name='variant', modules=(), realization=None):
         path = directory / f'{name}.zkc'
         path.write_text(source)
         return cls(toolchain, journal, directory,
                    [f'--module=example={path}', *library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', *modules, overrides=overrides),
                     *[f'--asset={k}=relation-bundle-json={v}' for k, v in assets.items()],
-                    'example::Proof', *flags], name)
+                    'example::Proof', *flags], name, realization)
 
     def request(self, public, witness=None):
         self.runs += 1
@@ -123,6 +167,7 @@ class Package:
         produced, proof = self.prove(public, witness, capacity=capacity)
         assert produced['status'] == 'produced'
         assert self.verify(public, proof, capacity=capacity)['status'] == 'accepted'
+        self.journal.write(f'{self.name}-{self.runs}-wire.json', wire_profile(proof.read_bytes()))
         return proof
 
 
@@ -137,17 +182,68 @@ def rejected(report):
     assert report['status'] == 'refused', report
     assert report['code'].startswith('artifact-stopped'), report
     stop = report['execution']['stop']
+    assert stop['role'] == 'role00000001', stop
     assert stop['kind'] == 'Explicit("reject")', stop
     return stop
 
 
-def expected_frames(rounds):
-    # Trace and quotient roots, trace and quotient claims, one root per FRI
-    # round and the final polynomial; then trace rows and proof, quotient rows
-    # and proof, and one sibling vector and proof per round.
-    return [ROOT_FRAME, ROOT_FRAME, QUARTIC_VECTOR, QUARTIC_VECTOR, *[ROOT_FRAME] * rounds,
-            QUARTIC_VECTOR, BASE_VECTOR, PROOF_FRAME, QUARTIC_VECTOR, PROOF_FRAME,
-            *[QUARTIC_VECTOR, PROOF_FRAME] * rounds]
+def source_guards(package):
+    """Resolve the caller and shared FRI checks from this exact package."""
+    from test_fri import CHECK_GUARDS, COMMIT_GUARDS, emitted_guard_sites
+    return emitted_guard_sites(json.loads(package.path.read_text())['original'], {
+        'table.': TABLE_GUARDS, 'commit.': COMMIT_GUARDS, 'check.': CHECK_GUARDS})
+
+
+def refused_at(report, package, name, iterations):
+    from test_fri import stop_guard
+    stop = rejected(report)
+    assert stop_guard(stop, source_guards(package)) == (name, iterations)
+    return stop
+
+
+def vector_count(frame, kind, width):
+    assert tag(frame) == kind and len(frame) >= 10
+    count = int.from_bytes(frame[6:10], 'little')
+    assert len(frame) == 10 + width * count
+    return count
+
+
+def assert_quartic_frames(messages, *, log_size, final, rounds, queries, width, chunks, claims):
+    """Observed Poseidon2 individual-leaf deployment, with batched outer rows.
+
+    Each selected actual layer has one response; each virtual fold has both
+    children, including the repeated initial value. This physical inventory
+    belongs to this explicit deployment, not to the logical FRI interface.
+    """
+    prefix = [ROOT_FRAME, ROOT_FRAME, QUARTIC_VECTOR, QUARTIC_VECTOR,
+              *[ROOT_FRAME] * rounds, QUARTIC_VECTOR,
+              BASE_VECTOR, PROOF_FRAME, QUARTIC_VECTOR, PROOF_FRAME]
+    assert [tag(frame) for frame in messages] == prefix + [69] * (2 * rounds * queries)
+    assert all(len(messages[i]) == 38 for i in [0, 1, *range(4, 4 + rounds)])
+    assert vector_count(messages[2], QUARTIC_VECTOR, 16) == claims
+    assert vector_count(messages[3], QUARTIC_VECTOR, 16) == chunks
+    assert vector_count(messages[4 + rounds], QUARTIC_VECTOR, 16) == 1 << final
+    outer = 5 + rounds
+    assert vector_count(messages[outer], BASE_VECTOR, 4) == width * queries
+    assert vector_count(messages[outer + 2], QUARTIC_VECTOR, 16) == chunks * queries
+    sibling_counts = [vector_count(messages[index], PROOF_FRAME, 32)
+                      for index in (outer + 1, outer + 3)]
+    # Both trees open the same positions with the same geometry. The number
+    # of shared siblings depends on the sampled positions, not row contents.
+    assert sibling_counts[0] == sibling_counts[1]
+    assert 0 <= sibling_counts[0] <= log_size * queries
+    packets = len(prefix)
+    for query in range(queries):
+        for layer in range(rounds):
+            for fold in (False, True):
+                packet = messages[packets + 2 * (query * rounds + layer) + fold]
+                answers = children(packet)
+                assert len(answers) == (2 if fold else 1)
+                for answer in answers:
+                    assert tag(answer) == 65 and answer[6:10] == bytes(4)
+                    row, path = children(answer)
+                    assert vector_count(row, QUARTIC_VECTOR, 16) == 1
+                    assert vector_count(path, PROOF_FRAME, 32) == log_size - layer
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--no-finite-bulk'], ['--release-storage']])
@@ -157,12 +253,8 @@ def test_example_entries_prove_and_verify(toolchain, journal, directory, entry, 
     public, witness = fibonacci_inputs(entry)
     proof = package.honest(public, witness)
     messages = frames(proof.read_bytes())
-    assert [tag(m) for m in messages] == expected_frames(3)
-    # Eight query positions open one row and one FRI pair per round each; the
-    # trace rows carry the two Fibonacci columns and the final polynomial has
-    # one coefficient.
-    assert len(messages[7]) == 10 + 16
-    assert int.from_bytes(messages[8][6:10], 'little') == 8 * 2
+    assert_quartic_frames(messages, log_size=5, final=0, rounds=3, queries=8,
+                          width=2, chunks=1, claims=8)
 
 
 def quadratic_air(height, width, *, field='koala-bear', modulus=P):
@@ -234,12 +326,13 @@ def test_generated_air_parameters(toolchain, journal, directory, height, width, 
     bundle, public_data, trace = quadratic_air(height, width)
     asset = journal.write('bundle.json', bundle)
     package = Package.source(toolchain, journal, directory, generated(height, final, blowup, queries),
-                             {'trace': asset})
+                             {'trace': asset}, realization=QUARTIC_REALIZATION)
     proof = package.honest({'public_data': public_data}, {'trace': trace})
     rounds = height.bit_length() - 1 - final
     messages = frames(proof.read_bytes())
-    assert [tag(m) for m in messages] == expected_frames(rounds)
-    assert len(messages[4 + rounds]) == 10 + 16 * 2 ** final
+    assert_quartic_frames(messages, log_size=height.bit_length() - 1 + blowup,
+                          final=final, rounds=rounds, queries=queries, width=width,
+                          chunks=1, claims=4 * width)
     # A changed public value is refused by the prover, whose quotient is then
     # not of the declared degree. The proof header binds the statement, so an
     # honest proof is refused for it before execution.
@@ -283,9 +376,12 @@ def recurrence_inputs():
 
 def test_statement_configuration_and_public_inputs(toolchain, journal, directory):
     package = Package.source(toolchain, journal, directory, RECURRENCE_SOURCE,
-                             {'recurrence': RECURRENCE / 'bundle.json'})
+                             {'recurrence': RECURRENCE / 'bundle.json'},
+                             realization=QUARTIC_REALIZATION)
     public, witness = recurrence_inputs()
     proof = package.honest(public, witness)
+    assert_quartic_frames(frames(proof.read_bytes()), log_size=5, final=1, rounds=2,
+                          queries=12, width=4, chunks=2, claims=11)
     configuration = [int(x) for x in public['configuration']]
     changes = {
         'x0': {'x0': '17'},
@@ -306,26 +402,80 @@ def test_statement_configuration_and_public_inputs(toolchain, journal, directory
 
 
 def test_every_altered_message_is_refused(toolchain, journal, directory):
+    from test_fri import authentication_rejection
     package = Package.project(toolchain, journal, directory, PROJECT, 'Plonky3Proof')
     public, witness = fibonacci_inputs('Plonky3Proof')
     proof = package.honest(public, witness)
     original = proof.read_bytes()
     messages = frames(original)
-    changed = 0
-    for position, frame in enumerate(messages):
-        value = altered(frame)
-        if value is None:
-            continue
-        candidate = directory / f'altered-{position}.proof'
+    assert_quartic_frames(messages, log_size=5, final=0, rounds=3, queries=8,
+                          width=2, chunks=1, claims=8)
+    descriptor = json.loads(json.loads(package.path.read_text())['artifact'])[2]
+    evidence, empty = [], []
+
+    def reject(name, position, value, reason=True):
+        candidate = directory / f'{name}.proof'
         candidate.write_bytes(replace_frame(original, position, value))
-        rejected(package.verify(public, candidate, refuses=True))
-        changed += 1
-    assert changed >= len(messages) - 1
+        report = package.verify(public, candidate, refuses=reason)
+        evidence.append({'name': name, 'message': position, 'code': report['code'],
+                         'stop': report.get('execution', {}).get('stop')})
+        journal.write('mutation-evidence.json', evidence)
+        return report
+
+    # The prefix determines later challenges/positions. Outer row/path failures
+    # remain source checks; dynamic FRI responses fail generated authentication.
+    for position, frame in enumerate(messages):
+        for path, leaf in mutable_leaves(frame):
+            value = altered(leaf)
+            if value is None:
+                empty.append((position, path))
+                continue
+            report = reject(f'altered-{position}-' + '-'.join(map(str, path)), position,
+                            replace_child(frame, path, value))
+            if position < 12:
+                name = ('table.identity' if position < 4 else
+                        'table.quotient_opening' if position in (10, 11) else
+                        'table.trace_opening')
+                refused_at(report, package, name, [])
+            else:
+                query, offset = divmod(position - 12, 6)
+                layer, fold = divmod(offset, 2)
+                assert authentication_rejection(report, descriptor) == (query, layer, bool(fold), path[0])
+    # This concrete proof has no empty pruned component. Every row/path of
+    # every packet was changed independently, including both children at q=7.
+    assert empty == []
+    assert len(evidence) == 12 + 8 * 3 * 3 * 2
+
+    index = 12 + 2 * (7 * 3 + 2) + 1
+    low, high = children(messages[index])
+    low_row, low_path = children(low)
+    high_row, high_path = children(high)
+    assert low_row != high_row and low_path != high_path
+    for name, answers, item in [('swapped', [high, low], 0),
+                                ('duplicated', [low, low], 1)]:
+        report = reject(name, index, with_children(messages[index], answers))
+        assert authentication_rejection(report, descriptor) == (7, 2, True, item)
+    for name, leaf in [('row', high_row), ('path', high_path)]:
+        report = reject(f'substituted-{name}', index,
+                        replace_child(messages[index], [0, 0 if name == 'row' else 1], leaf))
+        assert authentication_rejection(report, descriptor) == (7, 2, True, 0)
+    for name, answers in [('missing-sibling', [low]), ('missing-both', [])]:
+        report = reject(name, index, with_children(messages[index], answers))
+        assert authentication_rejection(report, descriptor, element=False) == (7, 2, True)
+    terminal = messages[7]
+    assert vector_count(terminal, QUARTIC_VECTOR, 16) == 1
+    for name, value in [('short-terminal', terminal[:6] + bytes(4)),
+                        ('long-terminal', terminal[:6] + (2).to_bytes(4, 'little') +
+                         terminal[10:] + bytes(16))]:
+        refused_at(reject(name, 7, value, 'artifact-stopped'), package,
+                   'commit.terminal_length', [])
     for name, value, code in [('truncated', original[:-1], 'proof-truncated'),
                               ('trailing', original + b'\x00', 'proof-trailing')]:
         candidate = directory / f'{name}.proof'
         candidate.write_bytes(value)
-        package.verify(public, candidate, refuses=code)
+        report = package.verify(public, candidate, refuses=code)
+        evidence.append({'name': name, 'code': report['code']})
+    journal.write('mutation-evidence.json', evidence)
 
 
 def dishonest(toolchain, journal, directory, name, overrides):
@@ -334,7 +484,7 @@ def dishonest(toolchain, journal, directory, name, overrides):
     return Package.source(toolchain, journal, directory, source,
                           {'clean': ROOT / 'compiler/adapters/clean/fixtures/fibonacci/bundle.json',
                            'plonky3': ROOT / 'compiler/adapters/plonky3/fixtures/fibonacci/bundle.json'},
-                          overrides=overrides, name=name)
+                          overrides=overrides, name=name, realization=QUARTIC_REALIZATION)
 
 
 SHIFTED = '''
@@ -349,15 +499,21 @@ fn shifted(positions: Indices, size: index) -> Indices {
 '''
 
 
-@pytest.mark.parametrize('variant', ['trace-rows', 'quotient-rows', 'fri-siblings'])
+@pytest.mark.parametrize('variant', ['trace-rows', 'quotient-rows', 'fri-first-value'])
 def test_wrong_openings_are_refused(toolchain, journal, directory, variant):
-    """The prover opens its own commitments, but not where the verifier asked."""
-    if variant == 'fri-siblings':
-        path = edited(directory, LIBRARY / 'single_table/low_degree.zkc', [(
-            'let proposed @P = sibling_values(opened.0, atP, nextP);',
-            'let proposed @P = sibling_values(opened.0, pair_indices(atP, 1), nextP);')],
-            'low_degree.zkc')
-        overrides = {'stark::single_table::low_degree': path}
+    """Reject wrong outer positions and a committed first value that disagrees with DEEP."""
+    if variant == 'fri-first-value':
+        # Authenticate a consistently changed initial word. Its selected value
+        # must disagree with the outer DEEP value before any chain is checked.
+        path = edited(directory, FRI, [(
+            'let values @P = coset::values(current);',
+            'let values @P = changed_initial(coset::values(current), round);'), (
+            'fn padded<F: Field>',
+            'fn changed_initial<F: Field>(values: Vector<F>, round: index) -> Vector<F> {\n'
+            '  return if round == 0 { zkc::vector::add(values, fill<F>(1, length(values))) }\n'
+            '    else { values };\n'
+            '}\n\nfn padded<F: Field>')], 'fri.zkc')
+        overrides = {'fri': path}
     else:
         target = {'trace-rows': 'K::open_base(trace_tree.1, positionsP, sizeP)',
                   'quotient-rows': 'K::open_extension(quotient_tree.1, positionsP, sizeP)'}[variant]
@@ -369,7 +525,13 @@ def test_wrong_openings_are_refused(toolchain, journal, directory, variant):
     public, witness = fibonacci_inputs('Plonky3Proof')
     produced, proof = package.prove(public, witness)
     assert produced['status'] == 'produced'
-    rejected(package.verify(public, proof, refuses=True))
+    report = package.verify(public, proof, refuses=True)
+    name, iterations = {
+        'trace-rows': ('table.trace_opening', []),
+        'quotient-rows': ('table.quotient_opening', []),
+        'fri-first-value': ('check.association', ['0']),
+    }[variant]
+    refused_at(report, package, name, iterations)
 
 
 COMPENSATED = '''
@@ -406,7 +568,8 @@ def test_dishonest_quotients_are_refused(toolchain, journal, directory):
     package = dishonest(toolchain, journal, directory, 'truncated', {'air::polynomial': truncate})
     produced, proof = package.prove(public, false)
     assert produced['status'] == 'produced'
-    identity = rejected(package.verify(public, proof, refuses=True))
+    identity = refused_at(package.verify(public, proof, refuses=True), package,
+                          'table.identity', [])
 
     claims = edited(directory, LIBRARY / 'single_table/lib.zkc', [
         ('  let proposed_quotient @P = opening_claims(coset::column_batch(geometryP, factsP.chunks, chunks), zetaP);',
@@ -414,25 +577,25 @@ def test_dishonest_quotients_are_refused(toolchain, journal, directory):
          '  let proposed_quotient @P = compensated<K::Extension,Table,B>(honest_quotient, proposed,\n'
          '    heightP, zetaP, alphaP);'),
         ('fn deep_values<', COMPENSATED + 'fn deep_values<')], 'argument.zkc')
-    final = edited(directory, LIBRARY / 'single_table/low_degree.zkc', [(
+    final = edited(directory, FRI, [(
         '  require !less(count, length(coefficients));\n'
         '  return concat(coefficients, fill<F>(0, count - length(coefficients)));',
         '  return if less(count, length(coefficients)) { zkc::vector::slice(coefficients, 0, count) }\n'
         '    else { concat(coefficients, fill<F>(0, count - length(coefficients))) };')],
-        'low_degree.zkc')
+        'fri.zkc')
     package = dishonest(toolchain, journal, directory, 'compensated',
                         {'air::polynomial': truncate, 'stark::single_table': claims,
-                         'stark::single_table::low_degree': final})
+                         'fri': final})
     produced, proof = package.prove(public, false)
     assert produced['status'] == 'produced'
-    terminal = rejected(package.verify(public, proof, refuses=True))
+    terminal = refused_at(package.verify(public, proof, refuses=True), package,
+                          'check.terminal', ['0'])
     # The two provers are stopped by different verifier checks.
     assert identity['site'] != terminal['site']
 
 
 CONFIGURATIONS = '''
-use stark::configurations::contract::{Configuration, reversed_rows, reversed_pairs, reverse_positions,
-  pair_positions};
+use stark::configurations::contract::{Configuration, reversed_rows, reverse_positions};
 use stark::configurations::koala_bear_quartic::{Quartic, KoalaBearRows, QuarticRows};
 use zkc::indices::{Indices};
 use zkc::oracle as oracle;
@@ -471,91 +634,29 @@ module Reversed: Configuration {
     return oracle::check_many<QuarticRows>(root, width, height,
       reverse_positions(positions, height), rows, proof);
   }
-  fn commit_pairs(word: Vector<Quartic>) -> (Root<QuarticRows>, State<QuarticRows>) {
-    return oracle::commit<QuarticRows>(reversed_pairs(word), 2);
-  }
-  fn open_pairs(state: State<QuarticRows>, pairs: Indices, half: index)
-      -> (Vector<Quartic>, Path<QuarticRows>) {
-    return oracle::open_many<QuarticRows>(state, reverse_positions(pairs, half));
-  }
-  fn check_pairs(root: Root<QuarticRows>, half: index, pairs: Indices, rows: Vector<Quartic>,
-      proof: Path<QuarticRows>) -> bool {
-    return oracle::check_many<QuarticRows>(root, 2, half, reverse_positions(pairs, half), rows, proof);
-  }
-}
-module Separate: Configuration {
-  type Base: Field = stark::configurations::koala_bear_octic::Base;
-  type Extension: Field = Quartic;
-  type Challenge: Field = stark::configurations::koala_bear_octic::Extension;
-  type BaseRows: Commitment = KoalaBearRows;
-  type ExtensionRows: Commitment = QuarticRows;
-  fn challenge(draw: stark::configurations::koala_bear_octic::Extension) -> Quartic { return Poseidon2::challenge(draw); }
-  fn embed(values: Vector<stark::configurations::koala_bear_octic::Base>) -> Vector<Quartic> { return Poseidon2::embed(values); }
-  fn lift(value: stark::configurations::koala_bear_octic::Base) -> Quartic { return Poseidon2::lift(value); }
-  fn shift() -> stark::configurations::koala_bear_octic::Base { return 3; }
-  fn commit_base(rows: Vector<stark::configurations::koala_bear_octic::Base>, width: index) -> (Root<KoalaBearRows>, State<KoalaBearRows>) {
-    return Poseidon2::commit_base(rows, width);
-  }
-  fn open_base(state: State<KoalaBearRows>, positions: Indices, height: index)
-      -> (Vector<stark::configurations::koala_bear_octic::Base>, Path<KoalaBearRows>) {
-    return Poseidon2::open_base(state, positions, height);
-  }
-  fn check_base(root: Root<KoalaBearRows>, width: index, height: index, positions: Indices,
-      rows: Vector<stark::configurations::koala_bear_octic::Base>, proof: Path<KoalaBearRows>) -> bool {
-    return Poseidon2::check_base(root, width, height, positions, rows, proof);
-  }
-  fn commit_extension(rows: Vector<Quartic>, width: index) -> (Root<QuarticRows>, State<QuarticRows>) {
-    return Poseidon2::commit_extension(rows, width);
-  }
-  fn open_extension(state: State<QuarticRows>, positions: Indices, height: index)
-      -> (Vector<Quartic>, Path<QuarticRows>) {
-    return Poseidon2::open_extension(state, positions, height);
-  }
-  fn check_extension(root: Root<QuarticRows>, width: index, height: index, positions: Indices,
-      rows: Vector<Quartic>, proof: Path<QuarticRows>) -> bool {
-    return Poseidon2::check_extension(root, width, height, positions, rows, proof);
-  }
-  fn commit_pairs(word: Vector<Quartic>) -> (Root<QuarticRows>, State<QuarticRows>) {
-    return oracle::commit<QuarticRows>(word, 1);
-  }
-  fn open_pairs(state: State<QuarticRows>, pairs: Indices, half: index)
-      -> (Vector<Quartic>, Path<QuarticRows>) {
-    return oracle::open_many<QuarticRows>(state, pair_positions(pairs, half));
-  }
-  fn check_pairs(root: Root<QuarticRows>, half: index, pairs: Indices, rows: Vector<Quartic>,
-      proof: Path<QuarticRows>) -> bool {
-    return oracle::check_many<QuarticRows>(root, 1, 2 * half, pair_positions(pairs, half), rows, proof);
-  }
 }
 '''
 
 
-def test_layout_and_leaf_grouping_are_configurations(toolchain, journal, directory):
-    """The same protocol with two other configurations: rows and FRI pairs in
-    bit-reversed order, and natural rows with one FRI value per leaf. All three
-    verify with the same message sequence; the layout changes the trace root,
-    and separate leaves need two authentication paths per pair."""
+def test_outer_row_layouts_are_configurations(toolchain, journal, directory):
+    """Natural and bit-reversed outer rows share the mathematical FRI client."""
     height, final, blowup, queries = 32, 1, 2, 16
     bundle, public_data, trace = quadratic_air(height, 3)
     asset = journal.write('bundle.json', bundle)
     proofs = {}
-    for configuration in ['Poseidon2', 'Reversed', 'Separate']:
+    for configuration in ['Poseidon2', 'Reversed']:
         source = generated(height, final, blowup, queries, configuration, CONFIGURATIONS)
         package = Package.source(toolchain, journal, directory, source, {'trace': asset},
-                                 name=configuration)
+                                 name=configuration, realization=QUARTIC_REALIZATION)
         proofs[configuration] = frames(package.honest({'public_data': public_data},
                                                       {'trace': trace}).read_bytes())
-    natural, reversed_, separate = proofs['Poseidon2'], proofs['Reversed'], proofs['Separate']
+    natural, reversed_ = proofs['Poseidon2'], proofs['Reversed']
     rounds = height.bit_length() - 1 - final
-    assert [tag(m) for m in natural] == [tag(m) for m in reversed_] == [tag(m) for m in separate]
-    # The trace root is committed before any challenge. The deployment differs
-    # between configurations, so later challenges and roots differ anyway.
-    assert natural[0] != reversed_[0] and natural[0] == separate[0]
-    # Separate leaves k and k + half lie in the two equal halves of a tree of
-    # 2*half leaves, so each layer proof holds the same boundary twice: an even
-    # digest count, below a root whose both children are covered.
-    layer_proofs = range(len(natural) - 2 * rounds + 1, len(natural), 2)
-    assert all(int.from_bytes(separate[i][6:10], 'little') % 2 == 0 for i in layer_proofs)
+    for messages in (natural, reversed_):
+        assert_quartic_frames(messages, log_size=7, final=final, rounds=rounds,
+                              queries=queries, width=3, chunks=1, claims=12)
+    # The trace commitment precedes challenges and binds a different row order.
+    assert natural[0] != reversed_[0]
     journal.write('sizes.json', {name: sum(map(len, value)) for name, value in proofs.items()})
 
 
@@ -572,17 +673,23 @@ entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 
 def test_quartic_challenges_are_octic_prefixes(toolchain, journal, directory):
     from entry import Entry
-    entry = Entry(toolchain, journal, directory, DERIVATION, library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle'))
+    entry = Entry(toolchain, journal, directory, DERIVATION, library_modules(
+        'arguments/stark/configurations/koala_bear_octic',
+        'arguments/stark/configurations/koala_bear_quartic'))
     for draw in ([1, 2, 3, 4, 5, 6, 7, 8], [P - 1] * 8, [0] * 7 + [9]):
         result = entry.run(f'draw-{draw[0]}-{draw[-1]}', {'draw': [str(x) for x in draw]})
         assert result['challenge'] == [str(x) for x in draw[:4]]
 
 
 def test_comparison_with_existing_profile(toolchain, journal, directory):
-    """The same Plonky3-exported Fibonacci AIR and the same small parameters
-    (eight rows, 32 evaluation points, eight queries) through the existing
-    KoalaBear profile and through this library. Both accept their honest
-    proofs; sizes and frame counts are recorded beside the evidence."""
+    """Characterize named deployments of the same small Fibonacci AIR.
+
+    Shared FRI authenticates every logical occurrence in dynamic packets.
+    Quartic outer rows retain pruned batching; the octic caller opens outer
+    rows separately. These costs do not describe the removed specialized FRI
+    implementation or promise a size advantage for other parameters.
+    """
+    from test_fri import assert_merkle_frames
     public, witness = fibonacci_inputs('Plonky3Proof')
     for entry in ('CleanProof', 'Plonky3Proof'):
         for group in ('public', 'witness'):
@@ -590,9 +697,36 @@ def test_comparison_with_existing_profile(toolchain, journal, directory):
             assert (PROJECT / name).read_text() == (EXISTING / name).read_text()
     record = {}
     for project in (EXISTING, PROJECT):
-        package = Package.project(toolchain, journal, directory, project, 'Plonky3Proof')
+        realization = OCTIC_REALIZATION if project == EXISTING else QUARTIC_REALIZATION
+        package = Package.project(toolchain, journal, directory, project, 'Plonky3Proof',
+                                  realization=realization)
         proof = package.honest(public, witness)
-        record[project.name] = {'bytes': proof.stat().st_size,
-                                'messages': len(frames(proof.read_bytes()))}
+        messages = frames(proof.read_bytes())
+        if project == PROJECT:
+            assert_quartic_frames(messages, log_size=5, final=0, rounds=3, queries=8,
+                                  width=2, chunks=1, claims=8)
+        else:
+            assert [tag(frame) for frame in messages[:4]] == [33, 35, 27, 27]
+            assert len(messages[0]) == len(messages[1]) == 38
+            assert vector_count(messages[2], 27, 32) == 8
+            assert vector_count(messages[3], 27, 32) == 1
+            assert_merkle_frames(messages[4:56], 5, 0, 3, 8)
+            assert [tag(frame) for frame in messages[56:]] == [20, 34, 27, 36] * 8
+            for query in range(8):
+                row, path, quotient, quotient_path = messages[56 + 4 * query:60 + 4 * query]
+                assert vector_count(row, 20, 4) == 2
+                assert vector_count(quotient, 27, 32) == 1
+                assert vector_count(path, 34, 32) == 5
+                assert vector_count(quotient_path, 36, 32) == 5
+        record[project.name] = {'scheme': QUARTIC_SCHEME if project == PROJECT else OCTIC_SCHEME,
+                                **wire_profile(proof.read_bytes())}
     journal.write('comparison.json', record)
-    assert record['stark']['bytes'] < record['fibonacci']['bytes']
+    # Occurrence identities bind the transcript, so a compiler change can
+    # change sampled positions and hence pruned multiproof sharing. Pin the
+    # complete fixed frame inventory, not one transcript's sibling count.
+    siblings = sum(record['stark']['frames'][i]['count'] for i in (9, 11))
+    assert {name: {key: value[key] for key in ('bytes', 'messages', 'payload_bytes')}
+            for name, value in record.items()} == {
+                'fibonacci': {'bytes': 19508, 'messages': 88, 'payload_bytes': 18764},
+                'stark': {'bytes': 15004 + 32 * siblings, 'messages': 60,
+                          'payload_bytes': 14484 + 32 * siblings}}

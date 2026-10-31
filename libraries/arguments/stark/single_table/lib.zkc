@@ -1,7 +1,8 @@
 module stark::single_table;
 pub module low_degree;
 use stark::configurations::contract::{Configuration};
-use stark::single_table::low_degree::{Commit, Open};
+use stark::single_table::low_degree::{FriConfiguration};
+use fri::{Commit, Positions, QueryAssociated};
 use zkc::vector::{Vector, length, get, append, empty, fill, transpose};
 use zkc::indices::{Indices, less};
 use zkc::coset::{extend_columns, disjoint_coset, outside_domains};
@@ -72,7 +73,8 @@ pub protocol TableArgument<K: Configuration, Table: nat, B: Bundle, LogFinal: na
     -> (accepted: bool @V)
     where zkc::algebra::TwoAdicField(K::Base), zkc::algebra::TwoAdicField(K::Extension),
       zkc::algebra::CharacteristicNotTwo(K::Extension), zkc::random::IndexRandomness(K::Challenge),
-      zkc::oracle::VectorCommitment(K::ExtensionRows), 1 <= Rounds, 1 <= LogBlowup, 1 <= Queries {
+      zkc::oracle::VectorCommitment(K::ExtensionRows),
+      LogFinal+Rounds+LogBlowup <= 63, 1 <= Rounds, 1 <= LogBlowup, 1 <= Queries {
   let heightP @P = index<pow2(LogFinal + Rounds)>();
   let heightV @V = index<pow2(LogFinal + Rounds)>();
   let sizeP @P = index<pow2(LogFinal + Rounds + LogBlowup)>();
@@ -147,8 +149,13 @@ pub protocol TableArgument<K: Configuration, Table: nat, B: Bundle, LogFinal: na
     zkc::opening_claims::checked(chunk_openingsP.0, chunk_openingsP.1, proposed_quotient));
   let initial @P = opening_context::vector_accumulator(geometryP, gammaP, reads.0, reads.1);
   let word @P = deep_columns(chunk_batch, chunk_bounds, initial);
-  let (statesP, positionsP, rootsV, betasV, finalV, positionsV) =
-    Commit<K,LogFinal,Rounds,LogBlowup,Queries>(opening_context::vector_values(word), shiftP, coins);
+  let fri_state <- Commit<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds,Queries>(
+    opening_context::vector_values(word), shift_extensionP, shift_extensionV,
+    index<Rounds>(), index<Queries>(), coins);
+  let positions <- Positions<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds,Queries>(
+    fri_state);
+  let positionsP @P = positions;
+  let positionsV @V = positions;
 
   // Openings, after every request.
   let trace_open @P = K::open_base(trace_tree.1, positionsP, sizeP);
@@ -164,7 +171,10 @@ pub protocol TableArgument<K: Configuration, Table: nat, B: Bundle, LogFinal: na
   let first @V = deep_values(slotsV, same_rotation(factsV.chunks, 0), K::embed(trace_rows),
     factsV.witness, quotient_rows, factsV.chunks, opened, opened_quotient, heightV,
     geometryV, positionsV, zetaV, gammaV);
-  let accepted = Open<K,LogFinal,Rounds,LogBlowup,Queries>(statesP, positionsP, rootsV, betasV,
-    finalV, positionsV, first, shiftV);
+  // QueryAssociated reads this state's initial handle at the very positions
+  // used above, then checks each authenticated value against the DEEP equation
+  // before its fold chain. No supplied sibling replaces that equality.
+  let accepted <- QueryAssociated<FriConfiguration<K>,LogFinal+Rounds+LogBlowup,LogFinal,Rounds,Queries>(
+    fri_state, first);
   return (accepted = accepted);
 }

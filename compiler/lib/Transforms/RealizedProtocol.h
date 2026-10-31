@@ -19,12 +19,12 @@ namespace zkc::mathematical {
 class RealizedProtocol {
   PreparedProtocol prepared;
   mlir::OwningOpRef<mlir::ModuleOp> candidate;
-  std::string record;
+  std::string record, selection;
   RealizedProtocol(PreparedProtocol prepared,
                    mlir::OwningOpRef<mlir::ModuleOp> candidate,
-                   std::string record)
+                   std::string record, std::string selection)
       : prepared(std::move(prepared)), candidate(std::move(candidate)),
-        record(std::move(record)) {}
+        record(std::move(record)), selection(std::move(selection)) {}
 
 public:
   static llvm::Expected<RealizedProtocol>
@@ -35,6 +35,9 @@ public:
   mlir::OwningOpRef<mlir::ModuleOp> originalSnapshot() const;
   mlir::OwningOpRef<mlir::ModuleOp> candidateSnapshot() const;
   llvm::StringRef realizationRecord() const { return record; }
+  // Canonical exact inventory of actual prepared roots, with the requested
+  // query order and authentication. The view borrows this owner's lifetime.
+  llvm::StringRef normalizedSelection() const { return selection; }
   // Project an independent copy of the checked native side. Retain the edge
   // for the entire compilation; projection alone grants no logical claim.
   mlir::OwningOpRef<mlir::ModuleOp> project(bool simplify) const;

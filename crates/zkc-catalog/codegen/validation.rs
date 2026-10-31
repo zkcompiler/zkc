@@ -482,7 +482,8 @@ impl<'a> Catalog<'a> {
                         &outputs.iter().map(&normalize).collect::<Result<Vec<_>>>()?,
                     )?;
                 }
-                _ => {}
+                "PublicReplay" | "DeterministicData" | "SourceHistory" | "ManagedHistory" => {}
+                _ => return Err(format!("unknown facet {k}")),
             }
         }
         for flag in ["ManagedHistory", "SourceHistory"] {

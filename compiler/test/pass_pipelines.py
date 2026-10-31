@@ -16,7 +16,7 @@ for project_only, linear, release in ((True, False, False), (False, False, False
     named = optimize(f"zkc-participant-pipeline{{{options}}}")
     passes = "zkc-project-protocol"
     if not project_only:
-        passes += ",zkc-lower-math,zkc-select-physical{" + f"linear-contractions={str(linear).lower()} release-storage={str(release).lower()}" + "}"
+        passes += ",zkc-lower-closed-participant,zkc-select-physical{" + f"linear-contractions={str(linear).lower()} release-storage={str(release).lower()}" + "}"
     explicit = optimize(passes)
     assert named == explicit
     if not project_only:

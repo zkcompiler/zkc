@@ -52,6 +52,15 @@ public:
                   syntax.domainBindings.size());
       syntax.domainBindings.push_back(*id);
     }
+    if (syntax.oracleDefinition) {
+      const auto &port = syntax.oracleDefinition->queryParameter;
+      auto id = bind(port.name, port.span, false, false, true);
+      if (!id)
+        return false;
+      syntax.oracleDefinition->queryBinding = *id;
+      syntax.bindings[id->index].written =
+          LexicalNode{LexicalNode::Kind::OracleQueryParameter, 0};
+    }
     if (!syntax.primitive && !syntax.domainConstructor &&
         !syntax.finiteDefinition && !body(0, 1))
       return false;

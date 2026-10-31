@@ -10,5 +10,7 @@ mod diagonal;
 mod local_vocabulary;
 #[path = "domains/resources.rs"]
 mod resources;
+#[path = "domains/selection.rs"]
+mod selection;
 #[path = "domains/support.rs"]
 mod support;

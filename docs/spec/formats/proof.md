@@ -247,8 +247,10 @@ The immutable compiler descriptor is:
  [event, ...],
  [[validator, original_port, logical_type, codec], ...],
  [[message_origin_hex, logical_type, codec], ...], construction_plan,
- [[query_origin_hex, witness_site, "index", "native.index/0"], ...]]
+ [[query_origin_hex, witness_site, "index", "native.index/0"], ...],
+ normalized_oracle_selection_json]
 event = ["query", origin_hex] | ["index", origin_hex, bound] | ["message", origin_hex]
+      | ["reconstructed-message", origin_hex]
       | ["indices", origin_hex, bound, count]
       | ["gated-indices", origin_hex, bound, count, difficulty]
       | ["start", origin_hex, [logical_input_type, ...]]
@@ -269,7 +271,28 @@ query origin. Witnesses are construction-owned transport, not source message
 observations, and are excluded from the message rows. Repeated occurrences use
 the same static slot and retain actual repeat coordinates in the request.
 Events and messages follow original source order. Public ports follow original
-input order. The descriptor includes the complete selected logical policy,
+input order. The descriptor has exactly nine fields. Its final field is one
+canonical JSON string using the strict `OracleSelection` codec with
+`roots.kind = "exact"`. The compiler checks this complete normalized root
+inventory against source. The Host requires canonical bytes and consistency
+with compiler choice 6: a uniform request requires every normalized root's
+scheme, grouping and leaf order to equal its table; an exact request requires
+the identical canonical inventory. Query order and authentication must match
+in both cases. The Host cannot establish completeness against absent source.
+
+`reconstructed-message` uses the ordinary message-origin grammar and retains
+its exact payload type and codec in the message inventory. It is admitted only
+for validator-to-producer observations with an installed native suite, no
+custom construction plan and no pending selected delivery. It contributes no
+proof frame or challenge transition. Selected deliveries remain ordinary
+`message` rows with exact query/delivery pairing, including payload association.
+Observations after the final challenge remain mandatory. Runtime admission
+checks the actual helper body before associating the authenticated event class,
+then checks endpoint state, coordinates, payload positions, ordinary
+dependencies and surviving transport. Equality with absent source or the other
+endpoint is the compiler's responsibility; there is no serialized replay proof.
+
+The descriptor includes the complete selected logical policy,
 origin tag, event labels and nominal wire codecs. Candidate implementation
 names and generated helper symbols are absent from the native baseline, whose
 `construction_plan` is `[]`. A programmable selection carries its executable
@@ -359,19 +382,33 @@ The owned `compileNativeProof` API and `protocol-proof` command return:
    [[original_result, logical_type], ...],
    [[original_service, service_name, service_contract, ingress_index], ...],
    acceptance_index_or_empty], ...],
- [simplify, release_storage, fuse_vector_reductions, finite_bulk, fuse_collect_fold, calculation_batching],
+ [simplify, release_storage, fuse_vector_reductions, finite_bulk, fuse_collect_fold, calculation_batching, oracle_selection_json],
  [[message_origin_hex, wire_site], ...]]
 ```
 
 The source digest hashes the original UTF-8 bytes once captured by compilation.
 The descriptor digest hashes its canonical logical tree; the candidate digest
 hashes the exact carried JSON string. Booleans in this record are strings
-`"true"` or `"false"`. The compiler-choice array has exactly these six entries
-in this order; the mathematical choices are recorded even at their defaults
-(both fusion choices false, finite bulk true, calculation batching true). Version `0`
-admits one current shape with no shorter compatibility form. A proof Entry's
-package options must agree with all six choices during native artifact binding.
-All indices use canonical decimal strings below 1024.
+`"true"` or `"false"`. The compiler-choice array has exactly seven strings
+in this order. The first six are the existing Boolean choices; the mathematical
+choices are recorded even at their defaults (both fusion choices false, finite
+bulk true, calculation batching true). The seventh is compact canonical JSON
+for the [requested oracle selection](oracle-realization.md#requested-selection),
+including the default uniform ideal selection. Object keys are sorted, exact
+selectors are sorted by entry and path, and no insignificant whitespace is
+included. Admission uses the full strict typed selection codec and requires its
+canonical encoding to equal the carried string. Malformed, unknown or duplicate
+fields and duplicate selectors refuse. Actual source-root coverage and installed
+scheme support remain the compiler realizer's responsibility.
+
+Version `0` admits one current shape with no six-choice compatibility form.
+A proof Entry's seven package options must agree with these choices during
+native artifact binding, with `oracle_realization` compared in canonical form.
+The seventh choice is a compilation request, not security authority. Descriptor
+field 8 independently retains its normalized exact inventory, checked against
+that request as specified above. The deployment still has exactly nine fields
+and the executable program carrier is unchanged.
+Deployment indices outside the selection JSON use canonical decimal strings below 1024.
 Role data/result maps are in original port order. A shared original data port
 must have the same nominal logical type at both roles; deployment admission
 checks this before invocation inputs. A service ingress index counts

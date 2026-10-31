@@ -48,7 +48,7 @@ bool Checker::constructionCodec(Declaration &decl,
   if (!constructionMember(*provider, "Record", syntax.codec->span))
     return false;
   auto record = types.associated(*provider, "Record", syntax.codec->span);
-  if (!record)
+  if (!record || !types.executableType(*record, syntax.codec->span))
     return false;
   auto permissions = types.permissions(*record, decl.span, &decl);
   if (!permissions)
@@ -77,7 +77,7 @@ bool Checker::constructionCodec(Declaration &decl,
       return types.fail("source.construction", "duplicate format layout input",
                         input.span);
     auto selected = types.substitute(found->type, substitution, input.span);
-    if (!selected)
+    if (!selected || !types.executableType(*selected, input.span))
       return false;
     layout.arguments.push_back(std::move(*selected));
     codec.inputs.push_back(index);

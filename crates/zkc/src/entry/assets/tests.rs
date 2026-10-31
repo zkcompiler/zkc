@@ -212,7 +212,7 @@ fn package(interface: &Json, artifact: &str, assets: &[(String, String)]) -> Pac
     assets.sort();
     let frame =
         json!({"format":"zkc.entry/0","original":ORIGINAL,"interface":interface.to_string(),
-        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true},"assets":assets})
+        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()},"assets":assets})
         .to_string();
     Package::capture(
         frame.as_bytes(),
@@ -519,7 +519,8 @@ fn deployment(field: &str, arenas: &Arenas) -> String {
         [["role00000001", "0", leaf, "zkc.native-data/0"]],
         [],
         [],
-        []
+        [],
+        r#"{"authentication":"per-query","format":"zkc.oracle-selection/0","order":"unrestricted","roots":{"entries":[],"kind":"exact"}}"#
     ]);
     json!([
         "zkc.native-proof/0",
@@ -539,7 +540,17 @@ fn deployment(field: &str, arenas: &Arenas) -> String {
                 "0"
             ]
         ],
-        ["true", "false", "false", "true", "false", "true"],
+        [
+            "true",
+            "false",
+            "false",
+            "true",
+            "false",
+            "true",
+            crate::entry::OracleSelection::default()
+                .canonical_json()
+                .unwrap()
+        ],
         []
     ])
     .to_string()

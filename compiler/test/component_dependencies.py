@@ -200,7 +200,7 @@ def main():
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/FiniteCardinality.h")
     private_headers["ZkcLanguage"].update(
         ROOT / f"lib/Language/{name}.h"
-        for name in ("FormalSource", "FormalSourceWriter", "LayoutReader", "OracleSyntax")
+        for name in ("FormalSource", "FormalSourceWriter", "LayoutReader", "OracleSyntax", "OracleDefinitions", "OracleInspection")
     )
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/APIRecords.h")
     private_headers["ZkcTranslation"] = {ROOT / "lib/Translation/Language/Finite.h", ROOT / "lib/Translation/Language/EmissionBudget.h", ROOT / "lib/Translation/Language/DataPreconditions.h"}
@@ -240,6 +240,13 @@ def main():
         ROOT / "lib/Transforms/OracleVerificationContext.h",
         ROOT / "lib/Transforms/OracleQueryCapacity.h",
         ROOT / "lib/Transforms/OracleQueryController.h",
+        ROOT / "lib/Transforms/OracleQueryBatch.h",
+        ROOT / "lib/Transforms/OracleQueryDemand.h",
+        ROOT / "lib/Transforms/OracleQueryPacket.h",
+        ROOT / "lib/Transforms/OracleQueryResponse.h",
+        ROOT / "lib/Transforms/OracleQuerySchedule.h",
+        ROOT / "lib/Transforms/OracleQueryWindow.h",
+
         ROOT / "lib/Transforms/OracleQueryExchange.h",
         ROOT / "lib/Transforms/OracleAnchorStorage.h",
         ROOT / "lib/Transforms/OracleLayout.h",
@@ -273,6 +280,8 @@ def main():
         ROOT / "lib/Compiler/NativeDeployment.h",
         ROOT / "lib/Compiler/NativeCodec.h",
         ROOT / "lib/Compiler/NativeProofVerification.h",
+        ROOT / "lib/Compiler/NativeProofOrigins.h",
+        ROOT / "lib/Compiler/NativeRequest.h",
     }
     private_headers["ZkcDriver"] = set((ROOT / "lib/Driver").glob("*.h"))
     public_headers = {name: header_set(roots) for name, roots in HEADER_ROOTS.items()}

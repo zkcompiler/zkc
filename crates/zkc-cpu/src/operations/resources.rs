@@ -129,11 +129,11 @@ pub(crate) fn apply(
             Ok(vec![RistrettoGroups(out.into()), Nonce(t)])
         }
         ("curve.response", [Field(x), Field(c), Nonce(t)]) => {
-            p.output(512, i.max_output_bytes)?;
+            p.output(crate::VALUE_SLOT_BYTES, i.max_output_bytes)?;
             Ok(vec![Field(r.respond(i.frame, t, *x, *c)?)])
         }
         ("curve.response", [RistrettoField(x), RistrettoField(c), Nonce(t)]) => {
-            p.output(512, i.max_output_bytes)?;
+            p.output(crate::VALUE_SLOT_BYTES, i.max_output_bytes)?;
             Ok(vec![RistrettoField(
                 r.respond_ristretto(i.frame, t, *x, *c)?,
             )])

@@ -24,6 +24,45 @@ pub fn less(left: index, right: index) -> bool effects(stop) where () { return k
 pub math fn power_of_two(value: index, exponent: index) -> bool
   = primitive("index.power_of_two");
 
+// Total unsigned 64-bit word mathematics; these establish no domain membership.
+pub math fn select(condition: bool, yes: index, no: index) -> index
+  = primitive("index.select");
+
+pub math fn wrapping_add(left: index, right: index) -> index
+  = primitive("index.wrapping_add");
+
+pub math fn wrapping_sub(left: index, right: index) -> index
+  = primitive("index.wrapping_sub");
+
+pub math fn bit_and(left: index, right: index) -> index
+  = primitive("index.bit_and");
+
+// Counts at least 64 return zero, without reducing the count modulo 64.
+pub math fn logical_shift_right(value: index, count: index) -> index
+  = primitive("index.logical_shift_right");
+
+// Keep the highest nonzero half and accumulate its offset. For these six
+// fixed shifts, the offset is at most 63 and wrapping addition cannot overflow.
+math fn bit_width_half(value: index, offset: index, shift: index)
+    -> (index, index) where () {
+  let upper = logical_shift_right(value, shift);
+  let upper_zero = upper == 0;
+  return (select(upper_zero, value, upper),
+    select(upper_zero, offset, wrapping_add(offset, shift)));
+}
+
+// The unsigned bit length: zero maps to zero, otherwise floor(log2(value))+1.
+// Six total steps suffice for the complete 64-bit word, without a new primitive.
+pub math fn bit_width(value: index) -> index where () {
+  let a = bit_width_half(value, 0, 32);
+  let b = bit_width_half(a.0, a.1, 16);
+  let c = bit_width_half(b.0, b.1, 8);
+  let d = bit_width_half(c.0, c.1, 4);
+  let e = bit_width_half(d.0, d.1, 2);
+  let f = bit_width_half(e.0, e.1, 1);
+  return select(f.0 == 0, 0, wrapping_add(f.1, 1));
+}
+
 pub fn maximum(left: index, right: index) -> index effects(stop) where () { return if less(left, right) { right } else { left }; }
 // Powers of two in [2, 2^LogMaximum], within the unsigned index carrier.
 

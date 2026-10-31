@@ -50,7 +50,8 @@ class LayoutReader {
   descriptor(Id id, llvm::StringRef symbol, Position position);
   llvm::Expected<uint32_t> expression(Id id, SyntaxDeclaration &decl);
   llvm::Expected<Expression> oracleSend(Id id, SyntaxDeclaration &decl);
-  llvm::Error oracleShapes(SyntaxDeclaration &decl);
+  llvm::Error oracleShapes(SyntaxDeclaration &decl, llvm::ArrayRef<Id>);
+  llvm::Error oracleDefinitionBody(Id, SyntaxDeclaration &);
   llvm::Error body(Id id, SyntaxDeclaration &decl, bool region = false);
 
 public:

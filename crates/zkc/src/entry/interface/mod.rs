@@ -86,6 +86,17 @@ impl BoundInterface {
     }
 }
 impl Interface {
+    pub(in crate::entry) fn check_executable_ports(&self) -> Result<()> {
+        let protocol = self.selected_protocol();
+        require(
+            protocol
+                .inputs
+                .iter()
+                .chain(&protocol.outputs)
+                .all(|port| !port.schema.kind.is_logical()),
+            InterfaceError::NativeBinding,
+        )
+    }
     #[cfg(feature = "project")]
     pub(crate) fn from_compiler(bytes: &[u8]) -> Result<Self> {
         Self::decode(bytes, None)

@@ -545,7 +545,8 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
     return refuse();
   const auto &binding = *operation.binding;
   const auto &callee = declarations[binding.target.declaration.index];
-  if (body.mode == Body::Mode::Math && callee.kind == Declaration::Kind::Local)
+  if ((body.mode == Body::Mode::Math || body.mode == Body::Mode::Oracle) &&
+      callee.kind == Declaration::Kind::Local)
     return refuse();
   if ((callee.kind == Declaration::Kind::EntryFunction ||
        (callee.generated && callee.generated->operation)) &&
@@ -598,6 +599,39 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
       types.substitute(callee.outputs.front().type, subst, operation.span);
   if (!result || *result != body.values[operation.results.front().index].type)
     return refuse();
+  if (callee.kind == Declaration::Kind::Oracle) {
+    const auto *action = std::get_if<OracleInstantiation>(&operation.action);
+    if (!action || body.mode != Body::Mode::Protocol ||
+        !callee.oracleDefinition || action->callee.index != callee.id.index ||
+        action->arguments != binding.arguments ||
+        action->module != binding.target.module ||
+        !sameOperands(action->operands, binding.operands))
+      return refuse();
+    if (!checkCallInputMapping(types, binding.argumentOrder,
+                               callee.inputs.size(), operation.span))
+      return false;
+    auto family = action->receivers;
+    if (family.empty() || llvm::is_contained(family, action->holder))
+      return refuse();
+    family.push_back(action->holder);
+    llvm::sort(family);
+    if (std::adjacent_find(family.begin(), family.end()) != family.end())
+      return refuse();
+    for (unsigned i = 0; i < action->operands.size(); ++i) {
+      const auto &value = body.values[action->operands[i].index];
+      if (i < callee.oracleDefinition->sourceCount) {
+        if (value.oracleHolder != action->holder || value.components != family)
+          return refuse();
+      } else if (!std::includes(value.components.begin(),
+                                value.components.end(), family.begin(),
+                                family.end()))
+        return refuse();
+    }
+    const auto &value = body.values[operation.results.front().index];
+    return (value.oracleHolder == action->holder &&
+            value.components == family) ||
+           refuse();
+  }
   if (callee.generated && callee.generated->operation) {
     const auto *action = std::get_if<HostInvocation>(&operation.action);
     return (body.stage == Body::Stage::Host && action &&

@@ -173,7 +173,7 @@ pub fn run(directory: &Path, family: &str, mode: &str) {
                         2
                     }),
                     Value::Groups(g.clone().into()),
-                    Value::Curve(reference::msm(&a, &g)),
+                    Value::Curve(reference::msm(&a, &g).into()),
                 ],
             },
         ];

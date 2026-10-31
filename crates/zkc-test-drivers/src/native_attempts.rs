@@ -35,9 +35,9 @@ fn inputs(envelope: &Json, producing: bool, fold: bool) -> Json {
             "field:bls12-381.fr" => {
                 Value::Field(Scalar::from(if fold && port == 1 { 5 } else { 3 }))
             }
-            "group:bls12-381.g1" => {
-                Value::Curve(G1::generator().scale(Scalar::from(if port == 0 { 1 } else { 3 })))
-            }
+            "group:bls12-381.g1" => Value::Curve(
+                (G1::generator().scale(Scalar::from(if port == 0 { 1 } else { 3 }))).into(),
+            ),
             _ => panic!("unexpected wire input"),
         };
         hex(&codec.encode_native_value(&value).unwrap())

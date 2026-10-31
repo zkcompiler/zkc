@@ -9,6 +9,52 @@
 #include <set>
 using namespace llvm;
 namespace zkc::language {
+namespace {
+// The outer package has already passed strict JSON validation. Retain the
+// authored request slice so its independent byte/nesting bounds still apply.
+Expected<protocol::OracleRealizationPolicy> packagedSelection(StringRef bytes) {
+  auto stringEnd = [&](size_t at) {
+    while (++at < bytes.size()) {
+      if (bytes[at] == '\\')
+        ++at;
+      else if (bytes[at] == '"')
+        return at + 1;
+    }
+    return bytes.size();
+  };
+  for (size_t at = 0; at < bytes.size();) {
+    if (bytes[at] != '"') {
+      ++at;
+      continue;
+    }
+    size_t end = stringEnd(at), next = end;
+    while (next < bytes.size() && isSpace(bytes[next]))
+      ++next;
+    if (next < bytes.size() && bytes[next] == ':') {
+      auto key = json::parse(bytes.slice(at, end));
+      if (!key)
+        return key.takeError();
+      if (key->getAsString() == "oracle_realization") {
+        size_t start = ++next;
+        unsigned depth = 0;
+        for (; next < bytes.size(); ++next) {
+          if (bytes[next] == '"')
+            next = stringEnd(next) - 1;
+          else if (bytes[next] == '{' || bytes[next] == '[')
+            ++depth;
+          else if ((bytes[next] == '}' || bytes[next] == ']') && depth &&
+                   --depth == 0)
+            return protocol::parseOracleRealizationPolicy(
+                bytes.slice(start, next + 1));
+        }
+        return error("entry.deployment", "invalid oracle selection");
+      }
+    }
+    at = end;
+  }
+  return error("entry.deployment", "missing oracle selection");
+}
+} // namespace
 Expected<EntryPackage> packageEntry(const CompiledEntry &entry,
                                     uint64_t byteLimit) {
   if (byteLimit > entryPackageByteLimit ||
@@ -24,6 +70,10 @@ Expected<EntryPackage> packageEntry(const CompiledEntry &entry,
       return error("source.package-limit", "Entry asset limit exceeded");
     assets.emplace_back(asset.identity().str(), std::move(body));
   }
+  auto selection = protocol::encodeOracleRealizationPolicy(
+      entry.options().oracleRealization);
+  if (!selection)
+    return selection.takeError();
   std::string bytes;
   BoundedStream stream(bytes, byteLimit);
   json::OStream out(stream);
@@ -40,6 +90,7 @@ Expected<EntryPackage> packageEntry(const CompiledEntry &entry,
         });
     });
     out.attributeObject("options", [&] {
+      out.attribute("oracle_realization", *selection);
       out.attribute("simplify", entry.options().simplify);
       out.attribute("release_storage", entry.options().releaseStorage);
       out.attribute("finite_bulk",
@@ -72,13 +123,16 @@ Expected<PackagedEntry> readPackagedEntry(StringRef bytes,
       !p->getObject("options"))
     return error("entry.deployment", "invalid exact child package");
   auto *options = p->getObject("options");
-  if (options->size() != 6)
+  if (options->size() != 7 || !options->get("oracle_realization"))
     return error("entry.deployment", "invalid child compiler options");
   for (StringRef option :
        {"simplify", "release_storage", "finite_bulk", "fuse_vector_reductions",
         "fuse_collect_fold", "calculation_batching"})
     if (!options->getBoolean(option))
       return error("entry.deployment", "invalid child compiler option");
+  auto selection = packagedSelection(bytes);
+  if (!selection)
+    return selection.takeError();
   std::vector<Asset> assets;
   std::set<std::string> identities;
   uint64_t assetBytes = 0;

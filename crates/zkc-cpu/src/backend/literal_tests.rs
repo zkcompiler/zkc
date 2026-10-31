@@ -635,24 +635,29 @@ fn output_preflight_and_current_policy_apply_to_every_scalar_use() {
             let mut caller = Caller::new(prepared);
             LITERAL_DECODES.set(0);
             // A cold output failure may retain successfully decoded facts.
-            for limit in [511, 512, 511, 512] {
+            for limit in [
+                (crate::VALUE_SLOT_BYTES - 1),
+                crate::VALUE_SLOT_BYTES,
+                (crate::VALUE_SLOT_BYTES - 1),
+                crate::VALUE_SLOT_BYTES,
+            ] {
                 caller.output_limit = Some(limit);
                 let (result, next) = one(caller, case.field, "1");
-                if limit == 511 {
+                if limit == (crate::VALUE_SLOT_BYTES - 1) {
                     assert_eq!(code(&result.unwrap_err()), "exhausted:output-bytes");
                 } else {
                     let value = result.unwrap().remove(0);
                     equal(&value, &small(case.field, true));
-                    assert_eq!(value.retained_bytes(), 512);
+                    assert_eq!(value.retained_bytes(), crate::VALUE_SLOT_BYTES);
                 }
                 caller = next;
             }
             assert_eq!(LITERAL_DECODES.get(), if prepared { 1 } else { 4 });
-            caller.output_limit = Some(512);
-            caller.inner.core.policy.max_value_bytes = 511;
+            caller.output_limit = Some(crate::VALUE_SLOT_BYTES);
+            caller.inner.core.policy.max_value_bytes = crate::VALUE_SLOT_BYTES - 1;
             let (result, mut caller) = one(caller, case.field, "1");
             assert_eq!(code(&result.unwrap_err()), "exhausted:output-bytes");
-            caller.inner.core.policy.max_value_bytes = 512;
+            caller.inner.core.policy.max_value_bytes = crate::VALUE_SLOT_BYTES;
             let (result, _) = one(caller, case.field, "1");
             equal(&result.unwrap()[0], &small(case.field, true));
         }
@@ -852,17 +857,33 @@ fn dormant_backend_faults_do_not_decode_or_initialize_a_slot() {
 }
 
 // Fixed receipts from index_preparation apply independently: every scalar
-// constant has the same 512-byte owned charge, and no operands are read.
+// constant has the same universal-slot owned charge, and no operands are read.
 fn repeated_observation(fail: bool, budget_case: usize) -> (Usage, Option<Stop>) {
     let literal_limit = budget_case == 1 || (!fail && budget_case == 3);
     let (instructions, total_value_bytes, logical_bytes) = if literal_limit {
-        (9, 5632, 1536)
+        (9, 11 * crate::VALUE_SLOT_BYTES, 3 * crate::VALUE_SLOT_BYTES)
     } else {
         match (fail, budget_case) {
-            (false, 0) => (12, 6144, 2048),
-            (false, 2) | (true, 3) => (11, 6144, 2048),
-            (true, 0) => (11, 6144, 3072),
-            (true, 2) => (10, 6144, 2048),
+            (false, 0) => (
+                12,
+                12 * crate::VALUE_SLOT_BYTES,
+                4 * crate::VALUE_SLOT_BYTES,
+            ),
+            (false, 2) | (true, 3) => (
+                11,
+                12 * crate::VALUE_SLOT_BYTES,
+                4 * crate::VALUE_SLOT_BYTES,
+            ),
+            (true, 0) => (
+                11,
+                12 * crate::VALUE_SLOT_BYTES,
+                6 * crate::VALUE_SLOT_BYTES,
+            ),
+            (true, 2) => (
+                10,
+                12 * crate::VALUE_SLOT_BYTES,
+                4 * crate::VALUE_SLOT_BYTES,
+            ),
             _ => panic!("unknown observation"),
         }
     };
@@ -870,7 +891,7 @@ fn repeated_observation(fail: bool, budget_case: usize) -> (Usage, Option<Stop>)
         instructions,
         iterations: 4,
         total_value_bytes,
-        logical_bytes,
+        logical_bytes: logical_bytes as u64,
         ..Usage::default()
     };
     if !fail && budget_case == 0 {
@@ -1048,7 +1069,7 @@ fn literal_failure_preserves_preceding_rng_effect_and_reverse_cleanup() {
                 result.unwrap();
                 caller.leaves.clear();
                 caller.cleanup_error = cleanup_error;
-                caller.output_limit = Some(511);
+                caller.output_limit = Some(crate::VALUE_SLOT_BYTES - 1);
                 let error = match fault {
                     0 => {
                         caller.operation = Some(binding(field, "field.add"));
@@ -1207,7 +1228,15 @@ fn resident_literal_cold_warm_failures_preserve_usage_and_typed_retained_facts()
             LITERAL_DECODES.set(0);
             let mut retained = None;
             let mut usages = Vec::new();
-            for (visit, limit) in [511, 512, 511, 512].into_iter().enumerate() {
+            for (visit, limit) in [
+                (crate::VALUE_SLOT_BYTES - 1),
+                crate::VALUE_SLOT_BYTES,
+                (crate::VALUE_SLOT_BYTES - 1),
+                crate::VALUE_SLOT_BYTES,
+            ]
+            .into_iter()
+            .enumerate()
+            {
                 caller.output_limit = Some(limit);
                 let (result, usage, next) = run(
                     caller,
@@ -1219,7 +1248,7 @@ fn resident_literal_cold_warm_failures_preserve_usage_and_typed_retained_facts()
                 caller = next;
                 assert_eq!(caller.inner.active_frames(), 0);
                 usages.push(usage);
-                if limit == 511 {
+                if limit == (crate::VALUE_SLOT_BYTES - 1) {
                     assert_eq!(code(&result.unwrap_err()), "exhausted:output-bytes");
                 } else {
                     equal(&result.unwrap()[0], &expected);

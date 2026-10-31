@@ -29,7 +29,8 @@ def compile_case(name, source, policy, family='schnorr', rounds=1, *options):
     assert envelope[0] == 'zkc.native-proof/0'
     assert envelope[1] == hashlib.sha256(source.encode()).hexdigest()
     assert envelope[2][1] == policy
-    assert envelope[7] == [
+    assert len(envelope[7]) == 7
+    assert envelope[7][:6] == [
         'false' if '--no-simplify' in options else 'true',
         'true' if '--release-storage' in options else 'false',
         'true' if '--fuse-vector-reductions' in options else 'false',
@@ -37,6 +38,12 @@ def compile_case(name, source, policy, family='schnorr', rounds=1, *options):
         'true' if '--fuse-collect-fold' in options else 'false',
         'false' if '--no-calculation-batching' in options else 'true',
     ]
+    assert json.loads(envelope[7][6]) == {
+        'format': 'zkc.oracle-selection/0',
+        'roots': {'kind': 'uniform', 'table': {
+            'scheme': '', 'grouping': 'individual', 'order': 'natural'}},
+        'order': 'unrestricted', 'authentication': 'per-query',
+    }
     assert envelope[5] == hashlib.sha256(envelope[4].encode()).hexdigest()
     assert json.loads(envelope[4])[0] == 'zkc.program/0'
     manifest.append(dict(name=name, family=family, rounds=rounds))

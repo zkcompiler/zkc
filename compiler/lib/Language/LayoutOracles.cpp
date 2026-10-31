@@ -1,11 +1,25 @@
 #include "LayoutReader.h"
 using namespace llvm;
 namespace zkc::language::detail {
-Error LayoutReader::oracleShapes(SyntaxDeclaration &decl) {
-  for (auto attribute : attributes) {
-    if (auto error = work.charge(decl.inputs.size() + decl.outputs.size() +
-                                     decl.oracleShapes.size() + 1,
-                                 span(attribute)))
+Error LayoutReader::oracleShapes(SyntaxDeclaration &decl,
+                                 ArrayRef<Id> shapeAttributes) {
+  if (auto error = work.charge(decl.inputs.size() + decl.outputs.size() +
+                                   decl.fields.size() + shapeAttributes.size(),
+                               decl.span))
+    return error;
+  std::map<std::string, unsigned> targets;
+  if (decl.logical) {
+    for (const auto &field : decl.fields)
+      ++targets[field.name];
+  } else {
+    for (const auto *ports : {&decl.inputs, &decl.outputs})
+      for (const auto &candidate : *ports)
+        if (candidate.oracleHolder || decl.kind == Declaration::Kind::Oracle)
+          ++targets[candidate.name];
+  }
+  std::set<std::string> selectedTargets;
+  for (auto attribute : shapeAttributes) {
+    if (auto error = work.charge(1, span(attribute)))
       return error;
     auto nodes = parts(attribute, 2, 2);
     if (!nodes)
@@ -16,7 +30,8 @@ Error LayoutReader::oracleShapes(SyntaxDeclaration &decl) {
     if (*attributeName != "shape")
       return fail(attribute, "protocol attributes must name an oracle shape",
                   "source.oracle-shape");
-    auto args = parts((*nodes)[1], 2, 2);
+    auto args =
+        parts((*nodes)[1], 2, decl.kind == Declaration::Kind::Oracle ? 3 : 2);
     if (!args)
       return args.takeError();
     auto target = argument((*args)[0]);
@@ -37,7 +52,24 @@ Error LayoutReader::oracleShapes(SyntaxDeclaration &decl) {
     if (between((*selected)[0], (*selected)[1]) != "." || *dimension != "rows")
       return fail(*target, "the installed table dimension is rows",
                   "source.oracle-shape");
-    auto bound = parts((*args)[1], 2, 2);
+    std::optional<std::string> capture;
+    if (args->size() == 3) {
+      auto selector = parts((*args)[1], 2, 2);
+      if (!selector)
+        return selector.takeError();
+      auto label = name(selector->front());
+      if (!label)
+        return label.takeError();
+      if (*label != "value" ||
+          between(selector->front(), selector->back()) != "=")
+        return fail((*args)[1], "result shape needs value = capture",
+                    "source.oracle-shape");
+      auto value = name(selector->back());
+      if (!value)
+        return value.takeError();
+      capture = std::move(*value);
+    }
+    auto bound = parts(args->back(), 2, 2);
     if (!bound)
       return bound.takeError();
     auto label = name((*bound)[0]);
@@ -49,20 +81,17 @@ Error LayoutReader::oracleShapes(SyntaxDeclaration &decl) {
     auto maximum = type((*bound)[1]);
     if (!maximum)
       return maximum.takeError();
-    unsigned matches = 0;
-    for (const auto *ports : {&decl.inputs, &decl.outputs})
-      for (const auto &candidate : *ports)
-        if (candidate.name == *port && candidate.oracleHolder)
-          ++matches;
-    if (matches != 1)
-      return fail(*target, "shape must select one custody port",
+    auto found = targets.find(*port);
+    if (found == targets.end() || found->second != 1)
+      return fail(*target,
+                  "shape must select one direct logical field or custody port",
                   "source.oracle-shape");
-    for (const auto &shape : decl.oracleShapes)
-      if (shape.port == *port && shape.dimension == *dimension)
-        return fail(attribute, "oracle shape bound was already specified",
-                    "source.oracle-shape");
+    if (!selectedTargets.insert(*port).second)
+      return fail(attribute, "oracle shape bound was already specified",
+                  "source.oracle-shape");
     decl.oracleShapes.push_back({std::move(*port), std::move(*dimension),
-                                 std::move(*maximum), span(attribute)});
+                                 std::move(*maximum), span(attribute),
+                                 std::move(capture)});
   }
   return Error::success();
 }

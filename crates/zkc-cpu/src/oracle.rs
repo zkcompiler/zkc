@@ -65,7 +65,7 @@ macro_rules! domains {
                 $((Domain::$domain, Value::$vector(values)) => {
                     let shape = shape(width, values.len(), policy)?;
                     let bytes = shape.retained_bytes::<$element>().map_err(failure)?;
-                    policy.output(bytes.checked_add(512).ok_or_else(|| exhausted("size-overflow"))?, available)?;
+                    policy.output(bytes.checked_add(crate::VALUE_SLOT_BYTES).ok_or_else(|| exhausted("size-overflow"))?, available)?;
                     let (root, state) = tree::commit(values.to_vec(), shape, policy.max_value_bytes).map_err(failure)?;
                     Ok(vec![Value::OracleRoot(domain, root), Value::OracleState(State::$domain(Arc::new(state)))])
                 },)+
@@ -270,7 +270,7 @@ pub(crate) fn apply(
                 Value::OraclePath(p, path),
             ],
         ) if *d == domain && *p == domain => {
-            policy.output(512, available)?;
+            policy.output(crate::VALUE_SLOT_BYTES, available)?;
             let (width, height, at) = (index(width)?, index(height)?, index(at)?);
             let valid = check_row(domain, *root, width, height, at, row, path, policy)?;
             vec![Value::Bool(valid)]
@@ -318,7 +318,7 @@ pub(crate) fn apply(
             vec![Value::OracleStates(domain, result.into())]
         }
         ("commitments.at", [Value::OracleRoots(d, roots), at]) if *d == domain => {
-            policy.output(512, available)?;
+            policy.output(crate::VALUE_SLOT_BYTES, available)?;
             vec![Value::OracleRoot(
                 domain,
                 *roots

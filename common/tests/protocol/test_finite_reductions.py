@@ -16,6 +16,11 @@ from octic_reference import ONE, P, ZERO, add, mul
 from test_total_callback_selection import operation_sites
 
 ROOT = Path(__file__).resolve().parents[3]
+ORACLE_SELECTION = {
+    'format': 'zkc.oracle-selection/0',
+    'roots': {'kind': 'uniform', 'table': {
+        'scheme': '', 'grouping': 'individual', 'order': 'natural'}},
+    'order': 'unrestricted', 'authentication': 'per-query'}
 FIELDS = [
     ('bls12-381.fr',
      52435875175126190479447740508185965837690552500527637822603658699938581184513),
@@ -344,7 +349,9 @@ def test_fusion_proof_construction_preserves_protocol_origins(toolchain, journal
         entry = Entry(toolchain, journal, subdirectory(directory, name), PROOF, flags)
         package = json.loads(entry.package.read_text())
         deployment = json.loads(package['artifact'])
-        assert deployment[7] == ['true', 'false', 'true' if flags else 'false', 'true', 'false', 'true']
+        assert deployment[7] == [
+            'true', 'false', 'true' if flags else 'false', 'true', 'false', 'true',
+            json.dumps(ORACLE_SELECTION, sort_keys=True, separators=(',', ':'))]
         descriptors.append(deployment[2])
         wire_sites.append(deployment[8])
         candidates.append(deployment[4:6])
@@ -410,9 +417,12 @@ def test_finite_proof_keeps_selection_at_realization(
     package = json.loads(entry.package.read_text())
     assert package['options'] == {'simplify': simplify, 'release_storage': False,
                                   'fuse_vector_reductions': False, 'finite_bulk': bulk,
-                                  'fuse_collect_fold': False, 'calculation_batching': True}
+                                  'fuse_collect_fold': False, 'calculation_batching': True,
+                                  'oracle_realization': ORACLE_SELECTION}
     deployment = json.loads(package['artifact'])
-    assert deployment[7] == [str(simplify).lower(), 'false', 'false', str(bulk).lower(), 'false', 'true']
+    assert deployment[7] == [
+        str(simplify).lower(), 'false', 'false', str(bulk).lower(), 'false', 'true',
+        json.dumps(ORACLE_SELECTION, sort_keys=True, separators=(',', ':'))]
     original = directory / 'original.mlir'
     original.write_text(package['original'])
     policy = journal.write('policy.json', deployment[2][1])

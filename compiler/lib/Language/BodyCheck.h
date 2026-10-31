@@ -93,7 +93,8 @@ private:
     std::vector<std::vector<unsigned>> used, moved;
   };
   std::vector<Uses> uses;
-  bool math() const { return body.mode == Body::Mode::Math; }
+  bool oracleMode() const { return body.mode == Body::Mode::Oracle; }
+  bool math() const { return body.mode == Body::Mode::Math || oracleMode(); }
   bool local() const { return body.mode == Body::Mode::Local; }
   bool protocol() const { return body.mode == Body::Mode::Protocol; }
   bool fail(llvm::StringRef, const llvm::Twine &, Span);
@@ -115,6 +116,12 @@ private:
   static std::optional<Statement::Evaluation>
       oracleEvaluation(Expression::Kind);
   std::optional<ValueId> oracle(const Expression &, unsigned);
+  std::optional<ValueId> oracleSourceQuery(const Expression &, unsigned);
+  std::optional<ValueId> oraclePredicateProjection(const Expression &,
+                                                   unsigned);
+  std::optional<ValueId> instantiateOracle(const Expression &, unsigned);
+  bool oracleStatement(const Statement &);
+  bool oracleExpression(const Expression &);
   std::optional<ValueId> assembleRoles(const Expression &, unsigned);
   std::optional<ValueId> oracleSequence(const Expression &, unsigned);
   std::optional<ValueId> intrinsic(const Expression &, unsigned);

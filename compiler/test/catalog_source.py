@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "common/catalog"))
 from generate import unique, validate  # noqa: E402
 from tablegen import project  # noqa: E402
+from test_deterministic_data import COVERAGE  # noqa: E402
 
 
 def main():
@@ -20,11 +21,11 @@ def main():
     directory.mkdir(parents=True)
     generator = tool("tablegen")
 
-    def native(value, expected=None, check_source=True, composed=False):
+    def native(value, expected=None, check_source=True, composed=False, extra=""):
         if check_source:
             validate(value)
         declarations, mathematical = project(value)
-        (directory / "Catalog.td").write_text(declarations)
+        (directory / "Catalog.td").write_text(declarations + extra)
         (directory / "Mathematical.td").write_text(mathematical)
         input_path = directory / "Catalog.td"
         if composed:
@@ -54,6 +55,33 @@ def Extension : ZKC_Contribution<"example", ["base"], [Extra]>;
         inventory = native(source, composed=True)
         assert inventory["operations"][-1]["name"] == "example.unenrolled"
         assert inventory["consumerProfiles"] == source["consumerProfiles"]
+
+    with case("deterministic data is an exact nullary exported facet"):
+        inventory = native(source)
+        selected = [op for op in inventory["operations"]
+                    if {"kind": "DeterministicData"} in op["facets"]]
+        assert {op["name"] for op in selected} == {
+            name for rows in COVERAGE.values() for name in rows.split()}
+        assert all(f == {"kind": "DeterministicData"} for op in selected
+                   for f in op["facets"] if f["kind"] == "DeterministicData")
+
+    with case("new declarations do not inherit deterministic data by prefix"):
+        inventory = native(source, extra='\ndef FutureIndex : ZKC_Operation<"index.future", [], [], []>;\n')
+        assert next(op for op in inventory["operations"]
+                    if op["name"] == "index.future")["facets"] == []
+
+    with case("duplicate deterministic data is independently refused"):
+        value = copy.deepcopy(source)
+        value["operations"][0]["facets"] = [{"kind": "DeterministicData"}] * 2
+        native(value, "duplicate semantic facet", check_source=False)
+
+    with case("unknown facets are independently refused"):
+        native(source, "unsupported semantic facet", extra='''
+def UnknownData : ZKC_Facet;
+def UnknownOperation : ZKC_Operation<"example.unknown", [], [], []> {
+  let facets = [UnknownData];
+}
+''')
 
     with case("separate consumer profiles require explicit declaration expectations"):
         value = copy.deepcopy(source)

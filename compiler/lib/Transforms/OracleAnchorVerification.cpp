@@ -127,9 +127,6 @@ Error checkOracleAnchorLookup(const OracleVerificationContext &context,
     return refuse();
   const auto &layout = plan.constructors[constructor];
   const auto &storage = layout.roles[role];
-  auto reference = oracleReferenceType(layout.kind);
-  if (!reference)
-    return reference.takeError();
   SmallVector<Type> fields;
   for (const auto &field : storage.fields)
     fields.push_back(field.type);
@@ -143,7 +140,7 @@ Error checkOracleAnchorLookup(const OracleVerificationContext &context,
            equal(function.getResultTypes(), TypeRange(outcome)) &&
            function->hasAttr("runtime.region") == region;
   };
-  if (!signature(actual, TypeRange{*reference, storage.sequence}, false))
+  if (!signature(actual, TypeRange{index, index, storage.sequence}, false))
     return refuse();
   const auto &closure = context.getClosure();
   auto steps = [&](func::FuncOp function,
@@ -170,15 +167,7 @@ Error checkOracleAnchorLookup(const OracleVerificationContext &context,
                    : isa<exec::ReturnOp>(step.operation)) &&
            step.regions.empty() && equal(step.inputs, inputs);
   };
-  auto root = steps(actual, 2);
-  if (!root ||
-      !match((*root)[0], "reference", actual.getArguments().drop_front()) ||
-      !terminal((*root)[1], (*root)[0].outputs, false))
-    return refuse();
-  auto selected = (*root)[0].regions[0];
-  if (!signature(selected, TypeRange{index, index, storage.sequence}, true))
-    return refuse();
-  auto body = steps(selected, 6);
+  auto body = steps(actual, 6);
   if (!body)
     return refuse();
   auto call = [&](unsigned i, StringRef contract, ArrayRef<Attribute> arguments,
@@ -207,14 +196,14 @@ Error checkOracleAnchorLookup(const OracleVerificationContext &context,
             {std::to_string(constructor)}))
     return refuse();
   if (!call(1, "index.equal", {}, IntegerType::get(candidate.getContext(), 1),
-            {selected.getArgument(1), (*body)[0].outputs[0]}, "belongs_to") ||
+            {actual.getArgument(1), (*body)[0].outputs[0]}, "belongs_to") ||
       !call(2, "control.require", {}, {}, (*body)[1].outputs,
             "admit_reference") ||
       !call(3, "sequence.at", {TypeAttr::get(storage.record)}, storage.record,
-            {selected.getArgument(3), selected.getArgument(2)}, "lookup"))
+            {actual.getArgument(3), actual.getArgument(2)}, "lookup"))
     return refuse();
   if (!match((*body)[4], "record", (*body)[3].outputs) ||
-      !terminal((*body)[5], (*body)[4].outputs, true))
+      !terminal((*body)[5], (*body)[4].outputs, false))
     return refuse();
   auto unpacked = (*body)[4].regions[0];
   auto unpack = steps(unpacked, 1);

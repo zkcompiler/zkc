@@ -193,6 +193,20 @@ NumericalSelection::advance(ArrayRef<NumericalOccurrence> implicated) {
   }
   return false;
 }
+Expected<bool>
+NumericalSelection::advanceTogether(ArrayRef<NumericalOccurrence> implicated) {
+  SmallVector<NumericalOccurrence> ordered(implicated);
+  llvm::sort(ordered);
+  ordered.erase(std::unique(ordered.begin(), ordered.end()), ordered.end());
+  bool changed = false;
+  for (auto id : ordered) {
+    auto advanced = advance({id});
+    if (!advanced)
+      return advanced.takeError();
+    changed |= *advanced;
+  }
+  return changed;
+}
 Expected<bool> NumericalSelection::advanceSubject(
     const RealizationSubject &subject,
     std::optional<RealizationSubject> invocation) {

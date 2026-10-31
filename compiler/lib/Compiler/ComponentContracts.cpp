@@ -2,6 +2,7 @@
 #include "zkc/Contracts/SourceTerms.h"
 #include "zkc/Support/Refusal.h"
 #include <algorithm>
+#include <functional>
 #include <map>
 #include <set>
 using namespace llvm;
@@ -1012,9 +1013,41 @@ Error checkComponentDeclarations(const J &value) {
     return error("component-declaration");
   auto validString = [](const J &value) {
     auto text = value.getAsString();
-    return text && !text->empty() && text->size() <= 512;
+    return text && !text->empty() && text->size() <= 512 &&
+           json::isUTF8(*text) && !text->contains('\0');
   };
+  unsigned remaining = 1048576;
+  std::function<bool(const J &, unsigned)> bounded = [&](const J &value,
+                                                         unsigned depth) {
+    if (!remaining || depth > 128)
+      return false;
+    --remaining;
+    if (const auto *items = value.getAsArray())
+      for (const auto &item : *items)
+        if (!bounded(item, depth + 1))
+          return false;
+    return true;
+  };
+  if (!bounded(value, 0))
+    return error("component-declaration-limit");
   std::set<std::string> types, owners;
+  std::map<std::string, StringRef> nominalKinds;
+  std::map<std::string, const A *> declarations;
+  auto fields = [&](const A &members) -> Error {
+    if (members.size() > 512)
+      return error("component-declaration-limit");
+    std::set<std::string> names;
+    for (const auto &value : members) {
+      auto field = value.getAsArray();
+      if (!field || field->size() != 2 || !validString((*field)[0]))
+        return error("component-declaration");
+      if (!names.insert(string((*field)[0]).str()).second)
+        return error("component-declaration-duplicate");
+      if (auto e = checkStaticTerm((*field)[1]))
+        return e;
+    }
+    return Error::success();
+  };
   if (array((*rows)[0]).size() > 128 || array((*rows)[1]).size() > 128)
     return error("component-declaration-limit");
   for (const auto &value : array((*rows)[0])) {
@@ -1026,28 +1059,97 @@ Error checkComponentDeclarations(const J &value) {
       return e;
     auto type = (*record)[0].getAsArray();
     if (!type || type->size() != 4 || (*type)[0] != J("nominal") ||
-        (*type)[1] != J("record"))
+        ((*type)[1] != J("record") && (*type)[1] != J("logical_record") &&
+         (*type)[1] != J("variant")))
+      return error("component-declaration-record");
+    auto kind = string((*type)[1]);
+    auto [nominal, added] =
+        nominalKinds.emplace(string((*type)[2]).str(), kind);
+    if (!added && nominal->second != kind)
       return error("component-declaration-record");
     if (!types.insert(key((*record)[0])).second)
       return error("component-declaration-duplicate");
+    declarations.emplace(key((*record)[0]), record);
     auto resource = string((*record)[1]);
     if (resource != "ordinary" && resource != "affine" && resource != "linear")
       return error("component-declaration");
+    if (kind == "logical_record" && resource != "ordinary")
+      return error("component-declaration-record");
     if (resource == "linear" && !*(*record)[2].getAsBoolean())
       return error("component-declaration-record");
     if (array((*record)[3]).size() > 512)
       return error("component-declaration-limit");
-    std::set<std::string> fields;
+    if (kind != "variant") {
+      if (auto e = fields(array((*record)[3])))
+        return e;
+      continue;
+    }
+    std::set<std::string> alternatives;
     for (const auto &value : array((*record)[3])) {
-      auto field = value.getAsArray();
-      if (!field || field->size() != 2 || !validString((*field)[0]))
+      auto alternative = value.getAsArray();
+      if (!alternative || alternative->size() != 2 ||
+          !validString((*alternative)[0]) || !(*alternative)[1].getAsArray())
         return error("component-declaration");
-      if (!fields.insert(string((*field)[0]).str()).second)
+      if (!alternatives.insert(string((*alternative)[0]).str()).second)
         return error("component-declaration-duplicate");
-      if (auto e = checkStaticTerm((*field)[1]))
+      if (auto e = fields(array((*alternative)[1])))
         return e;
     }
   }
+  // Logical records cannot acquire resource custody through an ordinary
+  // nominal child, including children erased by zero-length layouts.
+  std::set<std::string> ordinary;
+  std::function<Error(const J &, unsigned)> shared =
+      [&](const J &value, unsigned depth) -> Error {
+    if (!remaining || depth > 64)
+      return error("component-declaration-limit");
+    --remaining;
+    const auto &term = array(value);
+    auto tag = string(term[0]);
+    const A *arguments = nullptr;
+    if (tag == "nominal") {
+      auto kind = string(term[1]);
+      if (kind == "logical_record")
+        return error("component-declaration-record");
+      if (kind == "record" || kind == "variant") {
+        auto identity = key(value);
+        auto found = declarations.find(identity);
+        if (found == declarations.end() || (*found->second)[1] != J("ordinary"))
+          return error("component-declaration-record");
+        if (!ordinary.insert(identity).second)
+          return Error::success();
+        const auto &members = array((*found->second)[3]);
+        if (kind == "variant") {
+          for (const auto &alternative : members)
+            for (const auto &field : array(array(alternative)[1]))
+              if (auto e = shared(array(field)[1], depth + 1))
+                return e;
+        } else
+          for (const auto &field : members)
+            if (auto e = shared(array(field)[1], depth + 1))
+              return e;
+        // Closed member types already substitute the nominal arguments.
+        // A phantom type argument does not confer resource custody.
+        return Error::success();
+      }
+      arguments = &array(term[3]);
+    } else if (tag == "array") {
+      return shared(term[1], depth + 1);
+    } else if (tag == "tuple")
+      arguments = &array(term[1]);
+    else if (tag == "builtin" || tag == "formal")
+      arguments = &array(term[2]);
+    if (arguments)
+      for (const auto &argument : *arguments)
+        if (auto e = shared(argument, depth + 1))
+          return e;
+    return Error::success();
+  };
+  for (const auto &[identity, declaration] : declarations)
+    if (array((*declaration)[0])[1] == J("logical_record"))
+      for (const auto &field : array((*declaration)[3]))
+        if (auto e = shared(array(field)[1], 0))
+          return e;
   for (const auto &value : array((*rows)[1])) {
     auto owner = value.getAsArray();
     if (!owner || owner->size() != 3 || !validString((*owner)[0]))

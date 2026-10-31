@@ -68,8 +68,17 @@ calculation-batching=false
     alternatives = journal.json(command(toolchain, 'compile', '--profile=alternatives',
         f'--output={directory/"alternatives.zkpkg"}'), cwd=root)
     published = json.loads((directory/'alternatives.zkpkg').read_text())['options']
-    assert published == {name.replace('-', '_'): value
+    assert set(alternatives['settings']['values']) == {
+        'simplify', 'release-storage', 'fuse-vector-reductions', 'finite-bulk',
+        'fuse-collect-fold', 'calculation-batching'}
+    expected_options = {name.replace('-', '_'): value
         for name, value in alternatives['settings']['values'].items()}
+    expected_options['oracle_realization'] = {
+        'format': 'zkc.oracle-selection/0',
+        'roots': {'kind': 'uniform', 'table': {
+            'scheme': '', 'grouping': 'individual', 'order': 'natural'}},
+        'order': 'unrestricted', 'authentication': 'per-query'}
+    assert published == expected_options
     journal.json(command(toolchain, 'compile', '--profile=absent'), cwd=root, refuses='source-profile-missing')
     journal.json(command(toolchain, 'compile', f'--report={report}'), cwd=root, refuses='report-exists')
     ordinary = journal.json(command(toolchain, 'run', '--no-results'), cwd=root)

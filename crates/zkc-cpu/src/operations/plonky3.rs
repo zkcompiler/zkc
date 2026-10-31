@@ -96,11 +96,11 @@ fn execute<E: Registered>(
     };
     let output = match name {
         "poly.domain_root" => {
-            policy.output(512, available)?;
+            policy.output(crate::VALUE_SLOT_BYTES, available)?;
             E::field_value(domain(index(0)?, E::ONE)?.generator())
         }
         "poly.domain_point" => {
-            policy.output(512, available)?;
+            policy.output(crate::VALUE_SLOT_BYTES, available)?;
             E::field_value(
                 domain(index(1)?, field(0)?)?
                     .point(index(2)?)

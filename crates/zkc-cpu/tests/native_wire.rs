@@ -17,7 +17,7 @@ fn fixed_group_measurement_preserves_standalone_and_nested_collection_limits() {
     )
     .unwrap();
     let ordinary = ark_backend(None);
-    let point = Value::Curve(G1::generator());
+    let point = Value::Curve((G1::generator()).into());
     let ty = point.physical_type();
     let bytes = ordinary.encode_native_value(&point).unwrap();
     assert!(backend.decode_native_value(&ty, &bytes).is_ok());
@@ -236,8 +236,11 @@ fn native_frames_decode_exact_values_and_refuse_malformed_bytes() {
         (Value::Bool(false), 7),
         (Value::Bool(true), 7),
         (Value::Field(Scalar::from(19)), 38),
-        (Value::Curve(G1::identity()), 54),
-        (Value::Curve(G1::generator().scale(Scalar::from(17))), 54),
+        (Value::Curve((G1::identity()).into()), 54),
+        (
+            Value::Curve((G1::generator().scale(Scalar::from(17))).into()),
+            54,
+        ),
     ] {
         let ty = value.physical_type();
         assert_eq!(native_wire_size(&ty), Some(width));
@@ -291,7 +294,7 @@ fn invalid_boolean_scalar_and_group_encodings_have_closed_reasons() {
             NativeWireError::Invalid(DecodeReason::Scalar)
         );
     }
-    let group = Value::Curve(G1::identity()).physical_type();
+    let group = Value::Curve((G1::identity()).into()).physical_type();
     let mut nonsubgroup = vec![0; 48];
     nonsubgroup[0] = 0x80;
     let mut infinity = vec![0; 48];
@@ -606,7 +609,7 @@ fn additional_domains_keep_exact_canonical_frames_and_typed_errors() {
     let values = [
         Value::Bn254Field(Bn254Scalar::from(19)),
         Value::Bn254G1(Bn254G1::generator()),
-        Value::Bn254G2(Bn254G2::generator()),
+        Value::Bn254G2((Bn254G2::generator()).into()),
         Value::KoalaBearField(KoalaBear::new(19)),
         Value::KoalaBearExt8Field(KoalaBearExt8::from([
             KoalaBear::new(1),
@@ -619,7 +622,7 @@ fn additional_domains_keep_exact_canonical_frames_and_typed_errors() {
             KoalaBear::new(8),
         ])),
         Value::RistrettoField(RistrettoScalar::from(19u64)),
-        Value::RistrettoGroup(curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT),
+        Value::RistrettoGroup((curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT).into()),
     ];
     for value in &values {
         let ty = value.physical_type();

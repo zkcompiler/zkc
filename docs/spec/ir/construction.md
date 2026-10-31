@@ -43,6 +43,12 @@ justified by an unused digest alone. The
 observation classes, the binding obligations and the obligations of other
 transcript providers.
 
+[Deterministic verifier requests](verifier-requests.md) defines the additional
+checked construction rule needed after oracle realization. Its partial scoped
+replicas have a different producer-outcome contract from total public replay;
+they do not relax that replay rule or ordinary projection semantics. The
+extension's implementation remains separately tracked in status.
+
 A source-selected service port is removed only when every reachable query on
 that selected authority is accounted for, including unused replies and nested
 occurrences. Other service roots and aliases keep their original meaning.
@@ -67,7 +73,8 @@ and `protocol.restrict_roles` wrappers refuse. Pairing is checked in the same
 source block after unsimplified static expansion, retaining the authored call
 path. There is no intervening query or producer-to-validator message. Two
 outstanding draws, batched/derived delivery, unused selected draws,
-nonchallenge reverse messages, existing transcript inputs and selected draws
+nonchallenge reverse messages outside the checked deterministic-request
+extension, existing transcript inputs and selected draws
 hidden in local programs refuse this profile. These restrictions bound the
 constructor, not the common IR.
 
@@ -553,7 +560,14 @@ Construction appends the transcript as the last carried value of every
 participant loop whose subtree contains selected transcript events. The body
 receives that state, consumes/produces its successors and yields the final
 successor last. The loop result feeds subsequent events. Outer induction values
-are explicit captures in nested loops. Event-free loops retain their original
+are explicit captures in nested loops. Construction reuses an existing invariant
+capture when it is the exact same SSA operand, preserving every authored
+capture and its formal position. It adds a coordinate capture only when none
+exists; equality of types or a loop-carried initial value cannot justify reuse.
+The actual-body reader derives the coordinate-to-formal association from the
+checked operands. It rejects a missing, duplicated, reordered or substituted
+construction-owned coordinate binding. This does not permit deduplicating
+original captures or changing their owned-storage accounting. Event-free loops retain their original
 state and may belong to one role. They cannot contain hidden transcript events
 or unobserved proof messages.
 
@@ -625,8 +639,10 @@ observation. These are ordinary scoped `exec.apply` calls through
 source protocol's message list. Witness transport belongs to construction and
 is not a transcript observation.
 
-The current strict `zkc.native-proof-descriptor/0` has eight fields: tag, policy,
-origin format, sequence, public bindings, messages, construction plan, witnesses.
+The current strict `zkc.native-proof-descriptor/0` has nine fields: tag, policy,
+origin format, sequence, public bindings, messages, construction plan, witnesses,
+and the canonical normalized oracle-selection JSON string. Its exact grammar
+is defined in the [proof format](../formats/proof.md).
 An ungated sequence record is `["indices", origin, N, Q]`; a gated record is
 `["gated-indices", origin, N, Q, b]`, with decimal strings. Each gated static
 occurrence has one witness row `[origin, "gate." + query_site, "index",

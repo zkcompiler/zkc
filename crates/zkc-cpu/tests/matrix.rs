@@ -466,8 +466,8 @@ fn sparse_output_allowances_and_scalar_precedence_remain_exact_with_zero_numeric
             );
         }
         for (available, error) in [
-            (512, "refused:matrix-shape"),
-            (511, "exhausted:output-bytes"),
+            (zkc_cpu::VALUE_SLOT_BYTES, "refused:matrix-shape"),
+            (zkc_cpu::VALUE_SLOT_BYTES - 1, "exhausted:output-bytes"),
         ] {
             let mut controlled = Controlled::new(backend(policy));
             controlled.output_limit = Some(available);

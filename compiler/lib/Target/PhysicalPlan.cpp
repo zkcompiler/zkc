@@ -339,7 +339,8 @@ public:
     if (!logical)
       return logical.takeError();
     if (!numerical.chargeCatalog())
-      return error("finite-analysis-limit");
+      return error("finite-analysis-limit",
+                   "physical binding selection exhausted catalog work");
     // A generated declaration may stop being shared when one occurrence
     // changes recipe. Keep each source owner's alias to the same monotone
     // cursor, rather than keying a new cursor by the smaller current use set.
@@ -356,7 +357,8 @@ public:
     SmallVector<size_t> merge;
     for (const auto &key : keys) {
       if (!numerical.chargeCatalog())
-        return error("finite-analysis-limit");
+        return error("finite-analysis-limit",
+                     "physical binding alias lookup exhausted catalog work");
       auto found = implementationCoordinates.find(key);
       if (found == implementationCoordinates.end())
         continue;
@@ -371,7 +373,8 @@ public:
       if (!candidates)
         return candidates.takeError();
       if (!numerical.chargeCatalog(candidates->size()))
-        return error("finite-analysis-limit");
+        return error("finite-analysis-limit",
+                     "physical candidate inventory exhausted catalog work");
       implementations.push_back({application,
                                  {owners.begin(), owners.end()},
                                  authored.str(),
@@ -394,7 +397,8 @@ public:
     auto &entry = implementations[id];
     for (; entry.next < entry.candidates.size(); ++entry.next) {
       if (!numerical.chargeCatalog())
-        return error("finite-analysis-limit");
+        return error("finite-analysis-limit",
+                     "physical implementation search exhausted catalog work");
       auto selected = application;
       selected.implementation = entry.candidates[entry.next];
       auto descriptor = installedImplementations().find(
@@ -450,7 +454,8 @@ public:
       auto &entry = implementations[id];
       if (entry.next + 1 < entry.candidates.size()) {
         if (!numerical.chargeCatalog())
-          return error("finite-analysis-limit");
+          return error("finite-analysis-limit",
+                       "physical implementation retry exhausted catalog work");
         ++entry.next;
         advanced = true;
         // Capacity concerns the complete plan. Advance its automatic
@@ -467,10 +472,12 @@ chooseConversion(Type from, Type to, const CandidateCatalog &catalog,
                  mathematical::NumericalSelection &selection,
                  const CpuTarget &cpuTarget) {
   if (!selection.chargeCatalog())
-    return error("finite-analysis-limit");
+    return error("finite-analysis-limit",
+                 "physical conversion search exhausted catalog work");
   auto candidates = catalog.conversions(from, to);
   if (!selection.chargeCatalog(candidates.size()))
-    return error("finite-analysis-limit");
+    return error("finite-analysis-limit",
+                 "physical conversion inventory exhausted catalog work");
   for (auto candidate : candidates) {
     // A catalog suggestion can name an uninstalled adapter. Decline that
     // suggestion; authored bindings and explicit pins were admitted separately.
@@ -960,7 +967,9 @@ class Proposer {
       return e;
     while (!pending.empty()) {
       if (!selection.numerical.chargeCatalog())
-        return error("finite-analysis-limit");
+        return error(
+            "finite-analysis-limit",
+            "physical representation propagation exhausted catalog work");
       auto *op = pending.front();
       pending.pop_front();
       queued.erase(op);
@@ -1329,7 +1338,8 @@ public:
     // bindings have no cursor; numerical retry retains the reported slice.
     for (auto [index, binding] : enumerate(plan.bindings)) {
       if (!selection.numerical.chargeCatalog())
-        return error("finite-analysis-limit");
+        return error("finite-analysis-limit",
+                     "physical capacity attribution exhausted catalog work");
       if (!binding.fixed && !binding.origin)
         failure.bindings.push_back(index);
     }
@@ -1344,7 +1354,8 @@ public:
     execution = std::move(*admitted);
     for (auto [index, op] : enumerate(operations)) {
       if (!selection.numerical.chargeCatalog())
-        return error("finite-analysis-limit");
+        return error("finite-analysis-limit",
+                     "physical operation inventory exhausted catalog work");
       if (auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding"))
         bindingUses[ref.getValue().str()].push_back(index);
     }
@@ -1366,7 +1377,8 @@ public:
       bool authoredUse = false;
       for (auto index : bindingUses[binding->name]) {
         if (!selection.numerical.chargeCatalog())
-          return error("finite-analysis-limit");
+          return error("finite-analysis-limit",
+                       "physical binding provenance exhausted catalog work");
         auto occurrenceOwners = selection.numerical.owners(operations[index]);
         authoredUse |= occurrenceOwners.empty();
         append_range(owners, occurrenceOwners);
@@ -1455,7 +1467,9 @@ public:
         for (const auto &implementation :
              catalog.diagonalImplementations(clone.binding.application)) {
           if (!selection.numerical.chargeCatalog()) {
-            contractionError = error("finite-analysis-limit");
+            contractionError =
+                error("finite-analysis-limit",
+                      "physical contraction search exhausted catalog work");
             return false;
           }
           auto candidate = clone.binding.application;
@@ -1693,6 +1707,18 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       options.numericalWork->numericalOccurrence.reset();
     }
   });
+  // The independent validation allowance belongs to the complete transaction,
+  // not to each attempt or each later inspection of its immutable payload.
+  mathematical::RealizationWork numericalVerification;
+  if (options.numericalVerificationWork)
+    numericalVerification = *options.numericalVerificationWork;
+  auto settleVerification = llvm::scope_exit([&] {
+    if (options.numericalVerificationWork) {
+      *options.numericalVerificationWork = numericalVerification;
+      options.numericalVerificationWork->numericalSelection = nullptr;
+      options.numericalVerificationWork->numericalOccurrence.reset();
+    }
+  });
   bool firstAttempt = true, requiredEndpoint = false;
   for (;;) {
     auto incomingCopy = selection.numerical.remainingCopy;
@@ -1743,15 +1769,18 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
             module, selection.numerical.work, selection.numerical.remainingCopy,
             selection.numerical.remainingSiteBytes, preparationCapacity,
             options.numericalPolicy, &fixedFiniteBindings, &selection.numerical,
-            &preparationOutcome);
+            &preparationOutcome, mathematical::mathematicalRecipes(), nullptr,
+            /*deferCorrespondence=*/true);
         if (!finite)
           return error("computation-realization", "finite preparation refused");
         numericalSource = *finite;
       }
       if (hasNumerical) {
         prepared = computation::prepareComputationRealization(
-            numericalSource, &selection.numerical.remainingCopy,
-            &preparationCapacity, &selection.numerical);
+            numericalSource, selection.numerical.remainingCopy,
+            selection.numerical.work, &preparationCapacity,
+            &selection.numerical,
+            /*deferContext=*/true);
         if (!prepared)
           return error("computation-realization",
                        "numerical source preparation");
@@ -1786,6 +1815,27 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       refusal = prepare();
     } else
       refusal = prepare();
+    // Required independent reads cannot become speculative construction.
+    if (refusal &&
+        (preparationOutcome.outcome ==
+             mathematical::VerificationObservation::RequiredCapacity ||
+         (preparationCapacity &&
+          preparationCapacity->owner == WorkOwner::AlgorithmChecking))) {
+      for (auto &diagnostic : preparationDiagnostics)
+        module.getContext()->getDiagEngine().emit(std::move(diagnostic));
+      std::string detail = preparationOutcome.detail;
+      if (preparationCapacity) {
+        llvm::raw_string_ostream description(detail);
+        description << "numerical preparation capacity: "
+                    << mathematical::decisionName(preparationCapacity->owner);
+        if (preparationCapacity->requested)
+          description << " requested=" << *preparationCapacity->requested;
+        if (preparationCapacity->available)
+          description << " available=" << *preparationCapacity->available;
+      }
+      consumeError(std::move(refusal));
+      return error("computation-realization", detail);
+    }
     bool preparationCheckingCapacity =
         preparationOutcome.outcome ==
         mathematical::VerificationObservation::OptionalCapacity;
@@ -1820,7 +1870,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
                                       WorkOwner::AlgorithmOriginBytes);
         } else
           return error("computation-realization", numericalOutcome.detail);
-        refusal = error("finite-analysis-limit");
+        refusal = error("finite-analysis-limit", numericalOutcome.detail);
       }
       auto candidateRoot =
           cast<zkc::protocol_ir::ProtocolModuleOp>(selected.getBody()->front());
@@ -1889,10 +1939,23 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
         }
       }
     }
+    // Only physically feasible construction reaches the mandatory independent
+    // correspondence owner. Its accounts persist on every attributable retry.
+    if (!refusal && hasFinite &&
+        failed(protocol::verifyScopedFinitePreparation(
+            module, *finite, numericalVerification, options.numericalPolicy,
+            &numericalOutcome, &fixedFiniteBindings))) {
+      if (numericalOutcome.outcome !=
+          mathematical::VerificationObservation::OptionalCapacity)
+        return error("numerical-lowering-correspondence",
+                     numericalOutcome.detail);
+      capacitySubject = numericalOutcome.subject;
+      refusal = error("mathematical-analysis-limit");
+    }
     if (!refusal && hasNumerical &&
         failed(mathematical::verifyNumericalLowering(
             numericalSource, selected, options.numericalPolicy, selections,
-            &selection.numerical.work, &numericalOutcome))) {
+            &numericalVerification, &numericalOutcome))) {
       if (numericalOutcome.outcome !=
           mathematical::VerificationObservation::OptionalCapacity)
         return error("numerical-lowering-correspondence",
@@ -1933,8 +1996,18 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
                                            : selection.advance();
     if (advanced && !*advanced && constructionCapacity && capacitySubject)
       advanced = selection.numerical.advanceAll();
-    if (advanced && !*advanced && !capacitySubject && !constructionCapacity)
-      advanced = selection.numerical.advance(implicated);
+    if (advanced && !capacitySubject && !constructionCapacity) {
+      if (failure.kind == PhysicalFailureKind::OptionalProgramCapacity) {
+        auto numericalAdvanced =
+            selection.numerical.advanceTogether(implicated);
+        if (!numericalAdvanced) {
+          consumeError(std::move(refusal));
+          return numericalAdvanced.takeError();
+        }
+        *advanced |= *numericalAdvanced;
+      } else if (!*advanced)
+        advanced = selection.numerical.advance(implicated);
+    }
     if (!advanced) {
       consumeError(std::move(refusal));
       return advanced.takeError();
@@ -2102,46 +2175,17 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
     return error("binding-stale-selection");
   if (auto e = plan.input->check(module))
     return e;
-  // Check the original numerical-bearing source independently against the exact
-  // retained executable payload, before checking any installed physical
-  // choices. This reader does not emit or select numerical recipes.
+  // The numerical payload was independently checked before retention. Validate
+  // the actual physical choices against that unchanged private payload.
   if (failed(zkc::admitStage(module)))
     return error("binding-operation");
   ModuleOp selected = module;
-  ModuleOp numericalSource = module;
-  mathematical::RealizationWork numericalChecking;
-  if (plan.input->finite) {
-    llvm::DenseSet<Operation *> fixedFiniteBindings;
-    auto sourceOwner =
-        cast<zkc::protocol_ir::ProtocolModuleOp>(module.getBody()->front());
-    for (const auto &[name, implementation] : plan.input->selections) {
-      auto binding = dyn_cast_or_null<runtime::BindingOp>(
-          SymbolTable::lookupSymbolIn(sourceOwner, name));
-      if (!binding)
-        return error("binding-unknown-selection");
-      auto decoded = readPlanBinding(binding);
-      if (!decoded)
-        return decoded.takeError();
-      auto fixed = selectImplementation(decoded->application, implementation,
-                                        plan.input->cpuTarget);
-      if (!fixed)
-        return fixed.takeError();
-      fixedFiniteBindings.insert(binding);
-    }
-    if (failed(protocol::verifyScopedFinitePreparation(
-            module, *plan.input->finite, numericalChecking,
-            plan.input->numericalPolicy, nullptr, &fixedFiniteBindings)))
-      return error("numerical-lowering-correspondence",
-                   "finite preparation differs");
-    numericalSource = *plan.input->finite;
-  }
-  if (plan.input->numerical) {
+  // proposePhysical installs these private immutable subjects only after both
+  // independent correspondence edges succeed. check(module) guards the exact
+  // original identity/content. Public plan choices still require the complete
+  // physical reader below; no producer receipt or mutable payload is accepted.
+  if (plan.input->numerical)
     selected = *plan.input->numerical;
-    if (failed(mathematical::verifyNumericalLowering(
-            numericalSource, selected, plan.input->numericalPolicy,
-            plan.input->selections, &numericalChecking)))
-      return error("numerical-lowering-correspondence");
-  }
   auto root =
       cast<zkc::protocol_ir::ProtocolModuleOp>(&selected.getBody()->front());
   auto admitted = ExecutionPorts::read(selected);

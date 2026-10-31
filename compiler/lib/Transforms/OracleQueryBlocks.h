@@ -1,27 +1,24 @@
 #ifndef ZKC_TRANSFORMS_ORACLEQUERYBLOCKS_H
 #define ZKC_TRANSFORMS_ORACLEQUERYBLOCKS_H
-#include "OracleAnchorStorage.h"
+#include "OracleQueryCapacity.h"
+#include "mlir/IR/Dominance.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Transforms/OracleSelection.h"
-#include <optional>
+#include <vector>
 namespace zkc::protocol {
-// Source-derived evidence for crossing a base query's domain check. Borrows the
-// admitted immutable prepared entry. An upper shape bound or a virtual law is
-// never evidence that an actual position is valid.
-struct OracleDirectQuery {
-  protocol_ir::OracleQueryOp operation;
-  unsigned constructor;
-  mlir::Value anchor, position;
-  uint64_t rows;
-  std::optional<uint64_t> literal;
+// One contiguous nonadaptive source window. This borrows the admitted source;
+// it establishes neither query domains nor transport compatibility. Discovery
+// preserves a valid demand prefix and defers a later domain cut to replay.
+// The caller binds the selected source roots, exact controller family and
+// actual packet/replay calls in its complete realization check.
+struct OracleQueryWindowSelection {
+  std::vector<protocol_ir::OracleQueryOp> queries;
+  uint64_t leaves = 0;
 };
-llvm::Expected<std::optional<OracleDirectQuery>>
-admitOracleDirectQuery(protocol_ir::OracleQueryOp, const OracleAnchorStorage &,
-                       unsigned &remaining);
-// Sharing requires the same actual source reference, not a possible origin,
-// equal root or equal data. The selected layout determines physical equality.
-llvm::Expected<bool> shareOracleOpening(const OracleDirectQuery &,
-                                        const OracleDirectQuery &,
-                                        llvm::ArrayRef<OracleTableRealization>);
+llvm::Expected<OracleQueryWindowSelection>
+selectOracleQueryWindow(protocol_ir::OracleQueryOp first, OracleAuthentication,
+                        const OracleQueryCapacity &, mlir::DominanceInfo &,
+                        unsigned &remaining);
+
 } // namespace zkc::protocol
 #endif

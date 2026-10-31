@@ -50,6 +50,11 @@ def test_preparation_uses_maintained_scripts_and_records_profile_edits(measureme
         directory = tmp_path / case['name']
         flags = measurement.prepare_case(frozen, case, directory, journal)
         assert all(str(measurement.ROOT / 'common/tests') not in flag for flag in flags)
+        metadata = json.loads((directory/'case.json').read_text())
+        assert metadata['oracle_realization']['profile'] == 'fri-keccak256-koala-bear-octic'
+        assert metadata['oracle_realization']['selection']['roots']['table'] == {
+            'scheme': 'rows.merkle-keccak256.koala-bear.ext8-binomial3/0',
+            'grouping': 'individual', 'order': 'natural'}
         public = json.loads((directory / 'public.json').read_text())
         if case['project'] == 'accumulator-machine':
             assert public['memory_present'] == case['memory_present']
@@ -125,7 +130,8 @@ def small_package():
     return {'format': 'zkc.entry/0', 'original': original,
             'artifact': json.dumps(['zkc.native-proof/0', '', [], '', json.dumps(program), '', [], [], []]),
             'options': {'simplify': True, 'release_storage': False,
-                        'finite_bulk': True, 'fuse_vector_reductions': False, 'fuse_collect_fold': False, 'calculation_batching': True}}
+                        'finite_bulk': True, 'fuse_vector_reductions': False, 'fuse_collect_fold': False, 'calculation_batching': True,
+                        'oracle_realization': __import__('bench.oracle_policy', fromlist=['OCTIC_KECCAK']).OCTIC_KECCAK.selection()}}
 
 
 def test_inventory_counts_static_sites_and_bound_contracts(measurement):
@@ -163,6 +169,12 @@ def test_trial_runs_controlled_tools_and_fails_closed(measurement, tmp_path):
 import json,sys
 from pathlib import Path
 p=json.loads(Path({str(package_file)!r}).read_text())
+selections=[a for a in sys.argv if a.startswith('--oracle-realization=')]
+if sys.argv[1]=='language-emit': assert not selections
+else:
+ assert len(selections)==1
+ assert json.loads(selections[0].split('=',1)[1])==p['options']['oracle_realization']
+ assert p['options']['oracle_realization']['roots']['table']['scheme']=='rows.merkle-keccak256.koala-bear.ext8-binomial3/0'
 print(p['original'] if sys.argv[1]=='language-emit' else json.dumps(p), end='')
 ''')
     compiler.chmod(0o755)
@@ -191,6 +203,12 @@ print(json.dumps({{'status':'produced' if command=='prove' else 'accepted',
     assert measured['package']['sha256'] == measurement.digest(tmp_path / 'run/entry.zkpkg')
     summary = measurement.summaries([measured, measured])[0]
     assert summary['passed'] == 2 and summary['metrics']['prove.instructions']['median'] == 1
+    assert summary['oracle_realization']['profile'] == 'fri-keccak256-koala-bear-octic'
+    from copy import deepcopy
+    drifted = deepcopy(measured)
+    drifted['published_options']['oracle_realization']['roots']['table']['scheme'] = ''
+    with pytest.raises(measurement.MeasurementError, match='published oracle selection'):
+        measurement.summaries([drifted])
     # Ignoring a requested compiler policy cannot produce an accepted sample.
     bad = measurement.trial(case, 'current/no-finite-bulk', [], inputs, tmp_path / 'bad',
                              (compiler, runtime, None), 5)
@@ -254,7 +272,10 @@ if {contract!r} == 'legacy-source':
     assert 'entry fn Storage(' in source.read_text()
     print('entry fn is unsupported', file=sys.stderr); exit(1)
 kind = 'protocol' if {contract!r} == 'legacy-interface' else 'function'
-print(json.dumps({{'interface': json.dumps({{'format':'zkc.language-interface/0', 'selection':{{'kind':kind}}}})}}))
+options={{'simplify':True,'finite_bulk':True,'release_storage':'--release-storage' in sys.argv,
+'fuse_vector_reductions':False,'fuse_collect_fold':False,'calculation_batching':True,
+'oracle_realization':json.loads(next(x.split('=',1)[1] for x in sys.argv if x.startswith('--oracle-realization=')))}}
+print(json.dumps({{'options':options,'interface': json.dumps({{'format':'zkc.language-interface/0', 'selection':{{'kind':kind}}}})}}))
 ''')
     compiler.chmod(0o755)
     runtime = directory / 'runtime'

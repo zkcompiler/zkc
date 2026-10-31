@@ -25,7 +25,9 @@ struct FrontierNormalizationOrigin {
 // may reuse actual earlier generated producers in the same participant block.
 // Generated projections may forward exact retained pack coordinates through
 // actual ports. Concrete producers remain fixed. Does not emit IR.
-// Both readers debit the caller's cumulative transaction allowance. Capacity
+// Both readers debit the caller's cumulative numericalContextChecking, separate
+// from actual snapshot/emission construction. Exhaustion is required even
+// during speculative preparation. Capacity
 // output is cleared on entry and set only for a failed checking debit or depth
 // limit; depth limits have no requested/available work debit.
 mlir::LogicalResult verifyComputationFrontier(

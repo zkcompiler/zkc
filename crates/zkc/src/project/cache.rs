@@ -144,9 +144,7 @@ impl CompilationCache {
         );
         frame(&mut key, request.selection.name.unwrap_or("").as_bytes());
         frame(&mut key, format!("{:?}", request.selection.kind).as_bytes());
-        for flag in request.options.flags() {
-            frame(&mut key, flag.as_bytes());
-        }
+        frame_options(&mut key, &request.options)?;
         let key = crate::io::bytes::hex(&key.finalize());
         let path = self.directory.join(format!("{key}.zkcache"));
         // Bounded striped writer locks prevent partial/interleaved publication;
@@ -155,7 +153,7 @@ impl CompilationCache {
         let writing = writer.try_lock().is_ok();
         if let Some(bytes) = self.read(&path)?
             && let Ok(mut result) =
-                Compiler::captured(&bytes[65..], request.selection, request.options)
+                Compiler::captured(&bytes[65..], request.selection, request.options.clone())
         {
             result.cache = Some(serde_json::json!({"status":"hit","key":key}));
             return Ok(result);
@@ -184,6 +182,12 @@ impl CompilationCache {
         );
         Ok(result)
     }
+}
+fn frame_options(hash: &mut Sha256, options: &crate::entry::CompileOptions) -> Result<(), Error> {
+    for flag in options.flags().map_err(|e| e.to_string())? {
+        frame(hash, flag.as_bytes());
+    }
+    Ok(())
 }
 fn frame(hash: &mut Sha256, bytes: &[u8]) {
     hash.update((bytes.len() as u64).to_le_bytes());
@@ -418,5 +422,31 @@ mod tests {
         assert_eq!(cache.clear().unwrap(), 3);
         assert_eq!(cache.clear().unwrap(), 0);
         assert!(root.path().join("owner.txt").exists());
+    }
+    #[test]
+    fn oracle_selection_is_part_of_the_actual_cache_key() {
+        use crate::entry::{OracleRoots, OracleSelection};
+        let key = |options: &crate::entry::CompileOptions| {
+            let mut hash = Sha256::new();
+            frame_options(&mut hash, options).unwrap();
+            hash.finalize()
+        };
+        let defaults = super::super::ResolvedSettings::default().options();
+        let mut changed = defaults.clone();
+        changed.oracle_realization.roots = OracleRoots::Exact(vec![]);
+        assert_ne!(key(&defaults), key(&changed));
+        let exact = |entries: &str| {
+            OracleSelection::parse(&format!(
+            r#"{{"format":"zkc.oracle-selection/0","roots":{{"kind":"exact","entries":{entries}}},"order":"unrestricted","authentication":"per-query"}}"#
+        )).unwrap()
+        };
+        let a = r#"{"entry":"a","path":[0],"scheme":"","grouping":"individual","order":"natural"}"#;
+        let b = a.replace(r#""a""#, r#""b""#);
+        changed.oracle_realization = exact(&format!("[{a},{b}]"));
+        let first = key(&changed);
+        changed.oracle_realization = exact(&format!("[{b},{a}]"));
+        assert_eq!(first, key(&changed));
+        changed.oracle_realization.order = crate::entry::OracleQueryOrder::AfterFinalDraw;
+        assert_ne!(first, key(&changed));
     }
 }

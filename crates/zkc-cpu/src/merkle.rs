@@ -316,7 +316,7 @@ pub(crate) fn apply(
             "oracle.check" | "oracle.check_many",
             [root, width, height, at, rows, Value::MerkleProof(p, proof)],
         ) if *p == scheme => {
-            policy.output(512, available)?;
+            policy.output(crate::VALUE_SLOT_BYTES, available)?;
             let root = digest(scheme, root).ok_or_else(|| refused("oracle-operands"))?;
             let at = if name == "oracle.check" {
                 vec![index(at)?]

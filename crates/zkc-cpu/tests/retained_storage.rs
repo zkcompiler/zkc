@@ -13,7 +13,7 @@ use zkc_runtime::vm::{
     ValueBudget, WorkBudget,
 };
 
-const INLINE: usize = 512;
+const INLINE: usize = zkc_cpu::VALUE_SLOT_BYTES;
 
 fn size(n: usize, width: usize) -> usize {
     n * width + 256
@@ -800,5 +800,88 @@ fn row_check_preflights_claimed_height_times_width_without_allocation() {
             "exhausted:oracle-element-limit"
         );
         assert_eq!(check(1, (1 << 24) + 1).unwrap_err(), "refused:oracle-shape");
+    }
+}
+
+/// Distinct empty aggregate payloads can share a descriptor without becoming
+/// the same value. The descriptor remains live through a return handoff, and
+/// disappears only after the last payload has been released.
+#[test]
+fn descriptor_aliases_are_charged_once_through_transfers_and_releases() {
+    use zkc_runtime::vm::Value as RuntimeValue;
+    let ty = PhysicalType::default_for(LogicalType::parse("sequence<index>").unwrap()).unwrap();
+    let make =
+        |ty| Value::Sequence(zkc_cpu::Sequence::new(ty, vec![], &Policy::default()).unwrap());
+    let first = make(ty.clone());
+    let shared = make(ty.clone());
+    let separate = make(PhysicalType::parse(&ty.spelling()).unwrap());
+    let bytes = program(
+        vec![],
+        vec![function(
+            "identity",
+            json!([["x", ty.spelling()]]),
+            json!([ty.spelling()]),
+            json!([["return", ["x"]]]),
+        )],
+        json!([["a", ty.spelling()], ["b", ty.spelling()]]),
+        json!([
+            ["local", "handoff", "identity", ["a"], ["c"]],
+            ["local", "rebind", "identity", ["c"], ["d"]],
+            ["return", []]
+        ]),
+    );
+    let metadata = ty.descriptor_bytes();
+    for (second, expected) in [
+        (shared, 2 * 256 + metadata),
+        (separate, 2 * (256 + metadata)),
+    ] {
+        let inputs = vec![first.clone(), second];
+        let (outcome, usage) = run(
+            &bytes,
+            backend(4),
+            inputs.clone(),
+            unbounded(),
+            WorkBudget::default(),
+        );
+        outcome.unwrap();
+        assert_eq!(usage.total_value_bytes, expected);
+        assert_eq!((usage.live_values, usage.live_value_bytes), (0, 0));
+        for total in [false, true] {
+            let budgets = |n| {
+                if total {
+                    ValueBudget {
+                        live_bytes: usize::MAX,
+                        total_bytes: n,
+                    }
+                } else {
+                    live(n)
+                }
+            };
+            run(
+                &bytes,
+                backend(4),
+                inputs.clone(),
+                budgets(expected),
+                WorkBudget::default(),
+            )
+            .0
+            .unwrap();
+            let admitted =
+                zkc_runtime::vm::Program::decode(&bytes, zkc_cpu::cpu_contracts()).unwrap();
+            assert!(
+                Runner::new_with_budgets(
+                    &admitted,
+                    "main",
+                    "P",
+                    "session",
+                    backend(4),
+                    inputs.clone(),
+                    budgets(expected - 1),
+                    WorkBudget::default()
+                )
+                .is_err()
+            );
+        }
+        assert!(first.retained_bytes() <= expected);
     }
 }

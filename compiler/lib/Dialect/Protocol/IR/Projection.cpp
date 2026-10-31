@@ -605,8 +605,26 @@ struct MetadataVerifier {
       }
       llvm::DenseSet<std::pair<Attribute, Attribute>> insertedUses;
       llvm::DenseSet<Attribute> insertedCallees;
+      llvm::DenseSet<Attribute> sourceCallees;
       SmallVector<Attribute> retainedCallees;
       unsigned totalRemoved = 0;
+      auto collectCallees = [&](auto &&self, ArrayAttr actions,
+                                unsigned depth) -> LogicalResult {
+        if (depth > 64 || failed(charge(actions.size())))
+          return refuse(record, "projection metadata work limit");
+        for (Attribute item : actions) {
+          auto action = cast<DictionaryAttr>(item);
+          if (action.getAs<StringAttr>("kind").getValue() ==
+              "protocol.local_call")
+            sourceCallees.insert(action.get("callee"));
+          if (auto body = action.getAs<ArrayAttr>("body"))
+            if (failed(self(self, body, depth + 1)))
+              return failure();
+        }
+        return success();
+      };
+      if (failed(collectCallees(collectCallees, actions, 0)))
+        return failure();
       auto compare = [&](auto &&self, ArrayAttr source, ArrayAttr constructed,
                          unsigned depth) -> LogicalResult {
         if (depth > 64 || failed(charge(source.size() + constructed.size())))
@@ -614,6 +632,7 @@ struct MetadataVerifier {
         llvm::StringMap<DictionaryAttr> originals;
         SmallVector<Attribute> retained, actualRetained;
         unsigned removedQueries = 0, removedMessages = 0;
+        bool pendingChallenge = false;
         for (auto item : source) {
           auto action = cast<DictionaryAttr>(item);
           originals[action.getAs<StringAttr>("site").getValue()] = action;
@@ -650,12 +669,22 @@ struct MetadataVerifier {
             if (auto callee = action.get("callee"))
               retainedCallees.push_back(callee);
           } else if (kind == "protocol.query") {
+            if (pendingChallenge)
+              return refuse(record, "unpaired constructed challenges");
+            pendingChallenge = true;
             ++removedQueries;
           } else if (!codecMessage && !start) {
-            ++removedMessages;
+            // The first reverse exchange following a selected query delivers
+            // that sample. Additional reverse exchanges are requests, whose
+            // deterministic value relation belongs to the native source/body
+            // checker. Formation does not manufacture that relation.
+            if (pendingChallenge) {
+              pendingChallenge = false;
+              ++removedMessages;
+            }
           }
         }
-        if (removedQueries != removedMessages)
+        if (pendingChallenge || removedQueries != removedMessages)
           return refuse(record, "unpaired constructed challenges");
         totalRemoved += removedQueries;
         for (auto item : constructed) {
@@ -702,7 +731,19 @@ struct MetadataVerifier {
           auto function =
               ref ? tables.lookupNearestSymbolFrom<func::FuncOp>(record, ref)
                   : func::FuncOp();
-          if (!function || !constructionHelpers.contains(ref))
+          if (!function)
+            return refuse(record, "missing constructed helper");
+          if (sourceCallees.contains(ref) &&
+              !constructionHelpers.contains(ref)) {
+            // Replica calls retain an existing scoped source callee. They do
+            // not acquire transcript-helper identity. checkActions below binds
+            // their actual sites, targets, callee and order; the independent
+            // native reader checks every operand and complete source closure.
+            if (!protocol::scopedDataSignature(function))
+              return refuse(record, "invalid reconstructed source callee");
+            continue;
+          }
+          if (!constructionHelpers.contains(ref))
             return refuse(record, "missing constructed helper");
           if (insertedCallees.insert(ref).second && !programmable &&
               failed(checkTranscriptHelper(function)))

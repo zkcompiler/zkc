@@ -55,25 +55,69 @@ arrays retain their element construction policy despite having no fields.
 `permissions` is
 the canonical ordered subset of `Copy`, `Drop`; `Copy` requires `Drop`.
 
-A logical oracle port is a separate schema alternative. It has kind `oracle`,
-no data `leaves`, no fields or alternatives, `custody: false`,
-`constructible: false`, and permissions `["Copy", "Drop"]`. It additionally has
-`oracle: {kind, arguments}`. The closed kind arguments are ordered pairs
+A logical oracle port has schema kind `oracle` for a singleton handle or
+`oracle_sequence` for a bounded handle sequence. Both have no data `leaves`, no
+fields or alternatives, `custody: false`, `constructible: false`, and permissions
+`["Copy", "Drop"]`. Both additionally require `oracle: {kind, arguments}` and a
+recursive `data_schema` describing the complete holder projection. The closed
+kind arguments are ordered pairs
 `["type", <canonical logical BoundType>]` and `["nat", <decimal uint64 string>]`.
 The current kind is `table`, with a row type and optional exact row count. These
 are logical descriptors, not native opaque-handle spellings.
 
+An `oracle_sequence` schema additionally requires `maximum`, a canonical uint64
+decimal string including zero. This is the exact sequence capacity, independent
+of the kind's row count or per-element row bound. Singleton `oracle` schemas and
+ordinary schemas reject `maximum`. The singleton `data_schema` describes
+`K::Data`; the sequence `data_schema` describes the ordinary builtin
+`sequence<K::Data>`, including the outer sequence even when `K::Data` is itself
+a sequence. Repeated schema identities must agree on the complete kind, capacity
+and data schema.
+
+There is one strict current `/0` schema per alternative, with no legacy decoding
+path.
+
 An oracle port additionally has `holder` (one source role name) and
 `maximum_rows` (null for a sized kind, otherwise a canonical uint64 string).
+For a sequence this row bound applies to each element, independently of capacity.
 Its `roles` is the union of that holder and the nonempty receiver set; the holder
 cannot be a receiver. Its two `native` indices select holder data first, then the
-receiver anchor. The reader checks the common signature, each leaf's roles,
-kind and bound, and the actual input binding. Source comparison also binds the
-output maximum and complete descriptor to the checked declaration. Ordinary
-schema and port alternatives reject these additional keys.
+receiver anchor. The native signature pair is `[K::Data, Oracle<K>]` for a
+singleton and `[Sequence<K::Data>, OracleSequence<K, M>]` for a sequence with
+capacity `M`. The reader checks that exact pair, each leaf's ordered roles,
+kind, capacity and row bound, and the actual input binding. Source comparison
+also binds the output row bound and complete descriptor to the checked
+declaration. Ordinary schema and port alternatives reject these additional keys.
 
-Oracle schemas cannot occur as aggregate children, ordinary relation-data
-selectors or Host schemas. Realization determines the public commitment and
+The `logical_record` schema has the common schema members, no native `leaves`,
+no alternatives, `custody: false`, `constructible: false`, and permissions
+`["Copy", "Drop"]`. It requires a nonempty ordered field list containing at least
+one direct oracle handle or sequence. Other fields must recursively be ordinary
+total shared data. Nested logical records and ordinary products containing
+handles refuse. A direct unsized logical field additionally requires
+`maximum_rows`, a canonical uint64 decimal string including zero; sized logical
+fields and ordinary fields reject it. Field offsets count body leaves: one per
+direct handle or sequence, and the ordinary leaf count for other fields.
+Protocol native slots instead expand each direct handle or sequence into two
+slots, including a zero-capacity sequence. A logical record port requires
+`holder`, rejects a whole-port `maximum_rows`, and uses the same exact oriented
+holder/receiver family for all its logical fields. Repeated schema identities
+must agree on field order, names, offsets, bounds and complete child schemas.
+
+Oracle schemas cannot occur as ordinary aggregate children, ordinary relation-data
+selectors or Host schemas. Logical contract anchor selectors admit a singleton
+handle port or a direct singleton handle field of a logical record; they do not
+select sequences. Such a selector has a required null `role` and selects the
+paired anchor slot, with the complete associated `data_schema` as its logical
+relation type. A named role cannot select a logical value as ordinary data.
+Projection through a logical record derives native prefixes from expanded
+widths, rather than using body offsets as native offsets.
+
+Internal protocol ports may carry checked logical records, handles and sequences;
+preparation eliminates these internal ports. Rust metadata inspection validates
+the retained closure structurally without importing or executing its logical
+handles. Selected executable logical inputs and outputs refuse native binding
+and Host input/output admission. Realization determines the public commitment and
 witness interface before executable input admission; this source interface does
 not itself grant a data codec. Source names, display text and schema identities
 still require the separate source-correspondence check.
@@ -171,7 +215,8 @@ protocol's acceptance implies it.
 Each clause has `name`, `kind`, `subject`, `residual` and `decision`; absent optional
 fields are JSON null. An application has a relation symbol and ordered `operands`.
 Selectors have `direction` (`input` or `output`), logical `port` index, field-index
-`path` and actual `role` name. Native slices are derived from the admitted logical
+`path` and actual `role` name (or null for the singleton anchor case above).
+Native slices are derived from the admitted logical
 schema, rather than supplied again. Relations compare exact logical identities.
 Clauses remain on closed component declarations; original `protocol.apply`
 occurrences own their operand/result and role mappings. There is no separate
@@ -188,9 +233,10 @@ against its exact byte hash, selected protocol, flattened types and participant
 roles. It checks contiguous port/field indices, complete native coverage, variant
 labels/payloads, custody prefixes and managed-service contracts. Logical types
 with the same identity must have consistent kind, label and schema. Kinds are
-`boolean`, `index`, `field`, `group`, `unit`, `tuple`, `array`, `record`, `variant`,
-`associated` and `builtin`. Scalars have their matching single native leaf; unit
-has none. Tuples/arrays have positional fields, with one common element identity
+`boolean`, `index`, `field`, `group`, `unit`, `tuple`, `array`, `record`, `logical_record`, `variant`,
+`associated`, `builtin`, `oracle` and `oracle_sequence`. Ordinary scalars have
+their matching single native leaf; unit has none. Tuples/arrays have positional
+fields, with one common element identity
 for nonempty arrays. Records have identifier fields; associated representations
 have exactly one `value` field. Only variants have alternatives. An empty product
 cannot hide data leaves. Custody belongs only to nominal kinds.
@@ -419,3 +465,13 @@ static specialization appends `_` and the lowercase SHA-256 of its canonical
 closed family type, such as `module::Protocol<Field>`. Host admission checks this
 identity against every generated nominal signature. Equal native port shapes do
 not permit replacing a child with a different specialization.
+
+## Oracle realization selection
+
+Executable compiler options include mandatory `oracle_realization`, the exact
+[`zkc.oracle-selection/0` request](oracle-realization.md#requested-selection).
+It accompanies the six Boolean optimization options for every package, including
+Host children and the default ideal selection. Unknown, missing or malformed
+fields refuse; development version 0 has no prior six-field option reader.
+The request participates in cache identity and is forwarded to both joint and
+proof compilation. Choice metadata does not establish oracle correspondence.

@@ -24,7 +24,7 @@ fn read(document: Value) -> Result<FunctionInterface> {
     let bytes = json!({"format":"zkc.entry/0","original":"original source",
         "interface":document.to_string(),"artifact":"not interpreted by source inspection","assets":[],
         "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
-            "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true}}).to_string();
+            "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization":crate::entry::OracleSelection::default()}}).to_string();
     let package = Package::capture(
         bytes.as_bytes(),
         &Sha256::digest(bytes.as_bytes()).into(),
@@ -72,4 +72,38 @@ fn source_inspection_keeps_identity_permissions_and_constructor_checks() {
     assert_eq!(read(bad).unwrap_err().code(), "entry-interface-schema");
     let bad = document(schema("builtin", "prover_key:multilinear.kzg.bls12-381/0"));
     assert_eq!(read(bad).unwrap_err().code(), "entry-interface-schema");
+}
+
+#[test]
+fn host_signatures_refuse_logical_handles_sequences_and_records() {
+    for kind in ["oracle", "oracle_sequence", "logical_record"] {
+        let mut logical = schema("oracle", "Logical");
+        logical["constructible"] = json!(false);
+        logical["leaves"] = json!([]);
+        logical["oracle"] = json!({"kind":"table","arguments":[["type","bool"],["nat","0"]]});
+        logical["data_schema"] = schema("builtin", "sequence<bool>");
+        if kind == "oracle_sequence" {
+            logical["kind"] = json!(kind);
+            logical["maximum"] = json!("0");
+            logical["data_schema"] = schema("builtin", "sequence<sequence<bool>>");
+        } else if kind == "logical_record" {
+            let child = logical;
+            logical = schema(kind, "State");
+            logical["constructible"] = json!(false);
+            logical["leaves"] = json!([]);
+            logical["fields"] = json!([{"name":"word","offset":0,"schema":child}]);
+        }
+        for output in [false, true] {
+            let mut d = document(logical.clone());
+            if output {
+                d["functions"][0]["result"] = logical.clone();
+                d["functions"][0]["parameters"] = json!([]);
+            }
+            assert_eq!(
+                read(d).unwrap_err().code(),
+                "entry-host-schema",
+                "{kind} output={output}"
+            );
+        }
+    }
 }

@@ -1,6 +1,8 @@
 //! Independent carriers exercise admission without a compiler or opposite role.
 use super::*;
 use serde_json::{Value as Json, json};
+mod generated_origins;
+mod reconstructed;
 
 const BOOL: &str = "bool@native.bool/0";
 const SUITE: &str = "merlin3.bls12-381.fr64be/0";
@@ -513,6 +515,7 @@ fn event(query: bool) -> NativeTranscriptEvent {
     ]))
     .unwrap();
     NativeTranscriptEvent {
+        reconstructed: false,
         contract: format!(
             "transcript.native.indexed.{}",
             if query { "challenge" } else { "observe.data" }
@@ -745,6 +748,7 @@ fn custom_child_starts_and_queries_retain_selected_ports() {
     ]))
     .unwrap();
     let mut start = NativeTranscriptEvent {
+        reconstructed: false,
         contract: "construction.start".into(),
         origin: origin.iter().map(|b| format!("{b:02x}")).collect(),
         payload: None,

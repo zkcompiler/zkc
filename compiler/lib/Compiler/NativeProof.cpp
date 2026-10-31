@@ -1,5 +1,8 @@
 #include "zkc/Compiler/NativeProof.h"
+#include "../Transforms/PreparedProtocol.h"
+#include "../Transforms/RealizedProtocol.h"
 #include "NativeCodec.h"
+#include "NativeProofOrigins.h"
 #include "NativeProofVerification.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/IRMapping.h"
@@ -84,23 +87,27 @@ pir::ProtocolModuleOp unit(ModuleOp module) {
     return {};
   return dyn_cast<pir::ProtocolModuleOp>(module.getBody()->front());
 }
+bool oracleOperation(Operation &op) {
+  return isa<pir::OracleSendOp, pir::OracleQueryOp, pir::OracleVirtualOp,
+             pir::OracleInputOp, pir::OracleComponentsOp, pir::OracleShapeOp,
+             pir::OracleForgetShapeOp, pir::OracleContentsOp,
+             pir::OracleSequenceEmptyOp, pir::OracleSequenceAppendOp,
+             pir::OracleSequenceAtOp, pir::OracleSequenceLengthOp>(op);
+}
 bool admittedOperation(Operation &op, bool beforePreparation) {
   return !op.getNumRegions() &&
          (isa<pir::QueryOp, pir::ExchangeOp, pir::StatementOp, pir::GuardOp,
               pir::LocalCallOp, pir::MathematicalReturnOp, pir::FinishIfOp,
-              pir::RestrictRolesOp>(op) ||
+              pir::RestrictRolesOp, pir::AssembleRolesOp>(op) ||
           // Verified pure helpers contain no protocol events. The ordinary
           // preparation pass expands both kinds of static call under its
           // bounds.
-          (beforePreparation && isa<pir::ApplyOp, func::CallOp>(op)) ||
+          (beforePreparation &&
+           (isa<pir::ApplyOp, func::CallOp>(op) || oracleOperation(op))) ||
           (!beforePreparation && isa<pir::ConstructionStartOp>(op)) ||
           mathematical::isTotal(&op));
 }
-struct Origin {
-  std::string protocol, site;
-  std::vector<std::string> event;
-  std::vector<std::array<std::string, 3>> steps;
-};
+using Origin = detail::NativeSourceOrigin;
 // Borrowed services pass through isolated repeat captures without acquiring a
 // new authority. Return the argument in its original mathematical definition.
 BlockArgument sourcePort(Value value) {
@@ -135,6 +142,8 @@ origins(pir::MathematicalOp entry, SymbolTable &symbols,
                      const StringMap<std::string> &roles) -> Error {
     if (steps.size() > 64)
       return error("native-proof-origin-limit");
+    if (function.getSymName().starts_with("zkc.oracle."))
+      return error("native-proof-reserved-origin");
     for (auto &op : body) {
       if (!remaining--)
         return error("native-proof-origin-limit");
@@ -173,7 +182,8 @@ origins(pir::MathematicalOp entry, SymbolTable &symbols,
           return e;
         continue;
       }
-      if (repeat || isa<pir::QueryOp, pir::ExchangeOp>(op)) {
+      if (repeat || isa<pir::QueryOp, pir::ExchangeOp>(op) ||
+          oracleOperation(op)) {
         Origin origin{function.getSymName().str(),
                       site.str(),
                       {},
@@ -197,6 +207,8 @@ origins(pir::MathematicalOp entry, SymbolTable &symbols,
                           origin.site,
                           roles.lookup(message.getSender()),
                           roles.lookup(message.getReceiver())};
+        } else if (oracleOperation(op)) {
+          origin.event = {"oracle", origin.protocol, origin.site};
         } else {
           origin.event = {"repeat", origin.protocol, origin.site};
         }
@@ -327,7 +339,8 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
   };
   auto append = [&](Operation *op, bool query, Type payload,
                     json::Array &sequence, std::optional<uint64_t> bound = {},
-                    std::optional<uint64_t> count = {}) -> Error {
+                    std::optional<uint64_t> count = {},
+                    bool reconstructed = false) -> Error {
     auto site = op->getAttrOfType<StringAttr>("site").str();
     auto found = consume(site, query ? "query" : "message");
     if (!found)
@@ -357,6 +370,7 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
          bound, std::nullopt});
     auto &event = admitted.events.back();
     event.count = count;
+    event.reconstructed = reconstructed;
     if (count) {
       auto gate = find_if(policy.gates,
                           [&](const auto &gate) { return gate.first == site; });
@@ -380,7 +394,10 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
       sequence.push_back(
           json::Array{"index", *encoded, std::to_string(*bound)});
     else
-      sequence.push_back(json::Array{query ? "query" : "message", *encoded});
+      sequence.push_back(json::Array{query           ? "query"
+                                     : reconstructed ? "reconstructed-message"
+                                                     : "message",
+                                     *encoded});
     if (!query) {
       admitted.messages.push_back(
           json::Array{*encoded, type->spelling(), wireCodec(*type).str()});
@@ -493,9 +510,9 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
         bool selected = authority &&
                         is_contained(policy.services, authority.getArgNumber());
         if (!selected) {
-          // Placement keeps this service and its results owner-local. Whole
-          // candidate pairing below still permits V->P messages only for an
-          // immediately pending selected challenge, never for private entropy.
+          // Placement keeps this service and its results owner-local. Request
+          // reconstruction cannot use an unselected query as a seed, so private
+          // entropy cannot become a producer-visible request.
           auto origin = consume(query.getSite(), "query");
           if (!origin)
             return origin.takeError();
@@ -551,24 +568,36 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
         pending = query;
       }
       if (auto message = dyn_cast<pir::ExchangeOp>(op)) {
+        bool reconstructed = false;
         if (message.getSender() == policy.producer) {
           if (message.getReceiver() != policy.validator)
             return error("native-proof-reverse-message");
           if (pending)
             return error("native-proof-prefix");
         } else {
-          if (!pending || message.getInput() != pending.getResult(0) ||
-              (selection == DrawSelection::Explicit &&
-               message.getSite() != policy.draws[draw].second) ||
+          if (message.getSender() != policy.validator ||
               message.getReceiver() != policy.producer)
             return error("native-proof-reverse-message");
-          admitted.draws.emplace_back(pending.getSite().str(),
-                                      message.getSite().str());
-          pending = {};
-          ++draw;
+          if (pending) {
+            if (message.getInput() != pending.getResult(0) ||
+                (selection == DrawSelection::Explicit &&
+                 message.getSite() != policy.draws[draw].second))
+              return error("native-proof-reverse-message");
+            admitted.draws.emplace_back(pending.getSite().str(),
+                                        message.getSite().str());
+            pending = {};
+            ++draw;
+          } else {
+            // Occurrence selection is not a reconstruction certificate. The
+            // participant reader must establish the actual value relation
+            // before this message can lose its transport.
+            if (construction || policy.suite.empty())
+              return error("native-proof-request-profile");
+            reconstructed = true;
+          }
         }
-        if (auto e =
-                append(message, false, message.getInput().getType(), sequence))
+        if (auto e = append(message, false, message.getInput().getType(),
+                            sequence, {}, {}, reconstructed))
           return e;
       }
     }
@@ -889,6 +918,7 @@ class Emitter {
   pir::ProtocolModuleOp module;
   const NativeProofPolicy &policy;
   const protocol::ConstructionPlan *plan;
+  const mathematical::RealizedProtocol *realization;
   StringMap<const protocol::ConstructionRule *> rules;
   std::map<std::string, protocol::ConstructionRule> startRules;
   SmallVector<Attribute> invokedHelpers;
@@ -1062,8 +1092,9 @@ class Emitter {
 public:
   Emitter(pir::ProtocolModuleOp module, const NativeProofPolicy &policy,
           const protocol::ConstructionPlan *plan,
-          ArrayRef<protocol::ConstructionInvocation> invocations)
-      : module(module), policy(policy), plan(plan),
+          ArrayRef<protocol::ConstructionInvocation> invocations,
+          const mathematical::RealizedProtocol *realization = nullptr)
+      : module(module), policy(policy), plan(plan), realization(realization),
         builder(module.getContext()), symbols(module) {
     if (plan)
       for (const auto &rule : plan->rules)
@@ -1087,6 +1118,22 @@ public:
     });
   }
   Error run(const Admitted &admitted, json::Array &exportedPlan) {
+    auto requestSource = OwningOpRef<pir::ProtocolModuleOp>(
+        cast<pir::ProtocolModuleOp>(module->clone()));
+    auto requests = detail::planNativeRequests(*requestSource, policy,
+                                               admitted.events, realization);
+    if (!requests)
+      return requests.takeError();
+    auto emittedRequests =
+        detail::emitNativeRequests(*requests, module, [&] { return fresh(); });
+    if (!emittedRequests)
+      return emittedRequests.takeError();
+    auto replace = [&](Value from, Value to) {
+      from.replaceAllUsesWith(to);
+      for (auto &item : emittedRequests->requests)
+        if (item.second == from)
+          item.second = to;
+    };
     auto records = module.getBody().front().getOps<pir::ProjectionOp>();
     if (!hasSingleElement(records))
       return error("native-proof-entry");
@@ -1094,14 +1141,13 @@ public:
     if (record.getInterfaces().size() != 1)
       return error("native-proof-entry");
     auto original = cast<DictionaryAttr>(record.getInterfaces()[0]);
-    auto stateType = runtime::CapabilityType::get(
-        module.getContext(), zkc::runtime::CapabilityKind::Transcript,
-        policy.suite);
     SmallVector<Type> stateTypes;
     if (plan)
       stateTypes = plan->state;
     else
-      stateTypes.push_back(stateType);
+      stateTypes.push_back(runtime::CapabilityType::get(
+          module.getContext(), zkc::runtime::CapabilityKind::Transcript,
+          policy.suite));
     bool hostRoot =
         !plan || plan->root == protocol::ConstructionPlan::Root::Host;
     if (plan) {
@@ -1214,6 +1260,21 @@ public:
       queries.insert(query);
     }
     std::map<std::string, SmallVector<Attribute>> addedActions;
+    for (const auto &action : emittedRequests->actions) {
+      auto call = action.call;
+      auto participant = call->getParentOfType<pir::ParticipantOp>();
+      auto target = builder.getDictionaryAttr(
+          {builder.getNamedAttr("participant",
+                                FlatSymbolRefAttr::get(participant)),
+           builder.getNamedAttr("operation",
+                                builder.getStringAttr("protocol.local_call"))});
+      addedActions[action.anchor].push_back(builder.getDictionaryAttr(
+          {builder.getNamedAttr("site", call.getSiteAttr()),
+           builder.getNamedAttr("kind",
+                                builder.getStringAttr("protocol.local_call")),
+           builder.getNamedAttr("callee", call.getCalleeAttr()),
+           builder.getNamedAttr("targets", builder.getArrayAttr({target}))}));
+    }
     for (auto participant :
          module.getBody().front().getOps<pir::ParticipantOp>()) {
       auto &body = participant.getBody().front();
@@ -1396,10 +1457,24 @@ public:
                             state.end());
             SmallVector<Type> results(loop.getResultTypes());
             append_range(results, stateTypes);
-            // Fresh captures keep the source operands untouched. Normal later
-            // simplification may deduplicate them; admission follows capture
-            // SSA.
-            append_range(operands, coordinates);
+            // Reuse an exact invariant capture for an administrative coordinate
+            // when the source already forwards it. Preserve every original
+            // capture and its multiplicity; only new coordinate slots are
+            // shared. A carried slot is not an invariant capture.
+            unsigned captureStart = 1 + carried + stateTypes.size();
+            SmallVector<unsigned> coordinateSlots;
+            SmallVector<Value> addedCoordinates;
+            for (Value coordinate : coordinates) {
+              auto captures =
+                  ArrayRef<Value>(operands).drop_front(captureStart);
+              auto found = llvm::find(captures, coordinate);
+              unsigned slot = captureStart + (found - captures.begin());
+              if (found == captures.end()) {
+                addedCoordinates.push_back(coordinate);
+                operands.push_back(coordinate);
+              }
+              coordinateSlots.push_back(slot);
+            }
             builder.setInsertionPoint(loop);
             auto replacement = pir::ProtocolLoopOp::create(
                 builder, loop.getLoc(), results, operands, loop.getSiteAttr(),
@@ -1412,18 +1487,19 @@ public:
             for (auto [index, slot] : enumerate(stateTypes))
               state.push_back(child.insertArgument(1 + carried + index, slot,
                                                    loop.getLoc()));
+            for (Value coordinate : addedCoordinates)
+              child.addArgument(coordinate.getType(), loop.getLoc());
             SmallVector<Value> outer = coordinates;
             coordinates.clear();
-            for (Value coordinate : outer)
-              coordinates.push_back(
-                  child.addArgument(coordinate.getType(), loop.getLoc()));
+            for (unsigned slot : coordinateSlots)
+              coordinates.push_back(child.getArgument(slot));
             coordinates.push_back(child.getArgument(0));
             if (auto e = self(self, child))
               return e;
             coordinates = std::move(outer);
             for (auto [oldValue, newValue] :
                  zip(loop.getResults(), replacement.getResults()))
-              oldValue.replaceAllUsesWith(newValue);
+              replace(oldValue, newValue);
             state.clear();
             append_range(state,
                          replacement.getResults().take_back(stateTypes.size()));
@@ -1449,7 +1525,7 @@ public:
                 completion.getOwner());
             for (auto [oldValue, newValue] :
                  zip(completion.getResults(), replacement.getResults()))
-              oldValue.replaceAllUsesWith(newValue);
+              replace(oldValue, newValue);
             if (affineState) {
               state.clear();
               append_range(
@@ -1483,7 +1559,7 @@ public:
             if (event.difficulty)
               payload.push_back(witness(event, site.getValue()));
             auto replacement = call(event, site.getValue(), payload);
-            op.getResult(0).replaceAllUsesWith(replacement.getResult(0));
+            replace(op.getResult(0), replacement.getResult(0));
             op.erase();
           } else if (auto receive = dyn_cast<pir::AwaitOp>(op)) {
             if (event.query)
@@ -1497,8 +1573,16 @@ public:
                   call(*events.at(delivery->second), site.getValue());
               if (auto &query = *events.at(delivery->second); query.difficulty)
                 witness(query, site.getValue(), challenge.getResult(1));
-              receive.getOutput().replaceAllUsesWith(challenge.getResult(0));
+              replace(receive.getOutput(), challenge.getResult(0));
               observe(event, site.getValue(), challenge.getResult(0));
+              op.erase();
+            } else if (event.reconstructed) {
+              Value payload = emittedRequests->requests.lookup(&op);
+              if (participant.getRole() != policy.producer || !payload)
+                return error("native-request-emission");
+              builder.setInsertionPoint(&op);
+              replace(receive.getOutput(), payload);
+              observe(event, site.getValue(), payload);
               op.erase();
             } else {
               if (participant.getRole() != policy.validator)
@@ -1507,13 +1591,14 @@ public:
               observe(event, site.getValue(), receive.getOutput());
             }
           } else if (auto send = dyn_cast<pir::EmitOp>(op)) {
-            if (event.query || (deliveries.count(site.str())
-                                    ? participant.getRole() != policy.validator
-                                    : participant.getRole() != policy.producer))
+            if (event.query ||
+                (deliveries.count(site.str()) || event.reconstructed
+                     ? participant.getRole() != policy.validator
+                     : participant.getRole() != policy.producer))
               return error("native-proof-projected-event");
             builder.setInsertionPointAfter(&op);
             observe(event, site.getValue(), send.getInput());
-            if (deliveries.count(site.str()))
+            if (deliveries.count(site.str()) || event.reconstructed)
               op.erase();
           } else
             return error("native-proof-projected-event");
@@ -1551,7 +1636,9 @@ public:
           edited.set("body", *nested);
           action = edited.getDictionary(module.getContext());
         }
-        if (!queries.count(site) && !deliveries.count(site) &&
+        bool reconstructed =
+            events.count(site) && events.at(site)->reconstructed;
+        if (!queries.count(site) && !deliveries.count(site) && !reconstructed &&
             !startRules.count(site))
           actions.push_back(action);
         append_range(actions, addedActions[site]);
@@ -1595,10 +1682,12 @@ struct PreparedProof {
   StringMap<Origin> origins;
   std::optional<protocol::ConstructionPlan> construction;
   SmallVector<protocol::ConstructionInvocation> invocations;
+  std::shared_ptr<const mathematical::RealizedProtocol> realization;
 };
 Expected<PreparedProof>
 prepareProof(ModuleOp source, const NativeProofPolicy &policy,
-             MathematicalSelectionPolicy mathematicalSelection) {
+             MathematicalSelectionPolicy mathematicalSelection,
+             const protocol::OracleRealizationPolicy &oracleSelection) {
   if (!source || failed(zkc::admitStage(source)))
     return error("native-proof-source");
   auto original = unit(source);
@@ -1706,22 +1795,48 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
   SmallVector<mathematical::ApplicationStart> starts;
   for (const auto &invocation : invocations)
     starts.push_back({policy.entry, invocation.site, invocation.inputs});
-  auto candidate = mathematical::prepareProtocol(source, false,
-                                                 mathematicalSelection, starts);
+  // Keep original root ports stable: native proof bindings refer to authored
+  // data, not imported logical oracle graphs or appended realization stores.
+  bool logicalPort = false;
+  entry.getFunctionType().walk([&](Type type) {
+    logicalPort |= isa<pir::OracleHandleType, pir::OracleSequenceType>(type);
+  });
+  if (logicalPort)
+    return error("native-proof-oracle-interface");
+  auto preparation = mathematical::PreparedProtocol::prepare(
+      source, mathematicalSelection, nullptr, starts);
+  if (!preparation ||
+      failed(preparation->consumeConstruction(policy.construction)) ||
+      failed(preparation->selectEntries({policy.entry})))
+    return error("native-proof-preparation");
+  auto realization = mathematical::RealizedProtocol::realize(
+      std::move(*preparation), oracleSelection);
+  if (!realization)
+    return realization.takeError();
+  auto owner =
+      std::make_shared<mathematical::RealizedProtocol>(std::move(*realization));
+  auto actualOrigins =
+      detail::realizedNativeOrigins(*owner, policy.entry, *occurrenceMap);
+  if (!actualOrigins)
+    return actualOrigins.takeError();
+  auto candidate = owner->candidateSnapshot();
   if (!candidate || !unit(*candidate))
     return error("native-proof-preparation");
-  return PreparedProof{std::move(candidate), std::move(*occurrenceMap),
-                       std::move(construction), std::move(invocations)};
+  return PreparedProof{std::move(candidate), std::move(*actualOrigins),
+                       std::move(construction), std::move(invocations),
+                       std::move(owner)};
 }
 } // namespace
-Expected<NativeProofPolicy>
-selectNativeProofDraws(ModuleOp source, const NativeProofPolicy &selection,
-                       MathematicalSelectionPolicy mathematicalSelection) {
+Expected<NativeProofPolicy> selectNativeProofDraws(
+    ModuleOp source, const NativeProofPolicy &selection,
+    MathematicalSelectionPolicy mathematicalSelection,
+    const protocol::OracleRealizationPolicy &oracleSelection) {
   auto policy =
       readProofPolicy(printJson(encodeNativeProofPolicy(selection)), true);
   if (!policy)
     return policy.takeError();
-  auto prepared = prepareProof(source, *policy, mathematicalSelection);
+  auto prepared =
+      prepareProof(source, *policy, mathematicalSelection, oracleSelection);
   if (!prepared)
     return prepared.takeError();
   SymbolTable symbols(unit(*prepared->module));
@@ -1736,18 +1851,31 @@ selectNativeProofDraws(ModuleOp source, const NativeProofPolicy &selection,
                                    admitted->events))
       return std::move(e);
   policy->draws = std::move(admitted->draws);
+  // Every paired loop needs actual count correspondence, including loops
+  // without events. Reverse requests additionally need a deterministic
+  // source relation. Construction checks the emitted candidate separately;
+  // selecting an occurrence never certifies its payload or iteration count.
+  auto projected = prepared->realization->project(false);
+  if (!projected)
+    return error("native-proof-projection");
+  auto requests = detail::planNativeRequests(
+      unit(*projected), *policy, admitted->events, prepared->realization.get());
+  if (!requests)
+    return requests.takeError();
   return parseNativeProofPolicy(printJson(encodeNativeProofPolicy(*policy)));
 }
-static Expected<NativeProofConstruction>
-constructNativeProofChecked(ModuleOp source, const NativeProofPolicy &policy,
-                            MathematicalSelectionPolicy mathematicalSelection,
-                            ModuleOp supplied = {}) {
+static Expected<NativeProofConstruction> constructNativeProofChecked(
+    ModuleOp source, const NativeProofPolicy &policy,
+    MathematicalSelectionPolicy mathematicalSelection,
+    const protocol::OracleRealizationPolicy &oracleSelection,
+    ModuleOp supplied = {}) {
   // Validate public API callers too; policy structs are not admission tokens.
   auto checked =
       parseNativeProofPolicy(printJson(encodeNativeProofPolicy(policy)));
   if (!checked)
     return checked.takeError();
-  auto preparedSource = prepareProof(source, policy, mathematicalSelection);
+  auto preparedSource =
+      prepareProof(source, policy, mathematicalSelection, oracleSelection);
   if (!preparedSource)
     return preparedSource.takeError();
   auto candidate = std::move(preparedSource->module);
@@ -1763,26 +1891,10 @@ constructNativeProofChecked(ModuleOp source, const NativeProofPolicy &policy,
     if (auto e = admitConstruction(program, *preparedSource->construction,
                                    admitted->events))
       return std::move(e);
-  // The resolved plan owns the checked construction closure. Consume its
-  // declarations before dropping protocol definitions they may reference.
-  for (auto record : make_early_inc_range(
-           prepared.getBody().front().getOps<pir::ConstructionOp>()))
-    record.erase();
-  auto allDefinitions =
-      OwningOpRef<ModuleOp>(cast<ModuleOp>((*candidate)->clone()));
-  // Applications have already expanded. Export only the selected entry; local
-  // symbols remain owned and checked by the normal native module verifier.
-  for (auto function : make_early_inc_range(
-           prepared.getBody().front().getOps<pir::MathematicalOp>()))
-    if (function != program)
-      function.erase();
-  if (auto e = detail::verifyNativeEntrySelection(*allDefinitions, *candidate,
-                                                  policy.entry))
-    return std::move(e);
-  allDefinitions = {};
-  PassManager passes(source.getContext());
-  buildProjectionPipeline(passes, false, mathematicalSelection);
-  if (failed(passes.run(*candidate)))
+  // Consume the same checked edge used by ordinary execution. Projection
+  // checks an independent copy while the source/realization owner stays alive.
+  candidate = preparedSource->realization->project(false);
+  if (!candidate)
     return error("native-proof-projection");
   auto projected = OwningOpRef<ModuleOp>(cast<ModuleOp>((*candidate)->clone()));
   auto *plan =
@@ -1790,19 +1902,20 @@ constructNativeProofChecked(ModuleOp source, const NativeProofPolicy &policy,
   json::Array exportedPlan;
   if (!policy.suite.empty() || plan)
     if (auto e =
-            Emitter(unit(*candidate), policy, plan, preparedSource->invocations)
+            Emitter(unit(*candidate), policy, plan, preparedSource->invocations,
+                    preparedSource->realization.get())
                 .run(*admitted, exportedPlan))
       return std::move(e);
   if (failed(zkc::admitStage(*candidate)))
     return error("native-proof-construction");
-  if (auto e = detail::verifyNativeTranscript(*projected, *candidate, policy,
-                                              admitted->events, plan,
-                                              preparedSource->invocations))
+  if (auto e = detail::verifyNativeTranscript(
+          *projected, *candidate, policy, admitted->events, plan,
+          preparedSource->invocations, preparedSource->realization.get()))
     return std::move(e);
   if (supplied && !(plan && plan->codec))
-    if (auto e = detail::verifyNativeTranscript(*projected, supplied, policy,
-                                                admitted->events, plan,
-                                                preparedSource->invocations))
+    if (auto e = detail::verifyNativeTranscript(
+            *projected, supplied, policy, admitted->events, plan,
+            preparedSource->invocations, preparedSource->realization.get()))
       return error("native-proof-correspondence", toString(std::move(e)));
   json::Array codecPlan;
   if (plan && plan->codec) {
@@ -1830,23 +1943,28 @@ constructNativeProofChecked(ModuleOp source, const NativeProofPolicy &policy,
       "zkc.native-proof-descriptor/0", encodeNativeProofPolicy(policy),
       "zkc.native-origin/0", std::move(admitted->sequence),
       std::move(admitted->publicBindings), std::move(admitted->messages),
-      std::move(exportedPlan), std::move(admitted->witnesses)});
+      std::move(exportedPlan), std::move(admitted->witnesses),
+      preparedSource->realization->normalizedSelection().str()});
   return NativeProofConstruction{std::move(candidate), std::move(descriptor),
-                                 std::move(admitted->wireSites)};
+                                 std::move(admitted->wireSites),
+                                 std::move(preparedSource->realization)};
 }
 Expected<NativeProofConstruction>
 constructNativeProof(ModuleOp source, const NativeProofPolicy &policy,
-                     MathematicalSelectionPolicy mathematicalSelection) {
-  return constructNativeProofChecked(source, policy, mathematicalSelection);
+                     MathematicalSelectionPolicy mathematicalSelection,
+                     const protocol::OracleRealizationPolicy &oracleSelection) {
+  return constructNativeProofChecked(source, policy, mathematicalSelection,
+                                     oracleSelection);
 }
-Error checkNativeProof(ModuleOp source, ModuleOp candidate,
-                       const NativeProofPolicy &policy,
-                       MathematicalSelectionPolicy mathematicalSelection) {
+Error checkNativeProof(
+    ModuleOp source, ModuleOp candidate, const NativeProofPolicy &policy,
+    MathematicalSelectionPolicy mathematicalSelection,
+    const protocol::OracleRealizationPolicy &oracleSelection) {
   if (!source || !candidate || candidate.getContext() != source.getContext() ||
       failed(zkc::admitStage(candidate)))
     return error("native-proof-candidate");
-  auto expected = constructNativeProofChecked(source, policy,
-                                              mathematicalSelection, candidate);
+  auto expected = constructNativeProofChecked(
+      source, policy, mathematicalSelection, oracleSelection, candidate);
   if (!expected)
     return expected.takeError();
   if (!OperationEquivalence::isEquivalentTo(
@@ -2232,30 +2350,33 @@ exportCheckedParticipant(ModuleOp source, ModuleOp candidate,
 }
 } // namespace
 
-Expected<json::Value>
-exportConstructedParticipant(ModuleOp source, ModuleOp candidate,
-                             StringRef sourceBytes,
-                             const NativeProofPolicy &policy,
-                             MathematicalSelectionPolicy mathematicalSelection,
-                             ConstructedParticipantRole role) {
-  if (auto e =
-          checkNativeProof(source, candidate, policy, mathematicalSelection))
+Expected<json::Value> exportConstructedParticipant(
+    ModuleOp source, ModuleOp candidate, StringRef sourceBytes,
+    const NativeProofPolicy &policy,
+    MathematicalSelectionPolicy mathematicalSelection,
+    ConstructedParticipantRole role,
+    const protocol::OracleRealizationPolicy &oracleSelection) {
+  if (auto e = checkNativeProof(source, candidate, policy,
+                                mathematicalSelection, oracleSelection))
     return std::move(e);
-  auto prepared = prepareProof(source, policy, mathematicalSelection);
+  auto prepared =
+      prepareProof(source, policy, mathematicalSelection, oracleSelection);
   if (!prepared)
     return prepared.takeError();
   return exportCheckedParticipant(source, candidate, sourceBytes, policy,
                                   prepared->origins, role);
 }
 
-Expected<json::Value>
-exportConstructedPair(ModuleOp source, ModuleOp candidate,
-                      StringRef sourceBytes, const NativeProofPolicy &policy,
-                      MathematicalSelectionPolicy mathematicalSelection) {
-  if (auto e =
-          checkNativeProof(source, candidate, policy, mathematicalSelection))
+Expected<json::Value> exportConstructedPair(
+    ModuleOp source, ModuleOp candidate, StringRef sourceBytes,
+    const NativeProofPolicy &policy,
+    MathematicalSelectionPolicy mathematicalSelection,
+    const protocol::OracleRealizationPolicy &oracleSelection) {
+  if (auto e = checkNativeProof(source, candidate, policy,
+                                mathematicalSelection, oracleSelection))
     return std::move(e);
-  auto prepared = prepareProof(source, policy, mathematicalSelection);
+  auto prepared =
+      prepareProof(source, policy, mathematicalSelection, oracleSelection);
   if (!prepared)
     return prepared.takeError();
   auto producer = exportCheckedParticipant(

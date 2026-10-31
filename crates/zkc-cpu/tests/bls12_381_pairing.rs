@@ -143,17 +143,20 @@ fn groups_pairings_and_target_arithmetic() {
         Value::Bool(false)
     ));
     let out = call("curve.msm", "bls12-381.g2", vec![vecf(&[2, 5]), b2.clone()]);
-    assert!(matches!(&out[0], Value::Bls12381G2(x) if *x == b.scale(F::from(7))));
+    assert!(matches!(&out[0], Value::Bls12381G2(x) if **x == b.scale(F::from(7))));
     let sum = call(
         "curve.add",
         "bls12-381.g2",
-        vec![Value::Bls12381G2(b), Value::Bls12381G2(b.neg())],
+        vec![
+            Value::Bls12381G2(b.into()),
+            Value::Bls12381G2(b.neg().into()),
+        ],
     );
-    assert!(matches!(&sum[0], Value::Bls12381G2(x) if *x == G2::identity()));
+    assert!(matches!(&sum[0], Value::Bls12381G2(x) if **x == G2::identity()));
     let paired = call(
         "pairing.apply",
         "bls12-381.fr",
-        vec![Value::Curve(a), Value::Bls12381G2(b)],
+        vec![Value::Curve(a.into()), Value::Bls12381G2(b.into())],
     );
     let Value::Bls12381Gt(target) = &paired[0] else {
         panic!("target")
@@ -193,7 +196,7 @@ fn native_frames_round_trip_and_reject_damage() {
     let backend = support::backend(Policy::default());
     let b = G2::generator().scale(F::from(11));
     for (v, tag, width) in [
-        (Value::Bls12381G2(b), 51, 102),
+        (Value::Bls12381G2((b).into()), 51, 102),
         (
             Value::Bls12381G2Vector(vec![b, G2::identity()].into()),
             52,
@@ -226,11 +229,11 @@ fn native_frames_round_trip_and_reject_damage() {
     }
     // A G1 frame is not a G2 frame, even for the shared scalar field.
     let g1 = backend
-        .encode_native_value(&Value::Curve(G1::generator()))
+        .encode_native_value(&Value::Curve((G1::generator()).into()))
         .unwrap();
     assert!(
         backend
-            .decode_native_value(&Value::Bls12381G2(b).physical_type(), &g1)
+            .decode_native_value(&Value::Bls12381G2(b.into()).physical_type(), &g1)
             .is_err()
     );
 }

@@ -168,6 +168,7 @@ def facet(value):
     tag = value.get("kind")
     fields = {
         "PublicReplay": {},
+        "DeterministicData": {},
         "AcceptanceGuard": {},
         "Conjunction": {},
         "SourceHistory": {},
@@ -451,6 +452,8 @@ def validate(catalog):
     for row in catalog["operations"]:
         for key in ("scope", "requirements", "facets"):
             require(len(row[key]) <= 1024, "operation declaration limit")
+        facets = [facet["kind"] for facet in row["facets"]]
+        require(len(facets) == len(set(facets)), "duplicate semantic facet")
     validate_profiles(catalog)
 
 

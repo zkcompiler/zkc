@@ -41,6 +41,7 @@ int main(int argc, char **argv) {
       [](auto p) { return protocol::createPrepareProtocolPass(false, p); },
       [](auto p) { return protocol::createProjectProtocolPass(false, p); },
       [](auto p) { return protocol::createLowerMathPass(p); },
+      [](auto p) { return protocol::createLowerClosedParticipantPass(p); },
       [](auto p) { return computation::createRealizeComputationsPass(p); },
       [](auto p) {
         return protocol::createSelectPhysicalPass({}, false, false, nullptr, {},

@@ -51,7 +51,10 @@ struct Type {
     OracleSequence,
     /// A forward association of a symbolic logical kind; never an injective
     /// constructor.
-    OracleProjection
+    OracleProjection,
+    /// A nominal protocol product with one oriented oracle family. It has no
+    /// native representation and cannot occur inside ordinary data.
+    LogicalRecord
   };
   Kind kind = Kind::Boolean;
   std::string domain;
@@ -89,6 +92,8 @@ bool isStaticOnly(const Type &);
 /// Direct logical handle values; aggregate formation has its own recursive
 /// check.
 bool isOracleHandle(const Type &);
+/// Direct custody-bearing protocol values, including nominal logical records.
+bool isLogicalValue(const Type &);
 /// Library constructor spelling, distinct from native-data eligibility.
 llvm::StringRef oracleConstructor(const Type &);
 llvm::StringRef typeKindName(Type::Kind);

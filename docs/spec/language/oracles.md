@@ -5,8 +5,9 @@ family. They are not ordinary shared data or a Merkle commitment. The
 [Protocol IR contract](../ir/protocols.md#logical-oracle-kinds-and-handles)
 owns their meaning; realization selects an implementation separately.
 
-This page distinguishes the implemented layout projection from the remaining
-virtual-definition design. It does not announce production source-format cutover.
+This page specifies checked oracle projection, including virtual definitions,
+for explicitly selected source formats. It does not announce production
+source-format cutover.
 
 ## Types and ports
 
@@ -96,14 +97,20 @@ Append and selection are ordered checked operations. Selection requires its
 index to be available to the whole family; it cannot let each receiver choose
 a different anchor. Appended handles must preserve kind and custody family.
 The static sequence capacity is independent of each table's row shape.
-Sequences remain internal protocol values under the current IR profile.
+Sequences can cross internal protocol inputs and results with the same holder
+arrow as single handles. An alias `Oracles<K, Capacity> =
+builtin("oracle_sequence", K, Capacity)` retains the static capacity. A dynamic
+kind uses the port's named row bound for every element, independently of that
+capacity. Deployment-root sequence ingress remains refused.
 
 ## Protocol boundaries and components
 
 An oracle port is one logical source value. Calls and returns lower it into
-holder data and receiver anchor with the existing `oracle_components` operation;
-the callee rejoins those components using `oracle_input`. The same ordinary
-call-site role substitution applies, including when the callee uses different
+holder data and receiver anchor with the existing `oracle_components` operation.
+For a bounded sequence these are an ordered sequence of `K::Data` and the exact
+bounded sequence of anchors. Passing such a pair preserves all anchors and does
+not eagerly evaluate virtual contents. The callee rejoins those components
+using `oracle_input`. The same ordinary call-site role substitution applies, including when the callee uses different
 role names. Actual-body comparison checks the selected components and ordering.
 Authors do not write an additional decomposition operation or acquire a freely
 constructible anchor. `oracle.data` is the explicit holder-only data view.
@@ -118,10 +125,41 @@ pub protocol Relay<K: OracleKind> roles(A, B)(
 received <- Relay(word) @(P, V)
 ```
 
-Restricted logical records are a separate aggregate extension. Their eventual
-field projection must retain typed field paths and component custody. Ordinary
-tuples, records and native collections continue to exclude handles; the ABI
-decomposition above does not make them ordinary serializable values.
+## Restricted logical records
+
+`#[logical] struct` groups logical handles with shared metadata. It is a distinct
+nominal type, including its complete static arguments, private fields and fields
+with no represented storage. A record requires at least one direct `Oracle` or
+bounded `Oracles` field; a zero-capacity sequence still counts as a logical field.
+Other fields must recursively be ordinary shared data. Nested logical records,
+ordinary products containing handles, resources, services and native owner-local
+carriers are excluded. This does not add a new IR dialect or packed native type.
+
+Every logical field has the same exact oriented holder/receiver family. Record
+construction infers that family from its actual fields; equal data or equal roots
+cannot establish it. Ordinary metadata must be available throughout that family.
+Availability does not assert equality between participant components. Fields are
+evaluated once in authored order and retained in declaration order. Existing
+private-field construction and projection rules apply. Copy and Drop preserve
+immutable aliases without granting wire serialization or deployment ingress.
+
+A logical record port uses the holder arrow. The record has no whole-value row
+bound: `#[shape(field.rows, bound = Maximum)]` on the declaration names each
+unsized direct logical field. Bounds specialize with the record's parameters;
+a sequence maximum and its per-element row maximum remain distinct. Unknown,
+duplicate, sized-field and missing required bounds refuse. The actual boundary
+checks the specialized bound against the retained anchor shapes.
+
+Field projection preserves exact custody for a handle or sequence. Projecting
+ordinary metadata retains participant availability without an oracle holder.
+The layout retains nominal identity and typed field paths; protocol boundaries
+expand ordinary leaves once and each logical leaf into its exact holder-data /
+receiver-anchor pair. Actual-body comparison checks the same decomposition on
+inputs, applications, returns and loop-carried values. Holder data remains lazy
+across internal rebinding. The interface reader reconstructs this schema
+independently. Ordinary tuples, records and native collections still exclude
+handles, and no logical record can be a Host, Math, Local, codec or packed-data
+carrier merely because its protocol ABI is flat.
 
 ## Virtual definitions: designed integration boundary
 
@@ -140,8 +178,8 @@ The frontend projection must produce a typed immutable query plan containing:
   bounds; source custody and ordinary availability remain distinct.
 - The checked mathematical helper closure, ordered source-query sites and
   resolved admissibility predicate declaration.
-- The authored predicates and their required obligation keys, even if no
-  security bundle was requested.
+- The authored predicates and the complete admissibility predicate's reusable
+  companion addresses, even if no security bundle was requested.
 
 `requires` inside an oracle definition contributes to that admissibility
 predicate. It is neither an executable guard nor permission to put a partial
@@ -149,6 +187,24 @@ operation inside total mathematics. Each construction creates an obligation
 for the actual anchors and captures. The generated predicate is fixed before
 companion lookup, through the existing [companion contract](companions.md).
 No separate source keyword for an admissibility certificate is needed.
+The whole predicate has one `oracle-admissibility` address owned by the authored
+oracle, with ordinal zero. Clause labels and ordinals remain metadata; they do
+not define separate proof obligations. Template lookup and exact closed-instance
+lookup follow the same companion selection convention.
+
+A declared source row bound is also a conjunct of the generated predicate:
+the source Data's row count must be at most that static maximum. It is not
+silently discarded formation metadata, nor does it narrow the actual anchor's
+capacity. Result shape bounds remain the native constructor's checked shape
+map. The source-bound conjunct and every authored clause survive specialization
+and lowering in the same Formula relation; no second native bound attribute
+can disagree with it. Retaining this predicate does not discharge its
+construction occurrence obligations or insert a runtime guard.
+Declaration and public API inspection expose these addresses at a fallible,
+bounded export boundary. The [source-instance export](source-ast.md#closed-source-instances)
+also retains each construction's selected definition, typed actual substitution
+and custody, including unused and repeated constructions and nested regions.
+These are unresolved checking proposals, not evidence or theorem discharge.
 
 Instantiation allocates a fresh anchor but does not query the source or
 materialize all answers. Its captures must be available at the holder and every
@@ -157,10 +213,11 @@ explicitly with `@(P = received, V = sampled)`; assembly asserts no equality.
 The IR verifier owns dependency/shape formation, and the actual-body comparison
 must inspect the complete definition and predicate, including unused ones.
 
-This projection remains refused until its typed plan, total query-domain maps,
-obligation export and independent actual-definition comparison are implemented
-together. A parser-only declaration is insufficient. The existing IR per-query
-virtual evaluator does not fill these frontend obligations automatically.
+Projection checks the typed plan, total query-domain maps, obligation export
+and actual-definition comparison together. Both explicitly selected source
+formats produce that plan; neither a parser-only declaration nor the IR query
+evaluator substitutes for these checks. The admissibility predicate remains an
+explicit obligation, not an assumed theorem or an inserted runtime guard.
 
 ## Setup and realization selection
 
@@ -174,8 +231,8 @@ required observation/authentication policy. Selection consumes the IR owner's
 checked policy and cannot be inferred from an oracle type alias.
 
 The layout deployment projection is deferred with the entry/proof integration;
-the current C++ realization-selection API remains its producer. A future CLI or
-project-file spelling must serialize that same policy. Introducing a second
+the C++ API, CLI and SDK use the same requested realization policy. A future
+source or project-file spelling must serialize that policy. Introducing a second
 inline policy language before the existing reader and Host setup contract are
 connected would duplicate authority. KZG acceptance therefore needs an installed
 polynomial-evaluation kind, checked setup selectors and a KZG realization, while
@@ -196,7 +253,7 @@ Merkle table acceptance needs no setup key. Neither is supplied by parsing
 | `oracle_sequence_append` | `oracle.append(sequence, handle)` | Implemented projection |
 | `oracle_sequence_at` | `oracle.at(sequence, position)` | Implemented projection |
 | `oracle_sequence_length` | `oracle.length(sequence)` | Implemented projection |
-| `oracle_virtual` | `oracle def`, followed by ordered instantiation | Parsed design; typed definition/instantiation integration pending |
+| `oracle_virtual` | `oracle def`, followed by ordered instantiation | Implemented checked definition/instantiation projection |
 | `oracle_components` | Implicit decomposition at oracle protocol calls and returns | Implemented projection; no additional author keyword |
 
 Virtual definitions require the complete integration contract above. They must

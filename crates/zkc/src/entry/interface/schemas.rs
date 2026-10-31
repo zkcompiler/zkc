@@ -1,6 +1,8 @@
 use super::syntax::Leaf;
 use super::{InterfaceError as E, Result, hash, identifier, raw::*, require, text};
 use std::collections::{BTreeMap, BTreeSet};
+mod logical;
+pub(super) use logical::{native_width, row_bound};
 
 pub(in crate::entry) struct Schemas<'a> {
     remaining: usize,
@@ -141,6 +143,8 @@ impl<'a> Schemas<'a> {
                 let payload = &expected.1;
                 self.fields(&actual.fields, payload, 0, depth, &schema.permissions)?;
             }
+        } else if schema.kind == Kind::LogicalRecord {
+            self.logical_fields(schema, depth)?;
         } else if !schema.fields.is_empty() {
             self.fields(
                 &schema.fields,
@@ -160,6 +164,7 @@ impl<'a> Schemas<'a> {
                 )?;
             }
         }
+        self.logical_schema(schema, depth)?;
         self.shape(schema)?;
         if let Some(previous) = self.schemas.insert(&schema.identity, schema) {
             self.charge(1 + schema.leaves.len() + schema.fields.len() + schema.alternatives.len())?;
@@ -205,9 +210,11 @@ impl<'a> Schemas<'a> {
             )?;
             self.check(&field.schema, depth + 1)?;
             require(
-                permissions
-                    .iter()
-                    .all(|p| field.schema.permissions.contains(p)),
+                !field.schema.kind.is_logical()
+                    && field.maximum_rows.get().is_none()
+                    && permissions
+                        .iter()
+                        .all(|p| field.schema.permissions.contains(p)),
                 E::Schema,
             )?;
             next = end;
@@ -231,6 +238,17 @@ impl<'a> Schemas<'a> {
             E::Schema,
         )?;
         let valid = match s.kind {
+            Kind::Oracle | Kind::OracleSequence | Kind::LogicalRecord => {
+                !s.custody
+                    && !s.constructible
+                    && s.leaves.is_empty()
+                    && s.permissions == [Permission::Copy, Permission::Drop]
+                    && (if s.kind == Kind::LogicalRecord {
+                        !s.fields.is_empty()
+                    } else {
+                        s.fields.is_empty()
+                    })
+            }
             Kind::Variant => !s.alternatives.is_empty(),
             Kind::Associated => s.fields.len() == 1 && s.fields[0].name == "value",
             Kind::Record | Kind::Tuple | Kind::Array => {
@@ -288,7 +306,10 @@ impl<'a> Schemas<'a> {
 fn same_fields(a: &[Field], b: &[Field]) -> bool {
     a.len() == b.len()
         && a.iter().zip(b).all(|(a, b)| {
-            a.name == b.name && a.offset == b.offset && a.schema.identity == b.schema.identity
+            a.name == b.name
+                && a.offset == b.offset
+                && a.schema.identity == b.schema.identity
+                && a.maximum_rows == b.maximum_rows
         })
 }
 fn same_schema(a: &Schema, b: &Schema) -> bool {
@@ -299,6 +320,9 @@ fn same_schema(a: &Schema, b: &Schema) -> bool {
         && a.constructible == b.constructible
         && a.permissions == b.permissions
         && a.leaves == b.leaves
+        && a.oracle == b.oracle
+        && a.maximum == b.maximum
+        && a.data_schema.get().map(|s| &s.identity) == b.data_schema.get().map(|s| &s.identity)
         && same_fields(&a.fields, &b.fields)
         && a.alternatives.len() == b.alternatives.len()
         && a.alternatives
@@ -308,7 +332,7 @@ fn same_schema(a: &Schema, b: &Schema) -> bool {
 }
 /// Source constructor authority is independent of native decoding.
 pub(in crate::entry) fn check_import(schema: &Schema) -> std::result::Result<(), String> {
-    if schema.custody || !schema.constructible {
+    if schema.kind.is_logical() || schema.custody || !schema.constructible {
         return Err("entry-input-constructor".into());
     }
     for field in schema
@@ -321,7 +345,8 @@ pub(in crate::entry) fn check_import(schema: &Schema) -> std::result::Result<(),
     Ok(())
 }
 pub(in crate::entry) fn check_export(schema: &Schema) -> std::result::Result<(), String> {
-    if schema.custody || !schema.permissions.contains(&Permission::Copy) {
+    if schema.kind.is_logical() || schema.custody || !schema.permissions.contains(&Permission::Copy)
+    {
         return Err("entry-output-custody".into());
     }
     Ok(())

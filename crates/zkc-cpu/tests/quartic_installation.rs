@@ -247,7 +247,7 @@ fn quartic_tree_preflight_uses_sixteen_byte_elements_and_private_custody() {
     let bytes = shape.retained_bytes::<KoalaBearExt4>().unwrap();
     let values = vector(&coordinates(6));
     let mut controlled = Controlled::new(backend(Policy::default()));
-    controlled.output_limit = Some(bytes + 511);
+    controlled.output_limit = Some(bytes + zkc_cpu::VALUE_SLOT_BYTES - 1);
     let (out, _) = one(
         controlled,
         binding("oracle.commit", SCHEME),

@@ -302,7 +302,7 @@ Error LayoutReader::bodies(ArrayRef<BodyParseScope> scopes,
     if (syntax::category(kind(id)) == syntax::Category::Declaration)
       formalNodes.emplace(span(id).begin, id);
     if (kind(id) == K::Definition || kind(id) == K::Protocol ||
-        kind(id) == K::Relation)
+        kind(id) == K::Relation || kind(id) == K::OracleDefinition)
       if (auto suite = first(id, K::Suite))
         bodies.emplace(span(id).begin, *suite);
   }
@@ -382,7 +382,10 @@ Error LayoutReader::bodies(ArrayRef<BodyParseScope> scopes,
         decl.invalidBody = true;
         continue;
       }
-      if (auto error = body(found->second, decl)) {
+      auto error = decl.kind == Declaration::Kind::Oracle
+                       ? oracleDefinitionBody(found->second, decl)
+                       : body(found->second, decl);
+      if (error) {
         decl.invalidBody = true;
         if (auto fatal = record(std::move(error)))
           return fatal;

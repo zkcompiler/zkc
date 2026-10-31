@@ -16,7 +16,23 @@ namespace zkc::protocol {
 namespace {
 constexpr size_t byteLimit = 32 * 1024 * 1024;
 Error refuse() { return error("oracle-realization-record"); }
-// A closed schema, with one canonical intern table for ordinary logical types.
+// The record also describes original oracle interfaces, while executable
+// helper types remain ordinary data. Do not grant oracle types ordinary value
+// formation merely because their descriptors share this intern table.
+LogicalResult verifyRecordedType(Type type) {
+  auto emit = [&] {
+    auto diagnostic = emitError(UnknownLoc::get(type.getContext()));
+    diagnostic.abandon();
+    return diagnostic;
+  };
+  if (auto handle = dyn_cast<protocol_ir::OracleHandleType>(type))
+    return protocol_ir::OracleHandleType::verify(emit, handle.getKind());
+  if (auto sequence = dyn_cast<protocol_ir::OracleSequenceType>(type))
+    return protocol_ir::OracleSequenceType::verify(emit, sequence.getKind(),
+                                                   sequence.getMaximum());
+  return verifyLogicalType(emit, type);
+}
+// A closed schema, with one canonical intern table for complete source types.
 // The visitor only reads metadata. Actual body checking remains independent.
 struct Codec {
   bool reading, valid = true;
@@ -326,6 +342,75 @@ struct Codec {
       object.field("body", value.body);
     });
   }
+  void item(json::Value &node, OracleQueryDemand &value) {
+    object(node, [&](Object &object) {
+      object.field("frame", value.frame);
+      object.field("sequence", value.sequence);
+      object.field("state", value.state);
+      object.field("initialize", value.initialize);
+      object.field("advance", value.advance);
+      object.field("consume", value.consume);
+    });
+  }
+  void item(json::Value &node, OracleQueryResponse &value) {
+    object(node, [&](Object &object) {
+      object.field("answer", value.answer);
+      object.field("authenticate", value.authenticate);
+      object.field("resume", value.resume);
+    });
+  }
+  void item(json::Value &node, OracleQueryPacket &value) {
+    object(node, [&](Object &object) {
+      object.field("request_sequence", value.requestSequence);
+      object.field("response_sequence", value.responseSequence);
+      object.field("answer_sequence", value.answerSequence);
+      object.field("groups_sequence", value.groupsSequence);
+      object.field("key", value.key);
+      object.field("key_sequence", value.keySequence);
+      object.field("group", value.group);
+      object.field("open", value.open);
+      object.field("authenticate", value.authenticate);
+    });
+  }
+  void item(json::Value &node, OracleQueryWindow &value) {
+    object(node, [&](Object &object) {
+      object.field("request_sequence", value.requestSequence);
+      object.field("answer_sequence", value.answerSequence);
+      object.field("capacity", value.capacity);
+      object.field("collect", value.collect);
+      object.field("replay", value.replay);
+      object.field("finish", value.finish);
+    });
+  }
+  void item(json::Value &node, OracleQueryBatch &value) {
+    object(node, [&](Object &object) {
+      object.field("demand_state", value.demandState);
+      object.field("evaluator_state", value.evaluatorState);
+      object.field("request_sequence", value.requestSequence);
+      object.field("answer_sequence", value.answerSequence);
+      object.field("collect", value.collect);
+      object.field("check_available", value.checkAvailable);
+      object.field("replay", value.replay);
+      object.field("finish", value.finish);
+    });
+  }
+  void item(json::Value &node, OracleCommonRemote &value) {
+    object(node, [&](Object &object) {
+      object.field("receiver", value.receiver);
+      object.field("holder", value.holder);
+      object.field("demand", value.demand);
+      object.field("response", value.response);
+      object.field("open", value.open);
+      object.field("packet", value.packet);
+      object.field("window", value.window);
+    });
+  }
+  void item(json::Value &node, OracleCommonBatch &value) {
+    object(node, [&](Object &object) {
+      object.field("remotes", value.remotes);
+      object.field("body", value.body);
+    });
+  }
   void item(json::Value &node, OracleResultStore &value) {
     object(node, [&](Object &object) {
       object.field("constructor", value.constructor);
@@ -362,6 +447,8 @@ struct Codec {
       object.field("controllers", value.controllers);
       object.field("allocators", value.allocators);
       object.field("locals", value.locals);
+      object.field("remotes", value.remotes);
+      object.field("batches", value.batches);
       object.field("result_stores", value.resultStores);
       object.field("result_references", value.resultReferences);
       object.derived("constructors");
@@ -427,7 +514,9 @@ Expected<json::Value> contracts(Codec &codec,
     const auto &anchor = std::get<protocol_ir::ContractAnchor>(value);
     const auto &pairs = anchor.port.output ? layout.outputs : layout.inputs;
     auto pair = find_if(pairs, [&](const auto &pair) {
-      return pair.anchor == anchor.port.index && pair.kind == anchor.kind;
+      return pair.anchor == anchor.port.index &&
+             pair.type == protocol_ir::OracleHandleType::get(
+                              anchor.kind.getContext(), anchor.kind);
     });
     if (pair == pairs.end())
       return refuse();
@@ -491,9 +580,9 @@ Expected<json::Object> derived(Codec &codec, ModuleOp prepared,
   auto requirements = oracleRequirements(prepared, entry.entry, selections);
   if (!requirements)
     return requirements.takeError();
-  auto plan =
-      planOracleCommon(prepared, entry.entry, *requirements, entry.controllers,
-                       entry.allocators, entry.merkle, authentication);
+  auto plan = planOracleCommon(
+      prepared, entry.entry, *requirements, entry.controllers, entry.allocators,
+      entry.merkle, authentication, entry.remotes, entry.batches);
   if (!plan)
     return plan.takeError();
   auto unit = cast<protocol_ir::ProtocolModuleOp>(prepared.getBody()->front());
@@ -513,7 +602,7 @@ Expected<json::Object> derived(Codec &codec, ModuleOp prepared,
         receivers.push_back(cast<StringAttr>(role).getValue());
       result.push_back(json::Object{{"data", pair.data},
                                     {"anchor", pair.anchor},
-                                    {"kind", codec.kind(pair.kind)},
+                                    {"type", codec.type(pair.type)},
                                     {"holder", pair.holder.getValue()},
                                     {"receivers", std::move(receivers)}});
     }
@@ -566,11 +655,11 @@ Expected<json::Object> derived(Codec &codec, ModuleOp prepared,
     json::Array queries;
     for (const auto &path : block.queries)
       queries.push_back(numbers(path));
-    json::Value groups(nullptr);
-    if (block.requestGroups)
-      groups = numbers(*block.requestGroups);
+    json::Value capacity(nullptr);
+    if (block.packetCapacity)
+      capacity = *block.packetCapacity;
     blocks.push_back(json::Object{{"queries", std::move(queries)},
-                                  {"request_groups", std::move(groups)}});
+                                  {"packet_capacity", std::move(capacity)}});
   }
   auto signature = cast<FunctionType>(
       plan->attributes.getAs<TypeAttr>("function_type").getValue());
@@ -651,13 +740,7 @@ Expected<json::Value> encode(ModuleOp prepared, ModuleOp candidate,
   if (!codec.valid)
     return refuse();
   for (Type type : codec.types) {
-    if (failed(verifyLogicalType(
-            [&] {
-              auto diagnostic = emitError(UnknownLoc::get(type.getContext()));
-              diagnostic.abandon();
-              return diagnostic;
-            },
-            type)))
+    if (failed(verifyRecordedType(type)))
       return refuse();
   }
   auto types = exportLogicalTypesData(TypeRange(codec.types));
@@ -753,15 +836,7 @@ Error checkOracleRealization(ModuleOp prepared, ModuleOp candidate,
     return refuse();
   }
   for (Type type : *decoded) {
-    if (!seen.insert(type).second ||
-        failed(verifyLogicalType(
-            [&] {
-              auto diagnostic =
-                  emitError(UnknownLoc::get(candidate.getContext()));
-              diagnostic.abandon();
-              return diagnostic;
-            },
-            type)))
+    if (!seen.insert(type).second || failed(verifyRecordedType(type)))
       return refuse();
     codec.types.push_back(type);
   }

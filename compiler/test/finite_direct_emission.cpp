@@ -1067,7 +1067,7 @@ int main(int argc, char **argv) {
       require(bool(source), "physical reserve source refused");
       prepare(*source);
       lower(*source);
-      mathematical::RealizationWork work;
+      mathematical::RealizationWork work, verification;
       if (limit == 0)
         work.discardedRecipeCopy = 1;
       if (limit == 1)
@@ -1075,19 +1075,20 @@ int main(int argc, char **argv) {
       if (limit == 2)
         work.discardedRecipeExpansion = 0;
       if (limit == 3)
-        work.optionalFiniteChecking = 0;
+        verification.optionalFiniteChecking = 0;
       if (limit == 4)
-        work.requiredFiniteChecking = 0;
+        verification.requiredFiniteChecking = 0;
       target::PhysicalPlanOptions options;
       options.numericalWork = &work;
+      options.numericalVerificationWork = &verification;
       uint64_t copy = 1000000, siteBytes = 16 * 1024 * 1024;
       options.numericalCopy = &copy;
       options.numericalSiteBytes = &siteBytes;
       auto proposal = target::proposePhysical(
           *source, target::installedCandidates(), {}, options);
       if (limit == 4) {
-        refuses(std::move(proposal), "computation-realization");
-        require(!work.requiredFiniteChecking,
+        refuses(std::move(proposal), "numerical-lowering-correspondence");
+        require(!verification.requiredFiniteChecking,
                 "required checking was replenished on refusal");
         return;
       }

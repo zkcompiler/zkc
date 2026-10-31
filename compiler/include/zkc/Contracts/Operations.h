@@ -134,6 +134,12 @@ struct OperationContracts {
   std::optional<CosetContract> coset;
   std::optional<DomainValueContract> domainValue;
   bool publicReplay = false;
+  /// Equal complete logical inputs/parameters have equal normal results or
+  /// the same logical stop under an installed exact admitted interpretation.
+  /// Partial; grants no totality, speculation, budget equality or private
+  /// service authority. Selected implementations need their own interpretation;
+  /// callers still check exact bindings, closed functions and recursive data.
+  bool deterministicData = false;
   bool acceptanceGuard = false;
   bool conjunction = false;
   /// Installed permission for ordinary source authoring of a copyable data

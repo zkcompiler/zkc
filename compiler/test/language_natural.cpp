@@ -18,7 +18,7 @@ void check(bool value) {
     std::exit(1);
   }
 }
-void refuses(Expected<Natural> value, StringRef code) {
+template <typename T> void refuses(Expected<T> value, StringRef code) {
   check(!value);
   check(StringRef(toString(value.takeError())).starts_with(code));
 }
@@ -119,6 +119,61 @@ int main() {
   auto maximum = Natural::constant(std::numeric_limits<uint64_t>::max());
   refuses(arithmetic.add(maximum, one), "source.natural");
   refuses(arithmetic.multiply(maximum, Natural::constant(2)), "source.natural");
+  auto cancel = [&](const Natural &a, const Natural &b) {
+    return take(arithmetic.cancelCommonTerms(a, b));
+  };
+  auto residuals = [&](const Natural &a, const Natural &b, const Natural &left,
+                       const Natural &right) {
+    check(cancel(a, b) == std::make_pair(left, right));
+    check(cancel(b, a) == std::make_pair(right, left));
+  };
+  residuals(zero, zero, zero, zero);
+  residuals(n, n, zero, zero);
+  residuals(add(add(n, m), one), add(add(m, n), inputs), one, inputs);
+  residuals(add(mul(Natural::constant(3), n), one),
+            add(mul(Natural::constant(2), n), m), add(n, one), m);
+  // Identical nonlinear terms are additive quantities, even when they vanish.
+  auto nonlinear = add(mul(n, m), mul(n, n));
+  residuals(add(nonlinear, one), add(nonlinear, m), one, m);
+  residuals(add(pow2(n), inputs), add(pow2(n), outputs), inputs, outputs);
+  residuals(pow2(n), n, pow2(n), n);
+  residuals(inputs, take(Natural::atom("A::Inputs")), inputs,
+            take(Natural::atom("A::Inputs")));
+  residuals(n, take(Natural::atom("other::N")), n,
+            take(Natural::atom("other::N")));
+  // No division by a shared factor: N may be zero, and N*M is not M.
+  residuals(mul(n, m), mul(n, inputs), mul(n, m), mul(n, inputs));
+  residuals(zero, mul(n, m), zero, mul(n, m));
+  auto almostMaximum =
+      Natural::constant(std::numeric_limits<uint64_t>::max() - 1);
+  residuals(maximum, one, almostMaximum, zero);
+  residuals(add(maximum, mul(maximum, n)),
+            add(almostMaximum, mul(almostMaximum, n)), add(one, n), zero);
+  residuals(add(maximum, mul(one, n)), add(one, mul(maximum, n)), almostMaximum,
+            mul(almostMaximum, n));
+  NaturalArithmetic cancellationBudget;
+  auto beforeCancellation = cancellationBudget.remainingWork();
+  check(take(cancellationBudget.cancelCommonTerms(nonlinear, nonlinear)) ==
+        std::make_pair(zero, zero));
+  auto cancellationCost =
+      beforeCancellation - cancellationBudget.remainingWork();
+  check(cancellationCost > 0);
+  NaturalArithmetic exactCancellationWork(cancellationCost);
+  take(exactCancellationWork.cancelCommonTerms(nonlinear, nonlinear));
+  check(exactCancellationWork.remainingWork() == 0);
+  refuses(exactCancellationWork.cancelCommonTerms(zero, zero), "source.limit");
+  NaturalArithmetic insufficientCancellationWork(cancellationCost - 1);
+  refuses(insufficientCancellationWork.cancelCommonTerms(nonlinear, nonlinear),
+          "source.limit");
+  NaturalArithmetic cancellationNames(8);
+  refuses(cancellationNames.cancelCommonTerms(largeBinding, largeBinding),
+          "source.limit");
+  NaturalArithmetic cancellationTerms(1000, 1);
+  refuses(cancellationTerms.cancelCommonTerms(add(n, m), add(n, m)),
+          "source.limit");
+  NaturalArithmetic cancellationFactors(1000, 2, 1);
+  refuses(cancellationFactors.cancelCommonTerms(mul(n, m), mul(n, m)),
+          "source.limit");
   NaturalArithmetic exactly(100, 2, 2);
   check(take(exactly.add(n, m)).terms().size() == 2);
   refuses(exactly.add(add(n, m), one), "source.limit");
