@@ -326,7 +326,6 @@ def candidates(inventory):
         for arguments, provider in choices:
             assert provider, (name, arguments, "no explicit catalog provider")
             rows.append((operation, arguments, f"{provider}/{name}"))
-    # Field, oracle and transcript additions produce 2,320 closed candidates.
     # Enumerate each operation's domain sort rather than all parameter products.
     assert len(rows) < 2560, "review enumeration growth; avoid combinatorial testing"
     return rows
@@ -663,6 +662,14 @@ def test_explicit_semantic_witnesses(drivers, directory):
          ["hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"],
          ["transcript:hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0", "index", "indices"],
          ["index", "transcript:hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"]),
+        *(("transcript.native.indexed.indices" + suffix, [suite],
+           ["transcript:" + suite, *witness, "indices"],
+           ["indices", *result_witness, "transcript:" + suite])
+          for suite in (
+              "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",
+              "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0")
+          for suffix, witness, result_witness in (
+              ("", [], []), (".gated", ["index"], []), (".search", [], ["index"]))),
     ]
     requests = [binding(name, args) for name, args, _, _ in witnesses]
     expected = [{"accepted": True, "physical": False, "inputs": inputs, "outputs": outputs}
@@ -703,6 +710,11 @@ def test_unknowns_and_malformed_arguments(drivers, directory):
             # A field-only suite has no UniformIndex transition.
             ("transcript.native.indexed.index", ["hash-chain.keccak256.bls12-381.fr64be/0"]),
             ("transcript.index", ["hash-chain.keccak256.bls12-381.fr64be/0"]),
+            *(("transcript.native.indexed.indices" + suffix, [suite])
+              for suffix in ("", ".gated", ".search")
+              for suite in ("merlin3.bls12-381.fr64be/0",
+                            "hash-chain.keccak256.bls12-381.fr64be/0",
+                            "unknown.suite")),
             ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0",
                                                       "field_array<bls12-381.g1,4>"]),
             ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0",
