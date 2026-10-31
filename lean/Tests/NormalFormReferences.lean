@@ -29,6 +29,24 @@ theorem dependent_pair (left right : model.Field "bls12-381.fr") :
       .done (.cons (left - right) (.cons left .nil)) := by
   derive_helper_reference [pairLaw model, difference model] using scalarProgram false
 
+-- Failed elaboration rolls back binder-use tracking along with the candidate.
+set_option linter.unusedVariables false in
+/-- Reference discovery and reference verification are different operations.
+Library selection cannot fill a hole in the reference being verified. This is
+an actual helper invocation, so an unrestricted application would solve the
+existential by choosing the selected law's own result. -/
+example (left right : model.Field "bls12-381.fr") : True := by
+  fail_if_success
+    have : ∃ reference : PIR.Process closedInterface
+        (Values model.Value [field]),
+        invoke ((scalarProgram false).payload.definitions.foldl
+          (Evaluation.extendMeaningsOn model SiteObservations.closed) [])
+          (scalarLeaf false).helper (.cons left (.cons right .nil)) = reference := by
+      refine ⟨?_, ?_⟩
+      rotate_left
+      derive_helper_reference [difference model] using scalarProgram false
+  trivial
+
 /-- The wrapper is unchanged, but its dependency is now addition. -/
 example (_left _right : model.Field "bls12-381.fr") : True := by
   fail_if_success

@@ -103,12 +103,31 @@ structure Domain where
   result : Nat
   deriving DecidableEq, Repr
 
-/-- Non-callable primitive declaration, retained even when unused. -/
+/-- Kinded static values, distinct from the roots used by the existing
+primitive interpreter. A wire reader must check both representations agree. -/
+inductive BindingArgument where
+  | domain (sort identity : String)
+  | type (value : Ty)
+  | natural (value : Nat)
+  | mask (values : List Bool)
+  deriving DecidableEq, Repr
+
+/-- Complete logical declaration data retained by the current wire reader.
+It is checked independently against the selected primitive contract. -/
+structure BindingSchema where
+  arguments : List BindingArgument
+  inputs : List Ty
+  outputs : List Ty
+  deriving DecidableEq, Repr
+
+/-- Typed callable primitive declaration. It installs no source body or
+inlining permission. Internal primitive roots retain their existing meanings. -/
 structure Binding where
   name : String
   contract : String
   arguments : List String
   implementation : String
+  schema : Option BindingSchema := none
   deriving DecidableEq, Repr
 
 /-- Logical operations preserve anchors and query occurrences. This wire

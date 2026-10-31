@@ -65,8 +65,8 @@ def freeze (cache : Cache) (value : Expr) : TermElabM Expr := do
     let destination := (← getOptions).get `zkc.connection.traceFile ("" : String)
     if !destination.isEmpty then
       let now ← IO.monoMsNow
-      IO.FS.withFile destination .append fun handle =>
-        handle.putStrLn s!"{now} syntax declarations={count}; type={type.getAppFn.constName?}"
+      IO.FS.withFile destination .append fun handle => do
+        handle.putStrLn s!"{now} syntax declarations={count}; kernel_ns={← cache.kernelNanos.get}; type={type.getAppFn.constName?}"
   return mkConst name
 
 private def syntaxType (type : Expr) : Bool :=

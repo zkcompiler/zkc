@@ -10,6 +10,7 @@ import all Zkc.Construction.AuthoredPairProducer
 import all Zkc.Construction.Binding
 import all Zkc.Construction.Compiled
 import all Zkc.Construction.Context
+import all Zkc.Construction.ConnectionFrameLookup
 import all Zkc.Construction.DomainBinding
 import all Zkc.Construction.DomainCalculations
 import all Zkc.Construction.DomainCorrespondence

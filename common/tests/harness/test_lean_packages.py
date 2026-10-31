@@ -22,6 +22,17 @@ def test_package_selection_is_dependency_ordered():
     assert selected(['security', 'arklib']) == ['main', 'security', 'arklib']
 
 
+def test_companion_modules_are_declaration_record_inputs():
+    declarations = load('companion_record_inputs', 'lean/checks/records/declarations.py')
+    root, sources = declarations.PACKAGES['main']
+    selected = {path for source in sources
+                for path in ([root / source] if (root / source).is_file()
+                             else (root / source).rglob('*.lean'))}
+    companions = set((root / 'ZkcTools/Companions').rglob('*.lean'))
+    assert companions
+    assert companions <= selected
+
+
 @pytest.mark.parametrize('package,dependency', [('main', 'VCVio'), ('security', 'Arklib'),
                                               ('security', 'zkc_arklib')])
 def test_package_closure_rejects_unimported_locked_dependency(tmp_path, package, dependency):

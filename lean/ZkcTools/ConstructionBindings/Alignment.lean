@@ -4,6 +4,9 @@ public import Zkc.Construction.ConnectionCertificate
 public import Zkc.Construction.ConnectionInstallation
 public import ZkcTools.ConstructionBindings.Readback
 public meta import ZkcTools.ConstructionBindings.TargetPlacement
+public meta import ZkcTools.ConstructionBindings.Family
+public meta import ZkcTools.ConstructionBindings.TargetEquality
+public meta import ZkcTools.ConstructionBindings.StructuralFacts
 public meta import ZkcTools.ConstructionBindings.Syntax
 public meta import Lean.Elab.Tactic
 
@@ -47,7 +50,15 @@ private def listEntries (expression : Expr) : MetaM (Array Expr) := do
     rest := rest.getAppArgs[2]!
   return entries
 
-private def operandTerms (scope layout references : Expr) : MetaM Expr := do
+private def operandTerms (scope layout references types : Expr) : MetaM Expr := do
+  if ← Family.collecting then
+    let laws ← mkListLit (mkConst ``NormalForm.LawKey) []
+    let mut terms := #[]
+    for ty in ← listEntries types do
+      terms := terms.push (← mkFreshExprMVar (← mkAppM ``NormalForm.Term #[laws, scope, ty]))
+    let mut result ← mkAppOptM ``NormalForm.Terms.nil #[some laws, some scope]
+    for term in terms.reverse do result ← mkAppM ``NormalForm.Terms.cons #[term, result]
+    return result
   let frame ← listEntries layout
   let refs ← listEntries references
   let laws ← mkListLit (mkConst ``NormalForm.LawKey) []
@@ -123,6 +134,45 @@ private def finiteApplication (name : Name) (supplied : Array (Option Expr)) : M
     type := body.instantiate1 argument
   return mkAppN constructor arguments
 
+/-- Match a proposed target through primitive congruence. Fresh physical
+references remain finite length equalities, checked at every concrete use. -/
+private def applyWithLengths (goal : MVarId) (term : Expr) : TacticM (List MVarId) := do
+  unless ← Family.collecting do
+    let saved ← saveState
+    try return ← goal.apply term {newGoals := .all}
+    catch _ => saved.restore
+  let expected ← whnf (← goal.getType)
+  let mut term := term
+  let mut inferred ← whnf (← inferType term)
+  unless inferred.isAppOf ``ConnectionCertificate.Alignment do
+    throwError "connection-family-target-derivation"
+  for index in [:13] do
+    tracePhase s!"family target source index {index}"
+    unless ← isDefEq inferred.getAppArgs[index]! expected.getAppArgs[index]! do
+      throwError "connection-family-target-source-index: {index}"
+  if ← Family.collecting then
+    -- This is equality of finite typed source syntax, not of its process
+    -- meaning. It lets optional component shapes remain interface data.
+    let saved ← saveState
+    unless ← isDefEq inferred.getAppArgs[13]! expected.getAppArgs[13]! do
+      saved.restore
+      let equality ← mkFreshExprMVar (← mkEq inferred.getAppArgs[13]! expected.getAppArgs[13]!)
+      let sourceFunction ← withLocalDeclD `source (← inferType inferred.getAppArgs[13]!) fun source =>
+        mkLambdaFVars #[source] (mkAppN inferred.getAppFn (inferred.getAppArgs.set! 13 source))
+      term ← mkEqMP (← mkCongrArg sourceFunction equality) term
+      inferred ← whnf (← inferType term)
+  else
+    unless ← isDefEq inferred.getAppArgs[13]! expected.getAppArgs[13]! do
+      throwError "connection-family-target-source-index: 13"
+  tracePhase "family target congruence start"
+  let equality ← TargetEquality.propose inferred.getAppArgs[14]! expected.getAppArgs[14]!
+  tracePhase "family target congruence done"
+  let typeFunction ← withLocalDeclD `target (mkConst ``ConnectionCertificate.Block) fun target =>
+    mkLambdaFVars #[target] (mkAppN inferred.getAppFn (inferred.getAppArgs.set! 14 target))
+  let transport ← mkCongrArg typeFunction equality
+  goal.assign (← mkEqMP transport term)
+  return (← getMVars (← instantiateMVars (mkMVar goal))).toList
+
 private def viewHead (expression : Expr) : MetaM Expr := do
   let mut current := expression
   repeat
@@ -161,6 +211,41 @@ private partial def coordinatePrefix (layout block model : Expr) : MetaM (Expr �
       let parts := first.getAppArgs
       let coordinateRef := parts[1]!
       let indexRef := parts[2]!
+      if ← Family.collecting then
+        let termType ← mkAppOptM ``NormalForm.Term
+          #[some (← mkListLit (mkConst ``NormalForm.LawKey) []), some scope, some (mkConst ``Ty.index)]
+        -- Internal prefix cells are already fixed by the current target.
+        -- Only unresolved caller cells become family parameters.
+        let coordinate ← LayoutLookup.select? layout coordinateRef
+        let coordinate ← match coordinate with
+          | some selected => do
+            let cell ← whnf selected.cell
+            pure <| if cell.isAppOf ``ConnectionFrame.Cell.coordinates then
+              some (cell.getAppArgs.back!, selected.proof) else none
+          | none => pure none
+        let index ← LayoutLookup.select? layout indexRef
+        let index ← match index with
+          | some selected => do
+            let cell ← whnf selected.cell
+            if !cell.isAppOf ``ConnectionFrame.Cell.data then pure none else do
+              let component ← whnf cell.getAppArgs.back!
+              pure <| if component.isAppOf ``NormalForm.Comp.present then
+                some (component.getAppArgs.back!, selected.proof) else none
+          | none => pure none
+        let terms ← match coordinate with
+          | some (value, _) => pure value
+          | none => mkFreshExprMVar (← mkAppM ``List #[termType])
+        let term ← match index with
+          | some (value, _) => pure value
+          | none => mkFreshExprMVar termType
+        let extended ← mkAppM ``List.append #[terms, ← mkListLit termType [term]]
+        let cell ← mkAppM ``ConnectionFrame.Cell.coordinates #[extended]
+        let next ← mkAppM ``List.append #[layout, ← mkListLit (← inferType cell) [cell]]
+        let (prepared, tail, suffix) ← coordinatePrefix next view.getAppArgs[2]! model
+        let certificate ← finiteApplication ``ConnectionFrame.CoordinatePrefix.indicesAppend
+          #[some scope, some layout, none, none, some terms, some term, some coordinateRef,
+            some indexRef, coordinate.map (·.2), index.map (·.2), some tail]
+        return (prepared, certificate, suffix)
       let frame ← listEntries layout
       let some coordinate ← getNatValue? (← whnf coordinateRef) | throwError "alignment-prefix-reference"
       let some index ← getNatValue? (← whnf indexRef) | throwError "alignment-prefix-reference"
@@ -185,12 +270,31 @@ private partial def coordinatePrefix (layout block model : Expr) : MetaM (Expr �
       return (prepared, certificate, suffix)
   return (layout, ← mkAppM ``ConnectionFrame.CoordinatePrefix.empty #[layout], view)
 
+/-- Reuse a field from the current source only at its checked constructor type. -/
+private def sourceField? (fields : Array (Name × Expr)) (name : Name)
+    (domain : Expr) : MetaM (Option Expr) := do
+  let some (_, value) := fields.find? (·.1 == name) | return none
+  let saved ← saveState
+  if ← isDefEq (← inferType value) domain then return some value
+  saved.restore
+  return none
+
+/-- An open substitution can be blocked on a finite operand metavariable.
+Use named fields only after its source constructor is exposed. The guide can
+still propose constructor choices; the unchanged indexed goal checks them. -/
+private def exposedSourceFields (source : Expr) : MetaM (Array (Name × Expr)) := do
+  match source.getAppFn.constName?.bind (← getEnv).find? with
+  | some (.ctorInfo _) => Family.constructorFields source
+  | _ => pure #[]
+
 /-- Supply the prepared frame before matching an observation rule; higher-order
 unification is never asked to invent an instruction schedule. -/
 private def preparedAction (goal : MVarId) (rule : Name) (args : Array Expr)
-    (model block first : Expr) : TacticM (List MVarId) := do
+    (model block first : Expr) (fixed : Array (Name × Expr) := #[]) : TacticM (List MVarId) := do
+  tracePhase "family observation prepare"
   let source ← whnf args[13]!
   let sourceParts := source.getAppArgs
+  let sourceFields ← exposedSourceFields source
   if rule == ``ConnectionCertificate.Alignment.observedSend then
     unless source.isAppOf ``NormalForm.Form.send do throwError "alignment-expected-send"
   else unless source.isAppOf ``NormalForm.Form.receive do throwError "alignment-expected-receive"
@@ -205,6 +309,7 @@ private def preparedAction (goal : MVarId) (rule : Name) (args : Array Expr)
     initial ← mkAppM ``ConnectionFrame.queryLayout #[layout, ty.getAppArgs.back!, suite]
   let after := if first.isAppOf ``Domain.View.observe then block else block.getAppArgs[2]!
   let (_, certificate, suffix) ← coordinatePrefix initial after model
+  tracePhase "family observation prefix"
   unless suffix.isAppOf ``Domain.View.sequence do throwError "alignment-observation-suffix"
   let observation ← viewHead suffix.getAppArgs[1]!
   unless observation.isAppOf ``Domain.View.observe do throwError "alignment-observation-prefix"
@@ -214,10 +319,12 @@ private def preparedAction (goal : MVarId) (rule : Name) (args : Array Expr)
   let certificateArgs := certificateType.getAppArgs
   unless certificateArgs.size == 4 do throwError "alignment-prefix-certificate-type: {certificateType}"
   unless observationParts.size > 6 do throwError "alignment-observation-arity: {observation}"
-  let mut supplied : Array (Name × Expr) := #[( `prepared, certificateArgs[2]!),
+  let mut supplied : Array (Name × Expr) := fixed ++ #[( `prepared, certificateArgs[2]!),
     (`preparation, certificateArgs[3]!), (`preparationProof, certificate), (`rest, rest)]
   if rule == ``ConnectionCertificate.Alignment.delivery then
-    supplied := supplied ++ #[(`observeStateRef, observationParts[4]!), (`observePathRef, observationParts[6]!)]
+    let ty ← whnf sourceParts[sourceParts.size - 4]!
+    supplied := supplied ++ #[(`field, ty.getAppArgs.back!),
+      (`observeStateRef, observationParts[4]!), (`observePathRef, observationParts[6]!)]
   else
     supplied := supplied ++ #[(`stateRef, observationParts[4]!), (`pathRef, observationParts[6]!),
       (`template, observationParts[3]!)]
@@ -231,14 +338,15 @@ private def preparedAction (goal : MVarId) (rule : Name) (args : Array Expr)
     let value ← if index < 13 then pure args[index]! else
       match supplied.find? (fun item => item.1 == name) with
       | some (_, value) => pure value
-      | none => mkFreshExprMVar domain
+      | none => match ← sourceField? sourceFields name domain with
+        | some value => pure value
+        | none => mkFreshExprMVar domain
     unless ← isDefEq (← inferType value) domain do throwError "alignment-observation-field {name}"
     fields := fields.push value
     type := body.instantiate1 value
-  tryReflexivity (← goal.apply (mkAppN constructor fields))
-
-
-
+  let pending ← applyWithLengths goal (mkAppN constructor fields)
+  tracePhase "family observation applied"
+  if ← Family.collecting then pure pending else tryReflexivity pending
 
 private def splitSubject (component : Expr) : MetaM Expr := do
   let component ← whnf component
@@ -267,16 +375,71 @@ mutual
 private partial def staticGoal (goal : MVarId) : TacticM Unit := do
   let start ← IO.monoMsNow
   let head := (← goal.getType).getAppFn.constName?
+  if ← Family.collecting then
+    tracePhase s!"family static start {head}"
+    let type ← goal.withContext <| whnf (← instantiateMVars (← goal.getType))
+    -- A data hole is an unknown interface operand, not a proposition to prove.
+    -- In particular assumption must never choose an unrelated local Nat,
+    -- output list or history value merely because its type matches.
+    if ← Interface.finiteData type then return
+    if !(type.isAppOf ``Eq) && (← Interface.structural type) then
+      -- Readback and route certificates check the instantiated finite
+      -- boundary. Expanding them against unknown caller data duplicates work
+      -- and may split every output-selection Boolean during discovery.
+      return
+    if type.isAppOf ``Eq && (← Interface.structural type) then
+      -- Use proof-producing finite queries first. Open normalization and
+      -- projection equations are checked after their concrete interface data
+      -- is fixed; unrestricted conversion here performs speculative search.
+      -- Keep source normalization at the finite interface during discovery.
+      -- Matching whole open bodies here specializes the family too early;
+      -- application checks these equations after fixing actual operands.
+      if ← StructuralFacts.propose goal (sourceSyntax := false) then return
+      let left := type.getAppArgs[1]!
+      let right := type.getAppArgs[2]!
+      if left == right || left.isMVar || right.isMVar ||
+          (!type.hasFVar && !type.hasExprMVar) then
+        let saved ← saveState
+        try goal.withContext goal.refl
+        catch error =>
+          if error.isRuntime || error.isInterrupt then throw error
+          saved.restore
+      return
+  let saved ← saveState
   try staticStep goal
-  finally
-    let elapsed := (← IO.monoMsNow) - start
-    if elapsed > 1000 then tracePhase s!"static {head} ms={elapsed}"
+  catch error =>
+    if error.isRuntime || error.isInterrupt then throw error
+    saved.restore
+    let type ← goal.withContext <| whnf (← instantiateMVars (← goal.getType))
+    unless (← Family.collecting) && ((← Interface.structural type) || (← Interface.finiteData type)) do
+      throw error
+  let elapsed := (← IO.monoMsNow) - start
+  if elapsed > 1000 then tracePhase s!"static {head} ms={elapsed}"
 
 private partial def staticStep (goal : MVarId) : TacticM Unit := goal.withContext do
   if ← goal.isAssigned then return
+  let original ← instantiateMVars (← goal.getType)
+  if original.hasExprMVar then
+    goal.setType (← StructuralFacts.reduceRecordProjections original)
+  -- Query a known finite layout without expanding its inherited prefix.
+  if ← StructuralFacts.propose goal then return
+  let boundary ← instantiateMVars (← goal.getType)
+  if boundary.isAppOfArity ``Eq 3 && boundary.hasExprMVar then
+    -- Keep the effectful operand read inside the shape check: do-notation
+    -- lifts `(← ...)` out of Boolean conjunction before evaluating its guard.
+    if (← whnf boundary.getAppArgs[0]!).isAppOf ``NormalForm.Form then
+      -- Source substitution may mention unused fields of a placement record.
+      -- Normalize only the syntax equation, not layout/readback operands.
+      let arguments ← boundary.getAppArgs.mapM fun argument =>
+        withTransparency .all <| reduce argument (explicitOnly := false) (skipTypes := false)
+      goal.setType (mkAppN boundary.getAppFn arguments)
   let saved ← saveState
   try
-    goal.refl
+    if boundary.isAppOfArity ``Eq 3 && boundary.hasExprMVar &&
+        (boundary.getAppArgs[1]!.isAppOf ``List.get?Internal ||
+          boundary.getAppArgs[1]!.isAppOf ``GetElem?.getElem?) then
+      withReducible goal.refl
+    else goal.refl
     return
   catch _ => saved.restore
   let saved ← saveState
@@ -285,7 +448,19 @@ private partial def staticStep (goal : MVarId) : TacticM Unit := goal.withContex
     return
   catch _ => saved.restore
   let type ← whnf (← instantiateMVars (← goal.getType))
+  if ← Family.collecting then
+    -- Congruence under the unused model binder may lift a finite operand
+    -- equation. Family.install hoists it back before auditing the interface.
+    if let .forallE _ _ body _ := type then
+      if !body.hasLooseBVars && (← Interface.structural body) then return
+  if (← Family.collecting) && (← Interface.finiteData type) then return
   if type.hasExprMVar && type.isAppOf ``Eq then
+    -- Determining data may come from a later readback or routing fact. Broad
+    -- conversion here unfolds entire inherited layouts before that data is
+    -- available. The caller retries after finite interface progress.
+    if type.getAppArgs[1]!.isAppOf ``List.get?Internal ||
+        type.getAppArgs[1]!.isAppOf ``GetElem?.getElem? then
+      throwError "alignment-undetermined-layout-query"
     let saved ← saveState
     try
       withTransparency .all goal.refl
@@ -308,6 +483,34 @@ private partial def staticStep (goal : MVarId) : TacticM Unit := goal.withContex
     throwError "alignment-guard-placement-readback"
   if type.isAppOf ``ConnectionCertificate.HistoryReadback then
     let args := type.getAppArgs
+    let selector ← whnf args[3]!
+    if selector.isAppOf ``Option.none then
+      for pending in ← applyRule goal ``ConnectionCertificate.HistoryReadback.plain do staticGoal pending
+      return
+    if selector.isAppOf ``Option.some then
+      -- The profile has already fixed the transcript location. Query that
+      -- cell compositionally; scanning the inherited frame would inspect
+      -- unrelated, possibly unresolved guard and presence substitutions.
+      let reference := selector.getAppArgs.back!
+      if let some selected ← LayoutLookup.select? args[1]! reference then
+        let expected ← mkAppOptM ``ConnectionFrame.Cell.history #[some args[0]!, some args[2]!]
+        unless ← isDefEq selected.cell expected do
+          throwError "alignment-history-cell-mismatch"
+        let certificate ← mkAppOptM ``ConnectionCertificate.HistoryReadback.transcript
+          #[some args[0]!, some args[1]!, some args[2]!, some reference, some selected.proof]
+        goal.assign certificate
+      else
+        -- Fully determined compound frames (including application returns)
+        -- can check this one fixed location by conversion. No other slot is
+        -- searched, and an open predecessor remains deferred.
+        if (← instantiateMVars args[1]!).hasExprMVar then
+          throwError "alignment-history-cell-undetermined"
+        let constructor ← mkAppOptM ``ConnectionCertificate.HistoryReadback.transcript
+          #[some args[0]!, some args[1]!, some args[2]!, some reference]
+        for checked in ← goal.apply constructor do staticGoal checked
+      return
+    if (← instantiateMVars args[1]!).hasExprMVar then
+      throwError "alignment-history-selector-undetermined"
     let frame ← listEntries args[1]!
     for cell in frame, reference in [:frame.size] do
       let cell ← whnf cell
@@ -364,6 +567,9 @@ private partial def staticStep (goal : MVarId) : TacticM Unit := goal.withContex
 
 end
 
+/-- The finite interface solver never constructs an alignment. -/
+def solveStructural (goal : MVarId) : TacticM Unit := staticGoal goal
+
 private partial def deriveExtent (goal : MVarId) : TacticM Unit := goal.withContext do
   let expected ← whnf (← instantiateMVars (← goal.getType))
   let args := expected.getAppArgs
@@ -407,6 +613,209 @@ private partial def deriveExtent (goal : MVarId) : TacticM Unit := goal.withCont
       for pending in ← tryReflexivity (← goal.apply constructor) do staticGoal pending
       return
     throwError "alignment-unsupported-target-extent: target={target}, view={view}, type={← inferType view}"
+
+/-- Account for an actual total target calculation whose source instruction
+has normalized into an operand. The source form remains fixed. -/
+private def applyAuxiliaryCalculation (goal : MVarId) (args : Array Expr)
+    (operation references : Expr) : TacticM (MVarId × MVarId) := do
+  let terms ← operandTerms args[10]! args[12]! references
+    (← mkAppM ``Op.arguments #[← mkAppM ``Calculation.op #[operation]])
+  let yes ← mkEqRefl (mkConst ``Bool.true)
+  let supplied := (args.extract 0 14).map some ++
+    #[some operation, some yes, some terms, some references, some yes, some yes]
+  let constructor ← mkAppOptM ``ConnectionCertificate.Alignment.calculation supplied
+  let [readback, tail] ← tryReflexivity (← goal.apply constructor)
+    | throwError "alignment-calculation-shape"
+  return (readback, tail)
+
+private partial def openForm (guide expected : Expr) : MetaM Expr := do
+  let guide ← whnf guide
+  let constructor := guide.getAppFn
+  let mut type ← inferType constructor
+  let mut fields := #[]
+  for original in guide.getAppArgs, index in [:guide.getAppArgs.size] do
+    let .forallE _ domain body _ := type | throwError "connection-family-form-arity"
+    let domainHead ← whnf domain
+    let value ← if index < 4 then pure expected.getAppArgs[index]!
+      else if domainHead.isAppOf ``NormalForm.Form then openForm original domainHead
+      else if !domain.hasFVar && !domain.hasExprMVar then pure original
+      else mkFreshExprMVar domain
+    fields := fields.push value
+    type := body.instantiate1 value
+  return mkAppN constructor fields
+
+/-- Replay constructor choices as an untrusted proposal at the open family
+interface. Closed source declarations and nominal sorts are retained; scope,
+operands, physical references and all structural facts are inferred afresh.
+The guide is never installed as evidence for the new placement. -/
+private partial def replayBody (goal : MVarId) (guide : Expr) : TacticM Unit := goal.withContext do
+  let expected ← whnf (← instantiateMVars (← goal.getType))
+  let mut indices := expected.getAppArgs
+  for index in [:13] do
+    if indices[index]!.getAppFn.constName?.any (fun name =>
+        "Zkc.Construction.ConnectionTargetPlacement.Placement.".isPrefixOf name.toString) then
+      indices := indices.set! index (← whnf indices[index]!)
+  let expected := mkAppN expected.getAppFn indices
+  let guide ← whnf guide
+  let name := guide.getAppFn.constName!
+  tracePhase s!"family replay {name}"
+  if [``ConnectionCertificate.Alignment.observedReceive,
+      ``ConnectionCertificate.Alignment.observedSend, ``ConnectionCertificate.Alignment.delivery].contains name then
+    let mut guideType := (← getConstInfo name).type
+    let mut fixed := #[]
+    for argument in guide.getAppArgs do
+      let .forallE field _ body _ := guideType | throwError "connection-family-observation-guide"
+      if field == `replacement then fixed := fixed.push (field, argument)
+      guideType := body.instantiate1 argument
+    let children ← guide.getAppArgs.zipIdx.filterM fun (argument, _) => do
+      return (← whnf (← inferType argument)).isAppOf ``ConnectionCertificate.Alignment
+    withLocalDeclD `replayModel (mkConst ``DomainModel) fun model => do
+      let block ← viewHead (mkApp expected.getAppArgs[14]! model)
+      unless block.isAppOf ``Domain.View.sequence do
+        throwError "connection-family-observation-target"
+      let first ← viewHead block.getAppArgs[1]!
+      let pending ← preparedAction goal name expected.getAppArgs model block first fixed
+      let mut index := 0
+      for next in pending do
+        if ← next.isAssigned then continue
+        if (← whnf (← next.getType)).isAppOf ``ConnectionCertificate.Alignment then
+          let some child := children[index]?
+            | throwError "connection-family-observation-child-missing"
+          replayBody next child.1
+          index := index + 1
+        else staticGoal next
+      unless index == children.size do
+        throwError "connection-family-observation-child-unused"
+    return
+  let constructor ← mkConstWithFreshMVarLevels name
+  let mut type ← inferType constructor
+  let mut fields := #[]
+  let mut guided := #[]
+  let mut namedFields : Array (Name × Expr) := #[]
+  let indexNames : Array Name := #[`routing, `context, `definitions, `callees, `selection,
+    `out, `role, `scopes, `outputs, `history, `scope, `frames, `layout]
+  let indexed := indexNames.zip expected.getAppArgs
+  let source ← whnf expected.getAppArgs[13]!
+  let sourceFields ← exposedSourceFields source
+  let application := name == ``ConnectionCertificate.Alignment.application ||
+    name == ``ConnectionCertificate.Alignment.applicationRetainedHistory
+  let mut supplied : Array (Name × Expr) := #[]
+  if name == ``ConnectionCertificate.Alignment.split ||
+      name == ``ConnectionCertificate.Alignment.splitPresent then
+    unless source.isAppOf ``NormalForm.Form.split do throwError "connection-family-split-source"
+    -- A symbolic optional argument need not expose input/read yet. Recover
+    -- a determined subject directly; otherwise the finite source equation
+    -- retains that boundary parameter until the actual placement fixes it.
+    let saved ← saveState
+    try
+      supplied := #[(`subject, ← splitSubject source.getAppArgs[source.getAppArgs.size - 3]!)]
+    catch error =>
+      if error.isRuntime || error.isInterrupt then throw error
+      saved.restore
+  if application then
+    let source ← whnf expected.getAppArgs[13]!
+    unless source.isAppOf ``NormalForm.Form.apply do throwError "connection-family-application-source"
+    let selection ← whnf expected.getAppArgs[4]!
+    unless selection.isAppOf ``ConnectionLibrary.Selection.selected do
+      throwError "connection-family-application-library"
+    let selected := selection.getAppArgs
+    let parts := source.getAppArgs
+    let originalFields ← Family.constructorFields guide
+    let some (_, originalSpine) := originalFields.find? (·.1 == `spine)
+      | throwError "connection-family-application-spine"
+    let some (_, returns) := originalFields.find? (·.1 == `returnSelection)
+      | throwError "connection-family-application-returns"
+    let (spine, rest) ← Family.splitTarget originalSpine expected.getAppArgs[14]!
+    supplied := #[(`payload, selected[selected.size - 3]!), (`same, selected[selected.size - 2]!),
+      (`library, selected.back!), (`callee, parts[parts.size - 6]!),
+      (`signature, parts[parts.size - 5]!), (`roles, parts[parts.size - 4]!),
+      (`site, parts[parts.size - 3]!), (`arguments, parts[parts.size - 2]!),
+      (`next, parts.back!), (`returnSelection, returns), (`spine, spine), (`rest, rest)]
+  for original in guide.getAppArgs do
+    let .forallE field domain body _ := type | throwError "connection-family-guide-arity"
+    let domainHead ← whnf domain
+    let fromSource ← if indexed.any (·.1 == field) || supplied.any (·.1 == field) then pure none
+      else sourceField? sourceFields field domain
+    let value ← if let some (_, value) := indexed.find? (·.1 == field) then pure value
+      else if let some (_, value) := supplied.find? (·.1 == field) then pure value
+      else if let some value := fromSource then pure value
+      else if domainHead.isAppOf ``NormalForm.Form then openForm original domainHead
+      else if domainHead.isAppOf ``NormalForm.Terms then
+        operandTerms domainHead.getAppArgs[1]! expected.getAppArgs[12]!
+          (← mkListLit (mkConst ``Nat) []) domainHead.getAppArgs[2]!
+      else if [``Helper, ``CheckedDefinition, ``Zkc.Source.Structured.Program, ``Calculation, ``RepeatSpec,
+          ``Region, ``NormalForm.Equality, ``Ty, ``Replacement, ``ConnectionHelpers.Binding,
+          ``ConnectionHelpers.Projection, ``ConnectionHelpers.CalculationBody].any domainHead.isAppOf ||
+          field == `roster || field == `stateSorts || field == `site then
+        pure original
+      else if (← isProp domain) && !domain.hasFVar && !domain.hasExprMVar then pure original
+      else if field == `distinct then do
+        let roster := (fields.back!)
+        let check ← mkAppM ``ConnectionFrame.rosterCheck
+          #[expected.getAppArgs[1]!, expected.getAppArgs[6]!, roster]
+        let proof ← mkFreshExprMVar (← mkEq check (mkConst ``Bool.true))
+        mkAppM ``ConnectionFrame.rosterCheck_sound
+          #[expected.getAppArgs[1]!, expected.getAppArgs[6]!, roster, proof]
+      else mkFreshExprMVar domain
+    unless ← isDefEq (← inferType value) domain do
+      throwError "connection-family-guide-field: {field}"
+    fields := fields.push value
+    namedFields := namedFields.push (field, value)
+    if domainHead.isAppOf ``ConnectionCertificate.Alignment then
+      guided := guided.push (field, value.mvarId!, original)
+    type := body.instantiate1 value
+  let pending ← try applyWithLengths goal (mkAppN constructor fields)
+    catch error =>
+      if error.isRuntime || error.isInterrupt then throw error
+      throwError "connection-family-guide-apply: {name}: {error.toMessageData}"
+  -- Congruence can reorder metavariables in the proof term. Follow the
+  -- constructor's own child fields, never the traversal order of getMVars.
+  for (field, child, original) in guided do
+    if application && field == `bodyCertificate then
+      let input ← Family.application (mkAppN constructor fields)
+      let some placed ← TargetPlacement.propose child input.entry input.placement staticGoal
+        | throwError "connection-family-nested-body-refused"
+      let some (_, extent) := namedFields.find? (·.1 == `physicalExtent)
+        | throwError "connection-family-nested-extent"
+      let physical ← mkAppM ``ConnectionTargetPlacement.CheckedBody.physicalExtent #[placed.body]
+      unless ← isDefEq (← inferType physical) (← inferType extent) do
+        throwError "connection-family-nested-extent-type"
+      extent.mvarId!.assign physical
+      continue
+    unless ← child.isAssigned do replayBody child original
+  if application then
+    -- These existing constructor checks are decidable finite admission and
+    -- history separation. Reflect them into Bool equations, rather than
+    -- abstracting arbitrary propositions or another body derivation.
+    for (field, value) in namedFields do
+      if field == `admission || field == `separate then
+        unless ← value.mvarId!.isAssigned do
+          let rule ← if field == `admission then mkConstWithFreshMVarLevels ``of_decide_eq_true
+            else do
+              let get := fun name => (namedFields.find? (·.1 == name)).get!.2
+              mkAppM ``ConnectionTargetPlacement.historySeparationCheck_sound
+                #[get `calleeOutputs, get `calleeHistory]
+          for fact in ← value.mvarId!.apply rule do
+            staticGoal fact
+  for next in pending do
+    if ← next.isAssigned then continue
+    let pendingType ← whnf (← instantiateMVars (← next.getType))
+    if pendingType.isAppOf ``ConnectionCertificate.Alignment then
+      throwError "connection-family-unguided-child"
+    else if pendingType.isAppOf ``ConnectionTargetExtent.Extent then deriveExtent next
+    else staticGoal next
+    -- Close internal finite facts once. Only genuine boundary facts remain
+    -- as parameters of the installed family.
+
+/-- Install an open body from untrusted constructor choices discovered at one
+actual call. Only the newly checked family becomes reusable evidence. -/
+def installDiscoveredBody (entry routing selection placement guide : Expr) : TacticM Name :=
+  Family.install entry routing selection placement fun generated => do
+    let [alignment, extent] ← generated.apply (← mkConstWithFreshMVarLevels
+        ``ConnectionTargetPlacement.CheckedBody.mk)
+      | throwError "connection-family-fields"
+    replayBody alignment guide
+    deriveExtent extent
 
 structure PlacementCost where
   name : Name
@@ -570,6 +979,10 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
   -- library key row here makes every constructor compare that computation
   -- against the compact indices of the cached source and frame.
   for index in [3, 5, 7, 8, 9, 10, 11, 12, 13] do
+    -- A family's symbolic interface is already shared by its binders. Eagerly
+    -- expanding it destroys layout constructors needed by their generic laws
+    -- and duplicates open substitutions without creating cacheable syntax.
+    if args[index]!.hasFVar then continue
     let start ← IO.monoMsNow
     args := args.set! index (← Syntax.freeze cache (← reducedSyntax cache args[index]!))
     let elapsed := (← IO.monoMsNow) - start
@@ -633,10 +1046,15 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
       if visited.contains (index, rule) then continue
       visited := (index, rule) :: visited
       let (spine, rest) := slices[index]!
+      let entry ← mkAppM ``ConnectionLibrary.Library.entry #[library, callee]
+      unless ← TargetPlacement.compatiblePrefix entry spine do
+        failure := "alignment-reusable-body-refused: target instruction schedule"
+        continue
       search.found.set none
       tracePhase s!"application slice {index}/{slices.size} {rule}"
 
       let saved ← saveState
+      let installingFamily ← IO.mkRef false
       try
         let supplied := [( `payload, payload), (`same, same), (`library, library), (`callee, callee),
           (`signature, signature), (`roles, roles), (`site, site), (`arguments, arguments),
@@ -675,7 +1093,6 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
           else statics := statics ++ [pending]
         match alignments with
         | body :: tails =>
-          let entry ← mkAppM ``ConnectionLibrary.Library.entry #[library, callee]
           let field := fun name => (namedFields.find? (·.1 == name)).get!.2
           let entered ← mkAppM ``ProtocolContext.enter #[args[1]!, site, roles]
           let placement ← mkAppOptM ``ConnectionTargetPlacement.Placement.mk
@@ -691,16 +1108,47 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
               pending.assign extent
             tracePhase s!"reused body {placed.family}: proposal_ns={placed.proposalNanos}"
           | none =>
-            if (← getOptions).getBool `zkc.connection.requireReusableBodies false then
+            if (← getOptions).getBool `zkc.connection.generateReusableBodies false &&
+                !(← Family.collecting) && !(← TargetPlacement.hasEntry entry) then
+              -- Discover the finite boundary once, without installing this
+              -- concrete proposal as a per-placement proof declaration.
+              for pending in extents do
+                -- Infer the finite extent for discovery, but keep the actual
+                -- root field open for the installed family's projection.
+                let trialExtent ← mkFreshExprSyntheticOpaqueMVar (← pending.getType)
+                deriveExtent trialExtent.mvarId!
+              let trial ← mkFreshExprSyntheticOpaqueMVar (← body.getType)
+              derive cache (some search) trial.mvarId!
+              let placement ← instantiateMVars placement
+              let earlierSelection := (← whnf (← body.getType)).getAppArgs[4]!
+              installingFamily.set true
+              let _ ← installDiscoveredBody entry args[0]! earlierSelection placement
+                (← instantiateMVars trial)
+              let some placed ← TargetPlacement.propose body entry placement staticGoal
+                | throwError "alignment-generated-family-refused"
+              let extent ← mkAppM ``ConnectionTargetPlacement.CheckedBody.physicalExtent #[placed.body]
+              for pending in extents do
+                unless ← isDefEq (← inferType extent) (← pending.getType) do
+                  throwError "alignment-generated-family-extent"
+                pending.assign extent
+              installingFamily.set false
+            else if (← getOptions).getBool `zkc.connection.requireReusableBodies false ||
+                (← TargetPlacement.hasEntry entry) then
               throwError "alignment-reusable-body-refused"
-            for pending in extents do deriveExtent pending
-            checkedBody body (derive cache (some search))
+            else
+              for pending in extents do deriveExtent pending
+              checkedBody body (derive cache (some search))
           for pending in statics do unless ← pending.isAssigned do staticGoal pending
           for alignment in tails do derive cache discovery alignment
         | [] => throwError "alignment-application-body-missing"
         return
       catch error =>
         if error.isRuntime || error.isInterrupt then throw error
+        -- Discovery already checked this exact source/target boundary. A
+        -- failure to generalize it is not evidence for another, longer slice.
+        -- Preserve the useful failure instead of rederiving unrelated bodies.
+        if ← installingFamily.get then
+          throwError "connection-family-installation-failed: {error.toMessageData}"
         saved.restore
         if let .internal id _ := error then
           if id == discoveredCutException then
@@ -709,11 +1157,25 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
               candidates := candidatesFor cut ++ candidates
               continue
             throw error
+        trace[zkc.connection.placement] "application slice {index}: {error.toMessageData}"
         failure := error.toMessageData
         -- Formatting a dependent failure can traverse an entire root proof,
         -- even when tracePhase is disabled. Keep the original diagnostic for
         -- the final error; the search trace records only the failed choice.
         tracePhase s!"application slice {index} refused by {rule}"
+    -- Total source computations can normalize into the arguments of the next
+    -- application. First try every checked callee slice, then account for an
+    -- auxiliary calculation in the caller before reusing the callee family.
+    let auxiliary ← withLocalDeclD `applicationModel (mkConst ``DomainModel) fun model => do
+      let block ← viewHead (mkApp target model)
+      unless block.isAppOf ``Domain.View.sequence do return false
+      let first ← viewHead block.getAppArgs[1]!
+      unless first.isAppOf ``Domain.View.calculation do return false
+      let (readback, tail) ← applyAuxiliaryCalculation goal args first.getAppArgs[1]! first.getAppArgs[2]!
+      staticGoal readback
+      derive cache discovery tail
+      return true
+    if auxiliary then return
     throwError "alignment-callee-slice-refused: {failure}"
   if source.isAppOf ``NormalForm.Form.split then
     let parts := source.getAppArgs
@@ -729,13 +1191,14 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
     let frame ← listEntries layout
     for cell in frame, index in [:frame.size] do
       let cell ← whnf cell
-      if cell.isAppOf ``ConnectionFrame.Cell.data && (← isDefEq cell.getAppArgs.back! component) then
-        let constructor ← mkAppOptM ``ConnectionCertificate.Alignment.splitPresent
-          ((args.extract 0 13).map some ++ #[none, some subject, some parts[parts.size - 2]!, some parts.back!, some target, some (mkNatLit index)])
-        let [tail] ← tryReflexivity (← goal.apply constructor)
-          | throwError "alignment-presence-static-mismatch"
-        derive cache discovery tail
-        return
+      if cell.isAppOf ``ConnectionFrame.Cell.data then
+        if ← isDefEq cell.getAppArgs.back! component then
+          let constructor ← mkAppOptM ``ConnectionCertificate.Alignment.splitPresent
+            ((args.extract 0 13).map some ++ #[none, some subject, some parts[parts.size - 2]!, some parts.back!, some target, some (mkNatLit index)])
+          let [tail] ← tryReflexivity (← goal.apply constructor)
+            | throwError "alignment-presence-static-mismatch"
+          derive cache discovery tail
+          return
     let constructor ← mkAppOptM ``ConnectionCertificate.Alignment.split
       ((args.extract 0 13).map some ++ #[none, some subject, some parts[parts.size - 2]!, some parts.back!, some target])
     let [absent, present] ← goal.apply constructor | throwError "alignment-split-shape"
@@ -812,8 +1275,7 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
   try
     let [readback, historyRead] ← tryReflexivity (← goal.apply (← mkConstWithFreshMVarLevels ``ConnectionCertificate.Alignment.done))
       | throwError "alignment-not-return"
-    setGoals [readback]
-    evalTactic (← `(tactic| derive_source_readback))
+    staticGoal readback
     staticGoal historyRead
     return
   catch exception =>
@@ -856,27 +1318,17 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
           goal.apply constructor
           catch _ => throwError "alignment-compute-operation-or-view-mismatch"
         let [readback, tail] ← tryReflexivity pending | throwError "alignment-compute-shape"
-        setGoals [readback]
-        evalTactic (← `(tactic| derive_source_readback))
+        staticGoal readback
         derive cache discovery tail
         return
       -- Normalization removes total source instructions before a compute node.
       -- Retain their real target checkpoints and extend the symbolic frame
       -- before proposing the partial step; never treat that step as total.
-      let pending ← try
-        let terms ← operandTerms scope layout references
-        let yes ← mkEqRefl (mkConst ``Bool.true)
-        let supplied := (args.extract 0 14).map some ++
-          #[some operation, some yes, some terms, some references, some yes, some yes]
-        let constructor ← mkAppOptM ``ConnectionCertificate.Alignment.calculation supplied
-        goal.apply constructor
+      let (readback, tail) ← try applyAuxiliaryCalculation goal args operation references
       catch exception =>
         if computing then throwError "alignment-compute-operation-or-view-mismatch"
         else throw exception
-      let [readback, tail] ← tryReflexivity pending
-        | throwError "alignment-calculation-shape"
-      setGoals [readback]
-      evalTactic (← `(tactic| derive_source_readback))
+      staticGoal readback
       derive cache discovery tail
       return
     if [``Domain.View.receive, ``Domain.View.send, ``Domain.View.observe, ``Domain.View.challenge,
@@ -926,16 +1378,7 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
           let mut tails := []
           for pendingGoal in pending do
             let type ← instantiateMVars (← pendingGoal.getType)
-            if type.isAppOf ``ConnectionCertificate.GuardReadback then
-              let saved ← saveState
-              try
-                for checked in ← applyRule pendingGoal ``ConnectionCertificate.GuardReadback.comparison do
-                  staticGoal checked
-              catch _ =>
-                saved.restore
-                for checked in ← applyRule pendingGoal ``ConnectionCertificate.GuardReadback.boolean do
-                  staticGoal checked
-            else if type.isAppOf ``ConnectionCertificate.Alignment then
+            if type.isAppOf ``ConnectionCertificate.Alignment then
               tails := pendingGoal :: tails
             else staticGoal pendingGoal
           selected := some tails
@@ -972,8 +1415,7 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
         catch exception => throwError "alignment-helper-static-mismatch: {exception.toMessageData}"
       let pending ← tryReflexivity pending
       let [readback, tail] := pending | throwError "alignment-helper-static-mismatch: remaining={pending.length}"
-      setGoals [readback]
-      try evalTactic (← `(tactic| derive_source_readback))
+      try staticGoal readback
       catch _ => throwError "alignment-helper-operand-readback-mismatch-or-optional"
       derive cache discovery tail
       return
@@ -1001,13 +1443,17 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
         return (references, ← mkAppOptM ``Option.none #[some (mkConst ``Nat)])
       let (stateReferences, initialHistory) ← splitProfile initial
       let (yieldData, bodyHistory) ← splitProfile yielded
+      tracePhase "loop profile parsed"
       let roster ← mkAppM ``List.length #[← mkAppM ``ContextIdentity.roles #[← mkAppM ``Context.toContextIdentity #[context]]]
-      let distinct ← mkAppM ``ConnectionFrame.rosterCheck_sound #[args[1]!, args[6]!, roster,
-        ← mkEqRefl (mkConst ``Bool.true)]
+      let rosterCheck ← mkAppM ``ConnectionFrame.rosterCheck #[args[1]!, args[6]!, roster]
+      let rosterProof ← mkFreshExprMVar (← mkEq rosterCheck (mkConst ``Bool.true))
+      staticGoal rosterProof.mvarId!
+      let distinct ← mkAppM ``ConnectionFrame.rosterCheck_sound #[args[1]!, args[6]!, roster, rosterProof]
       let body ← mkLambdaFVars #[model] viewParts[6]!
       let rest ← mkLambdaFVars #[model] block.getAppArgs[2]!
       let visible ← whnf (← mkAppM ``ConnectionFrame.visibleState
         #[args[6]!, ← mkAppM ``RepeatSpec.stateScopes #[spec], ← mkAppM ``RepeatSpec.state #[spec]])
+      tracePhase "loop interface prepared"
       let constructor ← if visible.isConstOf ``Bool.true then
         finiteApplication ``ConnectionCertificate.Alignment.repeat
           ((args.extract 0 13).map some ++ #[some spec, some site, some callback, some count.getAppArgs.back!,
@@ -1024,23 +1470,33 @@ private partial def derive (cache : SyntaxCache) (discovery : Option CutDiscover
         let mappedScopes ← mkAppM ``ProtocolContext.mapScopes #[args[1]!, scopes]
         let schema ← whnf (← mkAppM ``Original.roleOutputSorts
           #[mappedRole, mappedScopes, ← mkAppM ``RepeatSpec.state #[spec]])
-        unless schema.isAppOf ``Option.some do throwError "alignment-loop-projected-schema"
+        let stateSorts ← if schema.isAppOf ``Option.some then pure schema.getAppArgs.back!
+          else if ← Family.collecting then do
+            let declared ← listEntries viewParts[5]!
+            let mut dataSorts := #[]
+            for sort in declared do
+              if (← whnf sort).isAppOf ``ValueSort.data then dataSorts := dataSorts.push sort
+            mkListLit (mkConst ``ValueSort) dataSorts.toList
+          else throwError "alignment-loop-projected-schema"
+        tracePhase "loop projected schema proposed"
         finiteApplication ``ConnectionCertificate.Alignment.projectedRepeat
           ((args.extract 0 13).map some ++ #[some spec, some site, some callback, some count.getAppArgs.back!,
             some parts[parts.size - 3]!, some parts[parts.size - 2]!, some parts.back!, some body, some rest,
-            some roster, some distinct, none, none, some schema.getAppArgs.back!, none, some viewParts[3]!, none,
+            some roster, some distinct, none, none, some stateSorts, none, some viewParts[3]!, none,
             some initialLocations.getAppArgs.back!, some yieldLocations.getAppArgs.back!,
             some stateReferences, some initial, some yieldData, some yielded, some initialHistory, some bodyHistory])
+      tracePhase "loop constructor assembled"
       let pending ← try goal.apply constructor catch _ => throwError "alignment-loop-bound-schema-or-layout-mismatch"
+      tracePhase "loop constructor applied"
       let pending ← tryReflexivity pending
+      tracePhase "loop finite reflexivity complete"
       let mut tails := []
       for remaining in pending do
         if ← remaining.isAssigned then continue
         let type ← instantiateMVars (← remaining.getType)
         if type.isAppOf ``ConnectionCertificate.Alignment then tails := tails ++ [remaining]
         else if type.isAppOf ``ConnectionFrame.Readback then
-          setGoals [remaining]
-          try evalTactic (← `(tactic| derive_source_readback))
+          try staticGoal remaining
           catch _ => throwError "alignment-loop-state-readback-mismatch"
         else
           try staticGoal remaining
@@ -1063,5 +1519,38 @@ elab "derive_connection_alignment" : tactic => withMainContext do
   let result ← instantiateMVars (mkMVar goal)
   if result.hasExprMVar then throwError "alignment-unresolved-finite-admission"
   setGoals pending
+
+/-- Construct a family at its symbolic interface, once. All parameters and
+premises are ordinary Lean binders; no transport theorem or semantic callback
+is assumed. Applications subsequently reference this checked declaration. -/
+elab "derive_connection_target_body" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let pending := (← getGoals).tail
+  let expected ← whnf (← goal.getType)
+  unless expected.isAppOf ``ConnectionTargetPlacement.CheckedBody do
+    throwError "connection-target-body-expected-checked-body"
+  let [alignment, extent] ← goal.apply (← mkConstWithFreshMVarLevels
+      ``ConnectionTargetPlacement.CheckedBody.mk)
+    | throwError "connection-target-body-fields"
+  let cache ← Syntax.newCache
+  derive cache none alignment
+  deriveExtent extent
+  Term.synthesizeSyntheticMVarsNoPostponing
+  let result ← instantiateMVars (mkMVar goal)
+  if result.hasExprMVar then
+    let mut missing : MessageData := ""
+    for hole in ← getMVars result do
+      missing := m!"{missing}\n{← hole.getType}"
+    throwError "connection-target-body-unresolved-interface: {missing}"
+  setGoals pending
+
+/-- Install a named parameterized family using the ordinary typed proposer.
+The caller specifies the exact Entry and supported placement interface; the
+generated declaration supplies the structural derivations and registration. -/
+syntax "install_connection_target_body " ident bracketedBinder* " : " term : command
+macro_rules
+  | `(install_connection_target_body $name:ident $binders:bracketedBinder* : $type:term) =>
+    `(command| @[connection_target_body] noncomputable def $name $binders* : $type := by
+      derive_connection_target_body)
 
 end ZkcTools.ConstructionBindings.Alignment

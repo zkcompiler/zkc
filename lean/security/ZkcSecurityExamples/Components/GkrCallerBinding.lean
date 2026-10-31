@@ -2,6 +2,7 @@ module
 
 public import ZkcExamples.Structured.Generated.Bindings.GkrRoundsCaller
 public import Zkc.Source.TypedABI
+public import Zkc.Source.Structured.ContractBoundary
 public import ZkcSecurityExamples.Components.GkrRoundsBindingInvocation
 public import ZkcSecurityExamples.Components.GkrCallerRealization
 
@@ -105,23 +106,16 @@ theorem first_callback (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 
     protocol2Role1First (F := F) (G := G) ctx (frame outputs rho claim service) =
       firstLeft ctx (some 0) none (some [rho]) (some claim) (some inputs)
         (some stackedAdd) (some stackedMul) (some 2) (some 1) (some 1) (some service) := by
-  let input : Values (Component (assignment F G))
-      (.index :: (layerSpec.state ++ layerSpec.captures)) :=
-    .cons (some 0) (.cons none (.cons (some [rho]) (.cons (some claim)
-      (.cons (some inputs) (.cons (some stackedAdd) (.cons (some stackedMul)
-        (.cons (some 2) (.cons (some 1) (.cons (some 1) (.cons (some service) .nil))))))))))
-  have inputEq : protocol2Role1FirstInput ctx (frame (G := G) outputs rho claim service) = input := by
-    simp [layerSpec, protocol2Role1FirstInput, frame, outputFrame, protocol2Role1MakeFrame, input,
-      mask_cons, maskValues, ProtocolContext.mapScopes, Participant.restrict,
-      TypedABI.get_cons_here, TypedABI.get_cons_there, Values.append]
   change ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx
     (ctx.roles 1)).callback layerSpec protocol2Role1Callback1Body)
     (protocol2Role1FirstInput ctx (frame outputs rho claim service)) = _
-  rw [inputEq]
-  exact congrFun (protocol2Role1Callback1_function ctx distinct) input
+  rw [protocol2Role1Callback1_function ctx distinct]
+  simp [protocol2Role1FirstInput, frame, outputFrame, protocol2Role1MakeFrame,
+    maskValues, ProtocolContext.mapScopes, Participant.restrict, Values.append]
 
 /-- Direct source call equation. No mathematical representation or assumed
-source equation occurs among its hypotheses. -/
+source equation occurs among its hypotheses. The checked source association
+supplies the callee body and both masks; the complete caller suffix is retained. -/
 theorem first_left_call (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
     (outputs : List F) (rho claim : F) (service : Nat) :
     (protocol2Role1Loop (F := F) (G := G) ctx (frame outputs rho claim service)).bind
@@ -134,14 +128,13 @@ theorem first_left_call (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1
   simp only [PIR.Process.bind, PIR.Process.bind_assoc]
   change (invokeProtocol _ definition0.signature (leftContext ctx)
     ((leftContext ctx).roles 1) _).bind _ = _
-  rw [protocol0Role1_invocation _ (left_distinct ctx distinct)]
-  unfold protocol0Role1View
-  have separate := (left_distinct ctx distinct) 0 (by decide) (by decide)
-  have inputScopes : definition0.inputScopes = [[0], [0], [0], [0], [1], [1], [0, 1], [1]] := by kernel_rfl
-  simp only [inputScopes, protocol2Role1Callback1SetupInput, leftFrame, protocol2Role1Callback1MakeSetupFrame, mask_cons, maskValues, ProtocolContext.mapScopes,
-    List.map_cons, List.map_nil, List.tail_cons, List.headD_cons, List.contains_cons, List.contains_nil, beq_self_eq_true,
-    Bool.or_false, Bool.or_true, Participant.restrict, ite_true, TypedABI.get_cons_here, TypedABI.get_cons_there, PIR.Process.bind_assoc,
-    PIR.Process.bind, ite_self]
+  rw [GkrRoundsBinding.source_invocation _ (left_distinct ctx distinct),
+    GkrRoundsBinding.source_process _ (left_distinct ctx distinct)]
+  unfold ZkcSecurity.Bindings.Gkr.RoundsSourceTemplate.view
+  simp [contract_mask_get, ZkcSecurity.Bindings.Gkr.RoundsSourceTemplate.signature,
+    Zkc.Protocols.Gkr.Source.HelperBodies.roundsProtocolSignature,
+    protocol2Role1Callback1SetupInput, leftFrame, protocol2Role1Callback1MakeSetupFrame,
+    ProtocolContext.mapScopes, Participant.restrict, Var.index, PIR.Process.bind_assoc, PIR.Process.bind]
   rfl
 
 end ZkcSecurity.Examples.Components.GkrCallerBinding

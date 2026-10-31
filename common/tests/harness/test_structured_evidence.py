@@ -125,8 +125,9 @@ def repeat_tree(repeats, bridge, monkeypatch, tmp_path):
     }
     for name in ("snapshot", "check", "evidence", "open_protocol", "repeats"):
         files[f"lean/bridges/structured/{name}.py"] = (BRIDGE / f"{name}.py").read_text()
-    for name in ("scripts/reporting.py", "common/tests/support/project.py", "lean/bridges/common/lean_render.py",
-                 "lean/bridges/common/native_entry.py",
+    for path in (ROOT / "lean/bridges/common").glob("*.py"):
+        files[path.relative_to(ROOT).as_posix()] = path.read_text()
+    for name in ("scripts/reporting.py", "common/tests/support/project.py", "common/catalog/declarations.json",
                  "lean/bridges/structured/fixtures.toml"):
         files[name] = (ROOT / name).read_text()
     for name, value in files.items():
@@ -439,6 +440,7 @@ def test_repeat_inventory_captures_owners_and_runs_from_git_free_archive(
         "lean/FutureOwner/Dependency.lean", "scripts/reporting.py", "common/tests/support/project.py",
         "lean/support/lake.py", "libraries/lib/lib.zkc", "libraries/lib/zkc.toml",
         "lean/bridges/common/lean_render.py", "lean/bridges/common/native_entry.py",
+        "lean/bridges/common/schema.py", "common/catalog/declarations.json",
         "lean/bridges/structured/fixtures.toml",
         "compiler/include/zkc/Support/Json.h", "compiler/lib/Compiler/StructuredSource.cpp",
         "compiler/test/structured_reference.cpp",
@@ -459,6 +461,8 @@ def test_repeat_inventory_captures_owners_and_runs_from_git_free_archive(
 import argparse, pathlib, subprocess, sys
 sys.path.insert(0, {str(restored / "lean/bridges/structured")!r})
 import repeats
+from bridges.common import schema
+schema.logical_type(["apply", "bool", []])
 repeats.SUBJECTS = {repeats.SUBJECTS!r}
 def no_git(*args, **kwargs):
     raise AssertionError("Git is unavailable")
@@ -484,10 +488,11 @@ def test_live_repeat_inventory_covers_main_lean_imports_and_python_owners(repeat
             dependency = ROOT / "lean" / (module.replace(".", "/") + ".lean")
             if dependency.exists():
                 assert dependency in inventory, (path, dependency)
-    for tree in ("scripts", "common/tests/support", "lean/bridges/structured"):
+    for tree in ("scripts", "common/tests/support", "lean/bridges/structured", "lean/bridges/common"):
         assert set((ROOT / tree).glob("*.py")) <= inventory
     assert ROOT / "lean/ZkcTools/StructuredSource/Bounds.lean" in inventory
     assert set((ROOT / "common/unicode").rglob("*.txt")) <= inventory
+    assert ROOT / "common/catalog/declarations.json" in inventory
 
 
 @pytest.mark.parametrize("driver", ["shared", "repeat"])

@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.ProtocolOperations
+public import Zkc.Protocols.TableMembership.SourceBodies
 
 @[expose] public section
 
@@ -9,63 +9,61 @@ public import Zkc.Source.Structured.ProtocolOperations
 namespace ZkcExamples.Structured.TableMembershipBodies
 open Zkc.Source Zkc.Source.Structured
 
+
+def names : Zkc.Protocols.TableMembership.Source.Names where
+  containsDecision := "zkl_eac5bb453765e151a156f69f4baa9e6bcf2f4bd5795339381998b1dec7955769"
+  containsStep := "finite_zkl_d4b93c8f46d7244a48506831b7018ce4a6c0c55f2b051afd84ed04935b4accfe_s2_body"
+  contains := "zkl_d4b93c8f46d7244a48506831b7018ce4a6c0c55f2b051afd84ed04935b4accfe"
+  queryDecision := "zkl_030ec014d62aacfcdf410a9867a0d256777f66bbad418c7438d2d11c402b4918"
+  queryStep := "finite_zkl_7c501270678eb45dbc3cb957141b65bbf2789c13f88546f5cc825219f80b9d98_s2_body"
+  membership := "zkl_7c501270678eb45dbc3cb957141b65bbf2789c13f88546f5cc825219f80b9d98"
+  formula := "zkf_39125dccf0dcbcb245fd5a5617424f01d0123f2a50f923aaf33eafa5487b4955"
+  containsDomain := "finite_zkl_d4b93c8f46d7244a48506831b7018ce4a6c0c55f2b051afd84ed04935b4accfe_s2_domain"
+  membershipDomain := "finite_zkl_7c501270678eb45dbc3cb957141b65bbf2789c13f88546f5cc825219f80b9d98_s2_domain"
+  queryName := "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"
+  queryConstructor := "case00000000"
+
 abbrev containsDecisionHelper : Helper :=
-  ⟨"zkl_eac5bb453765e151a156f69f4baa9e6bcf2f4bd5795339381998b1dec7955769", .math, [.boolean, (.field "koala-bear"), (.field "koala-bear")], [.boolean]⟩
+  Zkc.Protocols.TableMembership.Source.containsDecisionHelper "koala-bear" names
 
 def containsDecisionBody : Region dialect containsDecisionHelper.inputs containsDecisionHelper.outputs :=
-  .letOp (.fieldEqual "koala-bear") (.cons (.there .here) (.cons (.there (.there .here)) .nil)) .nil <|
-  .letOp .booleanOr (.cons (.there .here) (.cons .here .nil)) .nil <|
-  .ret (.cons .here .nil)
+  Zkc.Protocols.TableMembership.Source.containsDecisionBody "koala-bear" names
 
 abbrev containsStepHelper : Helper :=
-  ⟨"finite_zkl_d4b93c8f46d7244a48506831b7018ce4a6c0c55f2b051afd84ed04935b4accfe_s2_body", .math, [.boolean, (.field "koala-bear"), (.vector "koala-bear"), (.field "koala-bear")], [.boolean]⟩
+  Zkc.Protocols.TableMembership.Source.containsStepHelper "koala-bear" names
 
 def containsStepBody : Region dialect containsStepHelper.inputs containsStepHelper.outputs :=
-  .letOp (.invoke {name := "zkl_eac5bb453765e151a156f69f4baa9e6bcf2f4bd5795339381998b1dec7955769", kind := .math, inputs := [.boolean, .field "koala-bear", .field "koala-bear"], outputs := [.boolean]}) (.cons .here (.cons (.there .here) (.cons (.there (.there (.there .here))) .nil))) .nil <|
-  .ret (.cons .here .nil)
+  Zkc.Protocols.TableMembership.Source.containsStepBody "koala-bear" names
 
 abbrev containsHelper : Helper :=
-  ⟨"zkl_d4b93c8f46d7244a48506831b7018ce4a6c0c55f2b051afd84ed04935b4accfe", .math, [(.vector "koala-bear"), (.field "koala-bear")], [.boolean]⟩
+  Zkc.Protocols.TableMembership.Source.containsHelper "koala-bear" names
 
 def containsBody : Region dialect containsHelper.inputs containsHelper.outputs :=
-  .letOp (.booleanConstant false) .nil .nil <|
-  .letOp (.fold {domain := {name := "finite_zkl_d4b93c8f46d7244a48506831b7018ce4a6c0c55f2b051afd84ed04935b4accfe_s2_domain", inputs := [.vector "koala-bear"], items := [.field "koala-bear"], body := DomainBody.letNode (DomainNode.elements (Collection.vector "koala-bear") .here) (DomainBody.ret .here)}, state := [.boolean], captures := [.field "koala-bear"], step := "finite_zkl_d4b93c8f46d7244a48506831b7018ce4a6c0c55f2b051afd84ed04935b4accfe_s2_body", predicate := "", kind := .math}) (.cons (.there .here) (.cons .here (.cons (.there (.there .here)) .nil))) .nil <|
-  .ret (.cons .here .nil)
+  Zkc.Protocols.TableMembership.Source.containsBody "koala-bear" names
 
 abbrev queryDecisionHelper : Helper :=
-  ⟨"zkl_030ec014d62aacfcdf410a9867a0d256777f66bbad418c7438d2d11c402b4918", .math, [.boolean, .boolean, (.field "koala-bear"), (.vector "koala-bear")], [.boolean]⟩
+  Zkc.Protocols.TableMembership.Source.queryDecisionHelper "koala-bear" names
 
 def queryDecisionBody : Region dialect queryDecisionHelper.inputs queryDecisionHelper.outputs :=
-  .letOp (.booleanConstant false) .nil .nil <|
-  .letOp .booleanEqual (.cons (.there (.there .here)) (.cons .here .nil)) .nil <|
-  .letOp (.invoke {name := "zkl_d4b93c8f46d7244a48506831b7018ce4a6c0c55f2b051afd84ed04935b4accfe", kind := .math, inputs := [.vector "koala-bear", .field "koala-bear"], outputs := [.boolean]}) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
-  .letOp .booleanOr (.cons (.there .here) (.cons .here .nil)) .nil <|
-  .letOp .booleanAnd (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil <|
-  .ret (.cons .here .nil)
+  Zkc.Protocols.TableMembership.Source.queryDecisionBody "koala-bear" names
 
 abbrev queryStepHelper : Helper :=
-  ⟨"finite_zkl_7c501270678eb45dbc3cb957141b65bbf2789c13f88546f5cc825219f80b9d98_s2_body", .math, [.boolean, (.product "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]" "case00000000" (.cons .boolean (.cons (.field "koala-bear") .nil))), (.sequence (.product "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]" "case00000000" (.cons .boolean (.cons (.field "koala-bear") .nil)))), (.vector "koala-bear")], [.boolean]⟩
+  Zkc.Protocols.TableMembership.Source.queryStepHelper "koala-bear" names
 
 def queryStepBody : Region dialect queryStepHelper.inputs queryStepHelper.outputs :=
-  .letOp (.getProduct "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]" "case00000000" (ProductFields.cons .boolean (ProductFields.cons (.field "koala-bear") ProductFields.nil)) .boolean .here) (.cons (.there .here) .nil) .nil <|
-  .letOp (.getProduct "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]" "case00000000" (ProductFields.cons .boolean (ProductFields.cons (.field "koala-bear") ProductFields.nil)) (.field "koala-bear") (.there .here)) (.cons (.there (.there .here)) .nil) .nil <|
-  .letOp (.invoke {name := "zkl_030ec014d62aacfcdf410a9867a0d256777f66bbad418c7438d2d11c402b4918", kind := .math, inputs := [.boolean, .boolean, .field "koala-bear", .vector "koala-bear"], outputs := [.boolean]}) (.cons (.there (.there .here)) (.cons (.there .here) (.cons .here (.cons (.there (.there (.there (.there (.there .here))))) .nil)))) .nil <|
-  .ret (.cons .here .nil)
+  Zkc.Protocols.TableMembership.Source.queryStepBody "koala-bear" names
 
 abbrev membershipHelper : Helper :=
-  ⟨"zkl_7c501270678eb45dbc3cb957141b65bbf2789c13f88546f5cc825219f80b9d98", .math, [(.vector "koala-bear"), (.sequence (.product "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]" "case00000000" (.cons .boolean (.cons (.field "koala-bear") .nil))))], [.boolean]⟩
+  Zkc.Protocols.TableMembership.Source.membershipHelper "koala-bear" names
 
 def membershipBody : Region dialect membershipHelper.inputs membershipHelper.outputs :=
-  .letOp (.booleanConstant true) .nil .nil <|
-  .letOp (.fold {domain := {name := "finite_zkl_7c501270678eb45dbc3cb957141b65bbf2789c13f88546f5cc825219f80b9d98_s2_domain", inputs := [(.sequence (.product "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]" "case00000000" (ProductFields.cons .boolean (ProductFields.cons (.field "koala-bear") ProductFields.nil))))], items := [.product "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]" "case00000000" (ProductFields.cons .boolean (ProductFields.cons (.field "koala-bear") ProductFields.nil))], body := DomainBody.letNode (DomainNode.elements (Collection.sequence (.product "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]" "case00000000" (ProductFields.cons .boolean (ProductFields.cons (.field "koala-bear") ProductFields.nil)))) .here) (DomainBody.ret .here)}, state := [.boolean], captures := [.vector "koala-bear"], step := "finite_zkl_7c501270678eb45dbc3cb957141b65bbf2789c13f88546f5cc825219f80b9d98_s2_body", predicate := "", kind := .math}) (.cons (.there (.there .here)) (.cons .here (.cons (.there .here) .nil))) .nil <|
-  .ret (.cons .here .nil)
+  Zkc.Protocols.TableMembership.Source.membershipBody "koala-bear" names
 
 abbrev formulaHelper : Helper :=
-  ⟨"zkf_39125dccf0dcbcb245fd5a5617424f01d0123f2a50f923aaf33eafa5487b4955", .math, [(.vector "koala-bear"), (.sequence (.product "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]" "case00000000" (.cons .boolean (.cons (.field "koala-bear") .nil))))], [.boolean]⟩
+  Zkc.Protocols.TableMembership.Source.formulaHelper "koala-bear" names
 
 def formulaBody : Region dialect formulaHelper.inputs formulaHelper.outputs :=
-  .letOp (.invoke {name := "zkl_7c501270678eb45dbc3cb957141b65bbf2789c13f88546f5cc825219f80b9d98", kind := .math, inputs := [.vector "koala-bear", (.sequence (.product "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]" "case00000000" (ProductFields.cons .boolean (ProductFields.cons (.field "koala-bear") ProductFields.nil))))], outputs := [.boolean]}) (.cons .here (.cons (.there .here) .nil)) .nil <|
-  .ret (.cons .here .nil)
+  Zkc.Protocols.TableMembership.Source.formulaBody "koala-bear" names
 
 abbrev realizationHelper : Helper :=
   ⟨"_mathematical_admission_0", .local, [(.vector "koala-bear"), (.sequence (.product "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]" "case00000000" (.cons .boolean (.cons (.field "koala-bear") .nil))))], [.boolean]⟩

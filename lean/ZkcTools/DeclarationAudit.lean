@@ -268,6 +268,26 @@ private def dependencyPolicyJson : String := r##"
       "proof-tools"
     ],
     [
+      "ZkcTools.ConstructionBindings.Family",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.Interface",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.LayoutLookup",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.StructuralFacts",
+      "proof-tools"
+    ],
+    [
+      "ZkcTools.ConstructionBindings.TargetEquality",
+      "proof-tools"
+    ],
+    [
       "ZkcTools.ConstructionBindings.Readback",
       "proof-tools"
     ],

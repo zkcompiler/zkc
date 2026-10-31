@@ -15,6 +15,8 @@ This is correspondence evidence; property meanings and proofs are separate. -/
 set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 16000000
+set_option zkc.connection.generateReusableBodies true
+set_option zkc.connection.requireReusableBodies true
 noncomputable section
 namespace ZkcExamples.Structured.Generated.Connections.Schnorr
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ConnectionRoot

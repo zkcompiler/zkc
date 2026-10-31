@@ -48,6 +48,7 @@ root.
 | `profiles` | `executable` | program data, executable facts, Lean lowering rule, runtime differential |
 | `profiles` | `scalar` | the derived Common scalar contract over Structured participants in `[scalar]` |
 | `generated` | `data`, `bodies`, `participant`, `glue`, `program`, `facts` | generated modules of the Proof Entry |
+| `generated` | `pair` | optional actual producer/validator pair; independently exported validator must match in full, and both participants enter generated-data freshness checks |
 | `generated` | `interactive_data`, `interactive_bodies`, `interactive_views` | generated modules of the interactive protocol |
 | `generated` | `interactive_export`, `interactive_source` | retained JSON and MLIR of the interactive protocol |
 | `generated` | `original_export` | retained original JSON of the Proof Entry, before preparation or projection |
@@ -109,6 +110,16 @@ property/model registries and small author-library proof exports. Python emits
 only Wire.Request and method data and generic Lean construction calls in
 `Claims.lean`; it never prints a proposition. Lean computes the meaning before
 applying any method, and every receipt proves that computed proposition.
+
+Artifact ownership follows the actual typed data, including composed subjects
+whose artifact record is computed by a generic projection. The declaration
+reporter compares the complete source snapshot and participant values with
+closed data declarations in the receipt module's import closure. Every applicable
+value (also the producer for an honest-pair subject) must have an equal declaration
+in a freshly compared generated module. Matching digest fields or the outer
+adapter's declaration name is insufficient. The reporting process re-extracts
+these equalities from the stored modules before classifying a receipt.
+
 Each generated receipt is an `AdmittedReceipt`: it also carries the exact
 subject check and an actual model-resolution witness for the selected typed
 model registry. Method consumers use its enclosed generic receipt.

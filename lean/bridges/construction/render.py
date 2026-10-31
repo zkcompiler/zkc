@@ -17,11 +17,10 @@ meaning is assigned to any operation.
 """
 
 from pathlib import Path
-import re
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from bridges.common import lean_render  # noqa: E402
+from bridges.common import lean_render, schema  # noqa: E402
 from bridges.construction.types import data_type, render_type  # noqa: E402
 from bridges.common.lean_render import Refused as Refused  # noqa: E402
 from bridges.common.lean_render import (  # noqa: E402
@@ -35,12 +34,12 @@ def nat(value, limit=1 << 20):
 
 
 def sort(value):
-    """Return (Lean term, logical kind) for an exported MLIR type string."""
-    require(isinstance(value, str), "type must be a string")
-    match = re.fullmatch(r'!runtime\.capability<"transcript:([^"\\]+)">', value)
-    if match:
-        return f".transcript {text(match[1])}", ("transcript", match[1])
-    if value == "!algebra.indices":
+    """Return (Lean term, interpreted kind) from a complete logical Type."""
+    schema.logical_type(value)
+    if value[0] == "apply" and value[1] == "transcript":
+        suite = value[2][0][2]
+        return f".transcript {text(suite)}", ("transcript", suite)
+    if value == ["apply", "indices", []]:
         return ".indices", ("indices", None)
     data = data_type(value)
     if data[0] in ("bool", "index"):
@@ -60,32 +59,25 @@ def data_ty(kind):
 
 
 def attributes(value):
-    require(isinstance(value, list), "attributes must be an array")
-    result = {}
-    for item in value:
-        name, attribute = record(item, 2)
-        require(isinstance(name, str) and name not in result, "duplicate or invalid attribute")
-        kind, payload = record(attribute, 2)
-        require(kind in ("string", "symbol", "integer", "bool", "strings", "text"),
-                "unknown attribute kind")
-        if kind == "bool":
-            valid = type(payload) is bool
-        elif kind == "strings":
-            valid = isinstance(payload, list) and all(isinstance(item, str) for item in payload)
-        elif kind == "integer":
-            valid = isinstance(payload, str) and re.fullmatch(r"0|-?[1-9][0-9]*", payload) is not None
-        else:
-            valid = isinstance(payload, str)
-        require(valid, "invalid attribute payload")
-        result[name] = (kind, payload)
-    return result
+    """Validate all semantic attributes before an operation can omit diagnostics."""
+    decoded = schema.attributes(value)
+    return {name: (attribute[0], attribute[1:] if attribute[0] == "integer" else attribute[1])
+            for name, attribute in decoded.items()}
 
 
 def binding_attributes(attrs):
-    """The typed attribute roles shared by the admitted bound operations."""
     return (set(attrs) == {"binding", "parameters", "site"}
-            and attrs["binding"][0] == "symbol" and attrs["parameters"][0] == "strings"
+            and attrs["binding"][0] == "symbol" and len(attrs["binding"][1]) == 1
+            and attrs["parameters"][0] == "array"
+            and all(item[0] == "parameter" for item in attrs["parameters"][1])
             and attrs["site"][0] == "string")
+
+
+def integer_attribute(attrs, name, *, signedness="signless", width="64"):
+    kind, payload = attrs.get(name, (None, None))
+    require(kind == "integer" and payload[:2] == [signedness, width],
+            f"expected {signedness} i{width} attribute {name}")
+    return payload[2]
 
 
 def string_attribute(attrs, name):
@@ -96,17 +88,50 @@ def string_attribute(attrs, name):
 
 def one_parameter(attrs):
     kind, payload = attrs.get("parameters", (None, None))
-    require(kind == "strings" and isinstance(payload, list) and len(payload) == 1, "expected one parameter")
-    return payload[0]
+    require(kind == "array" and isinstance(payload, list) and len(payload) == 1
+            and payload[0][0] == "parameter", "expected one parameter")
+    return schema.origin_hex(payload[0][1])
+
+
+# This bounded interpretation's nominal associations are explicit. They are not
+# inferred from supplied signature ports or parsed from a suite's display name.
+CONSTRUCTION_PRIMITIVES = frozenset((
+    "indices.empty", "indices.append", "transcript.native.indexed.observe.data",
+    "transcript.native.indexed.challenge", "field.embed"))
+
+CONSTRUCTION_MEMBERS = {
+    ("Field", "koala-bear.ext8-binomial3", "BaseField"): ("Field", "koala-bear"),
+    ("Field", "koala-bear.ext4-binomial3", "BaseField"): ("Field", "koala-bear"),
+    ("Field", "baby-bear.ext4-binomial11", "BaseField"): ("Field", "baby-bear"),
+    ("Field", "goldilocks.ext2-binomial7", "BaseField"): ("Field", "goldilocks"),
+    ("Transcript", "merlin3.bls12-381.fr64be/0", "ChallengeField"): ("Field", "bls12-381.fr"),
+    ("Transcript", "merlin3.ristretto255.scalar64le/0", "ChallengeField"): ("Field", "ristretto255.scalar"),
+    ("Transcript", "spongefish0.8.0.keccak.bls12-381.fr64be/0", "ChallengeField"): ("Field", "bls12-381.fr"),
+    ("Transcript", "merlin3.koala-bear.ext8-binomial3.rejection31le/0", "ChallengeField"):
+        ("Field", "koala-bear.ext8-binomial3"),
+    ("Transcript", "merlin3.baby-bear.ext4-binomial11.rejection31le/0", "ChallengeField"):
+        ("Field", "baby-bear.ext4-binomial11"),
+    ("Transcript", "merlin3.goldilocks.ext2-binomial7.rejection64le/0", "ChallengeField"):
+        ("Field", "goldilocks.ext2-binomial7"),
+}
+
+
+def construction_member(parent, member):
+    require(parent[0] == "domain", "associated member parent kind")
+    key = (parent[1], parent[2], member)
+    require(key in CONSTRUCTION_MEMBERS, "uninstalled construction associated member")
+    return ["domain", *CONSTRUCTION_MEMBERS[key]]
 
 
 def operation(name, attrs, binding, operand_kinds, result_kinds):
     """Classify one exported operation strictly; return its Lean term."""
+    schema.binding(binding)
     boolean, index = ("boolean", None), ("index", None)
     if name == "data.index":
         require(set(attrs) == {"value"} and binding == [] and operand_kinds == [] and result_kinds == [index],
                 "index constant shape")
-        return f".calculate (.indexConstant {decimal(string_attribute(attrs, 'value'), 1 << 64)})"
+        value = integer_attribute(attrs, "value", signedness="unsigned")
+        return f".calculate (.indexConstant {decimal(value, 1 << 64)})"
     if name == "data.index_equal":
         require(not attrs and binding == [] and operand_kinds == [index, index] and result_kinds == [boolean],
                 "index equality shape")
@@ -118,9 +143,9 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
         return f".calculate (.booleanConstant {str(attrs['value'][1]).lower()})"
     if name == "arith.cmpi":
         require(set(attrs) == {"predicate"} and binding == [] and operand_kinds == [boolean, boolean]
-                and result_kinds == [boolean] and attrs["predicate"] in (("integer", "0"), ("integer", "1")),
+                and result_kinds == [boolean] and integer_attribute(attrs, "predicate") in ("0", "1"),
                 "Boolean comparison shape")
-        return ".calculate .booleanEqual" if attrs["predicate"][1] == "0" else ".calculate .booleanNotEqual"
+        return ".calculate .booleanEqual" if integer_attribute(attrs, "predicate") == "0" else ".calculate .booleanNotEqual"
     if name == "protocol.receive" and set(attrs) == {"peer", "schema", "site"} and binding == []:
         require(not operand_kinds and len(result_kinds) == 1, "receive shape")
         return (f".receive {text(string_attribute(attrs, 'site'))} {text(string_attribute(attrs, 'schema'))} "
@@ -130,11 +155,16 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
                 f"{text(string_attribute(attrs, 'peer'))}")
     if name == "exec.apply":
         require(binding_attributes(attrs), "execution binding attributes")
-        contract, arguments, implementation = record(binding, 3)
-        require(isinstance(contract, str) and isinstance(arguments, list)
-                and all(isinstance(value, str) for value in arguments)
-                and implementation == "", "execution binding")
-        parameters = attrs["parameters"][1]
+        contract, arguments, implementation, inputs, outputs = schema.binding(binding)
+        require(implementation == "", "execution binding implementation")
+        parameters = [value[1] for value in attrs["parameters"][1]]
+        if contract not in CONSTRUCTION_PRIMITIVES:
+            return f".unsupported {text(name + ':' + contract)}"
+        declaration, _ = schema.resolve_signature(binding, construction_member, CONSTRUCTION_PRIMITIVES)
+        schema.validate_parameters(parameters, declaration["parameters"])
+        require([sort(value)[1] for value in inputs] == operand_kinds
+                and [sort(value)[1] for value in outputs] == result_kinds,
+                "execution binding actual ports")
         if contract == "indices.empty":
             require(not arguments and not parameters and not operand_kinds
                     and result_kinds == [("indices", None)], "indices empty shape")
@@ -146,15 +176,20 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
             return ".indicesAppend"
         # The execution site is a diagnostic frame name, separate from transcript identity.
         if contract == "transcript.native.indexed.observe.data":
-            suite, leaf = record(arguments, 2)
+            require(schema.origin_structure(parameters[0][1])[0] == "message", "observation origin event")
+            suite_arg, leaf_arg = record(arguments, 2)
+            suite, leaf = suite_arg[2], schema.interpreted_type(leaf_arg[1])
             require(len(operand_kinds) == 3 and operand_kinds[0] == ("transcript", suite)
                     and operand_kinds[1][0] in ("field", "group")
                     and operand_kinds[2] == ("indices", None)
                     and result_kinds == [("transcript", suite)]
-                    and leaf == f"{operand_kinds[1][0]}:{operand_kinds[1][1]}", "observed leaf type")
+                    and leaf == list(operand_kinds[1]), "observed leaf type")
             return f".observe {text(suite)} {origin(one_parameter(attrs))}"
         if contract == "transcript.native.indexed.challenge":
-            (suite,) = record(arguments, 1)
+            event = schema.origin_structure(parameters[0][1])
+            require(event[0] == "query" and event[5] == "draw", "challenge origin method")
+            (suite_arg,) = record(arguments, 1)
+            suite = suite_arg[2]
             require(operand_kinds == [("transcript", suite), ("indices", None)]
                     and len(result_kinds) == 2 and result_kinds[0][0] == "field"
                     and result_kinds[1] == ("transcript", suite), "challenge results")
@@ -164,7 +199,7 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
             require(len(operand_kinds) == 1 and operand_kinds[0][0] == "field"
                     and len(result_kinds) == 1 and result_kinds[0][0] == "field", "field embedding ports")
             extension, base = result_kinds[0][1], operand_kinds[0][1]
-            require(arguments == [extension], "field embedding binding")
+            require(arguments == [["domain", "Field", extension]], "field embedding binding")
             return f".calculate (.fieldEmbed {text(extension)} {text(base)})"
         return f".unsupported {text(name + ':' + contract)}"
     if name == "exec.boolean":
@@ -190,8 +225,11 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
         # The canonical bound below is the BLS12-381 scalar modulus.
         require(not operand_kinds and len(result_kinds) == 1 and result_kinds[0] == ("field", "bls12-381.fr"),
                 "field constant shape")
+        kind, literal = attrs["value"]
+        require(kind == "parameter" and literal[:3] ==
+                ["field_literal", result_kinds[0][1], "natural"], "field constant parameter")
         return (f".calculate (.fieldConstant {text(result_kinds[0][1])} "
-                f"{decimal(string_attribute(attrs, 'value'), FIELD_MODULUS)})")
+                f"{decimal(literal[3], FIELD_MODULUS)})")
     if name in ("protocol.local_call", "func.call"):
         expected = {"callee", "site", "role"} if name == "protocol.local_call" else {"callee", "runtime.site"}
         require(set(attrs) == expected and binding == [], "call attributes")
@@ -199,8 +237,8 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
         if name == "protocol.local_call":
             require(bool(string_attribute(attrs, "role")), "call role")
         kind, callee = attrs["callee"]
-        require(kind == "symbol" and isinstance(callee, str), "call callee")
-        return f".call {text(callee)}"
+        require(kind == "symbol" and isinstance(callee, list) and len(callee) == 1, "call callee")
+        return f".call {text(callee[0])}"
     if name == "protocol.guard" and set(attrs) == {"site", "owner"} and binding == []:
         require(bool(string_attribute(attrs, "owner")), "guard owner")
         require(operand_kinds == [("boolean", None)] and not result_kinds, "guard shape")
@@ -210,8 +248,9 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
 
 def policy(value):
     (version, entry, producer, validator, acceptance, suite, services, public, draws,
-     framing, construction) = record(value, 11)
+     framing, construction, gates) = record(value, 12)
     require(version == "zkc.native-proof-policy/0", "wrong policy version")
+    require(gates == [], "unsupported policy gates")
     require(isinstance(services, list) and isinstance(public, list) and isinstance(draws, list),
             "invalid policy lists")
     require(producer != validator and construction == "", "unsupported construction profile")
@@ -283,6 +322,7 @@ def block(instructions, kinds, places, indent, depth=0, ports=None):
         is_service = bool(item) and item[0] == "protocol.service_query"
         record(item, 7 if is_service else 6)
         name, attrs, binding, operands, results, regions = item[:6]
+        schema.binding(binding)
         require(isinstance(name, str) and isinstance(regions, list), "operation name")
         mapped = references(operands, places, "operand")
         result_kinds = [sort(value)[1] for value in results]
@@ -293,7 +333,7 @@ def block(instructions, kinds, places, indent, depth=0, ports=None):
             carried = len(results)
             require(set(attributes_) == {"carried", "count", "maximum", "parameter", "site"} and binding == []
                     and attributes_["count"] == ("string", "") and attributes_["parameter"] == ("bool", False)
-                    and attributes_["carried"] == ("integer", str(carried)), "loop attributes")
+                    and integer_attribute(attributes_, "carried") == str(carried), "loop attributes")
             require(len(regions) == 1 and len(operands) >= carried + 1, "loop shape")
             arguments, nested, yielded = record(regions[0], 3)
             argument_kinds = [sort(value)[1] for value in arguments]
@@ -305,8 +345,7 @@ def block(instructions, kinds, places, indent, depth=0, ports=None):
                 nested, kinds + argument_kinds[:1 + carried],
                 places + list(range(fresh, fresh + 1 + carried)) + captured, indent + "    ", depth + 1, ports)
             yielded = references(yielded, inner_places, "yielded")
-            maximum = decimal(attributes_["maximum"][1], 1048577) if attributes_["maximum"][0] == "integer" \
-                else None
+            maximum = decimal(integer_attribute(attributes_, "maximum"), 1048577)
             require(maximum is not None, "loop maximum")
             term = f".loop {text(string_attribute(attributes_, 'site'))} {maximum} {seq(yielded, nat)}"
             body = "[]" if not inner else "[\n" + ",\n".join(inner) + "]"
@@ -370,4 +409,4 @@ def render(data, namespace):
 
 
 if __name__ == "__main__":
-    lean_render.render_main(render, __doc__)
+    lean_render.render_main(render, __doc__, read=lambda path: schema.loads(path.read_bytes()))

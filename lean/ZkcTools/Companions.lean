@@ -68,6 +68,15 @@ def orphaned (environment : Environment) (identities : Array String) : Array Reg
   (registrations.getState environment).filter fun entry =>
     environment.contains entry.declaration && !identities.contains entry.identity
 
+/-- Inspect the result sort before reducing a declaration's result. Stub wrappers
+live in Type; a recursive security proposition is never a stub. -/
+def placeholderWrapper? (type : Expr) : MetaM (Option Name) :=
+  forallTelescope type fun _ result => do
+    if ← isProp result then return none
+    let result ← whnf result
+    return if result.isAppOf ``ProofWanted then some ``ProofWanted
+      else if result.isAppOf ``DefWanted then some ``DefWanted else none
+
 /-- Resolve against an already fixed type. Failed elaboration is rolled back;
 no companion can fill holes in the expected meaning or leave proof holes behind.
 The enclosing Lean declaration performs the ordinary kernel check. -/
@@ -89,10 +98,7 @@ def resolve (selections : Array Selection) (expected : Expr) : TermElabM Resolut
       let function := mkIdent declaration
       let arguments := selection.arguments
       let application ← `(term| $function:ident $arguments*)
-      let placeholder ← forallTelescope (← getConstInfo declaration).type fun _ result => do
-        let result ← whnf result
-        return if result.isAppOf ``ProofWanted then some ``ProofWanted
-          else if result.isAppOf ``DefWanted then some ``DefWanted else none
+      let placeholder ← placeholderWrapper? (← getConstInfo declaration).type
       let applicationType ← match placeholder with
         | none => pure expected
         | some wrapper => mkAppM wrapper #[expected]
@@ -112,6 +118,7 @@ def resolve (selections : Array Selection) (expected : Expr) : TermElabM Resolut
         return .incomplete selection.identity declaration "unproved companion stub"
       return .matched selection.identity declaration value
     catch error =>
+      if error.isRuntime || error.isInterrupt then throw error
       let message ← error.toMessageData.toString
       saved.restore
       return .refused selection.identity message

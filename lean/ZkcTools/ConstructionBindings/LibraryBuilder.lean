@@ -92,7 +92,13 @@ private unsafe def proposeNormalization (computation : Expr) : TermElabM Expr :=
   let .ok parsed := Parser.runParserCategory (← getEnv) `term text
     | throwError "connection-native-normalization-syntax"
   let resultType ← inferType computation
-  Term.elabTerm parsed (some resultType.getAppArgs.back!)
+  let proposed ← Term.elabTerm parsed (some resultType.getAppArgs.back!)
+  -- Literal source applications contain finite-index proof obligations. Solve
+  -- those before the normal form is frozen behind a kernel declaration.
+  Term.synthesizeSyntheticMVarsNoPostponing
+  let proposed ← instantiateMVars proposed
+  if proposed.hasMVar then throwError "connection-normalization-literal-unresolved"
+  return proposed
 
 private def template (cache : Syntax.Cache) (payload keys : Expr) (selection : LibraryPlan.Selection) : TacticM Expr := do
   let source ← Term.exprToSyntax payload

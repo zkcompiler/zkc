@@ -167,7 +167,7 @@ theorem unchanged_suffix (suffix : List ℚ) :
 
 /-- All equations below are about the regenerated current-source import. -/
 theorem current_digest : GkrSourceData.snapshot.source =
-    "sha256:0c1696d084f39ac0870c06bda4e8e92c2d372cc651491caee546c77671eec9d5" := rfl
+    "sha256:7bfaaacdf20c2ca1b8d7d205d1ba27b5d1a7787b3767d4507e0953eb4a32fdfa" := rfl
 
 /-- Malformed rows stop during the ordered domain admission. -/
 theorem malformed_gate_map :

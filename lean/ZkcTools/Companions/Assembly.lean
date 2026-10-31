@@ -31,12 +31,14 @@ without residual metavariables or a transitive `sorry`. The final declaration
 still passes the kernel, and the owning receipt audit still checks assumptions. -/
 def assemble (selections : Array Selection) (expected : Expr)
     (defaults : Array DefaultMethod) : TermElabM Assembly := do
+  let expected ← instantiateMVars expected
+  if expected.hasExprMVar then
+    throwError "companion assembly requires the complete expected type before proof selection"
   match ← resolve selections expected with
   | .matched identity _ value => return .discharged value ("companion:" ++ identity) #[]
   | .incomplete identity _ reason => return .openObligation reason #[⟨"companion:" ++ identity, reason⟩]
   | .refused identity reason => return .refused reason #[⟨"companion:" ++ identity, reason⟩]
   | .missing => pure ()
-  let expected ← instantiateMVars expected
   let mut attempts : Array Attempt := #[]
   for method in defaults do
     let saved ← saveState
@@ -50,6 +52,7 @@ def assemble (selections : Array Selection) (expected : Expr)
           throwError "default method depends on sorry"
       return .discharged value method.name attempts
     catch error =>
+      if error.isRuntime || error.isInterrupt then throw error
       let reason ← error.toMessageData.toString
       saved.restore
       attempts := attempts.push ⟨method.name, reason⟩

@@ -1,6 +1,7 @@
 module
 
 public import ZkcExamples.Structured.GkrSourceViews
+public import Zkc.Protocols.Gkr.Source.VerifierHelperInstallation
 public import Zkc.Protocols.Multilinear.Source.MapPrefixContracts
 public import Zkc.Protocols.Sumcheck.Source.HelperLaws
 public import Zkc.Protocols.Multilinear.Source.MapSourceExpansions
@@ -115,40 +116,36 @@ theorem first_bodies : MapFirstContracts.Bodies unit.definitions collectBindings
 theorem prefix_bodies : MapPrefixContracts.Bodies unit.definitions prefixBindings := by
   bind_structured_bodies
 
+theorem bodies : Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.Bodies unit.definitions := by
+  bind_structured_bodies
+
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-/-- The closed meanings of the admitted unit's helpers. -/
+/-- The actual checked source table. -/
 abbrev helpers : Meanings F G := closedMeanings unit.definitions
 
-theorem prefix_laws : MapPrefixContracts.Laws (helpers (F := F) (G := G)) prefixBindings :=
-  MapPrefixContracts.laws_of_bodies unit.linked prefix_bodies first_bodies
-
-/-! ## Vectors -/
+theorem prefix_laws : MapPrefixContracts.Laws (helpers (F := F) (G := G)) prefixBindings := by
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.prefix_laws unit.linked bodies
 
 theorem empty_equation :
-    invoke (helpers (F := F) (G := G)) SumcheckHelperBodies.emptyHelper .nil = .done (.cons [] .nil) :=
-  (empty_association.invoke unit.linked .nil).trans (SumcheckHelperLaws.empty_body _)
+    invoke (helpers (F := F) (G := G)) SumcheckHelperBodies.emptyHelper .nil = .done (.cons [] .nil) := by
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.empty_equation unit.linked bodies
 
 theorem append_equation (xs : List F) (x : F) :
     invoke (helpers (G := G)) SumcheckHelperBodies.appendHelper (.cons xs (.cons x .nil)) =
-      .done (.cons (xs ++ [x]) .nil) :=
-  (append_association.invoke unit.linked (.cons xs (.cons x .nil))).trans
-    (SumcheckHelperLaws.append_body _ xs x)
+      .done (.cons (xs ++ [x]) .nil) := by
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.append_equation unit.linked bodies xs x
 
 theorem sum_body (table : Meanings F G) (xs : List F) :
     GkrSourceBodies.sumBody.denote (meaning F G table) (Values.cons xs .nil).get =
-      .done (.cons (xs.foldl (· + ·) 0) .nil) := rfl
+      .done (.cons (xs.foldl (· + ·) 0) .nil) := by
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.sum_body table xs
 
 theorem sum_equation (xs : List F) :
     invoke (helpers (G := G)) GkrSourceBodies.sumHelper (.cons xs .nil) = .done (.cons xs.sum .nil) := by
-  rw [(sum_association.invoke unit.linked (.cons xs .nil)).trans (sum_body _ xs), List.sum_eq_foldl]
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.sum_equation unit.linked bodies xs
 
-/-! ## Extensions at complete points -/
-
-set_option backward.isDefEq.respectTransparency false in
-/-- The table constructor, the prefix restriction at the point, the values
-and their sum. -/
 theorem evaluate_expansion (table : Meanings F G) (xs point : List F)
     (pointBound : point.length < indexLimit) :
     GkrSourceBodies.evaluateBody.denote (meaning F G table) (Values.cons xs (.cons point .nil)).get =
@@ -156,81 +153,35 @@ theorem evaluate_expansion (table : Meanings F G) (xs point : List F)
       (invoke table prefixHelper (constructed.append (.cons point .nil))).bind fun residual =>
       (invoke table (MultilinearPrefixBodies.valuesRealizationHelper prefixBindings.values) residual).bind fun values =>
       .done (.cons (values.get .here).sum .nil) := by
-  simp only [GkrSourceBodies.evaluateBody, inputs, Region.denote, meaning,
-    Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
-    Values.get_cons, Values.get, SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    SumcheckHelperLaws.prepend_three,
-    Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Process.bind, Primitive.evaluate, pointBound, ite_true, primitiveOutcome,
-    show 1 < indexLimit by decide +kernel, ← List.sum_eq_foldl]
-  congr 1
-  funext constructed
-  cases constructed with
-  | cons xs rest =>
-    cases rest with
-    | cons n rest =>
-      cases rest with
-      | cons w rest =>
-        cases rest
-        congr 1
-        funext residual
-        cases residual with
-        | cons xs rest =>
-          cases rest with
-          | cons n rest =>
-            cases rest with
-            | cons w rest => cases rest; rfl
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.evaluate_expansion table xs point pointBound
 
 theorem evaluate_generic_body (table : Meanings F G) (laws : MapPrefixContracts.Laws table prefixBindings)
     (xs point : List F) (vectorBound : xs.length < indexLimit) (pointBound : point.length < indexLimit) :
     GkrSourceBodies.evaluateBody.denote (meaning F G table) (Values.cons xs (.cons point .nil)).get =
       if HasShape xs point.length 1 then .done (.cons (restrictPrefixValues xs point).sum .nil)
       else .halt .reject := by
-  rw [evaluate_expansion table xs point pointBound,
-    laws.tableLaw xs point.length 1 vectorBound pointBound (by decide +kernel)]
-  by_cases shape : HasShape xs point.length 1
-  · simp only [shape, ite_true, PIR.Process.bind]
-    change (invoke table prefixHelper (prefixInputs xs point.length 1 point)).bind _ = _
-    rw [laws.fixPrefix xs point.length 1 point shape vectorBound pointBound]
-    simp only [Nat.le_refl, ite_true, Nat.sub_self, PIR.Process.bind]
-    rw [laws.values]
-    rfl
-  · simp only [shape, ite_false, PIR.Process.bind]
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.evaluate_generic_body table laws xs point vectorBound pointBound
 
 theorem evaluate_equation (xs point : List F) (vectorBound : xs.length < indexLimit)
     (pointBound : point.length < indexLimit) :
     invoke (helpers (G := G)) GkrSourceBodies.evaluateHelper (.cons xs (.cons point .nil)) =
       if HasShape xs point.length 1 then .done (.cons (restrictPrefixValues xs point).sum .nil)
-      else .halt .reject :=
-  (evaluate_association.invoke unit.linked (.cons xs (.cons point .nil))).trans
-    (evaluate_generic_body _ prefix_laws xs point vectorBound pointBound)
+      else .halt .reject := by
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.evaluate_equation unit.linked bodies xs point vectorBound pointBound
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-/-- Restricting a decoded table at a complete point leaves its extension
-there. -/
 theorem prefix_sum_extension (n : Nat) (xs point : List F) (table : Table F n)
     (decoded : ofList? n xs = some table) (length : point.length = n) :
     (restrictPrefixValues xs point).sum = extension n table (coordinates n point) := by
-  have dimension : 0 + point.length = n := by omega
-  subst dimension
-  exact complete_prefix_sum xs point table decoded
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.prefix_sum_extension n xs point table decoded length
 
-/-- A decoded table of the point's dimension: the extension at the point. -/
 theorem evaluate_extension (n : Nat) (xs point : List F) (table : Table F n)
     (decoded : ofList? n xs = some table) (length : point.length = n) (small : n < 64)
     (vectorBound : xs.length < indexLimit) :
     invoke (helpers (G := G)) GkrSourceBodies.evaluateHelper (.cons xs (.cons point .nil)) =
       .done (.cons (extension n table (coordinates n point)) .nil) := by
-  have pointBound : point.length < indexLimit := by
-    rw [length]; exact Nat.lt_trans small (by decide +kernel)
-  have shape : HasShape xs point.length 1 := by
-    refine ⟨by decide, by omega, Nat.mod_one _, ?_⟩
-    rw [Nat.div_one, ofList?_length xs table decoded, length]
-  rw [evaluate_equation xs point vectorBound pointBound, ite_eq_left shape,
-    prefix_sum_extension n xs point table decoded length]
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.evaluate_extension unit.linked bodies n xs point table decoded length small vectorBound
 
-set_option backward.isDefEq.respectTransparency false in
-/-- Three prefix restrictions of a table constructed at the summed dimension. -/
 theorem evaluateWiring_expansion (table : Meanings F G) (xs gate left right : List F)
     (gateBound : gate.length < indexLimit) (leftBound : left.length < indexLimit)
     (rightBound : right.length < indexLimit) (pairBound : gate.length + left.length < indexLimit)
@@ -244,116 +195,16 @@ theorem evaluateWiring_expansion (table : Meanings F G) (xs gate left right : Li
       (invoke table prefixHelper (second.append (.cons right .nil))).bind fun third =>
       (invoke table (MultilinearPrefixBodies.valuesRealizationHelper prefixBindings.values) third).bind fun values =>
       .done (.cons (values.get .here).sum .nil) := by
-  simp only [GkrSourceBodies.evaluateWiringBody, inputs, Region.denote, meaning,
-    Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
-    Values.get_cons, Values.get, SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    SumcheckHelperLaws.prepend_three,
-    Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Process.bind, Primitive.evaluate, checkedIndices, gateBound, leftBound, rightBound, pairBound,
-    sumBound, and_self, ite_true, primitiveOutcome, show 1 < indexLimit by decide +kernel,
-    ← List.sum_eq_foldl]
-  congr 1
-  funext constructed
-  cases constructed with
-  | cons xs rest =>
-    cases rest with
-    | cons n rest =>
-      cases rest with
-      | cons w rest =>
-        cases rest
-        congr 1
-        funext first
-        cases first with
-        | cons xs rest =>
-          cases rest with
-          | cons n rest =>
-            cases rest with
-            | cons w rest =>
-              cases rest
-              congr 1
-              funext second
-              cases second with
-              | cons xs rest =>
-                cases rest with
-                | cons n rest =>
-                  cases rest with
-                  | cons w rest =>
-                    cases rest
-                    congr 1
-                    funext third
-                    cases third with
-                    | cons xs rest =>
-                      cases rest with
-                      | cons n rest =>
-                        cases rest with
-                        | cons w rest => cases rest; rfl
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.evaluateWiring_expansion table xs gate left right gateBound leftBound rightBound pairBound sumBound
 
-/-- Representable points of total length `n` and a table of `2 ^ n` values:
-the values restricted at the concatenated point, summed. -/
 theorem evaluateWiring_equation (xs gate left right : List F)
     (vectorBound : xs.length < indexLimit) (small : gate.length + left.length + right.length < 64)
     (shape : xs.length = 2 ^ (gate.length + left.length + right.length)) :
     invoke (helpers (G := G)) GkrSourceBodies.evaluateWiringHelper
         (.cons xs (.cons gate (.cons left (.cons right .nil)))) =
       .done (.cons (restrictPrefixValues xs (gate ++ left ++ right)).sum .nil) := by
-  have bound : gate.length + left.length + right.length < indexLimit :=
-    Nat.lt_trans small (by decide +kernel)
-  have laws := prefix_laws (F := F) (G := G)
-  refine (evaluateWiring_association.invoke unit.linked _).trans ?_
-  rw [evaluateWiring_expansion _ xs gate left right (by omega) (by omega) (by omega) (by omega) bound,
-    laws.tableLaw xs _ 1 vectorBound bound (by decide +kernel)]
-  have tableShape : HasShape xs (gate.length + left.length + right.length) 1 :=
-    ⟨by decide, small, Nat.mod_one _, by rw [Nat.div_one, shape]⟩
-  simp only [tableShape, ite_true, PIR.Process.bind]
-  change (invoke _ prefixHelper (prefixInputs xs (gate.length + left.length + right.length) 1 gate)).bind _ = _
-  rw [laws.fixPrefix xs _ 1 gate tableShape vectorBound (by omega)]
-  simp only [show gate.length ≤ gate.length + left.length + right.length by omega, ite_true,
-    PIR.Process.bind]
-  have firstLength : (restrictPrefixValues xs gate).length = 2 ^ (left.length + right.length) := by
-    apply restrictPrefixValues_length
-    rw [shape]; congr 1; omega
-  have firstShape : HasShape (restrictPrefixValues xs gate)
-      (gate.length + left.length + right.length - gate.length) 1 :=
-    ⟨by decide, by omega, Nat.mod_one _, by rw [Nat.div_one, firstLength]; congr 1; omega⟩
-  have firstBound : (restrictPrefixValues xs gate).length < indexLimit := by
-    rw [firstLength]
-    have below : 2 ^ (left.length + right.length) ≤ 2 ^ (gate.length + left.length + right.length) :=
-      Nat.pow_le_pow_right (by decide) (by omega)
-    have small' : 2 ^ (gate.length + left.length + right.length) < 2 ^ 64 :=
-      Nat.pow_lt_pow_right (by decide) small
-    unfold indexLimit
-    omega
-  change (invoke _ prefixHelper (prefixInputs (restrictPrefixValues xs gate)
-    (gate.length + left.length + right.length - gate.length) 1 left)).bind _ = _
-  rw [laws.fixPrefix _ _ 1 left firstShape firstBound (by omega)]
-  simp only [show left.length ≤ gate.length + left.length + right.length - gate.length by omega,
-    ite_true, PIR.Process.bind]
-  have secondLength : (restrictPrefixValues (restrictPrefixValues xs gate) left).length =
-      2 ^ right.length := by
-    apply restrictPrefixValues_length
-    rw [firstLength, Nat.add_comm]
-  have secondShape : HasShape (restrictPrefixValues (restrictPrefixValues xs gate) left)
-      (gate.length + left.length + right.length - gate.length - left.length) 1 :=
-    ⟨by decide, by omega, Nat.mod_one _, by rw [Nat.div_one, secondLength]; congr 1; omega⟩
-  have secondBound : (restrictPrefixValues (restrictPrefixValues xs gate) left).length < indexLimit := by
-    rw [secondLength]
-    have below : 2 ^ right.length ≤ 2 ^ (gate.length + left.length + right.length) :=
-      Nat.pow_le_pow_right (by decide) (by omega)
-    have small' : 2 ^ (gate.length + left.length + right.length) < 2 ^ 64 :=
-      Nat.pow_lt_pow_right (by decide) small
-    unfold indexLimit
-    omega
-  change (invoke _ prefixHelper (prefixInputs (restrictPrefixValues (restrictPrefixValues xs gate) left)
-    (gate.length + left.length + right.length - gate.length - left.length) 1 right)).bind _ = _
-  rw [laws.fixPrefix _ _ 1 right secondShape secondBound (by omega)]
-  simp only [show right.length ≤ gate.length + left.length + right.length - gate.length - left.length
-    by omega, ite_true, PIR.Process.bind]
-  rw [laws.values]
-  simp only [restrictPrefixValues_append]
-  rfl
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.evaluateWiring_equation unit.linked bodies xs gate left right vectorBound small shape
 
-/-- A decoded wiring block at points of the width: the extension at the
-concatenated point. -/
 theorem evaluateWiring_extension (w : Nat) (xs gate left right : List F)
     (table : Table F (w + w + w)) (decoded : ofList? (w + w + w) xs = some table)
     (gateLength : gate.length = w) (leftLength : left.length = w) (rightLength : right.length = w)
@@ -362,80 +213,56 @@ theorem evaluateWiring_extension (w : Nat) (xs gate left right : List F)
         (.cons xs (.cons gate (.cons left (.cons right .nil)))) =
       .done (.cons (extension (w + w + w) table
         (coordinates (w + w + w) (gate ++ left ++ right))) .nil) := by
-  have lengths : gate.length + left.length + right.length = w + w + w := by omega
-  rw [evaluateWiring_equation xs gate left right vectorBound (by omega)
-    (by rw [lengths]; exact ofList?_length xs table decoded)]
-  have pointLength : (gate ++ left ++ right).length = w + w + w := by simp; omega
-  rw [prefix_sum_extension (w + w + w) xs _ table decoded pointLength]
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.evaluateWiring_extension unit.linked bodies w xs gate left right table decoded gateLength leftLength rightLength small vectorBound
 
-/-! ## Line points -/
-
-theorem helper42_body_eq : GkrSourceBodies.helper42Body = MapFirstBodies.interpolateBody := rfl
+theorem helper42_body_eq : GkrSourceBodies.helper42Body = MapFirstBodies.interpolateBody := by
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.interpolate_body_eq
 
 theorem interpolate_equation (low high r : F) :
     invoke (helpers (G := G)) GkrSourceBodies.helper42Helper (.cons low (.cons high (.cons r .nil))) =
       .done (.cons (low + (high - low) * r) .nil) := by
-  refine (helper42_association.invoke unit.linked (.cons low (.cons high (.cons r .nil)))).trans ?_
-  rw [helper42_body_eq, MapSourceExpansions.first_interpolate]
-  rfl
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.interpolate_equation unit.linked bodies low high r
 
 theorem line_realization_body (table : Meanings F G) (low high r : F) :
     GkrSourceBodies.lineInterpolationRealizationBody.denote (meaning F G table)
       (Values.cons low (.cons high (.cons r .nil))).get =
       (invoke table GkrSourceBodies.helper42Helper (.cons low (.cons high (.cons r .nil)))).bind
         fun result => .done (.cons (result.get .here) .nil) := by
-  derive_process
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.line_realization_body table low high r
 
 theorem line_callback_equation (low high : List F) (lo hi r : F) :
     invoke (helpers (G := G)) (MultilinearCollectBodies.mapCallbackHelper lineBindings)
       (.cons lo (.cons hi (.cons low (.cons high (.cons r .nil))))) =
       .done (.cons (lo + (hi - lo) * r) .nil) := by
-  change invoke (helpers (G := G)) GkrSourceBodies.lineCallbackHelper
-    (.cons lo (.cons hi (.cons low (.cons high (.cons r .nil))))) = _
-  rw [lineCallback_association.invoke unit.linked]
-  change (MultilinearCollectBodies.mapCallbackBody lineBindings).denote (meaning F G helpers)
-    (Values.cons lo (.cons hi (.cons low (.cons high (.cons r .nil))))).get = _
-  rw [MultilinearCollectLaws.callback_body]
-  rw [lineInterpolationRealization_association.invoke unit.linked,
-    line_realization_body, interpolate_equation]
-  rfl
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.line_callback_equation unit.linked bodies low high lo hi r
 
 theorem map_equation (start finish : List F) (t : F) (sameLength : finish.length = start.length)
     (small : start.length < indexLimit) :
     invoke (helpers (G := G)) GkrSourceBodies.sourceHelper110Helper (.cons start (.cons finish (.cons t .nil))) =
       .done (.cons (linePoints start finish t) .nil) := by
-  rw [sourceHelper110_association.invoke unit.linked]
-  change (MultilinearCollectBodies.mapBody lineBindings).denote (meaning F G helpers)
-    (Values.cons start (.cons finish (.cons t .nil))).get = _
-  exact MultilinearCollectLaws.map_body helpers lineBindings start finish t small sameLength.symm
-    (fun lo hi => line_callback_equation start finish lo hi t)
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.map_equation unit.linked bodies start finish t sameLength small
 
 theorem linePoint_body (table : Meanings F G) (start finish : List F) (t : F) :
     GkrSourceBodies.linePointBody.denote (meaning F G table)
         (Values.cons start (.cons finish (.cons t .nil))).get =
       (invoke table GkrSourceBodies.sourceHelper110Helper (.cons start (.cons finish (.cons t .nil)))).bind
         fun result => .done (.cons (result.get .here) .nil) := by
-  derive_process
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.linePoint_body table start finish t
 
 theorem linePoint_equation (start finish : List F) (t : F) (sameLength : finish.length = start.length)
     (small : start.length < indexLimit) :
     invoke (helpers (G := G)) GkrSourceBodies.linePointHelper (.cons start (.cons finish (.cons t .nil))) =
       .done (.cons (linePoints start finish t) .nil) := by
-  refine (linePoint_association.invoke unit.linked (.cons start (.cons finish (.cons t .nil)))).trans ?_
-  rw [linePoint_body, map_equation start finish t sameLength small]
-  rfl
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.linePoint_equation unit.linked bodies start finish t sameLength small
 
-/-! ## Line coefficients -/
-
-/-- The fold of `evaluate_coefficients` over the coefficient vector, with the
-state `(accumulated, power)` and the point as its capture. -/
 abbrev powerFold : FoldSpec :=
   (fold? GkrSourceBodies.helper43Body).get (by decide +kernel)
 
 theorem helper73_body (table : Meanings F G) (accumulated power coefficient point : F) :
     GkrSourceBodies.helper73Body.denote (meaning F G table)
         (Values.cons accumulated (.cons power (.cons coefficient (.cons point .nil)))).get =
-      .done (.cons (accumulated + coefficient * power) (.cons (power * point) .nil)) := rfl
+      .done (.cons (accumulated + coefficient * power) (.cons (power * point) .nil)) := by
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerStep_body table accumulated power coefficient point
 
 theorem coefficientStepRealization_body (table : Meanings F G) (accumulated power coefficient point : F) :
     GkrSourceBodies.sourceHelper112Body.denote (meaning F G table)
@@ -443,7 +270,7 @@ theorem coefficientStepRealization_body (table : Meanings F G) (accumulated powe
       (invoke table GkrSourceBodies.helper73Helper
         (.cons accumulated (.cons power (.cons coefficient (.cons point .nil))))).bind fun result =>
       .done (.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) := by
-  derive_process
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.coefficientStepRealization_body table accumulated power coefficient point
 
 theorem helper75_body (table : Meanings F G) (accumulated power coefficient point : F) :
     GkrSourceBodies.helper75Body.denote (meaning F G table)
@@ -451,7 +278,7 @@ theorem helper75_body (table : Meanings F G) (accumulated power coefficient poin
       (invoke table GkrSourceBodies.sourceHelper112Helper
         (.cons accumulated (.cons power (.cons coefficient (.cons point .nil))))).bind fun result =>
       .done (.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) := by
-  derive_process
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerStepWrapper_body table accumulated power coefficient point
 
 theorem helper78_body (table : Meanings F G) (accumulated power coefficient : F)
     (coefficients : List F) (point : F) :
@@ -461,17 +288,18 @@ theorem helper78_body (table : Meanings F G) (accumulated power coefficient : F)
       (invoke table GkrSourceBodies.helper75Helper
         (.cons accumulated (.cons power (.cons coefficient (.cons point .nil))))).bind fun result =>
       .done (.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) := by
-  derive_process
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerFoldCallback_body table accumulated power coefficient coefficients point
 
 theorem helper76_body (table : Meanings F G) :
     GkrSourceBodies.helper76Body.denote (meaning F G table) (Values.nil).get =
-      .done (.cons ((0 : Nat) : F) (.cons ((1 : Nat) : F) .nil)) := rfl
+      .done (.cons ((0 : Nat) : F) (.cons ((1 : Nat) : F) .nil)) := by
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerInitialState_body table
 
 theorem coefficientStartRealization_body (table : Meanings F G) :
     GkrSourceBodies.helper74Body.denote (meaning F G table) (Values.nil).get =
       (invoke table GkrSourceBodies.helper76Helper .nil).bind fun result =>
       .done (.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) := by
-  derive_process
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.coefficientStartRealization_body table
 
 theorem coefficientFold_body (table : Meanings F G) (coefficients : List F) (accumulated power point : F) :
     GkrSourceBodies.helper43Body.denote (meaning F G table)
@@ -479,7 +307,7 @@ theorem coefficientFold_body (table : Meanings F G) (coefficients : List F) (acc
       (Evaluation.denoteFold table powerFold
         (.cons coefficients (.cons accumulated (.cons power (.cons point .nil))))).bind fun result =>
       .done (.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) := by
-  derive_process
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.coefficientFold_body table coefficients accumulated power point
 
 theorem helper80_body (table : Meanings F G) (accumulated power point : F) (coefficients : List F) :
     GkrSourceBodies.helper80Body.denote (meaning F G table)
@@ -487,7 +315,7 @@ theorem helper80_body (table : Meanings F G) (accumulated power point : F) (coef
       (invoke table GkrSourceBodies.helper43Helper
         (.cons coefficients (.cons accumulated (.cons power (.cons point .nil))))).bind fun result =>
       .done (.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) := by
-  derive_process
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerFoldWrapper_body table accumulated power point coefficients
 
 theorem evaluateCoefficients_body (table : Meanings F G) (coefficients : List F) (point : F) :
     GkrSourceBodies.evaluateCoefficientsBody.denote (meaning F G table)
@@ -496,33 +324,25 @@ theorem evaluateCoefficients_body (table : Meanings F G) (coefficients : List F)
       (invoke table GkrSourceBodies.helper80Helper (.cons (start.get .here)
         (.cons (start.get (.there .here)) (.cons point (.cons coefficients .nil))))).bind fun result =>
       .done (.cons (result.get .here) .nil) := by
-  derive_process
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.evaluateCoefficients_body table coefficients point
 
 theorem powerStep_equation (accumulated power coefficient point : F) :
     invoke (helpers (G := G)) GkrSourceBodies.helper75Helper
         (.cons accumulated (.cons power (.cons coefficient (.cons point .nil)))) =
       .done (.cons (accumulated + coefficient * power) (.cons (power * point) .nil)) := by
-  rw [helper75_association.invoke unit.linked, helper75_body,
-    sourceHelper112_association.invoke unit.linked, coefficientStepRealization_body,
-    helper73_association.invoke unit.linked, helper73_body]
-  rfl
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerStep_equation unit.linked bodies accumulated power coefficient point
 
 theorem step_equation (accumulated power coefficient : F) (coefficients : List F) (point : F) :
     invoke (helpers (G := G)) GkrSourceBodies.helper78Helper
         (.cons accumulated (.cons power (.cons coefficient (.cons coefficients (.cons point .nil))))) =
       .done (.cons (accumulated + coefficient * power) (.cons (power * point) .nil)) := by
-  rw [helper78_association.invoke unit.linked, helper78_body, powerStep_equation]
-  rfl
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.step_equation unit.linked bodies accumulated power coefficient coefficients point
 
 theorem powerStart_equation :
     invoke (helpers (F := F) (G := G)) GkrSourceBodies.helper74Helper .nil =
       .done (.cons 0 (.cons 1 .nil)) := by
-  rw [helper74_association.invoke unit.linked, coefficientStartRealization_body,
-    helper76_association.invoke unit.linked, helper76_body]
-  simp only [Nat.cast_zero, Nat.cast_one]
-  rfl
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerStart_equation unit.linked bodies
 
-/-- The fold's step on the state `(accumulated, power)` and a coefficient. -/
 def powerTransition (point : F) (state : F × F) (coefficient : F) : F × F :=
   (state.1 + coefficient * state.2, state.2 * point)
 
@@ -530,13 +350,8 @@ omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 theorem powerTransition_fold (point : F) (coefficients : List F) (accumulated power : F) :
     coefficients.foldl (powerTransition point) (accumulated, power) =
       (accumulated + power * powerSum coefficients point, power * point ^ coefficients.length) := by
-  induction coefficients generalizing accumulated power with
-  | nil => simp [powerSum]
-  | cons coefficient rest ih =>
-      simp only [List.foldl_cons, powerTransition, ih, powerSum, List.length_cons, pow_succ]
-      ext <;> simp only <;> ring
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerTransition_fold point coefficients accumulated power
 
-/-- The fold's step on structured values. -/
 def powerReference (point : F) (state : Values (assignment F G) powerFold.state) (coefficient : F) :
     Values (assignment F G) powerFold.state :=
   .cons (state.get .here + coefficient * state.get (.there .here))
@@ -547,53 +362,24 @@ theorem powerReference_fold (point : F) (coefficients : List F) (accumulated pow
     coefficients.foldl (powerReference (G := G) point) (.cons accumulated (.cons power .nil)) =
       .cons (coefficients.foldl (powerTransition point) (accumulated, power)).1
         (.cons (coefficients.foldl (powerTransition point) (accumulated, power)).2 .nil) := by
-  induction coefficients generalizing accumulated power with
-  | nil => rfl
-  | cons coefficient rest ih => exact ih _ _
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerReference_fold point coefficients accumulated power
 
-set_option backward.isDefEq.respectTransparency false in
 theorem fold_equation (coefficients : List F) (accumulated power point : F)
     (small : coefficients.length < indexLimit) :
     invoke (helpers (G := G)) GkrSourceBodies.helper43Helper
         (.cons coefficients (.cons accumulated (.cons power (.cons point .nil)))) =
       .done (.cons (coefficients.foldl (powerTransition point) (accumulated, power)).1
         (.cons (coefficients.foldl (powerTransition point) (accumulated, power)).2 .nil)) := by
-  rw [helper43_association.invoke unit.linked, coefficientFold_body]
-  have folded := Evaluation.denoteFold_reference_map (helpers (F := F) (G := G)) powerFold
-    (.cons coefficients .nil) (.cons accumulated (.cons power .nil)) (.cons point .nil) coefficients
-    (fun coefficient => .cons coefficient .nil)
-    (Evaluation.elements_admit _ _ _ _ _ small) (powerReference point) (fun _ => True) trivial
-    (by
-      intro state coefficient _ _
-      refine ⟨?_, trivial⟩
-      rw [Evaluation.foldTransition_unfiltered _ _ rfl]
-      rcases state with _ | ⟨current, _ | ⟨currentPower, _ | _⟩⟩
-      exact step_equation current currentPower coefficient coefficients point)
-  change (Evaluation.denoteFold _ powerFold ((Values.cons coefficients .nil).append
-    ((Values.cons accumulated (.cons power .nil)).append (.cons point .nil)))).bind _ = _
-  rw [folded]
-  exact congrArg (fun result : Values (assignment F G) powerFold.state =>
-    (PIR.Process.done (Values.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) :
-      PIR.Process closedInterface (Values (assignment F G) [.field "bls12-381.fr", .field "bls12-381.fr"])))
-    (powerReference_fold point coefficients accumulated power)
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.fold_equation unit.linked bodies coefficients accumulated power point small
 
 theorem evaluateCoefficients_equation (coefficients : List F) (point : F)
     (small : coefficients.length < indexLimit) :
     invoke (helpers (G := G)) GkrSourceBodies.evaluateCoefficientsHelper
         (.cons coefficients (.cons point .nil)) =
       .done (.cons (powerSum coefficients point) .nil) := by
-  rw [evaluateCoefficients_association.invoke unit.linked, evaluateCoefficients_body,
-    powerStart_equation]
-  change (invoke (helpers (G := G)) GkrSourceBodies.helper80Helper
-    (.cons 0 (.cons 1 (.cons point (.cons coefficients .nil))))).bind _ = _
-  rw [helper80_association.invoke unit.linked, helper80_body, fold_equation coefficients 0 1 point small,
-    powerTransition_fold]
-  simp only [PIR.Process.bind, Values.get, zero_add, one_mul]
-
-/-! ## Blocks of stacked tables -/
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.evaluateCoefficients_equation unit.linked bodies coefficients point small
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-/-- A counted loop whose state after each iteration is given. -/
 theorem denoteLoop_states {I : PIR.Signature} (state captures : List Ty)
     (body : RegionFunction (assignment F G) I (.index :: (state ++ captures), state ++ captures))
     (count : Nat) (initial : Values (assignment F G) state)
@@ -603,79 +389,29 @@ theorem denoteLoop_states {I : PIR.Signature} (state captures : List Ty)
       Evaluation.invokeCallback body (.cons index ((states index).append captured)) =
         .done ((states (index + 1)).append captured)) :
     Evaluation.denoteLoop state captures body 0 count initial captured = .done (states count) := by
-  subst start
-  simp only [Evaluation.denoteLoop, Finite.execute, Finite.Domain.admit, Finite.admitThen, Nat.sub_zero]
-  have folded := Finite.fold_range_state
-    (fun current index => (Evaluation.invokeCallback body (.cons index (current.append captured))).bind
-      fun results => (.done (results.split state).1 : PIR.Process I _)) states 0 count (by
-        intro index _ upper
-        rw [law index (by omega)]
-        simp only [PIR.Process.bind, Values.split_append])
-  simpa using folded
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.denoteLoop_states state captures body count initial captured states start law
 
-set_option backward.isDefEq.respectTransparency false in
 theorem powerOfTwo_body (table : Meanings F G) (exponent : Nat) (small : exponent < 64) :
     GkrSourceBodies.helper18Body.denote (meaning F G table) (Values.cons exponent .nil).get =
       .done (.cons (2 ^ exponent) .nil) := by
-  have exponentBound : exponent < indexLimit := Nat.lt_trans small (by decide +kernel)
-  simp only [GkrSourceBodies.helper18Body, Region.denote, meaning, Evaluation.meaning,
-    Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Process.bind, Primitive.evaluate, primitiveOutcome, show 1 < indexLimit by decide +kernel,
-    show 0 < indexLimit by decide +kernel, ite_true, Values.split]
-  rw [denoteLoop_states (F := F) (G := G) [.index] [] _ exponent _ .nil
-    (fun index => .cons (2 ^ index) .nil) ?start ?law]
-  · rfl
-  case start => rfl
-  case law =>
-    intro index lower
-    have current : 2 ^ index < indexLimit := by
-      unfold indexLimit
-      exact Nat.pow_lt_pow_right (by decide) (by omega)
-    have product : 2 ^ index * 2 < indexLimit := by
-      rw [← Nat.pow_succ]
-      exact Nat.pow_lt_pow_right (by decide) (by omega : index + 1 < 64)
-    simp only [Evaluation.invokeCallback, Values.get_cons, Environment.prepend, Environment.push, PIR.Process.bind, checkedIndices, current, product,
-      show 2 < indexLimit by decide +kernel, and_self, ite_true, Values.append, Nat.pow_succ]
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerOfTwo_body table exponent small
 
 theorem powerOfTwo_equation (exponent : Nat) (small : exponent < 64) :
     invoke (helpers (F := F) (G := G)) GkrSourceBodies.helper18Helper (.cons exponent .nil) =
-      .done (.cons (2 ^ exponent) .nil) :=
-  (helper18_association.invoke unit.linked _).trans (powerOfTwo_body _ exponent small)
+      .done (.cons (2 ^ exponent) .nil) := by
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerOfTwo_equation unit.linked bodies exponent small
 
-/-- The loop body of `select_block`: one MSB-first bit of the position
-selects one half of the current block. -/
 def selectLoopBody : Region dialect [.index, .vector "bls12-381.fr", .index, .index]
     [.vector "bls12-381.fr", .index, .index] :=
-  .letOp (.mark "s5") .nil .nil <|
-  .letOp (.exec (.indexConstant 1)) .nil .nil <|
-  .letOp (.mark "s6") .nil .nil <|
-  .letOp (.exec (.indexSub)) (.cons (.there (.there (.there .here))) (.cons .here .nil)) .nil <|
-  .letOp (.mark "s8") .nil .nil <|
-  .letOp (.invoke ⟨"s3h676b7212h706f7765725f6f665f74776f", .local, [.index], [.index]⟩) (.cons .here .nil) .nil <|
-  .letOp (.mark "s9") .nil .nil <|
-  .letOp (.exec (.indexDiv)) (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons .here .nil)) .nil <|
-  .letOp (.mark "s10") .nil .nil <|
-  .letOp (.exec (.indexConstant 2)) .nil .nil <|
-  .letOp (.mark "s11") .nil .nil <|
-  .letOp (.exec (.indexMod)) (.cons (.there .here) (.cons .here .nil)) .nil <|
-  .letOp (.mark "s13") .nil .nil <|
-  .letOp (.exec (.vectorSplit "bls12-381.fr")) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil) .nil <|
-  .letOp (.mark "s15") .nil .nil <|
-  .letOp (.exec (.indexConstant 1)) .nil .nil <|
-  .letOp (.mark "s16") .nil .nil <|
-  .letOp (.exec (.indexEqual)) (.cons (.there (.there (.there .here))) (.cons .here .nil)) .nil <|
-  .letOp (.mark "s19") .nil .nil <|
-  .letOp (.branch [.vector "bls12-381.fr", .vector "bls12-381.fr"] [.vector "bls12-381.fr"]) (.cons .here (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil))) (.cons (
-    .ret (.cons (.there .here) .nil)) (.cons (
-    .ret (.cons .here .nil)) .nil)) <|
-  .ret (.cons .here (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))) .nil)))
+  Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.selectLoopBody
 
 theorem selectBlockBody_eq : GkrSourceBodies.selectBlockBody = (
   .letOp (.mark "s2") .nil .nil <|
   .letOp (.exec (.indexConstant 0)) .nil .nil <|
   .letOp (.mark "s4") .nil .nil <|
   .letOp (.loop [.vector "bls12-381.fr", .index] [.index]) (.cons .here (.cons (.there (.there (.there .here))) (.cons (.there .here) (.cons (.there (.there (.there .here))) (.cons (.there (.there .here)) .nil))))) (.cons selectLoopBody .nil) <|
-  .ret (.cons .here .nil)) := rfl
+  .ret (.cons .here .nil)) := by
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.selectBlockBody_eq
 
 theorem selectLoop_body (table : Meanings F G) (index : Nat) (current : List F) (remaining position : Nat) :
     selectLoopBody.denote (meaning F G table)
@@ -708,90 +444,15 @@ theorem selectLoop_body (table : Meanings F G) (index : Nat) (current : List F) 
     else .done (.cons (result6.get .here) .nil) :
       Closed (Values (assignment F G) [.vector "bls12-381.fr"])).bind fun result9 =>
     .done (.cons (result9.get .here) (.cons (result1.get .here) (.cons position .nil))) := by
-  derive_process using (exact branch_law _ _ _ _ _ _)
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.selectLoop_body table index current remaining position
 
-set_option backward.isDefEq.respectTransparency false in
 theorem selectBlock_equation (xs : List F) (position bits size : Nat)
     (shape : xs.length = 2 ^ bits * size) (positive : 0 < size) (inside : position < 2 ^ bits)
     (vectorBound : xs.length < indexLimit) :
     invoke (helpers (G := G)) GkrSourceBodies.selectBlockHelper
         (.cons xs (.cons position (.cons bits .nil))) =
       .done (.cons (block xs position size) .nil) := by
-  have powerBound : 2 ^ bits < indexLimit := by
-    refine Nat.lt_of_le_of_lt ?_ vectorBound
-    rw [shape]
-    exact Nat.le_mul_of_pos_right _ positive
-  have bitsSmall : bits < 64 := by
-    by_contra large
-    have : 2 ^ 64 ≤ 2 ^ bits := Nat.pow_le_pow_right (by decide) (by omega)
-    exact absurd powerBound (by unfold indexLimit; omega)
-  have positionBound : position < indexLimit := Nat.lt_trans inside powerBound
-  refine (selectBlock_association.invoke unit.linked _).trans ?_
-  rw [selectBlockBody_eq]
-  simp only [Region.denote, meaning, Evaluation.meaning, Evaluation.operation, Operands.eval,
-    Regions.denote, Values.get_cons, Environment.prepend, Environment.push,
-    SiteObservations.closed, SiteObservations.silent, PIR.Process.bind, Primitive.evaluate,
-    primitiveOutcome, show 0 < indexLimit by decide +kernel, ite_true, Values.split]
-  rw [denoteLoop_states (F := F) (G := G) [.vector "bls12-381.fr", .index] [.index] _ bits _
-    (.cons position .nil)
-    (fun index => .cons (block xs (position / 2 ^ (bits - index)) (size * 2 ^ (bits - index)))
-      (.cons (bits - index) .nil)) ?start ?law]
-  · simp only [Nat.sub_self, pow_zero, Nat.div_one, Nat.mul_one, PIR.Process.bind]
-    rfl
-  case start =>
-    have zero : position / 2 ^ bits = 0 := Nat.div_eq_of_lt inside
-    simp only [Nat.sub_zero, zero]
-    rw [block, Nat.zero_mul, List.drop_zero, Nat.mul_comm, ← shape, List.take_length]
-  case law =>
-    intro index lower
-    have remaining : 1 ≤ bits - index := by omega
-    have remainingBound : bits - index < indexLimit :=
-      Nat.lt_of_le_of_lt (Nat.sub_le _ _) (Nat.lt_trans bitsSmall (by decide +kernel))
-    have power := powerOfTwo_equation (F := F) (G := G) (bits - index - 1) (by omega)
-    have powerSmall : 2 ^ (bits - index - 1) < indexLimit :=
-      Nat.lt_of_le_of_lt (Nat.pow_le_pow_right (by decide) (by omega)) powerBound
-    have powerPositive : 2 ^ (bits - index - 1) ≠ 0 := by positivity
-    have quotientBound : position / 2 ^ (bits - index - 1) < indexLimit :=
-      Nat.lt_of_le_of_lt (Nat.div_le_self _ _) positionBound
-    have bitBound : position / 2 ^ (bits - index - 1) % 2 < indexLimit :=
-      Nat.lt_of_lt_of_le (Nat.mod_lt _ (by decide)) (by decide +kernel)
-    have above : position / 2 ^ (bits - index) < 2 ^ index := by
-      rw [Nat.div_lt_iff_lt_mul (by positivity), ← Nat.pow_add, Nat.add_sub_cancel' (by omega)]
-      exact inside
-    have blockLength :
-        (block xs (position / 2 ^ (bits - index)) (size * 2 ^ (bits - index))).length =
-          size * 2 ^ (bits - index) := by
-      apply block_length
-      rw [shape]
-      calc (position / 2 ^ (bits - index) + 1) * (size * 2 ^ (bits - index))
-          ≤ 2 ^ index * (size * 2 ^ (bits - index)) := Nat.mul_le_mul_right _ above
-        _ = 2 ^ bits * size := by
-          rw [Nat.mul_left_comm, ← Nat.pow_add, Nat.add_sub_cancel' (by omega), Nat.mul_comm]
-    have blockPositive : 0 < size * 2 ^ (bits - index) := by positivity
-    have doubled : size * 2 ^ (bits - index) = 2 * (size * 2 ^ (bits - index - 1)) := by
-      rw [show bits - index = (bits - index - 1) + 1 by omega, pow_succ]
-      simp only [Nat.add_sub_cancel]
-      ring
-    have blockEven : size * 2 ^ (bits - index) % 2 = 0 := by rw [doubled]; simp
-    have half : size * 2 ^ (bits - index) / 2 = size * 2 ^ (bits - index - 1) := by
-      rw [doubled]; simp
-    have next : bits - (index + 1) = bits - index - 1 := by omega
-    have step := block_step xs position size (bits - index) remaining
-    simp only [Evaluation.invokeCallback, Values.append]
-    show Region.denote (meaning F G (helpers (F := F) (G := G))) selectLoopBody _ = _
-    rw [selectLoop_body]
-    simp only [Primitive.evaluate, primitiveOutcome, checkedIndices, PIR.Process.bind, Values.get,
-      show 1 < indexLimit by decide +kernel, show 2 < indexLimit by decide +kernel, remaining,
-      remainingBound, power, powerSmall, powerPositive, positionBound, quotientBound, blockLength, blockPositive, blockEven, half, and_self, ite_true, ite_false, next,
-      true_and, and_true]
-    by_cases bit : position / 2 ^ (bits - index - 1) % 2 = 1
-    · simp only [bit, ite_true] at step ⊢
-      rw [← step]
-      simp [PIR.Process.bind, Values.get, show (1 : Nat) < indexLimit by decide +kernel]
-      rfl
-    · simp only [bit, ite_false] at step ⊢
-      rw [← step]
-      simp [PIR.Process.bind, Values.get, bit, bitBound]
+  exact Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.selectBlock_equation unit.linked bodies xs position bits size shape positive inside vectorBound
 
 /-! ## Helper calls of exported programs -/
 

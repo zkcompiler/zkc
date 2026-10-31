@@ -61,6 +61,25 @@ run_elab do
 @[zkc "Collision"] theorem left : True := True.intro
 @[zkc "Collision"] theorem right : True := True.intro
 
+/-- The companion resolver must not evaluate the property it is proving. -/
+def nestedProperty : Nat → Prop
+  | 0 => True
+  | n + 1 => nestedProperty n
+
+theorem nestedProperty_holds (n : Nat) : nestedProperty n := by
+  induction n with
+  | zero => exact True.intro
+  | succ _ ih => exact ih
+
+-- Test stub inspection itself: ordinary theorem/application elaboration has
+-- its own reduction policy, independently of companion discovery.
+open Lean Elab Command Term Meta in
+set_option maxRecDepth 128 in
+run_elab do
+  let proposition := mkApp (mkConst ``nestedProperty) (mkNatLit 100000)
+  unless (← ZkcTools.Companions.placeholderWrapper? proposition).isNone do
+    throwError "a genuine recursive proposition was classified as a stub"
+
 open Lean Elab Command Term Meta in
 run_elab do
   let found ← ZkcTools.Companions.resolve #[⟨"Collision", #[]⟩] (Lean.mkConst ``True)

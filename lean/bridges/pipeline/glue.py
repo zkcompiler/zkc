@@ -19,6 +19,7 @@ import re
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
+from bridges.common.schema import interpreted_type
 from bridges.common.lean_render import NAMESPACE, Refused, require, text  # noqa: E402
 
 # Lean identifiers a published input must not shadow in the generated module.
@@ -103,6 +104,8 @@ class Entry:
         self.policy = policy
         root = next(item for item in original[7] if item[0] == "function" and item[1] == original[3])
         _, _, _, _, self.input_types, self.output_types, header, _, _, _ = root
+        self.input_types = [interpreted_type(value) for value in self.input_types]
+        self.output_types = [interpreted_type(value) for value in self.output_types]
         require(header and header[0] == "protocol", "the Entry root is not a protocol")
         _, self.roles, input_scopes, output_scopes = header
         self.validator = self.roles.index(policy[3])
@@ -124,7 +127,7 @@ class Entry:
         require(contract[0] == "service", "the replaced input is not a service")
         self.contract = contract[1]
         fields = sorted({instruction_field(item) for item in walk(exported[7])
-                         if item[0] == "exec.apply" and len(item[2]) == 3
+                         if item[0] == "exec.apply" and len(item[2]) == 5
                          and item[2][0] == "transcript.native.indexed.challenge"})
         self.request = f"some (.draw {text(fields[0])})" if len(fields) == 1 else "none"
         self.draws = [(pair[0], pair[1]) for pair in policy[8]]
@@ -150,9 +153,10 @@ def walk(instructions):
 
 
 def instruction_field(item):
-    match = re.fullmatch(r'!algebra\.field<"([^"\\]+)">', item[4][0])
-    require(match is not None, "challenge result is not a field element")
-    return match[1]
+    value = interpreted_type(item[4][0], payload=True)
+    require(value[0] == "field", "challenge result is not a field element")
+    return value[1]
+
 
 
 HEADER = """module

@@ -9,6 +9,7 @@ import json
 
 from structured import entry, profile
 from bridges.structured.snapshot import render, text
+from bridges.common.schema import interpreted_type
 from request_support import require
 from verify import validate, VERSION
 
@@ -100,8 +101,8 @@ def validate_relation(data, request):
     matches = [d for d in data['snapshot'][7] if d[0] == 'function' and d[1] == data['helper']]
     require(len(matches) == 1, 'intent-relation-profile', 'Formula helper is missing or ambiguous')
     helper = matches[0]
-    require(helper[2] == 'math' and helper[4] == [['group', w['groupDomain']],
-            ['group', w['groupDomain']], ['field', w['fieldDomain']]] and helper[5] == [['bool']],
+    require(helper[2] == 'math' and [interpreted_type(value) for value in helper[4]] == [['group', w['groupDomain']],
+            ['group', w['groupDomain']], ['field', w['fieldDomain']]] and [interpreted_type(value) for value in helper[5]] == [['bool']],
             'intent-relation-profile', 'Expected the actual scalar group predicate signature')
     return helper
 

@@ -5,6 +5,7 @@ import ZkcSecurityExamples.Subjects.SchnorrAnd.Registration
 import ZkcSecurity.Claims.FiniteRecovery
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.Field.ZMod
+import ZkcTools.Companions.Assembly
 
 /-! Controls for request-owned extraction semantics. These check the actual
 registered profile, not a ban on classical reasoning inside proofs. -/
@@ -32,6 +33,23 @@ theorem witnessSearch_not_responseDifference :
   intro search
   have impossible := search 0 0 1 0
   simp [scalar, Extraction.Layout.recover_scalar] at impossible
+
+/-- A proof about a same-signature witness-search function is valid in its own
+right. Lookup must not use it to change the request-owned recovery function. -/
+@[zkc "ExtractionControl/witness-search"]
+theorem witnessSearch_self : ∀ (_first _response₁ _second _response₂ : F),
+    (pure (1 : F) : ProbComp F) = pure (1 : F) := fun _ _ _ _ => rfl
+
+open Lean Elab Command Term Meta ZkcTools.Companions in
+run_elab do
+  -- Construct this goal before retrieving the candidate; both functions have
+  -- four scalar arguments and the same full witness carrier.
+  let expected ← elabTerm (← `(term| ∀ first (response₁ : F) second response₂,
+    (pure (1 : F) : ProbComp F) = pure (scalar.recover first response₁ second response₂))) none
+  let result ← assemble #[⟨"ExtractionControl/witness-search", #[]⟩] expected
+    #[⟨"same-signature-search", ← `(term| witnessSearch_self)⟩]
+  unless (match result with | .refused _ _ => true | _ => false) do
+    throwError "proof selection changed the request-owned response-difference extractor"
 
 /-- Admission rejects aliased components, missing private inputs, public inputs,
 and a scalar field different from the challenge's declared domain. -/

@@ -1,0 +1,19 @@
+module reusable_aggregate;
+use zkc::sequence::{Sequence};
+use batch_opening::{Opening, check_batch, CheckBatch};
+
+// Two separate point/value record checks. These are not commitment openings.
+// The first exchange/check is inline; the second is a protocol application.
+pub protocol TwoBatches<F: Field> roles(P, V)
+    (first_point: F @V, first_value: F @V, first_batch: Sequence<Opening<F>> @P,
+     second_point: F @V, second_value: F @V, second_batch: Sequence<Opening<F>> @P)
+    -> (first_accepted: bool @V, first_delivered: Sequence<Opening<F>> @V,
+        second_accepted: bool @V, second_delivered: Sequence<Opening<F>> @V)
+    where () {
+  #[site(first_batch)] let first_received = send P -> V(first_batch);
+  let first_accepted = check_batch(first_point, first_value, first_received);
+  #[site(second_batch)] let (second_accepted, second_received) =
+    CheckBatch<F>(second_point, second_value, second_batch);
+  return (first_accepted = first_accepted, first_delivered = first_received,
+          second_accepted = second_accepted, second_delivered = second_received);
+}

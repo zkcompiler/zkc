@@ -8,7 +8,7 @@
     "protocol.func"() <{contracts = [], function_type = (ui64, !protocol.service_ref<"random.bls12-381.fr/0">, !protocol.service_ref<"random.bls12-381.fr/0">) -> (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">), input_roles = [["role00000000", "role00000001"], ["role00000001"], ["role00000001"]], origin = ["sample::Run", []], output_roles = [["role00000000"], ["role00000001"]], roles = ["role00000000", "role00000001"], sym_name = "s6h73616d706c653h52756e"}> ({
     ^bb0(%arg2: ui64, %arg3: !protocol.service_ref<"random.bls12-381.fr/0">, %arg4: !protocol.service_ref<"random.bls12-381.fr/0">):
       %6 = "protocol.query"(%arg3) <{method = "draw", owner = "role00000001", site = "s0"}> : (!protocol.service_ref<"random.bls12-381.fr/0">) -> !algebra.field<"bls12-381.fr">
-      %7 = "algebra.constant"() <{value = "0"}> : () -> !algebra.field<"bls12-381.fr">
+      %7 = "algebra.constant"() <{value = #algebra.literal<<"bls12-381.fr">, 0 : ui255> : !algebra.field<"bls12-381.fr">}> : () -> !algebra.field<"bls12-381.fr">
       %8 = "protocol.restrict_roles"(%7) <{roles = ["role00000000"]}> : (!algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
       %9:2 = "protocol.repeat"(%arg2, %8, %6, %arg3, %arg4) <{carried = 2 : i64, carried_roles = [["role00000000"], ["role00000001"]], maximum = 3 : i64, roles = ["role00000000", "role00000001"], site = "s6"}> ({
       ^bb0(%arg5: ui64, %arg6: !algebra.field<"bls12-381.fr">, %arg7: !algebra.field<"bls12-381.fr">, %arg8: !protocol.service_ref<"random.bls12-381.fr/0">, %arg9: !protocol.service_ref<"random.bls12-381.fr/0">):

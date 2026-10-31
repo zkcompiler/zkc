@@ -109,12 +109,12 @@ def namespace(name):
 # ---------------------------------------------------------------------------
 # The structured source vocabulary
 
-# Value types of the structured source format, `["bool"]`, `["index"]` or
-# `[tag, domain]`.
+# Internal, interpreted scalar descriptors. Wire types are decoded separately
+# by bridges.common.schema; this function is not a source-format reader.
 TYPE_TAGS = ("field", "vector", "group", "service")
 
 
-def ty(value, tags=TYPE_TAGS, index=True, string=lambda value: text(value, 512)):
+def interpreted_ty(value, tags=TYPE_TAGS, index=True, string=lambda value: text(value, 512)):
     """The Lean `Ty` of a structured value type. `tags`, `index` and `string`
     select the profile: the scalar profile has no vectors or indices and spells
     domains in printable ASCII."""

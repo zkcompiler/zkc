@@ -348,13 +348,34 @@ local macro "returns_iterate " results:term : tactic =>
   `(tactic| refine Evaluated.Returns.iterate installed validator (results := $results) (by rfl) (by rfl)
     (by rfl) (by rfl) ?_ ?_ (by rfl) ?_)
 
-/-- The body of the check's fold loop. -/
-def restrictionBody : List Zkc.Executable.Step :=
+/-- The actual fold instruction, including its compiler-selected bindings. -/
+def restrictionLoop : Zkc.Executable.Step :=
   match checkFunction.body with
   | [_, _, _, _, _, _, _, .cond _ _ _ checked _ _, _] =>
       match checked with
-      | [_, _, _, _, _, _, _, _, _, _, .iterate _ _ _ _ _ _ body _, _, _, _] => body
-      | _ => []
+      | [_, _, _, _, _, _, _, _, _, _, loop@(.iterate ..), _, _, _] => loop
+      | _ => .yield []
+  | _ => .yield []
+
+/-- The body and bindings come from the same actual instruction. -/
+def restrictionBody : List Zkc.Executable.Step :=
+  match restrictionLoop with
+  | .iterate _ _ _ _ _ _ body _ => body
+  | _ => []
+
+def restrictionInduction : String :=
+  match restrictionLoop with
+  | .iterate _ induction _ _ _ _ _ _ => induction
+  | _ => ""
+
+def restrictionStateNames : List String :=
+  match restrictionLoop with
+  | .iterate _ _ _ _ carried _ _ _ => carried.map Prod.fst
+  | _ => []
+
+def restrictionCaptureNames : List String :=
+  match restrictionLoop with
+  | .iterate _ _ _ _ _ captures _ _ => captures
   | _ => []
 
 /-- The parameters of the fold loop's numerical call: its expression. -/
@@ -439,9 +460,9 @@ theorem doubling_cost {first second two doubled carried induction : String}
 theorem restriction_cost (point : List F) (small : point.length < 64) :
     ∀ (count start : Nat) (current : List F), start + count = point.length →
       current.length = 2 ^ count →
-      (evalFor (fun env => evalSteps installed validator restrictionBody env) "v180"
-          ["v181", "v182", "v183"]
-          [("v120", .vector "bls12-381.fr" point), ("v178", .index point.length)]
+      (evalFor (fun env => evalSteps installed validator restrictionBody env) restrictionInduction
+          restrictionStateNames
+          (restrictionCaptureNames.zip [.vector "bls12-381.fr" point, .index point.length])
           (List.range' start count)
           [(.vector "bls12-381.fr" current : Value F G), .index count, .index 1]).ReturnsAfter
         [.vector "bls12-381.fr" (restrictPrefixValues current (point.drop start)), .index 0, .index 1]

@@ -1,6 +1,7 @@
 module
 
 public import ZkcExamples.Structured.GkrSourceViews
+public import Zkc.Protocols.Gkr.Source.VerifierHelperInstallation
 public import Zkc.Protocols.Multilinear.Source.PrimitiveLibrary
 public import Zkc.Source.Structured.BodyBindings
 public import Zkc.Source.TypedABI
@@ -58,48 +59,11 @@ theorem rows_bounded : RowsLaw (helpers (F := F) (G := G)) := by
   exact (helper3_association.invoke GkrSourceViews.unit.linked _).trans
     (rows_body _ comparison_bounded dimension small)
 
-omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-private theorem loop_states {I : PIR.Signature} (state captures : List Ty)
-    (body : RegionFunction (assignment F G) I (.index :: (state ++ captures), state ++ captures))
-    (count : Nat) (initial : Values (assignment F G) state)
-    (captured : Values (assignment F G) captures) (states : Nat → Values (assignment F G) state)
-    (start : states 0 = initial)
-    (law : ∀ index, index < count →
-      Evaluation.invokeCallback body (.cons index ((states index).append captured)) =
-        .done ((states (index + 1)).append captured)) :
-    Evaluation.denoteLoop state captures body 0 count initial captured = .done (states count) := by
-  subst start
-  simp only [Evaluation.denoteLoop, Finite.execute, Finite.Domain.admit, Finite.admitThen, Nat.sub_zero]
-  have folded := Finite.fold_range_state
-    (fun current index => (Evaluation.invokeCallback body (.cons index (current.append captured))).bind
-      fun results => (.done (results.split state).1 : PIR.Process I _)) states 0 count (by
-        intro index _ upper
-        rw [law index (by omega)]
-        simp only [PIR.Process.bind, Values.split_append])
-  simpa using folded
-
-set_option backward.isDefEq.respectTransparency false in
 theorem power_bounded (exponent : Nat) (small : exponent < 64) :
     invoke (helpers (F := F) (G := G)) GkrSourceBodies.helper18Helper (.cons exponent .nil) =
-      .done (.cons (2 ^ exponent) .nil) := by
-  rw [helper18_association.invoke GkrSourceViews.unit.linked]
-  simp only [GkrSourceBodies.helper18Body, Region.denote, meaning, Evaluation.meaning,
-    Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Environment.prepend,
-    Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
-    Primitive.evaluate, primitiveOutcome, show 1 < indexLimit by decide,
-    show 0 < indexLimit by decide, ite_true, Values.split]
-  rw [loop_states (F := F) (G := G) [.index] [] _ exponent _ .nil
-    (fun index => .cons (2 ^ index) .nil) ?start ?law]
-  · rfl
-  case start => rfl
-  case law =>
-    intro index lower
-    have current : 2 ^ index < indexLimit := power_bound index (by omega)
-    have product : 2 ^ index * 2 < indexLimit := by
-      simpa only [Nat.pow_succ] using power_bound (index + 1) (by omega : index + 1 < 64)
-    simp only [Evaluation.invokeCallback, Values.get_cons, Environment.prepend, Environment.push,
-      PIR.Process.bind, checkedIndices, current, product, show 2 < indexLimit by decide,
-      and_self, ite_true, Values.append, Nat.pow_succ]
+      .done (.cons (2 ^ exponent) .nil) :=
+  (helper18_association.invoke GkrSourceViews.unit.linked _).trans
+    (Zkc.Protocols.Gkr.Source.VerifierHelperInstallation.powerOfTwo_body _ exponent small)
 
 /-- An unrepresentable dimension refuses before the vector is inspected. -/
 theorem shape_dimension_refused (table : Meanings F G) (less : LessAllLaw table)

@@ -10,13 +10,17 @@ from bridges.construction import pair  # noqa: E402
 from bridges.common import lean_render  # noqa: E402
 
 
+BOOLEAN = ["apply", "bool", []]
+TRANSCRIPT = ["apply", "transcript", [["domain", "Transcript", "suite"]]]
+
+
 def fixture():
     digest = "sha256:" + "0" * 64
     policy = ["zkc.native-proof-policy/0", "main", "P", "V", "0", "suite",
-              ["1"], ["0"], [["q", "d"]], "zkc.framed/0", ""]
+              ["1"], ["0"], [["q", "d"]], "zkc.framed/0", "", []]
     child = ["zkc.constructed-participant/0", digest, digest, policy, "producer",
-             ["i1", "!runtime.capability<\"transcript:suite\">"],
-             ["!runtime.capability<\"transcript:suite\">"], [], [1], []]
+             [BOOLEAN, TRANSCRIPT],
+             [TRANSCRIPT], [], [1], []]
     validator = deepcopy(child)
     validator[4] = "validator"
     return [pair.FORMAT, child, validator]
@@ -24,13 +28,11 @@ def fixture():
 
 class PairReader(unittest.TestCase):
     def test_transcript_type_has_one_runtime_owner(self):
-        self.assertEqual(pair.participant.sort('!runtime.capability<"transcript:suite">')[1],
-                         ("transcript", "suite"))
-        for spelling in ['!local.capability<"transcript:suite">',
-                         '!runtime.capability<"rng:suite">',
-                         '!runtime.capability<"transcript:suite"> trailing']:
-            with self.subTest(spelling=spelling), self.assertRaisesRegex(
-                    ValueError, "unsupported constructed data type"):
+        self.assertEqual(pair.participant.sort(TRANSCRIPT)[1], ("transcript", "suite"))
+        for spelling in ['!runtime.capability<"transcript:suite">',
+                         ["apply", "transcript", [["domain", "Field", "suite"]]],
+                         ["apply", "capability", []]]:
+            with self.subTest(spelling=spelling), self.assertRaises(ValueError):
                 pair.participant.sort(spelling)
 
     def test_exact_envelope(self):
@@ -64,6 +66,25 @@ class PairReader(unittest.TestCase):
         self.assertIn("unsupported", pair.participant.operation(
             "local.guard", {"site": ("string", "stop")}, [], [boolean], []))
 
+    def test_each_participant_requires_current_ungated_policy(self):
+        for child in (1, 2):
+            for gates in [None, False, "", {}, [["q", "0"]], [["q", "1"]], [["q"]]]:
+                data = fixture()
+                data[child][3][-1] = gates
+                with self.subTest(child=child, gates=gates), self.assertRaisesRegex(
+                        ValueError, "policy gates"):
+                    pair.decode(data)
+            data = fixture()
+            data[child][3].pop()
+            with self.subTest(child=child, old_width=True), self.assertRaisesRegex(
+                    ValueError, "array of size 12"):
+                pair.decode(data)
+        data = fixture()
+        for child in data[1:]:
+            child[3].pop()
+        with self.assertRaisesRegex(ValueError, "array of size 12"):
+            pair.decode(data)
+
     def test_fixed_selection_pins_body_not_labels(self):
         expected = fixture()
         data = deepcopy(expected)
@@ -89,18 +110,18 @@ class PairReader(unittest.TestCase):
 
     def test_existing_calculations_are_exact(self):
         b, i = ("boolean", None), ("index", None)
-        cases = [("data.index", {"value": ("string", "0")}, [], [i], ".indexConstant 0"),
+        cases = [("data.index", {"value": ("integer", ["unsigned", "64", "0"])}, [], [i], ".indexConstant 0"),
                  ("data.index_equal", {}, [i, i], [b], ".indexEqual"),
                  ("arith.constant", {"value": ("bool", True)}, [], [b], ".booleanConstant true"),
-                 ("arith.cmpi", {"predicate": ("integer", "0")}, [b, b], [b], ".booleanEqual"),
-                 ("arith.cmpi", {"predicate": ("integer", "1")}, [b, b], [b], ".booleanNotEqual")]
+                 ("arith.cmpi", {"predicate": ("integer", ["signless", "64", "0"])}, [b, b], [b], ".booleanEqual"),
+                 ("arith.cmpi", {"predicate": ("integer", ["signless", "64", "1"])}, [b, b], [b], ".booleanNotEqual")]
         for name, attrs, operands, results, term in cases:
             with self.subTest(name=name, term=term):
                 self.assertIn(term, pair.participant.operation(name, attrs, [], operands, results))
                 with self.assertRaises(ValueError):
                     pair.participant.operation(name, attrs, [], operands, [i] if results == [b] else [b])
         with self.assertRaises(ValueError):
-            pair.participant.operation("arith.cmpi", {"predicate": ("integer", "2")}, [], [b, b], [b])
+            pair.participant.operation("arith.cmpi", {"predicate": ("integer", ["signless", "64", "2"])}, [], [b, b], [b])
 
     def test_local_services_are_separate_and_exact(self):
         data = fixture()
@@ -110,7 +131,7 @@ class PairReader(unittest.TestCase):
             ["query", "main", "nonce", "input_2", "random.bls12-381.fr/0", "draw", "P"]]).hex()
         data[1][7] = [["protocol.service_query", [["method", ["string", "draw"]],
                          ["port", ["string", "service_1"]], ["site", ["string", "nonce"]]],
-                        [], [], ['!algebra.field<"bls12-381.fr">'], [], [origin, []]]]
+                        [], [], [["apply", "field", [["domain", "Field", "bls12-381.fr"]]]], [], [origin, []]]]
         rendered = pair.render(data, "Services")
         self.assertIn("servicePorts :=", rendered)
         self.assertIn(".localService", rendered)

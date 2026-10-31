@@ -466,7 +466,7 @@ def run : IO Unit := do
   test "unknown-opcode" (!(Structured.Format.descriptor (.arr #[.str "provider.call"])).isOk)
   test "extra-op-field" (!(Structured.Format.descriptor (.arr #[.str "bool.and", .str "extra"])).isOk)
   test "extra-domain-op" (!(Structured.Format.domain (.arr #[.str "domain", .str "items",
-    .arr #[.arr #[.str "vector", .str scalarDomain]],
+    .arr #[ZkcTools.StructuredSource.wireType (.vector scalarDomain)],
     .arr #[.arr #[.str "elements", toJson (0 : Nat), .str "extra"]], toJson (0 : Nat)])).isOk)
   test "origin-bindings-retained" (match Structured.Format.origin .local
       (.arr #[.str "template", .arr #[.arr #[.str "N", .str "7"], .arr #[.str "F", .str scalarDomain]]]) with
@@ -474,7 +474,7 @@ def run : IO Unit := do
     | _ => false)
   test "origin-string-path-refused" (!(Structured.Format.origin .local
     (.arr #[.str "template", .arr #[.str "legacy-path"]])).isOk)
-  test "unknown-domain-decoded" ((Structured.Format.type (.arr #[.str "field", .str "F97"])).isOk)
+  test "unknown-domain-decoded" ((Structured.Format.type (ZkcTools.StructuredSource.wireType (.field "F97"))).isOk)
   test "unknown-domain-refused" (refused (snapshot [function "main" .protocol [.field "F97"] []
     (.block [] (.ret []))]) "structured-domain-unknown")
   test "overlong-string" (!(Structured.Format.string (.str (String.ofList (List.replicate 513 'a')))).isOk)

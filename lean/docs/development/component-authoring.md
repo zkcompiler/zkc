@@ -81,6 +81,35 @@ input pattern and cannot infer universal input availability from this view.
 
 ## Install source presentations and counted loops
 
+An installed source family binds exact helper bodies, including the helpers
+they call. A matching helper name or type is insufficient. `BodyIn` records
+the association with the admitted definition list; `bind_structured_bodies`
+constructs these associations against that list. The mathematical family is
+parameterized over the definitions and names, so a new Entry can reuse it.
+
+The [TwoBatches fixture](../../fixtures/reusable-aggregate/README.md) illustrates
+this boundary. Its root signature and typed body come from the body printer.
+The author selects the reusable batch helpers, installs their associations,
+and states how the two mathematical results compose. The source installer is:
+
+```lean
+theorem bodies : BatchSource.Bodies unit.definitions "koala-bear" names := by
+  bind_structured_bodies
+
+def batchSource : Template.Association unit batchSignature
+    (BatchSource.runBody "koala-bear" names protocolNames) := by
+  derive_source_association
+```
+
+The root's mathematical reference retains both decisions and both returned
+batches, including the receive prefixes when an input is missing. Both compiled
+role connections are generated from declaration selections. The instance adds
+no handwritten physical slots or whole-body interpreter proof. Names, selections,
+the reference, and its composition proof remain part of its authoring cost.
+The same source-association mechanism is used by the GKR helper installations
+and the randomized Sigma family; the connection engine does not select a
+protocol by name.
+
 `install_source_template association using_pattern pattern` applies the existing
 exact source association. It checks the complete signature and raw typed body,
 then infers the role, context, arguments, captures and full masked return from
@@ -108,8 +137,58 @@ inequality. Missing premises remain typed goals; unsupported continuation or
 frame shapes cannot establish a theorem. Nested loops compose by installing an
 inner loop contract as the outer callback. GKR's output and layer rejection
 proofs now use this shared induction, while retaining their existing polynomial
-and Sumcheck mathematics. This removes repeated induction structure; it does
-not yet eliminate GKR's representation or physical-placement proofs.
+and Sumcheck mathematics. Representation equations remain separate from the
+compiled connection: the former explain the mathematics of a representation,
+while the latter checks the actual source and target instructions.
+
+## Generate the compiled connection
+
+The common connection printer selects an admitted source, participant artifacts
+and their constructed views. It emits both role certificates through
+`derive_root_connection_with_library`. Both reusable-body discovery and strict
+reuse are enabled: an application with an installed but incompatible family is
+refused rather than reconstructed by a fallback route.
+
+At the first application, the proposer reads the actual source and target slice
+and installs a parameterized `ConnectionTargetPlacement.CheckedBody`. The
+family's result fixes the exact source `Entry`, earlier library, role, return
+selection, occurrence context, frame, target prefix and physical extent.
+Subsequent applications reference this checked declaration. They supply finite
+operands and checked layout, route, readback and extent facts; a missing body
+simulation cannot be passed as an interface assumption.
+
+Nested callees use the same interface. A checked parent body references its
+checked child family, and repeated parent placements reference that parent.
+The generic installer discovers the transitive declaration library in dependency
+order. A change to an earlier declaration or its pins therefore changes the
+association; identical printed names or normalized bodies are insufficient.
+
+The fixed connection goal is independent of the mathematical companion goals.
+A new entry using an installed family normally supplies declaration selections,
+exact helper associations and the root's mathematical composition. A genuinely
+new family additionally supplies its representation and protocol mathematics.
+Neither case requires a separate producer projection proof and validator
+projection proof when both are covered by the shared connection rules.
+
+The proposer distinguishes unknown data from proof goals. It determines loop
+input/output locations and transcript history from finite equations before
+checking readbacks. Presence checks that introduce no target instruction can
+infer a reference from a fixed typed cell in a finite frame. Neither matching
+names nor a same-typed local value authorizes a choice. Every proposed fact is
+checked by the ordinary kernel.
+
+Discovery retains open source-normalization equations in the family's finite
+interface. Application supplies their operands and checks the complete equations.
+Constructor inference visits only open syntax; fully determined subtrees remain
+part of the final equality check. This avoids specializing or traversing an
+entire source body merely to discover its reusable interface.
+
+The resulting root certificate gives the shared simulation theorem and reached
+route coverage for all modeled replies and stopping prefixes. Honest execution
+and adversarial properties consume this same connection; they do not each
+reprove projection. The author still supplies the representation laws,
+invariants, probabilistic bounds and mathematical composition laws described
+below. Root generation does not establish these security properties by itself.
 
 ## Bind one component
 
@@ -229,7 +308,154 @@ command does not preserve arbitrary declaration attributes.
 
 The lookup, ordered method selection, report and append-only printer are checked
 in `Tests.Companions`, `Tests.CompanionAssembly` and `Tests.CompanionReport`.
-Their integration with generated frame/goal modules and the source authoring
-command is a separate assembly step. The existing module-level method selection
-remains active until that cutover; this API does not implement claim defaults or
-change the request registry.
+`TestsSecurity.SourcePropertyCompanions` checks the property adapter, and
+`TestsSecurity.SourcePropertyConsumers` checks actual SmallSumcheck and TwoSums
+Pair, public rejection and cost obligations.
+
+### Author an actual source property
+
+The SmallSumcheck and TwoSums roots use three ordinary Lean modules per
+property group:
+
+```mermaid
+flowchart LR
+  G[SourcePairGoals / SourcePublicGoals] --> C[Authored companion mathematics]
+  G --> A[Generated installation consumers]
+  C --> A
+```
+
+The goal modules own the single explicit signature for each root. A header-only
+command generates an exposed, closed type declaration without declaring the
+consumer or elaborating any proof:
+
+```lean
+companion_goal residual_goal for theorem residual
+    {α : Type u} (x : α) (premise : x = x) : x = x
+```
+
+Use `for def` for a contract or derivation value. Like `companion_goal NAME in`
+before an ordinary declaration, this requires an explicit type. Both forms
+retain universe parameters, implicit binders, explicit premises and dependent
+types. Theorem goals follow Lean's header-based section-variable selection,
+including `include`, `omit` and instances over selected variables. Definition
+goals retain their available section context, including proof-only parameters.
+These commands support single theorems and explicitly typed definitions, not
+mutual blocks or inferred signatures. A header-only command introduces no
+consumer constant, proof, placeholder or assumption.
+
+`SourcePairCompanions` and `SourcePublicCompanions` import those independent goal
+modules. Each ordinary theorem or derivation definition uses its generated goal
+alias as its type. The author supplies the mathematics, including binder
+introductions and the existing source normalization, component laws and
+composition proofs. The author does not repeat the root signature or import its
+consumer. Existing helper mathematics retains its public names.
+
+`checks/GenerateSourcePropertyModules.lean` imports the goals without the
+companions or consumers. It uses `Companions.goalHeader` to print complete
+ordinary Lean declaration headers from their checked types, and the existing
+source-identity and stub tools to print initial companion scaffolding with
+ordinary registration attributes. Fully explicit generated headers retain
+type-class arguments as well as the full telescope; they are generated duplication, not another
+author-maintained signature. Each generated consumer imports both goals and
+companions and uses the lookup-only form:
+
+```lean
+source_property for (source .small) : small_goal with "honest-pair"
+  companions []
+```
+
+No normalizer proof is copied into the assembly as a fallback. The existing
+`via by ...` form remains available when a caller intentionally supplies a
+normalization method. Both forms check the independently fixed complete type
+before lookup and are kernel checked as ordinary Lean declarations.
+
+Here `source .small` is the existing admitted `Program`, not a theorem chosen by
+lookup. The adapter reads its retained snapshot's Entry symbol, source digest and
+the matching original protocol's structured origin path. The admitted importer
+owns the snapshot-to-payload association; this projection does not rerun source
+admission or decode a symbol to guess an origin. Missing origins refuse. Keys use
+the frontend's [canonical companion grammar](../../../docs/spec/language/companions.md):
+instance selection, role `implementation-law`, and the explicit Lean-owned label
+`honest-pair`, `public-rejection` or `public-cost`. These are implementation-law
+obligations, not invented frontend request or postcondition inventory entries.
+
+Declare a companion against its imported goal alias. Registrations are discovery
+metadata, not the source of its type. The companion declarations carry ordinary
+`@[zkc "KEY"]` attributes from the generated scaffold, under keys derived from
+the retained source. An empty author module therefore reaches lookup and
+produces a report for the missing root; assembly does not require a declaration merely to register its name.
+
+The generated goal is checked against the full original root telescope before
+lookup. The adapter supplies its canonical key with explicit arguments fixed
+from the local context; Lean infers implicit and instance arguments against the
+expected type. Authors can register an ordinary upstream theorem with `@[zkc
+"KEY"]`, or supply explicit selections with their independently fixed arguments
+in `companions [...]`. A present wrong or unfinished selection cannot fall back
+to a different companion or the existing `source-normal-form` method. That method
+still uses the same selected component laws and normalizer; no invariant search,
+new evaluator or receipt status path is added.
+
+An unresolved named root prints the JSON authoring record in its error. Set
+`trace.zkc.sourceProperty` to `true` to inspect successful attempts as well. The
+record contains the authoritative goal name, its importable module, alias-based
+`stub_text`, local context and closed expected type, method failures, direct
+constants in the full expected telescope, and retained source identity. `source_span` remains null
+when the structured export has no original source span. `proof_navigation` points
+to the Lean attempt and is explicitly separate from source navigation. The source
+digest is captured metadata, not an attestation of the native exporter. Direct
+expected-type constants do not inventory transitive proof dependencies, imported
+installation digests or the full dependency environment. The existing declaration
+and receipt audits remain responsible for those checks.
+
+The named obligation is the original root property. Inner normalizer, loop or
+composition failures remain the selected method's diagnostics within that report;
+this adapter does not generate separate authoritative declarations for
+intermediate tactic states.
+
+The six actual roots retain their complete original theorem types: participant
+processes and full returns, a shared service handle, arbitrary incoming public
+history, sampling premises and cost bounds. The checked controls apply each
+original proof at its fixed goal, leave missing mathematics open, and refuse an
+incompatible Pair/public counterpart even when a valid fallback is available.
+Statement comparison against the pre-integration declarations separately checks
+that the shared service, incoming history and complete return relations are unchanged.
+
+### Reproduce the module boundary
+
+After preparing the existing Lean packages, run from the repository root:
+
+```sh
+python3 lean/security/checks/check_source_property_modules.py
+```
+
+The focused driver builds into a private directory, reads existing dependency
+objects without rebuilding shared dependencies, regenerates the consumers,
+checks the independent companion modules and all six roots, and compares stored
+declaration types with the pre-existing consumer objects. It also compiles
+multi-module missing, wanted-stub and wrong-companion controls. Its report is
+`build/experiments/source-authoring/modules/REPORT.json`, with commands, source
+SHA256 values and gate evidence. `TestsSecurity.SourcePropertyCompanions` is an
+external author control importing goals and mathematics without consumers;
+`SourcePropertyConsumers` explicitly imports both that author module and the
+goals and checks all six imported companions. The original standard-axiom checks
+remain in place.
+
+To print modules alone after building the goal and tool modules, run from
+`lean/security/`:
+
+```sh
+lake env lean --run checks/GenerateSourcePropertyModules.lean /tmp/source-property-modules
+```
+
+The output contains the two installation modules and initial scaffolds under
+`CompanionStubs/`. Existing scaffold files are preserved. Use `appendStubs` when
+adding newly identified obligations to an existing author file; it preserves
+prior text and proofs. Proof scaffolds compile as wanted placeholders and remain
+open. Value scaffolds are commented templates requiring authored mathematics.
+Imports from the report identify the goal module needed to elaborate either
+kind. A missing companion stays open, and a wrong imported companion refuses at
+the same complete expected type. Neither can change a requested property.
+
+This module integration does not generate intermediate tactic-seam obligations
+or original frontend spans, implement claim defaults or frontend inventory
+coverage, or change request and receipt auditing. It adds no semantics or axioms.

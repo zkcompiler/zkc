@@ -22,6 +22,7 @@ from uuid import uuid4
 
 import snapshot as constructors
 from bridges.common.native_entry import native_subject
+from bridges.common.schema import interpreted_type
 from evidence import archive_sources, atomic_json, check_sources, retain_tool
 from bridges.common.lean_render import file_digest as digest  # noqa: E402
 
@@ -89,6 +90,7 @@ def definition(snapshot, name):
 
 
 def typed_value(ty, value):
+    ty = interpreted_type(ty, payload=True)
     if ty == ["bool"]:
         return ["bool", value]
     if ty == ["index"]:
@@ -430,6 +432,7 @@ class Suite:
 
 
 def wire(ty, value):
+    ty = interpreted_type(ty, payload=True)
     if ty == ["bool"]:
         tag, payload = 5, bytes([value])
     elif ty == ["index"]:

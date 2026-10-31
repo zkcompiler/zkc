@@ -14,6 +14,8 @@ restricted catalogue, not the entire native installation. Its capability
 strings record native admission facts; the law records prove the field,
 embedding and characteristic obligations consumed here. They do not certify
 two-adic operations, native arithmetic, codecs or sampling distributions.
+The index-block capability and method are catalogue metadata only; this model
+does not interpret index-block requests or gates.
 
 Unknown names have a default carrier because `DomainModel` is total, but are
 never admitted. There are no group rows. Only local standard algebra instances
@@ -46,7 +48,7 @@ def octicNominal : Nominal where
   sort := .field
   members := [("BaseField", baseIdentity)]
   capabilities := ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo",
-    "ExtensionField", "IndexRandomness"]
+    "ExtensionField", "IndexRandomness", "IndexBlockRandomness"]
   modulus := some q
 
 /-- Only these two field rows and the octic random service are selected. -/

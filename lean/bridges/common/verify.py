@@ -24,6 +24,7 @@ from registry import CONTRACTS
 from request_support import Obligation, require
 from structured import entry, profile, views, compile_modules, lean_environment
 from bridges.structured.snapshot import render, text, nat
+from bridges.common.schema import interpreted_type
 
 ROOT = Path(__file__).resolve().parents[2]
 VERSION = 'zkc.proof-request/0'
@@ -98,7 +99,7 @@ def validate(data, request):
     role = request['role']
     require(type(role) is int and 0 <= role < len(roles) and role in output_scopes[0],
             'role-selection', 'The selected participant must have the Boolean output')
-    require(selected[5] == [['bool']], 'output-type', 'This contract requires a Boolean verifier result')
+    require([interpreted_type(value) for value in selected[5]] == [['bool']], 'output-type', 'This contract requires a Boolean verifier result')
     bindings = request['inputs']
     require(isinstance(bindings, list) and len(bindings) == len(selected[4]),
             'input-bindings', 'Bind every declared input in declaration order')
@@ -134,7 +135,7 @@ def validate(data, request):
             domain = wiring['groupDomain'] if kind == 'group' else wiring['fieldDomain']
             if kind == 'service':
                 domain = 'random.' + domain + '/0'
-            require(dtype == [kind, domain] and role in scopes,
+            require(interpreted_type(dtype) == [kind, domain] and role in scopes,
                     'input-domain', f'{binding}: type, nominal domain or availability disagrees with the request')
     profile(data, wiring['fieldDomain'], wiring.get('groupDomain'))
     require(len(json.dumps(data)) < 500_000, 'source-size', 'Source exceeds this request profile')

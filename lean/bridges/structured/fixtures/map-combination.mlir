@@ -8,7 +8,7 @@
     "func.func"() <{function_type = (!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>, no_inline, sym_name = "s12h6d61705f6578616d706c657311h636f6d62696e6174696f6e", sym_visibility = "private"}> ({
     ^bb0(%arg21: !runtime.scope, %arg22: !algebra.field<"bls12-381.fr">, %arg23: !algebra.field_vector<"bls12-381.fr">, %arg24: !algebra.field<"bls12-381.fr">, %arg25: !algebra.field_vector<"bls12-381.fr">, %arg26: !algebra.field_vector<"bls12-381.fr">, %arg27: !algebra.field<"bls12-381.fr">):
       %16 = "exec.collect"(%arg21, %arg23, %arg25, %arg26, %arg22, %arg24, %arg27) <{body = @zkl_map_40c6231bdcafed97eac948be749084ce0abec13b10621543e354f70698ea9db6_body, domain = @zkl_map_40c6231bdcafed97eac948be749084ce0abec13b10621543e354f70698ea9db6_domain, site = "s0"}> : (!runtime.scope, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>
-      "exec.dispatch"(%16)[^bb1, ^bb2] : (!exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>) -> ()
+      "exec.dispatch"(%16)[^bb1, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>) -> ()
     ^bb1(%17: !algebra.field_vector<"bls12-381.fr">):  // pred: ^bb0
       %18 = "exec.returned"(%17) : (!algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>
       "func.return"(%18) : (!exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>) -> ()
@@ -28,7 +28,7 @@
     "func.func"() <{function_type = (!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">, !algebra.field_vector<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>, no_inline, sym_name = "zkl_map_40c6231bdcafed97eac948be749084ce0abec13b10621543e354f70698ea9db6_body", sym_visibility = "private"}> ({
     ^bb0(%arg8: !runtime.scope, %arg9: !algebra.field<"bls12-381.fr">, %arg10: !algebra.field<"bls12-381.fr">, %arg11: !algebra.field<"bls12-381.fr">, %arg12: !algebra.field_vector<"bls12-381.fr">, %arg13: !algebra.field_vector<"bls12-381.fr">, %arg14: !algebra.field_vector<"bls12-381.fr">, %arg15: !algebra.field<"bls12-381.fr">, %arg16: !algebra.field<"bls12-381.fr">, %arg17: !algebra.field<"bls12-381.fr">):
       %6 = "exec.compute"(%arg8, %arg15, %arg9, %arg16, %arg10, %arg11, %arg17) <{callee = @s12h6d61705f6578616d706c65736h6c696e656172, site = "body"}> : (!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>
-      "exec.dispatch"(%6)[^bb1, ^bb2] : (!exec.outcome<(!algebra.field<"bls12-381.fr">)>) -> ()
+      "exec.dispatch"(%6)[^bb1, ^bb2] <{successor_operand_segments = array<i32: 0, 0>}> : (!exec.outcome<(!algebra.field<"bls12-381.fr">)>) -> ()
     ^bb1(%7: !algebra.field<"bls12-381.fr">):  // pred: ^bb0
       %8 = "exec.returned"(%7) : (!algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>
       "func.return"(%8) : (!exec.outcome<(!algebra.field<"bls12-381.fr">)>) -> ()
@@ -41,7 +41,7 @@
       %1 = "func.call"(%arg2, %arg3) <{callee = @s12h6d61705f6578616d706c65735h7363616c65}> : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
       %2 = "func.call"(%arg4, %arg5) <{callee = @s12h6d61705f6578616d706c65735h7363616c65}> : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
       %3 = "algebra.field_subtract"(%1, %2) : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
-      %4 = "algebra.constant"() <{value = "3"}> : () -> !algebra.field<"bls12-381.fr">
+      %4 = "algebra.constant"() <{value = #algebra.literal<<"bls12-381.fr">, 3 : ui255> : !algebra.field<"bls12-381.fr">}> : () -> !algebra.field<"bls12-381.fr">
       %5 = "algebra.field_add"(%3, %4) : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
       "func.return"(%5) : (!algebra.field<"bls12-381.fr">) -> ()
     }) : () -> ()

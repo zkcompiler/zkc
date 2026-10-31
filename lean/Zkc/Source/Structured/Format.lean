@@ -3,6 +3,7 @@ module
 public import Zkc.Source.Structured.Primitives
 public import Zkc.Source.Structured.Limits
 public import Zkc.Source.Format
+public import Zkc.Source.LogicalFormat
 
 @[expose] public section
 
@@ -46,25 +47,35 @@ def group (json : Json) : Except String String := string json
 def service (json : Json) : Except String String := string json
 
 mutual
- def typeAt : Nat → Json → Except String Ty
+ /-- Lower only the already supported formal types. Complete structured
+ validation is performed by `typeAt` before this profile selection. -/
+ def lowerTypeAt : Nat → Json → Except String Ty
   | 0, _ => .error "structured-type-depth"
   | depth + 1, json => do
     match ← array json with
-    | [.str "bool"] => return .boolean
-    | [.str "index"] => return .index
-    | [.str "indices"] => return .indices
-    | [.str "field", name] => return .field (← field name)
-    | [.str "vector", name] => return .vector (← field name)
-    | [.str "group", name] => return .group (← group name)
-    | [.str "groups", name] => return .groups (← group name)
-    | [.str "oracle", kind] => return .oracle (← oracleKindAt depth kind)
-    | [.str "oracle_sequence", kind, maximum] =>
-      return .oracleSequence (← oracleKindAt depth kind) (← indexDecimal (← string maximum))
+    | [.str "apply", .str "bool", .arr #[]] => return .boolean
+    | [.str "apply", .str "index", .arr #[]] => return .index
+    | [.str "apply", .str "indices", .arr #[]] => return .indices
+    | [.str "apply", .str "field", .arr #[.arr #[.str "domain", .str "Field", name]]] =>
+      return .field (← field name)
+    | [.str "apply", .str "vector", .arr #[.arr #[.str "domain", .str "Field", name]]] =>
+      return .vector (← field name)
+    | [.str "apply", .str "group", .arr #[.arr #[.str "domain", .str "Group", name]]] =>
+      return .group (← group name)
+    | [.str "apply", .str "groups", .arr #[.arr #[.str "domain", .str "Group", name]]] =>
+      return .groups (← group name)
+    | [.str "oracle", .str "table", arguments] =>
+      return .oracle (← oracleKindAt depth (.arr #[.str "table", arguments]))
+    | [.str "oracle_sequence", .str "table", arguments, maximum] =>
+      return .oracleSequence (← oracleKindAt depth (.arr #[.str "table", arguments]))
+        (← indexDecimal (← string maximum))
     | [.str "service", name] => return .service (← service name)
-    | [.str "sequence", element] => return .sequence (← typeAt depth element)
-    | [.str "product", identity, constructor, fields] =>
-      let fields ← (← array fields).mapM (typeAt depth)
-      return .product (← string identity) (← string constructor) (ProductFields.ofList fields)
+    | [.str "apply", .str "sequence", .arr #[.arr #[.str "type", element]]] =>
+      return .sequence (← lowerTypeAt depth element)
+    | [.str "variant", identity, .arr #[.arr #[constructor, fields]]] =>
+      let fields ← (← array fields).mapM (lowerTypeAt depth)
+      let identity ← LogicalFormat.identity identity
+      return .product (← string (.str identity)) (← string constructor) (ProductFields.ofList fields)
     | _ => throw "structured-type-unsupported"
 
  def oracleKindAt : Nat → Json → Except String OracleKind
@@ -73,19 +84,37 @@ mutual
     match ← array json with
     | [.str "table", arguments] =>
       match ← array arguments 2 with
-      | [.arr #[.str "type", row]] => return .table (← typeAt depth row) none
+      | [.arr #[.str "type", row]] => return .table (← lowerTypeAt depth row) none
       | [.arr #[.str "type", row], .arr #[.str "nat", rows]] =>
-        return .table (← typeAt depth row) (some (← indexDecimal (← string rows)))
+        return .table (← lowerTypeAt depth row) (some (← indexDecimal (← string rows)))
       | _ => throw "structured-oracle-kind"
     | _ => throw "structured-oracle-kind"
 end
 
-def oracleKind (json : Json) : Except String OracleKind := oracleKindAt 64 json
+def typeAt (depth : Nat) (json : Json) : Except String Ty := do
+  LogicalFormat.checkWork json
+  LogicalFormat.checkTypeAt depth json
+  lowerTypeAt depth json
+
+def oracleKind (json : Json) : Except String OracleKind := do
+  let [.str "table", arguments] ← array json | throw "structured-oracle-kind"
+  discard <| LogicalFormat.type (.arr #[.str "oracle", .str "table", arguments])
+  oracleKindAt 64 json
 
 def type (json : Json) : Except String Ty := typeAt 64 json
 
 def types (json : Json) : Except String (List Ty) := do
   (← array json).mapM type
+
+/-- The fixed primitive interpretation currently admits only the Natural and
+None parameter schemas. A structured natural lowers exactly to the existing
+canonical internal decimal; other structured parameter families refuse. -/
+def primitiveParameters (json : Json) : Except String (List String) := do
+  (← array json).mapM fun parameter => do
+    let [.str "natural", value] ← array parameter | throw "structured-primitive-parameters"
+    let text ← string value
+    discard <| indexDecimal text
+    return text
 /-- JSON mask elements must be Booleans, including in unused declarations. -/
 def booleans (json : Json) : Except String (List Bool) := do
   (← array json).mapM fun value => match value with
@@ -168,7 +197,9 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "oracle_sequence_length", kind, maximum] =>
       return .oracle (.sequenceLength (← oracleKind kind) (← oracleNatural maximum))
   | [.str "exec", operation, binding, parameters] =>
-      return .exec (← string operation) (← string binding) (← strings parameters)
+      let operation ← string operation
+      if operation != "exec.apply" then throw "structured-primitive-operation"
+      return .exec operation (← string binding) (← primitiveParameters parameters)
   | [.str "index.constant", n] =>
       let text ← string n
       let _ ← indexDecimal text
@@ -349,14 +380,39 @@ def relation (json : Json) : Except String Relation := do
         arguments⟩
   | _ => throw "structured-relation"
 
+def bindingArgument (json : Json) : Except String BindingArgument := do
+  match ← array json with
+  | [.str "domain", _, _] =>
+    let (sort, identity) ← LogicalFormat.domain json
+    return .domain sort identity
+  | [.str "type", value] => return .type (← type value)
+  | [.str "nat", value] => return .natural (← LogicalFormat.natural value)
+  | [.str "mask", values] => return .mask (← booleans values)
+  | _ => throw "structured-binding-argument"
+
 def binding (json : Json) : Except String Binding := do
   match ← array json with
-  | [.str "binding", name, contract, arguments, implementation] =>
-    let value : Binding := ⟨← string name, ← string contract,
-      ← strings arguments, ← string implementation true⟩
+  | [.str "binding", name, contract, arguments, implementation, inputs, outputs] =>
+    let arguments ← (← array arguments 16).mapM bindingArgument
+    let roots ← arguments.mapM fun argument => match argument with
+      | .domain "Field" root => pure root
+      | _ => throw "structured-binding-argument"
+    let schema : BindingSchema := ⟨arguments, ← types inputs, ← types outputs⟩
+    let value : Binding := ⟨← string name, ← string contract, roots,
+      ← string implementation true, some schema⟩
     if !value.valid then throw "structured-binding"
+    if value.contract != "field.embed" then
+      value.checkSignature (roots.headD "") ""
     return value
   | _ => throw "structured-binding"
+
+/-- Fully check a decoded declaration against an explicitly supplied nominal
+catalogue. In particular, embedding signatures use its associated BaseField;
+the producer's input port cannot choose that association. -/
+def bindingIn (catalogue : Catalogue) (json : Json) : Except String Binding := do
+  let value ← binding json
+  discard <| value.resolveRoot catalogue
+  return value
 
 def definition (json : Json) : Except String Definition := do
   match ← array json with
@@ -446,10 +502,12 @@ def snapshot (json : Json) : Except String Snapshot := do
   | [.str "zkc.structured-source/0", .str "original", digest, entry, domains, relations, bindings, definitions, contracts, rows, declarations] =>
     let source ← string digest
     if !digestValid source then throw "structured-source-digest"
-    return ⟨source, ← string entry, ← (← array domains Limits.tableEntries).mapM domain,
+    let value : Snapshot := ⟨source, ← string entry, ← (← array domains Limits.tableEntries).mapM domain,
       ← (← array relations Limits.tableEntries).mapM relation, ← (← array bindings Limits.tableEntries).mapM binding,
       ← (← array definitions Limits.tableEntries).mapM definition,
       ← (← array contracts Limits.tableEntries).mapM protocolContract, ← catalogue rows, ← sourceDeclarations declarations⟩
+    value.bindings.forM fun binding => discard <| binding.resolveRoot value.catalogue
+    return value
   | _ => throw "structured-envelope"
 
 /-- Count arrays, including empty child lists, with the root at depth one. -/
@@ -491,6 +549,7 @@ lexical depth everywhere except exact, strictly decoded protocol-origin slots,
 including in unused declarations. -/
 def parse (text : String) (byteLimit : Nat := Limits.parsedBytes) : Except String Json := do
   if text.utf8ByteSize > byteLimit then throw "byte-limit"
+  LogicalFormat.checkUnicodeEscapes text
   let mut depth := 0
   let mut quoted := false
   let mut escaped := false

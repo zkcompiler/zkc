@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproduce the actual plain table and aggregate-message construction fixtures.
+"""Reproduce the actual plain table and aggregate-message fixtures.
 
 This driver invokes the native compiler and the existing transparent renderers.
 It neither evaluates participants nor selects a security claim or baseline.
@@ -28,14 +28,19 @@ BATCH_NAMES = {
     "zkl_206d594942dc6f123848ad35c8fcdc7017b483db9ccd5c0651d1ad5c850eceab": "run",
 }
 
+TWO_BATCHES_NAMES = {
+    **BATCH_NAMES,
+    "zkl_ccb0c20474f144c8f1737523c09fa681cbd4974bb2edde5304978a97c3573492": "pair",
+}
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--lake", default="lake")
-    parser.add_argument("--subject", action="append", choices=["table", "batch"],
-                        help="regenerate only the selected fixture (default: both)")
+    parser.add_argument("--subject", action="append", choices=["table", "batch", "two-batches"],
+                        help="regenerate only the selected fixture (default: all)")
     parser.add_argument("--fresh-bodies", action="store_true",
                         help="elaborate typed body printers without Lake replay")
     parser.add_argument("--write", action="store_true")
@@ -46,10 +51,11 @@ def main():
     os.environ.setdefault("LEAN_NUM_THREADS", "2")
     runner = Runner()
     report = {"status": "running", "compiler_sha256": digest(args.compiler.read_bytes()),
-              "subjects": args.subject or ["table", "batch"], "artifacts": {}}
+              "subjects": args.subject or ["table", "batch", "two-batches"], "artifacts": {}}
 
     def generated(path, value):
         if args.write:
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(value)
         runner.check("exact-generated:" + path.name, path.read_text() == value)
 
@@ -59,6 +65,9 @@ def main():
         ("batch", "batch_opening::CheckBatch<batch_opening::Scalar>",
          ["--module=batch_opening=lean/bridges/construction/fixtures/batch-opening.zkc",
           *project_arguments(ROOT / "libraries/core/traversal/zkc.toml")], "BatchOpening"),
+        ("two-batches", "reusable_aggregate::TwoBatches<batch_opening::Scalar>",
+         project_arguments(ROOT / "lean/fixtures/reusable-aggregate/zkc.toml"),
+         "ReusableAggregateTwoBatches"),
     ]
     try:
         for name, subject, modules, stem in subjects:
@@ -78,11 +87,23 @@ def main():
             (directory / "interface.json").write_text(interface_text)
             interface = json.loads(interface_text)
             runner.check(name + ":source-identity", interface["original"] == digest(source.encode()))
+            original = run("protocol-structured", source_path, "--symbol=" + interface["protocol"])
+            (directory / "original.json").write_text(original)
             if name == "table":
                 runner.check("exact-library-source", source ==
                              (ROOT / "lean/bridges/structured/fixtures/table-membership.mlir").read_text())
-            policy = ["zkc.native-proof-policy/0", interface["protocol"], "role00000000", "role00000001",
-                      "0", "", [], ["0", "1"], [], "zkc.framed/0", ""]
+            original_data = json.loads(original)
+            entries = [entry for entry in original_data[7]
+                       if entry[0] == "function" and entry[1] == interface["protocol"]]
+            runner.check(name + ":one-entry", len(entries) == 1)
+            entry = entries[0]
+            roster = entry[6]
+            runner.check(name + ":paired-roster", roster[0] == "protocol" and len(roster[1]) == 2)
+            producer, validator = roster[1]
+            publics = [str(index) for index, (type_, scope) in enumerate(zip(entry[4], roster[2]))
+                       if validator in scope and type_[0] != "service"]
+            policy = ["zkc.native-proof-policy/0", interface["protocol"], producer, validator,
+                      "0", "", [], publics, [], "zkc.framed/0", "", []]
             policy_path = directory / "policy.json"
             policy_path.write_text(json.dumps(policy))
             candidate = directory / "candidate.mlir"
@@ -97,27 +118,27 @@ def main():
                 runner.check(name + ":pair-" + role, json.loads(text) == child)
                 (directory / (role + ".json")).write_text(text)
                 identities[role] = "sha256:" + digest(text.encode())
-            original = run("protocol-structured", source_path, "--symbol=" + interface["protocol"])
-            (directory / "original.json").write_text(original)
             report["artifacts"][name] = dict(identities, source="sha256:" + digest(source.encode()),
                                             original="sha256:" + digest(original.encode()),
                                             pair="sha256:" + digest(exported.encode()))
-            namespace = "ZkcExamples.Construction." + stem
+            namespace = ("Tests." if name == "two-batches" else "ZkcExamples.Construction.") + stem
             generated(ROOT / ("lean/" + namespace.replace(".", "/") + "Artifacts.lean"),
                       pair.render(children, namespace + "Artifacts"))
             data_namespace = "ZkcExamples.Structured.TableMembershipData" if name == "table" else namespace + "Data"
             generated(ROOT / ("lean/" + data_namespace.replace(".", "/") + ".lean"),
                       snapshot.render(json.loads(original), data_namespace))
-        if args.subject and "batch" not in args.subject:
-            report["status"] = "pass"
-            return
-        runner.run([args.lake, "build", "ZkcExamples.Construction.BatchOpeningData"],
-                   cwd=ROOT / "lean", name="batch:build-data")
-        generated(ROOT / "lean/ZkcExamples/Construction/BatchOpeningBodies.lean",
-                  bodies.generate("ZkcExamples.Construction.BatchOpeningData",
-                                  "ZkcExamples.Construction.BatchOpeningBodies",
-                                  names=BATCH_NAMES, runner=runner, lake=args.lake,
-                                  fresh=args.fresh_bodies))
+        for name, namespace, names in [
+            ("batch", "ZkcExamples.Construction.BatchOpening", BATCH_NAMES),
+            ("two-batches", "Tests.ReusableAggregateTwoBatches", TWO_BATCHES_NAMES),
+        ]:
+            if args.subject and name not in args.subject:
+                continue
+            runner.run([args.lake, "build", namespace + "Data"],
+                       cwd=ROOT / "lean", name=name + ":build-data")
+            generated(ROOT / ("lean/" + namespace.replace(".", "/") + "Bodies.lean"),
+                      bodies.generate(namespace + "Data", namespace + "Bodies",
+                                      names=names, runner=runner, lake=args.lake,
+                                      fresh=args.fresh_bodies))
         report["status"] = "pass"
     finally:
         if report["status"] == "running":

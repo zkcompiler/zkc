@@ -928,9 +928,9 @@ def _referenced_records(records, roots):
     for record in roots:
         proof = (((record or {}).get("detail") or {}).get("claim_data") or {}).get("receipt") or {}
         names.update(row.get("name") for row in proof.get("dependencies") or [] if records.get(row.get("name")))
-        artifact = (proof.get("subject") or {}).get("artifacts_head")
-        if records.get(artifact):
-            names.add(artifact)
+        subject = proof.get("subject") or {}
+        for key in ("original_anchors", "participant_anchors", "producer_anchors"):
+            names.update(name for name in subject.get(key, []) if records.get(name))
     selected = {name: records.get(name) for name in names if records.get(name)}
     selected.update({record["name"]: record for record in roots if record})
     return [selected[name] for name in sorted(selected)]

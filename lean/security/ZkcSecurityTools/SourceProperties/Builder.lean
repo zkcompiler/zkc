@@ -15,6 +15,12 @@ set_option autoImplicit false
 namespace ZkcSecurity.Tools.SourceProperties
 open Lean Meta Elab Tactic
 
+/-- Only the internal composition may infer intermediate relations and costs.
+The caller fixes the complete property before any selected rule is elaborated. -/
+private def requireFixedProperty : TacticM Unit := withMainContext do
+  if (← instantiateMVars (← getMainTarget)).hasExprMVar then
+    throwError "source property assembly requires a fixed process, relation and requested bound"
+
 /-- Instantiate a selected contract against the actual typed process heads.
 Remaining proposition arguments are ordinary local seam goals; search never
 registers them as assumptions. -/
@@ -89,7 +95,9 @@ private partial def assemblePairs (rules rewrites : Array (TSyntax `term)) (dept
     evalTactic (← `(tactic| exact ZkcSecurity.Source.Pair.done (by
       first | rfl | (solve | repeat' first | assumption | constructor) | (simp_all only [$lemmas,*]; aesop))))
     return
-  catch _ => saved.restore
+  catch error =>
+    if error.isRuntime || error.isInterrupt then throw error
+    saved.restore
   let mut lastReason := "no selected head matched"
   for rule in rules do
     let saved ← saveState
@@ -117,6 +125,7 @@ private partial def assemblePairs (rules rewrites : Array (TSyntax `term)) (dept
       assemblePairs rules rewrites (depth - 1)
       return
     catch error =>
+      if error.isRuntime || error.isInterrupt then throw error
       let reason ← error.toMessageData.toString
       saved.restore
       lastReason := lastReason ++ "\n" ++ reason
@@ -125,7 +134,8 @@ private partial def assemblePairs (rules rewrites : Array (TSyntax `term)) (dept
 syntax "assemble_source_pairs " "[" term,* "]" " simplifying " "[" term,* "]" : tactic
 
 elab_rules : tactic
-  | `(tactic| assemble_source_pairs [$rules:term,*] simplifying [$rewrites:term,*]) =>
+  | `(tactic| assemble_source_pairs [$rules:term,*] simplifying [$rewrites:term,*]) => do
+      requireFixedProperty
       assemblePairs rules.getElems rewrites.getElems 64
 
 private partial def assembleNo (rules rewrites : Array (TSyntax `term)) (depth : Nat) : TacticM Unit := withMainContext do
@@ -143,6 +153,7 @@ private partial def assembleNo (rules rewrites : Array (TSyntax `term)) (depth :
       first | rfl | (solve | repeat' first | assumption | constructor) | (simp_all only [$lemmas,*]; aesop))))
     return
   catch error =>
+    if error.isRuntime || error.isInterrupt then throw error
     terminalReason ← error.toMessageData.toString
     saved.restore
   let mut lastReason := terminalReason
@@ -151,7 +162,9 @@ private partial def assembleNo (rules rewrites : Array (TSyntax `term)) (depth :
     try
       withTransparency .reducible <| evalTactic (← `(tactic| exact ($rule _)))
       return
-    catch _ => saved.restore
+    catch error =>
+      if error.isRuntime || error.isInterrupt then throw error
+      saved.restore
     try
       let target := (← instantiateMVars (← getMainTarget)).headBeta.consumeMData
       let selected ← selectedLaw rule ``Zkc.Obligations.Derivation
@@ -165,6 +178,7 @@ private partial def assembleNo (rules rewrites : Array (TSyntax `term)) (depth :
       assembleNo rules rewrites (depth - 1)
       return
     catch error =>
+      if error.isRuntime || error.isInterrupt then throw error
       let reason ← error.toMessageData.toString
       saved.restore
       lastReason := lastReason ++ "\n" ++ reason
@@ -173,7 +187,8 @@ private partial def assembleNo (rules rewrites : Array (TSyntax `term)) (depth :
 syntax "assemble_source_no " "[" term,* "]" " simplifying " "[" term,* "]" : tactic
 
 elab_rules : tactic
-  | `(tactic| assemble_source_no [$rules:term,*] simplifying [$rewrites:term,*]) =>
+  | `(tactic| assemble_source_no [$rules:term,*] simplifying [$rewrites:term,*]) => do
+      requireFixedProperty
       assembleNo rules.getElems rewrites.getElems 64
 
 private partial def assembleCost (rules rewrites : Array (TSyntax `term)) (depth : Nat) : TacticM Unit := withMainContext do
@@ -184,7 +199,9 @@ private partial def assembleCost (rules rewrites : Array (TSyntax `term)) (depth
   try
     evalTactic (← `(tactic| exact ZkcSecurity.FiatShamir.CostComposition.done _))
     return
-  catch _ => saved.restore
+  catch error =>
+    if error.isRuntime || error.isInterrupt then throw error
+    saved.restore
   let mut reasons := ""
   for rule in rules do
     let saved ← saveState
@@ -214,6 +231,7 @@ private partial def assembleCost (rules rewrites : Array (TSyntax `term)) (depth
       assembleCost rules rewrites (depth - 1)
       return
     catch error =>
+      if error.isRuntime || error.isInterrupt then throw error
       reasons := reasons ++ "\n" ++ (← error.toMessageData.toString)
       saved.restore
   throwError "open source cost seam: {reasons}\nExpected: {← getMainTarget}"
@@ -221,6 +239,7 @@ private partial def assembleCost (rules rewrites : Array (TSyntax `term)) (depth
 syntax "assemble_source_cost " "[" term,* "]" " simplifying " "[" term,* "]" : tactic
 elab_rules : tactic
   | `(tactic| assemble_source_cost [$rules:term,*] simplifying [$rewrites:term,*]) => do
+      requireFixedProperty
       evalTactic (← `(tactic| apply ZkcSecurity.FiatShamir.CostComposition.mono (large := _) ?_ ?_))
       let goals ← getGoals
       let mut bounded := none
