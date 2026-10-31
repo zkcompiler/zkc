@@ -74,9 +74,8 @@ ordinary schemas reject `maximum`. The singleton `data_schema` describes
 a sequence. Repeated schema identities must agree on the complete kind, capacity
 and data schema.
 
-This extends the current `/0` schema with `oracle_sequence`; singleton schema
-members remain unchanged. There is one strict schema per alternative, with no
-legacy decoding path.
+There is one strict current `/0` schema per alternative, with no legacy decoding
+path.
 
 An oracle port additionally has `holder` (one source role name) and
 `maximum_rows` (null for a sized kind, otherwise a canonical uint64 string).
@@ -90,11 +89,35 @@ kind, capacity and row bound, and the actual input binding. Source comparison
 also binds the output row bound and complete descriptor to the checked
 declaration. Ordinary schema and port alternatives reject these additional keys.
 
-Oracle schemas cannot occur as aggregate children, ordinary relation-data
-selectors or Host schemas. Logical contract anchor selectors admit only a whole
-singleton handle port; they do not select sequences. Internal protocol ports may
-carry sequences and checked preparation eliminates them. Root Host sequence
-ingress remains refused. Realization determines the public commitment and
+The `logical_record` schema has the common schema members, no native `leaves`,
+no alternatives, `custody: false`, `constructible: false`, and permissions
+`["Copy", "Drop"]`. It requires a nonempty ordered field list containing at least
+one direct oracle handle or sequence. Other fields must recursively be ordinary
+total shared data. Nested logical records and ordinary products containing
+handles refuse. A direct unsized logical field additionally requires
+`maximum_rows`, a canonical uint64 decimal string including zero; sized logical
+fields and ordinary fields reject it. Field offsets count body leaves: one per
+direct handle or sequence, and the ordinary leaf count for other fields.
+Protocol native slots instead expand each direct handle or sequence into two
+slots, including a zero-capacity sequence. A logical record port requires
+`holder`, rejects a whole-port `maximum_rows`, and uses the same exact oriented
+holder/receiver family for all its logical fields. Repeated schema identities
+must agree on field order, names, offsets, bounds and complete child schemas.
+
+Oracle schemas cannot occur as ordinary aggregate children, ordinary relation-data
+selectors or Host schemas. Logical contract anchor selectors admit a singleton
+handle port or a direct singleton handle field of a logical record; they do not
+select sequences. Such a selector has a required null `role` and selects the
+paired anchor slot, with the complete associated `data_schema` as its logical
+relation type. A named role cannot select a logical value as ordinary data.
+Projection through a logical record derives native prefixes from expanded
+widths, rather than using body offsets as native offsets.
+
+Internal protocol ports may carry checked logical records, handles and sequences;
+preparation eliminates these internal ports. Rust metadata inspection validates
+the retained closure structurally without importing or executing its logical
+handles. Selected executable logical inputs and outputs refuse native binding
+and Host input/output admission. Realization determines the public commitment and
 witness interface before executable input admission; this source interface does
 not itself grant a data codec. Source names, display text and schema identities
 still require the separate source-correspondence check.
@@ -192,7 +215,8 @@ protocol's acceptance implies it.
 Each clause has `name`, `kind`, `subject`, `residual` and `decision`; absent optional
 fields are JSON null. An application has a relation symbol and ordered `operands`.
 Selectors have `direction` (`input` or `output`), logical `port` index, field-index
-`path` and actual `role` name. Native slices are derived from the admitted logical
+`path` and actual `role` name (or null for the singleton anchor case above).
+Native slices are derived from the admitted logical
 schema, rather than supplied again. Relations compare exact logical identities.
 Clauses remain on closed component declarations; original `protocol.apply`
 occurrences own their operand/result and role mappings. There is no separate
@@ -209,7 +233,7 @@ against its exact byte hash, selected protocol, flattened types and participant
 roles. It checks contiguous port/field indices, complete native coverage, variant
 labels/payloads, custody prefixes and managed-service contracts. Logical types
 with the same identity must have consistent kind, label and schema. Kinds are
-`boolean`, `index`, `field`, `group`, `unit`, `tuple`, `array`, `record`, `variant`,
+`boolean`, `index`, `field`, `group`, `unit`, `tuple`, `array`, `record`, `logical_record`, `variant`,
 `associated`, `builtin`, `oracle` and `oracle_sequence`. Ordinary scalars have
 their matching single native leaf; unit has none. Tuples/arrays have positional
 fields, with one common element identity

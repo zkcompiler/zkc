@@ -368,6 +368,12 @@ These source names select existing contracts, not new group families or provider
 source groups `F::PairingG1` and `F::PairingG2` of a field with
 `zkc::algebra::PairingField(F)`; the empty product is the target identity.
 `scalar::from_index<F>` embeds an index by reduction in `F`.
+`scalar::select(condition, yes, no)` is total mathematical selection on two values
+of the same exact field. All three arguments are evaluated and retain their
+dependencies and formation obligations, even with a constant condition. It uses
+the existing native `Select` identity and its computation recipe.
+`indices::select` provides the same eager operation on unsigned words; see
+[mathematical selection](../../docs/spec/language/definitions.md#mathematical-selection).
 
 `encoding::cryptonote_map` is specific to `edwards25519.prime`; its signature
 makes that restriction explicit. Other encoding functions retain their admitted

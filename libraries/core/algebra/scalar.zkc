@@ -4,6 +4,8 @@ pub use zkc::primitives::scalar::{
   inverse, from_index
 };
 
+pub math fn select<F: Field>(condition: bool, yes: F, no: F) -> F = primitive("field.select");
+
 pub fn power<F: Field>(base: F, exponent: index) -> F effects(stop) where () {
   let mut remaining = exponent;
   let mut factor = base;

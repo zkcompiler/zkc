@@ -109,7 +109,7 @@ interpretation and grants no positive optimization fact.
 
 | Kind | Fields beyond `kind` |
 |---|---|
-| `PublicReplay`, `AcceptanceGuard`, `Conjunction`, `SourceHistory`, `ManagedHistory` | None |
+| `PublicReplay`, `DeterministicData`, `AcceptanceGuard`, `Conjunction`, `SourceHistory`, `ManagedHistory` | None |
 | `Mathematical` | `identity`: a declared mathematical identity |
 | `History` | `stateInput`, `stateOutput` |
 | `Observation` | `stateInput`, `payloadInput`, `stateOutput` |
@@ -123,6 +123,60 @@ interpretation and grants no positive optimization fact.
 a nullary operation. Unused legacy default fields are absent. The other rules
 derive values under their mathematical domain contract; they do not license
 removing a reached check or assume nonzero divisors.
+
+### Deterministic data
+
+`DeterministicData` is the nullary operational facet
+`{"kind":"DeterministicData"}`. Under the same installed exact admitted
+implementation, equal complete logical inputs and parameters have equal normal
+results or the same logical stop. The interpretation includes partial
+operations. It asserts neither totality nor speculative execution, equal
+resource exhaustion or budgets, sampling/randomness laws or cryptographic
+security. It grants no mutable-state, setup or private-service authority.
+
+The native projection is `OperationContracts::deterministicData`, default false;
+the Rust typed projection is `Facet::DeterministicData`. The exported object
+has no fields beyond `kind`; unknown fields, unknown facet kinds and duplicate
+facet kinds are refused. This widens the closed facet vocabulary at
+`zkc.contract-declarations/0`; it does not introduce an alternate arity or
+compatibility reader. Independent formal readers require their own vocabulary
+update before consuming these rows; this native projection establishes no
+formal correspondence.
+
+Each operation is enrolled explicitly in the authored declaration source.
+Neither a naming prefix nor mathematical meaning, purity or Copy grants this
+interpretation. An unknown operation or an operation lacking the facet has no
+positive deterministic-data fact. A custom/selected implementation does not
+inherit the unselected interpretation; its exact installed interpretation must
+be established separately. A declaration alone never installs executable code.
+
+Consumers must additionally admit the exact binding, complete nominal data
+types and parameters, and every transitive closed function and outcome path.
+Generic containers can carry Type parameters and variant payloads: recursive
+immutability remains a call-site obligation. Scope/outcome administration does
+not become ordinary data. The distinct `PublicReplay` facet retains its total,
+restricted public-construction contract; partial deterministic operations do
+not acquire it. The [request construction contract](../ir/verifier-requests.md)
+defines how continuing prefixes and replicated stopped outcomes are used.
+
+The initial finite installation covers checked scalar index/word/Boolean/field
+operations and guards; immutable sequence, indices, field-array, fixed-vector,
+commitment-list and field-vector data operations; polynomial and coset/domain
+arithmetic; bytes and deterministic codecs; fixed hashes and explicit immutable
+SHAKE snapshots; and `oracle.check`/`oracle.check_many` verification on supplied
+commitments, coordinates, rows and proofs. Logical vector/point/table
+conversions and Montgomery byte codecs do not authorize physical representation
+conversion. Variants use structural execution operations rather than separate
+catalog operation rows.
+
+Randomness, transcript, external and resource operations, physical conversion,
+arbitrary callbacks, oracle commitment/opening operations, PCS operations and
+private opening-state/setup services receive no such authority. Their types,
+copy permissions or a deterministic-looking implementation name do not enroll
+them. Exact current coverage is the authored facet inventory, checked by the
+finite witness in `common/catalog/test_deterministic_data.py`.
+
+### Mathematical laws
 
 A mathematical identity's `laws` is null or exactly `{algebra, signature,
 associative, commutative, total, leftIdentity, rightIdentity, annihilator,

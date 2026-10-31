@@ -177,8 +177,8 @@ The frontend projection must produce a typed immutable query plan containing:
   bounds; source custody and ordinary availability remain distinct.
 - The checked mathematical helper closure, ordered source-query sites and
   resolved admissibility predicate declaration.
-- The authored predicates and their required obligation keys, even if no
-  security bundle was requested.
+- The authored predicates and the complete admissibility predicate's reusable
+  companion addresses, even if no security bundle was requested.
 
 `requires` inside an oracle definition contributes to that admissibility
 predicate. It is neither an executable guard nor permission to put a partial
@@ -186,6 +186,10 @@ operation inside total mathematics. Each construction creates an obligation
 for the actual anchors and captures. The generated predicate is fixed before
 companion lookup, through the existing [companion contract](companions.md).
 No separate source keyword for an admissibility certificate is needed.
+The whole predicate has one `oracle-admissibility` address owned by the authored
+oracle, with ordinal zero. Clause labels and ordinals remain metadata; they do
+not define separate proof obligations. Template lookup and exact closed-instance
+lookup follow the same companion selection convention.
 
 A declared source row bound is also a conjunct of the generated predicate:
 the source Data's row count must be at most that static maximum. It is not
@@ -195,6 +199,11 @@ map. The source-bound conjunct and every authored clause survive specialization
 and lowering in the same Formula relation; no second native bound attribute
 can disagree with it. Retaining this predicate does not discharge its
 construction occurrence obligations or insert a runtime guard.
+Declaration and public API inspection expose these addresses at a fallible,
+bounded export boundary. The [source-instance export](source-ast.md#closed-source-instances)
+also retains each construction's selected definition, typed actual substitution
+and custody, including unused and repeated constructions and nested regions.
+These are unresolved checking proposals, not evidence or theorem discharge.
 
 Instantiation allocates a fresh anchor but does not query the source or
 materialize all answers. Its captures must be available at the holder and every

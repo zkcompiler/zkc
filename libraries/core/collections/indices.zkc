@@ -25,6 +25,9 @@ pub math fn power_of_two(value: index, exponent: index) -> bool
   = primitive("index.power_of_two");
 
 // Total unsigned 64-bit word mathematics; these establish no domain membership.
+pub math fn select(condition: bool, yes: index, no: index) -> index
+  = primitive("index.select");
+
 pub math fn wrapping_add(left: index, right: index) -> index
   = primitive("index.wrapping_add");
 
