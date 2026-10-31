@@ -234,6 +234,7 @@ add_zkc_component(IR
   lib/Analysis/ComputationMeaning.cpp
   lib/Analysis/MathematicalFacts.cpp
   lib/Analysis/Interactions.cpp
+  lib/Analysis/ProtocolConstants.cpp
   lib/Analysis/SuccessfulContinuations.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
   lib/Dialect/Algebra/IR/Attributes.cpp

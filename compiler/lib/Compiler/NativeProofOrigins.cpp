@@ -1,6 +1,7 @@
 #include "NativeProofOrigins.h"
 #include "../Transforms/RealizedProtocol.h"
 #include "mlir/IR/SymbolTable.h"
+#include "zkc/Analysis/Interactions.h"
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Support/Json.h"
@@ -102,42 +103,46 @@ realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
         return error("native-proof-realization-origin");
     }
   }
-  std::map<Path, Operation *> sourceOperations;
-  unsigned remaining = 100000;
-  auto index = [&](auto &&self, Block &body, const Path &prefix) -> Error {
-    if (prefix.size() > 64)
-      return error("native-proof-origin-limit");
-    for (auto [ordinal, op] : enumerate(body)) {
-      if (!remaining--)
-        return error("native-proof-origin-limit");
-      Path path(prefix);
-      path.push_back(ordinal);
-      sourceOperations.emplace(path, &op);
-      if (auto repeat = dyn_cast<pir::RepeatOp>(op))
-        if (auto e = self(self, repeat.getBody().front(), path))
-          return e;
+  uint64_t remaining = 100000;
+  facts::Work work(remaining);
+  InteractionAnalysis interactions(original.get());
+  const InteractionDeclaration *sourceView = nullptr;
+  auto sourceOperation = [&](const Path &path) -> Expected<Operation *> {
+    // Ordinary authored events need no oracle association. Do not extract
+    // their complete computation merely to rediscover an unused path index.
+    if (!sourceView) {
+      auto view = interactions.get(before, work);
+      if (!view) {
+        consumeError(view.takeError());
+        return error(work.exhausted() ? "native-proof-origin-limit"
+                                      : "native-proof-realization-origin");
+      }
+      sourceView = *view;
     }
-    return Error::success();
-  };
-  if (auto e = index(index, before.getBody().front(), {}))
-    return std::move(e);
-  auto association = [&](const Path &path) -> Expected<json::Value> {
-    auto found = sourceOperations.find(path);
-    if (found == sourceOperations.end())
+    auto action = sourceView->lookup(path, work);
+    if (!action) {
+      consumeError(action.takeError());
+      return error("native-proof-origin-limit");
+    }
+    if (!*action)
       return error("native-proof-realization-origin");
+    return (*action)->getOperation();
+  };
+  auto association = [&](const Path &path,
+                         Operation *sourceOp) -> Expected<json::Value> {
     json::Array coordinates;
     for (unsigned step : path)
       coordinates.push_back(std::to_string(step));
     json::Value lineage(nullptr);
-    if (auto site = found->second->getAttrOfType<StringAttr>("site")) {
+    if (auto site = sourceOp->getAttrOfType<StringAttr>("site")) {
       auto origin = authored.find(site.getValue());
       if (origin != authored.end())
         lineage = sourceOrigin(origin->second);
-      else if (isa<pir::OracleSendOp, pir::OracleQueryOp>(found->second))
+      else if (isa<pir::OracleSendOp, pir::OracleQueryOp>(sourceOp))
         return error("native-proof-realization-origin");
     }
     return json::Value(json::Array{entry, std::move(coordinates),
-                                   found->second->getName().getStringRef(),
+                                   sourceOp->getName().getStringRef(),
                                    std::move(lineage)});
   };
   StringMap<NativeSourceOrigin> result;
@@ -147,7 +152,7 @@ realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
     if (repeatFrames.size() > 64)
       return error("native-proof-origin-limit");
     for (Operation &op : body) {
-      if (!remaining--)
+      if (!work.charge())
         return error("native-proof-origin-limit");
       if (!isa<pir::RepeatOp, pir::ExchangeOp, pir::QueryOp,
                pir::ConstructionStartOp>(op))
@@ -171,7 +176,10 @@ realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
         auto path = readPath(*coordinate);
         if (!path)
           return path.takeError();
-        auto source = association(*path);
+        auto sourceOp = sourceOperation(*path);
+        if (!sourceOp)
+          return sourceOp.takeError();
+        auto source = association(*path, *sourceOp);
         if (!source)
           return source.takeError();
         json::Array queries;
@@ -181,7 +189,10 @@ realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
             auto position = readPath(item);
             if (!position)
               return position.takeError();
-            auto query = association(*position);
+            auto queryOp = sourceOperation(*position);
+            if (!queryOp)
+              return queryOp.takeError();
+            auto query = association(*position, *queryOp);
             if (!query)
               return query.takeError();
             queries.push_back(std::move(*query));
@@ -189,12 +200,11 @@ realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
           capacity = *block->second->get("packet_capacity");
         }
         if (auto message = dyn_cast<pir::ExchangeOp>(op)) {
-          auto *sourceOp = sourceOperations.at(*path);
           bool delivery =
-              *purpose == "deliver" && isa<pir::OracleSendOp>(sourceOp);
+              *purpose == "deliver" && isa<pir::OracleSendOp>(*sourceOp);
           bool opening = (*purpose == "opening_request" ||
                           *purpose == "opening_response") &&
-                         isa<pir::OracleQueryOp>(sourceOp) && !queries.empty();
+                         isa<pir::OracleQueryOp>(*sourceOp) && !queries.empty();
           if ((!delivery && !opening) || *role != message.getReceiver())
             return error("native-proof-realization-origin");
         } else if (!isa<pir::RepeatOp>(op)) {
@@ -219,8 +229,7 @@ realizedNativeOrigins(const mathematical::RealizedProtocol &realization,
         });
         if (!generatedParent)
           if (auto sourceSite =
-                  sourceOperations.at(*path)->getAttrOfType<StringAttr>(
-                      "site")) {
+                  (*sourceOp)->getAttrOfType<StringAttr>("site")) {
             auto sourceOrigin = authored.find(sourceSite.getValue());
             if (sourceOrigin != authored.end())
               origin.steps = sourceOrigin->second.steps;

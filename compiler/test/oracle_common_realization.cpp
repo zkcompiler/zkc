@@ -654,6 +654,55 @@ void dynamicWindows(Cases &cases, MLIRContext &context) {
           refused(checkOracleRealization(*prepared, *fresh, record, policy),
                   "oracle-window-body");
         });
+  for (unsigned trips : {0, 1, 3})
+    cases.run(
+        "exact repeat count retains checked inner and outer queries " +
+            Twine(trips),
+        [&] {
+          auto text = fixtureText("query-constructors");
+          replace(text, "   %last = \"protocol.repeat\"(%trips,",
+                  "   %actualTrips = \"data.index\"() {value=" +
+                      std::to_string(trips) +
+                      ":ui64} : ()->ui64\n"
+                      "   %last = \"protocol.repeat\"(%actualTrips,");
+          replace(text, "maximum=3:i64", "maximum=64:i64");
+          replace(text, "     \"protocol.yield\"(%next)",
+                  "     %inside = \"protocol.oracle_query\"(%next,%map) "
+                  "{owner=\"V\",site=\"inside\"} : (!H,ui64)->!F\n"
+                  "     \"protocol.yield\"(%next)");
+          auto source = parseSourceString<ModuleOp>(text, &context);
+          require(bool(source), "exact-count source did not parse");
+          auto prepared = mathematical::prepareProtocol(*source, false);
+          require(bool(prepared), "exact-count source did not prepare");
+          OracleRealizationPolicy policy;
+          policy.authentication = OracleAuthentication::AtomicBlocks;
+          policy.roots =
+              take(resolveOracleRealizationSelection(*prepared, policy));
+          for (auto [ordinal, root] : enumerate(
+                   std::get<std::vector<OracleRootSelection>>(policy.roots)))
+            root.realization = {
+                ordinal == 0 ? scheme.str()
+                             : "rows.merkle-keccak256.koala-bear/0",
+                OracleLeafGrouping::AntipodalPairs, OracleLeafOrder::Natural};
+          auto candidate = take(emitOracleRealization(*prepared, policy));
+          auto record =
+              take(serializeOracleRealization(*prepared, candidate, policy));
+          auto fresh =
+              parseSourceString<ModuleOp>(print(*candidate.module), &context);
+          require(bool(fresh), "exact-count candidate did not parse");
+          checked(checkOracleRealization(*prepared, *fresh, record, policy));
+          const auto &entry = candidate.entries.front();
+          require(entry.batches.size() == 2 &&
+                      entry.remotes.front().window.capacity == trips + 1,
+                  "exact capacity lost a retained query or count bound");
+          pir::RepeatOp retained;
+          fresh->walk([&](pir::RepeatOp loop) {
+            if (loop.getSite() == "chain")
+              retained = loop;
+          });
+          require(bool(retained) && retained.getMaximum() == 64,
+                  "capacity refinement changed source repeat control");
+        });
   cases.run("dynamic zero-leaf batches retain actual evaluator finish", [&] {
     auto source = parseSourceString<ModuleOp>(R"mlir(
 #K = #protocol.oracle_kind<"table", [!algebra.field<"koala-bear.ext4-binomial3">,8:ui64]>

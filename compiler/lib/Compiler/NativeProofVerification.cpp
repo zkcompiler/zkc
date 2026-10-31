@@ -391,15 +391,12 @@ class TranscriptCorrespondence {
       auto event = bySite.find(text(&op, "site"));
       if (event == bySite.end() && isa<pir::EmitOp, pir::AwaitOp>(op))
         return false;
-      auto requestLoop =
-          requestFrame
-              ? requestFrame->loops.find(&op)
-              : std::map<Operation *,
-                         std::unique_ptr<NativeRequestLoop>>::const_iterator();
-      const NativeRequestLoop *replica =
-          requestFrame && requestLoop != requestFrame->loops.end()
-              ? requestLoop->second.get()
-              : nullptr;
+      const NativeRequestLoop *replica = nullptr;
+      if (requestFrame) {
+        auto found = requestFrame->loops.find(&op);
+        if (found != requestFrame->loops.end())
+          replica = found->second.get();
+      }
       if (auto loop = dyn_cast<pir::ProtocolLoopOp>(op);
           loop && (observedLoops.contains(loop) || replica)) {
         auto actual = dyn_cast<pir::ProtocolLoopOp>(cursor);

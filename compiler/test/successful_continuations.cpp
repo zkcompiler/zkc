@@ -171,6 +171,18 @@ int main() {
   cases.run("another participant's guard supplies no successful check", [&] {
     expects(less() + guard("P") + query.str(), Status::Unknown);
   });
+  cases.run("assembled predicates use the observing participant's condition",
+            [&] {
+              auto assembled = less() + R"mlir(
+ %by_role = "protocol.assemble_roles"(%within,%no) {roles=["V","P"]} : (i1,i1)->i1
+)mlir";
+              expects(assembled + guard("V", "%by_role") + query.str(),
+                      Status::Proven);
+              expects(assembled + guard("P", "%by_role") + query.str(),
+                      Status::Unknown);
+              expects(assembled + guard("V", "%no") + query.str(),
+                      Status::Unreachable);
+            });
   cases.run("same-typed unrelated operands retain distinct identities", [&] {
     expects(less("%unrelated") + guard() + query.str(), Status::Unknown);
   });

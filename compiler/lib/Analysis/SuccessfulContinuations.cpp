@@ -1,9 +1,9 @@
 #include "zkc/Analysis/SuccessfulContinuations.h"
-#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
 #include "zkc/Analysis/Interactions.h"
 #include "zkc/Analysis/MathematicalFacts.h"
+#include "zkc/Analysis/ProtocolConstants.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -17,14 +17,6 @@ namespace zkc {
 namespace {
 namespace pir = protocol_ir;
 using Status = SuccessfulContinuationAnalysis::Status;
-std::optional<bool> boolean(Value value) {
-  auto constant = value.getDefiningOp<arith::ConstantOp>();
-  auto literal =
-      constant ? dyn_cast<IntegerAttr>(constant.getValue()) : IntegerAttr();
-  if (literal && literal.getType().isSignlessInteger(1))
-    return !literal.getValue().isZero();
-  return std::nullopt;
-}
 } // namespace
 
 struct SuccessfulContinuationAnalysis::Impl {
@@ -86,6 +78,12 @@ struct SuccessfulContinuationAnalysis::Impl {
         if (!member(restriction.getRoles(), participant, work))
           return {};
         value = restriction.getInput();
+        continue;
+      }
+      if (auto assembly = value.getDefiningOp<pir::AssembleRolesOp>()) {
+        if (!member(assembly.getRoles(), participant, work))
+          return {};
+        value = assembly.getComponent(participant);
         continue;
       }
       if (auto argument = dyn_cast<BlockArgument>(value)) {
@@ -190,8 +188,11 @@ struct SuccessfulContinuationAnalysis::Impl {
         // Literal/condition lookup, even on repeated queries.
         if (!work.charge())
           return Status::Capacity;
-        auto literal = boolean(condition);
-        if (literal && (*literal != guard))
+        auto literal = observeProtocolConstant(condition, participant,
+                                               mathematics, work, depth);
+        if (literal.status == facts::Status::Capacity)
+          return Status::Capacity;
+        if (literal.value && (bool(*literal.value) != guard))
           return Status::Unreachable;
         if (!guard)
           continue;
@@ -210,7 +211,8 @@ struct SuccessfulContinuationAnalysis::Impl {
         if (!constantUpper) {
           proven |= rhs == upper;
         } else {
-          auto integer = mathematics.integer(rhs, work, depth);
+          auto integer = observeProtocolConstant(rhs, participant, mathematics,
+                                                 work, depth);
           if (integer.status == facts::Status::Capacity)
             return Status::Capacity;
           proven |= integer.status == facts::Status::Proven && integer.value &&
@@ -230,7 +232,8 @@ struct SuccessfulContinuationAnalysis::Impl {
           normalize(repeat.getInputs().front(), declaration, participant, work);
       if (!count)
         return missing();
-      auto trips = mathematics.integer(count, work, depth);
+      auto trips =
+          observeProtocolConstant(count, participant, mathematics, work, depth);
       if (trips.status == facts::Status::Capacity)
         return Status::Capacity;
       if (!repeat.getMaximum() ||

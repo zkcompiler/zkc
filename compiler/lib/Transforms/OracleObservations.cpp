@@ -1,7 +1,7 @@
 #include "OracleSchedule.h"
-#include "mlir/IR/Matchers.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Interactions.h"
+#include "zkc/Analysis/ProtocolConstants.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
@@ -19,37 +19,17 @@ Summary uncertainStop() { return Summary().either(Summary::stop()); }
 struct Analysis {
   StringRef observer;
   facts::Work &work;
+  MathematicalFactAnalysis &mathematics;
   Error charge() {
     if (!work.charge())
       return error("oracle-observation-limit");
     return Error::success();
   }
   Expected<std::optional<uint64_t>> constant(Value value) {
-    while (value) {
-      if (auto e = charge())
-        return std::move(e);
-      if (auto view = value.getDefiningOp<pir::RestrictRolesOp>()) {
-        value = view.getInput();
-        continue;
-      }
-      if (auto argument = dyn_cast<BlockArgument>(value)) {
-        auto repeat =
-            dyn_cast<pir::RepeatOp>(argument.getOwner()->getParentOp());
-        // Captures are invariant. Carried values and the induction index are
-        // not constants just because their zero-trip initializer is one.
-        if (repeat && argument.getArgNumber() > uint64_t(repeat.getCarried())) {
-          value = repeat.getInputs()[argument.getArgNumber()];
-          continue;
-        }
-      }
-      Attribute attr;
-      if (matchPattern(value, m_Constant(&attr)))
-        if (auto integer = dyn_cast<IntegerAttr>(attr))
-          if (integer.getValue().getBitWidth() <= 64)
-            return std::optional<uint64_t>(integer.getValue().getZExtValue());
-      return std::optional<uint64_t>();
-    }
-    return std::optional<uint64_t>();
+    auto result = observeProtocolConstant(value, observer, mathematics, work);
+    if (result.status == facts::Status::Capacity)
+      return error("oracle-observation-limit");
+    return result.value;
   }
   bool includes(ArrayAttr roles) {
     return is_contained(roles, StringAttr::get(roles.getContext(), observer));
@@ -168,10 +148,12 @@ analyzeOracleObservations(ModuleOp prepared, StringRef entry,
   uint64_t remaining = 100000;
   facts::Work work(remaining);
   InteractionAnalysis interactions(prepared);
+  MathematicalFactAnalysis mathematics(prepared);
   auto view = structure(interactions, program, work);
   if (!view)
     return view.takeError();
-  return Analysis{observer, work}.sequence(**view, (*view)->getBody(), 64);
+  return Analysis{observer, work, mathematics}.sequence(**view,
+                                                        (*view)->getBody(), 64);
 }
 Error checkOracleFinalDrawSchedule(ModuleOp prepared) {
   auto module = admitted(prepared);
@@ -180,6 +162,7 @@ Error checkOracleFinalDrawSchedule(ModuleOp prepared) {
   uint64_t remaining = 100000;
   facts::Work work(remaining);
   InteractionAnalysis interactions(prepared);
+  MathematicalFactAnalysis mathematics(prepared);
   for (auto program : module->getBody().front().getOps<pir::MathematicalOp>()) {
     // Virtual declarations cannot draw. Their nested queries inherit the outer
     // observation; uncalled virtual declarations create no reached event.
@@ -201,7 +184,7 @@ Error checkOracleFinalDrawSchedule(ModuleOp prepared) {
       auto observer = cast<StringAttr>(role);
       if (!observers.contains(observer))
         continue;
-      auto summary = Analysis{observer.getValue(), work}.sequence(
+      auto summary = Analysis{observer.getValue(), work, mathematics}.sequence(
           **view, (*view)->getBody(), 64);
       if (!summary)
         return summary.takeError();

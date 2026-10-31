@@ -1,6 +1,7 @@
 #include "OracleQueryCapacity.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Interactions.h"
+#include "zkc/Analysis/ProtocolConstants.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Support/Refusal.h"
@@ -18,9 +19,10 @@ struct Analysis {
   uint64_t remaining;
   facts::Work work;
   InteractionAnalysis interactions;
+  MathematicalFactAnalysis mathematics;
   Analysis(ModuleOp module, Block &body, uint64_t allowance)
       : entry(&body), remaining(allowance), work(remaining),
-        interactions(module) {}
+        interactions(module), mathematics(module) {}
   OracleQueryCapacity result;
   llvm::DenseMap<Value, OracleQuerySize> values;
   static bool logical(Type type) {
@@ -69,8 +71,17 @@ struct Analysis {
       (i < unsigned(loop.getCarried()) ? carried : captures).push_back(*size);
     }
     auto &body = loop.getBody().front();
-    for (uint64_t iteration = 0; iteration < uint64_t(loop.getMaximum());
-         ++iteration) {
+    uint64_t maximum = loop.getMaximum();
+    auto count = observeProtocolConstant(loop.getInputs().front(), "",
+                                         mathematics, work);
+    if (count.status == facts::Status::Capacity)
+      return error("oracle-query-capacity-limit");
+    // A common value may tighten the maximum. A participant-specific count,
+    // backedge or out-of-range value supplies no common iteration bound.
+    if (count.status == facts::Status::Proven && count.value &&
+        *count.value <= maximum)
+      maximum = *count.value;
+    for (uint64_t iteration = 0; iteration < maximum; ++iteration) {
       if (auto e = charge(1 + body.getNumArguments()))
         return e;
       for (auto [argument, size] :

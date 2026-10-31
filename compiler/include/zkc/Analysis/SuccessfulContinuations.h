@@ -40,8 +40,9 @@ public:
   void clear();
 
   /// All queried SSA values and point must belong to this exact declaration
-  /// and module. Only exact role restrictions and invariant repeat captures
-  /// forward identity; carried initializers and callee formals do not.
+  /// and module. Only exact role restrictions, the observing participant's
+  /// assembled component and invariant repeat captures forward identity;
+  /// carried initializers and callee formals do not.
   /// Every extraction, navigation, forwarding and lookup debits caller Work,
   /// including cache hits. Depth/structure exhaustion is sticky Capacity.
   /// Unknown and Unreachable never establish the requested bound. Structural

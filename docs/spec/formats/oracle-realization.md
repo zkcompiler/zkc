@@ -126,7 +126,8 @@ participant-relative property, not a global ordering of independently running
 participants.
 
 The analysis distinguishes normal and stopped continuations, resolves actual
-constants and invariant captures, and conservatively joins unknown outcomes
+participant-selected constants and invariant captures, and conservatively joins
+unknown outcomes
 and loop counts through the checked bound. Another participant's guard or
 completion cannot end this observer's continuation. Applications must already
 be expanded with their role substitutions. A virtual query inherits its outer
@@ -259,7 +260,12 @@ checked over the complete controller inventory, rather than a restriction on
 logical oracle formation or an implicit switch to ideal data.
 
 The planner derives remote receiver/holder pairs and source batch coordinates
-from the frozen prepared original. The reader first checks actual controllers,
+from the frozen prepared original's shared interaction view. Capacity can use
+an exact uniform repeat count within its declared maximum; a single
+participant's component cannot narrow a common bound. Unknown counts retain
+the conservative maximum, and zero-trip alternatives remain in recurrence
+joins. This information neither evaluates answers nor removes count or domain
+checks. The reader first checks actual controllers,
 Merkle helpers and allocators, then derives that same schedule. A remote row
 contains exactly `{receiver, holder, demand, response, open, packet, window}`.
 `receiver` and `holder` index the entry's controller inventory. Each receiver

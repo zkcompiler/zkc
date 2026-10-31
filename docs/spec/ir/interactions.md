@@ -63,8 +63,9 @@ remain in the program even if analysis can derive a related mathematical fact.
 
 The initial successful-point profile interprets unsigned `data.index_less`
 followed by a reached `protocol.guard` owned by the observing participant. It
-matches exact SSA operands, allowing only exact role restrictions and invariant
-repeat captures. A constant upper bound may weaken to a larger constant bound;
+matches exact SSA operands, allowing exact role restrictions, the observing
+participant's assembled component and invariant repeat captures. A constant
+upper bound may weaken to a larger constant bound;
 an unrelated shape bound may not stand in for an actual extent. Queries inspect
 the prefix before their actual occurrence, not all guards in the declaration.
 An enclosing prefix applies inside a repeat through invariant captures. A fact
@@ -73,6 +74,22 @@ describe later iterations. Uninterpreted local calls supply no new premises.
 Known stopped prefixes are reported as unreachable, not as successful proofs
 of arbitrary predicates. Other structured-control profiles require their own
 checked continuation rule before they can supply successful-point evidence.
+
+Exact scalar observation is shared by successful continuations, observation
+ordering and query-capacity analysis. It distinguishes a named participant's
+Boolean or unsigned integer from a uniform value: role assembly selects that
+participant's actual component, whereas a uniform observation requires every
+component to agree. Pure helper results and invariant captures may forward
+constants; loop-carried initializers, loop results and formation premises do
+not. A constant is not evidence that its definition or any later action ran.
+No observation removes a guard, a count check or a possible stop.
+
+Capacity may tighten a repeat's declared maximum using an exact uniform count
+within that maximum. Unknown, differing participant components and out-of-range
+values retain the conservative declared bound. Recurrence joins still include
+the zero-trip alternative; this analysis does not assert honest completion or
+equal execution budgets. All reads and recursive queries share the caller's
+cumulative allowance, and exhausted work cannot supply a smaller bound.
 
 ## Source-relative comparison
 

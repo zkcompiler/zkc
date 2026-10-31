@@ -46,10 +46,11 @@ budgeted semantic queries still account for each request.
 
 The module-owned [interaction view](spec/ir/interactions.md) retains actual
 Protocol functions, virtual definitions, applications and symbolic repeats.
-Oracle observations and query-capacity analysis share this extraction while
-keeping separate transfer rules. Successful-continuation analysis interprets
+Oracle observations, query capacity, batch scheduling and native source-origin
+association share this extraction while keeping separate transfer rules.
+Successful-continuation analysis interprets
 same-participant guards over exact unsigned comparisons at an actual point,
-including invariant captures. It checks SSA dominance, preserves zero-trip and
+including participant-selected assembly and invariant captures. It checks SSA dominance, preserves zero-trip and
 stopped paths, and supplies reached bound queries independently of batching.
 Unchecked Booleans, foreign participants, carried initializers and unexpanded
 callee guards supply no such evidence. Dynamic query windows use answer-free
@@ -646,10 +647,11 @@ readback against the frozen source. It includes index and field draws, keeps
 participant continuations separate and uses one bounded analysis budget. This
 permits authentication after the last draw. Authentication granularity is a
 separate requested policy. Checked atomic blocks traverse consecutive dynamic
-base and virtual queries through answer-free discovery. Reached successful-domain
-facts permit extension; uncertain domain checks and source barriers end the
-window. The controller retains every logical query, authenticates the complete
-response prefix, then replays the source answers in order. It does not authorize
+base and virtual queries through answer-free discovery. Unknown positions remain
+eligible. Runtime discovery retains the valid request prefix at a failed domain
+check; source barriers end the static batch. The controller retains every logical
+query, authenticates the complete response prefix, then replays the source answers
+and any pending domain failure in order. It does not authorize
 cross-guard sharing, omitted siblings or a different refusal order. A formal
 simulation theorem remains a separate obligation. Private
 anchor-storage planning retains fresh constructor/instance references, actual
@@ -661,7 +663,10 @@ Pure virtual-query lowering emits total position and answer functions; its
 independent reader checks actual helper bodies and every ordered child query,
 including unused answers. Structural query capacity follows prepared SSA,
 loop carries and handle sequences, preserving duplicate queries and zero-trip
-alternatives. Overflow and analysis work limits refuse compilation. The
+alternatives. Exact uniform repeat counts tighten declared maxima; unknown or
+differing participant components do not. The same bounded scalar observation
+serves observation ordering and successful continuations without erasing
+checks. Overflow and analysis work limits refuse compilation. The
 private table continuation controller now emits ordinary scoped control over
 actual anchors, with explicit suspension, typed answers and bounded advancement.
 Its independent actual-body reader covers the complete transition closure.

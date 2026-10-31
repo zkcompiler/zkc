@@ -1,10 +1,12 @@
 #include "../lib/Compiler/NativeProofVerification.h"
+#include "../lib/Compiler/NativeRequest.h"
 #include "../lib/Transforms/OracleRealizationSelection.h"
 #include "../lib/Transforms/RealizedProtocol.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Contracts/NativeOrigin.h"
+#include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/Builders.h"
@@ -14,6 +16,8 @@
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include <algorithm>
+#include <functional>
 
 using namespace mlir;
 using namespace llvm;
@@ -630,6 +634,62 @@ int main(int argc, char **argv) {
   registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  cases.run(
+      "loop obligations follow source order, not allocation addresses", [&] {
+        NativeProofPolicy p;
+        p.entry = "main";
+        p.producer = "P";
+        p.validator = "V";
+        auto source =
+            parseSourceString<ModuleOp>(identityLoopFixture, &context);
+        require(bool(source), "ordered-loop source");
+        auto function = *unit(*source)
+                             .getBody()
+                             .front()
+                             .getOps<pir::MathematicalOp>()
+                             .begin();
+        auto loop = *function.getBody().front().getOps<pir::RepeatOp>().begin();
+        OpBuilder builder(function.getBody().front().getTerminator());
+        for (unsigned i = 0; i != 3; ++i) {
+          auto copy = cast<pir::RepeatOp>(builder.clone(*loop));
+          copy.setSite("extra_" + std::to_string(i));
+        }
+        auto built = take(constructNativeProof(*source, p));
+        auto projected = built.realization->project(false);
+        require(bool(projected), "ordered-loop projection");
+        auto &body = participant(*projected, "P").getBody().front();
+        SmallVector<Operation *> originals, order;
+        for (auto item : body.getOps<pir::ProtocolLoopOp>())
+          originals.push_back(item);
+        require(originals.size() == 4, "four actual paired loops");
+        for (auto *item : originals) {
+          require(item->getNumResults() == 0, "fixture loops have no outputs");
+          order.push_back(item->clone());
+        }
+        // Relocate the same operations without changing their lexical order,
+        // sites, operands or bodies. Only allocation addresses are reversed.
+        llvm::sort(order, [](Operation *a, Operation *b) {
+          return std::less<Operation *>{}(b, a);
+        });
+        for (auto [original, copy] : zip(originals, order)) {
+          copy->setAttrs(original->getAttrs());
+          copy->setOperands(original->getOperands());
+          copy->setLoc(original->getLoc());
+          copy->getRegion(0).takeBody(original->getRegion(0));
+          builder.setInsertionPoint(original);
+          builder.insert(copy);
+          original->erase();
+        }
+        require(succeeded(admitStage(*projected)),
+                "relocated loops must retain their admitted source meaning");
+        auto plan =
+            take(zkc::detail::planNativeRequests(unit(*projected), p, {}));
+        require(plan.root && plan.root->loops.size() == order.size(),
+                "all source loop obligations must remain present");
+        for (auto [expected, actual] : zip(order, plan.root->loops))
+          require(actual.first == expected,
+                  "allocation order changed obligation discovery");
+      });
   for (unsigned count : {0, 1})
     cases.run(
         Twine("identity construction paired-loop counts ") + Twine(count), [&] {

@@ -5,8 +5,8 @@
 #include "zkc/Compiler/NativeProof.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/STLFunctionalExtras.h"
-#include <map>
 #include <memory>
 #include <optional>
 
@@ -37,9 +37,12 @@ struct NativeRequestLoop {
 struct NativeRequestFrame {
   mlir::Block *producer = nullptr, *validator = nullptr;
   NativeRequestLoop *loop = nullptr;
-  std::map<mlir::Operation *, llvm::SmallVector<NativeRequestStep>> before;
+  llvm::DenseMap<mlir::Operation *, llvm::SmallVector<NativeRequestStep>>
+      before;
   llvm::DenseMap<mlir::Operation *, mlir::Operation *> definitions;
-  std::map<mlir::Operation *, std::unique_ptr<NativeRequestLoop>> loops;
+  // Count obligations may discover replica state. Visit them in source order,
+  // independent of operation allocation addresses and hash iteration order.
+  llvm::MapVector<mlir::Operation *, std::unique_ptr<NativeRequestLoop>> loops;
   llvm::DenseMap<mlir::Value, NativeRequestValue> relations;
   llvm::DenseMap<mlir::Operation *, NativeRequestValue> requests;
   // Exact frontier at loop entry; later sends never justify earlier captures.

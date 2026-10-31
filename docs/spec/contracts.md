@@ -34,6 +34,12 @@ extraction and separate judgments for dependency, exact custody, reached facts,
 authentication and sampling. IR owns the borrowed native view and independent
 source/candidate checks. Application maps and realization records retain their
 own schemas; no additional serialized interaction program is introduced.
+Native scalar observations distinguish participant-specific components from
+uniform constants. Observation ordering, successful-point bounds and capacity
+consume that same bounded interpretation; only exact uniform counts can tighten
+repeat capacity. Request-loop obligations retain source order even when their
+IR allocation order differs. These strengthen analysis and deterministic
+construction without changing a serialized schema or registering a new claim.
 Implementation coverage remains explicit in [status](../status.md), and formal
 interpretation remains an independent consumer obligation.
 

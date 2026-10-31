@@ -179,6 +179,8 @@ add_zkc_test(interaction_analysis IR interaction-analysis)
 mlir_target_link_libraries(zkc-interaction_analysis-test PRIVATE
   MLIRParser MLIRPass)
 add_zkc_test(successful_continuations Transforms successful-continuations)
+add_zkc_test(protocol_constants IR protocol-constants)
+mlir_target_link_libraries(zkc-protocol_constants-test PRIVATE MLIRParser)
 target_include_directories(zkc-successful_continuations-test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../lib/Transforms)
 mlir_target_link_libraries(zkc-successful_continuations-test PRIVATE

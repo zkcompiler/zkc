@@ -151,6 +151,19 @@ int main() {
             draw,
         true);
   });
+  cases.run("role assembly preserves participant-relative stopping", [&] {
+    auto condition = R"mlir(
+ %by_role = "protocol.assemble_roles"(%yes,%no) {roles=["P","V"]} : (i1,i1)->i1
+)mlir";
+    expects(query + condition +
+                R"mlir(protocol.guard %by_role {owner="V",site="reject"})mlir" +
+                draw,
+            false);
+    expects(query + condition +
+                R"mlir(protocol.guard %by_role {owner="P",site="reject"})mlir" +
+                draw,
+            true);
+  });
   cases.run("counted repeats retain cross-iteration observations", [&] {
     expects(loop("%zero", query + draw), false);
     expects(loop("%one", draw + query), false);

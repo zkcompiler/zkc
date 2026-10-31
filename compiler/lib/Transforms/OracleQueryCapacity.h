@@ -19,8 +19,10 @@ struct OracleQueryCapacity {
   llvm::DenseMap<mlir::Operation *, OracleQuerySize> queries;
 };
 // Read source structure, never positions, answers, data or validity predicates.
-// Bounds range over every admitted repeat count, with joins at loop backedges
-// and sequence selections. Overflow or exhausted analysis work refuses the
+// Bounds range over every possible admitted repeat count. A known uniform
+// count tightens the maximum; role-dependent values and carried initializers
+// do not. Joins retain loop backedges and sequence selections. Overflow or
+// exhausted analysis work refuses the
 // compilation; it does not add a source premise or a logical execution stop.
 // This analysis does not authorize replacing an actual reference by an origin.
 llvm::Expected<OracleQueryCapacity>

@@ -1,8 +1,8 @@
 #include "OracleQuerySchedule.h"
 #include "OracleQueryBlocks.h"
+#include "zkc/Analysis/Interactions.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/STLFunctionalExtras.h"
-#include <functional>
 using namespace mlir;
 using namespace llvm;
 namespace zkc::protocol {
@@ -87,66 +87,68 @@ planOracleQuerySchedule(ModuleOp source, StringRef entry,
     result.remotes.push_back({*receiver, *holder, std::move(*exchange)});
     return std::optional<unsigned>(unsigned(result.remotes.size() - 1));
   };
-  std::function<Error(Block &, std::vector<unsigned>, unsigned)> visit;
-  visit = [&](Block &block, std::vector<unsigned> prefix,
-              unsigned depth) -> Error {
-    if (!depth)
-      return error("oracle-query-block-limit");
-    unsigned skipped = 0;
-    for (auto [ordinal, operation] : enumerate(block)) {
-      if (!remaining)
-        return error("oracle-query-block-limit");
-      --remaining;
-      if (skipped) {
-        --skipped;
-        continue;
-      }
-      auto path = prefix;
-      path.push_back(ordinal);
-      if (auto repeat = dyn_cast<pir::RepeatOp>(operation)) {
-        if (auto e = visit(repeat.getBody().front(), path, depth - 1))
-          return e;
-        continue;
-      }
-      auto query = dyn_cast<pir::OracleQueryOp>(operation);
-      if (!query)
-        continue;
-      auto first = remote(query);
-      if (!first)
-        return first.takeError();
-      if (!*first)
-        continue;
-      auto selected = selectOracleQueryWindow(query, authentication,
-                                              requirements.queryCapacity,
-                                              dominance, remaining);
-      if (!selected)
-        return selected.takeError();
-      OracleBatchRequirement batch;
-      for (auto candidate : selected->queries) {
-        auto item = remote(candidate);
-        if (!item)
-          return item.takeError();
-        if (!*item || !compatible(result.remotes[**first].exchange,
-                                  result.remotes[**item].exchange))
-          break;
-        auto coordinate = path;
-        coordinate.back() += batch.queries.size();
-        batch.queries.push_back(std::move(coordinate));
-        batch.remotes.push_back(**item);
-        batch.leaves +=
-            requirements.queryCapacity.queries.lookup(candidate).leaves;
-      }
-      if (batch.queries.empty() || batch.leaves >= 1048576)
-        return error("oracle-query-block-limit");
-      skipped = batch.queries.size() - 1;
-      if (authentication == OracleAuthentication::AtomicBlocks)
-        result.capacity = std::max(result.capacity, batch.leaves);
-      result.batches.push_back(std::move(batch));
+  facts::Work work([&](uint64_t amount) {
+    if (amount > remaining) {
+      remaining = 0;
+      return false;
     }
-    return Error::success();
-  };
-  if (auto e = visit(program.getBody().front(), {}, 64))
-    return std::move(e);
+    remaining -= amount;
+    return true;
+  });
+  InteractionAnalysis interactions(source);
+  auto view = interactions.get(program, work);
+  if (!view) {
+    consumeError(view.takeError());
+    return error(work.exhausted() ? "oracle-query-block-limit"
+                                  : "oracle-query-block-source");
+  }
+  // Consume the same immutable lexical inventory as capacity and observation
+  // analyses. A selected window contains adjacent actions in one actual block;
+  // skipping its remaining queries never skips a nested repeat body.
+  unsigned skipped = 0;
+  for (const auto &action : (*view)->getActions()) {
+    if (!work.charge())
+      return error("oracle-query-block-limit");
+    if (skipped) {
+      --skipped;
+      continue;
+    }
+    auto path = action.getPath();
+    auto query = dyn_cast<pir::OracleQueryOp>(action.getOperation());
+    if (!query)
+      continue;
+    auto first = remote(query);
+    if (!first)
+      return first.takeError();
+    if (!*first)
+      continue;
+    auto selected = selectOracleQueryWindow(query, authentication,
+                                            requirements.queryCapacity,
+                                            dominance, remaining);
+    if (!selected)
+      return selected.takeError();
+    OracleBatchRequirement batch;
+    for (auto candidate : selected->queries) {
+      auto item = remote(candidate);
+      if (!item)
+        return item.takeError();
+      if (!*item || !compatible(result.remotes[**first].exchange,
+                                result.remotes[**item].exchange))
+        break;
+      std::vector<unsigned> coordinate(path.begin(), path.end());
+      coordinate.back() += batch.queries.size();
+      batch.queries.push_back(std::move(coordinate));
+      batch.remotes.push_back(**item);
+      batch.leaves +=
+          requirements.queryCapacity.queries.lookup(candidate).leaves;
+    }
+    if (batch.queries.empty() || batch.leaves >= 1048576)
+      return error("oracle-query-block-limit");
+    skipped = batch.queries.size() - 1;
+    if (authentication == OracleAuthentication::AtomicBlocks)
+      result.capacity = std::max(result.capacity, batch.leaves);
+    result.batches.push_back(std::move(batch));
+  }
   return result;
 }
 } // namespace zkc::protocol

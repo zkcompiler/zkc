@@ -102,6 +102,9 @@ The condition also applies to an identity construction: preserving both
 participant bodies does not preserve a count check formerly owned by the
 joint driver. Selection, construction and the independent actual-body reader
 each enforce the same count premise.
+Count obligations are visited in lexical source order, independently of
+operation allocation addresses. Checking a structural count can discover
+replica inputs or carried state; that discovery must have deterministic order.
 Ordinary structural congruence uses the value relation above. Oracle request
 loops additionally use the checked structural recurrence:
 
