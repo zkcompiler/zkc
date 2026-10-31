@@ -447,7 +447,11 @@ fn independent_history_classification_matches_installed_inventory() {
     let mut seen = std::collections::BTreeSet::new();
     // Native-only contracts have no portable Lean source interpretation. Keep
     // the shared portable inventory unchanged and enumerate this extension.
-    let native = "quotient.add 0
+    let native = "index.wrapping_add 0
+index.wrapping_sub 0
+index.bit_and 0
+index.logical_shift_right 0
+quotient.add 0
 quotient.subtract 0
 quotient.multiply 0
 quotient.norm_within 0
