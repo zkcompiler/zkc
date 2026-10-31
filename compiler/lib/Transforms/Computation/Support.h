@@ -39,11 +39,23 @@ mlir::func::FuncOp resolveInvocation(mlir::Operation *call,
 // Executable binding choices are unchanged and do not affect normalization;
 // callers can apply fixed requests to the owned result before recipe discovery.
 // A frontier snapshot is needed only when checked polynomial origins permit
-// port rewrites. Every performed copy and context check shares the given bound.
+// port rewrites. Actual snapshots/normalization/frontier construction debit
+// remainingCopy. Independent context/frontier readers debit the supplied work's
+// cumulative numericalContextChecking, including across discarded attempts.
+// Checking capacity is AlgorithmChecking and is always a required refusal.
 mlir::OwningOpRef<mlir::ModuleOp> prepareComputationRealization(
-    mlir::ModuleOp source, uint64_t *shared = nullptr,
+    mlir::ModuleOp source, uint64_t &remainingCopy,
+    mathematical::RealizationWork &work,
     std::optional<CapacityCause> *capacity = nullptr,
-    mathematical::NumericalSelection *selection = nullptr);
+    mathematical::NumericalSelection *selection = nullptr,
+    bool deferContext = false);
+// With deferContext, a no-frontier proposal is unchecked scoped construction.
+// Its owner must compare the complete actual realization with the original
+// before retaining a plan. Frontier rewrites always keep immediate checking.
+// Standalone preparation creates one construction/checking account and uses
+// the same implementation. Transactions use the explicit shared-account API.
+mlir::OwningOpRef<mlir::ModuleOp>
+prepareComputationRealization(mlir::ModuleOp source);
 // Materialize only computation occurrences in an already private candidate. The
 // containing numerical transaction owns cloning, map consumption and readback.
 // An outcome sink delegates retry to that transaction. optionalConstruction
@@ -120,7 +132,9 @@ mlir::LogicalResult verifyScopedNumericalContext(
     protocol_ir::ProtocolModuleOp original,
     protocol_ir::ProtocolModuleOp candidate,
     protocol_ir::ProtocolModuleOp declarations, MathematicalSelectionPolicy,
-    mathematical::RealizationWork &, mathematical::VerificationDecision &);
+    mathematical::RealizationWork &, mathematical::VerificationDecision &,
+    const llvm::DenseMap<mlir::Operation *, mlir::func::FuncOp> *entries =
+        nullptr);
 
 // Independent complete-candidate reader, including executable admission,
 // output interface, binding use and occurrence roots. The typed result allows

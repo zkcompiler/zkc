@@ -616,15 +616,22 @@ Matching, checking and catalog work remain cumulative. Standalone finite
 preparation owns its own retry envelope.
 
 The physical transaction retains the actual finite-prepared module alongside
-the selected numerical module. Its independent validation checks both edges:
-source to finite preparation, then finite preparation to numerical selection.
+the selected numerical module. Before retaining a physically feasible candidate,
+its independent validation owner checks both edges: source to finite preparation,
+then finite preparation to numerical selection. This owner shares one cumulative
+allowance across attempts. Standalone finite preparation checks immediately;
+construction inside the physical transaction may defer correspondence to that
+mandatory owner. No unchecked numerical payload can be retained in a plan.
 The finite reader interprets the original callback under actual operand
 substitution, checking exact generated occurrence sequences, ordered controls,
 callback bodies, stops and retained declarations. Validation does not regenerate
 an executable intermediate or accept a producer's expansion map as evidence.
-The snapshots are private to the transaction; source identity and current
-contents must still match before publication. These native checks do not by
-themselves establish a formal simulation or a runtime resource equivalence.
+The snapshots are private and immutable after independent validation; source
+identity and current contents must still match before publication. Later physical
+plan validation reuses that established numerical correspondence, checks the
+actual physical choices, and does not reconstruct another mathematical subject.
+The actual physical output still receives its separate independent check.
+These native checks do not by themselves establish a formal simulation or a runtime resource equivalence.
 
 ## Formal consumer boundary
 

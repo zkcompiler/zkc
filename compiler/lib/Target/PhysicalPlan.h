@@ -93,6 +93,10 @@ struct PhysicalPlanOptions {
   /// Optional caller-owned existing work account. Every return settles actual
   /// debits, including failed physical attempts; no retry replenishes it.
   mathematical::RealizationWork *numericalWork = nullptr;
+  /// Independent source/finite/selected validation, formerly owned by
+  /// validatePhysical. One account spans all physically feasible attempts;
+  /// checked immutable payloads need no repeated mathematical reconstruction.
+  mathematical::RealizationWork *numericalVerificationWork = nullptr;
   uint64_t *numericalCopy = nullptr;
   uint64_t *numericalSiteBytes = nullptr;
   MathematicalSelectionPolicy numericalPolicy = {};

@@ -71,8 +71,8 @@ public:
   NumericalSelection(const NumericalSelection &) = delete;
   NumericalSelection &operator=(const NumericalSelection &) = delete;
   RealizationWork work;
-  // One transaction includes whole scoped-context copies and independent
-  // context reads, in addition to recipe emission.
+  // Construction includes whole scoped-context copies and recipe emission.
+  // Independent context reads use work.numericalContextChecking.
   uint64_t remainingCopy = 4000000;
   uint64_t remainingSiteBytes = 16 * 1024 * 1024;
   /// Candidate pointers are transient. Clear before destroying the candidate;
@@ -105,6 +105,10 @@ public:
   void select(NumericalOccurrence, ComputationSelection &,
               const MathematicalRecipes &);
   llvm::Expected<bool> advance(llvm::ArrayRef<NumericalOccurrence> implicated);
+  /// Whole-program capacity declines every explicitly implicated automatic
+  /// occurrence in one round. Each distinct advance consumes catalog work.
+  llvm::Expected<bool>
+  advanceTogether(llvm::ArrayRef<NumericalOccurrence> implicated);
   llvm::Expected<bool>
   advanceSubject(const RealizationSubject &,
                  std::optional<RealizationSubject> invocation = {});

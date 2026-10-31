@@ -1,4 +1,5 @@
 #include "../lib/Transforms/Computation/Support.h"
+#include "../lib/Transforms/ScopedSubstitution.h"
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
@@ -206,6 +207,149 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  cases.run(
+      "substitution charges inspection and actual construction separately",
+      [&] {
+        auto projected = parse(realization, context);
+        auto prepared = closedFixture(*projected);
+        auto logical = formExecutable(*prepared, {false, false});
+        auto source = copy(*logical);
+        require(succeeded(computation::realizeComputations(*source)),
+                "substitution fixture realization failed");
+        auto original = copy(*source);
+        mathematical::NumericalSelection measured;
+        const auto initialCopy = measured.remainingCopy;
+        const auto initialChecking = measured.work.numericalContextChecking;
+        const llvm::DenseMap<Operation *, func::FuncOp> replacements;
+        std::optional<CapacityCause> capacity;
+        auto candidate = mathematical::substituteScopedComputations(
+            *source, replacements, measured, &capacity);
+        const auto copyCost = initialCopy - measured.remainingCopy;
+        const auto checkingCost =
+            initialChecking - measured.work.numericalContextChecking;
+        uint64_t inspected = initialChecking;
+        require(
+            computation::chargeCopy(*source, inspected) && candidate &&
+                !capacity && copyCost > 0 && copyCost < checkingCost &&
+                checkingCost == initialChecking - inspected &&
+                succeeded(computation::verifyComputationRealization(
+                    *logical, *candidate)),
+            "substitution lost bounded inspection or actual correspondence");
+        const auto firstChecking = measured.work.numericalContextChecking;
+        auto repeated = mathematical::substituteScopedComputations(
+            *source, replacements, measured, &capacity);
+        require(repeated && !capacity &&
+                    measured.work.numericalContextChecking ==
+                        firstChecking - checkingCost &&
+                    measured.remainingCopy == initialCopy - 2 * copyCost,
+                "repeated substitution replenished checking or construction");
+        auto extended = copy(*source);
+        auto helper =
+            SymbolTable(owner(*projected)).lookup<func::FuncOp>("difference");
+        require(bool(helper), "missing dormant mathematical helper");
+        SymbolTable extendedSymbols(owner(*extended));
+        auto *cloned = helper->clone();
+        extendedSymbols.insert(cloned);
+        uint64_t helperRemaining = initialCopy;
+        require(computation::chargeCopy(cloned, helperRemaining),
+                "dormant helper inspection failed");
+        const auto helperCost = initialCopy - helperRemaining;
+        mathematical::NumericalSelection withHelper;
+        auto retained = mathematical::substituteScopedComputations(
+            *extended, replacements, withHelper, &capacity);
+        require(retained && !capacity &&
+                    initialCopy - withHelper.remainingCopy ==
+                        copyCost + helperCost &&
+                    initialChecking -
+                            withHelper.work.numericalContextChecking ==
+                        checkingCost + helperCost,
+                "an actual dormant declaration clone was not charged");
+        for (bool shortCopy : {false, true}) {
+          mathematical::NumericalSelection bounded;
+          bounded.remainingCopy = copyCost - unsigned(shortCopy);
+          bounded.work.numericalContextChecking = checkingCost;
+          capacity.reset();
+          ScopedDiagnosticHandler quiet(&context,
+                                        [](Diagnostic &) { return success(); });
+          auto result = mathematical::substituteScopedComputations(
+              *source, replacements, bounded, &capacity);
+          require(
+              !bounded.work.numericalContextChecking &&
+                  (shortCopy
+                       ? !result && capacity &&
+                             capacity->owner == WorkOwner::AlgorithmExpansion
+                       : result && !capacity && !bounded.remainingCopy),
+              "construction boundary lost its own debit or inspection bound");
+        }
+        mathematical::NumericalSelection shortCheck;
+        shortCheck.work.numericalContextChecking = checkingCost - 1;
+        capacity.reset();
+        unsigned diagnostics = 0;
+        ScopedDiagnosticHandler observe(&context, [&](Diagnostic &) {
+          ++diagnostics;
+          return success();
+        });
+        auto refused = mathematical::substituteScopedComputations(
+            *source, replacements, shortCheck, &capacity);
+        require(
+            !refused && capacity &&
+                capacity->owner == WorkOwner::AlgorithmChecking &&
+                shortCheck.remainingCopy == initialCopy && !diagnostics &&
+                OperationEquivalence::isEquivalentTo(
+                    *source, *original, OperationEquivalence::IgnoreLocations),
+            "inspection exhaustion constructed output or changed the source");
+      });
+  cases.run(
+      "optional substitution cannot retry exhausted required inspection", [&] {
+        auto projected = parse(realization, context);
+        auto prepared = closedFixture(*projected);
+        auto source = formExecutable(*prepared, {false, false});
+        require(succeeded(computation::realizeComputations(*source)),
+                "inspection classification fixture failed");
+        auto original = copy(*source);
+        mathematical::NumericalSelection selection;
+        selection.work.numericalContextChecking = 0;
+        mathematical::VerificationDecision outcome;
+        require(
+            failed(computation::materializeComputations(
+                *source, {}, nullptr, selection, &outcome, true)) &&
+                outcome.outcome ==
+                    mathematical::VerificationObservation::RequiredCapacity &&
+                outcome.capacity &&
+                outcome.capacity->owner == WorkOwner::AlgorithmChecking &&
+                outcome.capacity->available == 0 &&
+                OperationEquivalence::isEquivalentTo(
+                    *source, *original, OperationEquivalence::IgnoreLocations),
+            "optional construction relabeled required inspection exhaustion");
+        expectRefusal(*source, "computation-realization", [&] {
+          return computation::materializeComputations(*source, {}, nullptr,
+                                                      selection);
+        });
+      });
+  cases.run("substitution still admits dormant mathematical declarations", [&] {
+    auto projected = parse(realization, context);
+    auto prepared = closedFixture(*projected);
+    auto source = formExecutable(*prepared, {false, false});
+    require(succeeded(computation::realizeComputations(*source)),
+            "dormant declaration fixture realization failed");
+    OpBuilder builder(&context);
+    builder.setInsertionPointToEnd(&owner(*source).getBody().front());
+    auto dormant =
+        mlir::ModuleOp::create(builder, source->getLoc(), StringRef("dormant"));
+    dormant->setAttr("exec.computation", builder.getUnitAttr());
+    auto original = copy(*source);
+    mathematical::NumericalSelection selection;
+    std::optional<CapacityCause> capacity;
+    const llvm::DenseMap<Operation *, func::FuncOp> replacements;
+    expectRefusal(*source, "execution-source-closure", [&] {
+      return success(bool(mathematical::substituteScopedComputations(
+          *source, replacements, selection, &capacity)));
+    });
+    require(!capacity &&
+                OperationEquivalence::isEquivalentTo(
+                    *source, *original, OperationEquivalence::IgnoreLocations),
+            "invalid dormant declaration was hidden or source changed");
+  });
   cases.run(
       "numerical checking preflights before admission and closure reading",
       [&] {
@@ -626,6 +770,61 @@ module {
       return computation::verifyComputationRealization(*logical, *candidate);
     });
   });
+  for (StringRef mutation : {"entry", "callee", "closure"})
+    cases.run("independent numerical reader rejects wrong " + mutation, [&] {
+      auto source = parse(realization, context);
+      auto closed = closedFixture(*source);
+      auto logical = formExecutable(*closed);
+      auto entry = numericalEntry(*logical);
+      OpBuilder builder(entry);
+      if (mutation == "callee") {
+        builder.setInsertionPoint(numericalUnit(*logical));
+        auto alternate = cast<mlir::ModuleOp>(
+            builder.clone(*numericalUnit(*logical).getOperation()));
+        SymbolTable::setSymbolName(alternate, "wrong_computation");
+        auto wrong = mathematical::getComputationEntry(alternate);
+        wrong.front().back().setOperand(0, wrong.getArgument(0));
+      } else if (mutation == "closure") {
+        auto helper = cast<func::FuncOp>(builder.clone(*entry.getOperation()));
+        SymbolTable::setSymbolName(helper, "actual_dependency");
+        helper.setPrivate();
+        entry.getBody().getBlocks().clear();
+        builder.setInsertionPointToEnd(entry.addEntryBlock());
+        auto invoke =
+            func::CallOp::create(builder, entry.getLoc(), helper.getSymName(),
+                                 helper.getResultTypes(), entry.getArguments());
+        func::ReturnOp::create(builder, entry.getLoc(), invoke.getResults());
+      }
+      require(succeeded(zkc::admitStage(*logical)),
+              "independent reader source was not admitted");
+      auto intact = copy(*logical);
+      require(succeeded(computation::realizeComputations(*intact)) &&
+                  succeeded(
+                      mathematical::verifyNumericalLowering(*logical, *intact)),
+              "independent reader positive control failed");
+      auto candidate = copy(*logical);
+      if (mutation == "callee") {
+        auto call = computationFixture(*candidate);
+        call.setCalleeAttr(
+            SymbolRefAttr::get(&context, "wrong_computation",
+                               call.getCallee().getNestedReferences()));
+      } else {
+        auto changed = numericalEntry(*candidate);
+        if (mutation == "closure")
+          changed = SymbolTable(numericalUnit(*candidate))
+                        .lookup<func::FuncOp>("actual_dependency");
+        changed.front().back().setOperand(0, changed.getArgument(0));
+      }
+      require(succeeded(zkc::admitStage(*candidate)) &&
+                  succeeded(computation::realizeComputations(*candidate)),
+              "wrong same-signature mathematics was not admitted and lowered");
+      expectRefusal(*candidate, "numerical-lowering-correspondence", [&] {
+        return mathematical::verifyNumericalLowering(*logical, *candidate);
+      });
+      require(
+          succeeded(mathematical::verifyNumericalLowering(*logical, *intact)),
+          "refused candidate changed the independent original subject");
+    });
   cases.run(
       "actual scoped recipe same-type operand permutation is refused", [&] {
         auto source = parse(realization, context);

@@ -2,6 +2,7 @@
 #include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "../lib/Transforms/Computation/Support.h"
+#include "../lib/Transforms/NumericalSelection.h"
 #include "mlir/IR/Verifier.h"
 #include "support/NativeBindings.h"
 #include "support/NativeCases.h"
@@ -77,7 +78,16 @@ func.func private @difference(%a:!F,%b:!F)->!F {
                        4);
 }
 
-std::string mappedSource() {
+std::string mappedSource(unsigned count = 1) {
+  std::string body;
+  std::string result;
+  for (unsigned index = 0; index < count; ++index) {
+    auto site = index ? "mapped_" + std::to_string(index) : "mapped";
+    result = "%result_" + std::to_string(index);
+    body += compute("mapped::@evaluate", site, "%xs,%a,%b", "!V,!F,!F", result,
+                    "!F", "[true,false,false]");
+  }
+  body += scopedReturn(result, "!F");
   return R"mlir(!F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 )mlir" + scopedFixture(R"mlir(
@@ -100,11 +110,7 @@ module @mapped attributes {exec.computation} {
 }
 )mlir",
                        "%xs:!V,%a:!F,%b:!F", "%xs,%a,%b", "!V,!F,!F", "!F",
-                       compute("mapped::@evaluate", "mapped", "%xs,%a,%b",
-                               "!V,!F,!F", "%result", "!F",
-                               "[true,false,false]") +
-                           scopedReturn("%result", "!F"),
-                       3);
+                       body, 3);
 }
 
 std::string printed(ModuleOp module);
@@ -1029,15 +1035,19 @@ module @difference attributes {exec.computation} {
             }
           });
           // Count complete structural inventories, including control blocks
-          // and their ports. The envelope covers construction plus context
-          // comparison; the remaining balance must not fit an extra snapshot.
-          // Independent verification has its own separately bounded account.
-          uint64_t copies = 7 * sourceCost;
+          // and their ports. The envelope covers actual construction; the
+          // remaining balance must not fit an extra snapshot. Input admission
+          // inspection and independent verification share a separate checking
+          // account, so neither inspection belongs in this copy allowance.
+          uint64_t copies = 3 * sourceCost;
           protocol::Assignments requests;
           if (requested)
             requests.emplace_back("context_add", "arkworks/field.add");
           PhysicalPlanOptions options;
           options.numericalCopy = &copies;
+          mathematical::RealizationWork validation;
+          options.numericalVerificationWork = &validation;
+          const auto verificationCopies = validation.numericalCheckCopy;
           unsigned preflights = 0;
           options.programCapacity = [&](ModuleOp candidate,
                                         const PhysicalPlan &)
@@ -1052,7 +1062,16 @@ module @difference attributes {exec.computation} {
           auto plan = take(proposePhysical(*module, installedCandidates(),
                                            requests, options));
           require(preflights == 1 && copies < sourceCost,
-                  "construction envelope permits an extra source snapshot");
+                  "construction envelope permits an extra source snapshot: " +
+                      std::to_string(copies) + "/" +
+                      std::to_string(sourceCost));
+          // Admission inspects both actual subjects; requested pinning adds one
+          // real source copy. The verifier must not create another whole
+          // normalization context merely to resolve mathematical entries.
+          require(
+              verificationCopies - validation.numericalCheckCopy <
+                  (requested ? 4 : 3) * sourceCost,
+              "readback constructed a redundant whole normalization context");
           const auto &binding = bindingFor(plan, "field.add");
           require(binding.fixed == requested &&
                       binding.binding.application.implementation ==
@@ -1114,6 +1133,90 @@ module @difference attributes {exec.computation} {
     frozen.check(*module);
   });
 
+  cases.run("independent numerical validation owns exact cumulative work", [&] {
+    auto module = executable(scalarSource, context);
+    FrozenInput frozen(*module);
+    mathematical::RealizationWork validation;
+    const auto initial = validation;
+    PhysicalPlanOptions options;
+    options.numericalVerificationWork = &validation;
+    unsigned preflights = 0;
+    options.programCapacity =
+        [&](ModuleOp,
+            const PhysicalPlan &) -> Expected<SmallVector<OperationIndex>> {
+      ++preflights;
+      return SmallVector<OperationIndex>{};
+    };
+    auto measured =
+        take(proposePhysical(*module, installedCandidates(), {}, options));
+    auto checking =
+        initial.numericalContextChecking - validation.numericalContextChecking;
+    auto copying = initial.numericalCheckCopy - validation.numericalCheckCopy;
+    require(checking && copying && preflights == 1,
+            "complete independent validation performed no bounded work");
+    validation = initial;
+    validation.numericalContextChecking = checking;
+    validation.numericalCheckCopy = copying;
+    auto exact =
+        take(proposePhysical(*module, installedCandidates(), {}, options));
+    require(!validation.numericalContextChecking &&
+                !validation.numericalCheckCopy,
+            "independent validation did not settle exact accounts");
+    take(validatePhysical(*module, exact));
+    take(validatePhysical(*module, exact));
+    {
+      ScopedDiagnosticHandler quiet(&context,
+                                    [](Diagnostic &) { return success(); });
+      refuses(proposePhysical(*module, installedCandidates(), {}, options),
+              "numerical-lowering-correspondence");
+    }
+    require(!validation.numericalContextChecking &&
+                !validation.numericalCheckCopy,
+            "immutable plan inspection reconstructed numerical subjects");
+    for (bool copy : {false, true}) {
+      validation = initial;
+      validation.numericalContextChecking = checking - unsigned(!copy);
+      validation.numericalCheckCopy = copying - unsigned(copy);
+      preflights = 0;
+      ScopedDiagnosticHandler quiet(&context,
+                                    [](Diagnostic &) { return success(); });
+      refuses(proposePhysical(*module, installedCandidates(), {}, options),
+              "numerical-lowering-correspondence");
+      require(preflights == 1 &&
+                  validation.numericalContextChecking <= checking &&
+                  validation.numericalCheckCopy <= copying,
+              "required validation capacity was retried or replenished");
+    }
+    take(validatePhysical(*module, measured));
+    frozen.check(*module);
+  });
+
+  cases.run("speculative frontier checking exhaustion remains required", [&] {
+    auto module =
+        executable(fixtureText("computation/shared-polynomial.mlir"), context);
+    FrozenInput frozen(*module);
+    CountingCatalog catalog;
+    mathematical::RealizationWork work;
+    work.numericalContextChecking = 0;
+    const auto initial = work;
+    PhysicalPlanOptions options;
+    options.numericalWork = &work;
+    ScopedDiagnosticHandler quiet(&context,
+                                  [](Diagnostic &) { return success(); });
+    auto refused = proposePhysical(*module, catalog, {}, options);
+    require(!refused, "exhausted speculative preparation was accepted");
+    auto detail = llvm::toString(refused.takeError());
+    require(
+        detail.find("algorithm-checking") != std::string::npos &&
+            detail.find("available=0") != std::string::npos &&
+            catalog.queryCount() == 0 && !work.numericalContextChecking &&
+            work.discardedRecipeCopy == initial.discardedRecipeCopy &&
+            work.discardedRecipeSiteBytes == initial.discardedRecipeSiteBytes &&
+            work.discardedRecipeExpansion == initial.discardedRecipeExpansion,
+        "required preparation checking was relabeled, retried or refunded");
+    frozen.check(*module);
+  });
+
   cases.run(
       "required numerical capacity is terminal before catalog search", [&] {
         auto module = executable(finiteSource(), context);
@@ -1163,6 +1266,64 @@ module @difference attributes {exec.computation} {
                   "declined inline body remained in the retained payload");
         take(validatePhysical(*module, proposal));
       });
+
+  cases.run("program capacity advances its complete numerical slice", [&] {
+    auto module = executable(mappedSource(3), context);
+    FrozenInput before(*module);
+    PhysicalPlanOptions options;
+    unsigned calls = 0;
+    options.programCapacity =
+        [&](ModuleOp,
+            const PhysicalPlan &plan) -> Expected<SmallVector<OperationIndex>> {
+      SmallVector<OperationIndex> sums;
+      for (const auto &decision : plan.operations)
+        if (decision.binding &&
+            plan.bindings[*decision.binding].binding.application.contract ==
+                "numerical.sum")
+          sums.push_back(decision.operation);
+      if (++calls == 1) {
+        require(sums.size() == 3, "fixture lost its three native reductions");
+        return SmallVector<OperationIndex>{sums[1], sums[0], sums[1]};
+      }
+      require(sums.size() == 1,
+              "capacity rebuilt a prefix or changed an unreported reduction");
+      return SmallVector<OperationIndex>{};
+    };
+    auto proposal =
+        take(proposePhysical(*module, installedCandidates(), {}, options));
+    require(calls == 2, "capacity required multiple numerical prefix rebuilds");
+    take(validatePhysical(*module, proposal));
+    before.check(*module);
+  });
+
+  cases.run("numerical capacity round settles distinct advances exactly", [&] {
+    mathematical::NumericalSelection selection;
+    mathematical::RealizationSubject subject;
+    subject.operation = "finite_fold";
+    auto first = take(selection.discover(subject, true));
+    subject.position.push_back(1);
+    auto second = take(selection.discover(subject, true));
+    subject.position[0] = 2;
+    auto untouched = take(selection.discover(subject, true));
+    selection.work.selectionBookkeeping = 2;
+    require(take(selection.advanceTogether({second, first, second})) &&
+                !selection.work.selectionBookkeeping &&
+                selection.alternative(first) ==
+                    mathematical::NumericalAlternative::Expression &&
+                selection.alternative(second) ==
+                    mathematical::NumericalAlternative::Expression &&
+                selection.alternative(untouched) ==
+                    mathematical::NumericalAlternative::Specialized,
+            "batch advancement duplicated, omitted or misattributed work");
+    refuses(selection.advanceTogether({second, first}),
+            "finite-analysis-limit");
+    require(!selection.work.selectionBookkeeping &&
+                selection.alternative(first) ==
+                    mathematical::NumericalAlternative::Expression &&
+                selection.alternative(second) ==
+                    mathematical::NumericalAlternative::Expression,
+            "exhausted numerical round received fresh catalog work");
+  });
 
   cases.run("unclassified program-preflight errors are terminal", [&] {
     auto module = executable(mappedSource(), context);

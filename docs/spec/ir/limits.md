@@ -20,7 +20,7 @@ An exhausted checker refuses; it does not establish semantic inequivalence.
 | Finite correspondence | 100,000 required-reader units per finite request or total expression; optional comparison capped at 100,000 and the reader's remaining allowance |
 | Optional lane realization | 1,000,000 work units; exhaustion retains ordered execution |
 | Required finite expressions and polynomial expansion | Separate cumulative allowances of 100,000 each |
-| Numerical normalization and frontier | 4,000,000 shared copy/context/frontier work units per lowering subject; independent normalization readers have 4,000,000 units per closure, helper depth 64 and polynomial depth 128 |
+| Numerical normalization and frontier | 4,000,000 construction units per lowering subject; context/frontier readers share the existing 4,000,000-unit realization checking account; independent unit normalization readers have 4,000,000 units per closure, helper depth 64 and polynomial depth 128 |
 | Numerical recipe materialization and correspondence | Separate allowances of 4,000,000 operation/slot units and 16 MiB generated-site text; discarded recipe construction has an additional cumulative reserve of the same sizes; existing recipe limits also apply |
 | Native R1CS reduction adapter | BLS Fr; at most 8 rows, 128 columns and 1,024 nonzero terms |
 
@@ -62,11 +62,22 @@ bulk proposal that would have fit the unused discard reserve.
 Only optional comparison capacity permits retry, and disabling bulk permits
 at most one ordered retry per call. Required construction has its original
 allowance on that retry; optional recognition and lane work remain cumulative.
-The transaction allowance covers scoped context copies, context comparison
-and recipe construction together. It is separate from the one-million-unit
-source-substitution allowance and the unchanged semantic helper-expansion
+The construction allowance covers scoped context copies and recipe construction;
+independent context comparisons use their cumulative checking owner. It is
+separate from the one-million-unit source-substitution allowance and the unchanged semantic helper-expansion
 ceiling. Selected and discarded construction together therefore consume at most
 8,000,000 charged operation/slot units and 32 MiB of charged generated-site text
 across calls with default allowances. Independent correspondence readers retain
 their own limits. These are charged construction bounds, not a bound on all
 compiler instructions or allocations.
+
+Physical selection owns one realization checking account and one independent
+validation account, each with the existing 4,000,000 context units. The latter
+owns both source-to-finite and finite-to-selected correspondence and its existing
+4,000,000-unit admission/scratch allowance. It is established once outside the
+attempt loop, rather than recreated on retry or on later validation of the same
+private immutable numerical payload. Physically rejected construction can defer
+whole-context correspondence, but every retained numerical payload must pass
+both independent edges. Every performed checking debit remains spent and
+exhaustion is required. Standalone readers create their accounts once per call;
+callers requiring cumulative bounds supply the shared account.
