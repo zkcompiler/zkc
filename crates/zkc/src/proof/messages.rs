@@ -152,13 +152,18 @@ impl<'a> MessageLayout<'a> {
                     .and_then(|s| s.strip_prefix("input_"))
                     .and_then(|s| logical::natural_index(s).ok())
                     .and_then(|s| usize::try_from(s).ok());
-                if selected.0 != site
-                    || pending_delivery.is_some()
-                    // Applied origins name the callee's lexical service port.
-                    // The compiler checks its mapping to the selected root;
-                    // runtime admission checks the authenticated expanded site.
-                    || !applied && !source.is_some_and(|source| policy.replaced_services.contains(&source))
-                    || policy.gates.get(site).copied() != difficulty
+                if selected.0 != site || pending_delivery.is_some() {
+                    return Err("native-proof-state-chain".into());
+                }
+                // Applied origins name the callee's lexical service port.
+                // The compiler checks its mapping to the selected root;
+                // runtime admission checks the authenticated expanded site.
+                if !applied
+                    && !source.is_some_and(|source| policy.replaced_services.contains(&source))
+                {
+                    return Err("native-proof-query-origin".into());
+                }
+                if policy.gates.get(site).copied() != difficulty
                     || !block && policy.gates.contains_key(site)
                 {
                     return Err("native-proof-gates".into());
