@@ -1,4 +1,5 @@
 #include "zkc/Language/Inspection.h"
+#include "OracleInspection.h"
 #include "State.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Language/Diagnostics.h"
@@ -19,7 +20,8 @@ json::Array permissions(Permissions value) {
     result.push_back("Drop");
   return result;
 }
-json::Object describe(const CheckedProject &project, const Declaration &decl) {
+Expected<json::Object> describe(const CheckedProject &project,
+                                const Declaration &decl, detail::Work &work) {
   auto type = [&](const Type &t) { return formatType(t); };
   const auto *owner =
       decl.parent ? &project.declarations()[decl.parent->index] : nullptr;
@@ -67,10 +69,19 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
   };
   auto ports = [&](ArrayRef<Port> ports) {
     json::Array result;
-    for (const auto &port : ports)
-      result.push_back(json::Object{{"name", port.name},
-                                    {"type", type(port.type)},
-                                    {"roles", roles(port.roles)}});
+    for (const auto &port : ports) {
+      json::Object value{{"name", port.name},
+                         {"type", type(port.type)},
+                         {"roles", roles(port.roles)}};
+      if (port.oracle) {
+        value["oracle_holder"] = decl.roles[port.oracle->holder];
+        value["maximum_rows"] =
+            port.oracle->maximumRows
+                ? json::Value(type(*port.oracle->maximumRows))
+                : json::Value(nullptr);
+      }
+      result.push_back(std::move(value));
+    }
     return result;
   };
   json::Array services, requirements;
@@ -190,7 +201,8 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                      : decl.finiteDefinition ? "finite"
                      : decl.abstract         ? "abstract"
                                              : "body"},
-      {"kind", domain                                          ? "domain"
+      {"kind", decl.kind == Declaration::Kind::Oracle          ? "oracle"
+               : domain                                        ? "domain"
                : !ordered                                      ? "math"
                : decl.kind == Declaration::Kind::EntryFunction ? "entry"
                : decl.kind == Declaration::Kind::Local         ? "local"
@@ -214,6 +226,13 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                           : "captured"},
            {"begin", decl.span.begin},
            {"end", decl.span.end}}}};
+  if (decl.oracleDefinition) {
+    auto definition =
+        detail::describeOracleDefinition(project.declarations(), decl, work);
+    if (!definition)
+      return definition.takeError();
+    result["oracle_definition"] = std::move(*definition);
+  }
   if (decl.kind == Declaration::Kind::EntryFunction ||
       (decl.generated && decl.generated->operation))
     result["stage"] = "host";
@@ -385,7 +404,8 @@ Expected<std::string> inspectDeclarations(const CheckedProject &project,
     if (project.sources()[decl.span.source.index].origin ==
         SourceOrigin::Installation)
       continue;
-    if (decl.kind != Declaration::Kind::Math &&
+    if (decl.kind != Declaration::Kind::Oracle &&
+        decl.kind != Declaration::Kind::Math &&
         decl.kind != Declaration::Kind::Local &&
         decl.kind != Declaration::Kind::EntryFunction &&
         decl.kind != Declaration::Kind::DomainFunction &&
@@ -410,16 +430,25 @@ Expected<std::string> inspectDeclarations(const CheckedProject &project,
   llvm::sort(declarations, [](auto *a, auto *b) {
     return a->qualifiedName < b->qualifiedName;
   });
+  detail::Work work{limits};
+  Error inspectionError = Error::success();
   std::string bytes;
   BoundedStream out(bytes, limits.interfaceBytes);
   json::OStream json(out);
   json.array([&] {
     for (auto *decl : declarations) {
-      json.value(describe(project, *decl));
+      auto value = describe(project, *decl, work);
+      if (!value) {
+        inspectionError = value.takeError();
+        break;
+      }
+      json.value(std::move(*value));
       if (out.overflow())
         break;
     }
   });
+  if (inspectionError)
+    return std::move(inspectionError);
   if (out.overflow())
     return error("source.limit", "declaration report byte limit exceeded");
   return bytes;
@@ -527,6 +556,7 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
       std::unique(references.begin(), references.end(),
                   [&](unsigned a, unsigned b) { return key(a) == key(b); }),
       references.end());
+  Error inspectionError = Error::success();
   std::string bytes;
   BoundedStream out(bytes, limits.apiInspectionBytes);
   json::OStream json(out);
@@ -553,7 +583,12 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
         if (out.overflow())
           break;
         const auto &decl = project.declarations()[id.index];
-        auto value = describe(project, decl);
+        auto description = describe(project, decl, work);
+        if (!description) {
+          inspectionError = description.takeError();
+          break;
+        }
+        auto value = std::move(*description);
         for (auto &requirement : *value.getArray("requirements")) {
           auto *record = requirement.getAsObject();
           if (record->getString("kind") != "capability")
@@ -580,9 +615,13 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
         auto fields = [&](ArrayRef<TypeField> fields) {
           json::Array result;
           for (const auto &field : fields)
-            if (field.isPublic)
-              result.push_back(json::Object{{"name", field.name},
-                                            {"type", formatType(field.type)}});
+            if (field.isPublic) {
+              json::Object value{{"name", field.name},
+                                 {"type", formatType(field.type)}};
+              if (field.maximumRows)
+                value["maximum_rows"] = formatType(*field.maximumRows);
+              result.push_back(std::move(value));
+            }
           return result;
         };
         switch (decl.kind) {
@@ -593,8 +632,11 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
           break;
         case Declaration::Kind::Record:
         case Declaration::Kind::Variant: {
-          dataKind(decl.kind == Declaration::Kind::Record ? "record"
-                                                          : "variant");
+          dataKind(decl.kind == Declaration::Kind::Record
+                       ? (decl.logical ? "logical_record" : "record")
+                       : "variant");
+          value["logical"] = decl.logical;
+          value["sealed"] = decl.sealed;
           bool privateFields = llvm::any_of(
               decl.fields, [](const auto &f) { return !f.isPublic; });
           json::Array alternatives;
@@ -706,6 +748,8 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
       }
     });
   });
+  if (inspectionError)
+    return std::move(inspectionError);
   if (out.overflow())
     return error("source.limit", "public API report byte limit exceeded");
   return bytes;

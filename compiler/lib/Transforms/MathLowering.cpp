@@ -336,7 +336,13 @@ public:
     return success();
   }
 };
-struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
+template <bool CloseDeployment>
+struct LowerMathPass
+    : PassWrapper<LowerMathPass<CloseDeployment>, OperationPass<ModuleOp>> {
+  using Base =
+      PassWrapper<LowerMathPass<CloseDeployment>, OperationPass<ModuleOp>>;
+  using Base::getOperation;
+  using Base::signalPassFailure;
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerMathPass)
   MathematicalPassOptions selection{*this};
   LowerMathPass() = default;
@@ -347,13 +353,13 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
     selection.set(policy);
   }
   LowerMathPass(const LowerMathPass &other)
-      : PassWrapper(other), selection(*this, other.selection.get()),
+      : Base(other), selection(*this, other.selection.get()),
         observer(other.observer) {}
-  Option<bool> traceMathematics{
+  typename Base::template Option<bool> traceMathematics{
       *this, "trace-mathematics",
       llvm::cl::desc("Report mathematical decisions and stages"),
       llvm::cl::init(false)};
-  Option<bool> dumpMathematics{
+  typename Base::template Option<bool> dumpMathematics{
       *this, "dump-mathematics",
       llvm::cl::desc("Dump mathematical lowering diagnostics and IR"),
       llvm::cl::init(false)};
@@ -362,9 +368,13 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
                     exec::ExecDialect, func::FuncDialect,
                     cf::ControlFlowDialect, arith::ArithDialect>();
   }
-  StringRef getArgument() const final { return "zkc-lower-math"; }
+  StringRef getArgument() const final {
+    return CloseDeployment ? "zkc-lower-closed-participant" : "zkc-lower-math";
+  }
   StringRef getDescription() const final {
-    return "Form scoped computations at participant mathematics demands";
+    return CloseDeployment
+               ? "Close participant helpers and form demanded computations"
+               : "Form scoped computations at participant mathematics demands";
   }
   void runOnOperation() final {
     auto source = getOperation();
@@ -376,7 +386,9 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
                       : (traceMathematics || dumpMathematics ? &diagnosticTrace
                                                              : nullptr);
     auto policy = selection.get();
-    RealizationScope scope(trace, "lower-math", source, policy);
+    RealizationScope scope(
+        trace, CloseDeployment ? "lower-closed-participant" : "lower-math",
+        source, policy);
     if (trace && trace->ir) {
       *trace->ir << "// Before mathematical demand lowering\n";
       source.print(*trace->ir);
@@ -396,6 +408,12 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
     auto expanded = protocol::expandScopedHelpers(source);
     if (!expanded)
       return signalPassFailure();
+    if constexpr (CloseDeployment) {
+      auto reachable = protocol::pruneParticipantHelpers(*expanded);
+      if (!reachable)
+        return signalPassFailure();
+      expanded = std::move(reachable);
+    }
     OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*expanded)->clone()));
     auto unit =
         cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
@@ -421,5 +439,9 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
 std::unique_ptr<mlir::Pass>
 zkc::protocol::createLowerMathPass(MathematicalSelectionPolicy policy,
                                    mathematical::RealizationTrace *trace) {
-  return std::make_unique<mathematical::LowerMathPass>(policy, trace);
+  return std::make_unique<mathematical::LowerMathPass<false>>(policy, trace);
+}
+std::unique_ptr<mlir::Pass> zkc::protocol::createLowerClosedParticipantPass(
+    MathematicalSelectionPolicy policy, mathematical::RealizationTrace *trace) {
+  return std::make_unique<mathematical::LowerMathPass<true>>(policy, trace);
 }

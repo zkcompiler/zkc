@@ -162,7 +162,7 @@ macro_rules! curve {
                 left.add(&right)
             }
             fn value(self) -> Value {
-                Value::$single(self)
+                Value::$single(self.into())
             }
             fn values(p: Vec<Self>) -> Value {
                 Value::$vector(p.into())

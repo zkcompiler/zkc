@@ -95,6 +95,44 @@ def Data_PowerOfTwoOp : DataExpression<"index_power_of_two", [DeclareOpInterface
   let arguments = (ins UI64:$value, UI64:$exponent);
   let results = (outs I1:$output);
 }
+// Total unsigned-word mathematics on the existing index carrier. These have
+// no overflow flags, parameters or domain-membership premises.
+class DataIndexBinary<string name> : DataExpression<name,
+    [DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+  let arguments = (ins UI64:$lhs, UI64:$rhs);
+  let results = (outs UI64:$output);
+  let hasVerifier = 0;
+}
+def Data_IndexWrappingAddOp : DataIndexBinary<"index_wrapping_add"> {
+  let summary = "Unsigned index addition modulo 2^64";
+  let description = [{
+    For all unsigned 64-bit operands a and b, return (a + b) modulo 2^64.
+    This total mathematical operation does not change checked index.add.
+  }];
+}
+def Data_IndexWrappingSubtractOp : DataIndexBinary<"index_wrapping_subtract"> {
+  let summary = "Unsigned index subtraction modulo 2^64";
+  let description = [{
+    For all unsigned 64-bit operands a and b, return (a - b) modulo 2^64,
+    represented in [0, 2^64). This does not change checked index.sub.
+  }];
+}
+def Data_IndexBitAndOp : DataIndexBinary<"index_bit_and"> {
+  let summary = "Bitwise conjunction of unsigned indices";
+  let description = [{
+    Result bit j is one exactly when bit j of both operands is one, for
+    every j in [0, 64). All input pairs have a defined unsigned result.
+  }];
+}
+// Counts at least 64 return zero; they are never reduced modulo 64.
+def Data_IndexLogicalShiftRightOp : DataIndexBinary<"index_logical_shift_right"> {
+  let summary = "Total unsigned logical right shift";
+  let description = [{
+    For value a and unsigned count b, return floor(a / 2^b) when b < 64,
+    and zero when b >= 64. The count is not reduced modulo 64. No input
+    introduces overflow, poison or an arithmetic refusal.
+  }];
+}
 def Data_MakeOp : DataExpression<"make"> {
   let arguments = (ins Variadic<AnyType>:$payload, StrAttr:$alternative);
   let results = (outs Variant:$output);

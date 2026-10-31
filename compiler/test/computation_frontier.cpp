@@ -268,9 +268,9 @@ int main() {
                     capacity->available == 1 && remaining == 1,
                 "entry checking refusal lost a positive remaining balance");
       });
-  cases.run("preparation shares copy and context allowance cumulatively", [&] {
-    // No numerical calls: the transaction consists of one source copy and
-    // its independent context comparison, without helper or recipe work.
+  cases.run("preparation separates cumulative construction and checking", [&] {
+    // No numerical calls: exactly one source clone and a complete independent
+    // context comparison. Neither owner may spend or replenish the other.
     auto source = cfgFixture();
     uint64_t copyRemaining = 100000, contextRemaining = 100000;
     require(computation::chargeCopy(*source, copyRemaining),
@@ -278,16 +278,54 @@ int main() {
     require(succeeded(computation::verifyComputationNormalizationContext(
                 *source, *source, {}, contextRemaining)),
             "preparation context measurement failed");
-    uint64_t remaining = 200000 - copyRemaining - contextRemaining;
+    const uint64_t copyCost = 100000 - copyRemaining;
+    const uint64_t checkingCost = 100000 - contextRemaining;
     std::optional<CapacityCause> capacity;
-    auto prepared = computation::prepareComputationRealization(
-        *source, &remaining, &capacity);
-    require(bool(prepared) && remaining == 0 && !capacity,
-            "preparation split or reset the cumulative allowance");
-    capacityBoundary(*source, [&](uint64_t &work, auto *cause) {
-      return success(bool(
-          computation::prepareComputationRealization(*source, &work, cause)));
-    });
+    mathematical::RealizationWork shared;
+    shared.numericalContextChecking = 2 * checkingCost;
+    uint64_t remaining = 2 * copyCost;
+    for (unsigned attempt = 0; attempt != 2; ++attempt) {
+      auto prepared = computation::prepareComputationRealization(
+          *source, remaining, shared, &capacity);
+      require(bool(prepared) && !capacity &&
+                  remaining == (1 - attempt) * copyCost &&
+                  shared.numericalContextChecking ==
+                      (1 - attempt) * checkingCost,
+              "preparation split, reset or mixed cumulative allowances");
+    }
+    for (bool checking : {false, true})
+      for (bool sufficient : {true, false}) {
+        mathematical::RealizationWork work;
+        uint64_t copies = copyCost - unsigned(!checking && !sufficient);
+        work.numericalContextChecking =
+            checkingCost - unsigned(checking && !sufficient);
+        ScopedDiagnosticHandler quiet(source->getContext(),
+                                      [](Diagnostic &) { return success(); });
+        auto prepared = computation::prepareComputationRealization(
+            *source, copies, work, &capacity);
+        require(bool(prepared) == sufficient,
+                "preparation ignored an exact or one-short allowance");
+        if (sufficient)
+          require(!copies && !work.numericalContextChecking && !capacity,
+                  "preparation did not settle exact separate allowances");
+        else {
+          auto balance = checking ? work.numericalContextChecking : copies;
+          require(capacity &&
+                      capacity->owner ==
+                          (checking ? WorkOwner::AlgorithmChecking
+                                    : WorkOwner::AlgorithmExpansion) &&
+                      capacity->available == balance && capacity->requested &&
+                      *capacity->requested == balance + 1,
+                  "preparation lost exact failed checking/construction debit");
+          mathematical::RealizationWork withoutSink;
+          withoutSink.numericalContextChecking =
+              checkingCost - unsigned(checking);
+          copies = copyCost - unsigned(!checking);
+          require(!computation::prepareComputationRealization(*source, copies,
+                                                              withoutSink),
+                  "preparation required a capacity sink to enforce bounds");
+        }
+      }
   });
   cases.run("frontier return mismatch at zero balance", [&] {
     auto before = fixture(context, "frontier-before.mlir");
@@ -372,9 +410,10 @@ int main() {
                     "context depth refusal lost capacity classification");
             if (!frontier) {
               remaining = 100000;
+              mathematical::RealizationWork work;
               rejects(*before, [&] {
                 return success(bool(computation::prepareComputationRealization(
-                    *before, &remaining, &capacity)));
+                    *before, remaining, work, &capacity)));
               });
               require(capacity &&
                           capacity->owner == WorkOwner::AlgorithmChecking,

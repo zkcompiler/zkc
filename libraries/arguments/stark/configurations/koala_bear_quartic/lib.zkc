@@ -1,5 +1,5 @@
 module stark::configurations::koala_bear_quartic;
-use stark::configurations::contract::{Configuration, natural_pairs};
+use stark::configurations::contract::{Configuration};
 use zkc::vector::{Vector};
 use zkc::indices::{Indices};
 use zkc::oracle as oracle;
@@ -14,8 +14,9 @@ pub domain KoalaBearRows = commitment("rows.merkle-poseidon2-16.koala-bear/0");
 pub domain QuarticRows = commitment("rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0");
 
 // KoalaBear trace rows, quartic-extension challenges and FRI, width-16
-// Poseidon2 Merkle trees with pruned multi-openings, natural-order rows with
-// both fold siblings in one FRI leaf, and the coset shift 3.
+// Poseidon2 Merkle trees with pruned multi-openings, natural-order outer
+// rows and the coset shift 3.
+// FRI authentication and layout are selected separately by deployment.
 //
 // Challenges come from the octic KoalaBear Merlin suite, the installed suite
 // with a KoalaBear challenge field. Its draws have independently
@@ -66,16 +67,5 @@ pub module Poseidon2: Configuration {
   fn check_extension(root: Root<QuarticRows>, width: index, height: index, positions: Indices,
       rows: Vector<Quartic>, proof: Path<QuarticRows>) -> bool effects(stop) where () {
     return oracle::check_many<QuarticRows>(root, width, height, positions, rows, proof);
-  }
-  fn commit_pairs(word: Vector<Quartic>) -> (Root<QuarticRows>, State<QuarticRows>) effects(stop) where () {
-    return oracle::commit<QuarticRows>(natural_pairs(word), 2);
-  }
-  fn open_pairs(state: State<QuarticRows>, pairs: Indices, half: index)
-      -> (Vector<Quartic>, Path<QuarticRows>) effects(stop) where () {
-    return oracle::open_many<QuarticRows>(state, pairs);
-  }
-  fn check_pairs(root: Root<QuarticRows>, half: index, pairs: Indices, rows: Vector<Quartic>,
-      proof: Path<QuarticRows>) -> bool effects(stop) where () {
-    return oracle::check_many<QuarticRows>(root, 2, half, pairs, rows, proof);
   }
 }

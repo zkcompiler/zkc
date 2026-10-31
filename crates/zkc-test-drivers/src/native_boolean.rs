@@ -27,7 +27,8 @@ fn main() {
                                 Ok(program)
                             })
                             .unwrap();
-                    let group = |n: u64| Value::Curve(G1::generator().scale(Scalar::from(n)));
+                    let group =
+                        |n: u64| Value::Curve((G1::generator().scale(Scalar::from(n))).into());
                     let mut runner = Runner::new(
                         &admitted,
                         "main",
@@ -71,7 +72,7 @@ fn main() {
                         matches!(&result[9], Value::Field(actual) if *actual == Scalar::from(if c {11u64} else {23u64}))
                     );
                     assert!(
-                        matches!(&result[10], Value::Curve(actual) if *actual == G1::generator().scale(Scalar::from(if c {31u64} else {47u64})))
+                        matches!(&result[10], Value::Curve(actual) if **actual == G1::generator().scale(Scalar::from(if c {31u64} else {47u64})))
                     );
                     assert_eq!(runner.backend().active_frames(), 0);
                     // Terminal results remain retained for stable repeated polling.

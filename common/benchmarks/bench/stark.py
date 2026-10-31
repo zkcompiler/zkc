@@ -5,6 +5,7 @@ import importlib.util
 
 from . import algebra as a
 from .programs import Program
+from .oracle_policy import OCTIC_KECCAK, LIBRARY_POLICIES
 
 
 @dataclass(frozen=True)
@@ -79,12 +80,11 @@ def fri(root, shape):
     public = {'shift': a.encode(shift), 'round_count': str(rounds), 'query_count': str(queries)}
     source = '''module example;
 use zkc::vector::{Vector};
-use fri::{LowDegree};
+use fri::{Direct, LowDegree};
 domain E=field("koala-bear.ext8-binomial3");
-domain Rows=commitment("rows.merkle-keccak256.koala-bear.ext8-binomial3/0");
 protocol Fri roles(P,V)(word:Vector<E>@P,shift:E@(P,V),round_count:index@(P,V),
  query_count:index@(P,V),coins:Random<E>@V)->(accepted:bool@V){
- let (accepted,_,_,_)=LowDegree<Rows,SIZE,0,ROUNDS,QUERIES>(word,shift,shift,round_count,query_count,coins);
+ let (accepted,_,_,_)=LowDegree<Direct<E>,SIZE,0,ROUNDS,QUERIES>(word,shift,shift,round_count,query_count,coins);
  return accepted;
 }
 proof Proof=Fri {prover P;verifier V;public {shift,round_count,query_count};accept accepted;
@@ -93,6 +93,8 @@ proof Proof=Fri {prover P;verifier V;public {shift,round_count,query_count};acce
     witness = {'word': list(map(a.encode, a.coset(coefficients, shift, size)))}
     return Program(source, [{'public': public, 'witness': witness}], invalid_witness={'word': list(map(a.encode, a.coset([*coefficients, (1, 0, 0, 0, 0, 0, 0, 0)], shift, size)))},
                    entry='example::Proof', dependencies=('protocols.polynomial.fri',), proof=True,
+                   oracle_policy=OCTIC_KECCAK,
+                   invalid_witness_stop=('fri', 'padded'),
                    changed=public | {'shift': a.encode((2, 1, 0, 0, 0, 0, 0, 0))},
                    oracle='independent Python polynomial evaluation; same-stack FRI verification and refusal controls')
 
@@ -184,13 +186,14 @@ proof Proof=Air {prover P;verifier V;public {public_data,shift,round_count,query
     witness = {'trace': list(map(str, trace))}
     return Program(source, [{'public': public, 'witness': witness}], mutate_proof=mutate_claim,
                    entry='example::Proof', dependencies=('arguments.stark.single_table.koala_bear_octic',), assets={'trace': bundle}, proof=True,
+                   oracle_policy=OCTIC_KECCAK,
                    changed=changed, support=(root/'compiler/adapters/ring_arena.py',), oracle=trace_oracle(shape))
 
 
 def library(root, shape):
     """The same AIR through an explicit library configuration and transcript,
     with the final polynomial a constant. KoalaBear remains the default."""
-    _, profile = library_profile(shape)
+    field, profile = library_profile(shape)
     height, size = shape['height'], shape['evaluation_size']
     bundle, initial, final, trace = recurrence(root, shape)
     public = {'public_data': list(map(str, initial+final))}
@@ -220,4 +223,5 @@ proof Proof=Air {prover P;verifier V;public {public_data};accept accepted;
                                         minimum=10+profile.degree*profile.coordinate_bytes,
                                         modulus=profile.modulus, coordinate_bytes=profile.coordinate_bytes),
                    entry='example::Proof', dependencies=dependencies, assets={'trace': bundle}, proof=True,
+                   oracle_policy=LIBRARY_POLICIES[field],
                    changed=changed, support=(root/'compiler/adapters/ring_arena.py',), oracle=trace_oracle(shape))

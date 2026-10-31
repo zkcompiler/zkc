@@ -7,5 +7,5 @@
 "algebra" = "../../../core/algebra"
 "collections" = "../../../core/collections"
 "polynomial" = "../../../core/polynomial"
-"primitive-cryptography" = "../../../core/primitives/cryptography"
 "primitive-polynomial" = "../../../core/primitives/polynomial"
+"traversal" = "../../../core/traversal"

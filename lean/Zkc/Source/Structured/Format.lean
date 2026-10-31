@@ -162,12 +162,20 @@ def oracleDimensions (kind : OracleKind) (json : Json) : Except String (List Str
   unless names == kind.shape.map Prod.fst do throw "structured-oracle-shape"
   return names
 
+/-- Input/component descriptors retain the complete logical sort. The derived
+kind is used only to validate shape bounds; sequence capacity is never erased. -/
+def oracleLogicalSort (json : Json) : Except String (Ty × OracleKind) := do
+  let sort ← type json
+  match sort with
+  | .oracle kind | .oracleSequence kind _ => return (sort, kind)
+  | _ => throw "structured-oracle-logical-sort"
+
 def descriptor (json : Json) : Except String Descriptor := do
   match ← array json with
-  | [.str "oracle_input", holder, receivers, kind, bounds] =>
-      let kind ← oracleKind kind
+  | [.str "oracle_input", holder, receivers, sort, bounds] =>
+      let (sort, kind) ← oracleLogicalSort sort
       return .oracle (.input (← string holder) (← strings receivers 16)
-        kind (← oracleShapeValues kind bounds))
+        sort (← oracleShapeValues kind bounds))
   | [.str "oracle_send", holder, receivers, kind, dimensions, bounds] =>
       let kind ← oracleKind kind
       return .oracle (.send (← string holder) (← strings receivers 16)
@@ -176,8 +184,9 @@ def descriptor (json : Json) : Except String Descriptor := do
       return .oracle (.query (← optional (fun value => string value) owner) (← oracleKind kind))
   | [.str "oracle_contents", owner, kind] =>
       return .oracle (.contents (← string owner) (← oracleKind kind))
-  | [.str "oracle_components", holder, receivers, kind] =>
-      return .oracle (.components (← string holder) (← strings receivers 16) (← oracleKind kind))
+  | [.str "oracle_components", holder, receivers, sort] =>
+      let (sort, _) ← oracleLogicalSort sort
+      return .oracle (.components (← string holder) (← strings receivers 16) sort)
   | [.str "oracle_shape", kind, dimension] =>
       let kind ← oracleKind kind
       let dimension ← string dimension

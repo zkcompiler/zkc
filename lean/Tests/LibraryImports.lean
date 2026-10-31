@@ -533,6 +533,7 @@ import Zkc.Transcript.Interface
 import Zkc.Transcript.Replay
 import Zkc.Transcript.ReturnBudget
 import Tests.ArtifactBindingControls
+import Tests.ArtifactDataAnchors
 import Tests.AuthoredPair
 import Tests.AuthoredPairSnapshots
 import Tests.BatchOpeningByteConnection

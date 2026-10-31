@@ -361,7 +361,9 @@ def test_named_profiles_reuse_scheduler_and_preserve_resolved_request(monkeypatc
     spec.loader.exec_module(module)
     values = {'simplify':True,'finite-bulk':False,'release-storage':False,
               'fuse-vector-reductions':False,'fuse-collect-fold':False,'calculation-batching':True}
-    settings = {'profile':name,'values':values,'origins':{k:f'profile.{name}' for k in values}}
+    settings = {'profile':name,'values':values,
+                'oracle_realization': __import__('bench.oracle_policy', fromlist=['OraclePolicy']).OraclePolicy().selection(),
+                'origins':{k:f'profile.{name}' for k in (*values, 'oracle-realization')}}
     monkeypatch.setattr(module.Journal, 'report', lambda *a,**k: ({'settings':settings}, {}))
     requests = []
     monkeypatch.setattr(module, 'run', lambda args, prepare: requests.append(args) or 0)
@@ -384,7 +386,9 @@ def test_invalid_profile_panel_refuses_before_any_measurement(monkeypatch, tmp_p
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     values = {key:default for key,(default,_) in SETTINGS.items()}
-    settings = {'profile':'default','values':values,'origins':{key:'default' for key in values}}
+    settings = {'profile':'default','values':values,
+                'oracle_realization': __import__('bench.oracle_policy', fromlist=['OraclePolicy']).OraclePolicy().selection(),
+                'origins':{key:'default' for key in (*values, 'oracle-realization')}}
     def resolve(_journal, argv, **_kwargs):
         if argv[-1] == '--profile=absent':
             raise bench.io.MeasurementError('unknown profile')

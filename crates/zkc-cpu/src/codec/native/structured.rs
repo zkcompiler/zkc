@@ -58,7 +58,7 @@ impl Counts {
     }
     pub(super) fn admit(&self, policy: &Policy) -> Result<()> {
         policy
-            .vector_width(self.nodes, 512)
+            .vector_width(self.nodes, crate::VALUE_SLOT_BYTES)
             .map_err(|_| Error::Limit)?;
         policy
             .vector_width(self.elements, 32)
@@ -349,13 +349,18 @@ pub(super) fn scan(
     if let Some(tag) = tag(ty) {
         let n = header(bytes, tag)?;
         if tag == 69 {
-            policy.vector_width(n, 512).map_err(|_| Error::Limit)?;
+            policy
+                .vector_width(n, crate::VALUE_SLOT_BYTES)
+                .map_err(|_| Error::Limit)?;
             if n > (bytes.len() - 10) / 4 {
                 return Err(invalid(DecodeReason::Length));
             }
             let element = ty.sequence_element().ok_or_else(unsupported)?;
             let mut total = add(
-                add(add(256, ty.descriptor_bytes())?, mul(n, 512)?)?,
+                add(
+                    add(256, ty.descriptor_bytes())?,
+                    mul(n, crate::VALUE_SLOT_BYTES)?,
+                )?,
                 crate::sequence::tree_overhead(n).map_err(|_| Error::Limit)?,
             )?;
             let mut rest = &bytes[10..];
@@ -375,7 +380,10 @@ pub(super) fn scan(
             let arm = ty
                 .variant_payload(n)
                 .ok_or_else(|| invalid(DecodeReason::Header))?;
-            let mut total = add(ty.descriptor_bytes(), add(256, mul(arm.len(), 512)?)?)?;
+            let mut total = add(
+                ty.descriptor_bytes(),
+                add(256, mul(arm.len(), crate::VALUE_SLOT_BYTES)?)?,
+            )?;
             let mut rest = &bytes[10..];
             for leaf in arm {
                 total = add(total, scan(leaf, child(&mut rest)?, policy, key, counts)?)?;

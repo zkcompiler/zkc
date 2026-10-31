@@ -116,6 +116,7 @@ class NativeIndexBlockParameters<int count>
     : ZKC_Parameters<"NativeIndexBlock", count, count>;
 class ZKC_Facet : ZKC_Declaration;
 def PublicReplay : ZKC_Facet;
+def DeterministicData : ZKC_Facet;
 def AcceptanceGuard : ZKC_Facet;
 def Conjunction : ZKC_Facet;
 def SourceHistory : ZKC_Facet;

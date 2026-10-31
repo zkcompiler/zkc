@@ -33,6 +33,8 @@ class TranscriptCorrespondence {
   ArrayRef<NativeTranscriptEvent> events;
   SymbolTable symbols;
   const protocol::SourceExecutionClosure &execution;
+  const NativeRequestPlan &requests;
+  NativeRequestValues replicas;
   SmallVector<Type> stateTypes;
   StringMap<const NativeTranscriptEvent *> bySite;
   StringMap<std::string> deliveries;
@@ -357,10 +359,13 @@ class TranscriptCorrespondence {
   bool body(Block &a, Block &b, Env env, SmallVector<Value> state,
             ArrayRef<Value> coordinates, StringRef role,
             SmallVectorImpl<const NativeTranscriptEvent *> &reached,
-            unsigned depth, Operation *first = nullptr) {
+            unsigned depth, Operation *first = nullptr, bool threaded = true) {
     if (depth > 64)
       return false;
     Operation *cursor = first ? first : &b.front();
+    auto *requestFrame =
+        role == policy.producer ? requests.frames.lookup(&a) : nullptr;
+    unsigned stateSlots = threaded ? stateTypes.size() : 0;
     SmallVector<Value> payloadGroup;
     auto observe = [&](const NativeTranscriptEvent &event, Value payload) {
       payloadGroup.push_back(payload);
@@ -378,91 +383,148 @@ class TranscriptCorrespondence {
     for (auto &op : a) {
       checkpoint =
           op.getName().getStringRef().str() + " at " + text(&op, "site").str();
+      if (requestFrame &&
+          !readNativeRequestSteps(*requestFrame, &op, cursor, env, replicas))
+        return false;
       if (!charge() || !cursor)
         return false;
       auto event = bySite.find(text(&op, "site"));
       if (event == bySite.end() && isa<pir::EmitOp, pir::AwaitOp>(op))
         return false;
+      const NativeRequestLoop *replica = nullptr;
+      if (requestFrame) {
+        auto found = requestFrame->loops.find(&op);
+        if (found != requestFrame->loops.end())
+          replica = found->second.get();
+      }
       if (auto loop = dyn_cast<pir::ProtocolLoopOp>(op);
-          loop && observedLoops.contains(loop)) {
+          loop && (observedLoops.contains(loop) || replica)) {
         auto actual = dyn_cast<pir::ProtocolLoopOp>(cursor);
         unsigned split = 1 + loop.getCarried();
+        bool observed = observedLoops.contains(loop);
+        unsigned ns = observed ? stateTypes.size() : 0;
+        unsigned nc = replica ? replica->carried.size() : 0;
+        unsigned np = replica ? replica->captures.size() : 0;
+        // Derive coordinate slots from checked source operands, independently
+        // of the candidate. Reuse only an exact invariant capture, preserving
+        // every original and replica slot. Missing coordinates append once.
+        SmallVector<Value> captures, addedCoordinates;
+        SmallVector<unsigned> coordinateSlots;
+        if (observed) {
+          for (Value input : loop.getInputs().drop_front(split)) {
+            Value value = env.lookup(input);
+            if (!value)
+              return false;
+            captures.push_back(value);
+          }
+          if (replica)
+            for (auto input : replica->captured) {
+              Value value = resolveNativeRequestValue(input, env, replicas);
+              if (!value)
+                return false;
+              captures.push_back(value);
+            }
+          for (Value coordinate : coordinates) {
+            auto found = llvm::find(captures, coordinate);
+            unsigned slot = split + nc + ns + (found - captures.begin());
+            if (found == captures.end()) {
+              captures.push_back(coordinate);
+              addedCoordinates.push_back(coordinate);
+            }
+            coordinateSlots.push_back(slot);
+          }
+        }
+        unsigned coords = addedCoordinates.size();
         if (!actual || !loop.getMaximum() ||
             !attributes(&op, cursor, {"carried"}) ||
-            actual.getCarried() != loop.getCarried() + stateTypes.size() ||
-            actual.getNumOperands() != loop.getNumOperands() +
-                                           stateTypes.size() +
-                                           coordinates.size() ||
-            actual.getNumResults() !=
-                loop.getNumResults() + stateTypes.size() ||
-            actual.getInputs().slice(split, stateTypes.size()) !=
-                ValueRange(state) ||
-            !llvm::equal(
-                actual.getResults().take_back(stateTypes.size()).getTypes(),
-                stateTypes) ||
-            !operands(loop.getInputs().take_front(split),
-                      actual.getInputs().take_front(split), env) ||
+            actual.getCarried() != loop.getCarried() + nc + ns ||
+            actual.getNumOperands() !=
+                loop.getNumOperands() + nc + ns + np + coords ||
+            actual.getNumResults() != loop.getNumResults() + nc + ns ||
+            actual.getInputs().slice(split + nc, ns) !=
+                (observed ? ValueRange(state) : ValueRange()) ||
+            !llvm::equal(actual.getResults().take_back(ns).getTypes(),
+                         ArrayRef<Type>(stateTypes).take_front(ns)) ||
+            (replica && replica->count
+                 ? actual.getInputs()[0] !=
+                       resolveNativeRequestValue(*replica->count, env, replicas)
+                 : !operands(loop.getInputs().take_front(1),
+                             actual.getInputs().take_front(1), env)) ||
+            !operands(loop.getInputs().slice(1, split - 1),
+                      actual.getInputs().slice(1, split - 1), env) ||
             !operands(loop.getInputs().drop_front(split),
-                      actual.getInputs().slice(split + stateTypes.size(),
+                      actual.getInputs().slice(split + nc + ns,
                                                loop.getNumOperands() - split),
                       env) ||
-            actual.getInputs().take_back(coordinates.size()) !=
-                ValueRange(coordinates))
+            actual.getInputs().take_back(coords) !=
+                ValueRange(addedCoordinates) ||
+            (replica &&
+             !readNativeRequestLoopInputs(*replica, actual, ns, env, replicas)))
           return false;
         auto &x = loop.getBody().front();
         auto &y = actual.getBody().front();
         Env inner;
         if (y.getNumArguments() !=
-                x.getNumArguments() + stateTypes.size() + coordinates.size() ||
-            !llvm::equal(ValueRange(y.getArguments())
-                             .slice(split, stateTypes.size())
-                             .getTypes(),
-                         stateTypes) ||
+                x.getNumArguments() + nc + ns + np + coords ||
+            !llvm::equal(
+                ValueRange(y.getArguments()).slice(split + nc, ns).getTypes(),
+                ArrayRef<Type>(stateTypes).take_front(ns)) ||
             !bind(x.getArguments().take_front(split),
                   y.getArguments().take_front(split), inner) ||
             !bind(x.getArguments().drop_front(split),
-                  y.getArguments().slice(split + stateTypes.size(),
+                  y.getArguments().slice(split + nc + ns,
                                          x.getNumArguments() - split),
-                  inner))
+                  inner) ||
+            (replica && !bindNativeRequestLoop(*replica, actual, ns, replicas)))
           return false;
-        SmallVector<Value> indices(
-            y.getArguments().take_back(coordinates.size()));
-        indices.push_back(y.getArgument(0));
+        SmallVector<Value> indices;
+        for (unsigned slot : coordinateSlots)
+          indices.push_back(y.getArgument(slot));
+        if (observed)
+          indices.push_back(y.getArgument(0));
         if (!body(x, y, std::move(inner),
-                  SmallVector<Value>(
-                      y.getArguments().slice(split, stateTypes.size())),
-                  indices, role, reached, depth + 1) ||
+                  SmallVector<Value>(y.getArguments().slice(split + nc, ns)),
+                  indices, role, reached, depth + 1, nullptr, observed) ||
             !bind(loop.getResults(),
-                  actual.getResults().drop_back(stateTypes.size()), env))
+                  actual.getResults().take_front(loop.getNumResults()), env))
           return false;
-        state.clear();
-        append_range(state, actual.getResults().take_back(stateTypes.size()));
+        if (observed) {
+          state.clear();
+          append_range(state, actual.getResults().take_back(ns));
+        }
         cursor = cursor->getNextNode();
       } else if (isa<pir::FinishOp, pir::ProtocolYieldOp, pir::FinishIfOp>(
                      op)) {
         bool continuing =
             isa<pir::FinishIfOp>(op) &&
             (!plan || plan->root == protocol::ConstructionPlan::Root::Host);
+        unsigned replicaYields =
+            isa<pir::ProtocolYieldOp>(op) && requestFrame && requestFrame->loop
+                ? requestFrame->loop->yielded.size()
+                : 0;
         if (op.getName() != cursor->getName() || !attributes(&op, cursor) ||
             cursor->getNumOperands() !=
-                op.getNumOperands() + stateTypes.size() ||
+                op.getNumOperands() + replicaYields + stateSlots ||
             cursor->getNumResults() !=
-                op.getNumResults() + (continuing ? stateTypes.size() : 0) ||
-            cursor->getOperands().take_back(stateTypes.size()) !=
-                ValueRange(state) ||
+                op.getNumResults() + (continuing ? stateSlots : 0) ||
+            cursor->getOperands().take_back(stateSlots) != ValueRange(state) ||
             !operands(op.getOperands(),
-                      cursor->getOperands().drop_back(stateTypes.size()),
+                      cursor->getOperands().take_front(op.getNumOperands()),
                       env) ||
+            (replicaYields &&
+             !readNativeRequestYield(*requestFrame->loop,
+                                     cursor->getOperands().slice(
+                                         op.getNumOperands(), replicaYields),
+                                     env, replicas)) ||
             !bind(op.getResults(),
                   cursor->getResults().take_front(op.getNumResults()), env))
           return false;
         if (continuing) {
           state.clear();
-          append_range(state,
-                       cursor->getResults().take_back(stateTypes.size()));
+          append_range(state, cursor->getResults().take_back(stateSlots));
           if (!llvm::equal(
-                  cursor->getResults().take_back(stateTypes.size()).getTypes(),
-                  stateTypes))
+                  cursor->getResults().take_back(stateSlots).getTypes(),
+                  ArrayRef<Type>(stateTypes).take_front(stateSlots)))
             return false;
         }
         cursor = cursor->getNextNode();
@@ -503,6 +565,15 @@ class TranscriptCorrespondence {
                 payload.getType() != receive.getOutput().getType())
               return false;
             env[receive.getOutput()] = payload;
+          } else if (fact.reconstructed) {
+            if (role != policy.producer || !requestFrame ||
+                !requestFrame->requests.count(&op))
+              return false;
+            payload = resolveNativeRequestValue(
+                requestFrame->requests.lookup(&op), env, replicas);
+            if (!payload || payload.getType() != receive.getOutput().getType())
+              return false;
+            env[receive.getOutput()] = payload;
           } else {
             if (role != policy.validator || !exact(op, *cursor, env, depth))
               return false;
@@ -513,10 +584,11 @@ class TranscriptCorrespondence {
             return false;
         } else if (auto send = dyn_cast<pir::EmitOp>(op)) {
           if (fact.query ||
-              role != (delivery != deliveries.end() ? policy.validator
-                                                    : policy.producer))
+              role != (delivery != deliveries.end() || fact.reconstructed
+                           ? policy.validator
+                           : policy.producer))
             return false;
-          if (delivery == deliveries.end()) {
+          if (delivery == deliveries.end() && !fact.reconstructed) {
             if (!exact(op, *cursor, env, depth))
               return false;
             cursor = cursor->getNextNode();
@@ -704,10 +776,12 @@ public:
       ArrayRef<NativeTranscriptEvent> events,
       const protocol::ConstructionPlan *plan,
       ArrayRef<protocol::ConstructionInvocation> invocations,
-      const protocol::SourceExecutionClosure &execution)
+      const protocol::SourceExecutionClosure &execution,
+      const NativeRequestPlan &requests)
       : policy(policy), plan(plan),
         hostRoot(!plan || plan->root == protocol::ConstructionPlan::Root::Host),
-        events(events), symbols(candidate), execution(execution) {
+        events(events), symbols(candidate), execution(execution),
+        requests(requests) {
     if (plan) {
       stateTypes = plan->state;
       for (const auto &rule : plan->rules)
@@ -740,7 +814,9 @@ public:
       return false;
     llvm::StringSet<> origins, queries;
     for (const auto &event : events) {
-      if (!bySite.try_emplace(event.site, &event).second ||
+      if ((event.reconstructed &&
+           (event.query || event.startInputs || event.difficulty)) ||
+          !bySite.try_emplace(event.site, &event).second ||
           !origins.insert(event.origin).second)
         return false;
       if (event.query)
@@ -750,7 +826,7 @@ public:
       auto delivery = bySite.find(draw.second);
       if (!deliveries.try_emplace(draw.second, draw.first).second ||
           !queries.erase(draw.first) || delivery == bySite.end() ||
-          delivery->second->query)
+          delivery->second->query || delivery->second->reconstructed)
         return false;
     }
     if (!queries.empty())
@@ -849,7 +925,8 @@ Error verifyNativeTranscript(
     ModuleOp projected, ModuleOp constructed, const NativeProofPolicy &policy,
     ArrayRef<NativeTranscriptEvent> events,
     const protocol::ConstructionPlan *plan,
-    ArrayRef<protocol::ConstructionInvocation> invocations) {
+    ArrayRef<protocol::ConstructionInvocation> invocations,
+    const mathematical::RealizedProtocol *realization) {
   if (!projected || !constructed ||
       projected.getContext() != constructed.getContext() ||
       failed(zkc::admitStage(projected)) ||
@@ -857,22 +934,27 @@ Error verifyNativeTranscript(
       !hasSingleElement(*projected.getBody()) ||
       !hasSingleElement(*constructed.getBody()))
     return error("native-transcript-subject");
+  auto before = dyn_cast<pir::ProtocolModuleOp>(projected.getBody()->front());
+  auto after = dyn_cast<pir::ProtocolModuleOp>(constructed.getBody()->front());
+  if (!before || !after || before.getProfile() != pir::Profile::Participant ||
+      after.getProfile() != pir::Profile::Participant)
+    return error("native-transcript-subject");
+  auto requests = planNativeRequests(before, policy, events, realization);
+  if (!requests)
+    return requests.takeError();
+  // An identity construction still leaves the joint driver. Its original
+  // paired-loop counts must agree even when no transcript state is added.
   if (policy.suite.empty() && !plan) {
     if (!OperationEquivalence::isEquivalentTo(
             projected, constructed, OperationEquivalence::IgnoreLocations))
       return error("native-transcript-correspondence");
     return Error::success();
   }
-  auto before = dyn_cast<pir::ProtocolModuleOp>(projected.getBody()->front());
-  auto after = dyn_cast<pir::ProtocolModuleOp>(constructed.getBody()->front());
-  if (!before || !after || before.getProfile() != pir::Profile::Participant ||
-      after.getProfile() != pir::Profile::Participant)
-    return error("native-transcript-subject");
   auto execution = protocol::readSourceExecutionClosure(after);
   if (!execution)
     return execution.takeError();
   TranscriptCorrespondence checker(after, policy, events, plan, invocations,
-                                   *execution);
+                                   *execution, *requests);
   if (!checker.check(before, after))
     return error(checker.exhausted() ? "native-transcript-limit"
                                      : "native-transcript-correspondence",

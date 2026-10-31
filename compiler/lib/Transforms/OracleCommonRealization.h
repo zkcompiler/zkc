@@ -1,7 +1,9 @@
 #ifndef ZKC_TRANSFORMS_ORACLECOMMONREALIZATION_H
 #define ZKC_TRANSFORMS_ORACLECOMMONREALIZATION_H
 #include "OracleMerkle.h"
+#include "OracleQueryBatch.h"
 #include "OracleQueryController.h"
+#include "OracleQueryPacket.h"
 #include "OracleRealizationSelection.h"
 namespace zkc::protocol {
 struct OracleCommonController {
@@ -39,6 +41,23 @@ struct OracleInputShape {
     return anchor == other.anchor && port == other.port;
   }
 };
+// Private helpers are installed once per source-derived receiver controller.
+// The exact source schedule and independently read helper bodies bind these
+// handles; the record alone grants no authority.
+struct OracleCommonRemote {
+  unsigned receiver, holder;
+  OracleQueryDemand demand;
+  OracleQueryResponse response;
+  mlir::func::FuncOp open;
+  OracleQueryPacket packet;
+  OracleQueryWindow window;
+};
+struct OracleCommonBatch {
+  // Ordered indexes into the entry's remote inventory. Source coordinates and
+  // capacity are rederived, never supplied as acceptance assumptions.
+  std::vector<unsigned> remotes;
+  OracleQueryBatch body;
+};
 struct OracleCommonEntryRealization {
   std::string entry;
   std::vector<OracleMerkleFunctions> merkle;
@@ -46,6 +65,8 @@ struct OracleCommonEntryRealization {
   std::vector<OracleCommonController> controllers;
   std::vector<std::vector<mlir::func::FuncOp>> allocators;
   std::vector<mlir::func::FuncOp> locals;
+  std::vector<OracleCommonRemote> remotes;
+  std::vector<OracleCommonBatch> batches;
   std::vector<OracleResultStore> resultStores;
   std::vector<OracleResultReference> resultReferences;
 };

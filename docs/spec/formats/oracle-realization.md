@@ -6,8 +6,8 @@ common module, the requested realization policy and the record. The native
 reader checks them together; a record cannot authorize its own policy.
 The record is not executable code, a claim of prior admission, a proof of oracle
 simulation, or permission to publish a proof artifact. Joint execution retains
-this checked edge through compilation; logical-contract transport, native proof
-integration and complete Merkle query realization remain separate obligations.
+this checked edge through compilation; logical-contract transport and native
+proof integration remain separate obligations.
 
 The policy chooses ideal data or a named Merkle scheme and leaf layout for each
 base input/send occurrence. All choices use ordinary references and immutable
@@ -25,6 +25,59 @@ native schedule against that candidate's interface and retains the entire edge
 in the final compilation owner. Execution does not authorize logical claim
 publication; the complete logical-contract interpretation remains required.
 
+Compilation selects explicit deployment entries after full source admission and
+checked application expansion. Internal protocol declarations do not acquire
+external oracle ingress solely because they remain in the source module.
+Selection keeps the full authored source in the preparation owner, preserves
+all non-program declarations, and refuses dangling symbolic references. The
+selected output entry and every companion required by a polynomial
+correspondence report are retained. Whole-module realization APIs continue to
+realize the caller-supplied module; they do not infer deployment roots from
+visibility or call-graph degree.
+
+## Requested selection
+
+The compiler, CLI and SDK use one requested selection, encoded as
+`zkc.oracle-selection/0`. It is an input to compilation, never proof-supplied
+policy or evidence of realization correctness. The object has exactly
+`format`, `roots`, `order` and `authentication`.
+
+`roots` is one of two exact tagged objects:
+
+- `{"kind": "uniform", "table": {"scheme": S, "grouping": G, "order": O}}`
+  selects the same table implementation for every actual base occurrence.
+- `{"kind": "exact", "entries": [...]}` contains the complete ordered or
+  unordered caller inventory. Each entry has exactly `entry`, `path`, `scheme`,
+  `grouping` and `order`. Normalization uses source order, not supplied order.
+
+`S` is an exact scheme identity or the empty string for ideal tables. `G` is
+`individual` or `antipodal-pairs`; `O` is `natural` or `bit-reversed`. Ideal data
+requires individual/natural layout. Selection-level `order` is `unrestricted`
+or `after-final-draw`, and `authentication` is `per-query` or `atomic-blocks`.
+The default selection is uniform ideal data, unrestricted order and per-query
+authentication. Empty exact inventories are distinct from uniform selections.
+
+The request admits no unknown/duplicate keys, aliases or alternate shapes.
+Bounds are 1 MiB, 32 JSON nesting levels, 100,000 exact selectors, 64 path
+ordinals and 4,096 bytes per name or scheme. Path ordinals are canonical
+unsigned integers and each path is nonempty. A selected implementation must be
+installed for every actual kind; no field or commitment substitution is implied.
+
+`--oracle-realization=JSON` passes this object to executable compilation. The
+same option is available through the source compiler, CLI and SDK settings.
+It is not an elaboration or source-check option. Project settings carry the
+same typed `oracle-realization` object. The selected request is part of the
+compiler cache key and the exact packaged compiler options; a child invocation
+inherits the actual request. The package's `options.oracle_realization` field
+is mandatory, including for the default and an empty oracle inventory. This
+changes the development version-0 package schema; no six-option compatibility
+reader is admitted. The six existing Boolean options retain their meanings.
+
+The realization record always carries the expanded exact choices, even when
+the request used a uniform selector. The independent reader derives expansion
+from the frozen prepared source and the independently supplied request. It does
+not accept the record's root inventory as selection authority.
+
 ## JSON envelope and limits
 
 The root has exactly these fields:
@@ -33,7 +86,7 @@ The root has exactly these fields:
 |---|---|
 | `format` | Exactly `zkc.oracle-realization/0` |
 | `selection` | Normalized caller-requested roots, query order and authentication boundary |
-| `types` | Canonical ordinary logical type spellings, interned in first-use order |
+| `types` | Canonical complete source type descriptors, interned in first-use order |
 | `entries` | Oracle-bearing entries in original declaration order |
 | `declarations` | Complete actual declaration order and symbolic reference slots |
 
@@ -53,9 +106,12 @@ and constructor order. `grouping` is `individual` or `antipodal-pairs`; `order`
 is `natural` or `bit-reversed`. An empty scheme requests ideal data and requires
 individual/natural layout. Virtual constructions have no selection row.
 
-The caller's absent root inventory explicitly selects ideal data everywhere.
-A present inventory must cover every base input/send occurrence exactly once;
-missing, duplicate and extraneous selectors refuse. Paths must be nonempty and
+The caller selects either one table realization for every base root, or an
+exact root inventory. The default uniform choice is ideal data with the
+individual/natural layout. A uniform choice is expanded against the actual
+prepared source; it never catches an unsupported scheme or kind by selecting
+ideal data. An exact inventory must cover every base input/send occurrence
+exactly once; missing, duplicate and extraneous selectors refuse. Paths must be nonempty and
 have at most 64 ordinals; at most 100,000 root selectors are admitted. The reader
 normalizes this external request against the original, checks actual bodies
 under that request, and compares the entire record to its rederived encoding.
@@ -70,7 +126,8 @@ participant-relative property, not a global ordering of independently running
 participants.
 
 The analysis distinguishes normal and stopped continuations, resolves actual
-constants and invariant captures, and conservatively joins unknown outcomes
+participant-selected constants and invariant captures, and conservatively joins
+unknown outcomes
 and loop counts through the checked bound. Another participant's guard or
 completion cannot end this observer's continuation. Applications must already
 be expanded with their role substitutions. A virtual query inherits its outer
@@ -78,8 +135,8 @@ query event; unused virtual declarations do not create events. One cumulative
 100,000-step analysis budget covers all entries and observers, with at most
 64 nested blocks. Unsupported or over-budget analysis refuses the policy.
 
-The property permits the existing immediate authentication at each reached
-query. It authorizes no batching, request hoisting, deferred authentication,
+The property permits per-query authentication. It authorizes no batching,
+request hoisting, deferred authentication,
 public-coin claim or simulation theorem. Those require their own checked
 realization obligations. The record cannot override a failed source analysis.
 
@@ -106,12 +163,14 @@ operations, executable operands, literal values or helper bodies.
 | `input_shapes` | `{anchor, port}` mappings from original root inputs to appended native shape inputs |
 | `controllers` | Role/kind/access selections and complete controller metadata |
 | `allocators` | Constructor order, then role order; each cell names its allocation helper |
-| `locals` | Names of source-derived common local recipes, in recipe order |
+| `locals` | Names of source-derived ordinary local recipes, in recipe order |
+| `remotes` | Source-ordered receiver/holder controller indexes and all dynamic query helpers |
+| `batches` | Source-ordered root occurrence groups and their aggregate helpers |
 | `result_stores` | `{constructor, role, port}` mappings to native support outputs |
 | `result_references` | `{result, role, stores}` mappings from original handle results to support ports |
 | `constructors` | Source-derived construction inventory and per-role store layouts |
 | `occurrences` | Source-derived generated common sites and their purpose/role/path |
-| `query_blocks` | Ordered logical query paths and their physical request groups |
+| `query_blocks` | Ordered logical query paths and the source-derived packet capacity |
 | `interface` | Complete native input/output type references and role families |
 | `logical_interface` | Original oracle input/output pairings, distinct from native representation leaves |
 | `contracts` | Complete original clause inventory and exact statement selections |
@@ -144,8 +203,11 @@ Appended support stores are native representation leaves, distinguished from aut
 They do not establish a general logical-handle codec or cross-entry graph ABI.
 
 The logical interface is `{inputs, outputs}`. Each list follows original anchor
-port order, with rows `{data, anchor, kind, holder, receivers}`. Port numbers
-refer to the original common signature; `kind` uses the kind schema above.
+port order, with rows `{data, anchor, type, holder, receivers}`. Port numbers
+refer to the original common signature; `type` uses the complete logical type
+schema, including a bounded sequence's maximum. This replaces the former bare
+`kind` field in version 0; producers, exact readers and fixtures change together.
+There is no alternate legacy row shape.
 Input rows bind the exact root data and handle leaves. Result rows choose the
 first unused matching holder-data leaf in result order, under the same component
 view/application and role rules as Protocol admission. Repeated aliases still
@@ -188,108 +250,172 @@ publication must consume and interpret the complete checked edge.
 
 ## Common opening communication
 
-The immediate-query profile admits multiple remote base constructors at one
-holder in the receiver controller's inventory. Constructors may use different
-answer kinds and installed Merkle schemes, allocate multiple instances, and
-participate in recurrent virtual graphs. The enclosing common regions must
-already include the holder. Mixed local/remote bases and selection across holders
-refuse with `oracle-common-communication-profile`. This is a realization
-capability restriction, not a restriction on logical oracle formation or an
-implicit switch to ideal data. The profile is conservative over the controller's
-whole constructor inventory, not a claim of per-query reachability precision.
+All remote queries use bounded dynamic demand windows. A receiver controller's
+base constructors must select Merkle realizations at one remote holder. They
+may have different answer kinds, installed schemes and allocated instances, and
+may occur in recurrent virtual graphs. The common region must include the
+holder. Mixed local/remote bases and selection across holders refuse with
+`oracle-common-communication-profile`. This is a realization capability bound,
+checked over the complete controller inventory, rather than a restriction on
+logical oracle formation or an implicit switch to ideal data.
 
-A query initializes its controller from the actual reference and position and
-advances it before opening communication. A Request-phase suspension produces
-one request record with ordered fields `(constructor, instance, position)`.
-The holder dispatches the actual constructor, rejecting an unknown tag, loads
-that instance's private opening state and shape, and opens it. Its response is a
-closed variant with one `ConstructorN` alternative per source constructor; each
-payload is the complete row followed by its proof. Request and response each
-use one ordinary exchange. Their nominal descriptors retain the source entry,
-receiver, holder and ordered constructor inventory, and obey ordinary variant
-limits, including at most 32 response alternatives.
+The planner derives remote receiver/holder pairs and source batch coordinates
+from the frozen prepared original's shared interaction view. Capacity can use
+an exact uniform repeat count within its declared maximum; a single
+participant's component cannot narrow a common bound. Unknown counts retain
+the conservative maximum, and zero-trip alternatives remain in recurrence
+joins. This information neither evaluates answers nor removes count or domain
+checks. The reader first checks actual controllers,
+Merkle helpers and allocators, then derives that same schedule. A remote row
+contains exactly `{receiver, holder, demand, response, open, packet, window}`.
+`receiver` and `holder` index the entry's controller inventory. Each receiver
+appears once, in first source-use order. `open` names an ordinary private scoped
+helper with signature `(request, holder stores...) -> response`; the request,
+response, constructor dispatch and store order are derived from checked source
+models, never accepted as record overrides.
 
-Before reading an anchor or using a response, the receiver's selected arm checks
-that the suspended phase is Request, that its constructor equals the response
-alternative, and that its answer kind is the expected kind. It loads the root
-and expected shape through the **suspended reference**, authenticates at the
-**suspended position**, and resumes with the original five request/continuation
-coordinates. An untrusted response cannot select a different anchor, position or
-continuation, including when constructors have identical payload types and roots.
+The other remote fields have these exact schemas. Types use the shared intern
+table; helper fields use actual candidate symbols.
 
-Holder dispatch and receiver authentication/resumption are specialized scoped
-helpers. A separate reader checks their actual conditional/match bodies,
-resolved helper identities, ordered guards and SSA operands. The common-body
-reader checks the request construction, exchanges, stores and continuation calls.
-There is one route for single and multiple constructors; there is no new runtime
-oracle object, wire opcode or general-purpose local recipe language. These
-native checks establish correspondence to the selected recipe, not a Lean
-simulation theorem or a cryptographic authenticity theorem.
+| Object | Exact fields |
+|---|---|
+| `demand` | `frame`, `sequence`, `state`, `initialize`, `advance`, `consume` |
+| `response` | `answer`, `authenticate`, `resume` |
+| `packet` | `request_sequence`, `response_sequence`, `answer_sequence`, `groups_sequence`, `key`, `key_sequence`, `group`, `open`, `authenticate` |
+| `window` | `request_sequence`, `answer_sequence`, `capacity`, `collect`, `replay`, `finish` |
 
-When virtual constructors are present, the queried handle must already be
-available at both receiver and holder. Each role computes the structural leaf
-count from its own component and immutable stores; role assembly supplies the
-counted loop's pointwise count. Assembly establishes availability, not component
-agreement. No extra count message exposes later work before it is reached.
-Without virtual constructors, a base query has exactly one leaf and needs no
-holder-side handle. The loop carries receiver-only controller state and captures
-the appropriate role stores. It advances after every authenticated answer,
-including the last, before finishing the outer query. Thus an invalid later or
-zero-query virtual child retains the prior opening prefix but prevents the outer
-answer. Zero structural leaves perform no opening exchanges. Duplicate and
-unused virtual queries remain separate reached openings. This reached-prefix
-route also handles queries for which the fixed-block proof below is unavailable.
-Multi-holder routing and general virtual batching remain unsupported.
+`demand.state` is an ordered type vector. Its header retains constructor,
+instance, position, answer kind, continuation and phase; the final field is an
+append-only frame sequence. Each frame retains parent constructor, instance,
+position, next child and parent continuation. Discovery has no answers or
+fabricated answer indices. It follows actual constructor instances and
+nonadaptive position maps in depth first source order, preserving duplicate and
+unused queries. It checks every node's domain before descent, including empty
+virtual nodes. A false predicate retains a pending domain cut and prevents
+later discovery; it does not execute a stopping source guard ahead of prior
+authentication.
 
-## Checked atomic query blocks
+`response.answer` is ordinary private variant data, with one typed logical
+answer alternative per exact base constructor. `authenticate` consumes one
+retained request and its response, reads that request's own receiver stores and
+checks its exact constructor, root, expected shape, layout and position. It
+returns a typed answer without resuming. `resume` checks the evaluator's actual
+request identity and resumes using its own continuation coordinates. Neither
+helper establishes authority for an arbitrary caller-supplied association.
 
-`per-query` retains one logical query per block. `atomic-blocks` admits a local
-block of at most 32 consecutive base-table queries with the same receiver and
-holder. Every intervening non-query operation closes the block: this includes
-service draws, guards, completion, calls, control flow and answer-dependent work.
-A missing proof closes the block and retains the ordinary singleton route.
+`packet.group` computes first-use physical groups at runtime. A key is the
+exact source constructor, instance and selected physical leaf. Equal roots or
+Data never merge different anchors. Logical order and multiplicity remain in
+the request sequence and one group ordinal per occurrence. The key and group
+sequences are ordinary private data. `packet.open` opens each physical request
+once through the checked `open` helper. `packet.authenticate` checks sequence
+lengths and the complete logical-to-physical association, then authenticates
+every logical occurrence independently against its retained request. Physical
+sharing never authorizes sharing authentication. All answers return together
+after the whole logical sequence authenticates. No packet helper resumes an
+evaluator.
 
-Before crossing a query-domain check, the planner and reader derive its validity
-from the actual prepared source. The supported evidence is an index literal
-within the exact table extent, or a successful same-owner `index` service query
-with a literal positive bound no larger than that extent. The extent is static
-or the literal actual `rows` operand of a send; a shape upper bound is not an
-extent. Role restrictions, shape forgetting and invariant repeat captures
-preserve the underlying source identity. Loop carries, sequence selections,
-virtual admissibility laws and arbitrary computed indices supply no such proof.
-This restriction preserves the reached request prefix at an invalid query.
+## Checked query batches
 
-Each `query_blocks` row is `{queries, request_groups}`. `queries` lists all
-logical source paths in order, including duplicates. `request_groups` is either
-an equally sized list of physical opening slots, numbered in first-use order,
-or `null` for ideal evaluation and dynamic virtual enumeration. A shared slot
-requires the same actual source anchor and constructor, the same selected layout
-and the same physical leaf. Equal roots or equal Data do not merge anchors.
-The supported sharing proofs use identical position SSA values or literals
-mapped through the checked layout, including antipodal pairs and bit reversal.
-The entire block partition and slot mapping are rederived, not trusted metadata.
+`per-query` selects one root occurrence per batch and packet capacity one.
+`atomic-blocks` selects up to 32 consecutive queries whose actual references
+and positions are available before the first query and whose checked transport
+inventories agree. Different root answer kinds and continuation layouts remain
+controller-local. Every intervening non-query operation ends a batch, including
+service draws, guards, calls, completion and control flow. An answer-dependent
+position or handle ends the current batch before that dependency. Unknown
+positions remain eligible: demand discovery preserves the valid prefix and
+replay executes a pending domain failure after that prefix authenticates.
+An upper shape bound is never proof that a queried position is valid.
 
-A fixed block emits one request exchange and one response exchange. A singleton
-uses the ordinary request/response component directly. Larger packets are
-ordinary nominal Records whose ordered payloads are those components. Scoped
-`exec.variant` and `exec.match` helpers pack and unpack packets, retaining their
-outcomes and charges; proof values do not become mathematical data. The nominal
-packet identity is `["zkc.oracle.query-packet/0", purpose]`, where purpose is
-`opening_request` or `opening_response`. Existing type, variant and codec limits
-apply. An independent reader checks the actual helper bodies and ordered fields.
+Each `query_blocks` row is exactly `{queries, packet_capacity}`. `queries` lists
+source occurrence paths in order, retaining repeated references and positions.
+`packet_capacity` is null for ideal local evaluation; otherwise it is the same
+positive entry-wide bound used by every remote window and packet helper.
+For `atomic-blocks`, this is the maximum source-derived structural leaf bound
+of any selected batch, with a minimum of one. It is a packet limit, not a new
+source-domain premise. A bound of 1048576 or greater refuses. Capacity exhaustion
+refuses the selected realization rather than silently changing the policy.
+There is no `request_groups` field or fixed nominal packet compatibility route.
+Actual physical groups are runtime data checked by the packet reader.
 
-Every logical query authenticates its selected response against its own
-suspended root, shape, constructor and position. All authentications dominate
-all source answer releases and subsequent continuation work. A failed block
-releases no source answer and reaches no later block. The complete request
-packet is observable even if the first authentication fails: `atomic-blocks`
-selects that observation boundary explicitly, rather than promising equality
-with per-query failure traces. Physical sharing reduces transmitted openings;
-authentication is currently repeated for each logical query. Resource limits
-and native failures remain those of the generated program. This correspondence
-check is not a resource-trace equivalence, simulation theorem or authenticity
-proof. General virtual/FRI batching requires additional checked shape and
-position evidence.
+Each `batches` row is exactly `{remotes, body}`. `remotes` is the ordered list of
+indexes into the entry's remote inventory, one per source root occurrence;
+repeated indexes retain distinct occurrences. `body` has exactly
+`{demand_state, evaluator_state, request_sequence, answer_sequence, collect,
+check_available, replay, finish}`. This is the single current `/0` shape; the
+former helper inventory is not accepted. State vectors concatenate each selected
+root's state in source order. Request and answer sequences and the immutable ordered store types must
+agree across roots. All helper signatures borrow scope and return explicit
+outcomes, and must fit native source execution's width limit of 512.
+The batch reader consumes windows already independently checked by its caller.
+
+The common body initializes demand and evaluator states with each root's exact
+source reference and position and binds the actual immutable stores. The batch
+`collect` helper takes only demand state and stores and traverses root windows
+in order, carrying one request sequence and a blocked flag. It returns all
+updated demand states, that sequence and
+one unsigned end offset per root. End offsets retain empty and repeated ranges.
+Discovery has no evaluator inputs and does not evaluate answers. Immediately
+after collection and before grouping or exchange, the verifier calls the
+distinct `check_available` helper with the actual collected request sequence,
+original evaluator states and the same stores. This helper returns no data.
+It tests the actual sequence length against zero. On an empty positive round,
+it finishes every root on its original evaluator state in source order before
+rejecting an impossible successful empty round. The first actual source failure
+propagates before that internal guard, and no empty packet is sent. On a
+nonempty prefix the helper has no effect. The batch reader independently checks
+both complete helper bodies, exact signatures, captures and ordered finishes;
+the common reader requires the actual check call with exact operands in this
+position. An unused correct helper cannot replace it.
+
+For a nonempty round, the common body calls the actual packet grouping helper,
+sends the physical requests, dispatches the holder opening, receives responses
+and authenticates the ENTIRE collected logical prefix before any replay.
+The actual two group outputs must come from the same call. The complete common
+body reader checks source operand identity, state/store captures, ordered helper
+calls, exchanges and SSA dataflow; recording a correct unused helper cannot
+substitute for checking the actual call.
+
+Batch `replay` passes each root the same request and answer sequences and its
+exact contiguous range: zero to the first end, then the previous end to the next
+end. The last end must equal request length. Each root matches its next evaluator
+request to the retained constructor, instance, position and kind, then resumes
+with its own continuation. Discovery's pending domain cut is executed by the
+original evaluator guard after the preceding authenticated prefix. Earlier
+authentication failure therefore precedes a later source-domain failure.
+Replay neither authenticates nor releases source answers. After the structural
+rounds, batch `finish` finishes every root in source order and releases the
+complete answer tuple only after all roots succeed. Zero-total batches skip
+collect and communication and invoke this finish once, retaining empty-node
+domain and answer checks.
+
+Structural leaf counts govern positive common rounds. The holder opens the
+actual received sequence without knowing receiver-private positions in advance.
+Role assembly supplies availability, not component agreement. A failed batch
+releases no source answer and reaches no later batch. `atomic-blocks` explicitly
+selects the whole packet observation boundary, including when an early
+authentication fails; it does not promise the same failure trace as `per-query`.
+Multi-holder routing remains unsupported.
+
+### Generated failure relation
+
+The logical request-prefix comparison assumes successful execution of generated
+discovery, carrier and replay work, apart from the source domain checks and
+selected authentication failures being compared. Generated native failures are
+separate outcomes: reference lookup, position computation, storage growth,
+opening, message decoding, authentication, answer computation and retention can
+stop at their actual positions in the generated program. They do not promise
+the same request prefix or resource trace as a per-query implementation.
+
+The checker covers these outcomes by checking complete actual bodies and their
+fixed failure continuations. A failed helper is not caught and reclassified as
+a source-domain cut, a partial packet is not published, and no alternate
+realization is retried. An arbitrary all-stop candidate does not satisfy that
+body comparison. Honest successful execution additionally needs the selected
+provider assumptions, valid source inputs and sufficient native resources.
+These native structural checks establish neither a Lean simulation theorem nor
+a cryptographic authenticity or resource-trace equivalence theorem.
 
 ## Controller metadata
 
@@ -321,9 +447,20 @@ queries. The state header retains the most recently produced answer index.
 Returning to a virtual parent reads each child's own index from its kind's arena
 in source query order. The reader checks those actual SSA references, arena
 appends and loads; a record's kind or index claim cannot authorize substitution.
-The current controller still authenticates and evaluates one request at a time.
-Answer references prepare bounded virtual batching without authorizing delayed
-domain checks or changing the current observation policy.
+Anchor lookup takes the actual constructor tag and instance coordinates directly,
+checks the tag before indexing the selected immutable store, and returns the
+record fields in their declared order. Internal callers do not reconstruct and
+immediately deconstruct a handle record. Dispatch is a balanced tree of scoped
+conditional regions in one callable; each leaf checks the exact selected tag.
+The bounded advance loop owns its transition body directly. Independent readers
+check these bodies, guards, case partitions and complete state transfers. None
+of these representation choices changes logical custody or authorizes using a
+static possible constructor in place of an actual reference.
+
+The evaluator remains responsible for source-ordered domains and answers.
+Dynamic demand windows use its checked request/resume transitions only after
+complete prefix authentication; answer arenas do not grant independent
+permission to defer domain checks or change the selected observation policy.
 
 ## Declaration and reference slots
 

@@ -71,23 +71,31 @@ Error Semantics::takeError() {
 }
 bool valueType(const Type &type) { return !isStaticOnly(type); }
 bool Semantics::protocolValue(const Type &type, Span span) {
+  if (type.kind == Type::Kind::LogicalRecord)
+    return logicalRecord(type, span);
   return isOracleHandle(type) || executableType(type, span);
 }
 bool Semantics::oraclePort(const Port &port) {
-  if (port.type.kind == Type::Kind::OracleSequence)
-    return fail("source.oracle-port",
-                "bounded oracle sequences are internal protocol values",
-                port.span);
-  if ((port.type.kind == Type::Kind::Oracle) != port.oracle.has_value())
+  if (isLogicalValue(port.type) != port.oracle.has_value())
     return fail("source.oracle-port",
                 "oracle ports require an explicit holder and receiver arrow",
                 port.span);
   if (!port.oracle)
     return true;
-  if (port.type.arguments.size() != 1 || port.roles.size() < 2 ||
+  if (port.roles.size() < 2 ||
       !llvm::is_contained(port.roles, port.oracle->holder))
     return fail("source.oracle-port", "invalid oracle port role family",
                 port.span);
+  if (port.type.kind == Type::Kind::LogicalRecord) {
+    if (port.oracle->maximumRows)
+      return fail("source.oracle-shape",
+                  "logical record row bounds belong to direct fields",
+                  port.span);
+    return logicalRecord(port.type, port.span);
+  }
+  unsigned arity = port.type.kind == Type::Kind::OracleSequence ? 2 : 1;
+  if (port.type.arguments.size() != arity)
+    return fail("source.oracle-port", "invalid oracle port type", port.span);
   if (port.oracle->maximumRows &&
       port.oracle->maximumRows->kind != Type::Kind::Natural)
     return fail("source.oracle-shape",
@@ -169,8 +177,9 @@ const Parameter *Semantics::parameter(StringRef atom) const {
 }
 const Declaration *Semantics::typeDeclaration(const Type &type) const {
   using K = Type::Kind;
-  if (type.kind != K::Record && type.kind != K::Variant &&
-      type.kind != K::Associated && type.kind != K::Module)
+  if (type.kind != K::Record && type.kind != K::LogicalRecord &&
+      type.kind != K::Variant && type.kind != K::Associated &&
+      type.kind != K::Module)
     return nullptr;
   auto found = qualified.find(type.domain);
   return found == qualified.end() ? nullptr
@@ -282,6 +291,19 @@ std::optional<Type> Semantics::substitute(const Type &input,
     auto pos = name.rfind("::");
     return associated(result.arguments.front(), name.drop_front(pos + 2), span);
   }
+  // Substitution must not introduce a logical value into an ordinary product,
+  // even when an array has no elements in its eventual native layout.
+  if (result.kind == Type::Kind::Array || result.kind == Type::Kind::Tuple ||
+      result.kind == Type::Kind::Builtin)
+    for (const auto &argument : result.arguments)
+      if (isLogicalValue(argument)) {
+        fail("source.oracle-aggregate",
+             "ordinary aggregates cannot contain logical protocol values",
+             span);
+        return {};
+      }
+  if (result.kind == Type::Kind::LogicalRecord && !logicalRecord(result, span))
+    return {};
   return result;
 }
 bool Semantics::oracleKind(const Type &kind, Span span,
@@ -613,20 +635,43 @@ bool Semantics::assumptions(const Declaration &caller,
   auto l = substitute(lhs, bindings, span), r = substitute(rhs, bindings, span);
   if (!l || !r)
     return false;
-  if (l->dimension.isClosed() && r->dimension.isClosed())
-    return l->dimension.closedValue() <= r->dimension.closedValue() ||
+  auto cancel =
+      [&](const Natural &left,
+          const Natural &right) -> std::optional<std::pair<Natural, Natural>> {
+    auto before = naturals.remainingWork();
+    auto result = naturals.cancelCommonTerms(left, right);
+    if (!result) {
+      accept(result.takeError(), span);
+      return {};
+    }
+    if (!charge(before - naturals.remainingWork(), span))
+      return {};
+    return std::move(*result);
+  };
+  auto requested = cancel(l->dimension, r->dimension);
+  if (!requested)
+    return false;
+  const auto &[requestedLeft, requestedRight] = *requested;
+  if (requestedLeft.isClosed() && requestedRight.isClosed())
+    return requestedLeft.closedValue() <= requestedRight.closedValue() ||
            fail("source.bound", "natural requirement is false", span);
-  if (l->dimension == r->dimension)
+  if (requestedLeft == requestedRight)
     return true;
   for (auto &given : caller.bounds) {
     if (!charge(1, span))
       return false;
-    if (given.rhs == r->dimension &&
-        (given.lhs == l->dimension ||
-         (given.lhs.isClosed() && l->dimension.isClosed() &&
-          given.lhs.closedValue() >= l->dimension.closedValue())))
+    auto available = cancel(given.lhs, given.rhs);
+    if (!available)
+      return false;
+    const auto &[givenLeft, givenRight] = *available;
+    if (givenRight == requestedRight &&
+        (givenLeft == requestedLeft ||
+         (givenLeft.isClosed() && requestedLeft.isClosed() &&
+          givenLeft.closedValue() >= requestedLeft.closedValue())))
       return true;
   }
+  // Cancellation is only a comparison view. Preserve the substituted source
+  // obligation when collecting an inferred contract.
   return (inferNatural &&
           inferNatural(caller, {l->dimension, r->dimension, span})) ||
          fail("source.bound", "contract does not establish natural bound", span,

@@ -108,10 +108,28 @@ Semantics::intrinsicSignature(const Declaration *scope, StringRef name,
     }
     if (!arguments.empty() || !parameters.empty()) {
       fail("source.intrinsic",
-           "index comparison has no static roots or parameters", span);
+           "index intrinsic has no static roots or parameters", span);
       return {};
     }
-    return CallSignature{{Type(K::Index), Type(K::Index)}, {Type{}}};
+    using I = MathematicalIdentity;
+    switch (intrinsic->identity) {
+    case I::Select:
+      return CallSignature{{Type{}, Type(K::Index), Type(K::Index)},
+                           {Type(K::Index)}};
+    case I::IndexWrappingAdd:
+    case I::IndexWrappingSubtract:
+    case I::IndexBitAnd:
+    case I::IndexLogicalShiftRight:
+      return CallSignature{{Type(K::Index), Type(K::Index)}, {Type(K::Index)}};
+    case I::IndexEqual:
+    case I::IndexLess:
+    case I::IndexPowerOfTwo:
+      return CallSignature{{Type(K::Index), Type(K::Index)}, {Type{}}};
+    default:
+      fail("source.intrinsic", "index identity has no authoring signature",
+           span);
+      return {};
+    }
   }
   if (intrinsic &&
       intrinsic->domain == MathematicalIntrinsic::Domain::Boolean) {
@@ -252,6 +270,10 @@ Semantics::intrinsicSignature(const Declaration *scope, StringRef name,
   auto n = intrinsic->naturals ? arguments[1]
                                : natural(Natural::constant(parameters.size()));
   switch (intrinsic->identity) {
+  case I::Select:
+    result.inputs = {Type{}, field, field};
+    result.outputs = {field};
+    break;
   case I::FieldAdd:
   case I::FieldSubtract:
   case I::FieldMultiply:

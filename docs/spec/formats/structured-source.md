@@ -64,8 +64,8 @@ There is no cross-category declaration-order field.
 | `["group", domain]` | nominal group |
 | `["groups", domain]` | immutable vector over that group |
 | `["indices"]` | immutable ordered unsigned indices |
-| `["oracle", kind]` | logical occurrence anchor, with associated Data/Query/Answer |
-| `["oracle_sequence", kind, maximum]` | bounded ordered logical handles; `maximum` is a uint64 decimal string |
+| `["oracle", kind-id, arguments]` | logical occurrence anchor, with associated Data/Query/Answer |
+| `["oracle_sequence", kind-id, arguments, maximum]` | bounded ordered logical handles; `maximum` is a uint64 decimal string |
 | `["service", contract]` | owner-local reusable service reference |
 | `["sequence", element-type]` | ordered immutable `data.sequence` |
 | `["product", identity, constructor, component-types]` | one-constructor packed product, with ordered components |
@@ -309,7 +309,7 @@ term   := ["nat", decimal] | ["field", id] | ["group", id]
         | ["domain", sort, id] | ["asset", sort, id]
         | ["bool"] | ["index"] | ["unit"]
         | ["tuple", [term...]] | ["array", term, decimal]
-        | ["nominal", "record"|"variant"|"associated"|"module", path, [term...]]
+        | ["nominal", "record"|"logical_record"|"variant"|"associated"|"module", path, [term...]]
         | ["builtin"|"formal", name, [term...]]
 ```
 
@@ -538,14 +538,17 @@ Every instruction uses the existing five fields:
 instructions have an empty `regions` array. Operand indices use the existing
 prepend-results convention. The kind in a descriptor must agree with the
 actual operand/result types; retaining it does not authorize a different kind.
+For input/component descriptors, `logical-sort` is the complete `["oracle", kind-id, arguments]`
+or `["oracle_sequence", kind-id, arguments, maximum]` sort from the type table. It must agree
+with the exact logical operand/result type, including sequence capacity.
 
 | Descriptor | Ordered operands | Results | Site |
 | --- | --- | --- | --- |
-| `["oracle_input", holder, receivers, kind, shape-bounds]` | holder data, receiver anchor | role-family handle | empty |
+| `["oracle_input", holder, receivers, logical-sort, shape-bounds]` | holder data, receiver anchor or sequence | role-family handle or sequence | empty |
 | `["oracle_send", holder, receivers, kind, dimension-names, shape-bounds]` | data, dimension extents in kind order | handle | send occurrence |
 | `["oracle_query", owner-or-null, kind]` | handle, position | answer | query occurrence or declaration-local label |
 | `["oracle_contents", holder, kind]` | handle | data | empty |
-| `["oracle_components", holder, receivers, kind]` | handle | holder data, receiver anchor | empty |
+| `["oracle_components", holder, receivers, logical-sort]` | handle or sequence | holder data, receiver anchor or sequence | empty |
 | `["oracle_shape", kind, dimension-name]` | handle | index | empty |
 | `["oracle_forget_shape", source-kind, target-kind]` | refined handle | view of the same anchor with fewer static extents | empty |
 | `["oracle_virtual", declaration, holder, receivers, kind]` | source handles, ordinary parameters | fresh virtual handle | empty |
@@ -553,6 +556,14 @@ actual operand/result types; retaining it does not authorize a different kind.
 | `["oracle_sequence_append", kind, maximum, roles]` | sequence, handle | sequence | bounds-check occurrence |
 | `["oracle_sequence_at", kind, maximum, roles]` | sequence, position | selected handle | bounds-check occurrence |
 | `["oracle_sequence_length", kind, maximum]` | sequence | index | empty |
+
+Current `/0` schema change: `oracle_input` and `oracle_components` replace their
+bare `kind` descriptor field with `logical-sort` for both singleton handles and
+bounded handle sequences. Send and virtual descriptors retain their `kind`
+field. There is one current schema and no alternate reader for the former
+bare-kind input/component rows. The independent formal reader preserves the
+complete logical sort and rejects the former rows. Wire recognition does not
+establish oracle execution admission or native/formal correspondence.
 
 An owner is absent only for a query inside a virtual declaration. Send and
 query sites remain ordered events, including repeated or unused queries.
@@ -588,14 +599,21 @@ row-count alternative. Shape reads must name a dimension of the actual kind. The
 source Data values and ordinary parameters, without proving it. A same-named
 replacement declaration is not correspondence evidence.
 
-An input binding exposes exactly two interface leaves, data at the holder and
-an anchor at receivers. Shape belongs to that anchor; there is no third shape
-leaf or duplicate source port. The generated honest-input relation must connect
-those two leaves without appending or renumbering authored contract clauses.
-A call rebinds its actual anchor; it does not allocate another root input.
-`oracle_contents` is executable only at an admitted holder. A future
-relation-side anchor selector has separate permissions and supplies no
-verifier-side data extraction operation.
+An input binding exposes exactly two interface leaves: `K::Data` at the holder
+and `Oracle<K>` at receivers for a singleton, or `Sequence<K::Data>` at the holder
+and `OracleSequence<K, M>` at receivers for a bounded sequence. Components retain
+that complete pair, including capacity `M`. Input shape bounds apply per element
+of a sequence; capacity and row shape are independent. Shape belongs to the
+anchors; there is no third shape leaf or duplicate source port. The generated
+honest-input relation must connect the actual paired leaves without appending or
+renumbering authored contract clauses. A call rebinds its actual anchor or
+sequence; it does not allocate another root input. Equal kinds, types or lengths
+alone do not identify a component pair. Internal sequence ports are eliminated
+by checked preparation; root Host sequence ingress remains refused. Logical
+contract anchor selectors remain singleton-only.
+`oracle_contents` is executable only at an admitted holder. A relation-side
+singleton anchor selector has separate permissions and supplies no verifier-side
+data extraction operation.
 
 The original snapshot and its row associations remain intact when a later
 construction selects a realization. That realization must produce ordinary
@@ -1060,6 +1078,20 @@ native unsigned 64-bit index ABI the last predicate equals
 `r < 64 && n == (1 << r)`. Its executable recipe enumerates the 64 representable
 powers with safe constant shifts; it does not construct an unbounded power or
 shift by a runtime exponent.
+
+### Total unsigned word operations
+
+`["index.wrapping_add"]`, `["index.wrapping_sub"]`, `["index.bit_and"]`
+and `["index.logical_shift_right"]` are exact one-slot mathematical
+descriptors. Each reads two index operands and returns one index, with no
+site, parameters or regions. Their all-input meanings are fixed by the
+[index contract](../domains/values.md#indices-and-total-word-mathematics),
+including zero for a shift count of at least 64. An extra descriptor slot,
+wrong carrier, unexpected attribute or Local spelling is refused.
+
+These descriptors extend the native producer's `/0` vocabulary. Independent
+readers with a closed operation inventory must refuse them until their own
+interpretation is installed; native export does not establish formal support.
 
 ### Total vector prefix restriction
 

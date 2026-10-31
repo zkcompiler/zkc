@@ -15,7 +15,7 @@ std::optional<Semantics::Admission> Semantics::admission(const Type &type,
   }
   using A = Admission;
   using K = Type::Kind;
-  if (isStaticOnly(type) || type.kind == K::Formal || isOracleHandle(type))
+  if (isStaticOnly(type) || type.kind == K::Formal || isLogicalValue(type))
     return A::Rejected;
   const auto *decl = typeDeclaration(type);
   if (boundary == Boundary::Construction && decl && decl->generated &&
@@ -34,7 +34,8 @@ std::optional<Semantics::Admission> Semantics::admission(const Type &type,
   std::vector<Type> children;
   if (type.kind == K::Tuple || type.kind == K::Array)
     children = type.arguments;
-  else if (type.kind == K::Record || type.kind == K::Associated) {
+  else if (type.kind == K::Record || type.kind == K::LogicalRecord ||
+           type.kind == K::Associated) {
     if (decl && decl->abstract)
       return A::Deferred;
     auto product = fields(type, span, depth + 1);
@@ -55,6 +56,10 @@ std::optional<Semantics::Admission> Semantics::admission(const Type &type,
   } else if (type.kind == K::Unit)
     return A::Accepted;
   else {
+    if (type.kind != K::Boolean && type.kind != K::Index &&
+        type.kind != K::Field && type.kind != K::Group &&
+        type.kind != K::Builtin)
+      return A::Rejected;
     StringRef kind = type.kind == K::Boolean ? "bool"
                      : type.kind == K::Index ? "index"
                      : type.kind == K::Field ? "field"
@@ -139,7 +144,8 @@ std::optional<bool> Semantics::setupAuthority(const Type &type, Span span,
   }
   using K = Type::Kind;
   std::vector<Type> children;
-  if (type.kind == K::Record || type.kind == K::Associated) {
+  if (type.kind == K::Record || type.kind == K::LogicalRecord ||
+      type.kind == K::Associated) {
     const auto *decl = typeDeclaration(type);
     if (decl && decl->abstract)
       return false;
@@ -182,6 +188,8 @@ std::optional<bool> Semantics::setupAuthority(const Type &type, Span span,
 }
 bool Semantics::hostData(const Type &type, Span span,
                          const Declaration *scope) {
+  if (!executableType(type, span))
+    return false;
   auto authority = setupAuthority(type, span);
   if (!authority)
     return false;

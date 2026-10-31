@@ -118,7 +118,10 @@ codecs are the identity at the oracle boundary. A law record for a request class
 A record is presented by one of five constructors, each a checked claim about
 the realized subdistribution `μ`:
 
-- **exact**: a bijective decoder; `μ = ν`;
+- **exact**: the decoder's pushforward law is `μ = ν`, with no refusal.
+  A bijection from uniform raw answers is sufficient but not necessary:
+  a projection with equally sized fibers also preserves uniformity. Equality
+  of supports alone does not establish equality of distributions;
 - **exact with refusal**: `μ = p_success · ν`, as for a rejection sampler
   conditioned on success;
 - **dominated with refusal**: `μ ≤ κ · ν + λ`. This suffices for soundness but

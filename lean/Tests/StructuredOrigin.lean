@@ -160,6 +160,9 @@ private def run : IO Unit := do
   let alias := fun term => SourceAlias.mk (.protocol ⟨"test::Alias", [("T", term)]⟩) "symbol" 0
   test "nominal sorts do not collide" (sourceAliasName (alias (.nominal .record "test::T" [])) !=
     sourceAliasName (alias (.nominal .variant "test::T" [])))
+  test "logical and ordinary record identities do not collide"
+    (sourceAliasName (alias (.nominal .record "test::T" [])) !=
+      sourceAliasName (alias (.nominal .logicalRecord "test::T" [])))
   test "formal and builtin do not collide" (sourceAliasName (alias (.formal "T" [])) !=
     sourceAliasName (alias (.builtin "T" [])))
   let .ok aliases := sourceAliases snapshot ["helper"] | throw (IO.userError "valid aliases refused")

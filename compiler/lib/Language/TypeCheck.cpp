@@ -72,6 +72,9 @@ std::optional<Type> Checker::type(const Declaration &context,
   auto result = elaborateType(context, s, depth);
   if (result && !types.chargeType(*result, s.span))
     return {};
+  if (result && result->kind == Type::Kind::LogicalRecord &&
+      !types.logicalRecord(*result, s.span))
+    return {};
   return result;
 }
 std::optional<Type> Checker::elaborateType(const Declaration &context,
@@ -189,7 +192,7 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
                  s.span);
       return {};
     }
-    if (isOracleHandle(*element)) {
+    if (isLogicalValue(*element)) {
       types.fail("source.oracle-aggregate",
                  "logical oracle handles require their bounded sequence",
                  s.span);
@@ -210,7 +213,7 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
         types.fail("source.type", "static term in tuple type", s.span);
         return {};
       }
-      if (isOracleHandle(*t)) {
+      if (isLogicalValue(*t)) {
         types.fail("source.oracle-aggregate",
                    "logical oracle handles require separate protocol ports",
                    s.span);
@@ -315,7 +318,7 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
                             s.span);
   Type result;
   if (decl.kind == Declaration::Kind::Record)
-    result.kind = K::Record;
+    result.kind = decl.logical ? K::LogicalRecord : K::Record;
   else if (decl.kind == Declaration::Kind::Variant)
     result.kind = K::Variant;
   else if (decl.kind == Declaration::Kind::Module ||

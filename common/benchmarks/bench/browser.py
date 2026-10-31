@@ -45,6 +45,15 @@ def artifact(path, capture, relative):
     return record | {'gzip_level': 9, 'gzip_bytes': len(gzip.compress(Path(path).read_bytes(), mtime=0))}
 
 
+def validate_case_policy(case):
+    from .oracle_policy import read_policy, OCTIC_KECCAK, OraclePolicy
+    from .configuration import validate_published
+    policy = read_policy(case.get('oracle_realization'))
+    expected = OCTIC_KECCAK if case['name'].startswith('fri-') else OraclePolicy()
+    require(policy == expected, 'browser oracle profile differs from workload')
+    validate_published(case.get('published_options'), None, policy)
+
+
 def prepare_cases(path, output, capture):
     """Capture candidate files; the supplied pin remains an independent input."""
     document = json.loads(path.read_text())
@@ -54,8 +63,8 @@ def prepare_cases(path, output, capture):
     capture.add(path, 'browser-cases.json')
     cases, names = [], set()
     for candidate in document['cases']:
-        require(isinstance(candidate, dict) and {'name', 'directory', 'providers'} <= candidate.keys()
-                and not candidate.keys() - {'name', 'directory', 'providers', 'options', 'statements', 'authority', 'setups', 'expected_outputs', 'bindings'},
+        require(isinstance(candidate, dict) and {'name', 'directory', 'providers', 'oracle_realization'} <= candidate.keys()
+                and not candidate.keys() - {'name', 'directory', 'providers', 'oracle_realization', 'options', 'statements', 'authority', 'setups', 'expected_outputs', 'bindings'},
                 'invalid browser case fields')
         name = candidate['name']
         require(isinstance(name, str) and name and len(name) <= 128
@@ -123,8 +132,13 @@ def prepare_cases(path, output, capture):
                 except ValueError:
                     pass
         package_document = json.loads(Path(package).read_text())
+        policy_evidence = {'name': name, 'oracle_realization': candidate['oracle_realization'],
+                           'published_options': package_document.get('options')}
+        validate_case_policy(policy_evidence)
         find_program(package_document['artifact'])
         cases.append({'name': name, 'directory': str(target), 'package': package, 'pin': pin,
+                      'oracle_realization': policy_evidence['oracle_realization'],
+                      'published_options': policy_evidence['published_options'],
                       'options': options | {'providers': sorted(providers)}, 'inputs': inputs,
                       'physical_bindings': bindings_used,
                       'setups': setups, 'bindings': bindings, 'authority': authority, 'expected_outputs': expected, 'files': files})
@@ -276,6 +290,8 @@ def validate_manifest(manifest):
     require(manifest.get('format') == FORMAT and manifest.get('observation') == 'browser', 'invalid browser manifest')
     require(manifest.get('status') in ('running', 'passed', 'failed', 'interrupted'), 'invalid browser status')
     require(isinstance(manifest.get('results'), list), 'invalid browser results')
+    for case in manifest.get('cases', []):
+        validate_case_policy(case)
     if manifest['status'] != 'passed':
         return
     require(type(manifest.get('processes')) is int and manifest['processes'] > 0

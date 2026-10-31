@@ -23,6 +23,7 @@
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -199,12 +200,25 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
       module, substitutions, selection, &substitutionCapacity);
   if (!result) {
     if (substitutionCapacity) {
+      std::string detail;
+      llvm::raw_string_ostream description(detail);
+      description << "scoped numerical substitution capacity: "
+                  << mathematical::decisionName(substitutionCapacity->owner);
+      if (substitutionCapacity->requested)
+        description << " requested=" << *substitutionCapacity->requested;
+      if (substitutionCapacity->available)
+        description << " available=" << *substitutionCapacity->available;
       if (outcome)
         *outcome = {
-            optionalConstruction
+            optionalConstruction && (substitutionCapacity->owner ==
+                                         WorkOwner::AlgorithmExpansion ||
+                                     substitutionCapacity->owner ==
+                                         WorkOwner::AlgorithmOriginBytes)
                 ? mathematical::VerificationObservation::OptionalCapacity
                 : mathematical::VerificationObservation::RequiredCapacity,
-            "scoped numerical substitution capacity", substitutionCapacity};
+            detail, substitutionCapacity};
+      else
+        return refuse(owner, detail);
       return failure();
     }
     return refuse(owner, "scoped numerical substitution refused");
@@ -286,8 +300,8 @@ OwningOpRef<mlir::ModuleOp> proposeComputationRealization(
   selection->origins.clear();
   OwningOpRef<mlir::ModuleOp> normalized;
   if (!prepared) {
-    normalized =
-        prepareComputationRealization(source, &selection->remainingCopy);
+    normalized = prepareComputationRealization(source, selection->remainingCopy,
+                                               selection->work);
     if (normalized)
       prepared = *normalized;
   }

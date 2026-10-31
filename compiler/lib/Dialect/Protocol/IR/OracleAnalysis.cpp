@@ -56,6 +56,8 @@ LogicalResult verifyOracleHolder(Value root, llvm::StringRef role,
       if (send.getSender() != role)
         return refuse();
     } else if (auto input = dyn_cast<protocol_ir::OracleInputOp>(producer)) {
+      // The checked pair binds one actual handle or the complete ordered
+      // sequence. Its holder applies to every possible selected element.
       if (input.getHolder() != role)
         return refuse();
     } else if (auto components =

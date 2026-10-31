@@ -70,7 +70,7 @@ pub(crate) fn split_len(n: usize) -> Result<usize> {
 pub(crate) fn dot<S: Family>(a: &[S], b: &[S], call: &crate::numerical::Call) -> Result<Value> {
     equal_len(a.len(), b.len())?;
     call.work_items(a.len(), 4, S::DOT_SETUP_WORK)?;
-    call.scalar(512)?
+    call.scalar(crate::VALUE_SLOT_BYTES)?
         .finish(|| Ok(S::field_value(S::dot(a, b)?)))
 }
 pub(crate) fn natural(attrs: &[String], i: usize) -> Result<usize> {
@@ -134,7 +134,7 @@ pub(crate) fn apply(
         };
     }
     if name == "field.embed" {
-        p.output(512, i.max_output_bytes)?;
+        p.output(crate::VALUE_SLOT_BYTES, i.max_output_bytes)?;
         return match (target, args) {
             (Some(Identity::KoalaBearExt8), [Value::KoalaBearField(x)]) => {
                 Ok(vec![Value::KoalaBearExt8Field((*x).into())])
@@ -166,7 +166,7 @@ fn preflight_scalar_output(i: &Invocation<'_>, p: &Policy) -> Result<()> {
             zkc_runtime::vm::Type::Field | zkc_runtime::vm::Type::Bool
         )
     }) {
-        p.output(512, i.max_output_bytes)?;
+        p.output(crate::VALUE_SLOT_BYTES, i.max_output_bytes)?;
     }
     Ok(())
 }
@@ -423,7 +423,7 @@ fn vector<S: Family>(
             let a = v(0)?;
             // One load and one accumulator operation per element, plus setup.
             call.work_items(a.len(), 2, 1)?;
-            let result = call.scalar(512)?;
+            let result = call.scalar(crate::VALUE_SLOT_BYTES)?;
             Ok(vec![result.finish(|| {
                 let value = if name == "vector.sum" {
                     a.iter().fold(S::zero(), |sum, x| sum + *x)
@@ -1572,11 +1572,11 @@ mod search_tests {
         let values = [Scalar::from(3), Scalar::from(7), Scalar::from(3)];
         let policy = Policy {
             max_numerical_work: 4,
-            max_numerical_bytes: 512,
+            max_numerical_bytes: crate::VALUE_SLOT_BYTES,
             ..Policy::default()
         };
         assert!(matches!(
-            find_last(&values, values[0], &policy, 512).unwrap(),
+            find_last(&values, values[0], &policy, crate::VALUE_SLOT_BYTES).unwrap(),
             Value::Index(2)
         ));
         for (limited, available, code) in [
@@ -1585,24 +1585,28 @@ mod search_tests {
                     max_numerical_work: 3,
                     ..policy
                 },
-                512,
+                crate::VALUE_SLOT_BYTES,
                 "exhausted:numerical-work",
             ),
             (
                 Policy {
-                    max_numerical_bytes: 511,
+                    max_numerical_bytes: (crate::VALUE_SLOT_BYTES - 1),
                     ..policy
                 },
-                512,
+                crate::VALUE_SLOT_BYTES,
                 "exhausted:numerical-bytes",
             ),
-            (policy, 511, "exhausted:output-bytes"),
+            (
+                policy,
+                (crate::VALUE_SLOT_BYTES - 1),
+                "exhausted:output-bytes",
+            ),
             (
                 Policy {
                     max_table_elements: 2,
                     ..policy
                 },
-                512,
+                crate::VALUE_SLOT_BYTES,
                 "exhausted:element-limit",
             ),
         ] {
@@ -1614,11 +1618,11 @@ mod search_tests {
             );
         }
         assert!(matches!(
-            find_last(&[], Scalar::from(9), &policy, 512).unwrap(),
+            find_last(&[], Scalar::from(9), &policy, crate::VALUE_SLOT_BYTES).unwrap(),
             Value::Index(0)
         ));
         assert!(matches!(
-            find_last(&values, Scalar::from(9), &policy, 512).unwrap(),
+            find_last(&values, Scalar::from(9), &policy, crate::VALUE_SLOT_BYTES).unwrap(),
             Value::Index(3)
         ));
         assert_eq!(values, [Scalar::from(3), Scalar::from(7), Scalar::from(3)]);

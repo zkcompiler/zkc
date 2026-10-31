@@ -1,5 +1,6 @@
 #include "RealizedProtocol.h"
 #include "OracleCommonRealization.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 
 using namespace mlir;
@@ -11,6 +12,17 @@ RealizedProtocol::realize(PreparedProtocol prepared,
   auto original = prepared.module.get();
   if (!original)
     return error("oracle-realization-source");
+  auto roots = protocol::resolveOracleRealizationSelection(original, policy);
+  if (!roots)
+    return roots.takeError();
+  auto normalized = policy;
+  normalized.roots = std::move(*roots);
+  auto selection = protocol::encodeOracleRealizationPolicy(normalized);
+  if (!selection)
+    return selection.takeError();
+  // Use the selection codec's sorted inventory and deterministic compact JSON
+  // printer, matching the C++/Rust wire policy rather than object iteration.
+  auto selectionText = printJson(*selection);
   auto actual = protocol::emitOracleRealization(original, policy);
   if (!actual)
     return actual.takeError();
@@ -23,7 +35,7 @@ RealizedProtocol::realize(PreparedProtocol prepared,
                                                       *record, policy))
     return std::move(failure);
   return RealizedProtocol(std::move(prepared), std::move(actual->module),
-                          std::move(*record));
+                          std::move(*record), std::move(selectionText));
 }
 OwningOpRef<ModuleOp> RealizedProtocol::originalSnapshot() const {
   return prepared.snapshot();

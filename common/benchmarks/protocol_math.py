@@ -28,6 +28,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from bench.io import (  # noqa: E402
     Journal, MeasurementBusy, MeasurementError, digest, executable, identity, measurement_slot,
     positive_integer, require, write_json)
+from bench.oracle_policy import OCTIC_KECCAK, read_policy  # noqa: E402
+from bench.configuration import validate_published  # noqa: E402
 
 FORMAT = 'zkc.protocol-measurement/0'
 P = 2130706433
@@ -46,8 +48,8 @@ def case_catalog():
         cases.append({'name': f'fri-{size}', 'project': 'fri', 'entry': 'example::Proof',
                       'storage_entry': 'example::Fri',
                       'size': size, 'rounds': rounds,
-                      'replacement': ['LowDegree<Rows,5,0,3,8>',
-                                      f'LowDegree<Rows,{size.bit_length()-1},0,{rounds},8>']})
+                      'replacement': ['LowDegree<Direct<E>,5,0,3,8>',
+                                      f'LowDegree<Direct<E>,{size.bit_length()-1},0,{rounds},8>']})
     for size in (32, 64, 1024):
         cases.append({'name': f'air-stark-{size}', 'project': 'air-stark',
                       'entry': 'air_stark_example::Proof', 'size': size,
@@ -61,7 +63,22 @@ def case_catalog():
                           'entry': f'accumulator_machine::{entry}',
                           'storage_entry': f'accumulator_machine::{"Storage" if reduction == "product" else "Run"}',
                           'fixture': fixture, 'memory_present': shape == 'present'})
-    return cases
+    return [case | {'oracle_realization': OCTIC_KECCAK.record()} for case in cases]
+
+
+def case_policy(case):
+    policy = read_policy(case.get('oracle_realization'))
+    require(policy == OCTIC_KECCAK, 'protocol measurement requires octic Keccak FRI')
+    return policy
+
+
+def validate_options(options, case, policy):
+    validate_published(options, None, case_policy(case))
+    require(options == {'simplify': True, 'finite_bulk': policy != 'no-finite-bulk',
+            'release_storage': policy == 'release-storage', 'fuse_vector_reductions': False,
+            'fuse_collect_fold': False, 'calculation_batching': policy != 'no-calculation-batching',
+            'oracle_realization': case_policy(case).selection()},
+            'compiler did not apply requested policy')
 
 
 def project(root, name):
@@ -263,8 +280,10 @@ def storage_invocation(case, policy, flags, inputs, directory, tools, journal):
                  for x in flags]
     package = directory / 'storage.zkpkg'
     journal.command([compiler, 'language-package', '--source-format=zkc', f'--entry={entry}',
-                     *flags, *POLICIES[policy]], cwd=directory, stdout=package)
-    interface = json.loads(json.loads(package.read_text())['interface'])
+                     *flags, *POLICIES[policy], case_policy(case).flag()], cwd=directory, stdout=package)
+    published = json.loads(package.read_text())
+    validate_options(published.get('options'), case, policy)
+    interface = json.loads(published['interface'])
     require(interface.get('format') == 'zkc.language-interface/0'
             and interface.get('selection', {}).get('kind') == 'function',
             'interactive storage requires an Entry function interface')
@@ -318,6 +337,8 @@ def observe_storage(case, policy, flags, inputs, directory, tools, journal):
             'interactive report missing exit storage counters')
     return {'scope': 'separate interactive Entry; per-role exit snapshot, not proof work or peak memory',
             'wall_seconds': command['wall_seconds'], 'package': identity(package),
+            'oracle_realization': case_policy(case).record(),
+            'published_options': json.loads(package.read_text())['options'],
             'roles': roles, 'backends': execution.get('backends'), 'capacity': report.get('capacity')}
 
 
@@ -330,15 +351,14 @@ def trial(case, variant, flags, inputs, directory, tools, timeout, interactive_s
         policy = variant.split('/', 1)[1]
         package_path = directory / 'entry.zkpkg'
         base = ['--source-format=zkc', f'--entry={case["entry"]}', *flags]
-        compiled = journal.command([compiler, 'language-package', *base, *POLICIES[policy]],
+        compiled = journal.command([compiler, 'language-package', *base, *POLICIES[policy], case_policy(case).flag()],
                                    cwd=directory, stdout=package_path)
         record['compile_wall_seconds'] = compiled['wall_seconds']
         package = json.loads(package_path.read_text())
         require(package['format'] == 'zkc.entry/0', 'unexpected package format')
-        require(package['options'] == {'simplify': True, 'finite_bulk': policy != 'no-finite-bulk',
-                'release_storage': policy == 'release-storage', 'fuse_vector_reductions': False,
-                'fuse_collect_fold': False, 'calculation_batching': policy != 'no-calculation-batching'},
-                'compiler did not apply requested policy')
+        validate_options(package.get('options'), case, policy)
+        record['oracle_realization'] = case_policy(case).record()
+        record['published_options'] = package['options']
         record['package'] = identity(package_path)
         record['original_inventory'] = logical_inventory(package['original'])
         record['emitted_inventory'] = kernel_inventory(package)
@@ -403,6 +423,16 @@ def summaries(results):
         item = {'case': case, 'variant': variant, 'passed': len(passed), 'total': len(values)}
         # Failed cells retain raw partial work, but never contribute favorable timings.
         if len(passed) == len(values):
+            for value in passed:
+                require(read_policy(value.get('oracle_realization')) == OCTIC_KECCAK,
+                        'saved protocol measurement has a different oracle profile')
+                validate_options(value.get('published_options'), value, variant.split('/', 1)[1])
+                if 'interactive_storage' in value:
+                    storage = value['interactive_storage']
+                    require(storage.get('oracle_realization') == value['oracle_realization'],
+                            'interactive storage oracle policy differs from trial')
+                    validate_options(storage.get('published_options'), value, variant.split('/', 1)[1])
+            item['oracle_realization'] = passed[0]['oracle_realization']
             metrics = {'compile_wall_seconds': [v['compile_wall_seconds'] for v in passed],
                        'frontend_emit_wall_seconds': [v['frontend_emit_wall_seconds'] for v in passed],
                        'package_bytes': [v['package']['bytes'] for v in passed],

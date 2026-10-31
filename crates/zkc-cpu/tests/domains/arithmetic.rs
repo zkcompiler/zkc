@@ -243,9 +243,9 @@ fn scalar_vector_and_polynomial_contracts_have_both_field_meanings() {
             &field(d, 0),
         );
         let round = if d {
-            Value::RistrettoRound([2u64, 3, 4].map(RistrettoScalar::from))
+            Value::RistrettoRound(([2u64, 3, 4].map(RistrettoScalar::from)).into())
         } else {
-            Value::Round([2, 3, 4].map(Scalar::from))
+            Value::Round(([2, 3, 4].map(Scalar::from)).into())
         };
         assert_value(
             &call(d, "poly.boundary", &[], vec![round.clone()])[0],
@@ -451,7 +451,7 @@ fn vector_output_limits_reject_growth_before_work() {
             "exhausted:element-limit"
         );
         let mut b = Controlled::new(backend(Policy::default()));
-        b.output_limit = Some(511);
+        b.output_limit = Some(zkc_cpu::VALUE_SLOT_BYTES - 1);
         assert_eq!(
             one(b, binding(d, "field.inverse"), &[], vec![field(d, 0)])
                 .0

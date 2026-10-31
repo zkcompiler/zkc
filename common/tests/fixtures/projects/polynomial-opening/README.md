@@ -2,8 +2,9 @@
 
 [protocol.zkc](protocol.zkc) combines row commitments, the shared univariate
 opening equations and FRI. It contains no native kernel calls or AIR dependency.
-[main.zkc](main.zkc) selects the commitment and transcript; the manifest selects
-only `zkc` and `fri` libraries.
+[main.zkc](main.zkc) selects the outer row commitment and transcript. FRI uses
+`Direct<C::ValueField>` for its mathematical configuration; deployment selects
+logical-oracle authentication independently of that outer commitment.
 
 The prover commits a natural-order word before FRI challenges. It forms the
 quotient `(f(X)-value)/(X-point)` and proves its degree is below four. The verifier

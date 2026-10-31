@@ -11,6 +11,9 @@ use crate::host::request::InputValue;
 use std::collections::BTreeMap;
 
 pub(super) fn check_ports(interface: &Interface) -> Result<(), String> {
+    interface
+        .check_executable_ports()
+        .map_err(|e| e.to_string())?;
     for i in 0..interface.selected_protocol().inputs.len() {
         let port = interface.input(i);
         if port.key.is_none() {
@@ -26,6 +29,9 @@ pub(super) fn check_host_ports(
     interface: &Interface,
     operation: Option<super::ProofOperation>,
 ) -> Result<(), String> {
+    interface
+        .check_executable_ports()
+        .map_err(|e| e.to_string())?;
     let roles = interface.roles().iter().filter(|role| {
         operation.is_none_or(|operation| {
             let proof = interface.proof().expect("proof operation");
@@ -62,6 +68,9 @@ pub(super) fn check_proof_ports(
     interface: &Interface,
     operation: super::ProofOperation,
 ) -> Result<(), String> {
+    interface
+        .check_executable_ports()
+        .map_err(|e| e.to_string())?;
     let proof = interface.proof().ok_or("entry-job-kind")?;
     let role = &interface.roles()[if operation == super::ProofOperation::Prove {
         proof.prover

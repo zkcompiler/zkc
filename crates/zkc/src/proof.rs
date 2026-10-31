@@ -4,6 +4,7 @@ mod attempts;
 mod inputs;
 mod interface;
 mod messages;
+mod selection;
 use crate::execution::InputValue;
 use crate::execution::{Capacity, CpuExecution};
 pub use inputs::ProofInputs;
@@ -58,7 +59,7 @@ pub struct NativeDeployment {
     operation: Option<bool>,
     proof_bytes_limit: usize,
     publication: String,
-    choices: [bool; 6],
+    choices: [String; 7],
     external_work_limit: u64,
     capacity: Capacity,
     setups: SetupAuthority,
@@ -75,7 +76,7 @@ pub struct NativeDeployment {
 pub(crate) struct SourceInterface<'a> {
     pub publication: &'a str,
     pub source: &'a str,
-    pub choices: [bool; 6],
+    pub choices: &'a [String; 7],
     pub acceptance: usize,
     pub suite: Option<&'a str>,
     pub construction: &'a str,
@@ -345,7 +346,7 @@ impl NativeDeployment {
         }
         let source = text(&envelope[1])?.to_owned();
         digest(&source)?;
-        let descriptor = array(&envelope[2], 8)?;
+        let descriptor = array(&envelope[2], 9)?;
         if text(&descriptor[0])? != "zkc.native-proof-descriptor/0"
             || text(&descriptor[2])? != "zkc.native-origin/0"
         {
@@ -359,13 +360,32 @@ impl NativeDeployment {
         if text(&envelope[5])? != hash(candidate.as_bytes()) {
             return Err("native-proof-candidate-binding".into());
         }
-        let choices = array(&envelope[7], 6)?;
-        if choices
+        let choices = array(&envelope[7], 7).map_err(|_| "native-proof-choices")?;
+        if choices[..6]
             .iter()
             .any(|v| !matches!(v.as_str(), Some("true" | "false")))
         {
             return Err("native-proof-choices".into());
         }
+        let selection = choices[6].as_str().ok_or("native-proof-choices")?;
+        let requested_selection =
+            crate::entry::OracleSelection::parse(selection).map_err(|_| "native-proof-choices")?;
+        let canonical_selection = requested_selection
+            .canonical_json()
+            .map_err(|_| "native-proof-choices")?;
+        if selection != canonical_selection {
+            return Err("native-proof-choices".into());
+        }
+        selection::check(
+            &requested_selection,
+            text(&descriptor[8]).map_err(|_| "native-proof-oracle-selection")?,
+        )?;
+        let choices = std::array::from_fn(|i| {
+            choices[i]
+                .as_str()
+                .expect("validated compilation choice")
+                .to_owned()
+        });
         let policy = interface::DeploymentPolicy::read(&descriptor[1])?;
         let (entry, producer, validator) = (policy.entry, policy.producer, policy.validator);
         let suite = policy.suite;
@@ -498,14 +518,7 @@ impl NativeDeployment {
             operation,
             proof_bytes_limit: MAX_PROOF_BYTES,
             publication: expected_sha256.to_owned(),
-            choices: [
-                choices[0] == "true",
-                choices[1] == "true",
-                choices[2] == "true",
-                choices[3] == "true",
-                choices[4] == "true",
-                choices[5] == "true",
-            ],
+            choices,
             external_work_limit: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
             capacity: Capacity::default(),
             setups,
@@ -618,7 +631,7 @@ impl NativeDeployment {
         SourceInterface {
             publication: &self.publication,
             source: &self.source,
-            choices: self.choices,
+            choices: &self.choices,
             acceptance: index(&policy[4]).expect("admitted acceptance"),
             suite: (!suite.is_empty()).then_some(suite),
             construction: policy[10].as_str().expect("admitted construction"),

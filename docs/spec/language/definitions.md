@@ -477,11 +477,26 @@ Calls must prove permission bounds from the caller's checked contract or the
 selected concrete type. Closed permission requirements are evaluated immediately; a true
 requirement adds no generic assumption. Group permissions do not imply scalar permissions.
 Requirements follow a callable's result type or a nominal declaration's parameter
-list; an alias places them before `=`. Symbolic inequalities must match a
-normalized assumption, or be reflexive. A stronger closed lower bound with the
-same right-hand side suffices: `2 <= N` establishes `1 <= N`. Closed inequalities
-are evaluated. There
-is no inequality solver or inference by solving equations such as `N + M = 8`.
+list; an alias places them before `=`. Natural-bound admission first cancels
+common additive polynomial terms on the two sides of each requested inequality
+and each caller assumption. For each identical monomial, it subtracts the smaller
+coefficient from the larger, leaving nonnegative residual coefficients. This
+includes constants, identical nonlinear monomials, powers of two and static
+projections; factor identities remain exact. For example, `1 <= B` establishes
+`F + R + 1 <= F + R + B`, and `X * Y + 2 <= X * Y + B` establishes
+`1 <= B`. Cancellation is sound over unbounded natural parameters and does not
+assume their values fit unsigned 64-bit integers.
+
+The residual inequality must match a normalized caller assumption, be reflexive,
+or have two closed sides whose comparison holds. A stronger closed lower bound
+with the same residual right-hand side suffices: `2 <= N` establishes `1 <= N`.
+False closed residual comparisons refuse. Cancellation uses the shared natural
+term, factor and work limits, including work for terms that disappear. It is a
+comparison view; retained source obligations and inferred preconditions keep the
+original substituted inequality. Common multiplicative factors are never divided
+out, since a factor may be zero. This limited additive rule is not a complete
+inequality solver: it does not chain unrelated inequalities or infer arguments
+by solving equations such as `N + M = 8`.
 
 Catalog capabilities use qualified exported names in the same clause, for example
 `where zkc::algebra::TwoAdicField(F), zkc::pcs::MultilinearOpening(C)`.
@@ -789,6 +804,30 @@ zkc::curve::ScalarAction(G) = primitive("curve.identity");`.
 Calling that helper from ordinary `fn` code realizes the same nullary native
 operation with its usual possible resource exhaustion. The shared
 `zkc::curve::identity<G>()` wrapper uses this primitive declaration.
+
+## Mathematical selection
+
+For unsigned words, `intrinsic("index.select", condition, yes, no)` takes a
+Boolean and two `index` values and returns `index`, with no static arguments.
+The public `indices::select` wrapper has the same signature. It shares the
+eager `Select` identity below and adds no executable operation.
+
+In a `math fn`, `intrinsic<F>("field.select", condition, yes, no)` takes
+exactly one static `Field` argument, no literal parameters, a Boolean condition
+and two values of the exact same field `F`. Its result has type `F`; distinct
+nominal field roots are not interchangeable. The primitive declaration
+`math fn select<F: Field>(condition: bool, yes: F, no: F) -> F =
+primitive("field.select");` infers that root from the result.
+
+This is eager total mathematical selection. The condition and both alternatives
+retain their dependencies and formation obligations, including for a constant
+condition or equal alternatives. Source emission uses the existing `Select`
+identity on upstream `arith.select`; independent source comparison checks all
+three ordered operands and the exact result type. Ordinary Local callers use
+the existing computation recipe, which captures both already computed
+alternatives before selecting the result. There is no executable operation named
+`field.select`. An empty effect allowance on a Local conditional helper does not
+admit that helper into mathematics.
 
 ## Boolean formulas
 

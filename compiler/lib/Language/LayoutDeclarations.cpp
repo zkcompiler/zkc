@@ -382,7 +382,8 @@ Error LayoutReader::declaration(Id id, SyntaxDeclaration &parent) {
     return Error::success();
   }
   if (!attributes.empty() && kind(id) != K::TypeAlias &&
-      kind(id) != K::Struct && kind(id) != K::Enum && kind(id) != K::Protocol)
+      kind(id) != K::Struct && kind(id) != K::Enum && kind(id) != K::Protocol &&
+      kind(id) != K::OracleDefinition)
     return fail(attributes.front(),
                 "resource attributes must precede a type declaration",
                 "source.resource");
@@ -431,6 +432,10 @@ Error LayoutReader::declaration(Id id, SyntaxDeclaration &parent) {
     break;
   case K::Module:
     result.kind = D::Module;
+    break;
+  case K::OracleDefinition:
+    result.kind = D::Oracle;
+    result.oracleDefinition.emplace();
     break;
   case K::Protocol:
     result.kind = D::Protocol;
@@ -626,40 +631,49 @@ Error LayoutReader::declaration(Id id, SyntaxDeclaration &parent) {
     result.target = std::move(*projected61);
     result.domain = literal.drop_front().drop_back().str();
   }
-  if (!attributes.empty() && result.kind == D::Protocol) {
-    result.span.begin = span(attributes.front()).begin;
-    if (auto error = oracleShapes(result))
-      return error;
-    attributes.clear();
-  }
+  std::vector<Id> shapeAttributes;
   if (!attributes.empty()) {
     result.span.begin = span(attributes.front()).begin;
     for (auto attribute : attributes) {
-      auto projected62 = parts(attribute, 1, 1);
-      if (!projected62)
-        return projected62.takeError();
-      auto nodes = std::move(*projected62);
-      auto projected63 = name(nodes.front());
-      if (!projected63)
-        return projected63.takeError();
-      auto attributeName = std::move(*projected63);
-      if (attributeName == "affine" || attributeName == "linear") {
+      auto nodes = parts(attribute, 1, 2);
+      if (!nodes)
+        return nodes.takeError();
+      auto attributeName = name(nodes->front());
+      if (!attributeName)
+        return attributeName.takeError();
+      if (*attributeName == "shape") {
+        shapeAttributes.push_back(attribute);
+        continue;
+      }
+      if (nodes->size() != 1)
+        return fail(attribute, "this attribute takes no arguments",
+                    "source.resource");
+      if (*attributeName == "logical") {
+        if (result.kind != D::Record || result.logical)
+          return fail(attribute, "logical annotation requires one struct",
+                      "source.oracle-aggregate");
+        result.logical = true;
+      } else if (*attributeName == "affine" || *attributeName == "linear") {
         if (result.resource)
           return fail(attribute, "resource restriction was already specified",
                       "source.resource");
         result.resource =
-            attributeName == "affine" ? Resource::Affine : Resource::Linear;
-      } else if (attributeName == "sealed") {
+            *attributeName == "affine" ? Resource::Affine : Resource::Linear;
+      } else if (*attributeName == "sealed") {
         if (result.sealed)
           return fail(attribute, "constructor sealing was already specified",
                       "source.resource");
         result.sealed = true;
       } else
-        return fail(attribute, "unknown native resource attribute",
+        return fail(attribute, "unknown native type attribute",
                     "source.resource");
     }
-    if (result.kind == D::Alias)
+    if (result.kind == D::Alias && (result.resource || result.sealed))
       result.kind = D::Associated;
+    if ((result.resource || result.sealed) && result.kind != D::Record &&
+        result.kind != D::Variant && result.kind != D::Associated)
+      return fail(id, "resource attributes require a nominal type",
+                  "source.resource");
     attributes.clear();
   }
   if (auto suite = first(id, K::Suite)) {
@@ -722,6 +736,15 @@ Error LayoutReader::declaration(Id id, SyntaxDeclaration &parent) {
       return fail(id, "a bodyless signature belongs to an interface",
                   "source.conformance");
     result.abstract = true;
+  }
+  if (!shapeAttributes.empty()) {
+    if (result.kind != D::Protocol && result.kind != D::Oracle &&
+        !result.logical)
+      return fail(shapeAttributes.front(),
+                  "shape annotations require a protocol or logical struct",
+                  "source.oracle-shape");
+    if (auto error = oracleShapes(result, shapeAttributes))
+      return error;
   }
   parent.members.push_back(std::move(result));
   return Error::success();

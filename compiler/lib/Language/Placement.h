@@ -32,6 +32,7 @@ public:
   std::vector<std::pair<unsigned, unsigned>> calls;
   std::vector<unsigned> applications;
   std::vector<std::pair<unsigned, unsigned>> oracleQueries;
+  std::vector<unsigned> oracleInstantiations;
   const Placement *enclosing;
 
 private:

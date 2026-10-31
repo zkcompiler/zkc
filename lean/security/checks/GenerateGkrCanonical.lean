@@ -46,9 +46,9 @@ run_cmd do
     modelModule := "ZkcSecurity.Bindings.Models.PrimeField"
     modelExpression := "ZkcSecurity.Domains.PrimeField.blsScalarModel"
     targetName := "circuit_outputs"
-    originalExportExpression := quoted "sha256:d73cb1755bed132e32367f16a789977f090079fef5c5649a8296cf8e74665133"
-    producerExportExpression := quoted "sha256:d68f53c1bfc1a84c277906ac327e7bdee395aedd469f0b776b5b06000112086e"
-    validatorExportExpression := quoted "sha256:edab1a2f1991db65a7b9a7560d5614113a4babb83df7307cee4f537f13fb2e7e"
+    originalExportExpression := quoted "sha256:56939f44b7084b9a929d7858dd0f5d85ef15d5486befff392fa0eab76f3eb756"
+    producerExportExpression := quoted "sha256:7906c9ce135594427e53a157741d36b38d7aa26c82f937263902e4238ede3ef5"
+    validatorExportExpression := quoted "sha256:73a70bb859999c94d1bdcb74b5e8ed9e2369ae9449182277ae5c49e64ecabaec"
     chargeSites := ["output", "left.challenge", "right.challenge", "line_challenge"]
     registryExpression := "(ZkcSecurity.Realizations.Gkr.Relations.registry ZkcSecurity.Domains.PrimeField.blsScalarModel)" }
   let sampling := "ZkcSecurity.Domains.PrimeField.rawSampleable Zkc.Source.Structured.blsModulus"

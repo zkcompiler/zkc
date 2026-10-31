@@ -39,7 +39,7 @@ macro_rules! register {
         impl crate::operations::field::StructuredFamily for $s {
             fn matrix(v: &Value) -> Result<&crate::matrix::SparseCoo<Self>> { if let Value::$m(x) = v { Ok(x) } else { Err(refused("kernel-operands")) } }
             fn polynomial(v: &Value) -> Result<&[Self]> { if let Value::$p(x) = v { Ok(x) } else { Err(refused("kernel-operands")) } }
-            fn round(v: &Value) -> Result<&[Self]> { if let Value::$r(x) = v { Ok(x) } else { Err(refused("kernel-operands")) } }
+            fn round(v: &Value) -> Result<&[Self]> { if let Value::$r(x) = v { Ok(x.as_slice()) } else { Err(refused("kernel-operands")) } }
             fn polynomial_value(v: crate::Buffer<Self>) -> Result<Value> { Ok(Value::$p(v)) }
         }
         impl crate::matrix::Wire for $s {
@@ -63,7 +63,7 @@ macro_rules! register {
             }
         }
         impl From<[$s; 3]> for Value {
-            fn from(value: [$s; 3]) -> Self { Value::$r(value) }
+            fn from(value: [$s; 3]) -> Self { Value::$r(value.into()) }
         }
         impl From<crate::matrix::SparseCoo<$s>> for Value {
             fn from(value: crate::matrix::SparseCoo<$s>) -> Self { Value::$m(value) }

@@ -79,16 +79,16 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
     return true;
   };
   std::map<const Layout *, std::string> identities;
-  std::optional<Diagnostic> spellingDiagnostic;
+  std::optional<Diagnostic> schemaDiagnostic;
   std::function<void(const Layout &, Span)> schema;
   schema = [&](const Layout &layout, Span port) {
-    if (spellingDiagnostic) {
+    if (schemaDiagnostic) {
       out.value(nullptr);
       return;
     }
     auto display = spelling(layout.type);
     if (display.size() > protocol::VariantSpellingBytes) {
-      spellingDiagnostic =
+      schemaDiagnostic =
           Diagnostic{"source.limit",
                      "interface schema type spelling exceeds byte limit",
                      port,
@@ -97,6 +97,18 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
       return;
     }
     if (!charge(1)) {
+      out.value(nullptr);
+      return;
+    }
+    bool oracle = layout.type.kind == Type::Kind::Oracle ||
+                  layout.type.kind == Type::Kind::OracleSequence;
+    const auto *logical =
+        layout.leaves.size() == 1 ? layout.leaves.front().oracle() : nullptr;
+    if (oracle && (!logical || !layout.oracleData ||
+                   logical->maximum.has_value() !=
+                       (layout.type.kind == Type::Kind::OracleSequence))) {
+      schemaDiagnostic = Diagnostic{
+          "source.interface", "invalid logical oracle layout", port, {}};
       out.value(nullptr);
       return;
     }
@@ -128,6 +140,8 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
           out.object([&] {
             out.attribute("name", field.name);
             out.attribute("offset", field.offset);
+            if (field.maximumRows)
+              out.attribute("maximum_rows", std::to_string(*field.maximumRows));
             out.attributeBegin("schema");
             schema(*field.layout, port);
             out.attributeEnd();
@@ -145,15 +159,19 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
           });
         }
       });
-      if (layout.type.kind == Type::Kind::Oracle) {
-        const auto &kind = layout.leaves.front().oracle()->kind;
+      if (oracle) {
+        const auto &kind = logical->kind;
         out.attribute("oracle",
                       encodeInterfaceOracle({kind.identity, kind.arguments}));
+        if (logical->maximum)
+          out.attribute("maximum", std::to_string(*logical->maximum));
         out.attributeBegin("data_schema");
         schema(*layout.oracleData, port);
         out.attributeEnd();
       }
       out.attributeArray("leaves", [&] {
+        if (layout.type.kind == Type::Kind::LogicalRecord)
+          return;
         for (auto &leaf : layout.leaves) {
           if (leaf.oracle())
             continue;
@@ -171,12 +189,18 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
   };
   auto ports = [&](const Declaration &protocol, StringRef name,
                    ArrayRef<Port> source,
-                   ArrayRef<std::shared_ptr<const Layout>> layouts) {
+                   ArrayRef<std::shared_ptr<const Layout>> portLayouts) {
     unsigned flat = 0;
     out.attributeArray(name, [&] {
       for (unsigned i = 0; i < source.size(); ++i) {
         if (!charge(source[i].name.size() + 1))
           break;
+        auto observed = layouts.protocolPort(source[i]);
+        if (!observed) {
+          staticFailure =
+              joinErrors(std::move(staticFailure), observed.takeError());
+          break;
+        }
         out.object([&] {
           out.attribute("name", source[i].name);
           out.attribute("type", spelling(source[i].type));
@@ -188,19 +212,21 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
           if (source[i].oracle) {
             const auto &port = *source[i].oracle;
             out.attribute("holder", protocol.roles[port.holder]);
-            out.attribute("maximum_rows",
-                          port.maximumRows
-                              ? json::Value(std::to_string(
-                                    port.maximumRows->dimension.closedValue()))
-                              : json::Value(nullptr));
+            if (source[i].type.kind != Type::Kind::LogicalRecord)
+              out.attribute(
+                  "maximum_rows",
+                  port.maximumRows
+                      ? json::Value(std::to_string(
+                            port.maximumRows->dimension.closedValue()))
+                      : json::Value(nullptr));
           }
           out.attributeArray("native", [&] {
-            unsigned count = source[i].oracle ? 2 : layouts[i]->leaves.size();
+            unsigned count = observed->size();
             for (unsigned j = 0; j < count; ++j)
               out.value(flat++);
           });
           out.attributeBegin("schema");
-          schema(*layouts[i], source[i].span);
+          schema(*portLayouts[i], source[i].span);
           out.attributeEnd();
         });
       }
@@ -452,8 +478,8 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
   });
   if (staticFailure)
     return staticFailure;
-  if (spellingDiagnostic)
-    return make_error<DiagnosticError>(std::move(*spellingDiagnostic));
+  if (schemaDiagnostic)
+    return make_error<DiagnosticError>(std::move(*schemaDiagnostic));
   if (formal)
     return error("source.formal", "interface schema contains formal leaves");
   if (limited || stream.overflow())

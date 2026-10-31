@@ -144,7 +144,7 @@ void registerCompilerPipelines() {
          const PhysicalPipelineOptions &selected) {
         buildProjectionPipeline(pm, options.simplify, options.mathematics());
         if (!options.projectOnly) {
-          buildExecutionPipeline(pm, false, false, options.mathematics());
+          buildClosedExecutionPipeline(pm, false, false, options.mathematics());
           buildPhysicalPipeline(pm, selected);
         }
       });

@@ -902,7 +902,7 @@ int main() {
             mathematical::RealizationWork retry;
             retry.optionalFiniteChecking = spent - 1;
             target::PhysicalPlanOptions options;
-            options.numericalWork = &retry;
+            options.numericalVerificationWork = &retry;
             auto plan = take(target::proposePhysical(
                 *original, target::installedCandidates(), {}, options));
             auto selected = take(plan.cloneSelectedSubject(*original));
@@ -920,18 +920,19 @@ int main() {
             std::to_string(reserve),
         [&] {
           auto source = parse(fixture()), original = executable(*source);
-          mathematical::RealizationWork work;
+          mathematical::RealizationWork work, verification;
           work.matching.structural = 0;
           work.discardedRecipeCopy = work.discardedRecipeSiteBytes = reserve;
           target::PhysicalPlanOptions options;
           options.numericalWork = &work;
+          options.numericalVerificationWork = &verification;
           auto plan = take(target::proposePhysical(
               *original, target::installedCandidates(), {}, options));
           auto selected = take(plan.cloneSelectedSubject(*original));
           require(
               callsOf(*selected, "numerical.map").empty() &&
                   sf::hasLoop(sf::function(*selected, "work")) &&
-                  work.requiredFiniteChecking < 1000000 &&
+                  verification.requiredFiniteChecking < 1000000 &&
                   work.selectionBookkeeping < 1000000,
               "matching or optional reserve exhaustion lost ordered execution");
           take(target::validatePhysical(*original, plan));

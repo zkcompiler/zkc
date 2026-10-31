@@ -195,13 +195,29 @@ impl PhysicalType {
             .get(start..start.checked_add(arm.payload().len())?)
     }
     pub fn descriptor_bytes(&self) -> usize {
-        self.children()
-            .unwrap_or_default()
-            .iter()
-            .fold(self.logical.descriptor_bytes(), |n, c| {
-                n.saturating_add(std::mem::size_of::<Self>())
-                    .saturating_add(c.descriptor_bytes())
-            })
+        self.children().unwrap_or_default().iter().fold(
+            self.logical
+                .descriptor_bytes()
+                .saturating_add(self.child_storage_bytes()),
+            |n, c| n.saturating_add(c.descriptor_bytes()),
+        )
+    }
+    fn child_storage_bytes(&self) -> usize {
+        self.children.as_ref().map_or(0, |children| {
+            256usize.saturating_add(children.len().saturating_mul(std::mem::size_of::<Self>()))
+        })
+    }
+    /// Visit complete metadata, including inactive variant alternatives and
+    /// physical child layouts. The admitted graph bounds traversal depth/width.
+    pub fn visit_descriptor_backings(&self, shared: &mut dyn FnMut(super::Backing) -> bool) {
+        self.logical.visit_descriptor_backings(shared);
+        if let Some(children) = &self.children
+            && shared(super::Backing::of(children, self.child_storage_bytes()))
+        {
+            for child in children.iter() {
+                child.visit_descriptor_backings(shared);
+            }
+        }
     }
     fn default_children(&self) -> bool {
         self.children()
@@ -377,6 +393,64 @@ mod tests {
             None => PhysicalType::new(logical, representation),
         }
     }
+    #[test]
+    fn descriptor_allocations_include_inactive_arms_and_share_only_by_identity() {
+        use std::collections::HashSet;
+        let resource = LogicalType::parse("resource_unit:slot").unwrap();
+        let spelling = zkc_test_support::variants::logical(
+            "Metadata",
+            serde_json::json!([
+                ["empty", []],
+                ["inactive", ["sequence<index>", resource.spelling()]]
+            ]),
+        );
+        let ty = PhysicalType::default_for(LogicalType::parse(&spelling).unwrap()).unwrap();
+        let collect = |ty: &PhysicalType| {
+            let mut seen = HashSet::new();
+            ty.visit_descriptor_backings(&mut |backing| seen.insert(backing));
+            seen
+        };
+        let allocations = collect(&ty);
+        assert_eq!(collect(&ty.clone()), allocations);
+        assert!(collect(&PhysicalType::parse(&ty.spelling()).unwrap()).is_disjoint(&allocations));
+        // Every logical child also occurs in the physical layout. Those edges
+        // retain the same logical descriptors, including the inactive resource.
+        let duplicated = ty
+            .logical()
+            .variant_descriptor()
+            .unwrap()
+            .alternatives()
+            .iter()
+            .flat_map(|arm| arm.payload())
+            .map(LogicalType::descriptor_bytes)
+            .sum::<usize>();
+        assert_eq!(
+            allocations
+                .iter()
+                .map(super::super::Backing::bytes)
+                .sum::<usize>()
+                + duplicated,
+            ty.descriptor_bytes()
+        );
+        let resource = ty.variant_payload(1).unwrap()[1].logical();
+        let mut found = 0;
+        resource.visit_descriptor_backings(&mut |backing| {
+            assert!(allocations.contains(&backing));
+            assert_eq!(backing.bytes(), 256);
+            found += 1;
+            true
+        });
+        assert_eq!(found, 1);
+        // A ledger already retaining both top-level allocations does not visit
+        // their children again. Releasing them follows the same graph edges.
+        let mut roots = 0;
+        ty.visit_descriptor_backings(&mut |_| {
+            roots += 1;
+            false
+        });
+        assert_eq!(roots, 2);
+    }
+
     #[test]
     fn canonical_layouts_preserve_complete_children_and_clone_equality() {
         for spelling in [

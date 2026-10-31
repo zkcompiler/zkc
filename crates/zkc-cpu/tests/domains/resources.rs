@@ -41,9 +41,9 @@ fn canonical_transcript_observations_match_direct_merlin_and_suite_reduction() {
             groups(d, &[1, 2]),
             call(d, "curve.generator", &[], vec![]).remove(0),
             if d {
-                Value::RistrettoRound([1u64, 2, 3].map(RistrettoScalar::from))
+                Value::RistrettoRound(([1u64, 2, 3].map(RistrettoScalar::from)).into())
             } else {
-                Value::Round([1u64, 2, 3].map(zkc_cpu::Scalar::from))
+                Value::Round(([1u64, 2, 3].map(zkc_cpu::Scalar::from)).into())
             },
             Value::Bool(true),
         ] {
@@ -437,5 +437,47 @@ fn vector_tape_exhaustion_keeps_full_transition_and_consumed_prefix() {
             identity(d).name(),
             snapshot(&b, &h)
         );
+    }
+}
+
+#[test]
+fn product_round_preflights_shared_backing_for_both_table_layouts() {
+    use std::sync::Arc;
+    use zkc_cpu::Scalar;
+    let policy = Policy::default();
+    for msb in [false, true] {
+        let canonical = Value::table(&[Scalar::from(2), Scalar::from(3)], &policy).unwrap();
+        let input = if msb {
+            let Value::Table(table) = &canonical else {
+                panic!()
+            };
+            Value::TableMsb(Arc::new(
+                zkc_kernels::arkworks::bls12_381::MsbTable::from_lsb(table, &policy.ark_bounds())
+                    .unwrap(),
+            ))
+        } else {
+            canonical
+        };
+        let mut operation = binding(false, "poly.product_round");
+        if msb {
+            operation.implementation = "arkworks-msb/poly.product_round".into();
+        }
+        let required = Value::Round([Scalar::from(0); 3].into()).retained_bytes();
+        for limit in [required - 1, required] {
+            let mut native = Controlled::new(backend(policy));
+            native.output_limit = Some(limit);
+            let (output, _) = one(
+                native,
+                operation.clone(),
+                &[],
+                vec![input.clone(), input.clone()],
+            );
+            if limit < required {
+                assert_eq!(output.unwrap_err(), "exhausted:output-bytes");
+            } else {
+                assert!(matches!(output.unwrap().as_slice(), [Value::Round(round)]
+                    if **round == [Scalar::from(4), Scalar::from(4), Scalar::from(1)]));
+            }
+        }
     }
 }

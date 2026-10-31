@@ -282,7 +282,7 @@ fn groups_pairing_codecs_nominal_separation_and_memory_limits() {
             Value::Bn254G1(x) => {
                 assert_eq!(*x, a.scale(F::from(2)).add(&a.neg().scale(F::from(5))))
             }
-            Value::Bn254G2(x) => assert_eq!(*x, b.scale(F::from(7))),
+            Value::Bn254G2(x) => assert_eq!(**x, b.scale(F::from(7))),
             _ => panic!(),
         }
     }
@@ -291,9 +291,9 @@ fn groups_pairing_codecs_nominal_separation_and_memory_limits() {
         f(123),
         vecf(&[1, 2]),
         Value::Bn254Polynomial(vec![F::one()].into()),
-        Value::Bn254Round([F::one(); 3]),
+        Value::Bn254Round(([F::one(); 3]).into()),
         Value::Bn254G1(a),
-        Value::Bn254G2(b),
+        Value::Bn254G2((b).into()),
         a2,
         b2,
         Value::bn254_matrix(1, 1, &[(0, 0, F::one())], &Policy::default()).unwrap(),
@@ -408,7 +408,10 @@ fn literal_admission_uses_bn254_modulus_and_wire_is_fixed() {
     assert_eq!(bytes, expected);
     assert!(
         backend
-            .decode_native_value(&Value::Bn254G2(G2::generator()).physical_type(), &bytes)
+            .decode_native_value(
+                &Value::Bn254G2(G2::generator().into()).physical_type(),
+                &bytes
+            )
             .is_err()
     );
     assert_eq!(

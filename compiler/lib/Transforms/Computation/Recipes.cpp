@@ -31,7 +31,6 @@
 #include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/ScopeExit.h"
-#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringSet.h"
 #include <map>
 
@@ -213,7 +212,7 @@ class Recipes {
     // Scalar inspection and emitted execution have separate costs. Ordinary
     // primitives allocate one invocation/dispatch pair; only control recipes
     // need the larger scope/transfer envelope in addition to their outlines.
-    if (isa<data::GetOp, data::IsOp, arith::SelectOp>(op) &&
+    if (isa<data::GetOp, data::IsOp>(op) &&
         !reserve(64 + 16 * (inputs.size() + op->getNumResults())))
       return failure();
     control.setLocation(op->getLoc());
@@ -315,7 +314,8 @@ class Recipes {
     }
     if (isa<data::PowerOfTwoOp>(op)) {
       for (StringRef contract :
-           {"index.constant", "index.equal", "bool.and", "bool.or"})
+           {"index.constant", "index.equal", "index.wrapping_sub",
+            "index.bit_and", "index.logical_shift_right", "bool.and"})
         if (!protocol::operationContracts(contract))
           return failure();
       auto emit = [&](StringRef contract, ValueRange operands, Type type,
@@ -335,23 +335,27 @@ class Recipes {
                            symbols.get(application, op->getLoc(), rewriter));
         return emitState(state).front();
       };
-      Value result;
-      // The VM has no shift contract. Enumerating its 64 representable powers
-      // implements r < 64 && n == (1 << r), with no runtime shift or overflow.
-      for (unsigned exponent = 0; exponent < 64; ++exponent) {
-        auto constant = [&](uint64_t value) {
-          return emit("index.constant", {}, inputs[0].getType(),
-                      {rewriter.getIntegerAttr(
-                          rewriter.getIntegerType(64, false), value)});
-        };
-        auto r = constant(exponent), n = constant(uint64_t(1) << exponent);
-        auto equalR = emit("index.equal", {inputs[1], r}, rewriter.getI1Type());
-        auto equalN = emit("index.equal", {inputs[0], n}, rewriter.getI1Type());
-        auto current = emit("bool.and", {equalR, equalN}, rewriter.getI1Type());
-        result = exponent == 0 ? current
-                               : emit("bool.or", {result, current},
-                                      rewriter.getI1Type(), {}, exponent == 63);
-      }
+      // A positive word has one set bit iff n & (n-1) is zero. Its
+      // total shift by r is one exactly at that bit; counts >= 64 yield
+      // zero. This also excludes n=0 without a partial operation.
+      auto indexType = inputs[0].getType();
+      auto constant = [&](uint64_t value) {
+        return emit("index.constant", {}, indexType,
+                    {rewriter.getIntegerAttr(rewriter.getIntegerType(64, false),
+                                             value)});
+      };
+      auto zero = constant(0), one = constant(1);
+      auto predecessor =
+          emit("index.wrapping_sub", {inputs[0], one}, indexType);
+      auto lowerBits =
+          emit("index.bit_and", {inputs[0], predecessor}, indexType);
+      auto shifted =
+          emit("index.logical_shift_right", {inputs[0], inputs[1]}, indexType);
+      auto singleBit =
+          emit("index.equal", {lowerBits, zero}, rewriter.getI1Type());
+      auto position = emit("index.equal", {shifted, one}, rewriter.getI1Type());
+      auto result = emit("bool.and", {singleBit, position},
+                         rewriter.getI1Type(), {}, true);
       replace(result);
       return success();
     }
@@ -397,11 +401,18 @@ class Recipes {
       replace(emitState(state));
       return success();
     }
-    if (isa<data::IndexOp, data::EqualOp, data::LessOp>(op)) {
+    if (isa<data::IndexOp, data::EqualOp, data::LessOp,
+            data::IndexWrappingAddOp, data::IndexWrappingSubtractOp,
+            data::IndexBitAndOp, data::IndexLogicalShiftRightOp>(op)) {
       NativeBindingApplication application;
-      application.contract = isa<data::IndexOp>(op)   ? "index.constant"
-                             : isa<data::EqualOp>(op) ? "index.equal"
-                                                      : "index.less";
+      application.contract =
+          isa<data::IndexOp>(op)                   ? "index.constant"
+          : isa<data::EqualOp>(op)                 ? "index.equal"
+          : isa<data::LessOp>(op)                  ? "index.less"
+          : isa<data::IndexWrappingAddOp>(op)      ? "index.wrapping_add"
+          : isa<data::IndexWrappingSubtractOp>(op) ? "index.wrapping_sub"
+          : isa<data::IndexBitAndOp>(op) ? "index.bit_and"
+                                         : "index.logical_shift_right";
       auto *declaration = protocol::operationContracts(application.contract);
       if (!declaration)
         return failure();
@@ -514,26 +525,25 @@ class Recipes {
         return refuse(op, "arithmetic identity has no lowering recipe");
     }
     if (isa<arith::SelectOp>(op)) {
-      llvm::SetVector<Value> captures;
-      captures.insert(inputs[1]);
-      captures.insert(inputs[2]);
-      SmallVector<Value> captured(captures.begin(), captures.end());
-      auto outline = [&](unsigned i) {
-        OpBuilder::InsertionGuard restore(rewriter);
-        auto function =
-            region(ValueRange(captured).getTypes(), op->getResultTypes());
-        if (!function)
-          return func::FuncOp();
-        rewriter.setInsertionPointToEnd(&function.front());
-        exec::ScopedExecutionBuilder nested(rewriter, function,
-                                            control.getLoopForm());
-        unsigned selected = std::distance(captures.begin(),
-                                          llvm::find(captures, inputs[i + 1]));
-        nested.complete(function.getArgument(1 + selected));
-        return function;
-      };
-      replace(control.conditional(inputs[0], captured, op->getResultTypes(),
-                                  site.getValue(), outline));
+      NativeBindingApplication selection;
+      auto type = op->getResult(0).getType();
+      if (auto field = dyn_cast<algebra::FieldType>(type)) {
+        selection.contract = "field.select";
+        selection.arguments = {rewriter.getStringAttr(field.getDomain())};
+      } else if (auto group = dyn_cast<algebra::GroupType>(type)) {
+        selection.contract = "curve.select";
+        selection.arguments = {rewriter.getStringAttr(group.getDomain())};
+      } else
+        selection.contract =
+            type.isSignlessInteger(1) ? "bool.select" : "index.select";
+      OperationState state(op->getLoc(), exec::ApplyOp::getOperationName());
+      state.addOperands(inputs);
+      state.addTypes(type);
+      state.addAttribute("site", site);
+      state.addAttribute("parameters", rewriter.getArrayAttr({}));
+      state.addAttribute("binding",
+                         symbols.get(selection, op->getLoc(), rewriter));
+      replace(emitState(state));
       return success(valid);
     }
     if (auto constant = dyn_cast<arith::ConstantOp>(op)) {

@@ -97,13 +97,16 @@ private def run : IO Unit := do
   let names := Json.arr #[.str "rows"]
   let receivers := Json.arr #[.str "V"]
   let empty := Json.arr #[]
+  let singleton := wireType (.oracle kind)
   let descriptors : List (Json × OracleDescriptor) := [
-    (.arr #[.str "oracle_input", .str "P", receivers, k, empty], .input "P" ["V"] kind []),
+    (.arr #[.str "oracle_input", .str "P", receivers, singleton, empty],
+      .input "P" ["V"] (.oracle kind) []),
     (.arr #[.str "oracle_send", .str "P", receivers, k, names, empty],
       .send "P" ["V"] kind ["rows"] []),
     (.arr #[.str "oracle_query", .str "V", k], .query (some "V") kind),
     (.arr #[.str "oracle_contents", .str "P", k], .contents "P" kind),
-    (.arr #[.str "oracle_components", .str "P", receivers, k], .components "P" ["V"] kind),
+    (.arr #[.str "oracle_components", .str "P", receivers, singleton],
+      .components "P" ["V"] (.oracle kind)),
     (.arr #[.str "oracle_shape", k, .str "rows"], .shape kind "rows"),
     (.arr #[.str "oracle_forget_shape", k, wireOracleKind unsized], .forgetShape kind unsized),
     (.arr #[.str "oracle_virtual", .str "map", .str "P", receivers, k],
@@ -116,6 +119,21 @@ private def run : IO Unit := do
     test "all twelve exact descriptor cases" (Format.descriptor json == .ok (.oracle expected))
     if let .arr fields := json then
       test "all twelve reject unknown fields" (!(Format.descriptor (.arr (fields.push .null))).isOk)
+  for capacity in [0, 4, maximum] do
+    let sort := Ty.oracleSequence unsized capacity
+    test "input retains sequence capacity independently of row bound" (Format.descriptor
+      (.arr #[.str "oracle_input", .str "P", receivers, wireType sort, bound]) ==
+        .ok (.oracle (.input "P" ["V"] sort [("rows", 32)])))
+    test "components retain sequence capacity" (Format.descriptor
+      (.arr #[.str "oracle_components", .str "P", receivers, wireType sort]) ==
+        .ok (.oracle (.components "P" ["V"] sort)))
+  for sort in [k, wireType .index, wireType (.sequence (.oracle kind)),
+      .arr #[.str "oracle_sequence", .str "table",
+        wireOracleArguments (.field "koala-bear") none, .str "18446744073709551616"]] do
+    test "input refuses obsolete kinds and nonlogical sorts" (!(Format.descriptor
+      (.arr #[.str "oracle_input", .str "P", receivers, sort, empty])).isOk)
+    test "components refuse obsolete kinds and nonlogical sorts" (!(Format.descriptor
+      (.arr #[.str "oracle_components", .str "P", receivers, sort])).isOk)
   let deepest := (List.range 19).foldl (fun type _ => Ty.sequence type) (.oracle kind)
   test "kind and row fit the expanded depth budget" ((Format.type (wireType deepest)).isOk)
   test "nested kind cannot bypass the expanded depth budget"

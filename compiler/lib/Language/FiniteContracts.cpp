@@ -56,6 +56,9 @@ class ContractCheck {
   std::map<ValueOrigin, Type> valueTypes;
   std::map<ValueOrigin, uint64_t> constants;
   HelperResults &helperResults;
+  static bool mathematicalMode(const Body &body) {
+    return body.mode == Body::Mode::Math || body.mode == Body::Mode::Oracle;
+  }
   struct Context {
     const Body &body;
     Facts inputs;
@@ -564,7 +567,7 @@ class ContractCheck {
   bool checkFixedCollection(Context &context, const HelperCall &call,
                             ArrayRef<ValueId> outputs, Span span) {
     const auto &callee = declarations[call.callee.index];
-    if (context.body.mode != Body::Mode::Math || !callee.finiteDefinition ||
+    if (!mathematicalMode(context.body) || !callee.finiteDefinition ||
         !callee.body || outputs.size() != 1 ||
         !staticExtent(context.body.values[outputs.front().index].type, 0))
       return true;
@@ -738,8 +741,7 @@ class ContractCheck {
     if (call.scopedArguments.size() != callee.scopedInputs.size() ||
         call.domainArguments.size() != callee.domainInputs.size())
       return refuse(span, "static call argument coverage differs");
-    if (!callee.dataPreconditions.empty() &&
-        context.body.mode != Body::Mode::Math)
+    if (!callee.dataPreconditions.empty() && !mathematicalMode(context.body))
       return types.fail(
           "source.data-bound",
           "conditional mathematical helper requires a total context", span);
@@ -948,7 +950,7 @@ class ContractCheck {
     };
     if (!checkFiniteFormation(types, finite,
                               context.body.values[output.index].type,
-                              context.body.mode == Body::Mode::Math, span,
+                              mathematicalMode(context.body), span,
                               {constant, size, same, equal, bound}) ||
         types.diagnostic)
       return false;
@@ -961,7 +963,7 @@ class ContractCheck {
                         finiteItemInput(finite.kind, true), depth + 1, span))
       return false;
     return finite.kind != FiniteApplication::Kind::Collect ||
-           context.body.mode != Body::Mode::Math ||
+           !mathematicalMode(context.body) ||
            collectResult(context, selected, output, bool(finite.predicate),
                          span);
   }

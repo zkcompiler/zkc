@@ -26,6 +26,12 @@ impl Source {
         let mut overrides = super::BuildSettings::default();
         for &(key, value) in &args.options {
             match key {
+                "--oracle-realization" => {
+                    overrides.oracle_realization = Some(
+                        zkc::entry::OracleSelection::parse(value.unwrap_or(""))
+                            .map_err(|e| e.to_string())?,
+                    )
+                }
                 "--no-simplify" => overrides.simplify = Some(false),
                 "--release-storage" => overrides.release_storage = Some(true),
                 "--no-finite-bulk" => overrides.finite_bulk = Some(false),
@@ -370,6 +376,7 @@ mod tests {
                                 fuse_vector_reductions: vector_reductions,
                                 fuse_collect_fold: collect_fold,
                                 calculation_batching,
+                                oracle_realization: Default::default(),
                             }
                         );
                         let mut report = json!({});
@@ -383,11 +390,44 @@ mod tests {
                                 "fuse_vector_reductions": vector_reductions,
                                 "fuse_collect_fold": collect_fold,
                                 "calculation_batching": calculation_batching,
+                                "oracle_realization": zkc::entry::OracleSelection::default(),
                             })
                         );
                     }
                 }
             }
+        }
+    }
+    #[test]
+    fn source_selection_is_typed_and_passed_without_inference() {
+        let executable = std::env::current_exe().unwrap();
+        let empty = zkc::entry::OracleSelection {
+            roots: zkc::entry::OracleRoots::Exact(vec![]),
+            ..Default::default()
+        };
+        for selection in [zkc::entry::OracleSelection::default(), empty] {
+            let text = selection.canonical_json().unwrap();
+            let source = Source::load(&Arguments {
+                positional: vec![],
+                options: vec![
+                    ("--compiler", executable.to_str()),
+                    ("--module", Some("sample=sample.zkc")),
+                    ("--oracle-realization", Some(&text)),
+                ],
+            })
+            .unwrap();
+            assert_eq!(source.settings.options().oracle_realization, selection);
+            assert_eq!(source.settings.origins()["oracle-realization"], "request");
+            let mut report = json!({});
+            source.describe(&mut report);
+            assert_eq!(report["options"]["oracle_realization"], json!(selection));
+        }
+        for invalid in ["{}", "[]", "null"] {
+            let result = Source::load(&Arguments {
+                positional: vec![],
+                options: vec![("--oracle-realization", Some(invalid))],
+            });
+            assert_eq!(result.err().unwrap(), "oracle-realization-selection");
         }
     }
 }

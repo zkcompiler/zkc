@@ -10,7 +10,7 @@ it does not independently establish correspondence to source.
 
 `compileRun(text, filename, options, registry)` accepts mathematical
 MLIR in the `protocol` profile. It owns the context, runs preparation, checked
-ideal oracle realization, projection,
+oracle realization under the selected policy, projection,
 optional participant simplification, math lowering and physical selection, then
 exports the typed physical participant carrier. Adjacent-stage preservation
 checks retain action order, calculation origins, statement interfaces and result
@@ -32,14 +32,16 @@ their own Data representation, separately from the holder's Data. The C++
 layouts for every base input/send occurrence. Merkle receivers retain public
 roots and actual shapes; holders retain private opening state. Queries use the
 [checked request/authentication profile](../formats/oracle-realization.md#common-opening-communication),
-including the supported fixed base-query blocks. The CLI currently exposes no
-realization selector and uses the default. Returned handles are references with
+including dynamic base/virtual query windows. The CLI exposes the same explicit
+`--oracle-realization` selection; omitting it selects the clear-table default.
+Returned handles are references with
 explicit support stores. The bundle uses this native
 interface; logical handles have no generic wire codec. Original clauses and exact
 statement selections remain on the original, not on the changed native
 signature. Run execution does not interpret these logical predicates or establish
-oracle simulation. Native proof construction still refuses this logical profile
-until its selected-target transport and construction are implemented. The bundle
+oracle simulation. Native proof compilation uses this same realization owner
+before its [checked transcript construction](../ir/verifier-requests.md).
+External logical input/result ports still have no generic Entry codec. The bundle
 schema below contains execution data; it does not embed or authorize a logical
 claim or the independently retained realization record.
 

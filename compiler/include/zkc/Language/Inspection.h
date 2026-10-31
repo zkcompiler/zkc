@@ -59,7 +59,11 @@ llvm::Expected<std::string> inspectSourceBindings(const CheckedProject &,
                                                   const Limits & = {});
 /// Closed static substitutions, scoped-source origins, domain constructor
 /// graphs and capture alias layouts. Symbols select actual closed definitions;
-/// they are never decoded as source identity. This is a checking proposal.
+/// they are never decoded as source identity. Oracle definitions carry bounded
+/// whole-predicate companion addresses; each construction retains its
+/// unresolved obligation and typed actual substitution, without optional
+/// security gating. This is a checking proposal, never evidence or theorem
+/// discharge.
 llvm::Expected<std::string> inspectSourceInstances(const ClosedEntry &,
                                                    const Limits & = {});
 struct NotationInspectionOptions {

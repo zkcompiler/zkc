@@ -177,10 +177,6 @@ struct Emitter {
     return apply(c, "index.equal", builder.getI1Type(), {actual, constant},
                  site)[0];
   }
-  void require(Control &c, Value actual, unsigned expected, StringRef site) {
-    apply(c, "control.require", {}, equal(c, actual, expected, site),
-          site.str() + "_guard");
-  }
   Value pack(Control &c, Type type, StringRef alternative, ValueRange inputs,
              StringRef site) {
     return c.invoke(
@@ -223,10 +219,9 @@ struct Emitter {
   Value opening(Control &c, ValueRange inputs, unsigned ordinal) {
     const auto &arm = model.arms[ordinal];
     std::string prefix = "constructor_" + std::to_string(arm.constructor) + "_";
-    auto reference = pack(c, arm.reference, "Record", inputs.take_front(2),
-                          prefix + "anchor");
-    auto held = call(c, arm.holderLookup, {reference, inputs[3 + ordinal]},
-                     prefix + "load_anchor");
+    auto held =
+        call(c, arm.holderLookup, {inputs[0], inputs[1], inputs[3 + ordinal]},
+             prefix + "load_anchor");
     auto row = call(c, arm.open,
                     {held[arm.openingState], held[arm.holderRows], inputs[2]},
                     prefix + "open");
@@ -236,64 +231,16 @@ struct Emitter {
     return function(
         recipe.inputs, recipe.outputs, false,
         [&](Control &c, ValueRange inputs) {
-          if (recipe.action == OracleExchangeAction::Open) {
-            Types captures(3, index);
-            append_range(captures, model.holderStores);
-            c.returned(c.match(inputs[0], inputs.drop_front(), model.response,
-                               {"Record"}, "request", [&](unsigned) {
-                                 return function(
-                                     captures, model.response, true,
-                                     [&](Control &body, ValueRange args) {
-                                       body.complete(dispatch(body, args, 0));
-                                     });
-                               }));
-            return;
-          }
-          std::vector<std::string> alternatives;
-          for (const auto &arm : model.arms)
-            alternatives.push_back(arm.alternative);
-          c.returned(c.match(
-              inputs[0], inputs.drop_front(), model.state, alternatives,
-              "response", [&](unsigned ordinal) {
-                const auto &arm = model.arms[ordinal];
-                Types types(arm.opened.begin(), arm.opened.end());
-                append_range(types, model.state);
-                append_range(types, model.receiverStores);
-                return function(
-                    types, model.state, true,
-                    [&](Control &body, ValueRange args) {
-                      using C = OracleQueryController;
-                      std::string prefix = "constructor_" +
-                                           std::to_string(arm.constructor) +
-                                           "_";
-                      auto state =
-                          args.drop_front(2).take_front(model.state.size());
-                      auto stores = args.drop_front(2 + model.state.size());
-                      require(body, state[C::Phase], C::Request,
-                              prefix + "request_phase");
-                      require(body, state[C::Constructor], arm.constructor,
-                              prefix + "request_constructor");
-                      require(body, state[C::Kind], arm.kind,
-                              prefix + "request_kind");
-                      auto reference =
-                          pack(body, arm.reference, "Record",
-                               {state[C::Constructor], state[C::Instance]},
-                               prefix + "anchor");
-                      auto stored = call(body, arm.receiverLookup,
-                                         {reference, stores[arm.receiverSlot]},
-                                         prefix + "load_anchor");
-                      auto answer =
-                          call(body, arm.authenticate,
-                               {stored[arm.root], stored[arm.receiverRows],
-                                state[C::Position], args[0], args[1]},
-                               prefix + "authenticate");
-                      Values resumed(state.begin(), state.end());
-                      append_range(resumed, state.take_front(5));
-                      resumed.push_back(answer[0]);
-                      body.complete(
-                          call(body, arm.resume, resumed, prefix + "resume"));
-                    });
-              }));
+          Types captures(3, index);
+          append_range(captures, model.holderStores);
+          c.returned(c.match(inputs[0], inputs.drop_front(), model.response,
+                             {"Record"}, "request", [&](unsigned) {
+                               return function(
+                                   captures, model.response, true,
+                                   [&](Control &body, ValueRange args) {
+                                     body.complete(dispatch(body, args, 0));
+                                   });
+                             }));
         });
   }
 };

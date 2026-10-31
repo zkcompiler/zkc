@@ -1,6 +1,7 @@
 #include "OracleSchedule.h"
-#include "mlir/IR/Matchers.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Analysis/Interactions.h"
+#include "zkc/Analysis/ProtocolConstants.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
@@ -17,56 +18,41 @@ using Summary = OracleObservationSummary;
 Summary uncertainStop() { return Summary().either(Summary::stop()); }
 struct Analysis {
   StringRef observer;
-  unsigned &remaining;
+  facts::Work &work;
+  MathematicalFactAnalysis &mathematics;
   Error charge() {
-    if (!remaining)
+    if (!work.charge())
       return error("oracle-observation-limit");
-    --remaining;
     return Error::success();
   }
   Expected<std::optional<uint64_t>> constant(Value value) {
-    while (value) {
-      if (auto e = charge())
-        return std::move(e);
-      if (auto view = value.getDefiningOp<pir::RestrictRolesOp>()) {
-        value = view.getInput();
-        continue;
-      }
-      if (auto argument = dyn_cast<BlockArgument>(value)) {
-        auto repeat =
-            dyn_cast<pir::RepeatOp>(argument.getOwner()->getParentOp());
-        // Captures are invariant. Carried values and the induction index are
-        // not constants just because their zero-trip initializer is one.
-        if (repeat && argument.getArgNumber() > uint64_t(repeat.getCarried())) {
-          value = repeat.getInputs()[argument.getArgNumber()];
-          continue;
-        }
-      }
-      Attribute attr;
-      if (matchPattern(value, m_Constant(&attr)))
-        if (auto integer = dyn_cast<IntegerAttr>(attr))
-          if (integer.getValue().getBitWidth() <= 64)
-            return std::optional<uint64_t>(integer.getValue().getZExtValue());
-      return std::optional<uint64_t>();
-    }
-    return std::optional<uint64_t>();
+    auto result = observeProtocolConstant(value, observer, mathematics, work);
+    if (result.status == facts::Status::Capacity)
+      return error("oracle-observation-limit");
+    return result.value;
   }
   bool includes(ArrayAttr roles) {
     return is_contained(roles, StringAttr::get(roles.getContext(), observer));
   }
-  Expected<Summary> block(Block &body, unsigned depth) {
-    if (!depth)
+  Expected<Summary> sequence(const InteractionDeclaration &view,
+                             const InteractionSequence &body, unsigned depth) {
+    if (!depth) {
+      work.exhaust();
       return error("oracle-observation-limit");
+    }
     Summary result;
-    for (auto &op : body) {
+    for (unsigned index : body.getActions()) {
       if (auto e = charge())
         return std::move(e);
+      const auto &action = view.getActions()[index];
+      auto &op = *action.getOperation();
       Summary step;
       if (isa<pir::ApplyOp>(op))
         return error("oracle-observation-preparation");
       if (auto repeat = dyn_cast<pir::RepeatOp>(op)) {
         if (includes(repeat.getRoles())) {
-          auto nested = block(repeat.getBody().front(), depth - 1);
+          auto nested = sequence(
+              view, view.getSequence(*action.getRepeatBody()), depth - 1);
           if (!nested)
             return nested.takeError();
           auto count = constant(repeat.getInputs().front());
@@ -121,6 +107,22 @@ struct Analysis {
     return result;
   }
 };
+Expected<const InteractionDeclaration *>
+structure(InteractionAnalysis &analysis, Operation *program,
+          facts::Work &work) {
+  // Extraction and observer transfers share the existing cumulative allowance.
+  // An incomplete view must never supply a neutral (safe-ordering) summary.
+  auto result = analysis.get(program, work);
+  if (result)
+    return *result;
+  return handleErrors(result.takeError(), [](const Refusal &refusal) -> Error {
+    if (refusal.code == "interaction-analysis-capacity")
+      return error("oracle-observation-limit");
+    if (refusal.code == "interaction-analysis-owner")
+      return error("oracle-observation-source");
+    return error("oracle-observation-operation");
+  });
+}
 Expected<pir::ProtocolModuleOp> admitted(ModuleOp prepared) {
   if (!prepared || failed(zkc::admitStage(prepared)) ||
       !hasSingleElement(prepared.getBody()->getOperations()))
@@ -143,40 +145,47 @@ analyzeOracleObservations(ModuleOp prepared, StringRef entry,
       !is_contained(program.getRoles(),
                     StringAttr::get(prepared.getContext(), observer)))
     return error("oracle-observation-interface");
-  unsigned remaining = 100000;
-  return Analysis{observer, remaining}.block(program.getBody().front(), 64);
+  uint64_t remaining = 100000;
+  facts::Work work(remaining);
+  InteractionAnalysis interactions(prepared);
+  MathematicalFactAnalysis mathematics(prepared);
+  auto view = structure(interactions, program, work);
+  if (!view)
+    return view.takeError();
+  return Analysis{observer, work, mathematics}.sequence(**view,
+                                                        (*view)->getBody(), 64);
 }
 Error checkOracleFinalDrawSchedule(ModuleOp prepared) {
   auto module = admitted(prepared);
   if (!module)
     return module.takeError();
-  unsigned remaining = 100000;
+  uint64_t remaining = 100000;
+  facts::Work work(remaining);
+  InteractionAnalysis interactions(prepared);
+  MathematicalFactAnalysis mathematics(prepared);
   for (auto program : module->getBody().front().getOps<pir::MathematicalOp>()) {
     // Virtual declarations cannot draw. Their nested queries inherit the outer
     // observation; uncalled virtual declarations create no reached event.
     llvm::DenseSet<StringAttr> observers;
-    Error failure = Error::success();
-    program.walk([&](Operation *op) -> WalkResult {
-      if (!remaining)
-        failure = error("oracle-observation-limit");
-      else if (isa<pir::ApplyOp>(op))
-        failure = error("oracle-observation-preparation");
-      if (failure)
-        return WalkResult::interrupt();
-      --remaining;
+    auto view = structure(interactions, program, work);
+    if (!view)
+      return view.takeError();
+    for (const auto &action : (*view)->getActions()) {
+      if (!work.charge())
+        return error("oracle-observation-limit");
+      auto *op = action.getOperation();
+      if (isa<pir::ApplyOp>(op))
+        return error("oracle-observation-preparation");
       if (auto query = dyn_cast<pir::OracleQueryOp>(op))
         observers.insert(query.getOwnerAttr());
-      return WalkResult::advance();
-    });
-    if (failure)
-      return failure;
+    }
     // Declaration order makes refusal precedence independent of hash order.
     for (Attribute role : program.getRoles()) {
       auto observer = cast<StringAttr>(role);
       if (!observers.contains(observer))
         continue;
-      auto summary = Analysis{observer.getValue(), remaining}.block(
-          program.getBody().front(), 64);
+      auto summary = Analysis{observer.getValue(), work, mathematics}.sequence(
+          **view, (*view)->getBody(), 64);
       if (!summary)
         return summary.takeError();
       if (summary->queryBeforeDraw())

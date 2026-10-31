@@ -186,6 +186,53 @@ int main() {
     refuses(analyzeOracleQueryCapacity(*original, "main"),
             "oracle-query-capacity-overflow");
   });
+  for (unsigned count : {0, 1, 3})
+    cases.run(
+        "exact count tightens a large declared recurrence maximum " +
+            Twine(count),
+        [&] {
+          auto text = replace(
+              source(64, "%previous,%previous"),
+              "   %last = \"protocol.repeat\"(%count,",
+              "   %actual = \"data.index\"() {value=" + std::to_string(count) +
+                  ":ui64} : ()->ui64\n"
+                  "   %last = \"protocol.repeat\"(%actual,");
+          auto original = parse(context, text);
+          auto result = take(analyzeOracleQueryCapacity(*original, "main"));
+          require(bound(*original, result) ==
+                      OracleQuerySize{uint64_t(1) << count,
+                                      (uint64_t(1) << (count + 1)) - 1},
+                  "known count did not tighten the recurrence");
+        });
+  for (bool agreed : {false, true})
+    cases.run(
+        agreed ? "uniform role count tightens capacity"
+               : "one participant cannot supply a common count",
+        [&] {
+          auto text =
+              replace(source(3, "%previous,%previous"),
+                      "   %last = \"protocol.repeat\"(%count,",
+                      R"mlir(   %one = "data.index"() {value=1:ui64} : ()->ui64
+   %two = "data.index"() {value=2:ui64} : ()->ui64
+   %actual = "protocol.assemble_roles"(%one,)mlir" +
+                          std::string(agreed ? "%one" : "%two") +
+                          R"mlir() {roles=["P","V"]} : (ui64,ui64)->ui64
+   %last = "protocol.repeat"(%actual,)mlir");
+          auto original = parse(context, text);
+          auto result = take(analyzeOracleQueryCapacity(*original, "main"));
+          require(bound(*original, result) ==
+                      (agreed ? OracleQuerySize{2, 3} : OracleQuerySize{8, 15}),
+                  "role components were incorrectly joined as a count");
+        });
+  cases.run("an out-of-range count does not create a new admitted maximum",
+            [&] {
+              auto text = replace(source(1), "\"protocol.repeat\"(%count,",
+                                  "\"protocol.repeat\"(%rows,");
+              auto original = parse(context, text);
+              auto result = take(analyzeOracleQueryCapacity(*original, "main"));
+              require(bound(*original, result) == OracleQuerySize{2, 3},
+                      "out-of-range count changed the source maximum");
+            });
   cases.run("analysis work is bounded without inventing an execution premise",
             [&] {
               auto original = parse(context, source(1048576));

@@ -358,7 +358,7 @@ impl Family for G1 {
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::Curve(v) = v {
-            Ok(*v)
+            Ok(**v)
         } else {
             Err(refused("kernel-operands"))
         }
@@ -385,7 +385,7 @@ impl Family for G1 {
         }
     }
     fn value(v: Self) -> Value {
-        Value::Curve(v)
+        Value::Curve((v).into())
     }
     fn values(v: Vec<Self>) -> Value {
         Value::Groups(v.into())
@@ -426,7 +426,7 @@ impl Family for RistrettoPoint {
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::RistrettoGroup(v) = v {
-            Ok(*v)
+            Ok(**v)
         } else {
             Err(refused("kernel-operands"))
         }
@@ -453,7 +453,7 @@ impl Family for RistrettoPoint {
         }
     }
     fn value(v: Self) -> Value {
-        Value::RistrettoGroup(v)
+        Value::RistrettoGroup((v).into())
     }
     fn values(v: Vec<Self>) -> Value {
         Value::RistrettoGroups(v.into())
@@ -494,7 +494,7 @@ impl Family for crate::EdwardsPrime {
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::EdwardsGroup(v) = v {
-            Ok(*v)
+            Ok(**v)
         } else {
             Err(refused("kernel-operands"))
         }
@@ -521,7 +521,7 @@ impl Family for crate::EdwardsPrime {
         }
     }
     fn value(v: Self) -> Value {
-        Value::EdwardsGroup(v)
+        Value::EdwardsGroup((v).into())
     }
     fn values(v: Vec<Self>) -> Value {
         Value::EdwardsGroups(v.into())
@@ -534,7 +534,7 @@ impl Family for crate::EdwardsPrime {
     }
 }
 macro_rules! bn_group {
-    ($t:ty,$one:ident,$many:ident) => {
+    ($t:ty,$one:ident,$many:ident,$wrap:expr,$read:expr) => {
         impl Group for $t {
             type Scalar = crate::Bn254Scalar;
             type Error = zkc_kernels::arkworks::Error;
@@ -563,7 +563,7 @@ macro_rules! bn_group {
             }
             fn point(v: &Value) -> Result<Self> {
                 if let Value::$one(v) = v {
-                    Ok(*v)
+                    Ok(($read)(v))
                 } else {
                     Err(refused("kernel-operands"))
                 }
@@ -590,7 +590,7 @@ macro_rules! bn_group {
                 }
             }
             fn value(v: Self) -> Value {
-                Value::$one(v)
+                Value::$one(($wrap)(v))
             }
             fn values(v: Vec<Self>) -> Value {
                 Value::$many(v.into())
@@ -604,8 +604,20 @@ macro_rules! bn_group {
         }
     };
 }
-bn_group!(crate::Bn254G1, Bn254G1, Bn254G1Vector);
-bn_group!(crate::Bn254G2, Bn254G2, Bn254G2Vector);
+bn_group!(
+    crate::Bn254G1,
+    Bn254G1,
+    Bn254G1Vector,
+    |v| v,
+    |v: &crate::Bn254G1| *v
+);
+bn_group!(
+    crate::Bn254G2,
+    Bn254G2,
+    Bn254G2Vector,
+    Arc::new,
+    |v: &Arc<crate::Bn254G2>| **v
+);
 impl Group for crate::Bls12381G2 {
     type Scalar = Scalar;
     type Error = zkc_kernels::arkworks::Error;
@@ -633,7 +645,7 @@ impl Family for crate::Bls12381G2 {
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::Bls12381G2(v) = v {
-            Ok(*v)
+            Ok(**v)
         } else {
             Err(refused("kernel-operands"))
         }
@@ -660,7 +672,7 @@ impl Family for crate::Bls12381G2 {
         }
     }
     fn value(v: Self) -> Value {
-        Value::Bls12381G2(v)
+        Value::Bls12381G2((v).into())
     }
     fn values(v: Vec<Self>) -> Value {
         Value::Bls12381G2Vector(v.into())
@@ -679,13 +691,16 @@ pub(crate) fn apply(
     p: &Policy,
 ) -> Result<Vec<Value>> {
     if name == "pairing.apply" {
-        p.output(512, i.max_output_bytes)?;
+        p.output(
+            Value::fixed_retained_bytes(&i.binding.signature().outputs[0]),
+            i.max_output_bytes,
+        )?;
         // Bound pairing preparation scratch independently of the GT result.
         p.output(32768, usize::MAX)?;
         return match args {
-            [Value::Bn254G1(a), Value::Bn254G2(b)] => Ok(vec![Value::Bn254Gt(
+            [Value::Bn254G1(a), Value::Bn254G2(b)] => Ok(vec![Value::Bn254Gt(Arc::new(
                 zkc_kernels::arkworks::bn254::pairing(a, b),
-            )]),
+            ))]),
             [Value::Curve(a), Value::Bls12381G2(b)] => Ok(vec![Value::Bls12381Gt(Arc::new(
                 zkc_kernels::arkworks::bls12_381::pairing(a, b),
             ))]),
@@ -698,7 +713,10 @@ pub(crate) fn apply(
                 equal_len(a.len(), b.len())?;
                 p.typed_groups::<crate::Bn254G1>(a.len())?;
                 p.typed_groups::<crate::Bn254G2>(b.len())?;
-                p.output(512, i.max_output_bytes)?;
+                p.output(
+                    Value::fixed_retained_bytes(&i.binding.signature().outputs[0]),
+                    i.max_output_bytes,
+                )?;
                 // BN254 G2 preparations retain 91 line coefficients (three Fq2 each),
                 // plus G1 preparation and multi-Miller loop working vectors.
                 p.output(size(a.len(), 32768)?, usize::MAX)?;
@@ -708,7 +726,10 @@ pub(crate) fn apply(
                 equal_len(a.len(), b.len())?;
                 p.groups(a.len())?;
                 p.typed_groups::<crate::Bls12381G2>(b.len())?;
-                p.output(512, i.max_output_bytes)?;
+                p.output(
+                    Value::fixed_retained_bytes(&i.binding.signature().outputs[0]),
+                    i.max_output_bytes,
+                )?;
                 // BLS12-381 G2 preparations retain 68 line coefficients (three
                 // Fq2 each), plus G1 preparation and multi-Miller loop vectors.
                 p.output(size(a.len(), 32768)?, usize::MAX)?;
@@ -772,10 +793,15 @@ pub(super) fn dense_with_storage<G: Family<S>, S: PointStorage<G>>(
         .iter()
         .all(|ty| ty.kind() != zkc_runtime::vm::Type::Groups);
     if scalar_output {
-        p.output(512, i.max_output_bytes)?;
+        p.output(
+            Value::fixed_retained_bytes(&i.binding.signature().outputs[0]),
+            i.max_output_bytes,
+        )?;
     }
     let _scalar_reservation = if G::RESIDENT_STORAGE && scalar_output {
-        Some(call.reserve_workspace::<u8>(512)?)
+        Some(call.reserve_workspace::<u8>(Value::fixed_retained_bytes(
+            &i.binding.signature().outputs[0],
+        ))?)
     } else {
         None
     };
@@ -1034,7 +1060,7 @@ impl Group for crate::Bn254Gt {
     }
 }
 impl Target for crate::Bn254Gt {
-    const RETAINED: usize = 512;
+    const RETAINED: usize = Value::bn254_gt_retained_bytes();
     fn scalar(scalar: &Value) -> Result<Self::Scalar> {
         let Value::Bn254Field(s) = scalar else {
             return Err(refused("kernel-operands"));
@@ -1043,13 +1069,13 @@ impl Target for crate::Bn254Gt {
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::Bn254Gt(v) = v {
-            Ok(*v)
+            Ok(**v)
         } else {
             Err(refused("kernel-operands"))
         }
     }
     fn value(v: Self) -> Value {
-        Value::Bn254Gt(v)
+        Value::Bn254Gt(Arc::new(v))
     }
 }
 impl Group for crate::Bls12381Gt {
@@ -1096,7 +1122,12 @@ fn target<G: Target>(
     i: &Invocation<'_>,
     p: &Policy,
 ) -> Result<Vec<Value>> {
-    p.output(G::RETAINED, i.max_output_bytes)?;
+    let bytes = if matches!(name, "curve.nonidentity" | "curve.equal") {
+        crate::VALUE_SLOT_BYTES
+    } else {
+        G::RETAINED
+    };
+    p.output(bytes, i.max_output_bytes)?;
     let v = match (name, args) {
         ("curve.identity", []) => G::value(G::identity()),
         ("curve.generator", []) => {

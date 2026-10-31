@@ -8,7 +8,7 @@ use zkc_runtime::vm::{
 
 #[derive(Clone, Debug)]
 pub struct FixedVector {
-    physical_type: PhysicalType,
+    physical_type: Arc<PhysicalType>,
     storage: Storage,
 }
 #[derive(Clone, Debug)]
@@ -20,7 +20,7 @@ impl FixedVector {
     /// Admission and exact length precede construction. There is no wire codec.
     pub fn new(physical_type: PhysicalType, elements: crate::Buffer<KoalaBear>) -> Result<Self> {
         let value = Self {
-            physical_type,
+            physical_type: Arc::new(physical_type),
             storage: Storage::KoalaBear(elements),
         };
         value.validate()?;
@@ -31,7 +31,7 @@ impl FixedVector {
         elements: Arc<zkc_kernels::blst::bls12_381::ScalarVector>,
     ) -> Result<Self> {
         let value = Self {
-            physical_type,
+            physical_type: Arc::new(physical_type),
             storage: Storage::Blst(elements),
         };
         value.validate()?;
@@ -97,12 +97,14 @@ impl FixedVector {
         Ok(())
     }
     pub(crate) fn retained_bytes(&self) -> Result<usize> {
+        let backing = self.backing()?;
         self.owned_bytes()
-            .checked_add(self.backing()?.bytes())
+            .checked_add(self.physical_type.descriptor_bytes())
+            .and_then(|bytes| bytes.checked_add(backing.bytes()))
             .ok_or_else(|| exhausted("output-bytes"))
     }
     pub(crate) fn owned_bytes(&self) -> usize {
-        DESCRIPTOR_BYTES.saturating_add(self.physical_type.descriptor_bytes())
+        DESCRIPTOR_BYTES
     }
     pub(crate) fn backing(&self) -> Result<Backing> {
         Ok(match &self.storage {
@@ -117,7 +119,16 @@ impl FixedVector {
     }
 }
 
+// This conservative owned allowance includes the shared immutable layout
+// wrapper as well as the inline view; recursive descriptors remain separately
+// accounted. Cloning a view cannot make layout storage uncharged.
 const DESCRIPTOR_BYTES: usize = 1024;
+const _: () = assert!(
+    std::mem::size_of::<PhysicalType>()
+        + std::mem::size_of::<FixedVector>()
+        + 2 * std::mem::size_of::<usize>()
+        <= DESCRIPTOR_BYTES
+);
 pub(crate) fn supports_type(ty: &PhysicalType) -> bool {
     let logical = ty.logical();
     let Some((element, length)) = logical.fixed_vector_parts() else {
@@ -236,7 +247,7 @@ pub(crate) fn apply(
             if a.physical_type != b.physical_type {
                 return Err(refused("fixed-vector-type"));
             }
-            policy.output(512, invocation.max_output_bytes)?;
+            policy.output(crate::VALUE_SLOT_BYTES, invocation.max_output_bytes)?;
             let call = crate::numerical::Call::new(policy, invocation.max_output_bytes);
             match (&a.storage, &b.storage) {
                 (Storage::KoalaBear(a), Storage::KoalaBear(b)) => {

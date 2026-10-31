@@ -23,6 +23,10 @@ semantic obligation.
 The strict reader recognizes the logical oracle types, twelve descriptors and
 virtual declaration rows specified by the
 [native wire contract](../../../docs/spec/formats/structured-source.md#logical-oracle-vocabulary).
+Input and component descriptors retain the complete singleton or sequence sort,
+including capacity; the former bare-kind rows are refused. Logical source
+records retain their distinct nominal origin kind through decoding and generated
+Lean declarations, so they cannot collide with ordinary record identities.
 It retains actual operands, roles, ordered query occurrences, labels, the
 admissibility relation and the entire virtual body. Table kinds derive their
 Data, Query and Answer types and own an ordered list of named dimensions.

@@ -1,5 +1,5 @@
 #include "OracleCommonPlan.h"
-#include "OracleQueryBlocks.h"
+#include "OracleQuerySchedule.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Admission.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
@@ -10,6 +10,7 @@
 #include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/STLFunctionalExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
 #include <map>
@@ -62,6 +63,9 @@ struct PlanBuilder {
   ArrayRef<std::vector<func::FuncOp>> allocators;
   ArrayRef<OracleMerkleFunctions> merkle;
   OracleAuthentication authentication;
+  const OracleQuerySchedule &schedule;
+  ArrayRef<OracleCommonRemote> remotes;
+  ArrayRef<OracleCommonBatch> batches;
   std::map<unsigned, unsigned> inputRows;
   Builder builder;
   Type index;
@@ -73,7 +77,7 @@ struct PlanBuilder {
   struct DataView {
     unsigned reference;
     std::string holder;
-    pir::OracleKindAttr kind;
+    Type type;
   };
   llvm::DenseMap<Value, DataView> dataViews;
   std::vector<unsigned> coordinates;
@@ -82,10 +86,14 @@ struct PlanBuilder {
                        ArrayRef<OracleCommonController> controllers,
                        ArrayRef<std::vector<func::FuncOp>> allocators,
                        ArrayRef<OracleMerkleFunctions> merkle,
-                       OracleAuthentication authentication)
+                       OracleAuthentication authentication,
+                       const OracleQuerySchedule &schedule,
+                       ArrayRef<OracleCommonRemote> remotes,
+                       ArrayRef<OracleCommonBatch> batches)
       : source(source), program(program), requirements(requirements),
         controllers(controllers), allocators(allocators), merkle(merkle),
-        authentication(authentication), builder(source.getContext()),
+        authentication(authentication), schedule(schedule), remotes(remotes),
+        batches(batches), builder(source.getContext()),
         index(
             IntegerType::get(source.getContext(), 64, IntegerType::Unsigned)) {
     llvm::StringSet<> used;
@@ -198,13 +206,43 @@ struct PlanBuilder {
     if (found == dataViews.end())
       return error("oracle-common-value");
     const auto &view = found->second;
-    auto *body =
-        controller(view.holder, view.kind, OracleControllerAccess::Holder);
+    auto kind = pir::getOracleFamilyKind(view.type);
+    auto *body = controller(view.holder, kind, OracleControllerAccess::Holder);
     if (!body || !body->contents)
       return error("oracle-common-helper");
     auto captures = stores(*body);
     if (!captures)
       return captures.takeError();
+    if (auto sequence = dyn_cast<pir::OracleSequenceType>(view.type)) {
+      // A component view stays lazy through internal ports. Enumerate data
+      // only when an ordinary consumer actually demands this projection.
+      Type data = pir::getOracleFamilyDataType(view.type);
+      auto empty = make(block, "data.sequence_empty", data, {});
+      if (!empty)
+        return empty.takeError();
+      auto count = make(block, "data.sequence_length", index, {view.reference});
+      if (!count)
+        return count.takeError();
+      auto output = traverseSequence(
+          block, sequence, view.reference, count->front(), view.holder,
+          *captures, body->stores, data, *empty, path, "component_data",
+          [&](OracleCommonBlock &region, unsigned reference,
+              ArrayRef<unsigned> carried,
+              ArrayRef<unsigned> stores) -> Expected<IDs> {
+            IDs arguments{reference};
+            append_range(arguments, stores);
+            auto element = call(region, body->contents, view.holder, arguments,
+                                site(path, "component_element", view.holder));
+            if (!element)
+              return element.takeError();
+            return make(region, "data.sequence_append", data,
+                        {carried.front(), element->front()});
+          });
+      if (!output)
+        return output.takeError();
+      values[original] = output->front();
+      return Error::success();
+    }
     IDs arguments{view.reference};
     append_range(arguments, *captures);
     auto output = call(block, body->contents, view.holder, arguments,
@@ -295,6 +333,71 @@ struct PlanBuilder {
                           {left, right})
                         .front());
   }
+  Expected<IDs> traverseSequence(
+      OracleCommonBlock &block, pir::OracleSequenceType sequence,
+      unsigned reference, unsigned count, StringRef role,
+      ArrayRef<unsigned> captures, TypeRange captureTypes,
+      TypeRange carriedTypes, ArrayRef<unsigned> seeds, ArrayRef<unsigned> path,
+      StringRef purpose,
+      llvm::function_ref<Expected<IDs>(OracleCommonBlock &, unsigned,
+                                       ArrayRef<unsigned>, ArrayRef<unsigned>)>
+          visit) {
+    // Common repeat has its own finite native bound. Do not narrow a logical
+    // uint64 capacity into its signed attribute or silently truncate traversal.
+    if (sequence.getMaximum() > 1048576)
+      return error("oracle-common-limit");
+    auto sequenceType = converted(sequence);
+    if (!sequenceType)
+      return sequenceType.takeError();
+    auto element = oracleReferenceType(sequence.getKind());
+    if (!element)
+      return element.takeError();
+    auto select = local({*sequenceType, index}, *element);
+    select.results =
+        apply(select, {"sequence.at", {TypeAttr::get(*element)}, ""}, *element,
+              {0, 1});
+    auto region = std::make_shared<OracleCommonBlock>();
+    region->types = {index};
+    append_range(region->types, carriedTypes);
+    region->types.push_back(*sequenceType);
+    append_range(region->types, captureTypes);
+    for ([[maybe_unused]] Type type : region->types)
+      region->arguments.push_back(id());
+    unsigned referenceIndex = 1 + seeds.size();
+    auto selected =
+        call(*region, select, role,
+             {region->arguments[referenceIndex], region->arguments.front()},
+             site(path, "sequence_reference", role));
+    if (!selected)
+      return selected.takeError();
+    result.locals.push_back(std::move(select));
+    ArrayRef<unsigned> arguments(region->arguments);
+    auto yielded =
+        visit(*region, selected->front(), arguments.slice(1, seeds.size()),
+              arguments.drop_front(referenceIndex + 1));
+    if (!yielded)
+      return yielded.takeError();
+    auto terminator = make(*region, "protocol.yield", {}, *yielded);
+    if (!terminator)
+      return terminator.takeError();
+    IDs inputs{count};
+    append_range(inputs, seeds);
+    inputs.push_back(reference);
+    append_range(inputs, captures);
+    SmallVector<Attribute> carriedRoles(seeds.size(),
+                                        builder.getStrArrayAttr({role}));
+    return make(
+        block, "protocol.repeat", carriedTypes, inputs,
+        attrs({text("site", site(path, purpose, role)),
+               builder.getNamedAttr("carried",
+                                    builder.getI64IntegerAttr(seeds.size())),
+               builder.getNamedAttr(
+                   "maximum", builder.getI64IntegerAttr(sequence.getMaximum())),
+               builder.getNamedAttr("roles", builder.getStrArrayAttr({role})),
+               builder.getNamedAttr("carried_roles",
+                                    builder.getArrayAttr(carriedRoles))}),
+        region);
+  }
   Expected<OracleLocalRecipe> checkShape(pir::OracleKindAttr kind,
                                          DictionaryAttr bounds, bool data,
                                          bool inferred) {
@@ -335,6 +438,79 @@ struct PlanBuilder {
     }
     recipe.results = {rows};
     return recipe;
+  }
+  Error checkSequenceRebinding(OracleCommonBlock &block,
+                               pir::OracleInputOp input, unsigned reference,
+                               ArrayRef<unsigned> path) {
+    auto sequence =
+        dyn_cast<pir::OracleSequenceType>(input.getHandle().getType());
+    if (!sequence)
+      return Error::success();
+    auto type = converted(sequence);
+    if (!type)
+      return type.takeError();
+    auto element = oracleReferenceType(sequence.getKind());
+    if (!element)
+      return element.takeError();
+    auto capacity = local(*type, index);
+    unsigned count =
+        apply(capacity, {"sequence.length", {TypeAttr::get(*element)}, ""},
+              index, {0})
+            .front();
+    unsigned tooLarge =
+        apply(capacity, {"index.less", {}, ""}, builder.getI1Type(),
+              {number(capacity, sequence.getMaximum()), count})
+            .front();
+    require(capacity, apply(capacity, {"bool.not", {}, ""}, builder.getI1Type(),
+                            {tooLarge})
+                          .front());
+    capacity.results = {count};
+    // Reserve helper identities before generating nested recipes.
+    result.locals.push_back(capacity);
+    SmallVector<Attribute> roles{input.getHolderAttr()};
+    append_range(roles, input.getReceivers());
+    auto kind = sequence.getKind();
+    for (auto attribute : roles) {
+      auto role = cast<StringAttr>(attribute).getValue();
+      auto checked = call(block, capacity, role, {reference},
+                          site(path, "sequence_capacity", role));
+      if (!checked)
+        return checked.takeError();
+      // Row bounds constrain each actual element, independently of the
+      // sequence capacity. Metadata reads never evaluate virtual contents.
+      if (kind.getStaticShape("rows") || !sequence.getMaximum())
+        continue;
+      auto *body = controller(role, kind);
+      if (!body || body->rowCounts.empty())
+        return error("oracle-common-helper");
+      auto captures = stores(*body);
+      if (!captures)
+        return captures.takeError();
+      auto shape = checkShape(kind, input.getShapeBounds(), false, false);
+      if (!shape)
+        return shape.takeError();
+      result.locals.push_back(*shape);
+      auto output = traverseSequence(
+          block, sequence, reference, checked->front(), role, *captures,
+          body->stores, {}, {}, path, "sequence_shape",
+          [&](OracleCommonBlock &region, unsigned element, ArrayRef<unsigned>,
+              ArrayRef<unsigned> stores) -> Expected<IDs> {
+            IDs arguments{element};
+            append_range(arguments, stores);
+            auto rows = call(region, body->rowCounts[0], role, arguments,
+                             site(path, "element_rows", role));
+            if (!rows)
+              return rows.takeError();
+            auto checked = call(region, *shape, role, *rows,
+                                site(path, "element_shape", role));
+            if (!checked)
+              return checked.takeError();
+            return IDs{};
+          });
+      if (!output)
+        return output.takeError();
+    }
+    return Error::success();
   }
   Operation *sourceOperation(ArrayRef<unsigned> path) {
     Block *body = &program.getBody().front();
@@ -761,353 +937,235 @@ struct PlanBuilder {
       store[key] = (*outputs)[repeat.getCarried() + i];
     return Error::success();
   }
-  struct QueryFrame {
-    const OracleQueryController *receiver;
-    std::shared_ptr<const OracleQueryExchange> model;
-    IDs state, captures, heldStores;
-    std::vector<unsigned> path;
-    bool hasVirtual;
-  };
-  Expected<QueryFrame> queryFrame(OracleCommonBlock &block,
-                                  pir::OracleQueryOp query,
-                                  ArrayRef<unsigned> path) {
-    auto *receiver =
-        controller(*query.getOwner(), query.getHandle().getType().getKind());
-    if (!receiver)
+  Expected<IDs> remoteBlock(OracleCommonBlock &block, unsigned ordinal) {
+    const auto &selection = schedule.batches[ordinal];
+    const auto &batch = batches[ordinal];
+    if (batch.remotes != selection.remotes || selection.remotes.empty())
       return error("oracle-common-helper");
-    std::string holderRole;
-    bool hasVirtual = false;
-    for (const auto &item : receiver->constructors) {
-      const auto &anchor = requirements.storage.constructors[item.source];
-      if (anchor.constructor == OracleAnchorConstructor::Kind::Virtual) {
-        hasVirtual = true;
-        continue;
-      }
-      if (anchor.scheme.empty() || anchor.holder == receiver->role ||
-          (!holderRole.empty() && holderRole != anchor.holder))
-        return error("oracle-common-communication-profile");
-      holderRole = anchor.holder;
-    }
-    auto *holder =
-        controller(holderRole, query.getHandle().getType().getKind());
-    if (holderRole.empty() || !holder)
-      return error("oracle-common-communication-profile");
-    auto exchangeModel = planOracleQueryExchange(requirements.storage,
-                                                 *receiver, *holder, merkle);
-    if (!exchangeModel)
-      return exchangeModel.takeError();
-    auto model =
-        std::make_shared<const OracleQueryExchange>(std::move(*exchangeModel));
-    auto captures = stores(*receiver);
+    const auto &first = remotes[selection.remotes.front()];
+    const auto &receiver = controllers[first.receiver].body;
+    const auto &holder = controllers[first.holder].body;
+    const auto &exchange = schedule.remotes[selection.remotes.front()].exchange;
+    const auto &path = selection.queries.front();
+    auto captures = stores(receiver);
     if (!captures)
       return captures.takeError();
     IDs heldStores;
-    for (const auto &arm : model->arms) {
-      auto held = find_if(holder->constructors, [&](const auto &item) {
+    for (const auto &arm : exchange.arms) {
+      auto held = find_if(holder.constructors, [&](const auto &item) {
         return item.source == arm.constructor;
       });
+      if (held == holder.constructors.end())
+        return error("oracle-common-helper");
       auto found = store.find({arm.constructor, held->role});
       if (found == store.end())
-        return error("oracle-common-communication-profile");
+        return error("oracle-common-store");
       heldStores.push_back(found->second);
     }
-    auto arguments = inputs(query->getOperands());
-    if (!arguments)
-      return arguments.takeError();
-    auto initial = call(block, receiver->initialize, receiver->role, *arguments,
-                        site(path, "query_initialize", receiver->role));
-    if (!initial)
-      return initial.takeError();
-    append_range(*initial, *captures);
-    // A fixed block may cross these domain checks only with source evidence.
-    auto state = call(block, receiver->advance, receiver->role, *initial,
-                      site(path, "query_advance", receiver->role));
-    if (!state)
-      return state.takeError();
-    return QueryFrame{receiver,
-                      std::move(model),
-                      std::move(*state),
-                      std::move(*captures),
-                      std::move(heldStores),
-                      {path.begin(), path.end()},
-                      hasVirtual};
-  }
-  // A singleton packet is its component. Larger packets use the same ordinary
-  // nominal Record carrier with scoped packing/matching for proof payloads.
-  Expected<IDs> packet(OracleCommonBlock &block, ArrayRef<unsigned> values,
-                       ArrayRef<Type> types, StringRef sender,
-                       StringRef receiver, ArrayRef<unsigned> path,
-                       StringRef purpose) {
-    if (values.empty() || values.size() != types.size())
-      return error("oracle-query-block-source");
-    Type type = types.front();
-    unsigned value = values.front();
-    if (values.size() > 1) {
-      auto *context = builder.getContext();
-      auto identity = data::importVariantIdentity(
-          context, json::Array{"zkc.oracle.query-packet/0", purpose});
-      if (!identity || types.size() > 128)
-        return error("oracle-query-block-limit");
-      auto arm = data::AlternativeAttr::get(
-          context, builder.getStringAttr("Record"), types);
-      type = data::VariantType::getChecked(
-          builder.getUnknownLoc(), context, identity,
-          ArrayRef<data::AlternativeAttr>{arm});
-      if (!type)
-        return error("oracle-query-block-limit");
-      OraclePacketRecipe packing;
-      static_cast<OracleHelperSignature &>(packing) = local(types, type);
-      packing.pack = true;
-      auto packed = call(block, packing, sender, values,
-                         site(path, "pack_" + purpose.str(), sender));
-      if (!packed)
-        return packed.takeError();
-      result.locals.push_back(std::move(packing));
-      value = packed->front();
-    }
-    auto exchanged =
-        make(block, "protocol.exchange", type, {value},
-             attrs({text("sender", sender), text("receiver", receiver),
-                    text("site", site(path, purpose, receiver))}));
-    if (!exchanged)
-      return exchanged.takeError();
-    if (values.size() == 1)
-      return std::move(*exchanged);
-    OraclePacketRecipe unpacking;
-    static_cast<OracleHelperSignature &>(unpacking) = local(type, types);
-    unpacking.pack = false;
-    auto unpacked = call(block, unpacking, receiver, *exchanged,
-                         site(path, "unpack_" + purpose.str(), receiver));
-    result.locals.push_back(std::move(unpacking));
-    return unpacked;
-  }
-
-  Expected<std::vector<IDs>> exchangeBlock(OracleCommonBlock &block,
-                                           ArrayRef<QueryFrame> frames,
-                                           ArrayRef<unsigned> groups) {
-    using C = OracleQueryController;
-    IDs requests, representatives;
-    Types requestTypes, responseTypes;
-    for (auto [ordinal, frame] : enumerate(frames)) {
-      if (groups[ordinal] < representatives.size()) {
-        const auto &shared = frames[representatives[groups[ordinal]]];
-        if (frame.model->request != shared.model->request ||
-            frame.model->response != shared.model->response)
-          return error("oracle-query-block-source");
-        continue;
-      }
-      if (groups[ordinal] != representatives.size())
+    IDs discovery, evaluation;
+    for (auto [remoteIndex, coordinate] :
+         zip(selection.remotes, selection.queries)) {
+      const auto &remote = remotes[remoteIndex];
+      const auto &body = controllers[remote.receiver].body;
+      auto query =
+          dyn_cast_or_null<pir::OracleQueryOp>(sourceOperation(coordinate));
+      if (!query || body.role != receiver.role)
         return error("oracle-query-block-source");
-      representatives.push_back(ordinal);
-      auto request =
-          local(frame.receiver->state, TypeRange{index, index, index});
-      same(request, C::Phase, number(request, C::Request));
-      request.results = {C::Constructor, C::Instance, C::Position};
-      auto fields = call(
-          block, request, frame.receiver->role, frame.state,
-          site(frame.path, "opening_request_values", frame.receiver->role));
-      if (!fields)
-        return fields.takeError();
-      result.locals.push_back(std::move(request));
-      auto packed = make(block, "data.make", frame.model->request, *fields,
-                         attrs({text("alternative", "Record")}));
-      if (!packed)
-        return packed.takeError();
-      requests.push_back(packed->front());
-      requestTypes.push_back(frame.model->request);
-      responseTypes.push_back(frame.model->response);
-    }
-    const auto &first = frames.front();
-    auto received = packet(block, requests, requestTypes, first.receiver->role,
-                           first.model->holder, first.path, "opening_request");
-    if (!received)
-      return received.takeError();
-    IDs responses;
-    for (auto [group, ordinal] : enumerate(representatives)) {
-      const auto &frame = frames[ordinal];
-      Types types{frame.model->request};
-      append_range(types, frame.model->holderStores);
-      OracleExchangeRecipe opening;
-      static_cast<OracleHelperSignature &>(opening) =
-          local(types, frame.model->response);
-      opening.action = OracleExchangeAction::Open;
-      opening.exchange = frame.model;
-      IDs arguments{(*received)[group]};
-      append_range(arguments, frame.heldStores);
-      auto opened =
-          call(block, opening, frame.model->holder, arguments,
-               site(frame.path, "opening_dispatch", frame.model->holder));
-      if (!opened)
-        return opened.takeError();
-      result.locals.push_back(std::move(opening));
-      responses.push_back(opened->front());
-    }
-    auto returned =
-        packet(block, responses, responseTypes, first.model->holder,
-               first.receiver->role, first.path, "opening_response");
-    if (!returned)
-      return returned.takeError();
-    std::vector<IDs> states;
-    for (auto [ordinal, frame] : enumerate(frames)) {
-      Types types{frame.model->response};
-      append_range(types, frame.receiver->state);
-      append_range(types, frame.receiver->stores);
-      OracleExchangeRecipe authentication;
-      static_cast<OracleHelperSignature &>(authentication) =
-          local(types, frame.receiver->state);
-      authentication.action = OracleExchangeAction::Authenticate;
-      authentication.exchange = frame.model;
-      IDs arguments{(*returned)[groups[ordinal]]};
-      append_range(arguments, frame.state);
-      append_range(arguments, frame.captures);
-      auto resumed =
-          call(block, authentication, frame.receiver->role, arguments,
-               site(frame.path, "authenticate_resume", frame.receiver->role));
-      if (!resumed)
-        return resumed.takeError();
-      result.locals.push_back(std::move(authentication));
-      states.push_back(std::move(*resumed));
-    }
-    return states;
-  }
-  // One canonical route: fixed base-query blocks have one iteration. An
-  // unproved/virtual query remains a singleton with its reached-prefix loop.
-  Expected<IDs> remoteBlock(OracleCommonBlock &block,
-                            ArrayRef<pir::OracleQueryOp> queries,
-                            ArrayRef<std::vector<unsigned>> paths,
-                            ArrayRef<unsigned> groups) {
-    std::vector<QueryFrame> frames;
-    for (auto [query, path] : zip(queries, paths)) {
-      auto frame = queryFrame(block, query, path);
-      if (!frame)
-        return frame.takeError();
-      frames.push_back(std::move(*frame));
-    }
-    const auto &first = frames.front();
-    for (const auto &frame : frames)
-      if (frame.receiver->role != first.receiver->role ||
-          frame.model->holder != first.model->holder)
+      auto rootStores = stores(body);
+      if (!rootStores)
+        return rootStores.takeError();
+      if (*rootStores != *captures)
         return error("oracle-query-block-source");
-    bool variable = frames.size() == 1 && first.hasVirtual;
-    Expected<unsigned> count = constant(block, 1);
-    if (!count)
-      return count.takeError();
-    if (variable) {
-      auto query = queries.front();
-      auto roles = handleRoles(query.getHandle());
-      if (!roles)
-        return roles.takeError();
-      if (!is_contained(*roles, first.model->holder))
-        return error("oracle-common-communication-profile");
-      auto *holder = controller(first.model->holder,
-                                query.getHandle().getType().getKind());
-      IDs counts;
-      std::vector<std::string> owners{first.receiver->role,
-                                      first.model->holder};
-      for (const auto *body : {first.receiver, holder}) {
-        auto captures = stores(*body);
+      auto arguments = inputs(query->getOperands());
+      if (!arguments)
+        return arguments.takeError();
+      auto demand =
+          call(block, remote.demand.initialize, receiver.role, *arguments,
+               site(coordinate, "query_discovery_initialize", receiver.role));
+      if (!demand)
+        return demand.takeError();
+      auto state = call(block, body.initialize, receiver.role, *arguments,
+                        site(coordinate, "query_initialize", receiver.role));
+      if (!state)
+        return state.takeError();
+      append_range(discovery, *demand);
+      append_range(evaluation, *state);
+    }
+    // Both participants derive the same structural round count from their own
+    // immutable graph. A count bounds communication; it is not domain evidence.
+    IDs counts;
+    std::vector<std::string> owners{receiver.role, holder.role};
+    for (unsigned role = 0; role < owners.size(); ++role) {
+      IDs leaves;
+      for (auto [remoteIndex, coordinate] :
+           zip(selection.remotes, selection.queries)) {
+        const auto &remote = remotes[remoteIndex];
+        const auto &body =
+            controllers[role ? remote.holder : remote.receiver].body;
+        auto query = cast<pir::OracleQueryOp>(sourceOperation(coordinate));
+        auto roles = handleRoles(query.getHandle());
+        if (!roles)
+          return roles.takeError();
+        if (!is_contained(*roles, body.role) || body.leafCounts.empty())
+          return error("oracle-common-communication-profile");
         auto handle = value(query.getHandle());
-        if (!captures)
-          return captures.takeError();
+        auto rootStores = stores(body);
         if (!handle)
           return handle.takeError();
+        if (!rootStores)
+          return rootStores.takeError();
         IDs arguments{*handle};
-        append_range(arguments, *captures);
-        auto counted = call(block, body->leafCounts[0], body->role, arguments,
-                            site(first.path, "query_count", body->role));
-        if (!counted)
-          return counted.takeError();
-        counts.push_back(counted->front());
+        append_range(arguments, *rootStores);
+        auto count = call(block, body.leafCounts[0], body.role, arguments,
+                          site(coordinate, "query_count", body.role));
+        if (!count)
+          return count.takeError();
+        leaves.push_back(count->front());
       }
-      count = assemble(block, index, counts, owners);
+      auto rounds = local(Types(leaves.size(), index), index);
+      unsigned total = number(rounds, 0);
+      for (unsigned i = 0; i < leaves.size(); ++i)
+        total = apply(rounds, {"index.add", {}, ""}, index, {total, i}).front();
+      auto bound = number(rounds, selection.leaves + 1);
+      require(rounds, apply(rounds, {"index.less", {}, ""}, builder.getI1Type(),
+                            {total, bound})
+                          .front());
+      // ceil(total / capacity): per-query capacity is one; the atomic capacity
+      // covers the complete block. The guarded total is below the native bound,
+      // so adding capacity-1 cannot overflow ui64.
+      auto offset = number(rounds, schedule.capacity - 1);
+      auto numerator =
+          apply(rounds, {"index.add", {}, ""}, index, {total, offset}).front();
+      auto width = number(rounds, schedule.capacity);
+      rounds.results =
+          apply(rounds, {"index.div", {}, ""}, index, {numerator, width});
+      auto count = call(block, rounds, owners[role], leaves,
+                        site(path, "query_round_count", owners[role]));
       if (!count)
         return count.takeError();
+      result.locals.push_back(std::move(rounds));
+      counts.push_back(count->front());
     }
+    auto count = assemble(block, index, counts, owners);
+    if (!count)
+      return count.takeError();
     auto region = std::make_shared<OracleCommonBlock>();
-    Types stateTypes;
-    IDs states, captures;
-    for (const auto &frame : frames) {
-      append_range(stateTypes, frame.receiver->state);
-      append_range(states, frame.state);
-      append_range(captures, frame.captures);
-      append_range(captures, frame.heldStores);
-    }
+    Types stateTypes(batch.body.demandState);
+    append_range(stateTypes, batch.body.evaluatorState);
     region->types = {index};
     append_range(region->types, stateTypes);
-    for (const auto &frame : frames) {
-      append_range(region->types, frame.receiver->stores);
-      append_range(region->types, frame.model->holderStores);
-    }
-    for ([[maybe_unused]] auto type : region->types)
+    append_range(region->types, receiver.stores);
+    append_range(region->types, exchange.holderStores);
+    for ([[maybe_unused]] Type type : region->types)
       region->arguments.push_back(id());
-    auto loopFrames = frames;
-    unsigned stateOffset = 1, captureOffset = 1 + stateTypes.size();
-    auto slice = [&](unsigned &offset, unsigned count) {
-      IDs result(region->arguments.begin() + offset,
-                 region->arguments.begin() + offset + count);
-      offset += count;
-      return result;
+    auto slice = [&](unsigned offset, unsigned size) {
+      return IDs(region->arguments.begin() + offset,
+                 region->arguments.begin() + offset + size);
     };
-    for (auto &frame : loopFrames) {
-      frame.state = slice(stateOffset, frame.state.size());
-      frame.captures = slice(captureOffset, frame.captures.size());
-      frame.heldStores = slice(captureOffset, frame.heldStores.size());
-    }
-    auto resumed = exchangeBlock(*region, loopFrames, groups);
-    if (!resumed)
-      return resumed.takeError();
-    IDs advanced;
-    for (auto [frame, state] : zip(loopFrames, *resumed)) {
-      append_range(state, frame.captures);
-      auto next =
-          call(*region, frame.receiver->advance, frame.receiver->role, state,
-               site(frame.path, "query_continue", frame.receiver->role));
-      if (!next)
-        return next.takeError();
-      append_range(advanced, *next);
-    }
+    auto loopDemand = slice(1, discovery.size());
+    auto loopEvaluation = slice(1 + discovery.size(), evaluation.size());
+    auto loopStores = slice(1 + stateTypes.size(), captures->size());
+    auto loopHeld =
+        slice(1 + stateTypes.size() + captures->size(), heldStores.size());
+    IDs collecting(loopDemand);
+    append_range(collecting, loopStores);
+    auto collected =
+        call(*region, batch.body.collect, receiver.role, collecting,
+             site(path, "query_collect", receiver.role));
+    if (!collected)
+      return collected.takeError();
+    if (collected->size() != discovery.size() + 1 + selection.remotes.size())
+      return error("oracle-common-helper");
+    unsigned requests = (*collected)[discovery.size()];
+    IDs checking{requests};
+    append_range(checking, loopEvaluation);
+    append_range(checking, loopStores);
+    auto available =
+        call(*region, batch.body.checkAvailable, receiver.role, checking,
+             site(path, "query_check_available", receiver.role));
+    if (!available)
+      return available.takeError();
+    if (!available->empty())
+      return error("oracle-common-helper");
+    IDs grouping{requests};
+    append_range(grouping, loopStores);
+    auto grouped = call(*region, first.packet.group, receiver.role, grouping,
+                        site(path, "opening_group", receiver.role));
+    if (!grouped)
+      return grouped.takeError();
+    auto sent = make(
+        *region, "protocol.exchange", first.packet.requestSequence,
+        {(*grouped)[0]},
+        attrs({text("sender", receiver.role), text("receiver", holder.role),
+               text("site", site(path, "opening_request", holder.role))}));
+    if (!sent)
+      return sent.takeError();
+    IDs opening{sent->front()};
+    append_range(opening, loopHeld);
+    auto opened = call(*region, first.packet.open, holder.role, opening,
+                       site(path, "opening_dispatch", holder.role));
+    if (!opened)
+      return opened.takeError();
+    auto returned = make(
+        *region, "protocol.exchange", first.packet.responseSequence, *opened,
+        attrs({text("sender", holder.role), text("receiver", receiver.role),
+               text("site", site(path, "opening_response", receiver.role))}));
+    if (!returned)
+      return returned.takeError();
+    IDs authenticationInputs{requests, (*grouped)[0], (*grouped)[1],
+                             returned->front()};
+    append_range(authenticationInputs, loopStores);
+    auto authenticated = call(
+        *region, first.packet.authenticate, receiver.role, authenticationInputs,
+        site(path, "opening_authenticate", receiver.role));
+    if (!authenticated)
+      return authenticated.takeError();
+    IDs replaying(loopEvaluation);
+    replaying.push_back(requests);
+    replaying.push_back(authenticated->front());
+    append_range(replaying,
+                 ArrayRef(*collected).drop_front(discovery.size() + 1));
+    append_range(replaying, loopStores);
+    auto replayed = call(*region, batch.body.replay, receiver.role, replaying,
+                         site(path, "query_replay", receiver.role));
+    if (!replayed)
+      return replayed.takeError();
+    IDs advanced(collected->begin(), collected->begin() + discovery.size());
+    append_range(advanced, *replayed);
     auto yielded = make(*region, "protocol.yield", {}, advanced);
     if (!yielded)
       return yielded.takeError();
     IDs loopInputs{*count};
-    append_range(loopInputs, states);
-    append_range(loopInputs, captures);
-    SmallVector<Attribute> carried(
-        stateTypes.size(), builder.getStrArrayAttr({first.receiver->role}));
+    append_range(loopInputs, discovery);
+    append_range(loopInputs, evaluation);
+    append_range(loopInputs, *captures);
+    append_range(loopInputs, heldStores);
+    SmallVector<Attribute> carried(stateTypes.size(),
+                                   builder.getStrArrayAttr({receiver.role}));
+    uint64_t maximum = authentication == OracleAuthentication::AtomicBlocks
+                           ? 1
+                           : std::max(uint64_t(1), selection.leaves);
     auto final = make(
         block, "protocol.repeat", stateTypes, loopInputs,
-        attrs({text("site",
-                    site(first.path, "query_requests", first.receiver->role)),
+        attrs({text("site", site(path, "query_requests", receiver.role)),
                builder.getNamedAttr(
                    "carried", builder.getI64IntegerAttr(stateTypes.size())),
-               builder.getNamedAttr(
-                   "maximum",
-                   builder.getI64IntegerAttr(
-                       variable ? first.receiver->capacity.leaves : 1)),
-               builder.getNamedAttr(
-                   "roles", builder.getStrArrayAttr(
-                                {first.model->holder, first.receiver->role})),
+               builder.getNamedAttr("maximum",
+                                    builder.getI64IntegerAttr(maximum)),
+               builder.getNamedAttr("roles", builder.getStrArrayAttr(
+                                                 {holder.role, receiver.role})),
                builder.getNamedAttr("carried_roles",
                                     builder.getArrayAttr(carried))}),
         region);
     if (!final)
       return final.takeError();
-    IDs answers;
-    unsigned offset = 0;
-    for (const auto &frame : frames) {
-      auto state = ArrayRef(*final).slice(offset, frame.state.size());
-      auto answer =
-          call(block, frame.receiver->finish, frame.receiver->role, state,
-               site(frame.path, "query_finish", frame.receiver->role));
-      if (!answer)
-        return answer.takeError();
-      append_range(answers, *answer);
-      offset += frame.state.size();
-    }
-    result.queryBlocks.push_back(
-        {{paths.begin(), paths.end()},
-         variable ? std::nullopt
-                  : std::optional<IDs>({groups.begin(), groups.end()})});
+    IDs finishing(final->begin() + discovery.size(), final->end());
+    append_range(finishing, *captures);
+    auto answers = call(block, batch.body.finish, receiver.role, finishing,
+                        site(path, "query_finish", receiver.role));
+    if (!answers)
+      return answers.takeError();
+    result.queryBlocks.push_back({selection.queries, schedule.capacity});
     return answers;
   }
   Error visit(OracleCommonBlock &block, Block &original,
@@ -1146,9 +1204,9 @@ struct PlanBuilder {
         if (!receiver)
           return receiver.takeError();
         values[components.getAnchor()] = receiver->front();
-        dataViews[components.getData()] = {
-            *anchor, components.getHolder().str(),
-            components.getHandle().getType().getKind()};
+        dataViews[components.getData()] = {*anchor,
+                                           components.getHolder().str(),
+                                           components.getHandle().getType()};
         continue;
       }
       if (auto restrict = dyn_cast<pir::RestrictRolesOp>(op)) {
@@ -1184,6 +1242,8 @@ struct PlanBuilder {
             return anchor.takeError();
           if (!type)
             return type.takeError();
+          if (auto e = checkSequenceRebinding(block, input, *anchor, path))
+            return e;
           SmallVector<Attribute> roles{input.getHolderAttr()};
           append_range(roles, input.getReceivers());
           auto rebound =
@@ -1234,69 +1294,24 @@ struct PlanBuilder {
           result.queryBlocks.push_back({{path}, std::nullopt});
           continue;
         }
-        std::vector<pir::OracleQueryOp> queries{query};
-        std::vector<std::vector<unsigned>> paths{path};
-        IDs groups{0};
-        if (authentication == OracleAuthentication::AtomicBlocks) {
-          auto first =
-              admitOracleDirectQuery(query, requirements.storage, allowance);
-          if (!first)
-            return first.takeError();
-          if (*first) {
-            std::vector<OracleDirectQuery> facts{**first};
-            unsigned nextGroup = 1;
-            auto *next = op.getNextNode();
-            while (next && queries.size() < 32) {
-              auto candidate = dyn_cast<pir::OracleQueryOp>(next);
-              if (!candidate || candidate.getOwner() != query.getOwner())
-                break;
-              auto fact = admitOracleDirectQuery(
-                  candidate, requirements.storage, allowance);
-              if (!fact)
-                return fact.takeError();
-              if (!*fact ||
-                  requirements.storage.constructors[(**fact).constructor]
-                          .holder !=
-                      requirements.storage.constructors[(**first).constructor]
-                          .holder)
-                break;
-              auto *other =
-                  controller(*candidate.getOwner(),
-                             candidate.getHandle().getType().getKind());
-              if (!other || other->evaluate)
-                break;
-              unsigned group = nextGroup;
-              for (auto [i, prior] : enumerate(facts)) {
-                auto shares = shareOracleOpening(prior, **fact,
-                                                 requirements.realizations);
-                if (!shares)
-                  return shares.takeError();
-                if (*shares && prior.operation.getHandle().getType() ==
-                                   candidate.getHandle().getType()) {
-                  group = groups[i];
-                  break;
-                }
-              }
-              if (group == nextGroup)
-                ++nextGroup;
-              queries.push_back(candidate);
-              facts.push_back(**fact);
-              groups.push_back(group);
-              auto position = path;
-              position.back() += queries.size() - 1;
-              paths.push_back(std::move(position));
-              next = next->getNextNode();
-            }
-          }
-        }
-        auto answers = remoteBlock(block, queries, paths, groups);
+        auto batch = find_if(schedule.batches, [&](const auto &item) {
+          return !item.queries.empty() && item.queries.front() == path;
+        });
+        if (batch == schedule.batches.end())
+          return error("oracle-query-block-source");
+        auto answers = remoteBlock(block, batch - schedule.batches.begin());
         if (!answers)
           return answers.takeError();
-        if (answers->size() != queries.size())
+        if (answers->size() != batch->queries.size())
           return error("oracle-common-helper");
-        for (auto [query, answer] : zip(queries, *answers))
-          values[query.getAnswer()] = answer;
-        skipped = queries.size() - 1;
+        for (auto [coordinate, answer] : zip(batch->queries, *answers)) {
+          auto originalQuery =
+              dyn_cast_or_null<pir::OracleQueryOp>(sourceOperation(coordinate));
+          if (!originalQuery)
+            return error("oracle-query-block-source");
+          values[originalQuery.getAnswer()] = answer;
+        }
+        skipped = batch->queries.size() - 1;
         continue;
       }
       if (auto contents = dyn_cast<pir::OracleContentsOp>(op)) {
@@ -1461,9 +1476,6 @@ struct PlanBuilder {
     }
     Types outputs;
     for (Type type : program.getFunctionType().getResults()) {
-      // A logical sequence is not an admitted paired result port.
-      if (isa<pir::OracleSequenceType>(type))
-        return error("oracle-common-interface");
       auto output = converted(type);
       if (!output)
         return output.takeError();
@@ -1478,8 +1490,7 @@ struct PlanBuilder {
       bool needed = false;
       for (auto [type, roles] : zip(program.getFunctionType().getResults(),
                                     program.getOutputRoles()))
-        needed |= isa<pir::OracleHandleType>(type) &&
-                  is_contained(cast<ArrayAttr>(roles), role);
+        needed |= logical(type) && is_contained(cast<ArrayAttr>(roles), role);
       if (!needed)
         continue;
       for (auto [constructor, item] :
@@ -1494,7 +1505,7 @@ struct PlanBuilder {
           }
     }
     for (auto [index, type] : enumerate(program.getFunctionType().getResults()))
-      if (isa<pir::OracleHandleType>(type))
+      if (logical(type))
         for (Attribute role :
              cast<ArrayAttr>(program.getOutputRoles()[index])) {
           OracleResultReference reference{
@@ -1504,7 +1515,8 @@ struct PlanBuilder {
                     .roles[support.role]
                     .role == reference.role)
               reference.storePorts.push_back(support.port);
-          if (reference.storePorts.empty())
+          if (reference.storePorts.empty() &&
+              !isa<pir::OracleSequenceType>(type))
             return error("oracle-common-interface");
           result.resultReferences.push_back(std::move(reference));
         }
@@ -1593,7 +1605,10 @@ oracleRequirements(ModuleOp source, StringRef entry,
   auto capacity = analyzeOracleQueryCapacity(source, entry);
   if (!capacity)
     return capacity.takeError();
-  OracleCommonRequirements result{std::move(*storage), {}, {1, 1}, {}};
+  OracleCommonRequirements result;
+  result.storage = std::move(*storage);
+  result.capacity = {1, 1};
+  result.queryCapacity = *capacity;
   for (const auto &constructor : result.storage.constructors) {
     auto choice = selection(constructor);
     result.realizations.push_back(choice ? *choice : OracleTableRealization{});
@@ -1633,6 +1648,17 @@ oracleRequirements(ModuleOp source, StringRef entry,
                       op.getResult().getType().getKind(),
                       OracleControllerAccess::Available);
   });
+  program.walk([&](pir::OracleInputOp op) {
+    auto sequence = dyn_cast<pir::OracleSequenceType>(op.getHandle().getType());
+    if (!sequence || sequence.getKind().getStaticShape("rows"))
+      return;
+    SmallVector<Attribute> roles{op.getHolderAttr()};
+    append_range(roles, op.getReceivers());
+    for (Attribute role : roles)
+      if (!failure)
+        failure = add(cast<StringAttr>(role).getValue(), sequence.getKind(),
+                      OracleControllerAccess::Available);
+  });
   program.walk([&](pir::OracleContentsOp op) {
     if (!failure)
       failure = add(op.getOwner(), op.getHandle().getType().getKind(),
@@ -1663,20 +1689,21 @@ oracleRequirements(ModuleOp source, StringRef entry,
       }
     }
     if (needed)
-      failure = add(op.getHolder(), op.getHandle().getType().getKind(),
+      failure = add(op.getHolder(),
+                    pir::getOracleFamilyKind(op.getHandle().getType()),
                     OracleControllerAccess::Holder);
   });
   if (failure)
     return std::move(failure);
   return result;
 }
-Expected<OracleCommonPlan>
-planOracleCommon(ModuleOp source, StringRef entry,
-                 const OracleCommonRequirements &requirements,
-                 ArrayRef<OracleCommonController> controllers,
-                 ArrayRef<std::vector<func::FuncOp>> allocators,
-                 ArrayRef<OracleMerkleFunctions> merkle,
-                 OracleAuthentication authentication) {
+Expected<OracleCommonPlan> planOracleCommon(
+    ModuleOp source, StringRef entry,
+    const OracleCommonRequirements &requirements,
+    ArrayRef<OracleCommonController> controllers,
+    ArrayRef<std::vector<func::FuncOp>> allocators,
+    ArrayRef<OracleMerkleFunctions> merkle, OracleAuthentication authentication,
+    ArrayRef<OracleCommonRemote> remotes, ArrayRef<OracleCommonBatch> batches) {
   if (allocators.size() != requirements.storage.constructors.size() ||
       merkle.size() != allocators.size() ||
       requirements.realizations.size() != allocators.size())
@@ -1687,8 +1714,19 @@ planOracleCommon(ModuleOp source, StringRef entry,
   auto unit = cast<pir::ProtocolModuleOp>(source.getBody()->front());
   auto program =
       cast<pir::MathematicalOp>(SymbolTable::lookupSymbolIn(unit, entry));
+  auto schedule = planOracleQuerySchedule(source, entry, requirements,
+                                          controllers, merkle, authentication);
+  if (!schedule)
+    return schedule.takeError();
+  if (remotes.size() != schedule->remotes.size() ||
+      batches.size() != schedule->batches.size())
+    return error("oracle-common-helper");
+  for (auto [actual, expected] : zip(remotes, schedule->remotes))
+    if (actual.receiver != expected.receiver ||
+        actual.holder != expected.holder)
+      return error("oracle-common-helper");
   return PlanBuilder(source, program, requirements, controllers, allocators,
-                     merkle, authentication)
+                     merkle, authentication, *schedule, remotes, batches)
       .run();
 }
 } // namespace zkc::protocol

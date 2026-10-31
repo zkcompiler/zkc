@@ -49,6 +49,9 @@ pub(super) fn check_interface(
     interface: &super::super::Interface,
     families: &mut BTreeMap<String, String>,
 ) -> Result<()> {
+    interface
+        .check_executable_ports()
+        .map_err(|e| EntryError::new(EntryPhase::Interface, e))?;
     require(d.results.len() == 1, "entry-host-deployment-signature")?;
     let r = &d.results[0];
     let source = interface.entry();

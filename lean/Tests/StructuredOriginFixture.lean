@@ -13,7 +13,8 @@ open Zkc.Source Zkc.Source.Structured
 def terms : List OriginTerm := [
   .natural "0", .field "F", .group "G", .domain "Field" "D", .asset "Commitment" "A",
   .boolean, .index, .unit, .tuple [.boolean, .unit], .array (.field "F") "12",
-  .nominal .record "test::T" [], .nominal .variant "test::T" [],
+  .nominal .record "test::T" [], .nominal .logicalRecord "test::T" [],
+  .nominal .variant "test::T" [],
   .nominal .associated "test::T" [], .nominal .moduleType "test::T" [],
   .builtin "Vector" [.field "F"], .formal "Function" [.index, .boolean]]
 

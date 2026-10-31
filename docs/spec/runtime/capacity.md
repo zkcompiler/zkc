@@ -73,6 +73,32 @@ partitions that charge into storage owned by one binding, such as an inline
 scalar, and the immutable allocations it shares. A shared allocation's charge
 includes the inline storage it holds, such as a collection's element slots.
 
+The CPU adapter reserves 80 bytes per inline value or collection value slot,
+with a compile-time bound on the complete native value enum. BN254 target-group
+values use shared immutable backing: their charge includes the 384-byte target
+and a 256-byte wrapper allowance. BLS12-381 G1 and G2, BN254 G2, Edwards, Ristretto
+and resident blst G1 points use immutable backing with a complete 512-byte
+profile. Wide three-coefficient rounds (BLS12-381 Fr, BN254 Fr, Ristretto
+scalar and KoalaBear octic extension) use shared immutable backing with a
+256-byte profile; smaller rounds remain inline. A variant is a shared complete
+node with an owned exact-length active payload; its 256-byte header allowance bounds the node and Arc counters.
+Aliases retain each actual allocation once; equal
+independent targets retain distinct allocations. Capability handles retain their
+512-byte profile, and larger shared group payloads retain their own profiles.
+These storage charges do not change canonical wire bytes or execution quotas.
+
+Aggregate payloads report immutable logical descriptors and physical child
+layouts as separate backing allocations. Their charges include all alternatives,
+including inactive variant arms and nominal resource domains. Two values sharing
+these actual allocations retain them once; separately parsed equal descriptors
+remain distinct. Expanded per-value, admission and codec bounds still count
+metadata at every occurrence. A descriptor allocation grants no payload-validation
+evidence: validation reuse identifies the immutable payload itself, and capability
+checks remain live. Field arrays and fixed vectors partition their descriptor and
+element storage in the same way. Their shared immutable physical-layout
+wrappers remain covered by the unchanged 1,024-byte view allowance, with a
+compile-time size check. No allocation is free merely because it is metadata.
+
 - **Live bytes** count each shared allocation once while any live binding, view
   or container retains it, plus the owned storage of every live binding. A view
   or collection that retains a parent allocation keeps the parent's whole charge
@@ -156,7 +182,8 @@ Committed instructions, iterations, logical work and fresh allocation are never
 refunded on release or unwind.
 
 For shared execution, trusted Value adapters advertise constructor allocation
-bounds before scalar/variant construction. The scalar default is 512 bytes; the
+bounds before scalar/variant construction. The generic scalar default is 512
+bytes; the CPU adapter supplies its 80-byte inline bound. The
 variant default covers its descriptor, conservative payload slots and full
 payload charges. Larger adapters must override these bounds. Insufficient
 capacity refuses before the constructor runs, even if the actual value might

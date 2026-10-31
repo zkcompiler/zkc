@@ -50,6 +50,11 @@ class ScopedCorrespondence {
   }
   bool charge(Operation *op, uint64_t amount) {
     if (amount > remaining) {
+      if (finiteOutcome)
+        *finiteOutcome = {
+            mathematical::VerificationObservation::RequiredCapacity,
+            "scoped finite context comparison capacity",
+            CapacityCause{WorkOwner::AlgorithmChecking, amount, remaining}};
       (void)refuse(op, "scoped substitution work limit");
       return false;
     }
@@ -159,6 +164,17 @@ class ScopedCorrespondence {
         finiteOutcome->detail = outcome.detail.str();
         finiteOutcome->capacity = outcome.capacity;
         finiteOutcome->subject = outcome.subject;
+        if (!finiteOutcome->subject.declaration.empty()) {
+          // Attribute this independent observation to the expanded source
+          // occurrence. A helper-local site alone cannot identify a physical
+          // choice when that helper is substituted at several call sites.
+          auto &subject = finiteOutcome->subject;
+          subject.definition = subject.declaration;
+          subject.originalSite = subject.site;
+          subject.declaration = root;
+          subject.site = *rootSite;
+          subject.occurrence = path;
+        }
       }
       return false;
     }
@@ -535,12 +551,22 @@ LogicalResult verifyScopedFinitePreparation(
   if (outcome)
     *outcome = {mathematical::VerificationObservation::Mismatch,
                 "scoped finite preparation differs"};
+  std::optional<CapacityCause> capacity;
+  if (!computation::chargeCopy(source, work.numericalContextChecking,
+                               &capacity) ||
+      !computation::chargeCopy(candidate, work.numericalContextChecking,
+                               &capacity)) {
+    if (capacity)
+      capacity->owner = WorkOwner::AlgorithmChecking;
+    if (outcome)
+      *outcome = {mathematical::VerificationObservation::RequiredCapacity,
+                  "scoped finite admission inspection capacity", capacity};
+    return failure();
+  }
   if (failed(zkc::admitStage(source)) || failed(zkc::admitStage(candidate)) ||
       !hasSingleElement(*source.getBody()) ||
       !hasSingleElement(*candidate.getBody()) ||
-      source->getAttrDictionary() != candidate->getAttrDictionary() ||
-      !computation::chargeCopy(source, work.numericalContextChecking) ||
-      !computation::chargeCopy(candidate, work.numericalContextChecking))
+      source->getAttrDictionary() != candidate->getAttrDictionary())
     return failure();
   auto before =
       dyn_cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());

@@ -1,3 +1,4 @@
+#include "OracleInspection.h"
 #include "WrittenSourceIndex.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/SourceTerms.h"
@@ -104,6 +105,82 @@ class Instances {
                         {"nodes", std::move(nodes)},
                         {"result", shape.result}};
   }
+  Error oracleObligations(const Body &body, std::vector<unsigned> &path,
+                          unsigned depth, json::Array &result) {
+    if (depth > work.limits.expressionDepth)
+      return failure("source.limit", "oracle obligation region depth exceeded");
+    if (auto e = work.charge(1 + body.operations.size()))
+      return e;
+    for (unsigned i = 0; i < body.operations.size(); ++i) {
+      const auto &operation = body.operations[i];
+      path.push_back(i);
+      if (const auto *call =
+              std::get_if<OracleInstantiation>(&operation.action)) {
+        const auto &definition = entry.declarations()[call->callee.index];
+        const auto &plan = *definition.oracleDefinition;
+        const auto &predicate = entry.declarations()[plan.admissibility.index];
+        auto companions = oracleAdmissibilityCompanions(entry.declarations(),
+                                                        definition, work);
+        if (!companions)
+          return companions.takeError();
+        auto address = indices(path);
+        if (!address)
+          return address.takeError();
+        auto receivers = indices(call->receivers);
+        if (!receivers)
+          return receivers.takeError();
+        if (auto e =
+                work.charge(call->operands.size() + operation.results.size() +
+                            definition.symbol.size() + 1))
+          return e;
+        json::Array substitution, results;
+        for (unsigned input = 0; input < call->operands.size(); ++input) {
+          auto value = call->operands[input];
+          auto type = term(body.values[value.index].type);
+          if (!type)
+            return type.takeError();
+          substitution.push_back(json::Object{
+              {"input", input},
+              {"value", value.index},
+              {"type", std::move(*type)},
+              {"projection", input < plan.sourceCount ? "data" : "value"}});
+        }
+        for (auto value : operation.results)
+          results.push_back(value.index);
+        result.push_back(
+            json::Object{{"path", std::move(*address)},
+                         {"source", span(operation.span)},
+                         {"site", operation.site ? json::Value(*operation.site)
+                                                 : json::Value(nullptr)},
+                         {"definition", definition.symbol},
+                         {"admissibility", formulaSymbol(predicate)},
+                         {"companions", std::move(*companions)},
+                         {"substitution", std::move(substitution)},
+                         {"holder", call->holder},
+                         {"receivers", std::move(*receivers)},
+                         {"results", std::move(results)},
+                         {"status", "unresolved"}});
+      }
+      if (const auto *repeat = std::get_if<ProtocolRepeat>(&operation.action)) {
+        path.push_back(0);
+        if (auto e =
+                oracleObligations(*repeat->region, path, depth + 1, result))
+          return e;
+        path.pop_back();
+      } else if (const auto *control =
+                     std::get_if<LocalControl>(&operation.action)) {
+        for (unsigned region = 0; region < control->regions.size(); ++region) {
+          path.push_back(region);
+          if (auto e = oracleObligations(*control->regions[region], path,
+                                         depth + 1, result))
+            return e;
+          path.pop_back();
+        }
+      }
+      path.pop_back();
+    }
+    return Error::success();
+  }
 
 public:
   Instances(const ClosedEntry &entry, const WrittenIndex &written, Work &work)
@@ -180,14 +257,28 @@ public:
       auto symbol = decl.relation ? formulaSymbol(decl) : decl.symbol;
       if (auto e = work.charge(1 + symbol.size()))
         return std::move(e);
-      result.push_back(json::Object{
+      json::Object instance{
           {"symbol", std::move(symbol)},
           {"template", std::move(origin)},
           {"statics", std::move(statics)},
           {"scoped", std::move(scoped)},
           {"domains", std::move(domains)},
           {"layout", json::Object{{"inputs", std::move(*inputs)},
-                                  {"captures", std::move(*captures)}}}});
+                                  {"captures", std::move(*captures)}}}};
+      if (decl.oracleDefinition) {
+        auto definition =
+            describeOracleDefinition(entry.declarations(), decl, work);
+        if (!definition)
+          return definition.takeError();
+        instance["oracle_definition"] = std::move(*definition);
+      }
+      json::Array obligations;
+      std::vector<unsigned> path;
+      if (decl.body)
+        if (auto e = oracleObligations(*decl.body, path, 1, obligations))
+          return std::move(e);
+      instance["oracle_obligations"] = std::move(obligations);
+      result.push_back(std::move(instance));
     }
     return result;
   }

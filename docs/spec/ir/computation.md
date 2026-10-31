@@ -171,6 +171,34 @@ contract remain applicable. Compile-time work is bounded independently of
 runtime capacity. Total mathematical meaning does not promise execution under
 arbitrary work or memory limits.
 
+Numerical substitution charges its complete input scan before recursive
+admission to the shared context-checking allowance. It reconstructs scoped
+execution from logical steps rather than cloning the input physical CFG.
+Actual declaration clones and logical operation/data-port expansion spend the
+construction allowance. Inspection and independent correspondence checks remain
+cumulative across attempts; inspection exhaustion is a required refusal, even
+when the proposed construction is optional.
+
+Preparation charges actual source/frontier snapshots and normalization emission
+as construction. Its independent normalization-context and frontier readers use
+the cumulative context-checking account; exhausted checking is a required
+refusal, including during speculative preparation. Standalone preparation checks
+before returning. A containing physical transaction may defer an unchanged
+scoped-context comparison to its complete independent actual-body reader. A
+polynomial frontier rewrite still requires both immediate independent context
+readers and checked origins.
+
+When independent normalization finds no polynomial frontier, numerical readback
+borrows the immutable original scoped context and constructs only the checked
+mathematical units needed by its actual calls. The reader owns this entry mapping;
+producer choices and occurrence maps do not supply it. This avoids cloning a
+complete context solely to reconstruct its mathematical entries and then compare
+that clone with the context just copied. Original and actual complete subjects
+still receive admission, including dormant declarations, and actual scoped bodies
+remain independently compared. If a frontier can change, readback retains the
+complete checked normalization/frontier subject instead. All performed work,
+including work before choosing that subject, remains charged.
+
 The unit remains the logical source. Numerical realization emits a private
 scoped schedule directly from immutable mathematical expressions, before its
 selected scoped CFG and physical conversions. The physical plan also checks

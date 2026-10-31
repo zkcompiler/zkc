@@ -125,7 +125,7 @@ collectOracleEntryPorts(protocol_ir::MathematicalOp program,
   llvm::DenseSet<unsigned> dataPorts;
   llvm::DenseSet<Operation *> bindings;
   for (BlockArgument argument : body.getArguments()) {
-    if (!isa<protocol_ir::OracleHandleType>(argument.getType()))
+    if (!protocol_ir::getOracleFamilyKind(argument.getType()))
       continue;
     if (failed(charge(program, remaining)))
       return failure();
@@ -137,7 +137,8 @@ collectOracleEntryPorts(protocol_ir::MathematicalOp program,
         // Contract verification checks the exact target projection next. This
         // use is logical metadata; it grants no raw executable handle access.
         unsigned index = use.getOperandNumber();
-        if (failed(statement->getName().verifyInvariants(statement)) ||
+        if (!isa<protocol_ir::OracleHandleType>(argument.getType()) ||
+            failed(statement->getName().verifyInvariants(statement)) ||
             statement->getBlock() != &body || !statement.getTargetAttr() ||
             index >= statement.getSelectors().size() ||
             statement.getSelectors()[index] !=
@@ -166,10 +167,9 @@ collectOracleEntryPorts(protocol_ir::MathematicalOp program,
       return refuse(input, "oracle input requires distinct paired entry leaves "
                            "with exact roles");
     if (pairs)
-      pairs->push_back(
-          {data.getArgNumber(), argument.getArgNumber(),
-           cast<protocol_ir::OracleHandleType>(argument.getType()).getKind(),
-           input.getHolderAttr(), input.getReceivers()});
+      pairs->push_back({data.getArgNumber(), argument.getArgNumber(),
+                        argument.getType(), input.getHolderAttr(),
+                        input.getReceivers()});
     bindings.insert(input);
   }
   bool effect = false;
@@ -209,7 +209,7 @@ collectOracleResultPorts(protocol_ir::MathematicalOp program,
     return refuse(program, "oracle result tuple differs from its interface");
   llvm::DenseSet<unsigned> dataPorts;
   for (auto [index, value] : llvm::enumerate(returned)) {
-    if (!isa<protocol_ir::OracleHandleType>(value.getType()))
+    if (!protocol_ir::getOracleFamilyKind(value.getType()))
       continue;
     Components actual;
     if (failed(components(value, actual, program, symbols, remaining)))
@@ -224,10 +224,8 @@ collectOracleResultPorts(protocol_ir::MathematicalOp program,
           singleton(program.getOutputRoles()[dataIndex], actual.holder)) {
         dataPorts.insert(dataIndex);
         if (pairs)
-          pairs->push_back(
-              {unsigned(dataIndex), unsigned(index),
-               cast<protocol_ir::OracleHandleType>(value.getType()).getKind(),
-               actual.holder, actual.receivers});
+          pairs->push_back({unsigned(dataIndex), unsigned(index),
+                            value.getType(), actual.holder, actual.receivers});
         pairedData = true;
         break;
       }

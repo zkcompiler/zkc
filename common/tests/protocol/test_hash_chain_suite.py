@@ -83,6 +83,8 @@ def substitute(text, old, new):
 
 def compile_project(toolchain, journal, directory, project, entry, suite=None, old=MERLIN):
     """Compile a maintained example, optionally with its suite replaced."""
+    from test_air_stark import FRI_REALIZATION
+
     modules, assets = project_inputs(ROOT / project / 'zkc.toml')
     if suite is not None:
         source = directory / f'{Path(project).name}-{entry}.zkc'
@@ -93,6 +95,7 @@ def compile_project(toolchain, journal, directory, project, entry, suite=None, o
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                            *[f'--module={name}={path}' for name, path in sorted(modules.items())],
                            *[f'--asset={name}={kind}={path}' for name, (kind, path) in sorted(assets.items())],
+                           *([FRI_REALIZATION] if project == 'examples/projects/fri' else []),
                            f'example::{entry}', f'--output={package}'])
     return [f'--package={package}', f'--sha256={report["package_sha256"]}']
 
@@ -162,12 +165,18 @@ def test_fri_example_proves_and_verifies_under_the_octic_hash_chain(toolchain, j
                            witness={'word': [[str(c) for c in v] for v in word]})
     verifier = input_files(journal, 'verifier', public=public)
     proof = prove_and_verify(toolchain, journal, directory, target, producer, verifier)
+    from test_air_stark import alter_octic_frame, check_fri_frames, frames, replace_frame
+    original = proof.read_bytes()
+    messages = frames(original)
+    check_fri_frames(messages, rounds=3, queries=8, log_size=5)
     # A changed first root moves every drawn position and fold challenge.
-    changed = bytearray(proof.read_bytes())
-    changed[40 + 8 + 10] ^= 1
-    proof.write_bytes(changed)
-    journal.run([toolchain.runtime, '--json', 'verify', *target, *verifier, f'--proof={proof}'],
-                refuses='artifact-stopped')
+    proof.write_bytes(replace_frame(original, 0, alter_octic_frame(messages[0])))
+    refused = journal.json([toolchain.runtime, '--json', 'verify', *target, *verifier, f'--proof={proof}'],
+                           refuses='rejected:require')
+    stop = refused['execution']['stop']
+    assert stop['role'] == 'role00000001'
+    assert stop['kind'] == 'Backend(BackendError { code: "rejected:require" })'
+    assert stop['local']['function'].startswith('_oracle_packet_authenticate_')
 
 
 SOURCE = '''module sample;

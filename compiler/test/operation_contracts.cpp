@@ -27,15 +27,17 @@ int main() {
       unsigned(I::VectorLength) == 36 && unsigned(I::IndexPowerOfTwo) == 37 &&
       unsigned(I::QuotientMultiply) == 42 &&
       unsigned(I::MultilinearRestrictPrefix) == 43);
-  require(zkc::mathematicalIntrinsics().size() == 39 &&
+  require(zkc::mathematicalIntrinsics().size() == 45 &&
               zkc::mathematicalIntrinsics()[0].name == "container.at" &&
-              zkc::mathematicalIntrinsics()[30].name == "poly.fix_table" &&
-              zkc::mathematicalIntrinsics()[31].name == "vector.length" &&
-              zkc::mathematicalIntrinsics()[32].name == "index.power_of_two" &&
-              zkc::mathematicalIntrinsics()[37].name ==
-                  "quotient.value.multiply" &&
+              zkc::mathematicalIntrinsics()[31].name == "poly.fix_table" &&
+              zkc::mathematicalIntrinsics()[32].name == "vector.length" &&
+              zkc::mathematicalIntrinsics()[33].name == "index.power_of_two" &&
               zkc::mathematicalIntrinsics()[38].name ==
+                  "quotient.value.multiply" &&
+              zkc::mathematicalIntrinsics()[39].name ==
                   "multilinear.restrict_prefix" &&
+              zkc::mathematicalIntrinsics()[9].name == "field.select" &&
+              zkc::mathematicalIntrinsics()[44].name == "index.select" &&
               zkc::mathematicalIdentityName(I::PolynomialMultiply) ==
                   "PolynomialMultiply",
           "mathematical source catalog identities changed");
@@ -124,6 +126,33 @@ int main() {
   require(bool(unselected), "closed literal still requires an admitted field");
   llvm::consumeError(std::move(unselected));
   std::set<std::string> keys;
+  for (llvm::StringRef key :
+       {"index.div", "index.wrapping_add", "field.inverse", "bool.not",
+        "control.require", "sequence.at", "indices.at", "field_array.at",
+        "fixed_vector.dot", "commitments.at", "vector.get", "bytes.at",
+        "encoding.field_from_le", "hash.keccak256", "shake128.squeeze",
+        "poly.domain_point", "oracle.check", "oracle.check_many"}) {
+    const auto *contracts = operationContracts(key);
+    require(contracts && contracts->deterministicData,
+            "installed deterministic-data facet missing: " + key.str());
+  }
+  for (llvm::StringRef key :
+       {"random.draw", "transcript.challenge", "external.monero.hash",
+        "resource_unit.pass", "representation.convert", "table.relayout",
+        "oracle.commit", "oracle.open", "oracle.open_many", "pcs.check",
+        "opening_states.at", "numerical.map"}) {
+    const auto *contracts = operationContracts(key);
+    require(contracts && !contracts->deterministicData,
+            "unclassified operation acquired deterministic data: " + key.str());
+  }
+  require(!operationContracts("index.future"),
+          "unknown operation inherited deterministic data by prefix");
+  for (llvm::StringRef key :
+       {"index.div", "field.inverse", "sequence.at", "vector.get",
+        "poly.domain_point", "control.require", "oracle.check",
+        "oracle.check_many"})
+    require(!isPublicReplay(key),
+            "partial deterministic data acquired public replay: " + key.str());
   std::ifstream fixture(ZKC_HISTORY_FIXTURE);
   require(fixture.is_open(), "history inventory fixture missing");
   std::map<std::string, bool> expectedHistory;

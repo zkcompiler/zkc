@@ -48,7 +48,8 @@ pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
             )?;
             schema_port(&input.schema, &input.native, &mut flat, &mut schemas)?;
             require(
-                input.schema.permissions.contains(&Permission::Copy)
+                !input.schema.kind.is_logical()
+                    && input.schema.permissions.contains(&Permission::Copy)
                     && input.schema.permissions.contains(&Permission::Drop),
                 E::Schema,
             )?;
@@ -149,7 +150,11 @@ pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
             if let Some(decision) = &clause.decision {
                 require(clause.kind != ClauseKind::Input, E::Selection)?;
                 schemas.charge(1 + decision.path.len())?;
-                check_decision(protocol, decision, &decision.role)?;
+                check_decision(
+                    protocol,
+                    decision,
+                    decision.role.as_deref().ok_or(E::Selection)?,
+                )?;
             } else {
                 require(clause.kind != ClauseKind::Target, E::Selection)?;
             }
@@ -176,15 +181,17 @@ fn schema_port<'a>(
     schemas: &mut Schemas<'a>,
 ) -> Result<()> {
     schemas.charge(1 + native.len())?;
+    schemas.check(schema, 1)?;
+    let width = super::schemas::native_width(schema);
+    require(width <= 1024, E::Limit)?;
     require(
-        native.len() == schema.leaves.len()
+        native.len() == width
             && native
                 .iter()
                 .enumerate()
                 .all(|(i, n)| *n as usize == *flat + i),
         E::Schema,
     )?;
-    schemas.check(schema, 1)?;
     *flat += native.len();
     Ok(())
 }
@@ -212,7 +219,24 @@ fn ports<'a>(
             previous = Some(index);
         }
         schema_port(&port.schema, &port.native, &mut flat, schemas)?;
-        if port.roles.len() > 1 {
+        let logical = port.schema.kind.is_logical();
+        require(
+            port.holder.get().is_some() == logical
+                && port.maximum_rows.get().is_some() == port.schema.kind.is_handle(),
+            E::Schema,
+        )?;
+        if logical {
+            require(
+                port.roles.len() >= 2 && port.holder.get().is_some_and(|h| port.roles.contains(h)),
+                E::Schema,
+            )?;
+            if port.schema.kind.is_handle() {
+                super::schemas::row_bound(
+                    &port.schema,
+                    port.maximum_rows.get().copied().flatten(),
+                )?;
+            }
+        } else if port.roles.len() > 1 {
             schemas.participants(&port.schema)?;
         }
     }
@@ -228,10 +252,19 @@ pub(super) fn select<'a>(
         &protocol.outputs
     };
     let port = ports.get(selector.port as usize).ok_or(E::Selection)?;
-    require(port.roles.contains(&selector.role), E::Selection)?;
-    project(port, &selector.path)
+    if let Some(role) = &selector.role {
+        require(port.roles.contains(role), E::Selection)?;
+    }
+    project_selector(port, &selector.path, selector.role.is_none())
 }
 pub(super) fn project<'a>(port: &'a Port, path: &[u32]) -> Result<(&'a Schema, &'a [u32])> {
+    project_selector(port, path, false)
+}
+fn project_selector<'a>(
+    port: &'a Port,
+    path: &[u32],
+    anchor: bool,
+) -> Result<(&'a Schema, &'a [u32])> {
     let mut schema = &port.schema;
     let mut offset = 0usize;
     require(path.len() <= 32, E::Limit)?;
@@ -241,9 +274,29 @@ pub(super) fn project<'a>(port: &'a Port, path: &[u32]) -> Result<(&'a Schema, &
             E::Selection,
         )?;
         let field = schema.fields.get(index as usize).ok_or(E::Selection)?;
-        offset = offset.checked_add(field.offset as usize).ok_or(E::Limit)?;
+        let prefix = if schema.kind == Kind::LogicalRecord {
+            schema.fields[..index as usize]
+                .iter()
+                .map(|f| super::schemas::native_width(&f.schema))
+                .sum()
+        } else {
+            field.offset as usize
+        };
+        offset = offset.checked_add(prefix).ok_or(E::Limit)?;
         schema = &field.schema;
     }
+    if anchor {
+        require(
+            port.holder.get().is_some() && schema.kind == Kind::Oracle,
+            E::Selection,
+        )?;
+        let native = port
+            .native
+            .get(offset + 1..offset + 2)
+            .ok_or(E::Selection)?;
+        return Ok((schema.data_schema.get().ok_or(E::Selection)?, native));
+    }
+    require(!schema.kind.is_logical(), E::Selection)?;
     let native = port
         .native
         .get(offset..offset + schema.leaves.len())
@@ -275,7 +328,7 @@ fn check_decision(protocol: &Protocol, selected: &Selector, role: &str) -> Resul
     let (schema, native) = select(protocol, selected)?;
     require(
         selected.direction == Direction::Output
-            && selected.role == role
+            && selected.role.as_deref() == Some(role)
             && schema.kind == Kind::Boolean
             && native.len() == 1,
         E::Selection,
@@ -384,9 +437,12 @@ fn job(
         let relation = relations[clause.subject.relation.as_str()];
         for (operand, input) in clause.subject.operands.iter().zip(&relation.inputs) {
             require(operand.direction == Direction::Input, E::Selection)?;
-            let visible = protocol.inputs[operand.port as usize]
-                .roles
-                .contains(verifier);
+            let port = &protocol.inputs[operand.port as usize];
+            let visible = if operand.role.is_none() {
+                port.holder.get() == Some(verifier)
+            } else {
+                port.roles.contains(verifier)
+            };
             require((input.purpose == Purpose::Witness) != visible, E::Selection)?;
         }
     }

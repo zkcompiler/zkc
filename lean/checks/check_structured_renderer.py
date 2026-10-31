@@ -143,11 +143,11 @@ example : (RenderedOpen.snapshot.definitions[0]?.bind fun definition =>
     oracle_kind = ["table", [["type", ["apply", "field", [["domain", "Field", "koala-bear"]]]], ["nat", "16"]]]
     dynamic_kind = ["table", [["type", ["apply", "field", [["domain", "Field", "koala-bear"]]]]]]
     oracle_descriptors = [
-        ["oracle_input", "P", ["V"], oracle_kind, []],
+        ["oracle_input", "P", ["V"], ["oracle", *oracle_kind], []],
         ["oracle_send", "P", ["V"], oracle_kind, ["rows"], []],
         ["oracle_query", None, oracle_kind],
         ["oracle_contents", "P", oracle_kind],
-        ["oracle_components", "P", ["V"], oracle_kind],
+        ["oracle_components", "P", ["V"], ["oracle", *oracle_kind]],
         ["oracle_shape", oracle_kind, "rows"],
         ["oracle_forget_shape", oracle_kind, dynamic_kind],
         ["oracle_virtual", "virtual", "P", ["V"], oracle_kind],
@@ -155,6 +155,8 @@ example : (RenderedOpen.snapshot.definitions[0]?.bind fun definition =>
         ["oracle_sequence_append", dynamic_kind, "4", ["P", "V"]],
         ["oracle_sequence_at", dynamic_kind, "4", ["P", "V"]],
         ["oracle_sequence_length", dynamic_kind, "4"],
+        ["oracle_input", "P", ["V"], ["oracle_sequence", *dynamic_kind, "4"], [["rows", "32"]]],
+        ["oracle_components", "P", ["V"], ["oracle_sequence", *dynamic_kind, "4"]],
     ]
     oracle_data = copy.deepcopy(data)
     oracle_data[7] = [["oracle", "virtual", [["oracle", *oracle_kind], ["apply", "index", []]],
@@ -171,7 +173,16 @@ example : (RenderedOracles.snapshot.definitions[0]?.map fun definition =>
 example : (RenderedOracles.snapshot.definitions[0]?.map fun definition =>
     match definition with
     | .oracle declaration => declaration.body.storedInstructions.length
-    | _ => 0) = some 12 := by decide +kernel
+    | _ => 0) = some 14 := by decide +kernel
+open Zkc.Source.Structured in
+example : (RenderedOracles.snapshot.definitions[0]?.map fun definition =>
+    match definition with
+    | .oracle declaration => declaration.body.storedInstructions.map fun
+        (Instruction.instruction descriptor _ _ _ _) => descriptor
+    | _ => []).map (·.drop 12) = some
+      [Descriptor.oracle (.input "P" ["V"] (.oracleSequence (.table (.field "koala-bear") none) 4) [("rows", 32)]),
+       .oracle (.components "P" ["V"] (.oracleSequence (.table (.field "koala-bear") none) 4))] :=
+  by decide +kernel
 example : (Zkc.Source.Structured.check RenderedOracles.snapshot).isOk = false := by decide +kernel
 """
     modules.append(source)
@@ -181,6 +192,13 @@ example : (Zkc.Source.Structured.check RenderedOracles.snapshot).isOk = false :=
         (renderer.ty, ["oracle_sequence", *oracle_kind, "18446744073709551616"]),
         (renderer.ty, ["oracle_sequence", *oracle_kind, 4]),
         (renderer.ty, ["oracle", "unknown", []]),
+        (renderer.descriptor, ["oracle_input", "P", ["V"], oracle_kind, []]),
+        (renderer.descriptor, ["oracle_components", "P", ["V"], oracle_kind]),
+        (renderer.descriptor, ["oracle_input", "P", ["V"], ["apply", "index", []], []]),
+        (renderer.descriptor, ["oracle_components", "P", ["V"], ["apply", "index", []]]),
+        (renderer.descriptor, ["oracle_components", "P", ["V"], ["oracle_sequence", *dynamic_kind, "04"]]),
+        (renderer.descriptor, ["oracle_components", "P", ["V"],
+                               ["oracle_sequence", *dynamic_kind, "18446744073709551616"]]),
         (renderer.descriptor, ["oracle_send", "P", ["V"], dynamic_kind, ["rows"], []]),
         (renderer.descriptor, ["oracle_send", "P", ["V"], oracle_kind, ["wrong"], []]),
         (renderer.descriptor, ["oracle_shape", oracle_kind, "wrong"]),
@@ -192,10 +210,11 @@ example : (Zkc.Source.Structured.check RenderedOracles.snapshot).isOk = false :=
         except ValueError:
             continue
         raise AssertionError("renderer accepted a malformed logical oracle row")
-    # Aggregate names remain escaped data, including inside recursive types.
+    # Aggregate identities remain escaped data, including inside recursive types.
+    # Constructor labels obey the native ASCII grammar independently of identity.
     # Inspect codepoints and typed components independently in the kernel.
     aggregate_identity = 'query_증명"\\\n'
-    constructor = 'make_α"\\\n'
+    constructor = "make_alpha"
     sequence = ["apply", "sequence", [["type", field]]]
     nominal_identity = ["tuple", [["atom", aggregate_identity],
                        ["tuple", [["atom", "bls12-381.fr"], ["atom", "phantom.F"]]]]]
@@ -230,6 +249,7 @@ example : (Zkc.Source.Structured.check RenderedAggregates.snapshot).isOk = true 
         (renderer.ty, ["apply", "sequence", [["type", field], ["type", field]]]),
         (renderer.ty, ["variant", ["atom", "id"], [["make", None]]]),
         (renderer.ty, ["variant", ["atom", "id"], [["make", [field] * 513]]]),
+        (renderer.ty, ["variant", ["atom", "id"], [['make_α"\\\n', [field]]]]),
         (renderer.descriptor, ["product.make", constructor, "extra"]),
         (renderer.descriptor, ["product.get", True]),
         (renderer.descriptor, ["product.get", 512]),
@@ -294,6 +314,17 @@ example : (RenderedDeclarations.snapshot.sourceDeclarations.protocols.map fun pr
     (protocol.name, protocol.inputs.map fun port =>
       (port.name.toList.map Char.toNat, port.type, port.roles, port.offset, port.count), protocol.outputs)) =
     [("main", [({contract_points}, .boolean, ["V"], 1, 1)], [])] := by rfl
+'''
+    modules.append(source)
+    logical_declaration_data = copy.deepcopy(declaration_data)
+    logical_declaration_data[10][0][0][0][1] = "logical_record"
+    source = renderer.render(logical_declaration_data, "RenderedLogicalDeclaration").replace("module\n\n", "", 1)
+    source += '''
+open Zkc.Source.Structured in
+example : (RenderedLogicalDeclaration.snapshot.sourceDeclarations.records.map (·.type)) =
+    [.nominal .logicalRecord "sample::Pending" [.field "bls12-381.fr"]] := by rfl
+example : RenderedLogicalDeclaration.snapshot.sourceDeclarations.records !=
+    RenderedDeclarations.snapshot.sourceDeclarations.records := by decide +kernel
 '''
     modules.append(source)
     anchor_data = copy.deepcopy(contract_data)
@@ -571,7 +602,7 @@ example : renderedRepeatHeaders {namespace}.snapshot = {expected} := by decide +
               "aggregate_kernel_cases": 2, "aggregate_refusal_cases": len(malformed_aggregates),
               "contract_metadata_kernel_cases": 2,
               "relation_static_arguments_kernel_cases": 1,
-              "source_declaration_kernel_cases": 2,
+              "source_declaration_kernel_cases": 4,
               "contract_metadata_refusal_cases": len(malformed_contracts),
               "primitive_metadata_kernel_cases": 5, "obsolete_envelope_refusal_cases": 2,
               "catalogue_refusal_cases": len(malformed_rows),

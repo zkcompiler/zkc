@@ -397,7 +397,10 @@ fn immutable_variant_bounds_count_shared_payload_occurrences() {
     let physical_type = zkc_runtime::vm::PhysicalType::default_for(pair_type).unwrap();
     // Expanded charges count both occurrences, even though cloned immutable
     // variants share their backing. Decoding retains that same profile.
-    let expected = physical_type.descriptor_bytes() + 256 + 2 * 512 + 2 * value.retained_bytes();
+    let expected = physical_type.descriptor_bytes()
+        + 256
+        + 2 * zkc_cpu::VALUE_SLOT_BYTES
+        + 2 * value.retained_bytes();
     let pair = Value::Variant(Variant::new(physical_type, 0, vec![value.clone(), value]).unwrap());
     assert_eq!(pair.retained_bytes(), expected);
     let backend = common::ark_backend(None);

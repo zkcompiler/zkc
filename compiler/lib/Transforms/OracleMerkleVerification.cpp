@@ -173,14 +173,22 @@ struct Reader {
                        "admit_pairs");
            }
            auto height = c.binary("index.div", a[0], width, "height");
+           // Positive rows and, for pairs, evenness establish height > 0.
+           // Read the actual total bit predicate and its guard before mapping.
+           auto predecessor = c.binary("index.wrapping_sub", height, one,
+                                       "height_predecessor");
+           auto bits =
+               c.binary("index.bit_and", height, predecessor, "height_bits");
+           c.require(c.binary("index.equal", bits, zero, "power_of_two"),
+                     "admit_power");
            auto leaf = c.binary("index.mod", a[1], height, "logical_leaf");
            auto slot = c.binary("index.div", a[1], height, "slot");
-           Types stateTypes{index};
-           Values seeds{height};
-           if (reversed) {
-             append_range(stateTypes, Types{index, index});
-             append_range(seeds, Values{leaf, zero});
+           if (!reversed) {
+             c.finish({height, leaf, slot});
+             return;
            }
+           Types stateTypes{index, index, index};
+           Values seeds{height, leaf, zero};
            auto limit = c.number(64, "bit_limit");
            auto small = c.binary("index.less", height, limit, "small_height");
            auto upper = c.bound(small, height, limit);
@@ -192,35 +200,26 @@ struct Reader {
                  append_range(outputs, stateTypes);
                  body(iteration, inputs, outputs, true,
                       [&](Cursor &b, ValueRange args) {
-                        auto zero = b.number(0, "bit_zero");
                         auto one = b.number(1, "bit_one");
                         auto two = b.number(2, "bit_two");
-                        auto remainder = b.binary("index.mod", args[1], two,
-                                                  "span_remainder");
-                        b.require(b.binary("index.equal", remainder, zero,
-                                           "even_span"),
-                                  "admit_span");
                         auto span =
                             b.binary("index.div", args[1], two, "next_span");
-                        Values next{span};
-                        if (reversed) {
-                          auto bit =
-                              b.binary("index.mod", args[2], two, "low_bit");
-                          auto rest = b.binary("index.div", args[2], two,
-                                               "remaining_bits");
-                          auto shifted = b.binary("index.mul", args[3], two,
-                                                  "shift_reversed");
-                          auto value =
-                              b.binary("index.add", shifted, bit, "append_bit");
-                          append_range(next, Values{rest, value});
-                        }
+                        auto bit =
+                            b.binary("index.mod", args[2], two, "low_bit");
+                        auto rest = b.binary("index.div", args[2], two,
+                                             "remaining_bits");
+                        auto shifted = b.binary("index.mul", args[3], two,
+                                                "shift_reversed");
+                        auto value =
+                            b.binary("index.add", shifted, bit, "append_bit");
+                        Values next{span, rest, value};
                         Values yielded{
                             b.binary("index.less", one, span, "more_bits")};
                         append_range(yielded, next);
                         b.finish(yielded, true);
                       });
                });
-           c.finish({height, reversed ? state[2] : leaf, slot});
+           c.finish({height, state[2], slot});
          });
   }
 };

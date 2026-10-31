@@ -10,7 +10,7 @@ struct Compilation::Storage {
   mlir::MLIRContext context;
   mlir::OwningOpRef<mlir::ModuleOp> module;
   LinearContractionStats statistics;
-  std::optional<mathematical::RealizedProtocol> realization;
+  std::shared_ptr<const mathematical::RealizedProtocol> realization;
   explicit Storage(const mlir::DialectRegistry &registry) : context(registry) {
     mlir::DialectRegistry builtins;
     registerDialects(builtins);

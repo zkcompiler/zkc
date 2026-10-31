@@ -15,7 +15,7 @@ namespace Zkc.Source.Structured
 open Lean
 
 inductive OriginNominalKind where
-  | record | variant | associated | moduleType
+  | record | variant | associated | moduleType | logicalRecord
   deriving BEq, DecidableEq, Repr
 
 inductive OriginTerm where
@@ -189,6 +189,7 @@ def nominalKind : Json → Except String OriginNominalKind
   | .str "variant" => pure .variant
   | .str "associated" => pure .associated
   | .str "module" => pure .moduleType
+  | .str "logical_record" => pure .logicalRecord
   | _ => throw "structured-origin-nominal-kind"
 
 def term : Nat → Json → Except String OriginTerm
@@ -239,6 +240,7 @@ end OriginFormat
 
 def OriginNominalKind.wireName : OriginNominalKind → String
   | .record => "record" | .variant => "variant" | .associated => "associated" | .moduleType => "module"
+  | .logicalRecord => "logical_record"
 
 def OriginTerm.toJson : OriginTerm → Json
   | .natural value => Lean.toJson ["nat", value]

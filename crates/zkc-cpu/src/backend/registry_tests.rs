@@ -499,7 +499,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         Value::BlstField(blst::Scalar::from(1)),
         Type::Field,
         I::Bls12381Fr,
-        512,
+        crate::VALUE_SLOT_BYTES,
     );
     check(
         Value::BlstVector(Arc::new(
@@ -510,7 +510,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         320,
     );
     check(
-        Value::BlstG1(blst::G1::generator()),
+        Value::BlstG1(blst::G1::generator().into()),
         Type::Group,
         I::Bls12381G1,
         512,
@@ -542,7 +542,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         Value::HaloField(halo::Scalar::from(1)),
         Type::Field,
         I::Bn254Fr,
-        512,
+        crate::VALUE_SLOT_BYTES,
     );
     check(
         Value::HaloVector(Arc::new(
@@ -556,7 +556,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         Value::HaloG1(halo::G1::generator()),
         Type::Group,
         I::Bn254G1,
-        512,
+        crate::VALUE_SLOT_BYTES,
     );
     check(
         Value::HaloG1Vector(Arc::new(
@@ -612,7 +612,12 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     macro_rules! scalar_family {
         ($scalar:expr, $identity:ident, $field:ident, $vector:ident, $poly:ident, $round:ident, $matrix:ident, $width:expr) => {{
             let scalar = $scalar;
-            check(Value::$field(scalar), Type::Field, I::$identity, 512);
+            check(
+                Value::$field(scalar),
+                Type::Field,
+                I::$identity,
+                crate::VALUE_SLOT_BYTES,
+            );
             check(
                 Value::$vector([scalar; 2].into()),
                 Type::Vector,
@@ -625,7 +630,19 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
                 I::$identity,
                 256 + 2 * $width,
             );
-            check(Value::$round([scalar; 3]), Type::Round, I::$identity, 512);
+            check(
+                Value::$round([scalar; 3].into()),
+                Type::Round,
+                I::$identity,
+                if matches!(
+                    I::$identity,
+                    I::Bls12381Fr | I::Bn254Fr | I::Ristretto255Scalar | I::KoalaBearExt8
+                ) {
+                    256
+                } else {
+                    crate::VALUE_SLOT_BYTES
+                },
+            );
             let matrix = crate::matrix::from_entries(1, 1, &[(0, 0, scalar)], &policy).unwrap();
             check(
                 Value::$matrix(matrix),
@@ -758,7 +775,16 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     macro_rules! group_family {
         ($point:expr, $identity:ident, $point_variant:ident, $vector_variant:ident, $width:expr) => {{
             let point = $point;
-            check(Value::$point_variant(point), Type::Group, I::$identity, 512);
+            check(
+                Value::$point_variant(point.into()),
+                Type::Group,
+                I::$identity,
+                if matches!(I::$identity, I::Bn254G1) {
+                    crate::VALUE_SLOT_BYTES
+                } else {
+                    512
+                },
+            );
             check(
                 Value::$vector_variant([point; 2].into()),
                 Type::Groups,
@@ -804,10 +830,10 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         std::mem::size_of::<crate::RistrettoPoint>()
     );
     check(
-        Value::Bn254Gt(crate::Bn254Gt::generator()),
+        Value::Bn254Gt(std::sync::Arc::new(crate::Bn254Gt::generator())),
         Type::Group,
         I::Bn254Gt,
-        512,
+        Value::bn254_gt_retained_bytes(),
     );
     check(
         Value::Bls12381Gt(std::sync::Arc::new(crate::Bls12381Gt::generator())),
@@ -815,8 +841,18 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         I::Bls12381Gt,
         1024,
     );
-    check(Value::Bool(true), Type::Bool, I::None, 512);
-    check(Value::Index(3), Type::Index, I::None, 512);
+    check(
+        Value::Bool(true),
+        Type::Bool,
+        I::None,
+        crate::VALUE_SLOT_BYTES,
+    );
+    check(
+        Value::Index(3),
+        Type::Index,
+        I::None,
+        crate::VALUE_SLOT_BYTES,
+    );
     check(Value::Indices([1, 2].into()), Type::Indices, I::None, 272);
     check(Value::Bytes([0, 255].into()), Type::Bytes, I::None, 258);
     check(
@@ -917,7 +953,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         Value::OracleRoot(domain, root),
         Type::Commitment,
         I::MerkleKoalaBear,
-        512,
+        crate::VALUE_SLOT_BYTES,
     );
     check(
         Value::OraclePath(domain, path.into()),
@@ -1012,7 +1048,8 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     .clone();
     let variant_type =
         zkc_runtime::vm::PhysicalType::default_for(LogicalType::variant(descriptor)).unwrap();
-    let variant_bytes = variant_type.descriptor_bytes() + 256 + 512 + fixed_bytes;
+    let variant_bytes =
+        variant_type.descriptor_bytes() + 256 + crate::VALUE_SLOT_BYTES + fixed_bytes;
     let sequence_type = zkc_runtime::vm::PhysicalType::default_for(
         LogicalType::sequence(LogicalType::parse("index").unwrap()).unwrap(),
     )
@@ -1028,7 +1065,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         ),
         Type::Sequence,
         I::None,
-        256 + sequence_type.descriptor_bytes() + 256 + 512 + 512,
+        256 + sequence_type.descriptor_bytes() + 256 + 2 * crate::VALUE_SLOT_BYTES,
     );
     check(
         Value::pack_variant(variant_type, 0, vec![fixed]).unwrap(),
@@ -1154,7 +1191,7 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
             Value::Nonce(token.clone()),
             Value::Transcript(token.clone()),
         ] {
-            assert_eq!(wrong.retained_bytes(), 512);
+            assert_eq!(wrong.retained_bytes(), Value::capability_retained_bytes());
             assert_eq!(wrong.physical_type(), value.physical_type());
             assert!(wrong.validate_serializable().is_err());
             if wrong.ty() == value.ty() {
@@ -1635,9 +1672,12 @@ fn every_alternative_executes_and_preserves_the_original_result() {
             ],
             "poly.empty_point" => vec![],
             "poly.append_point" => vec![Value::Point([scalar(3)].into()), Value::Field(scalar(4))],
-            "poly.boundary" => vec![Value::Round([1, 2, 3].map(scalar))],
+            "poly.boundary" => vec![Value::Round([1, 2, 3].map(scalar).into())],
             "poly.round_evaluate" => {
-                vec![Value::Round([1, 2, 3].map(scalar)), Value::Field(scalar(4))]
+                vec![
+                    Value::Round([1, 2, 3].map(scalar).into()),
+                    Value::Field(scalar(4)),
+                ]
             }
             "vector.from_table" => vec![table(&[1, 2, 3, 5])],
             "vector.to_table" => vec![vector(&[1, 2, 3, 5])],
@@ -1687,7 +1727,7 @@ fn every_alternative_executes_and_preserves_the_original_result() {
         let normalize = |v: Value| match v {
             Value::TableMsb(t) => Value::Table(Arc::new(t.to_lsb(&policy.ark_bounds()).unwrap())),
             Value::Point(v) | Value::Polynomial(v) => Value::Vector(v),
-            Value::Round(v) => Value::Vector(v.into()),
+            Value::Round(v) => Value::Vector(v.as_slice().into()),
             other => other,
         };
         let encode = |v: Value| native().encode_native_value(&normalize(v)).unwrap();
@@ -1988,6 +2028,7 @@ fn residue_field_and_profile_instances_have_independently_expected_ports() {
         record(&["field.neg", "field.inverse"], &[Field], &[Field], A::None);
         record(&["field.equal"], &[Field, Field], &[Bool], A::None);
         record(&["field.from_index"], &[Index], &[Field], A::None);
+        record(&["field.select"], &[Bool, Field, Field], &[Field], A::None);
         record(
             &["vector.constant"],
             &[],

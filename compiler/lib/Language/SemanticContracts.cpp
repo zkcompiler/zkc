@@ -2,6 +2,7 @@
 #include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Builtins.h"
+#include "zkc/Language/Layout.h"
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::language::detail {
@@ -21,6 +22,9 @@ bool Semantics::relationData(const Declaration &scope, const Type &type,
       return fail("source.relation", "relation inputs require immutable data",
                   span);
   }
+  if (isLogicalValue(type))
+    return fail("source.oracle-boundary",
+                "logical protocol values are not relation data", span);
   if (symbolic(type))
     return true; // Closed instantiation rechecks the selected representation.
   using K = Type::Kind;
@@ -67,16 +71,70 @@ std::optional<Type>
 Semantics::selectedType(const Declaration &decl,
                         const SpecificationSelector &value) {
   const auto &ports = value.output ? decl.outputs : decl.inputs;
+  if (value.path.size() > work.limits.typeDepth ||
+      !charge(value.path.size() + 1, value.span)) {
+    if (!diagnostic)
+      fail("source.limit", "selector path depth exceeded", value.span);
+    return {};
+  }
   if (value.anchor) {
-    if (value.port >= ports.size() ||
-        ports[value.port].type.kind != Type::Kind::Oracle ||
-        !value.path.empty() || value.role != 0) {
+    if (value.port >= ports.size() || value.role != 0 ||
+        (ports[value.port].type.kind != Type::Kind::Oracle &&
+         ports[value.port].type.kind != Type::Kind::LogicalRecord) ||
+        !ports[value.port].oracle) {
       fail("source.specification", "invalid oracle anchor selector",
            value.span);
       return {};
     }
-    return associated(ports[value.port].type.arguments.front(), "Data",
-                      value.span);
+    const auto &port = ports[value.port];
+    if (!oraclePort(port))
+      return {};
+    for (auto role : port.roles)
+      if (role >= decl.roles.size()) {
+        fail("source.specification", "invalid oracle role family", value.span);
+        return {};
+      }
+    auto selected = std::optional<Type>(port.type);
+    for (auto index : value.path) {
+      auto product = fields(*selected, value.span);
+      if (!product)
+        return {};
+      if (index >= product->size()) {
+        fail("source.specification", "invalid oracle field path", value.span);
+        return {};
+      }
+      // Numeric retained paths carry no private field access authority.
+      if (!fieldIndex(decl, *selected, (*product)[index].name, value.span,
+                      true))
+        return {};
+      selected = (*product)[index].type;
+    }
+    if (selected->kind != Type::Kind::Oracle ||
+        selected->arguments.size() != 1) {
+      fail("source.specification", "anchor requires a singleton oracle field",
+           value.span);
+      return {};
+    }
+    if (symbolic(port.type) ||
+        (port.oracle->maximumRows && symbolic(*port.oracle->maximumRows)))
+      return associated(selected->arguments.front(), "Data", value.span);
+    auto limits = work.limits;
+    limits.work -= work.used;
+    Layouts layouts(declarations, limits);
+    auto observed = layouts.protocolPort(port);
+    if (!observed) {
+      accept(observed.takeError(), value.span);
+      return {};
+    }
+    if (!charge(observed->nativeOffsets.size() + observed->leaves.size(),
+                value.span))
+      return {};
+    auto slice = observed->select(value.path, true);
+    if (!slice) {
+      accept(slice.takeError(), value.span);
+      return {};
+    }
+    return slice->layout->type;
   }
   if (value.port >= ports.size() || value.role >= decl.roles.size() ||
       !llvm::is_contained(ports[value.port].roles, value.role)) {
@@ -84,7 +142,14 @@ Semantics::selectedType(const Declaration &decl,
          "selector does not name an available port component", value.span);
     return {};
   }
-  return projectedType(decl, ports[value.port].type, value.path, value.span);
+  auto selected =
+      projectedType(decl, ports[value.port].type, value.path, value.span);
+  if (selected && isLogicalValue(*selected)) {
+    fail("source.specification",
+         "logical selection requires a singleton anchor", value.span);
+    return {};
+  }
+  return selected;
 }
 bool Semantics::checkProofEntry(const Declaration &entry,
                                 const Declaration &protocol) {

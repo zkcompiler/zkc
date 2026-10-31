@@ -15,6 +15,8 @@ from pathlib import Path
 import pytest
 
 from logical_tree import decode_tree
+from message_frames import children, replace_child, tag, with_children
+from oracle_deployment import table_realization
 
 ROOT = Path(__file__).resolve().parents[3]
 EXAMPLE = ROOT / 'common/tests/fixtures/projects/air-stark/main.zkc'
@@ -22,6 +24,7 @@ TABLE = ROOT / 'libraries/relations/air/table.zkc'
 STARK = ROOT / 'libraries/arguments/stark/single_table/koala_bear_octic/lib.zkc'
 FIXTURE = ROOT / 'compiler/adapters/plonky3/fixtures/recurrence'
 P = 2130706433
+FRI_REALIZATION = table_realization('rows.merkle-keccak256.koala-bear.ext8-binomial3/0')
 
 
 def scalar(value):
@@ -57,6 +60,7 @@ def test_documented_air_stark_requests(journal, directory):
 
 def compile_entry(toolchain, journal, directory, *, log_size=5, queries=8,
                   flags=(), entry='Proof', source=None, table=TABLE, stark=STARK):
+    flags = [FRI_REALIZATION, *flags]
     package = directory / f'{entry}.zkpkg'
     if source is None and log_size == 5 and queries == 8 and table == TABLE and stark == STARK:
         report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
@@ -70,7 +74,7 @@ def compile_entry(toolchain, journal, directory, *, log_size=5, queries=8,
     path.write_text(source)
     command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                f'--module=air_stark_example={path}',
-               *library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', overrides={'stark::octic_table': stark, 'air::table': table}),
+               *library_modules('arguments/stark/single_table/koala_bear_octic', overrides={'stark::octic_table': stark, 'air::table': table}),
                f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json',
                f'air_stark_example::{entry}', f'--output={package}', *flags]
     report = journal.json(command)
@@ -82,10 +86,14 @@ def request(journal, name, public, private=None):
 
 
 def frames(proof):
+    assert proof[:8] == b'ZKCPRF00' and len(proof) >= 40
     offset, result = 40, []
     while offset < len(proof):
+        assert offset + 8 <= len(proof)
         count = int.from_bytes(proof[offset:offset + 8], 'little')
+        assert count >= 6 and offset + 8 + count <= len(proof)
         result.append(proof[offset + 8:offset + 8 + count])
+        tag(result[-1])
         offset += count + 8
     assert offset == len(proof)
     return result
@@ -95,6 +103,87 @@ def replace_frame(proof, position, value):
     messages = frames(proof)
     messages[position] = value
     return proof[:40] + b''.join(len(m).to_bytes(8, 'little') + m for m in messages)
+
+
+def check_fri_frames(messages, *, rounds, queries, log_size, terminal_log=0):
+    """Check the selected octic individual-leaf FRI framing in full."""
+    assert len(messages) == rounds + 1 + 2 * rounds * queries
+    for root in messages[:rounds]:
+        assert tag(root) == 35 and len(root) == 38
+    terminal = messages[rounds]
+    assert tag(terminal) == 27
+    assert int.from_bytes(terminal[6:10], 'little') == 1 << terminal_log
+    assert len(terminal) == 10 + 32 * (1 << terminal_log)
+    for query in range(queries):
+        for layer in range(rounds):
+            for virtual, count in [(0, 1), (1, 2)]:
+                packet = messages[rounds + 1 + 2 * (query * rounds + layer) + virtual]
+                assert tag(packet) == 69
+                openings = children(packet)
+                assert len(openings) == count
+                for opening in openings:
+                    assert tag(opening) == 65 and opening[6:10] == bytes(4)
+                    row, path = children(opening)
+                    assert tag(row) == 27 and len(row) == 42
+                    assert int.from_bytes(row[6:10], 'little') == 1
+                    assert tag(path) == 36
+                    assert int.from_bytes(path[6:10], 'little') == log_size - layer
+                    assert len(path) == 10 + 32 * (log_size - layer)
+
+
+def alter_octic_frame(frame):
+    """Change a canonical field coordinate or digest, retaining all framing."""
+    kind = tag(frame)
+    if kind in (65, 69):
+        values = children(frame)
+        assert values
+        return replace_child(frame, [0], alter_octic_frame(values[0]))
+    if kind in (20, 27):
+        assert len(frame) >= 14
+        old = int.from_bytes(frame[10:14], 'little')
+        return frame[:10] + ((old + 1) % P).to_bytes(4, 'little') + frame[14:]
+    assert kind in (33, 34, 35, 36) and len(frame) > (6 if kind in (33, 35) else 10)
+    offset = 6 if kind in (33, 35) else 10
+    return frame[:offset] + bytes([frame[offset] ^ 1]) + frame[offset + 1:]
+
+
+def check_air_frames(proof, queries, log_size=5):
+    messages = frames(proof)
+    assert len(messages) == 8 + 10 * queries
+    assert [tag(message) for message in messages[:4]] == [33, 35, 27, 27]
+    check_fri_frames(messages[4:8 + 6 * queries], rounds=3, queries=queries,
+                     log_size=log_size)
+    for offset in range(8 + 6 * queries, len(messages), 4):
+        row, path, quotient, quotient_path = messages[offset:offset + 4]
+        assert [tag(frame) for frame in (row, path, quotient, quotient_path)] == [20, 34, 27, 36]
+        for frame in (path, quotient_path):
+            assert int.from_bytes(frame[6:10], 'little') == log_size
+            assert len(frame) == 10 + 32 * log_size
+    return messages
+
+
+def packet_mutations(messages, start, end):
+    """Mutate each authenticated row/path, and both-child packet association."""
+    for position in range(start, end):
+        packet = messages[position]
+        assert tag(packet) == 69
+        openings = children(packet)
+        for index, opening in enumerate(openings):
+            row, path = children(opening)
+            for part, frame in enumerate((row, path)):
+                yield (f'{position}-{index}-{part}', position,
+                       replace_child(packet, [index, part], alter_octic_frame(frame)))
+        if len(openings) == 2:
+            yield f'{position}-missing', position, with_children(packet, openings[:1])
+            yield f'{position}-swapped', position, with_children(packet, reversed(openings))
+
+
+def packet_rejected(report):
+    stop = report['execution']['stop']
+    assert report['status'] == 'refused' and report['code'] == 'rejected:require'
+    assert stop['role'] == 'role00000001'
+    assert stop['kind'] == 'Backend(BackendError { code: "rejected:require" })'
+    assert stop['local']['function'].startswith('_oracle_packet_authenticate_')
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--no-finite-bulk'], ['--release-storage']])
@@ -111,9 +200,9 @@ def test_external_air_stark_produces_and_verifies(toolchain, journal, directory,
     produced = journal.json([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
     checked = journal.json([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'])
     assert produced['status'] == 'produced' and checked['status'] == 'accepted'
-    # Trace root, quotient root, two OOD claims, 3 FRI roots and terminal,
-    # then four FRI messages per round/query and four table-opening messages.
-    assert len(frames(proof.read_bytes())) == 8 + 16 * queries
+    # Trace/quotient roots and OOD claims precede shared FRI. Each query has
+    # six FRI packets, followed later by four original table-opening frames.
+    check_air_frames(proof.read_bytes(), queries, log_size)
     captured = json.loads(package.read_text())
     assert any('zkc.relation-bundle/0' in text for _, text in captured['assets'])
 
@@ -179,20 +268,22 @@ def test_stark_authenticates_claims_roots_and_late_openings(toolchain, journal, 
     proof = directory / 'honest.bin'
     journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
     original = proof.read_bytes()
-    messages = frames(original)
+    messages = check_air_frames(original, public['query_count'])
+    assert journal.json([toolchain.runtime, '--json', 'verify', f'--package={package}',
+                         f'--sha256={pin}', *verifier, f'--proof={proof}'])['status'] == 'accepted'
     # Every table/FRI root, both OOD vectors, terminal, and all four final
     # trace/quotient opening components. Mutation retains the outer framing.
-    for position in [*range(8), *range(len(messages) - 4, len(messages))]:
-        payload = bytearray(messages[position])
-        if payload[:6] in (b'ZKCV\x00\x14', b'ZKCV\x00\x1b'):
-            old = int.from_bytes(payload[10:14], 'little')
-            payload[10:14] = ((old + 1) % P).to_bytes(4, 'little')
-        else:
-            payload[-1] ^= 1
-        candidate = directory / f'message-{position}.bin'
+    mutations = [(str(position), position, alter_octic_frame(messages[position]))
+                 for position in [*range(8), *range(len(messages) - 4, len(messages))]]
+    mutations.extend(packet_mutations(messages, 8, 8 + 6 * public['query_count']))
+    for name, position, payload in mutations:
+        candidate = directory / f'message-{name}.bin'
         candidate.write_bytes(replace_frame(original, position, payload))
-        journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={candidate}'],
-                    refuses='artifact-stopped')
+        generated = 4 <= position < 8 + 6 * public['query_count']
+        report = journal.json([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={candidate}'],
+                              refuses='rejected:require' if generated else 'artifact-stopped')
+        if generated:
+            packet_rejected(report)
     for name, value, code in [('truncated', original[:-1], 'proof-truncated'),
                               ('trailing', original + b'\x00', 'proof-trailing')]:
         candidate = directory / f'{name}.bin'
@@ -200,13 +291,15 @@ def test_stark_authenticates_claims_roots_and_late_openings(toolchain, journal, 
         journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={candidate}'], refuses=code)
 
 
-def test_stark_transcript_orders_commitments_claims_and_queries(toolchain, journal):
-    bundle = journal.json([toolchain.compiler, 'language-bundle', '--source-format=zkc',
-        '--entry=air_stark_example::Proof', f'--module=air_stark_example={EXAMPLE}',
-        *library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', overrides={'stark::octic_table': STARK}),
-        f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json'])
-    descriptor = bundle[2]
+def test_stark_transcript_orders_commitments_claims_and_queries(toolchain, journal, directory):
+    package, _ = compile_entry(toolchain, journal, directory)
+    descriptor = json.loads(json.loads(package.read_text())['artifact'])[2]
     assert descriptor[0] == 'zkc.native-proof-descriptor/0'
+    assert len(descriptor) == 9
+    selection = json.loads(descriptor[8])
+    assert selection['order'] == 'after-final-draw' and selection['authentication'] == 'atomic-blocks'
+    assert {root['scheme'] for root in selection['roots']['entries']} == {
+        'rows.merkle-keccak256.koala-bear.ext8-binomial3/0'}
     policy = descriptor[1]
     assert policy[2:4] == ['role00000000', 'role00000001'] and policy[7] == [str(i) for i in range(1, 9)]
     events = []
@@ -225,7 +318,11 @@ def test_stark_transcript_orders_commitments_claims_and_queries(toolchain, journ
         ('query', 1), ('message', 1), ('message', 0), ('message', 0),
         ('query', 0), ('message', 0), ('query', 0), ('message', 0),
         ('message', 1), ('query', 1), ('message', 1), ('message', 0),
-        ('index', 1), ('message', 1)] + [('message', 2)] * 4 + [('message', 1)] * 4
+        ('index', 1), ('message', 1)] + [
+        ('reconstructed-message', 2), ('message', 2),
+        ('reconstructed-message', 2), ('message', 2),
+        ('reconstructed-message', 3), ('message', 3),
+        ('reconstructed-message', 3), ('message', 3)] + [('message', 1)] * 4
     draws = [1, 4, 8, 10, 13, 16]
     assert len(policy[8]) == len(draws)
     for (query, delivery), i in zip(policy[8], draws, strict=True):
@@ -234,8 +331,8 @@ def test_stark_transcript_orders_commitments_claims_and_queries(toolchain, journ
         assert events[i][2][5:7] == ['index' if i == 16 else 'draw', 'role00000001']
     assert events[16][3] == ['32']
     for i, (kind, _, event, bound) in enumerate(events):
-        if kind == 'message':
-            assert event[4:6] == (['role00000001', 'role00000000'] if i - 1 in draws
+        if kind in ('message', 'reconstructed-message'):
+            assert event[4:6] == (['role00000001', 'role00000000'] if i - 1 in draws or kind == 'reconstructed-message'
                                   else ['role00000000', 'role00000001'])
             assert bound == []
     # One OOD loop, one fold loop, a separate query draw loop and opening
@@ -243,9 +340,16 @@ def test_stark_transcript_orders_commitments_claims_and_queries(toolchain, journ
     assert events[4][1] == events[5][1]
     assert events[12][1] == events[13][1] == events[14][1]
     assert events[16][1] == events[17][1]
-    assert len({events[i][1] for i in [4, 12, 16, 18, 22]}) == 5
-    assert all(events[i][1] == events[18][1] for i in range(18, 22))
-    assert all(events[i][1] == events[22][1] for i in range(22, 26))
+    assert len({events[i][1] for i in [4, 12, 16, 18, 20, 22, 24, 26]}) == 8
+    for i in (18, 20, 22, 24):
+        assert events[i][1] == events[i + 1][1]
+        assert events[i][2][2].endswith('_opening_request')
+        assert events[i + 1][2][2].endswith('_opening_response')
+    assert all(events[i][1][:1] == events[18][1][:1] for i in range(18, 26))
+    assert events[22][1][:2] == events[24][1][:2]
+    assert events[18][1][1:] != events[20][1][1:]
+    assert events[22][1][2:] != events[24][1][2:]
+    assert all(events[i][1] == events[26][1] for i in range(26, 30))
 
 
 @pytest.mark.parametrize('dishonest', ['quotient', 'deep'])
@@ -254,19 +358,16 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
     # FRI folds and transcript, so rejection must come from the outer equation.
     source = STARK.read_text()
     if dishonest == 'quotient':
-        old = '  let quotient @P = quotient_values'
-        new = '  let wrong_alpha @P = alter(alphaP);\n' + old
-        source = source.replace('dataP, heightP, shiftP, sizeP, alphaP);',
-                                'dataP, heightP, shiftP, sizeP, wrong_alpha);')
-        source += '\nfn alter(value: Extension) -> Extension { return value + 1; }\n'
-        guard, loops = 2, []
+        old = 'dataP, heightP, shiftP, sizeP, alphaP);'
+        new = 'dataP, heightP, shiftP, sizeP, alphaP + 1);'
+        guard, loops = 'identity', []
     else:
-        old = '  let (fri_ok, positionsP, positionsV, valuesV) ='
-        new = '  let reduced @P = alter_word(honest_reduced);\n' + old
-        source = source.replace('let reduced @P = deep_word', 'let honest_reduced @P = deep_word')
-        source += '\nfn alter_word(word: Vector<Extension>) -> Vector<Extension> {\n'
-        source += '  let two: Extension = 2; return kernel<Extension>("vector.scale", word, two);\n}\n'
-        guard, loops = 6, ['0']
+        old = ('let reduced @P = deep_word<Extension,Table,B>(trace_extension, chunks, proposed, proposed_quotient,\n'
+               '    heightP, shiftP, sizeP, zetaP, rhoP, adjustmentP);')
+        new = ('let reduced @P = vector::scale(deep_word<Extension,Table,B>(trace_extension, chunks, '
+               'proposed, proposed_quotient,\n'
+               '    heightP, shiftP, sizeP, zetaP, rhoP, adjustmentP), 2);')
+        guard, loops = 'deep', ['0']
     assert source.count(old) == 1
     source = source.replace(old, new)
     library = directory / 'stark.zkc'
@@ -276,12 +377,15 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
     # the honest source's generated identifiers after inserting P operations.
     emitted = journal.run([toolchain.compiler, 'language-emit', '--source-format=zkc',
         '--entry=air_stark_example::Proof', f'--module=air_stark_example={directory}/main.zkc',
-        *library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', overrides={'stark::octic_table': library}),
+        *library_modules('arguments/stark/single_table/koala_bear_octic', overrides={'stark::octic_table': library}),
         f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json'])
-    sites = re.findall(r'"protocol\.guard"\(%\d+(?:#\d+)?\) <\{owner = "(\w+)", site = "(s\d+)"\}>', emitted)
-    assert [owner for owner, _ in sites[:7]] == [
-        'role00000001', 'role00000000', *(['role00000001'] * 5)]
-    expected = sites[guard][1]
+    from test_fri import emitted_guard_sites
+    roster = [
+        ('profile', 'role00000001', 0), ('prover_profile', 'role00000000', 0),
+        ('identity', 'role00000001', 0), ('fri', 'role00000001', 0),
+        ('trace', 'role00000001', 1), ('quotient', 'role00000001', 1),
+        ('deep', 'role00000001', 1)]
+    expected = emitted_guard_sites(emitted, {'': roster})[guard]
     public, private = inputs()
     producer = request(journal, 'producer', public, private)
     verifier = request(journal, 'verifier', public)
@@ -291,7 +395,7 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
                           refuses='artifact-stopped')
     stop = report['execution']['stop']
     assert stop['role'] == 'role00000001' and stop['kind'] == 'Explicit("reject")'
-    assert stop['site'].endswith('_' + expected), stop
+    assert re.fullmatch(r'(?:apply_\d+_)+((?:s\d+_)*s\d+)', stop['site'])[1] == expected, stop
     assert [frame[2] for frame in stop['origin'][4] if frame[0] == 'loop'] == loops
 
 

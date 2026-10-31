@@ -330,7 +330,7 @@ charges follow the [capacity contract](../runtime/capacity.md#byte-construction)
 These authored operations have their own charge boundaries;
 replacing a scalar loop does not promise identical exhaustion behavior.
 
-## Checked indices
+## Indices and total word mathematics
 
 The installed `index` value is a natural number strictly below `2^64`.
 It is independent of a field and of the target pointer width. `indices` is an
@@ -339,10 +339,34 @@ separate occurrences. Neither type establishes an oracle-domain membership fact.
 
 `index.constant` has one canonical decimal u64 attribute. `index.add`, `sub` and
 `mul` refuse overflow or underflow; `div` and `mod` refuse a zero divisor.
-`equal` and `less` return Booleans. Arithmetic never wraps. `indices.empty`,
+`equal` and `less` return Booleans. These checked operations never wrap. `indices.empty`,
 `append`, `at` and `length` construct and inspect a sequence; `at` refuses an
 out-of-range position. Allocation ceilings are additional execution conditions.
 All these operations have no static domain argument.
+
+The explicitly named total operations use the same unsigned 64-bit carrier.
+For `M = 2^64`, `index.wrapping_add(a,b)` returns `(a+b) mod M` and
+`index.wrapping_sub(a,b)` returns the unique representative of `a-b` in
+`[0,M)`. `index.bit_and(a,b)` is bitwise conjunction over the 64 bits.
+`index.logical_shift_right(a,b)` returns `floor(a / 2^b)` for `b < 64`
+and zero otherwise. In particular, the shift count is not reduced modulo 64.
+Each takes two indices, returns one index, and has no attributes or static
+parameters. They are admitted in total mathematical bodies; the checked
+operations above remain ordered Local operations.
+
+The library's total `indices::bit_width` returns zero for zero and otherwise
+`floor(log2(value))+1`. It uses six successive upper-half selections over these
+existing word operations. `scalar::power_word` folds over that significant-bit
+count; `scalar::power` delegates to the same mathematics. Both preserve the
+full unsigned exponent and define the empty power, including `0^0`, as one.
+No native exponentiation primitive or new timing guarantee is introduced.
+
+The Data operations are `data.index_wrapping_add`,
+`data.index_wrapping_subtract`, `data.index_bit_and`, and
+`data.index_logical_shift_right`. Mathematical `arith.select` also admits
+two `ui64` alternatives and an `i1` condition. Neither a word operation nor a
+selection proves that its result lies in an oracle's actual domain. Native
+execution retains ordinary instruction, value and allocation accounting.
 
 `field.from_index<F>` is the explicit natural cast into `F`. It reduces modulo
 the field characteristic and generally loses information. It does not authorize
@@ -451,3 +475,18 @@ its own. The residual state of each participant therefore holds no unit that it
 neither consumed nor returned. This implicit affine
 disposal is frame bookkeeping and adds no primitive request/response event. Explicit `resource_unit.consume` still
 has its own operation observation.
+
+## Total scalar selection
+
+`bool.select`, `index.select`, `field.select<F>` and `curve.select<G>` consume
+`(condition, yes, no)` and return `yes` when the Boolean condition is true,
+otherwise `no`. Both alternatives are already computed values of the exact
+same scalar type and nominal domain. These operations have no invocation
+parameters, do not evaluate a branch, and supply no resource or domain authority.
+The native implementations preserve the selected value under the ordinary
+input validation, physical-type and output/retention accounting rules. Group
+values may share immutable backing. No constant-time guarantee is implied.
+
+The closed scalar signatures deliberately exclude capabilities, arbitrary
+containers and unconstrained type parameters. Their meaning is independent of
+the physical representation selected for a separately compiled artifact.

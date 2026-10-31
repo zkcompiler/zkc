@@ -61,6 +61,15 @@ fn complete_static_inventory() {
             projected.facets.len()
         );
         assert_eq!(
+            source["facets"]
+                .as_array()
+                .unwrap()
+                .contains(&json!({"kind": "DeterministicData"})),
+            projected.facets.contains(&Facet::DeterministicData),
+            "{} deterministic-data projection",
+            projected.name
+        );
+        assert_eq!(
             source["requirements"].as_array().unwrap().len(),
             projected.requirements.len()
         );
@@ -84,13 +93,97 @@ fn complete_static_inventory() {
     ));
     assert!(matches!(
         zkc_catalog::operation("vector.mul").unwrap().facets,
-        [Facet::Diagonal {
-            factors_input: 0,
-            values_input: 1,
-            result_output: 0
-        }]
+        [
+            Facet::Diagonal {
+                factors_input: 0,
+                values_input: 1,
+                result_output: 0
+            },
+            Facet::DeterministicData
+        ]
     ));
     assert_eq!(check(&value).unwrap(), check(&value).unwrap());
+}
+
+#[test]
+fn deterministic_data_is_partial_and_independent_of_other_facets() {
+    for name in [
+        "index.div",
+        "index.wrapping_add",
+        "field.inverse",
+        "control.require",
+        "sequence.at",
+        "vector.get",
+        "bytes.at",
+        "poly.domain_point",
+        "oracle.check",
+        "oracle.check_many",
+        "shake128.squeeze",
+    ] {
+        let op = zkc_catalog::operation(name).unwrap();
+        assert!(op.facets.contains(&Facet::DeterministicData), "{name}");
+        assert!(!op.facets.contains(&Facet::PublicReplay), "{name}");
+    }
+    for name in [
+        "random.draw",
+        "transcript.challenge",
+        "external.monero.hash",
+        "resource_unit.pass",
+        "representation.convert",
+        "table.relayout",
+        "oracle.commit",
+        "oracle.open",
+        "oracle.open_many",
+        "pcs.check",
+        "opening_states.at",
+        "numerical.map",
+    ] {
+        assert!(
+            !zkc_catalog::operation(name)
+                .unwrap()
+                .facets
+                .contains(&Facet::DeterministicData),
+            "{name}"
+        );
+    }
+    assert!(zkc_catalog::operation("index.future").is_none());
+    let mut value = source();
+    let mut future = operation(&mut value, "index.add").clone();
+    future["name"] = json!("index.future");
+    future["facets"] = json!([]);
+    value["operations"].as_array_mut().unwrap().push(future);
+    let generated = check(&value).unwrap();
+    assert_eq!(
+        generated.matches("Facet::DeterministicData").count(),
+        CATALOG
+            .operations
+            .iter()
+            .filter(|op| op.facets.contains(&Facet::DeterministicData))
+            .count()
+    );
+}
+
+#[test]
+fn deterministic_data_rejects_unknown_fields_kinds_and_duplicate_facets() {
+    for facet in [
+        json!({"kind": "DeterministicData", "total": true}),
+        json!({"kind": "DeterministicData", "stateInput": 0}),
+        json!({"kind": "UnknownDeterministicData"}),
+        json!({"kind": "deterministicData"}),
+    ] {
+        let mut value = source();
+        operation(&mut value, "index.add")["facets"] = json!([facet]);
+        assert!(check(&value).is_err());
+    }
+    let mut value = source();
+    operation(&mut value, "index.add")["facets"] = json!([
+        {"kind": "DeterministicData"}, {"kind": "DeterministicData"}
+    ]);
+    assert!(
+        check(&value)
+            .unwrap_err()
+            .contains("duplicate semantic facet")
+    );
 }
 
 #[test]

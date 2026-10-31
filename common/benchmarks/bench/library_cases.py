@@ -5,6 +5,7 @@ import sys
 from .io import Journal
 from .programs import Program
 from .stark import mutate_claim
+from .oracle_policy import OCTIC_KECCAK
 
 
 def mutate_response(proof):
@@ -84,6 +85,7 @@ def machine(root, shape, directory, *, timeout):
         dependencies=('arguments.stark.configurations.koala_bear_octic', 'arguments.stark.whole_bundle', 'core.collections', 'relations.air'),
         assets={'machine': json.loads(bundle.read_text())}, proof=True,
         mutate_proof=mutate_claim,
+        oracle_policy=OCTIC_KECCAK,
         changed=public | {'final': str((int(public['final'])+1) % 2130706433)},
         support=(project/'main.zkc', project/'prepare.py', fixture, bundle,
                  root/'compiler/adapters/accumulator-machine/accumulator_machine.py', root/'compiler/adapters/ring_arena.py'),

@@ -196,6 +196,9 @@ fn describe(schema: &Schema) -> Json {
         Kind::Associated => "associated",
         Kind::Variant => "variant",
         Kind::Builtin => "native",
+        Kind::LogicalRecord => "logical_record",
+        Kind::Oracle => "oracle",
+        Kind::OracleSequence => "oracle_sequence",
     };
     let mut result = json!({"kind":kind,"type":schema.display_type});
     if !schema.leaves.is_empty() {

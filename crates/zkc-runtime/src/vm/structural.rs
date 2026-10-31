@@ -102,13 +102,18 @@ impl StructuralType {
                 _ => true,
             })
     }
+    pub(super) fn own_retained_bytes(&self) -> usize {
+        512usize.saturating_add(256usize.saturating_mul(self.arguments.len()))
+    }
     pub(super) fn retained_bytes(&self) -> usize {
-        self.arguments.iter().fold(512usize, |bytes, arg| {
-            bytes.saturating_add(256).saturating_add(match arg {
-                TypeArgument::Type(t) => t.descriptor_bytes(),
-                _ => 0,
+        self.arguments
+            .iter()
+            .fold(self.own_retained_bytes(), |bytes, arg| {
+                bytes.saturating_add(match arg {
+                    TypeArgument::Type(t) => t.descriptor_bytes(),
+                    _ => 0,
+                })
             })
-        })
     }
 }
 

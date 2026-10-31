@@ -186,6 +186,12 @@ pub enum DomainValueRule {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Facet {
     PublicReplay,
+    /// Equal complete logical inputs/parameters have equal normal results or
+    /// the same logical stop under an installed exact admitted interpretation.
+    /// Does not imply totality, speculation, budget equality or private service
+    /// authority. Selected implementations need their own interpretation;
+    /// callers still check exact bindings, closed functions and recursive data.
+    DeterministicData,
     AcceptanceGuard,
     Conjunction,
     SourceHistory,

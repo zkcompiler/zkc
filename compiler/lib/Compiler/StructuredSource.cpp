@@ -891,8 +891,9 @@ class Exporter {
       return json::Array{"protocol_apply", application.getCallee(),
                          names(application.getRoles())};
     }
-    if (isa<data::IndexOp, data::EqualOp, data::LessOp, data::PowerOfTwoOp>(
-            op)) {
+    if (isa<data::IndexOp, data::EqualOp, data::LessOp, data::PowerOfTwoOp,
+            data::IndexWrappingAddOp, data::IndexWrappingSubtractOp,
+            data::IndexBitAndOp, data::IndexLogicalShiftRightOp>(op)) {
       bool constant = isa<data::IndexOp>(op);
       if (owner != "protocol" && owner != "math" && owner != "oracle")
         return error("structured-source-operation");
@@ -902,9 +903,14 @@ class Exporter {
       if (constant)
         return json::Array{"index.constant",
                            std::to_string(cast<data::IndexOp>(op).getValue())};
-      return json::Array{isa<data::EqualOp>(op)  ? "index.equal"
-                         : isa<data::LessOp>(op) ? "index.less"
-                                                 : "index.power_of_two"};
+      return json::Array{
+          isa<data::EqualOp>(op)                   ? "index.equal"
+          : isa<data::LessOp>(op)                  ? "index.less"
+          : isa<data::PowerOfTwoOp>(op)            ? "index.power_of_two"
+          : isa<data::IndexWrappingAddOp>(op)      ? "index.wrapping_add"
+          : isa<data::IndexWrappingSubtractOp>(op) ? "index.wrapping_sub"
+          : isa<data::IndexBitAndOp>(op) ? "index.bit_and"
+                                         : "index.logical_shift_right"};
     }
     if (auto restrict = dyn_cast<algebra::MultilinearRestrictPrefixOp>(op)) {
       if (owner != "protocol" && owner != "math" && owner != "oracle")
@@ -988,9 +994,14 @@ class Exporter {
         allowed.push_back("callee");
       if (auto e = attributes(op, allowed))
         return std::move(e);
-      auto handle = cast<protocol_ir::OracleHandleType>(
-          components ? op.getOperand(0).getType() : op.getResult(0).getType());
-      auto encoded = encodeOracleKind(handle.getKind(), used, 0);
+      auto logicalType =
+          components ? op.getOperand(0).getType() : op.getResult(0).getType();
+      auto kind = protocol_ir::getOracleFamilyKind(logicalType);
+      if (!kind || ((send || virtualHandle) &&
+                    !isa<protocol_ir::OracleHandleType>(logicalType)))
+        return error("structured-source-oracle-kind");
+      auto encoded = input || components ? sort(logicalType)
+                                         : encodeOracleKind(kind, used, 0);
       if (!encoded)
         return encoded.takeError();
       json::Array descriptor{send         ? "oracle_send"
@@ -1011,8 +1022,7 @@ class Exporter {
         descriptor.push_back(names(op.getAttrOfType<ArrayAttr>("shape_names")));
       if (send || input)
         descriptor.push_back(oracleShapeValues(
-            handle.getKind(),
-            op.getAttrOfType<DictionaryAttr>("shape_bounds")));
+            kind, op.getAttrOfType<DictionaryAttr>("shape_bounds")));
       return descriptor;
     }
     if (isa<protocol_ir::OracleQueryOp, protocol_ir::OracleContentsOp,
@@ -1492,10 +1502,12 @@ class Exporter {
             isa<algebra::MultilinearRestrictPrefixOp, algebra::FieldEqualOp,
                 algebra::GroupIdentityOp, algebra::GroupAddOp,
                 algebra::GroupScaleOp, algebra::GroupEqualOp, data::IndexOp,
-                data::EqualOp, data::LessOp, data::PowerOfTwoOp, data::DimOp,
-                data::MakeOp, data::GetOp, data::BoundedAtOp, arith::ConstantOp,
-                arith::AndIOp, arith::OrIOp, arith::XOrIOp, arith::CmpIOp,
-                arith::SelectOp>(instruction);
+                data::EqualOp, data::LessOp, data::PowerOfTwoOp,
+                data::IndexWrappingAddOp, data::IndexWrappingSubtractOp,
+                data::IndexBitAndOp, data::IndexLogicalShiftRightOp,
+                data::DimOp, data::MakeOp, data::GetOp, data::BoundedAtOp,
+                arith::ConstantOp, arith::AndIOp, arith::OrIOp, arith::XOrIOp,
+                arith::CmpIOp, arith::SelectOp>(instruction);
         if (!allowed || instruction.getNumRegions())
           return error(code, instruction.getName().getStringRef());
       }

@@ -405,8 +405,9 @@ theorem interpolate_eq (low high : List F) (r : F) :
 
 /-- The arguments of the check as the body names them. -/
 abbrev checkEnv (xs point : List F) (claim : F) : Env F G :=
-  [("v119", .vector "bls12-381.fr" xs), ("v120", .vector "bls12-381.fr" point),
-    ("v121", .data (.field "bls12-381.fr" claim))]
+  (checkFunction.inputs.map (·.1)).zip
+    [.vector "bls12-381.fr" xs, .vector "bls12-381.fr" point,
+      .data (.field "bls12-381.fr" claim)]
 
 /-- One installed operation that returns, with its exact charge. -/
 local macro "charged_operation " evaluates:term : tactic =>

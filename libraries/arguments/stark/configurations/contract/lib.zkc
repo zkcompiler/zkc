@@ -1,5 +1,5 @@
 module stark::configurations::contract;
-use zkc::vector::{Vector, length, transpose};
+use zkc::vector::{Vector};
 use zkc::vector as vector;
 use zkc::indices::{Indices};
 use zkc::indices as indices;
@@ -47,43 +47,9 @@ pub interface Configuration {
       -> (Vector<Extension>, Path<ExtensionRows>) effects(stop);
   fn check_extension(root: Root<ExtensionRows>, width: index, height: index, positions: Indices,
       rows: Vector<Extension>, proof: Path<ExtensionRows>) -> bool effects(stop);
-
-  // FRI layers. Leaf k of a natural-order word of length 2*half holds the two
-  // evaluations one fold combines, (word[k], word[k + half]), at x and -x.
-  // Folding sends pair k to position k of the next word.
-  fn commit_pairs(word: Vector<Extension>)
-      -> (Root<ExtensionRows>, State<ExtensionRows>) effects(stop);
-  fn open_pairs(state: State<ExtensionRows>, pairs: Indices, half: index)
-      -> (Vector<Extension>, Path<ExtensionRows>) effects(stop);
-  fn check_pairs(root: Root<ExtensionRows>, half: index, pairs: Indices,
-      rows: Vector<Extension>, proof: Path<ExtensionRows>) -> bool effects(stop);
 }
 
-// Layout helpers for configurations. Natural order commits rows as given;
-// its pair table places (word[k], word[k + half]) in row k.
-pub fn natural_pairs<F: Field>(word: Vector<F>) -> Vector<F> effects(stop) where () {
-  let half = indices::divide(length(word), 2);
-  require length(word) == half * 2;
-  return transpose(word, 2, half);
-}
-
-// Leaf grouping: a configuration may instead commit an FRI word as a width-one
-// table, one value per leaf, and open both members of pair k as positions k
-// and k + half. Its open and check members then return and check the same
-// (low, high) rows, with two authentication paths per pair.
-pub fn pair_positions(pairs: Indices, half: index) -> Indices effects(stop) where () {
-  let mut result = indices::empty();
-  for pair in 0..indices::length(pairs) {
-    let low = indices::get(pairs, pair);
-    result = indices::append(indices::append(result, low), low + half);
-  }
-  return result;
-}
-
-// Bit-reversed order commits natural position i at row reverse(i). Its pair
-// table is the bit-reversed word read as width-two rows: row k holds natural
-// positions reverse(2k) and reverse(2k) + half, so natural pair j sits at row
-// reverse(j) of the half-height table, and positions translate the same way.
+// Bit-reversed outer row layouts translate natural positions at open and check.
 pub fn reverse_bits(position: index, size: index) -> index effects(stop) where () {
   require indices::less(position, size);
   let mut remaining = size;
@@ -108,7 +74,4 @@ pub fn reverse_positions(positions: Indices, size: index) -> Indices effects(sto
 }
 pub fn reversed_rows<F: Field>(rows: Vector<F>, width: index) -> Vector<F> effects(stop) where () {
   return vector::bit_reverse_rows(rows, width);
-}
-pub fn reversed_pairs<F: Field>(word: Vector<F>) -> Vector<F> effects(stop) where () {
-  return vector::bit_reverse(word);
 }

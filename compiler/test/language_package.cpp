@@ -49,7 +49,11 @@ int main() {
                           "package changed or omitted checked bytes");
                   auto *options = root->getObject("options");
                   require(
-                      options && options->size() == 6 &&
+                      options && options->size() == 7 &&
+                          options->get("oracle_realization") &&
+                          *options->get("oracle_realization") ==
+                              take(protocol::encodeOracleRealizationPolicy(
+                                  entry.options().oracleRealization)) &&
                           options->getBoolean("finite_bulk") == finite &&
                           options->getBoolean("simplify") == simplify &&
                           options->getBoolean("release_storage") == release &&

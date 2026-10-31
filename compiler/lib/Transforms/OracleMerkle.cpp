@@ -107,14 +107,22 @@ struct Emitter {
                     "admit_pairs");
           }
           auto height = binary(c, "index.div", a[0], width, "height");
+          // Rows are positive; paired rows are also even, hence >= 2.
+          // Thus height is positive for either width before subtracting one.
+          auto predecessor = binary(c, "index.wrapping_sub", height, one,
+                                    "height_predecessor");
+          auto bits =
+              binary(c, "index.bit_and", height, predecessor, "height_bits");
+          require(c, binary(c, "index.equal", bits, zero, "power_of_two"),
+                  "admit_power");
           auto leaf = binary(c, "index.mod", a[1], height, "logical_leaf");
           auto slot = binary(c, "index.div", a[1], height, "slot");
-          Types stateTypes{index};
-          Values seeds{height};
-          if (reversed) {
-            append_range(stateTypes, Types{index, index});
-            append_range(seeds, Values{leaf, zero});
+          if (!reversed) {
+            c.returned({height, leaf, slot});
+            return;
           }
+          Types stateTypes{index, index, index};
+          Values seeds{height, leaf, zero};
           // Native admission checks a range's declared bound before execution.
           // Clamp it to 64 even though early completion already visits <=63
           // bits. The lower bound of one keeps the singleton loop empty.
@@ -137,36 +145,26 @@ struct Emitter {
                 return function(
                     "layout_bit", inputs, outputs, true,
                     [&](Control &body, ValueRange b) {
-                      auto zero = number(body, 0, "bit_zero");
                       auto one = number(body, 1, "bit_one");
                       auto two = number(body, 2, "bit_two");
-                      auto remainder = binary(body, "index.mod", b[1], two,
-                                              "span_remainder");
-                      require(body,
-                              binary(body, "index.equal", remainder, zero,
-                                     "even_span"),
-                              "admit_span");
                       auto span =
                           binary(body, "index.div", b[1], two, "next_span");
-                      Values next{span};
-                      if (reversed) {
-                        auto bit =
-                            binary(body, "index.mod", b[2], two, "low_bit");
-                        auto rest = binary(body, "index.div", b[2], two,
-                                           "remaining_bits");
-                        auto shifted = binary(body, "index.mul", b[3], two,
-                                              "shift_reversed");
-                        auto value = binary(body, "index.add", shifted, bit,
-                                            "append_bit");
-                        append_range(next, Values{rest, value});
-                      }
+                      auto bit =
+                          binary(body, "index.mod", b[2], two, "low_bit");
+                      auto rest = binary(body, "index.div", b[2], two,
+                                         "remaining_bits");
+                      auto shifted = binary(body, "index.mul", b[3], two,
+                                            "shift_reversed");
+                      auto value =
+                          binary(body, "index.add", shifted, bit, "append_bit");
+                      Values next{span, rest, value};
                       Values yielded{
                           binary(body, "index.less", one, span, "more_bits")};
                       append_range(yielded, next);
                       body.complete(yielded);
                     });
               });
-          c.returned({height, reversed ? state[2] : leaf, slot});
+          c.returned({height, state[2], slot});
         });
   }
 };

@@ -163,7 +163,8 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
                                                   ProtocolApplication>) {
                 return call(action.callee, {}, span);
               } else if constexpr (std::is_same_v<Action, FiniteApplication>) {
-                result.fixed.mayStop |= body.mode != Body::Mode::Math;
+                result.fixed.mayStop |= body.mode != Body::Mode::Math &&
+                                        body.mode != Body::Mode::Oracle;
                 return absorb(bindingEffects(types, body, action.body, 1, span),
                               span) &&
                        (!action.predicate ||
@@ -171,7 +172,8 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
                                               span),
                                span));
               } else if constexpr (std::is_same_v<Action, FiniteComputation>) {
-                result.fixed.mayStop |= body.mode != Body::Mode::Math;
+                result.fixed.mayStop |= body.mode != Body::Mode::Math &&
+                                        body.mode != Body::Mode::Oracle;
                 return call(action.body.helper, {}, span) &&
                        (!action.predicate ||
                         call(action.predicate->helper, {}, span));
@@ -219,6 +221,8 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
               } else {
                 // New operations must explicitly choose their source effects.
                 static_assert(std::is_same_v<Action, MathValue> ||
+                                  std::is_same_v<Action, OracleSourceQuery> ||
+                                  std::is_same_v<Action, OracleInstantiation> ||
                                   std::is_same_v<Action, Exchange> ||
                                   std::is_same_v<Action, Restriction> ||
                                   std::is_same_v<Action, RoleAssembly> ||

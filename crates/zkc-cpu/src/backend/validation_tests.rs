@@ -191,8 +191,8 @@ fn nested_operand_backing_is_free_but_inline_child_is_owned() {
         binding("sequence.at", &["field:bls12-381.fr"], "native"),
         vec![sequence(scalar.clone()), Value::Index(0)],
         vec![scalar],
-        512,
-        512,
+        crate::VALUE_SLOT_BYTES,
+        crate::VALUE_SLOT_BYTES,
     );
 }
 
@@ -273,7 +273,7 @@ fn tuple_charge_deduplicates_identity_in_either_output_order() {
 
 #[test]
 fn inline_result_before_fresh_backing_keeps_its_owned_charge() {
-    // This installed tuple puts 512 owned bytes before the first backing;
+    // This installed tuple puts one owned slot before the first backing;
     // use its actual ordering rather than inventing a reversed signature.
     check(
         binding("encoding.fields_from_be", &["bls12-381.fr"], "arkworks"),
@@ -282,8 +282,8 @@ fn inline_result_before_fresh_backing_keeps_its_owned_charge() {
             Value::Bool(true),
             Value::Vector(vec![Scalar::from(0); 2].into()),
         ],
-        832,
-        832,
+        crate::VALUE_SLOT_BYTES + 320,
+        crate::VALUE_SLOT_BYTES + 320,
     );
 }
 

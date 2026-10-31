@@ -13,7 +13,7 @@ use zkc::coset::{point, extend_columns, disjoint_coset};
 use air::polynomial::{split_quotient};
 use air::table::{shape, claims, quotient_values, identity, deep_word, deep_value};
 use zkc::opening::{opening_claims};
-use fri::{LowDegree};
+use fri::{Direct, LowDegree};
 
 use zkc::oracle::{commit, open};
 
@@ -51,7 +51,8 @@ pub protocol TableArgument<Table: nat, B: Bundle,
     (trace: Vector<Base> @P, statementP: Statement @P, statementV: Statement @V,
      round_count: index @(P,V), query_count: index @(P,V), attempt_count: index @(P,V),
      coins: Random<Extension> @V) -> (accepted: bool @V)
-    where 1 <= LogHeight, LogHeight+1 <= LogSize, 1 <= Queries, 1 <= Attempts {
+    where 1 <= LogHeight, LogHeight+1 <= LogSize, LogSize <= 63,
+      1 <= Queries, 1 <= Attempts {
   let validV @V = profile<Base,Table,B,LogHeight,LogSize,Queries,Attempts>(
     statementV.configuration, statementV.public_columns, statementV.public_data,
     statementV.shift, round_count, query_count, attempt_count);
@@ -111,7 +112,8 @@ pub protocol TableArgument<Table: nat, B: Bundle,
   let reduced @P = deep_word<Extension,Table,B>(trace_extension, chunks, proposed, proposed_quotient,
     heightP, shiftP, sizeP, zetaP, rhoP, adjustmentP);
   let (fri_ok, positionsP, positionsV, valuesV) =
-    LowDegree<ExtensionRows,LogSize,0,LogHeight,Queries>(reduced, shiftP, shiftV, round_count, query_count, coins);
+    LowDegree<Direct<Extension>,LogSize,0,LogHeight,Queries>(reduced, shiftP, shiftV,
+      round_count, query_count, coins);
   require @V fri_ok;
   for query in 0..query_count roles(P,V) max Queries {
     let indexP @P = indices::get(positionsP, query);

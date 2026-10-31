@@ -553,6 +553,8 @@ public:
       if (!function || !isScopedExecutionFunction(function)) {
         if (!declaration(&op))
           return failure();
+        if (replacements && !computation::chargeCopy(&op, remaining, capacity))
+          return failure();
         builder.setInsertionPointToEnd(&target.getBody().front());
         IRMapping mapping;
         auto *copy = builder.clone(op, mapping);
@@ -621,9 +623,18 @@ OwningOpRef<ModuleOp> substituteNumericalBodies(
     mathematical::NumericalSelection &selection,
     std::optional<CapacityCause> *capacity) {
   llvm::TimeTraceScope timing("zkc.numerical-substitution");
-  if (!hasSingleElement(*source.getBody()) ||
-      !computation::chargeCopy(source, selection.remainingCopy, capacity))
+  if (!hasSingleElement(*source.getBody()))
     return {};
+  // This scan bounds recursive admission of the physical input CFG. Scoped
+  // bodies are rebuilt from logical steps below, not cloned as physical CFG.
+  // Keep inspection cumulative with the independent context readers; actual
+  // declaration copies and logical expansion spend the construction account.
+  if (!computation::chargeCopy(source, selection.work.numericalContextChecking,
+                               capacity)) {
+    if (capacity && *capacity)
+      (*capacity)->owner = WorkOwner::AlgorithmChecking;
+    return {};
+  }
   auto owner =
       dyn_cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
   if (!owner)
@@ -665,16 +676,15 @@ OwningOpRef<ModuleOp> substituteNumericalBodies(
   return candidate;
 }
 
-OwningOpRef<ModuleOp>
-prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
-                    uint64_t &copy, uint64_t &siteBytes,
-                    std::optional<CapacityCause> &capacity,
-                    MathematicalSelectionPolicy policy,
-                    const llvm::DenseSet<Operation *> *fixedBindings,
-                    mathematical::NumericalSelection *selection,
-                    mathematical::VerificationDecision *reported,
-                    const mathematical::MathematicalRecipes &recipes,
-                    mathematical::RealizationTrace *trace) {
+OwningOpRef<ModuleOp> prepareScopedFinite(
+    ModuleOp source, mathematical::RealizationWork &work, uint64_t &copy,
+    uint64_t &siteBytes, std::optional<CapacityCause> &capacity,
+    MathematicalSelectionPolicy policy,
+    const llvm::DenseSet<Operation *> *fixedBindings,
+    mathematical::NumericalSelection *selection,
+    mathematical::VerificationDecision *reported,
+    const mathematical::MathematicalRecipes &recipes,
+    mathematical::RealizationTrace *trace, bool deferCorrespondence) {
   llvm::TimeTraceScope timing("zkc.finite-preparation");
   mathematical::RealizationScope scope(trace, "scoped-finite-preparation",
                                        source, policy, &work);
@@ -738,8 +748,9 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
       copy = choices.remainingCopy;
       siteBytes = choices.remainingSiteBytes;
       if (failed(result) || failed(zkc::admitStage(*candidate)) ||
-          failed(verifyScopedFinitePreparation(source, *candidate, work, policy,
-                                               &outcome, fixedBindings))) {
+          (!deferCorrespondence &&
+           failed(verifyScopedFinitePreparation(
+               source, *candidate, work, policy, &outcome, fixedBindings)))) {
         choices.origins.clear();
         return {};
       }

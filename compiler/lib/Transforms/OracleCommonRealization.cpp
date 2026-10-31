@@ -1,4 +1,5 @@
 #include "OracleCommonPlan.h"
+#include "OracleQuerySchedule.h"
 #include "RealizationEmission.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Admission.h"
@@ -48,55 +49,6 @@ func::FuncOp local(pir::ProtocolModuleOp unit,
   for (unsigned result : recipe.results)
     outputs.push_back(values[result]);
   control.returned(outputs);
-  return helper;
-}
-func::FuncOp local(pir::ProtocolModuleOp unit,
-                   const OraclePacketRecipe &recipe) {
-  OpBuilder builder(unit.getContext());
-  auto make = [&](StringRef name, TypeRange inputs, TypeRange outputs,
-                  bool region) {
-    builder.setInsertionPointToEnd(&unit.getBody().front());
-    SmallVector<Type> formals{runtime::ScopeType::get(unit.getContext())};
-    append_range(formals, inputs);
-    auto helper = func::FuncOp::create(
-        builder, unit.getLoc(), name,
-        builder.getFunctionType(
-            formals, exec::OutcomeType::get(unit.getContext(),
-                                            SmallVector<Type>(outputs))));
-    helper.setPrivate();
-    helper.setNoInline(true);
-    if (region)
-      helper->setAttr("runtime.region", builder.getUnitAttr());
-    else
-      helper->setAttr("runtime.origin",
-                      builder.getArrayAttr({builder.getStringAttr(name),
-                                            builder.getArrayAttr({})}));
-    builder.setInsertionPointToEnd(helper.addEntryBlock());
-    return helper;
-  };
-  auto helper = make(recipe.name, recipe.inputs, recipe.outputs, false);
-  exec::ScopedExecutionBuilder control(builder, helper);
-  auto inputs = helper.getArguments().drop_front();
-  if (recipe.pack) {
-    control.returned(control.invoke(
-        "exec.variant", recipe.outputs, control.scoped(inputs),
-        {builder.getNamedAttr("alternative", builder.getStringAttr("Record")),
-         builder.getNamedAttr("site", builder.getStringAttr("packet"))}));
-  } else {
-    control.returned(control.match(
-        inputs.front(), {}, recipe.outputs, {"Record"}, "packet",
-        [&](unsigned) {
-          unsigned suffix = 0;
-          std::string name;
-          do {
-            name = recipe.name + "_fields_" + std::to_string(suffix++);
-          } while (SymbolTable::lookupSymbolIn(unit, name));
-          auto fields = make(name, recipe.outputs, recipe.outputs, true);
-          exec::ScopedExecutionBuilder region(builder, fields);
-          region.complete(fields.getArguments().drop_front());
-          return fields;
-        }));
-  }
   return helper;
 }
 void body(OpBuilder &builder, Location loc, const OracleCommonBlock &plan,
@@ -181,23 +133,66 @@ emitOracleRealization(ModuleOp prepared,
       }
       item.allocators.push_back(std::move(allocators));
     }
-    auto plan =
-        planOracleCommon(prepared, entry, *requirements, item.controllers,
-                         item.allocators, item.merkle, policy.authentication);
+    auto schedule = planOracleQuerySchedule(prepared, entry, *requirements,
+                                            item.controllers, item.merkle,
+                                            policy.authentication);
+    if (!schedule)
+      return schedule.takeError();
+    for (const auto &remote : schedule->remotes) {
+      const auto &receiver = item.controllers[remote.receiver];
+      auto demand = emitOracleQueryDemand(*result.module, requirements->storage,
+                                          receiver.body, receiver.kind, work);
+      if (!demand)
+        return demand.takeError();
+      auto response =
+          emitOracleQueryResponse(*result.module, remote.exchange, work);
+      if (!response)
+        return response.takeError();
+      OracleExchangeRecipe recipe;
+      unsigned suffix = 0;
+      do {
+        recipe.name = "_oracle_query_open_" + std::to_string(suffix++);
+      } while (SymbolTable::lookupSymbolIn(unit, recipe.name));
+      recipe.action = OracleExchangeAction::Open;
+      recipe.exchange =
+          std::make_shared<const OracleQueryExchange>(remote.exchange);
+      recipe.inputs.push_back(remote.exchange.request);
+      append_range(recipe.inputs, remote.exchange.holderStores);
+      recipe.outputs.push_back(remote.exchange.response);
+      auto open = emitOracleQueryExchange(*result.module, recipe);
+      auto packet =
+          emitOracleQueryPacket(*result.module, remote.exchange, *response,
+                                open, item.merkle, schedule->capacity, work);
+      if (!packet)
+        return packet.takeError();
+      auto window = emitOracleQueryWindow(*result.module, receiver.body,
+                                          *demand, remote.exchange, *response,
+                                          schedule->capacity, work);
+      if (!window)
+        return window.takeError();
+      item.remotes.push_back({remote.receiver, remote.holder,
+                              std::move(*demand), std::move(*response), open,
+                              std::move(*packet), std::move(*window)});
+    }
+    for (const auto &batch : schedule->batches) {
+      SmallVector<OracleQueryBatchRoot> roots;
+      for (unsigned index : batch.remotes) {
+        const auto &remote = item.remotes[index];
+        roots.push_back({&item.controllers[remote.receiver].body,
+                         &remote.demand, &remote.window});
+      }
+      auto emitted = emitOracleQueryBatch(*result.module, roots, work);
+      if (!emitted)
+        return emitted.takeError();
+      item.batches.push_back({batch.remotes, std::move(*emitted)});
+    }
+    auto plan = planOracleCommon(
+        prepared, entry, *requirements, item.controllers, item.allocators,
+        item.merkle, policy.authentication, item.remotes, item.batches);
     if (!plan)
       return plan.takeError();
     for (const auto &recipe : plan->locals)
-      item.locals.push_back(std::visit(
-          [&](const auto &body) -> func::FuncOp {
-            if constexpr (std::is_same_v<std::decay_t<decltype(body)>,
-                                         OracleLocalRecipe> ||
-                          std::is_same_v<std::decay_t<decltype(body)>,
-                                         OraclePacketRecipe>)
-              return local(unit, body);
-            else
-              return emitOracleQueryExchange(*result.module, body);
-          },
-          recipe));
+      item.locals.push_back(local(unit, recipe));
     item.inputShapes = plan->inputShapes;
     item.resultStores = plan->resultStores;
     item.resultReferences = plan->resultReferences;

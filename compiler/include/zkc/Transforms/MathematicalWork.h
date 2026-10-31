@@ -35,7 +35,11 @@ struct RealizationWork {
   // One late numerical transaction shares these checking balances across
   // declarations and retries. Optional native interpretation cannot consume
   // the mandatory guard/vector reserve. Exact exhaustion on success is valid.
+  // Includes preparation's independent normalization/frontier context readers.
+  // Their exhaustion is required even during speculative construction.
   uint64_t numericalContextChecking = 4000000;
+  // Independent verification admission and transient normalized-subject copies.
+  // Preparation's context readers still share numericalContextChecking.
   uint64_t numericalCheckCopy = 4000000;
   uint64_t numericalCheckSiteBytes = 16 * 1024 * 1024;
   uint64_t requiredFiniteChecking = 1000000;

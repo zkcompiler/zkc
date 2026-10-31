@@ -673,7 +673,7 @@ fn native_standalone_group_messages_do_not_consume_collection_capacity() {
         )
         .unwrap()
     };
-    let point = Value::Curve(zkc_cpu::G1::generator());
+    let point = Value::Curve((zkc_cpu::G1::generator()).into());
     let bundle = Bundle::admit(
         message_bundle(&point.physical_type().spelling())
             .to_string()
@@ -1563,7 +1563,7 @@ fn structured_bundles_transfer_dynamic_and_nested_messages() {
     values.extend([
         Value::Bn254Vector(vec![zkc_cpu::Bn254Scalar::from(9); 3].into()),
         Value::Bn254G2Vector(vec![zkc_cpu::Bn254G2::generator(); 2].into()),
-        Value::Bn254Gt(zkc_cpu::Bn254Gt::generator()),
+        Value::Bn254Gt(std::sync::Arc::new(zkc_cpu::Bn254Gt::generator())),
         Value::bn254_matrix(
             2,
             3,

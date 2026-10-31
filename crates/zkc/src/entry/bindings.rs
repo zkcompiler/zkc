@@ -175,6 +175,9 @@ impl Generator {
             .collect()
     }
     fn schema(&mut self, schema: &Schema, prefix: &str) -> Result<String> {
+        if schema.kind.is_logical() {
+            return Err("entry-bindings-schema".into());
+        }
         let simple = match schema.kind {
             Kind::Boolean => Some("::core::primitive::bool"),
             Kind::Index => Some("::core::primitive::u64"),

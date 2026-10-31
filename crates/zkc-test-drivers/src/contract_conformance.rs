@@ -106,7 +106,7 @@ fn entry_interface(text: &str) -> Value {
     let bytes = serde_json::to_vec(&json!({
         "format": "zkc.entry/0", "original": "conformance original",
         "interface": text, "artifact": "conformance metadata only",
-        "options": {"simplify": true, "release_storage": false, "finite_bulk": true, "fuse_vector_reductions": false, "fuse_collect_fold": false, "calculation_batching": true}, "assets": []
+        "options": {"simplify": true, "release_storage": false, "finite_bulk": true, "fuse_vector_reductions": false, "fuse_collect_fold": false, "calculation_batching": true,"oracle_realization": zkc::entry::OracleSelection::default()}, "assets": []
     }))
     .expect("inert package serialization");
     let package = Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES)

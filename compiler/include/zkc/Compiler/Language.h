@@ -66,6 +66,7 @@ struct EntryOptions {
   MathematicalSelectionPolicy mathematicalSelection = {};
   CompilationObservation *observations = nullptr;
   target::CpuTarget cpuTarget = {};
+  protocol::OracleRealizationPolicy oracleRealization = {};
 };
 struct CompiledHost {
   std::string artifact;

@@ -5,6 +5,7 @@ namespace zkc::language {
 enum class ObligationRole {
   Postcondition,
   Request,
+  OracleAdmissibility,
   SourceCorrespondence,
   ImplementationLaw,
   RealizationCorrespondence,

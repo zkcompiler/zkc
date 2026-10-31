@@ -85,6 +85,11 @@ public:
   bool domainExpression(const Declaration &, const SyntaxDeclaration &,
                         uint32_t);
   bool relation(Declaration &);
+  bool prepareOraclePredicates();
+  bool oracleSignature(Declaration &, unsigned);
+  bool oraclePredicateSignature(Declaration &);
+  bool oracleBody(Declaration &, Body &, unsigned);
+  bool retainOraclePredicates(Declaration &, const Body &);
 
   std::map<unsigned, std::vector<SpecificationSelector>> inlineBindings;
   bool relationIdentities();

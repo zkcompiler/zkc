@@ -47,10 +47,13 @@ def withImplementation (validator : Validator) (symbol implementation : String) 
 
 theorem accepted : refusal (checkLowering installed constructed actual) = none := by decide +kernel
 
+/-- Select the arithmetic helper from the retained export, including its local names. -/
+private abbrev calculation := ZkcExamples.Executable.SchnorrProofProgramData.function0
+
 /-- The mutation helpers alone preserve acceptance. -/
 theorem unchanged_accepted :
     refusal (checkLowering installed constructed
-      (withStep actual "_calculation_2" 2 (.operation "lc_11_computation_6_kernel_1_2" "_numerical_binding_4" [] ["v12", "v14"] ["v15"])))
+      (withStep actual calculation.symbol 2 calculation.body[2]))
       = none := by
   decide +kernel
 
@@ -59,7 +62,11 @@ theorem unchanged_accepted :
 /-- The final addition takes its operands in the other order. The sum is a pure
 term, so the rule finds the difference where the decision it feeds is returned. -/
 def additionSwapped : Validator :=
-  withStep actual "_calculation_2" 2 (.operation "lc_11_computation_6_kernel_1_2" "_numerical_binding_4" [] ["v14", "v12"] ["v15"])
+  withStep actual calculation.symbol 2 <|
+    match calculation.body[2] with
+    | .operation site binding parameters [left, right] results =>
+        .operation site binding parameters [right, left] results
+    | step => step
 
 theorem additionSwapped_refused :
     refusal (checkLowering installed constructed additionSwapped) = some (.returned 0) := by
@@ -68,7 +75,11 @@ theorem additionSwapped_refused :
 /-- The final comparison compares one side with itself: the returned decision
 denotes another term. -/
 def comparisonTrivial : Validator :=
-  withStep actual "_calculation_2" 3 (.operation "lc_11_computation_6_kernel_1_3" "_numerical_binding_3" [] ["v13", "v13"] ["v16"])
+  withStep actual calculation.symbol 3 <|
+    match calculation.body[3] with
+    | .operation site binding parameters [left, _] results =>
+        .operation site binding parameters [left, left] results
+    | step => step
 
 theorem comparisonTrivial_refused :
     refusal (checkLowering installed constructed comparisonTrivial) = some (.returned 0) := by

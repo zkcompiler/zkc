@@ -16,6 +16,9 @@ from pathlib import Path
 import pytest
 
 from logical_tree import decode_tree
+from message_frames import tag
+from test_air_stark import (FRI_REALIZATION, alter_octic_frame, check_fri_frames,
+                            frames, packet_mutations, packet_rejected)
 
 ROOT = Path(__file__).resolve().parents[3]
 EXAMPLE = ROOT / 'common/tests/fixtures/projects/accumulator-machine'
@@ -26,6 +29,7 @@ _spec.loader.exec_module(prepare)
 
 
 def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None, edits=(), asset=None):
+    flags = [FRI_REALIZATION, *flags]
     path = EXAMPLE / 'main.zkc'
     if source is not None:
         path = directory / 'main.zkc'
@@ -34,7 +38,7 @@ def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None
     if source is None and not edits and asset is None:
         report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                                f'--project={EXAMPLE}/zkc.toml',
-                               f'accumulator_machine::{entry}', f'--output={package}', *flags])
+                               f'accumulator_machine::{entry}', f'--output={package}', *flags], timeout=600)
         return package, report['package_sha256']
     command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                f'--module=accumulator_machine={path}',
@@ -52,7 +56,7 @@ def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None
             module_path = directory / (module + '.zkc')
             module_path.write_text(text)
         command.append(f'--module={module}={module_path}')
-    report = journal.json(command)
+    report = journal.json(command, timeout=600)
     return package, report['package_sha256']
 
 
@@ -83,16 +87,6 @@ def alter_vector(values, position, value=None):
     changed = list(values)
     changed[position] = str((int(values[position]) + 1) % prepare.machine.P if value is None else value)
     return changed
-
-
-def proof_messages(proof):
-    offset, result = 40, []
-    while offset < len(proof):
-        length = int.from_bytes(proof[offset:offset + 8], 'little')
-        result.append(proof[offset + 8:offset + 8 + length])
-        offset += 8 + length
-    assert offset == len(proof)
-    return result
 
 
 def repack(proof, messages):
@@ -211,24 +205,31 @@ def test_machine_authenticates_all_commitment_phases(toolchain, journal, directo
     proof, verifier = prove_and_verify(toolchain, journal, directory, package, pin,
                                       'honest', requests('store-load'))
     original = proof.read_bytes()
-    messages = proof_messages(original)
-    # Base root, auxiliary root and claims, quotient root, three OOD vectors,
-    # five FRI roots and terminal, then all final base/auxiliary/quotient paths.
-    assert len(messages) == 13 + 26 * 8
-    for position in [*range(13), *range(len(messages) - 6, len(messages))]:
+    messages = frames(original)
+    # Seven original roots/claims, five common FRI roots and its terminal.
+    # Each of eight positions has two FRI packets per fold, then the three
+    # original table rows and paths. Deterministic requests are reconstructed.
+    assert len(messages) == 13 + 16 * 8
+    assert [tag(frame) for frame in messages[:7]] == [33, 35, 27, 35, 27, 27, 27]
+    fri_end = 13 + 10 * 8
+    check_fri_frames(messages[7:fri_end], rounds=5, queries=8, log_size=6)
+    for offset in range(fri_end, len(messages), 6):
+        assert [tag(frame) for frame in messages[offset:offset + 6]] == [20, 34, 27, 36, 27, 36]
+    mutations = [(str(position), position, alter_octic_frame(messages[position]))
+                 for position in [*range(13), *range(len(messages) - 6, len(messages))]]
+    mutations.extend(packet_mutations(messages, 13, fri_end))
+    for name, position, payload in mutations:
         altered = list(messages)
-        payload = bytearray(altered[position])
-        if payload[:6] in (b'ZKCV\x00\x14', b'ZKCV\x00\x1b'):
-            old = int.from_bytes(payload[10:14], 'little')
-            payload[10:14] = ((old + 1) % prepare.machine.P).to_bytes(4, 'little')
-        else:
-            payload[-1] ^= 1
-        altered[position] = bytes(payload)
-        candidate = directory / f'message-{position}.proof'
+        altered[position] = payload
+        candidate = directory / f'message-{name}.proof'
         candidate.write_bytes(repack(original, altered))
         report = assert_refused(journal.attempt(
             [toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={candidate}']))
-        assert report['code'].startswith('artifact-stopped'), (position, report)
+        if 7 <= position < fri_end:
+            assert report['code'] == 'rejected:require', (position, report)
+            packet_rejected(report)
+        else:
+            assert report['code'].startswith('artifact-stopped'), (position, report)
     for name, data, code in [('truncated', original[:-1], 'proof-truncated'),
                              ('trailing', original + b'\x00', 'proof-trailing')]:
         path = directory / (name + '.proof')
@@ -239,6 +240,10 @@ def test_machine_authenticates_all_commitment_phases(toolchain, journal, directo
 def check_transcript_schedule(package):
     descriptor = json.loads(json.loads(package.read_text())['artifact'])[2]
     assert descriptor[0] == 'zkc.native-proof-descriptor/0'
+    selection = json.loads(descriptor[8])
+    assert selection['order'] == 'after-final-draw' and selection['authentication'] == 'atomic-blocks'
+    assert {root['scheme'] for root in selection['roots']['entries']} == {
+        'rows.merkle-keccak256.koala-bear.ext8-binomial3/0'}
     policy = descriptor[1]
     assert policy[7] == [str(i) for i in [0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 13, 14, 15]]
     events = []
@@ -255,7 +260,11 @@ def check_transcript_schedule(package):
         ('query', 1), ('message', 1), ('message', 0), ('message', 0), ('message', 0),
         ('query', 0), ('message', 0), ('query', 0), ('message', 0),
         ('message', 1), ('query', 1), ('message', 1), ('message', 0),
-        ('index', 1), ('message', 1)] + [('message', 2)] * 4 + [('message', 1)] * 6
+        ('index', 1), ('message', 1)] + [
+        ('reconstructed-message', 2), ('message', 2),
+        ('reconstructed-message', 2), ('message', 2),
+        ('reconstructed-message', 3), ('message', 3),
+        ('reconstructed-message', 3), ('message', 3)] + [('message', 1)] * 6
     draws = [1, 3, 7, 10, 15, 17, 20, 23]
     assert len(policy[8]) == len(draws)
     for (query, delivery), i in zip(policy[8], draws, strict=True):
@@ -264,14 +273,19 @@ def check_transcript_schedule(package):
         assert events[i][2][5:7] == ['index' if i == 23 else 'draw', 'role00000001']
     assert events[23][3] == ['64']
     for i, (kind, _, event, bound) in enumerate(events):
-        if kind == 'message':
-            assert event[4:6] == (['role00000001', 'role00000000'] if i - 1 in draws
+        if kind in ('message', 'reconstructed-message'):
+            assert event[4:6] == (['role00000001', 'role00000000'] if i - 1 in draws or kind == 'reconstructed-message'
                                   else ['role00000000', 'role00000001'])
             assert bound == []
     assert events[1][1] == events[2][1] == events[3][1] == events[4][1]
-    assert len({events[i][1] for i in [1, 10, 19, 23, 25, 29]}) == 6
-    assert all(events[i][1] == events[25][1] for i in range(25, 29))
-    assert all(events[i][1] == events[29][1] for i in range(29, 35))
+    assert len({events[i][1] for i in [1, 10, 19, 23, 25, 27, 29, 31, 33]}) == 9
+    for i in (25, 27, 29, 31):
+        assert events[i][1] == events[i + 1][1]
+        assert events[i][2][2].endswith('_opening_request')
+        assert events[i + 1][2][2].endswith('_opening_response')
+    assert all(events[i][1][:1] == events[25][1][:1] for i in range(25, 33))
+    assert events[29][1][:2] == events[31][1][:2]
+    assert all(events[i][1] == events[33][1] for i in range(33, 39))
 
 
 @pytest.mark.parametrize('profile', ['larger-bound', 'local', 'partial-scope', 'field-balance'])

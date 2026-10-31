@@ -13,6 +13,13 @@ FIXTURES = Path(__file__).parent / 'fixtures/language'
 modules = [f'--module={name}={FIXTURES / (name + ".zkc")}' for name in ('transfer', 'algebra')]
 options = ['--source-format=zkc', '--entry=transfer::Demo', *modules]
 
+# The package binds the complete explicit deployment policy, even for a source
+# without oracle roots. This is the typed compiler API's ideal-table selection.
+ideal_oracles = {'format': 'zkc.oracle-selection/0',
+                 'roots': {'kind': 'uniform', 'table': {
+                     'scheme': '', 'grouping': 'individual', 'order': 'natural'}},
+                 'order': 'unrestricted', 'authentication': 'per-query'}
+
 with case('observation files cannot replace source or prior evidence'):
     source = OUT / 'observed-source.zkc'
     body = (FIXTURES / 'transfer.zkc').read_bytes()
@@ -102,7 +109,7 @@ with case('Entry packages retain exact source, interface and artifact bytes'):
     assert package['original'] == commands.run([compiler, 'language-emit', *options])
     assert json.loads(package['interface']) == host_interface
     assert package['artifact'] == commands.run([compiler, 'language-bundle', *options]).removesuffix('\n')
-    assert package['options'] == {'simplify': True, 'release_storage': False,
+    assert package['options'] == {'oracle_realization': ideal_oracles, 'simplify': True, 'release_storage': False,
                                   'finite_bulk': True, 'fuse_vector_reductions': False, 'fuse_collect_fold': False,
                                   'calculation_batching': True}
     assert package_bytes.endswith('}')
@@ -126,7 +133,7 @@ for flags, expected in [
 ]:
     with case(f'independent mathematical choices {flags}'):
         selected = json.loads(commands.run([compiler, 'language-package', *options, *flags]))
-        assert selected['options'] == {'release_storage': False, 'calculation_batching': True, **expected}
+        assert selected['options'] == {'oracle_realization': ideal_oracles, 'release_storage': False, 'calculation_batching': True, **expected}
         commands.run([compiler, 'language-check', *options, *flags], refuses='source.options')
 
 with case('same-signature protocols execute through distinct Entries'):
@@ -357,7 +364,8 @@ for suite, identity in enumerate(('merlin3.bls12-381.fr64be/0',
                 assert envelope[0] == 'zkc.native-proof/0'
                 assert envelope[7] == ['true' if simplified else 'false',
                                        'true' if released else 'false',
-                                       'false', 'true', 'false', 'true']
+                                       'false', 'true', 'false', 'true',
+                                       json.dumps(ideal_oracles, sort_keys=True, separators=(',', ':'))]
                 (OUT / f'source-proof-{suite}-{simplified}-{released}.json').write_text(deployment)
                 package = commands.run([compiler, 'language-package', *args, *flags])
                 assert json.loads(package)['artifact'] == deployment.removesuffix('\n')

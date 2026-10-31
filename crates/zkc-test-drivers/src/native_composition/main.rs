@@ -144,7 +144,7 @@ fn qap(n: usize, change: &str) -> Vec<Value> {
                 .collect::<Vec<_>>()
                 .into(),
         ),
-        Value::Bn254G2(Bn254G2::generator()),
+        Value::Bn254G2(Bn254G2::generator().into()),
         Value::Bn254Field(F::from(match change {
             "zero_shift" => 0,
             "overlap" => 1,
@@ -176,7 +176,7 @@ fn air(n: usize, change: &str) -> Vec<Value> {
 fn target(n: usize) -> Vec<Value> {
     vec![
         Value::Bn254G1(Bn254G1::generator()),
-        Value::Bn254G2(Bn254G2::generator()),
+        Value::Bn254G2(Bn254G2::generator().into()),
         Value::Bn254Field(F::from(13)),
         Value::Index(n as u64),
     ]
@@ -287,12 +287,12 @@ fn main() {
                 let replacements = match family {
                     "qap-composition" => vec![
                         (1, Value::Bn254G1(Bn254G1::generator())),
-                        (2, Value::Bn254Gt(zkc_cpu::Bn254Gt::generator())),
+                        (2, Value::Bn254Gt(zkc_cpu::Bn254Gt::generator().into())),
                     ],
                     "air-composition" => {
                         vec![(3, Value::KoalaBearExt8Vector(vec![E::ZERO].into()))]
                     }
-                    _ => vec![(0, Value::Bn254Gt(zkc_cpu::Bn254Gt::generator()))],
+                    _ => vec![(0, Value::Bn254Gt(zkc_cpu::Bn254Gt::generator().into()))],
                 };
                 for (index, replacement) in replacements {
                     let encoded = codec().encode_native_value(&replacement).unwrap();

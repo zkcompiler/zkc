@@ -324,7 +324,9 @@ bool UsagePlan::finishPlace(const Exit &exit, const Type &type,
   const auto *decl = types.typeDeclaration(type);
   bool structural =
       type.kind == Type::Kind::Tuple ||
-      (type.kind == Type::Kind::Record && decl && !decl->sealed) ||
+      ((type.kind == Type::Kind::Record ||
+        type.kind == Type::Kind::LogicalRecord) &&
+       decl && !decl->sealed) ||
       (type.kind == Type::Kind::Array && type.dimension.isClosed());
   if (structural) {
     auto fields = types.fields(type, exit.span);

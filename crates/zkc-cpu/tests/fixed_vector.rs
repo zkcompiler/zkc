@@ -351,10 +351,30 @@ fn ordinary_and_fixed_dot_share_exact_numerical_limits() {
             ),
         ] {
             for (memory, allowed_work, output, error) in [
-                (512, work, 512, None),
-                (511, work, 512, Some("exhausted:numerical-bytes")),
-                (512, work - 1, 512, Some("exhausted:numerical-work")),
-                (0, 0, 511, Some("exhausted:output-bytes")),
+                (
+                    zkc_cpu::VALUE_SLOT_BYTES,
+                    work,
+                    zkc_cpu::VALUE_SLOT_BYTES,
+                    None,
+                ),
+                (
+                    zkc_cpu::VALUE_SLOT_BYTES - 1,
+                    work,
+                    zkc_cpu::VALUE_SLOT_BYTES,
+                    Some("exhausted:numerical-bytes"),
+                ),
+                (
+                    zkc_cpu::VALUE_SLOT_BYTES,
+                    work - 1,
+                    zkc_cpu::VALUE_SLOT_BYTES,
+                    Some("exhausted:numerical-work"),
+                ),
+                (
+                    0,
+                    0,
+                    zkc_cpu::VALUE_SLOT_BYTES - 1,
+                    Some("exhausted:output-bytes"),
+                ),
             ] {
                 let mut controlled = Controlled::new(backend(Policy {
                     max_numerical_bytes: memory,

@@ -1,6 +1,7 @@
 //! Shared resident dispatcher boundaries for validated point views and builders.
 #[path = "domains/support.rs"]
 mod support;
+use zkc_runtime::vm::Value as _;
 
 use std::sync::Arc;
 use zkc_cpu::{Policy, Value};
@@ -144,7 +145,7 @@ fn cases_with_len(len: usize) -> Vec<Case> {
             BlstG1Vector,
             BlstVector,
             BlstField,
-            |v| v,
+            Arc::new,
             0
         ),
         case!(
@@ -227,7 +228,7 @@ fn shape_output_and_workspace_refusals_precede_destination_allocation() {
                 "curve.get",
                 vec![case.points.clone(), Value::Index(u64::MAX)],
                 Policy::default(),
-                Some(511),
+                Some(case.point.retained_bytes() - 1),
                 "exhausted:output-bytes",
             ),
             (

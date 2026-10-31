@@ -191,12 +191,14 @@ neither same-artifact metering changes nor permission to classify malformed
 domain/codec inputs as resource exhaustion. Completeness is conditional on the
 selected program's resources; exact metering equivalence and native execution
 correspondence remain separate obligations.
-`data.index_power_of_two` uses a fixed 64-case circuit of existing
-`index.constant`, `index.equal`, `bool.and` and `bool.or` executable contracts.
-Only compile-time shifts with exponents 0 through 63 construct constants.
-The independent recipe reader checks every constant, contract and SSA edge.
-This realizes `r < 64 && n == (1 << r)` without an oversized shift or a giant
-natural power. Vector length and index comparison reuse their existing
+`data.index_power_of_two` uses a total word circuit:
+`(n & (n - 1 mod 2^64)) == 0 && logical_shift_right(n,r) == 1`.
+A nonzero word passes the first condition exactly when it has one set bit;
+the second selects that bit's exponent and excludes zero. Shift counts at
+least 64 return zero, so unrepresentable exponents remain false. The circuit
+uses two constants and six operations from the existing total word, equality
+and Boolean contracts. The independent recipe reader checks every constant,
+contract and SSA edge. Vector length and index comparison reuse their existing
 executable contracts. These Math additions do not extend the executable
 operation catalogue.
 
@@ -403,3 +405,12 @@ additionally require a declared challenge experiment; action order alone does
 not establish uniformity. New native Lean interpretation, private PCS terminals
 and dynamic protocol composition are deferred. Static native applications and
 selected composed entry checking are specified in [composition](composition.md).
+
+### Scalar selection realization
+
+Admitted `arith.select` over Boolean, unsigned index, nominal field or nominal
+group values lowers to one exact `bool.select`, `index.select`, `field.select`
+or `curve.select` invocation. The independent recipe reader compares the
+condition, ordered alternatives and domain arguments against actual source SSA.
+This replaces the outlined conditional recipe for the complete admitted scalar
+profile. Source conditionals retain their separate scoped execution meaning.

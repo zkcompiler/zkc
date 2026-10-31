@@ -83,7 +83,9 @@ bool BodyChecker::finishValue(ValueId value, Span span, bool prefixOnly) {
             return true;
         }
         if (!restricted(t) &&
-            (t.kind == Type::Kind::Record || t.kind == Type::Kind::Tuple ||
+            (t.kind == Type::Kind::Record ||
+             t.kind == Type::Kind::LogicalRecord ||
+             t.kind == Type::Kind::Tuple ||
              (t.kind == Type::Kind::Array && t.dimension.isClosed()))) {
           auto fs = checker.types.fields(t, span);
           if (!fs)

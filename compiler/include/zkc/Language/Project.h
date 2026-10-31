@@ -329,6 +329,22 @@ struct OracleQuery {
   ValueId handle, position;
   unsigned owner;
 };
+/// A query of a direct constructor source in an oracle definition. No role
+/// owns this mathematical answer; source is a constructor input index.
+struct OracleSourceQuery {
+  unsigned source;
+  ValueId position;
+};
+/// An ordered Protocol construction. Operands contain constructor inputs only.
+/// Operation::binding retains ordinary source resolution/evaluation evidence.
+struct OracleInstantiation {
+  DeclarationId callee;
+  std::vector<Type> arguments;
+  std::optional<Type> module;
+  std::vector<ValueId> operands;
+  unsigned holder;
+  std::vector<unsigned> receivers;
+};
 struct OracleContents {
   ValueId input;
   unsigned owner;
@@ -476,7 +492,8 @@ struct Operation {
                LocalControl, ProtocolApplication, ServiceQuery, Require,
                ProtocolRepeat, ProtocolCompletion, ScopedInvoke,
                FiniteApplication, FiniteComputation, HostInvocation, OracleSend,
-               OracleQuery, OracleContents, OracleRows, OracleForgetRows,
+               OracleQuery, OracleSourceQuery, OracleInstantiation,
+               OracleContents, OracleRows, OracleForgetRows,
                OracleSequenceEmpty, OracleSequenceAppend, OracleSequenceAt,
                OracleSequenceLength>
       action;
@@ -489,7 +506,7 @@ struct Operation {
   std::optional<std::string> site = {};
 };
 struct Body {
-  enum class Mode { Math, Local, Protocol } mode;
+  enum class Mode { Math, Local, Protocol, Oracle } mode;
   enum class Stage { Computation, Host } stage = Stage::Computation;
   std::vector<ServicePort> services;
   std::vector<ScopedBinding> scopedBindings;
@@ -524,6 +541,9 @@ struct TypeField {
   Type type;
   bool isPublic = true;
   Span span;
+  /// Per-element row maximum of an unsized direct logical field. This is
+  /// independent of an oracle sequence's capacity.
+  std::optional<Type> maximumRows = {};
 };
 struct Alternative {
   std::string name;
@@ -720,6 +740,36 @@ struct PrimitiveDefinition {
   std::string identity;
   std::vector<Type> arguments;
 };
+struct OracleSourceBound {
+  unsigned source;
+  std::string dimension;
+  Type maximum;
+  Span span;
+};
+struct OracleShapeArgument {
+  std::string dimension;
+  unsigned input;
+  Type maximum;
+  Span span;
+};
+struct OraclePredicateClause {
+  std::optional<std::string> label;
+  unsigned ordinal;
+  /// Value in the generated admissibility relation's body, not the query body.
+  ValueId condition;
+  Span span;
+};
+/// Frozen definition plan. Declaration inputs/outputs are the constructor ABI;
+/// its body has those inputs followed by queryParameter and returns answer.
+struct OracleDefinition {
+  unsigned sourceCount;
+  Port queryParameter;
+  Type answer;
+  std::vector<OracleSourceBound> sourceBounds;
+  std::vector<OracleShapeArgument> resultShape;
+  DeclarationId admissibility;
+  std::vector<OraclePredicateClause> predicates;
+};
 struct Declaration {
   enum class Kind {
     Domain,
@@ -727,6 +777,7 @@ struct Declaration {
     Math,
     Local,
     Protocol,
+    Oracle,
     Construction,
     Entry,
     EntryFunction,
@@ -766,6 +817,8 @@ struct Declaration {
   std::vector<CapabilityBound> capabilityBounds;
   std::optional<Resource> resource;
   bool sealed = false;
+  /// Record declarations only; independent of constructor sealing.
+  bool logical = false;
   /// Explicit promises on associated types, independent of constructor access.
   std::optional<Permissions> permissions;
   std::vector<TypeField> fields;
@@ -788,6 +841,9 @@ struct Declaration {
   std::optional<std::pair<DeclarationId, uint32_t>> scopedOrigin;
   std::vector<std::string> roles;
   std::vector<Port> inputs, outputs;
+  std::shared_ptr<const OracleDefinition> oracleDefinition;
+  /// Reverse identity on a generated Formula relation, including closed copies.
+  std::optional<DeclarationId> oraclePredicateOwner;
   std::vector<ScopedParameter> scopedInputs;
   std::vector<DomainParameter> domainInputs;
   std::vector<std::shared_ptr<const DomainShape>> domainArguments;

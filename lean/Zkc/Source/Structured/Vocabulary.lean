@@ -133,12 +133,12 @@ structure Binding where
 /-- Logical operations preserve anchors and query occurrences. This wire
 vocabulary does not grant ordinary Math, message or executable-codec admission. -/
 inductive OracleDescriptor where
-  | input (holder : String) (receivers : List String) (kind : OracleKind) (bounds : List (String × Nat))
+  | input (holder : String) (receivers : List String) (logicalSort : Ty) (bounds : List (String × Nat))
   | send (holder : String) (receivers : List String) (kind : OracleKind)
       (dimensions : List String) (bounds : List (String × Nat))
   | query (owner : Option String) (kind : OracleKind)
   | contents (owner : String) (kind : OracleKind)
-  | components (holder : String) (receivers : List String) (kind : OracleKind)
+  | components (holder : String) (receivers : List String) (logicalSort : Ty)
   | shape (kind : OracleKind) (dimension : String)
   | forgetShape (source target : OracleKind)
   | virtual (declaration holder : String) (receivers : List String) (kind : OracleKind)

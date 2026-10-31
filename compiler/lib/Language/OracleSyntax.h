@@ -12,6 +12,7 @@ struct OracleSyntax {
 inline const OracleSyntax *oracleSyntax(llvm::StringRef name) {
   using K = Expression::Kind;
   static constexpr OracleSyntax operations[] = {
+      {"query", K::OracleQuery, 2, 0},
       {"data", K::OracleContents, 1, 0},
       {"rows", K::OracleRows, 1, 0},
       {"forget_rows", K::OracleForgetRows, 1, 0},

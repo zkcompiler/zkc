@@ -61,7 +61,11 @@ impl LogicalUnit {
         &self.token
     }
     pub fn domain(&self) -> zkc_runtime::vm::ResourceDomain {
-        self.token.resource_domain.expect("issued logical unit")
+        *self
+            .token
+            .resource_domain
+            .as_deref()
+            .expect("issued logical unit")
     }
 }
 struct Authority;
@@ -75,7 +79,7 @@ struct Seal;
 #[derive(Clone)]
 pub struct Capability {
     kind: Type,
-    resource_domain: Option<zkc_runtime::vm::ResourceDomain>,
+    resource_domain: Option<Arc<zkc_runtime::vm::ResourceDomain>>,
     identity: Identity,
     authority: Arc<Authority>,
     seal: Arc<Seal>,
@@ -87,7 +91,7 @@ impl Capability {
         self.kind
     }
     pub fn resource_domain(&self) -> Option<zkc_runtime::vm::ResourceDomain> {
-        self.resource_domain
+        self.resource_domain.as_deref().copied()
     }
     pub fn identity(&self) -> Identity {
         self.identity
@@ -273,7 +277,7 @@ impl Resources {
             .checked_add(1)
             .ok_or_else(|| exhausted("capability-id"))?;
         let resource_domain = match &state {
-            State::ResourceUnit(domain) => Some(*domain),
+            State::ResourceUnit(domain) => Some(Arc::new(*domain)),
             _ => None,
         };
         let identity = state.identity();

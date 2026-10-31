@@ -150,7 +150,7 @@ mathematicalRoots(Semantics &types, const Declaration &decl,
   if (intrinsic.domain == MathematicalIntrinsic::Domain::Boolean ||
       intrinsic.domain == MathematicalIntrinsic::Domain::Index)
     return std::vector<Type>{};
-  if (intrinsic.identity == I::GroupIdentity)
+  if (intrinsic.identity == I::GroupIdentity || intrinsic.identity == I::Select)
     return std::vector<Type>{decl.outputs.front().type};
   if (decl.inputs.empty())
     return refuse();

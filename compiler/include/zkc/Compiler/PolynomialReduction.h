@@ -6,6 +6,12 @@
 #include "llvm/Support/JSON.h"
 
 namespace zkc {
+/// Deployment roots needed to publish every companion bundle in a checked
+/// polynomial report. Uses the same complete requirements parser as checking;
+/// this is selection, not evidence that the requirements hold.
+llvm::Expected<llvm::SmallVector<std::string>>
+polynomialRequirementEntries(llvm::StringRef requirements);
+
 /// Check independently supplied boolean-sum-to-point requirements against an
 /// immutable protocol source and an unsimplified participant candidate in the
 /// same context. Neither input is changed. The returned report identifies the

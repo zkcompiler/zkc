@@ -62,9 +62,9 @@ fn inputs(envelope: &Json, family: &str, n: u64, producing: bool) -> Json {
         let v = if family == "nested" {
             match p {
                 0 => Value::Index(n),
-                1 => Value::Curve(G1::generator()),
+                1 => Value::Curve((G1::generator()).into()),
                 2 => Value::Field(Scalar::from(3)),
-                3 => Value::Curve(G1::generator().scale(Scalar::from(3))),
+                3 => Value::Curve((G1::generator().scale(Scalar::from(3))).into()),
                 _ => panic!("port"),
             }
         } else {

@@ -88,8 +88,21 @@ def oracle_shape(kind, value):
 
 def oracle_descriptor(tag, args):
     """Render wire data only; no operation receives semantic admission here."""
-    if tag in ("oracle_input", "oracle_send", "oracle_components", "oracle_virtual"):
-        size = {"oracle_input": 4, "oracle_send": 5, "oracle_components": 3, "oracle_virtual": 4}[tag]
+    if tag in ("oracle_input", "oracle_components"):
+        record(args, 4 if tag == "oracle_input" else 3)
+        holder, receivers, sort = args[:3]
+        projected = schema.interpreted_type(sort)
+        if projected[0] not in ("oracle", "oracle_sequence"):
+            raise ValueError("invalid oracle logical sort")
+        # The complete sort retains the singleton/sequence distinction and capacity.
+        rendered = interpreted_ty(projected)
+        extra = ""
+        if tag == "oracle_input":
+            extra = " " + oracle_shape(sort[1:3], args[3])
+        return (f".oracle (.{tag.removeprefix('oracle_')} {text(holder)} {seq(receivers, text, 16)} "
+                f"({rendered}){extra})")
+    if tag in ("oracle_send", "oracle_virtual"):
+        size = {"oracle_send": 5, "oracle_virtual": 4}[tag]
         record(args, size)
         declaration = text(args[0]) + " " if tag == "oracle_virtual" else ""
         holder, receivers, kind = args[1:4] if declaration else args[:3]
@@ -98,8 +111,6 @@ def oracle_descriptor(tag, args):
             if args[3] != ["rows"]:
                 raise ValueError("invalid oracle dimensions")
             extra = f" {seq(args[3], text, 16)} {oracle_shape(kind, args[4])}"
-        elif tag == "oracle_input":
-            extra = " " + oracle_shape(kind, args[3])
         constructor = tag.removeprefix("oracle_")
         return (f".oracle (.{constructor} {declaration}{text(holder)} {seq(receivers, text, 16)} "
                 f"({oracle_kind(kind)}){extra})")
@@ -426,9 +437,9 @@ def origin_term(value, depth=0, remaining=None):
         return f"(.array {child(element)} {origin_decimal(length)})"
     if tag == "nominal":
         kind, path, arguments = record(args, 3)
-        if kind not in ("record", "variant", "associated", "module"):
+        if kind not in ("record", "logical_record", "variant", "associated", "module"):
             raise ValueError("invalid origin nominal kind")
-        constructor = "moduleType" if kind == "module" else kind
+        constructor = {"module": "moduleType", "logical_record": "logicalRecord"}.get(kind, kind)
         return (f"(.nominal .{constructor} {origin_path(path)} "
                 f"{seq(arguments, child, limit=512)})")
     if tag in ("builtin", "formal"):

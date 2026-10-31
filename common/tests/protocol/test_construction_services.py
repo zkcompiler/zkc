@@ -71,7 +71,7 @@ def test_private_verifier_entropy_cannot_replace_a_delivery(toolchain, journal, 
     source.write_text(text)
     journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                   f'--module=sample={source}', 'sample::Demo', f'--output={directory / "proof.zkpkg"}'],
-                 refuses='native-proof-reverse-message')
+                 refuses='native-request-reconstruction')
 
 
 @pytest.mark.parametrize('codec', [False, True])
