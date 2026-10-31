@@ -48,6 +48,11 @@ runtime cost estimates or mathematical assumptions.
 
 Numerical recipe copy/site quotas are cumulative across calls and charge the
 selected attempt, including scheduling and consumption of the actual schedule.
+Structural preflight counts operations, operands, results, regions, blocks and
+block arguments, including empty structures, before recursive verification or
+copying. A bounded iterative traversal checks nesting and limits its worklist.
+Context interpretation and SSA comparison also consume their owning checking
+allowances; an exhausted account reports capacity, not semantic disagreement.
 A terminal failure retains its construction debit. A discarded bulk proposal
 instead charges separate cumulative copy/site reserves in the shared
 realization work. Before a bulk attempt, both discarded-construction reserves

@@ -28,7 +28,12 @@ bool chargeCopy(Operation *body, uint64_t &remaining,
   SmallVector<std::pair<Operation *, unsigned>> pending{{body, 0}};
   while (!pending.empty()) {
     auto [op, depth] = pending.pop_back_val();
-    if (depth > 128 || !charge(1 + op->getNumOperands() + op->getNumResults()))
+    if (depth > 128) {
+      if (capacity)
+        *capacity = CapacityCause{WorkOwner::AlgorithmExpansion};
+      return false;
+    }
+    if (!charge(1 + op->getNumOperands() + op->getNumResults()))
       return false;
     for (auto &region : op->getRegions()) {
       if (!charge(1))

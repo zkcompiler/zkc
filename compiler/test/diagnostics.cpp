@@ -207,6 +207,41 @@ void checkOverlappingBindingRead(bool closure) {
   require(isolated, "internal binding capture consumed or misclassified a "
                     "foreign error");
 }
+void checkNestedVerification() {
+  MLIRContext context;
+  context.getOrLoadDialect<func::FuncDialect>();
+  OpBuilder builder(&context);
+  auto location = builder.getUnknownLoc();
+  OwningOpRef<ModuleOp> module(ModuleOp::create(location));
+  for (StringRef name : {"first", "second"}) {
+    builder.setInsertionPointToEnd(module->getBody());
+    auto function =
+        func::FuncOp::create(builder, location, name,
+                             builder.getFunctionType({}, builder.getI1Type()));
+    builder.setInsertionPointToEnd(function.addEntryBlock());
+    func::ReturnOp::create(builder, location);
+  }
+  unsigned outerCalls = 0, innerCalls = 0;
+  zkc::diagnostics::ScopedThreadDiagnosticHandler outer(&context,
+                                                        [&](Diagnostic &) {
+                                                          ++outerCalls;
+                                                          return success();
+                                                        });
+  {
+    zkc::diagnostics::ScopedThreadDiagnosticHandler inner(&context,
+                                                          [&](Diagnostic &) {
+                                                            ++innerCalls;
+                                                            return failure();
+                                                          });
+    // Nested verification diagnostics must reach this synchronous caller
+    // and retain the enclosing handler when the inner observer forwards.
+    require(failed(verify(*module)) && innerCalls && outerCalls == innerCalls,
+            "nested verification lost invocation diagnostics or forwarding");
+  }
+  emitError(location) << "after nested observer";
+  require(outerCalls == innerCalls + 1,
+          "nested handler teardown changed the enclosing capture");
+}
 } // namespace
 
 int main() {
@@ -214,6 +249,7 @@ int main() {
   checkOverlappingHandlers(true);
   checkOverlappingBindingRead(false);
   checkOverlappingBindingRead(true);
+  checkNestedVerification();
   DialectRegistry registry;
   zkc::registerDialects(registry);
   MLIRContext context(registry);

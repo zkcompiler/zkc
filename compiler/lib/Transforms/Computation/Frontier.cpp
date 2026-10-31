@@ -40,6 +40,7 @@ class Frontier {
   SmallVector<Step> &steps;
   llvm::DenseSet<Operation *> &shareable;
   uint64_t &remaining;
+  std::optional<CapacityCause> *capacity;
   unsigned nextValue = 1;
   llvm::DenseMap<Value, unsigned> callerValues;
   struct Available {
@@ -54,8 +55,12 @@ class Frontier {
   llvm::DenseMap<std::pair<unsigned, Value>, Value> exports;
 
   bool charge(uint64_t amount = 1) {
-    if (amount > remaining)
+    if (amount > remaining) {
+      if (capacity)
+        *capacity =
+            CapacityCause{WorkOwner::AlgorithmExpansion, amount, remaining};
       return false;
+    }
     remaining -= amount;
     return true;
   }
@@ -203,8 +208,9 @@ class Frontier {
 
 public:
   Frontier(SmallVector<Step> &steps, llvm::DenseSet<Operation *> &shareable,
-           uint64_t &remaining)
-      : steps(steps), shareable(shareable), remaining(remaining) {}
+           uint64_t &remaining, std::optional<CapacityCause> *capacity)
+      : steps(steps), shareable(shareable), remaining(remaining),
+        capacity(capacity) {}
   LogicalResult run() {
     for (auto [position, step] : enumerate(steps)) {
       llvm::DenseMap<Value, unsigned> values;
@@ -221,9 +227,8 @@ public:
       }
       for (auto &op :
            make_early_inc_range(step.entry.front().without_terminator())) {
-        if (!remaining)
+        if (!charge())
           return refuse(step.entry, "normalization frontier work limit");
-        --remaining;
         SmallVector<unsigned> inputs;
         for (Value operand : op.getOperands()) {
           auto id = values.lookup(operand);
@@ -274,9 +279,8 @@ public:
         Instruction *prior = nullptr;
         if (shareable.contains(&op)) {
           for (auto index : buckets[hash]) {
-            if (!remaining)
+            if (!charge())
               return refuse(step.entry, "frontier signature comparison limit");
-            --remaining;
             auto &candidate = instructions[index];
             if (candidate.step == position)
               continue; // Keep the original normalization within each call.
@@ -413,6 +417,8 @@ prepareComputationRealization(mlir::ModuleOp source, uint64_t *shared,
                               std::optional<CapacityCause> *capacity,
                               mathematical::NumericalSelection *selection) {
   llvm::TimeTraceScope timing("zkc.numerical-normalization");
+  if (capacity)
+    capacity->reset();
   uint64_t standalone = 4000000;
   auto &remaining = shared ? *shared : standalone;
   if (!chargeCopy(source, remaining, capacity))
@@ -471,7 +477,7 @@ prepareComputationRealization(mlir::ModuleOp source, uint64_t *shared,
     rewrites.push_back({sourceCall, call, fresh});
   }
   if (failed(verifyComputationNormalizationContext(source, *proposal, rewrites,
-                                                   remaining)))
+                                                   remaining, capacity)))
     return {};
   // Only checked polynomial-generated operations can change a frontier. With
   // none, the checked normalized subject is already final: there is no port
@@ -538,8 +544,11 @@ prepareComputationRealization(mlir::ModuleOp source, uint64_t *shared,
       // need not match the numerical entry's argument coordinates.
       exec::ReturnOp returned;
       auto walk = wrapper.walk([&](Operation *op) {
-        if (!remaining)
+        if (!remaining) {
+          if (capacity)
+            *capacity = CapacityCause{WorkOwner::AlgorithmExpansion, 1, 0};
           return WalkResult::interrupt();
+        }
         --remaining;
         if (auto result = dyn_cast<exec::ReturnOp>(op)) {
           if (returned)
@@ -562,11 +571,11 @@ prepareComputationRealization(mlir::ModuleOp source, uint64_t *shared,
     }
     if (steps.empty())
       continue;
-    if (failed(Frontier(steps, shareable, remaining).run()))
+    if (failed(Frontier(steps, shareable, remaining, capacity).run()))
       return {};
   }
   if (failed(verifyComputationFrontier(*normalizedBefore, *proposal, origins,
-                                       remaining)))
+                                       remaining, capacity)))
     return {};
   inherit();
   return proposal;

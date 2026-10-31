@@ -1068,10 +1068,14 @@ int main() {
                 exchange(call.getOperandsMutable().slice(
                     loop ? 3 : 1, call.getNumOperands() - (loop ? 3 : 1)));
               else if (auto match = dyn_cast<exec::MatchOp>(op))
-                exchange(match.getForwardedMutable()[1]);
+                for (unsigned arm = 0; arm < match.getArms().size(); ++arm)
+                  exchange(match.getForwardedMutable()[arm + 1]);
             });
             require(succeeded(verify(*actual)),
                     "same-type capture mutation malformed");
+            // Keep all arms structurally consistent so this reaches the
+            // independent capture comparison instead of failing formation.
+            (void)take(protocol::readSourceExecutionClosure(unit(*actual)));
             ScopedDiagnosticHandler quiet(
                 &context, [](Diagnostic &) { return success(); });
             require(failed(compareFinite(*original, *actual, policy)),

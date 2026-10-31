@@ -628,9 +628,13 @@ int main() {
     uint64_t remaining = 1000000;
     require(failed(computation::verifyScheduleLowering(*schedule, *native,
                                                        &remaining, &outcome)) &&
-                outcome.status == finite::VerificationStatus::Mismatch &&
+                outcome.status ==
+                    finite::VerificationStatus::RequiredCapacity &&
+                outcome.capacity &&
+                outcome.capacity->owner == WorkOwner::AlgorithmChecking &&
+                !outcome.capacity->requested && !outcome.capacity->available &&
                 remaining < 1000000,
-            "excessive nesting reached recursive formation or became capacity");
+            "excessive nesting reached recursive formation or lost capacity");
   });
   cases.run("empty malformed blocks cannot evade inspection capacity", [&] {
     OwningOpRef<mlir::ModuleOp> schedule(

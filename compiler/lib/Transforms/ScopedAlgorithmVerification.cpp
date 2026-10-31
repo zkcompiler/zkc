@@ -202,6 +202,14 @@ class ScopedCorrespondence {
   bool attrs(Operation *original, Operation *actual, const Assignments &path,
              StringRef definition) {
     NamedAttrList expected(original->getAttrs());
+    NamedAttrList observed(actual->getAttrs());
+    if (isa<exec::MatchOp>(original) && isa<exec::MatchOp>(actual)) {
+      // Capture substitution may shrink each native successor segment. Both
+      // closures have checked that storage, and control() independently derives
+      // the ordered logical captures and every arm's argument association.
+      expected.erase("successor_operand_segments");
+      observed.erase("successor_operand_segments");
+    }
     if (auto site = original->getAttrOfType<StringAttr>("site")) {
       auto encoded = occurrence(path, site.getValue());
       if (!encoded) {
@@ -214,7 +222,7 @@ class ScopedCorrespondence {
     return original->getLoc() == actual->getLoc() &&
            original->getName() == actual->getName() &&
            expected.getDictionary(actual->getContext()) ==
-               actual->getAttrDictionary();
+               observed.getDictionary(actual->getContext());
   }
   bool control(const SourceExecutionStep &before,
                const SourceExecutionStep &after, const Environment &env,

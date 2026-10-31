@@ -17,14 +17,40 @@ LogicalResult refuse(Operation *op, StringRef reason) {
   return diagnostics::emit(op->emitOpError(),
                            "computation-frontier-correspondence", reason);
 }
-bool charge(Operation *op, uint64_t &remaining) {
-  uint64_t cost = 1 + op->getNumOperands() + op->getNumResults() +
-                  op->getAttrs().size() + op->getNumRegions();
-  if (cost > remaining)
+class CheckingWork {
+  uint64_t &remaining;
+  std::optional<CapacityCause> &capacity;
+
+public:
+  CheckingWork(uint64_t &remaining, std::optional<CapacityCause> &capacity)
+      : remaining(remaining), capacity(capacity) {
+    capacity.reset();
+  }
+  bool exhausted() const { return capacity.has_value(); }
+  bool charge(uint64_t cost) {
+    if (exhausted())
+      return false;
+    if (cost > remaining) {
+      capacity = CapacityCause{WorkOwner::AlgorithmChecking, cost, remaining};
+      return false;
+    }
+    remaining -= cost;
+    return true;
+  }
+  bool charge(Operation *op) {
+    return charge(1 + uint64_t(op->getNumOperands()) + op->getNumResults() +
+                  op->getAttrs().size() + op->getNumRegions());
+  }
+  bool withinDepth(unsigned depth) {
+    if (exhausted())
+      return false;
+    if (depth <= 64)
+      return true;
+    // A depth refusal is not a failed request against the work allowance.
+    capacity = CapacityCause{WorkOwner::AlgorithmChecking};
     return false;
-  remaining -= cost;
-  return true;
-}
+  }
+};
 bool prefix(TypeRange before, TypeRange after) {
   return before.size() <= after.size() &&
          llvm::equal(before, after.take_front(before.size()));
@@ -55,7 +81,7 @@ Block *payloadBlock(exec::ComputeOp call) {
 // The same ordered structural pattern as AlgorithmVerification::unchanged,
 // with narrow, explicitly enumerated exceptions. Locations are not semantic.
 class ContextReader {
-  uint64_t &remaining;
+  CheckingWork &work;
 
 public:
   llvm::DenseMap<Operation *, Operation *> pairs;
@@ -65,10 +91,10 @@ public:
   llvm::DenseSet<Block *> flexibleBlocks;
   llvm::DenseMap<Operation *, Attribute> callees;
 
-  explicit ContextReader(uint64_t &remaining) : remaining(remaining) {}
+  explicit ContextReader(CheckingWork &work) : work(work) {}
   LogicalResult operation(Operation *before, Operation *after, IRMapping values,
                           unsigned depth = 0) {
-    if (depth > 64 || !charge(before, remaining) || !charge(after, remaining))
+    if (!work.withinDepth(depth) || !work.charge(before) || !work.charge(after))
       return refuse(after, "context inspection limit");
     if (before->getName() != after->getName() ||
         before->getNumRegions() != after->getNumRegions() ||
@@ -92,9 +118,8 @@ public:
         return refuse(after, "missing function interface");
       uint64_t cost = uint64_t(x.getNumInputs()) + x.getNumResults() +
                       y.getNumInputs() + y.getNumResults();
-      if (cost > remaining)
+      if (!work.charge(cost))
         return refuse(after, "function interface inspection limit");
-      remaining -= cost;
       if (!prefix(x.getInputs(), y.getInputs()) ||
           !(prefix(x.getResults(), y.getResults()) ||
             outcomePrefix(x.getResults(), y.getResults())))
@@ -140,9 +165,8 @@ public:
       IRMapping inner(values);
       for (auto [a, b] : zip(source, target)) {
         uint64_t cost = 1 + uint64_t(a.getNumArguments()) + b.getNumArguments();
-        if (cost > remaining)
+        if (!work.charge(cost))
           return refuse(after, "block interface inspection limit");
-        remaining -= cost;
         bool extensible = flexibleBlocks.contains(&a);
         if (extensible ? !prefix(a.getArgumentTypes(), b.getArgumentTypes())
                        : a.getArgumentTypes() != b.getArgumentTypes())
@@ -155,9 +179,8 @@ public:
           if (cursor == b.end() || op.getNumResults() > cursor->getNumResults())
             return refuse(after, "missing ordered definition");
           uint64_t cost = 1 + uint64_t(op.getNumResults());
-          if (cost > remaining)
+          if (!work.charge(cost))
             return refuse(after, "definition correspondence inspection limit");
-          remaining -= cost;
           inner.map(op.getResults(),
                     cursor->getResults().take_front(op.getNumResults()));
           ++cursor;
@@ -175,8 +198,7 @@ public:
         // Normalization may append only the explicitly checked fresh units,
         // in the protocol module's declaration block.
         for (; cursor != b.end(); ++cursor)
-          if (!charge(&*cursor, remaining) ||
-              !appendedDeclarations.erase(&*cursor))
+          if (!work.charge(&*cursor) || !appendedDeclarations.erase(&*cursor))
             return refuse(&*cursor, "extra ordered operation or declaration");
       }
     }
@@ -212,7 +234,7 @@ struct BlockFrontier {
 
 class FrontierReader {
   mlir::ModuleOp before, after;
-  uint64_t &remaining;
+  CheckingWork &work;
   ContextReader context;
   SmallVector<Step> steps;
   llvm::DenseMap<Block *, BlockFrontier> frontiers;
@@ -235,7 +257,7 @@ class FrontierReader {
   }
   FailureOr<SmallVector<uint64_t>>
   operands(Operation *op, const llvm::DenseMap<Value, uint64_t> &values) {
-    if (!charge(op, remaining))
+    if (!work.charge(op))
       return failure();
     SmallVector<uint64_t> result;
     for (Value value : op->getOperands()) {
@@ -256,7 +278,7 @@ class FrontierReader {
             llvm::DenseMap<Value, uint64_t> &original,
             llvm::DenseMap<Value, uint64_t> &actual, BlockFrontier &frontier,
             unsigned depth = 0) {
-    if (depth > 64)
+    if (!work.withinDepth(depth))
       return false;
     for (; &*position != sourceReturn.getOperation(); ++position) {
       auto &op = *position;
@@ -271,7 +293,7 @@ class FrontierReader {
           bucket != frontier.producerIndex.end())
         for (auto index : bucket->second) {
           auto &producer = frontier.producers[index];
-          if (!charge(producer.operation, remaining))
+          if (!work.charge(producer.operation))
             return false;
           if (producer.cut != invocation.getOperation() &&
               signature(&op, producer.operation, *inputs, producer.inputs)) {
@@ -296,6 +318,8 @@ class FrontierReader {
       bool retained = false;
       if (target != actualReturn.getOperation()) {
         auto targetInputs = operands(target, actual);
+        if (work.exhausted())
+          return false;
         retained = succeeded(targetInputs) &&
                    signature(&op, target, *inputs, *targetInputs);
       }
@@ -322,9 +346,8 @@ class FrontierReader {
                         projectedValues.size();
         for (const auto &pack : frontier.packs)
           cost += 1 + pack.second.size();
-        if (cost > remaining)
+        if (!work.charge(cost))
           return false;
-        remaining -= cost;
         auto savedOriginal = original, savedActual = actual;
         auto savedProducers = frontier.producers.size();
         auto savedPacks = frontier.packs;
@@ -334,6 +357,10 @@ class FrontierReader {
                  sourceReturn, actualReturn, original, actual, frontier,
                  depth + 1))
           return true;
+        // Capacity is terminal, including in a speculative retention branch.
+        // Do not probe another path or replace the first failed request.
+        if (work.exhausted())
+          return false;
         for (auto &producer : ArrayRef<Producer>(frontier.producers)
                                   .drop_front(savedProducers)) {
           frontier
@@ -360,9 +387,10 @@ class FrontierReader {
     if (&*cursor != actualReturn.getOperation())
       return false;
     auto expected = operands(sourceReturn, original);
+    if (failed(expected))
+      return false;
     auto returned = operands(actualReturn, actual);
-    return succeeded(expected) && succeeded(returned) &&
-           expected->size() <= returned->size() &&
+    return succeeded(returned) && expected->size() <= returned->size() &&
            llvm::equal(*expected, ArrayRef<uint64_t>(*returned).take_front(
                                       expected->size()));
   }
@@ -449,9 +477,10 @@ class FrontierReader {
                            "or inspection limit");
     }
     auto expected = operands(sourceReturn, original);
+    if (failed(expected))
+      return refuse(entry, "original numerical return identity changed");
     auto returned = operands(actualReturn, actual);
-    if (failed(expected) || failed(returned) ||
-        expected->size() > returned->size() ||
+    if (failed(returned) || expected->size() > returned->size() ||
         !llvm::equal(*expected, ArrayRef<uint64_t>(*returned).take_front(
                                     expected->size())))
       return refuse(entry, "original numerical return identity changed");
@@ -485,9 +514,8 @@ class FrontierReader {
 
 public:
   FrontierReader(mlir::ModuleOp before, mlir::ModuleOp after,
-                 uint64_t &remaining)
-      : before(before), after(after), remaining(remaining), context(remaining) {
-  }
+                 CheckingWork &work)
+      : before(before), after(after), work(work), context(work) {}
   LogicalResult run(ArrayRef<FrontierNormalizationOrigin> origins) {
     if (!hasSingleElement(*before.getBody()) ||
         !hasSingleElement(*after.getBody()))
@@ -503,14 +531,13 @@ public:
               ? dyn_cast_or_null<mlir::ModuleOp>(origin.entry->getParentOp())
               : mlir::ModuleOp();
       if (!unit || unit->getParentOp() != owner.getOperation() ||
-          !origin.entry.getBody().hasOneBlock() ||
-          !charge(origin.entry, remaining) ||
+          !origin.entry.getBody().hasOneBlock() || !work.charge(origin.entry) ||
           !generated.try_emplace(origin.entry).second)
         return refuse(after,
                       "invalid or duplicate checked normalization entry");
       auto &membership = generated[origin.entry];
       for (auto *op : origin.polynomialGenerated)
-        if (!op || !charge(op, remaining) ||
+        if (!op || !work.charge(op) ||
             op->getBlock() != &origin.entry.front() ||
             op->hasTrait<OpTrait::IsTerminator>() || op->getNumRegions() ||
             op->getNumSuccessors() || !op->getNumResults() ||
@@ -523,9 +550,8 @@ public:
     for (auto record :
          owner.getBody().front().getOps<protocol_ir::ProjectionOp>())
       for (auto item : record.getCalculations()) {
-        if (!remaining)
+        if (!work.charge(uint64_t(1)))
           return refuse(after, "projection inspection limit");
-        --remaining;
         auto dictionary = dyn_cast<DictionaryAttr>(item);
         auto callee = dictionary ? dictionary.get("callee") : Attribute();
         auto participant =
@@ -546,7 +572,7 @@ public:
     SmallVector<protocol_ir::LocalCallOp> invocations;
     SymbolTableCollection symbols;
     auto walk = owner.walk([&](Operation *op) {
-      if (!charge(op, remaining))
+      if (!work.charge(op))
         return WalkResult::interrupt();
       if (auto invocation = dyn_cast<protocol_ir::LocalCallOp>(op)) {
         ++uses[invocation.getCalleeAttr()];
@@ -599,7 +625,7 @@ public:
       exec::ReturnOp returned;
       for (auto &block : wrapper.getBody())
         for (auto &op : block) {
-          if (!charge(&op, remaining))
+          if (!work.charge(&op))
             return refuse(after, "wrapper packaging inspection limit");
           if (auto result = dyn_cast<exec::ReturnOp>(op)) {
             if (returned)
@@ -640,16 +666,21 @@ public:
 
 LogicalResult verifyComputationFrontier(
     mlir::ModuleOp normalizedBefore, mlir::ModuleOp actualAfter,
-    ArrayRef<FrontierNormalizationOrigin> checkedOrigins, uint64_t &remaining) {
-  return FrontierReader(normalizedBefore, actualAfter, remaining)
+    ArrayRef<FrontierNormalizationOrigin> checkedOrigins, uint64_t &remaining,
+    std::optional<CapacityCause> *capacity) {
+  std::optional<CapacityCause> localCapacity;
+  CheckingWork work(remaining, capacity ? *capacity : localCapacity);
+  return FrontierReader(normalizedBefore, actualAfter, work)
       .run(checkedOrigins);
 }
 
 LogicalResult verifyComputationNormalizationContext(
     mlir::ModuleOp source, mlir::ModuleOp normalized,
     ArrayRef<ComputationNormalizationRewrite> checkedRewrites,
-    uint64_t &remaining) {
-  ContextReader context(remaining);
+    uint64_t &remaining, std::optional<CapacityCause> *capacity) {
+  std::optional<CapacityCause> localCapacity;
+  CheckingWork work(remaining, capacity ? *capacity : localCapacity);
+  ContextReader context(work);
   llvm::DenseSet<Operation *> targets;
   if (!hasSingleElement(*source.getBody()) ||
       !hasSingleElement(*normalized.getBody()))
@@ -667,7 +698,7 @@ LogicalResult verifyComputationNormalizationContext(
     auto a = rewrite.sourceCall;
     auto b = rewrite.normalizedCall;
     auto unit = rewrite.normalizedUnit;
-    if (!a || !b || !unit || !charge(a, remaining) ||
+    if (!a || !b || !unit || !work.charge(a) ||
         a->getParentOfType<mlir::ModuleOp>() != source ||
         b->getParentOfType<mlir::ModuleOp>() != normalized ||
         unit->getParentOp() != proposal.getOperation() ||

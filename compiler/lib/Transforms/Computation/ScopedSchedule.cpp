@@ -34,8 +34,13 @@ bool inspectForComparison(Operation *root, uint64_t &remaining,
   SmallVector<std::pair<Operation *, unsigned>> pending{{root, 0}};
   while (!pending.empty()) {
     auto [op, depth] = pending.pop_back_val();
-    if (depth > 66 ||
-        !chargeComparison(1 + op->getNumOperands() + op->getNumResults(),
+    if (depth > 66) {
+      outcome = {finite::VerificationStatus::RequiredCapacity,
+                 "schedule inspection depth",
+                 CapacityCause{WorkOwner::AlgorithmChecking}};
+      return false;
+    }
+    if (!chargeComparison(1 + op->getNumOperands() + op->getNumResults(),
                           remaining, outcome))
       return false;
     for (auto &region : op->getRegions()) {
