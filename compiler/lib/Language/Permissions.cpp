@@ -49,6 +49,7 @@ Semantics::fields(const Type &type, Span span, unsigned depth) {
   }
   auto *decl = typeDeclaration(type);
   if (!decl || (type.kind != Type::Kind::Record &&
+                type.kind != Type::Kind::LogicalRecord &&
                 type.kind != Type::Kind::Associated)) {
     fail("source.type", "type has no product fields; variants require match",
          span);
@@ -74,10 +75,78 @@ Semantics::fields(const Type &type, Span span, unsigned depth) {
     auto t = substitute(source.type, bindings, span, depth + 1);
     if (!t)
       return {};
-    result.push_back(
-        {source.name, std::move(*t), source.isPublic, source.span});
+    TypeField field{source.name, std::move(*t), source.isPublic, source.span};
+    if (source.maximumRows) {
+      field.maximumRows =
+          substitute(*source.maximumRows, bindings, span, depth + 1);
+      if (!field.maximumRows)
+        return {};
+    }
+    if (type.kind == Type::Kind::LogicalRecord && !oracleField(field))
+      return {};
+    result.push_back(std::move(field));
   }
   return result;
+}
+bool Semantics::oracleField(const TypeField &field) {
+  if (field.maximumRows) {
+    if (!chargeType(*field.maximumRows, field.span))
+      return false;
+    if (field.maximumRows->kind != Type::Kind::Natural)
+      return fail("source.oracle-shape",
+                  "field row maximum must be a static natural", field.span);
+  }
+  if (!isOracleHandle(field.type))
+    return !field.maximumRows ||
+           fail("source.oracle-shape",
+                "row bounds require a direct oracle field", field.span);
+  unsigned arity = field.type.kind == Type::Kind::OracleSequence ? 2 : 1;
+  if (field.type.arguments.size() != arity)
+    return fail("source.oracle-kind", "invalid direct oracle field",
+                field.span);
+  const auto &kind = field.type.arguments.front();
+  if (kind.kind != Type::Kind::OracleKind)
+    return fail("source.oracle-kind", "field requires an oracle kind",
+                field.span);
+  if (kind.symbolic)
+    return true;
+  if (!symbolic(kind) && !oracleKind(kind, field.span))
+    return false;
+  if ((kind.arguments.size() == 1) != field.maximumRows.has_value())
+    return fail("source.oracle-shape",
+                "only an unsized oracle field requires a row maximum",
+                field.span);
+  return true;
+}
+bool Semantics::logicalRecord(const Type &type, Span span) {
+  if (!chargeType(type, span))
+    return false;
+  auto key = typeIdentity(type);
+  if (checkedLogicalRecords.count(key))
+    return true;
+  const auto *decl = typeDeclaration(type);
+  if (type.kind != Type::Kind::LogicalRecord || !decl ||
+      decl->kind != Declaration::Kind::Record || !decl->logical)
+    return fail("source.type", "expected a nominal logical record", span);
+  if (decl->resource)
+    return fail("source.resource", "logical records require Copy and Drop",
+                decl->span);
+  auto product = fields(type, span);
+  if (!product)
+    return false;
+  bool logical = false;
+  for (const auto &field : *product) {
+    if (isOracleHandle(field.type))
+      logical = true;
+    else if (!sharedData(field.type, field.span, decl))
+      return false;
+  }
+  if (!logical)
+    return fail("source.oracle-aggregate",
+                "logical record requires a direct oracle handle or sequence",
+                decl->span);
+  checkedLogicalRecords.insert(std::move(key));
+  return true;
 }
 std::optional<std::vector<Alternative>>
 Semantics::alternatives(const Type &type, Span span, unsigned depth) {
@@ -184,6 +253,9 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
   if (type.kind == K::Boolean || type.kind == K::Index ||
       type.kind == K::Field || type.kind == K::Group || type.kind == K::Unit)
     return Permissions{true, true};
+  if (type.kind == K::LogicalRecord)
+    return logicalRecord(type, span) ? std::optional(Permissions{true, true})
+                                     : std::nullopt;
   if (type.kind == K::Formal || isOracleHandle(type))
     return Permissions{true, true};
   if (type.kind == K::Builtin) {
@@ -267,7 +339,7 @@ bool Semantics::executableType(const Type &type, Span span, unsigned depth) {
     return diagnostic ? false
                       : fail("source.limit", "executable type depth", span);
   using K = Type::Kind;
-  if (isOracleHandle(type))
+  if (isLogicalValue(type))
     return fail("source.oracle-boundary",
                 "logical oracle handles require semantic realization", span);
   if (type.kind == K::Formal)
@@ -276,7 +348,8 @@ bool Semantics::executableType(const Type &type, Span span, unsigned depth) {
   if (type.kind == K::Array || type.kind == K::Tuple ||
       type.kind == K::Builtin) {
     for (const auto &child : type.arguments)
-      if (!executableType(child, span, depth + 1))
+      if (!(type.kind == K::Builtin && isStaticOnly(child)) &&
+          !executableType(child, span, depth + 1))
         return false;
   } else if (type.kind == K::Record || type.kind == K::Associated) {
     auto *decl = typeDeclaration(type);
@@ -296,7 +369,11 @@ bool Semantics::executableType(const Type &type, Span span, unsigned depth) {
       for (const auto &child : alt.fields)
         if (!executableType(child.type, span, depth + 1))
           return false;
-  }
+  } else if (type.kind != K::Boolean && type.kind != K::Index &&
+             type.kind != K::Field && type.kind != K::Group &&
+             type.kind != K::Unit && type.kind != K::Parameter &&
+             type.kind != K::OracleProjection)
+    return fail("source.type", "type has no executable representation", span);
   return true;
 }
 bool Semantics::mathematicalData(const Type &type, Span span,
@@ -310,7 +387,7 @@ bool Semantics::mathematicalData(const Type &type, Span span,
                                   "mathematical values require Copy"))
     return false;
   using K = Type::Kind;
-  if (isOracleHandle(type))
+  if (isLogicalValue(type))
     return fail("source.oracle-boundary",
                 "logical oracle handles are outside ordinary Math", span);
   if (type.kind == K::Builtin) {
@@ -342,7 +419,11 @@ bool Semantics::mathematicalData(const Type &type, Span span,
       for (const auto &child : alt.fields)
         if (!mathematicalData(child.type, span, scope, depth + 1))
           return false;
-  }
+  } else if (type.kind != K::Boolean && type.kind != K::Index &&
+             type.kind != K::Field && type.kind != K::Group &&
+             type.kind != K::Unit && type.kind != K::Parameter &&
+             type.kind != K::OracleProjection && type.kind != K::Formal)
+    return fail("source.mode", "type is outside mathematical data", span);
   return true;
 }
 bool Semantics::sharedData(const Type &type, Span span,
@@ -356,6 +437,9 @@ bool Semantics::sharedData(const Type &type, Span span,
                      "role assembly requires Copy")))
     return false;
   using K = Type::Kind;
+  if (isLogicalValue(type))
+    return fail("source.oracle-boundary",
+                "logical protocol values are not ordinary shared data", span);
   std::vector<Type> children;
   if (type.kind == K::Builtin) {
     auto policy = protocol::nativeTypeConstructorPolicy(type.domain);
@@ -383,7 +467,11 @@ bool Semantics::sharedData(const Type &type, Span span,
     for (const auto &alternative : *alternatives)
       for (const auto &field : alternative.fields)
         children.push_back(field.type);
-  }
+  } else if (type.kind != K::Boolean && type.kind != K::Index &&
+             type.kind != K::Field && type.kind != K::Group &&
+             type.kind != K::Unit && type.kind != K::Parameter &&
+             type.kind != K::OracleProjection)
+    return fail("source.roles", "type is not ordinary shared data", span);
   for (const auto &child : children)
     if (!sharedData(child, span, scope, depth + 1))
       return false;
@@ -400,7 +488,9 @@ bool Semantics::constructorAllowed(const Declaration &context,
                                    const Type &type) const {
   auto *decl = typeDeclaration(type);
   return decl && (!decl->generated || decl->generated->constructible) &&
-         (type.kind == Type::Kind::Record || type.kind == Type::Kind::Variant ||
+         (type.kind == Type::Kind::Record ||
+          type.kind == Type::Kind::LogicalRecord ||
+          type.kind == Type::Kind::Variant ||
           type.kind == Type::Kind::Associated) &&
          withinModule(context.module, decl->module);
 }

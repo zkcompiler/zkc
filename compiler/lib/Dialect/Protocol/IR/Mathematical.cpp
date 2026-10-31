@@ -646,7 +646,7 @@ public:
       auto reference =
           dyn_cast<zkc::protocol_ir::ServiceReferenceType>(arg.getType());
       auto policy = types.get(arg.getType());
-      bool oracle = isa<protocol_ir::OracleHandleType>(arg.getType());
+      bool oracle = bool(protocol_ir::getOracleFamilyKind(arg.getType()));
       if (!policy && !reference && !oracle)
         return refuse(program, "unsupported mathematical input type");
       if (policy && !policy->protocolPort)
@@ -673,7 +673,7 @@ public:
       auto policy = types.get(value.getType());
       if (policy && !policy->protocolPort)
         return diagnostics::emit(program.emitOpError(), "variant-boundary");
-      bool oracle = isa<protocol_ir::OracleHandleType>(value.getType());
+      bool oracle = bool(protocol_ir::getOracleFamilyKind(value.getType()));
       if ((!policy && !oracle) ||
           (policy && !policy->shared && exposed.count() != 1))
         return refuse(program, "owner-local results require exactly one owner");

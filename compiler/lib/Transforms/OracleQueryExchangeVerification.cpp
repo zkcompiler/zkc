@@ -193,10 +193,6 @@ struct Reader {
     auto constant = c.number(expected, site.str() + "_expected");
     return c.apply("index.equal", boolean, {actual, constant}, site)[0];
   }
-  void require(Cursor &c, Value actual, unsigned expected, StringRef site) {
-    c.apply("control.require", {}, equalIndex(c, actual, expected, site),
-            site.str() + "_guard");
-  }
   Value opening(Cursor &c, ValueRange inputs, unsigned ordinal) {
     const auto &arm = model.arms[ordinal];
     std::string prefix = "constructor_" + std::to_string(arm.constructor) + "_";
@@ -235,64 +231,14 @@ struct Reader {
       return false;
     body(function, recipe.inputs, recipe.outputs, false,
          [&](Cursor &c, ValueRange inputs) {
-           if (recipe.action == OracleExchangeAction::Open) {
-             Types captures(3, index);
-             append_range(captures, model.holderStores);
-             auto output = c.match(
-                 inputs[0], inputs.drop_front(), model.response, {"Record"},
-                 "request", [&](unsigned, func::FuncOp function) {
-                   body(function, captures, model.response, true,
-                        [&](Cursor &region, ValueRange args) {
-                          region.finish(dispatch(region, args, 0), true);
-                        });
-                 });
-             c.finish(output);
-             return;
-           }
-           std::vector<std::string> alternatives;
-           for (const auto &arm : model.arms)
-             alternatives.push_back(arm.alternative);
+           Types captures(3, index);
+           append_range(captures, model.holderStores);
            auto output = c.match(
-               inputs[0], inputs.drop_front(), model.state, alternatives,
-               "response", [&](unsigned ordinal, func::FuncOp function) {
-                 const auto &arm = model.arms[ordinal];
-                 Types types(arm.opened.begin(), arm.opened.end());
-                 append_range(types, model.state);
-                 append_range(types, model.receiverStores);
-                 body(function, types, model.state, true,
+               inputs[0], inputs.drop_front(), model.response, {"Record"},
+               "request", [&](unsigned, func::FuncOp function) {
+                 body(function, captures, model.response, true,
                       [&](Cursor &region, ValueRange args) {
-                        using C = OracleQueryController;
-                        std::string prefix = "constructor_" +
-                                             std::to_string(arm.constructor) +
-                                             "_";
-                        auto state =
-                            args.drop_front(2).take_front(model.state.size());
-                        auto stores = args.drop_front(2 + model.state.size());
-                        require(region, state[C::Phase], C::Request,
-                                prefix + "request_phase");
-                        require(region, state[C::Constructor], arm.constructor,
-                                prefix + "request_constructor");
-                        require(region, state[C::Kind], arm.kind,
-                                prefix + "request_kind");
-                        auto reference = region.pack(
-                            arm.reference, "Record",
-                            {state[C::Constructor], state[C::Instance]},
-                            prefix + "anchor");
-                        auto stored =
-                            region.call(arm.receiverLookup,
-                                        {reference, stores[arm.receiverSlot]},
-                                        prefix + "load_anchor");
-                        auto answer = region.call(
-                            arm.authenticate,
-                            {stored[arm.root], stored[arm.receiverRows],
-                             state[C::Position], args[0], args[1]},
-                            prefix + "authenticate");
-                        Values resumed(state.begin(), state.end());
-                        append_range(resumed, state.take_front(5));
-                        resumed.push_back(answer[0]);
-                        region.finish(
-                            region.call(arm.resume, resumed, prefix + "resume"),
-                            true);
+                        region.finish(dispatch(region, args, 0), true);
                       });
                });
            c.finish(output);
@@ -304,6 +250,8 @@ struct Reader {
 bool checkOracleQueryExchange(const OracleVerificationContext &context,
                               func::FuncOp actual,
                               const OracleExchangeRecipe &recipe) {
+  if (recipe.action != OracleExchangeAction::Open || !recipe.exchange)
+    return false;
   return Reader(context, recipe).check(actual);
 }
 } // namespace zkc::protocol

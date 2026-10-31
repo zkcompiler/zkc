@@ -9,6 +9,7 @@
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
 #include <functional>
+#include <limits>
 #include <set>
 
 using namespace llvm;
@@ -175,53 +176,135 @@ Expected<std::string> inspectComponentDeclarations(const ClosedEntry &entry,
   detail::Work work{limits};
   Layouts layouts(entry, limits);
   json::Array records, protocols;
-  bool linear = false;
+  bool required = false;
   std::set<std::string> seen;
-  std::function<Error(const Layout &, unsigned)> retain =
-      [&](const Layout &layout, unsigned depth) -> Error {
+  std::map<std::string, const Declaration *> declarations;
+  for (const auto &declaration : entry.declarations()) {
+    if (auto e = work.charge(1, declaration.span))
+      return std::move(e);
+    if (declaration.kind == Declaration::Kind::Record ||
+        declaration.kind == Declaration::Kind::Variant ||
+        declaration.kind == Declaration::Kind::Associated)
+      declarations.emplace(declaration.qualifiedName, &declaration);
+  }
+  std::function<Error(const Type &, unsigned)> retain =
+      [&](const Type &type, unsigned depth) -> Error {
     if (depth > limits.typeDepth)
       return detail::failure("source.limit", "component declaration depth");
-    if (auto e = work.charge(layout.fields.size() + 1))
+    auto complexity = typeComplexity(type, limits.typeNodes, limits.typeDepth);
+    if (!complexity)
+      return complexity.takeError();
+    if (auto e = work.charge(*complexity))
       return e;
-    auto key = typeIdentity(layout.type);
+    auto key = typeIdentity(type);
+    if (auto e = work.charge(key.size()))
+      return e;
     if (!seen.insert(key).second)
       return Error::success();
-    for (const auto &field : layout.fields)
-      if (auto e = retain(*field.layout, depth + 1))
+    // Type arguments retain nominal elements even in zero-length arrays and
+    // native containers whose layouts expose no source fields.
+    for (const auto &argument : type.arguments)
+      if (auto e = retain(argument, depth + 1))
         return e;
-    if (layout.type.kind != Type::Kind::Record)
+    using K = Type::Kind;
+    if (type.kind != K::Record && type.kind != K::LogicalRecord &&
+        type.kind != K::Variant && type.kind != K::Associated)
       return Error::success();
-    const Declaration *declaration = nullptr;
-    for (const auto &candidate : entry.declarations())
-      if (candidate.qualifiedName == layout.type.domain &&
-          candidate.kind == Declaration::Kind::Record) {
-        declaration = &candidate;
-        break;
-      }
-    if (!declaration)
-      return detail::failure("component-declaration", "missing source record");
-    linear |= declaration->resource == Resource::Linear;
-    auto term = encodeStaticTerm(layout.type);
+    auto found = declarations.find(type.domain);
+    if (found == declarations.end())
+      return detail::failure("component-declaration", "missing source type");
+    const auto &declaration = *found->second;
+    if ((type.kind == K::Variant) !=
+            (declaration.kind == Declaration::Kind::Variant) ||
+        (type.kind == K::Associated) !=
+            (declaration.kind == Declaration::Kind::Associated) ||
+        (type.kind == K::LogicalRecord) != declaration.logical)
+      return detail::failure("component-declaration",
+                             "source type kind differs");
+    auto layout = layouts.get(type);
+    if (!layout)
+      return layout.takeError();
+    for (const auto &field : (*layout)->fields)
+      if (auto e = retain(field.layout->type, depth + 1))
+        return e;
+    for (const auto &alternative : (*layout)->alternatives)
+      for (const auto &field : alternative.fields)
+        if (auto e = retain(field.layout->type, depth + 1))
+          return e;
+    if (type.kind == K::Associated)
+      return Error::success();
+    required |=
+        declaration.resource.has_value() || type.kind == K::LogicalRecord;
+    auto term = encodeStaticTerm(type);
     if (!term)
       return term.takeError();
-    json::Array fields;
-    for (const auto &field : layout.fields) {
-      auto type = encodeStaticTerm(field.layout->type);
-      if (!type)
-        return type.takeError();
-      fields.push_back(json::Array{field.name, std::move(*type)});
+    auto fields = [&](ArrayRef<LayoutField> source) -> Expected<json::Array> {
+      json::Array result;
+      for (const auto &field : source) {
+        if (auto e = work.charge(field.name.size() + 1))
+          return std::move(e);
+        auto term = encodeStaticTerm(field.layout->type);
+        if (!term)
+          return term.takeError();
+        result.push_back(json::Array{field.name, std::move(*term)});
+      }
+      return result;
+    };
+    auto members = fields((*layout)->fields);
+    if (!members)
+      return members.takeError();
+    for (const auto &alternative : (*layout)->alternatives) {
+      if (auto e = work.charge(alternative.name.size() + 1))
+        return e;
+      auto payload = fields(alternative.fields);
+      if (!payload)
+        return payload.takeError();
+      members->push_back(json::Array{alternative.name, std::move(*payload)});
     }
     records.push_back(json::Array{std::move(*term),
-                                  !declaration->resource ? "ordinary"
-                                  : *declaration->resource == Resource::Linear
+                                  !declaration.resource ? "ordinary"
+                                  : *declaration.resource == Resource::Linear
                                       ? "linear"
                                       : "affine",
-                                  declaration->sealed, std::move(fields)});
+                                  declaration.sealed, std::move(*members)});
+    return Error::success();
+  };
+  std::function<Error(const Body &, unsigned)> retainBody =
+      [&](const Body &body, unsigned depth) -> Error {
+    if (depth > limits.callDepth)
+      return detail::failure("source.limit", "component body depth");
+    for (const auto &value : body.values)
+      if (auto e = retain(value.type, 0))
+        return e;
+    for (const auto &operation : body.operations) {
+      if (auto e = work.charge(1, operation.span))
+        return e;
+      if (const auto *repeat = std::get_if<ProtocolRepeat>(&operation.action)) {
+        if (repeat->region)
+          if (auto e = retainBody(*repeat->region, depth + 1))
+            return e;
+      } else if (const auto *control =
+                     std::get_if<LocalControl>(&operation.action)) {
+        for (const auto &region : control->regions)
+          if (region)
+            if (auto e = retainBody(*region, depth + 1))
+              return e;
+      }
+    }
     return Error::success();
   };
   for (const auto &declaration : entry.declarations()) {
-    if (declaration.kind != Declaration::Kind::Protocol || !declaration.body ||
-        !declaration.parameters.empty())
+    if (!declaration.body || !declaration.parameters.empty())
+      continue;
+    for (const auto &port : declaration.inputs)
+      if (auto e = retain(port.type, 0))
+        return std::move(e);
+    for (const auto &port : declaration.outputs)
+      if (auto e = retain(port.type, 0))
+        return std::move(e);
+    if (auto e = retainBody(*declaration.body, 0))
+      return std::move(e);
+    if (declaration.kind != Declaration::Kind::Protocol)
       continue;
     json::Array sides;
     for (bool output : {false, true}) {
@@ -229,11 +312,9 @@ Expected<std::string> inspectComponentDeclarations(const ClosedEntry &entry,
       unsigned offset = 0;
       for (const auto &port :
            output ? declaration.outputs : declaration.inputs) {
-        auto layout = layouts.get(port.type);
+        auto layout = layouts.protocolPort(port);
         if (!layout)
           return layout.takeError();
-        if (auto e = retain(**layout, 0))
-          return std::move(e);
         auto term = encodeStaticTerm(port.type);
         if (!term)
           return term.takeError();
@@ -241,9 +322,10 @@ Expected<std::string> inspectComponentDeclarations(const ClosedEntry &entry,
         for (auto role : port.roles)
           roles.push_back(nativeRoleName(role));
         ports.push_back(json::Array{port.name, std::move(*term),
-                                    std::move(roles), offset,
-                                    (*layout)->leaves.size()});
-        offset += (*layout)->leaves.size();
+                                    std::move(roles), offset, layout->size()});
+        if (offset > std::numeric_limits<unsigned>::max() - layout->size())
+          return detail::failure("source.limit", "component port leaves");
+        offset += layout->size();
       }
       sides.push_back(std::move(ports));
     }
@@ -252,7 +334,7 @@ Expected<std::string> inspectComponentDeclarations(const ClosedEntry &entry,
   }
   std::string bytes;
   BoundedStream out(bytes, limits.interfaceBytes);
-  if (!linear) {
+  if (!required) {
     records.clear();
     protocols.clear();
   }

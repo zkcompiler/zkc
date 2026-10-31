@@ -201,8 +201,12 @@ analyzeOracleQueryCapacity(ModuleOp prepared, StringRef entry, uint64_t work) {
   for (auto argument : program.getBody().front().getArguments()) {
     if (isa<pir::OracleHandleType>(argument.getType()))
       analysis.values[argument] = {1, 1};
-    else if (isa<pir::OracleSequenceType>(argument.getType()))
-      return error("oracle-query-capacity-source");
+    else if (auto sequence =
+                 dyn_cast<pir::OracleSequenceType>(argument.getType()))
+      // Cover every possible source element, including repeated occurrences.
+      // This structural bound grants no Host sequence-ingress capability.
+      analysis.values[argument] = {sequence.getMaximum(),
+                                   sequence.getMaximum()};
   }
   if (auto e = analysis.block(**view, (*view)->getBody()))
     return std::move(e);

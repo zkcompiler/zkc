@@ -1,3 +1,4 @@
+#include "OracleInspection.h"
 #include "WrittenSourceIndex.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/SourceTerms.h"
@@ -180,14 +181,25 @@ public:
       auto symbol = decl.relation ? formulaSymbol(decl) : decl.symbol;
       if (auto e = work.charge(1 + symbol.size()))
         return std::move(e);
-      result.push_back(json::Object{
+      json::Object instance{
           {"symbol", std::move(symbol)},
           {"template", std::move(origin)},
           {"statics", std::move(statics)},
           {"scoped", std::move(scoped)},
           {"domains", std::move(domains)},
           {"layout", json::Object{{"inputs", std::move(*inputs)},
-                                  {"captures", std::move(*captures)}}}});
+                                  {"captures", std::move(*captures)}}}};
+      if (decl.oracleDefinition) {
+        const auto &definition = *decl.oracleDefinition;
+        if (auto e = work.charge(
+                definition.predicates.size() + definition.sourceBounds.size() +
+                definition.resultShape.size() +
+                (decl.body ? decl.body->operations.size() : 0) + 1))
+          return std::move(e);
+        instance["oracle_definition"] =
+            describeOracleDefinition(entry.declarations(), decl);
+      }
+      result.push_back(std::move(instance));
     }
     return result;
   }

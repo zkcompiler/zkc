@@ -3,8 +3,9 @@
 #include "NativeBindingApplication.h"
 #include "OracleCommonRealization.h"
 #include "OracleQueryExchange.h"
+#include "OracleQueryCapacity.h"
 #include <memory>
-#include <variant>
+#include <optional>
 namespace zkc::protocol {
 // A finite declarative recipe, derived only from the original and checked
 // primitive identities. IDs are lexical SSA coordinates, never native handles.
@@ -33,20 +34,9 @@ struct OracleLocalRecipe : OracleHelperSignature {
   std::vector<OracleLocalInstruction> instructions;
   std::vector<unsigned> results;
 };
-// Wire packets may carry non-mathematical proof values. Packing and matching
-// therefore retain the existing scoped execution and outcome boundary.
-struct OraclePacketRecipe : OracleHelperSignature {
-  bool pack;
-};
-using OracleCommonLocal =
-    std::variant<OracleLocalRecipe, OracleExchangeRecipe, OraclePacketRecipe>;
-inline const OracleHelperSignature &
-localSignature(const OracleCommonLocal &local) {
-  return std::visit(
-      [](const auto &recipe) -> const OracleHelperSignature & {
-        return recipe;
-      },
-      local);
+using OracleCommonLocal = OracleLocalRecipe;
+inline const OracleHelperSignature &localSignature(const OracleCommonLocal &local) {
+  return local;
 }
 // Generated identifiers use the program grammar. Full source coordinates stay
 // separate from their short spelling, for the eventual realization record.
@@ -56,9 +46,9 @@ struct OracleCommonOccurrence {
 };
 struct OracleCommonQueryBlock {
   std::vector<std::vector<unsigned>> queries;
-  // Logical query -> physical request slot for a fixed base-query block.
-  // Null for ideal evaluation or a dynamic virtual controller.
-  std::optional<std::vector<unsigned>> requestGroups;
+  // Dynamic packet bound; null for ideal local evaluation. Actual physical
+  // groups are first-use runtime data checked by the packet reader.
+  std::optional<uint64_t> packetCapacity;
 };
 struct OracleCommonPlan {
   mlir::DictionaryAttr attributes;
@@ -79,6 +69,7 @@ struct OracleCommonRequirements {
   OracleAnchorStorage storage;
   std::vector<OracleTableRealization> realizations;
   OracleQuerySize capacity;
+  OracleQueryCapacity queryCapacity;
   std::vector<OracleControllerRequirement> controllers;
 };
 // Original declaration order determines the complete oracle-entry inventory.
@@ -92,7 +83,9 @@ planOracleCommon(mlir::ModuleOp prepared, llvm::StringRef entry,
                  llvm::ArrayRef<OracleCommonController>,
                  llvm::ArrayRef<std::vector<mlir::func::FuncOp>> allocators,
                  llvm::ArrayRef<OracleMerkleFunctions> merkle,
-                 OracleAuthentication authentication);
+                 OracleAuthentication authentication,
+                 llvm::ArrayRef<OracleCommonRemote>,
+                 llvm::ArrayRef<OracleCommonBatch>);
 // Internal parsed-model reader. Only the record reader publishes its result.
 class OracleVerificationContext;
 llvm::Error checkOracleRealizationModel(

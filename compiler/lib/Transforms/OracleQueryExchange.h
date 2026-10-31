@@ -25,7 +25,7 @@ struct OracleQueryExchange {
   std::vector<mlir::Type> state, receiverStores, holderStores;
   std::vector<Arm> arms;
 };
-enum class OracleExchangeAction { Open, Authenticate };
+enum class OracleExchangeAction { Open };
 struct OracleExchangeRecipe : OracleHelperSignature {
   OracleExchangeAction action;
   std::shared_ptr<const OracleQueryExchange> exchange;

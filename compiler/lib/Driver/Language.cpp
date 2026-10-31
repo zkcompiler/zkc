@@ -36,6 +36,7 @@ int runLanguageCompiler(int argc, char **argv) {
   bool notations = false;
   NotationInspectionOptions notationOptions;
   EntryOptions options;
+  bool oracleRealizationSelected = false;
   bool cpuTargetSelected = false;
   std::string observationPath;
   bool collectObservations = false;
@@ -176,6 +177,17 @@ int runLanguageCompiler(int argc, char **argv) {
           return refuse(error("source.options", "unknown dump phase"));
         dumps.push_back(name.str());
       }
+    } else if (arg.consume_front("--oracle-realization=")) {
+      if (oracleRealizationSelected ||
+          (command != "language-bundle" && command != "language-package"))
+        return refuse(
+            error("source.options",
+                  "oracle realization is a unique compilation option"));
+      auto selection = protocol::parseOracleRealizationPolicy(arg);
+      if (!selection)
+        return refuse(selection.takeError());
+      options.oracleRealization = std::move(*selection);
+      oracleRealizationSelected = true;
     } else if (arg.consume_front("--cpu-target=")) {
       if (cpuTargetSelected)
         return refuse(error("source.options", "CPU target must be unique"));

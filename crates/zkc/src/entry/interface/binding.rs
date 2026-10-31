@@ -74,18 +74,28 @@ impl BoundInterface {
             .iter()
             .map(|&i| p.services[i].native as usize)
             .collect();
+        let actual_choices: &[String] = native.choices.as_ref();
+        let mut expected_choices: Vec<String> = [
+            self.options.simplify,
+            self.options.release_storage,
+            self.options.fuse_vector_reductions,
+            self.options.finite_bulk,
+            self.options.fuse_collect_fold,
+            self.options.calculation_batching,
+        ]
+        .into_iter()
+        .map(|value| value.to_string())
+        .collect();
+        expected_choices.push(
+            self.options
+                .oracle_realization
+                .canonical_json()
+                .map_err(|_| E::NativeBinding)?,
+        );
         require(
             native.publication == self.artifact
                 && native.source == self.original()
-                && native.choices
-                    == [
-                        self.options.simplify,
-                        self.options.release_storage,
-                        self.options.fuse_vector_reductions,
-                        self.options.finite_bulk,
-                        self.options.fuse_collect_fold,
-                        self.options.calculation_batching,
-                    ]
+                && actual_choices == expected_choices.as_slice()
                 && entry.entry() == p.symbol
                 && native.producer == prover
                 && native.validator == verifier

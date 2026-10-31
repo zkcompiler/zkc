@@ -24,6 +24,20 @@ pub fn less(left: index, right: index) -> bool effects(stop) where () { return k
 pub math fn power_of_two(value: index, exponent: index) -> bool
   = primitive("index.power_of_two");
 
+// Total unsigned 64-bit word mathematics; these establish no domain membership.
+pub math fn wrapping_add(left: index, right: index) -> index
+  = primitive("index.wrapping_add");
+
+pub math fn wrapping_sub(left: index, right: index) -> index
+  = primitive("index.wrapping_sub");
+
+pub math fn bit_and(left: index, right: index) -> index
+  = primitive("index.bit_and");
+
+// Counts at least 64 return zero, without reducing the count modulo 64.
+pub math fn logical_shift_right(value: index, count: index) -> index
+  = primitive("index.logical_shift_right");
+
 pub fn maximum(left: index, right: index) -> index effects(stop) where () { return if less(left, right) { right } else { left }; }
 // Powers of two in [2, 2^LogMaximum], within the unsigned index carrier.
 

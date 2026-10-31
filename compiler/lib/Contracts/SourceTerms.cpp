@@ -76,7 +76,7 @@ struct Reader {
     if (*tag == "nominal") {
       auto kind = a->size() == 4 ? (*a)[1].getAsString() : std::nullopt;
       return kind &&
-             (*kind == "record" || *kind == "variant" ||
+             (*kind == "record" || *kind == "logical_record" || *kind == "variant" ||
               *kind == "associated" || *kind == "module") &&
              path((*a)[2]) && arguments(3);
     }

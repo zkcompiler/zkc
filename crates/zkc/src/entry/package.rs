@@ -13,7 +13,7 @@ pub(super) const ASSET_COUNT: usize = 256;
 const ASSET_BYTES: usize = zkc_runtime::ring::BYTE_LIMIT;
 const ASSETS_BYTES: usize = zkc_cpu::ring::REGISTRY_BYTE_LIMIT;
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, remote = "Self")]
 pub struct CompileOptions {
     pub simplify: bool,
@@ -22,6 +22,7 @@ pub struct CompileOptions {
     pub fuse_vector_reductions: bool,
     pub fuse_collect_fold: bool,
     pub calculation_batching: bool,
+    pub oracle_realization: super::OracleSelection,
 }
 impl Serialize for CompileOptions {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -135,6 +136,8 @@ impl Package {
         }
         // Only the frame is decoded here. Embedded interface and artifact
         // decoders retain their own structure, work and admission limits.
+        super::oracle_selection::validate_packaged_selection(bytes)
+            .map_err(|_| PackageError::Format)?;
         let frame: Frame = serde_json::from_slice(bytes).map_err(|_| PackageError::Format)?;
         if frame.format != "zkc.entry/0" {
             return Err(PackageError::Format);
@@ -201,7 +204,7 @@ impl Package {
         }
     }
     pub fn options(&self) -> CompileOptions {
-        self.options
+        self.options.clone()
     }
     /// Packaged asset bodies in digest order. Retention is not admission: an
     /// Entry admits each body and checks the program's references separately.
@@ -218,7 +221,7 @@ mod tests {
     fn frame() -> String {
         json!({"format":"zkc.entry/0","original":"module\n{}",
             "interface":"{\"job\":{\"kind\":\"run\"}}", "artifact":"[]",
-            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true},"assets":[]})
+            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()},"assets":[]})
         .to_string()
     }
     fn capture(bytes: &[u8]) -> Result<Package, PackageError> {
@@ -249,6 +252,7 @@ mod tests {
                 fuse_vector_reductions: false,
                 fuse_collect_fold: false,
                 calculation_batching: true,
+                oracle_realization: Default::default(),
             }
         );
         assert_eq!(package.clone().identity(), package.identity());
@@ -424,11 +428,17 @@ mod tests {
             capture(br#"["zkc.entry/0","o","i","a",[true,false,true,false,false],[]]"#),
             Err(PackageError::Format)
         ));
-        let value = frame().replace(
-            r#"{"calculation_batching":true,"finite_bulk":true,"fuse_collect_fold":false,"fuse_vector_reductions":false,"release_storage":false,"simplify":true}"#,
-            "[true,false]",
-        );
-        assert_ne!(value, frame());
+        let mut frame: serde_json::Value = serde_json::from_str(&frame()).unwrap();
+        frame["options"] = json!([
+            true,
+            false,
+            true,
+            false,
+            false,
+            true,
+            crate::entry::OracleSelection::default()
+        ]);
+        let value = frame.to_string();
         assert!(matches!(
             capture(value.as_bytes()),
             Err(PackageError::Format)
@@ -444,6 +454,51 @@ mod tests {
         assert!(matches!(
             capture(value.to_string().as_bytes()),
             Err(PackageError::Limit)
+        ));
+    }
+    #[test]
+    fn oracle_selection_is_a_required_strict_seventh_option() {
+        let mut v: serde_json::Value = serde_json::from_str(&frame()).unwrap();
+        v["options"]
+            .as_object_mut()
+            .unwrap()
+            .remove("oracle_realization");
+        assert!(matches!(
+            capture(v.to_string().as_bytes()),
+            Err(PackageError::Format)
+        ));
+        let mut v: serde_json::Value = serde_json::from_str(&frame()).unwrap();
+        for invalid in [
+            json!(null),
+            json!([]),
+            json!({}),
+            json!(["zkc.oracle-selection/0", {}, "unrestricted", "per-query"]),
+        ] {
+            v["options"]["oracle_realization"] = invalid;
+            assert!(matches!(
+                capture(v.to_string().as_bytes()),
+                Err(PackageError::Format)
+            ));
+        }
+        let empty = crate::entry::OracleSelection {
+            roots: crate::entry::OracleRoots::Exact(vec![]),
+            ..Default::default()
+        };
+        v["options"]["oracle_realization"] = json!(empty);
+        let package = capture(v.to_string().as_bytes()).unwrap();
+        assert_eq!(package.options().oracle_realization, empty);
+        assert_ne!(
+            package.options().oracle_realization,
+            crate::entry::OracleSelection::default()
+        );
+        let raw = frame();
+        let changed = raw.replace(
+            "\"oracle_realization\":",
+            "\"oracle_realization\":{},\"oracle_realization\":",
+        );
+        assert!(matches!(
+            capture(changed.as_bytes()),
+            Err(PackageError::Format)
         ));
     }
 }

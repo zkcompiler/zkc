@@ -79,12 +79,11 @@ def fri(root, shape):
     public = {'shift': a.encode(shift), 'round_count': str(rounds), 'query_count': str(queries)}
     source = '''module example;
 use zkc::vector::{Vector};
-use fri::{LowDegree};
+use fri::{Direct, LowDegree};
 domain E=field("koala-bear.ext8-binomial3");
-domain Rows=commitment("rows.merkle-keccak256.koala-bear.ext8-binomial3/0");
 protocol Fri roles(P,V)(word:Vector<E>@P,shift:E@(P,V),round_count:index@(P,V),
  query_count:index@(P,V),coins:Random<E>@V)->(accepted:bool@V){
- let (accepted,_,_,_)=LowDegree<Rows,SIZE,0,ROUNDS,QUERIES>(word,shift,shift,round_count,query_count,coins);
+ let (accepted,_,_,_)=LowDegree<Direct<E>,SIZE,0,ROUNDS,QUERIES>(word,shift,shift,round_count,query_count,coins);
  return accepted;
 }
 proof Proof=Fri {prover P;verifier V;public {shift,round_count,query_count};accept accepted;

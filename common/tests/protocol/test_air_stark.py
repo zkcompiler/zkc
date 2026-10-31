@@ -254,19 +254,16 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
     # FRI folds and transcript, so rejection must come from the outer equation.
     source = STARK.read_text()
     if dishonest == 'quotient':
-        old = '  let quotient @P = quotient_values'
-        new = '  let wrong_alpha @P = alter(alphaP);\n' + old
-        source = source.replace('dataP, heightP, shiftP, sizeP, alphaP);',
-                                'dataP, heightP, shiftP, sizeP, wrong_alpha);')
-        source += '\nfn alter(value: Extension) -> Extension { return value + 1; }\n'
-        guard, loops = 2, []
+        old = 'dataP, heightP, shiftP, sizeP, alphaP);'
+        new = 'dataP, heightP, shiftP, sizeP, alphaP + 1);'
+        guard, loops = 'identity', []
     else:
-        old = '  let (fri_ok, positionsP, positionsV, valuesV) ='
-        new = '  let reduced @P = alter_word(honest_reduced);\n' + old
-        source = source.replace('let reduced @P = deep_word', 'let honest_reduced @P = deep_word')
-        source += '\nfn alter_word(word: Vector<Extension>) -> Vector<Extension> {\n'
-        source += '  let two: Extension = 2; return kernel<Extension>("vector.scale", word, two);\n}\n'
-        guard, loops = 6, ['0']
+        old = ('let reduced @P = deep_word<Extension,Table,B>(trace_extension, chunks, proposed, proposed_quotient,\n'
+               '    heightP, shiftP, sizeP, zetaP, rhoP, adjustmentP);')
+        new = ('let reduced @P = vector::scale(deep_word<Extension,Table,B>(trace_extension, chunks, '
+               'proposed, proposed_quotient,\n'
+               '    heightP, shiftP, sizeP, zetaP, rhoP, adjustmentP), 2);')
+        guard, loops = 'deep', ['0']
     assert source.count(old) == 1
     source = source.replace(old, new)
     library = directory / 'stark.zkc'
@@ -278,10 +275,13 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
         '--entry=air_stark_example::Proof', f'--module=air_stark_example={directory}/main.zkc',
         *library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', overrides={'stark::octic_table': library}),
         f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json'])
-    sites = re.findall(r'"protocol\.guard"\(%\d+(?:#\d+)?\) <\{owner = "(\w+)", site = "(s\d+)"\}>', emitted)
-    assert [owner for owner, _ in sites[:7]] == [
-        'role00000001', 'role00000000', *(['role00000001'] * 5)]
-    expected = sites[guard][1]
+    from test_fri import emitted_guard_sites
+    roster = [
+        ('profile', 'role00000001', 0), ('prover_profile', 'role00000000', 0),
+        ('identity', 'role00000001', 0), ('fri', 'role00000001', 0),
+        ('trace', 'role00000001', 1), ('quotient', 'role00000001', 1),
+        ('deep', 'role00000001', 1)]
+    expected = emitted_guard_sites(emitted, {'': roster})[guard]
     public, private = inputs()
     producer = request(journal, 'producer', public, private)
     verifier = request(journal, 'verifier', public)
@@ -291,7 +291,7 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
                           refuses='artifact-stopped')
     stop = report['execution']['stop']
     assert stop['role'] == 'role00000001' and stop['kind'] == 'Explicit("reject")'
-    assert stop['site'].endswith('_' + expected), stop
+    assert re.fullmatch(r'(?:apply_\d+_)+((?:s\d+_)*s\d+)', stop['site'])[1] == expected, stop
     assert [frame[2] for frame in stop['origin'][4] if frame[0] == 'loop'] == loops
 
 

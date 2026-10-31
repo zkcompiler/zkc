@@ -152,7 +152,7 @@ BodyChecker::restrictRoles(ValueId value, ArrayRef<unsigned> roles, Span span) {
   }
   if (ArrayRef<unsigned>(before.components) == roles)
     return value;
-  if (isOracleHandle(before.type)) {
+  if (isLogicalValue(before.type)) {
     fail("source.oracle-role",
          "oracle aliases retain the complete holder/receiver family", span);
     return {};
@@ -244,7 +244,8 @@ bool BodyChecker::bindPattern(const Pattern &p, ValueId value, unsigned depth) {
     auto specified = checker.type(decl, *p.type);
     if (!specified)
       return false;
-    if (*specified != type || type.kind != Type::Kind::Record)
+    if (*specified != type || (type.kind != Type::Kind::Record &&
+                               type.kind != Type::Kind::LogicalRecord))
       return fail("source.type", "record pattern type differs", p.span);
     auto fs = checker.types.fields(type, p.span);
     if (!fs)
@@ -279,15 +280,19 @@ bool BodyChecker::bindPattern(const Pattern &p, ValueId value, unsigned depth) {
     return fail("source.binding", "pattern must cover every field exactly once",
                 p.span);
   std::set<unsigned> seen;
+  std::map<std::string, unsigned> fieldIndices;
+  if (p.kind == Pattern::Kind::Record)
+    for (unsigned i = 0; i < fields.size(); ++i)
+      fieldIndices.emplace(fields[i].name, i);
   for (unsigned i = 0; i < p.children.size(); ++i) {
     unsigned index = i;
     if (p.kind == Pattern::Kind::Record) {
-      auto field =
-          llvm::find_if(fields, [&](auto &f) { return f.name == p.labels[i]; });
-      if (field == fields.end())
+      auto field = fieldIndices.find(p.labels[i]);
+      if (field == fieldIndices.end())
         return fail("source.field", "unknown pattern field", p.span);
-      index = field - fields.begin();
-      if (!field->isPublic && !checker.types.constructorAllowed(decl, type))
+      index = field->second;
+      if (!fields[index].isPublic &&
+          !checker.types.constructorAllowed(decl, type))
         return fail("source.private", "pattern field is private", p.span);
     }
     if (!seen.insert(index).second)

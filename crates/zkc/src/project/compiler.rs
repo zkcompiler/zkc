@@ -368,7 +368,8 @@ impl Compiler {
             observations,
             ..
         } = request;
-        let flags = options.flags();
+        let flags = options.flags().map_err(|e| e.to_string())?;
+        let flags: Vec<_> = flags.iter().map(String::as_str).collect();
         let invocation =
             self.invoke_observed(project, "language-package", selection, &flags, observations)?;
         let mut result = Self::captured(&invocation.bytes, selection, options)?;

@@ -28,6 +28,11 @@ public:
   static std::optional<PreparedProtocol>
   prepare(mlir::ModuleOp source, MathematicalSelectionPolicy policy = {},
           RealizationTrace *trace = nullptr);
+  // Select explicit deployment roots after complete source admission and
+  // checked expansion. Retain the full authored source. Other declarations
+  // remain intact; any live reference to an omitted program is a refusal.
+  // Failure leaves this owner unchanged.
+  mlir::LogicalResult selectEntries(llvm::ArrayRef<llvm::StringRef> entries);
   mlir::OwningOpRef<mlir::ModuleOp> snapshot() const;
   mlir::OwningOpRef<mlir::ModuleOp> originalSnapshot() const;
   mlir::OwningOpRef<mlir::ModuleOp> project(bool simplify) &&;

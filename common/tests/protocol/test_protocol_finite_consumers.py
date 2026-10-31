@@ -85,6 +85,42 @@ def test_fri_terminal_coefficients_and_domain_admission(toolchain, journal, dire
                   refuses='entry-host-run-failed')
 
 
+PADDING = '''module sample;
+use zkc::vector::{Vector};
+use fri::{padded};
+domain F = field("koala-bear.ext8-binomial3");
+protocol Inspect roles(P)(coefficients: Vector<F> @P, count: index @P)
+    -> (values: Vector<F> @P) {
+  return padded(coefficients, count);
+}
+entry fn Demo(inputs: Inspect::Inputs) { return Inspect::run(inputs); }
+'''
+
+
+@pytest.mark.parametrize('flags', FLAGS, ids=MODES)
+def test_fri_padding_preserves_coefficients_and_refuses_oversize(
+        toolchain, journal, directory, flags):
+    source = fri.LIBRARY.read_text()
+    assert source.count('fn padded<') == 1
+    library = directory / 'fri-padding.zkc'
+    library.write_text(source.replace('fn padded<', 'pub fn padded<'))
+    entry = Entry(toolchain, journal, directory, PADDING,
+                  [*SHARED, f'--module=fri={library}', *flags])
+    for label, coefficients, count in [('empty', [], 4), ('zero', [ZERO], 4),
+                                       ('constant', [ONE], 4),
+                                       ('trailing-zero', [ONE, ZERO], 4),
+                                       ('maximum', fri.FULL_DEGREE, 8)]:
+        assert entry.run(label, {'coefficients': coefficients, 'count': count}) == decimal_values(
+            {'values': coefficients + [ZERO] * (count - len(coefficients))})
+    for label, coefficients, count in [('one-too-many', [ONE, ONE], 1),
+                                       ('degree-bound', fri.FULL_DEGREE, 4)]:
+        refused = entry.run(label, {'coefficients': coefficients, 'count': count},
+                            refuses='entry-host-run-failed')
+        role, = joint_execution(refused)['roles']
+        assert role['after'][0] == 'stopped'
+        assert role['after'][1]['cause'] == ['explicit', {'text': 'reject', 'omitted_bytes': 0}]
+
+
 REDUCTION = '''module sample;
 use zkc::indices as indices;
 use zkc::vector::{Vector};

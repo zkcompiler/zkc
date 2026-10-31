@@ -50,10 +50,13 @@ Oracle observations and query-capacity analysis share this extraction while
 keeping separate transfer rules. Successful-continuation analysis interprets
 same-participant guards over exact unsigned comparisons at an actual point,
 including invariant captures. It checks SSA dominance, preserves zero-trip and
-stopped paths, and supplies guarded bounds to fixed query-block admission.
+stopped paths, and supplies reached bound queries independently of batching.
 Unchecked Booleans, foreign participants, carried initializers and unexpanded
-callee guards supply no such evidence. General local success summaries, dynamic
-virtual batching and the shared FRI component remain subsequent work.
+callee guards supply no such evidence. The working dynamic-window migration
+replaces fixed packet admission with answer-free discovery, whole-prefix
+authentication and ordered replay. Its complete native validation and shared
+FRI migration remain open; primitive tests are not that completion gate.
+General local success summaries remain outside this profile.
 
 Source, constructed-participant and realization exports share complete
 [logical type data](spec/formats/logical-types.md) and typed catalog bindings and

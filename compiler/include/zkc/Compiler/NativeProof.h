@@ -5,6 +5,7 @@
 #include "zkc/Contracts/ProofFormat.h"
 #include "zkc/Target/CpuTarget.h"
 #include "zkc/Transforms/MathematicalSelection.h"
+#include "zkc/Transforms/OracleSelection.h"
 #include "llvm/Support/JSON.h"
 #include <optional>
 #include <variant>
@@ -93,6 +94,7 @@ struct NativeProofOptions {
   std::optional<NativeProofOperation> operation = std::nullopt;
   CompilationObservation *observations = nullptr;
   target::CpuTarget cpuTarget = {};
+  protocol::OracleRealizationPolicy oracleRealization = {};
 };
 struct CompiledNativeProof {
   Compilation compilation;

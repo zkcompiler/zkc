@@ -2,6 +2,7 @@
 #include "Effects.h"
 #include "FiniteContracts.h"
 #include "HelperResults.h"
+#include "OracleDefinitions.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/Support/SaveAndRestore.h"
@@ -18,7 +19,10 @@ BodyChecker::BodyChecker(Checker &checker, Declaration &decl,
                          unsigned depth)
     : checker(checker), decl(decl), syntax(syntax), body(body),
       plan(checker.bodyPlan(decl.id)),
-      witnesses(checker.bodyWitnesses(decl.id)), callDepth(depth) {}
+      witnesses(checker.bodyWitnesses(decl.id)), callDepth(depth) {
+  retainExpressionValues = decl.oraclePredicateOwner.has_value() ||
+                           decl.kind == Declaration::Kind::Oracle;
+}
 bool BodyChecker::active(ArrayRef<unsigned> roles, Span span) {
   auto available = allRoles();
   return std::includes(available.begin(), available.end(), roles.begin(),
@@ -86,10 +90,12 @@ std::optional<ValueId> BodyChecker::emit(decltype(Operation::action) action,
                                          Components components, Span span) {
   std::optional<unsigned> holder;
   if (auto *projection = std::get_if<Projection>(&action);
-      projection && projection->path.empty())
+      projection && (projection->path.empty() || isOracleHandle(type)))
     holder = body.values[projection->input.index].oracleHolder;
   if (auto *forget = std::get_if<OracleForgetRows>(&action))
     holder = body.values[forget->input.index].oracleHolder;
+  if (auto *instance = std::get_if<OracleInstantiation>(&action))
+    holder = instance->holder;
   if (auto *send = std::get_if<OracleSend>(&action))
     holder = send->holder;
   if (auto *empty = std::get_if<OracleSequenceEmpty>(&action))
@@ -98,6 +104,13 @@ std::optional<ValueId> BodyChecker::emit(decltype(Operation::action) action,
     holder = body.values[append->prefix.index].oracleHolder;
   if (auto *at = std::get_if<OracleSequenceAt>(&action))
     holder = body.values[at->input.index].oracleHolder;
+  if (auto *construct = std::get_if<Construct>(&action);
+      construct && type.kind == Type::Kind::LogicalRecord)
+    for (auto operand : construct->operands)
+      if (isOracleHandle(body.values[operand.index].type)) {
+        holder = body.values[operand.index].oracleHolder;
+        break;
+      }
   auto ids = emitResults(
       std::move(action),
       {{type,
@@ -126,8 +139,15 @@ BodyChecker::emitResults(decltype(Operation::action) action,
     if (!checker.types.chargeType(value.type, span) ||
         !checker.types.charge(value.components.size() + 1, span))
       return {};
+    if (value.type.kind == Type::Kind::LogicalRecord &&
+        (!value.oracleHolder || value.components.size() < 2 ||
+         !llvm::is_contained(value.components, *value.oracleHolder))) {
+      fail("source.oracle-role", "logical record has no oriented role family",
+           span);
+      return {};
+    }
     if (protocol() && !placement && value.components.size() > 1 &&
-        !isOracleHandle(value.type)) {
+        !isLogicalValue(value.type)) {
       if (!checker.types.admit(value.type, Boundary::Participants, span, &decl))
         return {};
     }
@@ -201,7 +221,7 @@ bool BodyChecker::labelSite(const Statement &source, size_t firstOperation) {
   const auto &expression = syntax.expressions[source.expression];
   auto label = source.site;
   const bool explicitLabel = bool(label);
-  if (!label && syntax.layoutSyntax && protocol()) {
+  if (!label && ((syntax.layoutSyntax && protocol()) || oracleMode())) {
     if (source.evaluation == Statement::Evaluation::Ordered &&
         source.pattern.kind == Pattern::Kind::Name)
       label = source.pattern.name;
@@ -211,8 +231,8 @@ bool BodyChecker::labelSite(const Statement &source, size_t firstOperation) {
   }
   if (!label)
     return true;
-  if (!protocol())
-    return fail("source.site", "site labels require protocol mode",
+  if (!protocol() && !oracleMode())
+    return fail("source.site", "site labels require protocol or oracle mode",
                 source.span);
   if (!checker.types.charge(body.operations.size() - firstOperation + 1,
                             source.span))
@@ -223,6 +243,8 @@ bool BodyChecker::labelSite(const Statement &source, size_t firstOperation) {
         std::holds_alternative<Exchange>(operation.action) ||
         std::holds_alternative<OracleSend>(operation.action) ||
         std::holds_alternative<OracleQuery>(operation.action) ||
+        std::holds_alternative<OracleSourceQuery>(operation.action) ||
+        std::holds_alternative<OracleInstantiation>(operation.action) ||
         std::holds_alternative<OracleSequenceAppend>(operation.action) ||
         std::holds_alternative<OracleSequenceAt>(operation.action) ||
         std::holds_alternative<ServiceQuery>(operation.action) ||
@@ -251,6 +273,8 @@ bool BodyChecker::labelSite(const Statement &source, size_t firstOperation) {
   return true;
 }
 bool BodyChecker::statementBody(const Statement &s) {
+  if (oracleMode() && !oracleStatement(s))
+    return false;
   if (body.stopped)
     return fail("source.unreachable", "statement follows a guaranteed stop",
                 s.span);
@@ -583,6 +607,12 @@ bool BodyChecker::run(const SyntaxBody &source, std::vector<Port> &outputs,
         body.values[value->index].oracleHolder != port.oracle->holder)
       return fail("source.oracle-role", "returned oracle holder differs",
                   syntax.expressions[id].span);
+    if (port.type.kind == Type::Kind::LogicalRecord &&
+        components(*value).roles != port.roles)
+      return fail(
+          "source.oracle-role",
+          "returned logical record must retain its complete role family",
+          syntax.expressions[id].span);
     if (isProtocol && !demand(*value, port.roles, syntax.expressions[id].span))
       return false;
     if (!use(*value, syntax.expressions[id].span))
@@ -606,6 +636,8 @@ bool BodyChecker::run(const SyntaxBody &source, std::vector<Port> &outputs,
 }
 bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
   const auto &source = *sources[decl.id.index];
+  if (decl.kind == Declaration::Kind::Oracle)
+    return oracleBody(decl, result, depth);
   if (source.primitive)
     return primitiveBody(decl, result);
   if (source.finiteDefinition)
@@ -620,7 +652,7 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
         !types.mathematicalData(p.type, p.span, &decl))
       return false;
     if (result.mode == Body::Mode::Protocol) {
-      if (p.roles.size() > 1 && !isOracleHandle(p.type) &&
+      if (p.roles.size() > 1 && !isLogicalValue(p.type) &&
           !types.admit(p.type, Boundary::Participants, p.span, &decl))
         return false;
     }
@@ -655,7 +687,7 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
         !types.mathematicalData(p.type, p.span, &decl))
       return false;
     if (result.mode == Body::Mode::Protocol && p.roles.size() > 1 &&
-        !isOracleHandle(p.type) &&
+        !isLogicalValue(p.type) &&
         !types.admit(p.type, Boundary::Participants, p.span, &decl))
       return false;
   }
@@ -696,9 +728,13 @@ bool Checker::body(DeclarationId id, unsigned depth) {
     inferredContracts.erase(&decl);
     return true;
   }
+  if (decl.kind == Declaration::Kind::Oracle &&
+      !body(decl.oracleDefinition->admissibility, depth))
+    return false;
   Body result;
-  result.mode = (decl.kind == Declaration::Kind::Math ||
-                 decl.kind == Declaration::Kind::Relation)
+  result.mode = decl.kind == Declaration::Kind::Oracle ? Body::Mode::Oracle
+                : (decl.kind == Declaration::Kind::Math ||
+                   decl.kind == Declaration::Kind::Relation)
                     ? Body::Mode::Math
                 : (decl.kind == Declaration::Kind::Local ||
                    decl.kind == Declaration::Kind::EntryFunction)
@@ -708,6 +744,12 @@ bool Checker::body(DeclarationId id, unsigned depth) {
                      ? Body::Stage::Host
                      : Body::Stage::Computation;
   if (!resolveBindings(*this, decl, *sources[id.index]))
+    return false;
+  if (decl.oraclePredicateOwner &&
+      !checkOraclePredicateReferences(
+          types, decl, *sources[id.index],
+          output.declarations[decl.oraclePredicateOwner->index]
+              .oracleDefinition->sourceCount))
     return false;
   std::set<std::string> sites;
   for (const auto &region : sources[id.index]->bodies)
@@ -773,6 +815,8 @@ bool Checker::body(DeclarationId id, unsigned depth) {
       for (const auto &port : *ports)
         if (!types.hostData(port.type, port.span, &decl))
           return false;
+  if (decl.oraclePredicateOwner && !retainOraclePredicates(decl, result))
+    return false;
   decl.body = std::make_shared<Body>(std::move(result));
   bodyState[id.index] = 2;
   inferredContracts.erase(&decl);

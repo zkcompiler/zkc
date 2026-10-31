@@ -1,4 +1,5 @@
 #include "zkc/Language/Inspection.h"
+#include "OracleInspection.h"
 #include "State.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Language/Diagnostics.h"
@@ -67,10 +68,19 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
   };
   auto ports = [&](ArrayRef<Port> ports) {
     json::Array result;
-    for (const auto &port : ports)
-      result.push_back(json::Object{{"name", port.name},
-                                    {"type", type(port.type)},
-                                    {"roles", roles(port.roles)}});
+    for (const auto &port : ports) {
+      json::Object value{{"name", port.name},
+                         {"type", type(port.type)},
+                         {"roles", roles(port.roles)}};
+      if (port.oracle) {
+        value["oracle_holder"] = decl.roles[port.oracle->holder];
+        value["maximum_rows"] =
+            port.oracle->maximumRows
+                ? json::Value(type(*port.oracle->maximumRows))
+                : json::Value(nullptr);
+      }
+      result.push_back(std::move(value));
+    }
     return result;
   };
   json::Array services, requirements;
@@ -190,7 +200,8 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                      : decl.finiteDefinition ? "finite"
                      : decl.abstract         ? "abstract"
                                              : "body"},
-      {"kind", domain                                          ? "domain"
+      {"kind", decl.kind == Declaration::Kind::Oracle          ? "oracle"
+               : domain                                        ? "domain"
                : !ordered                                      ? "math"
                : decl.kind == Declaration::Kind::EntryFunction ? "entry"
                : decl.kind == Declaration::Kind::Local         ? "local"
@@ -214,6 +225,9 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                           : "captured"},
            {"begin", decl.span.begin},
            {"end", decl.span.end}}}};
+  if (decl.oracleDefinition)
+    result["oracle_definition"] =
+        detail::describeOracleDefinition(project.declarations(), decl);
   if (decl.kind == Declaration::Kind::EntryFunction ||
       (decl.generated && decl.generated->operation))
     result["stage"] = "host";
@@ -385,7 +399,8 @@ Expected<std::string> inspectDeclarations(const CheckedProject &project,
     if (project.sources()[decl.span.source.index].origin ==
         SourceOrigin::Installation)
       continue;
-    if (decl.kind != Declaration::Kind::Math &&
+    if (decl.kind != Declaration::Kind::Oracle &&
+        decl.kind != Declaration::Kind::Math &&
         decl.kind != Declaration::Kind::Local &&
         decl.kind != Declaration::Kind::EntryFunction &&
         decl.kind != Declaration::Kind::DomainFunction &&
@@ -580,9 +595,13 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
         auto fields = [&](ArrayRef<TypeField> fields) {
           json::Array result;
           for (const auto &field : fields)
-            if (field.isPublic)
-              result.push_back(json::Object{{"name", field.name},
-                                            {"type", formatType(field.type)}});
+            if (field.isPublic) {
+              json::Object value{{"name", field.name},
+                                 {"type", formatType(field.type)}};
+              if (field.maximumRows)
+                value["maximum_rows"] = formatType(*field.maximumRows);
+              result.push_back(std::move(value));
+            }
           return result;
         };
         switch (decl.kind) {
@@ -593,8 +612,11 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
           break;
         case Declaration::Kind::Record:
         case Declaration::Kind::Variant: {
-          dataKind(decl.kind == Declaration::Kind::Record ? "record"
-                                                          : "variant");
+          dataKind(decl.kind == Declaration::Kind::Record
+                       ? (decl.logical ? "logical_record" : "record")
+                       : "variant");
+          value["logical"] = decl.logical;
+          value["sealed"] = decl.sealed;
           bool privateFields = llvm::any_of(
               decl.fields, [](const auto &f) { return !f.isPublic; });
           json::Array alternatives;

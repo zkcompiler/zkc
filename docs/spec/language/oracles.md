@@ -96,14 +96,20 @@ Append and selection are ordered checked operations. Selection requires its
 index to be available to the whole family; it cannot let each receiver choose
 a different anchor. Appended handles must preserve kind and custody family.
 The static sequence capacity is independent of each table's row shape.
-Sequences remain internal protocol values under the current IR profile.
+Sequences can cross internal protocol inputs and results with the same holder
+arrow as single handles. An alias `Oracles<K, Capacity> =
+builtin("oracle_sequence", K, Capacity)` retains the static capacity. A dynamic
+kind uses the port's named row bound for every element, independently of that
+capacity. Deployment-root sequence ingress remains refused.
 
 ## Protocol boundaries and components
 
 An oracle port is one logical source value. Calls and returns lower it into
-holder data and receiver anchor with the existing `oracle_components` operation;
-the callee rejoins those components using `oracle_input`. The same ordinary
-call-site role substitution applies, including when the callee uses different
+holder data and receiver anchor with the existing `oracle_components` operation.
+For a bounded sequence these are an ordered sequence of `K::Data` and the exact
+bounded sequence of anchors. Passing such a pair preserves all anchors and does
+not eagerly evaluate virtual contents. The callee rejoins those components
+using `oracle_input`. The same ordinary call-site role substitution applies, including when the callee uses different
 role names. Actual-body comparison checks the selected components and ordering.
 Authors do not write an additional decomposition operation or acquire a freely
 constructible anchor. `oracle.data` is the explicit holder-only data view.
@@ -118,10 +124,41 @@ pub protocol Relay<K: OracleKind> roles(A, B)(
 received <- Relay(word) @(P, V)
 ```
 
-Restricted logical records are a separate aggregate extension. Their eventual
-field projection must retain typed field paths and component custody. Ordinary
-tuples, records and native collections continue to exclude handles; the ABI
-decomposition above does not make them ordinary serializable values.
+## Restricted logical records
+
+`#[logical] struct` groups logical handles with shared metadata. It is a distinct
+nominal type, including its complete static arguments, private fields and fields
+with no represented storage. A record requires at least one direct `Oracle` or
+bounded `Oracles` field; a zero-capacity sequence still counts as a logical field.
+Other fields must recursively be ordinary shared data. Nested logical records,
+ordinary products containing handles, resources, services and native owner-local
+carriers are excluded. This does not add a new IR dialect or packed native type.
+
+Every logical field has the same exact oriented holder/receiver family. Record
+construction infers that family from its actual fields; equal data or equal roots
+cannot establish it. Ordinary metadata must be available throughout that family.
+Availability does not assert equality between participant components. Fields are
+evaluated once in authored order and retained in declaration order. Existing
+private-field construction and projection rules apply. Copy and Drop preserve
+immutable aliases without granting wire serialization or deployment ingress.
+
+A logical record port uses the holder arrow. The record has no whole-value row
+bound: `#[shape(field.rows, bound = Maximum)]` on the declaration names each
+unsized direct logical field. Bounds specialize with the record's parameters;
+a sequence maximum and its per-element row maximum remain distinct. Unknown,
+duplicate, sized-field and missing required bounds refuse. The actual boundary
+checks the specialized bound against the retained anchor shapes.
+
+Field projection preserves exact custody for a handle or sequence. Projecting
+ordinary metadata retains participant availability without an oracle holder.
+The layout retains nominal identity and typed field paths; protocol boundaries
+expand ordinary leaves once and each logical leaf into its exact holder-data /
+receiver-anchor pair. Actual-body comparison checks the same decomposition on
+inputs, applications, returns and loop-carried values. Holder data remains lazy
+across internal rebinding. The interface reader reconstructs this schema
+independently. Ordinary tuples, records and native collections still exclude
+handles, and no logical record can be a Host, Math, Local, codec or packed-data
+carrier merely because its protocol ABI is flat.
 
 ## Virtual definitions: designed integration boundary
 
@@ -149,6 +186,15 @@ operation inside total mathematics. Each construction creates an obligation
 for the actual anchors and captures. The generated predicate is fixed before
 companion lookup, through the existing [companion contract](companions.md).
 No separate source keyword for an admissibility certificate is needed.
+
+A declared source row bound is also a conjunct of the generated predicate:
+the source Data's row count must be at most that static maximum. It is not
+silently discarded formation metadata, nor does it narrow the actual anchor's
+capacity. Result shape bounds remain the native constructor's checked shape
+map. The source-bound conjunct and every authored clause survive specialization
+and lowering in the same Formula relation; no second native bound attribute
+can disagree with it. Retaining this predicate does not discharge its
+construction occurrence obligations or insert a runtime guard.
 
 Instantiation allocates a fresh anchor but does not query the source or
 materialize all answers. Its captures must be available at the holder and every

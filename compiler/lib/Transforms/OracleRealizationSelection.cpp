@@ -8,30 +8,15 @@ namespace zkc::protocol {
 Expected<std::vector<OracleRootSelection>>
 resolveOracleRealizationSelection(mlir::ModuleOp prepared,
                                   const OracleRealizationPolicy &policy) {
-  if ((policy.order != OracleQueryOrder::Unrestricted &&
-       policy.order != OracleQueryOrder::AfterFinalDraw) ||
-      (policy.authentication != OracleAuthentication::PerQuery &&
-       policy.authentication != OracleAuthentication::AtomicBlocks))
-    return error("oracle-realization-selection");
+  auto request = encodeOracleRealizationPolicy(policy);
+  if (!request)
+    return request.takeError();
   using Key = std::pair<std::string, std::vector<unsigned>>;
   std::map<Key, OracleTableRealization> selected;
-  if (policy.roots) {
-    if (policy.roots->size() > 100000)
-      return error("oracle-realization-selection-limit");
-    for (const auto &root : *policy.roots) {
-      const auto &choice = root.realization;
-      if (root.path.empty() || root.path.size() > 64 ||
-          (choice.grouping != OracleLeafGrouping::Individual &&
-           choice.grouping != OracleLeafGrouping::AntipodalPairs) ||
-          (choice.order != OracleLeafOrder::Natural &&
-           choice.order != OracleLeafOrder::BitReversed) ||
-          (choice.scheme.empty() &&
-           (choice.grouping != OracleLeafGrouping::Individual ||
-            choice.order != OracleLeafOrder::Natural)) ||
-          !selected.emplace(Key{root.entry, root.path}, choice).second)
-        return error("oracle-realization-selection");
-    }
-  }
+  auto *exact = std::get_if<std::vector<OracleRootSelection>>(&policy.roots);
+  if (exact)
+    for (const auto &root : *exact)
+      selected.emplace(Key{root.entry, root.path}, root.realization);
   auto entries = oracleEntries(prepared);
   if (!entries)
     return entries.takeError();
@@ -49,7 +34,9 @@ resolveOracleRealizationSelection(mlir::ModuleOp prepared,
       if (constructor.constructor == OracleAnchorConstructor::Kind::Virtual)
         continue;
       OracleTableRealization choice;
-      if (policy.roots) {
+      if (auto *uniform = std::get_if<OracleTableRealization>(&policy.roots))
+        choice = *uniform;
+      if (exact) {
         auto found = selected.find({entry, constructor.path});
         if (found == selected.end())
           return error("oracle-realization-selection");

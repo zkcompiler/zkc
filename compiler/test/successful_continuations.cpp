@@ -1,4 +1,3 @@
-#include "OracleQueryBlocks.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
@@ -606,101 +605,57 @@ int main() {
                 work.exhausted(),
             "invariant forwarding depth was not sticky capacity");
   });
-  for (StringRef mode :
-       {"guarded", "before", "unchecked", "other-role", "unrelated", "wide",
-        "nested", "carried", "post-repeat", "stopped", "finished",
-        "dynamic-exact", "dynamic-bound"}) {
-    cases.run("production direct-query consumer: " + mode, [&] {
-      std::string body = less() + guard() + query.str();
-      bool expected =
-          mode == "guarded" || mode == "nested" || mode == "dynamic-exact";
-      if (mode == "before")
-        body = query.str() + less() + guard();
-      else if (mode == "unchecked")
-        body = less() + query.str();
-      else if (mode == "other-role")
-        body = less() + guard("P") + query.str();
-      else if (mode == "unrelated")
-        body = less("%unrelated") + guard() + query.str();
-      else if (mode == "wide")
-        body = less("%position", "%wide") + guard() + query.str();
-      else if (mode == "nested")
-        body = less() + guard() + nested.str();
-      else if (mode == "carried")
-        body = less() + guard() + carried(false);
-      else if (mode == "post-repeat")
-        body = guardLoop("%zero") + query.str();
-      else if (mode == "stopped")
-        body = less() + guard() + guard("V", "%no", "stop") + query.str();
-      else if (mode == "finished")
-        body = less() + guard() + R"mlir(
- "protocol.finish_if"(%yes) {owner="V",site="stop"} : (i1)->()
-)mlir" + query.str();
-      auto text = source(body);
+  for (StringRef mode : {"literal-rows", "runtime-rows"}) {
+    cases.run("dynamic tables retain exact row-bound subjects: " + mode, [&] {
+      auto text = source(less() + guard() + query.str());
       auto replace = [&](StringRef before, StringRef after) {
         auto at = text.find(before);
-        require(at != std::string::npos, "missing production fixture slot");
+        require(at != std::string::npos, "missing dynamic-row fixture slot");
         text.replace(at, before.size(), after);
       };
-      if (mode.starts_with("dynamic-")) {
-        replace("[!F,16:ui64]", "[!F]");
-        replace("shape_bounds={}", "shape_bounds={rows=16:ui64}");
-        if (mode == "dynamic-bound")
-          replace("(%data,%rows)", "(%data,%upper)");
-      }
+      replace("[!F,16:ui64]", "[!F]");
+      replace("shape_bounds={}", "shape_bounds={rows=16:ui64}");
+      if (mode == "runtime-rows")
+        replace("(%data,%rows)", "(%data,%upper)");
       auto module = parse(text);
       auto program = declaration(*module);
       auto actual = cast<pir::OracleQueryOp>(point(program));
       auto frozen = print(*module);
-      auto storage = take(protocol::planOracleAnchorStorage(
-          *module, "subject", [](const auto &) -> Expected<std::string> {
-            return std::string(
-                "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0");
-          }));
-      unsigned remaining = 100000;
-      auto result =
-          take(protocol::admitOracleDirectQuery(actual, storage, remaining));
-      require(bool(result) == expected, "incorrect direct-query admission");
-      if (result)
-        require(
-            result->operation == actual && result->rows == 16 &&
-                !result->literal &&
-                result->position == program.getBody().front().getArgument(1),
-            "direct query lost exact occurrence, extent or position identity");
+      SuccessfulContinuationAnalysis analysis(*module);
+      for (bool actualRows : {false, true}) {
+        auto bound = [&](facts::Work &work) {
+          if (actualRows)
+            return take(analysis.bound(program, actual, *actual.getOwner(),
+                                       actual.getPosition(), rows(program),
+                                       work));
+          return take(analysis.bound(program, actual, *actual.getOwner(),
+                                     actual.getPosition(), uint64_t(16), work));
+        };
+        // The guard proves position < 16 in both fixtures. The shape upper
+        // bound does not identify the actual runtime row count with 16.
+        Status expected = actualRows && mode == "runtime-rows" ? Status::Unknown
+                                                               : Status::Proven;
+        uint64_t remaining = 100000;
+        facts::Work work(remaining);
+        require(bound(work) == expected,
+                "a shape upper bound replaced the actual row-bound subject");
+        uint64_t used = 100000 - remaining;
+        require(used > 0, "bound query did not debit caller Work");
+        for (uint64_t budget : {uint64_t(0), used - 1}) {
+          uint64_t limited = budget;
+          facts::Work limitedWork(limited);
+          require(bound(limitedWork) == Status::Capacity &&
+                      limitedWork.exhausted(),
+                  "insufficient bound-query work became ordinary absence");
+          limited = 100000;
+          require(bound(limitedWork) == Status::Capacity && limited == 100000,
+                  "an exhausted bound-query Work was replenished");
+        }
+      }
       require(print(*module) == frozen,
-              "direct admission changed actual source operations");
-      unsigned used = 100000 - remaining;
-      unsigned limited = used - 1;
-      refuses(protocol::admitOracleDirectQuery(actual, storage, limited),
-              "oracle-query-block-limit");
-      unsigned empty = 0;
-      refuses(protocol::admitOracleDirectQuery(actual, storage, empty),
-              "oracle-query-block-limit");
+              "bound analysis changed actual source operations");
     });
   }
-  cases.run(
-      "direct-query custody and concrete scheme requirements remain unchanged",
-      [&] {
-        auto module = parse(source(less() + guard() + query.str()));
-        auto program = declaration(*module);
-        auto actual = cast<pir::OracleQueryOp>(point(program));
-        auto storage = take(protocol::planOracleAnchorStorage(
-            *module, "subject", [](const auto &) -> Expected<std::string> {
-              return std::string();
-            }));
-        unsigned remaining = 100000;
-        require(
-            !take(protocol::admitOracleDirectQuery(actual, storage, remaining)),
-            "guard evidence admitted an ideal table as a concrete opening");
-        require(storage.constructors.size() == 1,
-                "unexpected source constructor count");
-        storage.constructors.front().scheme =
-            "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0";
-        storage.constructors.front().holder = "V";
-        require(
-            !take(protocol::admitOracleDirectQuery(actual, storage, remaining)),
-            "guard evidence bypassed the existing holder check");
-      });
   cases.run(
       "virtual definitions supply structure but no participant facts", [&] {
         auto module = parse(source("", R"mlir(

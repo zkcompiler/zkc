@@ -75,6 +75,7 @@ class Comparison {
     for (unsigned i = 0; i < source.size(); ++i)
       if (!text(source[i].name, actual[i].name) ||
           source[i].offset != actual[i].offset || !actual[i].schema ||
+          source[i].maximumRows != actual[i].maximumRows ||
           !schema(*source[i].layout, *actual[i].schema, depth + 1))
         return fail("logical field mapping differs");
     return true;
@@ -92,28 +93,34 @@ class Comparison {
     auto identity = typeIdentity(source.type);
     if (!charge(identity.size()))
       return false;
+    bool record = source.type.kind == Type::Kind::LogicalRecord;
     if (!text(toHex(SHA256::hash(arrayRefFromStringRef(identity)), true),
               actual.identity) ||
         !text(spelling(source.type), actual.type) ||
         source.type.kind != actual.kind || source.custody != actual.custody ||
         source.constructible != actual.constructible ||
         !(source.permissions == actual.permissions) ||
-        (source.type.kind == Type::Kind::Oracle
+        ((source.type.kind == Type::Kind::Oracle ||
+          source.type.kind == Type::Kind::OracleSequence)
              ? !actual.oracle || !actual.leaves.empty()
-             : actual.oracle.has_value() ||
-                   source.leaves.size() != actual.leaves.size()) ||
+             : actual.oracle.has_value() || actual.maximum.has_value() ||
+                   actual.oracleData ||
+                   (record ? !actual.leaves.empty()
+                           : source.leaves.size() != actual.leaves.size())) ||
         source.alternatives.size() != actual.alternatives.size())
       return fail("logical source schema differs");
     if (actual.oracle) {
       if (source.leaves.size() != 1 || !source.leaves[0].oracle())
         return fail("logical oracle schema differs");
-      const auto &kind = source.leaves[0].oracle()->kind;
-      if (!text(kind.identity, actual.oracle->kind) ||
+      const auto &logical = *source.leaves[0].oracle();
+      const auto &kind = logical.kind;
+      if (logical.maximum != actual.maximum ||
+          !text(kind.identity, actual.oracle->kind) ||
           kind.arguments != actual.oracle->arguments || !source.oracleData ||
           !actual.oracleData ||
           !schema(*source.oracleData, *actual.oracleData, depth + 1))
-        return fail("logical oracle kind differs");
-    } else {
+        return fail("logical oracle kind, capacity or data schema differs");
+    } else if (!record) {
       for (unsigned i = 0; i < source.leaves.size(); ++i)
         if (!source.leaves[i].data() ||
             !text(*source.leaves[i].data(), actual.leaves[i]))
@@ -156,11 +163,15 @@ class Comparison {
       auto expected = layout(source[i].type);
       if (!expected)
         return false;
+      auto observed = layouts.protocolPort(source[i]);
+      if (!observed) {
+        failure = observed.takeError();
+        return false;
+      }
       if (!text(source[i].name, actual[i].name) ||
           source[i].roles != actual[i].roles || !actual[i].schema ||
           !schema(*expected, *actual[i].schema) ||
-          !slice(actual[i].native, flat,
-                 source[i].oracle ? 2 : expected->leaves.size()))
+          !slice(actual[i].native, flat, observed->size()))
         return fail("logical source port differs");
       if (source[i].oracle.has_value() != actual[i].oracle.has_value())
         return fail("oracle role family is missing or invented");
@@ -186,29 +197,16 @@ class Comparison {
         source.path != actual.path)
       return fail(
           "source selector direction, port, path or participant differs");
-    const auto &ports = source.output ? protocol.outputs : protocol.inputs;
-    unsigned offset = 0;
-    for (unsigned i = 0; i < source.port; ++i) {
-      auto value = layout(ports[i].type);
-      if (!value)
-        return false;
-      offset += ports[i].oracle ? 2 : value->leaves.size();
-    }
-    auto value = layout(ports[source.port].type);
-    if (!value)
+    auto selected = layouts.select(protocol, source);
+    if (!selected) {
+      failure = selected.takeError();
       return false;
-    for (auto index : source.path) {
-      if (index >= value->fields.size())
-        return fail("checked selector has no layout field");
-      offset += value->fields[index].offset;
-      value = value->fields[index].layout;
     }
-    if (source.anchor) {
-      ++offset;
-      return value->oracleData && slice(actual.native, offset, 1);
-    }
-    return slice(actual.native, offset, value->leaves.size());
+    unsigned offset = selected->offset;
+    return slice(actual.native, offset,
+                 source.anchor ? 1 : selected->layout->leaves.size());
   }
+
   bool application(const Declaration &protocol,
                    const RelationApplication &source,
                    const InterfaceApplication &actual) {

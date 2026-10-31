@@ -97,7 +97,7 @@ fn capture(doc: &Json) -> Package {
 }
 fn package(interface: &Json, artifact: &str) -> Package {
     let bytes=json!({"format":"zkc.entry/0","original":"original","interface":interface.to_string(),"artifact":artifact,"assets":[],
-        "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true}}).to_string();
+        "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()}}).to_string();
     Package::capture(
         bytes.as_bytes(),
         &Sha256::digest(bytes.as_bytes()).into(),

@@ -45,6 +45,7 @@ Semantics::usageRequirements(const Type &type, Usage usage, Span span,
   if (type.kind == Type::Kind::Tuple || type.kind == Type::Kind::Array) {
     children = type.arguments;
   } else if (type.kind == Type::Kind::Record ||
+             type.kind == Type::Kind::LogicalRecord ||
              (type.kind == Type::Kind::Associated && nominal &&
               !nominal->abstract)) {
     auto fields = this->fields(type, span, depth + 1);

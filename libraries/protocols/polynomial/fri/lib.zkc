@@ -1,180 +1,317 @@
 module fri;
 use zkc::indices as indices;
-use zkc::vector::{Vector, length, append, get, empty};
-use zkc::boolean::{both};
-use zkc::indices::{less, remainder};
-
-use zkc::oracle::{Root, Path, Roots};
-
-use zkc::oracle as oracle;
+use zkc::indices::{Indices, less};
+use zkc::vector::{Vector, length, append, get, empty, concat, fill};
+use zkc::finite_domain as finite_domain;
+use zkc::finite_math as total;
 use zkc::polynomial as polynomial;
 use zkc::coset as coset;
 use zkc::scalar as scalar;
-use zkc::boolean as boolean;
 
-fn zero_index(value: index) -> bool { return value == 0; }
-fn first<F: Field>(values: Vector<F>) -> F { return get(values, 0); }
-fn halve(a: index) -> index { return indices::divide(a, 2); }
-fn open<C: Commitment>(states: oracle::States<C>, round: index, position: index)
-    -> (Vector<C::ValueField>, Path<C>) {
-  return oracle::open(oracle::state_at(states, round), position);
+// Mathematical choices only. Authentication and layout are deployment choices.
+// The challenge conversion's joint distribution law is an external premise;
+// implementing this interface does not prove that law.
+pub interface Configuration {
+  type Value: Field;
+  type Challenge: Field;
+  fn challenge(draw: Challenge) -> Value effects(stop);
 }
-fn authenticate<C: Commitment>(roots: Roots<C>, round: index, height: index,
-    position: index, row: Vector<C::ValueField>, path: Path<C>) -> bool {
-  return oracle::check(oracle::root_at(roots, round),
-                   1, height, position, row, path);
+
+pub module Direct<F: Field>: Configuration {
+  type Value: Field = F;
+  type Challenge: Field = F;
+  fn challenge(draw: F) -> F effects() where () { return draw; }
 }
-fn interpolate_coefficients<F: Field>(word: coset::Word<F>) -> Vector<F> {
-  return polynomial::coefficients(coset::interpolate(word));
+
+pub type FieldTable<F: Field> = builtin("oracle.table", F);
+pub type Oracle<K: OracleKind> = builtin("oracle", K);
+type Oracles<K: OracleKind, Capacity: nat> = builtin("oracle_sequence", K, Capacity);
+
+// The constructor and all fields are private to this module. Privacy keeps
+// independently obtained components from being accidentally recombined; it is
+// not an authentication, randomness or proximity theorem.
+#[logical]
+#[shape(initial.rows, bound = pow2(LogSize))]
+#[shape(layers.rows, bound = pow2(LogSize))]
+#[shape(folds.rows, bound = pow2(LogSize))]
+pub struct State<C: Configuration, LogSize: nat, TerminalLog: nat,
+                 Rounds: nat, Queries: nat> {
+  initial: Oracle<FieldTable<C::Value>>,
+  layers: Oracles<FieldTable<C::Value>, Rounds>,
+  folds: Oracles<FieldTable<C::Value>, Rounds>,
+  geometry: coset::CosetDomain<C::Value>,
+  coefficients: Vector<C::Value>,
+  positions: Indices,
+  round_count: index,
+  query_count: index
 }
-fn bounded<F: Field, LogDegree: nat>(coefficients: Vector<F>) -> bool {
-  let count = length(coefficients);
-  return less(count, index<pow2(LogDegree)>() + 1);
+
+// Total unsigned-word exponentiation: exactly 64 steps, including exponent 0.
+// Every helper reached by a virtual query is Math, never checked Local code.
+pub math fn power_word<F: Field>(base: F, exponent: index) -> F where () {
+  let initial: (F, F, index) = (1, base, exponent);
+  let result = total::fold(finite_domain::range(0, 64), initial,
+    fn((result, factor, remaining), _) =>
+      (if indices::bit_and(remaining, 1) == 1 { result * factor } else { result },
+       factor * factor, indices::logical_shift_right(remaining, 1)));
+  return result.0;
 }
+
+pub math fn fold_value<F: Field>(low: F, high: F, beta: F,
+                                inverse_two: F, inverse_x: F) -> F where () {
+  return (low + high) * inverse_two + beta * (low - high) * inverse_two * inverse_x;
+}
+
+math fn pair_low(position: index, rows: index) -> index where () {
+  return indices::bit_and(position,
+    indices::wrapping_sub(indices::logical_shift_right(rows, 1), 1));
+}
+
+// Total even for inadmissible captures. The predicate separately ties these
+// captures to the actual source shape and a nonzero natural-order coset.
+math fn binary_domain<F: Field>(rows: index, shift: F, generator: F,
+    inverse_shift: F, inverse_generator: F, inverse_two: F) -> bool where () {
+  return !(rows == 0) && !(rows == 1) &&
+    indices::bit_and(rows, indices::wrapping_sub(rows, 1)) == 0 &&
+    shift * inverse_shift == 1 && generator * inverse_generator == 1 &&
+    (1 + 1) * inverse_two == 1 &&
+    power_word(generator, indices::logical_shift_right(rows, 1)) == 0 - 1 &&
+    power_word(generator, rows) == 1;
+}
+
+#[shape(source.rows, bound = Maximum)]
+#[shape(result.rows, value = rows, bound = Maximum)]
+oracle def Fold<F: Field, Maximum: nat>(source: Oracle<FieldTable<F>>,
+    beta: F, source_rows: index, rows: index, shift: F, generator: F,
+    inverse_shift: F, inverse_generator: F, inverse_two: F)
+    -> Oracle<FieldTable<F>> {
+  requires source_size: source_rows == oracle.rows(source);
+  requires result_size: rows == indices::logical_shift_right(source_rows, 1);
+  requires source_domain: binary_domain(source_rows, shift, generator,
+    inverse_shift, inverse_generator, inverse_two);
+  query(position: index) {
+    let low = pair_low(position, source_rows);
+    let high = indices::wrapping_add(low, indices::logical_shift_right(source_rows, 1));
+    let left <- oracle.query(source, low);
+    let right <- oracle.query(source, high);
+    let inverse_x = inverse_shift * power_word(inverse_generator, low);
+    return fold_value(left, right, beta, inverse_two, inverse_x);
+  }
+}
+
+fn padded<F: Field>(coefficients: Vector<F>, count: index) -> Vector<F> {
+  require !less(count, length(coefficients));
+  return concat(coefficients, fill<F>(0, count - length(coefficients)));
+}
+
 fn terminal<F: Field>(coefficients: Vector<F>, shift: F, size: index,
                       position: index) -> F {
   let value = polynomial::from_coefficients(coefficients);
   let point = coset::point<F>(shift, size, position);
   return polynomial::evaluate(value, point);
 }
-// Scalar FRI arithmetic with caller-prepared inverses of two and the point x.
-// This total function does not establish domain membership or authenticate values.
-pub math fn fold_value<F: Field>(low: F, high: F, beta: F,
-                                inverse_two: F, inverse_x: F) -> F where () {
-  return (low + high) * inverse_two + beta * (low - high) * inverse_two * inverse_x;
-}
 
-// Natural domain order pairs x with -x in the two contiguous halves.
-fn folded_value<F: Field>(low: F, high: F, shift: F, size: index,
-                         position: index, beta: F) -> F {
-  let x = coset::point<F>(shift, size, position);
-  let inverse_two = scalar::inverse<F>(1 + 1);
-  let inverse_x = scalar::inverse<F>(x);
-  return fold_value(low, high, beta, inverse_two, inverse_x);
-}
-fn chain<F: Field>(round: index, selected: F, expected: F) -> bool {
-  return if zero_index(round) { true } else { selected == expected };
-}
-fn keep_first<F: Field>(values: Vector<F>, selected: F, round: index) -> Vector<F> {
-  return if zero_index(round) { append(values, selected) } else { values };
-}
-fn select_half<F: Field>(low: F, high: F, position: index, half: index) -> F {
-  return if less(position, half) { low } else { high };
-}
-fn shape<F: Field, LogSize: nat>(values: Vector<F>, shift: F) -> bool {
-  // The point operation also checks the installed two-adic domain bound.
-  let first_point = coset::point<F>(shift, index<pow2(LogSize)>(), 0);
-  return both(length(values) == index<pow2(LogSize)>(), boolean::negate(first_point == 0));
-}
-
-fn configured<F: Field, LogSize: nat, Rounds: nat, Queries: nat>(
-    shift: F, rounds: index, queries: index) -> bool {
-  let point = coset::point<F>(shift, index<pow2(LogSize)>(), 0);
-  return both(both(rounds == index<Rounds>(), queries == index<Queries>()),
-              boolean::negate(point == 0));
-}
-
-// Binary FRI for one word on shift*<g>. All round roots and the terminal
-// polynomial are fixed before any query. The returned first-layer values let
-// a caller bind this low-degree test to its own polynomial-opening equations.
-pub protocol LowDegree<C: Commitment, LogSize: nat, TerminalLog: nat,
-                       Rounds: nat, Queries: nat> roles(P,V)
-    (word: Vector<C::ValueField> @P, prover_shift: C::ValueField @P,
-     verifier_shift: C::ValueField @V,
-     round_count: index @(P,V), query_count: index @(P,V),
-     coins: Random<C::ValueField> @V)
-    -> (accepted: bool @V, positionsP: indices::Indices @P,
-        positionsV: indices::Indices @V, valuesV: Vector<C::ValueField> @V)
-    where zkc::algebra::TwoAdicField(C::ValueField),
-      zkc::algebra::CharacteristicNotTwo(C::ValueField),
-      zkc::random::IndexRandomness(C::ValueField),
-      zkc::oracle::VectorCommitment(C),
-      1 <= Rounds, TerminalLog+Rounds+1 <= LogSize, 1 <= Queries {
-  let schedule_ok @V = configured<C::ValueField,LogSize,Rounds,Queries>(
-    verifier_shift, round_count, query_count);
-  require @V schedule_ok;
-  let initial_sizeP @P = index<pow2(LogSize)>();
-  let initial_sizeV @V = index<pow2(LogSize)>();
-  let input_ok @P = shape<C::ValueField,LogSize>(word, prover_shift);
-  require @P input_ok;
-  let mut current = coset::word(word, prover_shift);
-  let mut roots @V = oracle::roots<C>();
-  let mut states @P = oracle::states<C>();
-  let mut betas @V = empty<C::ValueField>();
+// Exact positive static profile, traversed by bounded dynamic loops. Initial
+// degree < 2^(TerminalLog+Rounds); terminal degree < 2^TerminalLog. The degree
+// test is not a claim about proximity or the soundness gap.
+pub protocol Commit<C: Configuration, LogSize: nat, TerminalLog: nat,
+                    Rounds: nat, Queries: nat> roles(P,V)
+    (word: Vector<C::Value> @P, prover_shift: C::Value @P,
+     verifier_shift: C::Value @V, round_count: index @(P,V),
+     query_count: index @(P,V), coins: Random<C::Challenge> @V)
+    -> (state: State<C,LogSize,TerminalLog,Rounds,Queries> @P->V)
+    where zkc::algebra::TwoAdicField(C::Value),
+      zkc::algebra::CharacteristicNotTwo(C::Value),
+      zkc::random::IndexRandomness(C::Challenge), LogSize <= 63,
+      1 <= Rounds, 1 <= Queries, TerminalLog+Rounds+1 <= LogSize {
+  require @V round_count == index<Rounds>() && query_count == index<Queries>();
+  require @P round_count == index<Rounds>() && query_count == index<Queries>();
+  let initial_rows = index<pow2(LogSize)>();
+  require @P length(word) == initial_rows;
+  let shift = @(P = prover_shift, V = verifier_shift);
+  let geometry = coset::coset_domain(shift, initial_rows);
+  let mut current @P = coset::word(word, prover_shift);
+  let mut layers = oracle.empty<FieldTable<C::Value>,Rounds> roles(P,V)();
+  let mut folds = oracle.empty<FieldTable<C::Value>,Rounds> roles(P,V)();
+  let mut rows = initial_rows;
+  let mut offset = shift;
+  let mut generator = coset::root<C::Value>(initial_rows);
+  let inverse_two = scalar::inverse<C::Value>(1 + 1);
   for round in 0..round_count roles(P,V) max Rounds {
-    let tree @P = oracle::commit<C>(coset::values(current), 1);
-    let root = send P -> V(tree.0);
-    let kept_root @V = oracle::append_root(roots, root);
-    let kept_state @P = oracle::append_state(states, tree.1);
-    roots = kept_root;
-    states = kept_state;
-    let betaV = coins.draw();
-    let betaP = send V -> P(betaV);
-    let kept_beta @V = append(betas, betaV);
-    betas = kept_beta;
+    let values @P = coset::values(current);
+    let source <- send P -> V(values)
+      as oracle<FieldTable<C::Value>>(rows = rows) max pow2(LogSize);
+    let kept_layer <- oracle.append(layers, source);
+    layers = kept_layer;
+    let drawV = coins.draw();
+    let drawP = send V -> P(drawV);
+    let betaP @P = C::challenge(drawP);
+    let betaV @V = C::challenge(drawV);
+    let beta = @(P = betaP, V = betaV);
+
+    // Rows come from this actual anchor before virtual construction. The
+    // separate result-shape capture is checked equal to half those rows.
+    let source_rows = oracle.rows(source);
+    require @P source_rows == rows;
+    require @V source_rows == rows;
+    let next_rows = indices::logical_shift_right(source_rows, 1);
+    let installed_generator = coset::root<C::Value>(source_rows);
+    require @P installed_generator == generator;
+    require @V installed_generator == generator;
+    let inverse_shift = scalar::inverse(offset);
+    let inverse_generator = scalar::inverse(generator);
+    require @P binary_domain(source_rows, offset, generator,
+      inverse_shift, inverse_generator, inverse_two);
+    require @V binary_domain(source_rows, offset, generator,
+      inverse_shift, inverse_generator, inverse_two);
+    let view <- Fold<C::Value,pow2(LogSize)>(source, beta, source_rows, next_rows,
+      offset, generator, inverse_shift, inverse_generator, inverse_two);
+    let kept_fold <- oracle.append(folds, view);
+    folds = kept_fold;
     let next @P = coset::fold(current, betaP);
     current = next;
+    rows = next_rows;
+    offset = offset * offset;
+    generator = generator * generator;
   }
-  let proposed @P = interpolate_coefficients(current);
-  let final_coefficients = send P -> V(proposed);
-  let final_degree_ok @V = bounded<C::ValueField,TerminalLog>(final_coefficients);
-  require @V final_degree_ok;
-  let mut positionsP @P = indices::empty();
-  let mut positionsV @V = indices::empty();
-  let mut valuesV @V = empty<C::ValueField>();
+  let terminal_generator = coset::root<C::Value>(rows);
+  require @P terminal_generator == generator;
+  require @V terminal_generator == generator;
+  let proposed @P = padded(polynomial::coefficients(coset::interpolate(current)),
+    index<pow2(TerminalLog)>());
+  let received = send P -> V(proposed);
+  require @V length(received) == index<pow2(TerminalLog)>();
+  let coefficients = @(P = proposed, V = received);
+  let mut positions = indices::empty();
   for query in 0..query_count roles(P,V) max Queries {
     let positionV = coins.index<pow2(LogSize)>();
     let positionP = send V -> P(positionV);
-    let rememberedP @P = indices::append(positionsP, positionP);
-    let rememberedV @V = indices::append(positionsV, positionV);
-    positionsP = rememberedP;
-    positionsV = rememberedV;
+    let position = @(P = positionP, V = positionV);
+    let remembered = indices::append(positions, position);
+    positions = remembered;
   }
-  for query in 0..query_count roles(P,V) max Queries {
-    let positionP @P = indices::get(positionsP, query);
-    let positionV @V = indices::get(positionsV, query);
-    let mut atP = positionP;
-    let mut atV = positionV;
-    let mut sizeP = initial_sizeP;
-    let mut sizeV = initial_sizeV;
-    let mut query_shift = verifier_shift;
-    let mut expected: C::ValueField @V = 0;
-    for round in 0..round_count roles(P,V) max Rounds {
-      let halfP @P = halve(sizeP);
-      let halfV @V = halve(sizeV);
-      let lowP @P = remainder(atP, halfP);
-      let lowV @V = remainder(atV, halfV);
-      let opened_low @P = open<C>(states, round, lowP);
-      let opened_high @P = open<C>(states, round, lowP + halfP);
-      let row_low = send P -> V(opened_low.0);
-      let path_low = send P -> V(opened_low.1);
-      let row_high = send P -> V(opened_high.0);
-      let path_high = send P -> V(opened_high.1);
-      let low_ok @V = authenticate(roots, round, sizeV, lowV, row_low, path_low);
-      require @V low_ok;
-      let high_ok @V = authenticate(roots, round, sizeV, lowV + halfV, row_high, path_high);
-      require @V high_ok;
-      let low @V = first(row_low);
-      let high @V = first(row_high);
-      let selected @V = select_half(low, high, atV, halfV);
-      let chain_ok @V = chain(round, selected, expected);
-      require @V chain_ok;
-      let first_values @V = keep_first(valuesV, selected, round);
-      valuesV = first_values;
-      let beta @V = get(betas, round);
-      let next @V = folded_value(low, high, query_shift, sizeV, lowV, beta);
-      expected = next;
-      atP = lowP;
-      atV = lowV;
-      sizeP = halfP;
-      sizeV = halfV;
-      query_shift = query_shift * query_shift;
+  let initial <- oracle.at(layers, 0);
+  let state = State<C,LogSize,TerminalLog,Rounds,Queries> {
+    initial, layers, folds, geometry, coefficients, positions,
+    round_count, query_count
+  };
+  return (state = state);
+}
+
+pub protocol Positions<C: Configuration, LogSize: nat, TerminalLog: nat,
+                       Rounds: nat, Queries: nat> roles(P,V)
+    (state: State<C,LogSize,TerminalLog,Rounds,Queries> @P->V)
+    -> (positions: Indices @(P,V)) {
+  let positions = state.positions;
+  return (positions = positions);
+}
+
+#[shape(initial.rows, bound = pow2(LogSize))]
+pub protocol Initial<C: Configuration, LogSize: nat, TerminalLog: nat,
+                     Rounds: nat, Queries: nat> roles(P,V)
+    (state: State<C,LogSize,TerminalLog,Rounds,Queries> @P->V)
+    -> (initial: Oracle<FieldTable<C::Value>> @P->V) {
+  let initial = state.initial;
+  return (initial = initial);
+}
+
+// One checker for both entrypoints. Association means an actual equality with
+// the authenticated initial handle at this state's exact positions, before
+// each fold chain. The flag and the vector alone establish no binding claim.
+protocol Check<C: Configuration, LogSize: nat, TerminalLog: nat,
+               Rounds: nat, Queries: nat> roles(P,V)
+    (state: State<C,LogSize,TerminalLog,Rounds,Queries> @P->V,
+     associate: bool @V, first: Vector<C::Value> @V)
+    -> (accepted: bool @V, valuesV: Vector<C::Value> @V)
+    where zkc::algebra::TwoAdicField(C::Value),
+      zkc::algebra::CharacteristicNotTwo(C::Value), LogSize <= 63,
+      1 <= Rounds, 1 <= Queries, TerminalLog+Rounds+1 <= LogSize {
+  require @V state.round_count == index<Rounds>() && state.query_count == index<Queries>();
+  require @V oracle.length(state.layers) == state.round_count;
+  require @V oracle.length(state.folds) == state.round_count;
+  require @V indices::length(state.positions) == state.query_count;
+  require @V length(state.coefficients) == index<pow2(TerminalLog)>();
+  require @V coset::domain_size(state.geometry) == index<pow2(LogSize)>();
+  require @V oracle.rows(state.initial) == coset::domain_size(state.geometry);
+  require @V if associate { length(first) == state.query_count } else { true };
+  let mut valuesV @V = empty<C::Value>();
+  for query in 0..state.query_count roles(P,V) max Queries {
+    let positionV @V = indices::get(state.positions, query);
+    let selected @V <- query state.initial at positionV;
+    if associate {
+      require @V selected == get(first, query);
     }
-    let evaluated @V = terminal(final_coefficients, query_shift, sizeV, atV);
-    let terminal_ok @V = evaluated == expected;
-    require @V terminal_ok;
+    let remembered @V = append(valuesV, selected);
+    valuesV = remembered;
+    let mut expected @V = selected;
+    let mut atV @V = positionV;
+    let mut rowsV @V = coset::domain_size(state.geometry);
+    let mut shiftV @V = coset::domain_shift(state.geometry);
+    for round in 0..state.round_count roles(P,V) max Rounds {
+      if !(round == 0) {
+        let actual <- oracle.at(state.layers, round);
+        require @V oracle.rows(actual) == rowsV;
+        let value @V <- query actual at atV;
+        require @V value == expected;
+      }
+      let lowV @V = pair_low(atV, rowsV);
+      let view <- oracle.at(state.folds, round);
+      require @V oracle.rows(view) == indices::logical_shift_right(rowsV, 1);
+      let folded @V <- query view at lowV;
+      expected = folded;
+      atV = lowV;
+      rowsV = indices::logical_shift_right(rowsV, 1);
+      shiftV = shiftV * shiftV;
+    }
+    let evaluated @V = terminal(state.coefficients, shiftV, rowsV, atV);
+    require @V evaluated == expected;
   }
   let accepted @V = true;
-  return (accepted = accepted, positionsP = positionsP,
-          positionsV = positionsV, valuesV = valuesV);
+  return (accepted = accepted, valuesV = valuesV);
+}
+
+pub protocol Query<C: Configuration, LogSize: nat, TerminalLog: nat,
+                   Rounds: nat, Queries: nat> roles(P,V)
+    (state: State<C,LogSize,TerminalLog,Rounds,Queries> @P->V)
+    -> (accepted: bool @V, valuesV: Vector<C::Value> @V)
+    where zkc::algebra::TwoAdicField(C::Value),
+      zkc::algebra::CharacteristicNotTwo(C::Value), LogSize <= 63,
+      1 <= Rounds, 1 <= Queries, TerminalLog+Rounds+1 <= LogSize {
+  let (accepted, valuesV) <- Check<C,LogSize,TerminalLog,Rounds,Queries>(state,
+    false, empty<C::Value>());
+  return (accepted = accepted, valuesV = valuesV);
+}
+
+pub protocol QueryAssociated<C: Configuration, LogSize: nat, TerminalLog: nat,
+                             Rounds: nat, Queries: nat> roles(P,V)
+    (state: State<C,LogSize,TerminalLog,Rounds,Queries> @P->V,
+     first: Vector<C::Value> @V)
+    -> (accepted: bool @V)
+    where zkc::algebra::TwoAdicField(C::Value),
+      zkc::algebra::CharacteristicNotTwo(C::Value), LogSize <= 63,
+      1 <= Rounds, 1 <= Queries, TerminalLog+Rounds+1 <= LogSize {
+  let (accepted, _) <- Check<C,LogSize,TerminalLog,Rounds,Queries>(state, true, first);
+  return (accepted = accepted);
+}
+
+// Standalone convenience uses precisely the same Commit and Query kernel.
+pub protocol LowDegree<C: Configuration, LogSize: nat, TerminalLog: nat,
+                       Rounds: nat, Queries: nat> roles(P,V)
+    (word: Vector<C::Value> @P, prover_shift: C::Value @P,
+     verifier_shift: C::Value @V, round_count: index @(P,V),
+     query_count: index @(P,V), coins: Random<C::Challenge> @V)
+    -> (accepted: bool @V, positionsP: Indices @P,
+        positionsV: Indices @V, valuesV: Vector<C::Value> @V)
+    where zkc::algebra::TwoAdicField(C::Value),
+      zkc::algebra::CharacteristicNotTwo(C::Value),
+      zkc::random::IndexRandomness(C::Challenge), LogSize <= 63,
+      1 <= Rounds, 1 <= Queries, TerminalLog+Rounds+1 <= LogSize {
+  let state <- Commit<C,LogSize,TerminalLog,Rounds,Queries>(word, prover_shift,
+    verifier_shift, round_count, query_count, coins);
+  let positions <- Positions<C,LogSize,TerminalLog,Rounds,Queries>(state);
+  let (accepted, valuesV) <- Query<C,LogSize,TerminalLog,Rounds,Queries>(state);
+  let positionsP @P = positions;
+  let positionsV @V = positions;
+  return (accepted = accepted, positionsP = positionsP, positionsV = positionsV,
+    valuesV = valuesV);
 }

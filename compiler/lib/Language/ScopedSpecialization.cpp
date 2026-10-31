@@ -4,6 +4,7 @@
 #include "DomainWitness.h"
 #include "Effects.h"
 #include "FiniteContracts.h"
+#include "OracleDefinitions.h"
 #include "zkc/Language/Project.h"
 #include <algorithm>
 #include <set>
@@ -231,7 +232,8 @@ class SpecializationCheck {
           actual.values[i < original.inputs ? i : map({i}).index];
       if (!typeEqual(expected.type, value.type, subst, expected.span) ||
           !same(expected.span, value.span) ||
-          (actual.mode == Body::Mode::Protocol &&
+          ((actual.mode == Body::Mode::Protocol ||
+            actual.mode == Body::Mode::Oracle) &&
            (expected.components != value.components ||
             expected.oracleHolder != value.oracleHolder)) ||
           (actual.mode == Body::Mode::Local && !value.components.empty()))
@@ -269,7 +271,7 @@ class SpecializationCheck {
       const auto &op = original.operations[i];
       const auto &out = actual.operations[i];
       if (!same(op.span, out.span) || op.statement != out.statement ||
-          !same(out.results, mapped(op.results)))
+          op.site != out.site || !same(out.results, mapped(op.results)))
         return refuse(op.span, "operation occurrence differs");
       if (bool(op.binding) != bool(out.binding))
         return refuse(op.span, "call witness coverage differs");
@@ -454,18 +456,17 @@ class SpecializationCheck {
             const auto &value = std::get<T>(out.action);
             if constexpr (std::is_same_v<T, HelperCall> ||
                           std::is_same_v<T, BulkApplication> ||
-                          std::is_same_v<T, ProtocolApplication>) {
+                          std::is_same_v<T, ProtocolApplication> ||
+                          std::is_same_v<T, OracleInstantiation>) {
               if (value.callee.index >= candidate.size())
                 return false;
               auto target = action.callee;
               auto statics = arguments(action.arguments, subst, op.span);
               if (!statics)
                 return false;
-              if constexpr (std::is_same_v<T, HelperCall>) {
-                if (bool(action.module) != bool(value.module) ||
-                    action.owner != value.owner ||
-                    !value.scopedArguments.empty() ||
-                    !value.domainArguments.empty())
+              if constexpr (std::is_same_v<T, HelperCall> ||
+                            std::is_same_v<T, OracleInstantiation>) {
+                if (bool(action.module) != bool(value.module))
                   return false;
                 if (action.module) {
                   auto module = type(*action.module, subst, op.span);
@@ -487,8 +488,15 @@ class SpecializationCheck {
                   if (!found)
                     return false;
                 }
+              }
+              if constexpr (std::is_same_v<T, HelperCall>) {
+                if (action.owner != value.owner ||
+                    !value.scopedArguments.empty() ||
+                    !value.domainArguments.empty())
+                  return false;
                 const auto &definition = source[target.index];
-                if (original.mode == Body::Mode::Math &&
+                if ((original.mode == Body::Mode::Math ||
+                     original.mode == Body::Mode::Oracle) &&
                     definition.kind == Declaration::Kind::Math &&
                     definition.finiteDefinition && !definition.abstract)
                   return refuse(
@@ -545,6 +553,10 @@ class SpecializationCheck {
                   operands.push_back(*input);
                 }
               }
+              if constexpr (std::is_same_v<T, OracleInstantiation>)
+                if (action.holder != value.holder ||
+                    action.receivers != value.receivers)
+                  return false;
               if constexpr (std::is_same_v<T, BulkApplication>)
                 if (action.mapped != value.mapped)
                   return false;
@@ -638,6 +650,9 @@ class SpecializationCheck {
             else if constexpr (std::is_same_v<T, OracleRows> ||
                                std::is_same_v<T, OracleForgetRows>)
               return map(action.input).index == value.input.index;
+            else if constexpr (std::is_same_v<T, OracleSourceQuery>)
+              return action.source == value.source &&
+                     map(action.position).index == value.position.index;
             else if constexpr (std::is_same_v<T, OracleQuery>)
               return map(action.handle).index == value.handle.index &&
                      map(action.position).index == value.position.index &&
@@ -945,6 +960,14 @@ class SpecializationCheck {
     if (!active.insert(id.index).second)
       return refuse(actual.span, "recursive specialization witness");
     auto subst = substitution(original, statics);
+    if (!computation && !checkOracleMetadataSubstitution(
+                            types, original, actual, subst, candidate))
+      return false;
+    if (original.oracleDefinition &&
+        !instance(actual.oracleDefinition->admissibility,
+                  source[original.oracleDefinition->admissibility.index],
+                  nullptr, statics, {}, depth + 1))
+      return false;
     if (!computation && !construction(original, actual, subst, depth))
       return false;
     if (!computation) {
@@ -983,8 +1006,10 @@ class SpecializationCheck {
     }
     const auto *templateBody =
         computation ? computation->body.get() : original.body.get();
-    if (actual.body && (actual.body->inputs != actual.inputs.size() ||
-                        actual.body->values.size() < actual.inputs.size()))
+    const unsigned queryInputs = original.oracleDefinition ? 1 : 0;
+    if (actual.body &&
+        (actual.body->inputs != actual.inputs.size() + queryInputs ||
+         actual.body->values.size() < actual.inputs.size() + queryInputs))
       return refuse(actual.span, "closed body input coverage differs");
     if (bool(templateBody) != bool(actual.body))
       return refuse(actual.span);
@@ -1127,8 +1152,9 @@ class SpecializationCheck {
       domains.push_back(std::move(domain));
     }
     if (offset != layout.captures.size() || ports != actual.inputs.size() ||
-        (templateBody && !body(*templateBody, *actual.body, subst, environment,
-                               domains, depth, &layout)))
+        (templateBody &&
+         !body(*templateBody, *actual.body, subst, environment, domains, depth,
+               original.oracleDefinition ? nullptr : &layout)))
       return refuse(actual.span);
     if (actual.body) {
       if (actual.effectAllowance &&
@@ -1222,6 +1248,12 @@ public:
                    : failure("source.scoped-specialization",
                              "selected construction differs", authored.span);
     }
+    for (const auto &declaration : candidate)
+      if (declaration.kind == Declaration::Kind::Oracle && declaration.body &&
+          declaration.origin && !checked.count(declaration.id.index) &&
+          !instance(declaration.id, source[declaration.origin->index], nullptr,
+                    declaration.staticArguments, {}, 1))
+        return types.takeError();
     for (const auto &declaration : candidate)
       if (declaration.body && !checked.count(declaration.id.index))
         return failure("source.scoped-specialization",

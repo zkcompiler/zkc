@@ -55,25 +55,46 @@ arrays retain their element construction policy despite having no fields.
 `permissions` is
 the canonical ordered subset of `Copy`, `Drop`; `Copy` requires `Drop`.
 
-A logical oracle port is a separate schema alternative. It has kind `oracle`,
-no data `leaves`, no fields or alternatives, `custody: false`,
-`constructible: false`, and permissions `["Copy", "Drop"]`. It additionally has
-`oracle: {kind, arguments}`. The closed kind arguments are ordered pairs
+A logical oracle port has schema kind `oracle` for a singleton handle or
+`oracle_sequence` for a bounded handle sequence. Both have no data `leaves`, no
+fields or alternatives, `custody: false`, `constructible: false`, and permissions
+`["Copy", "Drop"]`. Both additionally require `oracle: {kind, arguments}` and a
+recursive `data_schema` describing the complete holder projection. The closed
+kind arguments are ordered pairs
 `["type", <canonical logical BoundType>]` and `["nat", <decimal uint64 string>]`.
 The current kind is `table`, with a row type and optional exact row count. These
 are logical descriptors, not native opaque-handle spellings.
 
+An `oracle_sequence` schema additionally requires `maximum`, a canonical uint64
+decimal string including zero. This is the exact sequence capacity, independent
+of the kind's row count or per-element row bound. Singleton `oracle` schemas and
+ordinary schemas reject `maximum`. The singleton `data_schema` describes
+`K::Data`; the sequence `data_schema` describes the ordinary builtin
+`sequence<K::Data>`, including the outer sequence even when `K::Data` is itself
+a sequence. Repeated schema identities must agree on the complete kind, capacity
+and data schema.
+
+This extends the current `/0` schema with `oracle_sequence`; singleton schema
+members remain unchanged. There is one strict schema per alternative, with no
+legacy decoding path.
+
 An oracle port additionally has `holder` (one source role name) and
 `maximum_rows` (null for a sized kind, otherwise a canonical uint64 string).
+For a sequence this row bound applies to each element, independently of capacity.
 Its `roles` is the union of that holder and the nonempty receiver set; the holder
 cannot be a receiver. Its two `native` indices select holder data first, then the
-receiver anchor. The reader checks the common signature, each leaf's roles,
-kind and bound, and the actual input binding. Source comparison also binds the
-output maximum and complete descriptor to the checked declaration. Ordinary
-schema and port alternatives reject these additional keys.
+receiver anchor. The native signature pair is `[K::Data, Oracle<K>]` for a
+singleton and `[Sequence<K::Data>, OracleSequence<K, M>]` for a sequence with
+capacity `M`. The reader checks that exact pair, each leaf's ordered roles,
+kind, capacity and row bound, and the actual input binding. Source comparison
+also binds the output row bound and complete descriptor to the checked
+declaration. Ordinary schema and port alternatives reject these additional keys.
 
 Oracle schemas cannot occur as aggregate children, ordinary relation-data
-selectors or Host schemas. Realization determines the public commitment and
+selectors or Host schemas. Logical contract anchor selectors admit only a whole
+singleton handle port; they do not select sequences. Internal protocol ports may
+carry sequences and checked preparation eliminates them. Root Host sequence
+ingress remains refused. Realization determines the public commitment and
 witness interface before executable input admission; this source interface does
 not itself grant a data codec. Source names, display text and schema identities
 still require the separate source-correspondence check.
@@ -189,8 +210,9 @@ roles. It checks contiguous port/field indices, complete native coverage, varian
 labels/payloads, custody prefixes and managed-service contracts. Logical types
 with the same identity must have consistent kind, label and schema. Kinds are
 `boolean`, `index`, `field`, `group`, `unit`, `tuple`, `array`, `record`, `variant`,
-`associated` and `builtin`. Scalars have their matching single native leaf; unit
-has none. Tuples/arrays have positional fields, with one common element identity
+`associated`, `builtin`, `oracle` and `oracle_sequence`. Ordinary scalars have
+their matching single native leaf; unit has none. Tuples/arrays have positional
+fields, with one common element identity
 for nonempty arrays. Records have identifier fields; associated representations
 have exactly one `value` field. Only variants have alternatives. An empty product
 cannot hide data leaves. Custody belongs only to nominal kinds.
@@ -419,3 +441,13 @@ static specialization appends `_` and the lowercase SHA-256 of its canonical
 closed family type, such as `module::Protocol<Field>`. Host admission checks this
 identity against every generated nominal signature. Equal native port shapes do
 not permit replacing a child with a different specialization.
+
+## Oracle realization selection
+
+Executable compiler options include mandatory `oracle_realization`, the exact
+[`zkc.oracle-selection/0` request](oracle-realization.md#requested-selection).
+It accompanies the six Boolean optimization options for every package, including
+Host children and the default ideal selection. Unknown, missing or malformed
+fields refuse; development version 0 has no prior six-field option reader.
+The request participates in cache identity and is forwarded to both joint and
+proof compilation. Choice metadata does not establish oracle correspondence.

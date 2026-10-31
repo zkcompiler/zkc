@@ -197,19 +197,40 @@ Checker::selector(const Declaration &decl, const SyntaxSelector &source) {
                "selector must name a declared logical port", source.span);
     return {};
   }
-  if (found->type.kind == Type::Kind::Oracle) {
-    if (source.role || !source.path.empty()) {
+  if (found->type.kind == Type::Kind::Oracle && !source.path.empty()) {
+    types.fail("source.specification",
+               "oracle anchor selectors have no product path", source.span);
+    return {};
+  }
+  SpecificationSelector result{
+      source.output, unsigned(found - ports.begin()), 0, {}, source.span};
+  auto current = std::optional<Type>(found->type);
+  for (const auto &name : source.path) {
+    auto index = types.fieldIndex(decl, *current, name, source.span, true);
+    if (!index)
+      return {};
+    current =
+        types.projectedType(decl, std::move(*current), {*index}, source.span);
+    if (!current)
+      return {};
+    result.path.push_back(*index);
+  }
+  if (current->kind == Type::Kind::Oracle) {
+    if (source.role) {
       types.fail("source.specification",
-                 "oracle anchor selectors have no participant or product path",
-                 source.span);
+                 "oracle anchor selectors have no participant", source.span);
       return {};
     }
-    SpecificationSelector result{
-        source.output, unsigned(found - ports.begin()), 0, {}, source.span,
-        true};
+    result.anchor = true;
     if (!types.selectedType(decl, result))
       return {};
     return result;
+  }
+  if (isLogicalValue(*current)) {
+    types.fail("source.specification",
+               "logical selectors require a singleton oracle field",
+               source.span);
+    return {};
   }
   unsigned role;
   if (source.role) {
@@ -225,21 +246,9 @@ Checker::selector(const Declaration &decl, const SyntaxSelector &source) {
                source.span);
     return {};
   }
-  SpecificationSelector result{
-      source.output, unsigned(found - ports.begin()), role, {}, source.span};
-  auto current = types.selectedType(decl, result);
-  if (!current)
+  result.role = role;
+  if (!types.selectedType(decl, result))
     return {};
-  for (const auto &name : source.path) {
-    auto index = types.fieldIndex(decl, *current, name, source.span, true);
-    if (!index)
-      return {};
-    current =
-        types.projectedType(decl, std::move(*current), {*index}, source.span);
-    if (!current)
-      return {};
-    result.path.push_back(*index);
-  }
   return result;
 }
 

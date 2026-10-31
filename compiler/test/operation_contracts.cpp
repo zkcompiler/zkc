@@ -27,7 +27,7 @@ int main() {
       unsigned(I::VectorLength) == 36 && unsigned(I::IndexPowerOfTwo) == 37 &&
       unsigned(I::QuotientMultiply) == 42 &&
       unsigned(I::MultilinearRestrictPrefix) == 43);
-  require(zkc::mathematicalIntrinsics().size() == 39 &&
+  require(zkc::mathematicalIntrinsics().size() == 43 &&
               zkc::mathematicalIntrinsics()[0].name == "container.at" &&
               zkc::mathematicalIntrinsics()[30].name == "poly.fix_table" &&
               zkc::mathematicalIntrinsics()[31].name == "vector.length" &&

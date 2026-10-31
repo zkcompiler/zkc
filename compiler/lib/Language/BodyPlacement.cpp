@@ -1,3 +1,4 @@
+#include "BindingWitness.h"
 #include "BodyCheck.h"
 #include <algorithm>
 #include <cassert>
@@ -54,7 +55,7 @@ bool BodyChecker::settle(Placement &plan) {
   for (const auto &[id, formula] : plan.values) {
     auto &value = body.values[id];
     value.components = plan.resolve(formula);
-    if (value.components.size() > 1 && !isOracleHandle(value.type)) {
+    if (value.components.size() > 1 && !isLogicalValue(value.type)) {
       if (!checker.types.admit(value.type, Boundary::Participants, value.span,
                                &decl))
         return false;
@@ -73,6 +74,10 @@ bool BodyChecker::settle(Placement &plan) {
           return false;
       }
   }
+  for (auto index : plan.oracleInstantiations)
+    if (!checkCallAction(checker.types, checker.output.declarations, body,
+                         body.operations[index]))
+      return false;
   for (auto [index, variable] : plan.oracleQueries)
     std::get<OracleQuery>(body.operations[index].action).owner =
         plan.selected(variable);

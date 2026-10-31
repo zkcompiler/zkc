@@ -475,6 +475,16 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
                                         callee.kind == Declaration::Kind::Math;
         }
       }
+    } else if (const auto *query = std::get_if<OracleSourceQuery>(&op.action)) {
+      auto operands = gather({ValueId{query->source}, query->position});
+      auto combined = operands ? join(types, *operands) : std::nullopt;
+      if (!combined || op.results.size() != 1)
+        return {};
+      dependencies = std::move(*combined);
+      // These markers are separate from constructor/query input dependencies.
+      // Checked helper summaries propagate only actual answer dependencies.
+      dependencies.inputs.push_back(body.inputs + op.results.front().index);
+      llvm::sort(dependencies.inputs);
     } else {
       std::vector<ValueId> operands;
       std::visit(
@@ -483,6 +493,7 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
             if constexpr (std::is_same_v<T, MathValue> ||
                           std::is_same_v<T, BulkApplication> ||
                           std::is_same_v<T, ProtocolApplication> ||
+                          std::is_same_v<T, OracleInstantiation> ||
                           std::is_same_v<T, HostInvocation> ||
                           std::is_same_v<T, Construct> ||
                           std::is_same_v<T, RoleAssembly> ||

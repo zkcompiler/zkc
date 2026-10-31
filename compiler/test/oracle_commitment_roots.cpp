@@ -267,13 +267,12 @@ int main(int argc, char **argv) {
         refused(checkOracleRealization(*prepared, *copy, record, policy));
         copy = parseSourceString<ModuleOp>(print(*candidate.module), &context);
         changed = false;
-        copy->walk([&](protocol_ir::ExchangeOp exchange) {
-          if (!exchange.getSite().contains("opening_request"))
+        copy->walk([&](exec::VariantOp request) {
+          if (request.getSite() != "window_request")
             return;
-          auto request = exchange.getInput().getDefiningOp<data::MakeOp>();
-          require(bool(request) && request.getNumOperands() == 3,
+          require(request.getPayload().size() == 3,
                   "missing request coordinates");
-          request->setOperand(1, request.getOperand(2));
+          request.getPayloadMutable()[1].set(request.getPayload()[2]);
           changed = true;
         });
         require(changed && succeeded(verify(*copy)),
@@ -420,9 +419,11 @@ int main(int argc, char **argv) {
       checked(checkOracleRealization(*prepared, *copy, record, policy));
       bool changed = false;
       copy->walk([&](exec::ApplyOp op) {
-        if (!op.getSite().ends_with("_request_constructor"))
+        if (!op.getSite().ends_with("_request_constructor_equal"))
           return;
-        op->setOperand(2, op.getOperand(1));
+        require(op.getInputs().size() == 2,
+                "missing constructor comparison inputs");
+        op.getInputsMutable()[1].set(op.getInputs()[0]);
         changed = true;
       });
       require(changed && succeeded(verify(*copy)),
@@ -608,68 +609,47 @@ int main(int argc, char **argv) {
                          ->front()
                          .getAsObject()
                          ->getArray("query_blocks");
-      unsigned count = (mode == "invalid-first" || mode == "guard") ? 3
-                       : mode == "invalid-later"                    ? 4
-                                                                    : 2;
+      unsigned count = mode == "guard" ? 3 : 2;
       require(blocks && blocks->size() == count,
               "wrong batch barrier partition");
-      if (count == 2) {
-        auto *groups =
-            blocks->front().getAsObject()->getArray("request_groups");
-        std::vector<unsigned> wanted =
-            (mode == "individual" || mode == "guarded-position")
-                ? std::vector<unsigned>{0, 1, 0, 2}
-                : std::vector<unsigned>{0, 0, 0, 1};
-        require(groups && groups->size() == wanted.size(),
-                "logical query coverage changed");
-        for (auto [actual, expected] : zip(*groups, wanted))
-          require(actual.getAsUINT64() == expected, "wrong physical sharing");
-        (*groups)[3] = 0;
-        std::string changed;
-        raw_string_ostream(changed) << encoded;
-        refused(checkOracleRealization(*prepared, *copy, changed, policy));
-      }
+      auto &firstBlock = *blocks->front().getAsObject();
+      auto *queries = firstBlock.getArray("queries");
+      require(queries && queries->size() == (mode == "guard" ? 1u : 4u),
+              "logical source occurrence coverage changed");
+      require(firstBlock.get("packet_capacity")->getAsUINT64() ==
+                  (mode == "guard" ? 3u : 4u) &&
+                  !firstBlock.get("request_groups"),
+              "dynamic packet bound or record schema differs");
+      firstBlock["packet_capacity"] = 1;
+      std::string changedRecord;
+      raw_string_ostream(changedRecord) << encoded;
+      refused(checkOracleRealization(*prepared, *copy, changedRecord, policy));
       bool mutated = false;
       copy->walk([&](protocol_ir::LocalCallOp call) {
-        if (!mutated && call.getSite().contains("unpack_opening_request") &&
-            call->getNumResults() > 1) {
-          auto first = call->getResult(0), second = call->getResult(1);
-          first.replaceAllUsesWith(second);
+        if (!mutated && call.getSite().contains("opening_group") &&
+            call->getNumResults() == 2 && !call.getInputs().empty()) {
+          call->getResult(0).replaceAllUsesWith(call.getInputs()[0]);
           mutated = true;
         }
       });
       require(mutated && succeeded(verify(*copy)),
-              "request-slot mutation must preserve formation");
+              "physical request substitution must preserve formation");
       refused(checkOracleRealization(*prepared, *copy, record, policy));
       if (mode == "paired") {
-        for (bool packing : {true, false}) {
+        for (unsigned field : {1u, 2u}) {
           auto packetCopy =
               parseSourceString<ModuleOp>(print(*candidate.module), &context);
           bool changed = false;
-          packetCopy->walk([&](Operation *op) {
-            if (changed)
+          packetCopy->walk([&](exec::VariantOp pack) {
+            if (changed || !pack.getSite().ends_with("_key") ||
+                pack.getPayload().size() != 3)
               return;
-            if (packing) {
-              auto pack = dyn_cast<exec::VariantOp>(op);
-              if (!pack || pack.getSite() != "packet" ||
-                  pack.getPayload().size() < 2)
-                return;
-              op->setOperand(1, pack.getPayload()[1]);
-            } else {
-              auto complete = dyn_cast<exec::CompleteOp>(op);
-              auto helper = op->getParentOfType<func::FuncOp>();
-              if (!complete || !helper ||
-                  !helper.getSymName().contains("_fields_") ||
-                  op->getNumOperands() < 3)
-                return;
-              op->setOperand(1, op->getOperand(2));
-            }
+            pack->setOperand(1 + field, pack.getPayload()[field - 1]);
             changed = true;
           });
           require(changed && succeeded(verify(*packetCopy)),
-                  "packet payload mutation must preserve formation");
-          refused(
-              checkOracleRealization(*prepared, *packetCopy, record, policy));
+                  "physical key mutation must preserve formation");
+          refused(checkOracleRealization(*prepared, *packetCopy, record, policy));
         }
       }
       auto invalid = parseSourceString<ModuleOp>(print(*prepared), &context);

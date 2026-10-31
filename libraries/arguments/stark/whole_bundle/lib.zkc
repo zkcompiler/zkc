@@ -21,7 +21,7 @@ use zkc::opening as opening_context;
 use zkc::opening::{opening_claims, deep_columns, deep_row, same_rotation};
 use air::interaction::{Interactions, Layout, Reduction, interactions, no_interactions,
   range_constraints};
-use fri::{LowDegree};
+use fri::{Direct, LowDegree};
 
 use zkc::oracle::{commit, open};
 
@@ -570,7 +570,7 @@ pub protocol ThreeTableArgument<B: Bundle, R: Reduction<Extension>,
      round_count: index @(P,V), query_count: index @(P,V), attempt_count: index @(P,V),
      channel_count: index @(P,V), coins: Random<Extension> @V) -> (accepted: bool @V)
     where B::Tables <= 3, 3 <= B::Tables, 1 <= B::Channels, 1 <= MaxLogHeight,
-      MaxLogHeight <= 63,
+      MaxLogHeight <= 63, LogSize <= 63,
       MaxLogHeight+1 <= LogSize, 1 <= Queries, 1 <= Attempts {
   let scheduledV @V = schedule<B,MaxLogHeight,Queries,Attempts>(round_count, query_count,
     attempt_count, channel_count);
@@ -624,7 +624,7 @@ pub protocol ThreeTableArgument<B: Bundle, R: Reduction<Extension>,
   let reduced @P = deep_tables<B>(extendedP, tablesP, chunksP, layoutsP, openedP, shiftP, sizeP, zetaP,
     rhoP, adjustmentP);
   let (fri_ok, positionsP, positionsV, valuesV) =
-    LowDegree<ExtensionRows,LogSize,0,MaxLogHeight,Queries>(reduced, shiftP, shiftV, round_count,
+    LowDegree<Direct<Extension>,LogSize,0,MaxLogHeight,Queries>(reduced, shiftP, shiftV, round_count,
       query_count, coins);
   require @V fri_ok;
   let base_widthV @V = base_width(layoutsV);

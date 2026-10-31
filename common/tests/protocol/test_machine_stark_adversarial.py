@@ -5,6 +5,7 @@ transcript challenges remain consistent. Exact source guards identify which
 verifier obligation rejects. Honest controls retain the modified prover.
 """
 from input_files import input_files
+from test_fri import emitted_guard_sites
 import json
 import re
 
@@ -20,33 +21,12 @@ TRUNCATE = ('air::polynomial',
 
 
 def guards(package):
-    """Read guard sites from this exact package, using the enclosing protocol.
-
-    The entry applies ThreeTableArgument once. The latter has nine guards;
-    helper protocols cannot contribute to this set. No fixed generated names
-    or site numbers are assumed.
-    """
+    """Resolve only the machine protocol's guards through shared FRI wrappers."""
     emitted = json.loads(package.read_text())['original']
-    functions, current = {}, None
-    for line in emitted.splitlines():
-        header = re.search(r'"(protocol|local)\.func"\(\) <\{.*sym_name = "(\w+)"', line)
-        if header:
-            current = functions.setdefault(header[2], {'guards': [], 'applies': []}) if header[1] == 'protocol' else None
-        if current is None:
-            continue
-        guard = re.search(r'"protocol\.guard".*owner = "(\w+)", site = "(s\d+)"', line)
-        if guard:
-            current['guards'].append(guard.groups())
-        applied = re.search(r'"protocol\.apply".*callee = @(\w+),.*site = "(s\d+)"', line)
-        if applied:
-            current['applies'].append(applied.groups())
-    (entry,) = [f for f in functions.values() if not f['guards'] and len(f['applies']) == 1]
-    ((symbol, call),) = entry['applies']
-    sites = functions[symbol]['guards']
-    assert [owner for owner, _ in sites] == [
-        'role00000001', 'role00000000', *(['role00000001'] * 7)]
-    names = ['profile', 'prover-profile', 'closure', 'identity', 'fri', 'base', 'auxiliary', 'quotient', 'deep']
-    return {name: call + '_' + site for name, (_, site) in zip(names, sites, strict=True)}
+    roster = [('profile', 'role00000001', 0), ('prover-profile', 'role00000000', 0)]
+    roster += [(name, 'role00000001', 0) for name in ('closure', 'identity', 'fri')]
+    roster += [(name, 'role00000001', 1) for name in ('base', 'auxiliary', 'quotient', 'deep')]
+    return emitted_guard_sites(emitted, {'': roster})
 
 
 def stopped_at(report, package, name):

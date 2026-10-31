@@ -296,6 +296,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                         "scoped call differs from authored argument mapping",
                         op.span);
     };
+    if (std::holds_alternative<OracleInstantiation>(op.action))
+      return checkCallAction(types, storage.declarations, body, op);
     const auto *call = std::get_if<HelperCall>(&op.action);
     if (!op.binding || !op.binding->scopedSource)
       return (!call || (call->scopedArguments.empty() &&

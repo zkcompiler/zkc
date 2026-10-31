@@ -46,15 +46,25 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
   }
   using K = Expression::Kind;
   using T = Type::Kind;
+  if (this->oracleMode() && !oracleExpression(expr))
+    return {};
   const auto oracleMode = oracleEvaluation(expr.kind);
-  if (syntax.layoutSyntax) {
+  if (syntax.layoutSyntax || this->oracleMode() || orderedRoot) {
     bool ordered = expr.kind == K::MethodCall ||
                    oracleMode == Statement::Evaluation::Ordered;
     if (auto found = inference->callees.find(id);
         found != inference->callees.end()) {
       const auto &callee =
           checker.output.declarations[found->second.declaration.index];
-      ordered |= callee.kind == Declaration::Kind::Local ||
+      if (callee.kind == Declaration::Kind::Oracle &&
+          (!protocol() || orderedRoot != id)) {
+        fail("source.oracle-construction",
+             "oracle construction requires an outer '<-' in Protocol mode",
+             expr.span);
+        return {};
+      }
+      ordered |= callee.kind == Declaration::Kind::Oracle ||
+                 callee.kind == Declaration::Kind::Local ||
                  callee.kind == Declaration::Kind::EntryFunction ||
                  (callee.generated && callee.generated->operation.has_value());
     }
@@ -277,7 +287,7 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
   } else {
     type =
         inference->expressions.at(uint32_t(&expr - syntax.expressions.data()));
-    if (type.kind != T::Record) {
+    if (type.kind != T::Record && type.kind != T::LogicalRecord) {
       fail("source.type", "named field constructor requires a record",
            expr.span);
       return {};
@@ -306,17 +316,20 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
     return {};
   }
   std::vector<ValueId> values(fields.size());
+  std::map<std::string, unsigned> fieldIndices;
+  if (expr.kind == E::Record)
+    for (unsigned i = 0; i < fields.size(); ++i)
+      fieldIndices.emplace(fields[i].name, i);
   std::set<unsigned> assigned;
   for (unsigned i = 0; i < expr.children.size(); ++i) {
     unsigned index = i;
     if (expr.kind == E::Record) {
-      auto found = llvm::find_if(
-          fields, [&](auto &f) { return f.name == expr.labels[i]; });
-      if (found == fields.end()) {
+      auto found = fieldIndices.find(expr.labels[i]);
+      if (found == fieldIndices.end()) {
         fail("source.field", "unknown constructor field", expr.span);
         return {};
       }
-      index = found - fields.begin();
+      index = found->second;
     }
     if (!assigned.insert(index).second) {
       fail("source.duplicate", "duplicate constructor field", expr.span);
@@ -338,6 +351,48 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
   if (!local() && nominal && nominal->resource) {
     fail("source.mode", "resource construction requires local mode", expr.span);
     return {};
+  }
+  if (type.kind == T::LogicalRecord) {
+    if (!protocol() || !checker.types.logicalRecord(type, expr.span)) {
+      if (!checker.types.diagnostic)
+        fail("source.oracle-boundary",
+             "logical record construction requires protocol mode", expr.span);
+      return {};
+    }
+    // Only direct logical fields determine the family. Ordinary operands must
+    // cover that entire family, even if their representation has no leaves.
+    std::optional<unsigned> holder;
+    std::vector<unsigned> family;
+    for (unsigned i = 0; i < fields.size(); ++i) {
+      if (!isOracleHandle(fields[i].type))
+        continue;
+      const auto &value = body.values[values[i].index];
+      auto available = components(values[i]);
+      if (!value.oracleHolder || !available.owners.empty()) {
+        fail("source.oracle-role",
+             "logical field has no concrete custody family", expr.span);
+        return {};
+      }
+      if (!holder) {
+        holder = value.oracleHolder;
+        family = std::move(available.roles);
+      } else if (holder != value.oracleHolder || family != available.roles) {
+        fail("source.oracle-role",
+             "logical fields must have identical holder and receiver families",
+             expr.span);
+        return {};
+      }
+    }
+    if (!holder) {
+      fail("source.oracle-aggregate",
+           "logical record has no direct oracle field", expr.span);
+      return {};
+    }
+    for (unsigned i = 0; i < fields.size(); ++i)
+      if (!isOracleHandle(fields[i].type) &&
+          !demand(values[i], family, expr.span))
+        return {};
+    return emit(Construct{std::move(values), {}}, type, family, expr.span);
   }
   auto components = combine(values, expr.span);
   if (!components)

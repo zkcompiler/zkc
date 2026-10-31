@@ -620,6 +620,21 @@ Expected<json::Value> checkComposition(pir::ProtocolModuleOp source,
 }
 } // namespace
 
+Expected<SmallVector<std::string>>
+polynomialRequirementEntries(StringRef text) {
+  auto requirements = parse(text);
+  if (!requirements)
+    return requirements.takeError();
+  SmallVector<std::string> entries;
+  std::set<std::string> seen;
+  for (const auto &requirement : *requirements)
+    for (const auto &entry : {requirement.reduction, requirement.terminal,
+                              requirement.composition})
+      if (!entry.empty() && seen.insert(entry).second)
+        entries.push_back(entry);
+  return entries;
+}
+
 Expected<json::Value>
 checkPolynomialReductions(ModuleOp original, ModuleOp candidate, StringRef text,
                           MathematicalSelectionPolicy mathematicalSelection) {

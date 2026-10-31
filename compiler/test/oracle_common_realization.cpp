@@ -12,6 +12,7 @@
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/Support/FormatVariadic.h"
+#include "llvm/Support/JSON.h"
 #include <filesystem>
 #include <fstream>
 using namespace mlir;
@@ -41,6 +42,491 @@ std::string print(Operation *op) {
   raw_string_ostream stream(text);
   op->print(stream);
   return text;
+}
+std::string fixtureText(StringRef name) {
+  std::ifstream input(std::filesystem::path(ZKC_ORACLE_FIXTURES) /
+                      (name.str() + ".mlir"));
+  require(bool(input), "missing oracle fixture: " + name.str());
+  return std::string((std::istreambuf_iterator<char>(input)), {});
+}
+void replace(std::string &text, StringRef before, StringRef after) {
+  auto at = text.find(before);
+  require(at != std::string::npos, "missing dynamic fixture slot");
+  text.replace(at, before.size(), after.str());
+}
+pir::LocalCallOp commonCall(ModuleOp module, StringRef purpose) {
+  pir::LocalCallOp found;
+  module.walk([&](pir::LocalCallOp call) {
+    if (!found && call.getSite().ends_with(purpose))
+      found = call;
+  });
+  require(bool(found), "missing common call: " + purpose.str());
+  return found;
+}
+func::FuncOp helper(ModuleOp module, func::FuncOp original) {
+  auto unit = cast<pir::ProtocolModuleOp>(module.getBody()->front());
+  auto found = dyn_cast_or_null<func::FuncOp>(
+      SymbolTable::lookupSymbolIn(unit, original.getSymName()));
+  require(bool(found), "fresh candidate lost helper");
+  return found;
+}
+// These are whole-candidate checks: every mutation is read from a fresh parsed
+// candidate under the frozen original, without reusing producer-owned handles.
+void dynamicWindows(Cases &cases, MLIRContext &context) {
+  constexpr StringLiteral scheme =
+      "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0";
+  for (StringRef mode :
+       {"paired", "individual", "reversed", "unknown-first", "unknown-later",
+        "guard", "unused-answer-call", "per-query"}) {
+    auto text = fixtureText("query-blocks");
+    if (mode == "unknown-first")
+      replace(text, "\"protocol.oracle_query\"(%a,%zero)",
+              "\"protocol.oracle_query\"(%a,%position)");
+    if (mode == "unknown-later")
+      replace(text, "\"protocol.oracle_query\"(%a,%four)",
+              "\"protocol.oracle_query\"(%a,%position)");
+    if (mode == "guard")
+      replace(text, "  %y = ",
+              "  \"protocol.guard\"(%allow) "
+              "{owner=\"V\",site=\"early_barrier\"} : (i1)->()\n  %y = ");
+    if (mode == "unused-answer-call") {
+      replace(text, " \"protocol.func\"()", R"mlir(
+ func.func private @choose_position(%answer:!F,%position:ui64)->ui64 {
+  return %position : ui64
+ }
+ "protocol.func"())mlir");
+      replace(text, "  %y = ",
+              "  %nextPosition = func.call @choose_position(%x,%position) : "
+              "(!F,ui64)->ui64\n  %y = ");
+      replace(text, "\"protocol.oracle_query\"(%a,%four)",
+              "\"protocol.oracle_query\"(%a,%nextPosition)");
+    }
+    auto source = parseSourceString<ModuleOp>(text, &context);
+    require(bool(source), "dynamic source did not parse");
+    auto prepared = mathematical::prepareProtocol(*source, false);
+    require(bool(prepared), "dynamic source did not prepare");
+    OracleRealizationPolicy policy;
+    policy.authentication = mode == "per-query"
+                                ? OracleAuthentication::PerQuery
+                                : OracleAuthentication::AtomicBlocks;
+    policy.roots = take(resolveOracleRealizationSelection(*prepared, policy));
+    for (auto &root : *policy.roots)
+      root.realization = {scheme.str(),
+                          mode == "individual"
+                              ? OracleLeafGrouping::Individual
+                              : OracleLeafGrouping::AntipodalPairs,
+                          mode == "reversed" ? OracleLeafOrder::BitReversed
+                                             : OracleLeafOrder::Natural};
+    auto candidate = take(emitOracleRealization(*prepared, policy));
+    auto record =
+        take(serializeOracleRealization(*prepared, candidate, policy));
+    auto candidateText = print(*candidate.module);
+    require(candidate.entries.size() == 1, "dynamic entry inventory changed");
+    const auto &entry = candidate.entries.front();
+    bool barrier = mode == "guard";
+    unsigned count = mode == "per-query" ? 5 : barrier ? 3 : 2;
+    uint64_t capacity = mode == "per-query" ? 1 : barrier ? 3 : 4;
+    cases.run("dynamic " + mode + " source order and fresh record", [&] {
+      auto fresh = parseSourceString<ModuleOp>(candidateText, &context);
+      require(bool(fresh), "dynamic candidate did not parse");
+      checked(checkOracleRealization(*prepared, *fresh, record, policy));
+      require(entry.remotes.size() == 1 && entry.batches.size() == count &&
+                  entry.remotes.front().window.capacity == capacity,
+              "wrong dynamic inventory or global capacity");
+      auto encoded = take(json::parse(record));
+      auto &row =
+          *encoded.getAsObject()->getArray("entries")->front().getAsObject();
+      auto &blocks = *row.getArray("query_blocks");
+      require(blocks.size() == count, "wrong dynamic barrier partition");
+      unsigned occurrences = 0;
+      for (auto [block, batch] : zip(blocks, entry.batches)) {
+        auto &fields = *block.getAsObject();
+        auto &paths = *fields.getArray("queries");
+        require(fields.size() == 2 && !fields.get("request_groups") &&
+                    fields.get("packet_capacity") &&
+                    fields.get("packet_capacity")->getAsUINT64() == capacity &&
+                    paths.size() == batch.remotes.size(),
+                "dynamic row lost capacity or logical occurrence coverage");
+        for (unsigned remote : batch.remotes)
+          require(remote == 0, "repeated roots lost their remote association");
+        occurrences += paths.size();
+      }
+      require(occurrences == 5, "repeated or unused source query disappeared");
+    });
+    if (mode != "paired")
+      continue;
+    auto mutate = [&](StringRef name, llvm::function_ref<void(ModuleOp)> change,
+                      StringRef code = "oracle-common-body") {
+      cases.run("dynamic refuses " + name, [&] {
+        auto fresh = parseSourceString<ModuleOp>(candidateText, &context);
+        require(bool(fresh), "mutation candidate did not parse");
+        change(*fresh);
+        require(succeeded(verify(*fresh)), "dynamic mutation lost formation");
+        refused(checkOracleRealization(*prepared, *fresh, record, policy),
+                code);
+      });
+    };
+    auto changeRecord = [&](StringRef name,
+                            llvm::function_ref<void(json::Object &)> change,
+                            StringRef code = "oracle-realization-record") {
+      cases.run("dynamic record refuses " + name, [&] {
+        auto encoded = take(json::parse(record));
+        auto &row =
+            *encoded.getAsObject()->getArray("entries")->front().getAsObject();
+        change(row);
+        std::string changed;
+        raw_string_ostream(changed) << encoded;
+        refused(checkOracleRealization(*prepared, *candidate.module, changed,
+                                       policy),
+                code);
+      });
+    };
+    changeRecord("derived capacity", [&](auto &row) {
+      (*row.getArray("query_blocks")
+            ->front()
+            .getAsObject())["packet_capacity"] = 1;
+    });
+    changeRecord("old physical group schema", [&](auto &row) {
+      auto &block = *row.getArray("query_blocks")->front().getAsObject();
+      block.erase("packet_capacity");
+      block["request_groups"] = json::Array{0, 0, 0, 1};
+    });
+    changeRecord(
+        "window capacity",
+        [&](auto &row) {
+          (*row.getArray("remotes")->front().getAsObject()->getObject(
+              "window"))["capacity"] = 1;
+        },
+        "oracle-common-body");
+    changeRecord(
+        "remote controller substitution",
+        [&](auto &row) {
+          auto &remote = *row.getArray("remotes")->front().getAsObject();
+          remote["receiver"] = *remote.get("holder");
+        },
+        "oracle-common-body");
+    changeRecord(
+        "missing remote", [&](auto &row) { row.getArray("remotes")->clear(); },
+        "oracle-common-body");
+    changeRecord(
+        "missing batch",
+        [&](auto &row) { row.getArray("batches")->pop_back(); },
+        "oracle-common-body");
+    changeRecord(
+        "changed root index",
+        [&](auto &row) {
+          (*row.getArray("batches")->front().getAsObject()->getArray(
+              "remotes"))[0] = 1;
+        },
+        "oracle-common-body");
+    changeRecord(
+        "lost repeated root",
+        [&](auto &row) {
+          row.getArray("batches")
+              ->front()
+              .getAsObject()
+              ->getArray("remotes")
+              ->pop_back();
+        },
+        "oracle-common-body");
+    changeRecord("reordered source paths", [&](auto &row) {
+      auto &paths = *row.getArray("query_blocks")
+                         ->front()
+                         .getAsObject()
+                         ->getArray("queries");
+      std::swap(paths[0], paths[1]);
+    });
+    changeRecord("helper model override", [&](auto &row) {
+      (*row.getArray("remotes")->front().getAsObject())["exchange"] =
+          json::Object{};
+    });
+    changeRecord("missing fresh helper", [&](auto &row) {
+      (*row.getArray("batches")->front().getAsObject()->getObject(
+          "body"))["collect"] = "absent";
+    });
+    mutate("wrong source position", [&](ModuleOp fresh) {
+      auto call = commonCall(fresh, "query_initialize");
+      require(call.getInputs().size() == 2 &&
+                  call.getInputs()[1].getDefiningOp(),
+              "missing source position");
+      auto original = call.getInputs()[1];
+      Value alternative;
+      for (auto &operation : *call->getBlock()) {
+        if (&operation == call.getOperation())
+          break;
+        for (Value value : operation.getResults())
+          if (value != original && value.getType() == original.getType())
+            alternative = value;
+      }
+      require(bool(alternative), "missing another actual source position");
+      call.getInputsMutable()[1].set(alternative);
+    });
+    mutate("another actual source anchor", [&](ModuleOp fresh) {
+      SmallVector<pir::LocalCallOp> initializers;
+      fresh.walk([&](pir::LocalCallOp call) {
+        if (call.getSite().ends_with("_query_initialize"))
+          initializers.push_back(call);
+      });
+      require(initializers.size() == 5 && initializers[0].getInputs()[0] !=
+                                              initializers[3].getInputs()[0],
+              "missing distinct source anchors");
+      initializers[0].getInputsMutable()[0].set(initializers[3].getInputs()[0]);
+    });
+    mutate("reordered collected root states", [&](ModuleOp fresh) {
+      auto call = commonCall(fresh, "query_collect");
+      unsigned width = entry.remotes.front().demand.state.size();
+      SmallVector<Value> first(call.getInputs().take_front(width));
+      for (unsigned i = 0; i < width; ++i) {
+        call.getInputsMutable()[i].set(call.getInputs()[width + i]);
+        call.getInputsMutable()[width + i].set(first[i]);
+      }
+    });
+    mutate("stale immutable store", [&](ModuleOp fresh) {
+      auto call = commonCall(fresh, "query_collect");
+      auto repeat = call->getParentOfType<pir::RepeatOp>();
+      require(bool(repeat), "collect lost structural rounds");
+      // The captured stores follow iteration and carried demand/evaluator
+      // states. Substitute a well-typed store from before its allocation.
+      auto original = call.getInputs().back();
+      auto argument = cast<BlockArgument>(original);
+      auto incoming = repeat.getInputs()[argument.getArgNumber()];
+      Value stale;
+      for (auto &operation : *repeat->getBlock()) {
+        if (&operation == repeat.getOperation())
+          break;
+        for (Value value : operation.getResults())
+          if (!stale && value != incoming &&
+              value.getType() == incoming.getType())
+            stale = value;
+      }
+      require(bool(stale), "missing pre-allocation immutable store");
+      repeat.getInputsMutable()[argument.getArgNumber()].set(stale);
+    });
+    mutate("request substitution", [&](ModuleOp fresh) {
+      auto group = commonCall(fresh, "opening_group");
+      auto authenticate = commonCall(fresh, "opening_authenticate");
+      authenticate.getInputsMutable()[0].set(group->getResult(0));
+    });
+    mutate("root end-range substitution", [&](ModuleOp fresh) {
+      auto replay = commonCall(fresh, "query_replay");
+      unsigned ends = entry.batches.front().body.evaluatorState.size() + 2;
+      replay.getInputsMutable()[ends + 1].set(replay.getInputs()[ends]);
+    });
+    mutate(
+        "correct unused helper beside a bad actual call", [&](ModuleOp fresh) {
+          auto group = commonCall(fresh, "opening_group");
+          auto good = helper(fresh, entry.remotes.front().packet.group);
+          auto bad = cast<func::FuncOp>(good->clone());
+          bad.setSymName("bad_actual_group");
+          Builder builder(&context);
+          bad->setAttr(
+              "runtime.origin",
+              builder.getArrayAttr({builder.getStringAttr("bad_actual_group"),
+                                    builder.getArrayAttr({})}));
+          good->getBlock()->push_back(bad);
+          exec::ApplyOp lower;
+          bad.walk([&](exec::ApplyOp op) {
+            if (op.getSite() == "packet_group_lower")
+              lower = op;
+          });
+          require(bool(lower), "missing actual packet grouping lower bound");
+          // Skip the first logical request in the forged implementation. The
+          // original recorded helper remains present and independently
+          // checkable.
+          lower.setParametersAttr(builder.getArrayAttr({builder.getIntegerAttr(
+              IntegerType::get(&context, 64, IntegerType::Unsigned), 1)}));
+          group->setAttr("callee", FlatSymbolRefAttr::get(bad));
+        });
+    mutate(
+        "logical authentication replaced by physical grouping",
+        [&](ModuleOp fresh) {
+          auto packet =
+              helper(fresh, entry.remotes.front().packet.authenticate);
+          exec::ApplyOp length;
+          packet.walk([&](exec::ApplyOp op) {
+            if (op.getSite() == "packet_auth_logical_length")
+              length = op;
+          });
+          require(bool(length), "missing logical authentication length");
+          length.getInputsMutable()[0].set(packet.getArgument(2));
+        },
+        "oracle-packet-body");
+    mutate(
+        "physical key drops actual instance identity",
+        [&](ModuleOp fresh) {
+          exec::VariantOp key;
+          fresh.walk([&](exec::VariantOp op) {
+            if (!key && op.getSite().starts_with("packet_constructor_") &&
+                op.getSite().ends_with("_key"))
+              key = op;
+          });
+          require(bool(key) && key.getPayload().size() == 3,
+                  "missing physical opening key");
+          key.getPayloadMutable()[1].set(key.getPayload()[0]);
+        },
+        "oracle-packet-body");
+    mutate("authentication after a replay call", [&](ModuleOp fresh) {
+      auto replay = commonCall(fresh, "query_replay");
+      auto authenticate = commonCall(fresh, "opening_authenticate");
+      auto *early = authenticate->clone();
+      authenticate->getBlock()->getOperations().insert(
+          authenticate->getIterator(), early);
+      auto partial = cast<pir::LocalCallOp>(early);
+      partial.setSite("partial_authentication");
+      // A first call authenticates only physical requests. Replay takes those
+      // answers while the actual complete logical authentication runs later.
+      partial.getInputsMutable()[0].set(authenticate.getInputs()[1]);
+      unsigned answer = entry.batches.front().body.evaluatorState.size() + 1;
+      replay.getInputsMutable()[answer].set(partial->getResult(0));
+      authenticate->moveAfter(replay);
+    });
+    cases.run("dynamic refuses reordered frozen source queries", [&] {
+      auto changed = parseSourceString<ModuleOp>(print(*prepared), &context);
+      SmallVector<pir::OracleQueryOp> queries;
+      changed->walk(
+          [&](pir::OracleQueryOp query) { queries.push_back(query); });
+      require(queries.size() == 5, "missing ordered source queries");
+      queries[1]->moveBefore(queries[0]);
+      require(succeeded(verify(*changed)), "reordered source lost formation");
+      refused(
+          checkOracleRealization(*changed, *candidate.module, record, policy),
+          "oracle-common-body");
+    });
+  }
+  for (bool sameKind : {false, true})
+    cases.run(
+        sameKind ? "dynamic recurrent queries keep constructor identity"
+                 : "dynamic recurrent mixed kinds retain logical answers",
+        [&] {
+          auto text = fixtureText("query-constructors");
+          if (sameKind) {
+            replace(text, "!BF = !algebra.field<\"koala-bear\">",
+                    "!BF = !algebra.field<\"koala-bear.ext4-binomial3\">");
+            replace(
+                text, "!BD = !algebra.field_vector<\"koala-bear\">",
+                "!BD = !algebra.field_vector<\"koala-bear.ext4-binomial3\">");
+          }
+          replace(text, "   \"protocol.return\"(%answer)",
+                  "   %unusedRoot = \"protocol.oracle_query\"(%b,%mapped) "
+                  "{owner=\"V\",site=\"sibling_root\"} : (!B,ui64)->!BF\n"
+                  "   \"protocol.return\"(%answer)");
+          auto source = parseSourceString<ModuleOp>(text, &context);
+          require(bool(source), "virtual dynamic source did not parse");
+          auto prepared = mathematical::prepareProtocol(*source, false);
+          require(bool(prepared), "virtual dynamic source did not prepare");
+          OracleRealizationPolicy policy;
+          policy.authentication = OracleAuthentication::AtomicBlocks;
+          policy.roots =
+              take(resolveOracleRealizationSelection(*prepared, policy));
+          require(policy.roots->size() == 2,
+                  "wrong mixed constructor inventory");
+          for (auto [ordinal, root] : enumerate(*policy.roots))
+            root.realization = {
+                ordinal == 0 || sameKind ? scheme.str()
+                                         : "rows.merkle-keccak256.koala-bear/0",
+                OracleLeafGrouping::AntipodalPairs, OracleLeafOrder::Natural};
+          auto candidate = take(emitOracleRealization(*prepared, policy));
+          auto record =
+              take(serializeOracleRealization(*prepared, candidate, policy));
+          auto fresh =
+              parseSourceString<ModuleOp>(print(*candidate.module), &context);
+          require(bool(fresh), "mixed dynamic candidate did not parse");
+          checked(checkOracleRealization(*prepared, *fresh, record, policy));
+          const auto &entry = candidate.entries.front();
+          require(entry.remotes.size() == (sameKind ? 1u : 2u) &&
+                      entry.batches.size() == 1 &&
+                      entry.batches.front().remotes ==
+                          std::vector<unsigned>({0, sameKind ? 0u : 1u}) &&
+                      entry.remotes.front().window.capacity > 1,
+                  "recurrent expansion did not use the bounded dynamic route");
+          if (!sameKind) {
+            auto encoded = take(json::parse(record));
+            auto &roots = *encoded.getAsObject()
+                               ->getArray("entries")
+                               ->front()
+                               .getAsObject()
+                               ->getArray("batches")
+                               ->front()
+                               .getAsObject()
+                               ->getArray("remotes");
+            std::swap(roots[0], roots[1]);
+            std::string changed;
+            raw_string_ostream(changed) << encoded;
+            refused(checkOracleRealization(*prepared, *fresh, changed, policy),
+                    "oracle-common-body");
+          }
+          exec::VariantOp request;
+          fresh->walk([&](exec::VariantOp op) {
+            if (!request && op.getSite() == "window_request")
+              request = op;
+          });
+          require(bool(request) && request.getPayload().size() == 3,
+                  "virtual discovery lost retained request coordinates");
+          request.getPayloadMutable()[1].set(request.getPayload()[2]);
+          require(succeeded(verify(*fresh)),
+                  "request coordinate mutation lost formation");
+          refused(checkOracleRealization(*prepared, *fresh, record, policy),
+                  "oracle-window-body");
+        });
+  cases.run("dynamic zero-leaf batches retain actual evaluator finish", [&] {
+    auto source = parseSourceString<ModuleOp>(R"mlir(
+#K = #protocol.oracle_kind<"table", [!algebra.field<"koala-bear.ext4-binomial3">,8:ui64]>
+!F = !algebra.field<"koala-bear.ext4-binomial3">
+!H = !protocol.oracle<#K>
+!D = !algebra.field_vector<"koala-bear.ext4-binomial3">
+module { "protocol.module"() ({
+ relation.declare @empty_ok {kind="external",key="test/empty",revision="0",
+  signature=(!D,!F)->i1,purposes=["witness","parameter"]}
+ "protocol.oracle"() ({
+ ^entry(%a:!H,%constant:!F,%position:ui64):
+  "protocol.oracle_yield"(%constant) : (!F)->()
+ }) {sym_name="empty",function_type=(!H,!F,ui64)->!F,kind=#K,
+     shape_arguments={},shape_bounds={},admissibility=@empty_ok} : ()->()
+ "protocol.func"() ({
+ ^entry(%data:!D,%constant:!F,%position:ui64):
+  %rows = "data.index"() {value=8:ui64} : ()->ui64
+  %base = "protocol.oracle_send"(%data,%rows) {shape_names=["rows"],shape_bounds={},sender="P",receivers=["V"],site="base"} : (!D,ui64)->!H
+  %empty = "protocol.oracle_virtual"(%base,%constant) {callee=@empty,holder="P",receivers=["V"]} : (!H,!F)->!H
+  %answer = "protocol.oracle_query"(%empty,%position) {owner="V",site="read"} : (!H,ui64)->!F
+  "protocol.return"(%answer) : (!F)->()
+ }) {sym_name="main",function_type=(!D,!F,ui64)->!F,roles=["P","V"],input_roles=[["P"],["P","V"],["V"]],output_roles=[["V"]]} : ()->()
+ }) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir",
+                                              &context);
+    require(bool(source), "empty virtual source did not parse");
+    auto prepared = mathematical::prepareProtocol(*source, false);
+    require(bool(prepared), "empty virtual source did not prepare");
+    OracleRealizationPolicy policy;
+    policy.authentication = OracleAuthentication::AtomicBlocks;
+    policy.roots = take(resolveOracleRealizationSelection(*prepared, policy));
+    for (auto &root : *policy.roots)
+      root.realization = {scheme.str(), OracleLeafGrouping::AntipodalPairs,
+                          OracleLeafOrder::Natural};
+    auto candidate = take(emitOracleRealization(*prepared, policy));
+    auto record =
+        take(serializeOracleRealization(*prepared, candidate, policy));
+    auto fresh =
+        parseSourceString<ModuleOp>(print(*candidate.module), &context);
+    require(bool(fresh), "empty virtual candidate did not parse");
+    checked(checkOracleRealization(*prepared, *fresh, record, policy));
+    const auto &entry = candidate.entries.front();
+    require(entry.remotes.size() == 1 && entry.batches.size() == 1 &&
+                entry.remotes.front().window.capacity == 1,
+            "zero leaves lost the positive global packet capacity");
+    auto finish = commonCall(*fresh, "query_finish");
+    require(finish.getCallee() ==
+                func::FuncOp(entry.batches.front().body.finish).getSymName(),
+            "zero-leaf batch did not use actual checked finish");
+    auto original = finish.getInputs()[0];
+    require(finish.getInputs().size() > 1 &&
+                original.getType() == finish.getInputs()[1].getType(),
+            "missing zero-leaf evaluator coordinates");
+    finish.getInputsMutable()[0].set(finish.getInputs()[1]);
+    require(succeeded(verify(*fresh)),
+            "finish coordinate mutation lost formation");
+    refused(checkOracleRealization(*prepared, *fresh, record, policy),
+            "oracle-common-body");
+  });
 }
 } // namespace
 int main(int argc, char **argv) {
@@ -766,12 +1252,21 @@ int main(int argc, char **argv) {
           require(bool(edge), "production compilation lost realization");
           checked(checkOracleRealization(*edge->original, *edge->candidate,
                                          edge->record));
-          require(print(*edge->original) == frozen,
-                  "production changed the retained logical subject");
-          require(edge->record ==
-                      take(serializeOracleRealization(*prepared, candidate)),
-                  "production record differs from the independently inspected "
-                  "edge");
+          OwningOpRef<ModuleOp> selectedSource(
+              cast<ModuleOp>(prepared->clone()));
+          SmallVector<Operation *> omitted;
+          selectedSource->walk([&](pir::MathematicalOp program) {
+            if (program.getSymName() != selectedEntry)
+              omitted.push_back(program);
+          });
+          for (Operation *program : omitted)
+            program->erase();
+          require(print(*edge->original) == print(*selectedSource),
+                  "production changed the selected prepared subject");
+          checked(checkOracleRealization(*selectedSource, *edge->candidate,
+                                         edge->record));
+          require(print(*prepared) == frozen,
+                  "deployment selection mutated the complete source");
           if (argc > 1) {
             auto base = std::filesystem::path(argv[1]) / name;
             std::ofstream(base.string() + ".mlir") << print(*edge->candidate);
@@ -782,6 +1277,10 @@ int main(int argc, char **argv) {
           }
         });
     }
+  }
+  if (mutations && (argc <= 3 || StringRef(argv[3]) == "dynamic-windows")) {
+    selectedFixture = true;
+    dynamicWindows(cases, context);
   }
   if (!selectedFixture) {
     errs() << "unknown common oracle fixture\n";

@@ -362,10 +362,21 @@ struct FormalSyntax {
   bool isPublic = false;
   std::shared_ptr<const FormalSource> authored;
 };
+struct SyntaxOraclePredicate {
+  std::optional<std::string> label;
+  uint32_t condition;
+  Span span;
+};
+struct SyntaxOracleDefinition {
+  SyntaxPort queryParameter;
+  std::optional<BindingId> queryBinding;
+  std::vector<SyntaxOraclePredicate> predicates;
+};
 struct SyntaxOracleShape {
   std::string port, dimension;
   SyntaxType bound;
   Span span;
+  std::optional<std::string> value;
 };
 struct SyntaxDeclaration {
   std::vector<FormalSyntax> formalSyntax;
@@ -392,6 +403,8 @@ struct SyntaxDeclaration {
   std::vector<std::string> roles;
   std::vector<SyntaxPort> inputs, outputs, services, scopedInputs, domainInputs;
   std::vector<SyntaxOracleShape> oracleShapes;
+  std::optional<SyntaxOracleDefinition> oracleDefinition;
+  bool oraclePredicate = false;
   std::vector<Declaration::InputSlot> inputOrder;
   std::vector<Expression> expressions;
   std::optional<DeferredBody> deferredBody;
@@ -413,6 +426,7 @@ struct SyntaxDeclaration {
   std::vector<std::string> writtenPermissions;
   std::optional<Resource> resource;
   bool sealed = false;
+  bool logical = false;
   std::optional<Effects> effects;
   std::vector<std::string> effectDependencies;
   std::optional<SyntaxType> definition;

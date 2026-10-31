@@ -12,7 +12,7 @@ use zkc_runtime::vm::{LogicalType, PhysicalType};
 fn package(document: &Value, artifact: &str) -> Package {
     let bytes =
         json!({"format":"zkc.entry/0", "original":"original", "interface":document.to_string(),
-        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true},"assets":[]})
+        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()},"assets":[]})
         .to_string();
     Package::capture(
         bytes.as_bytes(),
@@ -633,7 +633,17 @@ pub(in crate::entry) fn proof_fixture() -> (Value, String) {
                 ""
             ]
         ],
-        ["true", "false", "false", "true", "false", "true"],
+        [
+            "true",
+            "false",
+            "false",
+            "true",
+            "false",
+            "true",
+            crate::entry::OracleSelection::default()
+                .canonical_json()
+                .unwrap()
+        ],
         []
     ])
     .to_string();

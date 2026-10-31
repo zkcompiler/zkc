@@ -25,6 +25,10 @@ std::optional<ValueId> BodyChecker::oracle(const Expression &expr,
                                            unsigned depth) {
   using K = Expression::Kind;
   using T = Type::Kind;
+  if (oracleMode())
+    return oracleSourceQuery(expr, depth);
+  if (decl.oraclePredicateOwner)
+    return oraclePredicateProjection(expr, depth);
   if (!protocol()) {
     fail("source.mode", "oracle actions require protocol mode", expr.span);
     return {};

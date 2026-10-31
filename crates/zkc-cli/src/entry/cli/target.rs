@@ -37,6 +37,7 @@ impl Target {
                             | "--fuse-collect-fold"
                             | "--no-finite-bulk"
                             | "--no-calculation-batching"
+                            | "--oracle-realization"
                     )
                 }))
         {

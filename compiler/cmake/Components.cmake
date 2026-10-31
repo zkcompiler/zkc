@@ -158,6 +158,12 @@ add_zkc_component(Language
   lib/Language/BodyPlacement.cpp
   lib/Language/Expressions.cpp
   lib/Language/Oracles.cpp
+  lib/Language/OracleDefinitions.cpp
+  lib/Language/OracleBodies.cpp
+  lib/Language/OracleInspection.cpp
+  lib/Language/OracleInstantiation.cpp
+  lib/Language/OracleSpecialization.cpp
+  lib/Language/LayoutOracleDefinitions.cpp
   lib/Language/TypeInference.cpp
   lib/Language/CallableConstraints.cpp
   lib/Language/OperatorInference.cpp
@@ -336,9 +342,11 @@ add_zkc_component(Transforms
   lib/Transforms/FiniteVerification.cpp
   lib/Transforms/RealizationEmission.cpp
   lib/Transforms/OracleVerificationContext.cpp
+  lib/Transforms/OracleSelection.cpp
   lib/Transforms/OracleRealizationSelection.cpp
   lib/Transforms/OracleQueryExchange.cpp
   lib/Transforms/OracleQueryExchangeVerification.cpp
+  lib/Transforms/OracleQuerySchedule.cpp
   lib/Transforms/OracleQueryBlocks.cpp
   lib/Transforms/OracleSchedule.cpp
   lib/Transforms/OracleObservations.cpp
@@ -350,6 +358,16 @@ add_zkc_component(Transforms
   lib/Transforms/OracleQueryCapacity.cpp
   lib/Transforms/OracleQueryController.cpp
   lib/Transforms/OracleQueryControllerVerification.cpp
+  lib/Transforms/OracleQueryDemand.cpp
+  lib/Transforms/OracleQueryDemandVerification.cpp
+  lib/Transforms/OracleQueryResponse.cpp
+  lib/Transforms/OracleQueryResponseVerification.cpp
+  lib/Transforms/OracleQueryPacket.cpp
+  lib/Transforms/OracleQueryPacketVerification.cpp
+  lib/Transforms/OracleQueryWindow.cpp
+  lib/Transforms/OracleQueryWindowVerification.cpp
+  lib/Transforms/OracleQueryBatch.cpp
+  lib/Transforms/OracleQueryBatchVerification.cpp
   lib/Transforms/OracleAnchorStorage.cpp
   lib/Transforms/OracleAnchorEmission.cpp
   lib/Transforms/OracleAnchorVerification.cpp

@@ -330,7 +330,7 @@ charges follow the [capacity contract](../runtime/capacity.md#byte-construction)
 These authored operations have their own charge boundaries;
 replacing a scalar loop does not promise identical exhaustion behavior.
 
-## Checked indices
+## Indices and total word mathematics
 
 The installed `index` value is a natural number strictly below `2^64`.
 It is independent of a field and of the target pointer width. `indices` is an
@@ -339,10 +339,27 @@ separate occurrences. Neither type establishes an oracle-domain membership fact.
 
 `index.constant` has one canonical decimal u64 attribute. `index.add`, `sub` and
 `mul` refuse overflow or underflow; `div` and `mod` refuse a zero divisor.
-`equal` and `less` return Booleans. Arithmetic never wraps. `indices.empty`,
+`equal` and `less` return Booleans. These checked operations never wrap. `indices.empty`,
 `append`, `at` and `length` construct and inspect a sequence; `at` refuses an
 out-of-range position. Allocation ceilings are additional execution conditions.
 All these operations have no static domain argument.
+
+The explicitly named total operations use the same unsigned 64-bit carrier.
+For `M = 2^64`, `index.wrapping_add(a,b)` returns `(a+b) mod M` and
+`index.wrapping_sub(a,b)` returns the unique representative of `a-b` in
+`[0,M)`. `index.bit_and(a,b)` is bitwise conjunction over the 64 bits.
+`index.logical_shift_right(a,b)` returns `floor(a / 2^b)` for `b < 64`
+and zero otherwise. In particular, the shift count is not reduced modulo 64.
+Each takes two indices, returns one index, and has no attributes or static
+parameters. They are admitted in total mathematical bodies; the checked
+operations above remain ordered Local operations.
+
+The Data operations are `data.index_wrapping_add`,
+`data.index_wrapping_subtract`, `data.index_bit_and`, and
+`data.index_logical_shift_right`. Mathematical `arith.select` also admits
+two `ui64` alternatives and an `i1` condition. Neither a word operation nor a
+selection proves that its result lies in an oracle's actual domain. Native
+execution retains ordinary instruction, value and allocation accounting.
 
 `field.from_index<F>` is the explicit natural cast into `F`. It reduces modulo
 the field characteristic and generally loses information. It does not authorize

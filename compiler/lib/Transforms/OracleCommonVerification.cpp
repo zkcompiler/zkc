@@ -1,4 +1,5 @@
 #include "OracleCommonPlan.h"
+#include "OracleQuerySchedule.h"
 #include "OracleVerificationContext.h"
 #include "mlir/IR/OperationSupport.h"
 #include "zkc/Dialect/Bindings.h"
@@ -88,51 +89,6 @@ bool local(const OracleLocalRecipe &recipe, func::FuncOp actual,
     if (id >= values.size() || values[id] != input)
       return false;
   return true;
-}
-bool local(const OraclePacketRecipe &recipe, func::FuncOp actual,
-           const SourceExecutionClosure &closure) {
-  if (!actual || actual.getNumArguments() != recipe.inputs.size() + 1 ||
-      actual.getNumResults() != 1 ||
-      !isa<runtime::ScopeType>(actual.getArgument(0).getType()) ||
-      !equal(actual.getArgumentTypes().drop_front(), recipe.inputs))
-    return false;
-  auto outcome = dyn_cast<exec::OutcomeType>(actual.getResultTypes()[0]);
-  if (!outcome || !equal(outcome.getPayload(), recipe.outputs))
-    return false;
-  auto found = closure.bodies.find(actual.getSymName().str());
-  if (found == closure.bodies.end() || found->second.size() != 2)
-    return false;
-  const auto &step = found->second.front();
-  const auto &last = found->second.back();
-  if (!equal(step.inputs, actual.getArguments().drop_front()) ||
-      !equal(ValueRange(step.outputs).getTypes(), recipe.outputs) ||
-      !isa<exec::ReturnOp>(last.operation) || !last.regions.empty() ||
-      !last.outputs.empty() || !equal(last.inputs, step.outputs))
-    return false;
-  if (recipe.pack) {
-    auto pack = dyn_cast<exec::VariantOp>(step.operation);
-    return pack && step.regions.empty() && pack.getAlternative() == "Record" &&
-           pack.getSite() == "packet";
-  }
-  auto match = dyn_cast<exec::MatchOp>(step.operation);
-  if (!match || match.getSite() != "packet" || step.regions.size() != 1 ||
-      match.getAlternatives().size() != 1 ||
-      cast<StringAttr>(match.getAlternatives()[0]).getValue() != "Record")
-    return false;
-  auto fields = step.regions.front();
-  if (!fields || fields.getNumArguments() != recipe.outputs.size() + 1 ||
-      fields.getNumResults() != 1 || !fields->hasAttr("runtime.region") ||
-      !isa<runtime::ScopeType>(fields.getArgument(0).getType()) ||
-      !equal(fields.getArgumentTypes().drop_front(), recipe.outputs) ||
-      fields.getResultTypes()[0] != actual.getResultTypes()[0])
-    return false;
-  auto body = closure.bodies.find(fields.getSymName().str());
-  if (body == closure.bodies.end() || body->second.size() != 1)
-    return false;
-  const auto &finish = body->second.front();
-  return isa<exec::CompleteOp>(finish.operation) && finish.regions.empty() &&
-         finish.outputs.empty() &&
-         equal(finish.inputs, fields.getArguments().drop_front());
 }
 // Every extra declaration is reachable from a checked generated primitive or
 // the realized entry. Original declarations retain their exact body. A spare
@@ -315,9 +271,85 @@ Error checkOracleRealizationModel(
         root(helper);
       }
     }
+    auto schedule = planOracleQuerySchedule(prepared, entry, *requirements,
+                                            realized.controllers,
+                                            realized.merkle, authentication);
+    if (!schedule)
+      return schedule.takeError();
+    if (realized.remotes.size() != schedule->remotes.size() ||
+        realized.batches.size() != schedule->batches.size())
+      return refuse();
+    for (auto [expected, actual] : zip(schedule->remotes, realized.remotes)) {
+      if (actual.receiver != expected.receiver ||
+          actual.holder != expected.holder ||
+          actual.window.capacity != schedule->capacity)
+        return refuse();
+      const auto &receiver = realized.controllers[expected.receiver];
+      if (auto e = checkOracleQueryDemand(targetContext, sourceContext,
+                                          requirements->storage, receiver.body,
+                                          receiver.kind, actual.demand))
+        return e;
+      if (auto e = checkOracleQueryResponse(targetContext, expected.exchange,
+                                            actual.response))
+        return e;
+      if (!actual.open)
+        return refuse();
+      OracleExchangeRecipe recipe;
+      // The actual spelling is only a symbol handle. Source and checked
+      // primitives determine the complete signature and dispatch body.
+      func::FuncOp opening = actual.open;
+      recipe.name = opening.getSymName().str();
+      recipe.action = OracleExchangeAction::Open;
+      recipe.exchange =
+          std::make_shared<const OracleQueryExchange>(expected.exchange);
+      recipe.inputs.push_back(expected.exchange.request);
+      append_range(recipe.inputs, expected.exchange.holderStores);
+      recipe.outputs.push_back(expected.exchange.response);
+      if (!checkOracleQueryExchange(targetContext, actual.open, recipe))
+        return refuse();
+      if (auto e = checkOracleQueryPacket(
+              targetContext, expected.exchange, actual.response, actual.open,
+              realized.merkle, schedule->capacity, actual.packet))
+        return e;
+      if (auto e = checkOracleQueryWindow(targetContext, receiver.body,
+                                          actual.demand, expected.exchange,
+                                          actual.response, actual.window))
+        return e;
+      root(actual.demand.initialize);
+      root(actual.demand.advance);
+      root(actual.demand.consume);
+      root(actual.response.authenticate);
+      root(actual.response.resume);
+      root(actual.open);
+      root(actual.packet.group);
+      root(actual.packet.open);
+      root(actual.packet.authenticate);
+      root(actual.window.collect);
+      root(actual.window.replay);
+      root(actual.window.finish);
+    }
+    for (auto [expected, actual] : zip(schedule->batches, realized.batches)) {
+      if (actual.remotes != expected.remotes)
+        return refuse();
+      SmallVector<OracleQueryBatchRoot> batchRoots;
+      for (unsigned index : expected.remotes) {
+        const auto &remote = realized.remotes[index];
+        batchRoots.push_back({&realized.controllers[remote.receiver].body,
+                              &remote.demand, &remote.window});
+      }
+      // Windows have already been independently checked in this immutable
+      // context. The batch reader checks their exact ordered composition.
+      if (auto e =
+              checkOracleQueryBatch(targetContext, batchRoots, actual.body))
+        return e;
+      root(actual.body.collect);
+      root(actual.body.replay);
+      root(actual.body.finish);
+    }
     auto plan =
         planOracleCommon(prepared, entry, *requirements, realized.controllers,
-                         realized.allocators, realized.merkle, authentication);
+                         realized.allocators, realized.merkle, authentication,
+                         realized.remotes, realized.batches);
     if (!plan)
       return plan.takeError();
     if (realized.inputShapes != plan->inputShapes ||
@@ -333,19 +365,7 @@ Error checkOracleRealizationModel(
       return refuse();
     const auto &closure = targetContext.getClosure();
     for (auto [recipe, helper] : zip(plan->locals, realized.locals)) {
-      auto actual = helper;
-      bool checked = std::visit(
-          [&](const auto &body) {
-            if constexpr (std::is_same_v<std::decay_t<decltype(body)>,
-                                         OracleLocalRecipe> ||
-                          std::is_same_v<std::decay_t<decltype(body)>,
-                                         OraclePacketRecipe>)
-              return local(body, actual, closure);
-            else
-              return checkOracleQueryExchange(targetContext, actual, body);
-          },
-          recipe);
-      if (!checked)
+      if (!local(recipe, helper, closure))
         return refuse();
       root(helper);
     }

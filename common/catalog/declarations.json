@@ -843,6 +843,22 @@
     {
       "laws": null,
       "name": "MultilinearRestrictPrefix"
+    },
+    {
+      "laws": null,
+      "name": "IndexWrappingAdd"
+    },
+    {
+      "laws": null,
+      "name": "IndexWrappingSubtract"
+    },
+    {
+      "laws": null,
+      "name": "IndexBitAnd"
+    },
+    {
+      "laws": null,
+      "name": "IndexLogicalShiftRight"
     }
   ],
   "mathematicalIntrinsics": [
@@ -1155,6 +1171,38 @@
       "domainPoints": false,
       "identity": "MultilinearRestrictPrefix",
       "name": "multilinear.restrict_prefix",
+      "naturals": 0,
+      "scalar": false
+    },
+    {
+      "domainKind": "Index",
+      "domainPoints": false,
+      "identity": "IndexWrappingAdd",
+      "name": "index.wrapping_add",
+      "naturals": 0,
+      "scalar": false
+    },
+    {
+      "domainKind": "Index",
+      "domainPoints": false,
+      "identity": "IndexWrappingSubtract",
+      "name": "index.wrapping_sub",
+      "naturals": 0,
+      "scalar": false
+    },
+    {
+      "domainKind": "Index",
+      "domainPoints": false,
+      "identity": "IndexBitAnd",
+      "name": "index.bit_and",
+      "naturals": 0,
+      "scalar": false
+    },
+    {
+      "domainKind": "Index",
+      "domainPoints": false,
+      "identity": "IndexLogicalShiftRight",
+      "name": "index.logical_shift_right",
       "naturals": 0,
       "scalar": false
     }
@@ -13075,6 +13123,130 @@
         ]
       },
       "stage": "Physical"
+    },
+    {
+      "facets": [],
+      "name": "index.wrapping_add",
+      "parameters": {
+        "maximum": 0,
+        "minimum": 0,
+        "validator": "None"
+      },
+      "requirements": [],
+      "scope": [],
+      "signature": {
+        "inputs": [
+          {
+            "arguments": [],
+            "constructor": "index"
+          },
+          {
+            "arguments": [],
+            "constructor": "index"
+          }
+        ],
+        "kind": "fixed",
+        "outputs": [
+          {
+            "arguments": [],
+            "constructor": "index"
+          }
+        ]
+      },
+      "stage": "Source"
+    },
+    {
+      "facets": [],
+      "name": "index.wrapping_sub",
+      "parameters": {
+        "maximum": 0,
+        "minimum": 0,
+        "validator": "None"
+      },
+      "requirements": [],
+      "scope": [],
+      "signature": {
+        "inputs": [
+          {
+            "arguments": [],
+            "constructor": "index"
+          },
+          {
+            "arguments": [],
+            "constructor": "index"
+          }
+        ],
+        "kind": "fixed",
+        "outputs": [
+          {
+            "arguments": [],
+            "constructor": "index"
+          }
+        ]
+      },
+      "stage": "Source"
+    },
+    {
+      "facets": [],
+      "name": "index.bit_and",
+      "parameters": {
+        "maximum": 0,
+        "minimum": 0,
+        "validator": "None"
+      },
+      "requirements": [],
+      "scope": [],
+      "signature": {
+        "inputs": [
+          {
+            "arguments": [],
+            "constructor": "index"
+          },
+          {
+            "arguments": [],
+            "constructor": "index"
+          }
+        ],
+        "kind": "fixed",
+        "outputs": [
+          {
+            "arguments": [],
+            "constructor": "index"
+          }
+        ]
+      },
+      "stage": "Source"
+    },
+    {
+      "facets": [],
+      "name": "index.logical_shift_right",
+      "parameters": {
+        "maximum": 0,
+        "minimum": 0,
+        "validator": "None"
+      },
+      "requirements": [],
+      "scope": [],
+      "signature": {
+        "inputs": [
+          {
+            "arguments": [],
+            "constructor": "index"
+          },
+          {
+            "arguments": [],
+            "constructor": "index"
+          }
+        ],
+        "kind": "fixed",
+        "outputs": [
+          {
+            "arguments": [],
+            "constructor": "index"
+          }
+        ]
+      },
+      "stage": "Source"
     }
   ],
   "rules": [

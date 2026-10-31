@@ -3,7 +3,7 @@
 `stark::single_table::TableArgument` is generic over a `stark::configurations::contract::
 Configuration`; these tests run it with `stark::configurations::koala_bear_quartic::Poseidon2`
 (KoalaBear trace, quartic extension, Poseidon2 Merkle trees with pruned
-multi-openings, natural layout with both fold siblings in one FRI leaf,
+multi-openings for natural outer rows,
 challenges derived from the octic KoalaBear Merlin suite) and with a second,
 bit-reversed configuration written here. The AIRs are relation Bundles exported
 by the Plonky3 and Clean adapters and a generated quadratic recurrence.
@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[3]
 PROJECT = ROOT / 'examples/projects/stark'
 EXISTING = ROOT / 'examples/projects/fibonacci'
 LIBRARY = ROOT / 'libraries/arguments/stark'
+FRI = ROOT / 'libraries/protocols/polynomial/fri/lib.zkc'
 RECURRENCE = ROOT / 'compiler/adapters/plonky3/fixtures/recurrence'
 SUITE = 'merlin3.koala-bear.ext8-binomial3.rejection31le/0'
 P = 2130706433
@@ -349,15 +350,17 @@ fn shifted(positions: Indices, size: index) -> Indices {
 '''
 
 
-@pytest.mark.parametrize('variant', ['trace-rows', 'quotient-rows', 'fri-siblings'])
+@pytest.mark.parametrize('variant', ['trace-rows', 'quotient-rows', 'fri-first-value'])
 def test_wrong_openings_are_refused(toolchain, journal, directory, variant):
-    """The prover opens its own commitments, but not where the verifier asked."""
-    if variant == 'fri-siblings':
-        path = edited(directory, LIBRARY / 'single_table/low_degree.zkc', [(
-            'let proposed @P = sibling_values(opened.0, atP, nextP);',
-            'let proposed @P = sibling_values(opened.0, pair_indices(atP, 1), nextP);')],
-            'low_degree.zkc')
-        overrides = {'stark::single_table::low_degree': path}
+    """Reject wrong outer positions and a committed first value that disagrees with DEEP."""
+    if variant == 'fri-first-value':
+        # Authenticate a consistently changed initial word. Its selected value
+        # must disagree with the outer DEEP value before any chain is checked.
+        path = edited(directory, FRI, [(
+            'let values @P = coset::values(current);',
+            'let values @P = if round == 0 { zkc::vector::add(coset::values(current), '
+            'fill<C::Value>(1, rows)) } else { coset::values(current) };')], 'fri.zkc')
+        overrides = {'fri': path}
     else:
         target = {'trace-rows': 'K::open_base(trace_tree.1, positionsP, sizeP)',
                   'quotient-rows': 'K::open_extension(quotient_tree.1, positionsP, sizeP)'}[variant]
@@ -369,7 +372,12 @@ def test_wrong_openings_are_refused(toolchain, journal, directory, variant):
     public, witness = fibonacci_inputs('Plonky3Proof')
     produced, proof = package.prove(public, witness)
     assert produced['status'] == 'produced'
-    rejected(package.verify(public, proof, refuses=True))
+    report = package.verify(public, proof, refuses=True)
+    rejected(report)
+    if variant == 'fri-first-value':
+        from test_fri import guard_sites, rejected as fri_rejected
+        sites = guard_sites(toolchain, journal, directory, package=package.path)
+        assert fri_rejected(report, sites) == ('association', ['0'])
 
 
 COMPENSATED = '''
@@ -414,15 +422,15 @@ def test_dishonest_quotients_are_refused(toolchain, journal, directory):
          '  let proposed_quotient @P = compensated<K::Extension,Table,B>(honest_quotient, proposed,\n'
          '    heightP, zetaP, alphaP);'),
         ('fn deep_values<', COMPENSATED + 'fn deep_values<')], 'argument.zkc')
-    final = edited(directory, LIBRARY / 'single_table/low_degree.zkc', [(
+    final = edited(directory, FRI, [(
         '  require !less(count, length(coefficients));\n'
         '  return concat(coefficients, fill<F>(0, count - length(coefficients)));',
         '  return if less(count, length(coefficients)) { zkc::vector::slice(coefficients, 0, count) }\n'
         '    else { concat(coefficients, fill<F>(0, count - length(coefficients))) };')],
-        'low_degree.zkc')
+        'fri.zkc')
     package = dishonest(toolchain, journal, directory, 'compensated',
                         {'air::polynomial': truncate, 'stark::single_table': claims,
-                         'stark::single_table::low_degree': final})
+                         'fri': final})
     produced, proof = package.prove(public, false)
     assert produced['status'] == 'produced'
     terminal = rejected(package.verify(public, proof, refuses=True))
@@ -431,8 +439,7 @@ def test_dishonest_quotients_are_refused(toolchain, journal, directory):
 
 
 CONFIGURATIONS = '''
-use stark::configurations::contract::{Configuration, reversed_rows, reversed_pairs, reverse_positions,
-  pair_positions};
+use stark::configurations::contract::{Configuration, reversed_rows, reverse_positions};
 use stark::configurations::koala_bear_quartic::{Quartic, KoalaBearRows, QuarticRows};
 use zkc::indices::{Indices};
 use zkc::oracle as oracle;
@@ -471,91 +478,27 @@ module Reversed: Configuration {
     return oracle::check_many<QuarticRows>(root, width, height,
       reverse_positions(positions, height), rows, proof);
   }
-  fn commit_pairs(word: Vector<Quartic>) -> (Root<QuarticRows>, State<QuarticRows>) {
-    return oracle::commit<QuarticRows>(reversed_pairs(word), 2);
-  }
-  fn open_pairs(state: State<QuarticRows>, pairs: Indices, half: index)
-      -> (Vector<Quartic>, Path<QuarticRows>) {
-    return oracle::open_many<QuarticRows>(state, reverse_positions(pairs, half));
-  }
-  fn check_pairs(root: Root<QuarticRows>, half: index, pairs: Indices, rows: Vector<Quartic>,
-      proof: Path<QuarticRows>) -> bool {
-    return oracle::check_many<QuarticRows>(root, 2, half, reverse_positions(pairs, half), rows, proof);
-  }
-}
-module Separate: Configuration {
-  type Base: Field = stark::configurations::koala_bear_octic::Base;
-  type Extension: Field = Quartic;
-  type Challenge: Field = stark::configurations::koala_bear_octic::Extension;
-  type BaseRows: Commitment = KoalaBearRows;
-  type ExtensionRows: Commitment = QuarticRows;
-  fn challenge(draw: stark::configurations::koala_bear_octic::Extension) -> Quartic { return Poseidon2::challenge(draw); }
-  fn embed(values: Vector<stark::configurations::koala_bear_octic::Base>) -> Vector<Quartic> { return Poseidon2::embed(values); }
-  fn lift(value: stark::configurations::koala_bear_octic::Base) -> Quartic { return Poseidon2::lift(value); }
-  fn shift() -> stark::configurations::koala_bear_octic::Base { return 3; }
-  fn commit_base(rows: Vector<stark::configurations::koala_bear_octic::Base>, width: index) -> (Root<KoalaBearRows>, State<KoalaBearRows>) {
-    return Poseidon2::commit_base(rows, width);
-  }
-  fn open_base(state: State<KoalaBearRows>, positions: Indices, height: index)
-      -> (Vector<stark::configurations::koala_bear_octic::Base>, Path<KoalaBearRows>) {
-    return Poseidon2::open_base(state, positions, height);
-  }
-  fn check_base(root: Root<KoalaBearRows>, width: index, height: index, positions: Indices,
-      rows: Vector<stark::configurations::koala_bear_octic::Base>, proof: Path<KoalaBearRows>) -> bool {
-    return Poseidon2::check_base(root, width, height, positions, rows, proof);
-  }
-  fn commit_extension(rows: Vector<Quartic>, width: index) -> (Root<QuarticRows>, State<QuarticRows>) {
-    return Poseidon2::commit_extension(rows, width);
-  }
-  fn open_extension(state: State<QuarticRows>, positions: Indices, height: index)
-      -> (Vector<Quartic>, Path<QuarticRows>) {
-    return Poseidon2::open_extension(state, positions, height);
-  }
-  fn check_extension(root: Root<QuarticRows>, width: index, height: index, positions: Indices,
-      rows: Vector<Quartic>, proof: Path<QuarticRows>) -> bool {
-    return Poseidon2::check_extension(root, width, height, positions, rows, proof);
-  }
-  fn commit_pairs(word: Vector<Quartic>) -> (Root<QuarticRows>, State<QuarticRows>) {
-    return oracle::commit<QuarticRows>(word, 1);
-  }
-  fn open_pairs(state: State<QuarticRows>, pairs: Indices, half: index)
-      -> (Vector<Quartic>, Path<QuarticRows>) {
-    return oracle::open_many<QuarticRows>(state, pair_positions(pairs, half));
-  }
-  fn check_pairs(root: Root<QuarticRows>, half: index, pairs: Indices, rows: Vector<Quartic>,
-      proof: Path<QuarticRows>) -> bool {
-    return oracle::check_many<QuarticRows>(root, 1, 2 * half, pair_positions(pairs, half), rows, proof);
-  }
 }
 '''
 
 
-def test_layout_and_leaf_grouping_are_configurations(toolchain, journal, directory):
-    """The same protocol with two other configurations: rows and FRI pairs in
-    bit-reversed order, and natural rows with one FRI value per leaf. All three
-    verify with the same message sequence; the layout changes the trace root,
-    and separate leaves need two authentication paths per pair."""
+def test_outer_row_layouts_are_configurations(toolchain, journal, directory):
+    """Natural and bit-reversed outer rows share the mathematical FRI client."""
     height, final, blowup, queries = 32, 1, 2, 16
     bundle, public_data, trace = quadratic_air(height, 3)
     asset = journal.write('bundle.json', bundle)
     proofs = {}
-    for configuration in ['Poseidon2', 'Reversed', 'Separate']:
+    for configuration in ['Poseidon2', 'Reversed']:
         source = generated(height, final, blowup, queries, configuration, CONFIGURATIONS)
         package = Package.source(toolchain, journal, directory, source, {'trace': asset},
                                  name=configuration)
         proofs[configuration] = frames(package.honest({'public_data': public_data},
                                                       {'trace': trace}).read_bytes())
-    natural, reversed_, separate = proofs['Poseidon2'], proofs['Reversed'], proofs['Separate']
+    natural, reversed_ = proofs['Poseidon2'], proofs['Reversed']
     rounds = height.bit_length() - 1 - final
-    assert [tag(m) for m in natural] == [tag(m) for m in reversed_] == [tag(m) for m in separate]
-    # The trace root is committed before any challenge. The deployment differs
-    # between configurations, so later challenges and roots differ anyway.
-    assert natural[0] != reversed_[0] and natural[0] == separate[0]
-    # Separate leaves k and k + half lie in the two equal halves of a tree of
-    # 2*half leaves, so each layer proof holds the same boundary twice: an even
-    # digest count, below a root whose both children are covered.
-    layer_proofs = range(len(natural) - 2 * rounds + 1, len(natural), 2)
-    assert all(int.from_bytes(separate[i][6:10], 'little') % 2 == 0 for i in layer_proofs)
+    assert [tag(m) for m in natural] == [tag(m) for m in reversed_] == expected_frames(rounds)
+    # The trace commitment precedes challenges and binds a different row order.
+    assert natural[0] != reversed_[0]
     journal.write('sizes.json', {name: sum(map(len, value)) for name, value in proofs.items()})
 
 

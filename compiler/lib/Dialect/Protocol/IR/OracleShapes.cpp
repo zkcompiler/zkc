@@ -88,8 +88,8 @@ class InitialShape {
     if (!seen[{value, scope}].insert(meaning).second)
       return success();
     if (!meaning.empty())
-      if (auto type = dyn_cast<protocol_ir::OracleHandleType>(value.getType());
-          type && type.getKind().getStaticShape(meaning))
+      if (auto kind = protocol_ir::getOracleFamilyKind(value.getType());
+          kind && kind.getStaticShape(meaning))
         return success();
     if (auto argument = dyn_cast<BlockArgument>(value)) {
       auto environment = scopes[scope];

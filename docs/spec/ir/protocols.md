@@ -238,9 +238,61 @@ answer to the reached exchange and authentication. Resume coordinates are
 ordinary data, not an authentication capability. These primitive checks do not
 establish complete realization correspondence or the Lean simulation.
 
-Whole common realization accounts for every retained protocol entry. Selecting
-one native bundle does not authorize omitting a sibling entry from the checked
-module. Each oracle entry has its own constructor inventory and stores; shared
+### Dynamic query windows
+
+One sequence-packet engine implements remote queries. Per-query selection keeps
+one source query and packet capacity one. Atomic selection groups at most 32
+contiguous same-receiver queries whose actual handle and position operands
+properly dominate the first query. An intervening operation ends the window;
+an earlier answer cannot become a later discovery operand. Shared transport
+also requires the same checked constructor, holder, store and response family.
+A static source-derived bound covers the complete expansion. Exhausted analysis
+or unrepresentable bounds refuse compilation without adding a source premise.
+
+Discovery uses a separate answer-free continuation state. It may evaluate total
+position maps and actual domains, but never an answer function. A false domain
+marks a pending cut and retains the preceding valid demand prefix. It is not a
+native failure and does not authorize skipping earlier authentication. Native
+lookup, allocation, decoding and budget failures retain their own generated
+positions. Discovery stops immediately at packet capacity without inspecting the
+next window, including its next domain check.
+
+Each positive packet is grouped by first use of the exact constructor, anchor
+instance and physical leaf. Equal roots or equal data cannot merge identities.
+The holder opens each physical request once. The receiver authenticates every
+logical occurrence, in order, against its own request and retained root/shape,
+even when occurrences share one response. Exact lengths and bounds are checked.
+No evaluator resumes until the entire valid prefix authenticates. The bounded
+linear first-use search has quadratic runtime cost; runtime execution meters
+that work separately from compiler analysis and IR-generation allowances.
+
+Replay follows the original evaluator and compares each next request with the
+retained request before resuming from the evaluator's actual continuation.
+Ordered end offsets bind every root's segment, including empty segments. Kind
+numbers remain local to each controller. All source-root answers are returned
+only after every root finishes in source order. Finishing also traverses trailing
+zero-leaf children and their domains. An empty valid prefix in a positive round
+runs these original finishes before any exchange so that the pending source
+failure is preserved; an impossible successful empty round refuses internally.
+Zero-total windows perform no communication and still finish every root.
+
+Both participants compute structural round counts from their actual immutable
+stores: one per leaf for per-query selection, and zero or one for an atomic
+window. Counts do not prove that the leaves will be reached. A pending source
+stop truncates execution at its defined boundary; no flush or cancellation
+protocol is added. Private request/answer sequences and helper handles confer
+no proof authority. The complete reader rederives source windows and checks
+actual call sites, operands, stores, grouping outputs, segment offsets, round
+counts, authentication-before-replay and final answer release. Independently
+checking an unused helper is insufficient. Cryptographic realization and Lean
+connection remain separate obligations.
+
+Whole common realization accounts for every entry in its prepared subject.
+Explicit deployment selection happens after complete source admission and
+application expansion, before realization. It keeps the selected entries and
+required companions, refuses dangling symbol uses, and retains the full authored
+source separately. Realization cannot silently omit another entry from that
+selected subject. Each oracle entry has its own constructor inventory and stores; shared
 virtual definitions remain available until all referring entries are converted.
 Ordinary declarations retain their exact bodies. The complete reader checks both
 every converted entry and the union of generated helper dependencies, including
@@ -310,7 +362,14 @@ Registration and common formation do not supply an executable implementation.
 ### Oracle interface components
 
 One source oracle port has two common interface leaves: ordinary data at its
-holder and a logical handle at its receivers. `oracle_input(data, anchor)`
+holder and a logical handle or bounded handle sequence at its receivers.
+For a single handle the data type is `K::Data`; for a sequence it is an ordered
+ordinary sequence of `K::Data`. The receiver leaf retains the complete logical
+type, including sequence capacity. Row bounds constrain every element and are
+independent of capacity. Empty sequences are valid; order, multiplicity and each
+actual anchor survive rebinding. These sequence interfaces are internal protocol
+boundaries. Deployment-root sequence ingress has no installed contract and
+refuses explicitly. `oracle_input(data, anchor)`
 with `holder`, `receivers` and named `shape_bounds`, binds them
 into the role family used by the body. A raw handle entry argument has exactly
 one such binding, paired with a distinct holder data argument. Both leaves have
@@ -326,7 +385,11 @@ data and receiver handle for an application or return tuple. Every selected role
 must have its component and the declared holder must hold every possible anchor.
 An application supplies the paired results of the same component view, possibly
 through role restrictions or a paired earlier application result. Equal data or
-equal handle types do not authorize mixing anchors. A returned handle likewise
+equal handle types do not authorize mixing anchors. For sequences, equal
+lengths or element kinds likewise cannot establish pairing. The holder data is
+a lazy interface view: transporting a virtual sequence does not evaluate all
+its rows. Checked preparation forwards the original references and materializes
+data only for an actual holder-data demand. A returned handle likewise
 requires its matching data leaf with exact roles in the same result tuple.
 
 Application expansion preserves the caller's anchor. Splitting, returning and

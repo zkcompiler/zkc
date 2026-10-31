@@ -208,7 +208,7 @@ fn package(ty: &PhysicalType, constructible: bool) -> Package {
     let artifact = json!({"format":"zkc.run/0","candidate":candidate,"entry":"example_Add","roles":["role00000000"],"steps":[
         {"role":0,"instruction":0,"anchor":0},{"role":0,"instruction":1,"anchor":null}]}).to_string();
     let bytes = json!({"format":"zkc.entry/0","original":"source","interface":interface.to_string(),"artifact":artifact,"assets":[],
-        "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true}}).to_string();
+        "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()}}).to_string();
     Package::capture(
         bytes.as_bytes(),
         &Sha256::digest(bytes.as_bytes()).into(),

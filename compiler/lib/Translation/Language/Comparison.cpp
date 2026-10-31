@@ -473,6 +473,33 @@ class Comparator {
     }
     return result;
   }
+  std::optional<mlir::Value> packMathematical(mlir::Block &block,
+                                              mlir::Block::iterator &cursor,
+                                              const PackedLayout &layout,
+                                              mlir::ValueRange values,
+                                              Span span) {
+    auto carrier =
+        protocol::decodeBoundType(module.getContext(), layout.carrier);
+    if (!carrier || !types(values.getTypes(), layout.flat->leaves)) {
+      fail("oracle mathematical carrier differs");
+      return {};
+    }
+    if (!layout.product) {
+      if (values.size() != 1 || values.front().getType() != carrier) {
+        fail("oracle scalar carrier differs");
+        return {};
+      }
+      return values.front();
+    }
+    auto *actual = next(block, cursor, span, "data.make", values, 1);
+    if (!actual || !attributes(*actual, {"alternative"}) ||
+        !string(*actual, "alternative", layout.alternative) ||
+        actual->getResult(0).getType() != carrier) {
+      fail("oracle product carrier differs");
+      return {};
+    }
+    return actual->getResult(0);
+  }
   std::optional<Values> unpack(mlir::Value value, ArrayRef<LayoutLeaf> outputs,
                                StringRef alternative, Span span,
                                StringRef site) {
@@ -821,7 +848,8 @@ class Comparator {
     return true;
   }
   bool oraclePortAttributes(mlir::Operation &operation, const Port &port,
-                            ArrayRef<unsigned> mapping, bool binding) {
+                            ArrayRef<unsigned> mapping, bool binding,
+                            std::optional<uint64_t> maximum = {}) {
     unsigned holder = port.oracle->holder;
     if (!mapping.empty())
       holder = mapping[holder];
@@ -832,13 +860,7 @@ class Comparator {
         !roleSet(operation.getAttr("receivers"),
                  oracleReceivers(port, mapping)))
       return fail("oracle port role family differs");
-    return !binding ||
-           oracleShapeBounds(
-               operation,
-               port.oracle->maximumRows
-                   ? std::optional<uint64_t>(
-                         port.oracle->maximumRows->dimension.closedValue())
-                   : std::nullopt);
+    return !binding || oracleShapeBounds(operation, maximum);
   }
   mlir::Operation *oracleComponents(mlir::Block &block,
                                     mlir::Block::iterator &cursor, Span span,
@@ -846,30 +868,76 @@ class Comparator {
                                     ArrayRef<unsigned> mapping = {}) {
     auto *operation =
         next(block, cursor, span, "protocol.oracle_components", value, 2);
-    auto handle =
-        mlir::dyn_cast<protocol_ir::OracleHandleType>(value.getType());
-    if (!operation || !handle ||
+    auto data = protocol_ir::getOracleFamilyDataType(value.getType());
+    if (!operation || !data ||
         !oraclePortAttributes(*operation, port, mapping, false) ||
-        operation->getResult(0).getType() != handle.getKind().getDataType() ||
-        operation->getResult(1).getType() != handle)
+        operation->getResult(0).getType() != data ||
+        operation->getResult(1).getType() != value.getType())
       return fail("oracle component view differs"), nullptr;
     return operation;
   }
   mlir::Operation *bindOracle(mlir::Block &block, mlir::Block::iterator &cursor,
                               Span span, mlir::ValueRange pair,
-                              const Port &port,
-                              ArrayRef<unsigned> mapping = {}) {
+                              const Port &port, ArrayRef<unsigned> mapping,
+                              std::optional<uint64_t> maximum) {
     auto *operation =
         next(block, cursor, span, "protocol.oracle_input", pair, 1);
-    auto handle =
-        mlir::dyn_cast<protocol_ir::OracleHandleType>(pair[1].getType());
-    if (!operation || !handle ||
-        pair[0].getType() != handle.getKind().getDataType() ||
-        operation->getResult(0).getType() != handle ||
-        !oraclePortAttributes(*operation, port, mapping, true))
+    auto data = protocol_ir::getOracleFamilyDataType(pair[1].getType());
+    if (!operation || !data || pair[0].getType() != data ||
+        operation->getResult(0).getType() != pair[1].getType() ||
+        !oraclePortAttributes(*operation, port, mapping, true, maximum))
       return fail("oracle input binding differs"), nullptr;
     return operation;
   }
+  std::optional<Values> expandPort(mlir::Block &block,
+                                   mlir::Block::iterator &cursor, Span span,
+                                   mlir::ValueRange value, const Port &port,
+                                   ArrayRef<unsigned> mapping = {}) {
+    auto observed = take(layouts.protocolPort(port));
+    if (!observed)
+      return {};
+    if (value.size() != observed->leaves.size())
+      return fail("protocol body leaf count differs"), std::nullopt;
+    Values result;
+    for (const auto &leaf : observed->leaves) {
+      if (!leaf.leaf.oracle()) {
+        result.push_back(value[leaf.bodyOffset]);
+        continue;
+      }
+      auto *parts = oracleComponents(block, cursor, span,
+                                     value[leaf.bodyOffset], port, mapping);
+      if (!parts)
+        return {};
+      llvm::append_range(result, parts->getResults());
+    }
+    return result;
+  }
+  std::optional<Values> joinPort(mlir::Block &block,
+                                 mlir::Block::iterator &cursor, Span span,
+                                 mlir::ValueRange value, const Port &port,
+                                 ArrayRef<unsigned> mapping = {}) {
+    auto observed = take(layouts.protocolPort(port));
+    if (!observed)
+      return {};
+    if (value.size() != observed->size())
+      return fail("protocol ABI leaf count differs"), std::nullopt;
+    Values result;
+    for (const auto &leaf : observed->leaves) {
+      if (!leaf.leaf.oracle()) {
+        result.push_back(value[leaf.nativeOffset]);
+        continue;
+      }
+      auto *joined =
+          bindOracle(block, cursor, span,
+                     value.slice(leaf.nativeOffset, leaf.nativeSize()), port,
+                     mapping, leaf.maximumRows);
+      if (!joined)
+        return {};
+      result.push_back(joined->getResult(0));
+    }
+    return result;
+  }
+
   bool body(const Declaration &decl, const Body &source, mlir::Block &block,
             const mathematical::Availability *availability, bool region = false,
             unsigned forwarded = 0) {
@@ -909,17 +977,43 @@ class Comparator {
       return true;
     };
     for (unsigned i = 0; i < source.inputs; ++i) {
+      if (source.mode == Body::Mode::Oracle && i == decl.inputs.size()) {
+        auto layout = take(layouts.packed(source.values[i].type));
+        if (!layout)
+          return false;
+        auto carrier =
+            protocol::decodeBoundType(module.getContext(), layout->carrier);
+        if (argument >= block.getNumArguments() || !carrier ||
+            block.getArgument(argument).getType() != carrier)
+          return fail("oracle query parameter differs");
+        auto input = block.getArgument(argument++);
+        Values flat{input};
+        if (layout->product) {
+          auto unpacked = unpackMathematical(block, cursor, input,
+                                             layout->flat->leaves, decl.span);
+          if (!unpacked)
+            return false;
+          flat = std::move(*unpacked);
+        }
+        if (!bind(i, std::move(flat)))
+          return false;
+        continue;
+      }
       if (!region && source.mode == Body::Mode::Protocol &&
           decl.inputs[i].oracle) {
-        if (argument > block.getNumArguments() ||
-            block.getNumArguments() - argument < 2)
-          return fail("oracle input pair is incomplete");
-        auto *joined =
-            bindOracle(block, cursor, decl.inputs[i].span,
-                       block.getArguments().slice(argument, 2), decl.inputs[i]);
-        if (!joined || !bind(i, Values(joined->getResults())))
+        auto observed = take(layouts.protocolPort(decl.inputs[i]));
+        if (!observed)
           return false;
-        argument += 2;
+        if (argument > block.getNumArguments() ||
+            block.getNumArguments() - argument < observed->size())
+          return fail("protocol input components are incomplete");
+        auto joined =
+            joinPort(block, cursor, decl.inputs[i].span,
+                     block.getArguments().slice(argument, observed->size()),
+                     decl.inputs[i]);
+        if (!joined || !bind(i, std::move(*joined)))
+          return false;
+        argument += observed->size();
         continue;
       }
       auto layout = take(layouts.get(source.values[i].type));
@@ -1374,21 +1468,21 @@ class Comparator {
         Values operands;
         for (unsigned i = 0; i < application->operands.size(); ++i) {
           const auto &input = values[application->operands[i].index];
-          if (target.inputs[i].oracle) {
-            auto *parts =
-                oracleComponents(block, cursor, op.span, input.front(),
-                                 target.inputs[i], application->roles);
-            if (!parts)
-              return false;
-            llvm::append_range(operands, parts->getResults());
-          } else
-            llvm::append_range(operands, input);
+          auto parts = expandPort(block, cursor, op.span, input,
+                                  target.inputs[i], application->roles);
+          if (!parts)
+            return false;
+          llvm::append_range(operands, *parts);
         }
         for (auto service : application->services)
           operands.push_back(services[service.index]);
-        unsigned count = leaves.size();
-        for (const auto &port : target.outputs)
-          count += port.oracle.has_value();
+        unsigned count = 0;
+        for (const auto &port : target.outputs) {
+          auto observed = take(layouts.protocolPort(port));
+          if (!observed)
+            return false;
+          count += observed->size();
+        }
         auto *actual =
             next(block, cursor, op.span, "protocol.apply", operands, count);
         if (!actual)
@@ -1406,17 +1500,71 @@ class Comparator {
         unsigned offset = 0;
         for (unsigned i = 0; i < target.outputs.size(); ++i) {
           const auto &port = target.outputs[i];
-          unsigned count = port.oracle ? 2 : resultLayouts[i]->leaves.size();
+          auto observed = take(layouts.protocolPort(port));
+          if (!observed)
+            return false;
+          unsigned count = observed->size();
           auto output = actual->getResults().slice(offset, count);
-          if (port.oracle) {
-            auto *joined = bindOracle(block, cursor, op.span, output, port,
-                                      application->roles);
-            if (!joined)
-              return false;
-            result.push_back(joined->getResult(0));
-          } else
-            llvm::append_range(result, output);
+          auto joined = joinPort(block, cursor, op.span, output, port,
+                                 application->roles);
+          if (!joined)
+            return false;
+          llvm::append_range(result, *joined);
           offset += count;
+        }
+      } else if (auto *instance =
+                     std::get_if<OracleInstantiation>(&op.action)) {
+        const auto &target = project.declarations()[instance->callee.index];
+        if (source.mode != Body::Mode::Protocol ||
+            target.kind != Declaration::Kind::Oracle ||
+            !target.parameters.empty() || !target.oracleDefinition)
+          return fail("virtual construction does not select a closed oracle");
+        auto *actual = next(block, cursor, op.span, "protocol.oracle_virtual",
+                            flatten(instance->operands), 1);
+        if (!actual ||
+            !attributes(*actual, {"callee", "holder", "receivers"}) ||
+            !string(*actual, "holder", nativeRoleName(instance->holder)) ||
+            !roleSet(actual->getAttr("receivers"), instance->receivers))
+          return fail("virtual construction holder or receivers differ");
+        auto callee = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("callee");
+        if (!callee || callee.getValue() != target.symbol)
+          return fail("virtual construction closed callee differs");
+        result = Values(actual->getResults());
+      } else if (auto *query = std::get_if<OracleSourceQuery>(&op.action)) {
+        if (source.mode != Body::Mode::Oracle || !decl.oracleDefinition ||
+            query->source >= decl.oracleDefinition->sourceCount ||
+            values[query->source].size() != 1 || op.results.size() != 1)
+          return fail("oracle query does not select its constructor source");
+        auto positionLayout =
+            take(layouts.packed(source.values[query->position.index].type));
+        if (!positionLayout)
+          return false;
+        auto answerLayout =
+            take(layouts.packed(source.values[op.results.front().index].type));
+        if (!answerLayout)
+          return false;
+        auto position =
+            packMathematical(block, cursor, *positionLayout,
+                             values[query->position.index], op.span);
+        if (!position)
+          return false;
+        auto *actual =
+            next(block, cursor, op.span, "protocol.oracle_query",
+                 Values{values[query->source].front(), *position}, 1);
+        if (!actual || !attributes(*actual, {"site"}) ||
+            !string(*actual, "site", site))
+          return fail("oracle source query occurrence differs");
+        auto answer = protocol::decodeBoundType(module.getContext(),
+                                                answerLayout->carrier);
+        if (!answer || actual->getResult(0).getType() != answer)
+          return fail("oracle source answer carrier differs");
+        result = Values(actual->getResults());
+        if (answerLayout->product) {
+          auto flat = unpackMathematical(block, cursor, result.front(), leaves,
+                                         op.span);
+          if (!flat)
+            return false;
+          result = std::move(*flat);
         }
       } else if (std::holds_alternative<OracleSequenceEmpty>(op.action)) {
         auto *actual = next(block, cursor, op.span,
@@ -1699,22 +1847,119 @@ class Comparator {
       const auto &value = values[source.results[i].index];
       if (!region && source.mode == Body::Mode::Protocol &&
           decl.outputs[i].oracle) {
-        auto *parts = oracleComponents(block, cursor, decl.outputs[i].span,
-                                       value.front(), decl.outputs[i]);
+        auto parts = expandPort(block, cursor, decl.outputs[i].span, value,
+                                decl.outputs[i]);
         if (!parts)
           return false;
-        llvm::append_range(returned, parts->getResults());
+        llvm::append_range(returned, *parts);
       } else
         llvm::append_range(returned, value);
     }
+    if (source.mode == Body::Mode::Oracle) {
+      auto layout = take(layouts.packed(decl.oracleDefinition->answer));
+      if (!layout)
+        return false;
+      auto answer =
+          packMathematical(block, cursor, *layout, returned, decl.span);
+      if (!answer)
+        return false;
+      returned = {*answer};
+    }
     auto *ret =
         next(block, cursor, decl.span,
-             region && source.mode == Body::Mode::Protocol ? "protocol.yield"
-             : source.mode == Body::Mode::Protocol         ? "protocol.return"
-                                                           : "func.return",
+             source.mode == Body::Mode::Oracle ? "protocol.oracle_yield"
+             : region && source.mode == Body::Mode::Protocol ? "protocol.yield"
+             : source.mode == Body::Mode::Protocol           ? "protocol.return"
+                                                             : "func.return",
              returned, 0);
     return (ret && attributes(*ret, {}) && cursor == block.end()) ||
            fail("extra return attributes or operations after source body");
+  }
+
+  bool oracle(const Declaration &decl, mlir::Operation &function) {
+    auto actual = mlir::dyn_cast<protocol_ir::OracleDefinitionOp>(function);
+    if (!actual || !decl.oracleDefinition || !decl.body ||
+        decl.body->mode != Body::Mode::Oracle || decl.outputs.size() != 1 ||
+        decl.body->inputs != decl.inputs.size() + 1 ||
+        decl.body->results.size() != 1 || !decl.services.empty() ||
+        !attributes(function,
+                    {"sym_name", "function_type", "kind", "admissibility",
+                     "shape_arguments", "shape_bounds"}) ||
+        !string(function, "sym_name", decl.symbol) ||
+        function.getNumOperands() || function.getNumResults() ||
+        function.getNumSuccessors() || function.getNumRegions() != 1 ||
+        !llvm::hasSingleElement(function.getRegion(0)))
+      return fail("oracle declaration identity or structure differs");
+    const auto &definition = *decl.oracleDefinition;
+    const auto &predicate =
+        project.declarations()[definition.admissibility.index];
+    if (!predicate.relation ||
+        predicate.relation->kind != RelationDefinition::Kind::Formula ||
+        !predicate.body || !predicate.parameters.empty() || !predicate.origin ||
+        !predicate.oraclePredicateOwner ||
+        predicate.oraclePredicateOwner->index != decl.id.index ||
+        actual.getAdmissibilityAttr().getValue() != predicate.symbol)
+      return fail("oracle generated admissibility selection differs");
+    // Compare the actual query signature, independently of the constructor ABI.
+    // Neither a handle port's data projection nor participant roles enter it.
+    auto signature = actual.getFunctionType();
+    auto output = take(layouts.get(decl.outputs.front().type));
+    if (!output || !types({protocol_ir::OracleHandleType::get(
+                              module.getContext(), actual.getKind())},
+                          (**output).leaves))
+      return fail("oracle result kind differs");
+    std::vector<LayoutLeaf> leaves;
+    SmallVector<unsigned> offsets;
+    for (const auto &port : decl.inputs) {
+      offsets.push_back(leaves.size());
+      auto layout = take(layouts.get(port.type));
+      if (!layout)
+        return false;
+      llvm::append_range(leaves, (**layout).leaves);
+    }
+    if (signature.getNumInputs() != leaves.size() + 1 ||
+        actual.getNumSources() != definition.sourceCount ||
+        !types(signature.getInputs().drop_back(), leaves))
+      return fail("oracle source or capture signature differs");
+    auto query = take(layouts.packed(definition.queryParameter.type));
+    if (!query)
+      return false;
+    auto answer = take(layouts.packed(definition.answer));
+    if (!answer)
+      return false;
+    auto queryType =
+        protocol::decodeBoundType(module.getContext(), query->carrier);
+    auto answerType =
+        protocol::decodeBoundType(module.getContext(), answer->carrier);
+    if (!queryType || !answerType ||
+        signature.getInputs().back() != queryType ||
+        signature.getNumResults() != 1 ||
+        signature.getResult(0) != answerType ||
+        queryType != actual.getKind().getQueryType() ||
+        answerType != actual.getKind().getAnswerType())
+      return fail("oracle associated query or answer differs");
+    auto shapes = actual.getShapeArguments();
+    auto bounds = actual.getShapeBounds();
+    if (shapes.size() != definition.resultShape.size() ||
+        bounds.size() != definition.resultShape.size())
+      return fail("oracle result shape inventory differs");
+    for (const auto &shape : definition.resultShape) {
+      if (!charge(1 + shape.dimension.size()))
+        return false;
+      auto argument = shapes.getAs<mlir::IntegerAttr>(shape.dimension);
+      auto maximum = bounds.getAs<mlir::IntegerAttr>(shape.dimension);
+      if (shape.input < definition.sourceCount ||
+          shape.input >= offsets.size() || !argument ||
+          !argument.getType().isUnsignedInteger(64) ||
+          argument.getValue().getZExtValue() != offsets[shape.input] ||
+          !maximum || !maximum.getType().isUnsignedInteger(64) ||
+          maximum.getValue().getZExtValue() !=
+              shape.maximum.dimension.closedValue())
+        return fail("oracle shape capture offset or maximum differs");
+    }
+    siteOrdinal = 0;
+    return record(function, decl.span) &&
+           body(decl, *decl.body, function.getRegion(0).front(), nullptr);
   }
 
   bool construction(const Declaration &definition,
@@ -1946,13 +2191,19 @@ public:
     relation::FormulaIdentities formulas(remaining, limits.irBytes);
     LayoutIdentities schemaIdentities(remaining);
     for (auto &decl : declared) {
-      if (!decl.body || !decl.parameters.empty())
+      if ((!decl.body && decl.kind != Declaration::Kind::Oracle) ||
+          !decl.parameters.empty())
         continue;
       if (++report.declarations > limits.declarations)
         return error("source.limit", "comparison declaration limit");
       if (index >= functions.size())
         return error("source.correspondence", "omitted definition");
       auto &function = *functions[index++];
+      if (decl.kind == Declaration::Kind::Oracle) {
+        if (!oracle(decl, function))
+          return takeFailure();
+        continue;
+      }
       bool protocol = decl.kind == Declaration::Kind::Protocol,
            local = decl.kind == Declaration::Kind::Local;
       if (function.getName().getStringRef() !=
@@ -2029,28 +2280,25 @@ public:
             input ? "input_roles" : "output_roles");
         unsigned flat = 0;
         for (auto &port : input ? decl.inputs : decl.outputs) {
-          auto layout = take(layouts.get(port.type));
-          if (!layout)
+          auto observed = take(layouts.protocolPort(port));
+          if (!observed)
             return takeFailure();
-          if (port.oracle) {
-            const auto *oracle = (**layout).leaves.front().oracle();
-            if (!oracle || oracle->maximum)
-              return error("source.correspondence",
-                           "oracle port layout differs");
-            leaves.emplace_back(oracle->kind.signature.data.spelling());
-            if (!roles || flat >= roles.size() ||
-                !roleSet(roles[flat++], {port.oracle->holder}))
-              return error("source.correspondence",
-                           "oracle holder role differs");
-          }
-          llvm::append_range(leaves, (**layout).leaves);
-          for (unsigned i = 0; i < (**layout).leaves.size(); ++i)
-            if (protocol &&
-                (!roles || flat >= roles.size() ||
-                 !roleSet(roles[flat++],
-                          port.oracle ? oracleReceivers(port) : port.roles)))
+          for (const auto &leaf : observed->leaves) {
+            if (leaf.leaf.oracle()) {
+              llvm::append_range(leaves, leaf.oracleData->leaves);
+              if (!roles || flat >= roles.size() ||
+                  !roleSet(roles[flat++], {port.oracle->holder}))
+                return error("source.correspondence",
+                             "oracle holder role differs");
+            }
+            leaves.push_back(leaf.leaf);
+            if (protocol && (!roles || flat >= roles.size() ||
+                             !roleSet(roles[flat++], leaf.leaf.oracle()
+                                                         ? oracleReceivers(port)
+                                                         : port.roles)))
               return error("source.correspondence",
                            "flattened port roles differ");
+          }
         }
         auto nativeTypes =
             input ? signature.getInputs() : signature.getResults();

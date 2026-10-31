@@ -241,7 +241,7 @@ int main(int argc, char **argv) {
         auto &ops = *at(snapshot, {7, 2, 9, 1}).getAsArray();
         require(ops.size() == 13, "oracle operation lost");
         require(at(ops[0], {0}) ==
-                    J(A{"oracle_input", "P", A{"V"}, kind(), A{}}),
+                    J(A{"oracle_input", "P", A{"V"}, A{"oracle", "table", (*kind().getAsArray())[1]}, A{}}),
                 "input binding changed");
         require(at(ops[1], {0}) ==
                     J(A{"oracle_send", "P", A{"V"}, kind(), A{"rows"}, A{}}),
@@ -264,7 +264,8 @@ int main(int argc, char **argv) {
                     J(A{"oracle_sequence_at", kind(false), "4", A{"P", "V"}}),
                 "selection stop or roles lost");
         require(at(ops[11], {0}) ==
-                    J(A{"oracle_components", "P", A{"V"}, kind(false)}),
+                    J(A{"oracle_components", "P", A{"V"},
+                        A{"oracle", "table", (*kind(false).getAsArray())[1]}}),
                 "paired view lost");
         // Every exact exported row has a unique coordinate and the original
         // token.

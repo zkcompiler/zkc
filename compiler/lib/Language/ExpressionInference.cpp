@@ -708,17 +708,21 @@ class ExpressionInference {
           fail("source.call", "constructor arguments differ", expr.span);
         return;
       }
+      std::map<std::string, unsigned> fieldIndices;
+      if (expr.kind == K::Record)
+        for (unsigned i = 0; i < fields->size(); ++i)
+          fieldIndices.emplace((*fields)[i].name, i);
       for (unsigned i = 0; i < expr.children.size(); ++i) {
-        auto field = fields->begin() + i;
-        if (expr.kind == K::Record)
-          field = llvm::find_if(*fields, [&](const auto &field) {
-            return field.name == expr.labels[i];
-          });
-        if (field == fields->end()) {
-          fail("source.field", "unknown constructor field", expr.span);
-          return;
+        unsigned index = i;
+        if (expr.kind == K::Record) {
+          auto field = fieldIndices.find(expr.labels[i]);
+          if (field == fieldIndices.end()) {
+            fail("source.field", "unknown constructor field", expr.span);
+            return;
+          }
+          index = field->second;
         }
-        constrain(child(i), field->type, expr.span);
+        constrain(child(i), (*fields)[index].type, expr.span);
       }
       return;
     }
@@ -741,6 +745,7 @@ class ExpressionInference {
     if (callee.kind != Declaration::Kind::Local &&
         callee.kind != Declaration::Kind::EntryFunction &&
         callee.kind != Declaration::Kind::Math &&
+        callee.kind != Declaration::Kind::Oracle &&
         callee.kind != Declaration::Kind::Protocol) {
       fail("source.call", "call target must be a callable", expr.span);
       return;
@@ -1115,6 +1120,36 @@ class ExpressionInference {
     case K::OracleContents:
     case K::OracleRows:
     case K::OracleForgetRows: {
+      if (decl.oraclePredicateOwner) {
+        const auto &definition =
+            *checker.output.declarations[decl.oraclePredicateOwner->index]
+                 .oracleDefinition;
+        const auto &source = syntax.expressions[expr.children.front()];
+        auto binding = source.binding
+                           ? llvm::find(syntax.inputBindings, *source.binding)
+                           : syntax.inputBindings.end();
+        if ((expr.kind != K::OracleRows && expr.kind != K::OracleContents) ||
+            source.kind != K::Name || binding == syntax.inputBindings.end() ||
+            unsigned(binding - syntax.inputBindings.begin()) >=
+                definition.sourceCount) {
+          fail("source.oracle-predicate",
+               "predicate projection must select a direct source", expr.span);
+          break;
+        }
+        auto index = unsigned(binding - syntax.inputBindings.begin());
+        const auto &data = decl.inputs[index].type;
+        if (expr.kind == K::OracleRows) {
+          if (data.kind != T::Builtin || data.domain != "vector" ||
+              data.arguments.size() != 1) {
+            fail("source.oracle-projection",
+                 "rows projection requires field table Data", expr.span);
+            break;
+          }
+          constrain(result.type, Type(T::Index), expr.span);
+        } else
+          constrain(result.type, data, expr.span);
+        break;
+      }
       auto input = child(0);
       auto position =
           expr.kind == K::OracleQuery ? std::optional(child(1)) : std::nullopt;

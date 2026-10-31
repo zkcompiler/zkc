@@ -141,11 +141,15 @@ def test_opening_composes_shared_equations_and_fri(toolchain, journal, directory
     # transcript cannot make the quotient a low-degree polynomial.
     public['value'][0] = str(int(public['value'][0]) + 1)
     producer = input_files(journal, 'false-producer', public=public, witness=witness)
-    verifier = input_files(journal, 'false-verifier', public=public)
     wrong = directory / 'wrong.proof'
-    journal.run([toolchain.runtime, '--json', 'prove', *args, *producer, f'--output={wrong}'])
-    journal.run([toolchain.runtime, '--json', 'verify', *args, *verifier,
-                 f'--proof={wrong}'], refuses='artifact-stopped')
+    refused = journal.json([toolchain.runtime, '--json', 'prove', *args, *producer,
+                            f'--output={wrong}'], refuses='artifact-stopped')
+    assert not wrong.exists()
+    stop = refused['execution']['stop']
+    assert stop['role'] == 'role00000000' and stop['kind'] == 'Explicit("reject")'
+    from test_fri import local_function
+    assert stop['local']['function'] == local_function(json.loads(package.read_text())['original'],
+                                                      'fri', 'padded')
 
 
 def test_opening_refuses_a_pole_on_the_evaluation_domain(toolchain, journal, directory):

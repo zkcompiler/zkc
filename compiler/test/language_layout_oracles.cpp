@@ -40,6 +40,26 @@ unsigned occurrenceCount(StringRef text, StringRef value) {
 } // namespace
 int main() {
   Cases cases;
+  cases.run("bounded sequence ports use per-element shape bounds", [] {
+    auto source = original(R"(
+type Oracles<K: OracleKind, M: nat> = builtin("oracle_sequence", K, M)
+#[shape(words.rows, bound = 16)]
+#[shape(result.rows, bound = 16)]
+pub protocol Relay roles(A, B)(words: Oracles<Table<F>, 2> @A -> B) -> (result: Oracles<Table<F>, 2> @A -> B):
+    return words
+
+pub protocol Run roles(P, V)(word: Word @P -> V) -> F @V:
+    empty = oracle.empty<Table<F>, 2>() @(P, V)
+    words <- oracle.append(empty, oracle.forget_rows(word))
+    received <- Relay(words) @(P, V)
+    selected <- oracle.at(received, 0)
+    answer <- query selected at 0
+    return answer
+)");
+    require(source.bytes().contains("protocol.oracle_input") &&
+                source.bytes().contains("!protocol.oracle_sequence<"),
+            "bounded sequence boundary was lost");
+  });
   cases.run("oracle calls and returns retain components under role mapping", [] {
     auto source = original(
         R"(pub protocol Relay roles(A, B)(word: Word @A -> B) -> Word @A -> B:

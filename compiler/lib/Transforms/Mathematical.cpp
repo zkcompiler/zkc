@@ -1173,6 +1173,48 @@ PreparedProtocol::prepare(ModuleOp source, MathematicalSelectionPolicy policy,
       std::move(candidate), policy);
 }
 
+LogicalResult PreparedProtocol::selectEntries(ArrayRef<StringRef> entries) {
+  if (!module)
+    return failure();
+  auto refuse = [&] {
+    return diagnostics::emit(module->emitError(), "run-entry",
+                             "deployment roots must name distinct prepared "
+                             "programs without leaving live references");
+  };
+  if (entries.empty() || entries.size() > 4096)
+    return refuse();
+  OwningOpRef<ModuleOp> selected(cast<ModuleOp>(module.get()->clone()));
+  auto unit = *selected->getOps<protocol_ir::ProtocolModuleOp>().begin();
+  llvm::StringSet<> roots;
+  for (StringRef entry : entries)
+    if (!roots.insert(entry).second ||
+        !isa_and_nonnull<protocol_ir::MathematicalOp>(
+            SymbolTable::lookupSymbolIn(unit, entry)))
+      return refuse();
+  SmallVector<Operation *> omitted;
+  for (auto program :
+       unit.getBody().front().getOps<protocol_ir::MathematicalOp>())
+    if (!roots.contains(program.getSymName()))
+      omitted.push_back(program);
+  llvm::SmallDenseSet<Operation *, 8> omittedSet(omitted.begin(), omitted.end());
+  for (Operation *program : omitted) {
+    auto uses = SymbolTable::getSymbolUses(program, unit);
+    if (!uses)
+      return refuse();
+    for (const auto &use : *uses) {
+      auto owner = use.getUser()->getParentOfType<protocol_ir::MathematicalOp>();
+      if (!owner || !omittedSet.contains(owner.getOperation()))
+        return refuse();
+    }
+  }
+  for (Operation *program : omitted)
+    program->erase();
+  if (failed(zkc::admitStage(*selected)))
+    return failure();
+  module = std::move(selected);
+  return success();
+}
+
 OwningOpRef<ModuleOp> PreparedProtocol::snapshot() const {
   return module ? OwningOpRef<ModuleOp>(cast<ModuleOp>(module.get()->clone()))
                 : OwningOpRef<ModuleOp>();

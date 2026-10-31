@@ -33,7 +33,7 @@ fn document() -> Value {
 }
 fn read_text(interface: &str) -> Result<Interface> {
     let frame = json!({"format":"zkc.entry/0","original":"original","interface":interface,
-        "artifact":"not interpreted by the metadata reader", "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true},
+        "artifact":"not interpreted by the metadata reader", "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true,"oracle_realization": crate::entry::OracleSelection::default()},
         "assets":[]}).to_string();
     let package = Package::capture(
         frame.as_bytes(),

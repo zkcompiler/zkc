@@ -336,8 +336,8 @@ class Recipes {
         return emitState(state).front();
       };
       Value result;
-      // The VM has no shift contract. Enumerating its 64 representable powers
-      // implements r < 64 && n == (1 << r), with no runtime shift or overflow.
+      // Enumerating the 64 representable powers implements
+      // r < 64 && n == (1 << r), without introducing checked arithmetic.
       for (unsigned exponent = 0; exponent < 64; ++exponent) {
         auto constant = [&](uint64_t value) {
           return emit("index.constant", {}, inputs[0].getType(),
@@ -397,11 +397,18 @@ class Recipes {
       replace(emitState(state));
       return success();
     }
-    if (isa<data::IndexOp, data::EqualOp, data::LessOp>(op)) {
+    if (isa<data::IndexOp, data::EqualOp, data::LessOp,
+            data::IndexWrappingAddOp, data::IndexWrappingSubtractOp,
+            data::IndexBitAndOp, data::IndexLogicalShiftRightOp>(op)) {
       NativeBindingApplication application;
-      application.contract = isa<data::IndexOp>(op)   ? "index.constant"
-                             : isa<data::EqualOp>(op) ? "index.equal"
-                                                      : "index.less";
+      application.contract =
+          isa<data::IndexOp>(op)                   ? "index.constant"
+          : isa<data::EqualOp>(op)                 ? "index.equal"
+          : isa<data::LessOp>(op)                  ? "index.less"
+          : isa<data::IndexWrappingAddOp>(op)      ? "index.wrapping_add"
+          : isa<data::IndexWrappingSubtractOp>(op) ? "index.wrapping_sub"
+          : isa<data::IndexBitAndOp>(op) ? "index.bit_and"
+                                         : "index.logical_shift_right";
       auto *declaration = protocol::operationContracts(application.contract);
       if (!declaration)
         return failure();

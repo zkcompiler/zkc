@@ -187,6 +187,22 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
     options.observations->decisions(*result->module, preparationTrace);
   if (!preparation || diagnostics.hasErrors())
     return diagnostics.failure();
+  // Library declarations have already been admitted and expanded into actual
+  // callers. Only explicit deployment roots acquire external oracle ingress.
+  // Keep every companion whose bytes the correspondence report will publish.
+  SmallVector<std::string> companionEntries;
+  if (options.polynomialRequirements) {
+    auto entries = polynomialRequirementEntries(*options.polynomialRequirements);
+    if (!entries)
+      return diagnostics.failure(entries.takeError());
+    companionEntries = std::move(*entries);
+  }
+  SmallVector<StringRef> entries{options.entry};
+  for (const auto &entry : companionEntries)
+    if (!is_contained(entries, StringRef(entry)))
+      entries.push_back(entry);
+  if (failed(preparation->selectEntries(entries)) || diagnostics.hasErrors())
+    return diagnostics.failure();
   auto realization = mathematical::RealizedProtocol::realize(
       std::move(*preparation), options.oracleRealization);
   if (!realization)

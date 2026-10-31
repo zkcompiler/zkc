@@ -334,68 +334,78 @@ int main() {
     refuses(analyzeOracleObservations(*module, "example", "V"),
             "oracle-observation-source");
   });
-  cases.run("query blocks require exact source domain evidence", [&] {
-    for (StringRef mode :
-         {"literal", "outside", "unknown", "sampled", "sampled-wide",
-          "dynamic-literal", "dynamic-bound", "invariant"}) {
-      auto text = source(query);
-      auto replace = [&](StringRef before, StringRef after) {
-        auto at = text.find(before);
-        require(at != std::string::npos, "missing domain fixture slot");
-        text.replace(at, before.size(), after);
-      };
-      replace("random.bls12-381.fr/0", "random.goldilocks.ext2-binomial7/0");
-      for (size_t at; (at = text.find("bls12-381.fr")) != std::string::npos;)
-        text.replace(at, StringRef("bls12-381.fr").size(),
-                     "goldilocks.ext2-binomial7");
-      if (mode == "sampled" || mode == "sampled-wide") {
-        replace(" %answer =", "%sample = \"protocol.query\"(%random,%rows) "
-                              "{owner=\"V\",method=\"index\",site=\"sample\"} "
-                              ": (!R,ui64)->ui64\n %answer =");
-        replace("(%word,%position)", "(%word,%sample)");
-        if (mode == "sampled-wide") {
-          replace("%sample =", "%wide = \"data.index\"() {value=32 : ui64} : "
-                               "()->ui64\n %sample =");
-          replace("(%random,%rows)", "(%random,%wide)");
+  cases.run(
+      "source windows select independently of query domain evidence", [&] {
+        const std::string queries = query + R"mlir(
+ %second = "protocol.oracle_query"(%word,%position) {owner="V",site="second"} : (!H,ui64)->!F
+)mlir";
+        for (StringRef mode :
+             {"literal", "outside", "unknown", "sampled", "sampled-wide",
+              "dynamic-literal", "dynamic-bound", "invariant"}) {
+          auto text = source(queries);
+          auto replace = [&](StringRef before, StringRef after) {
+            auto at = text.find(before);
+            require(at != std::string::npos, "missing domain fixture slot");
+            text.replace(at, before.size(), after);
+          };
+          replace("random.bls12-381.fr/0",
+                  "random.goldilocks.ext2-binomial7/0");
+          for (size_t at;
+               (at = text.find("bls12-381.fr")) != std::string::npos;)
+            text.replace(at, StringRef("bls12-381.fr").size(),
+                         "goldilocks.ext2-binomial7");
+          if (mode == "sampled" || mode == "sampled-wide") {
+            replace(" %answer =",
+                    "%sample = \"protocol.query\"(%random,%rows) "
+                    "{owner=\"V\",method=\"index\",site=\"sample\"} "
+                    ": (!R,ui64)->ui64\n %answer =");
+            replace("(%word,%position)", "(%word,%sample)");
+            if (mode == "sampled-wide") {
+              replace("%sample =",
+                      "%wide = \"data.index\"() {value=32 : ui64} : "
+                      "()->ui64\n %sample =");
+              replace("(%random,%rows)", "(%random,%wide)");
+            }
+          } else if (mode == "invariant") {
+            replace(queries, loop("%one", queries));
+            replace("(%one,%word,%position,%random",
+                    "(%one,%word,%zero,%random");
+          } else if (mode != "unknown") {
+            replace("(%word,%position)",
+                    mode == "outside" ? "(%word,%rows)" : "(%word,%zero)");
+          }
+          if (mode.starts_with("dynamic-")) {
+            replace(", 16 : ui64", "");
+            replace("shape_bounds={}", "shape_bounds={rows=16:ui64}");
+            if (mode == "dynamic-bound")
+              replace("(%data,%rows)", "(%data,%trips)");
+          }
+          auto module = parse(text);
+          auto prepared = zkc::mathematical::prepareProtocol(*module, false);
+          require(bool(prepared), "domain fixture did not prepare");
+          auto capacity =
+              take(analyzeOracleQueryCapacity(*prepared, "example"));
+          DominanceInfo dominance(*prepared);
+          std::vector<zkc::protocol_ir::OracleQueryOp> actual;
+          prepared->walk([&](zkc::protocol_ir::OracleQueryOp query) {
+            actual.push_back(query);
+          });
+          require(actual.size() == 2,
+                  "domain fixture lost its consecutive queries");
+          unsigned remaining = 100000;
+          auto selected = take(selectOracleQueryWindow(
+              actual.front(), OracleAuthentication::AtomicBlocks, capacity,
+              dominance, remaining));
+          require(selected.queries == actual && selected.leaves == 2,
+                  "query domains changed source window selection for " +
+                      mode.str());
+          unsigned exhausted = 0;
+          refuses(selectOracleQueryWindow(actual.front(),
+                                          OracleAuthentication::AtomicBlocks,
+                                          capacity, dominance, exhausted),
+                  "oracle-query-block-limit");
         }
-      } else if (mode == "invariant") {
-        replace(query, loop("%one", R"mlir(
- %answer = "protocol.oracle_query"(%word,%position) {owner="V",site="read"} : (!H,ui64)->!F
-)mlir"));
-        replace("(%one,%word,%position,%random", "(%one,%word,%zero,%random");
-      } else if (mode != "unknown") {
-        replace("(%word,%position)",
-                mode == "outside" ? "(%word,%rows)" : "(%word,%zero)");
-      }
-      if (mode.starts_with("dynamic-")) {
-        replace(", 16 : ui64", "");
-        replace("shape_bounds={}", "shape_bounds={rows=16:ui64}");
-        if (mode == "dynamic-bound")
-          replace("(%data,%rows)", "(%data,%trips)");
-      }
-      auto module = parse(text);
-      auto prepared = zkc::mathematical::prepareProtocol(*module, false);
-      require(bool(prepared), "domain fixture did not prepare");
-      auto storage = take(planOracleAnchorStorage(
-          *prepared, "example", [](const auto &) -> Expected<std::string> {
-            return std::string(
-                "rows.merkle-poseidon2-8.goldilocks.ext2-binomial7/0");
-          }));
-      unsigned remaining = 100000, queries = 0;
-      prepared->walk([&](zkc::protocol_ir::OracleQueryOp query) {
-        ++queries;
-        auto fact = take(admitOracleDirectQuery(query, storage, remaining));
-        bool expected = mode == "literal" || mode == "sampled" ||
-                        mode == "dynamic-literal" || mode == "invariant";
-        require(bool(fact) == expected,
-                "incorrect domain evidence for " + mode.str());
-        unsigned exhausted = 0;
-        refuses(admitOracleDirectQuery(query, storage, exhausted),
-                "oracle-query-block-limit");
       });
-      require(queries == 1, "domain fixture lost its query");
-    }
-  });
   cases.run("unknown authentication policies refuse", [&] {
     auto module = parse(source(query));
     OracleRealizationPolicy policy;

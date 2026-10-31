@@ -359,6 +359,14 @@ class RecipeReader {
     if (isa<data::EqualOp, data::LessOp>(source))
       return take(isa<data::EqualOp>(source) ? "index.equal" : "index.less",
                   inputs);
+    if (isa<data::IndexWrappingAddOp>(source))
+      return take("index.wrapping_add", inputs);
+    if (isa<data::IndexWrappingSubtractOp>(source))
+      return take("index.wrapping_sub", inputs);
+    if (isa<data::IndexBitAndOp>(source))
+      return take("index.bit_and", inputs);
+    if (isa<data::IndexLogicalShiftRightOp>(source))
+      return take("index.logical_shift_right", inputs);
     auto isBoolean = [&](Operation *op) {
       return ports.contains(op) && isa<exec::BooleanOp>(op);
     };

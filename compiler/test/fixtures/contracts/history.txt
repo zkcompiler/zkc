@@ -65,6 +65,10 @@ field_array.get 0
 fixed_vector.dot 0
 fixed_vector.from_vector 0
 fixed_vector.to_vector 0
+index.logical_shift_right 0
+index.bit_and 0
+index.wrapping_sub 0
+index.wrapping_add 0
 index.add 0
 index.constant 0
 index.div 0

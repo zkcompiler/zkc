@@ -364,6 +364,7 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
     native.simplify = options.simplify;
     native.releaseStorage = options.releaseStorage;
     native.mathematicalSelection = options.mathematicalSelection;
+    native.oracleRealization = options.oracleRealization;
     auto compiled = compileNativeProof(original.bytes(), filename, native,
                                        mlir::DialectRegistry());
     if (!compiled)
@@ -397,6 +398,7 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
   run.simplify = options.simplify;
   run.releaseStorage = options.releaseStorage;
   run.mathematicalSelection = options.mathematicalSelection;
+  run.oracleRealization = options.oracleRealization;
   auto compiled =
       compileRun(original.bytes(), filename, run, mlir::DialectRegistry());
   if (!compiled)
