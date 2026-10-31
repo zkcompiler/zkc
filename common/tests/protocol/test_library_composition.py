@@ -127,7 +127,8 @@ def test_proof_binds_public_tables_even_with_unchanged_sum(toolchain, journal, d
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--no-finite-bulk']])
 def test_opening_composes_shared_equations_and_fri(toolchain, journal, directory, flags):
-    package, pin = build(toolchain, journal, directory, 'common/tests/fixtures/projects/polynomial-opening', 'Proof', flags)
+    from test_air_stark import FRI_REALIZATION
+    package, pin = build(toolchain, journal, directory, 'common/tests/fixtures/projects/polynomial-opening', 'Proof', [FRI_REALIZATION, *flags])
     public = read('common/tests/fixtures/projects/polynomial-opening', 'public')
     witness = read('common/tests/fixtures/projects/polynomial-opening', 'witness')
     producer = input_files(journal, 'producer', public=public, witness=witness)
@@ -153,7 +154,8 @@ def test_opening_composes_shared_equations_and_fri(toolchain, journal, directory
 
 
 def test_opening_refuses_a_pole_on_the_evaluation_domain(toolchain, journal, directory):
-    package, pin = build(toolchain, journal, directory, 'common/tests/fixtures/projects/polynomial-opening', 'Proof', [])
+    from test_air_stark import FRI_REALIZATION
+    package, pin = build(toolchain, journal, directory, 'common/tests/fixtures/projects/polynomial-opening', 'Proof', [FRI_REALIZATION])
     public = read('common/tests/fixtures/projects/polynomial-opening', 'public')
     public['point'] = public['shift']
     producer = input_files(journal, 'pole', public=public,

@@ -200,7 +200,8 @@ def test_complete_protocols_with_ordered_finite_consumers(
             checked = journal.json([toolchain.runtime, '--json', 'verify', f'--package={package}',
                                     f'--sha256={pin}', *verifier, f'--proof={proof}'])
             assert made['status'] == 'produced' and checked['status'] == 'accepted'
-            assert len(fri.messages(proof.read_bytes())) == 3 + 1 + 4 * 3 * 4
+            stark.check_fri_frames(fri.messages(proof.read_bytes()), rounds=3,
+                                   queries=4, log_size=6, terminal_log=1)
     elif family == 'air':
         package, pin = stark.compile_entry(toolchain, journal, directory, flags=options)
         public, witness = stark.inputs()

@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from logical_tree import decode_tree
+from test_air_stark import FRI_REALIZATION
 
 ROOT = Path(__file__).resolve().parents[3]
 EXAMPLE = ROOT / 'common/tests/fixtures/projects/accumulator-machine'
@@ -26,6 +27,7 @@ _spec.loader.exec_module(prepare)
 
 
 def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None, edits=(), asset=None):
+    flags = [FRI_REALIZATION, *flags]
     path = EXAMPLE / 'main.zkc'
     if source is not None:
         path = directory / 'main.zkc'

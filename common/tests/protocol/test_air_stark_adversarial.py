@@ -16,7 +16,7 @@ from test_fri import COMMIT_GUARDS, CHECK_GUARDS, emitted_guard_sites
 
 import pytest
 
-from test_air_stark import (EXAMPLE, FIXTURE, P, ROOT, STARK, TABLE, frames, inputs,
+from test_air_stark import (EXAMPLE, FIXTURE, FRI_REALIZATION, P, ROOT, STARK, TABLE, check_air_frames, frames, inputs,
                             request, scalar, unpack, vector)
 
 POLYNOMIAL = ROOT / 'libraries/relations/air/polynomial.zkc'
@@ -97,12 +97,12 @@ def build(toolchain, journal, directory, name, *, main=None, asset=None, edits=(
         path = where / f'{module}.zkc'
         path.write_text(text)
         overrides[module] = path
-    arguments = library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', overrides=overrides)
+    arguments = library_modules('arguments/stark/single_table/koala_bear_octic', overrides=overrides)
     label, bundle = asset or ('recurrence', FIXTURE / 'bundle.json')
     arguments.append(f'--asset={label}=relation-bundle-json={bundle}')
     package = where / 'Proof.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                           *arguments, 'air_stark_example::Proof', f'--output={package}'])
+                           *arguments, FRI_REALIZATION, 'air_stark_example::Proof', f'--output={package}'])
     emitted = journal.run([toolchain.compiler, 'language-emit', '--source-format=zkc',
                            '--entry=air_stark_example::Proof', *arguments])
     return Variant(package, report['package_sha256'], *emitted_sites(emitted))
@@ -115,7 +115,7 @@ def prove(toolchain, journal, variant, name, public, private):
     proof = variant.package.with_name(name + '.bin')
     made = journal.json([toolchain.runtime, '--json', 'prove', f'--package={variant.package}', f'--sha256={variant.pin}', *producer, f'--output={proof}'])
     assert made['status'] == 'produced'
-    assert len(frames(proof.read_bytes())) == 8 + 16 * public['query_count']
+    check_air_frames(proof.read_bytes(), public['query_count'])
     return proof
 
 
