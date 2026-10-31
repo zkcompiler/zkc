@@ -4,6 +4,10 @@ use crate::{proof::NativeDeployment, run::RunHost};
 use zkc_runtime::vm::LogicalType;
 
 impl BoundInterface {
+    /// Logical protocol metadata grants no external handle ingestion authority.
+    pub(in crate::entry) fn check_executable_ports(&self) -> Result<()> {
+        self.view.check_executable_ports()
+    }
     /// Check the exact package artifact and its participant ABI. The authenticated
     /// compiler publication owns source correspondence and run compile options;
     /// run bundles do not carry an independent original or options record.
@@ -17,6 +21,7 @@ impl BoundInterface {
         bundle: &zkc_runtime::host::joint::Bundle,
         identity: &str,
     ) -> Result<()> {
+        self.check_executable_ports()?;
         let p = &self.document.protocols[self.selected];
         require(
             matches!(self.document.job, Job::Run {})
@@ -56,6 +61,7 @@ impl BoundInterface {
     /// Check the exact deployment, complete original-port mappings and selected
     /// construction. This is admission consistency, not a soundness judgment.
     pub fn check_proof(&self, deployment: &NativeDeployment) -> Result<()> {
+        self.check_executable_ports()?;
         let p = &self.document.protocols[self.selected];
         let proof = self.proof().ok_or(E::NativeBinding)?;
         let prover = &self.roles()[proof.prover].native_name;

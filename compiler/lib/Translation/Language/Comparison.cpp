@@ -1190,7 +1190,11 @@ class Comparator {
         for (unsigned i = 0; i < dependencies.size(); ++i)
           if (dependencies[i] != i)
             return fail("mathematical dependency order differs");
-        if (math->identity == MathematicalIdentity::VectorLength) {
+        if (math->identity == MathematicalIdentity::Select) {
+          if (!mlir::isa<mlir::arith::SelectOp>(actual) ||
+              !attributes(*actual, {}))
+            return fail("mathematical selection differs");
+        } else if (math->identity == MathematicalIdentity::VectorLength) {
           auto axis = actual->getAttrOfType<mlir::IntegerAttr>("axis");
           if (!attributes(*actual, {"axis"}) || !axis ||
               !axis.getType().isSignlessInteger(64) || axis.getInt() != 0)
@@ -2204,7 +2208,10 @@ public:
     relation::FormulaIdentities formulas(remaining, limits.irBytes);
     LayoutIdentities schemaIdentities(remaining);
     for (auto &decl : declared) {
-      if ((!decl.body && decl.kind != Declaration::Kind::Oracle) ||
+      // Authored oracle templates retain metadata without closed query SSA.
+      // Specialized definitions must still pass the complete body check below.
+      if ((!decl.body &&
+           (decl.kind != Declaration::Kind::Oracle || !decl.origin)) ||
           !decl.parameters.empty())
         continue;
       if (++report.declarations > limits.declarations)

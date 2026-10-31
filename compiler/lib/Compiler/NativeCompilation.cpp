@@ -207,7 +207,8 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
       std::move(*preparation), options.oracleRealization);
   if (!realization)
     return diagnostics.failure(realization.takeError());
-  result->realization.emplace(std::move(*realization));
+  result->realization = std::make_shared<mathematical::RealizedProtocol>(
+      std::move(*realization));
   // Native scheduling consumes the actual represented interface. The original
   // logical clauses remain owned alongside the checked edge through
   // publication.
@@ -356,15 +357,17 @@ compileNativeProof(StringRef text, StringRef filename,
   if (!policy) {
     auto selected = selectNativeProofDraws(
         *original, std::get<NativeProofSelection>(options.policy).policy,
-        options.mathematicalSelection);
+        options.mathematicalSelection, options.oracleRealization);
     if (!selected)
       return diagnostics.failure(selected.takeError());
     policy = std::move(*selected);
   }
   auto constructed =
-      constructNativeProof(*original, *policy, options.mathematicalSelection);
+      constructNativeProof(*original, *policy, options.mathematicalSelection,
+                           options.oracleRealization);
   if (!constructed)
     return diagnostics.failure(constructed.takeError());
+  result->realization = std::move(constructed->realization);
   result->module = std::move(constructed->module);
   if (options.observations)
     options.observations->phase("participant", *result->module);
@@ -452,6 +455,10 @@ compileNativeProof(StringRef text, StringRef filename,
   auto digest = [](StringRef bytes) {
     return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
   };
+  auto oracleSelection =
+      protocol::encodeOracleRealizationPolicy(options.oracleRealization);
+  if (!oracleSelection)
+    return diagnostics.failure(oracleSelection.takeError());
   json::Value deployment(json::Array{
       "zkc.native-proof/0", digest(text), constructed->descriptor,
       digest(*descriptorBytes), candidate, digest(candidate), std::move(maps),
@@ -462,7 +469,8 @@ compileNativeProof(StringRef text, StringRef filename,
                                                               : "false",
           options.mathematicalSelection.finiteBulk ? "true" : "false",
           options.mathematicalSelection.collectFoldFusion ? "true" : "false",
-          options.mathematicalSelection.calculationBatching ? "true" : "false"},
+          options.mathematicalSelection.calculationBatching ? "true" : "false",
+          printJson(*oracleSelection)},
       json::Array(constructed->wireSites)});
   auto encoded = printJson(deployment);
   if (encoded.size() > 16 * 1024 * 1024)

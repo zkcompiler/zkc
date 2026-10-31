@@ -20,7 +20,8 @@ json::Array permissions(Permissions value) {
     result.push_back("Drop");
   return result;
 }
-json::Object describe(const CheckedProject &project, const Declaration &decl) {
+Expected<json::Object> describe(const CheckedProject &project,
+                                const Declaration &decl, detail::Work &work) {
   auto type = [&](const Type &t) { return formatType(t); };
   const auto *owner =
       decl.parent ? &project.declarations()[decl.parent->index] : nullptr;
@@ -225,9 +226,13 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                           : "captured"},
            {"begin", decl.span.begin},
            {"end", decl.span.end}}}};
-  if (decl.oracleDefinition)
-    result["oracle_definition"] =
-        detail::describeOracleDefinition(project.declarations(), decl);
+  if (decl.oracleDefinition) {
+    auto definition =
+        detail::describeOracleDefinition(project.declarations(), decl, work);
+    if (!definition)
+      return definition.takeError();
+    result["oracle_definition"] = std::move(*definition);
+  }
   if (decl.kind == Declaration::Kind::EntryFunction ||
       (decl.generated && decl.generated->operation))
     result["stage"] = "host";
@@ -425,16 +430,25 @@ Expected<std::string> inspectDeclarations(const CheckedProject &project,
   llvm::sort(declarations, [](auto *a, auto *b) {
     return a->qualifiedName < b->qualifiedName;
   });
+  detail::Work work{limits};
+  Error inspectionError = Error::success();
   std::string bytes;
   BoundedStream out(bytes, limits.interfaceBytes);
   json::OStream json(out);
   json.array([&] {
     for (auto *decl : declarations) {
-      json.value(describe(project, *decl));
+      auto value = describe(project, *decl, work);
+      if (!value) {
+        inspectionError = value.takeError();
+        break;
+      }
+      json.value(std::move(*value));
       if (out.overflow())
         break;
     }
   });
+  if (inspectionError)
+    return std::move(inspectionError);
   if (out.overflow())
     return error("source.limit", "declaration report byte limit exceeded");
   return bytes;
@@ -542,6 +556,7 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
       std::unique(references.begin(), references.end(),
                   [&](unsigned a, unsigned b) { return key(a) == key(b); }),
       references.end());
+  Error inspectionError = Error::success();
   std::string bytes;
   BoundedStream out(bytes, limits.apiInspectionBytes);
   json::OStream json(out);
@@ -568,7 +583,12 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
         if (out.overflow())
           break;
         const auto &decl = project.declarations()[id.index];
-        auto value = describe(project, decl);
+        auto description = describe(project, decl, work);
+        if (!description) {
+          inspectionError = description.takeError();
+          break;
+        }
+        auto value = std::move(*description);
         for (auto &requirement : *value.getArray("requirements")) {
           auto *record = requirement.getAsObject();
           if (record->getString("kind") != "capability")
@@ -728,6 +748,8 @@ Expected<std::string> inspectPublicAPI(const CheckedProject &project,
       }
     });
   });
+  if (inspectionError)
+    return std::move(inspectionError);
   if (out.overflow())
     return error("source.limit", "public API report byte limit exceeded");
   return bytes;

@@ -1,5 +1,6 @@
 use super::*;
 use serde_json::{Value, json};
+mod logical;
 mod static_arguments;
 fn digest(s: &str) -> String {
     crate::io::bytes::hex(&Sha256::digest(s.as_bytes()))

@@ -437,6 +437,10 @@ add_zkc_component(Compiler
   lib/Compiler/NativeCodec.cpp
   lib/Compiler/NativeCodecVerification.cpp
   lib/Compiler/NativeProof.cpp
+  lib/Compiler/NativeProofOrigins.cpp
+  lib/Compiler/NativeRequest.cpp
+  lib/Compiler/NativeRequestCounts.cpp
+  lib/Compiler/NativeRequestVerification.cpp
   lib/Compiler/NativeProofVerification.cpp
   lib/Compiler/Passes.cpp
   lib/Compiler/Pipelines.cpp

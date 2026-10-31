@@ -1,4 +1,4 @@
-use zkc_catalog::{CATALOG, IntrinsicDomain, ParameterValidator, Port, Signature, Stage};
+use zkc_catalog::{CATALOG, Facet, IntrinsicDomain, ParameterValidator, Port, Signature, Stage};
 
 #[test]
 fn total_index_identities_and_exact_signatures_use_existing_catalog_projection() {
@@ -26,11 +26,8 @@ fn total_index_identities_and_exact_signatures_use_existing_catalog_projection()
         assert!(!intrinsic.domain_points && !intrinsic.scalar);
         let operation = zkc_catalog::operation(name).unwrap();
         assert_eq!(operation.stage, Stage::Source);
-        assert!(
-            operation.scope.is_empty()
-                && operation.requirements.is_empty()
-                && operation.facets.is_empty()
-        );
+        assert!(operation.scope.is_empty() && operation.requirements.is_empty());
+        assert_eq!(operation.facets, &[Facet::DeterministicData]);
         assert_eq!(operation.parameters.minimum, 0);
         assert_eq!(operation.parameters.maximum, Some(0));
         assert_eq!(operation.parameters.validator, ParameterValidator::None);

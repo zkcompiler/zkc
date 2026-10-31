@@ -519,7 +519,8 @@ fn deployment(field: &str, arenas: &Arenas) -> String {
         [["role00000001", "0", leaf, "zkc.native-data/0"]],
         [],
         [],
-        []
+        [],
+        r#"{"authentication":"per-query","format":"zkc.oracle-selection/0","order":"unrestricted","roots":{"entries":[],"kind":"exact"}}"#
     ]);
     json!([
         "zkc.native-proof/0",

@@ -870,6 +870,9 @@ class Emitter {
         }
         mlir::Operation *actual = nullptr;
         switch (math->identity) {
+        case MathematicalIdentity::Select:
+          actual = make("arith.select", resultTypes, operands, {});
+          break;
         case MathematicalIdentity::BooleanConstant:
           actual = make(
               "arith.constant", resultTypes, {},
@@ -1977,7 +1980,10 @@ public:
     }
     definitions = &unit->getRegion(0).front();
     for (auto &decl : declared) {
-      if ((!decl.body && decl.kind != Declaration::Kind::Oracle) ||
+      // Authored oracle templates retain metadata without closed query SSA.
+      // Specialized definitions must still pass the complete body check below.
+      if ((!decl.body &&
+           (decl.kind != Declaration::Kind::Oracle || !decl.origin)) ||
           !decl.parameters.empty())
         continue;
       declaration = decl.qualifiedName;

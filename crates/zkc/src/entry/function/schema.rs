@@ -83,10 +83,12 @@ impl FunctionInterface {
                 schemas
                     .check(&p.schema, 0)
                     .map_err(|e| super::EntryError::new(super::EntryPhase::Interface, e))?;
+                super::require(!p.schema.kind.is_logical(), "entry-host-schema")?;
             }
             schemas
                 .check(&f.result, 0)
                 .map_err(|e| super::EntryError::new(super::EntryPhase::Interface, e))?;
+            super::require(!f.result.kind.is_logical(), "entry-host-schema")?;
         }
         super::require(
             document.functions.len() <= 4096 && symbols.contains(&document.selection.function),

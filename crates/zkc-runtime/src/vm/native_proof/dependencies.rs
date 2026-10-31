@@ -583,6 +583,86 @@ mod tests {
         );
     }
     #[test]
+    fn published_value_can_feed_replay_without_revealing_its_input() {
+        let derived = function(
+            "derived",
+            &["input"],
+            1,
+            vec![LocalInstruction::Return(names(&["input"]))],
+        );
+        let body = vec![
+            query("private"),
+            call("derived", &["private"], &["published"]),
+            Instruction::Send {
+                site: "publish".into(),
+                schema: "publish".into(),
+                peer: "V".into(),
+                input: "published".into(),
+            },
+            call("derived", &["published"], &["replay"]),
+            call("observe", &["replay"], &["state"]),
+            Instruction::Return(names(&["state", "private"])),
+        ];
+        assert_eq!(
+            check_as(vec![identity(), derived], body, 1000, true).unwrap(),
+            [false, true]
+        );
+    }
+    #[test]
+    fn later_publication_cannot_authorize_an_earlier_observation() {
+        let body = vec![
+            query("private"),
+            call("observe", &["private"], &["state"]),
+            Instruction::Send {
+                site: "publish".into(),
+                schema: "publish".into(),
+                peer: "V".into(),
+                input: "private".into(),
+            },
+            Instruction::Return(names(&["state"])),
+        ];
+        assert_eq!(
+            check_as(vec![identity()], body, 1000, true).unwrap_err().0,
+            "native-proof-private-dependency"
+        );
+    }
+    #[test]
+    fn publishing_a_related_value_does_not_authorize_a_private_loop_count() {
+        let derived = function(
+            "derived",
+            &["input"],
+            1,
+            vec![LocalInstruction::Return(names(&["input"]))],
+        );
+        let body = vec![
+            query("private_count"),
+            call("derived", &["private_count"], &["published"]),
+            Instruction::Send {
+                site: "publish".into(),
+                schema: "publish".into(),
+                peer: "V".into(),
+                input: "published".into(),
+            },
+            loop_body(
+                "private_count",
+                &[],
+                &["public"],
+                vec![
+                    call("observe", &["public"], &["state"]),
+                    Instruction::Yield(vec![]),
+                ],
+                &[],
+            ),
+            Instruction::Return(vec![]),
+        ];
+        assert_eq!(
+            check_as(vec![identity(), derived], body, 1000, true)
+                .unwrap_err()
+                .0,
+            "native-proof-private-dependency"
+        );
+    }
+    #[test]
     fn ordinary_returns_retain_per_output_dependencies() {
         let split = function(
             "split",

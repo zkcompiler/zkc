@@ -652,9 +652,11 @@ module { "protocol.module"() ({
           zkc::protocol::OracleRealizationPolicy policy;
           policy.roots = take(zkc::protocol::resolveOracleRealizationSelection(
               *prepared, policy));
-          require(policy.roots->size() == 1,
-                  "remote input allocated another anchor");
-          policy.roots->front().realization = {
+          auto &roots =
+              std::get<std::vector<zkc::protocol::OracleRootSelection>>(
+                  policy.roots);
+          require(roots.size() == 1, "remote input allocated another anchor");
+          roots.front().realization = {
               "rows.merkle-keccak256.koala-bear/0",
               zkc::protocol::OracleLeafGrouping::AntipodalPairs,
               zkc::protocol::OracleLeafOrder::Natural};

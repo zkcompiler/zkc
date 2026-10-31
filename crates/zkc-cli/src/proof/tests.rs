@@ -79,7 +79,8 @@ fn deployment() -> Json {
             [second, "bool", "zkcv.bool/0"]
         ],
         [],
-        []
+        [],
+        r#"{"authentication":"per-query","format":"zkc.oracle-selection/0","order":"unrestricted","roots":{"entries":[],"kind":"exact"}}"#
     ]);
     let mut result = json!([
         "zkc.native-proof/0",
@@ -99,7 +100,17 @@ fn deployment() -> Json {
             ],
             ["V", "v", [["2", "bool"]], [["3", "bool"]], [], "0"]
         ],
-        ["true", "false", "false", "true", "false", "true"],
+        [
+            "true",
+            "false",
+            "false",
+            "true",
+            "false",
+            "true",
+            zkc::entry::OracleSelection::default()
+                .canonical_json()
+                .unwrap()
+        ],
         [[first, "first"], [second, "second"]]
     ]);
     seal(&mut result);

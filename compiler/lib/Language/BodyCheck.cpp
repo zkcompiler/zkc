@@ -728,9 +728,14 @@ bool Checker::body(DeclarationId id, unsigned depth) {
     inferredContracts.erase(&decl);
     return true;
   }
-  if (decl.kind == Declaration::Kind::Oracle &&
-      !body(decl.oracleDefinition->admissibility, depth))
-    return false;
+  if (decl.kind == Declaration::Kind::Oracle) {
+    // Proof Entry checking can reach this body during the signature pass,
+    // before the signature pass reaches the generated predicate. Its source
+    // Data ports and capture bindings must exist before lexical resolution.
+    auto predicate = decl.oracleDefinition->admissibility;
+    if (!signature(predicate) || !body(predicate, depth))
+      return false;
+  }
   Body result;
   result.mode = decl.kind == Declaration::Kind::Oracle ? Body::Mode::Oracle
                 : (decl.kind == Declaration::Kind::Math ||

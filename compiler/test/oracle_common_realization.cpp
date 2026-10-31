@@ -110,7 +110,7 @@ void dynamicWindows(Cases &cases, MLIRContext &context) {
                                 ? OracleAuthentication::PerQuery
                                 : OracleAuthentication::AtomicBlocks;
     policy.roots = take(resolveOracleRealizationSelection(*prepared, policy));
-    for (auto &root : *policy.roots)
+    for (auto &root : std::get<std::vector<OracleRootSelection>>(policy.roots))
       root.realization = {scheme.str(),
                           mode == "individual"
                               ? OracleLeafGrouping::Individual
@@ -418,9 +418,10 @@ void dynamicWindows(Cases &cases, MLIRContext &context) {
           policy.authentication = OracleAuthentication::AtomicBlocks;
           policy.roots =
               take(resolveOracleRealizationSelection(*prepared, policy));
-          require(policy.roots->size() == 2,
-                  "wrong mixed constructor inventory");
-          for (auto [ordinal, root] : enumerate(*policy.roots))
+          auto &roots =
+              std::get<std::vector<OracleRootSelection>>(policy.roots);
+          require(roots.size() == 2, "wrong mixed constructor inventory");
+          for (auto [ordinal, root] : enumerate(roots))
             root.realization = {
                 ordinal == 0 || sameKind ? scheme.str()
                                          : "rows.merkle-keccak256.koala-bear/0",
@@ -499,7 +500,7 @@ module { "protocol.module"() ({
     OracleRealizationPolicy policy;
     policy.authentication = OracleAuthentication::AtomicBlocks;
     policy.roots = take(resolveOracleRealizationSelection(*prepared, policy));
-    for (auto &root : *policy.roots)
+    for (auto &root : std::get<std::vector<OracleRootSelection>>(policy.roots))
       root.realization = {scheme.str(), OracleLeafGrouping::AntipodalPairs,
                           OracleLeafOrder::Natural};
     auto candidate = take(emitOracleRealization(*prepared, policy));

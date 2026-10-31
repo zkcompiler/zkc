@@ -203,7 +203,7 @@ type O=builtin("oracle",builtin("oracle.table",F,16));
 )",
                                    "lib.zkc"},
                                   {"m", R"(
-module m;use lib::State;
+module m;use lib::{State};
 domain F=field("bls12-381.fr");
 type Kind=builtin("oracle.table",F,16);
 type Data=Kind::Data;
@@ -218,12 +218,17 @@ protocol Run roles(P,V)(state:State@P->V)->(out:State@P->V)
     auto entry = close(R"(
 struct BodyRecord{hidden:(),pub value:index}
 enum BodyVariant{Value(index,())}
+fn bodyVariant(value:index)->BodyVariant{return BodyVariant::Value(value,());}
+fn payload(value:index)->Choice{return Choice::Some(value,());}
 protocol Run roles(P,V)(a:O@P->V,b:O@P->V)->(out:O@P->V){
-  let note=BodyRecord{hidden=(),value=0};
-  let choice=BodyVariant::Value(1,());
+  let note=BodyRecord{hidden:(),value:0};
+  let choice@P=bodyVariant(1);
+  let first@P=payload(2);
+  let second@V=payload(2);
+  let shared=@(P=first,V=second);
   let layers=oracle.empty<Fixed<F,16>,0> roles(P,V)();
-  let state=State{secret=(),meta=Meta{before=0,empty=(),after=1},
-                  word=a,choice=Choice::Some(2,()),layers=layers,tail=[]};
+  let state=State{secret:(),meta:Meta{before:0,empty:(),after:1},
+                  word:a,choice:shared,layers:layers,tail:[]};
   return(out=state.word);
 }
 )");

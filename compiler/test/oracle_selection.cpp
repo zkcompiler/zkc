@@ -19,7 +19,7 @@ constexpr StringLiteral limit = "oracle-realization-selection-limit";
 std::string encoded(const OracleRealizationPolicy &policy = {}) {
   return printJson(take(encodeOracleRealizationPolicy(policy)));
 }
-std::string replace(std::string text, StringRef before, StringRef after) {
+std::string replaceText(std::string text, StringRef before, StringRef after) {
   auto at = text.find(before);
   require(at != std::string::npos, "missing mutation slot");
   text.replace(at, before.size(), after.str());
@@ -61,22 +61,23 @@ int main() {
     auto text = encoded();
     for (const auto &mutated : std::vector<std::string>{
              "[]", "null", text + "{}",
-             replace(text, "zkc.oracle-selection/0", "zkc.oracle-selection/1"),
-             replace(text, "\"uniform\"", "\"inferred\""),
-             replace(text, "\"individual\"", "\"paired\""),
-             replace(text, "\"natural\"", "\"reverse\""),
-             replace(text, "\"unrestricted\"", "\"unknown\""),
-             replace(text, "\"per-query\"", "\"unknown\""),
-             replace(text, "\"individual\"", "\"antipodal-pairs\""),
-             replace(text, "\"natural\"", "\"bit-reversed\""),
-             replace(text, "\"scheme\":\"\"", "\"scheme\":null"),
-             replace(text, "\"table\":{", "\"table\":{\"extra\":false,"),
-             replace(text, "\"kind\":\"uniform\"",
-                     "\"kind\":\"uniform\",\"kind\":\"uniform\""),
-             replace(text, "\"scheme\":\"\"",
-                     "\"scheme\":\"\",\"sch\\u0065me\":\"\""),
-             replace(text, "{", "{\"extra\":null,"),
-             replace(text, "\"scheme\":\"\"", "\"scheme\":\"\\ud800\"")})
+             replaceText(text, "zkc.oracle-selection/0",
+                         "zkc.oracle-selection/1"),
+             replaceText(text, "\"uniform\"", "\"inferred\""),
+             replaceText(text, "\"individual\"", "\"paired\""),
+             replaceText(text, "\"natural\"", "\"reverse\""),
+             replaceText(text, "\"unrestricted\"", "\"unknown\""),
+             replaceText(text, "\"per-query\"", "\"unknown\""),
+             replaceText(text, "\"individual\"", "\"antipodal-pairs\""),
+             replaceText(text, "\"natural\"", "\"bit-reversed\""),
+             replaceText(text, "\"scheme\":\"\"", "\"scheme\":null"),
+             replaceText(text, "\"table\":{", "\"table\":{\"extra\":false,"),
+             replaceText(text, "\"kind\":\"uniform\"",
+                         "\"kind\":\"uniform\",\"kind\":\"uniform\""),
+             replaceText(text, "\"scheme\":\"\"",
+                         "\"scheme\":\"\",\"sch\\u0065me\":\"\""),
+             replaceText(text, "{", "{\"extra\":null,"),
+             replaceText(text, "\"scheme\":\"\"", "\"scheme\":\"\\ud800\"")})
       refuses(parseOracleRealizationPolicy(mutated), invalid);
   });
   OracleRealizationPolicy exact;
@@ -84,7 +85,7 @@ int main() {
   for (StringRef path : {"[]", "[-0]", "[-1]", "[+1]", "[01]", "[1.0]", "[1e0]",
                          "[4294967296]", "[true]", "[\"0\"]", "null", "{}"})
     cases.run("strict path " + path, [&] {
-      refuses(parseOracleRealizationPolicy(replace(
+      refuses(parseOracleRealizationPolicy(replaceText(
                   encoded(exact), "\"path\":[0]", "\"path\":" + path.str())),
               invalid);
     });

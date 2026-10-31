@@ -351,6 +351,10 @@ zkc_source_project(zkc-language_scoped_ir-test
 add_zkc_test(language_reductions Language language-reductions)
 add_zkc_test(language_reduction_ir Compiler language-reduction-ir)
 mlir_target_link_libraries(zkc-language_reduction_ir-test PRIVATE MLIRParser)
+add_zkc_test(language_finite_product_state Compiler language-finite-product-state)
+mlir_target_link_libraries(zkc-language_finite_product_state-test PRIVATE MLIRParser)
+zkc_source_project(zkc-language_finite_product_state-test
+  "${PROJECT_SOURCE_DIR}/../libraries/protocols/polynomial/fri/zkc.toml")
 mlir_target_link_libraries(zkc-language_boolean-test PRIVATE MLIRParser)
 add_zkc_test(language_capabilities Compiler language-capabilities)
 add_zkc_test(language_inference Compiler language-inference)
@@ -361,6 +365,12 @@ add_zkc_test(language_notation_inspection Language language-notation-inspection)
 add_zkc_test(language_api_inspection Language language-api-inspection)
 add_zkc_test(language_written_source Language language-written-source)
 add_zkc_test(source_instances Language source-instances)
+add_zkc_test(mathematical_selection Compiler mathematical-selection)
+mlir_target_link_libraries(zkc-mathematical_selection-test PRIVATE MLIRParser)
+zkc_source_project(zkc-mathematical_selection-test
+  "${PROJECT_SOURCE_DIR}/../libraries/core/algebra/zkc.toml")
+add_zkc_test(oracle_companion_keys Language oracle-companion-keys)
+add_zkc_test(language_oracle_predicate_scope Language language-oracle-predicate-scope)
 zkc_source_project(zkc-source_instances-test
   "${PROJECT_SOURCE_DIR}/../examples/projects/fri/zkc.toml")
 add_zkc_test(source_bindings Language source-bindings)
@@ -414,6 +424,14 @@ add_zkc_test(native_preservation Compiler)
 mlir_target_link_libraries(zkc-native_preservation-test PRIVATE MLIRParser)
 add_test(NAME native-preservation COMMAND zkc-native_preservation-test
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/schnorr-services.mlir")
+add_zkc_test(native_proof_origins Compiler native-proof-origins)
+mlir_target_link_libraries(zkc-native_proof_origins-test PRIVATE MLIRParser)
+target_compile_definitions(zkc-native_proof_origins-test PRIVATE
+  ZKC_ORACLE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles")
+add_zkc_test(native_request_reconstruction Compiler)
+mlir_target_link_libraries(zkc-native_request_reconstruction-test PRIVATE MLIRParser)
+add_test(NAME native-request-reconstruction COMMAND zkc-native_request_reconstruction-test
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracles/query-blocks.mlir")
 add_zkc_test(native_proof Compiler)
 mlir_target_link_libraries(zkc-native_proof-test PRIVATE MLIRParser)
 add_test(NAME native-proof-construction COMMAND zkc-native_proof-test

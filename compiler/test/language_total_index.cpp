@@ -16,15 +16,15 @@ namespace {
 constexpr StringLiteral subject = R"(
 module total_index;
 use zkc::indices as indices;
-math fn words(a:index,b:index,choose:bool)->index {
+math fn words(a:index,b:index)->index {
   let sum = indices::wrapping_add(a,b);
   let difference = indices::wrapping_sub(sum,b);
   let bits = indices::bit_and(difference,a);
   let shifted = indices::logical_shift_right(bits,b);
-  return if choose { bits } else { shifted };
+  return indices::bit_and(bits,shifted);
 }
-protocol Run roles(P)(a:index@P,b:index@P,choose:bool@P)->(out:index@P) {
-  return(out=words(a,b,choose));
+protocol Run roles(P)(a:index@P,b:index@P)->(out:index@P) {
+  return(out=words(a,b));
 }
 entry fn Demo(inputs:Run::Inputs) { return Run::run(inputs); }
 )";

@@ -608,7 +608,8 @@ pub(in crate::entry) fn proof_fixture() -> (Value, String) {
         [["role00000000", "0", "bool", "zkcv.bool/0"]],
         [],
         [],
-        []
+        [],
+        r#"{"authentication":"per-query","format":"zkc.oracle-selection/0","order":"unrestricted","roots":{"entries":[],"kind":"exact"}}"#
     ]);
     let artifact = json!([
         "zkc.native-proof/0",
@@ -974,6 +975,7 @@ fn proof_package_binds_every_compilation_choice_to_the_deployment() {
         "fuse_vector_reductions",
         "finite_bulk",
         "fuse_collect_fold",
+        "calculation_batching",
     ]
     .into_iter()
     .enumerate()
@@ -1009,6 +1011,72 @@ fn proof_package_binds_every_compilation_choice_to_the_deployment() {
             ProofEntry::admit(capture(&frame), options.clone(), SetupAuthority::default()).is_ok(),
             "matching {key}"
         );
+    }
+}
+
+#[test]
+fn proof_package_binds_requested_selection_in_both_directions() {
+    use crate::entry::{OracleAuthentication, OracleRoots, OracleSelection};
+    let (doc, artifact) = proof_fixture();
+    let original = package(&doc, &artifact);
+    let capture = |frame: &Value| {
+        let raw = frame.to_string();
+        Package::capture(
+            raw.as_bytes(),
+            &Sha256::digest(raw.as_bytes()).into(),
+            Package::MAX_BYTES,
+        )
+        .unwrap()
+    };
+    for selection in [
+        OracleSelection {
+            roots: OracleRoots::Exact(vec![]),
+            ..Default::default()
+        },
+        OracleSelection {
+            authentication: OracleAuthentication::AtomicBlocks,
+            ..Default::default()
+        },
+    ] {
+        let canonical = selection.canonical_json().unwrap();
+        let mut normalized = selection.clone();
+        if matches!(normalized.roots, OracleRoots::Uniform(_)) {
+            normalized.roots = OracleRoots::Exact(vec![]);
+        }
+        let bind_selection = |deployment: &mut Value| {
+            deployment[7][6] = json!(canonical);
+            deployment[2][8] = json!(normalized.canonical_json().unwrap());
+            deployment[3] = json!(crate::io::bytes::hash(
+                &zkc_format::logical::encode_tree(&deployment[2]).unwrap()
+            ));
+        };
+        for change_package in [false, true] {
+            let mut frame: Value = serde_json::from_slice(original.bytes()).unwrap();
+            let mut deployment: Value = serde_json::from_str(&artifact).unwrap();
+            if change_package {
+                frame["options"]["oracle_realization"] = json!(selection);
+            } else {
+                bind_selection(&mut deployment);
+                frame["artifact"] = json!(deployment.to_string());
+            }
+            let options = ProofOptions {
+                binding: BindingPolicy::AllowAuthored,
+                ..Default::default()
+            };
+            assert_eq!(
+                ProofEntry::admit(capture(&frame), options.clone(), SetupAuthority::default())
+                    .err()
+                    .unwrap()
+                    .to_string(),
+                "entry-interface-native-binding"
+            );
+            frame["options"]["oracle_realization"] = json!(selection);
+            bind_selection(&mut deployment);
+            frame["artifact"] = json!(deployment.to_string());
+            let package = capture(&frame);
+            assert_eq!(package.options().oracle_realization, selection);
+            assert!(ProofEntry::admit(package, options, SetupAuthority::default()).is_ok());
+        }
     }
 }
 

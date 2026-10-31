@@ -165,7 +165,7 @@ protocol Run roles(P,V)(h:O@P->V,n:index@(P,V))->(out:S@P->V){
 #[logical] struct Empty{pub words:Oracles<Fixed<F,16>,0>,secret:()}
 protocol Run roles(P,V,W)()->(out:Empty@P->V){
   let words=oracle.empty<Fixed<F,16>,0> roles(P,V)();
-  let out=Empty{secret:(),words=words};return(out=out);
+  let out=Empty{secret:(),words:words};return(out=out);
 })"));
     const auto &body = *findDeclaration(project, "m::Run").body;
     const auto &value = body.values[body.results.front().index];
@@ -176,7 +176,7 @@ protocol Run roles(P,V,W)()->(out:Empty@P->V){
   cases.run("Copy and Drop preserve identity across repeated uses", [] {
     take(check(R"(
 protocol Run roles(P,V)(s:S@P->V)->(left:S@P->V,right:S@P->V){
-  let unused=s;let a=s;let b=s;return(left=a,right:b);
+  let unused=s;let a=s;let b=s;return(left=a,right=b);
 })"));
   });
   cases.run("generic ordinary payloads retain recursive shared data", [] {
@@ -185,7 +185,7 @@ struct Payload<T:Type+Copy+Drop>{pub pair:(T,()),pub empty:[T;0]}
 #[logical] struct WithPayload<T:Type+Copy+Drop>{pub word:O,pub data:Payload<T>}
 protocol Run roles(P,V)(h:O@P->V,data:Payload<index>@(P,V))
   ->(out:WithPayload<index>@P->V){
-  let state=WithPayload<index>{data=data,word:h};return(out=state);
+  let state=WithPayload<index>{data:data,word:h};return(out=state);
 }
 interface Carrier{type Item;}
 #[logical] struct AssociatedPayload<C:Carrier> where Copy(C::Item) {
@@ -436,7 +436,7 @@ struct Dynamic<K:OracleKind,Rows:nat,Capacity:nat>{pub words:Oracles<K,Capacity>
        "source.oracle-role"},
       {R"(protocol Invalid roles(P,V)(a:O@P->V,i:index@P)->(out:S@P->V){let layers=oracle.empty<Fixed<F,16>,2> roles(P,V)();let out=S{word:a,layers:layers,first:i,second:1};return(out=out);})",
        "source.roles"},
-      {R"(#[logical] struct Empty{pub words:Oracles<Fixed<F,16>,0>,secret:()}protocol Invalid roles(P,V)(unit:()@P)->(out:Empty@P->V){let words=oracle.empty<Fixed<F,16>,0> roles(P,V)();let out=Empty{secret:unit,words=words};return(out=out);})",
+      {R"(#[logical] struct Empty{pub words:Oracles<Fixed<F,16>,0>,secret:()}protocol Invalid roles(P,V)(unit:()@P)->(out:Empty@P->V){let words=oracle.empty<Fixed<F,16>,0> roles(P,V)();let out=Empty{secret:unit,words:words};return(out=out);})",
        "source.roles"},
       {R"(fn invalid(state:S)->S{return state;})", "source.oracle-boundary"},
       {R"(math fn invalid(state:S)->S{return state;})",

@@ -113,6 +113,9 @@ Semantics::intrinsicSignature(const Declaration *scope, StringRef name,
     }
     using I = MathematicalIdentity;
     switch (intrinsic->identity) {
+    case I::Select:
+      return CallSignature{{Type{}, Type(K::Index), Type(K::Index)},
+                           {Type(K::Index)}};
     case I::IndexWrappingAdd:
     case I::IndexWrappingSubtract:
     case I::IndexBitAnd:
@@ -267,6 +270,10 @@ Semantics::intrinsicSignature(const Declaration *scope, StringRef name,
   auto n = intrinsic->naturals ? arguments[1]
                                : natural(Natural::constant(parameters.size()));
   switch (intrinsic->identity) {
+  case I::Select:
+    result.inputs = {Type{}, field, field};
+    result.outputs = {field};
+    break;
   case I::FieldAdd:
   case I::FieldSubtract:
   case I::FieldMultiply:

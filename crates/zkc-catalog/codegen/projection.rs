@@ -285,7 +285,8 @@ fn parameters(v: &Value) -> Result<String> {
 fn facet(v: &Value) -> Result<String> {
     let name = string(&v["kind"])?;
     let (keys, fields): (&[&str], Vec<(&str, String)>) = match name {
-        "PublicReplay" | "AcceptanceGuard" | "Conjunction" | "SourceHistory" | "ManagedHistory" => {
+        "PublicReplay" | "DeterministicData" | "AcceptanceGuard" | "Conjunction"
+        | "SourceHistory" | "ManagedHistory" => {
             object(v, &["kind"], &[])?;
             return Ok(format!("Facet::{name}"));
         }

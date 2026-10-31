@@ -28,6 +28,10 @@ pub struct ProofConstruction<'a> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NativeTranscriptEvent {
+    /// Authenticated compiler classification, associated only after checking the
+    /// actual native helper's origin, payload and ordinary transition metadata.
+    /// This does not prove equality with source or an absent endpoint.
+    pub reconstructed: bool,
     pub contract: String,
     pub origin: String,
     pub payload: Option<super::LogicalType>,
@@ -89,6 +93,25 @@ pub fn native_origin_site(origin: &str, kind: &str) -> Result<String> {
         .map_err(|_| refuse("native-proof-origin"))?;
     let origin =
         zkc_format::logical::decode_tree(&bytes).map_err(|_| refuse("native-proof-origin"))?;
+    // Generated realization events keep authored apply/repeat frames for
+    // loop identity, while their checked common site is already expanded.
+    if let Some(digest) = origin[4][1]
+        .as_str()
+        .and_then(|protocol| protocol.strip_prefix("zkc.oracle."))
+    {
+        if kind != "message"
+            || digest.len() != 64
+            || !digest
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
+            return Err(refuse("native-proof-origin"));
+        }
+        return origin[4][2]
+            .as_str()
+            .map(str::to_owned)
+            .ok_or_else(|| refuse("native-proof-origin"));
+    }
     let mut prefix: Option<String> = None;
     for step in origin[2]
         .as_array()
@@ -402,6 +425,7 @@ fn helper<'a>(
         loops,
         gate_search: gated.then_some(search),
         events: vec![NativeTranscriptEvent {
+            reconstructed: false,
             contract: if gated {
                 "transcript.native.indexed.indices.gated".into()
             } else {
@@ -889,7 +913,20 @@ impl ProofWalk<'_> {
                             self.loops.insert(prefix.clone(), actual.clone());
                             self.loop_sites.insert(actual.0.clone(), prefix.clone());
                         }
-                        if let Some((sender, receiver)) = &checked.message {
+                        if checked.events[0].reconstructed {
+                            if !pending_message.is_empty() || !pending_challenge.is_empty() {
+                                return Err(refuse("native-proof-observation-order"));
+                            }
+                            // These exact ordinary payload positions were checked
+                            // against the actual helper signature above. There is
+                            // no transport operand or new challenge to consume.
+                            if checked.message.as_ref().is_none_or(|(sender, receiver)| {
+                                sender != self.validator || receiver != self.producer
+                            }) || payloads != 1
+                            {
+                                return Err(refuse("native-proof-reconstructed-message"));
+                            }
+                        } else if let Some((sender, receiver)) = &checked.message {
                             let payload = if sender == self.producer && receiver == self.validator {
                                 &mut pending_message
                             } else if sender == self.validator && receiver == self.producer {
@@ -1198,6 +1235,33 @@ impl NativeProofEntry {
             if !event_origins.insert(&event.origin) {
                 return Err(refuse("native-proof-duplicate-origin"));
             }
+            if event.reconstructed {
+                if transcript.is_none() || plan.is_some() {
+                    return Err(refuse("native-proof-reconstructed-profile"));
+                }
+                if event.contract != "transcript.native.indexed.observe.data"
+                    || event.payload.is_none()
+                    || event.bound.is_some()
+                    || event.count.is_some()
+                    || event.difficulty.is_some()
+                    || event.start_inputs.is_some()
+                {
+                    return Err(refuse("native-proof-reconstructed-message"));
+                }
+                let bytes = zkc_format::logical::native_origin_template(
+                    std::slice::from_ref(&event.origin),
+                    "message",
+                )
+                .map_err(|_| refuse("native-proof-origin"))?;
+                let origin = zkc_format::logical::decode_tree(&bytes)
+                    .map_err(|_| refuse("native-proof-origin"))?;
+                if origin[1].as_str() != Some(entry)
+                    || origin[4][4].as_str() != Some(validator)
+                    || origin[4][5].as_str() != Some(producer)
+                {
+                    return Err(refuse("native-proof-reconstructed-message"));
+                }
+            }
             if let Some(count) = event.count {
                 if plan.is_some()
                     || !matches!(
@@ -1239,7 +1303,18 @@ impl NativeProofEntry {
                 source_transcript_function(function, transcript.as_ref(), admitted.contracts())?;
                 continue;
             }
-            if let Some(checked) = helper(function, transcript.as_ref(), entry, validator)? {
+            if let Some(mut checked) = helper(function, transcript.as_ref(), entry, validator)? {
+                if let Some(expected) = events
+                    .iter()
+                    .find(|event| event.reconstructed && event.origin == checked.events[0].origin)
+                {
+                    let mut ordinary = expected.clone();
+                    ordinary.reconstructed = false;
+                    if checked.events.as_slice() != [ordinary] {
+                        return Err(refuse("native-proof-state-chain"));
+                    }
+                    checked.events[0].reconstructed = true;
+                }
                 helpers.insert(name.clone(), checked);
             }
         }

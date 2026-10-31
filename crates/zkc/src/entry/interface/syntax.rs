@@ -13,6 +13,7 @@ pub(in crate::entry) struct Leaf {
     pub copy: bool,
     pub drop: bool,
     pub participants: bool,
+    pub total: bool,
     pub constructible: bool,
     pub message: bool,
     pub needs_setup: bool,
@@ -29,6 +30,7 @@ impl Leaf {
             copy: row.copy,
             drop: row.drop,
             participants: row.participants,
+            total: row.native_local && row.mathematical,
             constructible: row.constructible,
             message: row.message,
             needs_setup: false,
@@ -97,6 +99,7 @@ fn parse(spelling: &str, depth: usize, remaining: &mut usize) -> Result<Leaf> {
                     leaf.needs_setup |= child.needs_setup;
                     if head == "sequence" {
                         leaf.participants = child.copy && child.participants;
+                        leaf.total = child.copy && child.total;
                         leaf.message &= child.message;
                     }
                 }
@@ -123,6 +126,12 @@ fn parse(spelling: &str, depth: usize, remaining: &mut usize) -> Result<Leaf> {
         [Kind::Domain(sort)] => require(domain(sort, identity), E::Schema)?,
         _ => return Err(E::Schema),
     }
+    // The native logical inventory has scalar pairing target groups but no
+    // `groups` collection for them (Contracts/Domains.cpp). Logical oracle
+    // rows and their Data association must both be formed total shared data.
+    if head == "groups" && matches!(identity, "bn254.gt" | "bls12-381.gt") {
+        leaf.total = false;
+    }
     leaf.needs_setup =
         matches!(head, "prover_key" | "verifier_key") || identity == "multilinear.kzg.bls12-381/0";
     Ok(leaf)
@@ -148,6 +157,7 @@ fn variant(tree: &Value, depth: usize, remaining: &mut usize) -> Result<Leaf> {
         copy: true,
         drop: true,
         participants: true,
+        total: true,
         constructible: true,
         message: true,
         needs_setup: false,
@@ -178,6 +188,7 @@ fn variant(tree: &Value, depth: usize, remaining: &mut usize) -> Result<Leaf> {
             leaf.copy &= facts.copy;
             leaf.drop &= facts.drop;
             leaf.participants &= facts.copy && facts.participants;
+            leaf.total &= facts.copy && facts.total;
             leaf.constructible &= facts.constructible;
             leaf.message &= facts.copy && facts.message;
             leaf.needs_setup |= facts.needs_setup;

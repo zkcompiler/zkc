@@ -10,6 +10,7 @@
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
+#include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Translation/Language.h"
@@ -29,8 +30,8 @@ type Oracle<K:OracleKind>=builtin("oracle",K);
 type Vector<T:Field>=builtin("vector",T);
 math fn length<T:Field>(data:Vector<T>)->index=primitive("vector.length");
 math fn mapped(position:index,mask:index)->index=primitive("index.bit_and");
-math fn choose<T:Field>(a:T,b:T,flag:bool)->T {
-  return if flag { a } else { b };
+math fn combine<T:Field>(a:T,b:T,flag:bool)->T {
+  return a+b;
 }
 #[shape(left.rows,bound=Max)]
 #[shape(right.rows,bound=Max)]
@@ -45,7 +46,7 @@ oracle def Select<T:Field,Max:nat>(left:Oracle<Table<T>>,right:Oracle<Table<T>>,
     let first <- oracle.query(left,position);
     let offset=mapped(position,mask);
     let second <- oracle.query(right,offset);
-    return choose<T>(first,second,flag);
+    return combine<T>(first,second,flag);
   }
 }
 oracle def Dormant(source:Oracle<Fixed<F,16>>,capture:index)
@@ -71,7 +72,7 @@ protocol Run roles(P,V)(left:Oracle<Fixed<F,16>>@P->V,
   let rows=oracle.rows(a);
   let selected <- Select<F,32>(a,b,padding,rows,mask,flag);
   let unused <- Select<F,32>(b,a,padding,rows,mask,flag);
-  let answer@V=oracle.query(selected,position);
+  let answer@V <- query selected at position;
   return(answer=answer);
 }
 )";
@@ -83,23 +84,23 @@ type Table<T: Type + Copy + Drop> = builtin("oracle.table", T)
 type Fixed<T: Type + Copy + Drop, N: nat> = builtin("oracle.table", T, N)
 type Oracle<K: OracleKind> = builtin("oracle", K)
 type Vector<T: Field> = builtin("vector", T)
-math fn length<T: Field>(data: Vector<T>) -> index = primitive("vector.length")
-math fn mapped(position: index, mask: index) -> index = primitive("index.bit_and")
-math fn choose<T: Field>(a: T, b: T, flag: bool) -> T:
-    return if flag { a } else { b }
+def mapped(position: index, mask: index) -> index:
+    mask
+def combine<T: Field>(a: T, b: T, flag: bool) -> T:
+    a + b
 
 #[shape(left.rows, bound = Max)]
 #[shape(right.rows, bound = Max)]
 #[shape(result.rows, value = rows, bound = Max)]
 oracle def Select<T: Field, Max: nat>(left: Oracle<Table<T>>, right: Oracle<Table<T>>, padding: (index, (index, ())), rows: index, mask: index, flag: bool) -> Oracle<Table<T>>:
     requires left_rows: oracle.rows(left) == rows
-    requires right_data: length<T>(oracle.data(right)) == rows
+    requires right_rows: oracle.rows(right) == rows
     query(position: index):
         unused <- oracle.query(left, position)
         first <- oracle.query(left, position)
         offset = mapped(position, mask)
         second <- oracle.query(right, offset)
-        return choose<T>(first, second, flag)
+        return combine<T>(first, second, flag)
 
 oracle def Dormant(source: Oracle<Fixed<F, 16>>, capture: index) -> Oracle<Fixed<F, 16>>:
     requires rows: oracle.rows(source) == capture
@@ -130,7 +131,15 @@ Expected<CheckedProject> check(StringRef text, StringRef format = "zkc") {
       capture({{"m", text.str(), "virtual-translation.zkc"}}, options);
   if (!captured)
     return captured.takeError();
-  return analyze(*captured).checkedProject();
+  auto analysis = analyze(*captured);
+  auto project = analysis.checkedProject();
+  if (!project) {
+    consumeError(project.takeError());
+    return createStringError(
+        inconvertibleErrorCode(),
+        formatDiagnostics(analysis.diagnostics(), analysis.sources()));
+  }
+  return project;
 }
 struct Fixture {
   ClosedEntry entry;
@@ -239,6 +248,15 @@ void roundTrip(const Fixture &fixture, mlir::MLIRContext &context) {
   auto helper = mlir::SymbolTable(unit(*module))
                     .lookup<mlir::func::FuncOp>(formulaSymbol(predicate));
   require(bool(helper), "generated predicate helper disappeared");
+  unsigned sourceBounds = 0;
+  helper.walk([&](data::LessOp op) {
+    auto maximum = op.getRhs().getDefiningOp<data::IndexOp>();
+    require(maximum && maximum.getValue() == 32,
+            "source bound did not survive predicate specialization");
+    ++sourceBounds;
+  });
+  require(sourceBounds == 2,
+          "generated predicate lost a source-bound conjunct");
   unsigned dimensions = 0;
   module->walk([&](data::DimOp) { ++dimensions; });
   require(
@@ -274,7 +292,7 @@ int main() {
               fixture.emplace(braces, "zkc");
               roundTrip(*fixture, context);
             });
-  cases.run("explicit layout grammar reaches the same native contract",
+  cases.run("explicit layout retains metadata and ordered occurrences",
             [&] { roundTrip(Fixture(layout, "zkc-layout"), context); });
   auto test = [&](StringRef name,
                   function_ref<void(const Fixture &, mlir::ModuleOp)> change,
@@ -444,13 +462,52 @@ int main() {
                                         .oracleDefinition->admissibility.index];
          auto helper = mlir::SymbolTable(unit(m)).lookup<mlir::func::FuncOp>(
              formulaSymbol(p));
-         auto *conjunction =
-             helper.front().back().getOperand(0).getDefiningOp();
-         require(conjunction && conjunction->getNumOperands() == 2,
-                 "generated predicate did not retain its clause conjunction");
-         conjunction->setOperand(1, conjunction->getOperand(0));
+         auto conjunction = helper.front()
+                                .back()
+                                .getOperand(0)
+                                .getDefiningOp<mlir::arith::AndIOp>();
+         // Source bounds follow the authored conjunction in source order.
+         for (unsigned i = 0;
+              i < f.definition("Select").oracleDefinition->sourceBounds.size();
+              ++i) {
+           require(bool(conjunction), "missing source-bound conjunction");
+           conjunction =
+               conjunction.getLhs().getDefiningOp<mlir::arith::AndIOp>();
+         }
+         require(conjunction && conjunction.getLhs() != conjunction.getRhs(),
+                 "generated predicate lost its authored conjunction");
+         conjunction->setOperand(1, conjunction.getLhs());
          refreshPredicates(f, m);
        });
+  for (unsigned source = 0; source < 2; ++source)
+    test(("each declared source bound must remain an actual predicate "
+          "conjunct " +
+          Twine(source))
+             .str(),
+         [=](const Fixture &f, mlir::ModuleOp m) {
+           const auto &p =
+               f.entry
+                   .declarations()[f.definition("Select")
+                                       .oracleDefinition->admissibility.index];
+           auto helper = mlir::SymbolTable(unit(m)).lookup<mlir::func::FuncOp>(
+               formulaSymbol(p));
+           auto conjunction = helper.front()
+                                  .back()
+                                  .getOperand(0)
+                                  .getDefiningOp<mlir::arith::AndIOp>();
+           if (source == 0) {
+             require(bool(conjunction), "missing second source-bound conjunct");
+             conjunction =
+                 conjunction.getLhs().getDefiningOp<mlir::arith::AndIOp>();
+           }
+           require(
+               conjunction &&
+                   conjunction.getRhs().getDefiningOp<mlir::arith::OrIOp>() &&
+                   conjunction.getLhs() != conjunction.getRhs(),
+               "source bound has no distinct <= predicate conjunct");
+           conjunction->setOperand(1, conjunction.getLhs());
+           refreshPredicates(f, m);
+         });
   test("unused generated predicates cannot be omitted",
        [](const Fixture &f, mlir::ModuleOp m) {
          const auto &p =

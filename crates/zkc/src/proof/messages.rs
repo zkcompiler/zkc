@@ -52,11 +52,13 @@ impl<'a> MessageLayout<'a> {
         for row in event_rows {
             let row = list(row)?;
             let kind = text(row.first().ok_or("artifact-record")?)?;
+            let reconstructed = kind == "reconstructed-message";
+            let message = kind == "message" || reconstructed;
             let block = kind == "indices" || kind == "gated-indices";
             let gated = kind == "gated-indices";
             let query = block || kind == "query" || kind == "index";
             let arity = match kind {
-                "query" | "message" => 2,
+                "query" | "message" | "reconstructed-message" => 2,
                 "index" | "start" => 3,
                 "indices" => 4,
                 "gated-indices" => 5,
@@ -65,6 +67,16 @@ impl<'a> MessageLayout<'a> {
             if row.len() != arity {
                 return Err("artifact-record".into());
             }
+            if reconstructed && (suite.is_none() || !policy.construction.is_empty()) {
+                return Err("native-proof-reconstructed-profile".into());
+            }
+            let origin_kind = if query {
+                "query"
+            } else if message {
+                "message"
+            } else {
+                kind
+            };
             let bound = if block || kind == "index" {
                 Some(
                     logical::uniform_index_bound(text(&row[2])?)
@@ -116,18 +128,14 @@ impl<'a> MessageLayout<'a> {
             } else {
                 None
             };
-            let bytes = logical::native_origin_template(
-                &[origin.into()],
-                if query { "query" } else { kind },
-            )
-            .map_err(|e| e.to_string())?;
+            let bytes = logical::native_origin_template(&[origin.into()], origin_kind)
+                .map_err(|e| e.to_string())?;
             let record = logical::decode_tree(&bytes).map_err(|e| e.to_string())?;
             if record[1].as_str() != Some(entry) || !origins.insert(origin) {
                 return Err("native-proof-origin-map".into());
             }
-            let expanded_site =
-                zkc_runtime::vm::native_origin_site(origin, if query { "query" } else { kind })
-                    .map_err(|e| e.to_string())?;
+            let expanded_site = zkc_runtime::vm::native_origin_site(origin, origin_kind)
+                .map_err(|e| e.to_string())?;
             source_sites.insert(expanded_site.clone());
             if policy.format == super::ProofFormat::RawBytes
                 && policy.construction.is_empty()
@@ -213,9 +221,16 @@ impl<'a> MessageLayout<'a> {
                     wire_origins.push(origin);
                     witness_types.push((origin, LogicalType::parse("index").unwrap()));
                 }
-            } else if kind == "message" {
+            } else if message {
                 observed_messages += 1;
-                if record[4][4].as_str() == Some(producer)
+                if reconstructed {
+                    if record[4][4].as_str() != Some(validator)
+                        || record[4][5].as_str() != Some(producer)
+                        || pending_delivery.is_some()
+                    {
+                        return Err("native-proof-reconstructed-message".into());
+                    }
+                } else if record[4][4].as_str() == Some(producer)
                     && record[4][5].as_str() == Some(validator)
                 {
                     if pending_delivery.is_some() {
@@ -232,7 +247,7 @@ impl<'a> MessageLayout<'a> {
                     return Err("native-proof-message-origin".into());
                 }
             }
-            let payload = if kind == "message" {
+            let payload = if message {
                 Some(
                     messages
                         .get(origin)
@@ -247,13 +262,14 @@ impl<'a> MessageLayout<'a> {
                 "index" => "transcript.native.indexed.index",
                 "indices" => "transcript.native.indexed.indices",
                 "gated-indices" => "transcript.native.indexed.indices.gated",
-                "message" => "transcript.native.indexed.observe.data",
+                "message" | "reconstructed-message" => "transcript.native.indexed.observe.data",
                 "start" => "construction.start",
                 _ => unreachable!(),
             }
             .to_owned();
             if suite.is_some() || !policy.construction.is_empty() {
                 events.push(NativeTranscriptEvent {
+                    reconstructed,
                     contract,
                     origin: origin.into(),
                     payload,
@@ -462,11 +478,12 @@ mod tests {
                 vec![json!([query, "gate.draw", "index", "native.index/0"])]
             } else {
                 vec![]
-            }
+            },
+            r#"{"authentication":"per-query","format":"zkc.oracle-selection/0","order":"unrestricted","roots":{"entries":[],"kind":"exact"}}"#
         ])
     }
     fn check(value: &Json) -> Result<()> {
-        let descriptor = array(value, 8)?;
+        let descriptor = array(value, 9)?;
         let policy = DeploymentPolicy::read(&descriptor[1])?;
         MessageLayout::read(descriptor, &policy).map(|_| ())
     }

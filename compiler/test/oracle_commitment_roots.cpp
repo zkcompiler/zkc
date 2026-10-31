@@ -17,6 +17,9 @@ using namespace zkc;
 using namespace zkc::protocol;
 using namespace zkc::test;
 namespace {
+std::vector<OracleRootSelection> &exactRoots(OracleRealizationPolicy &policy) {
+  return std::get<std::vector<OracleRootSelection>>(policy.roots);
+}
 constexpr StringLiteral scheme =
     "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0";
 std::string source(bool input, bool fixed, bool query = false) {
@@ -212,7 +215,8 @@ int main(int argc, char **argv) {
         // The record cannot authorize a change to the requested scheme/layout.
         refused(checkOracleRealization(*prepared, *candidate.module, record));
         auto changed = policy;
-        changed.roots->front().realization.order = OracleLeafOrder::BitReversed;
+        exactRoots(changed).front().realization.order =
+            OracleLeafOrder::BitReversed;
         refused(checkOracleRealization(*prepared, *candidate.module, record,
                                        changed));
         changed = policy;
@@ -291,23 +295,23 @@ int main(int argc, char **argv) {
       });
       runCase(name + " exact selection coverage", [&] {
         auto bad = policy;
-        bad.roots->clear();
+        exactRoots(bad).clear();
         refuses(emitOracleRealization(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->push_back(root);
+        exactRoots(bad).push_back(root);
         refuses(emitOracleRealization(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().path[0] += 1;
+        exactRoots(bad).front().path[0] += 1;
         refuses(emitOracleRealization(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().entry = "missing";
+        exactRoots(bad).front().entry = "missing";
         refuses(emitOracleRealization(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().realization.scheme.clear();
+        exactRoots(bad).front().realization.scheme.clear();
         refuses(emitOracleRealization(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
@@ -315,28 +319,29 @@ int main(int argc, char **argv) {
         refuses(resolveOracleRealizationSelection(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().path.clear();
+        exactRoots(bad).front().path.clear();
         refuses(resolveOracleRealizationSelection(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().path.assign(65, 0);
+        exactRoots(bad).front().path.assign(65, 0);
         refuses(resolveOracleRealizationSelection(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().realization.grouping =
+        exactRoots(bad).front().realization.grouping =
             static_cast<OracleLeafGrouping>(99);
         refuses(resolveOracleRealizationSelection(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().realization.order = static_cast<OracleLeafOrder>(99);
+        exactRoots(bad).front().realization.order =
+            static_cast<OracleLeafOrder>(99);
         refuses(resolveOracleRealizationSelection(*prepared, bad),
                 "oracle-realization-selection");
         bad = policy;
-        bad.roots->front().realization.scheme =
+        exactRoots(bad).front().realization.scheme =
             "rows.merkle-poseidon2-16.koala-bear/0";
         refuses(emitOracleRealization(*prepared, bad), "oracle-storage-scheme");
         bad = policy;
-        bad.roots->resize(100001);
+        exactRoots(bad).resize(100001);
         refuses(resolveOracleRealizationSelection(*prepared, bad),
                 "oracle-realization-selection-limit");
       });
@@ -479,7 +484,7 @@ int main(int argc, char **argv) {
     auto candidate = take(emitOracleRealization(*prepared, policy));
     auto record =
         take(serializeOracleRealization(*prepared, candidate, policy));
-    std::reverse(policy.roots->begin(), policy.roots->end());
+    std::reverse(exactRoots(policy).begin(), exactRoots(policy).end());
     checked(
         checkOracleRealization(*prepared, *candidate.module, record, policy));
     require(take(serializeOracleRealization(*prepared, candidate, policy)) ==
@@ -589,7 +594,7 @@ int main(int argc, char **argv) {
       policy.order = OracleQueryOrder::AfterFinalDraw;
       policy.authentication = OracleAuthentication::AtomicBlocks;
       policy.roots = take(resolveOracleRealizationSelection(*prepared, policy));
-      for (auto &root : *policy.roots)
+      for (auto &root : exactRoots(policy))
         root.realization = {scheme.str(),
                             mode == "individual"
                                 ? OracleLeafGrouping::Individual

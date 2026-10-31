@@ -28,6 +28,7 @@
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
+#include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Refusal.h"
@@ -39,6 +40,7 @@
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringSet.h"
 #include <chrono>
+#include <iterator>
 #include <map>
 
 using namespace mlir;
@@ -1164,13 +1166,72 @@ OwningOpRef<ModuleOp> prepareProtocol(ModuleOp source, bool simplify,
 
 std::optional<PreparedProtocol>
 PreparedProtocol::prepare(ModuleOp source, MathematicalSelectionPolicy policy,
-                          RealizationTrace *trace) {
-  auto candidate = prepareSource(source, false, policy, {}, trace);
+                          RealizationTrace *trace,
+                          ArrayRef<ApplicationStart> starts) {
+  auto candidate = prepareSource(source, false, policy, starts, trace);
   if (!candidate)
     return std::nullopt;
   return PreparedProtocol(
       OwningOpRef<ModuleOp>(cast<ModuleOp>(source->clone())),
       std::move(candidate), policy);
+}
+
+LogicalResult PreparedProtocol::consumeConstruction(StringRef selected) {
+  if (!module || !original)
+    return failure();
+  auto refuse = [&](StringRef detail) {
+    return diagnostics::emit(module->emitError(), "protocol-construction",
+                             detail);
+  };
+  auto source =
+      cast<protocol_ir::ProtocolModuleOp>(original->getBody()->front());
+  auto prepared =
+      cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front());
+  auto sourceRecords =
+      source.getBody().front().getOps<protocol_ir::ConstructionOp>();
+  auto preparedRecords =
+      prepared.getBody().front().getOps<protocol_ir::ConstructionOp>();
+  if (selected.empty())
+    return sourceRecords.empty() && preparedRecords.empty()
+               ? success()
+               : refuse("construction declarations require a selection");
+
+  // Prepared applications are already flattened. Only the retained original
+  // can establish the selected child closure, role maps and event coverage.
+  SymbolTableCollection symbols;
+  auto root = dyn_cast_or_null<protocol_ir::ConstructionOp>(
+      SymbolTable::lookupSymbolIn(source, selected));
+  if (!root)
+    return refuse("selected construction is absent");
+  auto resolved = protocol::resolveConstructionPlan(root, symbols);
+  if (!resolved)
+    return refuse(toString(resolved.takeError()));
+  if (resolved->definitions.size() !=
+          size_t(std::distance(sourceRecords.begin(), sourceRecords.end())) ||
+      resolved->definitions.size() !=
+          size_t(std::distance(preparedRecords.begin(), preparedRecords.end())))
+    return refuse("selection must cover every construction declaration");
+
+  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module.get()->clone()));
+  auto unit =
+      cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
+  llvm::SmallDenseSet<Operation *, 8> checked;
+  for (auto definition : resolved->definitions) {
+    auto authored = dyn_cast_or_null<protocol_ir::ConstructionOp>(
+        SymbolTable::lookupSymbolIn(source, definition));
+    auto actual = dyn_cast_or_null<protocol_ir::ConstructionOp>(
+        SymbolTable::lookupSymbolIn(unit, definition));
+    if (!authored || !actual || !checked.insert(actual.getOperation()).second ||
+        !OperationEquivalence::isEquivalentTo(
+            authored, actual, OperationEquivalence::IgnoreLocations))
+      return refuse("prepared construction differs from the selected original");
+  }
+  for (Operation *record : checked)
+    record->erase();
+  if (failed(zkc::admitStage(*candidate)))
+    return failure();
+  module = std::move(candidate);
+  return success();
 }
 
 LogicalResult PreparedProtocol::selectEntries(ArrayRef<StringRef> entries) {
@@ -1196,13 +1257,15 @@ LogicalResult PreparedProtocol::selectEntries(ArrayRef<StringRef> entries) {
        unit.getBody().front().getOps<protocol_ir::MathematicalOp>())
     if (!roots.contains(program.getSymName()))
       omitted.push_back(program);
-  llvm::SmallDenseSet<Operation *, 8> omittedSet(omitted.begin(), omitted.end());
+  llvm::SmallDenseSet<Operation *, 8> omittedSet(omitted.begin(),
+                                                 omitted.end());
   for (Operation *program : omitted) {
     auto uses = SymbolTable::getSymbolUses(program, unit);
     if (!uses)
       return refuse();
     for (const auto &use : *uses) {
-      auto owner = use.getUser()->getParentOfType<protocol_ir::MathematicalOp>();
+      auto owner =
+          use.getUser()->getParentOfType<protocol_ir::MathematicalOp>();
       if (!owner || !omittedSet.contains(owner.getOperation()))
         return refuse();
     }

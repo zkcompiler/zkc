@@ -963,6 +963,14 @@
       "scalar": true
     },
     {
+      "domainKind": "Field",
+      "domainPoints": false,
+      "identity": "Select",
+      "name": "field.select",
+      "naturals": 0,
+      "scalar": false
+    },
+    {
       "domainKind": "Group",
       "domainPoints": false,
       "identity": "GroupIdentity",
@@ -1233,6 +1241,14 @@
       "name": "index.logical_shift_right",
       "naturals": 0,
       "scalar": false
+    },
+    {
+      "domainKind": "Index",
+      "domainPoints": false,
+      "identity": "Select",
+      "name": "index.select",
+      "naturals": 0,
+      "scalar": false
     }
   ],
   "members": [
@@ -1338,7 +1354,11 @@
   ],
   "operations": [
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "field_array.at",
       "parameters": {
         "maximum": 1,
@@ -1394,7 +1414,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "field_array.from_vector",
       "parameters": {
         "maximum": 0,
@@ -1450,7 +1474,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "field_array.get",
       "parameters": {
         "maximum": 0,
@@ -1510,7 +1538,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "fixed_vector.dot",
       "parameters": {
         "maximum": 0,
@@ -1580,7 +1612,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "fixed_vector.from_vector",
       "parameters": {
         "maximum": 0,
@@ -1646,6 +1682,9 @@
       "facets": [
         {
           "kind": "PublicReplay"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "fixed_vector.to_vector",
@@ -2354,7 +2393,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "multilinear.restrict_prefix",
       "parameters": {
         "maximum": 0,
@@ -2506,7 +2549,11 @@
       "stage": "CompilerGenerated"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.coset_evaluate_at",
       "parameters": {
         "maximum": 0,
@@ -2573,7 +2620,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.coset_evaluate_batch",
       "parameters": {
         "maximum": 0,
@@ -2638,7 +2689,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.coset_extend",
       "parameters": {
         "maximum": 0,
@@ -2709,7 +2764,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.opening_quotient_sum",
       "parameters": {
         "maximum": 0,
@@ -2798,7 +2857,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.table_arity",
       "parameters": {
         "maximum": 0,
@@ -4137,7 +4200,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "sequence.append",
       "parameters": {
         "maximum": 0,
@@ -4180,7 +4247,11 @@
       "stage": "Construction"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "sequence.at",
       "parameters": {
         "maximum": 0,
@@ -4221,7 +4292,11 @@
       "stage": "Construction"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "sequence.empty",
       "parameters": {
         "maximum": 0,
@@ -4254,7 +4329,11 @@
       "stage": "Construction"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "sequence.length",
       "parameters": {
         "maximum": 0,
@@ -4292,7 +4371,11 @@
       "stage": "Construction"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.find_last",
       "parameters": {
         "maximum": 0,
@@ -4343,7 +4426,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.transpose",
       "parameters": {
         "maximum": 0,
@@ -4845,6 +4932,9 @@
           "output": 0,
           "parameter": 0,
           "rule": "Constant"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "index.constant",
@@ -4868,7 +4958,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "index.add",
       "parameters": {
         "maximum": 0,
@@ -4899,7 +4993,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "index.sub",
       "parameters": {
         "maximum": 0,
@@ -4930,7 +5028,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "index.mul",
       "parameters": {
         "maximum": 0,
@@ -4968,6 +5070,9 @@
           "otherInput": 1,
           "output": 0,
           "rule": "Divide"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "index.div",
@@ -5000,7 +5105,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "index.mod",
       "parameters": {
         "maximum": 0,
@@ -5031,7 +5140,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "index.equal",
       "parameters": {
         "maximum": 0,
@@ -5062,7 +5175,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "index.less",
       "parameters": {
         "maximum": 0,
@@ -5093,7 +5210,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "indices.empty",
       "parameters": {
         "maximum": 0,
@@ -5115,7 +5236,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "indices.append",
       "parameters": {
         "maximum": 0,
@@ -5146,7 +5271,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "indices.at",
       "parameters": {
         "maximum": 0,
@@ -5177,7 +5306,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "indices.length",
       "parameters": {
         "maximum": 0,
@@ -5208,6 +5341,9 @@
         {
           "identity": "ContainerAt",
           "kind": "Mathematical"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "vector.get",
@@ -5260,7 +5396,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.slice",
       "parameters": {
         "maximum": 0,
@@ -5321,6 +5461,9 @@
           "kind": "DomainValue",
           "output": 0,
           "rule": "Length"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "vector.length",
@@ -5367,7 +5510,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.rotate",
       "parameters": {
         "maximum": 0,
@@ -5418,7 +5565,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.interleave",
       "parameters": {
         "maximum": 0,
@@ -5471,7 +5622,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.prefix_product",
       "parameters": {
         "maximum": 0,
@@ -5518,7 +5673,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.prefix_sum",
       "parameters": {
         "maximum": 0,
@@ -5565,7 +5724,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.inverse",
       "parameters": {
         "maximum": 0,
@@ -5612,7 +5775,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.embed",
       "parameters": {
         "maximum": 0,
@@ -5664,7 +5831,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.fill",
       "parameters": {
         "maximum": 0,
@@ -5715,7 +5886,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.geometric",
       "parameters": {
         "maximum": 0,
@@ -5766,7 +5941,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "field.from_index",
       "parameters": {
         "maximum": 0,
@@ -5811,7 +5990,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.coefficient_count",
       "parameters": {
         "maximum": 0,
@@ -5864,6 +6047,9 @@
           "sizeInput": 2,
           "sizeIsLength": false,
           "vectorOutput": 0
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "poly.coset_evaluate",
@@ -5930,6 +6116,9 @@
           "sizeInput": 0,
           "sizeIsLength": true,
           "vectorOutput": null
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "poly.coset_interpolate",
@@ -5992,6 +6181,9 @@
           "sizeInput": 1,
           "sizeIsLength": false,
           "vectorOutput": null
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "poly.domain_point",
@@ -6048,7 +6240,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.domain_root",
       "parameters": {
         "maximum": 0,
@@ -6101,6 +6297,9 @@
           "sizeInput": 1,
           "sizeIsLength": false,
           "vectorOutput": 0
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "poly.domain_points",
@@ -6161,6 +6360,9 @@
           "sizeInput": 0,
           "sizeIsLength": true,
           "vectorOutput": 0
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "poly.even_odd_fold",
@@ -6227,7 +6429,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.divide_opening",
       "parameters": {
         "maximum": 0,
@@ -6294,6 +6500,9 @@
           "sizeInput": 0,
           "sizeIsLength": true,
           "vectorOutput": 0
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "poly.opening_quotient",
@@ -6364,6 +6573,9 @@
         {
           "identity": "FieldSubtract",
           "kind": "Mathematical"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "field.sub",
@@ -6418,7 +6630,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "field.neg",
       "parameters": {
         "maximum": 0,
@@ -6465,7 +6681,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "field.inverse",
       "parameters": {
         "maximum": 0,
@@ -6512,7 +6732,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "field.embed",
       "parameters": {
         "maximum": 0,
@@ -6819,7 +7043,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.constant",
       "parameters": {
         "fieldTerm": 0,
@@ -6860,7 +7088,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.scatter_sum",
       "parameters": {
         "maximum": null,
@@ -6907,7 +7139,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.empty",
       "parameters": {
         "maximum": 0,
@@ -6947,7 +7183,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.append",
       "parameters": {
         "maximum": 0,
@@ -7000,7 +7240,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.splat",
       "parameters": {
         "maximum": 1,
@@ -7047,7 +7291,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.powers",
       "parameters": {
         "maximum": 1,
@@ -7094,7 +7342,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.add",
       "parameters": {
         "maximum": 0,
@@ -7147,7 +7399,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.sub",
       "parameters": {
         "maximum": 0,
@@ -7206,6 +7462,9 @@
           "kind": "Diagonal",
           "resultOutput": 0,
           "valuesInput": 1
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "vector.mul",
@@ -7265,6 +7524,9 @@
           "coefficientsInput": 0,
           "kind": "Contraction",
           "valuesInput": 1
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "vector.dot",
@@ -7319,7 +7581,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.concat",
       "parameters": {
         "maximum": 0,
@@ -7372,7 +7638,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.kronecker",
       "parameters": {
         "maximum": 0,
@@ -7425,7 +7695,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.matvec",
       "parameters": {
         "maximum": 3,
@@ -7478,7 +7752,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.scale",
       "parameters": {
         "maximum": 0,
@@ -7531,7 +7809,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.sum",
       "parameters": {
         "maximum": 0,
@@ -7578,7 +7860,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.split",
       "parameters": {
         "maximum": 0,
@@ -7631,7 +7917,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.at",
       "parameters": {
         "maximum": 1,
@@ -7678,7 +7968,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.length_check",
       "parameters": {
         "maximum": 1,
@@ -7723,7 +8017,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.gather",
       "parameters": {
         "maximum": null,
@@ -7770,7 +8068,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.from_point",
       "parameters": {
         "maximum": 0,
@@ -7817,7 +8119,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.from_table",
       "parameters": {
         "maximum": 0,
@@ -7864,7 +8170,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.to_point",
       "parameters": {
         "maximum": 0,
@@ -7911,7 +8221,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.to_table",
       "parameters": {
         "maximum": 0,
@@ -7958,7 +8272,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.equality_weights",
       "parameters": {
         "maximum": 0,
@@ -8005,7 +8323,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.from_coefficients",
       "parameters": {
         "maximum": 0,
@@ -8052,7 +8374,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.coefficients",
       "parameters": {
         "maximum": 0,
@@ -8099,7 +8425,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.degree_check",
       "parameters": {
         "maximum": 1,
@@ -8144,7 +8474,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.univariate_evaluate",
       "parameters": {
         "maximum": 0,
@@ -8197,7 +8531,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.univariate_boundary",
       "parameters": {
         "maximum": 0,
@@ -8844,6 +9182,9 @@
           "output": 0,
           "parameter": 0,
           "rule": "Constant"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "field.constant",
@@ -8893,6 +9234,9 @@
         },
         {
           "kind": "PublicReplay"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "field.add",
@@ -8961,6 +9305,9 @@
           "otherInput": 1,
           "output": 0,
           "rule": "Multiply"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "field.mul",
@@ -9018,6 +9365,9 @@
       "facets": [
         {
           "kind": "PublicReplay"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "field.equal",
@@ -9076,6 +9426,9 @@
         },
         {
           "kind": "Conjunction"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "bool.and",
@@ -9111,6 +9464,9 @@
       "facets": [
         {
           "kind": "PublicReplay"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "bool.not",
@@ -9142,6 +9498,9 @@
       "facets": [
         {
           "kind": "PublicReplay"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "bool.or",
@@ -9177,6 +9536,9 @@
       "facets": [
         {
           "kind": "AcceptanceGuard"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "control.require",
@@ -9200,7 +9562,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.product_sum",
       "parameters": {
         "maximum": 0,
@@ -9253,7 +9619,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.product_round",
       "parameters": {
         "maximum": 0,
@@ -9309,6 +9679,9 @@
       "facets": [
         {
           "kind": "PublicReplay"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "poly.boundary",
@@ -9360,6 +9733,9 @@
       "facets": [
         {
           "kind": "PublicReplay"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "poly.round_evaluate",
@@ -9414,7 +9790,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.fold",
       "parameters": {
         "maximum": 0,
@@ -9467,7 +9847,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "poly.evaluate",
       "parameters": {
         "maximum": 0,
@@ -9523,6 +9907,9 @@
       "facets": [
         {
           "kind": "PublicReplay"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "poly.empty_point",
@@ -9567,6 +9954,9 @@
       "facets": [
         {
           "kind": "PublicReplay"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "poly.append_point",
@@ -9745,7 +10135,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "oracle.check",
       "parameters": {
         "maximum": 0,
@@ -9819,7 +10213,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "commitments.empty",
       "parameters": {
         "maximum": 0,
@@ -9864,7 +10262,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "commitments.append",
       "parameters": {
         "maximum": 0,
@@ -9922,7 +10324,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "commitments.at",
       "parameters": {
         "maximum": 0,
@@ -9978,7 +10384,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "commitments.length",
       "parameters": {
         "maximum": 0,
@@ -11390,7 +11800,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.equal",
       "parameters": {
         "maximum": 0,
@@ -11441,7 +11855,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.product",
       "parameters": {
         "maximum": 0,
@@ -11537,7 +11955,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "bytes.append",
       "parameters": {
         "maximum": 0,
@@ -11568,7 +11990,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "bytes.concat",
       "parameters": {
         "maximum": 0,
@@ -11599,7 +12025,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "bytes.slice",
       "parameters": {
         "maximum": 0,
@@ -11634,7 +12064,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "bytes.at",
       "parameters": {
         "maximum": 0,
@@ -11665,7 +12099,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "bytes.length",
       "parameters": {
         "maximum": 0,
@@ -11692,7 +12130,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "bytes.equal",
       "parameters": {
         "maximum": 0,
@@ -11723,7 +12165,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "shake128.init",
       "parameters": {
         "maximum": 0,
@@ -11753,6 +12199,9 @@
         },
         {
           "kind": "SourceHistory"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "shake128.absorb",
@@ -11793,6 +12242,9 @@
         },
         {
           "kind": "SourceHistory"
+        },
+        {
+          "kind": "DeterministicData"
         }
       ],
       "name": "shake128.squeeze",
@@ -11829,7 +12281,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.field_be",
       "parameters": {
         "maximum": 0,
@@ -11867,7 +12323,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.field_from_be",
       "parameters": {
         "maximum": 0,
@@ -11909,7 +12369,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.field_reduce_be",
       "parameters": {
         "maximum": 0,
@@ -11947,7 +12411,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.group_compressed",
       "parameters": {
         "maximum": 0,
@@ -11985,7 +12453,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.group_from_compressed",
       "parameters": {
         "maximum": 0,
@@ -12254,7 +12726,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.field_le",
       "parameters": {
         "maximum": 0,
@@ -12292,7 +12768,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.field_from_le",
       "parameters": {
         "maximum": 0,
@@ -12334,7 +12814,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.field_reduce_le",
       "parameters": {
         "maximum": 0,
@@ -12372,7 +12856,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.group_decode_cofactor",
       "parameters": {
         "maximum": 0,
@@ -12414,7 +12902,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.cryptonote_map",
       "parameters": {
         "maximum": 0,
@@ -12452,7 +12944,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "hash.keccak256",
       "parameters": {
         "maximum": 0,
@@ -12479,7 +12975,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "bytes.repeat",
       "parameters": {
         "maximum": 0,
@@ -12510,7 +13010,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "bytes.join",
       "parameters": {
         "maximum": 0,
@@ -12545,7 +13049,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.fields_be",
       "parameters": {
         "maximum": 0,
@@ -12583,7 +13091,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.fields_le",
       "parameters": {
         "maximum": 0,
@@ -12621,7 +13133,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.groups_compressed",
       "parameters": {
         "maximum": 0,
@@ -12659,7 +13175,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.index_uleb128",
       "parameters": {
         "maximum": 0,
@@ -12686,7 +13206,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "hash.sha256",
       "parameters": {
         "maximum": 0,
@@ -12713,7 +13237,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.fields_from_be",
       "parameters": {
         "maximum": 0,
@@ -12755,7 +13283,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.fields_from_le",
       "parameters": {
         "maximum": 0,
@@ -12797,7 +13329,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.field_montgomery_le",
       "parameters": {
         "maximum": 0,
@@ -12835,7 +13371,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.field_from_montgomery_le",
       "parameters": {
         "maximum": 0,
@@ -12877,7 +13417,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.fields_montgomery_le",
       "parameters": {
         "maximum": 0,
@@ -12915,7 +13459,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "encoding.fields_from_montgomery_le",
       "parameters": {
         "maximum": 0,
@@ -12957,7 +13505,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.bit_reverse",
       "parameters": {
         "maximum": 0,
@@ -13004,7 +13556,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "vector.bit_reverse_rows",
       "parameters": {
         "maximum": 0,
@@ -13055,7 +13611,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "hash.poseidon2_16",
       "parameters": {
         "maximum": 0,
@@ -13170,7 +13730,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "oracle.check_many",
       "parameters": {
         "maximum": 0,
@@ -13250,7 +13814,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "bytes.empty",
       "parameters": {
         "maximum": 0,
@@ -13353,7 +13921,11 @@
       "stage": "Physical"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "index.wrapping_add",
       "parameters": {
         "maximum": 0,
@@ -13384,7 +13956,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "index.wrapping_sub",
       "parameters": {
         "maximum": 0,
@@ -13415,7 +13991,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "index.bit_and",
       "parameters": {
         "maximum": 0,
@@ -13446,7 +14026,11 @@
       "stage": "Source"
     },
     {
-      "facets": [],
+      "facets": [
+        {
+          "kind": "DeterministicData"
+        }
+      ],
       "name": "index.logical_shift_right",
       "parameters": {
         "maximum": 0,

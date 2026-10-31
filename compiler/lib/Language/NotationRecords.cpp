@@ -343,11 +343,14 @@ bool Checker::retainNotations() {
           !(expression.kind == Expression::Kind::Subscript &&
             indexedCalls.count(site(expression.span))))
         continue;
-      if (!expression.notation || !expression.scope)
+      if (!expression.notation)
         return types.fail("source.binding-witness",
-                          "notation occurrence has no checked scope",
+                          "notation occurrence has no descriptor",
                           expression.span);
-      auto scope = scopes[*expression.scope];
+      // Oracle requires clauses are authored outside the query body and use
+      // the defining module's notation environment.
+      auto scope = expression.scope ? scopes[*expression.scope]
+                                    : moduleScopes[declaration.module.index];
       if (!types.charge(expression.children.size() +
                             expression.notation->symbol.size() + 1,
                         expression.span))

@@ -141,8 +141,12 @@ Error verifyNativeDeployment(ModuleOp source, ModuleOp physical,
   auto actualDescriptor = encodeLogicalTree(out[2]);
   if (!actualDescriptor)
     return actualDescriptor.takeError();
+  auto oracleSelection =
+      protocol::encodeOracleRealizationPolicy(options.oracleRealization);
+  if (!oracleSelection)
+    return oracleSelection.takeError();
   auto *record = out[2].getAsArray();
-  if (!candidate || !record || record->size() != 8 ||
+  if (!candidate || !record || record->size() != 9 ||
       (*record)[0].getAsString() != "zkc.native-proof-descriptor/0" ||
       (*record)[1] != encodeNativeProofPolicy(policy) ||
       out[0].getAsString() != "zkc.native-proof/0" ||
@@ -160,7 +164,8 @@ Error verifyNativeDeployment(ModuleOp source, ModuleOp physical,
               options.mathematicalSelection.collectFoldFusion ? "true"
                                                               : "false",
               options.mathematicalSelection.calculationBatching ? "true"
-                                                                : "false"}) ||
+                                                                : "false",
+              printJson(*oracleSelection)}) ||
       !out[8].getAsArray() || *out[8].getAsArray() != wireSites)
     return error("native-deployment-correspondence");
   auto decoded = protocol::verifyProgramArtifact(physical, *candidate);

@@ -29,8 +29,7 @@ Error LayoutReader::oracleDefinitionBody(Id suite, SyntaxDeclaration &decl) {
   if (!parameter)
     return parameter.takeError();
   decl.oracleDefinition->queryParameter = std::move(*parameter);
-  // Root body index zero is always the query; predicate expression suites
-  // allocate their own nested bodies afterwards.
+  // Root body index zero is always the query.
   if (auto error = body(*querySuite, decl))
     return error;
   for (auto item : predicates) {
@@ -48,16 +47,10 @@ Error LayoutReader::oracleDefinitionBody(Id suite, SyntaxDeclaration &decl) {
     auto condition = [&]() -> Expected<uint32_t> {
       if (kind(nodes->back()) != K::Suite)
         return expression(nodes->back(), decl);
-      auto region = uint32_t(decl.bodies.size());
-      if (auto error = body(nodes->back(), decl, true))
-        return error;
-      Expression block;
-      block.kind = Expression::Kind::Block;
-      block.regions = {region};
-      block.span = span(nodes->back());
-      auto index = uint32_t(decl.expressions.size());
-      decl.expressions.push_back(std::move(block));
-      return index;
+      auto formula = parts(nodes->back(), 1, 1);
+      if (!formula)
+        return formula.takeError();
+      return expression(formula->front(), decl);
     }();
     if (!condition)
       return condition.takeError();

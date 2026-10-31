@@ -11,6 +11,8 @@ StringRef spelling(ObligationRole role) {
     return "postcondition";
   case ObligationRole::Request:
     return "request";
+  case ObligationRole::OracleAdmissibility:
+    return "oracle-admissibility";
   case ObligationRole::SourceCorrespondence:
     return "source-correspondence";
   case ObligationRole::ImplementationLaw:

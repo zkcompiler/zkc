@@ -7,10 +7,14 @@
 #include "zkc/Transforms/MathematicalSelection.h"
 #include "zkc/Transforms/OracleSelection.h"
 #include "llvm/Support/JSON.h"
+#include <memory>
 #include <optional>
 #include <variant>
 namespace zkc {
 class CompilationObservation;
+namespace mathematical {
+class RealizedProtocol;
+}
 /// Current deployment policy. The source remains independently owned.
 struct NativeProofPolicy {
   std::string entry, producer, validator, suite;
@@ -36,13 +40,16 @@ llvm::json::Value encodeNativeProofPolicy(const NativeProofPolicy &policy);
 llvm::Expected<NativeProofPolicy>
 selectNativeProofDraws(mlir::ModuleOp source,
                        const NativeProofPolicy &selection,
-                       MathematicalSelectionPolicy mathematicalSelection = {});
+                       MathematicalSelectionPolicy mathematicalSelection = {},
+                       const protocol::OracleRealizationPolicy &oracleSelection = {});
 struct NativeProofConstruction {
   mlir::OwningOpRef<mlir::ModuleOp> module;
   llvm::json::Value descriptor;
   /// Source message origin to lowered wire site; excluded from transcript
   /// roots.
   llvm::json::Array wireSites;
+  /// Retained private checked edge; snapshots do not grant construction authority.
+  std::shared_ptr<const mathematical::RealizedProtocol> realization;
 };
 /// Admit original source, prepare/project without simplification and construct
 /// role-local transcripts. No source IR is mutated and no cryptographic theorem
@@ -50,7 +57,8 @@ struct NativeProofConstruction {
 /// profile; a construction symbol selects its checked scoped handler plan.
 llvm::Expected<NativeProofConstruction>
 constructNativeProof(mlir::ModuleOp source, const NativeProofPolicy &policy,
-                     MathematicalSelectionPolicy mathematicalSelection = {});
+                     MathematicalSelectionPolicy mathematicalSelection = {},
+                       const protocol::OracleRealizationPolicy &oracleSelection = {});
 /// Independently check the supplied candidate against the projected source,
 /// then construct and compare the entire candidate, including SSA and retained
 /// records, ignoring locations. Source policy/occurrence admission remains a
@@ -58,7 +66,8 @@ constructNativeProof(mlir::ModuleOp source, const NativeProofPolicy &policy,
 llvm::Error
 checkNativeProof(mlir::ModuleOp source, mlir::ModuleOp candidate,
                  const NativeProofPolicy &policy,
-                 MathematicalSelectionPolicy mathematicalSelection = {});
+                 MathematicalSelectionPolicy mathematicalSelection = {},
+                       const protocol::OracleRealizationPolicy &oracleSelection = {});
 enum class ConstructedParticipantRole { Producer, Validator };
 /// Check the supplied candidate as `checkNativeProof` does, then export its
 /// explicitly selected policy role as a flat `zkc.constructed-participant/0`
@@ -74,7 +83,8 @@ llvm::Expected<llvm::json::Value> exportConstructedParticipant(
     mlir::ModuleOp source, mlir::ModuleOp candidate,
     llvm::StringRef sourceBytes, const NativeProofPolicy &policy,
     MathematicalSelectionPolicy mathematicalSelection = {},
-    ConstructedParticipantRole role = ConstructedParticipantRole::Validator);
+    ConstructedParticipantRole role = ConstructedParticipantRole::Validator,
+    const protocol::OracleRealizationPolicy &oracleSelection = {});
 /// Check once, then export both actual candidate participants in policy order
 /// as `["zkc.constructed-pair/0", producer, validator]`. Child records retain
 /// exactly the same source/candidate identities and full policy.
@@ -82,7 +92,8 @@ llvm::Expected<llvm::json::Value>
 exportConstructedPair(mlir::ModuleOp source, mlir::ModuleOp candidate,
                       llvm::StringRef sourceBytes,
                       const NativeProofPolicy &policy,
-                      MathematicalSelectionPolicy mathematicalSelection = {});
+                      MathematicalSelectionPolicy mathematicalSelection = {},
+                       const protocol::OracleRealizationPolicy &oracleSelection = {});
 /// Request service-based occurrence selection inside the owned compiler
 /// context. The policy fixes every choice except draws, which must be empty.
 struct NativeProofSelection {

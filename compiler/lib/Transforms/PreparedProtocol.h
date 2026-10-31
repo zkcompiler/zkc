@@ -2,7 +2,7 @@
 #define ZKC_TRANSFORMS_PREPARED_PROTOCOL_H
 
 #include "mlir/IR/BuiltinOps.h"
-#include "zkc/Transforms/MathematicalSelection.h"
+#include "zkc/Transforms/Mathematical.h"
 #include <optional>
 
 namespace zkc::mathematical {
@@ -27,7 +27,12 @@ class PreparedProtocol {
 public:
   static std::optional<PreparedProtocol>
   prepare(mlir::ModuleOp source, MathematicalSelectionPolicy policy = {},
-          RealizationTrace *trace = nullptr);
+          RealizationTrace *trace = nullptr,
+          llvm::ArrayRef<ApplicationStart> starts = {});
+  // Independently resolve the complete selected construction closure against
+  // the retained authored source. Consume only its unchanged prepared records
+  // after admitting a scratch copy. Failure leaves this owner unchanged.
+  mlir::LogicalResult consumeConstruction(llvm::StringRef selected);
   // Select explicit deployment roots after complete source admission and
   // checked expansion. Retain the full authored source. Other declarations
   // remain intact; any live reference to an omitted program is a refusal.

@@ -43,7 +43,7 @@ Expected<OracleTableRealization> readTable(const json::Object &object) {
   return table;
 }
 json::Object tableObject(const OracleTableRealization &table) {
-  return {{"scheme", table.scheme},
+  return json::Object{{"scheme", table.scheme},
           {"grouping", table.grouping == OracleLeafGrouping::Individual
                            ? "individual"
                            : "antipodal-pairs"},
@@ -147,7 +147,7 @@ encodeOracleRealizationPolicy(const OracleRealizationPolicy &policy) {
     return std::move(failure);
   json::Object roots;
   if (auto *uniform = std::get_if<OracleTableRealization>(&policy.roots)) {
-    roots = {{"kind", "uniform"}, {"table", tableObject(*uniform)}};
+    roots = json::Object{{"kind", "uniform"}, {"table", tableObject(*uniform)}};
   } else {
     auto exact = std::get<std::vector<OracleRootSelection>>(policy.roots);
     std::sort(exact.begin(), exact.end(), [](const auto &a, const auto &b) {
@@ -163,7 +163,7 @@ encodeOracleRealizationPolicy(const OracleRealizationPolicy &policy) {
       object["path"] = std::move(path);
       entries.push_back(std::move(object));
     }
-    roots = {{"kind", "exact"}, {"entries", std::move(entries)}};
+    roots = json::Object{{"kind", "exact"}, {"entries", std::move(entries)}};
   }
   json::Value result = json::Object{
       {"format", "zkc.oracle-selection/0"},

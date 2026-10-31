@@ -264,6 +264,7 @@ def project(catalog):
             base = "ZKC_" + k
             if k in (
                 "PublicReplay",
+                "DeterministicData",
                 "AcceptanceGuard",
                 "Conjunction",
                 "SourceHistory",

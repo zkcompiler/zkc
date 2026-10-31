@@ -3,6 +3,7 @@
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Inspection.h"
 #include "llvm/ADT/STLExtras.h"
+#include <set>
 using namespace llvm;
 using namespace zkc::language;
 using zkc::test::require;
@@ -211,6 +212,31 @@ pub oracle def Identity(source: Oracle<Fixed<F, 16>>) -> Oracle<Fixed<F, 16>>:
                 decl.body->mode == Body::Mode::Oracle && decl.body->inputs == 2,
             "layout oracle did not share checked semantics");
   });
+  cases.run("requires notation retains its defining module scope", [] {
+    auto project = take(check(R"(
+oracle def EqualRows(source:O,rows:index)->O {
+  requires shape: oracle.rows(source)==rows;
+  requires data: intrinsic<F>("vector.length",oracle.data(source))==rows;
+  query(position:index) {
+    let answer <- query source at position;
+    return answer;
+  }
+}
+)"));
+    const auto &decl = declarationNamed(project.declarations(), "m::EqualRows");
+    const auto &definition = *decl.oracleDefinition;
+    const auto &predicate =
+        project.declarations()[definition.admissibility.index];
+    require(definition.predicates.size() == 2 && predicate.body,
+            "module-scope notation dropped an authored requires clause");
+    unsigned equalities = 0;
+    for (const auto &operation : predicate.body->operations)
+      if (const auto *math = std::get_if<MathValue>(&operation.action);
+          math && math->identity == zkc::MathematicalIdentity::IndexEqual)
+        ++equalities;
+    require(equalities == 2,
+            "requires notation did not retain both exact equality operations");
+  });
   cases.run("helper result dependencies ignore unrelated answer operands", [] {
     auto project = take(check(R"(
 math fn ignore(answer:index,position:index)->index{return position;}
@@ -298,6 +324,17 @@ oracle def Bad(source:O)->O {query(position:index){
       refusesDefinition("oracle def Bad(source:I)->I {query(p:index){" +
                         body.str() + "}}");
   });
+  cases.run("query events require ordered roots and mathematics stays pure",
+            [] {
+              for (StringRef statement :
+                   {"let x = oracle.query(source,p);", "let x <- same(p,p);",
+                    "let x <- same(oracle.query(source,p),p);"})
+                zkc::test::refuses(
+                    check("oracle def Bad(source:I)->I {query(p:index){" +
+                          statement.str() +
+                          "let answer <- query source at p;return answer;}}"),
+                    "source.action");
+            });
   cases.run("shape attributes select exact constructor capture slots", [] {
     for (StringRef attributes :
          {"#[shape(source.rows,bound=16)]",
@@ -374,6 +411,52 @@ oracle def Pair(a:O,b:O)->O{query(p:index){let x <- query a at p;return x;}}
 )" + protocol.str());
       });
   cases.run(
+      "closure allocates fresh identities without treating inputs as roles",
+      [] {
+        auto project = take(check(std::string(bounded) + R"(
+#[shape(source.rows,bound=64)]
+#[shape(out.rows,bound=32)]
+protocol Run roles(V,W,P)(source:Oracle<Table<F>>@P->V,rows:index@(V,P))
+    ->(out:Oracle<Table<F>>@P->V) {
+  let first <- Bounded<F,32>(source,rows);
+  let second <- Bounded<F,16>(source,rows);
+  return(out=first);
+}
+)"));
+        auto closed = take(zkc::test::closeNativeRun(project, "m::Run"));
+        unsigned instances = 0;
+        std::set<unsigned> predicates;
+        for (const auto &operation : closed.root().body->operations)
+          if (const auto *construction =
+                  std::get_if<OracleInstantiation>(&operation.action)) {
+            require(construction->holder == 2 &&
+                        construction->receivers == std::vector<unsigned>{0},
+                    "closure remapped the custody roles as input indices");
+            const auto &decl =
+                closed.declarations()[construction->callee.index];
+            const auto &definition = *decl.oracleDefinition;
+            require(
+                decl.origin && decl.id.index != decl.origin->index &&
+                    definition.sourceBounds.front()
+                            .maximum.dimension.closedValue() ==
+                        (instances == 0 ? 32 : 16) &&
+                    predicates.insert(definition.admissibility.index).second,
+                "static instances reused an oracle or predicate ID");
+            const auto &predicate =
+                closed.declarations()[definition.admissibility.index];
+            require(predicate.oraclePredicateOwner &&
+                        predicate.oraclePredicateOwner->index ==
+                            decl.id.index &&
+                        decl.body->inputs == 3 &&
+                        !decl.body->values[2].oracleHolder,
+                    "closed predicate or role-free query ABI differs");
+            ++instances;
+          }
+        require(instances == 2, "closure lost an unused construction");
+        if (auto error = checkScopedSpecialization(closed))
+          throw std::runtime_error(toString(std::move(error)));
+      });
+  cases.run(
       "closed metadata and ordered query mutation cannot pass specialization",
       [] {
         for (unsigned mutation = 0; mutation < 3; ++mutation) {
@@ -413,6 +496,53 @@ protocol Run roles(P,V)(source:O@P->V)->(out:O@P->V){
           consumeError(std::move(error));
         }
       });
+  for (unsigned mutation = 0; mutation < 4; ++mutation) {
+    const char *names[] = {
+        "closed source bounds cannot be erased",
+        "closed shape captures cannot select a source",
+        "closed requires labels cannot be substituted",
+        "closed predicate owners must select the fresh oracle"};
+    cases.run(names[mutation], [=] {
+      auto project = take(check(std::string(bounded) + R"(
+#[shape(source.rows,bound=32)]
+#[shape(out.rows,bound=16)]
+protocol Run roles(P,V)(source:Oracle<Table<F>>@P->V,rows:index@(P,V))
+    ->(out:Oracle<Table<F>>@P->V) {
+  let out <- Bounded<F,16>(source,rows);
+  return(out=out);
+}
+)"));
+      auto closed = take(zkc::test::closeNativeRun(project, "m::Run"));
+      bool changed = false;
+      for (const auto &decl : closed.declarations()) {
+        if (!decl.origin || !decl.oracleDefinition || !decl.body)
+          continue;
+        auto &candidate = const_cast<Declaration &>(decl);
+        auto definition =
+            std::make_shared<OracleDefinition>(*decl.oracleDefinition);
+        if (mutation == 0)
+          definition->sourceBounds.clear();
+        else if (mutation == 1)
+          definition->resultShape.front().input = 0;
+        else if (mutation == 2)
+          definition->predicates.front().label = "substituted";
+        else {
+          auto &predicate = const_cast<Declaration &>(
+              closed.declarations()[definition->admissibility.index]);
+          predicate.oraclePredicateOwner = decl.origin;
+        }
+        candidate.oracleDefinition = std::move(definition);
+        changed = true;
+        break;
+      }
+      require(changed, "no closed generic oracle mutation target");
+      auto error = checkScopedSpecialization(closed);
+      require(bool(error), "closed oracle metadata mutation was accepted");
+      require(StringRef(toString(std::move(error)))
+                  .contains("source.oracle-specialization"),
+              "metadata mutation did not fail its exact checked boundary");
+    });
+  }
   cases.run(
       "dormant closed oracles remain emitted; open templates have no SSA", [] {
         auto project = take(check(std::string(identitySource) + R"(
