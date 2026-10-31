@@ -144,9 +144,10 @@ Lean source checker must check the same selection.
 
 The enumeration authorities above retain their definitions. This register does
 not create a second runtime registry or grant every registered mathematical
-operation to every target. The four-face catalog probe in the
-[foundation plan](../roadmap.md#catalog-and-mlir-foundation-probe) must account for
-frontend, ODS, native execution and the Lean installed vocabulary together.
+operation to every target. Catalog changes at the
+[foundation regression boundary](../roadmap.md#preserve-the-landed-foundation)
+account for frontend, ODS, native execution and independent Lean vocabulary
+consumers. Declaration agreement does not establish their semantic interpretation.
 
 The proposed standalone `zkc.lean-interface/0` is superseded by projections
 of existing Lean declarations, subjects and bound-request formats. The

@@ -162,9 +162,9 @@ measurements must name the selected realization and authentication policy.
 
 The [library tests](../../../common/tests/protocol/test_stark_library.py)
 cover generated recurrences, configuration columns, altered messages and public
-inputs, wrong openings, and dishonest trace/quotient claims. Their shared-FRI
-migration is under integration validation; prior specialized-FRI measurements
-and passing counts are not evidence for the new implementation. The `stark`
+inputs, wrong openings, and dishonest trace/quotient claims on the shared-FRI
+implementation. Prior specialized-FRI measurements are not performance evidence
+for the new implementation. The `stark`
 [benchmark family](../../../common/benchmarks/README.md) exercises the same AIR
 shapes. Current validation is recorded in [status](../../../docs/status.md).
 

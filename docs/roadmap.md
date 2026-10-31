@@ -50,13 +50,19 @@ consumers, specify concrete semantics/refusals, implement the complete unit,
 independently review it, validate and fix it, then revise the next unit against
 what actually landed. The completion criteria below belong inside those units.
 
-| Unit | Required outcome |
+| Unit | Current position and required outcome |
 |---|---|
-| Catalog and MLIR execution foundation | Publish shared schema changes at version `0`, measure the main baseline, select typed invocation and structured types, generate neutral catalog projections, migrate all affected native code and remove replaced routes in one PR |
-| Virtual batching and FRI | Build on the landed foundation and existing table/Merkle realization. Complete dynamic virtual query blocks, ordered domain/failure prefixes and the same-subject FRI client. Consume the specified checked index family and runtime-owned quartic Keccak; keep formal realization closure separately reported |
-| STARK compiler support | Use the installed native block/gate emission, witness codec slot and independent record consumption; add source proof configuration and exercise the common frontend FRI/STARK acceptance client under selected transcript/extension fields, realizations and layouts |
-| Represented execution | Canonical logical collection ownership across Data/Algebra, Residue and Codec semantics, private buffer contracts and admitted Arith/Vector/Bufferization lowering; compare native kernels and transparent schedules |
-| Constraints and semantic consumers | One assignment-level owner, source-to-encoding adequacy, lookup/multiset and chronological-memory consumers, exact statement/witness maps and actual commitment/terminal connections |
+| Catalog and MLIR execution foundation | Landed native baseline: typed invocation, structured types, shared catalog, explicit admission and one default route. Preserve its contract and invalidation controls |
+| Virtual batching and FRI | Landed supported native profile: shared interaction analyses, checked dynamic virtual query blocks and one logical FRI component used by maintained STARK callers. Formal realization closure remains separate |
+| STARK reduction and checked construction | Next PR: settle the caller's DEEP degree claim, expose source proof policy through the existing construction path, complete the selected native binding checks and exercise the quartic Keccak STARK client |
+| Represented execution | Next substantial PR: canonical logical collection ownership across Data/Algebra, represented modular arithmetic and codec semantics, private buffer contracts and admitted Arith/Vector/Bufferization lowering |
+| Constraints and semantic consumers | Following substantial PR: one assignment-level owner, source-to-encoding adequacy, lookup/multiset and chronological-memory consumers, exact statement/witness maps and actual commitment/terminal connections |
+
+The remaining units each contain their research, contract changes, implementation,
+review and final validation. Do not reopen the completed foundation or shared FRI
+as separate implementation projects. Preserve their restrictions: current dynamic
+discovery is answer-free, multi-holder routing is unsupported, and FRI refuses
+zero rounds. New profiles need their own specified observations and consumers.
 
 Extend compiler analyses with concrete consumers inside those units. The
 interaction view and participant-relative scalar observations now serve oracle
@@ -80,6 +86,48 @@ it must not change generic FRI's absolute strict-degree meaning. The octic and
 bundle callers already have explicit adjustments, with separate aggregate-bound
 limitations described in the [STARK library](../libraries/arguments/stark/README.md).
 
+### Next STARK and construction unit
+
+Proceed through these phases inside one PR:
+
+1. **Reduction and statement.** Fix the exact column, quotient and DEEP degree
+   bounds, public/witness layouts and challenge order before changing code.
+   Compare a caller-owned degree adjustment with a tighter FRI degree API;
+   prefer a caller-local solution if it establishes the intended bound without
+   weakening FRI or adding a second FRI implementation. Record coefficient,
+   cancellation and sampling assumptions. Execution controls do not prove the
+   resulting soundness bound.
+2. **Source policy and actual construction.** Carry the selected transcript,
+   block/gate parameters and witness framing from the frontend checked program
+   through construction and independent record consumption. Reuse the installed
+   block/grinding wire and kernels. An explicit native policy already supports
+   gates; source proof declarations and the STARK client still need that path.
+   Inspect actual binding, omission and authentication-before-use conditions for
+   supported ordinary, programmable and explicit-input profiles. Unsupported
+   interpretations must refuse the requested judgment, not inherit a native
+   hash-chain security claim.
+3. **Selected complete client.** Use KoalaBear with its quartic extension,
+   quartic Keccak rows and the selected direct quartic transcript. Preserve
+   field/basis, setup, row order, request length and actual final acceptance.
+   Keep the existing shared FRI realization matrix distinct from a complete
+   STARK realization claim. Exercise both gated and ungated source deployments.
+4. **Analysis and cost.** Measure the unchanged 256-row/100-query client and
+   growth in queries, nested repeats and reused helpers. Its native execution
+   now passes; this does not enlarge the separate public-coin report profile.
+   That profile currently selects at most 64 scalar draw/index sites on an
+   expanded entry, excludes block draws and refuses verifier-local calls.
+   Define the required structured judgment before extending it; reuse shared
+   interaction extraction with bounded summaries, checked substitutions and
+   invalidation. Do not solve a refusal by merely raising limits. Optimize
+   measured work inside the existing checked path; do not make represented execution or AOT
+   prerequisites for this PR.
+5. **Review and completion.** Include degree-boundary and cancellation controls,
+   wrong policy/root/setup, altered witness and codec slots, zero difficulty,
+   search exhaustion, request-window overlap and failed terminal checks. Run
+   the affected complete native matrix on the final base; report formal
+   interpretation and security closure independently. Remove superseded forms
+   and revise represented execution from the measured result.
+
 ### Shared interfaces before implementation
 
 Publish each cross-layer interface against landed sources, including its
@@ -98,13 +146,12 @@ these repository specifications, not another session's unlanded implementation:
 The [contract register](spec/contracts.md) owns this inventory and its current
 producer/consumer gaps. Frontend owns source spelling, companions and source-AST
 contracts; the checked program belongs to frontend, its lowering and the catalog
-to IR. Main `abe85f7a7` contains both prerequisites: the native Common-export
-retirement and the complete frontend redesign stack. The migration consumes
-that landed checked-program interface once. IR is the sole
-writer of compiler/catalog/generated registry structure during this unit.
-Lean remains the sole writer of `lean/`; the foundation neither edits it nor
-supplies patches or handoffs, fixes Lean failures, or runs Lean as a landing
-gate. Its later interpretation does not delay native migration.
+to IR. The foundation migration is complete. Subsequent shared changes use the
+landed interfaces and publish their producer/consumer changes together; the
+temporary foundation-wide ownership freeze is over. Lean remains the sole
+writer of `lean/`. These native units neither patch Lean nor use its pipeline
+as a landing gate. Its independent interpretation does not delay native work
+or become established by catalog generation.
 
 Restricted logical aggregates retain typed field paths, actual handles and role
 components for claim records. They require explicit native frontend/IR admission;
@@ -118,38 +165,26 @@ or still trusted. Regeneration checks consistency with a producer; it does not
 independently establish that producer's semantics. Do not report the complete
 source-to-bytes claim while one of its required formal links remains open.
 
-After the foundation lands, runtime resumes per-target installation, checked compound realization and native
-Merkle/grinding kernels. The compiler owns request layout, emitted behavior
+Runtime owns target installation, checked compound runtime realization and
+native Merkle/grinding kernels. Reuse the landed CPU installation and block/gate
+implementation. The compiler owns request layout, emitted behavior
 and propagation of the selected installation through its own choices and
 validation. Common target ingress stays before native resident handles; no
 separately published typed-program view is required. Generated shared files
 are regenerated from the agreed current schema.
 
-### Catalog and MLIR foundation probe
+### Preserve the landed foundation
 
-Milestone A runs against main, without reading another session's worktree as an
-integration base. Measure ordinary, numerical, oracle and repeated-helper
-clients. Prototype two scalar operations and an affine/resource operation with
-typed callable bindings, checked outcomes, symbol interfaces and target
-restrictions. Exercise wrong operands, signatures, roles, source paths and
-installation constraints. Scalar-only success is insufficient.
+Build each unit from landed main, not another session's worktree. Keep ordinary,
+numerical, oracle and repeated-helper clients in the regression boundary. Check
+typed invocation, structural admission and native execution separately, including
+resource operations and target restrictions. Generated signatures and the
+catalog's formal-consumer data do not prove mathematical laws.
 
-Use the existing checked u64 index vocabulary for the FRI-map family. Fix
-zero-size, overflow, bounds and pairing-order premises in the native contract;
-IR owns that decision. The catalog's formal-consumer face is data, with no Lean
-definition or law required by this milestone. Probe declaration agreement,
-MLIR formation and native execution independently. Generated signatures do not
-prove mathematical laws or establish a future semantic interpretation.
-
-Milestone B migrates structured types, declarations and invocation across all
-affected code outside `lean/`. Milestone C separates structural verification
-from explicit admission, adds correctly scoped analyses and conversion legality,
-and preserves source/application correspondence. Milestone D reviews and
-validates the complete native default route, installed SDK/CLI consumers,
-malformed inputs and mutation/invalidation controls. Remove all replaced
-wrappers and inner string-schema verification; leave no fallback route. Run
-one broad native validation at this boundary, repeating only after relevant
-changes or unresolved failures. Lean builds and formal pipelines are excluded.
+Retain checked u64 index semantics, including zero-size, overflow, bounds and
+pairing order. Preserve the absence of executable wrappers, inner string-schema
+verification and fallback readers. Re-admit changed subjects rather than
+extending an old completion receipt to a new program.
 
 Preserve the foundation's direct/textual/production parity as later units extend
 it. Its regression boundaries include fresh-context direct APIs, textual and
@@ -213,9 +248,10 @@ an obligation inventory or ignored verification result is insufficient. Keep the
 present proof-profile refusals until the relevant consumer interprets that link.
 
 The foundation preserves source/application associations and existing occurrence
-encodings. The virtual-batching unit consolidates the derived interaction analysis,
-including multiplicity, dependencies, role views and dynamic coordinates. Recheck
-the candidate schedule rather than persisting another authored protocol graph.
+encodings. Shared interaction analyses now derive source structure for scheduling,
+capacity and source associations. Keep multiplicity, dependencies, role views
+and dynamic coordinates distinct. Recheck the candidate schedule rather than
+persisting another authored protocol graph.
 Physical opening reuse does not remove logical queries, charges or failures.
 
 Fix the exact statement/root/witness encodings, frame order, occurrence/domain
@@ -234,23 +270,22 @@ Interned identities keep exact readback and unchanged transcript bytes. Proposal
 remain outside semantic bodies, bound to the original and actual candidate, and
 require independent validation before they support a correspondence claim.
 
-**MLIR execution foundation.** Main-only probes select typed callable bindings
-and one ordered invocation, structural types and explicit admission. Compiler
+**MLIR execution foundation.** Preserve typed callable bindings, one ordered
+invocation, structural types and explicit admission. Compiler
 analyses inspect actual SSA and control, with dependency-aware invalidation at
 the enclosing isolated scope. The catalog describes typed contracts; selected
 consumer profiles and independent meanings remain distinct responsibilities.
 Review profile membership, unsupported operations and payload schemas before
-replacing hardcoded export selection. Publish each schema change before its
-producer/reader migration. Remove the executable wrappers and string-schema
-verification; this precedes represented execution.
+extending a consumer. Publish each schema change before its producer/reader
+migration. Preserve the single typed route without executable wrappers or inner
+string-schema verification as represented execution develops.
 
-**STARK support.** First resolve FRI reuse at the logical protocol boundary.
-Compare a common commit/query component with explicit first-layer claim and
-opening-layout contracts against the existing specialized STARK path. Require
-authentication, query alignment, transcript order and DEEP binding to survive;
-sharing only a fold function is insufficient. Select one shared implementation
-when those obligations and costs are satisfied, while keeping realization
-layouts explicit. The formal flagship target is the realized compiled verifier;
+**STARK support.** Retain the shared FRI commit/query component and its explicit
+first-layer association and final-degree conditions. Authentication, query
+alignment, transcript order and DEEP binding must survive each extension;
+realization layouts stay explicit. Do not restore specialized FRI packets or
+treat a successful FRI check as the caller's complete degree argument.
+The formal flagship target is the realized compiled verifier;
 native compilation still reaches bytes and execution. Fiat–Shamir and commitment
 realization require their full independent Lean checks. Neither formal STARK
 operation lowering nor a formal byte reader is a gate for these IR units.
@@ -261,9 +296,9 @@ extension basis, row/leaf ordering, public layout, block draws and actual
 acceptance dependence. Exercise one oracle-level argument under ideal,
 Poseidon2-Merkle and Keccak-Merkle realizations with different supported leaf
 layouts without changing protocol logic. Include virtual dependencies,
-repeated queries, zero rounds, wrong-root/setup failures, use before
-authentication and first-stop behavior. Existing kernels are dependencies,
-not duplicate compiler implementations.
+repeated queries, explicit zero-round refusal, wrong-root/setup failures, use
+before authentication and the declared stop observation. Existing kernels are
+dependencies, not duplicate compiler implementations.
 
 **Represented execution.** Start with a migration inventory: current owner,
 final owner, types/operations/schemas, source/formal/runtime consumers and
@@ -314,9 +349,11 @@ complete representative assets, preserving unsupported predicates as opaque.
   codecs and final validation. Candidate preference never grants installation
   authority. The runtime package owns installation; the compiler integration
   belongs with that package and is rechecked by represented execution.
-- Run affected checks during iteration and broad relevant native/formal checks
-  at landing. Record evidence scope and the revision, remove replaced owners
-  and compatibility readers, then update support and the next unit's premises.
+- Run affected checks during iteration and broad relevant native checks at
+  landing. Formal owners validate their independent consumers separately; that
+  work is not an IR landing gate. Record evidence scope and the revision,
+  remove replaced owners and compatibility readers, then update support and
+  the next unit's premises.
   Compare compile/check time, artifact size, memory and execution on matched
   workloads; passing integration tests supply no cryptographic or speedup claim.
 

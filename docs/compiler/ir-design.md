@@ -266,6 +266,18 @@ Three additional semantic owners have concrete prospective consumers:
   wire and recursive-verification consumers. Runtime still implements the
   independently installed physical codecs.
 
+These are ownership decisions; a new dialect namespace requires an actual
+operation set and checked consumers. Decide the Residue/Codec split with the
+represented-execution migration, rather than keeping duplicate meaning merely
+to match a planned dialect list. Ordinary collection shape converges on Data;
+nominal polynomial domains and bases remain Poly responsibilities.
+
+Delivery order does not impose representation order. Constraints consume exact
+logical assignments and relation assets before information-erasing physical
+lowering even though their migration follows represented execution. Review this
+ingress with the STARK unit now so later encodings do not reconstruct their
+statement or witness map from emitted machine programs.
+
 Construction-specific encoding contracts are fixed when their first consumer
 lands, including statement/root binding, witness framing and request/state
 semantics. Later Codec ownership consolidates those exact meanings with their
