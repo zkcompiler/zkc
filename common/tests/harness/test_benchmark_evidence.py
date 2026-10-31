@@ -1,4 +1,4 @@
-"""Mutations of retained current-worker evidence; no project binaries or file reads."""
+"""Retained worker payloads in synthetic envelopes; no authentication claims."""
 from copy import deepcopy
 import importlib
 import json
@@ -11,18 +11,33 @@ import pytest
 def evidence(monkeypatch):
     root = Path(__file__).resolve().parents[3]
     monkeypatch.syspath_prepend(str(root/'common/benchmarks'))
-    return (importlib.import_module('bench.results'), importlib.import_module('bench.io'),
-            json.loads((Path(__file__).parent/'fixtures/benchmark-evidence.json').read_text()))
+    fixtures = json.loads((Path(__file__).parent/'fixtures/benchmark-evidence.json').read_text())
+    # The retained ingress envelope predates recorded oracle policy. Reuse its
+    # worker payloads for structural checks under a neutral synthetic case name;
+    # do not reinterpret the archived package or publish it as STARK evidence.
+    for row in [*fixtures['ingress']['matrix'], *fixtures['ingress']['results']]:
+        if row['case'].startswith('stark-'):
+            row['case'] = 'worker-host-control'
+    return importlib.import_module('bench.results'), importlib.import_module('bench.io'), fixtures
 
 
 @pytest.mark.parametrize('name', ['ingress', 'reference'])
-def test_current_producer_evidence_needs_no_files(evidence, monkeypatch, name):
+def test_worker_envelope_evidence_needs_no_files(evidence, monkeypatch, name):
     results, _, fixtures = evidence
     # Neither saved report nor compare may open the archived input/proof paths.
     monkeypatch.setattr(Path, 'open', lambda *a, **kw: pytest.fail('structural validation opened a file'))
     document = fixtures[name]
     assert all(row['status'] == 'passed' for row in results.summarize(document))
     assert len(results.compare(document, document)['ratios']) == len(document['matrix'])
+
+
+def test_archived_stark_envelope_without_policy_is_not_publishable(evidence):
+    results, io, _ = evidence
+    original = json.loads((Path(__file__).parent/'fixtures/benchmark-evidence.json').read_text())['ingress']
+    with pytest.raises(io.MeasurementError, match='oracle workload contract'):
+        results.summarize(original)
+    with pytest.raises(io.MeasurementError, match='oracle workload contract'):
+        results.compare(original, original)
 
 
 @pytest.mark.parametrize('name', ['ingress', 'reference'])

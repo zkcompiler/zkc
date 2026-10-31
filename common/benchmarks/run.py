@@ -10,7 +10,7 @@ from bench.io import Journal, MeasurementBusy, MeasurementError, ROOT, executabl
 from bench.results import compare, publish, validate_manifest
 from bench.runner import run
 from bench.suites import catalog, prepare
-from bench.configuration import flags
+from bench.configuration import flags, validate_candidate
 from bench.environment import cpu_list
 
 
@@ -130,6 +130,7 @@ def main(argv=None):
                 candidate.output = args.output/'candidates'/name
                 candidate.label = name
                 candidate.configuration = report['settings']
+                validate_candidate(candidate.configuration)
                 candidate.compiler_option = flags(report['settings']['values'])
                 requests.append({'profile':name,'settings':report['settings'],
                     'request_report':str(directory),'result':str(candidate.output/'manifest.json')})

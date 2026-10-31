@@ -4,6 +4,7 @@ from copy import deepcopy
 from typing import Callable
 
 from . import algebra as a
+from .oracle_policy import OraclePolicy
 
 
 @dataclass
@@ -20,6 +21,8 @@ class Program:
     mutate_proof: Callable[[bytes], bytes] | None = None
     oracle: str = 'independent Python arithmetic; expected result checked on every call'
     support: tuple = ()
+    oracle_policy: OraclePolicy = field(default_factory=OraclePolicy)
+    invalid_witness_stop: tuple[str, str] | None = None
 
 
 def increment_first(values, name, modulus, *, empty_value='1'):

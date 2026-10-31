@@ -227,8 +227,10 @@ def prepare(args):
                 write_json(directory/filename, value)
                 statement[key] = filename
             statements.append(statement)
-        write_json(directory/'fixture.json', {'oracle': program.oracle, 'providers': providers, 'entry': program.entry})
+        write_json(directory/'fixture.json', {'oracle': program.oracle, 'providers': providers, 'entry': program.entry,
+                                             'oracle_realization': program.oracle_policy.record()})
         candidate = {'name': name, 'directory': str(directory), 'providers': providers,
+                     'oracle_realization': program.oracle_policy.record(),
                      'statements': statements, 'options': {'allow_authored': 'construction authored' in program.source}}
         if name == 'setup-key-proof':
             material = args.setup_material.resolve()

@@ -192,7 +192,51 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 
 The [source catalog](bench/coverage.py) records exact dimensions, operation mix,
 category and limitations. Each run also records its oracle, input identities and
-generated source/asset digests.
+generated source/asset digests, plus an explicit physical oracle policy.
+
+### Physical FRI realization
+
+Logical FRI does not select authentication. The benchmark workload selects it
+independently of the six Boolean optimization controls and named candidate
+profiles. FRI, octic AIR and machine workloads use
+`rows.merkle-keccak256.koala-bear.ext8-binomial3/0`. Configurable single-table
+workloads retain their existing outer configuration and use FRI Poseidon2
+commitments on `koala-bear.ext4-binomial3` (width 16),
+`baby-bear.ext4-binomial11` (width 16), or `goldilocks.ext2-binomial7` (width 8).
+Transcript suites, concrete outer commitments and input shapes are unchanged.
+
+Every profile selects uniform roots, individual leaves, natural table order,
+unrestricted query order and per-query authentication. This choice does not
+claim atomic authentication, paired leaves, a cryptographic improvement or a
+throughput improvement. The default for other generated workloads is explicit
+`clear-table`; concrete source commitments keep their authored schemes.
+
+`zkc.benchmark-oracle-policy/0` has exactly `format`, `profile` and `selection`.
+The profile is one of `clear-table`, `fri-keccak256-koala-bear-octic`,
+`fri-poseidon2-16-koala-bear-quartic`, `fri-poseidon2-16-baby-bear-quartic`,
+or `fri-poseidon2-8-goldilocks-quadratic`. `selection` is the exact
+[`zkc.oracle-selection/0`](../../docs/spec/formats/oracle-realization.md#requested-selection)
+request, with all fields present. Unknown fields and profile/selection mismatch
+refuse. There is one current schema; old evidence without this policy is not
+authenticated FRI benchmark evidence.
+
+For generated source workloads, `zkc.benchmark/0` contracts and compilation
+receipts carry mandatory `oracle_realization` policy records. Each receipt
+retains `published_options`, including the mandatory `oracle_realization`
+selection alongside the six Boolean options. Compilation and saved publication
+check the independently requested policy against these published options,
+and check the workload family and value field against the policy. Named
+optimization candidates retain current project settings (`profile`, `values`,
+`origins`, `oracle_realization`); the six values and their flags stay unchanged.
+Their project selection must be the default because workload policies select
+authentication. A nondefault semantic candidate refuses before measurements.
+
+Browser fixture generation uses the same typed policy. Each
+`zkc.browser-cases/0` candidate requires `oracle_realization`; captured browser
+cases retain this record and the package's `published_options`. Browser
+admission and saved publication recheck both. A package pin alone does not
+establish that a FRI fixture selected authentication.
+
 The two total finite forms use one explicit `math fn`, so collect and fold share
 a numerical unit. Ordinary function calls can introduce separate ordered units;
 collect–fold composition does not cross those boundaries.
@@ -632,9 +676,18 @@ successful benchmark calls rather than failure profiles.
 External comparisons cross-verify both directions and check deterministic proof
 identity or randomized proof uniqueness. Source proofs use same-stack verification
 and separate format, changed-statement and semantic controls. Semantic controls
-use an invalid witness under the same public statement (FRI/transcript), a
-canonical claim mutation (AIR/machine), or a canonical response mutation (BP+). The FRI control evaluates a polynomial one degree beyond the allowed bound.
-Each refusal is tested in a fresh Entry and after one valid call
+use an invalid transcript witness under the same public statement, a
+canonical claim mutation (AIR/machine), or a canonical response mutation (BP+).
+The FRI control evaluates the first disallowed degree. The honest prover must
+refuse with `artifact-stopped:Explicit("reject")`, an explicit rejection by role P at the retained
+`fri::padded` function origin, and no proof file. Its source workload contract
+records this precise prover outcome; arbitrary failure cannot satisfy the gate.
+Its `semantic_control` has exactly `stage`, `code`, `role`, `source_function`
+and `proof_published`. The matching successful check carries those fields plus
+`function` (the generated function resolved from the retained source origin)
+and `report` (the invocation receipt path). Generated symbols and paths remain
+in checks so identical workload contracts compare across output directories.
+Verifier refusal controls are tested in a fresh Entry and after one valid call
 in the same Entry. Changing-input schedules also test a swapped proof. Every timed verifier
 must accept; every produced proof, including warmups, is retained and validated.
 Run programs must return a typed `accepted = true`; every source Run control also

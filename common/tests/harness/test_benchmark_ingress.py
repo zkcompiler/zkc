@@ -269,7 +269,7 @@ def test_proof_jobs_and_existing_correctness_controls_share_the_selector(modules
                            preparation_entries=None, preparation_bytes=None, execution_counts=False)
     files = [{'public': f'public-{i}', 'witness': f'witness-{i}'} for i in range(2)]
     base = {'package': 'same-package', 'sha256': 'same-pin', 'ingress': policy}
-    program = SimpleNamespace(changed={'statement': 'changed'}, invalid_witness=None,
+    program = SimpleNamespace(invalid_witness_stop=None, changed={'statement': 'changed'}, invalid_witness=None,
                               mutate_proof=lambda proof: proof+b'changed')
     capture = modules['runner'].Capture(tmp_path/'capture')
     jobs, check = execution.proof_jobs(args, capture, tmp_path, 'same-case', base, files, program, 'zkc.framed/0')
@@ -307,7 +307,8 @@ def test_run_case_and_incorrect_result_gate_keep_identity_and_ingress(modules, m
 
     monkeypatch.setattr(execution, 'Journal', Journal)
     program = SimpleNamespace(proof=False, inputs=[{'P': {'expected': True}}], assets={},
-                              incorrect={'P': {'expected': False}}, source='same source', oracle='same oracle')
+                              incorrect={'P': {'expected': False}}, source='same source', oracle='same oracle',
+                              oracle_policy=importlib.import_module('bench.oracle_policy').OraclePolicy())
     case = SimpleNamespace(identifier='same-case', name='same', category='control', shape={}, mix={},
                            limitation='bounded', generate=lambda *args, **kwargs: program)
     args = SimpleNamespace(source=ROOT, worker=tmp_path/'worker', ingress=policy, timeout=5, execution_counts=False)

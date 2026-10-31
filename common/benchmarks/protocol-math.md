@@ -87,6 +87,20 @@ polynomial evaluation in the documented Ext8 field. AIR/STARK and machine inputs
 come from their example preparation scripts. Baseline and current public/witness
 documents must agree before measurements start.
 
+Every case records the `fri-keccak256-koala-bear-octic` physical profile using
+`zkc.benchmark-oracle-policy/0` (exactly `format`, `profile`, `selection`).
+The exact `zkc.oracle-selection/0` request selects uniform
+`rows.merkle-keccak256.koala-bear.ext8-binomial3/0`, individual leaves, natural
+table order, unrestricted query order and per-query authentication. This is
+passed to executable package compilation, including interactive storage;
+source-only `language-emit` receives no realization option. Package production
+and saved summary publication check all seven compiler options, including the
+mandatory `oracle_realization`, against the requested case and optimization
+policy. Each successful trial saves the physical policy and `published_options`;
+old records without these fields refuse. There is no fallback to clear tables.
+Outer configuration modules, transcript suites and concrete commitments remain
+as authored. These profiles establish no new security or performance comparison.
+
 These are bounded implementation profiles. The 1,024-point cases add a larger
 evaluation domain; they do not constitute a scaling study. The imported recurrence's height remains eight; changing its
 evaluation domain does not create a larger AIR. Machine shapes exercise both
