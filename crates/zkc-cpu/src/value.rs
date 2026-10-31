@@ -7,6 +7,10 @@ use zkc_runtime::vm::{
     Backing, Identity, LogicalType, PhysicalType, Representation, Type, Value as RuntimeValue,
 };
 
+/// Conservative storage for every CPU value slot, including inactive variants.
+pub const VALUE_SLOT_BYTES: usize = 256;
+const _: () = assert!(std::mem::size_of::<Value>() <= VALUE_SLOT_BYTES);
+
 /// Explicit per-value, numerical-call, transport and service-store ceilings.
 /// PCS temporary allocation is bounded indirectly by rank, not reserved here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -190,7 +194,8 @@ value_inventory! {
     Bn254G1(crate::Bn254G1),
     Bn254G1Vector(crate::Buffer<crate::Bn254G1>),
     Bn254G2(crate::Bn254G2),
-    Bn254Gt(crate::Bn254Gt),
+    /// Shared target group keeps the universal value slot bounded.
+    Bn254Gt(Arc<crate::Bn254Gt>),
     Bn254G2Vector(crate::Buffer<crate::Bn254G2>),
     Bls12381G2(crate::Bls12381G2),
     Bls12381G2Vector(crate::Buffer<crate::Bls12381G2>),
@@ -297,6 +302,28 @@ value_inventory! {
 }
 
 impl Value {
+    /// Complete immutable target backing, including wrapper and Arc allowance.
+    pub(crate) const fn bn254_gt_retained_bytes() -> usize {
+        VALUE_SLOT_BYTES + std::mem::size_of::<crate::Bn254Gt>()
+    }
+
+    /// Fixed leaf profiles; shared large group payloads have separate storage.
+    pub(crate) fn fixed_retained_bytes(ty: &PhysicalType) -> usize {
+        match (ty.kind(), ty.logical().identity()) {
+            (Type::Group, Identity::Bn254Gt) => Self::bn254_gt_retained_bytes(),
+            (Type::Group, Identity::Bls12381Gt) => 1024,
+            (Type::Group, Identity::Bn254G2 | Identity::Bls12381G2)
+                if crate::operations::resident::is_resident(ty) =>
+            {
+                512
+            }
+            (Type::Field | Type::Round | Type::Bool | Type::Index | Type::Group, _) => {
+                VALUE_SLOT_BYTES
+            }
+            (Type::Shake128State, _) => crate::hash::Shake128State::RETAINED_BYTES,
+            _ => 512,
+        }
+    }
     /// Conservative retained charge for an RNG, nonce or transcript handle.
     /// Host planners use this before issuing a capability.
     pub const fn capability_retained_bytes() -> usize {
@@ -870,8 +897,9 @@ impl Value {
                         (64, std::mem::size_of::<kernel::G2Element>())
                     }
                     _ => {
-                        policy.output(512, usize::MAX)?;
-                        return Ok(512);
+                        let bytes = Self::fixed_retained_bytes(&ty);
+                        policy.output(bytes, usize::MAX)?;
+                        return Ok(bytes);
                     }
                 }
             } else {
@@ -882,8 +910,9 @@ impl Value {
                     }
                     Type::Groups => (96, std::mem::size_of::<zkc_kernels::blst::bls12_381::G2>()),
                     _ => {
-                        policy.output(512, usize::MAX)?;
-                        return Ok(512);
+                        let bytes = Self::fixed_retained_bytes(&ty);
+                        policy.output(bytes, usize::MAX)?;
+                        return Ok(bytes);
                     }
                 }
             };
@@ -891,11 +920,11 @@ impl Value {
             policy.output(bytes, usize::MAX)?;
             return Ok(bytes);
         }
-        if ty.kind() == Type::Group && ty.logical().identity() == Identity::Bls12381Gt {
-            // Twelve 48-byte coefficients exceed the 512-byte fixed leaf charge.
+        if ty.kind() == Type::Group {
             policy.wire(wire_len)?;
-            policy.output(1024, usize::MAX)?;
-            return Ok(1024);
+            let bytes = Self::fixed_retained_bytes(&ty);
+            policy.output(bytes, usize::MAX)?;
+            return Ok(bytes);
         }
         if ty.kind() == Type::Groups
             && matches!(
@@ -931,7 +960,7 @@ impl Value {
                     size(wire_len / (width + 8), entry)?
                 }
                 Type::Vector | Type::Polynomial => size(wire_len / width, width)?,
-                _ => 512,
+                _ => VALUE_SLOT_BYTES,
             };
             policy.output(bytes, usize::MAX)?;
             return Ok(bytes);
@@ -1014,6 +1043,7 @@ impl Value {
             Self::Bn254G1Vector(v) => v.backing(bytes),
             Self::Bn254G2Vector(v) => v.backing(bytes),
             Self::Bls12381G2Vector(v) => v.backing(bytes),
+            Self::Bn254Gt(v) => Backing::of(v, bytes),
             Self::Bls12381Gt(v) => Backing::of(v, bytes),
             Self::Indices(v) => v.backing(bytes),
             Self::Bytes(v) => Backing::of(v, bytes),
@@ -1049,7 +1079,6 @@ impl Value {
             | Self::Bn254Field(_)
             | Self::Bn254Round(_)
             | Self::Bn254G1(_)
-            | Self::Bn254Gt(_)
             | Self::Bn254G2(_)
             | Self::Bls12381G2(_)
             | Self::OracleRoot(..)
@@ -1322,6 +1351,10 @@ impl RuntimeValue for Value {
         }
     }
 
+    fn control_allocation_bound() -> usize {
+        VALUE_SLOT_BYTES
+    }
+
     fn pack_variant(ty: PhysicalType, alternative: usize, payload: Vec<Self>) -> Result<Self> {
         Ok(Self::Variant(crate::variant::Variant::new(
             ty,
@@ -1342,7 +1375,7 @@ impl RuntimeValue for Value {
             .and_then(|bytes| crate::variant::Variant::storage_bytes(ty, length, bytes))
             .and_then(|bytes| {
                 length
-                    .checked_mul(512)
+                    .checked_mul(VALUE_SLOT_BYTES)
                     .and_then(|overlap| bytes.checked_add(overlap))
             })
             .unwrap_or(usize::MAX)
@@ -1556,7 +1589,7 @@ impl RuntimeValue for Value {
             Self::FixedVector(v) => v.retained_bytes(),
             Self::Variant(v) => Ok(v.retained_bytes()),
             Self::ResourceUnit(_) => Ok(512),
-            Self::OracleRoot(..) => Ok(512),
+            Self::OracleRoot(..) => Ok(VALUE_SLOT_BYTES),
             Self::OraclePath(_, p) | Self::OracleRoots(_, p) => size(p.len(), 32),
             Self::OracleState(s) => s.retained_bytes(),
             Self::OracleStates(_, states) => crate::oracle::states_bytes(states),
@@ -1601,8 +1634,10 @@ impl RuntimeValue for Value {
                 v.storage_capacity(),
                 std::mem::size_of::<crate::Bls12381G2>(),
             ),
-            // Twelve 48-byte base-field coefficients exceed the 512-byte leaf charge.
+            Self::Bn254Gt(_) => Ok(Self::bn254_gt_retained_bytes()),
             Self::Bls12381Gt(_) => Ok(1024),
+            // Shared resident G2 payloads exceed an inline slot.
+            Self::HaloG2(_) | Self::BlstG2(_) | Self::Commitment(_) => Ok(512),
             Self::Indices(v) => size(v.storage_capacity(), 8),
             Self::Bytes(v) => size(v.len(), 1),
             Self::Shake128State(_) => Ok(crate::hash::Shake128State::RETAINED_BYTES),
@@ -1665,12 +1700,9 @@ impl RuntimeValue for Value {
             | Self::BlstField(_)
             | Self::HaloG1(_)
             | Self::BlstG1(_)
-            | Self::HaloG2(_)
-            | Self::BlstG2(_)
             | Self::Bn254Field(_)
             | Self::Bn254Round(_)
             | Self::Bn254G1(_)
-            | Self::Bn254Gt(_)
             | Self::Bn254G2(_)
             | Self::Bls12381G2(_)
             | Self::KoalaBearExt8Round(_)
@@ -1699,8 +1731,7 @@ impl RuntimeValue for Value {
             | Self::Round(_)
             | Self::Bool(_)
             | Self::Index(_)
-            | Self::Commitment(_)
-            | Self::Curve(_) => Ok(512),
+            | Self::Curve(_) => Ok(VALUE_SLOT_BYTES),
         }
         .unwrap_or(usize::MAX)
     }
@@ -1759,6 +1790,7 @@ fn payload_bytes(ty: Type, elements: usize) -> Result<usize> {
         Type::Indices => size(elements, 8),
         Type::Bytes => size(elements, 1),
         Type::Shake128State => Ok(crate::hash::Shake128State::RETAINED_BYTES),
+        Type::Field | Type::Round | Type::Group | Type::Bool | Type::Index => Ok(VALUE_SLOT_BYTES),
         Type::QuotientMatrix => Err(refused("nonserializable")),
         Type::Groups | Type::VerifierKey => size(elements, 128),
         Type::Proof => size(elements, 192),
@@ -1767,12 +1799,7 @@ fn payload_bytes(ty: Type, elements: usize) -> Result<usize> {
         | Type::FixedVector
         | Type::Variant
         | Type::ResourceUnit
-        | Type::Field
         | Type::Matrix
-        | Type::Round
-        | Type::Group
-        | Type::Bool
-        | Type::Index
         | Type::Rng
         | Type::Commitment
         | Type::OpeningState
@@ -2042,6 +2069,27 @@ mod retained_parts_tests {
     use super::*;
     use serde_json::json;
     use std::collections::HashSet;
+
+    #[test]
+    fn target_backing_counts_aliases_and_distinct_allocations() {
+        let target = Value::Bn254Gt(Arc::new(crate::Bn254Gt::generator()));
+        let alias = target.clone();
+        let independent = Value::Bn254Gt(Arc::new(crate::Bn254Gt::generator()));
+        let (owned, allocations) = parts(&target);
+        assert_eq!(owned, 0);
+        assert_eq!(allocations.len(), 1);
+        assert_eq!(
+            allocations[0].bytes(),
+            256 + std::mem::size_of::<crate::Bn254Gt>()
+        );
+        assert_eq!(parts(&alias), (owned, allocations.clone()));
+        assert_ne!(parts(&independent).1, allocations);
+        assert_eq!(charged(&target), target.retained_bytes());
+        let repeated = pack("target_aliases", vec![target.clone(), alias]);
+        let separate = pack("target_separate", vec![target, independent]);
+        assert!(charged(&repeated) < repeated.retained_bytes());
+        assert_eq!(charged(&separate), separate.retained_bytes());
+    }
 
     /// Owned bytes and distinct allocations, as one first retention reports them.
     fn parts(value: &Value) -> (usize, Vec<Backing>) {

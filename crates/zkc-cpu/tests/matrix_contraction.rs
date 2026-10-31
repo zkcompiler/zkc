@@ -148,7 +148,7 @@ fn sparse_contractions_match_coordinate_oracle_in_every_installed_field() {
                     .unwrap();
                     assert_eq!(result.len(), 1);
                     assert_value(&result[0], &scalar(field, expected));
-                    assert_eq!(result[0].retained_bytes(), 512);
+                    assert_eq!(result[0].retained_bytes(), zkc_cpu::VALUE_SLOT_BYTES);
                 }
             }
         }
@@ -269,18 +269,22 @@ fn contractions_reserve_only_one_scalar_even_for_empty_or_large_selected_dimensi
                     vector(field, &vec![3; inner]),
                     Value::Index(0),
                 ];
-                for limit in [0, 511, 512] {
+                for limit in [
+                    0,
+                    zkc_cpu::VALUE_SLOT_BYTES - 1,
+                    zkc_cpu::VALUE_SLOT_BYTES,
+                ] {
                     let mut controlled = Controlled::new(backend(Policy::default()));
                     controlled.output_limit = Some(limit);
                     let (result, observed) =
                         one(controlled, binding(field, contract), &[], args.clone());
-                    if limit < 512 {
+                    if limit < zkc_cpu::VALUE_SLOT_BYTES {
                         assert_eq!(result.unwrap_err(), "exhausted:output-bytes");
                         assert!(observed.outputs.is_empty());
                     } else {
                         let result = result.unwrap();
                         assert_eq!(result.len(), 1);
-                        assert_eq!(result[0].retained_bytes(), 512);
+                        assert_eq!(result[0].retained_bytes(), zkc_cpu::VALUE_SLOT_BYTES);
                         assert_value(&result[0], &scalar(field, expected));
                     }
                 }
@@ -300,7 +304,7 @@ fn contractions_reserve_only_one_scalar_even_for_empty_or_large_selected_dimensi
             let (rows, columns) = if row { (65536, 0) } else { (0, 65536) };
             let p = Policy {
                 max_table_elements: 1,
-                max_value_bytes: 512,
+                max_value_bytes: zkc_cpu::VALUE_SLOT_BYTES,
                 ..Policy::default()
             };
             assert_value(
@@ -337,7 +341,7 @@ fn maximum_valid_shape_contracts_the_last_row_or_column_without_dense_output() {
         let v = vector(field, &numbers);
         for (contract, expected) in [("matrix.row_dot", 146), ("matrix.column_dot", 124)] {
             let mut controlled = Controlled::new(backend(Policy::default()));
-            controlled.output_limit = Some(512);
+            controlled.output_limit = Some(zkc_cpu::VALUE_SLOT_BYTES);
             let result = one(
                 controlled,
                 binding(field, contract),

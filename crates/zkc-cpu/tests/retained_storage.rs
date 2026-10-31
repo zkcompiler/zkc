@@ -13,7 +13,7 @@ use zkc_runtime::vm::{
     ValueBudget, WorkBudget,
 };
 
-const INLINE: usize = 512;
+const INLINE: usize = zkc_cpu::VALUE_SLOT_BYTES;
 
 fn size(n: usize, width: usize) -> usize {
     n * width + 256

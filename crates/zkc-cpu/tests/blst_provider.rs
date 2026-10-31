@@ -641,7 +641,12 @@ fn explicit_conversions_are_bidirectional_and_preserve_wire() {
                 Value::BlstG2Vector(v) => Some(v.len() * std::mem::size_of::<Bls12381G2>()),
                 _ => None,
             };
-            let retained = payload.map_or(512, |bytes| bytes + 256);
+            let scalar_bytes = match (&input, importing) {
+                (Value::Bls12381G2(_) | Value::Bn254G2(_), true) => 512,
+                (Value::BlstG2(_) | Value::HaloG2(_), true) => unreachable!(),
+                _ => zkc_cpu::VALUE_SLOT_BYTES,
+            };
+            let retained = payload.map_or(scalar_bytes, |bytes| bytes + 256);
             let memory = if !importing && payload.is_some() {
                 2 * retained
             } else {

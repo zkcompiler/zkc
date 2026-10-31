@@ -618,7 +618,12 @@ fn explicit_conversions_are_bidirectional_and_preserve_wire() {
                 Value::HaloG2Vector(v) => Some(v.len() * std::mem::size_of::<Bn254G2>()),
                 _ => None,
             };
-            let retained = payload.map_or(512, |bytes| bytes + 256);
+            let scalar_bytes = match (&input, importing) {
+                (Value::Bls12381G2(_) | Value::Bn254G2(_), true) => 512,
+                (Value::BlstG2(_) | Value::HaloG2(_), true) => unreachable!(),
+                _ => zkc_cpu::VALUE_SLOT_BYTES,
+            };
+            let retained = payload.map_or(scalar_bytes, |bytes| bytes + 256);
             let memory = if !importing && payload.is_some() {
                 2 * retained
             } else {
@@ -1323,13 +1328,18 @@ fn kernel_work_workspace_and_output_boundaries_refuse_before_execution() {
                 kernel::pairing_workspace_bytes(2).unwrap(),
             )
         };
-        let memory = 512 + scratch;
+        let output = if domain == "bn254.g2" {
+            512
+        } else {
+            zkc_cpu::VALUE_SLOT_BYTES
+        };
+        let memory = output + scratch;
         let declaration = binding(name, domain, true);
         for (work_limit, memory_limit, output_limit, error) in [
-            (work, memory, 512, None),
-            (work - 1, memory, 512, Some("exhausted:numerical-work")),
-            (work, memory - 1, 512, Some("exhausted:numerical-bytes")),
-            (work, memory, 511, Some("exhausted:output-bytes")),
+            (work, memory, output, None),
+            (work - 1, memory, output, Some("exhausted:numerical-work")),
+            (work, memory - 1, output, Some("exhausted:numerical-bytes")),
+            (work, memory, output - 1, Some("exhausted:output-bytes")),
         ] {
             let native = backend(
                 Policy {

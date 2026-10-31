@@ -140,12 +140,16 @@ fn extension_product_reduces_non_base_coefficients() {
 fn product_charges_scalar_output_even_for_empty_and_zero_inputs() {
     for (numbers, expected) in [(&[][..], 1), (&[2, 3][..], 6), (&[0, 3][..], 0)] {
         for (vector, expected) in cases(numbers, expected) {
-            for limit in [0, 511, 512] {
+            for limit in [
+                0,
+                zkc_cpu::VALUE_SLOT_BYTES - 1,
+                zkc_cpu::VALUE_SLOT_BYTES,
+            ] {
                 let mut controlled = Controlled::new(backend(Policy::default()));
                 controlled.output_limit = Some(limit);
                 let (result, observed) =
                     one(controlled, binding(&vector), &[], vec![vector.clone()]);
-                if limit < 512 {
+                if limit < zkc_cpu::VALUE_SLOT_BYTES {
                     assert_eq!(result.unwrap_err(), "exhausted:output-bytes");
                     assert!(observed.outputs.is_empty());
                 } else {

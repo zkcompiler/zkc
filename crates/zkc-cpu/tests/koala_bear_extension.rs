@@ -420,7 +420,7 @@ fn resource_limits_and_hostile_operands_fail_closed() {
         );
     }
     let mut controlled = Controlled::new(backend(Policy::default()));
-    controlled.output_limit = Some(511);
+    controlled.output_limit = Some(zkc_cpu::VALUE_SLOT_BYTES - 1);
     assert_eq!(
         one(
             controlled,

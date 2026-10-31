@@ -102,7 +102,7 @@ fn installed_bulk_domains_and_oracle_leaves_use_canonical_bytes() {
             &p,
         )
         .unwrap(),
-        Value::Bn254Gt(Bn254Gt::generator()),
+        Value::Bn254Gt(std::sync::Arc::new(Bn254Gt::generator())),
     ] {
         roundtrip(v);
     }
@@ -176,7 +176,7 @@ fn typed_errors_and_aggregate_limits_precede_bulk_allocation() {
     .validate_native_input(&nested)
     .unwrap();
 
-    let point = Value::Bn254Gt(Bn254Gt::identity());
+    let point = Value::Bn254Gt(std::sync::Arc::new(Bn254Gt::identity()));
     let mut bytes = b.encode_native_value(&point).unwrap();
     bytes[6..].fill(0);
     assert_eq!(
@@ -233,7 +233,7 @@ fn pairing_result_uses_ordinary_group_contracts() {
         "curve.scale",
         "bn254.gt",
         vec![
-            Value::Bn254Gt(Bn254Gt::generator()),
+            Value::Bn254Gt(std::sync::Arc::new(Bn254Gt::generator())),
             Value::Bn254Field(F::from(15)),
         ],
     );
@@ -291,7 +291,7 @@ fn pairing_preparation_obeys_value_capacity() {
 fn nested_target_budget_precedes_subgroup_validation() {
     let p = Policy::default();
     let b = backend(p);
-    let point = Value::Bn254Gt(Bn254Gt::generator());
+    let point = Value::Bn254Gt(std::sync::Arc::new(Bn254Gt::generator()));
     let nested = Value::Sequence(
         zkc_cpu::Sequence::new(
             PhysicalType::default_for(

@@ -236,7 +236,7 @@ pub(crate) fn apply(
             if a.physical_type != b.physical_type {
                 return Err(refused("fixed-vector-type"));
             }
-            policy.output(512, invocation.max_output_bytes)?;
+            policy.output(crate::VALUE_SLOT_BYTES, invocation.max_output_bytes)?;
             let call = crate::numerical::Call::new(policy, invocation.max_output_bytes);
             match (&a.storage, &b.storage) {
                 (Storage::KoalaBear(a), Storage::KoalaBear(b)) => {

@@ -1,6 +1,6 @@
 //! Checked active-only local values. Capability payloads are handles; packing
 //! never issues authority and frame admission still authenticates every leaf.
-use crate::{Result, Value, refused};
+use crate::{Result, VALUE_SLOT_BYTES, Value, refused};
 use std::sync::Arc;
 use zkc_runtime::vm::{Backing, PhysicalType, Value as RuntimeValue, VariantDescriptor};
 
@@ -109,9 +109,6 @@ impl Variant {
         // Stable physical-profile charge: descriptor, active storage, leaves.
         // Arc payload storage has exact length; no inactive value is allocated.
         const {
-            assert!(std::mem::size_of::<Value>() <= 512);
-        }
-        const {
             assert!(std::mem::size_of::<Self>() <= 256);
         }
         self.retained
@@ -124,7 +121,7 @@ impl Variant {
         physical_type
             .descriptor_bytes()
             .checked_add(256)?
-            .checked_add(length.checked_mul(512)?)?
+            .checked_add(length.checked_mul(VALUE_SLOT_BYTES)?)?
             .checked_add(payload_bytes)
     }
 }

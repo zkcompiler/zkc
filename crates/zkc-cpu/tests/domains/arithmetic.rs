@@ -451,7 +451,7 @@ fn vector_output_limits_reject_growth_before_work() {
             "exhausted:element-limit"
         );
         let mut b = Controlled::new(backend(Policy::default()));
-        b.output_limit = Some(511);
+        b.output_limit = Some(zkc_cpu::VALUE_SLOT_BYTES - 1);
         assert_eq!(
             one(b, binding(d, "field.inverse"), &[], vec![field(d, 0)])
                 .0

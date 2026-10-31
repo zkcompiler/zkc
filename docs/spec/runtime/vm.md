@@ -131,7 +131,7 @@ The native backend prepares typed `field.constant` and `vector.constant` values
 at that reached attribute checkpoint. Reuse requires the exact operation binding,
 bound physical signature, attribute rule and complete attribute strings. A failed decode
 publishes no replacement and refuses the current call. Each scalar use checks
-512 output bytes against current limits and retains a fresh inline scalar charge.
+256 output bytes against current limits and retains a fresh inline scalar charge.
 Vector preparation checks current element, retained-byte and applicable numerical
 storage limits before allocating typed storage. Attribute errors retain their
 original precedence over capacity errors. Each vector use repeats current limits

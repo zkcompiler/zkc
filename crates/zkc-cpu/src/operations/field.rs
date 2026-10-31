@@ -183,6 +183,6 @@ pub(crate) fn publish_literal(
     policy: &crate::Policy,
 ) -> Result<Vec<Value>> {
     // These are inline scalars: every result retains its ordinary fresh charge.
-    policy.output(512, i.max_output_bytes)?;
+    policy.output(crate::VALUE_SLOT_BYTES, i.max_output_bytes)?;
     Ok(vec![value.clone()])
 }

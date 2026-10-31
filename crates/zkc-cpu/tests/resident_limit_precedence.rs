@@ -231,14 +231,25 @@ fn check(
 #[test]
 fn output_tuple_and_invocation_limits_precede_work_memory_and_allocation() {
     for case in cases(0).into_iter().chain(cases(1)) {
-        for (tuple, available) in [(511, usize::MAX), (usize::MAX, 511), (511, 511)] {
-            // Nonempty BLST G2 inputs already exceed 512 bytes. Exercise their
+        for (tuple, available) in [
+            ((case.expected.retained_bytes() - 1), usize::MAX),
+            (usize::MAX, (case.expected.retained_bytes() - 1)),
+            (
+                (case.expected.retained_bytes() - 1),
+                (case.expected.retained_bytes() - 1),
+            ),
+        ] {
+            // Nonempty BLST G2 inputs already exceed the result charge. Exercise their
             // tuple ceiling with empty inputs, and invocation ceiling at both
             // lengths, so input validation cannot mask the handler preflight.
             if case.args.iter().any(|value| value.retained_bytes() > tuple) {
                 continue;
             }
-            for (work, memory) in [(0, 0), (0, 512 + case.workspace), (case.work, 0)] {
+            for (work, memory) in [
+                (0, 0),
+                (0, case.expected.retained_bytes() + case.workspace),
+                (case.work, 0),
+            ] {
                 check(
                     &case,
                     &case.args,
@@ -260,11 +271,21 @@ fn output_tuple_and_invocation_limits_precede_work_memory_and_allocation() {
 fn shape_mismatch_precedes_output_work_memory_and_allocation() {
     for case in cases(1) {
         for (tuple, available, work, memory) in [
-            (511, 0, 0, 0),
-            (511, usize::MAX, case.work, 512 + case.workspace),
-            (usize::MAX, 0, case.work, 512 + case.workspace),
-            (usize::MAX, 512, 0, 0),
-            (usize::MAX, 512, case.work, 0),
+            ((case.expected.retained_bytes() - 1), 0, 0, 0),
+            (
+                (case.expected.retained_bytes() - 1),
+                usize::MAX,
+                case.work,
+                case.expected.retained_bytes() + case.workspace,
+            ),
+            (
+                usize::MAX,
+                0,
+                case.work,
+                case.expected.retained_bytes() + case.workspace,
+            ),
+            (usize::MAX, case.expected.retained_bytes(), 0, 0),
+            (usize::MAX, case.expected.retained_bytes(), case.work, 0),
         ] {
             if case
                 .mismatched
@@ -296,15 +317,19 @@ fn work_precedes_shared_result_workspace_memory_and_provider_allocation() {
             (case.work - 1, 0, "exhausted:numerical-work"),
             (
                 case.work - 1,
-                512 + case.workspace,
+                case.expected.retained_bytes() + case.workspace,
                 "exhausted:numerical-work",
             ),
-            (case.work, 511, "exhausted:numerical-bytes"),
-            // Workspace alone fits, but the live 512-byte result also counts.
+            (
+                case.work,
+                (case.expected.retained_bytes() - 1),
+                "exhausted:numerical-bytes",
+            ),
+            // Workspace alone fits, but the live result also counts.
             (case.work, case.workspace, "exhausted:numerical-bytes"),
             (
                 case.work,
-                512 + case.workspace - 1,
+                case.expected.retained_bytes() + case.workspace - 1,
                 "exhausted:numerical-bytes",
             ),
         ] {
@@ -316,7 +341,7 @@ fn work_precedes_shared_result_workspace_memory_and_provider_allocation() {
                     max_numerical_bytes: memory,
                     ..Policy::default()
                 },
-                512,
+                case.expected.retained_bytes(),
                 Some(expected),
             );
         }
@@ -333,10 +358,10 @@ fn work_precedes_shared_result_workspace_memory_and_provider_allocation() {
                 &case.args,
                 Policy {
                     max_numerical_work: case.work,
-                    max_numerical_bytes: 512 + case.workspace,
+                    max_numerical_bytes: case.expected.retained_bytes() + case.workspace,
                     ..Policy::default()
                 },
-                512,
+                case.expected.retained_bytes(),
                 Some("exhausted:allocation"),
             );
         }
@@ -352,28 +377,32 @@ fn exact_admission_preserves_msm_values_and_true_false_pairing_results() {
                 &case.args,
                 Policy {
                     max_numerical_work: case.work,
-                    max_numerical_bytes: 512 + case.workspace,
+                    max_numerical_bytes: case.expected.retained_bytes() + case.workspace,
                     ..Policy::default()
                 },
-                512,
+                case.expected.retained_bytes(),
                 None,
             );
         }
     }
     for case in cases(0).into_iter().chain(cases(1)) {
-        if case.args.iter().any(|value| value.retained_bytes() > 512) {
+        if case
+            .args
+            .iter()
+            .any(|value| value.retained_bytes() > case.expected.retained_bytes())
+        {
             continue;
         }
         check(
             &case,
             &case.args,
             Policy {
-                max_value_bytes: 512,
+                max_value_bytes: case.expected.retained_bytes(),
                 max_numerical_work: case.work,
-                max_numerical_bytes: 512 + case.workspace,
+                max_numerical_bytes: case.expected.retained_bytes() + case.workspace,
                 ..Policy::default()
             },
-            512,
+            case.expected.retained_bytes(),
             None,
         );
     }

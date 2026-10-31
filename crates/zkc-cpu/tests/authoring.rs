@@ -55,7 +55,7 @@ fn same_ports_distinct_dot_algorithms_preserve_results_and_refusals() {
             "refused:length-mismatch"
         );
         let mut combined = support::Controlled::new(backend(Policy::default()));
-        combined.output_limit = Some(511);
+        combined.output_limit = Some(zkc_cpu::VALUE_SLOT_BYTES - 1);
         assert_eq!(
             one(
                 combined,
@@ -68,7 +68,7 @@ fn same_ports_distinct_dot_algorithms_preserve_results_and_refusals() {
             "exhausted:output-bytes"
         );
         let mut limited = support::Controlled::new(backend(Policy::default()));
-        limited.output_limit = Some(511);
+        limited.output_limit = Some(zkc_cpu::VALUE_SLOT_BYTES - 1);
         assert_eq!(
             one(
                 limited,

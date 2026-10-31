@@ -160,6 +160,15 @@ impl Backend for Traced {
     }
     type Value = Value;
     type Operation = TracedOperation;
+    fn operand_work(
+        &self,
+        operation: &Self::Operation,
+        context: &zkc_runtime::vm::CallContext<'_>,
+        arguments: &[Value],
+    ) -> Option<u64> {
+        self.inner
+            .operand_work(&operation.inner, context, arguments)
+    }
     fn prepare_binding(&self, b: &OperationBinding) -> Option<Self::Operation> {
         self.prepared.borrow_mut().push(b.clone());
         if self.blocked.as_deref() == Some(&b.contract) {
@@ -631,7 +640,7 @@ fn finite_value_budget_refuses_region_entry_without_open_frame_leak() {
         b,
         vec![Value::Bool(true), Value::Bool(true)],
         ValueBudget {
-            live_bytes: 2048,
+            live_bytes: 4 * zkc_cpu::VALUE_SLOT_BYTES,
             total_bytes: 10000,
         },
     )
@@ -691,10 +700,10 @@ fn region_storage_release_keeps_ghost_charge_and_final_return_charge() {
     assert_eq!(u.instructions, 6); // release costs zero
     assert_eq!(
         (u.live_values, u.live_value_bytes, u.total_value_bytes),
-        (1, 512, 7 * 512)
+        (1, zkc_cpu::VALUE_SLOT_BYTES, 7 * zkc_cpu::VALUE_SLOT_BYTES)
     );
     assert_eq!(b.inner.active_frames(), 0);
-    // Parent + local args + capture + temporary = 2048. A second temporary
+    // Parent + local args + capture + temporary = four slots. A second temporary
     // cannot exploit physical release to evade the conservative semantic budget.
     let mut value: Json = serde_json::from_slice(&bytes).unwrap();
     value[2][0][4][0][4]
@@ -717,7 +726,7 @@ fn region_storage_release_keeps_ghost_charge_and_final_return_charge() {
         b,
         vec![Value::Bool(true)],
         ValueBudget {
-            live_bytes: 2048,
+            live_bytes: 4 * zkc_cpu::VALUE_SLOT_BYTES,
             total_bytes: 10000,
         },
     )

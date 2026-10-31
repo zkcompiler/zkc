@@ -139,17 +139,13 @@ fn diagonal_fresh_output_limit_does_not_recharge_shared_parents() {
         let required = args[1].retained_bytes() + args[2].retained_bytes() + 256;
         assert!(required > dense_charge);
         // The new view owns 256 bytes; its two parent allocations are already
-        // live operands. Each later contraction allocates a 512-byte scalar.
+        // live operands. Each later contraction allocates one inline scalar.
         let (result, b) = run(d, true, Some(255), false);
         assert_eq!(result.unwrap_err(), "exhausted:output-bytes");
         assert!(b.outputs.is_empty());
-        for limit in [256, 511] {
-            let (result, b) = run(d, true, Some(limit), false);
-            assert_eq!(result.unwrap_err(), "exhausted:output-bytes");
-            assert_eq!(b.outputs.len(), 1);
-            assert_eq!(b.outputs[0][0].retained_bytes(), required);
-        }
-        let (result, b) = run(d, true, Some(512), false);
+        // View and scalar storage now have the same exact boundary.
+        assert_eq!(zkc_cpu::VALUE_SLOT_BYTES, 256);
+        let (result, b) = run(d, true, Some(zkc_cpu::VALUE_SLOT_BYTES), false);
         assert!(result.is_ok());
         assert_eq!(b.outputs.len(), 3);
         assert_eq!(b.outputs[0][0].retained_bytes(), required);

@@ -222,10 +222,11 @@ pub(crate) fn apply(
         arithmetic::equal_len(left.len(), right.len())?;
         policy.typed_groups::<kernel::G1>(left.len())?;
         policy.typed_groups::<kernel::G2>(right.len())?;
-        policy.output(512, invocation.max_output_bytes)?;
+        let retained = Value::fixed_retained_bytes(&invocation.binding.signature().outputs[0]);
+        policy.output(retained, invocation.max_output_bytes)?;
         let call = crate::numerical::Call::new(policy, invocation.max_output_bytes);
         call.work(kernel::pairing_work(left.len()).map_err(failure)?)?;
-        let output = call.scalar(512)?;
+        let output = call.scalar(retained)?;
         let _workspace = call.reserve_workspace::<u8>(
             kernel::pairing_workspace_bytes(left.len()).map_err(failure)?,
         )?;
@@ -249,10 +250,11 @@ pub(crate) fn apply(
             }
             _ => return Err(refused("kernel-operands")),
         };
-        policy.output(512, invocation.max_output_bytes)?;
+        let retained = Value::fixed_retained_bytes(&invocation.binding.signature().outputs[0]);
+        policy.output(retained, invocation.max_output_bytes)?;
         let call = crate::numerical::Call::new(policy, invocation.max_output_bytes);
         call.work(kernel::msm_work(len).map_err(failure)?)?;
-        let output = call.scalar(512)?;
+        let output = call.scalar(retained)?;
         let _workspace =
             call.reserve_workspace::<u8>(kernel::msm_workspace_bytes(len).map_err(failure)?)?;
         return Ok(vec![output.finish(|| {

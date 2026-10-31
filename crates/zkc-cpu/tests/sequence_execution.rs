@@ -192,8 +192,8 @@ fn retained_input_traversal_charges_only_the_examined_edge() {
 #[test]
 fn collection_budget_failures_release_all_carried_storage() {
     let (program, _) = collected(true);
-    // The complete variant descriptor exhausts cumulative capacity during
-    // packing; the live capacity limit instead reaches append's backend check.
+    // Both byte ceilings refuse append before its new storage is allocated.
+    // Instruction, iteration and traversal quotas retain separate boundaries.
     let limits = [
         (
             ValueBudget {
@@ -211,7 +211,7 @@ fn collection_budget_failures_release_all_carried_storage() {
             },
             WorkBudget::default(),
             u64::MAX,
-            "Limit",
+            "exhausted:output-bytes",
         ),
         (
             ValueBudget::default(),

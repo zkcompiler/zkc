@@ -185,7 +185,7 @@ fn residue_words<E: Registered>(
             Ok(vec![Value::Bytes(bytes.into())])
         }
         ("encoding.field_from_le" | "encoding.field_from_montgomery_le", [Value::Bytes(bytes)]) => {
-            policy.output(1024, available)?;
+            policy.output(2 * crate::VALUE_SLOT_BYTES, available)?;
             let value = words::decode::<E>(bytes, form);
             Ok(vec![
                 Value::Bool(value.is_some()),
@@ -197,14 +197,17 @@ fn residue_words<E: Registered>(
             [Value::Bytes(bytes)],
         ) => {
             if !words::valid_elements::<E>(bytes) {
-                policy.output(512usize.saturating_add(size(0, element)?), available)?;
+                policy.output(
+                    crate::VALUE_SLOT_BYTES.saturating_add(size(0, element)?),
+                    available,
+                )?;
                 return Ok(vec![Value::Bool(false), E::vector_value(Vec::new())]);
             }
             let count = bytes.len() / width;
             policy.vector_width(count, element)?;
             policy.output(
                 size(count, element)?
-                    .checked_add(512)
+                    .checked_add(crate::VALUE_SLOT_BYTES)
                     .ok_or_else(|| crate::exhausted("size-overflow"))?,
                 available,
             )?;
@@ -321,7 +324,7 @@ fn bit_patterns<E: BitPattern>(
             Ok(vec![Value::Bytes(bytes.into())])
         }
         ("encoding.field_from_le", [Value::Bytes(bytes)]) => {
-            policy.output(1024, available)?;
+            policy.output(2 * crate::VALUE_SLOT_BYTES, available)?;
             let value = E::decode(bytes);
             Ok(vec![
                 Value::Bool(value.is_some()),
@@ -330,14 +333,17 @@ fn bit_patterns<E: BitPattern>(
         }
         ("encoding.fields_from_le", [Value::Bytes(bytes)]) => {
             if !bytes.len().is_multiple_of(width) {
-                policy.output(512usize.saturating_add(size(0, element)?), available)?;
+                policy.output(
+                    crate::VALUE_SLOT_BYTES.saturating_add(size(0, element)?),
+                    available,
+                )?;
                 return Ok(vec![Value::Bool(false), E::vector_value(Vec::new().into())]);
             }
             let count = bytes.len() / width;
             policy.vector_width(count, element)?;
             policy.output(
                 size(count, element)?
-                    .checked_add(512)
+                    .checked_add(crate::VALUE_SLOT_BYTES)
                     .ok_or_else(|| crate::exhausted("size-overflow"))?,
                 available,
             )?;
@@ -479,7 +485,7 @@ pub(crate) fn apply(
             Ok(vec![Value::Bool(valid), Value::Vector(values.into())])
         }
         ("encoding.field_from_be", [Value::Bytes(bytes)]) => {
-            policy.output(1024, available)?;
+            policy.output(2 * crate::VALUE_SLOT_BYTES, available)?;
             let value = if let Ok(mut bytes) = <[u8; 32]>::try_from(bytes.as_ref()) {
                 bytes.reverse();
                 zkc_kernels::arkworks::bls12_381::decode_scalar(&bytes).ok()
@@ -492,7 +498,7 @@ pub(crate) fn apply(
             ])
         }
         ("encoding.field_reduce_be", [Value::Bytes(bytes)]) => {
-            policy.output(512, available)?;
+            policy.output(crate::VALUE_SLOT_BYTES, available)?;
             budget.charge_units((bytes.len() as u64).saturating_mul(2))?;
             // Horner reduction reads the input directly: no input-sized copy.
             let radix = Scalar::from(256u64);
@@ -507,7 +513,7 @@ pub(crate) fn apply(
             Ok(vec![Value::Bytes(value.to_bytes().as_slice().into())])
         }
         ("encoding.field_from_le", [Value::Bytes(bytes)]) => {
-            policy.output(1024, available)?;
+            policy.output(2 * crate::VALUE_SLOT_BYTES, available)?;
             let value = <[u8; 32]>::try_from(bytes.as_ref()).ok().and_then(|b| {
                 Option::<crate::RistrettoScalar>::from(
                     crate::RistrettoScalar::from_canonical_bytes(b),
@@ -519,7 +525,7 @@ pub(crate) fn apply(
             ])
         }
         ("encoding.field_reduce_le", [Value::Bytes(bytes)]) => {
-            policy.output(512, available)?;
+            policy.output(crate::VALUE_SLOT_BYTES, available)?;
             budget.charge_units((bytes.len() as u64).saturating_mul(2))?;
             let radix = crate::RistrettoScalar::from(256u64);
             let value = bytes
@@ -540,7 +546,7 @@ pub(crate) fn apply(
             "encoding.group_from_compressed" | "encoding.group_decode_cofactor",
             [Value::Bytes(bytes)],
         ) if identity == Identity::Edwards25519Prime => {
-            policy.output(1024, available)?;
+            policy.output(2 * crate::VALUE_SLOT_BYTES, available)?;
             budget.charge_units(if name == "encoding.group_decode_cofactor" {
                 2048
             } else {
@@ -557,7 +563,7 @@ pub(crate) fn apply(
             ])
         }
         ("encoding.cryptonote_map", [Value::Bytes(bytes)]) => {
-            policy.output(512, available)?;
+            policy.output(crate::VALUE_SLOT_BYTES, available)?;
             let input: [u8; 32] = bytes
                 .as_ref()
                 .try_into()
@@ -578,7 +584,7 @@ pub(crate) fn apply(
         ("encoding.group_from_compressed", [Value::Bytes(bytes)])
             if identity == Identity::Bls12381G2 =>
         {
-            policy.output(1024, available)?;
+            policy.output(2 * crate::VALUE_SLOT_BYTES, available)?;
             let point = crate::Bls12381G2::from_bytes(bytes).ok();
             Ok(vec![
                 Value::Bool(point.is_some()),
@@ -593,7 +599,7 @@ pub(crate) fn apply(
             )])
         }
         ("encoding.group_from_compressed", [Value::Bytes(bytes)]) => {
-            policy.output(1024, available)?;
+            policy.output(2 * crate::VALUE_SLOT_BYTES, available)?;
             // Exact width, subgroup validation and canonical re-encoding are
             // owned by the checked group adapter; no transcript state is touched.
             let point = G1::from_bytes(bytes).ok();
@@ -1236,7 +1242,7 @@ mod tests {
                 &[bytes(&[0; 48])],
                 &[],
                 &Policy::default(),
-                1023,
+                2 * crate::VALUE_SLOT_BYTES - 1,
                 &mut Default::default()
             )
             .is_err()

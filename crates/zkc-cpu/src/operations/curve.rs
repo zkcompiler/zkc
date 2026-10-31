@@ -679,13 +679,16 @@ pub(crate) fn apply(
     p: &Policy,
 ) -> Result<Vec<Value>> {
     if name == "pairing.apply" {
-        p.output(512, i.max_output_bytes)?;
+        p.output(
+            Value::fixed_retained_bytes(&i.binding.signature().outputs[0]),
+            i.max_output_bytes,
+        )?;
         // Bound pairing preparation scratch independently of the GT result.
         p.output(32768, usize::MAX)?;
         return match args {
-            [Value::Bn254G1(a), Value::Bn254G2(b)] => Ok(vec![Value::Bn254Gt(
+            [Value::Bn254G1(a), Value::Bn254G2(b)] => Ok(vec![Value::Bn254Gt(Arc::new(
                 zkc_kernels::arkworks::bn254::pairing(a, b),
-            )]),
+            ))]),
             [Value::Curve(a), Value::Bls12381G2(b)] => Ok(vec![Value::Bls12381Gt(Arc::new(
                 zkc_kernels::arkworks::bls12_381::pairing(a, b),
             ))]),
@@ -698,7 +701,10 @@ pub(crate) fn apply(
                 equal_len(a.len(), b.len())?;
                 p.typed_groups::<crate::Bn254G1>(a.len())?;
                 p.typed_groups::<crate::Bn254G2>(b.len())?;
-                p.output(512, i.max_output_bytes)?;
+                p.output(
+                    Value::fixed_retained_bytes(&i.binding.signature().outputs[0]),
+                    i.max_output_bytes,
+                )?;
                 // BN254 G2 preparations retain 91 line coefficients (three Fq2 each),
                 // plus G1 preparation and multi-Miller loop working vectors.
                 p.output(size(a.len(), 32768)?, usize::MAX)?;
@@ -708,7 +714,10 @@ pub(crate) fn apply(
                 equal_len(a.len(), b.len())?;
                 p.groups(a.len())?;
                 p.typed_groups::<crate::Bls12381G2>(b.len())?;
-                p.output(512, i.max_output_bytes)?;
+                p.output(
+                    Value::fixed_retained_bytes(&i.binding.signature().outputs[0]),
+                    i.max_output_bytes,
+                )?;
                 // BLS12-381 G2 preparations retain 68 line coefficients (three
                 // Fq2 each), plus G1 preparation and multi-Miller loop vectors.
                 p.output(size(a.len(), 32768)?, usize::MAX)?;
@@ -772,10 +781,15 @@ pub(super) fn dense_with_storage<G: Family<S>, S: PointStorage<G>>(
         .iter()
         .all(|ty| ty.kind() != zkc_runtime::vm::Type::Groups);
     if scalar_output {
-        p.output(512, i.max_output_bytes)?;
+        p.output(
+            Value::fixed_retained_bytes(&i.binding.signature().outputs[0]),
+            i.max_output_bytes,
+        )?;
     }
     let _scalar_reservation = if G::RESIDENT_STORAGE && scalar_output {
-        Some(call.reserve_workspace::<u8>(512)?)
+        Some(call.reserve_workspace::<u8>(Value::fixed_retained_bytes(
+            &i.binding.signature().outputs[0],
+        ))?)
     } else {
         None
     };
@@ -1034,7 +1048,7 @@ impl Group for crate::Bn254Gt {
     }
 }
 impl Target for crate::Bn254Gt {
-    const RETAINED: usize = 512;
+    const RETAINED: usize = Value::bn254_gt_retained_bytes();
     fn scalar(scalar: &Value) -> Result<Self::Scalar> {
         let Value::Bn254Field(s) = scalar else {
             return Err(refused("kernel-operands"));
@@ -1043,13 +1057,13 @@ impl Target for crate::Bn254Gt {
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::Bn254Gt(v) = v {
-            Ok(*v)
+            Ok(**v)
         } else {
             Err(refused("kernel-operands"))
         }
     }
     fn value(v: Self) -> Value {
-        Value::Bn254Gt(v)
+        Value::Bn254Gt(Arc::new(v))
     }
 }
 impl Group for crate::Bls12381Gt {
@@ -1096,7 +1110,12 @@ fn target<G: Target>(
     i: &Invocation<'_>,
     p: &Policy,
 ) -> Result<Vec<Value>> {
-    p.output(G::RETAINED, i.max_output_bytes)?;
+    let bytes = if matches!(name, "curve.nonidentity" | "curve.equal") {
+        crate::VALUE_SLOT_BYTES
+    } else {
+        G::RETAINED
+    };
+    p.output(bytes, i.max_output_bytes)?;
     let v = match (name, args) {
         ("curve.identity", []) => G::value(G::identity()),
         ("curve.generator", []) => {

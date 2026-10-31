@@ -255,14 +255,14 @@ pub(crate) fn apply(
             let index = zkc_format::logical::natural_index(index)
                 .map_err(|_| refused("field-array-index"))?;
             let index = usize::try_from(index).map_err(|_| refused("field-array-index"))?;
-            policy.output(512, invocation.max_output_bytes)?;
+            policy.output(crate::VALUE_SLOT_BYTES, invocation.max_output_bytes)?;
             array
                 .get(index)
                 .ok_or_else(|| refused("field-array-index"))?
         }
         ("field_array.get", [Value::FieldArray(array), Value::Index(index)]) => {
             let index = usize::try_from(*index).map_err(|_| refused("field-array-index"))?;
-            policy.output(512, invocation.max_output_bytes)?;
+            policy.output(crate::VALUE_SLOT_BYTES, invocation.max_output_bytes)?;
             array
                 .get(index)
                 .ok_or_else(|| refused("field-array-index"))?

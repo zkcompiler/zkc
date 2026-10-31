@@ -243,7 +243,7 @@ fn bls12_381_target_identity_is_multiplicative_one() {
 }
 #[test]
 fn bn254_target_identity_is_multiplicative_one() {
-    let identity = Value::Bn254Gt(Bn254Gt::identity());
+    let identity = Value::Bn254Gt(std::sync::Arc::new(Bn254Gt::identity()));
     check(
         "bn254.gt",
         identity.clone(),

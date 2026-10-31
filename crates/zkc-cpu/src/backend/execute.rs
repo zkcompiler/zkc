@@ -135,7 +135,7 @@ impl CpuBackend {
             ("pcs.open", [OpeningState(state), Point(point)]) => {
                 p.output(
                     size(state.commitment().metadata().arity(), 192)?
-                        .checked_add(512)
+                        .checked_add(crate::VALUE_SLOT_BYTES)
                         .ok_or_else(|| exhausted("output-bytes"))?,
                     i.max_output_bytes,
                 )?;

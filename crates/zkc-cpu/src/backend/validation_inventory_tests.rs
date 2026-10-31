@@ -192,17 +192,17 @@ macro_rules! collection_tests {
                         "exhausted:output-bytes"
                     );
                 }
-                // Inline values keep the historical conservative charge and
+                // Inline values use the universal slot charge and
                 // remain independent of collection element ceilings.
                 for value in [Value::$f(ONE), Value::$r([ONE; 3])] {
-                    assert_eq!(value.retained_bytes(), 512);
+                    assert_eq!(value.retained_bytes(), crate::VALUE_SLOT_BYTES);
                     assert_eq!(
                         value.retained_parts(&mut |_| panic!("inline value has no backing")),
-                        512
+                        crate::VALUE_SLOT_BYTES
                     );
                     assert_eq!(value.validation_backing(), None);
                     core(Policy {
-                        max_value_bytes: 512,
+                        max_value_bytes: crate::VALUE_SLOT_BYTES,
                         max_table_elements: 0,
                         ..Policy::default()
                     })
@@ -210,7 +210,7 @@ macro_rules! collection_tests {
                     .unwrap();
                     assert_eq!(
                         core(Policy {
-                            max_value_bytes: 511,
+                            max_value_bytes: (crate::VALUE_SLOT_BYTES - 1),
                             ..Policy::default()
                         })
                         .validate(&value)

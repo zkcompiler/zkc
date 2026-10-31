@@ -73,6 +73,14 @@ partitions that charge into storage owned by one binding, such as an inline
 scalar, and the immutable allocations it shares. A shared allocation's charge
 includes the inline storage it holds, such as a collection's element slots.
 
+The CPU adapter reserves 256 bytes per inline value or collection value slot,
+with a compile-time bound on the complete native value enum. BN254 target-group
+values use shared immutable backing: their charge includes the 384-byte target
+and a 256-byte wrapper allowance. Aliases retain that allocation once; equal
+independent targets retain distinct allocations. Capability handles retain their
+512-byte profile, and larger shared group payloads retain their own profiles.
+These storage charges do not change canonical wire bytes or execution quotas.
+
 - **Live bytes** count each shared allocation once while any live binding, view
   or container retains it, plus the owned storage of every live binding. A view
   or collection that retains a parent allocation keeps the parent's whole charge
@@ -156,7 +164,8 @@ Committed instructions, iterations, logical work and fresh allocation are never
 refunded on release or unwind.
 
 For shared execution, trusted Value adapters advertise constructor allocation
-bounds before scalar/variant construction. The scalar default is 512 bytes; the
+bounds before scalar/variant construction. The generic scalar default is 512
+bytes; the CPU adapter supplies its 256-byte inline bound. The
 variant default covers its descriptor, conservative payload slots and full
 payload charges. Larger adapters must override these bounds. Insufficient
 capacity refuses before the constructor runs, even if the actual value might

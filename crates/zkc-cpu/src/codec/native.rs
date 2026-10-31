@@ -373,11 +373,10 @@ impl CpuBackend {
         let (tag, width) = fixed_header(ty, bytes)?;
         self.policy().wire(width).map_err(|_| Limit)?;
         if tag != 64 {
-            // Installed fixed scalar/group wrappers retain 512 bytes, except the
-            // 1024-byte BLS12-381 target. Reject insufficient capacity before
+            // Fixed leaves include any separate group backing. Reject insufficient capacity before
             // canonical/subgroup decoding; fixed arrays reserve their
             // shape-dependent backing below.
-            let retained = if tag == 53 { 1024 } else { 512 };
+            let retained = Value::fixed_retained_bytes(ty);
             self.policy()
                 .output(retained, usize::MAX)
                 .map_err(|_| Limit)?;
@@ -472,10 +471,10 @@ impl CpuBackend {
             9 => Value::Curve(
                 crate::G1::from_bytes(&bytes[6..]).map_err(|_| Invalid(DecodeReason::Group))?,
             ),
-            50 => Value::Bn254Gt(
+            50 => Value::Bn254Gt(std::sync::Arc::new(
                 crate::Bn254Gt::from_bytes(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Group))?,
-            ),
+            )),
             40 => Value::Bn254Field(
                 zkc_kernels::arkworks::bn254::decode_scalar(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,

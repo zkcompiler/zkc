@@ -1029,7 +1029,7 @@ fn numerical_scope_has_exact_work_output_and_managed_memory_boundaries() {
             let output = if map {
                 256 + rows * size_of::<Scalar>()
             } else {
-                512
+                zkc_cpu::VALUE_SLOT_BYTES
             };
             let memory =
                 size_of::<Scalar>() + output + if map { rows * size_of::<Scalar>() } else { 0 };
@@ -1075,10 +1075,10 @@ fn numerical_scope_has_exact_work_output_and_managed_memory_boundaries() {
                     Some("exhausted:output-bytes"),
                 ),
             ] {
-                // The leading Index requires a 512-byte per-value allowance.
+                // The leading Index requires one inline slot of per-value allowance.
                 // The map at nine rows separately tests the tuple ceiling;
                 // every result size tests the invocation's output allowance.
-                if policy.max_value_bytes < 512 {
+                if policy.max_value_bytes < zkc_cpu::VALUE_SLOT_BYTES {
                     continue;
                 }
                 let mut driver = Controlled::new(backend(policy));
@@ -1115,7 +1115,7 @@ fn even_unused_scalar_slots_reserve_typed_operand_storage() {
         0,
     );
     let policy = Policy {
-        max_numerical_bytes: 512 + size_of::<Scalar>(),
+        max_numerical_bytes: zkc_cpu::VALUE_SLOT_BYTES + size_of::<Scalar>(),
         ..Policy::default()
     };
     let (result, driver) = one(
@@ -1286,7 +1286,11 @@ fn prepared_calls_recheck_inputs_static_identity_and_live_policy() {
             None,
             "exhausted:numerical-bytes",
         ),
-        (Policy::default(), Some(511), "exhausted:output-bytes"),
+        (
+            Policy::default(),
+            Some(zkc_cpu::VALUE_SLOT_BYTES - 1),
+            "exhausted:output-bytes",
+        ),
     ] {
         caller.inner = backend(policy);
         caller.output_limit = allowance;

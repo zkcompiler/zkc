@@ -72,7 +72,7 @@ fn dynamic_group_access_preserves_order_domains_bounds_and_output_charges() {
                 vec![groups(d, &[1])]
             };
             let mut controlled = Controlled::new(backend(Policy::default()));
-            controlled.output_limit = Some(511); // Existing curve scalar-result preflight.
+            controlled.output_limit = Some(zkc_cpu::VALUE_SLOT_BYTES - 1); // Existing curve scalar-result preflight.
             assert_eq!(
                 one(controlled, b.clone(), &[], args.clone()).0.unwrap_err(),
                 "exhausted:output-bytes"
