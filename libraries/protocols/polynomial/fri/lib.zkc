@@ -2,8 +2,6 @@ module fri;
 use zkc::indices as indices;
 use zkc::indices::{Indices, less};
 use zkc::vector::{Vector, length, append, get, empty, concat, fill};
-use zkc::finite_domain as finite_domain;
-use zkc::finite_math as total;
 use zkc::polynomial as polynomial;
 use zkc::coset as coset;
 use zkc::scalar as scalar;
@@ -46,16 +44,7 @@ pub struct State<C: Configuration, LogSize: nat, TerminalLog: nat,
   query_count: index
 }
 
-// Total unsigned-word exponentiation: exactly 64 steps, including exponent 0.
-// Every helper reached by a virtual query is Math, never checked Local code.
-pub math fn power_word<F: Field>(base: F, exponent: index) -> F where () {
-  let initial: (F, F, index) = (1, base, exponent);
-  let result = total::fold(finite_domain::range(0, 64), initial,
-    fn((result, factor, remaining), _) =>
-      (scalar::select(indices::bit_and(remaining, 1) == 1, result * factor, result),
-       factor * factor, indices::logical_shift_right(remaining, 1)));
-  return result.0;
-}
+pub use zkc::scalar::{power_word};
 
 pub math fn fold_value<F: Field>(low: F, high: F, beta: F,
                                 inverse_two: F, inverse_x: F) -> F where () {

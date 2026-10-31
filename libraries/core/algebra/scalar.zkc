@@ -1,4 +1,7 @@
 module zkc::scalar;
+use zkc::indices as indices;
+use zkc::finite_domain as finite_domain;
+use zkc::finite_math as total;
 
 pub use zkc::primitives::scalar::{
   inverse, from_index
@@ -6,15 +9,18 @@ pub use zkc::primitives::scalar::{
 
 pub math fn select<F: Field>(condition: bool, yes: F, no: F) -> F = primitive("field.select");
 
+// Total unsigned-word exponentiation over the exponent's significant bits.
+// Exponent zero has an empty fold and returns one, including for base zero.
+pub math fn power_word<F: Field>(base: F, exponent: index) -> F where () {
+  let initial: (F, F, index) = (1, base, exponent);
+  let result = total::fold(finite_domain::range(0, indices::bit_width(exponent)), initial,
+    fn((result, factor, remaining), _) =>
+      (select(indices::bit_and(remaining, 1) == 1, result * factor, result),
+       factor * factor, indices::logical_shift_right(remaining, 1)));
+  return result.0;
+}
+
+// Local callers share the same total unsigned-word meaning.
 pub fn power<F: Field>(base: F, exponent: index) -> F effects(stop) where () {
-  let mut remaining = exponent;
-  let mut factor = base;
-  let mut result: F = 1;
-  for _ in 0..64 {
-    let bit = kernel("index.mod", remaining, 2);
-    if bit == 1 { result = result * factor; }
-    factor = factor * factor;
-    remaining = kernel("index.div", remaining, 2);
-  }
-  return result;
+  return power_word(base, exponent);
 }

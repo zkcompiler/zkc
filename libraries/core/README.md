@@ -121,7 +121,10 @@ the [oracle contract](../../docs/spec/domains/oracles.md#openings-and-the-pruned
 
 `scalar::inverse` and vector inversion refuse zero. Vector arithmetic and
 layout operations retain native shape checks. `scalar::power` uses an unsigned
-64-bit index exponent. `indices::two_adic<Max>` recognizes powers of two from
+64-bit index exponent and delegates to total `scalar::power_word`. Both use
+binary exponentiation over `indices::bit_width(exponent)` significant bits;
+zero exponents return one. The bit-width helper covers every unsigned word
+using six total shifts and selections. `indices::two_adic<Max>` recognizes powers of two from
 2 through `2^Max`, with `Max <= 63`; zero and one return false. Prefix sums and
 products preserve every prefix, while ordinary sums and products return one
 value. `polynomial` stores univariate coefficients in increasing

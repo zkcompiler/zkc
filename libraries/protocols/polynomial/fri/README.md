@@ -91,9 +91,10 @@ For every unsigned 64-bit query word, it computes
 `high = wrapping_add(low, source_rows >> 1)`, queries low then high, and uses
 `inverse_shift * power_word(inverse_generator, low)` in `fold_value`. These
 maps are total even for inadmissible captures; actual domain checks remain
-ordered query obligations. `power_word` uses `finite_math::fold` over exactly
-64 steps carrying `(result, factor, remaining)`, with total low-bit and logical
-shift operations. The query suite contains no source data/shape reads, checked
+ordered query obligations. `power_word` uses `finite_math::fold` over the exponent's significant bits
+(at most 64), carrying `(result, factor, remaining)`. Six total word steps
+compute that bit width; exponent zero returns one from an empty fold. Low-bit
+and logical-shift operations are total. The query suite contains no source data/shape reads, checked
 Local calls or materialized virtual table.
 
 The checker first queries the initial handle at the selected position. In

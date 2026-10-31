@@ -15,10 +15,11 @@ from source_modules import library_modules
 def test_total_power_and_binary_fold(toolchain, journal, directory, field, flags):
     source = f'''module sample;
 use fri::{{power_word, fold_value}};
+use zkc::scalar as scalar;
 domain F=field("{field}");
 protocol Run roles(P)(base:F@P,exponent:index@P,low:F@P,high:F@P,
-    beta:F@P,inverse_two:F@P,inverse_x:F@P)->(power:F@P,folded:F@P) {{
-  return(power=power_word(base,exponent),
+    beta:F@P,inverse_two:F@P,inverse_x:F@P)->(power:F@P,local_power:F@P,folded:F@P) {{
+  return(power=power_word(base,exponent), local_power=scalar::power(base,exponent),
     folded=fold_value(low,high,beta,inverse_two,inverse_x));
 }}
 entry fn Demo(inputs:Run::Inputs) {{ return Run::run(inputs); }}
@@ -46,6 +47,7 @@ entry fn Demo(inputs:Run::Inputs) {{ return Run::run(inputs); }}
             'inverse_x': encode(ref.power(x, ref.modulus**ref.degree - 2)),
         })
         assert actual == {'power': encode(ref.power(base, exponent)),
+                          'local_power': encode(ref.power(base, exponent)),
                           'folded': encode(expected)}
     for exponent in [0, (1 << 64) - 1]:
         actual = entry.run(f'zero-{exponent}', {
@@ -55,4 +57,25 @@ entry fn Demo(inputs:Run::Inputs) {{ return Run::run(inputs); }}
             'inverse_x': encode(ref.one),
         })
         assert actual == {'power': encode(ref.one if exponent == 0 else ref.zero),
+                          'local_power': encode(ref.one if exponent == 0 else ref.zero),
                           'folded': encode(ref.zero)}
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_total_word_bit_width(toolchain, journal, directory, flags):
+    source = """module sample;
+use zkc::indices::{bit_width};
+protocol Run roles(P)(value:index@P)->(width:index@P) {
+  return(width=bit_width(value));
+}
+entry fn Demo(inputs:Run::Inputs) { return Run::run(inputs); }
+"""
+    entry = Entry(toolchain, journal, directory, source,
+                  [*library_modules('protocols/polynomial/fri'), *flags])
+    values = set(range(256))
+    for bit in range(64):
+        values.update([1 << bit, (1 << bit) - 1, (1 << bit) + 1])
+    values.add((1 << 64) - 1)
+    for value in sorted(values):
+        assert entry.run(f'width-{value}', {'value': str(value)}) == {
+            'width': str(value.bit_length())}

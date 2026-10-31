@@ -354,6 +354,13 @@ Each takes two indices, returns one index, and has no attributes or static
 parameters. They are admitted in total mathematical bodies; the checked
 operations above remain ordered Local operations.
 
+The library's total `indices::bit_width` returns zero for zero and otherwise
+`floor(log2(value))+1`. It uses six successive upper-half selections over these
+existing word operations. `scalar::power_word` folds over that significant-bit
+count; `scalar::power` delegates to the same mathematics. Both preserve the
+full unsigned exponent and define the empty power, including `0^0`, as one.
+No native exponentiation primitive or new timing guarantee is introduced.
+
 The Data operations are `data.index_wrapping_add`,
 `data.index_wrapping_subtract`, `data.index_bit_and`, and
 `data.index_logical_shift_right`. Mathematical `arith.select` also admits
