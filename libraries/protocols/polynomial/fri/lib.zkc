@@ -52,7 +52,7 @@ pub math fn power_word<F: Field>(base: F, exponent: index) -> F where () {
   let initial: (F, F, index) = (1, base, exponent);
   let result = total::fold(finite_domain::range(0, 64), initial,
     fn((result, factor, remaining), _) =>
-      (if indices::bit_and(remaining, 1) == 1 { result * factor } else { result },
+      (scalar::select(indices::bit_and(remaining, 1) == 1, result * factor, result),
        factor * factor, indices::logical_shift_right(remaining, 1)));
   return result.0;
 }
@@ -129,14 +129,20 @@ pub protocol Commit<C: Configuration, LogSize: nat, TerminalLog: nat,
   let initial_rows = index<pow2(LogSize)>();
   require @P length(word) == initial_rows;
   let shift = @(P = prover_shift, V = verifier_shift);
-  let geometry = coset::coset_domain(shift, initial_rows);
+  let geometryP @P = coset::coset_domain(shift, initial_rows);
+  let geometryV @V = coset::coset_domain(shift, initial_rows);
+  let geometry = @(P = geometryP, V = geometryV);
   let mut current @P = coset::word(word, prover_shift);
   let mut layers = oracle.empty<FieldTable<C::Value>,Rounds> roles(P,V)();
   let mut folds = oracle.empty<FieldTable<C::Value>,Rounds> roles(P,V)();
   let mut rows = initial_rows;
   let mut offset = shift;
-  let mut generator = coset::root<C::Value>(initial_rows);
-  let inverse_two = scalar::inverse<C::Value>(1 + 1);
+  let generatorP @P = coset::root<C::Value>(initial_rows);
+  let generatorV @V = coset::root<C::Value>(initial_rows);
+  let mut generator = @(P = generatorP, V = generatorV);
+  let inverse_twoP @P = scalar::inverse<C::Value>(1 + 1);
+  let inverse_twoV @V = scalar::inverse<C::Value>(1 + 1);
+  let inverse_two = @(P = inverse_twoP, V = inverse_twoV);
   for round in 0..round_count roles(P,V) max Rounds {
     let values @P = coset::values(current);
     let source <- send P -> V(values)
@@ -155,11 +161,16 @@ pub protocol Commit<C: Configuration, LogSize: nat, TerminalLog: nat,
     require @P source_rows == rows;
     require @V source_rows == rows;
     let next_rows = indices::logical_shift_right(source_rows, 1);
-    let installed_generator = coset::root<C::Value>(source_rows);
-    require @P installed_generator == generator;
-    require @V installed_generator == generator;
-    let inverse_shift = scalar::inverse(offset);
-    let inverse_generator = scalar::inverse(generator);
+    let installed_generatorP @P = coset::root<C::Value>(source_rows);
+    let installed_generatorV @V = coset::root<C::Value>(source_rows);
+    require @P installed_generatorP == generator;
+    require @V installed_generatorV == generator;
+    let inverse_shiftP @P = scalar::inverse(offset);
+    let inverse_shiftV @V = scalar::inverse(offset);
+    let inverse_shift = @(P = inverse_shiftP, V = inverse_shiftV);
+    let inverse_generatorP @P = scalar::inverse(generator);
+    let inverse_generatorV @V = scalar::inverse(generator);
+    let inverse_generator = @(P = inverse_generatorP, V = inverse_generatorV);
     require @P binary_domain(source_rows, offset, generator,
       inverse_shift, inverse_generator, inverse_two);
     require @V binary_domain(source_rows, offset, generator,
@@ -174,21 +185,25 @@ pub protocol Commit<C: Configuration, LogSize: nat, TerminalLog: nat,
     offset = offset * offset;
     generator = generator * generator;
   }
-  let terminal_generator = coset::root<C::Value>(rows);
-  require @P terminal_generator == generator;
-  require @V terminal_generator == generator;
+  let terminal_generatorP @P = coset::root<C::Value>(rows);
+  let terminal_generatorV @V = coset::root<C::Value>(rows);
+  require @P terminal_generatorP == generator;
+  require @V terminal_generatorV == generator;
   let proposed @P = padded(polynomial::coefficients(coset::interpolate(current)),
     index<pow2(TerminalLog)>());
   let received = send P -> V(proposed);
   require @V length(received) == index<pow2(TerminalLog)>();
   let coefficients = @(P = proposed, V = received);
-  let mut positions = indices::empty();
+  let positionsP @P = indices::empty();
+  let positionsV @V = indices::empty();
+  let mut positions = @(P = positionsP, V = positionsV);
   for query in 0..query_count roles(P,V) max Queries {
     let positionV = coins.index<pow2(LogSize)>();
     let positionP = send V -> P(positionV);
     let position = @(P = positionP, V = positionV);
-    let remembered = indices::append(positions, position);
-    positions = remembered;
+    let rememberedP @P = indices::append(positions, position);
+    let rememberedV @V = indices::append(positions, position);
+    positions = @(P = rememberedP, V = rememberedV);
   }
   let initial <- oracle.at(layers, 0);
   let state = State<C,LogSize,TerminalLog,Rounds,Queries> {
@@ -215,6 +230,15 @@ pub protocol Initial<C: Configuration, LogSize: nat, TerminalLog: nat,
   return (initial = initial);
 }
 
+fn association_size<F: Field>(enabled: bool, values: Vector<F>, count: index) -> bool {
+  return if enabled { length(values) == count } else { true };
+}
+
+fn associated_value<F: Field>(enabled: bool, values: Vector<F>, position: index,
+                              actual: F) -> bool {
+  return if enabled { actual == get(values, position) } else { true };
+}
+
 // One checker for both entrypoints. Association means an actual equality with
 // the authenticated initial handle at this state's exact positions, before
 // each fold chain. The flag and the vector alone establish no binding claim.
@@ -233,27 +257,34 @@ protocol Check<C: Configuration, LogSize: nat, TerminalLog: nat,
   require @V length(state.coefficients) == index<pow2(TerminalLog)>();
   require @V coset::domain_size(state.geometry) == index<pow2(LogSize)>();
   require @V oracle.rows(state.initial) == coset::domain_size(state.geometry);
-  require @V if associate { length(first) == state.query_count } else { true };
+  require @V association_size(associate, first, state.query_count);
+  let remaining_rounds = indices::wrapping_sub(state.round_count, 1);
   let mut valuesV @V = empty<C::Value>();
   for query in 0..state.query_count roles(P,V) max Queries {
     let positionV @V = indices::get(state.positions, query);
     let selected @V <- query state.initial at positionV;
-    if associate {
-      require @V selected == get(first, query);
-    }
+    require @V associated_value(associate, first, query, selected);
     let remembered @V = append(valuesV, selected);
     valuesV = remembered;
-    let mut expected @V = selected;
-    let mut atV @V = positionV;
-    let mut rowsV @V = coset::domain_size(state.geometry);
-    let mut shiftV @V = coset::domain_shift(state.geometry);
-    for round in 0..state.round_count roles(P,V) max Rounds {
-      if !(round == 0) {
-        let actual <- oracle.at(state.layers, round);
-        require @V oracle.rows(actual) == rowsV;
-        let value @V <- query actual at atV;
-        require @V value == expected;
-      }
+
+    // The initial read already supplies round zero's actual-layer value.
+    // Peel its fold so every later iteration has the same distributed schedule.
+    let initial_rowsV @V = coset::domain_size(state.geometry);
+    let initial_shiftV @V = coset::domain_shift(state.geometry);
+    let first_lowV @V = pair_low(positionV, initial_rowsV);
+    let first_view <- oracle.at(state.folds, 0);
+    require @V oracle.rows(first_view) == indices::logical_shift_right(initial_rowsV, 1);
+    let first_folded @V <- query first_view at first_lowV;
+    let mut expected @V = first_folded;
+    let mut atV @V = first_lowV;
+    let mut rowsV @V = indices::logical_shift_right(initial_rowsV, 1);
+    let mut shiftV @V = initial_shiftV * initial_shiftV;
+    for step in 0..remaining_rounds roles(P,V) max Rounds {
+      let round = indices::wrapping_add(step, 1);
+      let actual <- oracle.at(state.layers, round);
+      require @V oracle.rows(actual) == rowsV;
+      let value @V <- query actual at atV;
+      require @V value == expected;
       let lowV @V = pair_low(atV, rowsV);
       let view <- oracle.at(state.folds, round);
       require @V oracle.rows(view) == indices::logical_shift_right(rowsV, 1);
@@ -277,8 +308,9 @@ pub protocol Query<C: Configuration, LogSize: nat, TerminalLog: nat,
     where zkc::algebra::TwoAdicField(C::Value),
       zkc::algebra::CharacteristicNotTwo(C::Value), LogSize <= 63,
       1 <= Rounds, 1 <= Queries, TerminalLog+Rounds+1 <= LogSize {
+  let first @V = empty<C::Value>();
   let (accepted, valuesV) <- Check<C,LogSize,TerminalLog,Rounds,Queries>(state,
-    false, empty<C::Value>());
+    false, first);
   return (accepted = accepted, valuesV = valuesV);
 }
 

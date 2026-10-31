@@ -19,7 +19,7 @@ math fn words(a:index,b:index,n:index,choose:bool)->(index,index,index,index,ind
   let half=indices::logical_shift_right(n,1);
   let low=indices::bit_and(a,indices::wrapping_sub(half,1));
   let high=indices::wrapping_add(low,half);
-  let selected=if choose { low } else { high };
+  let selected=indices::select(choose,low,high);
   return(sum,difference,bits,shifted,low,high,selected);
 }
 protocol Run roles(P)(a:index@P,b:index@P,n:index@P,choose:bool@P)

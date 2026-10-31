@@ -5,10 +5,12 @@ The [library](lib.zkc) has one logical `Commit` and one private query checker.
 parameter, Merkle state, roots, paths, pair layout or automatic realization
 selection. A deployment must select and check its oracle realization.
 
-This migration is source work awaiting compiler integration and central
-validation. No build, test, proof execution or Lean check was run for it.
-NativeProof publication of logical oracles remains a central integration gap;
-the example proof declarations do not supply that missing integration.
+The compiler realizes these handles before participant projection. NativeProof
+then reconstructs deterministic verifier requests from the checked public
+inputs, transcript draws and already published values. Both participants absorb
+those requests at their original occurrences; only their transport is omitted.
+The verifier still authenticates each response before using its answers. See
+[verifier request reconstruction](../../../../docs/spec/ir/verifier-requests.md).
 
 ## Public API
 
@@ -98,7 +100,10 @@ The checker first queries the initial handle at the selected position. In
 association mode it immediately compares that authenticated answer with the
 supplied DEEP value. Each later actual layer answer is compared with the
 preceding virtual-fold answer; the last fold is compared with the terminal
-polynomial. Both source siblings remain logical queries. Physical sharing or
+polynomial. Round zero's fold is explicit, followed by a uniform loop over the
+remaining rounds. Optional association is a verifier-local predicate, so it does
+not create a conditional communication schedule. Both source siblings remain
+logical queries. Physical sharing or
 sibling omission needs its own checked reconstruction and authentication.
 Existing pruned multi-openings and dynamic query packets have different costs;
 this migration claims no preserved proof size or throughput.

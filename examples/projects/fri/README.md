@@ -20,6 +20,21 @@ zkc compile \
   example::Proof --output=fri.zkpkg
 ```
 
+That command selects the clear-table interpretation. To use the installed
+octic Keccak Merkle realization with individual leaves, select it explicitly:
+
+```sh
+zkc compile \
+  --project=examples/projects/fri/zkc.toml \
+  '--oracle-realization={"format":"zkc.oracle-selection/0","roots":{"kind":"uniform","table":{"scheme":"rows.merkle-keccak256.koala-bear.ext8-binomial3/0","grouping":"individual","order":"natural"}},"order":"after-final-draw","authentication":"atomic-blocks"}' \
+  example::Proof --output=fri-merkle.zkpkg
+```
+
+These packages retain the same logical protocol and have different deployment
+identities. Use the same package and its digest for proof production and
+verification. Merkle responses contain the complete rows and paths for both
+fold children; they do not reuse the former specialized FRI sibling omission.
+
 `Fri` provides its default interactive run entry without an `entry fn` wrapper.
 `Proof` explicitly derives verifier randomness through
 the installed Merlin3 transcript construction. Public inputs are the coset

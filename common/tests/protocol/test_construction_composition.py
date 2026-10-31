@@ -7,6 +7,12 @@ from source_modules import core_packages, library_modules
 from test_constructions import SOURCE, reject_deployment
 from test_record_codecs import CODEC
 
+ORACLE_SELECTION = {
+    'format': 'zkc.oracle-selection/0',
+    'roots': {'kind': 'uniform', 'table': {
+        'scheme': '', 'grouping': 'individual', 'order': 'natural'}},
+    'order': 'unrestricted', 'authentication': 'per-query'}
+
 
 def composed_source(empty, nested=False):
     text = SOURCE.replace('STATE', 'F').replace('INITIAL', '0')
@@ -108,8 +114,9 @@ def test_child_state_arguments_and_root_codec(toolchain, journal, directory, emp
                'finite_bulk': '--no-finite-bulk' not in flags,
                'fuse_collect_fold': '--fuse-collect-fold' in flags,
                'calculation_batching': '--no-calculation-batching' not in flags}
-    assert stored['options'] == choices
-    assert deployment[7] == [str(value).lower() for value in choices.values()]
+    assert stored['options'] == {**choices, 'oracle_realization': ORACLE_SELECTION}
+    assert deployment[7] == [str(value).lower() for value in choices.values()] + [
+        json.dumps(ORACLE_SELECTION, sort_keys=True, separators=(',', ':'))]
     bindings = json.loads(deployment[4])[1]
     assert any(binding[1] == 'vector.sum' for binding in bindings) == choices['finite_bulk']
     witness = journal.write('witness.json', {'secret': '7'})
