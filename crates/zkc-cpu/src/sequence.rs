@@ -317,15 +317,16 @@ impl Sequence {
         })
     }
     pub(crate) fn retained_parts(&self, shared: &mut dyn FnMut(Backing) -> bool) -> usize {
-        if shared(self.backing())
-            && let Some(top) = &self.root.top
-        {
-            top.retained_parts(shared);
+        if shared(self.backing()) {
+            self.root.physical_type.visit_descriptor_backings(shared);
+            if let Some(top) = &self.root.top {
+                top.retained_parts(shared);
+            }
         }
         0
     }
     fn root_bytes(&self) -> usize {
-        NODE_HEADER + self.root.physical_type.descriptor_bytes()
+        NODE_HEADER
     }
     fn backing(&self) -> Backing {
         Backing::of(&self.root, self.root_bytes())
@@ -670,7 +671,9 @@ mod tests {
         let shared_bytes: usize = parts(&outer).iter().sum();
         assert_eq!(
             outer.retained_bytes() - shared_bytes,
-            64 * nested.retained_bytes()
+            // The outer logical descriptor and its physical child both share
+            // the inner logical metadata with the nested value.
+            64 * nested.retained_bytes() + 2 * nested.physical_type().logical().descriptor_bytes()
         );
         let original = outer.clone();
         let next = outer.appended(&inner, &policy, usize::MAX).unwrap();

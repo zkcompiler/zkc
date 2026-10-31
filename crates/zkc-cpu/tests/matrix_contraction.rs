@@ -269,11 +269,7 @@ fn contractions_reserve_only_one_scalar_even_for_empty_or_large_selected_dimensi
                     vector(field, &vec![3; inner]),
                     Value::Index(0),
                 ];
-                for limit in [
-                    0,
-                    zkc_cpu::VALUE_SLOT_BYTES - 1,
-                    zkc_cpu::VALUE_SLOT_BYTES,
-                ] {
+                for limit in [0, zkc_cpu::VALUE_SLOT_BYTES - 1, zkc_cpu::VALUE_SLOT_BYTES] {
                     let mut controlled = Controlled::new(backend(Policy::default()));
                     controlled.output_limit = Some(limit);
                     let (result, observed) =

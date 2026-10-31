@@ -81,6 +81,16 @@ independent targets retain distinct allocations. Capability handles retain their
 512-byte profile, and larger shared group payloads retain their own profiles.
 These storage charges do not change canonical wire bytes or execution quotas.
 
+Aggregate payloads report immutable logical descriptors and physical child
+layouts as separate backing allocations. Their charges include all alternatives,
+including inactive variant arms and nominal resource domains. Two values sharing
+these actual allocations retain them once; separately parsed equal descriptors
+remain distinct. Expanded per-value, admission and codec bounds still count
+metadata at every occurrence. A descriptor allocation grants no payload-validation
+evidence: validation reuse identifies the immutable payload itself, and capability
+checks remain live. Field arrays and fixed vectors partition their descriptor and
+element storage in the same way. No allocation is free merely because it is metadata.
+
 - **Live bytes** count each shared allocation once while any live binding, view
   or container retains it, plus the owned storage of every live binding. A view
   or collection that retains a parent allocation keeps the parent's whole charge

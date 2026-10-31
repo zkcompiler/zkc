@@ -10,7 +10,7 @@ pub struct Variant {
     descriptor: Arc<VariantDescriptor>,
     alternative: usize,
     payload: Arc<[Value]>,
-    /// Charge of the payload allocation: descriptor, header, payload slots and
+    /// Charge of the payload allocation: header, payload slots and
     /// storage the payload keeps inline. Payload allocations are separate.
     spine: usize,
     /// Expanded physical-profile charge, counting every active occurrence.
@@ -37,7 +37,7 @@ impl Variant {
             sum.checked_add(value.retained_parts(&mut |_| false))
         });
         let spine = inline
-            .and_then(|bytes| Self::storage_bytes(&physical_type, payload.len(), bytes))
+            .and_then(|bytes| Self::payload_bytes(payload.len(), bytes))
             .unwrap_or(usize::MAX);
         let retained = payload
             .iter()
@@ -61,6 +61,7 @@ impl Variant {
     /// payload's own allocations.
     pub(crate) fn retained_parts(&self, shared: &mut dyn FnMut(Backing) -> bool) -> usize {
         if shared(self.spine()) {
+            self.physical_type.visit_descriptor_backings(shared);
             for value in self.payload.iter() {
                 value.retained_parts(shared);
             }
@@ -120,7 +121,10 @@ impl Variant {
     ) -> Option<usize> {
         physical_type
             .descriptor_bytes()
-            .checked_add(256)?
+            .checked_add(Self::payload_bytes(length, payload_bytes)?)
+    }
+    fn payload_bytes(length: usize, payload_bytes: usize) -> Option<usize> {
+        256usize
             .checked_add(length.checked_mul(VALUE_SLOT_BYTES)?)?
             .checked_add(payload_bytes)
     }

@@ -140,11 +140,7 @@ fn extension_product_reduces_non_base_coefficients() {
 fn product_charges_scalar_output_even_for_empty_and_zero_inputs() {
     for (numbers, expected) in [(&[][..], 1), (&[2, 3][..], 6), (&[0, 3][..], 0)] {
         for (vector, expected) in cases(numbers, expected) {
-            for limit in [
-                0,
-                zkc_cpu::VALUE_SLOT_BYTES - 1,
-                zkc_cpu::VALUE_SLOT_BYTES,
-            ] {
+            for limit in [0, zkc_cpu::VALUE_SLOT_BYTES - 1, zkc_cpu::VALUE_SLOT_BYTES] {
                 let mut controlled = Controlled::new(backend(Policy::default()));
                 controlled.output_limit = Some(limit);
                 let (result, observed) =

@@ -72,7 +72,7 @@ impl VariantDescriptor {
     pub(super) fn is_program_port(&self) -> bool {
         self.program_port
     }
-    fn compute_retained_bytes(&self) -> usize {
+    pub(super) fn own_retained_bytes(&self) -> usize {
         const {
             assert!(std::mem::size_of::<LogicalType>() <= 256);
         }
@@ -87,13 +87,18 @@ impl VariantDescriptor {
             bytes = bytes.checked_add(self.alternatives.len().checked_mul(256)?)?;
             for arm in &self.alternatives {
                 bytes = bytes.checked_add(arm.payload.len().checked_mul(256)?)?;
-                for ty in &arm.payload {
-                    bytes = bytes.checked_add(ty.descriptor_bytes())?;
-                }
             }
             Some(bytes)
         })();
         size.unwrap_or(usize::MAX)
+    }
+    fn compute_retained_bytes(&self) -> usize {
+        self.alternatives
+            .iter()
+            .flat_map(|arm| arm.payload.iter())
+            .fold(self.own_retained_bytes(), |bytes, ty| {
+                bytes.saturating_add(ty.descriptor_bytes())
+            })
     }
     pub(super) fn parse(
         spelling: &str,

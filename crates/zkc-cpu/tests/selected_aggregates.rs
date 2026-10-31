@@ -260,12 +260,21 @@ fn dense_storage_shares_capacity_and_exact_backing_through_every_operation() {
             let value = call(b("from_vector"), &[], vec![vector.clone()]);
             assert_eq!(value.physical_type(), ty);
             let (owned, backing) = parts(&value);
-            assert_eq!(backing, source_backing);
+            assert_eq!(backing.len(), 3);
+            assert!(backing.contains(&source_backing[0]));
             assert_eq!(
                 owned + backing.iter().map(Backing::bytes).sum::<usize>(),
                 value.retained_bytes()
             );
-            assert!(owned >= ty.descriptor_bytes());
+            assert_eq!(owned, 1024);
+            assert_eq!(
+                backing
+                    .iter()
+                    .filter(|b| !source_backing.contains(b))
+                    .map(Backing::bytes)
+                    .sum::<usize>(),
+                ty.descriptor_bytes()
+            );
             assert_eq!(parts(&value.clone()), parts(&value));
             match &value {
                 Value::FieldArray(v) => {

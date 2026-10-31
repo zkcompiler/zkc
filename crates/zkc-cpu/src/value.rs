@@ -1745,10 +1745,12 @@ impl RuntimeValue for Value {
             Self::Sequence(v) => Ok(v.retained_parts(shared)),
             Self::Variant(v) => Ok(v.retained_parts(shared)),
             Self::FieldArray(v) => v.backing().map(|backing| {
+                v.physical_type().visit_descriptor_backings(shared);
                 shared(backing);
                 v.owned_bytes()
             }),
             Self::FixedVector(v) => v.backing().map(|backing| {
+                v.physical_type().visit_descriptor_backings(shared);
                 shared(backing);
                 v.owned_bytes()
             }),
@@ -2218,11 +2220,15 @@ mod retained_parts_tests {
                 .1
                 .contains(&parts(&Value::Vector(other)).1[0])
         );
-        assert_eq!(parts(&array).1, [vector_backing]);
-        assert_eq!(parts(&fixed).1, parts(&fixed_vector).1);
+        assert!(parts(&array).1.contains(&vector_backing));
+        assert_eq!(parts(&array).1.len(), 3); // Logical metadata, child layout, elements.
+        assert!(parts(&fixed).1.contains(&parts(&fixed_vector).1[0]));
+        assert_eq!(parts(&fixed).1.len(), 3);
         let aliases = pack("SharedFixed", vec![fixed.clone(), fixed_vector.clone()]);
         assert_eq!(
-            charged(&aliases) + fixed_vector.retained_bytes(),
+            charged(&aliases)
+                + fixed_vector.retained_bytes()
+                + fixed.physical_type().logical().descriptor_bytes(),
             aliases.retained_bytes()
         );
         // Repeated allocations inside one value are charged once.

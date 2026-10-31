@@ -98,12 +98,14 @@ impl FieldArray {
         Ok(())
     }
     pub(crate) fn retained_bytes(&self) -> Result<usize> {
+        let backing = self.backing()?;
         self.owned_bytes()
-            .checked_add(self.backing()?.bytes())
+            .checked_add(self.physical_type.descriptor_bytes())
+            .and_then(|bytes| bytes.checked_add(backing.bytes()))
             .ok_or_else(|| exhausted("output-bytes"))
     }
     pub(crate) fn owned_bytes(&self) -> usize {
-        DESCRIPTOR_BYTES.saturating_add(self.physical_type.descriptor_bytes())
+        DESCRIPTOR_BYTES
     }
     /// The identity and charge match the dynamic vector's shared carrier.
     pub(crate) fn backing(&self) -> Result<Backing> {
