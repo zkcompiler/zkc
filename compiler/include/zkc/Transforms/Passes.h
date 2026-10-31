@@ -35,7 +35,14 @@ createPrepareProtocolPass(bool simplify = true,
 std::unique_ptr<mlir::Pass>
 createProjectProtocolPass(bool simplify = true,
                           MathematicalSelectionPolicy policy = {});
-/// Form demanded participant mathematics as closed computation units in Exec.
+/// Close a participant deployment by checked scoped expansion and unreachable
+/// helper pruning, then form demanded mathematics in Exec. Each edge is checked
+/// against its actual input. Standalone lowering retains authored definitions.
+std::unique_ptr<mlir::Pass> createLowerClosedParticipantPass(
+    MathematicalSelectionPolicy policy = {},
+    mathematical::RealizationTrace *trace = nullptr);
+/// Form demanded participant mathematics as closed computation units in Exec,
+/// preserving the authored definition inventory.
 std::unique_ptr<mlir::Pass>
 createLowerMathPass(MathematicalSelectionPolicy policy = {},
                     mathematical::RealizationTrace *trace = nullptr);

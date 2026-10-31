@@ -786,9 +786,12 @@ body path, independently of optional security selection. These unresolved
 occurrences are checking proposals; lookup does not supply proof evidence or
 extend formal oracle admission. See the [companion contract](spec/language/companions.md#virtual-oracle-admissibility).
 Bounded source sequences retain explicit families, persistent loop state and
-dynamic selected anchors. Virtual source spelling remains with the frontend
-redesign. The proposals' semantic interpretation and checked realization remain
-in progress. Formation does not enable execution.
+dynamic selected anchors. Both explicitly selected source formats check virtual
+definitions and instantiations through one typed query plan; lowering and
+independent comparison retain total maps, ordered queries, shapes and predicates.
+Checked native realization implements the admitted communication profile above.
+Admissibility proposals still require independent semantic discharge; formation
+and native execution do not establish those predicates or a security theorem.
 
 Checked notation inspection is available through
 `inspectNotations` with `NotationInspectionOptions.includePrivate` and

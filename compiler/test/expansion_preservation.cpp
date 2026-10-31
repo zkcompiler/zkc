@@ -160,6 +160,25 @@ int main() {
               "unsound helper pruning accepted");
     });
   };
+  cases.run(
+      "deployment pruning preserves the standalone lowering boundary", [&] {
+        auto ordinary = copy(*participant);
+        run(*ordinary, protocol::createLowerMathPass());
+        require(bool(function(*ordinary, "identity")),
+                "standalone mathematical lowering deleted an authored helper");
+        auto closed = copy(*source);
+        run(*closed, protocol::createProjectProtocolPass(false));
+        run(*closed, protocol::createLowerClosedParticipantPass());
+        auto unit =
+            cast<protocol_ir::ProtocolModuleOp>(closed->getBody()->front());
+        require(!SymbolTable::lookupSymbolIn(unit, "identity") &&
+                    SymbolTable::lookupSymbolIn(unit, "both"),
+                "deployment lowering did not prune exactly the unused helper");
+        require(succeeded(
+                    mathematical::verifyProjectionPreserved(*pruned, *closed)),
+                "deployment lowering repeated scoped expansion or changed its "
+                "frozen context");
+      });
   pruneNegative("pruning cannot remove a reachable helper",
                 [&](ModuleOp m) { function(m, "both").erase(); });
   pruneNegative("pruning cannot modify retained helper semantics",

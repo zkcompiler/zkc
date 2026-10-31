@@ -226,8 +226,12 @@ def assert_quartic_frames(messages, *, log_size, final, rounds, queries, width, 
     outer = 5 + rounds
     assert vector_count(messages[outer], BASE_VECTOR, 4) == width * queries
     assert vector_count(messages[outer + 2], QUARTIC_VECTOR, 16) == chunks * queries
-    for index in [outer + 1, outer + 3]:
-        vector_count(messages[index], PROOF_FRAME, 32)
+    sibling_counts = [vector_count(messages[index], PROOF_FRAME, 32)
+                      for index in (outer + 1, outer + 3)]
+    # Both trees open the same positions with the same geometry. The number
+    # of shared siblings depends on the sampled positions, not row contents.
+    assert sibling_counts[0] == sibling_counts[1]
+    assert 0 <= sibling_counts[0] <= log_size * queries
     packets = len(prefix)
     for query in range(queries):
         for layer in range(rounds):
@@ -717,7 +721,12 @@ def test_comparison_with_existing_profile(toolchain, journal, directory):
         record[project.name] = {'scheme': QUARTIC_SCHEME if project == PROJECT else OCTIC_SCHEME,
                                 **wire_profile(proof.read_bytes())}
     journal.write('comparison.json', record)
+    # Occurrence identities bind the transcript, so a compiler change can
+    # change sampled positions and hence pruned multiproof sharing. Pin the
+    # complete fixed frame inventory, not one transcript's sibling count.
+    siblings = sum(record['stark']['frames'][i]['count'] for i in (9, 11))
     assert {name: {key: value[key] for key in ('bytes', 'messages', 'payload_bytes')}
             for name, value in record.items()} == {
                 'fibonacci': {'bytes': 19508, 'messages': 88, 'payload_bytes': 18764},
-                'stark': {'bytes': 15900, 'messages': 60, 'payload_bytes': 15380}}
+                'stark': {'bytes': 15004 + 32 * siblings, 'messages': 60,
+                          'payload_bytes': 14484 + 32 * siblings}}

@@ -71,9 +71,9 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
   trace.eventLimit = 4096;
   if (observations)
     observations->instrument(pipeline);
-  buildExecutionPipeline(pipeline, simplify, fixPolynomials,
-                         mathematicalSelection,
-                         observations ? &trace : nullptr);
+  buildClosedExecutionPipeline(pipeline, simplify, fixPolynomials,
+                               mathematicalSelection,
+                               observations ? &trace : nullptr);
   if (stages)
     for (auto &pass : pipeline.getPasses())
       stages->push_back(pass.getArgument().str());

@@ -78,9 +78,9 @@ int main() {
                 !intrinsic->scalar,
             "field selection catalog signature differs");
     require(
-        llvm::none_of(protocol::executableOperationContracts(),
-                      [](const auto &op) { return op.name == "field.select"; }),
-        "selection unexpectedly enrolled a runtime operation");
+        llvm::any_of(protocol::executableOperationContracts(),
+                     [](const auto &op) { return op.name == "field.select"; }),
+        "selection is missing its executable scalar recipe");
   });
   cases.run("index selection has one total catalog identity", [] {
     const auto *intrinsic = mathematicalIntrinsic("index.select");
@@ -230,8 +230,8 @@ fn select(c:bool,a:Fr,b:Fr)->Fr effects() {
 math fn bad(c:bool,a:Fr,b:Fr)->Fr { return select(c,a,b); }
 )"),
             "source.mode");
-    refuses(check(R"(fn bad(c:bool,a:Fr,b:Fr)->Fr=primitive("field.select");)"),
-            "source.primitive");
+    take(
+        check(R"(fn select(c:bool,a:Fr,b:Fr)->Fr=primitive("field.select");)"));
   });
   for (StringRef arguments : {"false,at(xs,i),0", "true,0,at(xs,i)"})
     cases.run("unselected alternative retains formation: " + arguments, [=] {

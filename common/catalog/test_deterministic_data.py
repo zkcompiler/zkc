@@ -16,6 +16,7 @@ COVERAGE = {
         index.bit_and index.logical_shift_right bool.and bool.not bool.or
         field.from_index field.sub field.neg field.inverse field.embed
         field.constant field.add field.mul field.equal control.require
+        bool.select index.select field.select curve.select
     """,
     "containers": """
         sequence.empty sequence.append sequence.at sequence.length

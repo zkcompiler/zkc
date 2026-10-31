@@ -36,6 +36,8 @@ def evaluate(carrier, arguments):
                 if contract == "bool.and": value = args[0] and args[1]
                 elif contract == "bool.or": value = args[0] or args[1]
                 elif contract == "bool.not": value = not args[0]
+                elif contract in ("bool.select", "field.select", "index.select", "curve.select"):
+                    value = args[1] if args[0] else args[2]
                 else: raise AssertionError(contract)
                 env[op[5][0]] = value
             elif op[0] == "if":
@@ -100,7 +102,7 @@ for operation in ("andi", "select"):
     if operation == "andi":
         assert bound_count(direct, 'bool.and') > bound_count(simplified, 'bool.and')
     else:
-        assert direct.count('exec.test') > simplified.count('exec.test')
+        assert bound_count(direct, 'bool.select') > bound_count(simplified, 'bool.select')
     c = json.loads(commands.source("protocol-export", commands.verified(direct, None, "--zkc-select-physical")))
     for a, b, condition in itertools.product((False, True), repeat=3):
         values = evaluate(c, [a, b, condition, 11, 23, 31, 47])

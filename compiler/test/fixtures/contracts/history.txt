@@ -1,3 +1,4 @@
+bool.select 0
 bool.and 0
 ring.point 0
 ring.rows 0
@@ -21,6 +22,7 @@ commitments.at 0
 commitments.empty 0
 commitments.length 0
 control.require 0
+curve.select 0
 curve.add 0
 curve.append 0
 curve.at 0
@@ -50,6 +52,7 @@ external.openvm.observe 1
 external.openvm.sample 1
 external.openvm.sample_bits 1
 external.openvm.sample_ext 1
+field.select 0
 field.add 0
 field.constant 0
 field.embed 0
@@ -65,6 +68,7 @@ field_array.get 0
 fixed_vector.dot 0
 fixed_vector.from_vector 0
 fixed_vector.to_vector 0
+index.select 0
 index.logical_shift_right 0
 index.bit_and 0
 index.wrapping_sub 0

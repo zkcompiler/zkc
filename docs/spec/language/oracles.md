@@ -5,8 +5,9 @@ family. They are not ordinary shared data or a Merkle commitment. The
 [Protocol IR contract](../ir/protocols.md#logical-oracle-kinds-and-handles)
 owns their meaning; realization selects an implementation separately.
 
-This page distinguishes the implemented layout projection from the remaining
-virtual-definition design. It does not announce production source-format cutover.
+This page specifies checked oracle projection, including virtual definitions,
+for explicitly selected source formats. It does not announce production
+source-format cutover.
 
 ## Types and ports
 
@@ -212,10 +213,11 @@ explicitly with `@(P = received, V = sampled)`; assembly asserts no equality.
 The IR verifier owns dependency/shape formation, and the actual-body comparison
 must inspect the complete definition and predicate, including unused ones.
 
-This projection remains refused until its typed plan, total query-domain maps,
-obligation export and independent actual-definition comparison are implemented
-together. A parser-only declaration is insufficient. The existing IR per-query
-virtual evaluator does not fill these frontend obligations automatically.
+Projection checks the typed plan, total query-domain maps, obligation export
+and actual-definition comparison together. Both explicitly selected source
+formats produce that plan; neither a parser-only declaration nor the IR query
+evaluator substitutes for these checks. The admissibility predicate remains an
+explicit obligation, not an assumed theorem or an inserted runtime guard.
 
 ## Setup and realization selection
 
@@ -229,8 +231,8 @@ required observation/authentication policy. Selection consumes the IR owner's
 checked policy and cannot be inferred from an oracle type alias.
 
 The layout deployment projection is deferred with the entry/proof integration;
-the current C++ realization-selection API remains its producer. A future CLI or
-project-file spelling must serialize that same policy. Introducing a second
+the C++ API, CLI and SDK use the same requested realization policy. A future
+source or project-file spelling must serialize that policy. Introducing a second
 inline policy language before the existing reader and Host setup contract are
 connected would duplicate authority. KZG acceptance therefore needs an installed
 polynomial-evaluation kind, checked setup selectors and a KZG realization, while
@@ -251,7 +253,7 @@ Merkle table acceptance needs no setup key. Neither is supplied by parsing
 | `oracle_sequence_append` | `oracle.append(sequence, handle)` | Implemented projection |
 | `oracle_sequence_at` | `oracle.at(sequence, position)` | Implemented projection |
 | `oracle_sequence_length` | `oracle.length(sequence)` | Implemented projection |
-| `oracle_virtual` | `oracle def`, followed by ordered instantiation | Parsed design; typed definition/instantiation integration pending |
+| `oracle_virtual` | `oracle def`, followed by ordered instantiation | Implemented checked definition/instantiation projection |
 | `oracle_components` | Implicit decomposition at oracle protocol calls and returns | Implemented projection; no additional author keyword |
 
 Virtual definitions require the complete integration contract above. They must

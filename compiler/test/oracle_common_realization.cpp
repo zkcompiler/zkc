@@ -1450,7 +1450,13 @@ int main(int argc, char **argv) {
             program->erase();
           require(print(*edge->original) == print(*selectedSource),
                   "production changed the selected prepared subject");
-          checked(checkOracleRealization(*selectedSource, *edge->candidate,
+          // Compilation owns a separate MLIR context. Reparse the independent
+          // source into that context before comparing uniqued native types.
+          auto comparisonSource = parseSourceString<ModuleOp>(
+              print(*selectedSource), edge->candidate->getContext());
+          require(bool(comparisonSource),
+                  "independent source failed context-local import");
+          checked(checkOracleRealization(*comparisonSource, *edge->candidate,
                                          edge->record));
           require(print(*prepared) == frozen,
                   "deployment selection mutated the complete source");

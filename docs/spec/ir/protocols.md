@@ -976,10 +976,11 @@ after role projection while preserving the original interface and ordered
 actions. Every resulting candidate must pass closed admission and the frozen
 interface postcondition.
 
-`zkc-lower-math` first applies independently checked scoped helper substitution.
-It then removes scoped helper definitions unreachable from the participant
-context, using MLIR symbol references. Every other declaration is a live root,
-including all entries, participants, bindings, mathematical definitions,
+`zkc-lower-closed-participant` closes a participant deployment before
+forming its mathematical computations. It applies independently checked scoped helper
+substitution, then removes scoped helper definitions unreachable from the
+participant context, using MLIR symbol references. Every other declaration is
+a live root, including all entries, participants, bindings, mathematical definitions,
 relations and projection metadata. The independent pruning checker admits both
 actual modules and requires the candidate to be an unchanged, ordered
 subsequence of the source declarations, with only scoped definitions omitted.
@@ -987,8 +988,13 @@ Candidate admission rules out any retained reference to an omitted definition.
 Invalid dormant helpers therefore cannot escape source admission. This edge
 applies only to the participant profile; it cannot remove role-free exported
 functions. Pruning does not change any executed operation or resource charge.
+Native compilation and the full textual participant pipeline run this pass.
+It composes the separately checked expansion, pruning and computation-formation
+edges, expanding helpers only once before pruning. Standalone mathematical lowering retains every authored
+definition; it does not treat its input as a closed deployment.
 
-It then produces `exec` with retained mathematical computation units. For every local
+`zkc-lower-math` applies independently checked scoped helper substitution and
+produces `exec` with retained mathematical computation units. For every local
 action or finish cut, it finds total dependencies not previously computed and
 schedules them in dependency order with source-order tie breaking. Work starts
 at its first consumer, so an earlier guard cannot trigger unrelated later
@@ -1012,9 +1018,9 @@ outcomes and accounting.
 Lowering disables implicit dialect-conversion folding. Total simplification is
 an explicit earlier stage; executable recipes have deterministic sites and
 retain the selected instruction structure. XOR and comparison use existing
-Boolean kernels; selection uses local conditional control with already evaluated
-data captures. A literal uses the
-[native participant instruction](../formats/program.md).
+Boolean kernels. Selection of Boolean, index, field and group scalars uses
+the corresponding deterministic `*.select` contract on already evaluated
+operands. A literal uses the [native participant instruction](../formats/program.md).
 
 Each total calculation becomes an owned numerical entry invoked by typed
 `exec.compute` from its scoped wrapper. The guard remains outside that unit.
