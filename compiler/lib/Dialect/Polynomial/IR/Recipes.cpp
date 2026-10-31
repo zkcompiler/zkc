@@ -109,14 +109,17 @@ FailureOr<FunctionType> realizationType(RealizeOp realization) {
   if (field.getDomain() != "bls12-381.fr")
     return failure();
   auto *context = realization.getContext();
-  auto state = residualStateType(recipe);
-  if (!state)
-    return failure();
+  auto kind = realization.getKind();
+  Type state;
+  if (kind != "evaluate") {
+    state = residualStateType(recipe);
+    if (!state)
+      return failure();
+  }
   auto table = MultilinearType::get(context, field.getDomain());
   auto point = PointType::get(context, field.getDomain());
   auto index = IntegerType::get(context, 64, IntegerType::Unsigned);
   SmallVector<Type> inputs, outputs;
-  auto kind = realization.getKind();
   if (kind == "init" || kind == "evaluate") {
     inputs.push_back(kind == "init" ? Type(index) : Type(point));
     inputs.append(recipe.getBody().front().getNumArguments(), table);

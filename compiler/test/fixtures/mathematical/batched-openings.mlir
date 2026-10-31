@@ -208,7 +208,7 @@ module { "protocol.module"() ({
       %8 = "exec.apply"(%arg0, %7, %5) <{binding = @coordinate, parameters = [], site = "point1"}> : (!runtime.scope, !p, !f) -> !exec.outcome<(!p)>
       "exec.dispatch"(%8)[^bb5, ^bb2] : (!exec.outcome<(!p)>) -> ()
     ^bb5(%9: !p):  // pred: ^bb4
-      "exec.match"(%arg0, %1, %arg4, %arg5, %9)[^bb2, ^bb7, ^bb8] <{alternatives = ["none", "some"], site = "present"}> : (!runtime.scope, !message, !vk, !c, !p) -> ()
+      "exec.match"(%arg0, %1, %arg4, %arg5, %9, %arg4, %arg5, %9)[^bb2, ^bb7, ^bb8] <{alternatives = ["none", "some"], site = "present", successor_operand_segments = array<i32: 0, 3, 3 >}> : (!runtime.scope, !message, !vk, !c, !p, !vk, !c, !p) -> ()
     ^bb6(%10: i1):  // 2 preds: ^bb11, ^bb14
       %11 = "exec.apply"(%arg0, %arg2, %10) <{binding = @and, parameters = [], site = "next"}> : (!runtime.scope, i1, i1) -> !exec.outcome<(i1)>
       "exec.dispatch"(%11)[^bb15, ^bb2] : (!exec.outcome<(i1)>) -> ()

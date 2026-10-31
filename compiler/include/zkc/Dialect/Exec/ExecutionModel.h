@@ -30,10 +30,6 @@ readExecutionDefinitions(mlir::Operation *symbolTable, bool physical);
 /// correspondence, and its result cannot be published unexpanded.
 llvm::Expected<program::LocalDefinitions>
 readSourceExecutionDefinitions(mlir::Operation *symbolTable);
-/// Explicit neutral adapter for independent schedule comparison. Native
-/// admission and analyses consume readScheduledExecutionClosure directly.
-llvm::Expected<program::LocalDefinitions>
-readScheduledExecutionDefinitions(mlir::Operation *symbolTable);
 /// Independently compare current actual CFG with admitted native definitions.
 /// Allows SSA renaming; checks all actual bodies and bindings without calling
 /// the reconstruction reader or replaying emission. No source theorem is

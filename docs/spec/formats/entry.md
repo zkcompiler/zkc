@@ -230,8 +230,8 @@ spelling and diagnostic locations. It retains those exact bytes and returns
 its emitted bytes need no second canonicality comparison.
 `CheckedOriginal::interface()` exposes the checked view; `selectedProtocol()`
 selects a protocol or proof deployment's protocol record. Application Entry
-functions expose their Host plan instead. Host authentication must bind the retained
-interface bytes, not arbitrary caller JSON that happens to compare semantically.
+functions expose their checked Host interface and retained original SSA.
+Host authentication must bind the retained interface bytes, not arbitrary caller JSON that happens to compare semantically.
 The byte overload of `inspectApplications` admits the entire original and interface before calling a
 read-only visitor for each static `protocol.apply`. Each occurrence exposes its
 caller/callee records, actual MLIR operation, callee-to-caller role substitution,

@@ -301,7 +301,17 @@ complete representative assets, preserving unsupported predicates as opaque.
 ### Extensions with separate entry conditions
 
 Transform/PDL adoption depends on a useful admitted schedule and reader coverage;
-shipping a dialect is not itself a completion criterion. General privacy
+shipping a dialect is not itself a completion criterion. Before admitting
+generic CFG simplification of Host or scoped execution, preserve complete
+semantic binding ports independently of removable edge transport, including
+unused and repeated captures and their storage charges. Extend bounded readers
+to edge-dependent SSA environments and shared continuations, then check source
+occurrences, payload identities, custody, first-stop behavior and budget
+boundaries independently. Correct BranchOpInterface mutation alone does not
+establish that correspondence. The current execution profile deliberately
+retains common source captures and its explicit scope/charge skeleton.
+
+General privacy
 analysis, adaptive oracle profiles, further folding and lattice algorithms need
 named consumers. A complete Falcon verifier and AOT backend remain separate
 projects. Before admitting hashing relations or internal verifiers that share

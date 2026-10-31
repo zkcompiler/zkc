@@ -5,7 +5,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/ControlCursor.h"
-#include "zkc/Dialect/Exec/ExecutionModel.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/Execution.h"
@@ -101,10 +101,12 @@ int main() {
             &context);
         require(bool(flat), "missing independent flat fixture");
         sourceReturn(flat->lookupSymbol<func::FuncOp>("loop"));
-        auto error = protocol::verifySourceExecutionDefinitions(
-            *flat,
-            take(protocol::readScheduledExecutionDefinitions(*schedule)));
-        require(!error, error ? llvm::toString(std::move(error)) : "");
+        // The complete fixture correspondence is exercised by scoped_schedule
+        // through verifyScheduleLowering. Here check each native reader's
+        // actual conditional-loop association without a byte-model adapter.
+        auto executable = take(protocol::readSourceExecutionClosure(*flat));
+        require(executable.bodies.size() == actual->bodies.size(),
+                "authored executable has a different native body inventory");
         auto &step = actual->bodies.at("loop").front();
         require(step.operation == first<exec::RangeOp>(function) &&
                     step.inputs == SmallVector<Value>(
@@ -113,6 +115,16 @@ int main() {
                     step.regions.size() == 1 &&
                     step.regions.front().getSymName() == "step",
                 "scheduled SSA association was reconstructed incorrectly");
+        auto &nativeStep = executable.bodies.at("loop").front();
+        auto nativeLoop = flat->lookupSymbol<func::FuncOp>("loop");
+        require(nativeStep.operation == first<exec::RangeOp>(nativeLoop) &&
+                    nativeStep.inputs ==
+                        SmallVector<Value>(
+                            nativeLoop.getArguments().drop_front()) &&
+                    nativeStep.outputs.size() == 1 && nativeStep.conditional &&
+                    nativeStep.regions.size() == 1 &&
+                    nativeStep.regions.front().getSymName() == "step",
+                "executable SSA association differs from authored loop");
         auto source = protocol::readSourceExecutionClosure(*schedule);
         require(!source, "schedule widened ordinary source admission");
         llvm::consumeError(source.takeError());

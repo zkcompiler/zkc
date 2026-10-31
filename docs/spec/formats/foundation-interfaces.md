@@ -75,6 +75,17 @@ The retired assertion that bindings are non-callable metadata is replaced by
 the typed callable declaration contract. Callable here describes the installed
 invocation ABI; it adds no source body and no inlining permission.
 
+## Native successor operands
+
+The current native MLIR form stores each branch edge's forwarded operands
+separately. `data.match` and `exec.match` require an explicit
+`successor_operand_segments` property and repeat a common source capture once
+per arm. `exec.dispatch` uses the same representation with a default empty
+returned/stopped inventory. Producers, readers and fixtures change together;
+there is no reader for the shared-capture form. See the
+[execution contract](../ir/execution.md#structural-branch-interfaces-and-admitted-execution).
+All external format tags remain `/0`; executable program bytes are unchanged.
+
 ## Constructed participants
 
 The participant envelope retains its ten slots, hashes, policy and service-port

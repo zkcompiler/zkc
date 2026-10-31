@@ -11,6 +11,10 @@ namespace zkc::computation {
 mlir::OwningOpRef<mlir::ModuleOp>
 consumeSchedule(mlir::ModuleOp schedule, uint64_t &remaining,
                 std::optional<CapacityCause> *capacity = nullptr);
+// Independently compare admitted native SCF/CFG closures, including exact
+// declarations, attributes, typed SSA ports and outlined control associations.
+// No byte export, recipe production or consumer replay participates. Shared
+// work covers structural inspection and the complete association comparison.
 mlir::LogicalResult
 verifyScheduleLowering(mlir::ModuleOp schedule, mlir::ModuleOp candidate,
                        uint64_t *shared = nullptr,

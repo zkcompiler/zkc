@@ -198,6 +198,22 @@ int main(int argc, char **argv) {
   registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  cases.run(
+      "empty definition subsets roundtrip without a participant entry", [&] {
+        for (bool physical : {false, true}) {
+          program::LocalDefinitions empty;
+          auto emitted =
+              take(protocol::writeLocalExecution(context, empty, physical));
+          require(succeeded(verify(*emitted)),
+                  "empty subset produced invalid IR");
+          auto decoded = take(protocol::readLocalExecution(*emitted, physical));
+          require(decoded.bindings.empty() && decoded.functions.empty(),
+                  "empty subset acquired executable declarations");
+          if (auto error =
+                  protocol::verifyLocalExecution(*emitted, empty, physical))
+            throw std::runtime_error(llvm::toString(std::move(error)));
+        }
+      });
   cases.run("scoped execution needs no Local dialect", [] {
     DialectRegistry registry;
     registry.insert<algebra::AlgebraDialect, data::DataDialect,

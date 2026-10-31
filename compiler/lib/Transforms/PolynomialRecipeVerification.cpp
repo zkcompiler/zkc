@@ -297,7 +297,9 @@ public:
         return failure();
       auto alternatives = match->getAttrOfType<ArrayAttr>("alternatives");
       auto state = StringAttr::get(source.getContext(), "state");
-      if (match->getAttrs().size() != 2 || !alternatives ||
+      // The segment property describes native successor storage. The scoped
+      // reader checks it and exposes the single semantic capture list below.
+      if (match->getAttrs().size() != 3 || !alternatives ||
           alternatives != ArrayAttr::get(source.getContext(), {state}) ||
           !llvm::equal(ports.inputs(match), inputs) || ports.bodies(match) != 1)
         return failure();

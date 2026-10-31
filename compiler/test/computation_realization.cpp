@@ -1,4 +1,5 @@
 #include "../lib/Transforms/Computation/Support.h"
+#include "mlir/AsmParser/AsmParser.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
@@ -205,6 +206,39 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  cases.run(
+      "numerical checking preflights before admission and closure reading",
+      [&] {
+        auto source = parse(realization, context);
+        auto prepared = closedFixture(*source);
+        auto logical = formExecutable(*prepared, {false, false});
+        auto lowered = copy(*logical);
+        require(succeeded(computation::realizeComputations(*lowered)),
+                "capacity fixture realization failed");
+        for (bool admission : {true, false}) {
+          mathematical::RealizationWork work;
+          if (admission)
+            work.numericalCheckCopy = 0;
+          else
+            work.numericalContextChecking = 0;
+          mathematical::VerificationDecision outcome;
+          unsigned diagnostics = 0;
+          ScopedDiagnosticHandler observe(&context, [&](Diagnostic &) {
+            ++diagnostics;
+            return success();
+          });
+          require(
+              failed(mathematical::verifyNumericalLowering(
+                  *logical, *lowered, {}, {}, &work, &outcome)) &&
+                  outcome.outcome ==
+                      mathematical::VerificationObservation::RequiredCapacity &&
+                  outcome.capacity &&
+                  outcome.capacity->owner == WorkOwner::AlgorithmChecking &&
+                  outcome.capacity->available == 0 && !diagnostics,
+              "exhausted inspection reached semantic admission or lost "
+              "capacity");
+        }
+      });
   cases.run("direct realization loads the same dialects as the pass", [&] {
     auto original = fixture(context, "finite/total-state.mlir");
     auto logical = formExecutable(*original, {false, false});
@@ -1592,9 +1626,14 @@ module {
                                                                     *lowered)),
                 "shared binding was not independently checked");
       });
-  cases.run(
-      "projection aliases share captures without merging distinct leaves", [&] {
-        auto source = parse(R"mlir(
+  for (bool matching : {false, true})
+    cases.run(
+        matching
+            ? "match aliases retain produced payloads and distinct captures"
+            : "projection aliases share captures without merging distinct "
+              "leaves",
+        [&] {
+          auto source = parse(R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 module { "protocol.module"() ({
  func.func private @identity(%x:!F)->!F {func.return %x:!F}
@@ -1608,77 +1647,110 @@ module { "protocol.module"() ({
  }) {sym_name="main",function_type=(!F,!F,i1)->!F,roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"]]}:()->()
 }) {profile=#protocol.profile<protocol>}:()->() }
 )mlir",
-                            context);
-        auto identity =
-            SymbolTable(owner(*source)).lookup<func::FuncOp>("identity");
-        OpBuilder builder(identity);
-        auto field = identity.getArgument(0).getType();
-        auto root = scopedFunction(*source, "work");
-        root.getBody().getBlocks().clear();
-        builder.setInsertionPointToEnd(root.addEntryBlock());
-        exec::ScopedExecutionBuilder control(builder, root);
-        auto invoke = [&](Value value, StringRef site) {
-          return control
-              .invoke(
-                  "exec.compute", field, control.scoped(value),
-                  {builder.getNamedAttr(
-                       "callee",
-                       FlatSymbolRefAttr::get(identity.getSymNameAttr())),
-                   builder.getNamedAttr("site", builder.getStringAttr(site))})
-              .front();
-        };
-        auto alias = invoke(root.getArgument(1), "identity");
-        auto other = invoke(root.getArgument(2), "other");
-        auto again = invoke(root.getArgument(1), "again");
-        SmallVector<Value> captures{root.getArgument(1), alias,
-                                    root.getArgument(2), other, again};
-        auto result = control.conditional(
-            root.getArgument(3), captures, field, "choose",
-            [&](unsigned branch) {
-              auto region =
-                  sc::region(builder, root, branch ? "otherwise" : "then",
-                             TypeRange(captures), field);
-              exec::ScopedExecutionBuilder action(builder, region);
-              action.complete(region.getArgument(branch ? 4 : 5));
-              return region;
+                              context);
+          auto identity =
+              SymbolTable(owner(*source)).lookup<func::FuncOp>("identity");
+          OpBuilder builder(identity);
+          auto field = identity.getArgument(0).getType();
+          auto root = scopedFunction(*source, "work");
+          root.getBody().getBlocks().clear();
+          builder.setInsertionPointToEnd(root.addEntryBlock());
+          exec::ScopedExecutionBuilder control(builder, root);
+          auto invoke = [&](Value value, StringRef site) {
+            return control
+                .invoke(
+                    "exec.compute", field, control.scoped(value),
+                    {builder.getNamedAttr(
+                         "callee",
+                         FlatSymbolRefAttr::get(identity.getSymNameAttr())),
+                     builder.getNamedAttr("site", builder.getStringAttr(site))})
+                .front();
+          };
+          auto alias = invoke(root.getArgument(1), "identity");
+          auto other = invoke(root.getArgument(2), "other");
+          auto again = invoke(root.getArgument(1), "again");
+          SmallVector<Value> captures{root.getArgument(1), alias,
+                                      root.getArgument(2), other, again};
+          auto outline = [&](unsigned branch) {
+            SmallVector<Type> inputs;
+            if (matching)
+              inputs.push_back(field);
+            llvm::append_range(inputs, TypeRange(captures));
+            auto region = sc::region(
+                builder, root, branch ? "otherwise" : "then", inputs, field);
+            exec::ScopedExecutionBuilder action(builder, region);
+            action.complete(region.getArgument((branch ? 4 : 5) + matching));
+            return region;
+          };
+          SmallVector<Value> result;
+          if (matching) {
+            auto variant = parseType(
+                "!data.variant<#data.identity<[\"atom\",\"CaptureChoice\"]>, "
+                "[#data.alternative<\"then\", "
+                "[!algebra.field<\"bls12-381.fr\">]>, "
+                "#data.alternative<\"otherwise\", "
+                "[!algebra.field<\"bls12-381.fr\">]>]>",
+                &context);
+            require(bool(variant), "payload variant did not parse");
+            auto choice = control.invoke(
+                "exec.variant", variant, control.scoped(root.getArgument(1)),
+                {builder.getNamedAttr("site", builder.getStringAttr("tag")),
+                 builder.getNamedAttr("alternative",
+                                      builder.getStringAttr("then"))})[0];
+            result = control.match(choice, captures, field,
+                                   {"then", "otherwise"}, "choose", outline);
+          } else {
+            result = control.conditional(root.getArgument(3), captures, field,
+                                         "choose", outline);
+          }
+          control.returned(result);
+          require(succeeded(zkc::admitStage(*source)),
+                  "authored scoped aliases refused");
+          auto logical = formExecutable(*source);
+          auto lowered = copy(*logical);
+          require(succeeded(computation::realizeComputations(*lowered)),
+                  "alias capture lowering failed");
+          auto function = scopedFunction(*lowered, "work");
+          SmallVector<runtime::EnterScopeOp> entries;
+          function.walk([&](runtime::EnterScopeOp enter) {
+            if (enter.getKind() == (matching ? "match" : "conditional"))
+              entries.push_back(enter);
+          });
+          require(entries.size() == 2, "conditional alternatives disappeared");
+          for (auto enter : entries)
+            require(
+                enter.getInputs().size() == 2 + unsigned(matching),
+                "shared leaf or produced payload has wrong capture position");
+          require(succeeded(computation::verifyComputationRealization(
+                      *logical, *lowered)),
+                  "alias layout correspondence failed");
+          if (matching) {
+            function.walk([&](exec::MatchOp match) {
+              for (unsigned arm = 0; arm < match.getArms().size(); ++arm) {
+                auto forwarded = match.getForwardedMutable()[arm + 1];
+                auto left = forwarded[0].get(), right = forwarded[1].get();
+                forwarded.assign(ValueRange{right, left});
+              }
             });
-        control.returned(result);
-        require(succeeded(zkc::admitStage(*source)),
-                "authored scoped aliases refused");
-        auto logical = formExecutable(*source);
-        auto lowered = copy(*logical);
-        require(succeeded(computation::realizeComputations(*lowered)),
-                "alias capture lowering failed");
-        auto function = scopedFunction(*lowered, "work");
-        exec::TestOp test;
-        function.walk([&](exec::TestOp op) { test = op; });
-        require(bool(test), "conditional test disappeared");
-        SmallVector<runtime::EnterScopeOp> entries;
-        function.walk([&](runtime::EnterScopeOp enter) {
-          if (enter.getSite() == test.getSite())
-            entries.push_back(enter);
+          } else {
+            for (auto enter : entries) {
+              auto inputs = enter.getInputsMutable();
+              auto left = enter.getInputs()[0], right = enter.getInputs()[1];
+              inputs.assign(ValueRange{right, left});
+              auto dispatch = cast<exec::DispatchOp>(enter->getNextNode());
+              auto invocation =
+                  cast<func::CallOp>(dispatch.getReturned()->front());
+              invocation->setOperand(1, right);
+              invocation->setOperand(2, left);
+            }
+          }
+          require(succeeded(verify(*lowered)),
+                  "same-type capture mutation must remain formed");
+          (void)take(protocol::readSourceExecutionClosure(owner(*lowered)));
+          expectRefusal(*lowered, "numerical-lowering-correspondence", [&] {
+            return computation::verifyComputationRealization(*logical,
+                                                             *lowered);
+          });
         });
-        require(entries.size() == 2, "conditional alternatives disappeared");
-        for (auto enter : entries)
-          require(enter.getInputs().size() == 2,
-                  "shared leaf was not captured once");
-        require(succeeded(computation::verifyComputationRealization(*logical,
-                                                                    *lowered)),
-                "alias layout correspondence failed");
-        for (auto enter : entries) {
-          auto inputs = enter.getInputsMutable();
-          auto left = enter.getInputs()[0], right = enter.getInputs()[1];
-          inputs.assign(ValueRange{right, left});
-          auto dispatch = cast<exec::DispatchOp>(enter->getNextNode());
-          auto invocation = cast<func::CallOp>(dispatch.getReturned()->front());
-          invocation->setOperand(1, right);
-          invocation->setOperand(2, left);
-        }
-        require(succeeded(verify(*lowered)),
-                "same-type capture mutation must remain formed");
-        expectRefusal(*lowered, "numerical-lowering-correspondence", [&] {
-          return computation::verifyComputationRealization(*logical, *lowered);
-        });
-      });
   return cases.result();
 }

@@ -3,6 +3,7 @@
 #include "mlir/IR/IRMapping.h"
 #include "support/NumericalLoops.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 using namespace mlir;
 using namespace zkc;
@@ -91,6 +92,60 @@ int main() {
     auto actual = consume(*selected);
     accepts(unit, *actual);
   });
+  for (StringRef mutation : {"Boolean value", "variant label", "match children",
+                             "conditional children", "result order"})
+    cases.run("native schedule comparison refuses admitted " + mutation, [&] {
+      auto original = controls(context);
+      auto unit = cast<mlir::ModuleOp>(original->getBody()->front());
+      auto selected = schedule(unit);
+      auto actual = consume(*selected);
+      OpBuilder builder(&context);
+      if (mutation == "Boolean value") {
+        auto op =
+            cast<exec::BooleanOp>(operations(*actual, "exec.boolean").front());
+        op->setAttr("value", builder.getBoolAttr(!op.getValue()));
+      } else if (mutation == "variant label")
+        operations(*actual, "exec.variant")
+            .front()
+            ->setAttr("alternative", builder.getStringAttr("right"));
+      else if (mutation == "match children" ||
+               mutation == "conditional children") {
+        auto closure =
+            take(protocol::readSourceExecutionClosure(owner(*actual)));
+        func::FuncOp left, right;
+        for (const auto &[name, body] : closure.bodies)
+          for (const auto &step : body)
+            if ((mutation == "match children"
+                     ? isa<exec::MatchOp>(step.operation)
+                     : isa<exec::TestOp>(step.operation)) &&
+                !left) {
+              require(step.regions.size() == 2, "missing conditional children");
+              left = step.regions[0];
+              right = step.regions[1];
+            }
+        require(left && right, "missing conditional mutation subject");
+        actual->walk([&](func::CallOp call) {
+          if (call.getCallee() == left.getSymName())
+            call.setCallee(right.getSymName());
+          else if (call.getCallee() == right.getSymName())
+            call.setCallee(left.getSymName());
+        });
+      } else {
+        auto *returned = operations(function(*actual), "exec.returned").front();
+        auto first = returned->getOperand(0), last = returned->getOperand(2);
+        returned->setOperand(0, last);
+        returned->setOperand(2, first);
+      }
+      require(succeeded(computation::verifyRecipeOutput(*actual)),
+              "native semantic mutation must remain admitted");
+      finite::VerificationResult outcome{finite::VerificationStatus::Verified,
+                                         {}};
+      require(failed(computation::verifyScheduleLowering(*selected, *actual,
+                                                         nullptr, &outcome)) &&
+                  outcome.status == finite::VerificationStatus::Mismatch,
+              "native semantic difference accepted or classified as capacity");
+      scheduleAccepts(unit, *selected);
+    });
   for (llvm::StringRef mutation :
        {"Boolean value", "Boolean type", "variant label", "variant type",
         "match labels", "match type"})

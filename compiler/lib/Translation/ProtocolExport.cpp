@@ -15,7 +15,7 @@ Error verifyExportSubject(Operation *root) {
   if (!root)
     return error("interactive-malformed-ir");
   Error refusals = Error::success();
-  ScopedDiagnosticHandler capture(
+  zkc::diagnostics::ScopedThreadDiagnosticHandler capture(
       root->getContext(), [&](Diagnostic &diagnostic) {
         if (diagnostic.getSeverity() == DiagnosticSeverity::Error)
           for (const auto &refusal : diagnostics::refusals(diagnostic))

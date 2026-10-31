@@ -11,7 +11,7 @@ module {
     func.return %returned : !R
   }
   func.func @select(%scope: !S, %input: !V, %capture: !F) -> !R attributes {no_inline, runtime.origin=["select", []]} {
-    "exec.match"(%scope, %input, %capture)[^failed, ^some] {alternatives=["some"], site="select"} : (!S, !V, !F) -> ()
+    "exec.match"(%scope, %input, %capture)[^failed, ^some] <{alternatives=["some"], site="select", successor_operand_segments = array<i32: 0, 1 >}> : (!S, !V, !F) -> ()
   ^some(%value: !F, %captured: !F):
     %entered = "runtime.enter_scope"(%scope, %value, %captured) <{operandSegmentSizes=array<i32: 1, 0, 2>, kind="match", site="select", selection="some"}> : (!S, !F, !F) -> !E
     "exec.dispatch"(%entered)[^body, ^failed] : (!E) -> ()

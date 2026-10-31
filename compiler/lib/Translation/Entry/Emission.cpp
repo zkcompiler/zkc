@@ -201,9 +201,17 @@ class Emitter {
           SmallVector<mlir::Attribute> names;
           for (const auto &alternative : control->alternatives)
             names.push_back(builder.getStringAttr(alternative));
-          make("data.match", {}, *inputs,
+          SmallVector<mlir::Value> forwarded{inputs->front()};
+          SmallVector<int32_t> segments;
+          for (size_t i = 0; i < arms.size(); ++i) {
+            append_range(forwarded, ArrayRef(*inputs).drop_front());
+            segments.push_back(inputs->size() - 1);
+          }
+          make("data.match", {}, forwarded,
                {builder.getNamedAttr("alternatives",
-                                     builder.getArrayAttr(names))},
+                                     builder.getArrayAttr(names)),
+                builder.getNamedAttr("successor_operand_segments",
+                                     builder.getDenseI32ArrayAttr(segments))},
                arms);
           for (auto [region, target] : zip(control->regions, arms))
             if (auto error = body(owner, *region, target,

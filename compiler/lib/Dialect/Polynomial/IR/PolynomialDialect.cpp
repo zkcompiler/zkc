@@ -1,5 +1,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraDialect.h"
+#include "zkc/Dialect/Data/IR/DataDialect.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "zkc/Dialect/TypeAdapters.h"
 #include "llvm/ADT/TypeSwitch.h"

@@ -406,12 +406,7 @@ Expected<OwningOpRef<ModuleOp>>
 writeLocalExecution(MLIRContext &context,
                     const program::LocalDefinitions &definitions,
                     bool physical) {
-  program::Participants model;
-  model.stage = physical ? program::Participants::Stage::Physical
-                         : program::Participants::Stage::Logical;
-  model.bindings = definitions.bindings;
-  model.functions = definitions.functions;
-  if (auto e = admit(model))
+  if (auto e = admitExecutionDefinitions(definitions, physical))
     return std::move(e);
   context.loadDialect<func::FuncDialect, arith::ArithDialect,
                       cf::ControlFlowDialect, exec::ExecDialect,

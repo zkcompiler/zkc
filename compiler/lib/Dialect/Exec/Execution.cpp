@@ -312,12 +312,20 @@ bool BodyReader::conditional(exec::TestOp test, SourceExecutionStep &step) {
 }
 bool BodyReader::match(exec::MatchOp match, SourceExecutionStep &step) {
   if (match.getScope() != scope ||
-      !attributes(match, {"site", "alternatives"}) || !atEnd() ||
-      !failedEdge(match.getStopped()) || !uses(match.getInput()) ||
-      !uses(match.getCaptures()))
+      !attributes(match,
+                  {"site", "alternatives", "successor_operand_segments"}) ||
+      !atEnd() || !failedEdge(match.getStopped()) || !uses(match.getInput()) ||
+      match.getArms().empty() ||
+      match.getForwarded().size() != match.getArms().size() + 1 ||
+      !match.getForwarded()[0].empty())
     return reader.fail("variant dispatch association");
+  auto captures = match.getForwarded()[1];
+  if (!uses(captures))
+    return false;
   Block *join = nullptr;
   for (auto [i, armBlock] : enumerate(match.getArms())) {
+    if (match.getForwarded()[i + 1] != captures)
+      return reader.fail("variant arms disagree on source captures");
     if (!block(armBlock))
       return false;
     auto alternative = cast<StringAttr>(match.getAlternatives()[i]).getValue();
@@ -339,7 +347,7 @@ bool BodyReader::match(exec::MatchOp match, SourceExecutionStep &step) {
       environment.erase(value);
   }
   step.inputs.push_back(match.getInput());
-  append_range(step.inputs, match.getCaptures());
+  append_range(step.inputs, captures);
   if (!block(join) || !results(navigation.currentBlock()->getArguments()))
     return false;
   append_range(step.outputs, navigation.currentBlock()->getArguments());
@@ -712,7 +720,7 @@ Expected<SourceExecutionClosure> Reader::run(bool mixed) {
                        "function_type", "arg_attrs", "res_attrs"}))
         return error("execution-cfg", "unknown binding attribute");
       std::string code = "binding-signature", detail;
-      ScopedDiagnosticHandler capture(
+      zkc::diagnostics::ScopedThreadDiagnosticHandler capture(
           module->getContext(), [&](Diagnostic &diagnostic) {
             if (detail.empty()) {
               auto refusals = diagnostics::refusals(diagnostic);

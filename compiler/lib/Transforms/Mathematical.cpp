@@ -3,6 +3,7 @@
 #include "MathematicalPreservation.h"
 #include "MathematicalSupport.h"
 #include "MathematicalValues.h"
+#include "PreparationDialects.h"
 #include "PreparedProtocol.h"
 #include "ProtocolApplications.h"
 #include "RealizationTrace.h"
@@ -822,12 +823,13 @@ Error checkFormulaDefinitions(ModuleOp original, uint64_t &remaining) {
   for (const auto &name : names)
     helpers.push_back(name);
   bool limited = false;
-  ScopedDiagnosticHandler limits(original.getContext(), [&](Diagnostic
-                                                                &diagnostic) {
-    for (const auto &refusal : diagnostics::refusals(diagnostic))
-      limited |= refusal.code == "mathematical-expansion-limit";
-    return failure(); // Keep the caller's diagnostic and source attribution.
-  });
+  zkc::diagnostics::ScopedThreadDiagnosticHandler limits(
+      original.getContext(), [&](Diagnostic &diagnostic) {
+        for (const auto &refusal : diagnostics::refusals(diagnostic))
+          limited |= refusal.code == "mathematical-expansion-limit";
+        return failure(); // Keep the caller's diagnostic and source
+                          // attribution.
+      });
   if (failed(checkHelperObservations(unit, helpers, remaining)))
     return error(limited ? "source.limit" : "target.admission",
                  limited ? "predicate observation work limit exceeded"
@@ -936,6 +938,7 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
                                     MathematicalSelectionPolicy policy,
                                     ArrayRef<ApplicationStart> starts = {},
                                     RealizationTrace *trace = nullptr) {
+  loadPreparationDialects(*source.getContext());
   RealizationWork work;
   RealizationScope scope(trace, "prepare-source", source, policy, &work);
   if (failed(zkc::admitStage(source)))
@@ -1061,9 +1064,7 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   void getDependentDialects(DialectRegistry &registry) const final {
     // Polynomial recipes can introduce scoped execution even when the input
     // has no executable operations. Numerical selection belongs to lowering.
-    registry.insert<runtime::RuntimeDialect, exec::ExecDialect,
-                    algebra::AlgebraDialect, func::FuncDialect,
-                    cf::ControlFlowDialect, arith::ArithDialect>();
+    registerPreparationDialects(registry);
   }
   void runOnOperation() final {
     auto source = getOperation();
@@ -1138,10 +1139,7 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
            "programs";
   }
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry.insert<runtime::RuntimeDialect, zkc::protocol_ir::ProtocolDialect,
-                    exec::ExecDialect, zkc::algebra::AlgebraDialect,
-                    func::FuncDialect, cf::ControlFlowDialect,
-                    arith::ArithDialect>();
+    registerPreparationDialects(registry);
   }
   void runOnOperation() final {
     auto source = getOperation();
