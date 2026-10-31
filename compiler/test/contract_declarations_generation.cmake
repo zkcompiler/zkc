@@ -26,6 +26,27 @@ function(declaration_case name definitions expected_error)
   set(failures "${failures}" PARENT_SCOPE)
 endfunction()
 declaration_case(valid "" "")
+declaration_case(native-block-parameters [=[
+def Block : ZKC_Operation<"transcript.native.indexed.indices", [], [], []> {
+  let parameters = NativeIndexBlockParameters<3>;
+}
+def Search : ZKC_Operation<"transcript.native.indexed.indices.search", [], [], []> {
+  let parameters = NativeIndexBlockParameters<4>;
+}
+def Gate : ZKC_Operation<"transcript.native.indexed.indices.gated", [], [], []> {
+  let parameters = NativeIndexBlockParameters<4>;
+}
+]=] "")
+declaration_case(native-block-wrong-arity [=[
+def Block : ZKC_Operation<"transcript.native.indexed.indices", [], [], []> {
+  let parameters = NativeIndexBlockParameters<4>;
+}
+]=] "unsupported parameter validator or bounds")
+declaration_case(native-gate-wrong-arity [=[
+def Gate : ZKC_Operation<"transcript.native.indexed.indices.gated", [], [], []> {
+  let parameters = NativeIndexBlockParameters<3>;
+}
+]=] "unsupported parameter validator or bounds")
 declaration_case(duplicate-base-ordinal [=[
 def First : ZKC_Operation<"first.op", [], [], []> { int ordinal = 7; }
 def Second : ZKC_Operation<"second.op", [], [], []> { int ordinal = 7; }

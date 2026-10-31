@@ -113,7 +113,7 @@ interpretation and grants no positive optimization fact.
 | `Mathematical` | `identity`: a declared mathematical identity |
 | `History` | `stateInput`, `stateOutput` |
 | `Observation` | `stateInput`, `payloadInput`, `stateOutput` |
-| `Sampling` | `provider` (`Entropy` or `Transcript`), `domain` (`Field`, `FieldVector` or `BoundedIndex`), `stateInput`, `valueOutput`, `stateOutput`, `boundInput` (port or null) |
+| `Sampling` | `provider` (`Entropy` or `Transcript`), `domain` (`Field`, `FieldVector`, `BoundedIndex` or `IndexBlock`), `stateInput`, `valueOutput`, `stateOutput`, `boundInput` (port or null) |
 | `Diagonal` | `factorsInput`, `valuesInput`, `resultOutput` |
 | `Contraction` | `coefficientsInput`, `valuesInput` |
 | `Coset` | `shiftInput`, `sizeInput`, Boolean `sizeIsLength` and `foldedOutput`, `vectorOutput` (port or null) |
@@ -330,3 +330,17 @@ resource successors and custody. Native source/candidate comparisons retain
 their own checks. A formal consumer selects and proves its own interpretation
 after this data contract is available; an unimplemented interpretation stays
 explicitly unsupported.
+
+`IndexBlock` sampling produces one logical `indices` block, with count and bound
+fixed by the composite `NativeIndexBlock` static invocation parameters, rather
+than a scalar bound operand. Its `boundInput` is null. Source service fact
+`IndexBlockRandomness` and explicit suite fact `IndexBlockTranscript` are
+independent of scalar index facts. Search and gate-check operations declare
+History only. No sampling facet asserts a compound-query security theorem.
+
+`NativeIndexBlock` has exactly three parameters for
+`transcript.native.indexed.indices`, and exactly four for its `.search` and
+`.gated` declarations. The ordered carriers are structured origin (query method
+`indices`), natural N, natural Q, and optionally natural b. Naturals use the
+full u64 carrier: N is power-of-two in [1,2^63], Q in [1,2^20], b in [0,64].
+The [native block format](native-index-block.md) owns the exact bytes.

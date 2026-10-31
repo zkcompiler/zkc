@@ -79,6 +79,7 @@ pub(crate) struct SourceInterface<'a> {
     pub acceptance: usize,
     pub suite: Option<&'a str>,
     pub construction: &'a str,
+    pub gates: &'a [Json],
     pub format: ProofFormat,
     pub services: Vec<usize>,
     pub public: &'a [Port],
@@ -344,7 +345,7 @@ impl NativeDeployment {
         }
         let source = text(&envelope[1])?.to_owned();
         digest(&source)?;
-        let descriptor = array(&envelope[2], 7)?;
+        let descriptor = array(&envelope[2], 8)?;
         if text(&descriptor[0])? != "zkc.native-proof-descriptor/0"
             || text(&descriptor[2])? != "zkc.native-origin/0"
         {
@@ -621,6 +622,7 @@ impl NativeDeployment {
             acceptance: index(&policy[4]).expect("admitted acceptance"),
             suite: (!suite.is_empty()).then_some(suite),
             construction: policy[10].as_str().expect("admitted construction"),
+            gates: policy[11].as_array().expect("admitted gates"),
             format: self.format,
             services: services
                 .iter()

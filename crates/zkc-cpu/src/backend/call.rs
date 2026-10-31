@@ -264,6 +264,12 @@ impl CpuCall {
                 zkc_format::logical::native_origin_template(attributes, "message")
                     .map_err(|_| refused("kernel-attributes"))?;
             }
+            AttributeRule::NativeIndexBlock | AttributeRule::NativeGatedIndexBlock => {
+                crate::resource::index_block::Parameters::parse(
+                    attributes,
+                    rule == AttributeRule::NativeGatedIndexBlock,
+                )?;
+            }
             // The query's source method separates field and index transitions.
             AttributeRule::NativeChallengeTemplate | AttributeRule::NativeIndexTemplate => {
                 let method = if rule == AttributeRule::NativeIndexTemplate {

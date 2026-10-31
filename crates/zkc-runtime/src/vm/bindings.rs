@@ -286,6 +286,13 @@ impl Identity {
                 | Self::HashChainKeccak256KoalaBearExt4
         )
     }
+    /// Explicit block installation, independent of scalar index sampling.
+    pub fn has_index_block_transcript(self) -> bool {
+        matches!(
+            self,
+            Self::HashChainKeccak256KoalaBearExt8 | Self::HashChainKeccak256KoalaBearExt4
+        ) && self.has_index_transcript()
+    }
     pub fn provider(self) -> Option<&'static str> {
         if self == Self::Spongefish080KeccakFr64Be {
             return Some("spongefish");

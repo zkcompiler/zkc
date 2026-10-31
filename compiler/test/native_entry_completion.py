@@ -113,7 +113,9 @@ with case("exit operands preserve source correspondence"):
                 ["0", "1"],
                 [["draw", "challenge"]],
                 "zkc.framed/0",
-             ""]
+                "",
+                [],
+            ]
         )
     )
     candidate = commands.run([compiler, "protocol-construct-proof", fixture, policy])

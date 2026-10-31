@@ -231,6 +231,10 @@ pub enum AttributeRule {
     NativeMessageTemplate,
     NativeChallengeTemplate,
     NativeIndexTemplate,
+    /// Origin, full-u64 power-of-two bound and positive block count.
+    NativeIndexBlock,
+    /// The same block parameters followed by the gate difficulty.
+    NativeGatedIndexBlock,
     /// One canonical, exactly typed Ring body for a closed numerical binding.
     NumericalExpression,
 }

@@ -379,7 +379,7 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
                                         : nullptr;
     auto selected = compiled->policy;
     selected.draws.clear();
-    if (!descriptor || descriptor->size() != 7 ||
+    if (!descriptor || descriptor->size() != 8 ||
         (*deployment)[0].getAsString() != "zkc.native-proof/0" ||
         (*deployment)[1].getAsString() != original.identity() ||
         encodeNativeProofPolicy(selected) !=

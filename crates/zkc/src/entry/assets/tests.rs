@@ -511,11 +511,13 @@ fn deployment(field: &str, arenas: &Arenas) -> String {
             ["0"],
             [],
             "zkc.framed/0",
-            ""
+            "",
+            []
         ],
         "zkc.native-origin/0",
         [],
         [["role00000001", "0", leaf, "zkc.native-data/0"]],
+        [],
         [],
         []
     ]);

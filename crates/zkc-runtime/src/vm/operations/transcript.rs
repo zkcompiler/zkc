@@ -33,6 +33,12 @@ pub(super) const CONTRACTS: &[Installation] = &[
     ]),
     Installation::new("transcript.native.indexed.index")
         .implemented_by(&["plonky3/transcript.native.indexed.index"]),
+    Installation::new("transcript.native.indexed.indices")
+        .implemented_by(&["plonky3/transcript.native.indexed.indices"]),
+    Installation::new("transcript.native.indexed.indices.search")
+        .implemented_by(&["plonky3/transcript.native.indexed.indices.search"]),
+    Installation::new("transcript.native.indexed.indices.gated")
+        .implemented_by(&["plonky3/transcript.native.indexed.indices.gated"]),
 ];
 
 pub(super) const CONTRIBUTION: Contribution = Contribution {
@@ -48,6 +54,13 @@ fn select(
     logical: &OperationSignature<LogicalType>,
     selection: Selection,
 ) -> Result<BoundSignature> {
+    if binding
+        .contract
+        .starts_with("transcript.native.indexed.indices")
+        && !support::primary(binding)?.has_index_block_transcript()
+    {
+        return Err(support::failure());
+    }
     support::select_nominal(binding, logical, selection)
 }
 

@@ -112,6 +112,8 @@ def MatrixVector : ZKC_Parameters<"MatrixVector", 3, 3>;
 def GatherIndices : ZKC_Parameters<"GatherIndices", 0, -1>;
 def ScatterIndices : ZKC_Parameters<"ScatterIndices", 1, -1>;
 def NativeOrigin : ZKC_Parameters<"NativeOrigin", 1, 1>;
+class NativeIndexBlockParameters<int count>
+    : ZKC_Parameters<"NativeIndexBlock", count, count>;
 class ZKC_Facet : ZKC_Declaration;
 def PublicReplay : ZKC_Facet;
 def AcceptanceGuard : ZKC_Facet;
@@ -135,6 +137,7 @@ class ZKC_SampleDomain<string value> : ZKC_Declaration { string name = value; }
 def FieldSample : ZKC_SampleDomain<"Field">;
 def VectorSample : ZKC_SampleDomain<"FieldVector">;
 def IndexSample : ZKC_SampleDomain<"BoundedIndex">;
+def IndexBlockSample : ZKC_SampleDomain<"IndexBlock">;
 class ZKC_Sampling<ZKC_Provider p, ZKC_SampleDomain d, int bound = -1>
     : ZKC_Facet {
   ZKC_Provider provider = p;

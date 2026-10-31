@@ -166,7 +166,7 @@ fn capability(name: &str, args: &[&Argument]) -> bool {
             *identity == Identity::Bn254Fr || identity.is_plonky3_residue()
         }
         ("Field", "PairingField") => matches!(identity, Identity::Bn254Fr | Identity::Bls12381Fr),
-        ("Field", "IndexRandomness") => matches!(
+        ("Field", "IndexRandomness" | "IndexBlockRandomness") => matches!(
             identity,
             Identity::KoalaBearExt8
                 | Identity::KoalaBearExt4
@@ -178,6 +178,7 @@ fn capability(name: &str, args: &[&Argument]) -> bool {
             identity.transcript() == Some(*identity)
         }
         ("Transcript", "IndexTranscript") => identity.has_index_transcript(),
+        ("Transcript", "IndexBlockTranscript") => identity.has_index_block_transcript(),
         ("Commitment", "VectorCommitment") => identity.is_row_commitment(),
         ("Commitment", "MultiOpening") => identity.has_multi_opening(),
         ("Commitment", "MultilinearOpening") => *identity == Identity::MultilinearKzgBls12381,
@@ -212,6 +213,11 @@ fn attribute_rule(operation: &Operation, scope: &[Argument]) -> Result<Attribute
         V::GatherIndices => AttributeRule::NaturalIndices,
         V::ScatterIndices => AttributeRule::ScatterShape,
         V::NumericalExpression => AttributeRule::NumericalExpression,
+        V::NativeIndexBlock => match (operation.parameters.minimum, operation.parameters.maximum) {
+            (3, Some(3)) => AttributeRule::NativeIndexBlock,
+            (4, Some(4)) => AttributeRule::NativeGatedIndexBlock,
+            _ => return Err(support::failure()),
+        },
         V::NativeOrigin => {
             if operation
                 .facets

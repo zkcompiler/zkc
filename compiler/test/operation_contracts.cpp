@@ -148,6 +148,9 @@ int main() {
     const bool opaqueResource =
         llvm::is_contained(kernel.inputs, "nonce") ||
         kernel.key.starts_with("resource_unit.") ||
+        // These have ordered history, but no ideal sampling/replay facet.
+        kernel.key == "transcript.native.indexed.indices.search" ||
+        kernel.key == "transcript.native.indexed.indices.gated" ||
         kernel.key == "representation.convert" ||
         (kernel.key.starts_with("sequence.") && !kernel.inputs.empty());
     require(hasUnclassifiedProviderEffect(kernel.key) == opaqueResource,

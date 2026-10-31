@@ -42,6 +42,17 @@ fn derive(
         return None;
     }
     let t = suite(binding)?;
+    if matches!(
+        binding.contract.as_str(),
+        "transcript.native.indexed.indices"
+            | "transcript.native.indexed.indices.search"
+            | "transcript.native.indexed.indices.gated"
+    ) && !matches!(
+        t.suite,
+        Identity::HashChainKeccak256KoalaBearExt4 | Identity::HashChainKeccak256KoalaBearExt8
+    ) {
+        return None;
+    }
     // UniformIndex requires an explicit suite installation.
     if matches!(
         binding.contract.as_str(),

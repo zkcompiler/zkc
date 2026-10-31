@@ -46,7 +46,7 @@ mod program;
 pub(crate) mod retention;
 pub use native_proof::{
     ConstructionPlan, NativeProofEntry, NativeProofError, NativeProofOperation,
-    NativeTranscriptEvent, ProofConstruction,
+    NativeTranscriptEvent, ProofConstruction, native_origin_site,
 };
 pub use preparation::{PreparationLimits, PreparationStats, PreparedComputations};
 pub use program::{AssetReference, ProgramAction, ProgramCut, ProgramRole, ProgramState};

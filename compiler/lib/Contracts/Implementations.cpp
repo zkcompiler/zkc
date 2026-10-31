@@ -387,6 +387,11 @@ constexpr ContractRow contractRows[] = {
      Arkworks | Dalek | Plonky3 | Spongefish, Compatibility::Transcript},
     // Only explicitly installed sampling suites grant IndexTranscript.
     {"transcript.native.indexed.index", Plonky3, Compatibility::Transcript},
+    {"transcript.native.indexed.indices", Plonky3, Compatibility::Transcript},
+    {"transcript.native.indexed.indices.search", Plonky3,
+     Compatibility::Transcript},
+    {"transcript.native.indexed.indices.gated", Plonky3,
+     Compatibility::Transcript},
     {"field_array.from_vector", Arkworks, Compatibility::Nominal,
      "bls12-381.fr"},
     {"field_array.at", Arkworks, Compatibility::Nominal, "bls12-381.fr"},

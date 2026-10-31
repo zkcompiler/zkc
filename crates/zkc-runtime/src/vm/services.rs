@@ -71,6 +71,22 @@ impl ServiceContract {
             .expect("installed representation")
         };
         match method {
+            // This describes a block distribution; provider installation is a
+            // separate check and cannot follow from the scalar method.
+            "indices"
+                if matches!(
+                    self,
+                    Self::RandomExtensionField
+                        | Self::RandomKoalaBearExt4
+                        | Self::RandomBabyBearExt4
+                        | Self::RandomGoldilocksExt2
+                ) =>
+            {
+                Some(ServiceSignature {
+                    inputs: vec![physical(super::Type::Index, super::Identity::None); 2],
+                    outputs: vec![physical(super::Type::Indices, super::Identity::None)],
+                })
+            }
             "draw" => Some(ServiceSignature {
                 inputs: vec![],
                 outputs: vec![physical(super::Type::Field, self.field())],
@@ -116,4 +132,44 @@ pub struct ServicePort {
     pub contract: ServiceContract,
     /// Index in the projected MLIR participant's complete input interface.
     pub input_index: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn index_blocks_have_a_distinct_two_parameter_service_signature() {
+        for (contract, supported) in [
+            (ServiceContract::RandomKoalaBearExt4, true),
+            (ServiceContract::RandomExtensionField, true),
+            (ServiceContract::RandomBabyBearExt4, true),
+            (ServiceContract::RandomGoldilocksExt2, true),
+            (ServiceContract::RandomBls12381Field, false),
+            (ServiceContract::RandomBn254Field, false),
+            (ServiceContract::RandomRistrettoField, false),
+        ] {
+            let signature = contract.signature("indices");
+            assert_eq!(signature.is_some(), supported);
+            if let Some(signature) = signature {
+                assert_eq!(
+                    signature
+                        .inputs
+                        .iter()
+                        .map(PhysicalType::kind)
+                        .collect::<Vec<_>>(),
+                    vec![super::super::Type::Index; 2]
+                );
+                assert_eq!(
+                    signature
+                        .outputs
+                        .iter()
+                        .map(PhysicalType::kind)
+                        .collect::<Vec<_>>(),
+                    vec![super::super::Type::Indices]
+                );
+            }
+            assert!(contract.signature("unknown").is_none());
+            assert!(contract.signature("draw").is_some());
+        }
+    }
 }

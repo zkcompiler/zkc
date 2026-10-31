@@ -869,7 +869,12 @@ Registered services cover seven RNG distributions/providers. Each offers field
 `draw`; the KoalaBear quartic and octic, BabyBear quartic and Goldilocks quadratic services also offer [UniformIndex](spec/runtime/services.md#uniformindex-realization)
 sampling over a static power-of-two domain (`coins.index<N>()`), interactively and
 as a typed [derived transcript transition](spec/ir/construction.md#uniformindex-transitions)
-under their installed transcript suites. Explicit query handlers support other positive static
+under their installed transcript suites. These four services also expose static
+`coins.indices(N,Q)` blocks; native Keccak quartic/octic suites implement the
+[block/gate contract](spec/formats/native-index-block.md). Explicit native policies
+select grinding difficulty and construction-owned witness transport; source proof
+declarations currently select ungated blocks. The STARK library and independent
+Lean interpretation have not adopted this native gate path. Explicit query handlers support other positive static
 u64 bounds; `zkc::sampling` supplies bounded rejection over ordinary word
 providers. The installed interactive and native transcript samplers retain
 their power-of-two restriction. Runtime query bounds and other service families
@@ -929,9 +934,10 @@ key-dependent raw answers, possibly refusing, with an error per site. Realized
 sampling laws (exact decodings, masking with refusal, low-bit masking of
 KoalaBear elements, reduction modulo the BLS12-381 scalar order as in EIP-4844),
 grinding-gated sites, compound sites and role separation at one key are proved
-for it. No compiled verifier has typed, gated or compound query sites yet: the
-native construction and the participant model draw field challenges only, so
-these results apply to compiled verifiers only through the participant instance. Composed with the Sumcheck Entry's checked transform equation, this
+for it. Native construction now emits checked index blocks and grinding-gated blocks
+under explicit native policies. The formal compiled-verifier connection still
+uses the narrower field-challenge participant instance: the new native sites
+have no independent Lean interpretation or compiled-verifier theorem yet. Composed with the Sumcheck Entry's checked transform equation, this
 bounds the compiled Sumcheck verifier's ideal interpretation in the random-oracle
 model: a false claim is accepted with probability at most `(Q + n) / |F|` for a
 fixed well-formed statement with `n` rounds (the Entry admits at most two), and

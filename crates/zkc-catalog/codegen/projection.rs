@@ -271,6 +271,7 @@ fn parameters(v: &Value) -> Result<String> {
                         "ScatterIndices",
                         "NumericalExpression",
                         "NativeOrigin",
+                        "NativeIndexBlock",
                     ],
                 )?,
             ),
@@ -330,7 +331,7 @@ fn facet(v: &Value) -> Result<String> {
                     variant(
                         &v["domain"],
                         "SamplingDomain",
-                        &["Field", "FieldVector", "BoundedIndex"],
+                        &["Field", "FieldVector", "BoundedIndex", "IndexBlock"],
                     )?,
                 ),
                 ("state_input", count(&v["stateInput"])?),
@@ -567,6 +568,7 @@ fn consumer_profile(v: &Value) -> Result<String> {
                             "GatherIndices",
                             "ScatterIndices",
                             "NativeOrigin",
+                            "NativeIndexBlock",
                         ],
                     )
                 })?,

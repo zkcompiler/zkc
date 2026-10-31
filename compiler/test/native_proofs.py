@@ -46,7 +46,7 @@ def compile_case(name, source, policy, family='schnorr', rounds=1, *options):
 def policy(suite, public=None):
     return ['zkc.native-proof-policy/0', 'main', 'Alice', 'Bob', '0', suite,
             ['4'] if suite else [], public or ['0', '2'],
-            [['draw_challenge', 'challenge']] if suite else [], "zkc.framed/0", ""]
+            [['draw_challenge', 'challenge']] if suite else [], "zkc.framed/0", "", []]
 
 
 def with_pure_helpers(source):

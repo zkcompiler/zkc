@@ -142,7 +142,7 @@ Error verifyNativeDeployment(ModuleOp source, ModuleOp physical,
   if (!actualDescriptor)
     return actualDescriptor.takeError();
   auto *record = out[2].getAsArray();
-  if (!candidate || !record || record->size() != 7 ||
+  if (!candidate || !record || record->size() != 8 ||
       (*record)[0].getAsString() != "zkc.native-proof-descriptor/0" ||
       (*record)[1] != encodeNativeProofPolicy(policy) ||
       out[0].getAsString() != "zkc.native-proof/0" ||

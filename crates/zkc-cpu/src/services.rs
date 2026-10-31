@@ -15,7 +15,7 @@ pub(crate) fn support(
     use zkc_runtime::vm::{
         Identity, LogicalType, PhysicalType, Representation, ServiceSignature, ServiceSupport, Type,
     };
-    if method == "index" {
+    if matches!(method, "index" | "indices") {
         // Explicit residue RNG roots supply uniform words for the masked sampler.
         if !matches!(
             contract,
@@ -31,6 +31,22 @@ pub(crate) fn support(
             Representation::Index,
         )
         .ok()?;
+        if method == "indices" {
+            let indices = PhysicalType::new(
+                LogicalType::new(Type::Indices, Identity::None).ok()?,
+                Representation::Indices,
+            )
+            .ok()?;
+            return Some(ServiceSupport {
+                signature: ServiceSignature {
+                    inputs: vec![index; 2],
+                    outputs: vec![indices],
+                },
+                // ServiceSupport has no argument-dependent bound. The runner
+                // reserves the largest installed reply, then settles its size.
+                max_retained_bytes: 8 * crate::sampling::MAX_INDEX_COUNT + 256,
+            });
+        }
         return Some(ServiceSupport {
             signature: ServiceSignature {
                 inputs: vec![index.clone()],
@@ -360,6 +376,34 @@ impl ServiceLease {
             resources.draw_managed_index(&self.owner, token, bound)
         })
     }
+    /// Validate and allocate the complete reply before marking the root. One
+    /// product sample is one transition, irrespective of its element count.
+    pub(crate) fn indices(
+        &self,
+        reference: &ServiceReference,
+        bound: u64,
+        count: u64,
+        policy: &Policy,
+        available: usize,
+    ) -> Result<Value> {
+        if support(reference.service_contract(), "indices").is_none() {
+            return Err(refused("service-contract"));
+        }
+        crate::sampling::index_bound(bound)?;
+        let count = crate::sampling::index_count(count)?;
+        policy.vector_width(count, 8)?;
+        policy.output(crate::value::size(count, 8)?, available)?;
+        let mut output = Vec::new();
+        output
+            .try_reserve_exact(count)
+            .map_err(|_| crate::exhausted("allocation"))?;
+        // Retention charges capacity, including any allocator spare slots.
+        policy.output(crate::value::size(output.capacity(), 8)?, available)?;
+        output.resize(count, 0);
+        self.transition(reference, |resources, token| {
+            resources.draw_managed_indices(&self.owner, token, bound, output)
+        })
+    }
     fn transition(
         &self,
         reference: &ServiceReference,
@@ -473,6 +517,23 @@ impl ServiceBindings {
             .as_ref()
             .ok_or_else(|| refused("service-lease"))?
             .index(reference, bound)
+    }
+    pub(crate) fn indices(
+        &self,
+        port: &str,
+        bound: u64,
+        count: u64,
+        policy: &Policy,
+        available: usize,
+    ) -> Result<Value> {
+        let reference = self
+            .ports
+            .get(port)
+            .ok_or_else(|| refused("service-port"))?;
+        self.lease
+            .as_ref()
+            .ok_or_else(|| refused("service-lease"))?
+            .indices(reference, bound, count, policy, available)
     }
     pub(crate) fn poison(&self, port: &str) {
         if let (Some(lease), Some(reference)) = (&self.lease, self.ports.get(port)) {

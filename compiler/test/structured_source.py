@@ -334,7 +334,8 @@ with case('binary-and-extension-identities-export-their-rows'):
     assert {row[1] for row in nominals} == {'koala-bear.ext4-binomial3', 'koala-bear'}
     extension = next(row for row in nominals if row[1] == 'koala-bear.ext4-binomial3')
     assert extension[3:] == [[['BaseField', 'koala-bear']],
-                               ['TwoAdicField', 'Field', 'CommRing', 'CharacteristicNotTwo', 'ExtensionField'],
+                               ['TwoAdicField', 'Field', 'CommRing', 'CharacteristicNotTwo',
+                                'ExtensionField', 'IndexRandomness', 'IndexBlockRandomness'],
                                '2130706433']
 
 with case('field-embedding-retains-nominal-binding-and-ports'):

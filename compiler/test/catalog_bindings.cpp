@@ -3,9 +3,11 @@
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Implementations.h"
+#include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/TypeFormation.h"
 #include "zkc/Interfaces/CatalogType.h"
 #include "llvm/ADT/StringExtras.h"
@@ -487,6 +489,50 @@ int main() {
               }
               require(false, "no native transcript signature formed");
             });
+  cases.run("native block invocations have typed composite parameters", [&] {
+    auto origin = take(protocol::encodeNativeOriginTemplate(
+        "entry", {},
+        {"query", "source", "block", "input_0",
+         "random.koala-bear.ext4-binomial3/0", "indices", "V"}));
+    for (StringRef suite :
+         {"hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",
+          "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"}) {
+      auto arguments = builder.getArrayAttr({builder.getStringAttr(suite)});
+      for (StringRef contract : {"transcript.native.indexed.indices",
+                                 "transcript.native.indexed.indices.search",
+                                 "transcript.native.indexed.indices.gated"}) {
+        auto signature = resolve(contract, arguments.getValue());
+        bool search = contract.ends_with(".search"),
+             gated = contract.ends_with(".gated");
+        require(signature.getNumInputs() == (gated ? 3 : 2) &&
+                    signature.getNumResults() == (search ? 3 : 2),
+                "native block ports differ");
+        std::vector<std::string> parameters{origin, "9223372036854775808",
+                                            "1048576"};
+        if (search || gated)
+          parameters.push_back("0");
+        auto typed = take(protocol::decodeInvocationParameters(
+            contract, arguments, parameters));
+        require(take(protocol::encodeInvocationParameters(contract, arguments,
+                                                          typed)) == parameters,
+                "typed block parameter roundtrip differs");
+        SmallVector<Attribute> wrong(typed.getValue());
+        wrong[1] = builder.getI64IntegerAttr(8);
+        codes.clear();
+        require(failed(verifyInvocationParameters(
+                    emit, contract, arguments, builder.getArrayAttr(wrong))) &&
+                    llvm::is_contained(codes, "interactive-kernel-parameters"),
+                "signed block natural admitted");
+        wrong.assign(typed.begin(), typed.end());
+        wrong[0] = builder.getStringAttr(origin);
+        codes.clear();
+        require(failed(verifyInvocationParameters(
+                    emit, contract, arguments, builder.getArrayAttr(wrong))) &&
+                    llvm::is_contained(codes, "interactive-native-origin"),
+                "unstructured block origin admitted");
+      }
+    }
+  });
   cases.run("numerical families preserve mixed and empty masks", [&] {
     auto mask = builder.getDenseBoolArrayAttr({true, false, true});
     require(resolve("numerical.map", {domain, mask}) ==

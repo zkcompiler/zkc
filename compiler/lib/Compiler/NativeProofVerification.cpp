@@ -28,7 +28,7 @@ class TranscriptCorrespondence {
   const protocol::ConstructionPlan *plan;
   StringMap<const protocol::ConstructionRule *> rules;
   std::map<std::string, protocol::ConstructionRule> startRules;
-  llvm::StringSet<> rootHelpers, recordedHelpers;
+  llvm::StringSet<> rootHelpers, recordedHelpers, searchHelpers;
   bool hostRoot;
   ArrayRef<NativeTranscriptEvent> events;
   SymbolTable symbols;
@@ -127,10 +127,12 @@ class TranscriptCorrespondence {
     bindings.insert(binding.getSymName());
     return true;
   }
-  bool helper(func::FuncOp function, const NativeTranscriptEvent &event) {
+  bool helper(func::FuncOp function, const NativeTranscriptEvent &event,
+              bool search) {
     auto prior = checkedHelpers.find(function.getSymName());
     if (prior != checkedHelpers.end())
-      return prior->second == &event;
+      return prior->second == &event &&
+             searchHelpers.contains(function.getSymName()) == search;
     if (originalSymbols.count(function.getSymName()) ||
         function->getAttrs().size() != 5 || !function.isPrivate() ||
         !function->getAttrOfType<UnitAttr>("no_inline"))
@@ -153,6 +155,12 @@ class TranscriptCorrespondence {
       append_range(inputs, rule->payload);
     else
       inputs.push_back(event.payload);
+    if (event.difficulty && !search)
+      inputs.push_back(
+          IntegerType::get(function.getContext(), 64, IntegerType::Unsigned));
+    if (event.difficulty && search)
+      outputs.push_back(
+          IntegerType::get(function.getContext(), 64, IntegerType::Unsigned));
     unsigned data = inputs.size();
     inputs.append(event.depth, IntegerType::get(function.getContext(), 64,
                                                 IntegerType::Unsigned));
@@ -170,7 +178,7 @@ class TranscriptCorrespondence {
     };
     auto arguments = function.getArguments().drop_front();
     SmallVector<Value> operands(arguments.take_front(data));
-    if (event.bound) {
+    if (event.bound && !event.count) {
       auto *step = take();
       if (!event.query ||
           !kernel(step, "index.constant", {}, {},
@@ -228,7 +236,12 @@ class TranscriptCorrespondence {
       }
       operands.push_back(indices);
       std::string contract =
-          !event.query  ? "transcript.native.indexed.observe.data"
+          !event.query ? "transcript.native.indexed.observe.data"
+          : event.count
+              ? (event.difficulty
+                     ? (search ? "transcript.native.indexed.indices.search"
+                               : "transcript.native.indexed.indices.gated")
+                     : "transcript.native.indexed.indices")
           : event.bound ? "transcript.native.indexed.index"
                         : "transcript.native.indexed.challenge";
       SmallVector<Attribute> parameters{
@@ -236,8 +249,17 @@ class TranscriptCorrespondence {
       if (!event.query)
         parameters.push_back(TypeAttr::get(event.payload));
       auto *step = take();
-      if (!kernel(step, contract, parameters, operands, {event.origin},
-                  "transition"))
+      SmallVector<std::string> invocation{event.origin};
+      if (event.count) {
+        invocation.push_back(std::to_string(*event.bound));
+        invocation.push_back(std::to_string(*event.count));
+        if (event.difficulty)
+          invocation.push_back(std::to_string(*event.difficulty));
+      }
+      if (!kernel(step, contract, parameters, operands, invocation,
+                  "transition") ||
+          step->outputs.size() != outputs.size() ||
+          !llvm::equal(ValueRange(step->outputs).getTypes(), outputs))
         return false;
       results = step->outputs;
     }
@@ -246,6 +268,8 @@ class TranscriptCorrespondence {
         returned->inputs != results || cursor != body.size())
       return false;
     checkedHelpers.try_emplace(function.getSymName(), &event);
+    if (search)
+      searchHelpers.insert(function.getSymName());
     return true;
   }
   bool call(Operation *&cursor, const NativeTranscriptEvent &event,
@@ -256,7 +280,8 @@ class TranscriptCorrespondence {
     if (!invocation || !charge())
       return false;
     auto function = symbols.lookup<func::FuncOp>(invocation.getCallee());
-    if (!function || !helper(function, event))
+    bool search = event.difficulty && !payload.size();
+    if (!function || !helper(function, event, search))
       return false;
     SmallVector<Value> inputs(state.begin(), state.end());
     append_range(inputs, payload);
@@ -270,6 +295,38 @@ class TranscriptCorrespondence {
     append_range(state, invocation.getResults().take_back(stateTypes.size()));
     reached.push_back(&event);
     cursor = cursor->getNextNode();
+    return true;
+  }
+  bool queryCall(Operation *&cursor, const NativeTranscriptEvent &event,
+                 SmallVectorImpl<Value> &state, ArrayRef<Value> coordinates,
+                 StringRef role, Value &challenge,
+                 SmallVectorImpl<const NativeTranscriptEvent *> &reached) {
+    SmallVector<Value> payload;
+    auto witness = [&](Operation *op, bool send) {
+      return op && op->getAttrs().size() == 3 &&
+             text(op, "site") == event.witnessSite &&
+             text(op, "schema") == event.witnessSite &&
+             text(op, "peer") == (send ? policy.validator : policy.producer);
+    };
+    bool search = role == policy.producer;
+    if (event.difficulty && !search) {
+      auto receive = dyn_cast_if_present<pir::AwaitOp>(cursor);
+      if (!receive || !witness(cursor, false) ||
+          !receive.getOutput().getType().isUnsignedInteger(64))
+        return false;
+      payload.push_back(receive.getOutput());
+      cursor = cursor->getNextNode();
+    }
+    auto invocation = dyn_cast_if_present<pir::LocalCallOp>(cursor);
+    if (!call(cursor, event, state, payload, coordinates, &challenge, reached))
+      return false;
+    if (event.difficulty && search) {
+      auto send = dyn_cast_if_present<pir::EmitOp>(cursor);
+      if (!send || !witness(cursor, true) ||
+          send.getInput() != invocation.getResult(1))
+        return false;
+      cursor = cursor->getNextNode();
+    }
     return true;
   }
   bool indexObservedLoops(pir::ParticipantOp participant) {
@@ -426,8 +483,8 @@ class TranscriptCorrespondence {
         } else if (isa<pir::ParticipantQueryOp>(op)) {
           Value challenge;
           if (role != policy.validator || !fact.query ||
-              !call(cursor, fact, state, {}, coordinates, &challenge,
-                    reached) ||
+              !queryCall(cursor, fact, state, coordinates, role, challenge,
+                         reached) ||
               op.getNumResults() != 1 ||
               challenge.getType() != op.getResult(0).getType())
             return false;
@@ -441,8 +498,8 @@ class TranscriptCorrespondence {
             auto query = bySite.find(delivery->second);
             if (role != policy.producer || query == bySite.end() ||
                 !query->second->query ||
-                !call(cursor, *query->second, state, {}, coordinates, &payload,
-                      reached) ||
+                !queryCall(cursor, *query->second, state, coordinates, role,
+                           payload, reached) ||
                 payload.getType() != receive.getOutput().getType())
               return false;
             env[receive.getOutput()] = payload;
@@ -738,10 +795,14 @@ public:
         continue;
       return false;
     }
-    unsigned expectedHelpers = count_if(events, [&](const auto &event) {
-      auto *rule = rules.lookup(event.site);
-      return !rule || rule->sites.back() == event.site;
-    });
+    unsigned expectedHelpers =
+        count_if(
+            events,
+            [](const auto &event) { return event.difficulty.has_value(); }) +
+        count_if(events, [&](const auto &event) {
+          auto *rule = rules.lookup(event.site);
+          return !rule || rule->sites.back() == event.site;
+        });
     if (recordedHelpers.size() != checkedHelpers.size() + rootHelpers.size())
       return false;
     for (const auto &item : checkedHelpers)

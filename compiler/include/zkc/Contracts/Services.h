@@ -81,6 +81,10 @@ inline std::optional<ServiceMethod> serviceMethod(llvm::StringRef contract,
   if (method == "index" &&
       installedDomains().hasFact("IndexRandomness", {field.str()}))
     return ServiceMethod{{{"index", {}, {}}}, {"index", {}, {}}};
+  if (method == "indices" &&
+      installedDomains().hasFact("IndexBlockRandomness", {field.str()}))
+    return ServiceMethod{{{"index", {}, {}}, {"index", {}, {}}},
+                         {"indices", {}, {}}};
   return {};
 }
 inline llvm::StringRef nativeChallengeField(llvm::StringRef suite) {

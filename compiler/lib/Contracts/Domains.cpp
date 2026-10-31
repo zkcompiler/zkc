@@ -371,8 +371,10 @@ const DomainCatalog &installedDomains() {
         if (field.identity == "koala-bear.ext8-binomial3" ||
             field.identity == "koala-bear.ext4-binomial3" ||
             field.identity == "baby-bear.ext4-binomial11" ||
-            field.identity == "goldilocks.ext2-binomial7")
+            field.identity == "goldilocks.ext2-binomial7") {
           capabilities.push_back("IndexRandomness");
+          capabilities.push_back("IndexBlockRandomness");
+        }
         if (!randomServiceContract(field.identity).empty()) {
           logicalTypes.push_back({"rng", field.identity.str()});
           representations.push_back(
@@ -463,11 +465,13 @@ const DomainCatalog &installedDomains() {
          {chainExtensionTranscript,
           "Transcript",
           {{"ChallengeField", extension}},
-          {"FieldTranscript", "IndexTranscript", "Transcript"}},
+          {"FieldTranscript", "IndexTranscript", "IndexBlockTranscript",
+           "Transcript"}},
          {chainQuarticTranscript,
           "Transcript",
           {{"ChallengeField", quartic}},
-          {"FieldTranscript", "IndexTranscript", "Transcript"}},
+          {"FieldTranscript", "IndexTranscript", "IndexBlockTranscript",
+           "Transcript"}},
          {chainTranscript,
           "Transcript",
           {{"ChallengeField", field}},

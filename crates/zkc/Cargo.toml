@@ -48,3 +48,7 @@ required-features = ["cpu"]
 [[test]]
 name = "native_capacity"
 required-features = ["cpu"]
+
+[[test]]
+name = "unicode_bindings"
+required-features = ["cpu"]

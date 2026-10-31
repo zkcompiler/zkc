@@ -33,6 +33,26 @@ The admitted operations are:
   : (!protocol.service_ref<"random.koala-bear.ext8-binomial3/0">, ui64) -> ui64
 ```
 
+The four residue-field roots also declare `indices(N,Q) -> indices` under the
+separate `IndexBlockRandomness` fact. N and Q are positive static u64 constants.
+The ideal block is the ordered product UniformIndex(N)^Q, retaining duplicates.
+The installed CPU service admits power-of-two N through 2^63 and Q through 2^20,
+subject to the configured collection/output ceilings. It reads one fresh provider
+word per sample and consumes one service request, not Q root transitions.
+Whole-output reservation and argument checks precede root consumption. Service
+admission reserves a conservative maximum block reply through the existing
+provider-support interface; smaller replies settle their actual retained size.
+Native transcript blocks have their own explicit installation and
+[byte contract](../formats/native-index-block.md). Scalar index support alone
+does not install either block consumer.
+
+For example, in a protocol body whose `coins` service belongs to V:
+
+```zkc
+let positions = coins.indices(16, 4);
+let delivered = send V -> P(positions);
+```
+
 `draw` draws one field element. `index` draws one sample of UniformIndex(N),
 whose ideal distribution is uniform on `[0, N)`. Its single data operand must be
 defined by a `data.index` constant whose canonical decimal value N is a positive
@@ -75,7 +95,8 @@ construction's pinned older permutation or byte schedule.
 References are used directly by queries. They cannot be selected, restricted,
 passed to mathematical helpers, exchanged, returned, or bound as statement data.
 Static [protocol applications](../ir/composition.md) pass existing references with exact contracts and mapped owners. `draw` has no data arguments and exactly one field reply;
-`index` has its static bound and exactly one index reply. Other distributions,
+`index` has its static bound and exactly one index reply; `indices` has a static
+bound/count and one ordered indices reply. Other distributions,
 dynamic bounds,
 reference results, ownership transfer,
 asynchronous providers and other service contracts require explicit extensions.

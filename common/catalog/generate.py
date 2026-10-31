@@ -150,6 +150,7 @@ def parameters(value):
                 "ScatterIndices",
                 "NumericalExpression",
                 "NativeOrigin",
+                "NativeIndexBlock",
             ),
             "minimum": count,
             "maximum": nullable(count),
@@ -180,7 +181,7 @@ def facet(value):
         },
         "Sampling": {
             "provider": one_of("Entropy", "Transcript"),
-            "domain": one_of("Field", "FieldVector", "BoundedIndex"),
+            "domain": one_of("Field", "FieldVector", "BoundedIndex", "IndexBlock"),
             "stateInput": count,
             "valueOutput": count,
             "stateOutput": count,
@@ -310,6 +311,7 @@ def validate_profiles(catalog):
         "None", "Natural", "Extent", "FieldLiteral", "FieldLiterals",
         "MatrixShape", "MatrixIdentity", "AssetIdentity", "MatrixVector",
         "GatherIndices", "ScatterIndices", "NativeOrigin",
+                "NativeIndexBlock",
     }
     for profile in catalog["consumerProfiles"]:
         require(bool(profile["name"]), "empty consumer profile identity")

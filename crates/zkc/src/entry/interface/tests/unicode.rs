@@ -600,11 +600,13 @@ pub(in crate::entry) fn proof_fixture() -> (Value, String) {
             ["0"],
             [],
             "zkc.framed/0",
-            ""
+            "",
+            []
         ],
         "zkc.native-origin/0",
         [],
         [["role00000000", "0", "bool", "zkcv.bool/0"]],
+        [],
         [],
         []
     ]);

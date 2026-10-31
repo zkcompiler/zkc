@@ -43,10 +43,33 @@ pub(crate) fn index_bound(bound: u64) -> Result<()> {
     Ok(())
 }
 
+pub(crate) const MAX_INDEX_COUNT: usize = 1 << 20;
+
+pub(crate) fn index_count(count: u64) -> Result<usize> {
+    if !(1..=MAX_INDEX_COUNT as u64).contains(&count) {
+        return Err(refused("query-count"));
+    }
+    usize::try_from(count).map_err(|_| refused("query-count"))
+}
+
 /// Power-of-two bounds make this an exact uniform map from uniform 64-bit words.
 pub(crate) fn index(bytes: &[u8; 64], bound: u64) -> Result<u64> {
     index_bound(bound)?;
     Ok(u64::from_le_bytes(bytes[..8].try_into().expect("eight bytes")) & (bound - 1))
+}
+
+/// Each ordered sample uses a fresh provider block, including when bound is one.
+pub(crate) fn indices(
+    output: &mut [u64],
+    bound: u64,
+    mut block: impl FnMut() -> [u8; 64],
+) -> Result<()> {
+    index_bound(bound)?;
+    index_count(output.len() as u64)?;
+    for position in output {
+        *position = index(&block(), bound)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -181,6 +204,33 @@ mod tests {
         }
         for bound in [0, 3, 5, u64::MAX] {
             assert!(index(&[0; 64], bound).is_err());
+        }
+    }
+
+    #[test]
+    fn index_blocks_preserve_order_duplicates_and_one_fresh_block_per_sample() {
+        let mut words = [513u64, 7, 513].into_iter();
+        let mut output = [0; 3];
+        indices(&mut output, 65_536, || {
+            let mut bytes = [255; 64];
+            bytes[..8].copy_from_slice(&words.next().expect("fresh block").to_le_bytes());
+            bytes
+        })
+        .unwrap();
+        assert_eq!(output, [513, 7, 513]);
+        assert!(words.next().is_none());
+        let mut calls = 0;
+        indices(&mut output, 1, || {
+            calls += 1;
+            [255; 64]
+        })
+        .unwrap();
+        assert_eq!(output, [0; 3]);
+        assert_eq!(calls, 3);
+        assert!(indices(&mut output, 3, || panic!("invalid bound")).is_err());
+        assert!(indices(&mut [], 8, || panic!("invalid count")).is_err());
+        for count in [0, (MAX_INDEX_COUNT + 1) as u64, u64::MAX] {
+            assert_eq!(index_count(count).unwrap_err().code, "refused:query-count");
         }
     }
 }

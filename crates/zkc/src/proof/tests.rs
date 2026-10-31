@@ -216,9 +216,11 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                 [],
                 [],
                 "zkc.framed/0",
-                ""
+                "",
+                []
             ],
             "zkc.native-origin/0",
+            [],
             [],
             [],
             [],

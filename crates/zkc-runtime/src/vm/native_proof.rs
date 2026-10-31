@@ -33,6 +33,10 @@ pub struct NativeTranscriptEvent {
     pub payload: Option<super::LogicalType>,
     /// The static UniformIndex domain of an index transition.
     pub bound: Option<u64>,
+    /// Exact block output count, distinct from a scalar UniformIndex draw.
+    pub count: Option<u64>,
+    /// Construction-selected difficulty; Some(0) still owns a witness slot.
+    pub difficulty: Option<u8>,
     /// Actual shared argument types of a child start; Some([]) is an empty start.
     pub start_inputs: Option<Vec<super::LogicalType>>,
 }
@@ -68,6 +72,52 @@ struct Helper<'a> {
     message: Option<(String, String)>,
     function: &'a Function,
     loops: Vec<LoopPath>,
+    /// Search produces a witness; checking consumes the construction witness.
+    gate_search: Option<bool>,
+}
+fn witness_slot(event: &NativeTranscriptEvent) -> Result<String> {
+    Ok(format!(
+        "gate.{}",
+        native_origin_site(&event.origin, "query")?
+    ))
+}
+
+/// Resolve a checked source occurrence using the native application-site law.
+/// Repeat frames supply coordinates and do not alter the static site spelling.
+pub fn native_origin_site(origin: &str, kind: &str) -> Result<String> {
+    let bytes = zkc_format::logical::native_origin_template(&[origin.into()], kind)
+        .map_err(|_| refuse("native-proof-origin"))?;
+    let origin =
+        zkc_format::logical::decode_tree(&bytes).map_err(|_| refuse("native-proof-origin"))?;
+    let mut prefix: Option<String> = None;
+    for step in origin[2]
+        .as_array()
+        .ok_or_else(|| refuse("native-proof-origin"))?
+    {
+        if step[0] == "apply" {
+            let site = step[2]
+                .as_str()
+                .ok_or_else(|| refuse("native-proof-origin"))?;
+            prefix = Some(match prefix {
+                None => site.into(),
+                Some(parent) => format!("apply_{}_{}_{}", parent.len(), parent, site),
+            });
+            if prefix.as_ref().unwrap().len() > 4096 {
+                return Err(refuse("native-proof-origin-limit"));
+            }
+        }
+    }
+    let site = origin[4][2]
+        .as_str()
+        .ok_or_else(|| refuse("native-proof-origin"))?;
+    let site = match prefix {
+        None => site.into(),
+        Some(parent) => format!("apply_{}_{}_{}", parent.len(), parent, site),
+    };
+    if site.len() > 4096 {
+        return Err(refuse("native-proof-origin-limit"));
+    }
+    Ok(site)
 }
 fn query_result(origin: &serde_json::Value, index: bool) -> Result<PhysicalType> {
     let contract = origin[4][4]
@@ -107,6 +157,9 @@ fn helper<'a>(
                     name,
                     "transcript.native.indexed.challenge"
                         | "transcript.native.indexed.index"
+                        | "transcript.native.indexed.indices"
+                        | "transcript.native.indexed.indices.search"
+                        | "transcript.native.indexed.indices.gated"
                         | "transcript.native.indexed.observe.data"
                 ) || native.is_some()
                 {
@@ -136,11 +189,28 @@ fn helper<'a>(
     };
     let contract = binding.declaration().contract.as_str();
     let index = contract == "transcript.native.indexed.index";
-    // Both query transitions return a sample; the origin's service method
+    let block = matches!(
+        contract,
+        "transcript.native.indexed.indices"
+            | "transcript.native.indexed.indices.search"
+            | "transcript.native.indexed.indices.gated"
+    );
+    let search = contract == "transcript.native.indexed.indices.search";
+    let gated = search || contract == "transcript.native.indexed.indices.gated";
+    // Query transitions return a sample; the origin's service method
     // must name the same distribution as the transition contract.
-    let challenge = index || contract == "transcript.native.indexed.challenge";
+    let challenge = block || index || contract == "transcript.native.indexed.challenge";
     let encoded = if challenge {
-        zkc_format::logical::native_query_template(attributes, if index { "index" } else { "draw" })
+        zkc_format::logical::native_query_template(
+            if block { &attributes[..1] } else { attributes },
+            if block {
+                "indices"
+            } else if index {
+                "index"
+            } else {
+                "draw"
+            },
+        )
     } else {
         zkc_format::logical::native_origin_template(attributes, "message")
     }
@@ -168,11 +238,27 @@ fn helper<'a>(
             }
         }
     }
-    let ordinary = if challenge { 1 } else { 2 };
-    if attributes.len() != 1
+    let ordinary = if !challenge || gated && !search { 2 } else { 1 };
+    let sample = if block {
+        PhysicalType::default_for(super::LogicalType::parse("indices").unwrap()).unwrap()
+    } else if challenge {
+        query_result(&origin, index)?
+    } else {
+        state.clone()
+    };
+    if attributes.len() != if block { if gated { 4 } else { 3 } } else { 1 }
         || function.inputs.len() != ordinary + loops.len()
-        || function.outputs.len() != if challenge { 2 } else { 1 }
-        || challenge && function.outputs[0] != query_result(&origin, index)?
+        || function.outputs.len()
+            != if search {
+                3
+            } else if challenge {
+                2
+            } else {
+                1
+            }
+        || challenge && function.outputs[0] != sample
+        || search && function.outputs[1].kind() != Type::Index
+        || gated && !search && function.inputs[1].1.kind() != Type::Index
         || function.inputs[0].1 != *state
         || function.outputs.last() != Some(state)
         || inputs.len() != ordinary + usize::from(index) + 1
@@ -189,6 +275,41 @@ fn helper<'a>(
     {
         return Err(refuse("native-proof-helper-signature"));
     }
+    if block && !state.logical().identity().has_index_block_transcript() {
+        return Err(refuse("native-proof-suite"));
+    }
+    if block
+        && origin[4][4]
+            .as_str()
+            .and_then(|name| super::ServiceContract::parse(name).ok())
+            .map(|c| c.field())
+            != state.logical().identity().scalar_field()
+    {
+        return Err(refuse("native-proof-query-origin"));
+    }
+    let block_values = if block {
+        let numbers = attributes[1..]
+            .iter()
+            .map(|value| {
+                if !super::decode::canonical_decimal(value) {
+                    return Err(refuse("native-proof-index-block"));
+                }
+                value
+                    .parse::<u64>()
+                    .map_err(|_| refuse("native-proof-index-block"))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        if !numbers[0].is_power_of_two()
+            || numbers[0] > 1 << 63
+            || !(1..=1 << 20).contains(&numbers[1])
+            || gated && numbers[2] > 64
+        {
+            return Err(refuse("native-proof-index-block"));
+        }
+        Some(numbers)
+    } else {
+        None
+    };
     // A fixed grammar assembles coordinates from the helper's induction
     // operands. No arbitrary computation can manufacture an occurrence index.
     let mut coordinates: Option<&str> = None;
@@ -279,15 +400,26 @@ fn helper<'a>(
     Ok(Some(Helper {
         message,
         loops,
+        gate_search: gated.then_some(search),
         events: vec![NativeTranscriptEvent {
-            contract: contract.into(),
+            contract: if gated {
+                "transcript.native.indexed.indices.gated".into()
+            } else {
+                contract.into()
+            },
             origin: attributes[0].clone(),
             payload: if challenge {
                 None
             } else {
                 Some(function.inputs[1].1.logical().clone())
             },
-            bound: bound.map(|b| b.1),
+            bound: block_values.as_ref().map(|v| v[0]).or(bound.map(|b| b.1)),
+            count: block_values.as_ref().map(|v| v[1]),
+            difficulty: if gated {
+                Some(block_values.as_ref().unwrap()[2] as u8)
+            } else {
+                None
+            },
             start_inputs: None,
         }],
         function,
@@ -315,6 +447,12 @@ fn custom_helper<'a>(
     let first = events
         .first()
         .ok_or_else(|| refuse("native-proof-construction-coverage"))?;
+    if events
+        .iter()
+        .any(|event| event.count.is_some() || event.difficulty.is_some())
+    {
+        return Err(refuse("native-proof-uninstalled-block-construction"));
+    }
     let start = first.start_inputs.is_some();
     let query = !start && first.payload.is_none();
     let mut loops = Vec::new();
@@ -446,6 +584,7 @@ fn custom_helper<'a>(
         message,
         function,
         loops,
+        gate_search: None,
     })
 }
 
@@ -630,6 +769,9 @@ struct ProofWalk<'a> {
     reached: Vec<NativeTranscriptEvent>,
     loops: BTreeMap<LoopPath, (String, u64)>,
     loop_sites: BTreeMap<String, LoopPath>,
+    witness_slots: BTreeSet<String>,
+    delivered_witnesses: BTreeSet<String>,
+    witness_values: BTreeSet<String>,
 }
 fn tail<T>(values: &[T], count: usize) -> Option<&[T]> {
     values
@@ -639,7 +781,10 @@ fn tail<T>(values: &[T], count: usize) -> Option<&[T]> {
 }
 impl ProofWalk<'_> {
     fn ordinary<'a>(&self, values: impl IntoIterator<Item = &'a String>) -> Result<()> {
-        if values.into_iter().any(|name| self.states.contains(name)) {
+        if values
+            .into_iter()
+            .any(|name| self.states.contains(name) || self.witness_values.contains(name))
+        {
             return Err(refuse("native-proof-state-escape"));
         }
         Ok(())
@@ -670,7 +815,14 @@ impl ProofWalk<'_> {
         }
         let mut pending_message = Vec::new();
         let mut pending_challenge = Vec::new();
+        let mut witness_input: Option<(String, String)> = None;
+        let mut witness_output: Option<(String, String)> = None;
         for instruction in body.iter() {
+            if witness_output.is_some() && !matches!(instruction, Instruction::Send { .. })
+                || witness_input.is_some() && !matches!(instruction, Instruction::Local { .. })
+            {
+                return Err(refuse("native-proof-witness-order"));
+            }
             match instruction {
                 Instruction::Local {
                     function,
@@ -679,6 +831,23 @@ impl ProofWalk<'_> {
                     ..
                 } => {
                     if let Some(checked) = self.helpers.get(function) {
+                        if let Some(search) = checked.gate_search {
+                            if search == self.validating {
+                                return Err(refuse("native-proof-witness-direction"));
+                            }
+                            let slot = witness_slot(&checked.events[0])?;
+                            if search {
+                                if witness_input.is_some() {
+                                    return Err(refuse("native-proof-witness-order"));
+                                }
+                                witness_output = Some((slot, outputs[1].clone()));
+                                self.witness_values.insert(outputs[1].clone());
+                            } else if witness_input.take() != Some((slot, inputs[1].clone())) {
+                                return Err(refuse("native-proof-witness-input"));
+                            }
+                        } else if witness_input.is_some() {
+                            return Err(refuse("native-proof-witness-order"));
+                        }
                         let state = current
                             .as_ref()
                             .ok_or_else(|| refuse("native-proof-state-chain"))?;
@@ -688,7 +857,10 @@ impl ProofWalk<'_> {
                         {
                             return Err(refuse("native-proof-state-chain"));
                         }
-                        self.ordinary(&inputs[state.len()..])?;
+                        self.ordinary(
+                            &inputs
+                                [state.len() + usize::from(checked.gate_search == Some(false))..],
+                        )?;
                         let start_inputs = checked.events[0].start_inputs.as_ref();
                         let payloads = if let Some(inputs) = start_inputs {
                             inputs.len()
@@ -697,7 +869,9 @@ impl ProofWalk<'_> {
                         } else {
                             0
                         };
-                        let ordinary = state.len() + payloads;
+                        let ordinary = state.len()
+                            + payloads
+                            + usize::from(checked.gate_search == Some(false));
                         if inputs.get(ordinary..) != Some(coordinates)
                             || checked.loops.len() != parents.len()
                         {
@@ -742,6 +916,9 @@ impl ProofWalk<'_> {
                         current = Some(next.to_vec());
                         self.reached.extend_from_slice(&checked.events);
                     } else {
+                        if witness_input.is_some() {
+                            return Err(refuse("native-proof-witness-order"));
+                        }
                         self.ordinary(inputs)?;
                         if self.validating {
                             verifier_function(
@@ -751,9 +928,21 @@ impl ProofWalk<'_> {
                         }
                     }
                 }
-                Instruction::Send { peer, input, .. }
-                    if !self.validating && peer == self.validator =>
-                {
+                Instruction::Send {
+                    site,
+                    schema,
+                    peer,
+                    input,
+                } if !self.validating && peer == self.validator => {
+                    if self.witness_slots.contains(site) || witness_output.is_some() {
+                        if schema != site
+                            || witness_output.take() != Some((site.clone(), input.clone()))
+                            || !self.delivered_witnesses.insert(site.clone())
+                        {
+                            return Err(refuse("native-proof-witness-output"));
+                        }
+                        continue;
+                    }
                     self.ordinary([input])?;
                     if self.transcript && current.is_none() {
                         return Err(refuse("native-proof-loop-state"));
@@ -765,9 +954,26 @@ impl ProofWalk<'_> {
                         pending_message.push(input.clone());
                     }
                 }
-                Instruction::Receive { peer, output, .. }
-                    if self.validating && peer == self.producer =>
-                {
+                Instruction::Receive {
+                    site,
+                    schema,
+                    peer,
+                    output,
+                    ty,
+                } if self.validating && peer == self.producer => {
+                    if self.witness_slots.contains(site) {
+                        if schema != site
+                            || ty.logical().spelling() != "index"
+                            || !self.delivered_witnesses.insert(site.clone())
+                            || !pending_message.is_empty()
+                            || !pending_challenge.is_empty()
+                        {
+                            return Err(refuse("native-proof-witness-input"));
+                        }
+                        witness_input = Some((site.clone(), output.clone()));
+                        self.witness_values.insert(output.clone());
+                        continue;
+                    }
                     if self.transcript && current.is_none() {
                         return Err(refuse("native-proof-loop-state"));
                     }
@@ -891,6 +1097,8 @@ impl ProofWalk<'_> {
         }
         if !pending_message.is_empty()
             || !pending_challenge.is_empty()
+            || witness_input.is_some()
+            || witness_output.is_some()
             || !(if depth != 0 {
                 matches!(body.last(), Some(Instruction::Yield(_)))
             } else {
@@ -985,9 +1193,36 @@ impl NativeProofEntry {
             return Err(refuse("native-proof-events"));
         }
         let mut event_origins = BTreeSet::new();
+        let mut witness_slots = BTreeSet::new();
         for event in events {
             if !event_origins.insert(&event.origin) {
                 return Err(refuse("native-proof-duplicate-origin"));
+            }
+            if let Some(count) = event.count {
+                if !matches!(
+                    event.contract.as_str(),
+                    "transcript.native.indexed.indices" | "transcript.native.indexed.indices.gated"
+                ) || !(1..=1 << 20).contains(&count)
+                    || event
+                        .bound
+                        .is_none_or(|bound| !bound.is_power_of_two() || bound > 1 << 63)
+                    || event.payload.is_some()
+                    || event.start_inputs.is_some()
+                    || event.difficulty.is_some()
+                        != (event.contract == "transcript.native.indexed.indices.gated")
+                    || event.difficulty.is_some_and(|bits| bits > 64)
+                {
+                    return Err(refuse("native-proof-index-block"));
+                }
+                if event.difficulty.is_some() && !witness_slots.insert(witness_slot(event)?) {
+                    return Err(refuse("native-proof-duplicate-witness"));
+                }
+            } else if event.difficulty.is_some()
+                || event
+                    .contract
+                    .starts_with("transcript.native.indexed.indices")
+            {
+                return Err(refuse("native-proof-index-block"));
             }
         }
         let mut helpers = BTreeMap::new();
@@ -1369,9 +1604,12 @@ impl NativeProofEntry {
                 reached: Vec::new(),
                 loops: BTreeMap::new(),
                 loop_sites: BTreeMap::new(),
+                witness_slots: witness_slots.clone(),
+                delivered_witnesses: BTreeSet::new(),
+                witness_values: BTreeSet::new(),
             };
             walk.block(body, current, &[], &[], 0)?;
-            if walk.reached != events {
+            if walk.reached != events || walk.delivered_witnesses != witness_slots {
                 return Err(refuse("native-proof-state-chain"));
             }
             if previous_loops

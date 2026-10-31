@@ -13,6 +13,30 @@ pub(crate) fn apply(
 ) -> Result<Vec<Value>> {
     use Value::*;
     match (name, args) {
+        (
+            "transcript.native.indexed.indices" | "transcript.native.indexed.indices.search",
+            [Transcript(t), Indices(coordinates)],
+        ) => r.transcript_indices(
+            t,
+            coordinates,
+            i,
+            p,
+            if name.ends_with(".search") {
+                crate::resource::index_block::Mode::Search
+            } else {
+                crate::resource::index_block::Mode::Ungated
+            },
+        ),
+        (
+            "transcript.native.indexed.indices.gated",
+            [Transcript(t), Index(witness), Indices(coordinates)],
+        ) => r.transcript_indices(
+            t,
+            coordinates,
+            i,
+            p,
+            crate::resource::index_block::Mode::Check(*witness),
+        ),
         ("transcript.observe", [Transcript(t), Bytes(label), Bytes(value)]) => {
             p.output(512, i.max_output_bytes)?;
             Ok(vec![Transcript(
@@ -185,6 +209,27 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             AttributeRule::NativeIndexTemplate,
         )
         .implemented_by(&["plonky3/transcript.native.indexed.index"]),
+        transcript::challenge(
+            "transcript.native.indexed.indices",
+            &[Transcript, Indices],
+            &[Indices, Transcript],
+            AttributeRule::NativeIndexBlock,
+        )
+        .implemented_by(&["plonky3/transcript.native.indexed.indices"]),
+        transcript::challenge(
+            "transcript.native.indexed.indices.search",
+            &[Transcript, Indices],
+            &[Indices, Index, Transcript],
+            AttributeRule::NativeGatedIndexBlock,
+        )
+        .implemented_by(&["plonky3/transcript.native.indexed.indices.search"]),
+        transcript::challenge(
+            "transcript.native.indexed.indices.gated",
+            &[Transcript, Index, Indices],
+            &[Indices, Transcript],
+            AttributeRule::NativeGatedIndexBlock,
+        )
+        .implemented_by(&["plonky3/transcript.native.indexed.indices.gated"]),
         curve::operation(
             "curve.commit",
             &[Groups, Nonce],
