@@ -154,6 +154,14 @@ add_zkc_test(finite_cardinality Contracts finite-cardinality)
 add_zkc_test(mathematical_fact_analysis IR mathematical-fact-analysis)
 mlir_target_link_libraries(zkc-mathematical_fact_analysis-test PRIVATE
   MLIRParser MLIRPass)
+add_zkc_test(interaction_analysis IR interaction-analysis)
+mlir_target_link_libraries(zkc-interaction_analysis-test PRIVATE
+  MLIRParser MLIRPass)
+add_zkc_test(successful_continuations Transforms successful-continuations)
+target_include_directories(zkc-successful_continuations-test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../lib/Transforms)
+mlir_target_link_libraries(zkc-successful_continuations-test PRIVATE
+  MLIRParser MLIRPass)
 add_zkc_test(language_mathematical_facts Language language-mathematical-facts)
 add_zkc_test(language_usage_plan Language language-usage-plan)
 add_zkc_test(language_compositional_forwarding Compiler language-compositional-forwarding)

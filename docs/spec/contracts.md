@@ -29,6 +29,14 @@ valid receipt's meaning or proof status.
 
 ## Contract inventory
 
+The [interaction analysis contract](ir/interactions.md) fixes shared structural
+extraction and separate judgments for dependency, exact custody, reached facts,
+authentication and sampling. IR owns the borrowed native view and independent
+source/candidate checks. Application maps and realization records retain their
+own schemas; no additional serialized interaction program is introduced.
+Implementation coverage remains explicit in [status](../status.md), and formal
+interpretation remains an independent consumer obligation.
+
 ### Foundation interfaces
 
 These rows identify the native cutover and independently maintained consumers.

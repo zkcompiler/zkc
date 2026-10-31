@@ -548,7 +548,7 @@ int main(int argc, char **argv) {
                                    edge->record, policy));
   });
   for (StringRef mode : {"paired", "individual", "reversed", "invalid-first",
-                         "invalid-later", "guard"})
+                         "invalid-later", "guard", "guarded-position"})
     runCase("batch-" + mode, [&] {
       std::ifstream file(std::filesystem::path(ZKC_ORACLE_FIXTURES) /
                          "query-blocks.mlir");
@@ -568,6 +568,17 @@ int main(int argc, char **argv) {
         replace("  %y = ",
                 "  \"protocol.guard\"(%allow) "
                 "{owner=\"V\",site=\"early_barrier\"} : (i1)->()\n  %y = ");
+      if (mode == "guarded-position") {
+        replace("  %x = ",
+                "  %within = \"data.index_less\"(%position,%rows) : "
+                "(ui64,ui64)->i1\n"
+                "  \"protocol.guard\"(%within) "
+                "{owner=\"V\",site=\"position_bound\"} : (i1)->()\n  %x = ");
+        replace("%x = \"protocol.oracle_query\"(%a,%zero)",
+                "%x = \"protocol.oracle_query\"(%a,%position)");
+        replace("%z = \"protocol.oracle_query\"(%a,%zero)",
+                "%z = \"protocol.oracle_query\"(%a,%position)");
+      }
       auto original = parseSourceString<ModuleOp>(text, &context);
       require(bool(original), "batch fixture did not parse");
       auto owner = mathematical::PreparedProtocol::prepare(*original);
@@ -605,9 +616,10 @@ int main(int argc, char **argv) {
       if (count == 2) {
         auto *groups =
             blocks->front().getAsObject()->getArray("request_groups");
-        std::vector<unsigned> wanted = mode == "individual"
-                                           ? std::vector<unsigned>{0, 1, 0, 2}
-                                           : std::vector<unsigned>{0, 0, 0, 1};
+        std::vector<unsigned> wanted =
+            (mode == "individual" || mode == "guarded-position")
+                ? std::vector<unsigned>{0, 1, 0, 2}
+                : std::vector<unsigned>{0, 0, 0, 1};
         require(groups && groups->size() == wanted.size(),
                 "logical query coverage changed");
         for (auto [actual, expected] : zip(*groups, wanted))

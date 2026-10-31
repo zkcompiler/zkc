@@ -1,5 +1,6 @@
 #include "OracleQueryBlocks.h"
 #include "OracleLayout.h"
+#include "zkc/Analysis/SuccessfulContinuations.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Support/Refusal.h"
 #include <algorithm>
@@ -119,6 +120,36 @@ admitOracleDirectQuery(pir::OracleQueryOp query,
         valid = *bound && **bound > 0 && **bound <= *rows;
       }
     }
+  if (!valid) {
+    auto declaration = query->getParentOfType<pir::MathematicalOp>();
+    auto module = query->getParentOfType<ModuleOp>();
+    if (declaration && module) {
+      // Share the existing allowance, including structural extraction and warm
+      // lookups. The view borrows this immutable source only during this call.
+      facts::Work work([&](uint64_t amount) {
+        if (amount > remaining) {
+          remaining = 0;
+          return false;
+        }
+        remaining -= static_cast<unsigned>(amount);
+        return true;
+      });
+      SuccessfulContinuationAnalysis analysis(module);
+      auto result = analysis.bound(declaration, query, *query.getOwner(),
+                                   query.getPosition(), *rows, work);
+      if (!result) {
+        auto failure = result.takeError();
+        if (work.exhausted()) {
+          consumeError(std::move(failure));
+          return error("oracle-query-block-limit");
+        }
+        return std::move(failure);
+      }
+      if (*result == SuccessfulContinuationAnalysis::Status::Capacity)
+        return error("oracle-query-block-limit");
+      valid = *result == SuccessfulContinuationAnalysis::Status::Proven;
+    }
+  }
   if (!valid)
     return std::optional<OracleDirectQuery>();
   return std::optional<OracleDirectQuery>(

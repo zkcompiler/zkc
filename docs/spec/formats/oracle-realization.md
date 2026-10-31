@@ -252,11 +252,14 @@ A missing proof closes the block and retains the ordinary singleton route.
 Before crossing a query-domain check, the planner and reader derive its validity
 from the actual prepared source. The supported evidence is an index literal
 within the exact table extent, or a successful same-owner `index` service query
-with a literal positive bound no larger than that extent. The extent is static
+with a literal positive bound no larger than that extent, or a reached
+same-participant `data.index_less` guard proving that bound before the actual
+query. The successful-point profile checks exact SSA identity and dominance;
+merely computing the Boolean supplies no premise. The extent is static
 or the literal actual `rows` operand of a send; a shape upper bound is not an
 extent. Role restrictions, shape forgetting and invariant repeat captures
 preserve the underlying source identity. Loop carries, sequence selections,
-virtual admissibility laws and arbitrary computed indices supply no such proof.
+virtual admissibility laws and unchecked computed indices supply no such proof.
 This restriction preserves the reached request prefix at an invalid query.
 
 Each `query_blocks` row is `{queries, request_groups}`. `queries` lists all
@@ -290,6 +293,24 @@ and native failures remain those of the generated program. This correspondence
 check is not a resource-trace equivalence, simulation theorem or authenticity
 proof. General virtual/FRI batching requires additional checked shape and
 position evidence.
+
+### Generated failure relation
+
+The logical request-prefix comparison assumes successful execution of generated
+discovery, carrier and replay work, apart from the source domain checks and
+selected authentication failures being compared. Generated native failures are
+separate outcomes: reference lookup, position computation, storage growth,
+opening, message decoding, authentication, answer computation and retention can
+stop at their actual positions in the generated program. They do not promise
+the same request prefix or resource trace as a per-query implementation.
+
+The checker covers these outcomes by checking the complete actual body and its
+fixed failure continuations. A failed helper is not caught and reclassified as
+a source-domain cut, a partial packet is not published, and no alternate
+realization is retried. An arbitrary all-stop candidate does not satisfy that
+body comparison. Honest successful execution additionally needs the selected
+provider assumptions, valid source inputs and sufficient native resources;
+the stop-permitting correspondence alone does not establish it.
 
 ## Controller metadata
 

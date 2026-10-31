@@ -44,6 +44,17 @@ egress use the same admission. Pass-managed symbol and mathematical facts are
 scoped to the stable symbol-table owner with explicit invalidation dependencies;
 budgeted semantic queries still account for each request.
 
+The module-owned [interaction view](spec/ir/interactions.md) retains actual
+Protocol functions, virtual definitions, applications and symbolic repeats.
+Oracle observations and query-capacity analysis share this extraction while
+keeping separate transfer rules. Successful-continuation analysis interprets
+same-participant guards over exact unsigned comparisons at an actual point,
+including invariant captures. It checks SSA dominance, preserves zero-trip and
+stopped paths, and supplies guarded bounds to fixed query-block admission.
+Unchecked Booleans, foreign participants, carried initializers and unexpanded
+callee guards supply no such evidence. General local success summaries, dynamic
+virtual batching and the shared FRI component remain subsequent work.
+
 Source, constructed-participant and realization exports share complete
 [logical type data](spec/formats/logical-types.md) and typed catalog bindings and
 parameters. Source declarations use inherent arrays. The fixed primitive export
