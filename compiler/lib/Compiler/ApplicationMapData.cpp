@@ -239,9 +239,9 @@ bool sameDescriptor(const Instruction &source, const Instruction &candidate,
     if (map)
       // Every role-valued attribute an application can rename, including a
       // selected region's per-result role sets.
-      for (StringRef key : {"roles", "carried_roles", "output_roles",
-                            "receivers", "holder", "sender", "receiver",
-                            "owner", "role"})
+      for (StringRef key :
+           {"roles", "carried_roles", "output_roles", "receivers", "holder",
+            "sender", "receiver", "owner", "role"})
         if (auto attr = result.get(key))
           result.set(key, substitute(attr));
     return result.getDictionary(op->getContext());
