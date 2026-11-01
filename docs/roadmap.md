@@ -374,6 +374,13 @@ wire semantics. Fix private-scratch aliasing, extent, lifetime, custody,
 allocation/refusal and publication before bufferization; validate stale
 evidence, failed-output withholding and the declared resource relation.
 
+Preserve the landed common-compiler, CPU-target and EVM-target split. Source
+policy, logical construction and checked realization subjects remain common;
+each target owns its supported representations and lowering. A common caller
+must not acquire a CPU handle or link a machine target to derive that policy.
+Keep common-only and EVM-only installed consumers as regression gates while
+collection and buffer ownership changes.
+
 Define the admitted standard-MLIR transformations, required effect/shape/index/
 range interfaces, analysis invalidation and independent reader coverage before
 enabling them. Check the actual default path and installed consumers, then
