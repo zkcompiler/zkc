@@ -323,7 +323,7 @@ def main():
     bridges = {("ZkcDriver", ROOT / "lib/Support/Input.h"),
                ("ZkcCompiler", ROOT / "lib/Transforms/PreparedProtocol.h"),
                ("ZkcCompiler", ROOT / "lib/Transforms/RealizedProtocol.h")}
-    bridges.update(("ZkcCpuTarget", ROOT / f"lib/Compiler/{name}.h") for name in ("CompilationState", "LanguageDiagnostics", "HostReferences", "MathematicalOptions", "NativeDeployment", "ArtifactJson", "Run", "LanguageInterface", "LanguagePackageReader"))
+    bridges.update(("ZkcCpuTarget", ROOT / f"lib/Compiler/{name}.h") for name in ("CompilationState", "LanguageDiagnostics", "HostReferences", "MathematicalOptions", "NativeDeployment", "ArtifactJson", "Run", "LanguageInterface", "LanguagePackageReader", "PublicCoin"))
     bridges.update(("ZkcCpuTarget", ROOT / f"lib/Transforms/{name}.h") for name in ("PreparedProtocol", "RealizedProtocol", "MathematicalSupport", "NativeBindingApplication", "MathematicalPassOptions", "Computation/Support", "NumericalSelection", "ScopedPreparation", "FiniteVerification", "MathematicalRecipes", "ScopedCallback"))
     assert not (ROOT / "include/zkc/Dialect/Builders.h").exists(), "raw builders belong to unsupported detail"
 
