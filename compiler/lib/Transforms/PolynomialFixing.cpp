@@ -123,6 +123,9 @@ struct FixPolynomialFactorsPass
     return "Fix ordered prefixes through shared polynomial factors and MLE "
            "tables";
   }
+  void getDependentDialects(DialectRegistry &registry) const final {
+    registry.insert<PolynomialDialect>();
+  }
   void runOnOperation() final {
     auto source = getOperation();
     if (failed(zkc::admitStage(source)) ||

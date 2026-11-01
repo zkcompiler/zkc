@@ -150,7 +150,7 @@ This unit contains the following implementation and completion criteria:
 
 ### Constraint redesign and complete migration
 
-The third remaining PR redesigns the whole assignment/constraint boundary. It
+The next PR redesigns the whole assignment/constraint boundary. It
 is not an adapter-only addition to the present AIR representation. Clean and
 LLZK exercise complementary requirements; neither becomes the protocol owner.
 
@@ -186,8 +186,8 @@ clients end to end within them. This is complete support of explicit executable
 profiles, not a promise to compile every upstream language or proposition.
 CirC remains a comparison point, not an extra mandatory integration.
 
-The first PR publishes logical term and statement/witness maps; represented
-execution preserves them; Constraint reads them before physical lowering.
+The STARK construction retains logical terms and statement/witness maps;
+represented execution preserves them; Constraint reads them before physical lowering.
 Consequently this delivery order does not require rebuilding relations from
 buffers or bytes. If representation work needs assignment meaning, it must
 preserve the existing logical subject instead of inventing a temporary owner.

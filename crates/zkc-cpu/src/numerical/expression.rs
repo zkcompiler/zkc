@@ -197,7 +197,7 @@ pub(crate) fn prepare(
 }
 
 /// Conservative evaluation-admission score W = 8B + 2I + 2N + 1 + R(3N + 3),
-/// where B is the carrier byte length, I the slot count, N the node count and R
+/// where B is the carrier byte length, I the operand count, N the node count and R
 /// the row count. The fixed setup surcharge applies even on an empty domain and
 /// is identical for cold and cached calls. Bounded parsing, canonicalization and
 /// immutable preparation precede per-evaluation scope admission; this score does

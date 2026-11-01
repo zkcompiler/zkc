@@ -20,11 +20,12 @@ int main() {
   auto outcome = zkc::exec::OutcomeType::get(&context, {});
   if (!outcome.getPayload().empty())
     return 5;
-  context.getOrLoadDialect<zkc::algebra::AlgebraDialect>();
+  context.getOrLoadDialect<zkc::data::DataDialect>();
   auto vector = zkc::data::FieldVectorType::get(&context, "bls12-381.fr");
   auto collection = mlir::cast<zkc::CollectionTypeInterface>(vector);
   if (collection.getCollectionKind() != zkc::CollectionKind::FieldVector ||
-      collection.getRank() != 1 || collection.getStaticExtent(0))
+      collection.getRank() != 1 || collection.getStaticExtent(0) ||
+      !mlir::isa<zkc::algebra::FieldType>(collection.getElementType()))
     return 4;
   auto module = mlir::parseSourceString<mlir::ModuleOp>(R"(
 module { "protocol.module"() ({

@@ -274,9 +274,10 @@ domains and bases.
 
 Delivery order does not impose representation order. Constraints consume exact
 logical assignments and relation assets before information-erasing physical
-lowering even though their migration follows represented execution. Review this
-ingress with the STARK unit now so later encodings do not reconstruct their
-statement or witness map from emitted machine programs.
+lowering even though their migration follows represented execution. The STARK
+construction retains logical terms and public/witness maps at that ingress;
+later encodings consume them directly instead of reconstructing them from
+emitted machine programs.
 
 Construction-specific encoding contracts are fixed when their first consumer
 lands, including statement/root binding, witness framing and request/state

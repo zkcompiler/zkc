@@ -2,7 +2,7 @@
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
-#include "zkc/Dialect/Algebra/IR/AlgebraDialect.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 
@@ -11,11 +11,22 @@ using namespace zkc;
 using namespace zkc::test;
 int main() {
   DialectRegistry registry;
-  registry
-      .insert<data::DataDialect, algebra::AlgebraDialect, func::FuncDialect>();
+  registry.insert<data::DataDialect, func::FuncDialect>();
   MLIRContext context(registry);
-  context.loadAllAvailableDialects();
   Cases cases;
+  cases.run("lazy collection ownership loads nominal scalar dependencies", [&] {
+    require(!context.getLoadedDialect("algebra"),
+            "scalar owner was eagerly loaded");
+    context.getOrLoadDialect<data::DataDialect>();
+    require(context.getLoadedDialect("algebra"),
+            "collection dependency is missing");
+    auto vector = data::FieldVectorType::get(&context, "bls12-381.fr");
+    require(isa<algebra::FieldType>(vector.getElementType()),
+            "collection element observation lost its scalar owner");
+    auto groups = data::GroupVectorType::get(&context, "bls12-381.g1");
+    require(isa<algebra::GroupType>(groups.getElementType()),
+            "group collection element observation lost its scalar owner");
+  });
   std::vector<diagnostics::RefusalInfo> refusals;
   ScopedDiagnosticHandler handler(&context, [&](Diagnostic &diagnostic) {
     auto codes = diagnostics::refusals(diagnostic);

@@ -1,5 +1,6 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
+#include "zkc/Dialect/Data/IR/DataDialect.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "llvm/ADT/TypeSwitch.h"
 using namespace mlir;

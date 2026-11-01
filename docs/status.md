@@ -153,8 +153,9 @@ SSA against admitted native local definitions without reader or emitter replay.
 Both checks inspect the complete immediate execution inventory, including
 dormant definitions; surrounding protocol associations remain the enclosing
 profile's responsibility. Native program records and runtime kernels retain
-their own contracts. Transparent word arithmetic and compiler-selected
-writable-buffer execution remain incomplete.
+their own contracts. The [represented arithmetic profile](#represented-arithmetic-development)
+adds independently checked word and private-buffer candidates consumed through
+physical numerical plans. General writable-buffer programs remain outside it.
 
 Source preparation has one service with polynomial recipe, protocol application
 and participant mathematics stages. Numerical recipes emit scoped operations
@@ -360,7 +361,9 @@ reader and source comparison are in IR Analysis; proposal and optimization are
 in Transforms. Numerical pass options preserve representation choices through
 copied and textual pipelines. Products use the pointwise tensor stage; their
 aggregate remains native. Row-free fills and explicit vector selection remain
-outside the tensor profile. General tensor transforms and writable-buffer ownership are outside this profile.
+outside the tensor profile. The later represented pointwise stage checks private
+buffer ownership separately; general tensor and buffer transforms remain outside
+these profiles.
 Owned [quotient-ring kernels](spec/domains/quotient-rings.md) support canonical
 negacyclic arithmetic, exact centered norms and natural-order transforms through
 ordered native contracts. Coefficient and evaluation values have distinct kernel
@@ -386,8 +389,9 @@ Weighted sums of selected off-domain column quotients use the same scope
 on BN254 Fr and those residue fields.
 Compiler-generated pointwise expressions pass
 borrowed columns and scalar captures through ordinary installed bindings.
-Compiler buffer lowering, target-specific vectorization and JIT/AOT engines remain
-unimplemented. These execution boundaries do not establish formal native
+The represented pointwise stage uses upstream vectorization and bufferization,
+then checked resident storage plans. It does not emit object code or provide
+JIT/AOT engines. These execution boundaries do not establish formal native
 correspondence.
 
 ## Source and application boundary

@@ -41,11 +41,12 @@ void runChecked(ModuleOp module, std::unique_ptr<Pass> pass,
   DialectRegistry dependencies;
   pass->getDependentDialects(dependencies);
   auto *context = module.getContext();
-  // Fail the case before executing a pass with an uncovered dependency. In
-  // particular, the preparation regression must never reach unregistered ops.
+  // Check the declared transitive closure in a fresh context. Input dialects
+  // already loaded in the source context must not mask a missing declaration.
+  MLIRContext dependencyContext(dependencies);
+  dependencyContext.loadAllAvailableDialects();
   for (auto name : createdDialects)
-    require(context->getLoadedDialect(name) ||
-                dependencies.getDialectAllocator(name),
+    require(bool(dependencyContext.getLoadedDialect(name)),
             pass->getArgument() + " does not declare " + name);
   PassManager manager(context);
   manager.addPass(std::move(pass));
@@ -327,14 +328,15 @@ int main() {
     });
   for (bool projection : {false, true})
     cases.run(
-        projection ? "project a range fold without input algebra"
-                   : "prepare a range fold without input algebra",
+        projection
+            ? "project a range fold with declared transitive dependencies"
+            : "prepare a range fold with declared transitive dependencies",
         [&] {
           withSource<data::DataDialect, runtime::RuntimeDialect,
                      exec::ExecDialect, func::FuncDialect>(
               rangeFold, [&](ModuleOp module, MLIRContext &context) {
-                require(!context.getLoadedDialect<algebra::AlgebraDialect>(),
-                        "range fixture unexpectedly loaded algebra");
+                require(context.getLoadedDialect<algebra::AlgebraDialect>(),
+                        "Data did not initialize its scalar dependency");
                 auto pass = projection
                                 ? protocol::createProjectProtocolPass(false)
                                 : protocol::createPrepareProtocolPass(false);
@@ -472,7 +474,10 @@ int main() {
                     "missing polynomial observation");
             auto pass = eliminate ? protocol::createEliminatePolynomialsPass()
                                   : protocol::createFixPolynomialFactorsPass();
-            runChecked(module, std::move(pass), {"algebra", "poly"});
+            if (eliminate)
+              runChecked(module, std::move(pass), {"algebra", "data"});
+            else
+              runChecked(module, std::move(pass), {"poly"});
             require(!count(module, "poly.fix") &&
                         context.getLoadedDialect<data::DataDialect>() &&
                         !context.getLoadedDialect<func::FuncDialect>(),
