@@ -161,9 +161,10 @@ def test_serialized_child_start_admission(toolchain, journal, directory, mutatio
     participant = program[3][1 if mutation == 'verifier-private-start' else 0]
     helper = deployment[2][6][6][0][0]
     loop = next(op for op in participant[6] if op[0] == 'loop')
+    captures = {parent: local for local, parent in loop[4]}
     start = next(op for op in loop[5] if op[0] == 'local' and op[2] == helper)
     if mutation == 'private-start':
-        start[3][1] = participant[4][2][0]
+        start[3][1] = captures[participant[4][2][0]]
         reason = 'native-proof-private-dependency'
     elif mutation == 'verifier-private-start':
         participant[7].append(['private', 'random.bls12-381.fr/0', '2'])
@@ -173,7 +174,7 @@ def test_serialized_child_start_admission(toolchain, journal, directory, mutatio
         start[3][1] = 'private_value'
         reason = 'native-proof-private-dependency'
     elif mutation == 'coordinate':
-        start[3][-1] = participant[4][1][0]
+        start[3][-1] = captures[participant[4][1][0]]
         reason = 'native-proof-coordinate-operand'
     else:
         # Remove only the invocation, preserving SSA formation and the rest of

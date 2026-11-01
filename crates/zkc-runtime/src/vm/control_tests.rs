@@ -118,14 +118,14 @@ fn body(nested: bool) -> Json {
             "outer",
             ["value", "n", "4", "i"],
             [["outer_r", "r"]],
-            ["c", "n"],
+            [["c", "c"], ["n", "n"]],
             [
                 [
                     "loop",
                     "inner",
                     ["value", "n", "4", "j"],
                     [["inner_r", "outer_r"]],
-                    ["c"],
+                    [["c", "c"]],
                     [
                         ["return_if", "exit", "c", ["c", "inner_r"], ["next"]],
                         ["yield", ["next"]]
@@ -176,7 +176,7 @@ fn runner(nested: bool, taken: bool, fail: Option<u64>, total: usize) -> Runner<
 fn participant_frames_use_admitted_loop_ports_and_reject_mistyped_captures() {
     use crate::vm::{instance::Instance, retention::Retention};
     let mut source = body(true);
-    source[0][4] = json!(["n", "c"]); // preserve declared order, not lexical order
+    source[0][4] = json!([["n", "n"], ["c", "c"]]); // preserve declared order, not lexical order
     let program = Program::decode(
         &serde_json::to_vec(&artifact(source, json!([]))).unwrap(),
         &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
@@ -279,6 +279,89 @@ fn participant_frames_use_admitted_loop_ports_and_reject_mistyped_captures() {
         if let FrameKind::Loop { site, .. } = frame.kind() {
             assert_eq!(frame.inputs(), program.loop_inputs("p", site));
         }
+    }
+}
+
+#[test]
+fn distinct_loop_formals_can_capture_the_same_copy_value() {
+    let source = json!([
+        "zkc.program/0",
+        [],
+        [],
+        [[
+            "participant",
+            "p",
+            "root",
+            "P",
+            [["c", BOOL], ["n", INDEX]],
+            [BOOL, BOOL],
+            [
+                [
+                    "loop",
+                    "repeat",
+                    ["value", "n", "4", "i"],
+                    [["a", "c"], ["b", "c"]],
+                    [["left", "c"], ["right", "c"]],
+                    [["yield", ["left", "right"]]],
+                    ["first", "second"]
+                ],
+                ["return", ["first", "second"]]
+            ],
+            []
+        ]],
+        [["entry", "main", [["P", "p"]]]]
+    ]);
+    let decode = |source: &Json| {
+        Program::decode(
+            &serde_json::to_vec(source).unwrap(),
+            &Contracts::standard(ExecutionPolicy::general_purpose()),
+        )
+    };
+    let program = decode(&source).unwrap();
+    assert_eq!(program.loop_inputs("p", "repeat").len(), 5);
+    for n in [0, 3] {
+        for c in [0, 1] {
+            let mut runner = Runner::new(
+                &program,
+                "main",
+                "P",
+                "session",
+                Store::default(),
+                vec![Datum::new(BOOL, c), Datum::new(INDEX, n)],
+            )
+            .unwrap();
+            while runner.advance_local_control().unwrap() {}
+            assert!(
+                matches!(runner.poll(), Action::Returned(_)),
+                "n={n}, c={c}: {:?}",
+                runner.stop()
+            );
+            assert_eq!(
+                runner
+                    .returned_values()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.value)
+                    .collect::<Vec<_>>(),
+                [c, c]
+            );
+            assert_eq!(runner.usage().iterations, n);
+            for frame in &runner.backend().entered {
+                if let FrameKind::Loop { .. } = frame.kind() {
+                    assert_eq!(frame.inputs(), program.loop_inputs("p", "repeat"));
+                }
+            }
+        }
+    }
+    for captures in [
+        json!(["c"]), // retired format has no fallback
+        json!([["left", "c"], ["left", "c"]]),
+        json!([["i", "c"]]),
+        json!([["left", "missing"]]),
+    ] {
+        let mut invalid = source.clone();
+        invalid[3][0][6][0][4] = captures;
+        assert!(decode(&invalid).is_err());
     }
 }
 

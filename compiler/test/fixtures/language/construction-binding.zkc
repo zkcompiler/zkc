@@ -1,0 +1,57 @@
+module m;
+domain F=field("bls12-381.fr");
+type Bytes=builtin("bytes");
+fn empty()->Bytes=primitive("bytes.empty");
+fn append(x:Bytes,b:index)->Bytes=primitive("bytes.append");
+fn concat(x:Bytes,y:Bytes)->Bytes=primitive("bytes.concat");
+fn hash(x:Bytes)->Bytes=primitive("hash.sha256");
+fn encode(x:F)->Bytes=primitive("encoding.field_be");
+fn sample(x:Bytes)->F=primitive("encoding.field_reduce_be");
+fn tag(x:index)->Bytes{return append(empty(),x);}
+interface Chain {
+  type State:Copy+Drop;
+  fn initialize()->State effects(stop,opaque);
+  fn start(t:State,v:F)->State effects(stop,opaque);
+  fn observe(t:State,v:F)->State effects(stop,opaque);
+  fn draw(t:State)->(State,F) effects(stop,opaque);
+}
+protocol Round roles(P,V)
+  (public:F@(P,V),secret:F@P,challenges:Random<F>@V)->(ok:bool@V){
+  #[site(commitment)] let first=send P->V(secret);
+  #[site(challenge)] let c=challenges.draw();
+  #[site(delivery)] let actual=send V->P(c);
+  #[site(response)] let last=send P->V(secret+actual);
+  return last==first+c;
+}
+construction Derived<H:Chain> for Round {
+  transcript H; replace challenges;
+  on start(t,public){return H::start(t,public);}
+  on message {commitment,response}(t,value){return H::observe(t,value);}
+  on message delivery(t,value){return t;}
+  on query challenge(t){return H::draw(t);}
+}
+module History:Chain {
+  type State:Copy+Drop=Bytes;
+  fn initialize()->State{return State(hash(tag(1)));}
+  fn start(t:State,v:F)->State {
+    return State(hash(concat(tag(2),concat(unpack(t),encode(v)))));
+  }
+  fn observe(t:State,v:F)->State {
+    return State(hash(concat(tag(3),concat(unpack(t),encode(v)))));
+  }
+  fn draw(t:State)->(State,F) {
+    let next=hash(concat(tag(4),unpack(t)));
+    return (State(next),sample(next));
+  }
+}
+module Explicit:Chain {
+  type State:Copy+Drop=Bytes;
+  fn initialize()->State{return State(empty());}
+  fn start(t:State,v:F)->State{return State(encode(v));}
+  fn observe(t:State,v:F)->State{return State(concat(unpack(t),encode(v)));}
+  fn draw(t:State)->(State,F){
+    return (t,sample(hash(concat(tag(5),unpack(t)))));
+  }
+}
+proof Demo=Round {prover P;verifier V;public{public};accept ok;
+  construction Derived<History>;}

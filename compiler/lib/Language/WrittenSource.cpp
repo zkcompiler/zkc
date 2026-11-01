@@ -975,6 +975,16 @@ private:
                                            ProofEntry::Construction::FiatShamir
                                        ? "fiat_shamir"
                                        : "authored")},
+                {"gates", list("gates", p.gates,
+                               [&](const auto &gate) {
+                                 json::Array path;
+                                 for (const auto &part : gate.path)
+                                   path.push_back(part);
+                                 return emit(
+                                     "gate", gate.span,
+                                     json::Object{{"path", std::move(path)},
+                                                  {"bits", gate.bits}});
+                               })},
                 {"suite", p.suite}});
       });
     }

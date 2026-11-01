@@ -713,6 +713,12 @@ struct ConstructionDefinition {
   std::vector<ConstructionApplication> applications;
   std::optional<ConstructionCodec> codec;
 };
+/// An authored static block-query path and native grinding difficulty.
+struct ProofGate {
+  std::vector<std::string> path;
+  unsigned bits = 0;
+  Span span;
+};
 /// Explicit two-participant proof job choices. Public inputs name whole logical
 /// ports; acceptance can select a Boolean product component. Service indices
 /// refer to managed ports, independently of native data flattening.
@@ -731,6 +737,7 @@ struct ProofEntry {
   std::string suite;
   std::optional<DeclarationId> selectedConstruction;
   std::vector<Type> constructionArguments;
+  std::vector<ProofGate> gates;
   protocol::ProofFormat format = protocol::ProofFormat::Native;
   Span span;
 };

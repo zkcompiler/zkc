@@ -1039,7 +1039,7 @@ impl ProofWalk<'_> {
                         return Err(refuse("native-proof-observation-order"));
                     }
                     self.ordinary([&count.value])?;
-                    self.ordinary(captures)?;
+                    self.ordinary(captures.iter().map(|(_, parent)| parent))?;
                     let before = self.reached.len();
                     if self.has_events(body) {
                         let state = current
@@ -1048,7 +1048,9 @@ impl ProofWalk<'_> {
                         let slots = tail(carried, state.len())
                             .ok_or_else(|| refuse("native-proof-loop-state"))?;
                         if !slots.iter().map(|(_, value)| value).eq(state.iter())
-                            || coordinates.iter().any(|v| !captures.contains(v))
+                            || coordinates
+                                .iter()
+                                .any(|v| !captures.iter().any(|(_, parent)| parent == v))
                         {
                             return Err(refuse("native-proof-loop-state"));
                         }
@@ -1057,7 +1059,17 @@ impl ProofWalk<'_> {
                                 .iter()
                                 .map(|(_, v)| v),
                         )?;
-                        let mut child_coordinates = coordinates.to_vec();
+                        let mut child_coordinates = coordinates
+                            .iter()
+                            .map(|coordinate| {
+                                captures
+                                    .iter()
+                                    .find(|(_, parent)| parent == coordinate)
+                                    .expect("checked coordinate capture")
+                                    .0
+                                    .clone()
+                            })
+                            .collect::<Vec<_>>();
                         child_coordinates.push(count.induction.clone());
                         let mut child_parents = parents.to_vec();
                         child_parents.push((site.clone(), count.maximum));

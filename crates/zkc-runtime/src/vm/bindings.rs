@@ -223,7 +223,10 @@ impl Identity {
     pub fn has_multi_opening(self) -> bool {
         matches!(
             self,
-            Self::MerklePoseidon2KoalaBear
+            Self::MerkleKoalaBear
+                | Self::MerkleKoalaBearExt4
+                | Self::MerkleKoalaBearExt8
+                | Self::MerklePoseidon2KoalaBear
                 | Self::MerklePoseidon2KoalaBearExt4
                 | Self::MerklePoseidon2BabyBear
                 | Self::MerklePoseidon2BabyBearExt4

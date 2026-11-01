@@ -77,7 +77,10 @@ with case("copy aliases remain distinct native loop formals"):
       "protocol.finish"(%x) : ({FIELD}) -> ()
     ''', [("n", "ui64"), ("x", FIELD)], [FIELD]))
     commands.verified(loop)
-    commands.verified(loop, "interactive-loop-capture", "--zkc-select-physical")
+    model = export(loop)
+    captures = model[3][0][6][0][4]
+    assert len(captures) == 2 and captures[0][0] != captures[1][0]
+    assert captures[0][1] == captures[1][1]
     commands.verified(loop.replace('site="right"', 'site="left"'), "interactive-site")
 
 with case("loop invariant cannot borrow an affine capability"):

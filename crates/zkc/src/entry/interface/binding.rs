@@ -102,9 +102,12 @@ impl BoundInterface {
                 && native.acceptance == proof.acceptance
                 && native.suite == suite
                 && native.construction == proof.construction.as_deref().unwrap_or("")
-                // The current source interface has no gate-selection field.
-                // Gated deployments require the explicit whole-artifact API.
-                && native.gates.is_empty()
+                && native.gates
+                    == proof
+                        .gates
+                        .iter()
+                        .map(|(site, bits)| serde_json::json!([site, bits.to_string()]))
+                        .collect::<Vec<_>>()
                 && native.format == proof.format
                 && native.services == services
                 && native.roles.len()

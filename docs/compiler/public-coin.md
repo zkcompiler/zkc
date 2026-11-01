@@ -48,25 +48,34 @@ the verifier actually observes in the same program.
 
 ## Implementation boundaries
 
-`ZkcCompiler` owns the analysis because it invokes the existing preparation
-workflow. `createPrepareProtocolPass(false, policy)` exposes unsimplified expansion
-under the caller's shared mathematical selection policy;
-projection and default preparation retain their existing behavior. An owned
-clone, ordinary admission, shared role availability and registered operand
-contracts supply the analysis inputs. Reports use numeric dependency anchors
-and prefix lengths to avoid copying each growing transcript.
+`ZkcAnalysis` owns the immutable module-level numerical and protocol observation
+analyses. `ZkcCompiler` selects the subject and produces the checked report.
+An authored view reads original Protocol IR; a realized view reads the actual
+candidate and generated-exchange associations from the checked realization owner.
+Checked compilation reuses that owner. Standalone analysis prepares and realizes
+once under independently supplied mathematical and oracle policies.
 
-The independent requirement pins entry ports and ordered query/delivery sites.
-The implementation discovers the actual edges. Each challenge retains its
-service contract, method and exact static arguments, distinguishing a field draw
-from scalar `UniformIndex` without merging event boundaries. It refuses hidden V-local calls,
-unmatched or changed coins and omitted verifier dependencies. Report checking
-recomputes everything, including preparation under an independently supplied
-policy. The view records `finite_bulk`, `fuse_vector_reductions` and
-`fuse_collect_fold`; its prepared
-hash names that exact unsimplified subject. Checked compilation forwards its
-policy to analysis and binds the result to the source text and exact emitted
-bundle, while preserving the narrower structural claim.
+Shared definitions and repeat-body summaries retain actual SSA substitutions,
+role-relative observations, logical stops, exact query origins and ordered pending
+challenge transfer. Repeat carries use a bounded fixed point including zero trips;
+iteration maxima are not unrolled. Actual deterministic numerical helpers are
+summarized through scoped execution and installed primitive contracts. Unknown
+effects or unsupported control refuse. A dependency never proves that an encoding
+is injective or that a value is cryptographically bound.
+
+The independent requirement pins the subject, complete deployment entries,
+verifier data ports and ordered query/delivery selectors. All verifier data inputs
+must be accounted for, even when unused; source statement membership is recorded
+separately. Field draws, scalar `UniformIndex` and product `UniformIndices` retain
+distinct laws and exact static domains. Generated deterministic oracle requests
+are recognized only through checked source/candidate associations.
+
+Reports retain a bounded definition DAG, body identities, primitive premises,
+full realization and independent policy selections. Rechecking recomputes the
+complete view. Checked compilation also pins source text, exact emitted bundle
+and the remaining stages from the analyzed subject. There is one current `/0`
+schema, with no flat-report reader. See the [protocol observation contract](../spec/ir/protocol-observations.md)
+for ownership, invalidation and transfer rules.
 
 ## Adopted construction boundary
 
@@ -88,8 +97,9 @@ actual candidate operands against the retained source. It then threads explicit
 state in each projected role, avoiding a new common role-family assembly
 operation. The construction supplies authorized public values to the host
 for transcript-root initialization and adds no participant data inputs. Private
-verifier inputs are not silently disclosed. Iterated prefixes and local public replay
-recipes require extensions beyond the current static report. Diagnostic sites
+verifier inputs are not silently disclosed. Structured iterated prefixes and
+checked deterministic request replay are supported; adaptive query domains and
+arbitrary observer effects require separately defined profiles. Diagnostic sites
 and generated helper names do not define cryptographic occurrence identity.
 
 [Merlin's transcript operations](https://merlin.cool/transcript/ops.html) are a

@@ -294,6 +294,7 @@ struct SyntaxProofEntry {
   ProofEntry::Construction construction = ProofEntry::Construction::Authored;
   std::string suite;
   std::optional<SyntaxType> selectedConstruction;
+  std::vector<ProofGate> gates;
   Span span;
 };
 struct Binding {

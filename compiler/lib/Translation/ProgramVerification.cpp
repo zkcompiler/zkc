@@ -186,11 +186,13 @@ class ArtifactCorrespondence {
               !inner.bind(region.getArgument(offset + i), carried.first))
             return false;
         unsigned start = offset + r->carried.size();
-        if (!environment.inputs(op.getOperands().drop_front(start),
-                                r->captures) ||
-            !captures(region.getArguments().drop_front(start), r->captures,
-                      inner) ||
-            !body(region, r->body, std::move(inner), depth + 1) ||
+        for (auto [i, capture] : enumerate(r->captures))
+          if (!charge() ||
+              !environment.inputs(op.getOperands().slice(start + i, 1),
+                                  {capture.second}) ||
+              !inner.bind(region.getArgument(start + i), capture.first))
+            return false;
+        if (!body(region, r->body, std::move(inner), depth + 1) ||
             !outputs(r->outputs))
           return false;
       } else

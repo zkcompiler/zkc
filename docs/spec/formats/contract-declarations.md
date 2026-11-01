@@ -169,6 +169,19 @@ conversions and Montgomery byte codecs do not authorize physical representation
 conversion. Variants use structural execution operations rather than separate
 catalog operation rows.
 
+The eleven installed relation-table operations are also deterministic partial
+operations over an immutable admitted Bundle: rows, shape, input, scope, point,
+points, widths, policy, interactions, interaction and record-points. Their exact
+asset identity, table, carrier and input values are part of the interpretation.
+The exact admitted asset bytes are an interpretation premise, not a conclusion
+from digest equality or a hash injectivity theorem. The asset registry admits
+those bytes against their identity and refuses duplicate replacement; it is
+read-only during invocation. Missing assets and resource
+admission remain execution obligations. A dependency report must retain the
+asset parameter and exact selected binding; it may not erase them because the
+asset is not an SSA operand. This enrollment grants no relation soundness,
+compiler correspondence, transcript binding or general asset lookup purity.
+
 Randomness, transcript, external and resource operations, physical conversion,
 arbitrary callbacks, oracle commitment/opening operations, PCS operations and
 private opening-state/setup services receive no such authority. Their types,

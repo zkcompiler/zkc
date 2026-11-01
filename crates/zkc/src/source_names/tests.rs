@@ -148,3 +148,15 @@ fn complete_unicode17_normalization_corpus() {
     }
     assert_eq!(count, 20_034);
 }
+
+#[test]
+fn gate_paths_use_exact_length_delimited_labels() {
+    assert_eq!(
+        native_site_path(&["a".into(), "β".into()]),
+        "apply_8_label_61_label_ceb2"
+    );
+    assert_ne!(
+        native_site_path(&["ab".into(), "c".into()]),
+        native_site_path(&["a".into(), "bc".into()])
+    );
+}

@@ -507,7 +507,7 @@ fn openings(domains: &[(Domain, usize, usize)], count: u64) -> (Vec<u8>, Vec<Val
             [x, n, w],
             [format!("root{k}"), format!("state{k}")]
         ]));
-        captures.push(json!(format!("state{k}")));
+        captures.push(json!([format!("state{k}"), format!("state{k}")]));
         loop_body.push(json!([
             "local",
             format!("open{k}"),

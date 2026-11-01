@@ -325,7 +325,8 @@ def test_record_codec_admission_checks_actual_program(toolchain, journal, direct
         selected[receive][3][2] = selected[receive][3][3]
     elif mutation.endswith('escape'):
         ty = 'index@native.index/0' if mutation == 'range-escape' else 'bytes@native.bytes/0'
-        value = (verifier[4][-1][0] if mutation == 'raw-escape' else
+        captures = {parent: local for local, parent in loop[4]}
+        value = (captures[verifier[4][-1][0]] if mutation == 'raw-escape' else
                  selected[receive][4][-1] if mutation == 'range-escape' else selected[slicer][4][0])
         # A typed, independently admissible ordinary function must not receive
         # internal codec values, even if its result is unused.

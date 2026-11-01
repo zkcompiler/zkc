@@ -263,6 +263,14 @@ fn domain(sort: &str, identity: &str) -> bool {
         _ => false,
     }
 }
+/// Metadata profile only; native admission independently checks installation.
+pub(super) fn block_transcript(suite: &str) -> bool {
+    matches!(
+        suite,
+        "hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0"
+            | "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"
+    )
+}
 pub(super) fn transcript_field(suite: &str) -> Option<&'static str> {
     match suite {
         "merlin3.bls12-381.fr64be/0"

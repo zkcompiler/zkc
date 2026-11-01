@@ -259,12 +259,29 @@ Three additional semantic owners have concrete prospective consumers:
 - **Constraint:** assignment predicates, lookup/multiset and chronological-memory
   structure. Move existing assignment-level ownership here when the encoding
   consumers land, retaining Relation as the statement/declaration interface.
-  Do not keep two canonical AIR/R1CS representations.
+  Do not keep two canonical AIR/R1CS representations. The migration includes
+  complete declared Clean ensemble and LLZK executable profiles, all existing
+  consumers, and the removal of replaced assignment implementations. Partial
+  witness computation is separate from validity for arbitrary assignments.
+  Public/fixed/witness/auxiliary projections, ensemble interactions, row scopes
+  and padding remain semantic data, not adapter annotations.
 - **Residue:** represented modular arithmetic, ranges, limbs and overflow laws
   needed before Arith/Vector can implement nominal field and ring operations.
 - **Codec:** exact logical-value/byte relations shared by transcript, commitment,
   wire and recursive-verification consumers. Runtime still implements the
   independently installed physical codecs.
+
+These are ownership decisions; a new dialect namespace requires an actual
+operation set and checked consumers. Decide the Residue/Codec split with the
+represented-execution migration, rather than keeping duplicate meaning merely
+to match a planned dialect list. Ordinary collection shape converges on Data;
+nominal polynomial domains and bases remain Poly responsibilities.
+
+Delivery order does not impose representation order. Constraints consume exact
+logical assignments and relation assets before information-erasing physical
+lowering even though their migration follows represented execution. Review this
+ingress with the STARK unit now so later encodings do not reconstruct their
+statement or witness map from emitted machine programs.
 
 Construction-specific encoding contracts are fixed when their first consumer
 lands, including statement/root binding, witness framing and request/state
@@ -296,7 +313,11 @@ explicit-vector mode does not restore a withheld provider. See the
 
 External dialects remain useful at bounded adapters where their semantics match.
 HEIR reuse should be evaluated against represented polynomial/modular workloads;
-LLZK or CirC interoperability belongs at constraint/relation boundaries. Compare
+Clean and LLZK are acceptance clients of the constraint/relation redesign;
+CirC remains a comparison point. Clean's ensemble obligations must survive
+extraction, and LLZK's mutable object identity cannot be treated as an immutable
+logical aggregate. Reassess current upstream semantics and toolchains before
+choosing direct dialect reuse or an adapter. Compare
 conversion laws, pin/build costs, independent validation and performance with an
 owned implementation. Learning from external designs does not remove maintenance
 of our own implementation. Transform/PDL may later describe profitable schedules,

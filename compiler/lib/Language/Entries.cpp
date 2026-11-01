@@ -43,6 +43,10 @@ bool Checker::entry(DeclarationId id, unsigned depth) {
                         source.span);
     uint64_t copied = definition.staticArguments.size();
     if (definition.proof()) {
+      for (const auto &gate : definition.proof()->gates)
+        for (const auto &part : gate.path)
+          if (!types.charge(part.size() + 1, source.span))
+            return false;
       copied += definition.proof()->publicInputs.size() +
                 definition.proof()->acceptance.path.size();
       if (definition.proof()->completion)
@@ -274,6 +278,14 @@ bool Checker::configureEntry(Declaration &entry, const Declaration &protocol,
       return false;
     value.services = {*service};
   }
+  value.gates = source.gates;
+  auto order = types.proofGateOrder(protocol, value);
+  if (!order)
+    return false;
+  auto gates = std::move(value.gates);
+  value.gates.clear();
+  for (unsigned index : *order)
+    value.gates.push_back(std::move(gates[index]));
   entry.configuration = std::move(value);
   return types.checkProofEntry(entry, protocol);
 }

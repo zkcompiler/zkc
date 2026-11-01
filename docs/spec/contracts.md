@@ -43,6 +43,42 @@ construction without changing a serialized schema or registering a new claim.
 Implementation coverage remains explicit in [status](../status.md), and formal
 interpretation remains an independent consumer obligation.
 
+The [execution observation summary](ir/execution-observations.md) is a borrowed
+native analysis of actual numerical bodies, including logical stops and closed
+finite callbacks. It retains exact primitive occurrences as interpretation
+premises and is not a transcript-binding or security certificate. The
+[structured public-coin consumer](ir/public-coin.md) selects the authored
+or checked realized subject explicitly and serializes shared definition DAGs.
+Its required deployment inventory and independent policies reproduce the same
+checked owner as compilation. All verifier data inputs are binding obligations,
+including unused and generated shape inputs. No serialized formal consumer or
+Lean interpretation is claimed by this native summary.
+
+The [protocol observation summary](ir/protocol-observations.md) composes those
+numerical facts through actual Protocol definitions, role maps and retained
+repeats. Its dependency DAG and exact pending-challenge transfer are distinct:
+arithmetic dependence never establishes exact delivery. This is an internal
+borrowed analysis, not a new artifact format or an additional execution route.
+
+The separate [construction binding view](ir/construction-binding.md) checks
+actual encoding coverage and state successors after source/candidate
+correspondence. All profiles distinguish terminal event templates outside query
+coverage from observations absorbed into a final history state. Primitive/codec
+meaning, host initialization where applicable and cryptographic laws remain
+explicit premises; the report grants no execution authority or security theorem.
+
+### Participant-loop capture bindings
+
+Participant `loop` captures in `zkc.program/0` are ordered
+`[local_name, parent_name]` pairs. This preserves distinct Copy formals that
+refer to one parent value, including their storage accounting. The compiler,
+independent artifact checker, native decoder, interpreter and proof admission
+readers use this form together. The old string list is rejected; local numeric
+control keeps its existing grammar. See the
+[byte-language change](formats/program-bytes.md#participant-bodies). This is a
+version-0 schema replacement, not a compatibility profile. Independent formal
+reader adaptation remains separate.
+
 ### Foundation interfaces
 
 These rows identify the native cutover and independently maintained consumers.
@@ -67,7 +103,7 @@ review loops for this unit. Formal interpretation is a later independent task.
 | Outcome, stop, budget meaning | [Native foundation](ir/native-foundation.md#outcomes-observations-and-budgets), IR / Execution | Typed invocation → compiler admission and native VM/providers | Typed route implemented; existing reached schedule, stops and budgets retained |
 | Native successor operands | [Execution branches](ir/execution.md#structural-branch-interfaces-and-admitted-execution), IR / Data and Exec | Native builders and source emitter → BranchOpInterface clients, source readers and correspondence checks | Independent forwarded segments implemented; generic CFG publication still requires semantic binding, custody and budget correspondence beyond structural formation |
 | Stage admission and target selection | [Stage pipelines](ir/native-foundation.md#stage-pipelines-and-target-selection), IR / Compiler | Shared stage builder and selected installation → API, textual pipeline, import and publication | Shared stage builders, typed selection and complete native admission; catalog availability does not establish an installed backend |
-| `zkc.program/0` | [Retained byte language](formats/foundation-interfaces.md#executable-byte-language), IR / Program | Compiler → independent C++/Rust readers and other target consumers | Byte meaning unchanged; structural native adapter and independent byte readers retained |
+| `zkc.program/0` | [Retained byte language](formats/foundation-interfaces.md#executable-byte-language), IR / Program | Compiler → independent C++/Rust readers and other target consumers | Logical execution retained with explicit local/parent loop-capture bindings; structural native adapter and independent byte readers use the current byte grammar |
 
 ### Current producers and consumers
 
@@ -110,8 +146,11 @@ contract change, not the most recent documentation-only registration.
 | Retired proposal `zkc.lean-interface/0` | [Shared interfaces plan](../roadmap.md#shared-interfaces-before-implementation) | Frontend / Language | Existing declarations and bound requests → frontend resolution | Retired proposal: extend existing transports; no parallel format is admitted | None | — |
 | Restricted logical aggregates; version unassigned | [Logical aggregate plan](../roadmap.md#shared-interfaces-before-implementation) | IR / Protocol | Future frontend claim views → Protocol formation and Lean reader | Designed: typed field paths and role components; ordinary data/codec boundaries continue to exclude handles | None | — |
 | Native index blocks and gated requests, version 0 | [Request bytes](formats/native-index-block.md), [construction](ir/construction.md#native-index-blocks) | IR / Construction | Native construction → independent actual-body and Rust readers, CPU bounded search/check, SDK transport | Native compiler/runtime integration; independent Lean adaptation remains open | No registered gate premise or Fiat–Shamir theorem | — |
+| `zkc.construction-binding/0` | [Closed binding profiles](ir/construction-binding.md) | IR / Compiler | Actual original/candidate correspondence → canonical encoding/state analysis → complete recomputation | Native history, canonical hash history and explicit-input coverage; bounded closed profiles | Primitive interpretation, host initialization and cryptographic premises remain explicit; not a security theorem | [#196](https://github.com/zkcompiler/zkc/pull/196) |
+| Source-selected gates, version 0 | [Proof choices](language/entries.md#proof-declarations), [written syntax](language/source-ast.md) | Frontend / IR | Checked labelled query paths → source/interface comparison, native selection and SDK artifact binding | Required `gates` proof-job field and written `gate` nodes; native policy and witness wire unchanged | Direct installed block construction only; no security theorem from difficulty | [#196](https://github.com/zkcompiler/zkc/pull/196) |
 | Expanded local occurrence names | [Function origins](ir/functions.md#origins-and-identity), IR / Algorithms | Scoped expansion and numerical realization → independent correspondence readers and emitted native sites | Full length-delimited paths remain in origin records; long names use the complete SHA-256 digest in unpadded base64url; native producers and checkers change together | Names do not establish correspondence; independent formal consumers are not migrated here | [#193](https://github.com/zkcompiler/zkc/pull/193) |
 | CPU retained-value profile | [Native capacity](runtime/capacity.md#retained-values-and-logical-work), Runtime / CPU | CPU value constructors, preflight and codecs → VM retention and shared execution ledgers | 80-byte inline slots; large group points, complete variant nodes and aggregate metadata use charged immutable backing; expanded value bounds and live capability validation remain independent | Native resource accounting only; no new formal claim | [#193](https://github.com/zkcompiler/zkc/pull/193) |
+| Parameterized STARK degree reduction | [Assignment inventory and DEEP contract](domains/stark.md) | Libraries / IR | Captured Bundle → extended OOD inventory → adjusted first FRI word and authenticated query association | Implemented native profile; degree-boundary adversary, full-column inventory and scalar/product/gated quartic Keccak deployments exercised | No complete DEEP/FRI, commitment or FS theorem for this compiled client | [#196](https://github.com/zkcompiler/zkc/pull/196) |
 | Installed transcript and Merkle suites | [Transcripts](ir/construction.md), [Merkle schemes](domains/oracles.md), [services](runtime/services.md) | Runtime / Providers | [Backend registry](../../crates/zkc-cpu/src/backend/registry.rs) → Contracts selection, native invocation, Lean installed vocabulary | Native quartic Keccak rows, randomness and hash-chain transcript installed; independent Lean coverage remains separate | Kernel interpretation remains explicit | [#174](https://github.com/zkcompiler/zkc/pull/174) |
 
 For designed rows, the linked roadmap is a delivery contract, not a wire
@@ -144,9 +183,10 @@ Lean source checker must check the same selection.
 
 The enumeration authorities above retain their definitions. This register does
 not create a second runtime registry or grant every registered mathematical
-operation to every target. The four-face catalog probe in the
-[foundation plan](../roadmap.md#catalog-and-mlir-foundation-probe) must account for
-frontend, ODS, native execution and the Lean installed vocabulary together.
+operation to every target. Catalog changes at the
+[foundation regression boundary](../roadmap.md#preserve-the-landed-foundation)
+account for frontend, ODS, native execution and independent Lean vocabulary
+consumers. Declaration agreement does not establish their semantic interpretation.
 
 The proposed standalone `zkc.lean-interface/0` is superseded by projections
 of existing Lean declarations, subjects and bound-request formats. The
@@ -268,7 +308,7 @@ not pass it.
   policies emit bounded prover search, a construction-owned witness slot and the
   verifier gate check. Independent readers check actual helper/transport order;
   CPU checks bytes, authority, accounting and failure successors. Source proof
-  declarations do not yet configure gating, and Lean interpretation remains open.
+  declarations select gates by checked labelled query paths; Lean interpretation remains open.
   An installed signature alone does not prove its implementation.
 
 Report these four results separately against the same source and configuration.

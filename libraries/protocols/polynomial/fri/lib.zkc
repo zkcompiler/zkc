@@ -32,7 +32,21 @@ type Oracles<K: OracleKind, Capacity: nat> = builtin("oracle_sequence", K, Capac
 #[shape(initial.rows, bound = pow2(LogSize))]
 #[shape(layers.rows, bound = pow2(LogSize))]
 #[shape(folds.rows, bound = pow2(LogSize))]
-pub struct State<C: Configuration, LogSize: nat, TerminalLog: nat,
+pub struct CommitmentState<C: Configuration, LogSize: nat, TerminalLog: nat,
+                 Rounds: nat> {
+  initial: Oracle<FieldTable<C::Value>>,
+  layers: Oracles<FieldTable<C::Value>, Rounds>,
+  folds: Oracles<FieldTable<C::Value>, Rounds>,
+  geometry: coset::CosetDomain<C::Value>,
+  coefficients: Vector<C::Value>,
+  round_count: index
+}
+
+#[logical]
+#[shape(initial.rows, bound = pow2(LogSize))]
+#[shape(layers.rows, bound = pow2(LogSize))]
+#[shape(folds.rows, bound = pow2(LogSize))]
+pub struct QueryState<C: Configuration, LogSize: nat, TerminalLog: nat,
                  Rounds: nat, Queries: nat> {
   initial: Oracle<FieldTable<C::Value>>,
   layers: Oracles<FieldTable<C::Value>, Rounds>,
@@ -104,17 +118,17 @@ fn terminal<F: Field>(coefficients: Vector<F>, shift: F, size: index,
 // degree < 2^(TerminalLog+Rounds); terminal degree < 2^TerminalLog. The degree
 // test is not a claim about proximity or the soundness gap.
 pub protocol Commit<C: Configuration, LogSize: nat, TerminalLog: nat,
-                    Rounds: nat, Queries: nat> roles(P,V)
+                    Rounds: nat> roles(P,V)
     (word: Vector<C::Value> @P, prover_shift: C::Value @P,
      verifier_shift: C::Value @V, round_count: index @(P,V),
-     query_count: index @(P,V), coins: Random<C::Challenge> @V)
-    -> (state: State<C,LogSize,TerminalLog,Rounds,Queries> @P->V)
+     coins: Random<C::Challenge> @V)
+    -> (state: CommitmentState<C,LogSize,TerminalLog,Rounds> @P->V)
     where zkc::algebra::TwoAdicField(C::Value),
       zkc::algebra::CharacteristicNotTwo(C::Value),
-      zkc::random::IndexRandomness(C::Challenge), LogSize <= 63,
-      1 <= Rounds, 1 <= Queries, TerminalLog+Rounds+1 <= LogSize {
-  require @V round_count == index<Rounds>() && query_count == index<Queries>();
-  require @P round_count == index<Rounds>() && query_count == index<Queries>();
+      LogSize <= 63,
+      1 <= Rounds, TerminalLog+Rounds+1 <= LogSize {
+  require @V round_count == index<Rounds>();
+  require @P round_count == index<Rounds>();
   let initial_rows = index<pow2(LogSize)>();
   require @P length(word) == initial_rows;
   let shift = @(P = prover_shift, V = verifier_shift);
@@ -183,6 +197,21 @@ pub protocol Commit<C: Configuration, LogSize: nat, TerminalLog: nat,
   let received = send P -> V(proposed);
   require @V length(received) == index<pow2(TerminalLog)>();
   let coefficients = @(P = proposed, V = received);
+  let initial <- oracle.at(layers, 0);
+  let state = CommitmentState<C,LogSize,TerminalLog,Rounds> {
+    initial, layers, folds, geometry, coefficients, round_count
+  };
+  return (state = state);
+}
+
+// Query acquisition is a separate source-selected law. Binding the resulting
+// sequence below checks its shape, not uniformity or independence.
+pub protocol ScalarQueries<F: Field, LogSize: nat, Queries: nat> roles(P,V)
+    (query_count: index @(P,V), coins: Random<F> @V)
+    -> (positions: Indices @(P,V))
+    where zkc::random::IndexRandomness(F), LogSize <= 63, 1 <= Queries {
+  require @V query_count == index<Queries>();
+  require @P query_count == index<Queries>();
   let positionsP @P = indices::empty();
   let positionsV @V = indices::empty();
   let mut positions = @(P = positionsP, V = positionsV);
@@ -194,17 +223,57 @@ pub protocol Commit<C: Configuration, LogSize: nat, TerminalLog: nat,
     let rememberedV @V = indices::append(positions, position);
     positions = @(P = rememberedP, V = rememberedV);
   }
-  let initial <- oracle.at(layers, 0);
-  let state = State<C,LogSize,TerminalLog,Rounds,Queries> {
-    initial, layers, folds, geometry, coefficients, positions,
-    round_count, query_count
+  return (positions = positions);
+}
+
+pub protocol BlockQueries<F: Field, LogSize: nat, Queries: nat> roles(P,V)
+    (query_count: index @(P,V), coins: Random<F> @V)
+    -> (positions: Indices @(P,V))
+    where zkc::random::IndexBlockRandomness(F), LogSize <= 63, 1 <= Queries {
+  require @V query_count == index<Queries>();
+  require @P query_count == index<Queries>();
+  #[site(positions)]
+  let positionsV = coins.indices(pow2(LogSize),Queries);
+  let positionsP = send V -> P(positionsV);
+  let positions = @(P = positionsP, V = positionsV);
+  return (positions = positions);
+}
+
+fn bounded_positions(positions: Indices, bound: index) -> bool {
+  let mut bounded = true;
+  for query in 0..indices::length(positions) {
+    let position = indices::get(positions, query);
+    bounded = bounded && less(position, bound);
+  }
+  return bounded;
+}
+
+// Distinct flat logical records express the phase boundary without embedding
+// a logical record or an owner-local resource in shared logical metadata.
+pub protocol BindQueries<C: Configuration, LogSize: nat, TerminalLog: nat,
+                         Rounds: nat, Queries: nat> roles(P,V)
+    (committed: CommitmentState<C,LogSize,TerminalLog,Rounds> @P->V,
+     positions: Indices @(P,V))
+    -> (state: QueryState<C,LogSize,TerminalLog,Rounds,Queries> @P->V)
+    where LogSize <= 63, 1 <= Queries {
+  require @V indices::length(positions) == index<Queries>();
+  require @P indices::length(positions) == index<Queries>();
+  let boundedV @V = bounded_positions(positions, index<pow2(LogSize)>());
+  require @V boundedV;
+  let boundedP @P = bounded_positions(positions, index<pow2(LogSize)>());
+  require @P boundedP;
+  let state = QueryState<C,LogSize,TerminalLog,Rounds,Queries> {
+    initial: committed.initial, layers: committed.layers,
+    folds: committed.folds, geometry: committed.geometry,
+    coefficients: committed.coefficients, positions,
+    round_count: committed.round_count, query_count: index<Queries>()
   };
   return (state = state);
 }
 
 pub protocol Positions<C: Configuration, LogSize: nat, TerminalLog: nat,
                        Rounds: nat, Queries: nat> roles(P,V)
-    (state: State<C,LogSize,TerminalLog,Rounds,Queries> @P->V)
+    (state: QueryState<C,LogSize,TerminalLog,Rounds,Queries> @P->V)
     -> (positions: Indices @(P,V)) where () {
   let positions = state.positions;
   return (positions = positions);
@@ -213,7 +282,7 @@ pub protocol Positions<C: Configuration, LogSize: nat, TerminalLog: nat,
 #[shape(initial.rows, bound = pow2(LogSize))]
 pub protocol Initial<C: Configuration, LogSize: nat, TerminalLog: nat,
                      Rounds: nat, Queries: nat> roles(P,V)
-    (state: State<C,LogSize,TerminalLog,Rounds,Queries> @P->V)
+    (state: QueryState<C,LogSize,TerminalLog,Rounds,Queries> @P->V)
     -> (initial: Oracle<FieldTable<C::Value>> @P->V) where () {
   let initial = state.initial;
   return (initial = initial);
@@ -233,7 +302,7 @@ fn associated_value<F: Field>(enabled: bool, values: Vector<F>, position: index,
 // each fold chain. The flag and the vector alone establish no binding claim.
 protocol Check<C: Configuration, LogSize: nat, TerminalLog: nat,
                Rounds: nat, Queries: nat> roles(P,V)
-    (state: State<C,LogSize,TerminalLog,Rounds,Queries> @P->V,
+    (state: QueryState<C,LogSize,TerminalLog,Rounds,Queries> @P->V,
      associate: bool @V, first: Vector<C::Value> @V)
     -> (accepted: bool @V, valuesV: Vector<C::Value> @V)
     where zkc::algebra::TwoAdicField(C::Value),
@@ -292,7 +361,7 @@ protocol Check<C: Configuration, LogSize: nat, TerminalLog: nat,
 
 pub protocol Query<C: Configuration, LogSize: nat, TerminalLog: nat,
                    Rounds: nat, Queries: nat> roles(P,V)
-    (state: State<C,LogSize,TerminalLog,Rounds,Queries> @P->V)
+    (state: QueryState<C,LogSize,TerminalLog,Rounds,Queries> @P->V)
     -> (accepted: bool @V, valuesV: Vector<C::Value> @V)
     where zkc::algebra::TwoAdicField(C::Value),
       zkc::algebra::CharacteristicNotTwo(C::Value), LogSize <= 63,
@@ -305,7 +374,7 @@ pub protocol Query<C: Configuration, LogSize: nat, TerminalLog: nat,
 
 pub protocol QueryAssociated<C: Configuration, LogSize: nat, TerminalLog: nat,
                              Rounds: nat, Queries: nat> roles(P,V)
-    (state: State<C,LogSize,TerminalLog,Rounds,Queries> @P->V,
+    (state: QueryState<C,LogSize,TerminalLog,Rounds,Queries> @P->V,
      first: Vector<C::Value> @V)
     -> (accepted: bool @V)
     where zkc::algebra::TwoAdicField(C::Value),
@@ -315,8 +384,8 @@ pub protocol QueryAssociated<C: Configuration, LogSize: nat, TerminalLog: nat,
   return (accepted = accepted);
 }
 
-// Standalone convenience uses precisely the same Commit and Query kernel.
-pub protocol LowDegree<C: Configuration, LogSize: nat, TerminalLog: nat,
+// Explicit scalar policy over the common commitment and query phases.
+pub protocol ScalarLowDegree<C: Configuration, LogSize: nat, TerminalLog: nat,
                        Rounds: nat, Queries: nat> roles(P,V)
     (word: Vector<C::Value> @P, prover_shift: C::Value @P,
      verifier_shift: C::Value @V, round_count: index @(P,V),
@@ -327,9 +396,35 @@ pub protocol LowDegree<C: Configuration, LogSize: nat, TerminalLog: nat,
       zkc::algebra::CharacteristicNotTwo(C::Value),
       zkc::random::IndexRandomness(C::Challenge), LogSize <= 63,
       1 <= Rounds, 1 <= Queries, TerminalLog+Rounds+1 <= LogSize {
-  let state <- Commit<C,LogSize,TerminalLog,Rounds,Queries>(word, prover_shift,
-    verifier_shift, round_count, query_count, coins);
-  let positions <- Positions<C,LogSize,TerminalLog,Rounds,Queries>(state);
+  let committed <- Commit<C,LogSize,TerminalLog,Rounds>(word, prover_shift,
+    verifier_shift, round_count, coins);
+  #[site(queries)]
+  let positions <- ScalarQueries<C::Challenge,LogSize,Queries>(query_count, coins);
+  let state <- BindQueries<C,LogSize,TerminalLog,Rounds,Queries>(committed, positions);
+  let (accepted, valuesV) <- Query<C,LogSize,TerminalLog,Rounds,Queries>(state);
+  let positionsP @P = positions;
+  let positionsV @V = positions;
+  return (accepted = accepted, positionsP = positionsP, positionsV = positionsV,
+    valuesV = valuesV);
+}
+
+// Explicit product-block policy; no capability fallback to scalar requests.
+pub protocol BlockLowDegree<C: Configuration, LogSize: nat, TerminalLog: nat,
+                       Rounds: nat, Queries: nat> roles(P,V)
+    (word: Vector<C::Value> @P, prover_shift: C::Value @P,
+     verifier_shift: C::Value @V, round_count: index @(P,V),
+     query_count: index @(P,V), coins: Random<C::Challenge> @V)
+    -> (accepted: bool @V, positionsP: Indices @P,
+        positionsV: Indices @V, valuesV: Vector<C::Value> @V)
+    where zkc::algebra::TwoAdicField(C::Value),
+      zkc::algebra::CharacteristicNotTwo(C::Value),
+      zkc::random::IndexBlockRandomness(C::Challenge), LogSize <= 63,
+      1 <= Rounds, 1 <= Queries, TerminalLog+Rounds+1 <= LogSize {
+  let committed <- Commit<C,LogSize,TerminalLog,Rounds>(word, prover_shift,
+    verifier_shift, round_count, coins);
+  #[site(queries)]
+  let positions <- BlockQueries<C::Challenge,LogSize,Queries>(query_count, coins);
+  let state <- BindQueries<C,LogSize,TerminalLog,Rounds,Queries>(committed, positions);
   let (accepted, valuesV) <- Query<C,LogSize,TerminalLog,Rounds,Queries>(state);
   let positionsP @P = positions;
   let positionsV @V = positions;

@@ -43,6 +43,13 @@ impl ReadExtent {
                 state.opening_bytes(1).ok()?.checked_add(HANDLE)?
             }
             // Each requested position reads its row and at most its full path.
+            (Self::Rows, [Value::OracleState(state), Value::Indices(positions)]) => state
+                .opening_bytes()
+                .ok()?
+                .checked_mul(positions.len())?
+                .checked_add(HANDLE)?
+                .checked_add(positions.len().checked_mul(8)?)?
+                .min(state.retained_bytes().ok()?.checked_add(HANDLE)?),
             (Self::Rows, [Value::MerkleTree(state), Value::Indices(positions)]) => state
                 .opening_bytes(positions.len())
                 .ok()?

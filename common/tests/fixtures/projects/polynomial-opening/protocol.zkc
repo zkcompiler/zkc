@@ -5,7 +5,7 @@ use zkc::oracle as oracle;
 use zkc::opening as opening;
 use zkc::coset as coset;
 use zkc::scalar::{power};
-use fri::{Direct, LowDegree};
+use fri::{Direct, ScalarLowDegree};
 
 // One polynomial-opening composition. The quotient has degree < 4; the
 // original polynomial therefore has degree <= 4. Parameters are for tests.
@@ -28,7 +28,7 @@ pub protocol Open<C: Commitment> roles(P,V)
   let rounds: index @(P,V) = 2;
   let queries: index @(P,V) = 8;
   let (ok, positionsP, positionsV, valuesV) =
-    LowDegree<Direct<C::ValueField>,5,0,2,8>(opening::vector_values(reduced), shift, shift, rounds, queries, coins);
+    ScalarLowDegree<Direct<C::ValueField>,5,0,2,8>(opening::vector_values(reduced), shift, shift, rounds, queries, coins);
   require @V ok;
   let columnsV @V = opening::same_rotation(1, 0);
   let claimV @V = vector::fill(value, 1);

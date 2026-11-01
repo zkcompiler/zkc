@@ -162,7 +162,7 @@ fn run_program(field: &str, arenas: &Arenas) -> Json {
                     "rounds",
                     ["value", "rounds", "8", "i"],
                     [],
-                    ["x"],
+                    [["x", "x"]],
                     [["local", "inner", "inner", ["x"], ["r2"]], ["yield", []]],
                     []
                 ],
@@ -565,7 +565,7 @@ fn proof_interface(field: &str) -> Json {
             "outputs":[port("accepted",0,&[0],&["V"],boolean)],"services":[],"clauses":[]}),
         json!({"kind":"proof","prover":"P","verifier":"V","public":[0],
             "acceptance":{"direction":"output","port":0,"role":"V","path":[]},
-            "completion":null,"target":null,"construction":{"kind":"authored", "format": "zkc.framed/0"}}),
+            "completion":null,"target":null,"gates":[],"construction":{"kind":"authored", "format": "zkc.framed/0"}}),
     )
 }
 fn proof_entry(

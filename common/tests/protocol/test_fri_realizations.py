@@ -11,7 +11,7 @@ from test_fri import authentication_rejection, messages, replace_messages
 
 
 SOURCE = '''module sample;
-use fri::{Configuration, LowDegree};
+use fri::{Configuration, ScalarLowDegree};
 use zkc::vector::{Vector};
 use zkc::indices::{Indices};
 use zkc::encoding as encoding;
@@ -33,7 +33,7 @@ protocol Fri roles(P,V)(word: Vector<F> @P, shift: F @(P,V),
     -> (accepted: bool @V, positionsP: Indices @P,
         positionsV: Indices @V, valuesV: Vector<F> @V) {
   let (accepted, positionsP, positionsV, valuesV) =
-    LowDegree<Quartic,4,0,2,4>(word, shift, shift, round_count, query_count, coins);
+    ScalarLowDegree<Quartic,4,0,2,4>(word, shift, shift, round_count, query_count, coins);
   return (accepted = accepted, positionsP = positionsP,
     positionsV = positionsV, valuesV = valuesV);
 }

@@ -3,9 +3,12 @@
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/NativeLanguage.h"
+#include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Language/Inspection.h"
 #include "zkc/Language/Names.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Translation/Language.h"
 using namespace llvm;
 using namespace zkc;
@@ -91,6 +94,85 @@ int main() {
     for (bool simplify : {false, true})
       take(compileEntry(original, {simplify, false}));
   });
+  const std::string gated = R"(
+    domain Q=field("koala-bear.ext4-binomial3");
+    protocol Queries roles(A,B)(coins:Random<Q>@B)->(){
+      #[site(positions)] let positions=coins.indices(16,100);
+      let delivered=send B->A(positions);
+      return ();
+    }
+    protocol Gated roles(P,V)(n:index@(P,V),coins:Random<Q>@V,other:Random<Q>@V)->(ok:bool@V){
+      #[site(first)] let ()=Queries roles(P,V)(coins);
+      for _ in 0..n roles(P,V) max 2 {
+        #[site(second)] let ()=Queries roles(P,V)(coins);
+      }
+      return true;
+    }
+    proof Gates=Gated{prover P;verifier V;public{n};accept ok;
+      construction fiat_shamir("hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",coins);
+      gate second.positions bits 0;
+      gate first.positions bits 3;
+    }
+  )";
+  cases.run(
+      "source gates bind actual nested and repeated block occurrences", [&] {
+        auto project = take(checked(gated));
+        auto closed =
+            take(zkc::test::closeProtocolDeployment(project, "m::Gates"));
+        auto original = take(prepareOriginal(closed));
+        auto &gates = original.interface().proof->gates;
+        require(gates.size() == 2 && gates[0].path.front() == "first" &&
+                    gates[0].bits == 3 && gates[1].bits == 0,
+                "gates must use source order while retaining explicit zero");
+        auto written = take(inspectWrittenSource(project));
+        require(StringRef(written).contains("\"kind\":\"gate\""),
+                "written gates were lost");
+        for (bool simplify : {false, true}) {
+          auto compiled = take(compileEntry(original, {simplify, false}));
+          auto &policy =
+              std::get<CompiledNativeProof>(compiled.artifact()).policy;
+          require(policy.gates.size() == 2 && policy.draws.size() == 2,
+                  "block or repeated query was expanded or omitted");
+          require(policy.gates[0] ==
+                      std::pair(mathematical::expandedApplicationSite(
+                                    nativeSiteName("first", 0),
+                                    nativeSiteName("positions", 0)),
+                                3u),
+                  "source selector differs from actual expanded site");
+        }
+        auto doc = take(json::parse(original.interfaceJson()));
+        auto *job = doc.getAsObject()->getObject("job");
+        (*job->getArray("gates"))[0].getAsObject()->operator[]("bits") = 4;
+        require(StringRef(toString(checkInterface(original, printJson(doc))))
+                    .contains("source.interface"),
+                "altered or missing gate metadata accepted");
+        job->erase("gates");
+        require(StringRef(toString(checkInterface(original, printJson(doc))))
+                    .contains("source.interface"),
+                "altered or missing gate metadata accepted");
+      });
+  for (const auto &mutation : std::vector<std::pair<std::string, std::string>>{
+           {"bits 3", "bits 65"},
+           {"gate first.positions", "gate absent.positions"},
+           {"gate first.positions", "gate first.absent"},
+           {"gate first.positions", "gate first"},
+           {"gate first.positions", "gate second.positions"},
+           {"#[site(first)] ", ""},
+           {"coins.indices(16,100)", "coins.index<16>()"},
+           {"Queries roles(P,V)(coins);\n      for",
+            "Queries roles(P,V)(other);\n      for"},
+           {"construction "
+            "fiat_shamir(\"hash-chain.keccak256.koala-bear.ext4-binomial3."
+            "rejection31le/0\",coins);",
+            "construction authored;"}}) {
+    cases.run("gate refuses " + mutation.second, [&] {
+      auto source = gated;
+      auto at = source.find(mutation.first);
+      require(at != std::string::npos, "mutation does not select source");
+      source.replace(at, mutation.first.size(), mutation.second);
+      refuses(checked(source), "source.gate");
+    });
+  }
   const std::vector<std::string> invalid = {
       "#[site(a)] let x2=x;",
       "#[site(a)] let c=coins.draw()+coins.draw();",

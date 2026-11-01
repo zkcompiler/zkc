@@ -656,7 +656,7 @@ pub(in crate::entry) fn proof_fixture() -> (Value, String) {
         "protocols":[{"symbol":"main","roles":["検証者","証明者"],"services":[],"clauses":[],
             "inputs":[port("公開",0,json!([0]),json!(["検証者","証明者"]),boolean.clone()),port("秘密",1,json!([1]),json!(["証明者"]),boolean.clone())],
             "outputs":[port("受理",0,json!([0]),json!(["検証者"]),boolean.clone()),port("結果",1,json!([1]),json!(["証明者"]),boolean)]}],
-        "job":{"kind":"proof","prover":"証明者","verifier":"検証者","public":[0],"acceptance":selector("output",0,"検証者"),"completion":null,"target":null,"construction":{"kind":"authored", "format": "zkc.framed/0"}}});
+        "job":{"kind":"proof","prover":"証明者","verifier":"検証者","public":[0],"acceptance":selector("output",0,"検証者"),"completion":null,"target":null,"gates":[], "construction":{"kind":"authored", "format": "zkc.framed/0"}}});
     (doc, artifact)
 }
 fn proof_request(interface: &Interface, producer: bool) -> ProofRequest {

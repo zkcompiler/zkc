@@ -67,11 +67,9 @@ jobs:
       - name: Reserve build space
         if: steps.changes.outputs.native == 'true' && runner.environment == 'github-hosted'
         run: |
-          # Leave room for downloaded toolchains and concurrent native builds.
-          available_kib=$(df --output=avail -k / | tail -n 1)
-          if (( available_kib < 20 * 1024 * 1024 )); then
-            sudo rm -rf /usr/local/lib/android
-          fi
+          # A fresh compiler and Rust check can exhaust even 25 GiB of free
+          # space. The hosted runner's Android SDK is not used by native checks.
+          sudo rm -rf /usr/local/lib/android
           df -h /
       - uses: ./.github/actions/nix
         if: steps.changes.outputs.native == 'true'

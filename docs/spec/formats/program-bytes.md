@@ -126,7 +126,7 @@ under its admitted contract; that does not introduce another instruction tag.
 ["send", site, schema, peer, input]
 ["receive", site, schema, peer, output, physical_type]
 ["query", site, service_name, method, list(input), list(output)]
-["loop", site, Count, list(Carried), list(capture),
+["loop", site, Count, list(Carried), list(Capture),
  ParticipantBody, list(output)]
 ["return_if", site, condition, list(value), list(continuation)]
 ["yield", list(value)]
@@ -148,6 +148,23 @@ share `yield` or `return` shapes. Participant bodies cannot contain `op`,
 Boolean literals, `if`, `for`, `match`, `release` or direct `stop`. Local bodies
 cannot contain `send`, `receive`, `query`, `loop` or `return_if`. Composition,
 parameter and family-selector records are absent from both closed grammars.
+
+Participant-loop captures use explicit bindings:
+
+```text
+Capture := [local_name, parent_name]
+```
+
+Each local name is a distinct body formal, disjoint from the induction and
+carried formals. Parent names resolve in the enclosing environment and may
+repeat only for Copy types. Every row retains one formal and its owned-storage
+charge; two aliases are not deduplicated. A body uses the local name. Capture
+order remains significant. This change is confined to participant `loop`;
+local structured instructions retain their specified capture lists.
+
+The version remains `zkc.program/0`. Producers, independent readers and fixtures
+change together. The previous participant-loop string capture list is refused;
+there is no compatibility decoder. Empty capture lists remain empty.
 
 ## Bounds and admission
 

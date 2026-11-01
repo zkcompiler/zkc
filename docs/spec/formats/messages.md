@@ -119,7 +119,7 @@ rows and columns occupy offsets 6 and 10. Each coordinate/count is `u32`.
 | Registered residue vector | BabyBear 91, BabyBear quartic 94, Goldilocks 97, Goldilocks quadratic 100 | `10 + n*w`; element widths 4, 16, 8, 16 respectively | `n` elements |
 | Registered residue matrix | BabyBear 92, BabyBear quartic 95, Goldilocks 98, Goldilocks quadratic 101 | `18 + n*(8+w)`; element widths 4, 16, 8, 16 respectively | `n` elements |
 | Merkle root | KoalaBear 33, ext8 35, ext4 79 | 38 | one element |
-| Merkle path | KoalaBear 34, ext8 36, ext4 80 | `10 + 32*n`, at most 24 siblings | `n` elements |
+| Merkle path | KoalaBear 34, ext8 36, ext4 80 | `10 + 32*n`, ordered full-path or pruned multi-opening siblings | `n` elements |
 | Digest-generic Merkle root | 71 | `6 + w` | one element |
 | Digest-generic Merkle proof | 72 | `10 + w*n` | `n` elements |
 

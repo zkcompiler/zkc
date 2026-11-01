@@ -535,6 +535,16 @@ class Comparison {
     const auto &actual = *view.proof;
     if (!charge(source->publicInputs.size() + actual.publicInputs.size() + 1))
       return false;
+    if (source->gates.size() != actual.gates.size())
+      return fail("source gate choices differ");
+    for (auto [expected, selected] : zip(source->gates, actual.gates)) {
+      if (expected.bits != selected.bits ||
+          expected.path.size() != selected.path.size())
+        return fail("source gate choices differ");
+      for (auto [a, b] : zip(expected.path, selected.path))
+        if (!text(a, b))
+          return fail("source gate paths differ");
+    }
     return (source->construction == actual.construction &&
             source->format == actual.format &&
             source->prover == actual.prover &&

@@ -112,6 +112,7 @@ add_zkc_component(Language
   lib/Language/Primitives.cpp
   lib/Language/IntrinsicSignatures.cpp
   lib/Language/SemanticContracts.cpp
+  lib/Language/ProofGates.cpp
   lib/Language/TypeCheck.cpp
   lib/Language/Signatures.cpp
   lib/Language/Specifications.cpp
@@ -236,6 +237,9 @@ add_zkc_component(IR
   lib/Analysis/Interactions.cpp
   lib/Analysis/ProtocolConstants.cpp
   lib/Analysis/SuccessfulContinuations.cpp
+  lib/Analysis/CanonicalEncoding.cpp
+  lib/Analysis/ExecutionObservations.cpp
+  lib/Analysis/ProtocolObservations.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
   lib/Dialect/Algebra/IR/Attributes.cpp
   lib/Dialect/Algebra/Parameters.cpp
@@ -423,8 +427,10 @@ add_zkc_component(Compiler
   lib/Compiler/ArtifactJson.cpp
   lib/Compiler/PolynomialReduction.cpp
   lib/Compiler/PublicCoin.cpp
+  lib/Compiler/PublicCoinGraph.cpp
   lib/Compiler/NativeCodec.cpp
   lib/Compiler/NativeCodecVerification.cpp
+  lib/Compiler/ConstructionBinding.cpp
   lib/Compiler/NativeProof.cpp
   lib/Compiler/NativeProofOrigins.cpp
   lib/Compiler/NativeRequest.cpp

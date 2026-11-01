@@ -1,6 +1,7 @@
 #include "zkc/Compiler/NativeCompilation.h"
 #include "../../Compiler/CompilationState.h"
 #include "../../Compiler/NativeDeployment.h"
+#include "../../Compiler/PublicCoin.h"
 #include "../../Transforms/PreparedProtocol.h"
 #include "Run.h"
 #include "mlir/Parser/Parser.h"
@@ -127,16 +128,6 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
   if (options.observations)
     options.observations->phase("protocol", *result->module);
   std::optional<json::Value> publicCoin;
-  if (options.publicCoinRequirement) {
-    auto checked =
-        analyzePublicCoin(*result->module, *options.publicCoinRequirement,
-                          options.mathematicalSelection);
-    if (!checked)
-      return diagnostics.failure(checked.takeError());
-    if (checked->getAsObject()->getString("entry") != options.entry)
-      return diagnostics.failure(error("public-coin-interface"));
-    publicCoin = std::move(*checked);
-  }
   // Freeze the source before helper expansion. Checked candidates are projected
   // without folding, checked once, and then lowered in this same invocation.
   std::optional<json::Value> correspondence;
@@ -178,6 +169,15 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
     return diagnostics.failure(realization.takeError());
   result->realization =
       std::make_shared<mathematical::RealizedProtocol>(std::move(*realization));
+  if (options.publicCoinRequirement) {
+    auto checked = detail::analyzePublicCoin(*result->realization,
+                                             *options.publicCoinRequirement);
+    if (!checked)
+      return diagnostics.failure(checked.takeError());
+    if (checked->getAsObject()->getString("entry") != options.entry)
+      return diagnostics.failure(error("public-coin-interface"));
+    publicCoin = std::move(*checked);
+  }
   // Native scheduling consumes the actual represented interface. The original
   // logical clauses remain owned alongside the checked edge through
   // publication.
@@ -287,15 +287,18 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
         {"calculation_batching",
          options.mathematicalSelection.calculationBatching},
         {"fix_polynomial_factors", options.fixPolynomialFactors}});
-    // Describe semantic pipeline stages with their public pass names. This is
-    // not a PassManager execution trace: preparation is implicit here, and
-    // projection consumes the privately owned prepared subject above.
-    json::Array passes;
-    passes.push_back("zkc-prepare-protocol");
-    passes.push_back("zkc-project-protocol");
+    // Describe the route from the explicitly selected subject, not an
+    // execution trace. Both checked owners already exist before analysis.
+    auto *view = record.getAsObject()->getObject("view");
+    json::Array stages;
+    if (view->getString("subject") == "authored") {
+      stages.push_back("checked-preparation");
+      stages.push_back("checked-oracle-realization");
+    }
+    stages.push_back("zkc-project-protocol");
     for (auto &stage : loweringStages)
-      passes.push_back(stage);
-    (*record.getAsObject())["post_analysis_passes"] = std::move(passes);
+      stages.push_back(stage);
+    (*record.getAsObject())["subject_to_bundle_stages"] = std::move(stages);
     (*record.getAsObject())["projection_simplify"] =
         !options.polynomialRequirements && options.simplify;
     viewReport.emplace();

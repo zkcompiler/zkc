@@ -138,23 +138,30 @@ for family in ['r1cs', 'air']:
         manifest.append(dict(name=f'{family}_derived', family=family))
         requirement = OUT / 'public-coin.json'
         requirement.write_text(json.dumps(dict(
-            format='zkc.public-coin-requirement/0', entry='main', prover='P', verifier='V',
+            format='zkc.public-coin-requirement/0', subject='authored', deployment_entries=['main'], entry='main', prover='P', verifier='V',
             service=3, decision=1, bound_inputs=[0, 1],
             draws=[dict(query_site='draw', delivery_site='challenge')])))
-        commands.run([compiler, 'protocol-public-coin', path, requirement],
-                     refuses='public-coin-verifier-local')
-        # The public-coin view has its own total-verifier profile. Check its
-        # structured statement retention without claiming local-body analysis.
+        if family == 'air':
+            observed = json.loads(commands.run([compiler, 'protocol-public-coin', path, requirement]))
+            graph = observed['graph']
+            assert graph['definitions'][graph['root']]['may_stop']
+            assert graph['numerical'] and any(row['primitives'] for row in graph['numerical'])
+        else:
+            # Matrix primitives have no deterministic-data facet in this
+            # closed profile. Keep the refusal instead of inferring a premise.
+            commands.run([compiler, 'protocol-public-coin', path, requirement],
+                         refuses='public-coin-dependence')
+        # A constant fixture separately isolates structured statement retention.
         total = re.sub(r' %accepted = "protocol.local_call"[^\n]+',
                        ' %accepted = arith.constant true', derived)
         assert total != derived
         path = OUT / 'total-view.mlir'
         path.write_text(total)
         view = json.loads(commands.run([compiler, 'protocol-public-coin', path, requirement]))
-        assert view['statement_inputs'] == [0, 1]
-        assert view['bound_non_statement_inputs'] == []
-        assert view['decision_dependencies'] == []  # constant-true test decision
-        # The total verifier view cannot summarize an owner-local early exit.
+        assert view['interface']['statement_inputs'] == [0, 1]
+        assert view['interface']['bound_non_statement_inputs'] == []
+        assert view['graph']['definitions'][view['graph']['root']]['results'][1] == []  # constant-true test decision
+        # Owner-local early exit is outside the closed observation profile.
         early = total.replace(
             ' "protocol.return"(%unused,%accepted)',
             ' "protocol.finish_if"(%accepted,%unused,%accepted) '

@@ -137,6 +137,7 @@ impl Interface {
                 verifier,
                 acceptance,
                 completion,
+                gates,
                 ..
             } => Some(json!({
                 "prover":prover, "verifier":verifier,
@@ -145,6 +146,7 @@ impl Interface {
                 "completion":completion.as_deref().map(selection),
                 "transcript_suite":self.proof().and_then(|p| p.suite.as_deref()),
                 "proof_format":self.proof().map(|p| p.format.name()),
+                "gates":gates.iter().map(|g| json!({"path":g.path,"bits":g.bits})).collect::<Vec<_>>(),
             })),
         };
         json!({"entry":self.entry(), "protocol":self.protocol(),

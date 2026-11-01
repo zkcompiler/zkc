@@ -1,6 +1,8 @@
 #include "zkc/Compiler/NativeProof.h"
 #include "../Transforms/PreparedProtocol.h"
 #include "../Transforms/RealizedProtocol.h"
+#include "ConstructionBinding.h"
+#include "IRFingerprint.h"
 #include "NativeCodec.h"
 #include "NativeProofOrigins.h"
 #include "NativeProofVerification.h"
@@ -1868,7 +1870,9 @@ static Expected<NativeProofConstruction> constructNativeProofChecked(
     ModuleOp source, const NativeProofPolicy &policy,
     MathematicalSelectionPolicy mathematicalSelection,
     const protocol::OracleRealizationPolicy &oracleSelection,
-    ModuleOp supplied = {}) {
+    ModuleOp supplied = {}, json::Value *bindingView = nullptr,
+    NativeProofBindingProfile bindingProfile =
+        NativeProofBindingProfile::NativeHistory) {
   // Validate public API callers too; policy structs are not admission tokens.
   auto checked =
       parseNativeProofPolicy(printJson(encodeNativeProofPolicy(policy)));
@@ -1891,6 +1895,7 @@ static Expected<NativeProofConstruction> constructNativeProofChecked(
     if (auto e = admitConstruction(program, *preparedSource->construction,
                                    admitted->events))
       return std::move(e);
+  SmallVector<Type> bindingInputs(program.getFunctionType().getInputs());
   // Consume the same checked edge used by ordinary execution. Projection
   // checks an independent copy while the source/realization owner stays alive.
   candidate = preparedSource->realization->project(false);
@@ -1945,6 +1950,15 @@ static Expected<NativeProofConstruction> constructNativeProofChecked(
       std::move(admitted->publicBindings), std::move(admitted->messages),
       std::move(exportedPlan), std::move(admitted->witnesses),
       preparedSource->realization->normalizedSelection().str()});
+  if (bindingView) {
+    auto view = detail::analyzeConstructionBinding(
+        supplied ? supplied : *candidate, bindingInputs, policy, bindingProfile,
+        admitted->events, plan);
+    if (!view)
+      return view.takeError();
+    (*view->getAsObject())["descriptor"] = descriptor;
+    *bindingView = std::move(*view);
+  }
   return NativeProofConstruction{std::move(candidate), std::move(descriptor),
                                  std::move(admitted->wireSites),
                                  std::move(preparedSource->realization)};
@@ -1971,6 +1985,73 @@ Error checkNativeProof(
           expected->module->getOperation(), candidate,
           OperationEquivalence::IgnoreLocations))
     return error("native-proof-correspondence");
+  return Error::success();
+}
+Expected<json::Value> analyzeNativeProofBinding(
+    ModuleOp source, ModuleOp candidate, const NativeProofPolicy &policy,
+    NativeProofBindingProfile profile,
+    MathematicalSelectionPolicy mathematicalSelection,
+    const protocol::OracleRealizationPolicy &oracleSelection) {
+  if (!source || !candidate || candidate.getContext() != source.getContext() ||
+      failed(zkc::admitStage(candidate)))
+    return error("native-proof-candidate");
+  json::Value view(nullptr);
+  auto expected =
+      constructNativeProofChecked(source, policy, mathematicalSelection,
+                                  oracleSelection, candidate, &view, profile);
+  if (!expected)
+    return expected.takeError();
+  if (!OperationEquivalence::isEquivalentTo(
+          expected->module->getOperation(), candidate,
+          OperationEquivalence::IgnoreLocations))
+    return error("native-proof-correspondence");
+  auto originalHash =
+      detail::fingerprintIR(source, "construction-binding-capacity");
+  if (!originalHash)
+    return originalHash.takeError();
+  auto candidateHash =
+      detail::fingerprintIR(candidate, "construction-binding-capacity");
+  if (!candidateHash)
+    return candidateHash.takeError();
+  auto &object = *view.getAsObject();
+  object["source_sha256"] = *originalHash;
+  object["candidate_sha256"] = *candidateHash;
+  auto record = parseNaturalJson(
+      expected->realization->realizationRecord(), 8 * 1024 * 1024, 64,
+      "construction-binding-report", "construction-binding-capacity");
+  if (!record)
+    return record.takeError();
+  auto oracle = protocol::encodeOracleRealizationPolicy(oracleSelection);
+  if (!oracle)
+    return oracle.takeError();
+  object["realization"] = std::move(*record);
+  object["oracle_policy"] = std::move(*oracle);
+  object["mathematical_policy"] = json::Object{
+      {"finite_bulk", mathematicalSelection.finiteBulk},
+      {"calculation_batching", mathematicalSelection.calculationBatching},
+      {"fuse_vector_reductions", mathematicalSelection.vectorReductionFusion},
+      {"fuse_collect_fold", mathematicalSelection.collectFoldFusion}};
+  if (printJson(view).size() > 8 * 1024 * 1024)
+    return error("construction-binding-capacity");
+  return view;
+}
+Error checkNativeProofBinding(
+    ModuleOp source, ModuleOp candidate, const NativeProofPolicy &policy,
+    NativeProofBindingProfile profile, StringRef report,
+    MathematicalSelectionPolicy mathematicalSelection,
+    const protocol::OracleRealizationPolicy &oracleSelection) {
+  auto supplied = parseNaturalJson(report, 8 * 1024 * 1024, 64,
+                                   "construction-binding-report",
+                                   "construction-binding-capacity");
+  if (!supplied)
+    return supplied.takeError();
+  auto expected =
+      analyzeNativeProofBinding(source, candidate, policy, profile,
+                                mathematicalSelection, oracleSelection);
+  if (!expected)
+    return expected.takeError();
+  if (!equalNaturalJson(*supplied, *expected))
+    return error("construction-binding-report");
   return Error::success();
 }
 } // namespace zkc

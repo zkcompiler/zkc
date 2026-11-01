@@ -115,6 +115,14 @@ fn portable_permissions_match_native_atomic_and_aggregate_admission() {
         Identity::HashChainKeccak256KoalaBearExt4,
         Identity::HashChainKeccak256KoalaBearExt8,
     ];
+    for identity in &identities {
+        assert_eq!(
+            block_transcript(identity.name()),
+            identity.has_index_block_transcript(),
+            "block metadata differs for {}",
+            identity.name()
+        );
+    }
     let mut admitted = 0;
     for row in zkc_catalog::CATALOG.types {
         let spellings = match row.parameters {

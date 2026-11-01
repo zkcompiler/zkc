@@ -1728,7 +1728,7 @@ fn block_origin_roles_suite_and_repeat_coordinates_are_independent_checks() {
                 ["value", "n", "2", "i"],
                 [["t", "root_t"]],
                 if endpoint == 0 {
-                    vec!["candidate"]
+                    vec![("candidate", "candidate")]
                 } else {
                     vec![]
                 },

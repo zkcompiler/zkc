@@ -20,24 +20,42 @@ class RealizedProtocol {
   PreparedProtocol prepared;
   mlir::OwningOpRef<mlir::ModuleOp> candidate;
   std::string record, selection;
+  protocol::OracleRealizationPolicy requestedPolicy;
   RealizedProtocol(PreparedProtocol prepared,
                    mlir::OwningOpRef<mlir::ModuleOp> candidate,
-                   std::string record, std::string selection)
+                   std::string record, std::string selection,
+                   protocol::OracleRealizationPolicy requestedPolicy)
       : prepared(std::move(prepared)), candidate(std::move(candidate)),
-        record(std::move(record)), selection(std::move(selection)) {}
+        record(std::move(record)), selection(std::move(selection)),
+        requestedPolicy(std::move(requestedPolicy)) {}
 
 public:
+  struct ObservationSnapshot {
+    mlir::OwningOpRef<mlir::ModuleOp> module;
+    llvm::SmallVector<mlir::Operation *> dataExchanges;
+  };
   static llvm::Expected<RealizedProtocol>
   realize(PreparedProtocol prepared,
           const protocol::OracleRealizationPolicy &policy = {});
   // Independent clones cannot mutate the owned checked edge. A moved-from
   // owner has no snapshots. The record view borrows this owner's lifetime.
   mlir::OwningOpRef<mlir::ModuleOp> preparedSnapshot() const;
+  mlir::OwningOpRef<mlir::ModuleOp> authoredSnapshot() const;
+  MathematicalSelectionPolicy mathematicalPolicy() const {
+    return prepared.policy;
+  }
   mlir::OwningOpRef<mlir::ModuleOp> candidateSnapshot() const;
+  // An independent clone with exact generated opening-request associations
+  // from this checked edge. This grants no new public-coin premise by itself.
+  // The observation consumer must recompute after any snapshot mutation.
+  llvm::Expected<ObservationSnapshot> observationSnapshot() const;
   llvm::StringRef realizationRecord() const { return record; }
   // Canonical exact inventory of actual prepared roots, with the requested
   // query order and authentication. The view borrows this owner's lifetime.
   llvm::StringRef normalizedSelection() const { return selection; }
+  const protocol::OracleRealizationPolicy &oraclePolicy() const {
+    return requestedPolicy;
+  }
   // Project an independent copy of the checked native side. Retain the edge
   // for the entire compilation; projection alone grants no logical claim.
   mlir::OwningOpRef<mlir::ModuleOp> project(bool simplify) const;

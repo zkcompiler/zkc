@@ -168,7 +168,7 @@ class Structure {
                                      text(std::to_string(op.count.maximum)),
                                      text(op.count.induction)});
               return fields({tag, text(i.site), count, pairs(op.carried),
-                             names(op.captures), body(op.body, depth + 1),
+                             pairs(op.captures), body(op.body, depth + 1),
                              names(op.outputs)});
             }
           },

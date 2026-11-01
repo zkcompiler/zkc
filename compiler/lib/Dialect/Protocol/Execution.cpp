@@ -254,7 +254,7 @@ class ExecutionModelReader {
         }
         Env innerEnv;
         protocol::Assignments initial;
-        program::Names captures;
+        protocol::Assignments captures;
         std::string induction;
         if (offset) {
           induction = fresh();
@@ -267,11 +267,11 @@ class ExecutionModelReader {
             innerEnv[inner.getArgument(i)] = n;
             initial.emplace_back(n, input);
           } else {
-            innerEnv[inner.getArgument(i)] = input;
-            // Preserve binding multiplicity. Even Copy aliases can carry
-            // owned-storage charges; the byte grammar must represent every
-            // formal or refuse, never silently deduplicate them.
-            captures.push_back(input);
+            // Each formal has its own storage binding even when several
+            // Copy captures reference the same parent value.
+            std::string local = fresh();
+            innerEnv[inner.getArgument(i)] = local;
+            captures.emplace_back(std::move(local), std::move(input));
           }
         }
         program::LoopCount n{name(op->getOperand(0), env), *loop.getMaximum(),

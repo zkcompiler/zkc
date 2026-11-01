@@ -1,5 +1,6 @@
 """Contextual source products cross ordinary native sequence and codec boundaries."""
 from pathlib import Path
+import json
 
 import pytest
 
@@ -88,14 +89,29 @@ entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}
         result = entry.run('collect', {'n': str(count), 'last': str(count - 1)})['r']
         assert result == [str(count), {'first': '0', 'second': '0'},
                           {'first': str(count - 1), 'second': str(count - 1)}]
-        # Keep the independent native 8192-record success control in
-        # compiler/test/fixtures/language/sequence-capacity.zkc (language_native).
-        # The same aggregate allowance
-        # also covers the parent and transport here; exhausted children publish
-        # no root (checked by Entry.run), even when the returned tuple is small.
-        refused = entry.run('shared-limit', {'n': '8192', 'last': '8191'},
+        # The Host also admits the independent native 8192-record control.
+        inputs = {'n': '8192', 'last': '8191'}
+        assert entry.run('larger', inputs)['r'] == [
+            '8192', {'first': '0', 'second': '0'}, {'first': '8191', 'second': '8191'}]
+        report = json.loads(journal.last.stdout)
+        capacity = report['capacity']
+        used = report['execution']['usage']['fresh_bytes']
+        assert 0 < used <= int(capacity[6][1])
+        capacity[6][1] = str(used // 2)
+        # Tighten the actual shared allocation allowance, rather than assuming
+        # an optimizer-independent cost. Exhaustion must publish no root even
+        # though the returned tuple is small (checked by Entry.run).
+        limits = journal.write('shared.capacity.json', capacity)
+        refused = entry.run('shared-limit', inputs, capacity=limits,
                             refuses='entry-host-run-failed')
-        assert names(str(refused), 'output-bytes')
+        execution = refused['execution']
+        assert not execution['completed']
+        assert execution['usage']['fresh_bytes'] <= int(capacity[6][1])
+        assert 0 < execution['usage']['iterations'] < 8192
+        call, = execution['calls']
+        stopped = call['native']['failure_role']['after']
+        assert stopped[0] == 'stopped' and stopped[1]['cause'] == ['limit']
+        assert stopped[1]['local']['function']
         return
     result = entry.run('collect', {'n': str(count)})['xs']
     assert result == [str(i) for i in range(count)]

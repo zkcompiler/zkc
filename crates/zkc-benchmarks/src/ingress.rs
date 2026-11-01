@@ -366,7 +366,7 @@ mod tests {
         doc["job"] = json!({"kind":"proof","prover":"P","verifier":"V","public":[0],
             "acceptance":{"direction":"output","port":0,"role":"V","path":[]},
             "completion":null,"target":null,
-            "construction":{"kind":"authored","format":"zkc.framed/0"}});
+            "gates":[],"construction":{"kind":"authored","format":"zkc.framed/0"}});
         doc
     }
 

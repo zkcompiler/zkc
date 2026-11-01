@@ -91,12 +91,7 @@ pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
         _ => return Option::None,
     })
 }
-/// Keccak row-oracle paths keep their historical sibling cap; pruned proofs of
-/// the digest-generic schemes are bounded by the element ceiling instead.
-fn capped(tag: u8) -> bool {
-    matches!(tag, 34 | 36 | 80)
-}
-fn limit(kind: Type, tag: u8, count: usize, memory: usize, p: &Policy) -> Result<()> {
+fn limit(kind: Type, count: usize, memory: usize, p: &Policy) -> Result<()> {
     if kind == Type::Groups {
         if count > p.max_groups.min(32768) {
             return Err(Error::Limit);
@@ -105,9 +100,6 @@ fn limit(kind: Type, tag: u8, count: usize, memory: usize, p: &Policy) -> Result
             .map_err(|_| Error::Limit)?;
     } else {
         p.vector_width(count, memory).map_err(|_| Error::Limit)?;
-    }
-    if kind == Type::Proof && capped(tag) && count > 24 {
-        return Err(invalid(DecodeReason::Length));
     }
     Ok(())
 }
@@ -155,9 +147,9 @@ fn quantities(kind: Type, count: usize) -> (usize, usize) {
     }
 }
 pub(super) fn value_counts(value: &Value, policy: &Policy) -> Result<(usize, usize)> {
-    let (tag, _, memory) = format(&value.physical_type()).ok_or_else(unsupported)?;
+    let (_, _, memory) = format(&value.physical_type()).ok_or_else(unsupported)?;
     let count = count(value)?;
-    limit(value.ty(), tag, count, memory, policy)?;
+    limit(value.ty(), count, memory, policy)?;
     Ok(quantities(value.ty(), count))
 }
 fn prefix(kind: Type) -> usize {
@@ -169,9 +161,9 @@ fn prefix(kind: Type) -> usize {
 }
 pub(super) fn width(value: &Value, policy: &Policy) -> Result<usize> {
     let ty = value.physical_type();
-    let (tag, wire, memory) = format(&ty).ok_or_else(unsupported)?;
+    let (_, wire, memory) = format(&ty).ok_or_else(unsupported)?;
     let n = count(value)?;
-    limit(ty.kind(), tag, n, memory, policy)?;
+    limit(ty.kind(), n, memory, policy)?;
     add(prefix(ty.kind()), mul(n, wire)?)
 }
 pub(super) fn scan(
@@ -213,7 +205,7 @@ pub(super) fn scan(
             count
         }
     };
-    limit(kind, tag, n, memory, policy)?;
+    limit(kind, n, memory, policy)?;
     if bytes.len() != add(prefix(kind), mul(n, wire)?)? {
         return Err(invalid(DecodeReason::Length));
     }

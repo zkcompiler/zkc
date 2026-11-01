@@ -20,8 +20,8 @@ struct RunOptions {
   /// enables checking before any mathematical folding; an empty record refuses.
   std::optional<std::string> polynomialRequirements;
   /// Independently retained zkc.public-coin-requirement/0 JSON. Analyze the
-  /// unsimplified common source before projection; bind the view to this
-  /// bundle.
+  /// selected authored or realized subject through the existing checked owner
+  /// before projection; bind the view to this bundle.
   std::optional<std::string> publicCoinRequirement;
   /// Mathematical algorithm families, independent of simplify/storage release.
   MathematicalSelectionPolicy mathematicalSelection = {};

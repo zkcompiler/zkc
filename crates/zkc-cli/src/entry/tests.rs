@@ -784,7 +784,7 @@ fn source_inspection_preparation_and_execution_share_checked_metadata() {
             "outputs":[port("accepted",0,json!(["V"]))],"services":[],"clauses":[]}],
         "job":{"kind":"proof","prover":"P","verifier":"V","public":[0],"completion":null,"target":null,
             "acceptance":{"direction":"output","port":0,"role":"V","path":[]},
-            "construction":{"kind":"authored","format":"zkc.framed/0"}}});
+            "gates":[],"construction":{"kind":"authored","format":"zkc.framed/0"}}});
     std::fs::write(root.join("proof-interface.json"), proof.to_string()).unwrap();
     std::fs::write(root.join("package.json"), boolean_package(false)).unwrap();
     let check = json!({"format":"zkc.source-check/0","status":"checked","phase":"complete",

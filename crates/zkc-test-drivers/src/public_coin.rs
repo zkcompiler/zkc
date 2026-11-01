@@ -21,19 +21,48 @@ struct Case {
 #[derive(Deserialize)]
 struct View {
     verifier: String,
-    anchors: Vec<Anchor>,
-    events: Vec<usize>,
+    graph: Graph,
+}
+#[derive(Deserialize)]
+struct Graph {
+    root: usize,
+    definitions: Vec<Definition>,
     draws: Vec<Draw>,
 }
 #[derive(Deserialize)]
-struct Anchor {
+struct Definition {
+    actions: Vec<Action>,
+}
+#[derive(Deserialize)]
+struct Action {
     kind: String,
     site: Option<String>,
+    observation: String,
+    callee: Option<usize>,
 }
 #[derive(Deserialize)]
 struct Draw {
     site: String,
-    prefix_length: usize,
+}
+impl Graph {
+    // These execution fixtures are loop-free. Walk actual shared definitions
+    // per invocation; do not interpret a symbolic repeat as an executed trace.
+    fn observations(&self, id: usize, prefix: &str, out: &mut Vec<(String, String)>) {
+        for action in &self.definitions[id].actions {
+            assert_ne!(action.kind, "protocol.repeat");
+            let site = action.site.as_deref().unwrap_or("");
+            let site = if prefix.is_empty() {
+                site.to_owned()
+            } else {
+                format!("apply_{}_{prefix}_{site}", prefix.len())
+            };
+            if let Some(child) = action.callee {
+                self.observations(child, &site, out);
+            } else if matches!(action.observation.as_str(), "query" | "receive") {
+                out.push((action.observation.clone(), site));
+            }
+        }
+    }
 }
 fn scalar(s: &str) -> Scalar {
     zkc_kernels::arkworks::bls12_381::parse_decimal(s).unwrap()
@@ -151,6 +180,8 @@ fn execute(
     (report, state.state.unwrap().draw_count)
 }
 fn trace(bundle: &Bundle, view: &View, report: &Report<CpuBackend>) -> usize {
+    let mut expected = vec![];
+    view.graph.observations(view.graph.root, "", &mut expected);
     let mut observed: Vec<(&str, &str)> = vec![];
     let mut queries = 0;
     for reached in &report.reached {
@@ -159,18 +190,19 @@ fn trace(bundle: &Bundle, view: &View, report: &Report<CpuBackend>) -> usize {
         }
         match bundle.action(&reached.step).unwrap() {
             ProgramAction::Query { site, .. } => {
-                let draw = &view.draws[queries];
+                let draw = &view.graph.draws[queries];
                 assert_eq!(site, &draw.site);
-                let expected: Vec<_> = view.events[..draw.prefix_length]
+                let position = expected
                     .iter()
-                    .filter_map(|i| {
-                        let a = &view.anchors[*i];
-                        a.site.as_deref().map(|site| (a.kind.as_str(), site))
-                    })
+                    .position(|(kind, label)| kind == "query" && label == site)
+                    .unwrap();
+                let prefix: Vec<_> = expected[..position]
+                    .iter()
+                    .map(|(kind, label)| (kind.as_str(), label.as_str()))
                     .collect();
-                assert_eq!(observed, expected, "actual prefix before {site}");
+                assert_eq!(observed, prefix, "actual prefix before {site}");
                 if reached.progress == Progress::Completed {
-                    observed.push(("draw", site));
+                    observed.push(("query", site));
                     queries += 1;
                 }
             }
@@ -336,5 +368,5 @@ fn main() {
             trace(&bundle, &view, &report);
         }
     }
-    println!("native public-coin prefixes, binding counterexample and stop boundaries passed");
+    println!("native structured observations, binding counterexample and stop boundaries passed");
 }

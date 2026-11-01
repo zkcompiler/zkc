@@ -237,8 +237,14 @@ module { "protocol.module"() ({
         // binding.
         refuses(protocol::verifyProgramArtifact(*source, encoded(artifact)),
                 "artifact-correspondence");
-        refuses(protocol::readExecutionModel(source->getOperation()),
-                "interactive-loop-capture");
+        auto preserved = readProgram(*source);
+        take(protocol::verifyProgramArtifact(*source, encoded(preserved)));
+        const auto *loop =
+            preserved.participants.front().body.front().get<program::Loop>();
+        require(loop && loop->captures.size() == 3 &&
+                    loop->captures[0].first != loop->captures[1].first &&
+                    loop->captures[0].second == loop->captures[1].second,
+                "distinct aliases lost their capture bindings");
       });
   cases.run("current program shape retains actual arguments", [&] {
     auto artifact = program::encode(original);

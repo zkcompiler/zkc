@@ -65,6 +65,12 @@ COVERAGE = {
         shake128.init shake128.absorb shake128.squeeze
     """,
     "verification": "oracle.check oracle.check_many",
+    "immutable relation assets": """
+        relation.table_rows relation.table_shape relation.table_input
+        relation.table_scope relation.table_point relation.table_points
+        relation.table_widths relation.table_policy relation.table_interactions
+        relation.table_interaction relation.table_record_points
+    """,
 }
 
 

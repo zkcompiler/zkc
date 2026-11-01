@@ -48,8 +48,8 @@ def case_catalog():
         cases.append({'name': f'fri-{size}', 'project': 'fri', 'entry': 'example::Proof',
                       'storage_entry': 'example::Fri',
                       'size': size, 'rounds': rounds,
-                      'replacement': ['LowDegree<Direct<E>,5,0,3,8>',
-                                      f'LowDegree<Direct<E>,{size.bit_length()-1},0,{rounds},8>']})
+                      'replacement': ['ScalarLowDegree<Direct<E>,5,0,3,8>',
+                                      f'ScalarLowDegree<Direct<E>,{size.bit_length()-1},0,{rounds},8>']})
     for size in (32, 64, 1024):
         cases.append({'name': f'air-stark-{size}', 'project': 'air-stark',
                       'entry': 'air_stark_example::Proof', 'size': size,

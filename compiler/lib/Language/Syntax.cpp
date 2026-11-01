@@ -983,6 +983,31 @@ private:
           return false;
         continue;
       }
+      if (take("gate")) {
+        if (decl.entryKind != EntryKind::Proof)
+          return fail("source.gate", "gates require a proof declaration");
+        ProofGate gate;
+        gate.span = current().span;
+        do {
+          std::string part;
+          if (!name(part))
+            return false;
+          gate.path.push_back(std::move(part));
+        } while (take("."));
+        if (!expect("bits"))
+          return false;
+        if (current().kind != TokenKind::Decimal ||
+            text().getAsInteger(10, gate.bits) || gate.bits > 64)
+          return fail(
+              "source.gate",
+              "gate difficulty must be a decimal literal from 0 through 64");
+        advance();
+        if (!expect(";"))
+          return false;
+        gate.span.end = previousEnd;
+        value.gates.push_back(std::move(gate));
+        continue;
+      }
       auto key = text().str();
       if (!choices.insert(key).second)
         return fail("source.entry", "duplicate Entry choice");

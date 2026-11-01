@@ -626,10 +626,14 @@ impl<B: Backend> Runner<B> {
             self.failed(error, Some(site.clone()), Some(child_origin));
             return Ok(());
         }
-        let capture_values = self.values(captures);
+        let parents = captures
+            .iter()
+            .map(|(_, parent)| parent.clone())
+            .collect::<Vec<_>>();
+        let capture_values = self.values(&parents);
         let destination = Destination::Loop {
             outputs: outputs.clone(),
-            captures: captures.clone(),
+            captures: parents,
             remaining: count,
             iteration: 0,
             site: site.clone(),

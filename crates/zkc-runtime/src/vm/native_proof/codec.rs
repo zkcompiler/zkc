@@ -29,7 +29,9 @@ fn available(op: &Instruction, internal: &BTreeSet<String>) -> Result<()> {
         } => {
             !internal.contains(&count.value)
                 && carried.iter().all(|(_, v)| !internal.contains(v))
-                && allowed(captures)
+                && captures
+                    .iter()
+                    .all(|(_, parent)| !internal.contains(parent))
         }
         Instruction::ReturnIf {
             condition, values, ..
@@ -1006,7 +1008,9 @@ impl Walk<'_, '_> {
                         .checked_sub(slots)
                         .ok_or_else(|| refuse("native-proof-codec-record-chain"))?;
                     if !carried[start..].iter().map(|(_, v)| v).eq(record.iter())
-                        || proof.as_ref().is_some_and(|p| !captures.contains(p))
+                        || proof
+                            .as_ref()
+                            .is_some_and(|p| !captures.iter().any(|(_, parent)| parent == p))
                     {
                         return Err(refuse("native-proof-codec-record-chain"));
                     }
@@ -1014,10 +1018,24 @@ impl Walk<'_, '_> {
                     let mut nested_internal = internal.clone();
                     nested_internal.extend(carried[start..].iter().map(|(n, _)| n.clone()));
                     let nested = carried[start..].iter().map(|(n, _)| n.clone()).collect();
+                    let child_proof = proof.as_ref().map(|proof| {
+                        captures
+                            .iter()
+                            .find(|(_, parent)| parent == proof)
+                            .expect("checked proof capture")
+                            .0
+                            .clone()
+                    });
+                    nested_internal.extend(
+                        captures
+                            .iter()
+                            .filter(|(_, parent)| internal.contains(parent))
+                            .map(|(local, _)| local.clone()),
+                    );
                     let normalized = self.block(
                         body,
                         nested,
-                        proof.clone(),
+                        child_proof,
                         aliases.clone(),
                         nested_internal,
                         depth + 1,
@@ -1034,7 +1052,7 @@ impl Walk<'_, '_> {
                         carried: carried[..start].to_vec(),
                         captures: captures
                             .iter()
-                            .filter(|c| Some(*c) != proof.as_ref())
+                            .filter(|(_, parent)| Some(parent) != proof.as_ref())
                             .cloned()
                             .collect(),
                         body: normalized,
@@ -1092,7 +1110,9 @@ fn rename(op: &mut Instruction, names: &Names) {
             for (_, value) in carried {
                 *value = mapped(names, value);
             }
-            map(captures);
+            for (_, parent) in captures {
+                *parent = mapped(names, parent);
+            }
         }
         Instruction::ReturnIf {
             condition, values, ..

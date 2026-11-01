@@ -95,10 +95,12 @@ int zkc::runCompiler(int argc, char **argv,
            "[--no-finite-bulk]\n"
            "  protocol-public-coin SOURCE.mlir REQUIREMENT.json "
            "[--fuse-vector-reductions] [--fuse-collect-fold] "
-           "[--no-finite-bulk]\n"
+           "[--no-finite-bulk] [--no-calculation-batching] "
+           "[--oracle-realization=JSON]\n"
            "  protocol-check-public-coin SOURCE.mlir REQUIREMENT.json "
            "REPORT.json [--fuse-vector-reductions] [--fuse-collect-fold] "
-           "[--no-finite-bulk]\n"
+           "[--no-finite-bulk] [--no-calculation-batching] "
+           "[--oracle-realization=JSON]\n"
            "  protocol-proof FILE.mlir POLICY [--no-simplify] "
            "[--release-storage] [--fuse-vector-reductions] "
            "[--fuse-collect-fold] [--no-finite-bulk]\n"
@@ -106,6 +108,12 @@ int zkc::runCompiler(int argc, char **argv,
            "  protocol-construct-proof FILE.mlir POLICY "
            "[--fuse-vector-reductions] [--fuse-collect-fold] "
            "[--no-finite-bulk]\n"
+           "  protocol-proof-binding SOURCE.mlir POLICY CANDIDATE.mlir\n"
+           "  protocol-check-proof-binding SOURCE.mlir POLICY CANDIDATE.mlir "
+           "REPORT.json\n"
+           "    "
+           "--binding-profile=native-history|canonical-hash-history|explicit-"
+           "input\n"
            "  protocol-check-proof FILE.mlir POLICY CANDIDATE.mlir "
            "[--fuse-vector-reductions] [--fuse-collect-fold] "
            "[--no-finite-bulk]\n"
@@ -141,7 +149,8 @@ int zkc::runCompiler(int argc, char **argv,
   };
   StringRef mode(argv[1]);
   if (mode == "protocol-proof" || mode == "protocol-construct-proof" ||
-      mode == "protocol-check-proof" ||
+      mode == "protocol-check-proof" || mode == "protocol-proof-binding" ||
+      mode == "protocol-check-proof-binding" ||
       mode == "protocol-constructed-participant" ||
       mode == "protocol-constructed-pair") {
     if (argc < 4)
@@ -165,6 +174,11 @@ int zkc::runCompiler(int argc, char **argv,
           if (!target)
             return fail(target.takeError());
           options.cpuTarget = *target;
+        } else if (option.consume_front("--oracle-realization=")) {
+          auto policy = protocol::parseOracleRealizationPolicy(option);
+          if (!policy)
+            return fail(policy.takeError());
+          options.oracleRealization = std::move(*policy);
         } else if (option == "--no-simplify")
           options.simplify = false;
         else if (option == "--release-storage")
@@ -186,11 +200,16 @@ int zkc::runCompiler(int argc, char **argv,
       outs() << compiled->deployment << '\n';
       return 0;
     }
+    bool binding = mode == "protocol-proof-binding" ||
+                   mode == "protocol-check-proof-binding";
+    bool checkBinding = mode == "protocol-check-proof-binding";
     bool exportParticipant = mode == "protocol-constructed-participant";
     bool exportPair = mode == "protocol-constructed-pair";
-    bool check =
-        mode == "protocol-check-proof" || exportParticipant || exportPair;
-    const int required = check ? 5 : 4;
+    bool check = mode == "protocol-check-proof" || exportParticipant ||
+                 exportPair || binding;
+    const int required = checkBinding ? 6 : check ? 5 : 4;
+    std::optional<NativeProofBindingProfile> bindingProfile;
+    protocol::OracleRealizationPolicy oraclePolicy;
     MathematicalSelectionPolicy mathematicalSelection;
     ConstructedParticipantRole role = ConstructedParticipantRole::Validator;
     bool roleSelected = false;
@@ -207,7 +226,27 @@ int zkc::runCompiler(int argc, char **argv,
         role = option == "--role=producer"
                    ? ConstructedParticipantRole::Producer
                    : ConstructedParticipantRole::Validator;
-      } else if (option == "--fuse-vector-reductions")
+      } else if (binding && option.consume_front("--binding-profile=")) {
+        if (bindingProfile)
+          return fail(error("native-proof-options"));
+        if (option == "native-history")
+          bindingProfile = NativeProofBindingProfile::NativeHistory;
+        else if (option == "canonical-hash-history")
+          bindingProfile = NativeProofBindingProfile::CanonicalHashHistory;
+        else if (option == "explicit-input")
+          bindingProfile = NativeProofBindingProfile::ExplicitInput;
+        else
+          return fail(error("native-proof-options"));
+      } else if (option.consume_front("--oracle-realization=")) {
+        auto parsed = protocol::parseOracleRealizationPolicy(option);
+        if (!parsed)
+          return fail(parsed.takeError());
+        if (!seen.insert("oracle-policy").second)
+          return fail(error("native-proof-options"));
+        oraclePolicy = std::move(*parsed);
+      } else if (option == "--no-calculation-batching")
+        mathematicalSelection.calculationBatching = false;
+      else if (option == "--fuse-vector-reductions")
         mathematicalSelection.vectorReductionFusion = true;
       else if (option == "--fuse-collect-fold")
         mathematicalSelection.collectFoldFusion = true;
@@ -216,7 +255,8 @@ int zkc::runCompiler(int argc, char **argv,
       else
         return fail(error("native-proof-options"));
     }
-    if (argc < required || !mlirNestingWithinLimit(*source))
+    if (argc < required || (binding && !bindingProfile) ||
+        !mlirNestingWithinLimit(*source))
       return fail(error("native-proof-options"));
     auto policy = parseNativeProofPolicy(*selected);
     if (!policy)
@@ -236,26 +276,46 @@ int zkc::runCompiler(int argc, char **argv,
           mlir::parseSourceString<mlir::ModuleOp>(*bytes, &context);
       if (!candidate)
         return fail(error("native-proof-candidate"));
+      if (binding) {
+        if (checkBinding) {
+          auto report = readInput(argv[5], 8 * 1024 * 1024);
+          if (!report)
+            return fail(report.takeError());
+          if (auto error = checkNativeProofBinding(
+                  *original, *candidate, *policy, *bindingProfile, *report,
+                  mathematicalSelection, oraclePolicy))
+            return fail(std::move(error));
+          outs() << "{\"format\":\"zkc.construction-binding-checked/0\"}\n";
+        } else {
+          auto report = analyzeNativeProofBinding(
+              *original, *candidate, *policy, *bindingProfile,
+              mathematicalSelection, oraclePolicy);
+          if (!report)
+            return fail(report.takeError());
+          outs() << printJson(*report) << '\n';
+        }
+        return 0;
+      }
       if (exportParticipant || exportPair) {
         auto exported =
             exportPair
                 ? exportConstructedPair(*original, *candidate, *source, *policy,
-                                        mathematicalSelection)
+                                        mathematicalSelection, oraclePolicy)
                 : exportConstructedParticipant(*original, *candidate, *source,
                                                *policy, mathematicalSelection,
-                                               role);
+                                               role, oraclePolicy);
         if (!exported)
           return fail(exported.takeError());
         outs() << printJson(*exported) << '\n';
         return 0;
       }
       if (auto e = checkNativeProof(*original, *candidate, *policy,
-                                    mathematicalSelection))
+                                    mathematicalSelection, oraclePolicy))
         return fail(std::move(e));
       outs() << "[\"zkc.native-proof-checked/0\"]\n";
     } else {
-      auto constructed =
-          constructNativeProof(*original, *policy, mathematicalSelection);
+      auto constructed = constructNativeProof(
+          *original, *policy, mathematicalSelection, oraclePolicy);
       if (!constructed)
         return fail(constructed.takeError());
       constructed->module->print(outs());
@@ -269,6 +329,7 @@ int zkc::runCompiler(int argc, char **argv,
     if (argc < required)
       return fail(error("public-coin-options"));
     MathematicalSelectionPolicy mathematicalSelection;
+    protocol::OracleRealizationPolicy oraclePolicy;
     std::set<std::string> seen;
     for (int i = required; i < argc; ++i) {
       StringRef option(argv[i]);
@@ -278,9 +339,19 @@ int zkc::runCompiler(int argc, char **argv,
         mathematicalSelection.vectorReductionFusion = true;
       else if (option == "--fuse-collect-fold")
         mathematicalSelection.collectFoldFusion = true;
+      else if (option == "--no-calculation-batching")
+        mathematicalSelection.calculationBatching = false;
       else if (option == "--no-finite-bulk")
         mathematicalSelection.finiteBulk = false;
-      else
+      else if (option.consume_front("--oracle-realization=")) {
+        auto parsed = protocol::parseOracleRealizationPolicy(option);
+        if (!parsed || !seen.insert("oracle-policy").second) {
+          if (!parsed)
+            return fail(parsed.takeError());
+          return fail(error("public-coin-options"));
+        }
+        oraclePolicy = std::move(*parsed);
+      } else
         return fail(error("public-coin-options"));
     }
     auto source = readInput(argv[2], 16 * 1024 * 1024);
@@ -301,12 +372,12 @@ int zkc::runCompiler(int argc, char **argv,
       if (!report)
         return fail(report.takeError());
       if (auto error = checkPublicCoin(*original, *requirement, *report,
-                                       mathematicalSelection))
+                                       mathematicalSelection, oraclePolicy))
         return fail(std::move(error));
       outs() << "{\"format\":\"zkc.public-coin-checked/0\"}\n";
     } else {
-      auto report =
-          analyzePublicCoin(*original, *requirement, mathematicalSelection);
+      auto report = analyzePublicCoin(*original, *requirement,
+                                      mathematicalSelection, oraclePolicy);
       if (!report)
         return fail(report.takeError());
       outs() << *report << '\n';
@@ -369,6 +440,11 @@ int zkc::runCompiler(int argc, char **argv,
         if (!target)
           return fail(target.takeError());
         options.cpuTarget = *target;
+      } else if (argument.consume_front("--oracle-realization=")) {
+        auto policy = protocol::parseOracleRealizationPolicy(argument);
+        if (!policy)
+          return fail(policy.takeError());
+        options.oracleRealization = std::move(*policy);
       } else if (argument.consume_front("--entry="))
         options.entry = argument.str();
       else if (argument == "--no-simplify")

@@ -2,7 +2,7 @@
 
 Prove the eight-row Fibonacci AIR of the [Fibonacci project](../fibonacci/README.md)
 with the parameterized single-table STARK library,
-[`stark::single_table::TableArgument`](../../../libraries/arguments/stark/README.md#parameterized-single-table-argument).
+[`stark::single_table::ScalarTableArgument`](../../../libraries/arguments/stark/README.md#parameterized-single-table-argument).
 `CleanProof` imports the Clean table and `Plonky3Proof` the Plonky3 AIR; the
 inputs are the Fibonacci project's.
 
@@ -26,10 +26,11 @@ zkc verify CleanProof
 
 The proof carries the trace and quotient roots, the out-of-domain claims, one
 root per FRI round and the final polynomial, then, after every query position
-has been drawn, one pruned multi-opening of the trace rows, of the quotient rows
-and of each FRI layer. The verifier receives only the sibling of each FRI pair;
-it reconstructs the leaf from its own value. The proof is about 2.3 KB, against
-13.5 KB for the same AIR and sizes through the Fibonacci project's profile.
+has been drawn, pruned outer-row openings and common FRI authentication packets.
+FRI authenticates the complete selected leaves and every logical occurrence,
+including the initial values checked against the reconstructed DEEP equation.
+Proof sizes depend on the leaf layout and sampled-position sharing; the library
+tests record the complete frame inventory for both projects.
 
 The [library tests](../../../common/tests/protocol/test_stark_library.py)
 prove these Entries under several compilation modes, alter every proof message,

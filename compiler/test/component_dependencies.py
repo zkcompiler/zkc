@@ -278,8 +278,12 @@ def main():
         ROOT / "lib/Compiler/ApplicationMapData.h",
         ROOT / "lib/Compiler/LanguageInterface.h",
         ROOT / "lib/Compiler/LanguagePackageReader.h",
+        ROOT / "lib/Compiler/PublicCoin.h",
+        ROOT / "lib/Compiler/PublicCoinGraph.h",
         ROOT / "lib/Compiler/NativeDeployment.h",
         ROOT / "lib/Compiler/NativeCodec.h",
+        ROOT / "lib/Compiler/IRFingerprint.h",
+        ROOT / "lib/Compiler/ConstructionBinding.h",
         ROOT / "lib/Compiler/NativeProofVerification.h",
         ROOT / "lib/Compiler/NativeProofOrigins.h",
         ROOT / "lib/Compiler/NativeRequest.h",
@@ -319,14 +323,14 @@ def main():
     bridges = {("ZkcDriver", ROOT / "lib/Support/Input.h"),
                ("ZkcCompiler", ROOT / "lib/Transforms/PreparedProtocol.h"),
                ("ZkcCompiler", ROOT / "lib/Transforms/RealizedProtocol.h")}
-    bridges.update(("ZkcCpuTarget", ROOT / f"lib/Compiler/{name}.h") for name in ("CompilationState", "LanguageDiagnostics", "HostReferences", "MathematicalOptions", "NativeDeployment", "ArtifactJson", "Run", "LanguageInterface", "LanguagePackageReader"))
+    bridges.update(("ZkcCpuTarget", ROOT / f"lib/Compiler/{name}.h") for name in ("CompilationState", "LanguageDiagnostics", "HostReferences", "MathematicalOptions", "NativeDeployment", "ArtifactJson", "Run", "LanguageInterface", "LanguagePackageReader", "PublicCoin"))
     bridges.update(("ZkcCpuTarget", ROOT / f"lib/Transforms/{name}.h") for name in ("PreparedProtocol", "RealizedProtocol", "MathematicalSupport", "NativeBindingApplication", "MathematicalPassOptions", "Computation/Support", "NumericalSelection", "ScopedPreparation", "FiniteVerification", "MathematicalRecipes", "ScopedCallback"))
     assert not (ROOT / "include/zkc/Dialect/Builders.h").exists(), "raw builders belong to unsupported detail"
 
     def check_private_edge(component, path, target):
         if target.resolve() in registration_fragments:
             assert path == ROOT / "lib/Dialect/Registry.cpp", f"private dialect registration fragment: {path} -> {target}"
-        semantic_files = {"State.h", "Semantics.h", "Semantics.cpp", "SemanticContracts.cpp",
+        semantic_files = {"State.h", "Semantics.h", "Semantics.cpp", "SemanticContracts.cpp", "ProofGates.cpp",
                           "KernelSignatures.cpp", "IntrinsicSignatures.cpp", "Permissions.cpp",
                           "Capabilities.cpp", "Specialize.cpp", "Layout.cpp", "NotationInspection.cpp"}
         if path.parent == ROOT / "lib/Language" and path.name in semantic_files:

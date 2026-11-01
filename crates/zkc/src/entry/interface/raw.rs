@@ -56,11 +56,23 @@ pub(in crate::entry) enum Job {
         #[serde(deserialize_with = "present_optional")]
         target: Option<String>,
         construction: Box<Construction>,
+        gates: Vec<Gate>,
     },
 }
 #[derive(Debug, Deserialize)]
 #[serde(remote = "Self")]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
+pub(in crate::entry) struct Gate {
+    pub path: Vec<String>,
+    pub bits: u32,
+}
+#[derive(Debug, Deserialize)]
+#[serde(
+    remote = "Self",
+    tag = "kind",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub(in crate::entry) enum Construction {
     Authored {
         format: zkc_format::proof::ProofFormat,
@@ -275,6 +287,7 @@ crate::entry::decode::objects!(
     Setup,
     EntryInput,
     Job,
+    Gate,
     Construction,
     Protocol,
     Port,

@@ -94,6 +94,10 @@ rejects("IR cannot depend on a compiler workflow", root / "lib/Dialect/Algebra/I
         lambda text: '#include "zkc/Compiler/Run.h"\n' + text, "ZkcIR: upward include")
 rejects("public program headers cannot expose implementation", root / "include/zkc/Program/Model.h",
         lambda text: '#include "../../../lib/Program/Structure.h"\n' + text, "public header includes private implementation")
+rejects("CPU public-coin bridge grants no private graph implementation",
+        root / "lib/Target/Cpu/NativeCompilation.cpp",
+        lambda text: '#include "../../Compiler/PublicCoinGraph.h"\n' + text,
+        "private component dependency")
 rejects("public extension headers cannot reexport raw builders",
         root / "include/zkc/Dialect/IR.h",
         lambda text: '#include "zkc/Dialect/detail/Builders.h"\n' + text,

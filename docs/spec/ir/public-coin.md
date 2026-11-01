@@ -1,232 +1,187 @@
-# Native public-coin views
+# Structured verifier observations and public-coin requirements
 
-This profile selects a bounded structural analysis of the
-[native mathematical protocol](protocols.md). It uses the existing
-`protocol → participant → exec → physical` route. It adds no operation, IR
-stage, random-oracle interpretation or cryptographic transformation.
+The native public-coin checker reads an explicitly selected **authored** or
+**realized** Protocol IR subject. It produces a bounded, conservative verifier
+observation DAG. This is an actual-source structural judgment, not transcript
+binding, Fiat–Shamir security, provider conformance, or a semantic simulation.
+Dependency is not binding: an expression such as `x - x` can depend syntactically
+on `x` without encoding it injectively.
 
-## Judgment
+The analysis owners are [protocol observations](protocol-observations.md) and
+[execution observations](execution-observations.md). Shared protocol and
+numerical definitions remain shared. Repeat bodies have finite transfer
+summaries including zero iterations; the report never unrolls them into an
+alleged execution trace. Logical stops remain distinct from host budgets and
+allocation failures.
 
-Given an admitted common source, an independently supplied requirement and a
-selected verifier V, establish this sufficient fact on an **expanded,
-unsimplified** copy of its entry:
-
-> V's guard conditions and selected Boolean decision depend only on its bound
-> entry components, its actual receives, and its designated service draws. Every
-> draw has exactly one unchanged delivery to P before another draw or V receive.
-
-Dependence is syntactic and conservative. Constants have empty dependence;
-total expressions union the dependence of their operands, using the registered
-operation contract. Restriction preserves the selected component. At P→V
-exchange, **V's receive is a fresh anchor**: the analysis does not follow the
-sent expression. At V→P exchange, V retains its own sent component. This
-respects role-family semantics; availability at P and V does not imply equality.
-
-All statement operands selected at V must also be bound. These include witness
-operands if a declaration explicitly selects them. The report separately marks
-bound inputs that lack a V-selected `parameter` or `statement` purpose.
-Declarations referring to other output indices do not change the selected
-Boolean decision or establish that it decides those relations.
-
-A source refusal establishes neither insecurity nor algebraic independence.
-For example, syntactic dependence on `x` in `x == x` is retained. The judgment
-concerns guard conditions and a selected returned decision on reached prefixes;
-it does not characterize termination, scheduling, other returned values, or
-prover local behavior. A stopped guard is distinct from a returned `false`.
-
-## Requirement and accepted fragment
+## Independent selection and ownership
 
 `zkc.public-coin-requirement/0` is an exact JSON object:
 
 ```json
 {
   "format": "zkc.public-coin-requirement/0",
+  "subject": "authored",
   "entry": "main",
-  "prover": "Prover",
-  "verifier": "Checker",
-  "service": 1,
+  "deployment_entries": ["main"],
+  "prover": "P",
+  "verifier": "V",
+  "service": 0,
   "decision": 0,
-  "bound_inputs": [0],
-  "draws": [
-    {"query_site": "draw", "delivery_site": "coin"}
-  ]
+  "bound_inputs": [],
+  "draws": [{"query_site": "draw", "delivery_site": "coin"}]
 }
 ```
 
-Numeric values use unsigned 64-bit integer tokens; signs, leading zeros, decimal points
-and exponents are refused. Duplicate object keys, including differently escaped
-spellings of the same key, are refused. Unicode escapes must denote scalar
-values; unpaired UTF-16 surrogates are refused. Input/result indices address the
-common entry interface. `bound_inputs` is an
-ordered, duplicate-free list; it may be empty. Each selected input must have a
-V component and an admitted native wire type. Binding here declares the view's
-initial values, not a runtime authentication mechanism or a hash operation.
-V-only bound inputs are accepted and explicitly reported as unavailable at P.
+The two subject choices are different judgments. There is no fallback between
+those choices. The entry has exactly the named two roles. `service`, `decision`
+and `bound_inputs` address the selected subject's **actual** common signature.
+The decision is a verifier-available Boolean result; the selected random service
+is owned exclusively by the verifier. Every verifier data input must be listed
+in `bound_inputs`, even if unused. Bound inputs must have a wire data policy;
+service references are separate authority, never bound data. A realized
+signature can contain generated shape inputs. Those are explicit obligations,
+not implicitly covered by an original logical oracle handle.
 
-The entry has exactly the two distinct specified roles. Its selected result is
-Boolean and available at V. The designated service is an exclusively V-owned
-installed [random-service](../runtime/services.md) entry port. Every query in the expanded entry uses that
-port and uses `draw` or `index`; other methods refuse with
-`public-coin-service`. Query sites equal the requirement's list in source order;
-ordinary native admission checks each method's signature and installed capability.
-An `index` request has one positive unsigned 64-bit bound, defined by an actual
-`data.index` constant. Its value is retained in the request descriptor. Field
-and index requests may interleave. There is at least one query.
+`deployment_entries` is a nonempty, duplicate-free inventory containing `entry`.
+It identifies the complete retained preparation/realization context, including
+companion entries required by other checks in a compiled invocation. This is
+independent input, not inferred from a supplied report. The inventory must match
+the checked owner's actual retained programs exactly. Report order is canonical;
+requirement byte identity still distinguishes differently written requests.
 
-The descriptor refers to the existing service contract: field sampling for
-`draw`, or `UniformIndex(N)` for `index`. The analysis does not prove provider
-conformance or a sampling law. It does not introduce an atomic block request or
-identify sequential index draws with a product-law event. Dynamic bounds and
-block draws remain outside this profile.
+Mathematical selection and oracle realization policies are independent API/CLI
+inputs. Standalone analysis prepares once, selects this inventory, and realizes
+once through the existing actual-body checker. Checked compilation uses its
+already constructed owner. The owner retains authored source, prepared source,
+realized candidate, requested policy, normalized root selection, and checked
+realization record. The checker never constructs a second preparation inside a
+compiled invocation or accepts a report's policy as authority.
 
-Every V→P exchange is the unique designated delivery of the pending draw. Its
-operand must be that query's result, optionally through `restrict_roles`.
-Arithmetic equivalence is insufficient. Delivery precedes the next query or
-P→V receive, and all queries must be delivered before return. Multiple
-outstanding draws are outside this profile. P→V messages need no syntactic
-relationship to the declared prover expression. V-owned local calls are
-refused, including calls with no outputs: they can hide state or stopping.
-P-owned local calls and guards retain their ordinary meaning. V guards may
-intervene between a draw and delivery; their prefixes include the draw although
-P has not received it yet. Statement bindings belong to the entry; ordinary
-static application admission refuses a callee that contains a statement.
+Authored analysis uses the retained source with shared applications intact. It
+refuses logical oracle effects rather than treating a handle as received data.
+Realized analysis uses the checked candidate. Exact generated opening-request
+exchanges are selected by the checked realization owner as deterministic
+transport. A label, source attribute, or untrusted report cannot authorize this
+classification. These sends require empty pending-challenge state and do not
+consume a challenge. Other verifier sends must forward the exact pending draw.
 
-## Derived report and checking
+## Observation and challenge families
 
-`zkc.public-coin-view/0` contains:
+The selected verifier's service queries must all use the selected entry service,
+including through actual call substitutions. A field draw, scalar index draw,
+and product index-sequence draw retain different request laws. The admitted
+positive static request operands, their actual SSA associations, and their
+dependencies remain explicit.
+No request law proves provider sampling conformance or provider-specific domain
+admission by itself.
+Prover-private queries do not become verifier challenge families.
 
-- The entry, roles, service and decision indices.
-- `anchors`: input entries in original port order, then actual V receives and
-  draws in action order. Input anchors include unused/unbound ports; only
-  declared bound inputs enter the view. Input anchors have `port` and `type`;
-  receive/draw anchors have `site`, authored `path`, `kind` and `type`.
-- `events`: anchor indices, beginning with `bound_inputs` in requirement order,
-  followed by receives and draws in source order.
-- `draws`: query `site`, authored `path`, `prefix_length` into `events`, and the
-  matched delivery's `site` and `path`. The prefix excludes this draw and all
-  later events. It is conditional on reaching the query. Every row also has a
-  `request` object with exactly `contract`, `method` and `arguments`. The contract
-  is the selected service identity, the method is `draw` or `index`, and
-  `arguments` is empty for `draw` or the one exact unsigned bound for `index`.
-  These are derived from the source, including for unused answers, and do not
-  grant new binding premises. Checking compares integers exactly, including
-  adjacent values above the signed 64-bit range.
-- `guards`: V guard site/path, current prefix length and dependency anchor
-  indices. `decision_dependencies` lists the selected decision's anchors.
-- `statement_inputs`, `bound_non_statement_inputs`, and
-  `prover_unavailable_bound_inputs`, each in increasing port order.
-- `finite_bulk`, `fuse_vector_reductions` and `fuse_collect_fold`: Boolean choices
-  from the supplied `MathematicalSelectionPolicy`; finite bulk defaults to true
-  and both fusion choices to false.
-- `source_ir_sha256`, `prepared_ir_sha256`, and `requirement_sha256`.
-  The prepared identity hashes the unsimplified subject prepared using those
-  exact selection choices, including when a choice has no eligible operation.
+The independent `draws` list selects query/delivery pairs in structural traversal
+order. A shared helper invoked twice denotes two contexts. Selector spelling is
+the same left-fold application-site spelling used by preparation; the report
+also retains the structured path and actual operation/context references. A
+repeat contributes one family with an iteration-coordinate template, not one
+freshness assertion for all iterations. Repeats do not add a spelling segment.
+Labels grant neither entropy nor cryptographic domain separation.
 
-IR identities hash the default MLIR printing of the admitted original module
-and unsimplified prepared module; locations are omitted. The requirement hash
-covers the exact supplied JSON bytes. Hashes identify artifacts, not proofs.
-Each authored action path is the sequence of application sites followed by the
-leaf action site; the entry is retained separately. Expanded names follow the
-existing length-prefixed application convention. Neither naming scheme is
-adopted as cryptographic domain separation. Renaming requires recomputation. Printer/preparation changes can also change
-these identities: reports are specific to the compiler and MLIR version, not a
-cross-version canonical encoding.
+The observation transfer checks exact forwarding separately from dependence:
 
-`analyzePublicCoin` leaves its original module unchanged and owns all returned
-report data after its prepared copy is destroyed. `checkPublicCoin` recomputes
-the whole report from the original, independent requirement and independently
-supplied selection policy, then compares JSON values exactly after checking
-integer tokens, Unicode escapes and
-key uniqueness. Whitespace and object-key order are immaterial; floating-point
-spellings are not accepted. No supplied report fact is trusted; additional keys
-are refused too. A supplied report cannot select its own policy. All three policy
-fields are required even when different policies yield identical prepared IR.
-Neither API checks an arbitrary transformed program.
+- a new query requires empty pending state;
+- a verifier receive requires empty pending state and creates an independent
+  observed atom, even if the sender used an expression also known to V;
+- a challenge delivery consumes the exact pending query through admitted aliases
+  and call forwarding; reconstruction from arithmetic dependencies does not pass;
+- helpers can query and return a challenge for another helper to deliver;
+- repeated bodies must preserve incoming pending state or form a closed round
+  for every count, including zero;
+- a root cannot require an incoming pending formal or leave a pending query.
 
-## Checked compilation
+Verifier guards and eager numerical calls contribute logical-stop dependencies,
+including zero-result or ignored-result calls. Unknown verifier effects refuse.
+The result is conservative may-dependence, not a path-feasibility proof. The
+interface separately records statement inputs, bound nonstatement inputs, and
+bound inputs unavailable to the prover. Verifier-only data is not thereby made
+available for a prover-computed transcript.
 
-`RunOptions.publicCoinRequirement` requests this analysis before
-projection. Its entry must equal the compiled entry. Ordinary projection,
-simplification and lowering remain trusted/tested compiler passes.
-`CompiledRun.publicCoin` returns `zkc.compiled-public-coin/0`, containing
-`view`, exact input-text `source_sha256`, emitted `bundle_sha256`, and the
-`simplify`, `release_storage`, `fuse_vector_reductions`, `finite_bulk`, `fuse_collect_fold`,
-`fix_polynomial_factors`
-options, the actual `projection_simplify` setting and ordered
-`post_analysis_passes`. The compiler
-returns no partial executable on failure.
+## Report
 
-`fuse_vector_reductions` defaults to false and records the selected
-[local preparation rewrite](protocols.md#optional-vector-reduction-fusion).
-Analysis and checked compilation use the same selection policy. The inner
-view's policy fields equal the wrapper's fields, and `prepared_ir_sha256`
-identifies the compilation's unsimplified prepared subject before projection.
-The compiled report lists `zkc-prepare-protocol` before projection in
-`post_analysis_passes`; analysis independently prepares its owned copy too.
-It is independent of participant simplification and storage release. Polynomial
-correspondence compilation and `checkPolynomialReductions` forward the same
-mathematical selection policy and record `fuse_vector_reductions`,
-`finite_bulk` and `fuse_collect_fold` in the correspondence report.
-`protocol-check-reductions` accepts the matching options for comparison
-with a supplied candidate. A report does not make local fusion a Fiat–Shamir
-reduction or general resource-preservation theorem.
+`zkc.public-coin-view/0` records the subject, entry/deployment inventory, roles,
+service/decision indices, actual interface, and a `graph` containing:
 
-The CLI supports:
+- `root`: the selected definition ID;
+- `definitions`: first-use IDs for actual protocol definitions and retained
+  repeat bodies, qualified by the observing role;
+- `numerical`: shared actual numerical definitions and reachable interpretation
+  premises;
+- `draws`: selected query families and exact delivery occurrences, with actual
+  call contexts and symbolic iteration coordinates.
 
-```sh
-zkc-compile protocol-public-coin source.mlir requirement.json
-zkc-compile protocol-check-public-coin source.mlir requirement.json view.json
-zkc-compile protocol-checked-bundle source.mlir --public-coin=requirement.json
-```
+Each protocol definition includes its declaration, block owner, formal types,
+atom basis, ordered actions, result/stop/service dependencies, exact result
+origins and pending transfer. Nonformal call/repeat atoms refer to actual child
+result or stop transfers; they are not arbitrary messages. Actions retain actual
+operation kinds, sites, attributes, typed SSA operands, observation categories,
+dependencies, exact input
+origins, child IDs and selected deterministic-transport status. Repeat actions
+retain count/carry/capture association, maximum and the finite fixed-point
+transfer rule. A null dependency vector means unavailable; an empty array means
+an observed value with no dependence. Internal padding is never an atom.
 
-All three commands accept `--no-finite-bulk`, `--fuse-vector-reductions` and
-`--fuse-collect-fold`.
-Standalone analysis and checking accept each option at most once, after their
-positional arguments. When checking a view from a nondefault compilation,
-supply the same choices independently on the checking command.
+Numerical rows retain actual declarations, signatures, returning/stopping facts,
+formal dependency sets, direct child IDs, and primitive occurrences with actual
+binding declarations, static arguments, invocation parameters and implementation
+choices. An empty implementation constraint remains unselected; analysis does
+not infer a physical installation. These are interpretation premises, not claims that a provider has been
+verified. In particular, relation-asset identity is not a proof of digest
+injectivity or permission to omit asset bytes from a binding judgment.
 
-Successful report checking prints `{"format":"zkc.public-coin-checked/0"}`.
-Checked compilation with a public-coin requirement emits
-`zkc.checked-run/0`: `bundle`, `public_coin`, and `correspondence` (null
-unless `--requirements` also requests polynomial correspondence). Polynomial-only
-compilation uses the same wrapper with `public_coin` set to null. For later report
-checking, supply the inner `view`, not the compiled wrapper.
+Operation references are stable preorder ordinals in the analyzed module;
+definition IDs use first encounter in the retained DAG. No pointer is serialized.
+They are local report identities, not cross-revision identifiers or hash domains.
+The report contains authored, prepared, realized and analyzed IR SHA-256
+identities, exact requirement-byte identity, independent policies, normalized
+oracle selection and the checked realization record. These identify the native
+structural association; they do not manufacture a formal simulation.
 
-## Bounds and refusals
+The checker parses bounded natural JSON, recomputes the whole report from source,
+independent requirement and independent policies, and requires exact equality.
+Duplicate object keys, non-natural numeric tokens, changed bodies, changed
+policies, missing obligations and altered graph facts refuse. A successful JSON
+comparison is evidence only for this closed native checking profile.
 
-Requirements are at most 1 MiB, JSON nesting 64, names 4096 bytes, input/result
-indices below 1024, at most 1024 bound ports and 1–64 draws. Sites and input
-indices are unique. Source and prepared fingerprints are bounded at 16 MiB
-of default printed IR. Ordinary module admission and preparation budgets apply
-first. The entry has at most 1024 inputs/results and 2048 action occurrences;
-authored occurrence paths plus expanded names occupy at most 1 MiB. The analysis
-allocates a dependency bit vector per V-available SSA value. It charges
-`ceil(number_of_anchors / 64) + 1` units per stored vector and operand union,
-with a total budget of 1,000,000. At most 65,536 dependency indices are emitted.
-Candidate reports are bounded at 8 MiB and JSON nesting 64 before parsing.
-The CLI additionally bounds source text at 16 MiB before MLIR parsing.
+## Limits and integration
 
-`public-coin-requirement` rejects the requirement schema; `public-coin-interface`
-rejects entry/role/port selection; `public-coin-service`,
-`public-coin-delivery`, `public-coin-verifier-local`, `public-coin-statement`,
-and `public-coin-unbound-input` identify failed fragment conditions.
-`public-coin-limit` rejects a resource bound. `public-coin-module` reports
-ordinary admission/preparation failure, `public-coin-occurrence` an inconsistent
-authored path, and `public-coin-dependence` an unavailable dependence contract.
-Conditional entry completion (`protocol.finish_if`) lacks a total-verifier
-dependence contract and is refused as `public-coin-dependence`.
-`public-coin-report` rejects a malformed or mismatched candidate report;
-`public-coin-options` rejects standalone CLI arity and unknown or repeated options.
-`checked-bundle-requirement-missing` rejects checked compilation without either
-independent requirement.
+The requirement is at most 1 MiB, with at most 1,024 input/result ports and
+retained deployment entries, 64 selected challenge families, and 4,096 bytes per
+name. Observation retains at most 2,048 site actions, depth 64, and one cumulative
+allowance of 1,000,000 work units shared with report traversal. At most 65,536
+dependency indices are serialized. The complete report, including realization
+association, is at most 8 MiB. IR fingerprints stream at most 16 MiB per subject.
+Exhaustion is a refusal, never a truncated successful report.
 
-## Security and formal boundary
+The CLI modes `protocol-public-coin` and `protocol-check-public-coin` accept the
+independent mathematical-selection flags and `--oracle-realization=<JSON>`.
+`protocol-checked-bundle --public-coin=<file>` associates the view with exact
+source and bundle byte hashes in `zkc.compiled-public-coin/0`.
+`subject_to_bundle_stages` describes the route from the selected subject to those
+bytes, not a PassManager trace. For an authored subject the route includes checked
+preparation and oracle realization. For a realized subject those edges precede
+the analysis and are not claimed as later passes. Both routes then project and
+use the actual selected lowering stages. Execution, correspondence, public-coin
+observation and cryptographic binding remain distinct judgments.
 
-Verifier-view analysis and [native transcript construction](../formats/proof.md)
-have distinct contracts. The view fact supplies no freshness/uniformity law,
-P/V agreement premise, hash codec or application domain,
-Fiat–Shamir security, round-by-round soundness, algebraic completeness or special
-soundness theorem. Concrete service failure, wire decoding, cancellation and
-resource exhaustion retain the native runtime's outcomes. Trace tests compare
-draw prefixes on the generated fixtures with their execution; no new Lean
-correspondence is claimed.
+## Version-0 cutover
+
+All formats remain `/0`. Producers, readers and fixtures change together:
+
+- `subject` and `deployment_entries` are required;
+- shared definition DAGs replace flat anchors/events/prefix lengths;
+- all verifier inputs are obligations, including unused inputs;
+- structured calls, symbolic repeats, deterministic partial numerical helpers
+  and product index queries are admitted through their analysis owners;
+- authored/prepared/realized identities and independent oracle policies are
+  retained, with exact checked generated-request associations;
+- compilation reuses its owner and reports `subject_to_bundle_stages`.
+
+The old flat consumer and its schema are removed. No compatibility reader remains.

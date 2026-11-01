@@ -1,6 +1,6 @@
 """The parameterized single-table STARK library at its KoalaBear configuration.
 
-`stark::single_table::TableArgument` is generic over a `stark::configurations::contract::
+`stark::single_table::ScalarTableArgument` is generic over a `stark::configurations::contract::
 Configuration`; these tests run it with `stark::configurations::koala_bear_quartic::Poseidon2`
 (KoalaBear trace, quartic extension, Poseidon2 Merkle trees with pruned
 multi-openings for natural outer rows,
@@ -40,7 +40,8 @@ BASE_VECTOR, QUARTIC_VECTOR, ROOT_FRAME, PROOF_FRAME = 20, 22, 71, 72
 TABLE_GUARDS = [(name, role, 0) for name, role in (
     ('admissible_v', 'role00000001'), ('admissible_p', 'role00000000'),
     ('trace_length', 'role00000000'), ('outside_v', 'role00000001'),
-    ('outside_p', 'role00000000'), ('identity', 'role00000001'),
+    ('outside_p', 'role00000000'), ('claim_count', 'role00000001'),
+    ('identity', 'role00000001'),
     ('trace_opening', 'role00000001'), ('quotient_opening', 'role00000001'))]
 
 
@@ -190,8 +191,10 @@ def rejected(report):
 def source_guards(package):
     """Resolve the caller and shared FRI checks from this exact package."""
     from test_fri import CHECK_GUARDS, COMMIT_GUARDS, emitted_guard_sites
-    return emitted_guard_sites(json.loads(package.path.read_text())['original'], {
-        'table.': TABLE_GUARDS, 'commit.': COMMIT_GUARDS, 'check.': CHECK_GUARDS})
+    emitted = json.loads(package.path.read_text())['original']
+    return (emitted_guard_sites(emitted, {
+        'table.': TABLE_GUARDS[:-2], 'commit.': COMMIT_GUARDS, 'check.': CHECK_GUARDS}) |
+        emitted_guard_sites(emitted, {'table.': TABLE_GUARDS[-2:]}))
 
 
 def refused_at(report, package, name, iterations):
@@ -291,7 +294,7 @@ def quadratic_air(height, width, *, field='koala-bear', modulus=P):
 GENERATED = '''module example;
 use stark::configurations::koala_bear_octic::{Base, Extension};
 use stark::configurations::koala_bear_quartic::{Poseidon2};
-use stark::single_table::{Statement, TableArgument};
+use stark::single_table::{Statement, ScalarTableArgument};
 use zkc::vector::{Vector};
 use zkc::vector as v;
 domain Trace = bundle(asset trace);
@@ -302,7 +305,7 @@ protocol Air roles(P,V)(trace: Vector<Base> @P, public_data: Vector<Base> @(P,V)
     coins: Random<Extension> @V) -> (accepted: bool @V) {
   let prover @P = statement(public_data);
   let verifier @V = statement(public_data);
-  let accepted = TableArgument<CONFIGURATION, 0, Trace, LogFinal = FINAL, Rounds = ROUNDS,
+  let accepted = ScalarTableArgument<CONFIGURATION, 0, Trace, LogFinal = FINAL, Rounds = ROUNDS,
     LogBlowup = BLOWUP, Queries = QUERIES>(trace, prover, verifier, coins);
   return accepted;
 }
@@ -317,6 +320,140 @@ def generated(height, final, blowup, queries, configuration='Poseidon2', extra='
             .replace('ROUNDS', str(rounds)).replace('BLOWUP', str(blowup))
             .replace('QUERIES', str(queries)).replace('SUITE', SUITE)
             .replace('domain Trace', extra + 'domain Trace'))
+
+
+@pytest.mark.parametrize(('sampling', 'difficulty', 'height', 'final', 'blowup', 'queries'), [
+    ('Scalar', None, 8, 0, 2, 4), ('Block', None, 8, 0, 2, 4),
+    ('Block', 0, 8, 0, 2, 4), ('Block', 4, 8, 0, 2, 4),
+    ('Block', 4, 256, 1, 1, 100),
+])
+def test_direct_quartic_keccak_sampling(toolchain, journal, directory, sampling, difficulty,
+                                      height, final, blowup, queries):
+    bundle, public, trace = quadratic_air(height, 1)
+    asset = journal.write(f'{sampling}-air.json', bundle)
+    source = generated(height, final, blowup, queries, configuration='Keccak256')
+    source = (source.replace(
+        'use stark::configurations::koala_bear_octic::{Base, Extension};',
+        'use stark::configurations::koala_bear_quartic::{Base, Quartic};')
+        .replace('::{Poseidon2}', '::{Keccak256}')
+        .replace('Random<Extension>', 'Random<Quartic>')
+        .replace('ScalarTableArgument', sampling + 'TableArgument')
+        .replace(SUITE, 'hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0'))
+    if difficulty is not None:
+        source = source.replace('  let accepted = BlockTableArgument',
+                                '  #[site(argument)] let accepted = BlockTableArgument')
+        source = source.replace('coins); }',
+                                f'coins); gate argument.fri_queries.positions bits {difficulty}; }}')
+    package = Package.source(toolchain, journal, directory, source, {'trace': asset},
+        name=f'quartic-keccak-{sampling.lower()}',
+        realization=table_realization('rows.merkle-keccak256.koala-bear.ext4-binomial3/0'))
+    published = json.loads(package.path.read_text())
+    gates = json.loads(published['interface'])['job']['gates']
+    assert gates == ([] if difficulty is None else [
+        {'path': ['argument', 'fri_queries', 'positions'], 'bits': difficulty}])
+    public_inputs = {'public_data': public}
+    produced, proof = package.prove(public_inputs, {'trace': trace})
+    assert produced['status'] == 'produced'
+    accepted = package.verify(public_inputs, proof)
+    assert accepted['status'] == 'accepted'
+    if difficulty == 0:
+        messages = frames(proof.read_bytes())
+        witnesses = [i for i, value in enumerate(messages) if tag(value) == 31]
+        assert len(witnesses) == 1
+        slot = witnesses[0]
+        assert messages[slot][6:] == bytes(8)
+        changed_witness = messages[slot][:6] + (1).to_bytes(8, 'little')
+        candidate = directory / 'noncanonical-zero-gate.proof'
+        candidate.write_bytes(replace_frame(proof.read_bytes(), slot, changed_witness))
+        assert package.verify(public_inputs, candidate, refuses=True)['status'] == 'refused'
+    changed = list(public)
+    changed[0] = str((int(changed[0]) + 1) % P)
+    refused = package.verify({'public_data': changed}, proof, refuses=True)
+    assert refused['status'] == 'refused'
+
+
+def unread_column_case(journal):
+    bundle, public, trace = quadratic_air(8, 1)
+    # The arena still reads only column zero. Column one nevertheless belongs
+    # to the committed witness layout and the advertised degree claim.
+    bundle[3][0][4][0][3] = 2
+    asset = journal.write('unread-column.json', bundle)
+    witness = [entry for value in trace for entry in (value, '7')]
+    return asset, {'public_data': public}, {'trace': witness}
+
+
+def test_unread_witness_column_claims(toolchain, journal, directory):
+    asset, public, witness = unread_column_case(journal)
+    package = Package.source(toolchain, journal, directory, generated(8, 0, 1, 8),
+                             {'trace': asset}, realization=QUARTIC_REALIZATION)
+    proof = package.honest(public, witness)
+    messages = frames(proof.read_bytes())
+    assert_quartic_frames(messages, log_size=4, final=0, rounds=3, queries=8,
+                          width=2, chunks=1, claims=5)
+    claims = messages[2]
+    # Omitting the appended claim must fail the exact inventory check before
+    # any later challenge or opening can supply a different interpretation.
+    missing = claims[:6] + (4).to_bytes(4, 'little') + claims[10:-16]
+    candidate = directory / 'missing-unread-claim.proof'
+    candidate.write_bytes(replace_frame(proof.read_bytes(), 2, missing))
+    refused_at(package.verify(public, candidate, refuses=True), package,
+               'table.claim_count', [])
+
+
+def test_degree_boundary_on_unread_column(toolchain, journal, directory):
+    """The old <n quotient subcheck accepts a degree-n committed column.
+
+    This is a degree-claim control, not a false-AIR statement: the AIR does not
+    constrain the extra column. The corrected verifier rejects after the
+    dishonest prover truncates its otherwise inadmissible terminal polynomial.
+    """
+    asset, public, witness = unread_column_case(journal)
+    helper = '''
+fn high_column<F: Field>(values: Vector<F>, shift: F, size: index, height: index)
+    -> Vector<F> {
+  let mut result = zkc::vector::slice(values, 0, size);
+  for row in 0..size {
+    result = append(result, zkc::scalar::power(coset::point(shift, size, row), height));
+  }
+  return result;
+}
+'''
+    substitutions = [
+        ('fn deep_values<', helper + 'fn deep_values<'),
+        ('  let trace_lde @P = extend_columns(trace_columns, factsP.witness, heightP, shiftP, sizeP);',
+         '  let honest_lde @P = extend_columns(trace_columns, factsP.witness, heightP, shiftP, sizeP);\n'
+         '  let trace_lde @P = high_column(honest_lde, shiftP, sizeP, heightP);'),
+        ('  let proposed @P = input_values(slotsP, K::embed(trace_columns), K::embed(configP),\n'
+         '    K::embed(publicP), dataP, heightP, zetaP);',
+         '  let honest_claims @P = input_values(slotsP, K::embed(trace_columns), K::embed(configP),\n'
+         '    K::embed(publicP), dataP, heightP, zetaP);\n'
+         '  let proposed @P = append(zkc::vector::slice(honest_claims, 0, length(honest_claims)-1),\n'
+         '    zkc::scalar::power(zetaP, heightP));'),
+    ]
+    unadjusted = edited(directory, LIBRARY / 'single_table/lib.zkc', [*substitutions,
+        ('let adjustmentV @V = K::challenge(adjustmentDraw);', 'let adjustmentV: K::Extension @V = 0;'),
+        ('let adjustmentP @P = K::challenge(adjustmentSent);', 'let adjustmentP: K::Extension @P = 0;')],
+        'unadjusted-library.zkc')
+    package = Package.source(toolchain, journal, directory, generated(8, 0, 1, 16),
+                             {'trace': asset}, overrides={'stark::single_table': unadjusted},
+                             name='unadjusted', realization=QUARTIC_REALIZATION)
+    package.honest(public, witness)
+
+    adjusted = edited(directory, LIBRARY / 'single_table/lib.zkc', substitutions,
+                      'adjusted-library.zkc')
+    truncated = edited(directory, FRI, [(
+        '  require !less(count, length(coefficients));\n'
+        '  return concat(coefficients, fill<F>(0, count - length(coefficients)));',
+        '  return if less(count, length(coefficients)) { zkc::vector::slice(coefficients, 0, count) }\n'
+        '    else { concat(coefficients, fill<F>(0, count - length(coefficients))) };')],
+        'truncated.zkc')
+    package = Package.source(toolchain, journal, directory, generated(8, 0, 1, 16),
+                             {'trace': asset}, overrides={'stark::single_table': adjusted,
+                                                         'fri': truncated},
+                             name='adjusted', realization=QUARTIC_REALIZATION)
+    produced, proof = package.prove(public, witness)
+    assert produced['status'] == 'produced'
+    refused_at(package.verify(public, proof, refuses=True), package, 'check.terminal', ['0'])
 
 
 @pytest.mark.parametrize('height,width,final,blowup,queries', [
@@ -344,7 +481,7 @@ def test_generated_air_parameters(toolchain, journal, directory, height, width, 
 RECURRENCE_SOURCE = '''module example;
 use stark::configurations::koala_bear_octic::{Base, Extension};
 use stark::configurations::koala_bear_quartic::{Poseidon2};
-use stark::single_table::{Statement, TableArgument};
+use stark::single_table::{Statement, ScalarTableArgument};
 use zkc::vector::{Vector};
 use zkc::vector as v;
 domain Recurrence = bundle(asset recurrence);
@@ -357,7 +494,7 @@ protocol RecurrenceProof roles(P,V)(trace: Vector<Base> @P, configuration: Vecto
     -> (accepted: bool @V) {
   let statementP @P = statement(configuration, x0, y0, final_acc);
   let statementV @V = statement(configuration, x0, y0, final_acc);
-  let accepted = TableArgument<Poseidon2, 0, Recurrence, LogFinal = 1, Rounds = 2, LogBlowup = 2,
+  let accepted = ScalarTableArgument<Poseidon2, 0, Recurrence, LogFinal = 1, Rounds = 2, LogBlowup = 2,
     Queries = 12>(trace, statementP, statementV, coins);
   return (accepted = accepted);
 }
@@ -515,8 +652,8 @@ def test_wrong_openings_are_refused(toolchain, journal, directory, variant):
             '}\n\nfn padded<F: Field>')], 'fri.zkc')
         overrides = {'fri': path}
     else:
-        target = {'trace-rows': 'K::open_base(trace_tree.1, positionsP, sizeP)',
-                  'quotient-rows': 'K::open_extension(quotient_tree.1, positionsP, sizeP)'}[variant]
+        target = {'trace-rows': 'K::open_base(prover.trace, positionsP, sizeP)',
+                  'quotient-rows': 'K::open_extension(prover.quotient, positionsP, sizeP)'}[variant]
         path = edited(directory, LIBRARY / 'single_table/lib.zkc', [
             (target, target.replace('positionsP', 'shifted(positionsP, sizeP)')),
             ('fn deep_values<', SHIFTED + 'fn deep_values<')], 'argument.zkc')

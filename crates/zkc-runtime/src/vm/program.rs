@@ -338,8 +338,8 @@ impl Program {
                     for (argument, initial) in carried {
                         child.insert(argument.clone(), env[initial].clone());
                     }
-                    for name in captures {
-                        child.insert(name.clone(), env[name].clone());
+                    for (local, parent) in captures {
+                        child.insert(local.clone(), env[parent].clone());
                     }
                     for ((_, initial), output) in carried.iter().zip(outputs) {
                         env.insert(output.clone(), env[initial].clone());

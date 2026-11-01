@@ -22,6 +22,8 @@ report_path = OUT / "view.json"
 def requirement(bound, service, sites, prover="Prover", verifier="Checker"):
     return {
         "format": "zkc.public-coin-requirement/0",
+        "subject": "authored",
+        "deployment_entries": ["main"],
         "entry": "main",
         "prover": prover,
         "verifier": verifier,
@@ -56,10 +58,16 @@ def checked(name, text, req, *flags):
         record["bundle_sha256"] == hashlib.sha256(result["bundle"].encode()).hexdigest()
     )
     policy = tuple(
-        flag for flag in flags if flag in {"--fuse-vector-reductions", "--no-finite-bulk", "--fuse-collect-fold"}
+        flag for flag in flags if flag in {"--fuse-vector-reductions", "--no-finite-bulk", "--fuse-collect-fold", "--no-calculation-batching"} or flag.startswith("--oracle-realization=")
     )
     view = analyze(text, req, policy=policy)
     assert view == record["view"]
+    route = record["subject_to_bundle_stages"]
+    if req["subject"] == "realized":
+        assert route[0] == "zkc-project-protocol"
+        assert "checked-preparation" not in route and "checked-oracle-realization" not in route
+    else:
+        assert route[:2] == ["checked-preparation", "checked-oracle-realization"]
     (OUT / f"{name}.bundle").write_text(result["bundle"])
     (OUT / f"{name}.view.json").write_text(json.dumps(view))
     (OUT / f"{name}.mlir").write_text(text)
@@ -67,16 +75,67 @@ def checked(name, text, req, *flags):
     return view
 
 
-def event_sites(view, end=None):
-    return [
-        (view["anchors"][i]["kind"], view["anchors"][i].get("site"))
-        for i in view["events"][:end]
-        if view["anchors"][i]["kind"] != "input"
-    ]
+def root(view):
+    return view["graph"]["definitions"][view["graph"]["root"]]
 
 
-def dependencies(view, refs):
-    return [view["anchors"][i] for i in refs]
+def observation_actions(view, definition=None, prefix=""):
+    """Small fixture traversal; production retains shared definitions."""
+    definition = root(view) if definition is None else definition
+    for action in definition["actions"]:
+        label = action.get("site", "")
+        label = f"apply_{len(prefix)}_{prefix}_{label}" if prefix else label
+        if "callee" in action:
+            assert action["kind"] != "protocol.repeat", "use DAG assertions for loops"
+            yield from observation_actions(
+                view, view["graph"]["definitions"][action["callee"]], label)
+        else:
+            yield definition, action, label
+
+
+def event_sites(view, before=None):
+    result = []
+    for definition, action, label in observation_actions(view):
+        if label == before:
+            break
+        if action["kind"] == "protocol.query" and "service" in action:
+            result.append(("draw", label))
+        elif action["observation"] == "receive":
+            result.append(("receive", label))
+    return result
+
+
+def decision_dependencies(view):
+    return root(view)["results"][view["decision"]]
+
+
+def dependencies(view, refs, definition=None, arguments=None):
+    definition = root(view) if definition is None else definition
+    arguments = ([[{"kind": "input", "port": i}] for i in range(definition["formals"])]
+                 if arguments is None else arguments)
+    actions = {a["operation"]: a for a in definition["actions"]}
+    result = []
+    for ref in refs:
+        atom = definition["atoms"][ref]
+        if atom["kind"] == "formal":
+            result.extend(arguments[atom["port"]])
+        elif atom["kind"] in {"query", "receive"}:
+            result.append({"kind": "draw" if atom["kind"] == "query" else "receive",
+                           "operation": atom["operation"]})
+        else:
+            assert atom["kind"] in {"call_result", "call_stop"}
+            action = actions[atom["operation"]]
+            child = view["graph"]["definitions"][action["callee"]]
+            actuals = [dependencies(view, bits, definition, arguments) if bits is not None else []
+                       for bits in action["inputs"]]
+            bits = child["stops"] if atom["kind"] == "call_stop" else child["results"][atom["port"]]
+            result.extend(dependencies(view, bits, child, actuals))
+    return result
+
+
+def guard_actions(view):
+    return [action for _, action, _ in observation_actions(view)
+            if action["kind"] == "protocol.guard"]
 
 
 tables = composed_sumcheck()
@@ -85,21 +144,21 @@ round_sites = [
 ]
 table_req = requirement([0, 1, 2], 3, round_sites)
 view = checked("tables", tables, table_req)
-assert event_sites(view, view["draws"][0]["prefix_length"]) == [
+assert event_sites(view, view["graph"]["draws"][0]["site"]) == [
     ("receive", "apply_6_reduce_round0")
 ]
-assert view["draws"][0]["path"] == ["reduce", "query0"]
-assert view["draws"][0]["delivery"]["path"] == ["reduce", "challenge0"]
-assert event_sites(view, view["draws"][1]["prefix_length"]) == [
+assert view["graph"]["draws"][0]["path"] == ["reduce", "query0"]
+assert view["graph"]["draws"][0]["delivery"]["path"] == ["reduce", "challenge0"]
+assert event_sites(view, view["graph"]["draws"][1]["site"]) == [
     ("receive", "apply_6_reduce_round0"),
     ("draw", "apply_6_reduce_query0"),
     ("receive", "apply_6_reduce_round1"),
 ]
 assert {
     a["port"]
-    for a in dependencies(view, view["decision_dependencies"])
+    for a in dependencies(view, decision_dependencies(view))
     if a["kind"] == "input"
-} == {0, 1}
+} == {0, 1, 2}  # The reached guards also constrain the returning decision.
 analyze(tables, {**table_req, "bound_inputs": [0, 1]}, "public-coin-unbound-input")
 analyze(tables, {**table_req, "bound_inputs": [2]}, "public-coin-unbound-input")
 # Both independent judgments can be requested in the same native invocation.
@@ -112,7 +171,7 @@ polynomial["requirements"][0]["composition"] = {
 }
 polynomial_path = OUT / "polynomial.json"
 polynomial_path.write_text(json.dumps(polynomial))
-checked("tables_both", tables, table_req, f"--requirements={polynomial_path}")
+checked("tables_both", tables, {**table_req, "deployment_entries": ["main", "reduction", "terminal"]}, f"--requirements={polynomial_path}")
 assert checked("tables_plain", tables, table_req, "--no-simplify") == view
 assert (
     checked(
@@ -141,10 +200,10 @@ asset = [
 r1cs = commands.source("relation-protocol", json.dumps(asset))
 r1cs_req = requirement([0], 1, [("weight_draw0", "weight0"), round_sites[0]])
 r1cs_view = checked("r1cs", r1cs, r1cs_req)
-assert r1cs_view["statement_inputs"] == []
-assert r1cs_view["bound_non_statement_inputs"] == [0]
-assert event_sites(r1cs_view, r1cs_view["draws"][0]["prefix_length"]) == []
-assert event_sites(r1cs_view, r1cs_view["draws"][1]["prefix_length"]) == [
+assert r1cs_view["interface"]["statement_inputs"] == []
+assert r1cs_view["interface"]["bound_non_statement_inputs"] == [0]
+assert event_sites(r1cs_view, r1cs_view["graph"]["draws"][0]["site"]) == []
+assert event_sites(r1cs_view, r1cs_view["graph"]["draws"][1]["site"]) == [
     ("draw", "weight_draw0"),
     ("receive", "apply_6_reduce_round0"),
 ]
@@ -160,7 +219,7 @@ public_asset = copy.deepcopy(asset)
 public_asset[4] = "1"
 public_r1cs = commands.source("relation-protocol", json.dumps(public_asset))
 analyze(public_r1cs, {**r1cs_req, "bound_inputs": []}, "public-coin-statement")
-assert analyze(public_r1cs, r1cs_req)["statement_inputs"] == [0]
+assert analyze(public_r1cs, r1cs_req)["interface"]["statement_inputs"] == [0]
 
 
 def small(
@@ -189,12 +248,12 @@ def delivery(value="draw", site="coin"):
 receive = f'%received=protocol.exchange %x {{sender="Prover",receiver="Checker",site="reply"}} : {F}\n'
 compare = f"%ok=algebra.field_equal %received,%draw : ({F},{F})->i1\n"
 shadow = small(query() + delivery() + receive + compare)
-shadow_req = requirement([], 1, [("draw", "coin")])
+shadow_req = requirement([0], 1, [("draw", "coin")])
 shadow_view = checked("shadow", shadow, shadow_req)
 assert {
-    a["kind"] for a in dependencies(shadow_view, shadow_view["decision_dependencies"])
+    a["kind"] for a in dependencies(shadow_view, decision_dependencies(shadow_view))
 } == {"receive", "draw"}
-assert shadow_view["draws"][0]["prefix_length"] == 0
+assert event_sites(shadow_view, "draw") == []
 assert event_sites(shadow_view) == [("draw", "draw"), ("receive", "reply")]
 # A V-only bound port is valid for a V view; it is explicitly unsuitable for a
 # shared hash computation until a later construction supplies its P component.
@@ -202,17 +261,13 @@ private = small(
     query() + delivery() + f"%ok=algebra.field_equal %x,%draw : ({F},{F})->i1",
     roles='[["Checker"],["Checker"]]',
 )
-assert analyze(private, {**shadow_req, "bound_inputs": [0]})[
-    "prover_unavailable_bound_inputs"
-] == [0]
+assert analyze(private, {**shadow_req, "bound_inputs": [0]})["interface"]["prover_unavailable_bound_inputs"] == [0]
 # A syntactic dependence survives an equality folder that knows x == x.
 cancelled = small(
     query() + delivery() + f"%ok=algebra.field_equal %x,%x : ({F},{F})->i1"
 )
-analyze(cancelled, shadow_req, "public-coin-unbound-input")
-assert analyze(cancelled, {**shadow_req, "bound_inputs": [0]})[
-    "decision_dependencies"
-] == [0]
+analyze(cancelled, {**shadow_req, "bound_inputs": []}, "public-coin-unbound-input")
+assert decision_dependencies(analyze(cancelled, shadow_req)) == [0]
 # Keep the actual scalar request and its full static domain. An index draw is
 # neither a field draw nor an atomic block of several samples.
 index_service = '!protocol.service_ref<"random.koala-bear.ext8-binomial3/0">'
@@ -227,22 +282,26 @@ index_req = {**shadow_req, "bound_inputs": [0]}
 for upper in (1, 8, 17, (1 << 64) - 1):
     current = indexed.replace('value=8 : ui64', f'value={upper} : ui64')
     view = checked(f"index_{upper}", current, index_req)
-    request = view["draws"][0]["request"]
-    assert request == {"contract": "random.koala-bear.ext8-binomial3/0",
-                       "method": "index", "arguments": [upper]}
-    assert view["anchors"][2]["type"] == "ui64"
-    assert view["draws"][0]["prefix_length"] == 1
+    request = view["graph"]["draws"][0]["request"]
+    assert request["contract"] == "random.koala-bear.ext8-binomial3/0"
+    assert request["method"] == "index" and request["law"] == "uniform-index"
+    assert request["static_arguments"] == [upper]
+    constants = [a for a in root(view)["actions"] if a["kind"] == "data.index"]
+    assert len(constants) == 1 and f"value = {upper} : ui64" in constants[0]["attributes"]
+    query_action = next(a for a in root(view)["actions"] if a["kind"] == "protocol.query")
+    assert query_action["operands"][1] == {"kind": "result", "operation": constants[0]["operation"], "port": 0}
+    assert query_action["outputs"] == ["ui64"]
     for changed_request in ({**request, "method": "draw"},
-                            {**request, "arguments": [upper ^ 1]},
-                            {**request, "arguments": []},
+                            {**request, "static_arguments": [upper ^ 1]},
+                            {**request, "static_arguments": []},
                             {**request, "contract": "random.bls12-381.fr/0"}):
         changed_view = copy.deepcopy(view)
-        changed_view["draws"][0]["request"] = changed_request
+        changed_view["graph"]["draws"][0]["request"] = changed_request
         report_path.write_text(json.dumps(changed_view))
         commands.run([compiler, "protocol-check-public-coin", source_path,
                       requirement_path, report_path], refuses="public-coin-report")
     missing = copy.deepcopy(view)
-    del missing["draws"][0]["request"]
+    del missing["graph"]["draws"][0]["request"]
     report_path.write_text(json.dumps(missing))
     commands.run([compiler, "protocol-check-public-coin", source_path,
                   requirement_path, report_path], refuses="public-coin-report")
@@ -252,10 +311,10 @@ index_dependent = indexed.replace(
     f'%ok = algebra.field_equal %x, %x : ({F}, {F}) -> i1',
     '%ok = "data.index_less"(%position, %bound) : (ui64, ui64) -> i1')
 view = analyze(index_dependent, shadow_req)
-assert view["decision_dependencies"] == [2]
+assert decision_dependencies(view) == [2]
 analyze(index_dependent.replace('"protocol.exchange"(%position)',
                                 '"protocol.exchange"(%bound)'),
-        shadow_req, "public-coin-delivery")
+        shadow_req, "public-coin-dependence")
 
 # Mixed field/index requests retain two distinct prefix boundaries.
 field = '!algebra.field<"koala-bear.ext8-binomial3">'
@@ -265,9 +324,9 @@ mixed_body = index_body.replace('%ok = algebra.field_equal', f"""%field = "proto
 mixed = small(mixed_body).replace(S, index_service)
 mixed_req = requirement([0], 1, [("draw", "coin"), ("field", "field_coin")])
 view = analyze(mixed, mixed_req)
-assert [d["prefix_length"] for d in view["draws"]] == [1, 2]
-assert [d["request"]["method"] for d in view["draws"]] == ["index", "draw"]
-assert view["draws"][1]["request"]["arguments"] == []
+assert [d["site"] for d in view["graph"]["draws"]] == ["draw", "field"]
+assert [d["request"]["method"] for d in view["graph"]["draws"]] == ["index", "draw"]
+assert view["graph"]["draws"][1]["request"]["law"] == "uniform-field"
 
 
 # Exact edge, order, and service failures on otherwise admitted programs.
@@ -278,21 +337,21 @@ changed = (
 analyze(
     small(changed + delivery("changed") + receive + compare),
     shadow_req,
-    "public-coin-delivery",
+    "public-coin-dependence",
 )
 analyze(
-    small(query() + receive + delivery() + compare), shadow_req, "public-coin-delivery"
+    small(query() + receive + delivery() + compare), shadow_req, "public-coin-dependence"
 )
-analyze(small(query() + receive + compare), shadow_req, "public-coin-delivery")
+analyze(small(query() + receive + compare), shadow_req, "public-coin-dependence")
 analyze(
     small(query() + delivery() + delivery(site="twice") + receive + compare),
     shadow_req,
-    "public-coin-delivery",
+    "public-coin-dependence",
 )
 analyze(
     small(query() + query("other") + delivery() + receive + compare),
     shadow_req,
-    "public-coin-delivery",
+    "public-coin-dependence",
 )
 analyze(
     shadow,
@@ -323,7 +382,6 @@ analyze(
         local + query() + delivery() + receive + compare, declarations=local_declaration
     ),
     shadow_req,
-    "public-coin-verifier-local",
 )
 # Role-restricted copies retain exact delivery, without granting another role.
 restricted = (
@@ -347,9 +405,9 @@ assert (
     == "zkc.public-coin-checked/0"
 )
 for change in [
-    lambda v: v["draws"][0].update(prefix_length=1),
-    lambda v: v["anchors"][-1].update(kind="input", port=0),
-    lambda v: v.update(decision_dependencies=[]),
+    lambda v: v["graph"]["draws"][0].update(context=[0]),
+    lambda v: root(v)["atoms"][-1].update(kind="formal", port=0),
+    lambda v: root(v)["results"].__setitem__(0, []),
     lambda v: v.update(verifier="Prover"),
     lambda v: v.update(source_ir_sha256="0" * 64),
     lambda v: v.update(prepared_ir_sha256="0" * 64),
@@ -360,7 +418,7 @@ for change in [
     lambda v: v.update(fuse_collect_fold="false"),
     lambda v: v.pop("finite_bulk"),
     lambda v: v.update(finite_bulk="true"),
-    lambda v: v["draws"][0].update(path=["unrelated"]),
+    lambda v: v["graph"]["draws"][0].update(path=["unrelated"]),
 ]:
     bad = copy.deepcopy(view)
     change(bad)
@@ -458,7 +516,7 @@ for bad in [{**shadow_req, "service": 0}, {**shadow_req, "bound_inputs": [1]}]:
         bad,
         "public-coin-service" if bad["service"] == 0 else "public-coin-interface",
     )
-analyze(shadow, {**shadow_req, "entry": "absent"}, "public-coin-interface")
+analyze(shadow, {**shadow_req, "entry": "absent", "deployment_entries": ["absent"]}, "public-coin-interface")
 analyze(shadow, {**shadow_req, "decision": 1}, "public-coin-interface")
 requirement_path.write_text("[" * 65)
 commands.run(
@@ -469,11 +527,11 @@ commands.run(
     [compiler, "protocol-public-coin", source_path], refuses="public-coin-options"
 )
 # Existing group arithmetic is covered without binding the P-only witness.
-# The service-based nonce variant deliberately falls outside this profile;
-# an entry nonce tests the same verifier with only its public challenge query.
+# Prover-private randomness does not enter the verifier observation. Both a
+# private nonce service and an entry nonce retain the same public challenge.
 schnorr = (fixtures / "schnorr-services.mlir").read_text()
 schnorr_req = requirement([0, 2], 4, [("draw_challenge", "challenge")], "Alice", "Bob")
-analyze(schnorr, schnorr_req, "public-coin-service")
+analyze(schnorr, schnorr_req)
 nonce_line = next(
     line for line in schnorr.splitlines() if '%k = "protocol.query"' in line
 )
@@ -482,11 +540,11 @@ input_nonce = schnorr.replace(nonce_line, "").replace(f"%nonce: {S}", f"%k: {F}"
 signature = input_nonce.index("function_type=")
 input_nonce = input_nonce[:signature] + input_nonce[signature:].replace(S, F, 1)
 schnorr_view = analyze(input_nonce, schnorr_req)
-assert schnorr_view["statement_inputs"] == [0, 2]
-assert schnorr_view["bound_non_statement_inputs"] == []
+assert schnorr_view["interface"]["statement_inputs"] == [0, 2]
+assert schnorr_view["interface"]["bound_non_statement_inputs"] == []
 assert {
     a["port"]
-    for a in dependencies(schnorr_view, schnorr_view["decision_dependencies"])
+    for a in dependencies(schnorr_view, decision_dependencies(schnorr_view))
     if a["kind"] == "input"
 } == {0, 2}
 # Nested application paths remain structured; expanded names follow the same
@@ -502,22 +560,20 @@ outer = (
 )
 nested = nested.replace("}) {profile=", caller + outer + "}) {profile=")
 nested_req = requirement(
-    [], 1, [("apply_19_apply_5_outer_inner_draw", "apply_19_apply_5_outer_inner_coin")]
+    [0], 1, [("apply_19_apply_5_outer_inner_draw", "apply_19_apply_5_outer_inner_coin")]
 )
 nested_view = analyze(nested, nested_req)
-assert nested_view["draws"][0]["path"] == ["outer", "inner", "draw"]
-assert nested_view["draws"][0]["delivery"]["path"] == ["outer", "inner", "coin"]
+assert nested_view["graph"]["draws"][0]["path"] == ["outer", "inner", "draw"]
+assert nested_view["graph"]["draws"][0]["delivery"]["path"] == ["outer", "inner", "coin"]
 # An unused statement operand is still mandatory, independent of SSA liveness.
 statement = f'relation.declare @predicate {{kind="external",key="view",revision="0",signature=({F})->i1,purposes=["statement"]}}'
 bind = f'protocol.statement @predicate(%x) {{selectors=["Checker"],acceptance=0:i64}} : {F}\n'
 dead_statement = small(
     bind + query() + delivery() + "%ok=arith.constant true", declarations=statement
 )
-analyze(dead_statement, shadow_req, "public-coin-statement")
+analyze(dead_statement, {**shadow_req, "bound_inputs": []}, "public-coin-statement")
 assert (
-    analyze(dead_statement, {**shadow_req, "bound_inputs": [0]})[
-        "decision_dependencies"
-    ]
+    decision_dependencies(analyze(dead_statement, shadow_req))
     == []
 )
 # The dependent guard can exceed the reporting budget while SSA work remains
@@ -551,7 +607,7 @@ analyze(
 view = analyze(shadow, shadow_req)
 for token in ("0.0", "0e0", "-0", "00", "+0"):
     report_path.write_text(
-        json.dumps(view).replace('"prefix_length": 0', f'"prefix_length": {token}', 1)
+        json.dumps(view).replace('"decision": 0', f'"decision": {token}', 1)
     )
     commands.run(
         [
@@ -581,9 +637,9 @@ requirement_path.write_text(json.dumps(shadow_req))
 for data in [
     '{"verifier":"Prover",' + json.dumps(view)[1:],
     '{"\\u0076erifier":"Prover",' + json.dumps(view)[1:],
-    '{"draws":{"nested":1},' + json.dumps(view)[1:],
+    '{"graph":{"nested":1},' + json.dumps(view)[1:],
     json.dumps(view).replace(
-        '"prefix_length": 0', '"prefix_length": 1,"prefix_length": 0', 1
+        '"decision": 0', '"decision": 1,"decision": 0', 1
     ),
 ]:
     report_path.write_text(data)
@@ -617,7 +673,8 @@ commands.run(
 )
 # A string with escaped quotes, backslashes and numeric punctuation still uses
 # ordinary JSON string parsing; only numeric tokens are constrained.
-escaped = {**shadow_req, "entry": 'missing "quote" \\ -1.0'}
+escaped_name = 'missing "quote" \\ -1.0'
+escaped = {**shadow_req, "entry": escaped_name, "deployment_entries": [escaped_name]}
 analyze(shadow, escaped, "public-coin-interface")
 # Unicode escapes denote scalars; LLVM's replacement of lone surrogates must
 # not change the name that a different JSON reader observes. Native names are
@@ -660,14 +717,14 @@ middle_guard = (
     + delivery()
 )
 guarded = analyze(small(middle_guard), shadow_req)
-assert guarded["guards"][0]["prefix_length"] == 1
-assert dependencies(guarded, guarded["guards"][0]["dependencies"])[0]["kind"] == "draw"
+assert len(guard_actions(guarded)) == 1
+assert dependencies(guarded, guard_actions(guarded)[0]["stops"])[0]["kind"] == "draw"
 unbound_guard = (
     query()
     + delivery()
     + f'%condition=algebra.field_equal %x,%x : ({F},{F})->i1\nprotocol.guard %condition {{owner="Checker",site="unbound"}}\n%ok=arith.constant true'
 )
-analyze(small(unbound_guard), shadow_req, "public-coin-unbound-input")
+analyze(small(unbound_guard), {**shadow_req, "bound_inputs": []}, "public-coin-unbound-input")
 prover_only = shadow.replace(
     'input_roles=[["Prover","Checker"],["Checker"]]',
     'input_roles=[["Prover"],["Checker"]]',
@@ -752,7 +809,7 @@ analyze(
         types=wide_types,
         roles="[" + wide_roles * 1000 + '["Checker"]]',
     ),
-    requirement([], 1000, [("draw", "coin")]),
+    requirement(list(range(1000)), 1000, [("draw", "coin")]),
     "public-coin-limit",
 )
 
@@ -786,3 +843,123 @@ analyze(
         }
     )
 )
+
+# A previously unused verifier input remains an explicit binding obligation.
+unused = small(query() + delivery() + '%ok=arith.constant true')
+analyze(unused, {**shadow_req, "bound_inputs": []}, "public-coin-unbound-input")
+unused_view = analyze(unused, shadow_req)
+assert decision_dependencies(unused_view) == []
+for bad in [
+    {k: v for k, v in shadow_req.items() if k != "subject"},
+    {**shadow_req, "subject": "prepared"},
+    {k: v for k, v in shadow_req.items() if k != "deployment_entries"},
+    {**shadow_req, "deployment_entries": ["main", "main"]},
+    {**shadow_req, "deployment_entries": []},
+    {**shadow_req, "deployment_entries": ["other"]},
+]:
+    analyze(shadow, bad, "public-coin-requirement")
+
+# Cross-helper exact forwarding and a symbolic repeated round use the same
+# shared definitions. Their challenge identities remain separate by context.
+helper_draw = f'''"protocol.func"() ({{^entry(%s:{S}):
+{query()}
+"protocol.return"(%draw) : ({F})->()
+}}) {{sym_name="sample",function_type=({S})->{F},roles=["Prover","Checker"],input_roles=[["Checker"]],output_roles=[["Checker"]]}} : ()->()'''
+helper_send = f'''"protocol.func"() ({{^entry(%draw:{F}):
+{delivery()}
+"protocol.return"() : ()->()
+}}) {{sym_name="send",function_type=({F})->(),roles=["Prover","Checker"],input_roles=[["Checker"]],output_roles=[]}} : ()->()'''
+round_calls = f'''%q=protocol.apply @sample(%s) {{roles=["Prover","Checker"],site="sample_call"}} : ({S})->{F}
+protocol.apply @send(%q) {{roles=["Prover","Checker"],site="delivery_call"}} : ({F})->()
+'''
+repeat = f'''"protocol.repeat"(%n,%s) ({{^loop(%i:ui64,%s:{S}):
+{round_calls}
+"protocol.yield"() : ()->()
+}}) {{site="rounds",carried=0:i64,maximum=1048576:i64,roles=["Prover","Checker"],carried_roles=[]}} : (ui64,{S})->()
+%ok=arith.constant true'''
+# The explicit repeat body cannot reuse its enclosing SSA name in the parser.
+repeat = repeat.replace('^loop(%i:ui64,%s:', '^loop(%i:ui64,%service:').replace('@sample(%s)', '@sample(%service)')
+repeated_source = small(repeat, args=f"%n:ui64,%s:{S}", types=f"ui64,{S}",
+                        declarations=helper_draw + helper_send)
+repeated_req = requirement([0], 1, [("apply_11_sample_call_draw", "apply_13_delivery_call_coin")])
+repeated_view = analyze(repeated_source, repeated_req)
+repeated_graph = repeated_view["graph"]
+assert len(repeated_graph["definitions"]) == 4
+assert len(repeated_graph["draws"]) == 1
+assert len(repeated_graph["draws"][0]["iteration_coordinates"]) == 1
+assert len(repeated_graph["draws"][0]["context"]) == 2
+assert root(repeated_view)["may_stop"]  # count/maximum is checked, even at zero
+assert dependencies(repeated_view, root(repeated_view)["stops"])[0]["port"] == 0
+# Tampering with a child transfer or a coordinate template cannot be hidden by
+# preserving the independent selector strings or source digests.
+for mutation in (
+    lambda v: v["graph"]["draws"][0].update(iteration_coordinates=[]),
+    lambda v: v["graph"]["definitions"][1].update(pending={"input": "any", "output": "query"}),
+    lambda v: v["graph"]["definitions"][2].update(result_origins=[{"kind": "unknown"}]),
+):
+    changed = copy.deepcopy(repeated_view)
+    mutation(changed)
+    report_path.write_text(json.dumps(changed))
+    commands.run([compiler, "protocol-check-public-coin", source_path,
+                  requirement_path, report_path], refuses="public-coin-report")
+
+# An actual checked Merkle realization selects opening-request transport and
+# appends a shape input. Neither a source label nor dependency alone grants it.
+realized_source = '''
+#K = #protocol.oracle_kind<"table", [!algebra.field<"koala-bear.ext4-binomial3">]>
+!F = !algebra.field<"koala-bear.ext4-binomial3">
+!D = !algebra.field_vector<"koala-bear.ext4-binomial3">
+!H = !protocol.oracle<#K>
+!S = !protocol.service_ref<"random.koala-bear.ext4-binomial3/0">
+module { "protocol.module"() ({
+ "protocol.func"() ({^entry(%data:!D,%anchor:!H,%s:!S):
+  %h="protocol.oracle_input"(%data,%anchor) {holder="P",receivers=["V"],shape_bounds={rows=8:ui64}} : (!D,!H)->!H
+  %q="protocol.query"(%s) {owner="V",method="draw",site="draw"} : (!S)->!F
+  %d=protocol.exchange %q {sender="V",receiver="P",site="coin"} : !F
+  %zero="data.index"() {value=0:ui64} : ()->ui64
+  %a="protocol.oracle_query"(%h,%zero) {owner="V",site="read"} : (!H,ui64)->!F
+  %ok=algebra.field_equal %a,%a : (!F,!F)->i1
+  "protocol.return"(%ok) : (i1)->()
+ }) {sym_name="main",function_type=(!D,!H,!S)->i1,roles=["P","V"],input_roles=[["P"],["V"],["V"]],output_roles=[["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+'''
+merkle = {"format": "zkc.oracle-selection/0", "roots": {"kind": "uniform", "table": {
+    "scheme": "rows.merkle-keccak256.koala-bear.ext4-binomial3/0",
+    "grouping": "individual", "order": "natural"}},
+    "order": "after-final-draw", "authentication": "atomic-blocks"}
+merkle_flags = ("--oracle-realization=" + json.dumps(merkle),)
+realized_req = {**requirement([1, 3], 2, [("draw", "coin")], "P", "V"), "subject": "realized"}
+realized_view = checked("realized", realized_source, realized_req, *merkle_flags)
+assert realized_view["analyzed_ir_sha256"] == realized_view["realized_ir_sha256"]
+assert realized_view["source_ir_sha256"] != realized_view["realized_ir_sha256"]
+assert realized_view["oracle_policy"] == merkle
+assert len(realized_view["interface"]["inputs"]) == 4
+assert any(a["data_exchange"] for d in realized_view["graph"]["definitions"] for a in d["actions"])
+analyze(realized_source, {**realized_req, "bound_inputs": [1]}, "public-coin-unbound-input", policy=merkle_flags)
+analyze(realized_source, {**realized_req, "bound_inputs": [3]}, "public-coin-unbound-input", policy=merkle_flags)
+# An independently changed policy refuses; the candidate's policy is not input.
+source_path.write_text(realized_source)
+requirement_path.write_text(json.dumps(realized_req))
+report_path.write_text(json.dumps(realized_view))
+commands.run([compiler, "protocol-check-public-coin", source_path, requirement_path,
+              report_path, *merkle_flags])
+for mutation in (
+    lambda v: v.update(oracle_selection={}),
+    lambda v: v.update(realization={}),
+    lambda v: next(a for d in v["graph"]["definitions"] for a in d["actions"] if a["data_exchange"]).update(data_exchange=False),
+):
+    changed = copy.deepcopy(realized_view)
+    mutation(changed)
+    report_path.write_text(json.dumps(changed))
+    commands.run([compiler, "protocol-check-public-coin", source_path, requirement_path,
+                  report_path, *merkle_flags], refuses="public-coin-report")
+# A forged opening-request-looking source label stays an ordinary send.
+forged = small(query() + delivery() + delivery("x", "oracle_opening_request") + receive + compare)
+analyze(forged, shadow_req, "public-coin-dependence")
+
+# Independent requests stay visible even when they select no actual roots.
+for flags in (("--no-calculation-batching",), merkle_flags):
+    selected = checked("independent_policy", shadow, shadow_req, *flags)
+    report_path.write_text(json.dumps(selected))
+    commands.run([compiler, "protocol-check-public-coin", source_path, requirement_path,
+                  report_path], refuses="public-coin-report")
