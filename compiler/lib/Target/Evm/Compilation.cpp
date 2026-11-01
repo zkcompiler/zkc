@@ -16,11 +16,29 @@
 using namespace llvm;
 using namespace mlir;
 namespace zkc {
+StringRef evmForkName(EvmFork fork) {
+  switch (fork) {
+  case EvmFork::Cancun:
+    return "cancun";
+  case EvmFork::Prague:
+    return "prague";
+  }
+  return {};
+}
+Expected<EvmFork> parseEvmFork(StringRef name) {
+  if (name == "cancun")
+    return EvmFork::Cancun;
+  if (name == "prague")
+    return EvmFork::Prague;
+  return error("evm.fork", "expected cancun or prague");
+}
 struct EvmCompilation::Storage {
   MLIRContext context;
   OwningOpRef<ModuleOp> module;
   std::string yul, source, digest;
   json::Value abi = nullptr, descriptor = nullptr, manifest = nullptr;
+  json::Value options = nullptr;
+  EvmFork fork = EvmFork::Cancun;
   NativeProofPolicy policy;
   EvmLimits limits;
   std::unique_ptr<CheckedEndpoint> endpoint;
@@ -50,6 +68,8 @@ const NativeProofPolicy &EvmCompilation::policy() const {
   return storage->policy;
 }
 const EvmLimits &EvmCompilation::limits() const { return storage->limits; }
+EvmFork EvmCompilation::fork() const { return storage->fork; }
+const json::Value &EvmCompilation::options() const { return storage->options; }
 StringRef EvmCompilation::sourceSha256() const { return storage->digest; }
 StringRef EvmCompilation::sourceBytes() const { return storage->source; }
 OwningOpRef<ModuleOp> EvmCompilation::targetSnapshot() const {
@@ -108,8 +128,14 @@ json::Value standardAbi() {
 Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
                                          const EvmOptions &options,
                                          const DialectRegistry &registry) {
+  if (evmForkName(options.fork).empty())
+    return error("evm.fork", "expected cancun or prague");
   if (auto error = validateLimits(options.limits))
     return std::move(error);
+  auto oracleSelection =
+      protocol::encodeOracleRealizationPolicy(options.oracleSelection);
+  if (!oracleSelection)
+    return oracleSelection.takeError();
   if (bytes.empty() || bytes.size() > 16 * 1024 * 1024 ||
       filename.size() > 4096 || !mlirNestingWithinLimit(bytes))
     return error("evm.source-limit",
@@ -127,12 +153,17 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
   if (!source || failed(admitStage(source->getOperation())))
     return error("evm.source", diagnostics);
   auto policy = options.policy;
-  if (policy.suite != "hash-chain.keccak256.bls12-381.fr64be/0" ||
+  if ((!policy.suite.empty() &&
+       policy.suite != "hash-chain.keccak256.bls12-381.fr64be/0") ||
       !policy.construction.empty() ||
+      (policy.suite.empty() &&
+       (!policy.services.empty() || !policy.draws.empty() ||
+        !policy.gates.empty())) ||
       policy.format != protocol::ProofFormat::Native)
     return error("evm.construction",
-                 "EVM requires the managed framed Keccak Fr64BE construction");
-  if (policy.draws.empty()) {
+                 "EVM requires framed transport with no transcript or the "
+                 "managed Keccak Fr64BE construction");
+  if (!policy.suite.empty() && policy.draws.empty()) {
     auto selected = selectNativeProofDraws(*source, policy, options.mathematics,
                                            options.oracleSelection);
     if (!selected)
@@ -155,7 +186,8 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
     return error("evm.descriptor",
                  "common construction returned an invalid descriptor");
   PassManager pipeline(&result->context);
-  buildClosedExecutionPipeline(pipeline, false, false, options.mathematics);
+  buildClosedExecutionPipeline(pipeline, options.simplify, false,
+                               options.mathematics);
   if (failed(pipeline.run(*constructed->module)))
     return error("evm.closed-execution", diagnostics);
   auto endpoint = closeEndpoint(*constructed->module, policy.validator);
@@ -179,12 +211,26 @@ Expected<EvmCompilation> compileEvmProof(StringRef bytes, StringRef filename,
   result->abi = standardAbi();
   result->policy = std::move(policy);
   result->limits = options.limits;
+  result->fork = options.fork;
+  result->options = json::Object{
+      {"simplify", options.simplify},
+      {"release_storage", false},
+      {"finite_bulk", options.mathematics.finiteBulk},
+      {"fuse_vector_reductions", options.mathematics.vectorReductionFusion},
+      {"fuse_collect_fold", options.mathematics.collectFoldFusion},
+      {"calculation_batching", options.mathematics.calculationBatching},
+      {"numerical_expressions", options.mathematics.numericalExpressions ==
+                                        NumericalExpressionMode::PreferNative
+                                    ? "prefer-native"
+                                    : "vector-only"},
+      {"oracle_realization", std::move(*oracleSelection)}};
   result->endpoint = std::make_unique<CheckedEndpoint>(std::move(*endpoint));
   result->realization = std::move(constructed->realization);
   result->manifest = json::Object{
       {"format", "zkc.evm-source-manifest/0"},
       {"target", "evm"},
-      {"fork", "cancun"},
+      {"fork", evmForkName(options.fork)},
+      {"options", result->options},
       {"source_sha256", result->digest},
       {"source_format", "zkc.original-mlir/0"},
       {"entry", result->policy.entry},
@@ -220,7 +266,8 @@ compileEvmEntry(const language::CheckedOriginal &original,
 json::Value encodeEvmCompilation(const EvmCompilation &compiled) {
   return json::Object{{"format", "zkc.evm-source/0"},
                       {"target", "evm"},
-                      {"fork", "cancun"},
+                      {"fork", evmForkName(compiled.fork())},
+                      {"options", compiled.options()},
                       {"yul", compiled.yul()},
                       {"abi", compiled.abi()},
                       {"descriptor", compiled.descriptor()},

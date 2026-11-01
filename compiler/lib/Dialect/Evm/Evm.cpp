@@ -1,5 +1,9 @@
 #include "zkc/Dialect/Evm/Evm.h"
 #include "mlir/IR/Builders.h"
+#include "zkc/Contracts/NativeOrigin.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
+#include "zkc/Target/Evm/Layout.h"
+#include "zkc/Target/Evm/Wire.h"
 #include "llvm/ADT/StringSwitch.h"
 
 using namespace mlir;
@@ -37,7 +41,8 @@ LogicalResult WordOp::verify() {
   return success();
 }
 ArrayRef<StringRef> CheckedOp::getAttributeNames() {
-  static StringRef names[] = {"opcode"};
+  static StringRef names[] = {"opcode",      "value_type", "value",  "values",
+                              "alternative", "payload",    "origin", "site"};
   return names;
 }
 void CheckedOp::build(OpBuilder &b, OperationState &s, TypeRange types,
@@ -67,7 +72,16 @@ bool isCheckedOpcode(StringRef name) {
       .Cases({"index.wrapping_add", "index.wrapping_sub", "index.bit_and",
               "index.logical_shift_right"},
              true)
-      .Cases({"field.inverse", "field.pow", "field.div"}, true)
+      .Cases({"field.constant", "field.add", "field.sub", "field.mul",
+              "field.neg", "field.equal", "field.from_index", "field.embed",
+              "field.inverse", "field.pow", "field.div"},
+             true)
+      .Case("vector.constant", true)
+      .Cases({"sequence.empty", "sequence.append", "sequence.length",
+              "sequence.get", "sequence.alloc", "sequence.set"},
+             true)
+      .Cases({"variant.make", "variant.tag", "variant.get"}, true)
+      .Cases({"bytes.empty", "bytes.length", "bytes.get", "bytes.append"}, true)
       .Cases({"vector.empty", "vector.length", "vector.append"}, true)
       .Cases({"vector.split", "vector.sum", "vector.alloc"}, true)
       .Cases({"vector.get", "vector.set", "vector.equal"}, true)
@@ -83,92 +97,267 @@ bool isCheckedOpcode(StringRef name) {
       .Default(false);
 }
 LogicalResult CheckedOp::verify() {
-  if (!isCheckedOpcode(opcode()))
-    return emitOpError("[evm.opcode] unsupported checked opcode: ") << opcode();
+  StringRef code = opcode();
+  if (!isCheckedOpcode(code))
+    return emitOpError("[evm.opcode] unsupported checked opcode: ") << code;
   auto valid = [](Type t) {
-    return t.isInteger(1) || t.isInteger(32) || t.isInteger(64) ||
-           t.isInteger(256);
+    auto integer = dyn_cast<IntegerType>(t);
+    return integer && integer.isSignless() &&
+           llvm::is_contained({1u, 32u, 64u, 256u}, integer.getWidth());
   };
   if (!llvm::all_of(getOperandTypes(), valid) ||
       !llvm::all_of(getResultTypes(), valid))
     return emitOpError(
         "[evm.type] checked operands/results must be EVM integers");
-  auto signature = [&](ArrayRef<unsigned> inputs, ArrayRef<unsigned> outputs) {
-    if (inputs.size() != getNumOperands() || outputs.size() != getNumResults())
-      return false;
-    for (auto [type, width] : llvm::zip(getOperandTypes(), inputs))
-      if (!type.isInteger(width))
-        return false;
-    for (auto [type, width] : llvm::zip(getResultTypes(), outputs))
-      if (!type.isInteger(width))
-        return false;
-    return true;
+  for (auto attribute : (*this)->getAttrs()) {
+    StringRef name = attribute.getName().strref();
+    bool allowed =
+        name == "opcode" || (name == "site" && code == "source.stop") ||
+        (name == "value_type" &&
+         (code.starts_with("field.") || code.starts_with("vector.") ||
+          code.starts_with("sequence.") || code.starts_with("variant.") ||
+          code.starts_with("bytes.") || code.starts_with("indices.") ||
+          code == "proof.receive" || code.starts_with("transcript."))) ||
+        (name == "value" && code == "field.constant") ||
+        (name == "values" && code == "vector.constant") ||
+        (name == "alternative" &&
+         (code == "variant.make" || code == "variant.get")) ||
+        (name == "payload" && code == "variant.get") ||
+        (name == "origin" && code.starts_with("transcript."));
+    if (!allowed)
+      return emitOpError("[evm.attributes] unexpected checked attribute: ")
+             << name;
+  }
+  auto i1 = IntegerType::get(getContext(), 1);
+  auto i64 = IntegerType::get(getContext(), 64);
+  auto i256 = IntegerType::get(getContext(), 256);
+  auto signature = [&](TypeRange inputs, TypeRange outputs) {
+    return llvm::equal(inputs, getOperandTypes()) &&
+           llvm::equal(outputs, getResultTypes());
   };
-  StringRef code = opcode();
+  NativeLayouts layouts(*getContext());
+  auto type = (*this)->getAttrOfType<TypeAttr>("value_type");
+  bool typed = code.starts_with("field.") || code.starts_with("vector.") ||
+               code.starts_with("sequence.") || code.starts_with("variant.") ||
+               code.starts_with("bytes.") || code.starts_with("indices.") ||
+               code == "proof.receive" || code.starts_with("transcript.");
+  const ValueLayout *layout = nullptr;
+  if (typed) {
+    if (!type)
+      return emitOpError("[evm.value-type] requires exact native value_type");
+    auto result = layouts.get(type.getValue());
+    if (!result) {
+      llvm::consumeError(result.takeError());
+      return emitOpError("[evm.value-type] unsupported complete native layout");
+    }
+    layout = *result;
+  }
+  auto literalValid = [&](Attribute attribute, algebra::FieldType expected) {
+    auto literal = dyn_cast_or_null<algebra::FieldLiteralAttr>(attribute);
+    return literal && literal.getField() == expected &&
+           succeeded(algebra::FieldLiteralAttr::verify(
+               [&] { return emitOpError(); }, expected, literal.getValue()));
+  };
+  auto number = [&](StringRef name) -> std::optional<uint32_t> {
+    auto value = (*this)->getAttrOfType<IntegerAttr>(name);
+    if (!value || !value.getType().isInteger(32))
+      return std::nullopt;
+    return uint32_t(value.getUInt());
+  };
   bool correct = false;
-  if (code.starts_with("index.")) {
+  if (code.starts_with("field.")) {
+    auto scalar = dyn_cast<algebra::FieldType>(type.getValue());
+    if (!scalar)
+      return emitOpError("[evm.value-type] field operation requires FieldType");
+    if (code == "field.constant") {
+      if (!literalValid((*this)->getAttr("value"), scalar))
+        return emitOpError(
+            "[evm.literal] requires exact canonical field literal");
+      correct = signature({}, layout->lanes);
+    } else if (code == "field.from_index")
+      correct = signature({i64}, layout->lanes);
+    else if (code == "field.embed") {
+      auto facts = layouts.field(scalar);
+      if (!facts) {
+        llvm::consumeError(facts.takeError());
+        return failure();
+      }
+      correct = (*facts)->degree > 1 && signature({i256}, layout->lanes);
+    } else if (code == "field.inverse" || code == "field.neg")
+      correct = signature(layout->lanes, layout->lanes);
+    else {
+      SmallVector<Type> inputs(layout->lanes.begin(), layout->lanes.end());
+      if (code == "field.pow")
+        inputs.push_back(i64);
+      else
+        llvm::append_range(inputs, layout->lanes);
+      correct =
+          signature(inputs, code == "field.equal" ? TypeRange(i1)
+                                                  : TypeRange(layout->lanes));
+    }
+  } else if (code.starts_with("vector.") || code.starts_with("sequence.") ||
+             code.starts_with("indices.") || code.starts_with("bytes.")) {
+    bool coefficients = code.starts_with("vector.");
+    bool bytes = code.starts_with("bytes.");
+    bool indices = code.starts_with("indices.");
+    if (!layout->collection ||
+        (coefficients && layout->collection->storage !=
+                             CollectionLayout::Storage::FieldCoefficients) ||
+        (bytes && layout->kind != ValueLayout::Kind::Bytes) ||
+        (indices && layout->kind != ValueLayout::Kind::Indices) ||
+        (!coefficients && !bytes && !indices &&
+         layout->collection->storage != CollectionLayout::Storage::LaneCells))
+      return emitOpError("[evm.value-type] incorrect collection family");
+    SmallVector<Type> element{i64};
+    if (!bytes) {
+      auto child = layouts.get(layout->collection->element);
+      if (!child) {
+        llvm::consumeError(child.takeError());
+        return failure();
+      }
+      element.assign((*child)->lanes.begin(), (*child)->lanes.end());
+    }
+    StringRef action = code.split('.').second;
+    if (action == "constant") {
+      auto values = (*this)->getAttrOfType<ArrayAttr>("values");
+      auto scalar = dyn_cast<algebra::FieldType>(layout->collection->element);
+      if (!values || !scalar || !llvm::all_of(values, [&](Attribute a) {
+            return literalValid(a, scalar);
+          }))
+        return emitOpError("[evm.literal] requires exact collection literals");
+      correct = signature({}, layout->lanes);
+      if (auto array = dyn_cast<data::FieldArrayType>(type.getValue()))
+        correct &= values.size() == array.getLength();
+    } else if (action == "empty") {
+      correct = signature({}, layout->lanes);
+      if (auto array = dyn_cast<data::FieldArrayType>(type.getValue()))
+        correct &= array.getLength() == 0;
+      if (auto fixed = dyn_cast<data::FixedVectorType>(type.getValue()))
+        correct &= fixed.getLength() == 0;
+    } else if (action == "length")
+      correct = signature(layout->lanes, {i64});
+    else if (action == "alloc")
+      correct = signature({i64}, {i64});
+    else if (action == "get")
+      correct = signature({i64, i64, i64}, element);
+    else if (action == "sum")
+      correct = coefficients && signature(layout->lanes, element);
+    else if (action == "equal")
+      correct = signature({i64, i64, i64, i64}, {i1});
+    else if (action == "split")
+      correct = layout->kind == ValueLayout::Kind::FieldVector &&
+                signature(layout->lanes, {i64, i64, i64, i64});
+    else {
+      SmallVector<Type> inputs{i64, i64};
+      if (action == "set")
+        inputs.push_back(i64);
+      llvm::append_range(inputs, element);
+      correct = action == "set" ? signature(inputs, {})
+                                : signature(inputs, layout->lanes);
+      if (action == "append" &&
+          isa<data::FieldArrayType, data::FixedVectorType>(type.getValue()))
+        correct = false;
+    }
+  } else if (code.starts_with("variant.")) {
+    auto variant = dyn_cast<data::VariantType>(type.getValue());
+    if (!variant)
+      return emitOpError("[evm.value-type] requires complete VariantType");
+    if (code == "variant.tag")
+      correct = signature({i64}, {i64});
+    else {
+      auto alternative = number("alternative");
+      if (!alternative || *alternative >= variant.getAlternatives().size())
+        return emitOpError("[evm.alternative] invalid alternative index");
+      if (code == "variant.make") {
+        auto payload = layouts.payload(variant, *alternative);
+        if (!payload) {
+          llvm::consumeError(payload.takeError());
+          return failure();
+        }
+        correct = signature(payload->lanes, {i64});
+      } else {
+        auto index = number("payload");
+        auto payload = variant.getAlternatives()[*alternative].getPayload();
+        if (!index || *index >= payload.size())
+          return emitOpError("[evm.payload] invalid payload index");
+        auto child = layouts.get(payload[*index]);
+        if (!child) {
+          llvm::consumeError(child.takeError());
+          return failure();
+        }
+        correct = signature({i64}, (*child)->lanes);
+      }
+    }
+  } else if (code == "proof.receive" || code == "transcript.observe") {
+    if (auto error = verifyWireType(layouts, type.getValue())) {
+      llvm::consumeError(std::move(error));
+      return emitOpError("[evm.wire-type] complete native message permission "
+                         "and codec required");
+    }
+    if (code == "proof.receive")
+      correct = signature({}, layout->lanes);
+    else {
+      SmallVector<Type> inputs{i64, i64};
+      llvm::append_range(inputs, layout->lanes);
+      inputs.append({i64, i64});
+      correct = signature(inputs, {i64});
+    }
+  } else if (code == "transcript.challenge") {
+    auto scalar = dyn_cast<algebra::FieldType>(type.getValue());
+    correct = scalar && scalar.getDomain() == "bls12-381.fr" &&
+              signature({i64, i64, i64, i64}, {i256, i64});
+  } else if (code.starts_with("index.")) {
     if (code == "index.pow2")
-      correct = signature({64}, {64});
+      correct = signature({i64}, {i64});
     else if (code == "index.power_of_two")
-      correct = signature({64, 64}, {1});
+      correct = signature({i64, i64}, {i1});
     else
-      correct = signature({64, 64}, {64});
-  } else if (code == "field.inverse")
-    correct = signature({256}, {256});
-  else if (code == "field.pow")
-    correct = signature({256, 64}, {256});
-  else if (code == "field.div")
-    correct = signature({256, 256}, {256});
-  else if (code == "vector.empty" || code == "indices.empty")
-    correct = signature({}, {64, 64});
-  else if (code == "vector.length")
-    correct = signature({64, 64}, {64});
-  else if (code == "vector.append")
-    correct = signature({64, 64, 256}, {64, 64});
-  else if (code == "indices.append")
-    correct = signature({64, 64, 64}, {64, 64});
-  else if (code == "vector.split")
-    correct = signature({64, 64}, {64, 64, 64, 64});
-  else if (code == "vector.sum")
-    correct = signature({64, 64}, {256});
-  else if (code == "vector.alloc")
-    correct = signature({64}, {64});
-  else if (code == "vector.get")
-    correct = signature({64, 64, 64}, {256});
-  else if (code == "vector.set")
-    correct = signature({64, 64, 64, 256}, {});
-  else if (code == "vector.equal")
-    correct = signature({64, 64, 64, 64}, {1});
-  else if (code == "scope.root" || code == "scope.current")
-    correct = signature({}, {64});
+      correct = signature({i64, i64}, {i64});
+  } else if (code == "scope.root" || code == "scope.current")
+    correct = signature({}, {i64});
   else if (code == "scope.enter")
-    correct = signature({64, 64}, {64});
+    correct = signature({i64, i64}, {i64});
   else if (code == "scope.exit")
-    correct = signature({64, 64}, {64}) || signature({64, 64}, {});
+    correct = signature({i64, i64}, {i64}) || signature({i64, i64}, {});
   else if (code == "scope.check" || code == "transfer.check" ||
            code == "transfer.release")
-    correct = signature({64}, {});
+    correct = signature({i64}, {});
   else if (code == "transfer.make")
-    correct = signature({64}, {64});
+    correct = signature({i64}, {i64});
   else if (code == "transfer.accept" || code == "loop.bound" ||
            code == "range.check" || code == "range.admit")
-    correct = signature({64, 64}, {});
-  else if (code == "proof.receive")
-    correct = signature({}, {256});
+    correct = signature({i64, i64}, {});
   else if (code == "source.stop")
-    correct = signature({}, {}) || signature({1}, {});
-  else if (code == "transcript.observe")
-    correct = signature({64, 64, 256, 64, 64}, {64});
-  else if (code == "transcript.challenge")
-    correct = signature({64, 64, 64, 64}, {256, 64});
+    correct = signature({}, {}) || signature({i1}, {});
   if (!correct)
     return emitOpError("[evm.signature] incorrect operands/results for ")
            << code;
+  if (code == "vector.set" || code == "sequence.set") {
+    auto allocation = getOperand(0).getDefiningOp<CheckedOp>();
+    StringRef expected =
+        code == "vector.set" ? "vector.alloc" : "sequence.alloc";
+    if (!allocation || allocation.opcode() != expected ||
+        allocation->getAttr("value_type") != type ||
+        allocation->getNumOperands() != 1 ||
+        allocation.getOperand(0) != getOperand(1))
+      return emitOpError("[evm.construction] stores require their exact fresh "
+                         "construction buffer and count");
+  }
+
+  if (auto site = (*this)->getAttr("site");
+      site &&
+      (!isa<StringAttr>(site) || cast<StringAttr>(site).getValue().empty()))
+    return emitOpError("[evm.site] requires nonempty source stop site");
   if (code.starts_with("transcript.")) {
     auto origin = (*this)->getAttrOfType<StringAttr>("origin");
     if (!origin || origin.getValue().empty())
       return emitOpError(
           "[evm.origin] transition requires an occurrence template");
+    auto occurrence = protocol::decodeNativeOriginTemplate(origin.getValue());
+    if (!occurrence) {
+      llvm::consumeError(occurrence.takeError());
+      return emitOpError("[evm.origin] invalid exact occurrence template");
+    }
   }
   return success();
 }

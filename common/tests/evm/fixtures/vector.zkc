@@ -1,0 +1,25 @@
+module vectors;
+domain F = field("koala-bear.ext4-binomial3");
+type Vector<E:Field> = builtin("vector", E);
+fn empty<E:Field>()->Vector<E> = primitive("vector.empty");
+fn append<E:Field>(values:Vector<E>,value:E)->Vector<E> = primitive("vector.append");
+fn get<E:Field>(values:Vector<E>,i:index)->E = primitive("vector.get");
+fn length<E:Field>(values:Vector<E>)->index = primitive("vector.length");
+fn split<E:Field>(values:Vector<E>)->(Vector<E>,Vector<E>) = primitive("vector.split");
+fn sum<E:Field>(values:Vector<E>)->E = primitive("vector.sum");
+fn equal<E:Field>(left:Vector<E>,right:Vector<E>)->bool = primitive("vector.equal");
+fn work(values:Vector<F>)->(F,bool,index) {
+  let (left,right)=split(values);
+  let built=append(append(empty<F>(),get(values,0)),get(values,1));
+  return(sum(values)+sum(left)+sum(right)+get(built,1),equal(built,values),length(right));
+}
+protocol Check roles(P,V)(values:Vector<F>@P,expected:F@V,same:bool@V,count:index@V)
+  ->(extra:(F,bool,index)@V,accepted:bool@V) {
+  let received=send P->V(values);
+  let actual@V=work(received);
+  let (value,is_same,size)=actual;
+  return(extra=(value,is_same,size),accepted=value==expected&&is_same==same&&size==count);
+}
+proof Proof=Check {
+  prover P; verifier V; public{expected,same,count}; accept accepted; construction authored;
+}

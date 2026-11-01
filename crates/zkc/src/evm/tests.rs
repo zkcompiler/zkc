@@ -55,7 +55,9 @@ pub(crate) fn source_record(entry: &str, body: &str) -> Value {
         [],
         "{\"authentication\":\"per-query\",\"format\":\"zkc.oracle-selection/0\",\"order\":\"unrestricted\",\"roots\":{\"entries\":[],\"kind\":\"exact\"}}"
     ]);
-    let manifest = json!({"format":"zkc.evm-source-manifest/0", "target":"evm", "fork":"cancun",
+    let mut options = serde_json::to_value(Options::default().compile).unwrap();
+    options["numerical_expressions"] = json!("prefer-native");
+    let manifest = json!({"format":"zkc.evm-source-manifest/0", "target":"evm", "fork":"cancun", "options":options,
         "entry":entry, "capture":identity, "installation":identity,
         "original":identity, "source_sha256":identity, "source_format":"zkc.original-mlir/0",
         "producer":"P", "validator":"V", "compiler":identity,
@@ -64,7 +66,7 @@ pub(crate) fn source_record(entry: &str, body: &str) -> Value {
     json!({"format":"zkc.evm-source/0", "target":"evm", "fork":"cancun",
         "yul":body, "abi":super::calldata::abi(),"entry":entry,
         "capture":identity,"installation":identity,"original":identity,"source_sha256":identity,
-        "manifest":manifest,"limits":limits,"descriptor":descriptor,"policy":policy})
+        "manifest":manifest,"limits":limits,"descriptor":descriptor,"policy":policy,"options":options})
 }
 fn source(body: &str) -> Source {
     Source::capture(&serde_json::to_vec(&source_record("Main::Proof", body)).unwrap()).unwrap()
@@ -141,6 +143,231 @@ fn source_transport_is_explicit_and_bounded() {
 }
 
 #[test]
+fn forks_are_exact_typed_and_repeated() {
+    let valid = source_record("Main::Proof", "fork control");
+    for fork in [EvmFork::Cancun, EvmFork::Prague] {
+        let mut record = valid.clone();
+        record["fork"] = json!(fork);
+        record["manifest"]["fork"] = json!(fork);
+        let source = Source::capture(&encode(&record).unwrap()).unwrap();
+        assert_eq!(source.fork(), fork);
+        assert_eq!(solc::input(&source)["settings"]["evmVersion"], json!(fork));
+        record["manifest"]["fork"] = json!(if fork == EvmFork::Cancun {
+            EvmFork::Prague
+        } else {
+            EvmFork::Cancun
+        });
+        assert_eq!(
+            Source::capture(&encode(&record).unwrap()).unwrap_err().0,
+            "evm-source-identity"
+        );
+    }
+    for wrong in [
+        json!(""),
+        json!("Cancun"),
+        json!("Prague"),
+        json!("shanghai"),
+        json!(0),
+        Value::Null,
+        json!({"prague": null}),
+        json!(["cancun"]),
+    ] {
+        assert!(serde_json::from_value::<EvmFork>(wrong.clone()).is_err());
+        let mut record = valid.clone();
+        record["fork"] = wrong.clone();
+        record["manifest"]["fork"] = wrong;
+        assert_eq!(
+            Source::capture(&encode(&record).unwrap()).unwrap_err().0,
+            "evm-fork"
+        );
+    }
+    assert_eq!("Cancun".parse::<EvmFork>().unwrap_err().0, "evm-fork");
+}
+
+#[test]
+fn zero_transcript_requires_the_complete_native_policy() {
+    let mut valid = source_record("Main::Proof", "zero transcript control");
+    valid["policy"][5] = json!("");
+    valid["policy"][6] = json!([]);
+    valid["policy"][8] = json!([]);
+    valid["descriptor"][1] = valid["policy"].clone();
+    valid["descriptor"][3].as_array_mut().unwrap().remove(0);
+    assert!(Source::capture(&encode(&valid).unwrap()).is_ok());
+    for (slot, value) in [
+        (5, json!("unknown/0")),
+        (6, json!(["1"])),
+        (8, json!([["query", "delivery"]])),
+        (9, json!("zkc.raw/0")),
+        (10, json!("custom")),
+        (11, json!([["query", "1"]])),
+    ] {
+        let mut wrong = valid.clone();
+        wrong["policy"][slot] = value;
+        wrong["descriptor"][1] = wrong["policy"].clone();
+        assert_eq!(
+            Source::capture(&encode(&wrong).unwrap()).unwrap_err().0,
+            "evm-source-descriptor",
+            "slot {slot}"
+        );
+    }
+    let mut wrong = valid.clone();
+    wrong["descriptor"][1][5] = json!("hash-chain.keccak256.bls12-381.fr64be/0");
+    assert_eq!(
+        Source::capture(&encode(&wrong).unwrap()).unwrap_err().0,
+        "evm-source-descriptor"
+    );
+    for slot in [3, 7] {
+        let mut wrong = valid.clone();
+        wrong["descriptor"][slot] = if slot == 3 {
+            json!([["query", "origin"]])
+        } else {
+            json!([["origin", "witness", "index", "native.index/0"]])
+        };
+        assert_eq!(
+            Source::capture(&encode(&wrong).unwrap()).unwrap_err().0,
+            "evm-source-descriptor"
+        );
+    }
+}
+
+#[test]
+fn requested_and_normalized_oracle_selections_must_agree() {
+    use crate::entry::{OracleRoots, OracleSelection};
+    let requested = OracleSelection::parse(
+        r#"{
+        "format":"zkc.oracle-selection/0",
+        "roots":{"kind":"uniform","table":{"scheme":"selected/0",
+            "grouping":"antipodal-pairs","order":"bit-reversed"}},
+        "order":"after-final-draw","authentication":"atomic-blocks"
+    }"#,
+    )
+    .unwrap();
+    let normalized = OracleSelection::parse(
+        r#"{
+        "format":"zkc.oracle-selection/0",
+        "roots":{"kind":"exact","entries":[{"entry":"main","path":[0],
+            "scheme":"selected/0","grouping":"antipodal-pairs","order":"bit-reversed"}]},
+        "order":"after-final-draw","authentication":"atomic-blocks"
+    }"#,
+    )
+    .unwrap();
+    let capture = |requested: &OracleSelection, normalized: &Value| {
+        let mut record = source_record("Main::Proof", "oracle selection control");
+        record["options"]["oracle_realization"] = json!(requested);
+        record["manifest"]["options"] = record["options"].clone();
+        record["descriptor"][8] = json!(serde_json::to_string(normalized).unwrap());
+        Source::capture(&encode(&record).unwrap())
+    };
+    let exact = json!(normalized);
+    assert!(capture(&requested, &exact).is_ok());
+    assert!(capture(&normalized, &exact).is_ok());
+    for (path, wrong) in [
+        ("/order", json!("unrestricted")),
+        ("/authentication", json!("per-query")),
+        ("/roots/entries/0/scheme", json!("different/0")),
+        ("/roots/entries/0/grouping", json!("individual")),
+        ("/roots/entries/0/order", json!("natural")),
+    ] {
+        let mut changed = exact.clone();
+        *changed.pointer_mut(path).unwrap() = wrong;
+        assert_eq!(
+            capture(&requested, &changed).unwrap_err().0,
+            "evm-source-descriptor",
+            "{path}"
+        );
+    }
+    let mut different_inventory = exact.clone();
+    different_inventory["roots"]["entries"][0]["path"] = json!([1]);
+    assert_eq!(
+        capture(&normalized, &different_inventory).unwrap_err().0,
+        "evm-source-descriptor"
+    );
+    let empty = OracleSelection {
+        roots: OracleRoots::Exact(vec![]),
+        ..normalized
+    };
+    assert_eq!(
+        capture(&empty, &exact).unwrap_err().0,
+        "evm-source-descriptor"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn fork_and_effective_options_seal_artifact_identity_and_reuse() {
+    let directory = tempfile::tempdir().unwrap();
+    let tool = fake_tool(directory.path(), RESPONSE);
+    let source = source("same Yul across forks and options");
+    let pin = "10".repeat(32);
+    let artifact = tool
+        .compile(Build {
+            source: &source,
+            compiler_sha256: &pin,
+            reuse: None,
+        })
+        .unwrap();
+    let mut record = source.metadata().clone();
+    record["fork"] = json!(EvmFork::Prague);
+    record["manifest"]["fork"] = json!(EvmFork::Prague);
+    let mut selections = vec![record];
+    for field in [
+        "simplify",
+        "finite_bulk",
+        "fuse_vector_reductions",
+        "fuse_collect_fold",
+        "calculation_batching",
+    ] {
+        let mut record = source.metadata().clone();
+        let flipped = !record["options"][field].as_bool().unwrap();
+        record["options"][field] = json!(flipped);
+        record["manifest"]["options"][field] = json!(flipped);
+        selections.push(record);
+    }
+    for record in selections {
+        let selected = Source::capture(&encode(&record).unwrap()).unwrap();
+        assert_eq!(
+            tool.compile(Build {
+                source: &selected,
+                compiler_sha256: &pin,
+                reuse: Some(&artifact)
+            })
+            .unwrap_err()
+            .0,
+            "evm-cache-key"
+        );
+        let rebuilt = tool
+            .compile(Build {
+                source: &selected,
+                compiler_sha256: &pin,
+                reuse: None,
+            })
+            .unwrap();
+        assert_ne!(rebuilt.identity(), artifact.identity());
+        assert_eq!(rebuilt.manifest().evm_version, selected.fork());
+        assert_eq!(
+            tool.compile(Build {
+                source: &selected,
+                compiler_sha256: &pin,
+                reuse: Some(&rebuilt)
+            })
+            .unwrap()
+            .identity(),
+            rebuilt.identity()
+        );
+    }
+    let mut wrong = artifact.manifest().clone();
+    wrong.evm_version = EvmFork::Prague;
+    let output = directory.path().join("artifact");
+    artifact.publish(&output).unwrap();
+    let bytes = encode(&wrong).unwrap();
+    fs::write(output.join("manifest.json"), &bytes).unwrap();
+    assert_eq!(
+        Artifact::capture(&output, &hash(&bytes)).unwrap_err().0,
+        "evm-artifact-settings"
+    );
+}
+
+#[test]
 fn source_objects_require_every_current_field_and_refuse_unknown_fields() {
     let valid = source_record("Main::Proof", "object \"Verifier\" { code {} }");
     let bytes = serde_json::to_vec_pretty(&valid).unwrap();
@@ -150,6 +377,8 @@ fn source_objects_require_every_current_field_and_refuse_unknown_fields() {
         ("/manifest", "evm-source-format"),
         ("/limits", "evm-source-limits"),
         ("/manifest/limits", "evm-source-limits"),
+        ("/options", "evm-source-options"),
+        ("/manifest/options", "evm-source-options"),
     ] {
         let fields = valid.pointer(path).unwrap().as_object().unwrap();
         for field in fields.keys() {
@@ -209,6 +438,10 @@ fn source_duplicate_keys_refuse_even_when_equal_escaped_or_nested() {
         "/manifest",
         "/limits",
         "/manifest/limits",
+        "/options",
+        "/manifest/options",
+        "/options/oracle_realization",
+        "/manifest/options/oracle_realization",
         "/abi/0",
         "/abi/0/inputs/0",
         "/abi/0/outputs/0",
@@ -239,7 +472,6 @@ fn source_formats_digests_and_repeated_metadata_are_checked_at_capture() {
     for path in [
         "/format",
         "/target",
-        "/fork",
         "/yul",
         "/entry",
         "/manifest/format",
@@ -264,6 +496,7 @@ fn source_formats_digests_and_repeated_metadata_are_checked_at_capture() {
         "entry",
         "target",
         "fork",
+        "options",
         "limits",
     ] {
         let mut changed = valid.clone();
@@ -271,6 +504,11 @@ fn source_formats_digests_and_repeated_metadata_are_checked_at_capture() {
             "entry" => json!("Other::Proof"),
             "target" => json!("cpu"),
             "fork" => json!("other"),
+            "options" => {
+                let mut options = valid["options"].clone();
+                options["simplify"] = json!(false);
+                options
+            }
             "limits" => {
                 let mut limits = valid["limits"].clone();
                 limits["rounds"] = json!(9);

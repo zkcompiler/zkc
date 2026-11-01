@@ -296,6 +296,13 @@ layouts for EVM and later targets. Standard bufferization can inform private
 storage lowering, but its [alias and ownership analysis](https://mlir.llvm.org/docs/Bufferization/)
 does not establish zkc scope custody or observable resource refusal.
 
+The [EVM target](../spec/targets/evm.md) reads the same Data collection types
+through its native layout owner. Its word lanes, coefficient buffers and exact
+wire permissions are target-specific interpretations of those logical values.
+They do not consume CPU numerical plans or inherit the CPU tile limits. Keep
+installed field facts and complete logical layouts common; keep storage,
+instruction selection and reached resource accounting with each target.
+
 A selected installation restricts independently known contracts throughout
 compiler selection and final validation, including defaults, explicit choices,
 fallback, conversions, table relayout, nested layouts and codecs. Candidate

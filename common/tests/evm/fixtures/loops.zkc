@@ -1,0 +1,24 @@
+module capture_bindings;
+domain F = field("bls12-381.fr");
+
+protocol Copies roles(A,B)(a:F@(A,B),b:F@(A,B),rounds:index@(A,B))
+  ->(accepted:bool@B) {
+  let mut accepted @B = true;
+  for _ in 0..rounds roles(A,B) max 3 {
+    let left=send A->B(a);
+    let right=send A->B(b);
+    accepted=accepted&&left==a&&right==b;
+  }
+  return accepted;
+}
+
+protocol Check roles(P,V)(value:F@(P,V),rounds:index@(P,V))
+  ->(accepted:bool@V) {
+  let accepted=Copies roles(P,V)(value,value,rounds);
+  return accepted;
+}
+
+proof Proof=Check {
+  prover P; verifier V; public{value,rounds};
+  accept accepted; construction authored;
+}

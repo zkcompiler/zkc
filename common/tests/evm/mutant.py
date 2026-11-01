@@ -26,7 +26,7 @@ def omit_final_observation(request, transitions):
     changed = copy.deepcopy(request)
     source = next(iter(changed["sources"].values()))
     yul = source["content"]
-    needle = "let next := keccak256(p, mload(0x1c0))"
+    needle = "let next := keccak256(p, size)"
     if yul.count(needle) != 1 or 'verbatim_1i_0o(hex"50", next)' not in yul:
         raise ValueError("generated observation helper changed; re-review the mutation")
     # Observe debits first. c0 is the checked generation, 0x120 the chain state,
@@ -34,7 +34,7 @@ def omit_final_observation(request, transitions):
     # messages, request blocks/feedback and the final origin remain unchanged.
     replacement = ("let next := mload(0x120)\n"
                    f"  if iszero(and(eq(mload(0xc0), {transitions}), eq(label, 0x76616c7565))) {{\n"
-                   "    next := keccak256(p, mload(0x1c0))\n"
+                   "    next := keccak256(p, size)\n"
                    "  }")
     source["content"] = yul.replace(needle, replacement)
     return changed
@@ -54,15 +54,15 @@ def main():
         raise ValueError("expected a completed native/reference fixture")
     calldata = encode_verify([bytes.fromhex(v) for v in fixture["public"]],
                              bytes.fromhex(fixture["context"]), bytes.fromhex(fixture["proof"]))
+    request = json.loads(args.solc_input.read_text())
     original_artifact = {"creation": bytecode(args.creation, args.bytecode_format),
-                         "runtime": bytecode(args.runtime, args.bytecode_format)}
+                         "runtime": bytecode(args.runtime, args.bytecode_format), "request": request}
     original = execute(args.runner, original_artifact, calldata, args.gas)
     if original["phase"] != "runtime" or original["status"] != "return":
         raise AssertionError(f"release baseline did not execute: {original}")
     if original["output"] != int(reference["decision"]).to_bytes(32, "big").hex():
         raise AssertionError("release baseline differs from native decision")
     check_trace(original["trace"], reference["trace"])
-    request = json.loads(args.solc_input.read_text())
     # An unrelated request must not be relabeled as the production baseline.
     recompiled = compile_request(args.solc, request)
     if any(recompiled[key] != original_artifact[key] for key in ("creation", "runtime")):

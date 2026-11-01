@@ -1,0 +1,9 @@
+module envelopes;
+domain Rows=commitment("rows.merkle-keccak256.koala-bear.ext4-binomial3/0");
+type Root=builtin("commitment",Rows);
+type Path=builtin("proof",Rows);
+protocol Relay roles(P,V)(root:Root@P,path:Path@P)->(root:Root@V,path:Path@V,accepted:bool@V){
+ let received=send P->V((root,path));
+ return(root=received.0,path=received.1,accepted=true);
+}
+proof Proof=Relay{prover P;verifier V;public{};accept accepted;construction authored;}

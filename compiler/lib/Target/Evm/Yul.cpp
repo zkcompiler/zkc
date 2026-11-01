@@ -1,15 +1,20 @@
+#include "Arithmetic.h"
 #include "Runtime.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Parser/Parser.h"
 #include "zkc/Contracts/NativeOrigin.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
-#include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/BindingTypes.h"
 #include "zkc/Dialect/Evm/Evm.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Support/LogicalTree.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Target/Evm/Target.h"
+#include "zkc/Target/Evm/Wire.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/SHA256.h"
@@ -27,7 +32,8 @@ public:
   Exporter(ModuleOp module, StringRef original, const json::Value &descriptor,
            const NativeProofPolicy &policy, const EvmLimits &limits)
       : module(module), original(original), descriptor(descriptor),
-        policy(policy), limits(limits), out(text) {}
+        policy(policy), limits(limits), layouts(*module.getContext()),
+        arithmetic(layouts, limits), wire(layouts, limits), out(text) {}
   Expected<std::string> run();
 
 private:
@@ -36,6 +42,9 @@ private:
   const json::Value &descriptor;
   const NativeProofPolicy &policy;
   const EvmLimits &limits;
+  NativeLayouts layouts;
+  detail::Arithmetic arithmetic;
+  WireGenerator wire;
   std::string text;
   raw_string_ostream out;
   llvm::DenseMap<Value, std::string> names;
@@ -184,20 +193,34 @@ LogicalResult Exporter::transcript(CheckedOp op) {
   out << "let end := evm_tree_header(add(occurrence, " << prefix->size()
       << "), 1, " << depth << ")\n";
   out << "for { let i := 0 } lt(i, " << depth << ") { i := add(i, 1) } {\n"
-      << "let coordinate := evm_vector_get(" << name(coordinateData) << ", "
-      << name(coordinateLength) << ", i)\n"
+      << "evm_memory(" << name(coordinateData) << ", mul("
+      << name(coordinateLength) << ", 32))\n"
+      << "let coordinate := mload(add(" << name(coordinateData)
+      << ", mul(i, 32)))\n"
       << "end := evm_tree_natural(end, coordinate)\n}\n";
   copyStatic(*suffix, "end");
   out << "end := add(end, " << suffix->size() << ")\n"
       << "if gt(sub(end, occurrence), 4096) { evm_resource(9) }\n";
-  out << list(op.getResults()) << " := evm_"
-      << (op.opcode() == "transcript.observe" ? "transcript_observe"
-                                              : "transcript_challenge")
-      << "(" << name(op.getOperand(0)) << ", " << name(op.getOperand(1));
-  if (op.opcode() == "transcript.observe")
-    out << ", " << name(op.getOperand(2));
-  out << ", occurrence, sub(end, occurrence))\n"
-      << "mstore(0x40, occurrence)\n}\n";
+  if (op.opcode() == "transcript.observe") {
+    auto type = op->getAttrOfType<TypeAttr>("value_type");
+    if (!type)
+      return refuse(op, "observation lacks exact native value_type");
+    auto encoder = wire.encoder(type.getValue());
+    if (!encoder) {
+      auto reason = toString(encoder.takeError());
+      return refuse(op, reason);
+    }
+    out << "let frame, frameLength := " << *encoder << "("
+        << list(op.getOperands().slice(2, coordinates - 2)) << ")\n";
+    out << list(op.getResults()) << " := evm_transcript_observe("
+        << name(op.getOperand(0)) << ", " << name(op.getOperand(1))
+        << ", frame, frameLength, occurrence, sub(end, occurrence))\n";
+  } else {
+    out << list(op.getResults()) << " := evm_transcript_challenge("
+        << name(op.getOperand(0)) << ", " << name(op.getOperand(1))
+        << ", occurrence, sub(end, occurrence))\n";
+  }
+  out << "mstore(0x40, occurrence)\n}\n";
   return success();
 }
 
@@ -236,13 +259,28 @@ LogicalResult Exporter::operation(Operation *op) {
       out << "\n";
       return success();
     }
-    std::string helper = opcode.str();
-    std::replace(helper.begin(), helper.end(), '.', '_');
+    Expected<std::string> helper =
+        zkc::error("evm.yul", "unsupported checked helper");
+    if (opcode.starts_with("field.") || opcode.starts_with("vector."))
+      helper = arithmetic.helper(checked);
+    else if (opcode == "proof.receive" || opcode.starts_with("sequence.") ||
+             opcode.starts_with("variant.") || opcode.starts_with("bytes."))
+      helper = wire.operation(checked);
+    else {
+      // checkTarget has admitted the exact closed ordinary Runtime inventory.
+      std::string ordinary = opcode.str();
+      std::replace(ordinary.begin(), ordinary.end(), '.', '_');
+      helper = "evm_" + ordinary;
+    }
+    if (!helper) {
+      auto reason = toString(helper.takeError());
+      return refuse(op, reason);
+    }
     if (op->getNumResults())
       out << list(op->getResults()) << " := ";
     else if (opcode == "scope.exit")
       out << "pop(";
-    out << "evm_" << helper << "(" << list(op->getOperands()) << ")";
+    out << *helper << "(" << list(op->getOperands()) << ")";
     if (!op->getNumResults() && opcode == "scope.exit")
       out << ")";
     out << "\n";
@@ -469,12 +507,23 @@ LogicalResult Exporter::function(func::FuncOp function) {
 }
 
 LogicalResult Exporter::outer(func::FuncOp function) {
+  const bool hasTranscript = !policy.suite.empty();
+  if ((hasTranscript &&
+       policy.suite != "hash-chain.keccak256.bls12-381.fr64be/0") ||
+      !policy.construction.empty() ||
+      (!hasTranscript && (!policy.services.empty() || !policy.draws.empty() ||
+                          !policy.gates.empty())) ||
+      policy.format != protocol::ProofFormat::Native)
+    return refuse(function, "unsupported checked construction policy");
   const auto *descriptorRows = descriptor.getAsArray();
   const auto *rows = descriptorRows && descriptorRows->size() == 9
                          ? (*descriptorRows)[4].getAsArray()
                          : nullptr;
-  if (!rows)
-    return refuse(function, "invalid logical public schema");
+  if (!rows ||
+      (*descriptorRows)[0].getAsString() != "zkc.native-proof-descriptor/0" ||
+      (*descriptorRows)[1] != encodeNativeProofPolicy(policy))
+    return refuse(function,
+                  "invalid descriptor or checked construction policy");
   auto logicalAttr = function->getAttrOfType<TypeAttr>("evm.logical_type");
   auto logical = logicalAttr ? dyn_cast<FunctionType>(logicalAttr.getValue())
                              : FunctionType();
@@ -485,70 +534,102 @@ LogicalResult Exporter::outer(func::FuncOp function) {
     auto capability = dyn_cast<runtime::CapabilityType>(type);
     return capability &&
            capability.getKind() == runtime::CapabilityKind::Transcript &&
+           capability.getIdentity() ==
+               "hash-chain.keccak256.bls12-381.fr64be/0" &&
            capability.getIdentity() == policy.suite;
   };
-  // Admit copyable data explicitly. Scope, transfer and other affine values
-  // must never disappear into unused return lanes at this boundary.
-  auto lanes = [&](Type type, SmallVectorImpl<Type> &expanded) -> StringRef {
-    auto i64 = IntegerType::get(module.getContext(), 64);
-    if (type.isSignlessInteger(1)) {
-      expanded.push_back(type);
-      return "bool";
+  // Descriptors are a neutral publication boundary. Compare the complete
+  // checked source public rows (role, original port, nominal type and codec),
+  // then compare native endpoint types through the same export adapter.
+  auto originalModule =
+      parseSourceString<ModuleOp>(original, module.getContext());
+  if (!originalModule)
+    return refuse(function, "invalid original source at descriptor boundary");
+  protocol_ir::MathematicalOp originalEntry;
+  originalModule->walk([&](protocol_ir::MathematicalOp candidate) {
+    if (candidate.getSymName() == policy.entry)
+      originalEntry = candidate;
+  });
+  if (!originalEntry)
+    return refuse(function, "descriptor entry is absent from original source");
+  json::Array expectedRows;
+  for (auto [port, type] :
+       enumerate(originalEntry.getFunctionType().getInputs())) {
+    auto roles = cast<ArrayAttr>(originalEntry.getInputRoles()[port]);
+    bool publicPort = llvm::any_of(roles, [&](Attribute role) {
+      return cast<StringAttr>(role).getValue() == policy.validator;
+    });
+    if (!publicPort || isa<protocol_ir::ServiceReferenceType>(type))
+      continue;
+    auto neutral = protocol::encodeBoundType(type, false);
+    if (!neutral) {
+      consumeError(neutral.takeError());
+      return refuse(function, "cannot export complete source public type");
     }
-    if (type.isUnsignedInteger(64)) {
-      expanded.push_back(i64);
-      return "index";
-    }
-    if (auto field = dyn_cast<algebra::FieldType>(type)) {
-      if (field.getDomain() == "bls12-381.fr") {
-        expanded.push_back(IntegerType::get(module.getContext(), 256));
-        return "field:bls12-381.fr";
-      }
-    }
-    if (auto vector = dyn_cast<data::FieldVectorType>(type)) {
-      if (vector.getDomain() == "bls12-381.fr") {
-        expanded.append({i64, i64});
-        return "vector:bls12-381.fr";
-      }
-    }
-    if (isa<data::IndicesType>(type)) {
-      expanded.append({i64, i64});
-      return "indices";
-    }
-    return {};
-  };
-  bool hasTranscript = logical.getNumInputs() == rows->size() + 1 &&
-                       transcriptType(logical.getInputs().back());
+    auto codec =
+        protocol::nativeDataFrame(*neutral) ? StringRef("zkc.native-data/0")
+        : neutral->kind == "field_array" ? StringRef("zkc.native-field-array/0")
+                                         : protocol::defaultCodec(*neutral);
+    expectedRows.push_back(json::Array{policy.validator, std::to_string(port),
+                                       neutral->spelling(), codec});
+  }
+  if (expectedRows != *rows)
+    return refuse(function,
+                  "public rows differ from complete original source interface");
   if (logical.getNumInputs() != rows->size() + unsigned(hasTranscript) ||
       logical.getNumResults() != ports.size() + unsigned(hasTranscript))
     return refuse(function, "unconsumed endpoint inputs or affine results");
+  if (hasTranscript && (!transcriptType(logical.getInputs().back()) ||
+                        !transcriptType(logical.getResults().back())))
+    return refuse(function, "endpoint differs from managed transcript policy");
   SmallVector<Type> inputs, outputs;
   for (auto [i, row] : enumerate(*rows)) {
     auto *port = row.getAsArray();
-    auto type = lanes(logical.getInput(i), inputs);
-    if (!port || port->size() != 4 || type.empty() ||
-        (*port)[2].getAsString() != type)
+    Type type = logical.getInput(i);
+    auto layout = layouts.get(type);
+    if (!layout) {
+      consumeError(layout.takeError());
+      return refuse(function, "unsupported public layout");
+    }
+    auto neutral = protocol::encodeBoundType(type, false);
+    if (!neutral) {
+      consumeError(neutral.takeError());
+      return refuse(function, "cannot export complete endpoint public type");
+    }
+    if (!port || port->size() != 4 ||
+        (*port)[2].getAsString() != neutral->spelling())
       return refuse(function, "public schema differs from endpoint signature");
+    append_range(inputs, (*layout)->lanes);
   }
   std::optional<unsigned> acceptance;
   for (auto [i, port] : enumerate(ports)) {
     auto source = dyn_cast<IntegerAttr>(port);
     if (!source || source.getInt() < 0)
       return refuse(function, "invalid checked output projection");
+    if (source.getUInt() >= originalEntry.getFunctionType().getNumResults() ||
+        originalEntry.getFunctionType().getResult(source.getUInt()) !=
+            logical.getResult(i))
+      return refuse(function,
+                    "output projection differs from original source types");
+    if (i && cast<IntegerAttr>(ports[i - 1]).getUInt() >= source.getUInt())
+      return refuse(function,
+                    "output projection is not in canonical source order");
     if (source.getUInt() == policy.acceptance) {
       if (acceptance || !logical.getResult(i).isSignlessInteger(1))
         return refuse(function, "selected acceptance is not one Boolean");
       acceptance = outputs.size();
     }
-    if (lanes(logical.getResult(i), outputs).empty())
+    auto layout = layouts.get(logical.getResult(i));
+    if (!layout) {
+      consumeError(layout.takeError());
       return refuse(function, "unsupported or affine data result");
+    }
+    append_range(outputs, (*layout)->lanes);
   }
   if (!acceptance)
     return refuse(function, "selected acceptance is absent from endpoint");
   unsigned generation = outputs.size();
   if (hasTranscript) {
-    if (!transcriptType(logical.getResults().back()))
-      return refuse(function, "unconsumed managed transcript result");
     inputs.push_back(IntegerType::get(module.getContext(), 64));
     outputs.push_back(IntegerType::get(module.getContext(), 64));
   }
@@ -595,14 +676,17 @@ LogicalResult Exporter::outer(func::FuncOp function) {
     auto *row = value.getAsArray();
     if (!row || row->size() != 4 || !(*row)[2].getAsString())
       return refuse(function, "invalid public row");
-    StringRef type = *(*row)[2].getAsString();
-    StringRef decoder = type == "field:bls12-381.fr"    ? "evm_field_decode"
-                        : type == "vector:bls12-381.fr" ? "evm_vector_decode"
-                        : type == "index"               ? "evm_index_decode"
-                        : type == "bool"                ? "evm_bool_decode"
-                                                        : "";
-    if (decoder.empty())
-      return refuse(function, "unsupported public logical type");
+    Type type = logical.getInput(index);
+    auto decoder = wire.decoder(type);
+    if (!decoder) {
+      auto reason = toString(decoder.takeError());
+      return refuse(function, reason);
+    }
+    auto layout = layouts.get(type);
+    if (!layout) {
+      consumeError(layout.takeError());
+      return refuse(function, "unsupported public layout");
+    }
     auto rowPrefix =
         encodeLogicalTree(json::Array{(*row)[0], (*row)[1], (*row)[2]});
     if (!rowPrefix) {
@@ -619,14 +703,16 @@ LogicalResult Exporter::outer(func::FuncOp function) {
         << "publicBytes := add(publicBytes, public_length_" << index << ")\n"
         << "if gt(publicBytes, " << limits.publicBytes
         << ") { evm_resource(11) }\n";
-    std::string a = "input_" + std::to_string(index);
-    out << "let " << a;
-    arguments.push_back(a);
-    if (type == "vector:bls12-381.fr") {
-      out << ", " << a << "_length";
-      arguments.push_back(a + "_length");
+    out << "let ";
+    for (unsigned lane = 0; lane < (*layout)->lanes.size(); ++lane) {
+      if (lane)
+        out << ", ";
+      std::string argument =
+          "input_" + std::to_string(index) + "_" + std::to_string(lane);
+      out << argument;
+      arguments.push_back(argument);
     }
-    out << " := " << decoder << "(public_" << index << ", public_length_"
+    out << " := " << *decoder << "(public_" << index << ", public_length_"
         << index << ")\n"
         << "if gt(add(sub(rootEnd, root), add(" << rowPrefix->size() + 9
         << ", mul(public_length_" << index << ", 2))), " << limits.rootBytes
@@ -654,40 +740,43 @@ LogicalResult Exporter::outer(func::FuncOp function) {
       << "if iszero(eq(mload(add(proof, 8)), binding)) { evm_decode(12) }\n"
       << "mstore(0x140, add(proof, 40)) mstore(0x160, add(proof, "
          "proofLength))\n"
-      << "mstore(0x180, evm_alloc(8192))\n"
       << "let rootScope := evm_alloc(64) mstore(rootScope, 0)\n"
-      << "mstore(0x80, rootScope) mstore(0xa0, rootScope) mstore(0x1e0, "
-         "rootScope)\n"
-      << "mstore(0xc0, 0) mstore(0xe0, 0) mstore(0x100, "
-      << limits.transcriptTransitions << ")\n";
-  // Bind the complete invocation tree, not just its SHA256 digest.
-  std::string bindPrefix = "zkc.hash-chain.bind/0";
-  bindPrefix.push_back('\0');
-  auto frame = [&](uint8_t tag, StringRef label, StringRef bytes) {
-    bindPrefix.push_back(tag);
+      << "mstore(0x80, rootScope) mstore(0x1e0, rootScope)\n";
+  if (hasTranscript) {
+    out << "mstore(0xa0, rootScope) mstore(0xc0, 0) mstore(0xe0, 0) "
+           "mstore(0x100, "
+        << limits.transcriptTransitions << ")\n";
+    // Bind the complete invocation tree, not just its SHA256 digest.
+    std::string bindPrefix = "zkc.hash-chain.bind/0";
+    bindPrefix.push_back('\0');
+    auto frame = [&](uint8_t tag, StringRef label, StringRef bytes) {
+      bindPrefix.push_back(tag);
+      for (int shift = 56; shift >= 0; shift -= 8)
+        bindPrefix.push_back(
+            static_cast<char>(uint64_t(label.size()) >> shift));
+      bindPrefix += label;
+      for (int shift = 56; shift >= 0; shift -= 8)
+        bindPrefix.push_back(
+            static_cast<char>(uint64_t(bytes.size()) >> shift));
+      bindPrefix += bytes;
+    };
+    frame(0, "domain", "zkc.artifact/0");
+    frame(0, "suite", policy.suite);
+    bindPrefix.push_back(1);
     for (int shift = 56; shift >= 0; shift -= 8)
-      bindPrefix.push_back(static_cast<char>(uint64_t(label.size()) >> shift));
-    bindPrefix += label;
-    for (int shift = 56; shift >= 0; shift -= 8)
-      bindPrefix.push_back(static_cast<char>(uint64_t(bytes.size()) >> shift));
-    bindPrefix += bytes;
-  };
-  frame(0, "domain", "zkc.artifact/0");
-  frame(0, "suite", policy.suite);
-  bindPrefix.push_back(1);
-  for (int shift = 56; shift >= 0; shift -= 8)
-    bindPrefix.push_back(static_cast<char>(uint64_t(7) >> shift));
-  bindPrefix += "binding";
-  out << "{\nlet input := evm_alloc(add(" << bindPrefix.size() + 8
-      << ", sub(rootEnd, root)))\n";
-  copyStatic(bindPrefix, "input");
-  out << "mstore(add(input, " << bindPrefix.size()
-      << "), shl(192, sub(rootEnd, root)))\n"
-      << "mcopy(add(input, " << bindPrefix.size() + 8
-      << "), root, sub(rootEnd, root))\n"
-      << "let boundState := keccak256(input, add(" << bindPrefix.size() + 8
-      << ", sub(rootEnd, root)))\nverbatim_1i_0o(hex\"50\", boundState)\n"
-      << "mstore(0x120, boundState)\nmstore(0x40, input)\n}\n";
+      bindPrefix.push_back(static_cast<char>(uint64_t(7) >> shift));
+    bindPrefix += "binding";
+    out << "{\nlet input := evm_alloc(add(" << bindPrefix.size() + 8
+        << ", sub(rootEnd, root)))\n";
+    copyStatic(bindPrefix, "input");
+    out << "mstore(add(input, " << bindPrefix.size()
+        << "), shl(192, sub(rootEnd, root)))\n"
+        << "mcopy(add(input, " << bindPrefix.size() + 8
+        << "), root, sub(rootEnd, root))\n"
+        << "let boundState := keccak256(input, add(" << bindPrefix.size() + 8
+        << ", sub(rootEnd, root)))\nverbatim_1i_0o(hex\"50\", boundState)\n"
+        << "mstore(0x120, boundState)\nmstore(0x40, input)\n}\n";
+  }
   if (hasTranscript)
     arguments.push_back("0"); // The actual internally issued generation.
   if (function.getNumArguments() != arguments.size())
@@ -711,7 +800,9 @@ LogicalResult Exporter::outer(func::FuncOp function) {
   if (hasTranscript)
     out << "if iszero(eq(" << results[generation]
         << ", mload(0xc0))) { evm_fault(5) }\n";
-  out << "if iszero(eq(mload(0xa0), rootScope)) { evm_fault(5) }\n"
+  if (hasTranscript)
+    out << "if iszero(eq(mload(0xa0), rootScope)) { evm_fault(5) }\n";
+  out << "if iszero(eq(mload(0x80), rootScope)) { evm_fault(5) }\n"
       << "mstore(0, " << results[*acceptance] << ") return(0, 32)\n";
   return success();
 }
@@ -743,6 +834,7 @@ Expected<std::string> Exporter::run() {
   for (auto function : module.getOps<func::FuncOp>())
     if (failed(this->function(function)))
       return zkc::error("evm.yul", "could not emit target function");
+  out << arithmetic.helpers() << wire.definitions();
   out << "}\n";
   for (const auto &item : data)
     out << "data \"" << item.name << "\" hex\"" << toHex(item.bytes, true)

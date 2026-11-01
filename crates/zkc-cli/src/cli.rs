@@ -75,6 +75,7 @@ Use inspect for API, placement and notation inventories.\nChecking does not exec
             Opt::new("--project=FILE"),
             Opt::new("--output=PATH"),
             Opt::new("--target=TARGET"),
+            Opt::new("--evm-version=FORK"),
             Opt::new("--solc=PATH"),
             Opt::new("--solc-sha256=PIN").hex(Some(32)),
             Opt::new("--reuse=EVM_DIRECTORY"),
@@ -89,6 +90,7 @@ Use inspect for API, placement and notation inventories.\nChecking does not exec
         description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.
 --target=cpu is the default. --target=evm requires --solc and --solc-sha256;
 it publishes a fresh verifier directory, defaulting to build/zkc/<entry-stem>.evm.
+--evm-version=cancun|prague selects the EVM deployment fork (default cancun).
 The report supplies the manifest SHA-256 for independent artifact authentication.
 --reuse and --reuse-sha256 reuse an authenticated EVM artifact only on an exact build match.
 Select generic runs with closed arguments, e.g. 'Schnorr<G>'.
@@ -434,6 +436,36 @@ mod tests {
     use super::*;
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|s| (*s).into()).collect()
+    }
+
+    #[test]
+    fn evm_version_is_unique_documented_and_requires_the_evm_target() {
+        let spec = command("compile").unwrap();
+        assert!(spec.help().contains("--evm-version=cancun|prague"));
+        assert!(spec.help().contains("default cancun"));
+        for fork in ["cancun", "prague"] {
+            let values = args(&["--target=evm", &format!("--evm-version={fork}")]);
+            assert_eq!(
+                spec.parse(&values).unwrap().value("--evm-version"),
+                Some(fork)
+            );
+            assert_eq!(
+                run("compile", &args(&[&format!("--evm-version={fork}")]))["code"],
+                "cli-usage"
+            );
+        }
+        assert!(
+            spec.parse(&args(&[
+                "--target=evm",
+                "--evm-version=cancun",
+                "--evm-version=prague"
+            ]))
+            .is_err()
+        );
+        assert_eq!(
+            run("check", &args(&["--evm-version=prague"]))["code"],
+            "cli-option"
+        );
     }
 
     #[test]

@@ -625,10 +625,12 @@ construction plans, including query handlers and record codecs, refuse with
 `native-proof-index-block`; source query-handler declarations for blocks refuse
 with `source.construction`. They do not gain the block contract from an annotation
 or a native base selector.
-Source-bound proof declarations currently select ungated blocks. Explicit gate
-selection uses an authenticated native deployment policy until the source
-interface represents that selection; a source-bound package cannot add gates
-absent from its declaration.
+Source-bound proof declarations select gates through checked labelled query
+paths in [proof declarations](../language/entries.md#proof-declarations).
+The source interface and native artifact binding retain those exact selections;
+a source-bound package cannot add gates absent from its declaration. The
+explicit native deployment API instead authenticates a selected policy and its
+complete artifact.
 
 The producer replaces the selected delivery receive with a typed bounded-search
 helper and an actual `protocol.send` of its returned witness. The verifier
