@@ -61,7 +61,7 @@ what actually landed. The completion criteria below belong inside those units.
 | Catalog and MLIR execution foundation | Landed native baseline: typed invocation, structured types, shared catalog, explicit admission and one default route. Preserve its contract and invalidation controls |
 | Virtual batching and FRI | Landed supported native profile: shared interaction analyses, checked dynamic virtual query blocks and one logical FRI component used by maintained STARK callers. Formal realization closure remains separate |
 | STARK reduction and checked construction | Implemented native profile: caller-owned DEEP adjustment and complete column inventory, phased common FRI, source-selected gates, shared verifier observations, actual-body binding checks and a quartic Keccak STARK client |
-| Represented execution | Implemented native profile under final validation: Data collection ownership, exact Residue/codec distinction, checked Arith/Vector/private-buffer candidates and actual CPU numerical-plan execution |
+| Represented execution | Implemented native profile: Data collection ownership, exact Residue/codec distinction, checked Arith/Vector/private-buffer candidates and actual CPU numerical-plan execution |
 | Constraints and semantic consumers | Next substantial PR: complete assignment-level redesign and consumer migration, with Clean ensembles and LLZK as acceptance clients, exact statement/witness maps, lookup/multiset and chronological-memory meaning, and actual commitment/terminal connections |
 
 The remaining units each contain their research, contract changes, implementation,

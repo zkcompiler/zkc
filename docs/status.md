@@ -1281,7 +1281,9 @@ CPU Call consumes the plan using packed resident kernels with exact-slot aliases
 and scalar tails. Extension/binary domains keep complete identities and select
 opaque providers. Old executable bare Ring parameters are refused.
 
-Focused default-selection, mutation and resource tests and compiled
-field/quotient-ring/group clients pass. Broad native and installed-target
-validation for this development snapshot remains in progress. These native
-readers do not add Lean correspondence or object-code/AOT coverage.
+Maintained checks exercise default selection, actual-candidate mutation,
+resource refusal and compiled field/quotient-ring/group clients. Lazy-context
+checks cover collection and pass dependencies; the installed IR client consumes
+a word candidate without the lowering or target libraries. The admitted storage
+profile is static, rank-one and pointwise. These native readers do not add Lean
+correspondence or object-code/AOT coverage.
