@@ -97,8 +97,8 @@ int main() {
             "hash primitive missing");
     require(coverage.getArray("transitions")->size() == 5,
             "root/start/commit/query/terminal coverage");
-    require(coverage.getArray("terminal_outside_query")->empty(),
-            "terminal observation missing");
+    require(coverage.getArray("terminal_outside_query")->size() == 1,
+            "terminal absorption is not a subsequent query");
   });
   auto explicitSource = mutate(program, "construction Derived<History>;",
                                "construction Derived<Explicit>;");
@@ -152,6 +152,9 @@ int main() {
         take(analyze(native, NativeProofBindingProfile::NativeHistory));
     require(report.getAsObject()->getString("profile") == "native-history",
             "native profile");
+    auto &coverage = *report.getAsObject()->getObject("coverage");
+    require(coverage.getArray("terminal_outside_query")->size() == 1,
+            "native terminal absorption is not a subsequent query");
   });
   cases.run("local handlers do not inherit installed history", [&] {
     refuses(analyze(program, NativeProofBindingProfile::NativeHistory),

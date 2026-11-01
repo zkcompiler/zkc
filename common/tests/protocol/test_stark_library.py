@@ -322,12 +322,16 @@ def generated(height, final, blowup, queries, configuration='Poseidon2', extra='
             .replace('domain Trace', extra + 'domain Trace'))
 
 
-@pytest.mark.parametrize(('sampling', 'difficulty'), [('Scalar', None), ('Block', None),
-                                                     ('Block', 0), ('Block', 4)])
-def test_direct_quartic_keccak_sampling(toolchain, journal, directory, sampling, difficulty):
-    bundle, public, trace = quadratic_air(8, 1)
+@pytest.mark.parametrize(('sampling', 'difficulty', 'height', 'final', 'blowup', 'queries'), [
+    ('Scalar', None, 8, 0, 2, 4), ('Block', None, 8, 0, 2, 4),
+    ('Block', 0, 8, 0, 2, 4), ('Block', 4, 8, 0, 2, 4),
+    ('Block', 4, 256, 1, 1, 100),
+])
+def test_direct_quartic_keccak_sampling(toolchain, journal, directory, sampling, difficulty,
+                                      height, final, blowup, queries):
+    bundle, public, trace = quadratic_air(height, 1)
     asset = journal.write(f'{sampling}-air.json', bundle)
-    source = generated(8, 0, 2, 4, configuration='Keccak256')
+    source = generated(height, final, blowup, queries, configuration='Keccak256')
     source = (source.replace(
         'use stark::configurations::koala_bear_octic::{Base, Extension};',
         'use stark::configurations::koala_bear_quartic::{Base, Quartic};')

@@ -223,8 +223,6 @@ public:
     auto graph = encoding.exportGraph();
     if (!graph)
       return graph.takeError();
-    if (history)
-      terminal.clear();
     return json::Value(
         json::Object{{"hash", primitive},
                      {"transitions", std::move(transitions)},
@@ -248,9 +246,19 @@ analyzeConstructionBinding(ModuleOp candidate, ArrayRef<Type> sourceInputs,
                   !plan->applications.empty())))
       return error("construction-binding-profile",
                    "native history has custom handlers");
+    json::Array terminal;
+    for (const auto &event : events) {
+      if (event.query)
+        terminal.clear();
+      else if (!llvm::any_of(policy.draws, [&](const auto &draw) {
+                 return draw.second == event.site;
+               }))
+        terminal.push_back(event.site);
+    }
     coverage = json::Object{{"suite", policy.suite},
                             {"root", "installed-host-invocation"},
-                            {"terminal_observations", "all-ordered-messages"}};
+                            {"terminal_observations", "all-ordered-messages"},
+                            {"terminal_outside_query", std::move(terminal)}};
   } else if (profile == NativeProofBindingProfile::CanonicalHashHistory ||
              profile == NativeProofBindingProfile::ExplicitInput) {
     bool history = profile == NativeProofBindingProfile::CanonicalHashHistory;

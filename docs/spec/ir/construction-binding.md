@@ -37,9 +37,9 @@ such as `x - x` is not a canonical encoding of `x`.
   complete canonical encoding supplied to the selected hash. Every public input
   and preceding prover message must occur in order. Equal encoded requests may
   intentionally share a challenge; no evolving-history judgment is attached.
-  Messages after the final query remain outside that query's coverage and are
-  reported as such. Original acceptance correspondence still applies; it does
-  not establish their cryptographic authentication.
+  Messages after the final query remain outside query coverage. Original
+  acceptance correspondence still applies; it does not establish their
+  cryptographic authentication.
 
 These are closed profiles, not recognition by library name. Unrecognized
 control, arithmetic, lossy encodings, mutable resources, custom codecs, nested
@@ -102,6 +102,15 @@ or an execution fallback. A report contains:
 Source/candidate and original-acceptance correspondence are checked facts, not
 external premises. Native history separately names installed host invocation
 initialization among its premises; local profiles do not inherit that binding.
+
+All three profiles report `terminal_outside_query`: non-delivery event templates
+following the final query template. Absorption into a final history state is
+not coverage by a subsequent query or an external authentication of that final
+state. For repeats this is a syntactic template suffix, not a claim that every
+template executes or an enumeration of dynamic last occurrences; the repeat
+coordinates and actual continuing trace determine those. History profiles check
+all reached transition templates, including that suffix. The explicit-input
+profile supports only a nonrepeated event sequence.
 
 Local coverage contains `hash`, ordered `transitions`, `encoding_graph` and
 `terminal_outside_query`. Transitions identify the actual digest expression,

@@ -60,6 +60,13 @@ repeats. Its dependency DAG and exact pending-challenge transfer are distinct:
 arithmetic dependence never establishes exact delivery. This is an internal
 borrowed analysis, not a new artifact format or an additional execution route.
 
+The separate [construction binding view](ir/construction-binding.md) checks
+actual encoding coverage and state successors after source/candidate
+correspondence. All profiles distinguish terminal event templates outside query
+coverage from observations absorbed into a final history state. Primitive/codec
+meaning, host initialization where applicable and cryptographic laws remain
+explicit premises; the report grants no execution authority or security theorem.
+
 ### Participant-loop capture bindings
 
 Participant `loop` captures in `zkc.program/0` are ordered
@@ -96,7 +103,7 @@ review loops for this unit. Formal interpretation is a later independent task.
 | Outcome, stop, budget meaning | [Native foundation](ir/native-foundation.md#outcomes-observations-and-budgets), IR / Execution | Typed invocation → compiler admission and native VM/providers | Typed route implemented; existing reached schedule, stops and budgets retained |
 | Native successor operands | [Execution branches](ir/execution.md#structural-branch-interfaces-and-admitted-execution), IR / Data and Exec | Native builders and source emitter → BranchOpInterface clients, source readers and correspondence checks | Independent forwarded segments implemented; generic CFG publication still requires semantic binding, custody and budget correspondence beyond structural formation |
 | Stage admission and target selection | [Stage pipelines](ir/native-foundation.md#stage-pipelines-and-target-selection), IR / Compiler | Shared stage builder and selected installation → API, textual pipeline, import and publication | Shared stage builders, typed selection and complete native admission; catalog availability does not establish an installed backend |
-| `zkc.program/0` | [Retained byte language](formats/foundation-interfaces.md#executable-byte-language), IR / Program | Compiler → independent C++/Rust readers and other target consumers | Byte meaning unchanged; structural native adapter and independent byte readers retained |
+| `zkc.program/0` | [Retained byte language](formats/foundation-interfaces.md#executable-byte-language), IR / Program | Compiler → independent C++/Rust readers and other target consumers | Logical execution retained with explicit local/parent loop-capture bindings; structural native adapter and independent byte readers use the current byte grammar |
 
 ### Current producers and consumers
 
