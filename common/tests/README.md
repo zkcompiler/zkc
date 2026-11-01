@@ -63,6 +63,18 @@ The `harness`, `sdk` and `integration` selections are disjoint. `checks.project`
 
 `python3 common/tests/run.py style` checks source formatting and syntax without project builds. `lint` adds C++ formatting and Clippy. Install checks live in `check_sdk.py` and `check_domain.py`; `check_install.py` exercises the packaged application outside the checkout. Domain checks prepare isolated base/domain builds or validate explicitly selected existing builds with `--skip-build`.
 
+### Fresh compiler pairing
+
+Four ignored Cargo tests pair the SDK with a freshly built compiler. They
+compile real sources through `language-package`, then admit and execute the
+actual packages: published common-input inventories, collection extents, Entry
+component families and typed Host children. Hand-built SDK fixtures cannot
+satisfy them. Build the compiler first, then run them explicitly:
+
+```sh
+ZKC_COMPILER_BIN=build/compiler cargo test --locked -p zkc --features cpu,files --test common_inventory_compiler --test entry_components -- --ignored
+```
+
 ### CPU worker confinement
 
 Portable Cargo checks cover numerical agreement under different worker counts.

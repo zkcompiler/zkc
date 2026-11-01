@@ -3,9 +3,10 @@
 This chapter specifies the accepted layout-language record contract. Source
 checking, native transport, recursive interfaces and SDK component admission
 are implemented for the supported fixed-roster profile. The strict recursive
-interface schema is published in the shared format. Coherent cross-branch
-integration and independent formal-reader compatibility remain landing gates;
-native support does not imply a formal interpretation of every record profile.
+interface schema is published in the shared format. Independent formal readers
+do not yet interpret these record profiles; the
+[formal reader status](../contracts.md#formal-reader-status) records the gap.
+Native support does not imply a formal interpretation of every record profile.
 Serialized changes belong to the existing
 [interface contract](../formats/entry.md) and [contract register](../contracts.md),
 with strict producers and readers updated together.
@@ -149,6 +150,7 @@ it does not follow from multi-role placement.
 Shared source and interface changes retain the existing development version `0`.
 Publish exact schemas and positive/mutated fixtures before changing producers,
 then update affected native readers and SDK adapters together. The Lean owner
-implements its reader, interpretation and connector. Reader compatibility and
-new formal proof completion are separate integration gates; this placement
-contract grants no new receipt status, claim stage or correspondence theorem.
+implements its reader, interpretation and connector against the landed
+contract. Reader compatibility and new formal proof completion are tracked in
+the register and do not hold native landing; this placement contract grants no
+new receipt status, claim stage or correspondence theorem.

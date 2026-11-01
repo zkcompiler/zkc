@@ -2,13 +2,26 @@
 #![cfg(all(feature = "cpu", feature = "files"))]
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
-use std::{path::Path, process::Command};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 use zkc::entry::{
     self, BindingPolicy, FunctionEntry, FunctionInterface, FunctionOptions, FunctionRequest,
     InvocationBinding, InvocationContext, Package, ProofContext, ProofEntry, ProofOperation,
     ProofOptions, ProofRequest, RoleInputs, RunContext, RunEntry, RunRequest,
 };
 
+/// The explicit pairing gate uses the compiler build selected by
+/// `ZKC_COMPILER_BIN`; a relative path is resolved from the checkout root.
+fn compiler() -> PathBuf {
+    let directory = std::env::var_os("ZKC_COMPILER_BIN")
+        .expect("set ZKC_COMPILER_BIN to the freshly built compiler directory");
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(directory)
+        .join("zkc-compile")
+}
 fn capture(bytes: &[u8]) -> Package {
     Package::capture(bytes, &Sha256::digest(bytes).into(), Package::MAX_BYTES).unwrap()
 }
@@ -53,12 +66,11 @@ fn proof_request(host: &ProofEntry, proving: bool) -> ProofRequest {
 }
 
 #[test]
-#[ignore = "requires a freshly built C++ compiler with Entry component publication"]
+#[ignore = "explicit gate: pairs the SDK with the fresh zkc-compile in ZKC_COMPILER_BIN"]
 fn fresh_cpp_packages_execute_complete_component_run_proof_and_host_families() {
-    let compiler = std::env::var_os("ZKC_ENTRY_COMPONENTS_COMPILER")
-        .expect("set ZKC_ENTRY_COMPONENTS_COMPILER to the exact fresh zkc-compile");
+    let compiler = compiler();
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/entry_components.zkc");
-    let proof_package = compile(Path::new(&compiler), &source, "Demo");
+    let proof_package = compile(&compiler, &source, "Demo");
     let host = ProofEntry::admit(
         proof_package,
         ProofOptions {
@@ -81,7 +93,7 @@ fn fresh_cpp_packages_execute_complete_component_run_proof_and_host_families() {
 
     // The default protocol Entry is a Host wrapper; pair its independently
     // authenticated joint child directly with the named Run API as well.
-    let wrapper = compile(Path::new(&compiler), &source, "Round");
+    let wrapper = compile(&compiler, &source, "Round");
     let artifact: Json = serde_json::from_str(wrapper.artifact()).unwrap();
     let child = artifact["deployments"][0]["package"].as_str().unwrap();
     let run = RunEntry::admit(
@@ -120,7 +132,7 @@ fn fresh_cpp_packages_execute_complete_component_run_proof_and_host_families() {
         .is_success()
     );
 
-    let package = compile(Path::new(&compiler), &source, "Produce");
+    let package = compile(&compiler, &source, "Produce");
     let children = FunctionInterface::deployment_interfaces(&package).unwrap();
     let authority = children
         .iter()
@@ -161,10 +173,9 @@ fn fresh_cpp_packages_execute_complete_component_run_proof_and_host_families() {
 }
 
 #[test]
-#[ignore = "requires a freshly built C++ compiler with typed Host child admission"]
+#[ignore = "explicit gate: pairs the SDK with the fresh zkc-compile in ZKC_COMPILER_BIN"]
 fn fresh_cpp_host_transports_home_constructed_sealed_witness() {
-    let compiler = std::env::var_os("ZKC_ENTRY_COMPONENTS_COMPILER")
-        .expect("set ZKC_ENTRY_COMPONENTS_COMPILER to the exact fresh zkc-compile");
+    let compiler = compiler();
     let source =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/entry_components_opaque.zkc");
 
@@ -189,7 +200,7 @@ fn fresh_cpp_host_transports_home_constructed_sealed_witness() {
         );
     }
 
-    let import = admit_function(compile(Path::new(&compiler), &source, "Import"));
+    let import = admit_function(compile(&compiler, &source, "Import"));
     let forged = entry::Value::Record([("value".into(), false.into())].into());
     let error = import
         .prepare(FunctionRequest {
@@ -203,9 +214,9 @@ fn fresh_cpp_host_transports_home_constructed_sealed_witness() {
         "{error}"
     );
 
-    let produce = admit_function(compile(Path::new(&compiler), &source, "Produce"));
-    let check = admit_function(compile(Path::new(&compiler), &source, "Check"));
-    let run = admit_function(compile(Path::new(&compiler), &source, "Run"));
+    let produce = admit_function(compile(&compiler, &source, "Produce"));
+    let check = admit_function(compile(&compiler, &source, "Check"));
+    let run = admit_function(compile(&compiler, &source, "Run"));
 
     // A verifier consumes no prover witness, even at the external SDK boundary.
     let artifact: Json = serde_json::from_str(check.package().artifact()).unwrap();

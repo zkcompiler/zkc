@@ -2,9 +2,23 @@
 #![cfg(all(feature = "cpu", feature = "files"))]
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, path::Path, process::Command};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    process::Command,
+};
 use zkc::entry::{self, Package, RoleInputs, RunEntry, RunRequest};
 
+/// The explicit pairing gate uses the compiler build selected by
+/// `ZKC_COMPILER_BIN`; a relative path is resolved from the checkout root.
+fn compiler() -> PathBuf {
+    let directory = std::env::var_os("ZKC_COMPILER_BIN")
+        .expect("set ZKC_COMPILER_BIN to the freshly built compiler directory");
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(directory)
+        .join("zkc-compile")
+}
 fn capture(bytes: &[u8]) -> Package {
     Package::capture(bytes, &Sha256::digest(bytes).into(), Package::MAX_BYTES).unwrap()
 }
@@ -68,13 +82,12 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 #[test]
-#[ignore = "requires freshly delivered compiler inventory derivation/comparison/publication"]
+#[ignore = "explicit gate: pairs the SDK with the fresh zkc-compile in ZKC_COMPILER_BIN"]
 fn fresh_compiler_common_inventories_bind_actual_named_cpu_runs() {
-    let compiler = std::env::var_os("ZKC_COMMON_INVENTORY_COMPILER")
-        .expect("set ZKC_COMMON_INVENTORY_COMPILER to the exact fresh zkc-compile");
+    let compiler = compiler();
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/common_inputs.zkc");
     for name in ["Boolean", "Tag", "Payload", "Permuted"] {
-        let package = compile(Path::new(&compiler), &source, name, "zkc-layout");
+        let package = compile(&compiler, &source, name, "zkc-layout");
         let artifact: Json = serde_json::from_str(package.artifact()).unwrap();
         let program = artifact["candidate"].as_str().unwrap();
         let run = RunEntry::admit(package.clone(), Default::default(), Default::default()).unwrap();
@@ -168,12 +181,11 @@ fn fresh_compiler_common_inventories_bind_actual_named_cpu_runs() {
 }
 
 #[test]
-#[ignore = "requires freshly delivered compiler extent inventory and native publication"]
+#[ignore = "explicit gate: pairs the SDK with the fresh zkc-compile in ZKC_COMPILER_BIN"]
 fn fresh_compiler_extent_inventory_executes_zero_one_and_multiple_iterations() {
-    let compiler = std::env::var_os("ZKC_COMMON_INVENTORY_COMPILER")
-        .expect("set ZKC_COMMON_INVENTORY_COMPILER to the exact fresh zkc-compile");
+    let compiler = compiler();
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/common_extents.zkc");
-    let package = compile(Path::new(&compiler), &source, "Extent", "zkc");
+    let package = compile(&compiler, &source, "Extent", "zkc");
     let artifact: Json = serde_json::from_str(package.artifact()).unwrap();
     for count in [0usize, 1, 3] {
         let run = RunEntry::admit(package.clone(), Default::default(), Default::default()).unwrap();

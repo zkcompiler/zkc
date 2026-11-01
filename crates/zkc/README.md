@@ -181,8 +181,10 @@ The authenticated compiler owns complete source/native inventory derivation and
 comparison. The SDK authenticates the owner-associated inventory, validates every
 retained Protocol's local inventory, and checks mapped types against the actual
 Program. It cannot establish source coverage by rehashing an attacker-edited
-package. Fresh compiler publication and paired execution remain integration gates
-until the producer delivers. Computing a digest of received context bytes supplies
+package. The explicit
+[fresh-compiler pairing gates](../../common/tests/README.md#fresh-compiler-pairing)
+check the producer's publication and paired execution. Computing a digest of
+received context bytes supplies
 no external pin authority. Generic native execution, joint reached-header
 agreement and independent pin trust retain separate contracts.
 

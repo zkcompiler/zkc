@@ -141,8 +141,9 @@ Resource restriction and sealing are independent: a linear or affine record
 may expose public observations while retaining its custody and home-only
 construction/destruction. The `sealed` Boolean records explicit source access
 restriction; it is not inferred from the resource tag. Candidate/source
-correspondence checks its exact authored value. The independent Lean consumer's
-adoption of this distinction is a separate compatibility gate.
+correspondence checks its exact authored value. The independent Lean consumer
+does not yet read this distinction; the
+[formal reader status](../contracts.md#formal-reader-status) records the gap.
 
 The terms use the existing typed origin grammar, including closed static
 arguments. Participant lists are derived summaries, not per-field authority.
@@ -160,10 +161,11 @@ with the other original-only contracts; provenance uses the retained original.
 
 The current independent Lean consumer profile reconstructs Boolean/index/field/group, tuple, bounded
 array, field-vector and recursively declared record layouts, then compares
-exact native types, offsets and role scopes. Recursive distributed schemas and
-the updated Entry schema require an independently maintained reader migration
-before landing; the following describes the existing narrower formal profile.
-It checks a single holder for each
+exact native types, offsets and role scopes. It does not yet read recursive
+distributed schemas or the updated Entry schema; the
+[formal reader status](../contracts.md#formal-reader-status) records that gap,
+and native publication does not wait for it. The following describes the
+existing narrower formal profile. It checks a single holder for each
 linear source port. A protocol with any retained clauses must associate every
 linear port with one relation, with consistent relation identity for repeated
 uses of the same closed type. The relation comes from actual checked
@@ -862,8 +864,8 @@ arguments, full ordered data operand and successful payload types, parameters,
 and Local ownership. Native scope/outcome ports belong to the admitted CFG;
 they are not logical value ports in this descriptor. Binding names confer no
 semantics by themselves. The exporter reuses the native logical catalogue for
-these ABI checks. The independent Lean consumer admits its documented subset;
-nominal resource-unit rows require its separate consumer migration. There is no
+these ABI checks. The independent Lean consumer admits its documented subset,
+which does not yet include nominal resource-unit rows. There is no
 reader for retired per-primitive MLIR operation names.
 
 Here `I` is index, `B` Boolean, `F` the binding's nominal field, and `V` an
