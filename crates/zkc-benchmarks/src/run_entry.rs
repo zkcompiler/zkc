@@ -303,13 +303,16 @@ mod tests {
         }
         let _cleanup = Cleanup(directory.clone());
         let boolean = json!({"kind":"boolean","type":"bool","identity":hash(b"bool"),
-            "custody":false,"constructible":true,"permissions":["Copy","Drop"],
+            "generated":null,"custody":0,"sealed":false,"roles":[],"element":null,
+            "constructible":true,"permissions":["Copy","Drop"],
             "fields":[],"alternatives":[],"leaves":["bool"]});
         let product = |name: &str, member: &str, child: &serde_json::Value| {
             json!({
             "kind":"record","type":name,"identity":hash(name.as_bytes()),
-            "custody":false,"constructible":true,"permissions":["Copy","Drop"],
-            "fields":[{"name":member,"offset":0,"schema":child}],"alternatives":[],"leaves":["bool"]})
+            "generated":null,"custody":0,"sealed":false,"roles":[],"element":null,
+            "constructible":true,"permissions":["Copy","Drop"],
+            "fields":[{"name":member,"offset":0,"public":true,"placement":null,"schema":child}],
+            "alternatives":[],"leaves":["bool"]})
         };
         let outputs = product("example::Outputs", "accepted", &boolean);
         let result = product("example::Result", "P", &outputs);

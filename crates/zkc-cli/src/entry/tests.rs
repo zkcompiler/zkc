@@ -10,8 +10,22 @@ fn hex(bytes: &[u8]) -> String {
 
 fn schema(kind: &str, ty: &str, leaves: &[&str]) -> Json {
     json!({"kind":kind,"identity":hex(&Sha256::digest(ty.as_bytes())),"type":ty,
-        "custody":false,"constructible":true,"permissions":["Copy","Drop"],
+        "generated":null,"custody":0,"sealed":false,"roles":[],"element":null,
+        "constructible":true,"permissions":["Copy","Drop"],
         "fields":[],"alternatives":[],"leaves":leaves})
+}
+fn field(name: &str, offset: usize, schema: &Json) -> Json {
+    json!({"name":name,"offset":offset,"public":true,"placement":null,"schema":schema})
+}
+/// A data-placed scalar port with one native component per placed role.
+fn port(name: &str, index: u32, roles: &[u32], schema: &Json) -> Json {
+    let components: Vec<Json> = roles
+        .iter()
+        .map(|role| json!({"path":[],"leaf":0,"role":role,"facet":"data","native":index}))
+        .collect();
+    json!({"name":name,"index":index,"native":[index],
+        "placement":{"kind":"data","roles":roles},"components":components,
+        "type":schema["type"],"schema":schema})
 }
 fn interface(schema: &Json, parameter: bool) -> Json {
     json!({"format":"zkc.language-interface/0","capture":hex(&Sha256::digest(b"capture")),
@@ -58,7 +72,7 @@ fn record(ty: &str, fields: &[(&str, Json)], constructible: bool) -> Json {
         fields
             .iter()
             .map(|(name, schema)| {
-                let field = json!({"name":name,"offset":offset,"schema":schema});
+                let field = field(name, offset, schema);
                 offset += schema["leaves"].as_array().unwrap().len();
                 field
             })
@@ -111,13 +125,13 @@ fn joint_package() -> Vec<u8> {
     let native = json!({"format":"zkc.run/0","candidate":program.to_string(),"entry":"pair",
         "roles":["role00000000","role00000001"],"steps":[
             {"role":0,"instruction":0,"anchor":null},{"role":1,"instruction":0,"anchor":null}]});
-    let port = json!({"name":"value","index":0,"native":[0],"roles":["P","V"],
-        "type":"bool","schema":boolean});
+    let port = port("value", 0, &[0, 1], &boolean);
     let child_interface = json!({"format":"zkc.language-interface/0","setups":[],"relations":[],
         "capture":hex(&Sha256::digest(b"capture")),"original":hex(&Sha256::digest(b"checked source")),
         "toolchain":hex(&Sha256::digest(b"toolchain")),"entry":"sample::Pair::run",
         "protocol":"pair","job":{"kind":"run"},"protocols":[{"symbol":"pair",
-            "roles":["P","V"],"inputs":[port],"outputs":[port],"services":[],"clauses":[]}]});
+            "roles":["P","V"],"inputs":[port],"outputs":[port],"services":[],
+            "common_input_requirements":[],"clauses":[]}]});
     let mut child: Json = serde_json::from_slice(&boolean_package(false)).unwrap();
     child["interface"] = json!(child_interface.to_string());
     child["artifact"] = json!(native.to_string());
@@ -186,10 +200,10 @@ fn joint_setup_package() -> Vec<u8> {
     ] {
         let mut ty = schema("builtin", logical, &[logical]);
         ty["constructible"] = json!(false);
-        view["protocols"][0]["inputs"].as_array_mut().unwrap().push(
-            json!({"name":name,"index":index,"native":[index],"roles":["P"],
-                "type":logical,"schema":ty}),
-        );
+        view["protocols"][0]["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .push(port(name, index, &[0], &ty));
         let physical = zkc_runtime::vm::PhysicalType::default_for(
             zkc_runtime::vm::LogicalType::parse(logical).unwrap(),
         )
@@ -734,11 +748,9 @@ fn structured_arguments_and_returns_follow_the_same_schema() {
     let boolean = schema("boolean", "bool", &["bool"]);
     let unit = schema("unit", "()", &[]);
     let mut pair = schema("tuple", "((),index)", &["index"]);
-    pair["fields"] =
-        json!([{"name":"0","offset":0,"schema":unit},{"name":"1","offset":0,"schema":index}]);
+    pair["fields"] = json!([field("0", 0, &unit), field("1", 0, &index)]);
     let mut record = schema("record", "sample::Data", &["index", "bool"]);
-    record["fields"] =
-        json!([{"name":"item","offset":0,"schema":pair},{"name":"ok","offset":1,"schema":boolean}]);
+    record["fields"] = json!([field("item", 0, &pair), field("ok", 1, &boolean)]);
     let bytes = package(
         &interface(&record, true),
         json!([]),
@@ -772,17 +784,16 @@ fn source_inspection_preparation_and_execution_share_checked_metadata() {
     let boolean = schema("boolean", "bool", &["bool"]);
     let metadata = interface(&boolean, true);
     std::fs::write(root.join("interface.json"), metadata.to_string()).unwrap();
-    let port = |name, index, roles: Json| {
-        json!({"name":name,"index":index,"native":[index],
-        "roles":roles,"type":"bool","schema":boolean})
-    };
+
     let proof = json!({"format":"zkc.language-interface/0","capture":metadata["capture"],
         "original":metadata["original"],"toolchain":metadata["toolchain"],"entry":"sample::Proof",
         "protocol":"sample_Protocol","setups":[],"relations":[],"protocols":[{
             "symbol":"sample_Protocol","roles":["P","V"],
-            "inputs":[port("statement",0,json!(["P","V"])),port("secret",1,json!(["P"]))],
-            "outputs":[port("accepted",0,json!(["V"]))],"services":[],"clauses":[]}],
-        "job":{"kind":"proof","prover":"P","verifier":"V","public":[0],"completion":null,"target":null,
+            "inputs":[port("statement", 0, &[0, 1], &boolean),port("secret", 1, &[0], &boolean)],
+            "outputs":[port("accepted", 0, &[1], &boolean)],"services":[],
+            "common_input_requirements":[],"clauses":[]}],
+        "job":{"kind":"proof","prover":"P","verifier":"V",
+            "public":[{"port":0,"path":[],"role":"V"}],"completion":null,"target":null,
             "acceptance":{"direction":"output","port":0,"role":"V","path":[]},
             "gates":[],"construction":{"kind":"authored","format":"zkc.framed/0"}}});
     std::fs::write(root.join("proof-interface.json"), proof.to_string()).unwrap();
