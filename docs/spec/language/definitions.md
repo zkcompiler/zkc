@@ -1845,7 +1845,7 @@ have no native leaves; its result must also pass the bounded interface reader.
 | Declarations; source or emitted operations | 10,000; 100,000 |
 | Static instances; aggregate leaves/array length | 4096; 1024 |
 | Natural monomials; factors per monomial | 1024; 64 |
-| Charged work per phase | 8,000,000 |
+| Charged work per phase | 32,000,000 |
 | Emitted MLIR; interface JSON | 16 MiB; 4 MiB |
 | Encoded symbol; diagnostic path bytes | 4096 each |
 | Active notation descriptor keys per environment; delimiter holes | 4096; 64 |
@@ -1858,7 +1858,10 @@ Bodies in one source file share its filtered token stream, with a separate
 notation environment for each module.
 
 The work ceiling accommodates composed source libraries while preserving charges
-for each traversal. File, type, instance, operation and output ceilings remain
+for each traversal. Project checking now also derives every concrete
+Protocol's common-input requirements and checks record placement; the largest
+maintained closure, the STARK library with its AIR relations, charges about
+16.5 million units, and the ceiling keeps twice that margin. File, type, instance, operation and output ceilings remain
 independent; a higher work allowance does not admit a larger type or deeper call.
 
 Parse depth bounds both recursive parsing and constructed type/natural syntax
