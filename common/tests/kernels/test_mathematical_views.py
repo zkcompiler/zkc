@@ -126,17 +126,23 @@ def test_view_constructor_authority(toolchain, journal, directory, view, constru
     if boundary == 'construct':
         body = f'fn bypass(values:Vector<F>)->{view}{{return {construction};}}'
     elif boundary == 'entry':
-        body = f'protocol Run roles(P)(value:{view}@P)->(result:{view}@P){{return value;}} entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}'
+        body = f'protocol Run roles(P)(value:{view}@P)->(result:bool@P){{return true;}} entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}'
     else:
         make = 'mle::table(values,0,1)' if view.startswith('mle') else 'coset::word(values,1)'
         body = f'''protocol Run roles(P,V)(values:Vector<F>@P)->(result:{view}@V){{
           let value={make};let received=send P -> V(value);return received;
         }} entry fn Demo(inputs: Run::Inputs) {{ return Run::run(inputs); }}'''
+    if boundary == 'entry':
+        # A retained opaque output may enter an Entry as a whole typed value, so
+        # the source check admits the port. Caller-supplied data still has no
+        # construction authority and is refused when the SDK decodes it.
+        entry = Entry(toolchain, journal, directory, declarations + body, MODULES)
+        entry.run('external', {'value': {}}, refuses='entry-input-constructor')
+        return
     path = directory / 'private.zkc'
     path.write_text(declarations + body)
     report = journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
-                           f'--module=sample={path}', *MODULES,
-                           *(['sample::Demo'] if boundary == 'entry' else [])], refuses='source-compilation')
+                           f'--module=sample={path}', *MODULES], refuses='source-compilation')
     code = 'source.private' if boundary == 'construct' else 'source.ingress'
     assert report['diagnostics'].startswith(code + ':'), report
 
