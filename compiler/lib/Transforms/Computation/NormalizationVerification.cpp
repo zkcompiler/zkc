@@ -339,8 +339,8 @@ struct NormalizationProvenanceChecker::Implementation {
       SmallVector<Term> samples;
       for (unsigned i = 0; i < n; ++i)
         samples.push_back(terms.anchor(field));
-      auto array = data::FieldArrayType::get(
-          source.getParentOp()->getContext(), field.getDomain(), n);
+      auto array = data::FieldArrayType::get(source.getParentOp()->getContext(),
+                                             field.getDomain(), n);
       auto empty = attributes.getDictionaryAttr({});
       Term table =
           terms.expression("data.array_from_elements", array, empty, samples);
