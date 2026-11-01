@@ -102,9 +102,9 @@ theorem gate_map_dependencies (add mul left right : List F) :
     GkrGateCompanion.mapCondition (ringModel F G) (helpers (G := G)) add mul left right := by
   constructor
   · exact GkrRoundsHelpers.values_domain (G := G) add mul left right
-  · intro selected
-    obtain ⟨item, rfl⟩ := GkrGateGoals.Item.pack_surjective selected
-    exact gate_callback item.addWeight item.mulWeight item.left item.right add mul left right
+  · intro length _ index _
+    exact gate_callback (add[index]?.getD 0) (mul[index]?.getD 0)
+      (left[index]?.getD 0) (right[index]?.getD 0) add mul left right
 
 /-- Four arbitrary decoded tables, including every operand's shape. -/
 theorem gate_map_encodes {n : Nat} (add mul left right : Table F n)

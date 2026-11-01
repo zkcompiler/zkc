@@ -24,7 +24,6 @@ macro "collection_simp" " [" definitions:term,* "]" : tactic => do
     Zkc.Source.Structured.Op.regions, Zkc.Source.Structured.FoldSpec.stepHelper,
     show "".isEmpty = true by rfl, Bool.true_eq,
     Zkc.Source.Values.get_head, Zkc.Source.Values.get_tail,
-    Zkc.Source.Structured.ReferenceLibrary.forwardDependency,
     Zkc.Source.Structured.ReferenceLibrary.marked,
     Zkc.Source.Structured.ReferenceLibrary.forward,
     Zkc.Source.Structured.ReferenceLibrary.call,

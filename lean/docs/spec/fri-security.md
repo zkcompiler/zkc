@@ -1,7 +1,7 @@
 # FRI security at the ideal interpretation
 
 This page specifies the independent model of the verifier of
-[`fri::LowDegree`](../../../libraries/protocols/polynomial/fri/lib.zkc), its completeness on the
+[`fri::LowDegree` at `1f57002c30ec980137fc1ad28281ecb4d7df6c0a`](https://github.com/zkcompiler/zkc/blob/1f57002c30ec980137fc1ad28281ecb4d7df6c0a/libraries/protocols/polynomial/fri/lib.zkc), its completeness on the
 tested code, its round-by-round soundness theorem, its Fiat–Shamir transfer
 with one query-block site and the same verifier with words committed by Merkle
 trees. The model is a transcription of the library verifier, related line by
@@ -11,6 +11,13 @@ every commitment as the vector it commits to. The modules are
 `ZkcArkLib.Fri.*`, `ZkcArkLibExamples.FriFiatShamir` and
 `ZkcArkLibExamples.CommittedFri` in the
 [security integration](../../integrations/arklib/README.md).
+
+The current library has separate commitment, query and checking phases. In
+particular, its `Check` requires exactly `2^TerminalLog` padded coefficients;
+this historical model accepts any list up to that length. The correspondence
+below is to the pinned verifier, not the current phased implementation.
+Connecting the current implementation to these mathematical results remains
+separate work; this page does not establish that connection.
 
 ## Subject
 
@@ -40,7 +47,7 @@ model's words have their expected sizes and the verifier reads committed values.
 
 ## Source correspondence
 
-Line numbers refer to `libraries/protocols/polynomial/fri/lib.zkc`. Each model definition is in
+Line numbers refer to the pinned source above. Each model definition is in
 `ZkcArkLib.Fri.Protocol` unless the table names another module.
 
 | Source (lines) | Model | Relation to ArkLib |

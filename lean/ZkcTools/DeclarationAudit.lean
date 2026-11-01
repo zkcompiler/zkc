@@ -376,6 +376,10 @@ private def dependencyPolicyJson : String := r##"
       "proof-tools"
     ],
     [
+      "ZkcTools.StructuredSource.ReferenceRules",
+      "proof-tools"
+    ],
+    [
       "ZkcTools.StructuredSource.SourceCalls",
       "proof-tools"
     ],

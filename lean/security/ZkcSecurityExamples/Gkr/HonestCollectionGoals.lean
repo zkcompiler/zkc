@@ -31,17 +31,6 @@ helper_presentation Layout inputs [add, mul, point, below, width] outputs [addVa
 abbrev replicateSpec : FoldSpec := (GkrSourceLaws.fold? GkrSourceBodies.scopedHelper45Body).get (by decide +kernel)
 abbrev appendSpec : FoldSpec := (GkrSourceLaws.fold? GkrSourceBodies.scopedHelper48Body).get (by decide +kernel)
 
-named_values RepeatArguments [initial, value, count] := GkrSourceBodies.helper20Helper.inputs
-named_values ReplicateStepArguments [initial, value, source, count] := GkrSourceBodies.helper22Helper.inputs
-named_values ReplicateFoldArguments [source, initial, count] := GkrSourceBodies.scopedHelper45Helper.inputs
-named_values ReplicateWrapperArguments [initial, count, source] := GkrSourceBodies.helper24Helper.inputs
-named_values ReplicateArguments [source, count] := GkrSourceBodies.helper25Helper.inputs
-named_values AppendArguments [initial, value] := GkrSourceBodies.helper26Helper.inputs
-named_values AppendStepArguments [initial, value, source] := GkrSourceBodies.helper27Helper.inputs
-named_values AppendFoldArguments [source, initial] := GkrSourceBodies.scopedHelper48Helper.inputs
-named_values ConcatenateArguments [initial, source] := GkrSourceBodies.helper29Helper.inputs
-named_values PrefixArguments [source, dimension, point] := GkrSourceBodies.helper35Helper.inputs
-named_values LayoutArguments [add, mul, point, below, width] := GkrSourceBodies.helper36Helper.inputs
 named_values CollectionState [values] := appendSpec.state
 
 -- The multi-call processes and all their parameters come from the actual

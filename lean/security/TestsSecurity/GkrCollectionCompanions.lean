@@ -15,32 +15,32 @@ open CollectionGoals CollectionCompanion
 private abbrev model := ringModel Int Int
 
 example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper25Helper
-    (ReplicateArguments.pack { source := [3, 5], count := 2 }) =
+    (Replicate.Inputs.pack { source := [3, 5], count := 2 }) =
       .done (Replicate.encode model ⟨[3, 3, 5, 5]⟩) :=
   replicate_equation [3, 5] 2 (by decide +kernel) (by decide +kernel)
 
 example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper30Helper
-    (ReplicateArguments.pack { source := [3, 5], count := 2 }) =
+    (Replicate.Inputs.pack { source := [3, 5], count := 2 }) =
       .done (Tile.encode model ⟨[3, 5, 3, 5]⟩) :=
   tile_equation [3, 5] 2 (by decide +kernel) (by decide +kernel)
 
 example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper29Helper
-    (ConcatenateArguments.pack { initial := [7], source := [3, 5] }) =
+    (Concatenate.Inputs.pack { initial := [7], source := [3, 5] }) =
       .done (Concatenate.encode model ⟨[7, 3, 5]⟩) := by
   simp only [GkrSourceLaws.helpers, closedMeanings_eq_closedMeaningsOn]
   have law := (collection_laws (F := Int) (G := Int)).concatenate
-    (ConcatenateArguments.pack { initial := [7], source := [3, 5] })
+    (Concatenate.Inputs.pack { initial := [7], source := [3, 5] })
   exact law
 
 example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper36Helper
-    (LayoutArguments.pack { add := [2], mul := [3], point := [], below := [7], width := 0 }) =
+    (Layout.Inputs.pack { add := [2], mul := [3], point := [], below := [7], width := 0 }) =
       .done (Layout.encode model ⟨[2], [3], [7], [7]⟩) :=
   layout_equation [2] [3] [7] [] 0 (by decide +kernel) (by decide +kernel)
     (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
 
 -- Nontrivial width distinguishes every payload, including replication versus tiling.
 example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper36Helper
-    (LayoutArguments.pack
+    (Layout.Inputs.pack
       { add := [1, 2, 3, 4], mul := [5, 6, 7, 8], point := [], below := [3, 5], width := 1 }) =
       .done (Layout.encode model ⟨[1, 2, 3, 4], [5, 6, 7, 8], [3, 3, 5, 5], [3, 5, 3, 5]⟩) :=
   layout_equation [1, 2, 3, 4] [5, 6, 7, 8] [3, 5] [] 1 (by decide +kernel)
@@ -56,26 +56,26 @@ example : Repeat.run model [] [7] 3 0 = .done ⟨[7]⟩ := rfl
 /-- Actual vector admission precedes the missing fold callback, even at count zero. -/
 theorem replicate_exhausted (source : List Int) (exhausted : ¬ source.length < indexLimit) :
     invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper25Helper
-      (ReplicateArguments.pack { source, count := 0 }) = .halt .exhausted := by
+      (Replicate.Inputs.pack { source, count := 0 }) = .halt .exhausted := by
   simp only [GkrSourceLaws.helpers, closedMeanings_eq_closedMeaningsOn]
   have law := (collection_laws (F := Int) (G := Int)).replicated
-    (ReplicateArguments.pack { source, count := 0 })
+    (Replicate.Inputs.pack { source, count := 0 })
   change _ = primitiveOutcome (Replicate.encodeOutcome model (replicateReference model source 0)) at law
   simpa only [replicateReference, exhausted, ↓reduceIte, Replicate.encodeOutcome, primitiveOutcome] using law
 
 /-- Tile has no up-front vector admission: its zero loop never calls concatenation. -/
 theorem tile_zero_unadmitted (source : List Int) :
     invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper30Helper
-      (ReplicateArguments.pack { source, count := 0 }) = .done (Tile.encode model ⟨[]⟩) := by
+      (Replicate.Inputs.pack { source, count := 0 }) = .done (Tile.encode model ⟨[]⟩) := by
   simp only [GkrSourceLaws.helpers, closedMeanings_eq_closedMeaningsOn]
-  exact (collection_laws (F := Int) (G := Int)).tiled (ReplicateArguments.pack { source, count := 0 })
+  exact (collection_laws (F := Int) (G := Int)).tiled (Replicate.Inputs.pack { source, count := 0 })
 
 theorem tile_exhausted (source : List Int) (exhausted : ¬ source.length < indexLimit) :
     invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper30Helper
-      (ReplicateArguments.pack { source, count := 1 }) = .halt .exhausted := by
+      (Replicate.Inputs.pack { source, count := 1 }) = .halt .exhausted := by
   simp only [GkrSourceLaws.helpers, closedMeanings_eq_closedMeaningsOn]
   have law := (collection_laws (F := Int) (G := Int)).tiled
-    (ReplicateArguments.pack { source, count := 1 })
+    (Replicate.Inputs.pack { source, count := 1 })
   change _ = primitiveOutcome (Tile.encodeOutcome model (tileReference model source 1)) at law
   simpa only [tileReference, exhausted, ↓reduceIte, Finite.repeatAppend,
     Finite.continueWith, Tile.encodeOutcome, primitiveOutcome] using law
@@ -127,7 +127,7 @@ theorem variant_companion : Variant.Goal model variantReference
     by_cases bounded : batch.length < indexLimit <;>
       collection_simp [variantLibrary, replicateLaw, Replicate.law, replicateReference, bounded,
         Replicate.encodeOutcome, Replicate.encode, variantReference, Variant.encodeOutcome, Variant.encode]
-  · intro table copies retained batch dependency; exact dependency
+  · intro table copies retained batch dependency; exact dependency _
 
 private def definition (helper : Helper) (body : Region dialect helper.inputs helper.outputs) :
     CheckedDefinition :=

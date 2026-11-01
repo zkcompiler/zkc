@@ -95,9 +95,13 @@ from the body. It produces ordinary declarations:
 
 - `Gate.Inputs.View Value`, with complete named input packing for any carrier;
 - `Gate.Output model`, with every returned coordinate;
+- `Gate.encodeOutcome` and `Gate.decodeOutcome`, inverse complete-result
+  transports that preserve every stopped reason;
 - `Gate.run model table`, a curried readable computation;
 - `Gate.run_eq` and `Gate.equation`, checked structural correspondences;
 - `Gate.Goal model reference condition`, the complete mathematical obligation;
+- `Gate.of_installed`, which presents an existing exact-body law with named
+  outputs and exactly its original premises;
 - `Gate.law`, which assembles a proof into the existing `ReferenceLaw`.
 
 The reference returns `PIR.Outcome (Gate.Output model)`. It describes stops as
@@ -124,12 +128,28 @@ theorem value (model : DomainModel) :
 
 A companion can instead use `Gate.of_law` with an installed library theorem.
 That transport checks the actual body, the full encoded reference and its
-premises. Forwarding and ordered collection constructors live in
+premises. When only the names of the outputs change, `Gate.of_installed model
+installed sameBody` supplies this transport directly. It decodes the existing
+reference and keeps `installed.Requires` on the actual packed inputs. It does
+not ask for another mathematical formula or an output case split. Reuse
+`Gate.Inputs.pack` and its inverse laws rather than generating a second input
+record for the same helper; mathematical subrows such as a fold state can have
+their own views.
+
+Forwarding and ordered collection constructors live in
 `Zkc.Source.Structured.CollectionReference`; the corresponding proof-producing
 terms are in `ZkcTools.StructuredSource.ReferenceComposition`. They retain the
 callee's complete return row and collection admission, order and captures.
 `Values.curry` and named rows keep heterogeneous packing outside the
 mathematical formula.
+
+`forward_reference% body using dependency` requires the dependency equation at
+the actual forwarded arguments. A conditional helper law can supply it with
+`ReferenceLaw.invoke` and its input precondition; a total `Realizes` law is a
+convenience, not a requirement of forwarding. `collection_reference%` asks for
+callback equations only at the admitted indices. An empty or refused domain
+therefore needs no callback law. Neither constructor erases a reached failure
+or infers an actual-body association from the helper's name.
 
 Direct use and companion discovery share this same goal. Use the existing
 `companion_goal` header and `@[zkc ...]` registration when discovery is useful;
@@ -172,6 +192,22 @@ the value's arguments when unused by that value, but it remains a premise of
 the correspondence. A reference generated under a condition is not an
 unconditional equation for the source.
 
+Repeated structural rules can be selected through an ordinary Lean simp set:
+
+```lean
+source_reference layerPresentation from_equation @Root.verifierLayer_observed
+  using [Root.verifierLayerForm, zkc_source_structure]
+  atoms [invoke, denoteRepeatOn, invokeProtocol]
+```
+
+`zkc_source_structure` packages the normal-form evaluators and typed row
+projections. It does not select a helper's mathematical law or unfold a callee's
+implementation. The selected source form remains explicit. Libraries can use
+ordinary named simp sets to package their own equations; only the sets listed
+in `using` participate. The command consumes their proof rules, not custom
+simplification procedures, and does not implicitly use the global simp set.
+Conditional equations still need their premises.
+
 For a process without an existing checked equation, `source_reference name
 from @source using [...]` constructs the equation by proof-producing
 simplification. It preserves effects, arbitrary reply continuations, stopped
@@ -191,6 +227,9 @@ with a checked occurrence equation, so downstream proofs use `inputCall.site`
 and `inputCall.roles` without repeating source strings. Occurrences after a
 stopped prefix are still lexical occurrences; this facility never claims that
 they execute. A same-typed operand swap changes the selected header.
+An ambiguous selection reports candidate paths, sites and role maps. Missing
+signatures and incorrect paths have distinct diagnostics. Paths must be closed
+values: `_` cannot silently choose the first candidate.
 
 Source equations can be reused by honest execution, adversarial rejection and
 cost proofs. Those property proofs still supply different premises and

@@ -6,8 +6,6 @@ public meta import Lean.Elab.Command
 public meta import Lean.Elab.Term
 public meta import Lean.Meta.Reduce
 
-@[expose] public section
-
 /-! Source-derived call headers for companions. Labels and role maps are read
 from the retained typed occurrence. The materialized header is connected to
 that exact occurrence by a kernel-checked equation; a lookup is no reachability
@@ -73,6 +71,39 @@ partial def candidates (source signature : Expr) : MetaM (Array Candidate) := do
           #[operation.getAppArgs[0]!, operation.getAppArgs[1]!, operands, body, next, candidate.witness] }
   return result
 
+private def candidatePaths (found : Array Candidate) : MetaM MessageData := do
+  let descriptions ← found.toList.mapM fun candidate => do
+    let path ← mkListLit (Lean.mkConst ``Nat) (candidate.path.map mkNatLit)
+    let site ← reduce (← mkAppM ``CallSite.site #[candidate.header])
+    let roles ← reduce (← mkAppM ``CallSite.roles #[candidate.header])
+    return m!"  at {path}: site {site}, role map {roles}"
+  return MessageData.joinSep descriptions m!"\n"
+
+private partial def pathValue? (expression : Expr) : MetaM (Option (List Nat)) := do
+  let expression ← whnf expression
+  if expression.isAppOfArity ``List.nil 1 then return some []
+  unless expression.isAppOfArity ``List.cons 3 do return none
+  let args := expression.getAppArgs
+  let some head ← getNatValue? (← whnf args[1]!) | return none
+  let some tail ← pathValue? args[2]! | return none
+  return some (head :: tail)
+
+private def elaboratePath (path : Syntax) : TermElabM (List Nat) := do
+  try
+    let requested ← elabTermEnsuringType path (mkApp (Lean.mkConst ``List [0]) (Lean.mkConst ``Nat))
+    synthesizeSyntheticMVarsNoPostponing
+    let requested ← instantiateMVars requested
+    -- Never let candidate comparison solve holes in the user's path.
+    if requested.hasMVar || requested.hasFVar then
+      throwError "path contains unresolved metavariables or local variables"
+    let some value ← pathValue? requested
+      | throwError "path does not reduce to a finite list of natural numbers"
+    return value
+  catch error =>
+    if error.isRuntime || error.isInterrupt then throw error
+    if let .internal _ _ := error then throw error
+    throwErrorAt path "protocol-call-selection: malformed or unresolved path; use a closed List Nat, such as [] or [0]\n{error.toMessageData}"
+
 syntax (name := protocolCall) "protocol_call " ident " from " term
   " to " term (" at " term)? : command
 
@@ -90,15 +121,21 @@ def generate : CommandElab := fun stx => do
     let signature ← instantiateMVars signature
     if expression.hasFVar || expression.hasMVar || signature.hasFVar || signature.hasMVar then
       throwError "protocol-call-open-source: instantiate static parameters first"
-    let mut found ← candidates expression signature
-    if let some path := path then
-      let requested ← elabTermEnsuringType path (mkApp (Lean.mkConst ``List [0]) (Lean.mkConst ``Nat))
-      synthesizeSyntheticMVarsNoPostponing
-      found ← found.filterM fun candidate => do
-        isDefEq requested (← mkListLit (Lean.mkConst ``Nat) (candidate.path.map mkNatLit))
-    unless found.size == 1 do
-      throwError "protocol-call-selection: expected one matching typed occurrence; select an explicit path when ambiguous"
-    let candidate := found[0]!
+    let found ← candidates expression signature
+    let requested ← path.mapM fun path => elaboratePath path
+    if found.isEmpty then
+      throwErrorAt callee "protocol-call-selection: no matching signature; check the callee's full signature and the source"
+    let candidate ← match requested with
+      | some requested => do
+          let matching := found.filter fun candidate => candidate.path == requested
+          unless matching.size == 1 do
+            let path ← mkListLit (Lean.mkConst ``Nat) (requested.map mkNatLit)
+            throwError "protocol-call-selection: no matching typed occurrence at {path}; choose a candidate path:\n{← candidatePaths found}"
+          pure matching[0]!
+      | none => do
+          unless found.size == 1 do
+            throwError "protocol-call-selection: {found.size} matching typed occurrences; add 'at <path>' to select one:\n{← candidatePaths found}"
+          pure found[0]!
     let header ← instantiateMVars candidate.header
     let witness ← instantiateMVars candidate.witness
     if header.hasMVar || header.hasFVar || witness.hasMVar || witness.hasFVar then

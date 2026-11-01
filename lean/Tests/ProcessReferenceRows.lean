@@ -38,7 +38,7 @@ def source {I : PIR.Signature} (model : DomainModel)
   | some false => callee (Arguments.eval (Bindings.emptyResults model) selectedArguments
       (Arguments.pack { left, right, accepted }))
 
-source_reference direct from @source using [source, selectedArguments]
+source_reference direct from @source using [source, selectedArguments, zkc_source_structure]
 
 example {I : PIR.Signature} (model : DomainModel)
     (callee : Binders model key.pattern.scope → Process I (Option Nat × Option Nat × Option Bool))
@@ -84,7 +84,8 @@ def dependentSource {I : PIR.Signature} (model : DomainModel)
   | some false => callee (Arguments.eval (Bindings.emptyResults model) selectedArguments
       (Arguments.pack { left, right, accepted }))
 
-source_reference dependent from @dependentSource using [dependentSource, selectedArguments]
+source_reference dependent from @dependentSource
+  using [dependentSource, selectedArguments, zkc_source_structure]
 
 example {I : PIR.Signature} (model : DomainModel)
     (callee : Binders model descriptors[0].pattern.scope →
@@ -103,7 +104,8 @@ theorem admitted {I : PIR.Signature} (model : DomainModel)
       source model callee left right accepted stop := by
   simp only [present, ↓reduceIte]
 
-source_reference checked from_equation @admitted using [source, selectedArguments]
+source_reference checked from_equation @admitted
+  using [source, selectedArguments, zkc_source_structure]
 
 example {I : PIR.Signature} (model : DomainModel)
     (callee : Binders model key.pattern.scope → Process I (Option Nat × Option Nat × Option Bool))
@@ -136,20 +138,29 @@ run_meta do
     unless parameters.size == 9 do throwError "source premise telescope changed"
     unless ← isProp (← inferType parameters.back!) do throwError "admission premise missing"
 
--- Command failure remains transactional and does not install a partial view.
+-- A late collision must roll back the already installed certificate and view.
+-- Calling the actual command elaborator avoids an outer transaction hiding a
+-- missing transaction in the generator itself.
+theorem collision_equation : True := True.intro
+
 open Lean Elab Command in
 run_cmd do
+  let .ok command := Parser.runParserCategory (← getEnv) `command
+      "source_reference collision from @source using [source, selectedArguments]"
+    | throwError "invalid rollback control"
   let refused ← try
-    ZkcTools.Generation.Commands.atomic "refusal-control" do
-      elabCommand (← `(command| source_reference invalid from (fun n : Nat => n) using []))
+    ZkcTools.StructuredSource.ProcessReference.elaborateReference command
     pure false
   catch error =>
     if error.isRuntime || error.isInterrupt then throw error
     pure true
-  unless refused do throwError "non-process reference was admitted"
-  if (← getEnv).contains `Tests.ProcessReferenceRows.invalid_certificate ||
-      (← getEnv).contains `Tests.ProcessReferenceRows.invalid then
+  unless refused do throwError "a generated theorem overwrote an existing declaration"
+  if (← getEnv).contains `Tests.ProcessReferenceRows.collision_certificate ||
+      (← getEnv).contains `Tests.ProcessReferenceRows.collision then
     throwError "failed reference command leaked declarations"
+  let preserved ← getConstInfo `Tests.ProcessReferenceRows.collision_equation
+  unless preserved.type.isConstOf ``True do
+    throwError "failed reference command changed the pre-existing declaration"
 
 #print axioms direct_equation
 #print axioms checked_equation

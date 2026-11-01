@@ -27,7 +27,7 @@ theorem layout_plain {width : Nat} (add mul below point : List F)
       (fixPrefix width a (coordinates width point)) (fixPrefix width m (coordinates width point)) v v
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
       GkrSourceBodies.helper36Helper
-      (CollectionGoals.LayoutArguments.pack (Value := assignment F G) { add, mul, point, below, width }) =
+      (CollectionGoals.Layout.Inputs.pack (Value := assignment F G) { add, mul, point, below, width }) =
         .done (CollectionGoals.Layout.encode (ringModel F G)
           { addValues := GkrRoundsLayout.encode state.add, mulValues := GkrRoundsLayout.encode state.mul,
             leftValues := GkrRoundsLayout.encode state.left, rightValues := GkrRoundsLayout.encode state.right }) :=
@@ -45,7 +45,7 @@ theorem layout_component {width : Nat} (add mul below point : List F)
       (fixPrefix width a (coordinates width point)) (fixPrefix width m (coordinates width point)) v v
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).components
       GkrSourceBodies.helper36Helper
-      (CollectionGoals.LayoutArguments.pack (Value := Component (assignment F G))
+      (CollectionGoals.Layout.Inputs.pack (Value := Component (assignment F G))
         { add := some add, mul := some mul, point := some point, below := some below, width := some width }) =
       .done (CollectionGoals.Layout.encode (ringModel F G)
         { addValues := GkrRoundsLayout.encode state.add, mulValues := GkrRoundsLayout.encode state.mul,
@@ -80,14 +80,14 @@ theorem round_restriction_component {n : Nat} (raw : GkrRoundsRealization.RawSta
 theorem element_plain (xs : List F) (position : Nat)
     (xsBound : xs.length < indexLimit) (positionBound : position < indexLimit) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper57Helper (ReadbackGoals.ElementArguments.pack (Value := assignment F G) { source := xs, position }) =
+      GkrSourceBodies.helper57Helper (ReadbackGoals.Element.Inputs.pack (Value := assignment F G) { source := xs, position }) =
       .done (ReadbackGoals.Element.encode (ringModel F G) ⟨xs[position]?.getD 0⟩) :=
   closed_invoke_returned GkrSourceViews.unit _ _ _ (element_equation xs position xsBound positionBound)
 
 theorem element_after_plain (xs : List F) (position : Nat)
     (xsBound : xs.length < indexLimit) (positionBound : position + 1 < indexLimit) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed
-      GkrSourceBodies.helper70Helper (ReadbackGoals.ElementArguments.pack (Value := assignment F G) { source := xs, position }) =
+      GkrSourceBodies.helper70Helper (ReadbackGoals.Element.Inputs.pack (Value := assignment F G) { source := xs, position }) =
       .done (ReadbackGoals.After.encode (ringModel F G) ⟨xs[position + 1]?.getD 0⟩) :=
   closed_invoke_returned GkrSourceViews.unit _ _ _ (element_after_equation xs position xsBound positionBound)
 
@@ -95,7 +95,7 @@ theorem element_after_plain (xs : List F) (position : Nat)
 theorem element_component (xs : List F) (position : Nat)
     (xsBound : xs.length < indexLimit) (positionBound : position < indexLimit) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).components
-      GkrSourceBodies.helper57Helper (ReadbackGoals.ElementArguments.pack (Value := Component (assignment F G))
+      GkrSourceBodies.helper57Helper (ReadbackGoals.Element.Inputs.pack (Value := Component (assignment F G))
         { source := some xs, position := some position }) =
       .done (ReadbackGoals.Element.encode (ringModel F G) ⟨xs[position]?.getD 0⟩).present :=
   component_invoke_returned GkrSourceViews.unit _ _ _ (element_equation xs position xsBound positionBound)
@@ -104,7 +104,7 @@ theorem element_component (xs : List F) (position : Nat)
 theorem element_after_component (xs : List F) (position : Nat)
     (xsBound : xs.length < indexLimit) (positionBound : position + 1 < indexLimit) :
     invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).components
-      GkrSourceBodies.helper70Helper (ReadbackGoals.ElementArguments.pack (Value := Component (assignment F G))
+      GkrSourceBodies.helper70Helper (ReadbackGoals.Element.Inputs.pack (Value := Component (assignment F G))
         { source := some xs, position := some position }) =
       .done (ReadbackGoals.After.encode (ringModel F G) ⟨xs[position + 1]?.getD 0⟩).present :=
   component_invoke_returned GkrSourceViews.unit _ _ _ (element_after_equation xs position xsBound positionBound)

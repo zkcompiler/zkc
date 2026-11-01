@@ -39,33 +39,33 @@ theorem collection_laws : CollectionCompanion.Laws (ringModel F G)
 theorem repeat_body (table : Meanings F G) (xs : List F) (value : F) (count : Nat)
     (_small : count < indexLimit) :
     GkrSourceBodies.helper20Body.denote (meaning F G table)
-      (RepeatArguments.pack { initial := xs, value, count }).get =
+      (Repeat.Inputs.pack { initial := xs, value, count }).get =
         .done (Repeat.encode (ringModel F G) ⟨xs ++ List.replicate count value⟩) := by
   rw [Evaluation.denote_meaning_eq_meaningOn]
   exact (repeatLaw (ringModel F G)).valid table
-    (RepeatArguments.pack { initial := xs, value, count }) True.intro
+    (Repeat.Inputs.pack { initial := xs, value, count }) True.intro
 
 theorem replicate_equation (source : List F) (count : Nat)
     (sourceBound : source.length < indexLimit) (small : count < indexLimit) :
     invoke (helpers (G := G)) GkrSourceBodies.helper25Helper
-      (ReplicateArguments.pack { source, count }) =
+      (Replicate.Inputs.pack { source, count }) =
         .done (Replicate.encode (ringModel F G) ⟨source.flatMap (List.replicate count)⟩) := by
   have _countBound := small
   simp only [helpers, closedMeanings_eq_closedMeaningsOn]
   simpa [replicateLaw, Replicate.law, replicateReference, sourceBound,
-    ReplicateArguments.pack, Replicate.encodeOutcome, primitiveOutcome] using
-    (collection_laws (F := F) (G := G)).replicated (ReplicateArguments.pack { source, count })
+    Replicate.Inputs.pack, Replicate.encodeOutcome, primitiveOutcome] using
+    (collection_laws (F := F) (G := G)).replicated (Replicate.Inputs.pack { source, count })
 
 theorem tile_equation (source : List F) (count : Nat) (small : count < indexLimit)
     (sourceBound : source.length < indexLimit) :
     invoke (helpers (G := G)) GkrSourceBodies.helper30Helper
-      (ReplicateArguments.pack { source, count }) =
+      (Replicate.Inputs.pack { source, count }) =
         .done (Tile.encode (ringModel F G) ⟨(List.replicate count source).flatten⟩) := by
   have _countBound := small
   simp only [helpers, closedMeanings_eq_closedMeaningsOn]
   simpa [tileLaw, Tile.law, tileReference, sourceBound, Finite.repeatAppend_returned,
-    ReplicateArguments.pack, Tile.encodeOutcome, primitiveOutcome] using
-    (collection_laws (F := F) (G := G)).tiled (ReplicateArguments.pack { source, count })
+    Replicate.Inputs.pack, Tile.encodeOutcome, primitiveOutcome] using
+    (collection_laws (F := F) (G := G)).tiled (Replicate.Inputs.pack { source, count })
 
 /-- Prefix restriction through the producer's wrapper, with all shape checks. -/
 theorem prefix_equation (xs point : List F) (dimension : Nat)
@@ -73,7 +73,7 @@ theorem prefix_equation (xs point : List F) (dimension : Nat)
     (xsBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
     (pointBound : point.length < indexLimit) (inside : point.length ≤ dimension) :
     invoke (helpers (G := G)) GkrSourceBodies.helper35Helper
-      (PrefixArguments.pack { source := xs, dimension, point }) =
+      (Prefix.Inputs.pack { source := xs, dimension, point }) =
         .done (Prefix.encode (ringModel F G) ⟨restrictPrefixValues xs point⟩) := by
   rw [helper35_association.invoke unit.linked, Evaluation.denote_meaning_eq_meaningOn]
   erw [prefixProcess_equation]
@@ -95,7 +95,7 @@ theorem layout_equation (add mul below point : List F) (width : Nat)
     (belowBound : below.length < indexLimit)
     (dimensionBound : point.length + width + width < indexLimit) :
     invoke (helpers (G := G)) GkrSourceBodies.helper36Helper
-      (LayoutArguments.pack { add, mul, point, below, width }) =
+      (Layout.Inputs.pack { add, mul, point, below, width }) =
         .done (Layout.encode (ringModel F G)
           { addValues := restrictPrefixValues add point,
             mulValues := restrictPrefixValues mul point,

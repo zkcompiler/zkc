@@ -33,12 +33,6 @@ named_values State [current, index] := foldSpec.state
 named_values Item [value] := foldSpec.domain.items
 named_values DomainArguments [source] := foldSpec.domain.inputs
 named_values Captures [position] := foldSpec.captures
-named_values ZeroArguments [] := GkrSourceBodies.helper46Helper.inputs
-named_values StepArguments [current, index, value, position] := GkrSourceBodies.helper53Helper.inputs
-named_values CallbackArguments [current, index, value, source, position] := GkrSourceBodies.helper54Helper.inputs
-named_values ScanArguments [source, current, index, position] := GkrSourceBodies.scopedHelper82Helper.inputs
-named_values WrapperArguments [current, index, position, source] := GkrSourceBodies.helper56Helper.inputs
-named_values ElementArguments [source, position] := GkrSourceBodies.helper57Helper.inputs
 
 /-- Every dependency is associated separately; matching its signature alone is
 insufficient. This record can be installed for any linked definition list. -/

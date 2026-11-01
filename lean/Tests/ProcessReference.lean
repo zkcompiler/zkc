@@ -57,6 +57,22 @@ source_reference guardedReference from @guarded using [guarded_returns]
 
 example {I : Signature} : guardedReference (I := I) 0 = .halt .refused := rfl
 
+section
+-- A library can package ordinary rewrite rules in a selected Lean simp set.
+-- Its mathematical preconditions remain obligations, not assumed facts.
+attribute [local zkc_source_structure] source Process.bind_done guarded_returns
+
+source_reference bundled from @source using [zkc_source_structure]
+source_reference guardedBundled from @guarded using [zkc_source_structure]
+
+example : @bundled = @reference := rfl
+example {I : Signature} : guardedBundled (I := I) 0 = .halt .refused := rfl
+example {I : Signature} : bundled (I := I) (.halt .abort) (fun _ => .done true) =
+    .halt .abort := rfl
+example {I : Signature} : bundled (I := I) (.done 7) (fun _ => .done false) =
+    .done (7, false) := rfl
+end
+
 /- The reference is generated without an applicability-proof runtime argument,
 while the correspondence theorem keeps the source theorem's premise. -/
 source_reference positiveReference from_equation @guarded_returns using []

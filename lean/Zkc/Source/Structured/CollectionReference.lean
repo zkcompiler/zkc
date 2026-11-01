@@ -74,18 +74,9 @@ theorem ReferenceLaw.realizesUniform {F G : Type} [CommRing F] [AddCommGroup G] 
 
 namespace ReferenceLibrary
 
-def forwardDependency (model : DomainModel) {inputs : List Ty} (helper : Helper)
-    (arguments : Operands inputs helper.inputs)
-    (dependency : ReferenceLaw model helper.inputs helper.outputs) :
-    ReferenceLaw model inputs helper.outputs where
-  body := (forward model helper arguments dependency.reference).body
-  Requires table _ := dependency.Realizes (helper := helper) table
-  reference := (forward model helper arguments dependency.reference).reference
-  valid table args premise := (forward model helper arguments dependency.reference).valid
-    table args (premise _)
-
 /-- Any admitted ordered domain and scalar formula, with every domain input
-and heterogeneous capture retained. Admission failures keep their exact stop. -/
+and heterogeneous capture retained. Callback equations are needed only at the
+indices of a returned shape. Admission failures keep their exact stop. -/
 def indexedCollection (model : DomainModel) {inputs : List Ty} (spec : CollectSpec)
     (arguments : Operands inputs (spec.domain.inputs ++ spec.captures))
     (shape : Values model.Value inputs → PIR.Outcome Nat)
@@ -100,9 +91,9 @@ def indexedCollection (model : DomainModel) {inputs : List Ty} (spec : CollectSp
     let domain := actual.split.1
     spec.domain.admit domain = Finite.continueWith (shape args)
       (fun length => .returned ((List.range length).map (item args))) ∧
-    ∀ selected : Values model.Value spec.domain.items,
-      invoke table spec.bodyHelper (selected.append actual) =
-      .done (.cons (formula (selected.append actual)) .nil)
+    ∀ length, shape args = .returned length → ∀ index, index < length →
+      invoke table spec.bodyHelper ((item args index).append actual) =
+      .done (.cons (formula ((item args index).append actual)) .nil)
   reference args :=
     let actual := Operands.eval args.get arguments
     match shape args with
@@ -126,8 +117,9 @@ def indexedCollection (model : DomainModel) {inputs : List Ty} (spec : CollectSp
           actual.split.1 actual.split.2 (List.range length) (item args)
           (by simpa only [selectedShape, Finite.continueWith] using premise.1)
           absent (fun index => formula ((item args index).append actual)) (by
-            intro index _
-            simpa only [packed] using premise.2 (item args index))
+            intro index member
+            simpa only [packed] using
+              premise.2 length selectedShape index (List.mem_range.mp member))
         rw [packed] at collected
         rw [collected]
         simp only [PIR.Process.bind, primitiveOutcome]

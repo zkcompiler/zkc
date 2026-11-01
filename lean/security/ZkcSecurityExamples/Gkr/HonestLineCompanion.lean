@@ -61,7 +61,7 @@ theorem differenceWrapper (model : DomainModel) :
     DifferenceWrapper.Goal model (differenceWrapperReference model) (differenceWrapperCondition model) := by
   apply DifferenceWrapper.of_law model _ _ (differenceWrapperLibrary model) rfl
   · intro high low; rfl
-  · intro table high low dependency; exact dependency
+  · intro table high low dependency; exact dependency _
 
 noncomputable def differenceWrapperLaw (model : DomainModel) :=
   DifferenceWrapper.law model (differenceWrapperReference model) (differenceWrapperCondition model) (differenceWrapper model)
@@ -79,7 +79,7 @@ theorem slopeWrapper (model : DomainModel) :
     SlopeWrapper.Goal model (slopeWrapperReference model) (slopeWrapperCondition model) := by
   apply SlopeWrapper.of_law model _ _ (slopeWrapperLibrary model) rfl
   · intro low high delta; rfl
-  · intro table low high delta dependency; exact dependency
+  · intro table low high delta dependency; exact dependency _
 
 noncomputable def slopeWrapperLaw (model : DomainModel) :=
   SlopeWrapper.law model (slopeWrapperReference model) (slopeWrapperCondition model) (slopeWrapper model)
@@ -97,7 +97,7 @@ theorem slopeCallback (model : DomainModel) :
     SlopeCallback.Goal model (slopeCallbackReference model) (slopeCallbackCondition model) := by
   apply SlopeCallback.of_law model _ _ (slopeCallbackLibrary model) rfl
   · intro low high left right delta; rfl
-  · intro table low high left right delta dependency; exact dependency
+  · intro table low high left right delta dependency; exact dependency _
 
 noncomputable def slopeCallbackLaw (model : DomainModel) :=
   SlopeCallback.law model (slopeCallbackReference model) (slopeCallbackCondition model) (slopeCallback model)
@@ -115,7 +115,7 @@ theorem totalWrapper (model : DomainModel) :
     TotalWrapper.Goal model (totalWrapperReference model) (totalWrapperCondition model) := by
   apply TotalWrapper.of_law model _ _ (totalWrapperLibrary model) rfl
   · intro left right; rfl
-  · intro table left right dependency; exact dependency
+  · intro table left right dependency; exact dependency _
 
 noncomputable def totalWrapperLaw (model : DomainModel) :=
   TotalWrapper.law model (totalWrapperReference model) (totalWrapperCondition model) (totalWrapper model)
@@ -133,7 +133,7 @@ theorem totalCallback (model : DomainModel) :
     TotalCallback.Goal model (totalCallbackReference model) (totalCallbackCondition model) := by
   apply TotalCallback.of_law model _ _ (totalCallbackLibrary model) rfl
   · intro low high left right; rfl
-  · intro table low high left right dependency; exact dependency
+  · intro table low high left right dependency; exact dependency _
 
 noncomputable def totalCallbackLaw (model : DomainModel) :=
   TotalCallback.law model (totalCallbackReference model) (totalCallbackCondition model) (totalCallback model)

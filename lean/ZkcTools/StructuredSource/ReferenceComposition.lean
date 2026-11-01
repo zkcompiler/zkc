@@ -56,8 +56,9 @@ partial def forwarding (body dependency model : Expr) : TermElabM Expr := do
     let law ← forwarding next dependency model
     checkBody (← mkAppM ``ReferenceLibrary.marked #[model, op.getAppArgs.back!, law]) body
   else if op.isAppOf ``Op.invoke then
-    let law ← mkAppM ``ReferenceLibrary.forwardDependency
-      #[model, op.getAppArgs.back!, arguments, dependency]
+    let reference ← mkAppM ``ReferenceLaw.reference #[dependency]
+    let law ← mkAppM ``ReferenceLibrary.forward
+      #[model, op.getAppArgs.back!, arguments, reference]
     checkBody law body
   else throwError "reference composition expects an actual helper call or source marker"
 

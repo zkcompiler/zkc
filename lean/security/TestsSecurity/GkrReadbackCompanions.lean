@@ -27,7 +27,7 @@ private def alteredStep := definition GkrSourceBodies.helper53Helper (.stop .abo
 theorem altered_dependency_stops :
     invoke (closedMeaningsOn model [alteredStep, callbackDefinition])
       GkrSourceBodies.helper54Helper
-      (CallbackArguments.pack { current := 7, index := 0, value := 11, source := [11], position := 0 }) =
+      (Callback.Inputs.pack { current := 7, index := 0, value := 11, source := [11], position := 0 }) =
       .halt .abort := by rfl
 
 /-- A matching dependency name and ABI cannot install its old body law. -/
@@ -45,36 +45,36 @@ theorem altered_dependency_not_realized :
     ¬ (callbackLaw model).Realizes (helper := GkrSourceBodies.helper54Helper)
       (closedMeaningsOn model [alteredStep, callbackDefinition]) := by
   intro claimed
-  have wrong := claimed (CallbackArguments.pack
+  have wrong := claimed (Callback.Inputs.pack
     { current := 7, index := 0, value := 11, source := [11], position := 0 })
   rw [altered_dependency_stops] at wrong
   contradiction
 
 /-- Checked overflow and an allowed out-of-bounds read have different outcomes. -/
 example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper57Helper
-    (ElementArguments.pack { source := [3, 5], position := 2 }) = .done (Element.encode model ⟨0⟩) :=
+    (Element.Inputs.pack { source := [3, 5], position := 2 }) = .done (Element.encode model ⟨0⟩) :=
   element_equation [3, 5] 2 (by decide +kernel) (by decide +kernel)
 
 example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper70Helper
-    (ElementArguments.pack { source := [3, 5], position := indexLimit - 1 }) = .halt .refused :=
+    (Element.Inputs.pack { source := [3, 5], position := indexLimit - 1 }) = .halt .refused :=
   element_after_overflow [3, 5] (indexLimit - 1) (by decide +kernel)
 
 /-- An empty scan has no reached equality/increment, even at an invalid index. -/
 example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper57Helper
-    (ElementArguments.pack { source := [], position := indexLimit }) = .done (Element.encode model ⟨0⟩) := by
+    (Element.Inputs.pack { source := [], position := indexLimit }) = .done (Element.encode model ⟨0⟩) := by
   simp only [GkrSourceLaws.helpers, closedMeanings_eq_closedMeaningsOn]
   have law := (readback_laws (F := Int) (G := Int)).element
-    (ElementArguments.pack { source := [], position := indexLimit })
+    (Element.Inputs.pack { source := [], position := indexLimit })
   change _ = primitiveOutcome (Element.encodeOutcome model (elementReference model [] indexLimit)) at law
   simpa only [elementReference, scanReference, List.length_nil,
     show 0 < indexLimit by decide +kernel, ↓reduceIte,
     Zkc.Algorithms.ListReadback.scan_empty, Element.encodeOutcome, primitiveOutcome] using law
 
 example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper57Helper
-    (ElementArguments.pack { source := [3], position := indexLimit }) = .halt .refused := by
+    (Element.Inputs.pack { source := [3], position := indexLimit }) = .halt .refused := by
   simp only [GkrSourceLaws.helpers, closedMeanings_eq_closedMeaningsOn]
   have law := (readback_laws (F := Int) (G := Int)).element
-    (ElementArguments.pack { source := [3], position := indexLimit })
+    (Element.Inputs.pack { source := [3], position := indexLimit })
   change _ = primitiveOutcome (Element.encodeOutcome model (elementReference model [3] indexLimit)) at law
   simpa only [elementReference, scanReference, List.length_cons, List.length_nil,
     show 0 + 1 < indexLimit by decide +kernel, ↓reduceIte,
@@ -84,10 +84,10 @@ example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.h
 /-- Domain exhaustion is preserved before any callback or index check. -/
 example (source : List Int) (exhausted : ¬ source.length < indexLimit) :
     invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper57Helper
-      (ElementArguments.pack { source, position := indexLimit }) = .halt .exhausted := by
+      (Element.Inputs.pack { source, position := indexLimit }) = .halt .exhausted := by
   simp only [GkrSourceLaws.helpers, closedMeanings_eq_closedMeaningsOn]
   have law := (readback_laws (F := Int) (G := Int)).element
-    (ElementArguments.pack { source, position := indexLimit })
+    (Element.Inputs.pack { source, position := indexLimit })
   change _ = primitiveOutcome (Element.encodeOutcome model (elementReference model source indexLimit)) at law
   simpa only [elementReference, scanReference, exhausted, ↓reduceIte,
     Element.encodeOutcome, primitiveOutcome] using law
@@ -95,22 +95,22 @@ example (source : List Int) (exhausted : ¬ source.length < indexLimit) :
 /-- The successor fails before shape admission, even on an exhausted source. -/
 example (source : List Int) (_exhausted : ¬ source.length < indexLimit) :
     invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.helper70Helper
-      (ElementArguments.pack { source, position := indexLimit - 1 }) = .halt .refused :=
+      (Element.Inputs.pack { source, position := indexLimit - 1 }) = .halt .refused :=
   element_after_overflow source (indexLimit - 1) (by decide +kernel)
 
 /-- The full fold result includes the advanced cursor, not only the selection. -/
 example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.scopedHelper82Helper
-    (ScanArguments.pack { source := [11, 13], current := 7, index := 2, position := 3 }) =
+    (Scan.Inputs.pack { source := [11, 13], current := 7, index := 2, position := 3 }) =
       .done (Scan.encode model ⟨13, 4⟩) :=
   read_fold [11, 13] 3 2 7 (by decide +kernel) (by decide +kernel)
 
 /-- The actual scan still checks later increments after selecting its value. -/
 example : invoke (GkrSourceLaws.helpers (F := Int) (G := Int)) GkrSourceBodies.scopedHelper82Helper
-    (ScanArguments.pack
+    (Scan.Inputs.pack
       { source := [3, 5], current := 0, index := indexLimit - 2, position := indexLimit - 2 }) = .halt .refused := by
   simp only [GkrSourceLaws.helpers, closedMeanings_eq_closedMeaningsOn]
   have law := (readback_laws (F := Int) (G := Int)).scan
-    (ScanArguments.pack
+    (Scan.Inputs.pack
       { source := [3, 5], current := 0, index := indexLimit - 2, position := indexLimit - 2 })
   change _ = primitiveOutcome (Scan.encodeOutcome model
     (scanReference model [3, 5] 0 (indexLimit - 2) (indexLimit - 2))) at law
@@ -159,7 +159,7 @@ theorem variant_companion : Variant.Goal model variantReference
     cases outcome : afterReference model source position <;>
       simp [variantReference, outcome, After.encodeOutcome, After.encode,
         Variant.encodeOutcome, Variant.encode]
-  · intro table position retained source dependency; exact dependency
+  · intro table position retained source dependency; exact dependency _
 
 private def variantDefinition := definition variantHelper variantBody
 

@@ -1367,6 +1367,7 @@ import ZkcTools.StructuredSource.PropertyInstallation
 import ZkcTools.StructuredSource.ReferenceComposition
 import ZkcTools.StructuredSource.ReferenceInstallation
 import ZkcTools.StructuredSource.ReferenceLaws
+import ZkcTools.StructuredSource.ReferenceRules
 import ZkcTools.StructuredSource.Root
 import ZkcTools.StructuredSource.SourceCalls
 import ZkcTools.StructuredSource.TemplateInstallation

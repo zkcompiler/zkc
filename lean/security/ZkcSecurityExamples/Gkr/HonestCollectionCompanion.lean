@@ -135,27 +135,27 @@ structure Laws (table : Evaluation.MeaningsOn model.toCarriers closedInterface) 
 theorem install (definitions : List CheckedDefinition) (linked : DeclarationsLinked [] definitions)
     (bodies : Bodies definitions) : Laws model (closedMeaningsOn model definitions) := by
   have repeated := install_collection% (repeatLaw model) for_helper GkrSourceBodies.helper20Helper in_definitions definitions
-    linked_by linked body_at bodies.repeated view_by RepeatArguments.pack_surjective requiring True.intro
+    linked_by linked body_at bodies.repeated view_by Repeat.Inputs.pack_surjective requiring True.intro
   have repeatWrapper := install_collection% (repeatWrapperLaw model) for_helper GkrSourceBodies.helper21Helper in_definitions definitions
-    linked_by linked body_at bodies.repeatWrapper view_by RepeatArguments.pack_surjective requiring repeated
+    linked_by linked body_at bodies.repeatWrapper view_by Repeat.Inputs.pack_surjective requiring (repeated _)
   have replicateStep := install_collection% (replicateStepLaw model) for_helper GkrSourceBodies.helper22Helper in_definitions definitions
-    linked_by linked body_at bodies.replicateStep view_by ReplicateStepArguments.pack_surjective requiring repeatWrapper
+    linked_by linked body_at bodies.replicateStep view_by ReplicateStep.Inputs.pack_surjective requiring (repeatWrapper _)
   have replicateFold := install_collection% (replicateFoldLaw model) for_helper GkrSourceBodies.scopedHelper45Helper in_definitions definitions
-    linked_by linked body_at bodies.replicateFold view_by ReplicateFoldArguments.pack_surjective requiring replicateStep
+    linked_by linked body_at bodies.replicateFold view_by ReplicateFold.Inputs.pack_surjective requiring replicateStep
   have replicateWrapper := install_collection% (replicateWrapperLaw model) for_helper GkrSourceBodies.helper24Helper in_definitions definitions
-    linked_by linked body_at bodies.replicateWrapper view_by ReplicateWrapperArguments.pack_surjective requiring replicateFold
+    linked_by linked body_at bodies.replicateWrapper view_by ReplicateWrapper.Inputs.pack_surjective requiring (replicateFold _)
   have replicated := install_collection% (replicateLaw model) for_helper GkrSourceBodies.helper25Helper in_definitions definitions
-    linked_by linked body_at bodies.replicate view_by ReplicateArguments.pack_surjective requiring replicateWrapper
+    linked_by linked body_at bodies.replicate view_by Replicate.Inputs.pack_surjective requiring replicateWrapper
   have appended := install_collection% (appendLaw model) for_helper GkrSourceBodies.helper26Helper in_definitions definitions
-    linked_by linked body_at bodies.append view_by AppendArguments.pack_surjective requiring True.intro
+    linked_by linked body_at bodies.append view_by Append.Inputs.pack_surjective requiring True.intro
   have appendStep := install_collection% (appendStepLaw model) for_helper GkrSourceBodies.helper27Helper in_definitions definitions
-    linked_by linked body_at bodies.appendStep view_by AppendStepArguments.pack_surjective requiring appended
+    linked_by linked body_at bodies.appendStep view_by AppendStep.Inputs.pack_surjective requiring (appended _)
   have appendFold := install_collection% (appendFoldLaw model) for_helper GkrSourceBodies.scopedHelper48Helper in_definitions definitions
-    linked_by linked body_at bodies.appendFold view_by AppendFoldArguments.pack_surjective requiring appendStep
+    linked_by linked body_at bodies.appendFold view_by AppendFold.Inputs.pack_surjective requiring appendStep
   have concatenate := install_collection% (concatenateLaw model) for_helper GkrSourceBodies.helper29Helper in_definitions definitions
-    linked_by linked body_at bodies.concatenate view_by ConcatenateArguments.pack_surjective requiring appendFold
+    linked_by linked body_at bodies.concatenate view_by Concatenate.Inputs.pack_surjective requiring (appendFold _)
   have tiled := install_collection% (tileLaw model) for_helper GkrSourceBodies.helper30Helper in_definitions definitions
-    linked_by linked body_at bodies.tile view_by ReplicateArguments.pack_surjective requiring concatenate
+    linked_by linked body_at bodies.tile view_by Replicate.Inputs.pack_surjective requiring concatenate
   exact ⟨repeated, repeatWrapper, replicateStep, replicateFold, replicateWrapper,
     replicated, appended, appendStep, appendFold, concatenate, tiled⟩
 

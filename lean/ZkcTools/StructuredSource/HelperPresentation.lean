@@ -29,8 +29,11 @@ generated goal types also work with the existing companion resolver.
 `run_eq` and `equation` are kernel-checked structural equations. The latter
 has the independently generated `SourceEquation` type. `of_law` transports an
 ordinary installed law after checking its exact body, complete reference and
-premises. `law` performs the converse assembly from a proof of `Goal`; it does
-not discharge dependency premises or the caller's final relation link.
+premises. `of_installed` decodes that law's complete reference and retains
+exactly its premises on the packed inputs. `encodeOutcome` and `decodeOutcome`
+are inverse transports, including every stopped reason. `law` performs the
+converse assembly from a proof of `Goal`; it does not discharge dependency
+premises or the caller's final relation link.
 -/
 
 set_option autoImplicit false
@@ -123,8 +126,9 @@ def generate : CommandElab := fun stx => do
   let outputNames := outs.getElems.toList.map (·.getId.toString)
   let reserved := ["model", "table", "reference", "condition", "arguments", "result", "proof",
     "body", "run", "encode", "decode", "premise", "installed", "same", "reference_eq", "premises",
-    "Inputs", "Output", "Goal", "SourceEquation", "encodeOutcome", "encode_decode", "decode_encode",
-    "run_eq", "equation", "of_law", "law", "mk", "Values", "Region", "DomainModel",
+    "Inputs", "Output", "Goal", "SourceEquation", "encodeOutcome", "decodeOutcome", "outcome",
+    "encode_decode", "decode_encode", "encode_decode_outcome", "decode_encode_outcome",
+    "run_eq", "equation", "of_law", "of_installed", "law", "mk", "Values", "Region", "DomainModel",
     "Evaluation", "PIR", "Closed", "ReferenceLaw", "primitiveOutcome"]
   for names in [inputNames, outputNames] do
     unless names.eraseDups.length == names.length do
@@ -177,11 +181,20 @@ def generate : CommandElab := fun stx => do
   command ("def encodeOutcome (model : DomainModel) (outcome : PIR.Outcome (Output model)) : PIR.Outcome (Values model.Value [" ++
     String.intercalate ", " outputTypes ++ "]) := match outcome with\n" ++
     "| .returned result => .returned (encode model result) | .stopped reason => .stopped reason")
+  command ("def decodeOutcome (model : DomainModel) (outcome : PIR.Outcome (Values model.Value [" ++
+    String.intercalate ", " outputTypes ++ "])) : PIR.Outcome (Output model) := match outcome with\n" ++
+    "| .returned result => .returned (decode model result) | .stopped reason => .stopped reason")
   command ("theorem encode_decode (model : DomainModel) (arguments : Values model.Value [" ++
     String.intercalate ", " outputTypes ++ "]) : encode model (decode model arguments) = arguments := by\n  " ++
     String.join (outputNames.map fun name => "cases arguments with | cons " ++ name ++ " arguments => ") ++
     "cases arguments; rfl")
   command "theorem decode_encode (model : DomainModel) (result : Output model) : decode model (encode model result) = result := by cases result; rfl"
+  command ("theorem encode_decode_outcome (model : DomainModel) (outcome : PIR.Outcome (Values model.Value [" ++
+    String.intercalate ", " outputTypes ++ "])) : encodeOutcome model (decodeOutcome model outcome) = outcome := by\n" ++
+    "  cases outcome <;> simp only [decodeOutcome, encodeOutcome, encode_decode]")
+  command ("theorem decode_encode_outcome (model : DomainModel) (outcome : PIR.Outcome (Output model)) :\n" ++
+    "  decodeOutcome model (encodeOutcome model outcome) = outcome := by\n" ++
+    "  cases outcome <;> simp only [encodeOutcome, decodeOutcome, decode_encode]")
   let rawView := "(body.denote (Evaluation.meaningOn model SiteObservations.closed table) (" ++
     values inputNames ++ " : Values model.Value [" ++ String.intercalate ", " inputTypes ++
     "]).get).bind (fun result => .done (decode model result))"
@@ -215,6 +228,15 @@ def generate : CommandElab := fun stx => do
     "  rw [← run_eq]\n" ++
     "  rw [← same, installed.valid table _ (premises table " ++ arguments ++ " premise), reference_eq]\n" ++
     "  cases reference " ++ arguments ++ " <;> simp only [encodeOutcome, primitiveOutcome, PIR.Process.bind, decode_encode]")
+  let curryInputs := if inputNames.isEmpty then "" else "fun " ++ arguments ++ " => "
+  command ("theorem of_installed (model : DomainModel) (installed : " ++ abi ++ ")\n" ++
+    "  (same : installed.body = body) : Goal model\n" ++
+    "  (" ++ curryInputs ++ "decodeOutcome model (installed.reference (" ++ values inputNames ++ ")))\n" ++
+    "  (fun table " ++ arguments ++ " => installed.Requires table (" ++ values inputNames ++ ")) := by\n" ++
+    "  apply of_law model _ _ installed same\n" ++
+    "  · " ++ (if inputNames.isEmpty then "" else "intro " ++ arguments ++ "; ") ++
+    "exact (encode_decode_outcome model _).symm\n" ++
+    "  · intro table " ++ arguments ++ " premise; exact premise")
   -- Goal is the author-facing name of this complete equation. The installer
   -- consumes the equation itself, so its generated equation lemmas introduce
   -- no new named hypothesis schema for each source helper. All conditions and

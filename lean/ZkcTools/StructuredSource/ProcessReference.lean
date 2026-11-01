@@ -2,6 +2,7 @@ module
 
 public meta import ZkcTools.Generation.Commands
 public meta import ZkcTools.StructuredSource.Composition
+public meta import ZkcTools.StructuredSource.ReferenceRules
 public meta import Lean.Elab.Command
 public meta import Lean.Elab.Term
 public meta import Lean.Meta.Tactic.Simp.Main
@@ -17,10 +18,35 @@ can change the selected source or omit an output, effect, or stopped branch. -/
 namespace ZkcTools.StructuredSource.ProcessReference
 open Lean Meta Elab Term
 
+-- The selected source form and mathematical laws remain explicit. This set
+-- only removes the common typed normal-form plumbing when requested.
+attribute [zkc_source_structure]
+  Zkc.Source.Structured.NormalForm.Form.denoteOn
+  Zkc.Source.Structured.NormalForm.Form.denoteWithOn
+  Zkc.Source.Structured.NormalForm.Comps.eval
+  Zkc.Source.Structured.NormalForm.Comp.eval
+  Zkc.Source.Structured.NormalForm.Term.eval
+  Zkc.Source.Structured.NormalForm.Terms.eval
+  Zkc.Source.Structured.NormalForm.entryAt
+  Zkc.Source.Structured.NormalForm.firstEntry
+  Zkc.Source.Structured.NormalForm.laterEntries
+  Zkc.Source.Structured.NormalForm.Arguments.eval
+  Zkc.Source.Structured.NormalForm.Argument.eval
+  Zkc.Source.Structured.ProtocolPresentation.callees
+  Zkc.Source.Structured.NormalForm.calleeAt
+  Zkc.Source.Structured.NormalForm.InputPattern.environment
+  Zkc.Source.Structured.Bindings.optionalPattern
+  Zkc.Source.Structured.Op.evalTotal
+  Zkc.Source.Values.get
+
 private def rewriteContext (laws : Array (TSyntax `term)) : TermElabM Simp.Context := do
   let mut theorems : SimpTheorems := {}
+  let mut selectedSets : Array SimpTheorems := #[]
   for law in laws do
     if law.raw.isIdent then
+      if let some extension ← getSimpExtension? law.raw.getId then
+        selectedSets := selectedSets.push (← extension.getTheorems)
+        continue
       let name ← resolveGlobalConstNoOverload law
       let info ← getConstInfo name
       -- Public module imports need not expose a theorem's stored proof body.
@@ -34,7 +60,7 @@ private def rewriteContext (laws : Array (TSyntax `term)) : TermElabM Simp.Conte
       if proof.hasExprMVar then
         throwError "process reference law leaves unresolved arguments"
       theorems ← theorems.add (.stx (← mkFreshId) law) #[] proof
-  Simp.mkContext (simpTheorems := #[theorems])
+  Simp.mkContext (simpTheorems := #[theorems] ++ selectedSets)
 
 /-- Reduce source row access beneath dependent applications and optional
 branches. Ordinary simp intentionally avoids some dependent arguments. These

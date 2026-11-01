@@ -4,6 +4,35 @@ import ZkcTools.Companions.Assembly
 set_option autoImplicit false
 open Lean Elab Command Term Meta ZkcTools.Companions
 
+@[zkc "Assembly.registered"] theorem companionShadowTarget : True := True.intro
+
+/- A registered declaration keeps its identity even when local notation would
+resolve the same spelling to a proof of a different proposition. -/
+run_elab do
+  let selection : Array Selection := #[⟨"Assembly.registered", #[]⟩]
+  withLocalDeclD `companionShadowTarget (Lean.mkConst ``False) fun shadow => do
+    let wanted := Lean.mkConst ``True
+    let matched ← resolve selection wanted
+    match matched with
+    | .matched _ declaration value =>
+        unless declaration == ``companionShadowTarget &&
+            value.isConstOf ``companionShadowTarget do
+          throwError "registered companion identity was captured by a local name"
+    | _ => throwError "a local name refused a valid registered companion"
+    let direct ← resolve selection (Lean.mkConst ``False)
+    unless (match direct with | .refused _ _ => true | _ => false) do
+      throwError "a local proof replaced the registered declaration"
+    let fallback : DefaultMethod := ⟨"local-proof", ← exprToSyntax shadow⟩
+    let result ← assemble selection (Lean.mkConst ``False) #[fallback]
+    unless (match result with | .refused _ _ => true | _ => false) do
+      throwError "fallback hid a captured registered companion"
+    let accepted ← assemble selection wanted #[]
+    unless (match accepted with
+      | .discharged value method _ => value.isConstOf ``companionShadowTarget &&
+          method == "companion:Assembly.registered"
+      | _ => false) do
+      throwError "assembly did not use the selected registered declaration"
+
 run_elab do
   let expected := Lean.mkConst ``True
   let good : DefaultMethod := ⟨"truth", ← `(term| True.intro)⟩

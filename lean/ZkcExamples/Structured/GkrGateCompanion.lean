@@ -44,7 +44,7 @@ theorem realization (model : DomainModel) :
     Realization.Goal model (realizationReference model) (realizationCondition model) := by
   apply Realization.of_law model _ _ (realizationLibrary model) rfl
   · intro addWeight mulWeight left right; rfl
-  · intro table addWeight mulWeight left right dependency; exact dependency
+  · intro table addWeight mulWeight left right dependency; exact dependency _
 
 noncomputable def realizationLaw (model : DomainModel) :=
   Realization.law model (realizationReference model) (realizationCondition model) (realization model)
@@ -66,7 +66,7 @@ theorem callback (model : DomainModel) :
   apply Callback.of_law model _ _ (callbackLibrary model) rfl
   · intro addWeight mulWeight left right addWeights mulWeights lefts rights; rfl
   · intro table addWeight mulWeight left right addWeights mulWeights lefts rights dependency
-    exact dependency
+    exact dependency _
 
 noncomputable def callbackLaw (model : DomainModel) :=
   Callback.law model (callbackReference model) (callbackCondition model) (callback model)
