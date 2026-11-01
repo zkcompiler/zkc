@@ -236,6 +236,7 @@ def main():
         ROOT / "lib/Transforms/RealizationEmission.h",
         ROOT / "lib/Transforms/OracleCommonRealization.h",
         ROOT / "lib/Transforms/OracleCommonPlan.h",
+        ROOT / "lib/Transforms/OracleRealizationFacts.h",
         ROOT / "lib/Transforms/OracleRealizationSelection.h",
         ROOT / "lib/Transforms/OracleVirtualRecipe.h",
         ROOT / "lib/Transforms/OracleVerificationContext.h",
@@ -274,6 +275,7 @@ def main():
         ROOT / "lib/Compiler/CompilationState.h",
         ROOT / "lib/Compiler/ComponentContracts.h",
         ROOT / "lib/Compiler/SourceArtifacts.h",
+        ROOT / "lib/Compiler/SourceView.h",
         ROOT / "lib/Compiler/Run.h", ROOT / "lib/Compiler/ArtifactJson.h",
         ROOT / "lib/Compiler/ApplicationMapData.h",
         ROOT / "lib/Compiler/LanguageInterface.h",
@@ -323,6 +325,10 @@ def main():
     bridges = {("ZkcDriver", ROOT / "lib/Support/Input.h"),
                ("ZkcCompiler", ROOT / "lib/Transforms/PreparedProtocol.h"),
                ("ZkcCompiler", ROOT / "lib/Transforms/RealizedProtocol.h")}
+    # The checked owner exposes these data-only facts, not its planner or
+    # emitter. Keep that transitive implementation boundary explicit.
+    bridges.update((name, ROOT / "lib/Transforms/OracleRealizationFacts.h")
+                   for name in ("ZkcCompiler", "ZkcCpuTarget"))
     bridges.update(("ZkcCpuTarget", ROOT / f"lib/Compiler/{name}.h") for name in ("CompilationState", "LanguageDiagnostics", "HostReferences", "MathematicalOptions", "NativeDeployment", "ArtifactJson", "Run", "LanguageInterface", "LanguagePackageReader", "PublicCoin"))
     bridges.update(("ZkcCpuTarget", ROOT / f"lib/Transforms/{name}.h") for name in ("PreparedProtocol", "RealizedProtocol", "MathematicalSupport", "NativeBindingApplication", "MathematicalPassOptions", "Computation/Support", "NumericalSelection", "ScopedPreparation", "FiniteVerification", "MathematicalRecipes", "ScopedCallback"))
     assert not (ROOT / "include/zkc/Dialect/Builders.h").exists(), "raw builders belong to unsupported detail"

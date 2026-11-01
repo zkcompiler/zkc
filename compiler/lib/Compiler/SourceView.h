@@ -9,7 +9,8 @@
 
 namespace mlir {
 class AsmParserState;
-}
+class IRMapping;
+} // namespace mlir
 namespace llvm {
 class SourceMgr;
 }
@@ -82,6 +83,10 @@ namespace zkc::language::detail {
 // Private access clones the admitted module; no mutable checked handle crosses
 // the public language API. The returned view retains its context owner.
 struct OriginalAccess {
+  // The clone borrows the original's context. Keep the original alive until
+  // the clone is destroyed; rewriting the clone cannot change that original.
+  static mlir::OwningOpRef<mlir::ModuleOp>
+  clone(const CheckedOriginal &, mlir::IRMapping *mapping = nullptr);
   static llvm::Expected<protocol::SourceView> read(const CheckedOriginal &);
 };
 } // namespace zkc::language::detail

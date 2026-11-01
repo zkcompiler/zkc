@@ -21,8 +21,8 @@ llvm::Error withInterface(
     llvm::StringRef original, llvm::StringRef interface, const Limits &,
     llvm::ArrayRef<Asset>,
     llvm::function_ref<llvm::Error(mlir::ModuleOp, LanguageInterface &&)>);
-/// Reuse admitted immutable metadata; tighter limits take the byte-admission
-/// path.
+/// Reuse admitted immutable metadata and inspect an independent module clone.
+/// Tighter limits require fresh byte admission under the requested policy.
 llvm::Error withInterface(
     const CheckedOriginal &, const Limits &,
     llvm::function_ref<llvm::Error(mlir::ModuleOp, const LanguageInterface &)>);

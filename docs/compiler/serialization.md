@@ -51,6 +51,13 @@ The owner is intentionally local to a compilation; no global mutable IR cache is
 introduced. Any later caching or lazy projection must preserve the same admission,
 source-association and invalidation rules.
 
+Fresh target compilation admits the authenticated original bytes into an isolated
+compilation context. Target installations, diagnostics and rewriting then belong
+to that compilation; it does not reimport a generated semantic report. Read-only
+inspection of a checked original uses its retained module through a clone. If a
+caller requests tighter limits than the original admission established, inspection
+must re-admit under those limits instead of reusing the weaker judgment.
+
 ## Encoding and identity
 
 MLIR assembly and bytecode encode the same compiler IR. Bytecode is appropriate

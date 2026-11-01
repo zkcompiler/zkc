@@ -325,21 +325,27 @@ Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
   storage->module = std::move(module);
   return CheckedOriginal(std::move(storage));
 }
+mlir::OwningOpRef<mlir::ModuleOp>
+detail::OriginalAccess::clone(const CheckedOriginal &original,
+                              mlir::IRMapping *mapping) {
+  auto source = original.storage->module.get();
+  return mlir::OwningOpRef<mlir::ModuleOp>(mlir::cast<mlir::ModuleOp>(
+      mapping ? source->clone(*mapping) : source->clone()));
+}
 Expected<protocol::SourceView>
 detail::OriginalAccess::read(const CheckedOriginal &original) {
   if (!original.entry().protocolOrNull())
     return error("source.entry", "structured source requires a protocol");
   const auto &storage = *original.storage;
   mlir::IRMapping mapping;
-  auto clone = mlir::OwningOpRef<mlir::ModuleOp>(
-      mlir::cast<mlir::ModuleOp>(storage.module.get()->clone(mapping)));
+  auto copy = clone(original, &mapping);
   llvm::DenseMap<mlir::Operation *, mlir::Operation *> written;
   storage.module.get()->walk([&](mlir::Operation *op) {
     if (auto *copy = mapping.lookupOrNull(op))
       written[copy] = op;
   });
   auto result = protocol::readSourceView(
-      std::move(clone), original.bytes(), original.entry().protocol().symbol,
+      std::move(copy), original.bytes(), original.entry().protocol().symbol,
       storage.parser.get(), storage.sourceManager.get(), &written);
   if (!result)
     return result.takeError();
