@@ -4,9 +4,10 @@ This is an optional test workspace. It does not add an EVM engine to the SDK,
 decode a native program in EVM, or implement a replacement Sumcheck prover.
 The runner uses revm **43.0.3**, whose MSRV is Rust 1.91, with Rust 1.99 in the
 development environment. Its own `Cargo.lock` freezes transitive dependencies.
-Cancun is explicit; standard precompiles, gas, initcode and runtime size limits
-remain enabled. Each request deploys the supplied creation bytes once into fresh state, reads
-the installed code, then invokes that same deployment one to eight times. Calls
+The selected Cancun or Prague fork is explicit; standard precompiles, gas,
+initcode and runtime size limits remain enabled. Each request deploys the supplied
+creation bytes once into fresh state, reads the installed code, then invokes that
+same deployment one to eight times. Calls
 commit storage and advance the caller nonce; passive traces reset for each call.
 
 From the repository root:
@@ -35,7 +36,7 @@ by `0x`:
   "calldata": "...",
   "gas_limit": 20000000,
   "deployment_gas_limit": 5000000,
-  "fork": "Cancun",
+  "fork": "cancun",
   "repeat_count": 2
 }
 ```
@@ -54,7 +55,8 @@ the top-level runtime result describes the first call. `repeat_count` defaults
 to one and must be between one and eight. Installed code is checked after every
 call. `test_engine.py` uses a storage counter to prove state persists and traces
 do not accumulate.
-Gas includes transaction intrinsic gas and the normal Cancun charges. Deployment
+`fork` is exactly `cancun` or `prague`; results repeat that selection. Gas includes
+transaction intrinsic gas and the selected fork's normal charges. Deployment
 failure sets `phase=deployment` and `runtime_gas=null`. Transaction admission,
 JSON, runtime pin and trace-capacity errors use `error` and nonzero process exit;
 they are not EVM false/revert/halt. Limits are 4 MiB JSON, 100 million gas per
@@ -175,7 +177,9 @@ pin. Optional paired `evm_native --evm-artifact DIR --evm-sha256 PIN` calls
 source and descriptor agreement and exports calldata, authenticated hashes and
 the exact captured bytecode under `evm` in the fixture. `validate.py` compares
 that calldata against the independent Python codec and requires supplied
-bytecode to equal the SDK export. `native_fixtures.py` accepts the same paired
+bytecode and the selected execution fork to equal the SDK export. Pass
+`--evm-version=prague` to validation and capacity commands for a Prague artifact;
+a mismatch refuses before execution. `native_fixtures.py` accepts the same paired
 options for the complete matrix.
 
 Pass the unmodified **binary** creation/runtime files to the execution helper; `--bytecode-format hex` is available for explicit hex files.
@@ -240,3 +244,35 @@ Immutable lower budgets and aggregate capacity must come from real compiler
 options, with separate artifact identities and matching fixtures. No calldata
 field changes a deployment limit. Exact captured release traces, including a
 separate omitted-final-hash mutant, are required after source or tool changes.
+
+## Common layout and arithmetic controls
+
+The same adapter tests the shared target layouts without protocol-specific
+execution. Build `evm_fixture` in `zkc-test-drivers` and the compiler's
+`zkc-evm_wire-test` consumer, then run:
+
+```sh
+CARGO_BUILD_JOBS=2 cargo build --locked -p zkc-test-drivers --bin evm_fixture
+python3 common/tests/evm/foundation_controls.py \
+ --compiler build/compiler/zkc-compile --native-driver target/debug/evm_fixture \
+ --solc /pinned/solc --runner /path/to/zkc-evm-test-runner \
+ --output build/experiments/evm-foundation
+python3 common/tests/evm/wire_controls.py \
+ --consumer build/compiler/test/zkc-evm_wire-test --compiler build/compiler/zkc-compile \
+ --solc /pinned/solc --runner /path/to/zkc-evm-test-runner \
+ --output build/experiments/evm-wire
+```
+
+The foundation controls use real native producers, independent prime/binomial
+arithmetic, and complete invocation/transcript hash oracles. They cover
+structured observations, non-first acceptance, extension-vector strides, nested
+and filtered finite callbacks, empty admission, source stops and later malformed
+frames. Participant-loop controls retain distinct Copy formals bound to the
+same parent value, including empty loops and altered messages. Success requires
+the exact 32-byte ABI Boolean; refusals require the exact class, code and hash
+frontier. The wire consumer emits the production expected-type helpers; separate
+raw-value views check coefficient order independently of their encoder. Its
+controls cover whole-value node/element/memory budgets, inactive/empty type
+refusals, fixed arrays, and opaque root/path envelopes. Envelope transport does
+not establish cryptographic authentication. These are bounded differential
+controls, not a general EVM refinement proof.

@@ -30,7 +30,8 @@ The fresh output directory contains Yul, ABI, creation and runtime bytecode,
 exact compiler metadata/settings and a manifest. Retain the reported manifest
 SHA-256 independently. The contract's `verify(bytes[],bytes,bytes)` arguments are
 canonical public ZKCV frames in descriptor order, context bytes and the unchanged
-native proof. Its target is Cancun. See the [EVM contract](../../../docs/spec/targets/evm.md)
+native proof. Cancun is the default; use `--evm-version=prague` to select Prague.
+See the [EVM contract](../../../docs/spec/targets/evm.md)
 for limits and failure behavior, and the [deployed checks](../../../common/tests/evm/README.md)
 for the independent native/EVM comparison.
 

@@ -1,0 +1,32 @@
+module filtered;
+domain F = field("koala-bear.ext4-binomial3");
+type Vector<E:Field> = builtin("vector", E);
+domain fn elements<E:Field>(xs:Vector<E>)->domain<E> = domain("elements");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item,rows))->S effects(stop) = finite("local.fold");
+fn fold_where<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,keep:fn(item:I)->bool effects(stop) where item_from(item,rows),step:fn(S,item:I)->S effects(stop) where item_from(item,rows))->S effects(stop) = finite("local.fold_where");
+fn collect_where<I:Type+Copy+Drop,E:Field>(rows:domain<I>,keep:fn(item:I)->bool effects(stop) where item_from(item,rows),body:fn(item:I)->E effects(stop) where item_from(item,rows))->Vector<E> effects(stop) = finite("local.collect.vector_where");
+fn work(values:Vector<F>,enabled:bool,seed:F)->(F,F,F) {
+  let first=fold_where(elements(values),seed,fn(x)=>enabled,
+    fn(state,x)=>state+kernel<F>("field.inverse",x));
+  let selected=collect_where(elements(values),fn(x)=>enabled,
+    fn(x)=>kernel<F>("field.inverse",x));
+  let second=fold(elements(selected),seed,fn(state,x)=>state+x);
+  let pair=fold_where(elements(values),(seed,seed),fn(x)=>enabled,
+    fn((left,right),x)=>(left+x,right*x));
+  let (left,right)=pair;
+  return(first+second,left,right);
+}
+protocol Check roles(P,V)(
+  values:Vector<F>@P,later:F@P,enabled:bool@V,seed:F@V,
+  first:F@V,second:F@V,third:F@V
+)->(extra:(F,F,F)@V,accepted:bool@V) {
+  let received=send P->V(values);
+  let actual@V=work(received,enabled,seed);
+  let trailing=send P->V(later);
+  let (one,two,three)=actual;
+  return(extra=actual,accepted=one==first&&two==second&&three==third);
+}
+proof Proof=Check {
+  prover P; verifier V; public{enabled,seed,first,second,third};
+  accept accepted; construction authored;
+}

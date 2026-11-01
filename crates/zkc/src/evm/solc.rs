@@ -22,7 +22,7 @@ pub(super) fn input(source: &Source) -> Value {
         "language":"Yul",
         "sources":{"verifier.yul":{"content":source.yul()}},
         "settings":{
-            "evmVersion":"cancun",
+            "evmVersion":source.fork(),
             "optimizer":{"enabled":true,"details":{"yul":true,"yulDetails":{"optimizerSteps":":"}}},
             "outputSelection":{"*":{"*":["evm.bytecode.object","evm.deployedBytecode.object"]}}
         }
@@ -145,7 +145,7 @@ impl Solc {
             compiler_sha256: build.compiler_sha256.into(),
             solc_sha256: self.sha256.clone(),
             solc_version: SOLC_VERSION.into(),
-            evm_version: "cancun".into(),
+            evm_version: build.source.fork(),
             files: files
                 .iter()
                 .map(|(name, bytes)| (name.clone(), hash(bytes)))

@@ -22,13 +22,37 @@ const MAX_EVENTS: usize = 16384;
 const MAX_GAS: u64 = 100_000_000;
 const MAX_REPEAT: u64 = 8;
 
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum EvmFork {
+    Cancun,
+    Prague,
+}
+impl<'de> Deserialize<'de> for EvmFork {
+    fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> Result<Self, D::Error> {
+        match String::deserialize(decoder)?.as_str() {
+            "cancun" => Ok(Self::Cancun),
+            "prague" => Ok(Self::Prague),
+            _ => Err(serde::de::Error::custom("unsupported-fork")),
+        }
+    }
+}
+impl EvmFork {
+    fn spec(self) -> SpecId {
+        match self {
+            Self::Cancun => SpecId::CANCUN,
+            Self::Prague => SpecId::PRAGUE,
+        }
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Request {
     creation_bytecode: String,
     calldata: String,
     gas_limit: u64,
-    fork: String,
+    fork: EvmFork,
     #[serde(default)]
     deployment_gas_limit: Option<u64>,
     #[serde(default)]
@@ -210,9 +234,6 @@ fn run(request: Request) -> Result<Value, String> {
     if !(1..=MAX_REPEAT).contains(&repeat) {
         return Err("runner-repeat-cap".into());
     }
-    if request.fork != "Cancun" && request.fork != "cancun" {
-        return Err("unsupported-fork".into());
-    }
     let deploy_gas = request.deployment_gas_limit.unwrap_or(request.gas_limit);
     if request.gas_limit > MAX_GAS || deploy_gas > MAX_GAS {
         return Err("runner-gas-cap".into());
@@ -235,7 +256,7 @@ fn run(request: Request) -> Result<Value, String> {
     );
     let context = Context::mainnet()
         .with_db(db)
-        .modify_cfg_chained(|cfg| cfg.set_spec_and_mainnet_gas_params(SpecId::CANCUN))
+        .modify_cfg_chained(|cfg| cfg.set_spec_and_mainnet_gas_params(request.fork.spec()))
         .modify_block_chained(|block| {
             block.gas_limit = MAX_GAS;
             block.basefee = 0;
@@ -258,7 +279,7 @@ fn run(request: Request) -> Result<Value, String> {
     }
     let Some(address) = deployment.created_address() else {
         return Ok(
-            json!({"engine":"revm/43.0.3", "fork":"Cancun", "phase":"deployment",
+            json!({"engine":"revm/43.0.3", "fork":request.fork, "phase":"deployment",
             "status":result_json(&deployment)["status"], "deployment":result_json(&deployment),
             "output":result_json(&deployment)["output"], "deployment_gas":deployment.tx_gas_used(),
             "runtime_gas":null, "code_size":0, "trace":[], "deployment_trace":deployment_trace.events}),
@@ -330,7 +351,7 @@ fn run(request: Request) -> Result<Value, String> {
     }
     let execution_json = &calls[0];
     Ok(
-        json!({"engine":"revm/43.0.3", "fork":"Cancun", "phase":"runtime",
+        json!({"engine":"revm/43.0.3", "fork":request.fork, "phase":"runtime",
         "status":execution_json["status"], "reason":execution_json["reason"],
         "output":execution_json["output"], "deployment":result_json(&deployment),
         "deployment_gas":deployment.tx_gas_used(), "runtime_gas":execution_json["gas_used"],

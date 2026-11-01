@@ -17,6 +17,54 @@ pub const SOLC_VERSION: &str = "0.8.38+commit.1835d247";
 pub const FORMAT: &str = "zkc.evm-artifact/0";
 const MAX_BYTES: usize = 16 * 1024 * 1024;
 
+/// Exact deployment fork. Only these typed values can reach solc settings.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EvmFork {
+    #[default]
+    Cancun,
+    Prague,
+}
+impl<'de> serde::Deserialize<'de> for EvmFork {
+    fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> std::result::Result<Self, D::Error> {
+        let value = <String as serde::Deserialize>::deserialize(decoder)?;
+        value.parse().map_err(serde::de::Error::custom)
+    }
+}
+impl EvmFork {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Cancun => "cancun",
+            Self::Prague => "prague",
+        }
+    }
+}
+impl std::str::FromStr for EvmFork {
+    type Err = Error;
+    fn from_str(value: &str) -> Result<Self> {
+        match value {
+            "cancun" => Ok(Self::Cancun),
+            "prague" => Ok(Self::Prague),
+            _ => Err("evm-fork".into()),
+        }
+    }
+}
+
+/// Common resolved compiler options and a target deployment setting.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Options {
+    pub fork: EvmFork,
+    pub compile: crate::entry::CompileOptions,
+}
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            fork: EvmFork::default(),
+            compile: crate::project::ResolvedSettings::default().options(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Error(pub String);
 impl fmt::Display for Error {
@@ -91,7 +139,41 @@ fn source_limits(value: &Value) -> Result<()> {
     Ok(())
 }
 
-fn source_descriptor(record: &Value) -> Result<()> {
+fn source_options(value: &Value) -> Result<crate::entry::CompileOptions> {
+    let mut options = value.clone();
+    exact_object(
+        &options,
+        &[
+            "simplify",
+            "release_storage",
+            "finite_bulk",
+            "fuse_vector_reductions",
+            "fuse_collect_fold",
+            "calculation_batching",
+            "oracle_realization",
+            "numerical_expressions",
+        ],
+        "evm-source-options",
+    )?;
+    if !matches!(
+        options["numerical_expressions"].as_str(),
+        Some("prefer-native" | "vector-only")
+    ) {
+        return Err("evm-source-options".into());
+    }
+    options
+        .as_object_mut()
+        .unwrap()
+        .remove("numerical_expressions");
+    let options: crate::entry::CompileOptions =
+        serde_json::from_value(options).map_err(|_| "evm-source-options")?;
+    if options.release_storage {
+        return Err("evm-source-options".into());
+    }
+    Ok(options)
+}
+
+fn source_descriptor(record: &Value, requested: &crate::entry::OracleSelection) -> Result<()> {
     let code = "evm-source-descriptor";
     let array = |value: &Value, size| value.as_array().is_some_and(|items| items.len() == size);
     let natural = |value: &Value| {
@@ -100,6 +182,14 @@ fn source_descriptor(record: &Value) -> Result<()> {
             .and_then(|text| zkc_format::logical::natural_index(text).ok())
     };
     let text = |value: &Value| value.as_str().is_some_and(|s| !s.is_empty());
+    let name = |value: &Value| {
+        value.as_str().is_some_and(|s| {
+            !s.is_empty()
+                && s.len() <= 128
+                && s.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
+        })
+    };
     let descriptor = &record["descriptor"];
     let policy = &record["policy"];
     // The descriptor is an existing string/array carrier, not arbitrary JSON.
@@ -110,10 +200,13 @@ fn source_descriptor(record: &Value) -> Result<()> {
         || descriptor[2] != "zkc.native-origin/0"
         || !array(policy, 12)
         || policy[0] != "zkc.native-proof-policy/0"
-        || (1..=3).any(|i| !text(&policy[i]))
+        || (1..=3).any(|i| !name(&policy[i]))
         || policy[2] == policy[3]
         || natural(&policy[4]).is_none_or(|n| n >= 1024)
-        || policy[5] != "hash-chain.keccak256.bls12-381.fr64be/0"
+        || !matches!(
+            policy[5].as_str(),
+            Some("" | "hash-chain.keccak256.bls12-381.fr64be/0")
+        )
         || policy[9] != "zkc.framed/0"
         || policy[10] != ""
         || descriptor[6] != serde_json::json!([])
@@ -130,13 +223,13 @@ fn source_descriptor(record: &Value) -> Result<()> {
             }
             previous = Some(n);
         }
-        if slot == 6 && ports.len() != 1 {
+        if slot == 6 && ports.len() != usize::from(policy[5] != "") {
             return Err(code.into());
         }
     }
     let draws = policy[8].as_array().ok_or(code)?;
     let mut sites = std::collections::BTreeSet::new();
-    if draws.is_empty() || draws.len() > 64 {
+    if draws.len() > 64 || (draws.is_empty() != (policy[5] == "")) {
         return Err(code.into());
     }
     for draw in draws {
@@ -167,6 +260,12 @@ fn source_descriptor(record: &Value) -> Result<()> {
     for slot in [3, 4, 5, 7] {
         for row in descriptor[slot].as_array().ok_or(code)? {
             let row = row.as_array().ok_or(code)?;
+            if policy[5] == ""
+                && ((slot == 3 && row.first().and_then(Value::as_str) != Some("message"))
+                    || slot == 7)
+            {
+                return Err(code.into());
+            }
             let width = match slot {
                 3 => match row.first().and_then(Value::as_str) {
                     Some("query" | "message" | "reconstructed-message") => 2,
@@ -207,12 +306,7 @@ fn source_descriptor(record: &Value) -> Result<()> {
         return Err("evm-source-identity".into());
     }
     let selection = descriptor[8].as_str().ok_or(code)?;
-    let parsed = crate::entry::OracleSelection::parse(selection).map_err(|_| code)?;
-    if !matches!(parsed.roots, crate::entry::OracleRoots::Exact(_))
-        || parsed.canonical_json().map_err(|_| code)? != selection
-    {
-        return Err(code.into());
-    }
+    requested.check_normalized(selection).map_err(|_| code)?;
     Ok(())
 }
 
@@ -222,6 +316,8 @@ fn source_descriptor(record: &Value) -> Result<()> {
 pub struct Source {
     bytes: Vec<u8>,
     record: Value,
+    fork: EvmFork,
+    options: crate::entry::CompileOptions,
 }
 impl Source {
     pub fn capture(bytes: &[u8]) -> Result<Self> {
@@ -235,6 +331,7 @@ impl Source {
                 "format",
                 "target",
                 "fork",
+                "options",
                 "yul",
                 "abi",
                 "descriptor",
@@ -256,6 +353,7 @@ impl Source {
                 "format",
                 "target",
                 "fork",
+                "options",
                 "source_sha256",
                 "source_format",
                 "entry",
@@ -275,7 +373,6 @@ impl Source {
         )?;
         if record["format"] != "zkc.evm-source/0"
             || record["target"] != "evm"
-            || record["fork"] != "cancun"
             || record["yul"].as_str().is_none_or(str::is_empty)
             || record["entry"].as_str().is_none_or(str::is_empty)
             || record["abi"] != calldata::abi()
@@ -287,6 +384,9 @@ impl Source {
         {
             return Err("evm-source-format".into());
         }
+        let fork = record["fork"].as_str().ok_or("evm-fork")?.parse()?;
+        let options = source_options(&record["options"])?;
+        source_options(&manifest["options"])?;
         source_limits(&record["limits"])?;
         source_limits(&manifest["limits"])?;
         for key in ["capture", "installation", "original", "source_sha256"] {
@@ -298,7 +398,7 @@ impl Source {
                 return Err("evm-source-identity".into());
             }
         }
-        if ["entry", "target", "fork", "limits"]
+        if ["entry", "target", "fork", "options", "limits"]
             .iter()
             .any(|key| manifest[key] != record[key])
             || record["original"] != record["source_sha256"]
@@ -309,10 +409,12 @@ impl Source {
         {
             return Err("evm-source-identity".into());
         }
-        source_descriptor(&record)?;
+        source_descriptor(&record, &options.oracle_realization)?;
         Ok(Self {
             bytes: bytes.to_vec(),
             record,
+            fork,
+            options,
         })
     }
     pub fn bytes(&self) -> &[u8] {
@@ -329,6 +431,12 @@ impl Source {
     }
     pub fn metadata(&self) -> &Value {
         &self.record
+    }
+    pub fn fork(&self) -> EvmFork {
+        self.fork
+    }
+    pub fn options(&self) -> &crate::entry::CompileOptions {
+        &self.options
     }
 }
 

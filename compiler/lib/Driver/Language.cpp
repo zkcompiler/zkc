@@ -40,6 +40,8 @@ int runLanguageCompiler(int argc, char **argv) {
   EntryOptions options;
   bool oracleRealizationSelected = false;
   bool cpuTargetSelected = false;
+  EvmOptions evmOptions;
+  bool evmForkSelected = false;
   std::string observationPath;
   bool collectObservations = false;
   std::vector<std::string> dumps;
@@ -165,16 +167,20 @@ int runLanguageCompiler(int argc, char **argv) {
   for (int i = 2; i < argc; ++i) {
     StringRef arg(argv[i]);
     if (command == "language-evm" &&
-        (arg.starts_with("--cpu-target=") ||
-         arg.starts_with("--oracle-realization=") ||
-         arg.starts_with("--dump=") || arg == "--no-simplify" ||
-         arg == "--release-storage" || arg == "--no-finite-bulk" ||
-         arg == "--no-calculation-batching" ||
-         arg == "--fuse-vector-reductions" || arg == "--fuse-collect-fold"))
+        (arg.starts_with("--cpu-target=") || arg.starts_with("--dump=") ||
+         arg == "--release-storage"))
       return refuse(
           error("evm.options", "option is not supported by the EVM target"));
-    if (arg.starts_with("--observations=") ||
-        arg.starts_with("--diagnostics=")) {
+    if (arg.consume_front("--evm-version=")) {
+      if (command != "language-evm" || evmForkSelected)
+        return refuse(error("evm.fork", "EVM fork is a unique EVM option"));
+      auto fork = parseEvmFork(arg);
+      if (!fork)
+        return refuse(fork.takeError());
+      evmOptions.fork = *fork;
+      evmForkSelected = true;
+    } else if (arg.starts_with("--observations=") ||
+               arg.starts_with("--diagnostics=")) {
       collectObservations = arg.starts_with("--observations=");
       arg = arg.split('=').second;
       if (!observationPath.empty() || arg.empty() || arg == "-")
@@ -190,7 +196,8 @@ int runLanguageCompiler(int argc, char **argv) {
       }
     } else if (arg.consume_front("--oracle-realization=")) {
       if (oracleRealizationSelected ||
-          (command != "language-bundle" && command != "language-package"))
+          (command != "language-bundle" && command != "language-package" &&
+           command != "language-evm"))
         return refuse(
             error("source.options",
                   "oracle realization is a unique compilation option"));
@@ -522,7 +529,10 @@ int runLanguageCompiler(int argc, char **argv) {
     return 0;
   }
   if (command == "language-evm") {
-    auto compiled = compileEvmEntry(*original);
+    evmOptions.mathematics = options.mathematicalSelection;
+    evmOptions.oracleSelection = options.oracleRealization;
+    evmOptions.simplify = options.simplify;
+    auto compiled = compileEvmEntry(*original, evmOptions);
     if (!compiled)
       return refuse(compiled.takeError());
     auto result = encodeEvmCompilation(*compiled);

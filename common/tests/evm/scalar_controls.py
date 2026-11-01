@@ -48,10 +48,10 @@ def compile_source(compiler, text):
     return json.loads(process.stdout)
 
 
-def artifact(solc, yul):
+def artifact(solc, yul, fork):
     return compile_request(solc, {
         "language": "Yul", "sources": {"scalar.yul": {"content": yul}},
-        "settings": {"evmVersion": "cancun", "optimizer": PROFILES["colon"],
+        "settings": {"evmVersion": fork, "optimizer": PROFILES["colon"],
                      "outputSelection": {"*": {"*": ["evm.bytecode.object",
                          "evm.deployedBytecode.object"]}}}})
 
@@ -131,7 +131,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     for name, text, inputs in cases:
         compiled = compile_source(args.compiler, text)
-        built = artifact(args.solc, compiled["yul"])
+        built = artifact(args.solc, compiled["yul"], compiled["manifest"]["fork"])
         (args.output / f"{name}.zkc").write_text(text)
         (args.output / f"{name}.json").write_text(json.dumps(compiled, indent=2))
         (args.output / f"{name}.solc.json").write_text(json.dumps(built, indent=2))
@@ -162,7 +162,7 @@ def main():
             changed, count = re.subn(r"if iszero\(eq\((v\d+), mload\(0xc0\)\)\)",
                 r"if iszero(eq(add(\1, 1), mload(0xc0)))", compiled["yul"])
             assert count == 1, "managed generation check missing"
-            mutant = artifact(args.solc, changed)
+            mutant = artifact(args.solc, changed, compiled["manifest"]["fork"])
             public, proof, trace = invocation(compiled, (2, 3, 6))
             result = execute(args.runner, mutant, encode_verify(public, b"", proof),
                              gas=20_000_000, repeat_count=2)

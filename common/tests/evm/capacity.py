@@ -11,14 +11,13 @@ from oracle import check_trace
 from native_fixtures import rebind
 from probe import execute
 from reference import reconstruct
-from validate import bytecode, check_revert, sdk_artifact
+from validate import check_revert, check_sdk_artifact, deployed_artifact
 
 
 def capacities(runner, artifact, fixture, maximum_context=None, *,
                aggregate_artifact=None, aggregate_limit=None):
     if fixture.get("evm") is not None:
-        if any(artifact[name] != code for name, code in sdk_artifact(fixture).items()):
-            raise AssertionError("capacity deployment differs from SDK captured artifact")
+        check_sdk_artifact(fixture, artifact)
     public = [bytes.fromhex(v) for v in fixture["public"]]
     context, proof = bytes.fromhex(fixture["context"]), bytes.fromhex(fixture["proof"])
     expected = reconstruct(fixture)
@@ -70,15 +69,20 @@ def capacities(runner, artifact, fixture, maximum_context=None, *,
                  "resource", 11, [], aggregate_artifact)
     calldata = encode_verify(public, context, proof)
     rejected("calldata-one-over", calldata + bytes(MAX_CALLDATA + 1 - len(calldata)), "resource", 10, [])
-    # Intrinsic gas plus eight execution gas lets dispatcher setup execute but
-    # reaches no primitive. This frontier is independent of optimizer layout.
+    # Cancun can stop in dispatcher setup. Prague first requires the EIP-7623
+    # calldata floor, which can leave enough execution gas to reach primitives.
+    # A gas halt may retain only an exact prefix of the completed reference.
     intrinsic = 21000 + sum(4 if byte == 0 else 16 for byte in calldata)
+    if artifact.get("request", {}).get("settings", {}).get("evmVersion") == "prague":
+        intrinsic = max(intrinsic, 21000 + sum(10 if byte == 0 else 40 for byte in calldata))
     exhausted = execute(runner, artifact, calldata, intrinsic + 8)
     if exhausted["phase"] != "runtime" or exhausted["status"] != "halt" or "OutOfGas" not in exhausted["reason"]:
         raise AssertionError(f"expected a real EVM gas halt: {exhausted}")
     if exhausted["output"] != "":
         raise AssertionError("gas halt returned data")
-    check_trace(exhausted["trace"], [])
+    if len(exhausted["trace"]) >= len(expected["trace"]):
+        raise AssertionError("gas control did not stop before the complete reference frontier")
+    check_trace(exhausted["trace"], expected["trace"][:len(exhausted["trace"])])
     cases["evm-out-of-gas"] = exhausted
     if maximum_context is not None:
         context = bytes.fromhex(maximum_context["context"])
@@ -116,16 +120,17 @@ def main():
     parser.add_argument("--aggregate-runtime", type=Path)
     parser.add_argument("--aggregate-public-bytes", type=int)
     parser.add_argument("--bytecode-format", choices=["binary", "hex"], default="binary")
+    parser.add_argument("--evm-version", choices=("cancun", "prague"), default="cancun")
     args = parser.parse_args()
     aggregate_args = (args.aggregate_creation, args.aggregate_runtime, args.aggregate_public_bytes)
     if any(value is not None for value in aggregate_args) and not all(value is not None for value in aggregate_args):
         parser.error("aggregate creation, runtime and immutable public-byte limit are required together")
-    result = capacities(args.runner, {"creation": bytecode(args.creation, args.bytecode_format),
-                                     "runtime": bytecode(args.runtime, args.bytecode_format)},
+    result = capacities(args.runner, deployed_artifact(args.creation, args.runtime,
+                                                      args.bytecode_format, args.evm_version),
                         json.loads(args.fixture.read_text()),
                         json.loads(args.maximum_context_fixture.read_text()) if args.maximum_context_fixture else None,
-                        aggregate_artifact={"creation": bytecode(args.aggregate_creation, args.bytecode_format),
-                                            "runtime": bytecode(args.aggregate_runtime, args.bytecode_format)}
+                        aggregate_artifact=deployed_artifact(args.aggregate_creation, args.aggregate_runtime,
+                                                             args.bytecode_format, args.evm_version)
                         if args.aggregate_creation else None, aggregate_limit=args.aggregate_public_bytes)
     args.output.write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({name: {"status": value["status"], "gas": value["runtime_gas"],

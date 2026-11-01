@@ -308,6 +308,18 @@ mod tests {
                 .code,
             "refused:bytes-element"
         );
+        assert_eq!(
+            apply(
+                "bytes.append",
+                &[bytes(&[0; 32]), Value::Index(256)],
+                &[],
+                &Policy::default(),
+                0
+            )
+            .unwrap_err()
+            .code,
+            "refused:bytes-element"
+        );
         assert!(run("bytes.at", &[bytes(&[]), Value::Index(0)]).is_err());
         assert!(
             apply(

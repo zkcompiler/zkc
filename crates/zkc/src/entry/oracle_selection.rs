@@ -212,6 +212,31 @@ impl OracleSelection {
     pub fn canonical_json(&self) -> Result<String, OracleSelectionError> {
         self.encoded().map(|(_, text)| text)
     }
+    /// Bind a canonical compiler inventory to the request. Source coverage and
+    /// installed realization checking remain the compiler's responsibility.
+    #[cfg(any(feature = "cpu", feature = "evm"))]
+    pub(crate) fn check_normalized(&self, encoded: &str) -> Result<(), OracleSelectionError> {
+        let normalized = Self::parse(encoded)?;
+        let OracleRoots::Exact(entries) = &normalized.roots else {
+            return Err(OracleSelectionError);
+        };
+        let roots_match = match &self.roots {
+            OracleRoots::Uniform(table) => entries.iter().all(|root| {
+                root.scheme == table.scheme
+                    && root.grouping == table.grouping
+                    && root.order == table.order
+            }),
+            OracleRoots::Exact(_) => self == &normalized,
+        };
+        if normalized.canonical_json()? != encoded
+            || normalized.order != self.order
+            || normalized.authentication != self.authentication
+            || !roots_match
+        {
+            return Err(OracleSelectionError);
+        }
+        Ok(())
+    }
     fn encoded(&self) -> Result<(serde_json::Value, String), OracleSelectionError> {
         self.validate()?;
         let value = self.value();

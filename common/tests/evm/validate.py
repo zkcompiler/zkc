@@ -27,6 +27,14 @@ ABI_REFUSALS = {
 }
 
 
+def check_return(result, output, trace):
+    if (result["phase"] != "runtime" or result["status"] != "return"
+            or result["output"] != output):
+        raise AssertionError(f"expected exact runtime return {output}, got "
+                             f"{result['phase']}/{result['status']}/{result['output']}")
+    check_trace(result["trace"], trace)
+
+
 def check_revert(result, kind, code, trace):
     output = (REVERT_CLASSES[kind] + code.to_bytes(32, "big")).hex()
     if (result["phase"] != "runtime" or result["status"] != "revert"
@@ -36,8 +44,8 @@ def check_revert(result, kind, code, trace):
     check_trace(result["trace"], trace)
 
 
-def sdk_artifact(fixture):
-    """Check the exported SDK tuple against the independent Python codec."""
+def check_sdk_artifact(fixture, artifact):
+    """Bind supplied code and execution fork to the SDK's captured tuple."""
     captured = fixture["evm"]
     if captured is None:
         raise ValueError("fixture has no SDK Artifact::capture export")
@@ -45,12 +53,18 @@ def sdk_artifact(fixture):
                              bytes.fromhex(fixture["context"]), bytes.fromhex(fixture["proof"]))
     if captured["calldata"] != calldata.hex():
         raise AssertionError("SDK and independent Python calldata differ")
+    fork = captured["manifest"]["evm_version"]
+    if fork not in ("cancun", "prague"):
+        raise AssertionError("SDK exported unsupported execution fork")
+    if artifact.get("request", {}).get("settings", {}).get("evmVersion") != fork:
+        raise AssertionError("selected execution fork differs from SDK captured artifact")
     for name in ("creation", "runtime"):
         digest = hashlib.sha256(bytes.fromhex(captured[name])).hexdigest()
         if (digest != captured[f"{name}_sha256"]
                 or digest != captured["manifest"]["files"][f"{name}.bin"]):
             raise AssertionError(f"SDK exported {name} identity differs")
-    return {name: captured[name] for name in ("creation", "runtime")}
+        if artifact[name] != captured[name]:
+            raise AssertionError("supplied deployment differs from SDK captured artifact")
 
 
 def bytecode(path, encoding):
@@ -59,6 +73,14 @@ def bytecode(path, encoding):
     value = path.read_text().strip().removeprefix("0x")
     bytes.fromhex(value)
     return value
+
+
+def deployed_artifact(creation, runtime, encoding, fork):
+    """Attach the selected fork when checking separately stored bytecode."""
+    if fork not in ("cancun", "prague"):
+        raise ValueError("unsupported-fork")
+    return {"creation": bytecode(creation, encoding), "runtime": bytecode(runtime, encoding),
+            "request": {"settings": {"evmVersion": fork}}}
 
 
 def removed_final_hash_control(runner, artifact, calldata, original, expected_trace, gas,
@@ -90,7 +112,8 @@ def removed_final_hash_control(runner, artifact, calldata, original, expected_tr
         offset = creation.index(runtime)
         changed_runtime = runtime[:pc] + b"\x50" + runtime[pc + 1:]
         changed_creation = creation[:offset + pc] + b"\x50" + creation[offset + pc + 1:]
-        mutated = execute(runner, {"creation": changed_creation.hex(), "runtime": changed_runtime.hex()}, calldata, gas)
+        mutated = execute(runner, dict(artifact, creation=changed_creation.hex(),
+                                       runtime=changed_runtime.hex()), calldata, gas)
     if mutated["status"] != original["status"] or mutated["output"] != original["output"]:
         raise AssertionError("deleted-final-hash mutant changed the observable result")
     try:
@@ -119,8 +142,7 @@ def validate(runner, artifact, fixture, expected_trace, *, gas=20_000_000,
     context = bytes.fromhex(fixture["context"])
     calldata = encode_verify(public, context, proof)
     if fixture.get("evm") is not None:
-        if any(artifact[name] != code for name, code in sdk_artifact(fixture).items()):
-            raise AssertionError("supplied deployment differs from SDK captured artifact")
+        check_sdk_artifact(fixture, artifact)
     if expected_status == "revert" and (expected_revert_class is None or expected_revert_code is None):
         raise ValueError("revert expectations require both exact class and code")
     if expected_status == "return" and expected_output is None:
@@ -197,6 +219,7 @@ def main():
     parser.add_argument("--expected-trace", type=Path,
                         help="independent trace JSON; defaults to maintained Sumcheck reconstruction")
     parser.add_argument("--bytecode-format", choices=["binary", "hex"], default="binary")
+    parser.add_argument("--evm-version", choices=("cancun", "prague"), default="cancun")
     parser.add_argument("--final-hash-mutant", type=Path,
                         help="mutant.py receipt when the last Keccak opcode is shared")
     parser.add_argument("--gas", type=int, default=20_000_000)
@@ -220,8 +243,8 @@ def main():
         if type(fixture["decision"]) is not bool:
             raise ValueError("fixture has no native Boolean decision; specify the stopped outcome")
         expected_output = int(fixture["decision"]).to_bytes(32, "big").hex()
-    receipt = validate(args.runner, {"creation": bytecode(args.creation, args.bytecode_format),
-                                   "runtime": bytecode(args.runtime, args.bytecode_format)},
+    receipt = validate(args.runner, deployed_artifact(args.creation, args.runtime,
+                                                    args.bytecode_format, args.evm_version),
                        fixture, trace, gas=args.gas,
                        expected_status=args.expected_status, expected_output=expected_output,
                        controls=not args.no_controls,

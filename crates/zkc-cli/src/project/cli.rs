@@ -188,9 +188,15 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
             return Err("cli-target".into());
         }
         if target == "cpu"
-            && ["--solc", "--solc-sha256", "--reuse", "--reuse-sha256"]
-                .iter()
-                .any(|flag| args.has(flag))
+            && [
+                "--solc",
+                "--solc-sha256",
+                "--reuse",
+                "--reuse-sha256",
+                "--evm-version",
+            ]
+            .iter()
+            .any(|flag| args.has(flag))
         {
             return Err("cli-usage".into());
         }
