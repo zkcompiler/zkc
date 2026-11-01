@@ -250,7 +250,13 @@ def test_native_base_supports_ordinary_affine_handlers(toolchain, journal, direc
                 # succeeds before the construction-specific authority check.
                 names = {replacement[2][0][0]: target[2][0][0],
                          replacement[2][1][0]: target[2][1][0]}
+                # Target formals may use the original helper's local names.
+                # Rename those definitions simultaneously with the formals.
+                assert all(op[0] in {'op', 'return'} for op in replacement[4])
+                names.update({value: 'copied_' + value for op in replacement[4]
+                              if op[0] == 'op' for value in op[5]})
                 coordinate = replacement[2][-1][0]
+                names[coordinate] = 'copied_coordinate'
                 if target[2][-1][1].startswith('index@'):
                     names[coordinate] = target[2][-1][0]
                 else:

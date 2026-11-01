@@ -34,6 +34,15 @@ fn replace(value: &mut Json, old: &str, new: &str) {
         _ => {}
     }
 }
+fn captured(loop_: &Json, parent: &Json) -> Json {
+    loop_[4]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|pair| &pair[1] == parent)
+        .expect("public operand is captured into this loop")[0]
+        .clone()
+}
 pub fn nested(envelope: &Json, input: &Json, proof: &[u8]) {
     let original: Json = serde_json::from_str(envelope[4].as_str().unwrap()).unwrap();
     for duplicate in [false, true] {
@@ -51,7 +60,9 @@ pub fn nested(envelope: &Json, input: &Json, proof: &[u8]) {
     candidate[3][1][6][0][2][2] = json!("9");
     refused(envelope, &candidate, "native-proof-loop-layout");
     let mut candidate = original.clone();
-    let public = candidate[3][1][4][1][0].clone();
+    let outer = &candidate[3][1][6][0];
+    let public = captured(outer, &candidate[3][1][4][1][0]);
+    let public = captured(&outer[5][2], &public);
     candidate[3][1][6][0][5][2][5][1][3][1] = public;
     refused(envelope, &candidate, "native-proof-observation-payload");
     let mut candidate = original.clone();

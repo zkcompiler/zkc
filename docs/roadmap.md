@@ -60,7 +60,7 @@ what actually landed. The completion criteria below belong inside those units.
 |---|---|
 | Catalog and MLIR execution foundation | Landed native baseline: typed invocation, structured types, shared catalog, explicit admission and one default route. Preserve its contract and invalidation controls |
 | Virtual batching and FRI | Landed supported native profile: shared interaction analyses, checked dynamic virtual query blocks and one logical FRI component used by maintained STARK callers. Formal realization closure remains separate |
-| STARK reduction and checked construction | Next PR: settle the caller's DEEP degree claim, expose source proof policy through the existing construction path, complete the selected native binding checks and exercise the quartic Keccak STARK client |
+| STARK reduction and checked construction | Implemented native profile: caller-owned DEEP adjustment and complete column inventory, phased common FRI, source-selected gates, shared verifier observations, actual-body binding checks and a quartic Keccak STARK client |
 | Represented execution | Next substantial PR: canonical logical collection ownership across Data/Algebra, represented modular arithmetic and codec semantics, private buffer contracts and admitted Arith/Vector/Bufferization lowering |
 | Constraints and semantic consumers | Following substantial PR: complete assignment-level redesign and consumer migration, with Clean ensembles and LLZK as acceptance clients, exact statement/witness maps, lookup/multiset and chronological-memory meaning, and actual commitment/terminal connections |
 
@@ -92,9 +92,9 @@ Proximity, extraction and complete composition security remain separate obligati
 bundle callers already have explicit adjustments, with separate aggregate-bound
 limitations described in the [STARK library](../libraries/arguments/stark/README.md).
 
-### Next STARK and construction unit
+### STARK and construction completion
 
-Proceed through these phases inside one PR:
+This unit contains the following implementation and completion criteria:
 
 1. **Reduction and statement.** Fix the exact column, quotient and DEEP degree
    bounds, public/witness layouts and challenge order before changing code.
@@ -112,8 +112,8 @@ Proceed through these phases inside one PR:
    through construction and independent record consumption. Reuse the installed
    block/grinding wire and kernels. Source proof declarations now select gates through that path, with scalar,
    block, zero-bit and positive-gate quartic Keccak STARK controls. The structured
-   verifier analysis and closed selected binding judgments are implemented; the
-   coherent validation and final review remain part of this unit.
+   verifier analysis and closed selected binding judgments are implemented and
+   exercised by native source deployments and independent report recomputation.
    Select gates by authored query labels and labelled application paths, with
    independent source-to-selected-occurrence comparison. Separate FRI's common
    folding/opening implementation from query acquisition: the flagship selects

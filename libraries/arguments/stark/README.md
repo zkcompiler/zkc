@@ -110,6 +110,15 @@ It supports the installed quartic hash-chain suite, including explicit block
 sampling. Root, leaf and node bytes are unchanged by multi-opening; the proof
 is the exact pruned sibling sequence for the verifier's positions.
 
+The maintained quartic Keccak scale control uses 256 trace rows, 100 queries,
+`LogFinal=1`, `LogBlowup=1` and a four-bit block gate. It proves and verifies
+under the default execution budgets and rejects changed public input. Increasing
+only `LogBlowup` to 2 in that control reached the limit of one million verifier
+instructions. Supported arithmetic and query shapes remain subject to
+execution budgets; the larger setting is not a passing default-budget case.
+The [STARK controls](../../../common/tests/protocol/test_stark_library.py)
+keep the maintained baseline alongside scalar, block and zero-bit gate cases.
+
 `stark::configurations::koala_bear_quartic::Poseidon2` is another installed configuration:
 
 | Choice | Value |

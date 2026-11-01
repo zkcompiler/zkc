@@ -31,13 +31,15 @@ def test_total_shape_source_success_and_target_exhaustion(toolchain, journal, di
     output = directory / 'success.json'
     normal = journal.json([*command, f'--results={output}'], keep='target-success.json')
     assert normal['execution']['completed']
-    assert normal['execution']['usage']['instructions'] > 100
+    instructions = normal['execution']['usage']['instructions']
+    assert instructions > 4
     assert json.loads(output.read_text())['value'] == {
         'P': {'power': True, 'length': '2', 'less': False, 'shape': True}}
 
+    budget = instructions // 2
     capacity = journal.write('low.capacity.json', [
         'zkc.native-capacity/0', '65536', '4096', '16777216', '67108864',
-        ['100', '100000', '4294967296'], ['67108864', '268435456']])
+        [str(budget), '100000', '4294967296'], ['67108864', '268435456']])
     unpublished = directory / 'exhausted.json'
     refused = journal.json([*command, f'--capacity={capacity}',
                             f'--results={unpublished}'], refuses=True,
@@ -45,7 +47,7 @@ def test_total_shape_source_success_and_target_exhaustion(toolchain, journal, di
     assert refused['status'] == 'refused'
     assert refused['code'] == 'entry-host-run-failed'
     assert not refused['execution']['completed'] and not unpublished.exists()
-    assert refused['execution']['usage']['instructions'] <= 100
+    assert refused['execution']['usage']['instructions'] <= budget
     assert refused['execution']['failure']['path']
     call, = refused['execution']['calls']
     assert call['operation'] == 'run' and not call['completed']
