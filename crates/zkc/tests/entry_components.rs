@@ -181,24 +181,22 @@ fn fresh_cpp_host_transports_home_constructed_sealed_witness() {
 
     // Direct proof ingress cannot reconstruct a private sealed value.
     // A typed Function signature can accept a retained value instead.
-    for name in ["Demo"] {
-        let external = Command::new(&compiler)
-            .arg("language-package")
-            .arg("--source-format=zkc-layout")
-            .arg(format!("--module=m={}", source.display()))
-            .arg(format!("--entry=m::{name}"))
-            .output()
-            .unwrap();
-        assert!(
-            !external.status.success(),
-            "external constructor was granted: {name}"
-        );
-        assert!(
-            String::from_utf8_lossy(&external.stderr).contains("source.ingress"),
-            "{}",
-            String::from_utf8_lossy(&external.stderr)
-        );
-    }
+    let external = Command::new(&compiler)
+        .arg("language-package")
+        .arg("--source-format=zkc-layout")
+        .arg(format!("--module=m={}", source.display()))
+        .arg("--entry=m::Demo")
+        .output()
+        .unwrap();
+    assert!(
+        !external.status.success(),
+        "external constructor was granted"
+    );
+    assert!(
+        String::from_utf8_lossy(&external.stderr).contains("source.ingress"),
+        "{}",
+        String::from_utf8_lossy(&external.stderr)
+    );
 
     let import = admit_function(compile(&compiler, &source, "Import"));
     let forged = entry::Value::Record([("value".into(), false.into())].into());
