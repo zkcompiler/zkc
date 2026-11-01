@@ -6,6 +6,7 @@
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/ExecutionModel.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
+#include "zkc/Dialect/InherentAttributes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -32,13 +33,13 @@ class ExecutionModelReader {
     if (problem.empty())
       problem = why.str();
   }
-  bool attributes(Operation *op, ArrayRef<StringRef> allowed) {
-    for (auto a : op->getAttrs())
-      if (!is_contained(allowed, a.getName().getValue())) {
-        fail("interactive-unknown-attribute");
-        return false;
-      }
-    return true;
+  // Inherent attributes come from the operation's ODS definition; a
+  // discardable attribute or call metadata is admitted only when named here.
+  bool attributes(Operation *op, ArrayRef<StringRef> named = {}) {
+    if (hasOnlyInherentAttributes(op, named))
+      return true;
+    fail("interactive-unknown-attribute");
+    return false;
   }
   protocol::Assignments pairs(ArrayAttr attrs, bool symbols = false) {
     if (!attrs) {
@@ -136,7 +137,7 @@ class ExecutionModelReader {
       if (isa<zkc::protocol_ir::MathematicalReturnOp,
               zkc::protocol_ir::FinishOp, zkc::protocol_ir::ProtocolYieldOp>(
               op)) {
-        if (!attributes(op, {}) || op != &block.back() ||
+        if (!attributes(op) || op != &block.back() ||
             op->getOperandTypes() != outputs) {
           fail("interactive-return-type");
           return {};
@@ -148,7 +149,7 @@ class ExecutionModelReader {
           instruction.value = program::Return{names(op->getOperands(), env)};
         out.push_back(std::move(instruction));
       } else if (auto completion = dyn_cast<zkc::protocol_ir::FinishIfOp>(op)) {
-        if (!attributes(op, {"site", "owner"}) || failed(completion.verify())) {
+        if (!attributes(op) || failed(completion.verify())) {
           fail("interactive-return-type");
           return {};
         }
@@ -163,8 +164,7 @@ class ExecutionModelReader {
       } else if (auto call = dyn_cast<protocol_ir::LocalCallOp>(op)) {
         auto participant = op->getParentOfType<protocol_ir::ParticipantOp>();
         if (!participant || call.getRoleAttr() != participant.getRoleAttr() ||
-            !attributes(op, {"site", "callee", "role"}) ||
-            !callTypes(op, call.getCallee())) {
+            !attributes(op) || !callTypes(op, call.getCallee())) {
           fail("interactive-local-symbol");
           return {};
         }
@@ -196,8 +196,7 @@ class ExecutionModelReader {
           }
           return selected->spelling();
         };
-        if (!method || !attributes(op, {"site", "port", "method"}) ||
-            op->getNumResults() != 1 ||
+        if (!method || !attributes(op) || op->getNumResults() != 1 ||
             query.getInputs().size() != method->inputs.size() ||
             expected(method->output).empty() ||
             type(op->getResult(0).getType()) != expected(method->output) ||
@@ -214,7 +213,7 @@ class ExecutionModelReader {
                        query.getPort().str(), query.getMethod().str(),
                        names(query.getInputs(), env), results(op, env)}});
       } else if (isa<zkc::protocol_ir::EmitOp, zkc::protocol_ir::AwaitOp>(op)) {
-        if (!attributes(op, {"site", "schema", "peer"})) {
+        if (!attributes(op)) {
           fail("interactive-stage");
           return {};
         }
@@ -232,8 +231,7 @@ class ExecutionModelReader {
         }
       } else if (isa<zkc::protocol_ir::ParticipantBranchOp>(op)) {
         auto alternatives = op->getAttrOfType<ArrayAttr>("alternatives");
-        if (!attributes(op, {"site", "alternatives"}) ||
-            op->getNumOperands() == 0 || !alternatives ||
+        if (!attributes(op) || op->getNumOperands() == 0 || !alternatives ||
             alternatives.empty() ||
             alternatives.size() != op->getNumRegions()) {
           fail("interactive-branch-body");
@@ -313,9 +311,7 @@ class ExecutionModelReader {
                                    std::move(selector), std::move(captured),
                                    std::move(arms), std::move(joined)}});
       } else if (auto loop = dyn_cast<zkc::protocol_ir::ProtocolLoopOp>(op)) {
-        if (!attributes(op,
-                        {"site", "carried", "count", "parameter", "maximum"}) ||
-            !llvm::hasSingleElement(loop.getBody())) {
+        if (!attributes(op) || !llvm::hasSingleElement(loop.getBody())) {
           fail("interactive-loop-body");
           return {};
         }
@@ -374,8 +370,7 @@ class ExecutionModelReader {
     return out;
   }
   program::Participant participant(Operation *op) {
-    if (!attributes(op, {"sym_name", "function_type", "instance", "role",
-                         "service_ports"}))
+    if (!attributes(op, {"service_ports"}))
       return {};
     FunctionType ft = signature(op);
     if (!ft || op->getNumRegions() != 1) {
@@ -447,8 +442,8 @@ public:
         physical(profile &&
                  profile.getValue() == zkc::protocol_ir::Profile::Physical) {}
   Expected<program::Participants> run() {
-    if (!isa<zkc::protocol_ir::ProtocolModuleOp>(root) ||
-        !attributes(root, {"profile", "source_declarations"}) || !profile ||
+    if (!isa<zkc::protocol_ir::ProtocolModuleOp>(root) || !attributes(root) ||
+        !profile ||
         !zkc::protocol_ir::isExecutableProfile(profile.getValue()) ||
         !llvm::hasSingleElement(root->getRegion(0)))
       return error("interactive-module");
@@ -476,9 +471,7 @@ public:
       if (isa<zkc::protocol_ir::ProjectionOp, zkc::relation::DeclareOp>(op))
         continue;
       if (isa<zkc::runtime::BindingOp>(op)) {
-        if (!attributes(&op,
-                        {"sym_name", "contract", "arguments", "implementation",
-                         "function_type", "arg_attrs", "res_attrs"}))
+        if (!attributes(&op, {"arg_attrs", "res_attrs"}))
           return error("binding-attribute");
         auto binding = readBinding(&op);
         if (!binding)
@@ -490,7 +483,7 @@ public:
           return error(problem);
         participants.participants.push_back(std::move(value));
       } else if (auto entry = dyn_cast<zkc::protocol_ir::ProtocolEntryOp>(op)) {
-        if (!attributes(&op, {"sym_name", "targets"}))
+        if (!attributes(&op))
           return error("interactive-entry-attribute");
         program::ParticipantEntry value;
         value.name = entry.getSymName().str();

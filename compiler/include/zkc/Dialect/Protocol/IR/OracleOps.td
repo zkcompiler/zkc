@@ -8,9 +8,9 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 def OracleSendOp : Op<ProtocolDialect, "oracle_send",
     [MemoryEffects<[MemRead, MemWrite]>,
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>]> {
-  let arguments = (ins AnyType:$data, Variadic<UI64>:$shape, StrArrayAttr:$shape_names, StrAttr:$sender,
-    StrArrayAttr:$receivers, StrAttr:$site,
-    DictionaryAttr:$shape_bounds);
+  let arguments = (ins AnyType:$data, Variadic<UI64>:$shape, StrArrayAttr:$shape_names,
+    ProtocolRole<StrAttr>:$sender, ProtocolRoleSet<StrArrayAttr>:$receivers,
+    StrAttr:$site, DictionaryAttr:$shape_bounds);
   let results = (outs OracleHandle:$handle);
   let hasVerifier = 1;
   let extraClassDeclaration = [{
@@ -27,7 +27,8 @@ def OracleQueryOp : Op<ProtocolDialect, "oracle_query",
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp",
                   "zkc::protocol_ir::OracleDefinitionOp"]>]> {
   let arguments = (ins OracleHandle:$handle, AnyType:$position,
-                       OptionalAttr<StrAttr>:$owner, StrAttr:$site);
+                       OptionalAttr<ProtocolRole<StrAttr>>:$owner,
+                       StrAttr:$site);
   let results = (outs AnyType:$answer);
   let hasVerifier = 1;
 }
@@ -45,7 +46,7 @@ def OracleForgetShapeOp : Op<ProtocolDialect, "oracle_forget_shape",
 // their own permissions and do not grant this executable operation.
 def OracleContentsOp : Op<ProtocolDialect, "oracle_contents",
     [Pure, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>]> {
-  let arguments = (ins OracleHandle:$handle, StrAttr:$owner);
+  let arguments = (ins OracleHandle:$handle, ProtocolRole<StrAttr>:$owner);
   let results = (outs AnyType:$data);
   let hasVerifier = 1;
 }
@@ -61,7 +62,7 @@ def OracleSequenceAppendOp : Op<ProtocolDialect, "oracle_sequence_append",
     [MemoryEffects<[MemRead, MemWrite]>,
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>]> {
   let arguments = (ins OracleSequence:$prefix, OracleHandle:$element,
-                       StrArrayAttr:$roles, StrAttr:$site);
+                       ProtocolRoleSet<StrArrayAttr>:$roles, StrAttr:$site);
   let results = (outs OracleSequence:$output);
   let hasVerifier = 1;
 }
@@ -70,7 +71,7 @@ def OracleSequenceAtOp : Op<ProtocolDialect, "oracle_sequence_at",
     [MemoryEffects<[MemRead, MemWrite]>,
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>]> {
   let arguments = (ins OracleSequence:$sequence, UI64:$position,
-                       StrArrayAttr:$roles, StrAttr:$site);
+                       ProtocolRoleSet<StrArrayAttr>:$roles, StrAttr:$site);
   let results = (outs OracleHandle:$handle);
   let hasVerifier = 1;
 }
@@ -112,7 +113,8 @@ def OracleVirtualOp : Op<ProtocolDialect, "oracle_virtual",
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>,
      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
   let arguments = (ins Variadic<AnyType>:$inputs, FlatSymbolRefAttr:$callee,
-                       StrAttr:$holder, StrArrayAttr:$receivers);
+                       ProtocolRole<StrAttr>:$holder,
+                       ProtocolRoleSet<StrArrayAttr>:$receivers);
   let results = (outs OracleHandle:$handle);
 }
 // One logical port has data at the holder and handles at its receivers, either
@@ -123,7 +125,8 @@ def OracleInputOp : Op<ProtocolDialect, "oracle_input",
     [MemoryEffects<[MemRead, MemWrite]>,
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>]> {
   let arguments = (ins AnyType:$data, AnyTypeOf<[OracleHandle, OracleSequence]>:$anchor,
-    StrAttr:$holder, StrArrayAttr:$receivers, DictionaryAttr:$shape_bounds);
+    ProtocolRole<StrAttr>:$holder, ProtocolRoleSet<StrArrayAttr>:$receivers,
+    DictionaryAttr:$shape_bounds);
   let results = (outs AnyTypeOf<[OracleHandle, OracleSequence]>:$handle);
   let hasVerifier = 1;
 }
@@ -132,7 +135,8 @@ def OracleInputOp : Op<ProtocolDialect, "oracle_input",
 def OracleComponentsOp : Op<ProtocolDialect, "oracle_components",
     [Pure, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>]> {
   let arguments = (ins AnyTypeOf<[OracleHandle, OracleSequence]>:$handle,
-                       StrAttr:$holder, StrArrayAttr:$receivers);
+                       ProtocolRole<StrAttr>:$holder,
+                       ProtocolRoleSet<StrArrayAttr>:$receivers);
   let results = (outs AnyType:$data, AnyTypeOf<[OracleHandle, OracleSequence]>:$anchor);
   let hasVerifier = 1;
 }

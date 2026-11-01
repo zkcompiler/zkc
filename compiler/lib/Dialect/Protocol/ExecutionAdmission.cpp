@@ -4,6 +4,7 @@
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/InherentAttributes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Protocol/Services.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
@@ -57,11 +58,10 @@ class ExecutionAdmission {
     remaining -= amount;
     return true;
   }
-  bool attributes(Operation *op, ArrayRef<StringRef> allowed) {
-    return all_of(op->getAttrs(),
-                  [&](NamedAttribute attr) {
-                    return is_contained(allowed, attr.getName().getValue());
-                  }) ||
+  // Inherent attributes come from the operation's ODS definition; a
+  // discardable attribute or call metadata is admitted only when named here.
+  bool attributes(Operation *op, ArrayRef<StringRef> named = {}) {
+    return hasOnlyInherentAttributes(op, named) ||
            fail(op, "interactive-unknown-attribute");
   }
   bool type(Operation *op, Type type) {
@@ -167,7 +167,7 @@ class ExecutionAdmission {
       if (terminal != (op == &block.back()))
         return fail(op, "interactive-terminator");
       if (terminal) {
-        if (!attributes(op, {}) ||
+        if (!attributes(op) ||
             isa<protocol_ir::ProtocolYieldOp>(op) != (depth != 0) ||
             op->getOperandTypes() != outputs || !consume(op, op->getOperands()))
           return fail(op, "interactive-return");
@@ -178,18 +178,16 @@ class ExecutionAdmission {
           !sites.insert(occurrence.getValue()).second)
         return fail(op, "interactive-site");
       if (auto branch = dyn_cast<protocol_ir::ParticipantBranchOp>(op)) {
-        if (!attributes(op, {"site", "alternatives"}) ||
-            failed(branch.verifyRegions()) || !consume(op, branch.getInputs()))
+        if (!attributes(op) || failed(branch.verifyRegions()) ||
+            !consume(op, branch.getInputs()))
           return fail(op, "interactive-branch-body");
         for (Region &arm : branch.getArms())
           if (!body(participant, arm.front(), branch.getResultTypes(), sites,
                     depth + 1))
             return fail(op, "interactive-branch-body");
       } else if (auto loop = dyn_cast<protocol_ir::ProtocolLoopOp>(op)) {
-        if (!attributes(op,
-                        {"site", "carried", "count", "parameter", "maximum"}) ||
-            !loop.getBody().hasOneBlock() || !loop.getMaximum() ||
-            *loop.getMaximum() > 1048576 ||
+        if (!attributes(op) || !loop.getBody().hasOneBlock() ||
+            !loop.getMaximum() || *loop.getMaximum() > 1048576 ||
             !consume(op, loop.getInputs().take_front(1 + loop.getCarried())) ||
             !consume(op, loop.getInputs().drop_front(1 + loop.getCarried()),
                      true) ||
@@ -203,18 +201,18 @@ class ExecutionAdmission {
           auto function =
               symbols.lookupSymbolIn<func::FuncOp>(owner, call.getCalleeAttr());
           auto signature = scopedDataSignature(function);
-          if (!attributes(op, {"site", "callee", "role"}) ||
+          if (!attributes(op) ||
               call.getRoleAttr() != participant.getRoleAttr() || !signature ||
               call.getOperandTypes() != signature.getInputs() ||
               call.getResultTypes() != signature.getResults())
             return fail(op, "interactive-local-signature");
         } else if (auto query = dyn_cast<protocol_ir::ParticipantQueryOp>(op)) {
-          if (!attributes(op, {"site", "port", "method"}) || !service(query))
+          if (!attributes(op) || !service(query))
             return false;
         } else if (isa<protocol_ir::EmitOp, protocol_ir::AwaitOp>(op)) {
           auto schema = op->getAttrOfType<StringAttr>("schema");
           auto peer = op->getAttrOfType<StringAttr>("peer");
-          if (!attributes(op, {"site", "schema", "peer"}) || !schema || !peer ||
+          if (!attributes(op) || !schema || !peer ||
               !identifier(schema.getValue()) || !identifier(peer.getValue()) ||
               peer == participant.getRoleAttr())
             return fail(op, "interactive-peer");
@@ -227,7 +225,7 @@ class ExecutionAdmission {
           if (!inserted && position->second != payload)
             return fail(op, "interactive-schema-type");
         } else if (auto finish = dyn_cast<protocol_ir::FinishIfOp>(op)) {
-          if (!attributes(op, {"site", "owner"}) || failed(finish.verify()))
+          if (!attributes(op) || failed(finish.verify()))
             return fail(op, "interactive-return-type");
         } else
           return fail(op, "binding-operation",
@@ -241,8 +239,7 @@ class ExecutionAdmission {
     return true;
   }
   bool participant(protocol_ir::ParticipantOp participant) {
-    if (!attributes(participant, {"sym_name", "function_type", "instance",
-                                  "role", "service_ports"}) ||
+    if (!attributes(participant, {"service_ports"}) ||
         !identifier(participant.getSymName()) ||
         !identifier(participant.getInstance()) ||
         !identifier(participant.getRole()) ||
@@ -285,9 +282,8 @@ class ExecutionAdmission {
                 signature.getResults(), sites);
   }
   bool entry(protocol_ir::ProtocolEntryOp entry) {
-    if (!attributes(entry, {"sym_name", "targets"}) ||
-        !identifier(entry.getSymName()) || entry.getTargets().empty() ||
-        entry.getTargets().size() > 4096)
+    if (!attributes(entry) || !identifier(entry.getSymName()) ||
+        entry.getTargets().empty() || entry.getTargets().size() > 4096)
       return fail(entry, "interactive-entry-targets");
     llvm::StringSet<> roles;
     StringAttr instance;
@@ -312,7 +308,7 @@ class ExecutionAdmission {
     return true;
   }
   bool check() {
-    if (!attributes(owner, {"profile", "source_declarations"}) ||
+    if (!attributes(owner) ||
         (owner->hasAttr("source_declarations") &&
          !owner->getAttrOfType<ArrayAttr>("source_declarations")))
       return fail(owner, "interactive-module");

@@ -1,6 +1,7 @@
 #include "TableGen/Declarations.h"
 #include "TableGen/Mathematical.h"
 #include "TableGen/Recipes.h"
+#include "TableGen/Roles.h"
 #include "TableGen/TypeBindings.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/CommandLine.h"
@@ -23,13 +24,16 @@ enum class Action {
   Inventory,
   TypeBindings,
   Mathematics,
-  Recipes
+  Recipes,
+  RoleAttributes
 };
 cl::opt<Action> action(
     cl::desc("Generation action (required):"), cl::Required,
     cl::values(
         clEnumValN(Action::Recipes, "gen-mathematical-recipes",
                    "Generate checked private realization recipes"),
+        clEnumValN(Action::RoleAttributes, "gen-role-attributes",
+                   "Generate the Protocol role attribute table"),
         clEnumValN(Action::Mathematics, "gen-mathematical-declarations",
                    "Generate mathematical identities, intrinsics and laws"),
         clEnumValN(Action::TypeBindings, "gen-type-bindings",
@@ -42,6 +46,8 @@ bool generate(raw_ostream &os, const RecordKeeper &records) {
   switch (action) {
   case Action::Recipes:
     return emitMathematicalRecipes(os, records);
+  case Action::RoleAttributes:
+    return emitRoleAttributes(os, records);
   case Action::Mathematics:
     return emitMathematicalDeclarations(os, records);
   case Action::TypeBindings:

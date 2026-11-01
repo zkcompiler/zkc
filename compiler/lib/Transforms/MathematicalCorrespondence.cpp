@@ -2,6 +2,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Dialect/Protocol/IR/RoleAttributes.h"
 #include "zkc/Dialect/SelectedControl.h"
 #include "llvm/ADT/StringMap.h"
 #include <set>
@@ -31,33 +32,21 @@ class Correspondence {
   std::string definition;
   bool validStarts = true;
   struct Substitution {
-    StringMap<Attribute> roles;
+    StringMap<StringAttr> roles;
     std::string prefix;
-    Attribute role(Attribute value) const {
-      auto found = roles.find(cast<StringAttr>(value).getValue());
+    StringAttr role(StringAttr value) const {
+      auto found = roles.find(value.getValue());
       return found == roles.end() ? value : found->second;
     }
     ArrayAttr set(ArrayAttr values) const {
-      SmallVector<Attribute> result;
-      for (auto value : values)
-        result.push_back(role(value));
-      return ArrayAttr::get(values.getContext(), result);
+      return cast<ArrayAttr>(protocol_ir::renameRoles(
+          values, protocol_ir::RoleShape::RoleSet,
+          [&](StringAttr value) { return role(value); }));
     }
     DictionaryAttr attributes(Operation *op) const {
       NamedAttrList result(op->getAttrDictionary());
-      for (StringRef key : {"owner", "sender", "receiver", "role", "holder"})
-        if (auto attr = op->getAttrOfType<StringAttr>(key))
-          result.set(key, role(attr));
-      for (StringRef key : {"roles", "receivers"})
-        if (auto attr = op->getAttrOfType<ArrayAttr>(key))
-          result.set(key, set(attr));
-      for (StringRef key : {"carried_roles", "output_roles"})
-        if (auto attr = op->getAttrOfType<ArrayAttr>(key)) {
-          SmallVector<Attribute> sets;
-          for (auto value : attr)
-            sets.push_back(set(cast<ArrayAttr>(value)));
-          result.set(key, ArrayAttr::get(op->getContext(), sets));
-        }
+      protocol_ir::renameRoleUses(
+          op->getName(), result, [&](StringAttr value) { return role(value); });
       if (!prefix.empty())
         if (auto site = op->getAttrOfType<StringAttr>("site"))
           result.set("site", StringAttr::get(op->getContext(),
@@ -202,7 +191,7 @@ class Correspondence {
         for (auto [formal, actual] :
              zip(callee.getRoles(), application.getRoles()))
           nested.roles[cast<StringAttr>(formal).getValue()] =
-              substitution.role(actual);
+              substitution.role(cast<StringAttr>(actual));
         nested.prefix = substitution.prefix.empty()
                             ? application.getSite().str()
                             : expandedApplicationSite(substitution.prefix,

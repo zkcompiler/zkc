@@ -1,6 +1,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Dialect/Protocol/IR/RoleAttributes.h"
 #include "llvm/ADT/DenseSet.h"
 #include <functional>
 using namespace mlir;
@@ -9,6 +10,19 @@ namespace zkc {
 namespace {
 LogicalResult refuse(Operation *op, StringRef reason) {
   return diagnostics::emit(op->emitOpError(), "protocol-application", reason);
+}
+// The role names in one role use, each of which expansion copies and renames.
+uint64_t roleNames(const protocol_ir::RoleUse &use) {
+  auto values = dyn_cast<ArrayAttr>(use.value);
+  if (use.shape == protocol_ir::RoleShape::Role || !values)
+    return 1;
+  if (use.shape == protocol_ir::RoleShape::RoleSet)
+    return values.size();
+  uint64_t names = 0;
+  for (Attribute slot : values)
+    if (auto set = dyn_cast<ArrayAttr>(slot))
+      names += set.size();
+  return names;
 }
 } // namespace
 LogicalResult
@@ -82,8 +96,8 @@ LogicalResult verifyApplications(protocol_ir::ProtocolModuleOp module) {
       auto &op = *operation;
       uint64_t work = 1;
       summary.indices += op.getNumOperands() + op.getNumResults();
-      if (auto roles = op.getAttrOfType<ArrayAttr>("roles"))
-        summary.indices += roles.size();
+      for (const auto &use : protocol_ir::getRoleUses(&op))
+        summary.indices += roleNames(use);
       if (auto site = op.getAttrOfType<StringAttr>("site")) {
         ++summary.sites;
         summary.siteBytes += site.size();

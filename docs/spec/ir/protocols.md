@@ -41,6 +41,17 @@ availability; an operation with no dependencies would be available at every
 declared role. A restriction selects a nonempty subset of an existing value's
 components. It neither communicates nor changes their values.
 
+Every role-valued inherent attribute of a Protocol operation is declared once,
+with its shape: one role, a role set, one role set per input, result or carried
+slot, or a roster declaration. A definition's `roles` and a participant's `role`
+are roster declarations; they bind roles, and every other role-valued attribute
+uses them. A role substitution, such as application expansion or a
+correspondence under an application's role mapping, renames exactly the role
+uses; roster declarations and every other attribute are unchanged. Statement
+selectors name entry roles but are never substituted, because an applied
+definition cannot contain a statement. Inside selected or repeated control,
+every role use names a participating role.
+
 `protocol.assemble_roles` is the pointwise counterpart of restriction. It has
 one ordinary total, shared, non-affine input per distinct named role, all of the
 same type, and one result. At role `roles[i]`, the result is precisely that

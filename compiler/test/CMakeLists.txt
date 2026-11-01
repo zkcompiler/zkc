@@ -599,6 +599,7 @@ add_zkc_test(algebra_formation IR algebra-formation)
 mlir_target_link_libraries(zkc-algebra_formation-test PRIVATE MLIRParser)
 add_zkc_test(representations Contracts representation-domains)
 add_zkc_test(properties IR registered-properties)
+add_zkc_test(declared_attributes IR declared-attributes)
 
 add_zkc_test(diagnostics IR ir-diagnostics)
 add_zkc_test(dialect_registration IR dialect-registration)

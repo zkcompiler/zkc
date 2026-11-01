@@ -6,6 +6,7 @@
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
+#include "zkc/Dialect/Protocol/IR/RoleAttributes.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/SelectedControl.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -414,12 +415,17 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate,
                   protocol_ir::ConstructionStartOp>(action))
             continue;
           auto operation = target.getAs<StringAttr>("operation").getValue();
-          auto owner = action->getAttrOfType<StringAttr>(
-              operation == "protocol.send"            ? "sender"
-              : operation == "protocol.receive"       ? "receiver"
-              : isa<protocol_ir::LocalCallOp>(action) ? "role"
-                                                      : "owner");
-          if (participant.getRoleAttr() != owner)
+          // An exchange projects to the sender's send and the receiver's
+          // receive. Every other projected action has one owning role use.
+          StringAttr owner;
+          auto exchange = dyn_cast<protocol_ir::ExchangeOp>(action);
+          if (operation == protocol_ir::EmitOp::getOperationName())
+            owner = exchange ? exchange.getSenderAttr() : StringAttr();
+          else if (operation == protocol_ir::AwaitOp::getOperationName())
+            owner = exchange ? exchange.getReceiverAttr() : StringAttr();
+          else if (!exchange)
+            owner = protocol_ir::getSoleRole(action);
+          if (!owner || participant.getRoleAttr() != owner)
             return refuse(result, "role projection changed an action owner");
         }
         if (auto start = dyn_cast<protocol_ir::ConstructionStartOp>(action)) {

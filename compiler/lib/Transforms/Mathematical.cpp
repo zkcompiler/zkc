@@ -28,6 +28,7 @@
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Protocol/Construction.h"
+#include "zkc/Dialect/Protocol/IR/RoleAttributes.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/SelectedControl.h"
@@ -178,11 +179,11 @@ class Projector {
                        dyn_cast<protocol_ir::ConstructionStartOp>(op)) {
           if (is_contained(start.getRoles(), role))
             operation = protocol_ir::ConstructionStartOp::getOperationName();
-        } else if (isa<zkc::protocol_ir::LocalCallOp>(op)) {
-          if (op.getAttr("role") == role)
-            operation = zkc::protocol_ir::LocalCallOp::getOperationName();
-        } else if (op.getAttr("owner") == role) {
-          operation = isa<protocol_ir::FinishIfOp>(op)
+        } else if (protocol_ir::getSoleRole(&op) == role) {
+          // A single-owner action projects to its owner's participant action.
+          operation = isa<zkc::protocol_ir::LocalCallOp>(op)
+                          ? zkc::protocol_ir::LocalCallOp::getOperationName()
+                      : isa<protocol_ir::FinishIfOp>(op)
                           ? protocol_ir::FinishIfOp::getOperationName()
                       : isa<zkc::protocol_ir::GuardOp>(op)
                           ? zkc::protocol_ir::GuardOp::getOperationName()

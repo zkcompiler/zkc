@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Protocol/IR/RoleAttributes.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Dialect/StructuredData.h"
@@ -31,8 +32,10 @@ StringRef symbol(mlir::Operation *op, StringRef attribute = "callee") {
   auto value = op->getAttrOfType<mlir::FlatSymbolRefAttr>(attribute);
   return value ? value.getValue() : StringRef();
 }
-StringRef role(mlir::Operation *op, StringRef attribute = "owner") {
-  auto value = op->getAttrOfType<mlir::StringAttr>(attribute);
+// The owning role of a single-owner action, such as a guard, query or local
+// call; empty for every other operation.
+StringRef role(mlir::Operation *op) {
+  auto value = protocol_ir::getSoleRole(op);
   return value ? value.getValue() : StringRef();
 }
 std::vector<std::string> roleNames(mlir::ArrayAttr values) {
@@ -372,7 +375,7 @@ struct Deriver {
         const auto &callee = *found->second;
         auto childRoles = roles(callee);
         const auto actualRoles =
-            roleNames(op->getAttrOfType<mlir::ArrayAttr>("roles"));
+            roleNames(mlir::cast<protocol_ir::ApplyOp>(op).getRoles());
         auto actual = [&](StringRef role) -> StringRef {
           size_t index =
               std::find(childRoles.begin(), childRoles.end(), role.str()) -
@@ -620,16 +623,18 @@ struct Deriver {
           }
           continue;
         }
+        auto exchange = mlir::dyn_cast<protocol_ir::ExchangeOp>(op);
         for (const auto &role : roster) {
           if (tag == "restrict" &&
               !llvm::is_contained(
-                  roleNames(op->getAttrOfType<mlir::ArrayAttr>("roles")), role))
+                  roleNames(
+                      mlir::cast<protocol_ir::RestrictRolesOp>(op).getRoles()),
+                  role))
             continue;
           if ((tag == "local_call" || tag == "draw") &&
-              zkc::language::role(op, tag == "local_call" ? "role" : "owner") !=
-                  role)
+              zkc::language::role(op) != role)
             continue;
-          if (tag == "exchange" && zkc::language::role(op, "receiver") != role)
+          if (exchange && exchange.getReceiver() != role)
             continue;
           std::vector<Flow> operands;
           bool available = true;
@@ -637,9 +642,7 @@ struct Deriver {
             unsigned index = argument;
             if (index >= environment.size())
               return refuse("component-seam-reference");
-            auto sourceRole = tag == "exchange"
-                                  ? zkc::language::role(op, "sender").str()
-                                  : role;
+            auto sourceRole = exchange ? exchange.getSender().str() : role;
             auto found = environment[index].find(sourceRole);
             if (found == environment[index].end()) {
               available = false;

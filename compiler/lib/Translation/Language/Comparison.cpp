@@ -12,6 +12,7 @@
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Exec/ControlCursor.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InherentAttributes.h"
 #include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
@@ -42,9 +43,14 @@ using namespace llvm;
 namespace zkc::language {
 namespace {
 using Values = SmallVector<mlir::Value>;
-bool attributes(mlir::Operation &op, ArrayRef<StringRef> names) {
-  return op.getAttrs().size() == names.size() &&
-         llvm::all_of(names, [&](auto name) { return bool(op.getAttr(name)); });
+// The operation's ODS definition owns its inherent attributes; an optional one
+// that changes the compared form is compared with that form. A discardable
+// attribute or call metadata is admitted only when named, and each named one is
+// present.
+bool attributes(mlir::Operation &op, ArrayRef<StringRef> named = {}) {
+  return hasOnlyInherentAttributes(&op, named) &&
+         llvm::all_of(named,
+                      [&](StringRef name) { return bool(op.getAttr(name)); });
 }
 bool string(mlir::Operation &op, StringRef name, StringRef expected) {
   auto value = op.getAttrOfType<mlir::StringAttr>(name);
@@ -355,8 +361,7 @@ class Comparator {
                         ? mlir::func::FuncOp()
                         : mlir::dyn_cast<mlir::func::FuncOp>(found->second);
     if (!function || !usedOutlined.insert(function).second ||
-        !attributes(*function, {"sym_name", "sym_visibility", "function_type",
-                                "no_inline", "runtime.region"}) ||
+        !attributes(*function, {"no_inline", "runtime.region"}) ||
         !string(*function, "sym_visibility", "private") ||
         !function->getAttrOfType<mlir::UnitAttr>("no_inline") ||
         !function->getAttrOfType<mlir::UnitAttr>("runtime.region") ||
@@ -386,21 +391,21 @@ class Comparator {
         result
             ? mlir::dyn_cast<exec::OutcomeType>(result->getResult(0).getType())
             : exec::OutcomeType();
-    if (!result || !attributes(*result, {}) || !outcome ||
+    if (!result || !attributes(*result) || !outcome ||
         mlir::TypeRange(outcome.getPayload()) != values.getTypes())
       return fail("scoped return packaging differs");
     auto *ret =
         next(block, cursor, span, "func.return", result->getResults(), 0);
-    return (ret && attributes(*ret, {}) && scoped->complete()) ||
+    return (ret && attributes(*ret) && scoped->complete()) ||
            fail("scoped function has extra control or a changed return");
   }
   bool stop(Span span, StringRef reason, StringRef site) {
     auto reject = mlir::dyn_cast_or_null<exec::RejectOp>(scoped->take());
     auto edge = mlir::dyn_cast_or_null<mlir::cf::BranchOp>(scoped->take());
-    if (!reject || !attributes(*reject, {"site", "reason"}) ||
+    if (!reject || !attributes(*reject) ||
         reject.getScope() != scoped->getScope() ||
         reject.getReason() != reason || reject.getSite() != site || !edge ||
-        !attributes(*edge, {}) ||
+        !attributes(*edge) ||
         edge.getDestOperands() != mlir::ValueRange{reject.getStop()} ||
         !scoped->atEnd() || !scoped->failure(edge.getDest()) ||
         !scoped->complete() || !account() || !record(*reject, span) ||
@@ -444,7 +449,7 @@ class Comparator {
     Values result;
     auto *actual =
         invoke(block, cursor, span, "exec.variant", inputs, {output}, result);
-    if (!actual || !attributes(*actual, {"alternative", "site"}) ||
+    if (!actual || !attributes(*actual) ||
         !string(*actual, "alternative", alternative) ||
         !string(*actual, "site", site)) {
       fail("variant alternative or occurrence differs");
@@ -460,7 +465,7 @@ class Comparator {
     Values result;
     for (unsigned i = 0; i < outputs.size(); ++i) {
       auto *project = next(block, cursor, span, "data.get", value, 1);
-      if (!project || !attributes(*project, {"index"}) ||
+      if (!project || !attributes(*project) ||
           !types(project->getResultTypes(), {outputs[i]})) {
         fail("total payload projection differs");
         return {};
@@ -494,7 +499,7 @@ class Comparator {
       return values.front();
     }
     auto *actual = next(block, cursor, span, "data.make", values, 1);
-    if (!actual || !attributes(*actual, {"alternative"}) ||
+    if (!actual || !attributes(*actual) ||
         !string(*actual, "alternative", layout.alternative) ||
         actual->getResult(0).getType() != carrier) {
       fail("oracle product carrier differs");
@@ -578,7 +583,7 @@ class Comparator {
       auto outcome = exec::OutcomeType::get(module.getContext(), {scalar});
       auto definition = [&](mlir::Operation *op, StringRef kind,
                             mlir::TypeRange inputs, mlir::TypeRange outputs,
-                            ArrayRef<StringRef> attrs, bool single) {
+                            ArrayRef<StringRef> named, bool single) {
         auto type = op->getAttrOfType<mlir::TypeAttr>("function_type");
         auto signature =
             type ? mlir::dyn_cast<mlir::FunctionType>(type.getValue())
@@ -589,7 +594,7 @@ class Comparator {
           return false;
         }
         return (op->getName().getStringRef() == kind &&
-                attributes(*op, attrs) &&
+                attributes(*op, named) &&
                 string(*op, "sym_visibility", "private") &&
                 !op->getNumOperands() && !op->getNumResults() &&
                 op->getNumRegions() == 1 && !op->getRegion(0).empty() &&
@@ -601,12 +606,10 @@ class Comparator {
                fail("mapped definition structure or signature differs");
       };
       if (!definition(domainOp, "data.domain",
-                      mlir::ValueRange(vectors).getTypes(), {domainType},
-                      {"sym_name", "sym_visibility", "function_type"}, true) ||
+                      mlir::ValueRange(vectors).getTypes(), {domainType}, {},
+                      true) ||
           !definition(callbackOp, "func.func", arguments, {outcome},
-                      {"sym_name", "sym_visibility", "function_type",
-                       "no_inline", "runtime.origin"},
-                      false))
+                      {"no_inline", "runtime.origin"}, false))
         return {};
       usedMaps.insert(domainOp);
       usedMaps.insert(callbackOp);
@@ -621,7 +624,7 @@ class Comparator {
         for (auto input : entry.getArguments()) {
           auto *elements =
               next(entry, cursor, span, "data.domain_elements", input, 1);
-          if (!elements || !attributes(*elements, {}) ||
+          if (!elements || !attributes(*elements) ||
               elements->getResult(0).getType() !=
                   data::DomainType::get(module.getContext(), {scalar})) {
             fail("mapped element domain differs");
@@ -634,7 +637,7 @@ class Comparator {
           }
           auto *zip = next(entry, cursor, span, "data.domain_zip",
                            {root, elements->getResult(0)}, 1);
-          if (!zip || !attributes(*zip, {}) ||
+          if (!zip || !attributes(*zip) ||
               zip->getResult(0).getType() !=
                   data::DomainType::get(module.getContext(), admittedItems)) {
             fail("mapped zip domain or row admission order differs");
@@ -643,7 +646,7 @@ class Comparator {
           root = zip->getResult(0);
         }
         auto *yield = next(entry, cursor, span, "data.domain_yield", root, 0);
-        if (!yield || !attributes(*yield, {}) || cursor != entry.end()) {
+        if (!yield || !attributes(*yield) || cursor != entry.end()) {
           fail("mapped domain returns a different value or has extra work");
           return {};
         }
@@ -671,8 +674,9 @@ class Comparator {
             auto callee =
                 call ? call->getAttrOfType<mlir::FlatSymbolRefAttr>("callee")
                      : mlir::FlatSymbolRefAttr();
-            return (call && attributes(*call, {"callee", "site"}) && callee &&
-                    callee.getValue() == helper.symbol &&
+            auto compute = mlir::dyn_cast_or_null<exec::ComputeOp>(call);
+            return (compute && attributes(*call) && !compute.getPolicyAttr() &&
+                    callee && callee.getValue() == helper.symbol &&
                     string(*call, "site", "body") &&
                     finish(entry, cursor, span, result, false)) ||
                    fail("mapped scalar callback differs");
@@ -689,7 +693,8 @@ class Comparator {
     auto selectedBody =
         actual ? actual->getAttrOfType<mlir::FlatSymbolRefAttr>("body")
                : mlir::FlatSymbolRefAttr();
-    if (!actual || !attributes(*actual, {"domain", "body", "site"}) ||
+    auto collect = mlir::dyn_cast_or_null<exec::CollectOp>(actual);
+    if (!collect || !attributes(*actual) || collect.getPredicateAttr() ||
         !selectedDomain || !selectedBody ||
         selectedDomain.getValue() != name + "_domain" ||
         selectedBody.getValue() != name + "_body" ||
@@ -714,7 +719,7 @@ class Comparator {
       if (!actual)
         return {};
       auto value = actual->getAttrOfType<mlir::BoolAttr>("value");
-      if (!attributes(*actual, {"value", "site"}) || !value ||
+      if (!attributes(*actual) || !value ||
           value.getValue() != (expected.parameters.front() == "true") ||
           !string(*actual, "site", site)) {
         if (!failure)
@@ -750,8 +755,7 @@ class Comparator {
         invoke(block, cursor, span, "exec.apply", operands, outputs, result);
     if (!actual)
       return {};
-    if (!attributes(*actual, {"binding", "parameters", "site"}) ||
-        !string(*actual, "site", site)) {
+    if (!attributes(*actual) || !string(*actual, "site", site)) {
       if (!failure)
         fail("ordered operation contract, parameters or site differ");
       return {};
@@ -833,8 +837,7 @@ class Comparator {
     auto owners = leaf.roles();
     auto *call = next(block, cursor, span, "protocol.local_call", inputs,
                       outputs.size());
-    if (!call || owners.size() != 1 ||
-        !attributes(*call, {"callee", "role", "site"}) ||
+    if (!call || owners.size() != 1 || !attributes(*call) ||
         !string(*call, "role", nativeRoleName(owners.front())) ||
         !string(*call, "site", site) || !types(call->getResultTypes(), outputs))
       return fail("role-local custody call differs"), std::nullopt;
@@ -845,8 +848,7 @@ class Comparator {
                       ? mlir::func::FuncOp()
                       : mlir::dyn_cast<mlir::func::FuncOp>(found->second);
     if (!helper || !usedCustody.insert(helper).second ||
-        !attributes(*helper, {"sym_name", "sym_visibility", "function_type",
-                              "no_inline", "runtime.origin"}) ||
+        !attributes(*helper, {"no_inline", "runtime.origin"}) ||
         !string(*helper, "sym_visibility", "private") ||
         !helper->getAttrOfType<mlir::UnitAttr>("no_inline") ||
         helper.getNumArguments() != inputs.size() + 1 ||
@@ -914,9 +916,7 @@ class Comparator {
     unsigned holder = placement.holder;
     if (!mapping.empty())
       holder = mapping[holder];
-    if (!(binding
-              ? attributes(operation, {"holder", "receivers", "shape_bounds"})
-              : attributes(operation, {"holder", "receivers"})) ||
+    if (!attributes(operation) ||
         !string(operation, "holder", nativeRoleName(holder)) ||
         !roleSet(operation.getAttr("receivers"),
                  oracleReceivers(placement, mapping)))
@@ -1142,8 +1142,7 @@ class Comparator {
           next(block, cursor, clause.span, "protocol.statement", operands, 0);
       if (!actual)
         return false;
-      if (!attributes(*actual,
-                      {"relation", "selectors", "acceptance", "target"}))
+      if (!attributes(*actual))
         return fail("selected Entry statement attributes differ");
       auto symbol = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("relation");
       auto output = actual->getAttrOfType<mlir::IntegerAttr>("acceptance");
@@ -1298,12 +1297,11 @@ class Comparator {
           if (dependencies[i] != i)
             return fail("mathematical dependency order differs");
         if (math->identity == MathematicalIdentity::Select) {
-          if (!mlir::isa<mlir::arith::SelectOp>(actual) ||
-              !attributes(*actual, {}))
+          if (!mlir::isa<mlir::arith::SelectOp>(actual) || !attributes(*actual))
             return fail("mathematical selection differs");
         } else if (math->identity == MathematicalIdentity::VectorLength) {
           auto axis = actual->getAttrOfType<mlir::IntegerAttr>("axis");
-          if (!attributes(*actual, {"axis"}) || !axis ||
+          if (!attributes(*actual) || !axis ||
               !axis.getType().isSignlessInteger(64) || axis.getInt() != 0)
             return fail("vector length axis differs");
         } else if (math->identity == MathematicalIdentity::IndexConstant) {
@@ -1312,8 +1310,7 @@ class Comparator {
             literal = math->staticArguments.front().dimension.closedValue();
           else if (StringRef(math->literal).getAsInteger(10, literal))
             return fail("invalid checked index literal");
-          if (!attributes(*actual, {"value"}) ||
-              !natural(*actual, "value", literal))
+          if (!attributes(*actual) || !natural(*actual, "value", literal))
             return fail("index literal differs");
         } else if (math->identity == MathematicalIdentity::FieldConstant) {
           auto field = mlir::dyn_cast<algebra::FieldType>(
@@ -1326,17 +1323,16 @@ class Comparator {
             llvm::consumeError(expected.takeError());
             return fail("invalid checked field literal");
           }
-          if (!attributes(*actual, {"value"}) ||
-              actual->getAttr("value") != *expected)
+          if (!attributes(*actual) || actual->getAttr("value") != *expected)
             return fail("field literal differs");
         } else if (math->identity == MathematicalIdentity::BooleanConstant) {
           auto value = actual->getAttrOfType<mlir::IntegerAttr>("value");
-          if (!attributes(*actual, {"value"}) || !value ||
+          if (!attributes(*actual) || !value ||
               value.getValue().getBoolValue() != (math->literal == "true"))
             return fail("Boolean literal differs");
         } else if (math->identity == MathematicalIdentity::BooleanEqual) {
           auto cmp = mlir::dyn_cast<mlir::arith::CmpIOp>(actual);
-          if (!attributes(*actual, {"predicate"}) || !cmp ||
+          if (!attributes(*actual) || !cmp ||
               cmp.getPredicate() != mlir::arith::CmpIPredicate::eq)
             return fail("Boolean comparison differs");
         } else if (math->identity == MathematicalIdentity::ArrayAt ||
@@ -1345,7 +1341,7 @@ class Comparator {
                               ? "index"
                               : "count";
           auto value = actual->getAttrOfType<mlir::IntegerAttr>(key);
-          if (!attributes(*actual, {key}) || !value ||
+          if (!attributes(*actual) || !value ||
               !value.getType().isSignlessInteger(64) ||
               value.getValue().getZExtValue() !=
                   math->staticArguments[2].dimension.closedValue())
@@ -1361,7 +1357,7 @@ class Comparator {
                   ? mlir::cast<poly::PolynomialType>(type).getDomain()
                   : mlir::cast<data::FieldArrayType>(type).getDomain());
           auto points = actual->getAttrOfType<mlir::ArrayAttr>("points");
-          if (!attributes(*actual, {"points"}) || !points ||
+          if (!attributes(*actual) || !points ||
               points.size() != math->parameters.size())
             return fail("polynomial domain differs");
           for (auto [point, parameter] : llvm::zip(points, math->parameters)) {
@@ -1373,7 +1369,7 @@ class Comparator {
             if (point != *expected)
               return fail("polynomial domain differs");
           }
-        } else if (!attributes(*actual, {}))
+        } else if (!attributes(*actual))
           return fail("extra mathematical attributes");
         result = Values(actual->getResults());
         if (packed &&
@@ -1437,13 +1433,13 @@ class Comparator {
         if (!actual)
           return false;
         auto callee = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("callee");
-        SmallVector<StringRef> attrs{"callee"};
-        if (owned)
-          attrs.append({"site", "role"});
-        else if (scoped)
-          attrs.push_back(math ? "site" : "runtime.site");
+        auto compute = mlir::dyn_cast<exec::ComputeOp>(actual);
+        SmallVector<StringRef, 1> named;
+        if (scoped && !math)
+          named.push_back("runtime.site");
         if (!callee || callee.getValue() != target.symbol ||
-            !attributes(*actual, attrs) ||
+            !attributes(*actual, named) ||
+            (compute && compute.getPolicyAttr()) ||
             ((owned || scoped) &&
              !string(*actual, scoped && !math ? "runtime.site" : "site",
                      site)) ||
@@ -1495,7 +1491,7 @@ class Comparator {
           auto *bound = next(block, cursor, op.span, "data.index", {}, 1);
           if (!bound)
             return false;
-          if (!attributes(*bound, {"value"}) ||
+          if (!attributes(*bound) ||
               !natural(*bound, "value", query->bound->closedValue()) ||
               !bound->getResult(0).getType().isUnsignedInteger(64))
             return fail("index query domain differs");
@@ -1505,7 +1501,7 @@ class Comparator {
           if (!query->count->isClosed())
             return fail("index count is not closed");
           auto *count = next(block, cursor, op.span, "data.index", {}, 1);
-          if (!count || !attributes(*count, {"value"}) ||
+          if (!count || !attributes(*count) ||
               !natural(*count, "value", query->count->closedValue()) ||
               !count->getResult(0).getType().isUnsignedInteger(64))
             return fail("index query count differs");
@@ -1515,7 +1511,7 @@ class Comparator {
             next(block, cursor, op.span, "protocol.query", operands, 1);
         if (!actual)
           return false;
-        if (!attributes(*actual, {"method", "owner", "site"}) ||
+        if (!attributes(*actual) ||
             !string(*actual, "method",
                     query->count   ? "indices"
                     : query->bound ? "index"
@@ -1544,7 +1540,7 @@ class Comparator {
                             successors.size());
         if (!actual)
           return false;
-        if (!attributes(*actual, {"owner", "site"}) ||
+        if (!attributes(*actual) ||
             !string(*actual, "owner", nativeRoleName(completion->owner)) ||
             !string(*actual, "site", site) ||
             actual->getResultTypes() != mlir::TypeRange(successors))
@@ -1560,7 +1556,7 @@ class Comparator {
         if (protocol) {
           auto *actual = next(block, cursor, op.span, "protocol.guard",
                               values[check->condition.index], 0);
-          if (!actual || !attributes(*actual, {"owner", "site"}) ||
+          if (!actual || !attributes(*actual) ||
               !string(*actual, "owner", nativeRoleName(*check->owner)) ||
               !string(*actual, "site", site))
             return fail("require owner or occurrence differs");
@@ -1615,7 +1611,7 @@ class Comparator {
         std::vector<std::string> mapped;
         for (auto role : application->roles)
           mapped.push_back(nativeRoleName(role));
-        if (!attributes(*actual, {"callee", "site", "roles"}) || !callee ||
+        if (!attributes(*actual) || !callee ||
             callee.getValue() != target.symbol ||
             !string(*actual, "site", site) ||
             !strings(actual->getAttr("roles"), mapped))
@@ -1645,8 +1641,7 @@ class Comparator {
           return fail("virtual construction does not select a closed oracle");
         auto *actual = next(block, cursor, op.span, "protocol.oracle_virtual",
                             flatten(instance->operands), 1);
-        if (!actual ||
-            !attributes(*actual, {"callee", "holder", "receivers"}) ||
+        if (!actual || !attributes(*actual) ||
             !string(*actual, "holder", nativeRoleName(instance->holder)) ||
             !roleSet(actual->getAttr("receivers"), instance->receivers))
           return fail("virtual construction holder or receivers differ");
@@ -1675,7 +1670,8 @@ class Comparator {
         auto *actual =
             next(block, cursor, op.span, "protocol.oracle_query",
                  Values{values[query->source].front(), *position}, 1);
-        if (!actual || !attributes(*actual, {"site"}) ||
+        if (!actual || !attributes(*actual) ||
+            mlir::cast<protocol_ir::OracleQueryOp>(actual).getOwnerAttr() ||
             !string(*actual, "site", site))
           return fail("oracle source query occurrence differs");
         auto answer = protocol::decodeBoundType(module.getContext(),
@@ -1693,14 +1689,14 @@ class Comparator {
       } else if (std::holds_alternative<OracleSequenceEmpty>(op.action)) {
         auto *actual = next(block, cursor, op.span,
                             "protocol.oracle_sequence_empty", {}, 1);
-        if (!actual || !attributes(*actual, {}))
+        if (!actual || !attributes(*actual))
           return fail("empty oracle sequence differs");
         result = Values(actual->getResults());
       } else if (auto *append = std::get_if<OracleSequenceAppend>(&op.action)) {
         auto *actual =
             next(block, cursor, op.span, "protocol.oracle_sequence_append",
                  flatten({append->prefix, append->element}), 1);
-        if (!actual || !attributes(*actual, {"roles", "site"}) ||
+        if (!actual || !attributes(*actual) ||
             !roleSet(actual->getAttr("roles"), append->roles) ||
             !string(*actual, "site", site))
           return fail("oracle sequence append family or occurrence differs");
@@ -1709,7 +1705,7 @@ class Comparator {
         auto *actual =
             next(block, cursor, op.span, "protocol.oracle_sequence_at",
                  flatten({at->input, at->position}), 1);
-        if (!actual || !attributes(*actual, {"roles", "site"}) ||
+        if (!actual || !attributes(*actual) ||
             !roleSet(actual->getAttr("roles"), at->roles) ||
             !string(*actual, "site", site))
           return fail("oracle sequence selection family or occurrence differs");
@@ -1718,7 +1714,7 @@ class Comparator {
         auto *actual =
             next(block, cursor, op.span, "protocol.oracle_sequence_length",
                  values[length->input.index], 1);
-        if (!actual || !attributes(*actual, {}))
+        if (!actual || !attributes(*actual))
           return fail("oracle sequence length differs");
         result = Values(actual->getResults());
       } else if (auto *send = std::get_if<OracleSend>(&op.action)) {
@@ -1726,8 +1722,7 @@ class Comparator {
                             flatten({send->data, send->rows}), 1);
         if (!actual)
           return false;
-        if (!attributes(*actual, {"sender", "receivers", "site", "shape_names",
-                                  "shape_bounds"}) ||
+        if (!attributes(*actual) ||
             !string(*actual, "sender", nativeRoleName(send->holder)) ||
             !roleSet(actual->getAttr("receivers"), send->receivers) ||
             !string(*actual, "site", site))
@@ -1751,7 +1746,7 @@ class Comparator {
                             flatten({query->handle, query->position}), 1);
         if (!actual)
           return false;
-        if (!attributes(*actual, {"owner", "site"}) ||
+        if (!attributes(*actual) ||
             !string(*actual, "owner", nativeRoleName(query->owner)) ||
             !string(*actual, "site", site))
           return fail("oracle query owner or occurrence differs");
@@ -1770,14 +1765,14 @@ class Comparator {
       } else if (auto *contents = std::get_if<OracleContents>(&op.action)) {
         auto *actual = next(block, cursor, op.span, "protocol.oracle_contents",
                             values[contents->input.index], 1);
-        if (!actual || !attributes(*actual, {"owner"}) ||
+        if (!actual || !attributes(*actual) ||
             !string(*actual, "owner", nativeRoleName(contents->owner)))
           return fail("oracle data owner differs");
         result = Values(actual->getResults());
       } else if (auto *rows = std::get_if<OracleRows>(&op.action)) {
         auto *actual = next(block, cursor, op.span, "protocol.oracle_shape",
                             values[rows->input.index], 1);
-        if (!actual || !attributes(*actual, {"dimension"}) ||
+        if (!actual || !attributes(*actual) ||
             !string(*actual, "dimension", "rows"))
           return fail("oracle row view differs");
         result = Values(actual->getResults());
@@ -1785,7 +1780,7 @@ class Comparator {
         auto *actual =
             next(block, cursor, op.span, "protocol.oracle_forget_shape",
                  values[forget->input.index], 1);
-        if (!actual || !attributes(*actual, {}))
+        if (!actual || !attributes(*actual))
           return fail("oracle shape refinement differs");
         result = Values(actual->getResults());
       } else if (auto *exchange = std::get_if<Exchange>(&op.action)) {
@@ -1798,7 +1793,7 @@ class Comparator {
               next(block, cursor, op.span, "protocol.exchange", input[i], 1);
           if (!sent)
             return false;
-          if (!attributes(*sent, {"sender", "receiver", "site"}) ||
+          if (!attributes(*sent) ||
               !string(*sent, "sender", nativeRoleName(exchange->sender)) ||
               !string(*sent, "receiver", nativeRoleName(exchange->receiver)) ||
               !string(*sent, "site", site + "_" + std::to_string(i)))
@@ -1808,7 +1803,7 @@ class Comparator {
                    sent->getResult(0), 1);
           if (!received)
             return false;
-          if (!attributes(*received, {"roles"}) ||
+          if (!attributes(*received) ||
               !roleSet(received->getAttr("roles"), {exchange->receiver}))
             return fail("message receiver restriction differs");
           result.push_back(received->getResult(0));
@@ -1822,7 +1817,7 @@ class Comparator {
                               components, 1);
           if (!actual)
             return false;
-          if (!attributes(*actual, {"roles"}) ||
+          if (!attributes(*actual) ||
               !roleSet(actual->getAttr("roles"), assembly->roles))
             return fail("role component assembly differs");
           result.push_back(actual->getResult(0));
@@ -1833,7 +1828,7 @@ class Comparator {
               next(block, cursor, op.span, "protocol.restrict_roles", input, 1);
           if (!actual)
             return false;
-          if (!attributes(*actual, {"roles"}) ||
+          if (!attributes(*actual) ||
               !roleSet(actual->getAttr("roles"), restriction->roles))
             return fail("role restriction differs");
           result.push_back(actual->getResult(0));
@@ -1852,10 +1847,8 @@ class Comparator {
         auto carried = actual->getAttrOfType<mlir::IntegerAttr>("carried");
         auto carriedRoles =
             actual->getAttrOfType<mlir::ArrayAttr>("carried_roles");
-        if (!attributes(*actual, {"site", "carried", "maximum", "roles",
-                                  "carried_roles"}) ||
-            !string(*actual, "site", site) || !maximum ||
-            !maximum.getType().isSignlessInteger(64) ||
+        if (!attributes(*actual) || !string(*actual, "site", site) ||
+            !maximum || !maximum.getType().isSignlessInteger(64) ||
             maximum.getValue().getZExtValue() !=
                 repeat->maximum.closedValue() ||
             !carried || !carried.getType().isSignlessInteger(64) ||
@@ -1919,9 +1912,7 @@ class Comparator {
                 mlir::StringAttr::get(module.getContext(), expected[i]))
               return fail("selected alternative identity differs");
           if (protocol) {
-            if (!attributes(*actual, {"site", "roles", "output_roles",
-                                      "alternatives"}) ||
-                !string(*actual, "site", site) ||
+            if (!attributes(*actual) || !string(*actual, "site", site) ||
                 !roleSet(actual->getAttr("roles"), control->roles))
               return fail("selected roster or site differs");
             auto outputRoles =
@@ -1938,7 +1929,7 @@ class Comparator {
                 if (!roleSet(outputRoles[flat++], leaf.roles()))
                   return fail("selected result placement differs");
             }
-          } else if (!attributes(*actual, {"alternatives"}))
+          } else if (!attributes(*actual))
             return fail("extra mathematical selected attributes");
           for (unsigned arm = 0; arm < control->regions.size(); ++arm) {
             if (!llvm::hasSingleElement(actual->getRegion(arm)))
@@ -2056,7 +2047,7 @@ class Comparator {
              : region                                        ? "data.yield"
                                                              : "func.return",
              returned, 0);
-    return (ret && attributes(*ret, {}) && cursor == block.end()) ||
+    return (ret && attributes(*ret) && cursor == block.end()) ||
            fail("extra return attributes or operations after source body");
   }
 
@@ -2066,10 +2057,7 @@ class Comparator {
         decl.body->mode != Body::Mode::Oracle || decl.outputs.size() != 1 ||
         decl.body->inputs != decl.inputs.size() + 1 ||
         decl.body->results.size() != 1 || !decl.services.empty() ||
-        !attributes(function,
-                    {"sym_name", "function_type", "kind", "admissibility",
-                     "shape_arguments", "shape_bounds"}) ||
-        !string(function, "sym_name", decl.symbol) ||
+        !attributes(function) || !string(function, "sym_name", decl.symbol) ||
         function.getNumOperands() || function.getNumResults() ||
         function.getNumSuccessors() || function.getNumRegions() != 1 ||
         !llvm::hasSingleElement(function.getRegion(0)))
@@ -2287,10 +2275,7 @@ public:
                    "expected one unadorned protocol module");
     auto native = mlir::dyn_cast<protocol_ir::ProtocolModuleOp>(
         module.getBody()->front());
-    if (!native ||
-        !(native->hasAttr("source_declarations")
-              ? attributes(*native, {"profile", "source_declarations"})
-              : attributes(*native, {"profile"})) ||
+    if (!native || !attributes(*native) ||
         native.getProfile() != protocol_ir::Profile::Protocol ||
         !llvm::hasSingleElement(native.getBody()))
       return error("source.correspondence", "unexpected original module");
@@ -2336,9 +2321,8 @@ public:
           return error("source.correspondence", "duplicate relation symbol");
       } else if (op.getName().getStringRef() == "runtime.binding") {
         auto name = op.getAttrOfType<mlir::StringAttr>("sym_name");
-        if (!attributes(op, {"sym_name", "contract", "arguments",
-                             "implementation", "function_type"}) ||
-            !name || !bindings.emplace(name.getValue().str(), &op).second)
+        if (!attributes(op) || !name ||
+            !bindings.emplace(name.getValue().str(), &op).second)
           return error("source.correspondence", "invalid or duplicate binding");
       } else if (name && name.getValue().starts_with("zkl_custody_")) {
         if (!custodyHelpers.emplace(name.getValue().str(), &op).second)
@@ -2405,20 +2389,11 @@ public:
                  : !llvm::hasSingleElement(function.getRegion(0))))
         return error("source.correspondence",
                      "definition identity or structure differs");
-      SmallVector<StringRef> names =
-          protocol ? std::initializer_list<StringRef>{"sym_name",
-                                                      "function_type",
-                                                      "roles",
-                                                      "input_roles",
-                                                      "output_roles",
-                                                      "contracts",
-                                                      "origin"}
-          : local
-              ? std::initializer_list<StringRef>{"sym_name", "function_type",
-                                                 "runtime.origin", "no_inline",
-                                                 "sym_visibility"}
-              : std::initializer_list<StringRef>{"sym_name", "function_type",
-                                                 "sym_visibility"};
+      // Contracts and origins of protocols, and helper visibility, are
+      // compared below.
+      SmallVector<StringRef, 3> named;
+      if (local)
+        named.append({"runtime.origin", "no_inline"});
       auto conditions = take(flattenDataPreconditions(decl, layouts));
       if (!conditions)
         return std::move(failure);
@@ -2428,11 +2403,11 @@ public:
           ++condition.right;
         }
       if (!conditions->empty())
-        names.push_back("data.preconditions");
+        named.push_back("data.preconditions");
       if (!compareDataPreconditions(function, *conditions))
         return error("source.correspondence",
                      "helper data preconditions differ");
-      if (!attributes(function, names) ||
+      if (!attributes(function, named) ||
           (!protocol && !string(function, "sym_visibility", "private")) ||
           (local && !function.getAttrOfType<mlir::UnitAttr>("no_inline")))
         return error("source.correspondence", "definition attributes differ");
@@ -2550,12 +2525,10 @@ public:
         return error("source.correspondence", "omitted relation declaration");
       auto declaration = found->second;
       relations.erase(found);
-      SmallVector<StringRef> attributesExpected{
-          "sym_name",         "kind",      "key",     "revision",
-          "static_arguments", "signature", "purposes"};
-      if (decl.relation->kind == RelationDefinition::Kind::Formula)
-        attributesExpected.push_back("formula");
-      if (!attributes(*declaration, attributesExpected) ||
+      bool formula = decl.relation->kind == RelationDefinition::Kind::Formula;
+      if (!attributes(*declaration) || declaration.getSymVisibilityAttr() ||
+          !declaration.getStaticArgumentsAttr() ||
+          bool(declaration.getFormulaAttr()) != formula ||
           declaration->getNumRegions() || declaration->getNumOperands() ||
           declaration->getNumResults())
         return error("source.correspondence",

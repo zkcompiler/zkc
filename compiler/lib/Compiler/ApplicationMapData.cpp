@@ -4,6 +4,7 @@
 #include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Protocol/IR/RoleAttributes.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/STLExtras.h"
 #include <functional>
@@ -213,7 +214,8 @@ StringRef callee(const Instruction &instruction) {
       .getValue();
 }
 ArrayAttr applicationRoles(const Instruction &instruction) {
-  return instruction.operation->getAttrOfType<ArrayAttr>("roles");
+  auto application = dyn_cast<protocol_ir::ApplyOp>(instruction.operation);
+  return application ? application.getRolesAttr() : ArrayAttr();
 }
 bool sameDescriptor(const Instruction &source, const Instruction &candidate,
                     const Roles &roles) {
@@ -223,27 +225,14 @@ bool sameDescriptor(const Instruction &source, const Instruction &candidate,
     NamedAttrList result(op->getAttrs());
     result.erase("site");
     result.erase("runtime.site");
-    std::function<Attribute(Attribute)> substitute = [&](Attribute attr) {
-      if (auto name = dyn_cast<StringAttr>(attr)) {
-        auto found = roles.find(name.str());
-        if (found != roles.end())
-          return Attribute(StringAttr::get(op->getContext(), found->second));
-      } else if (auto array = dyn_cast<ArrayAttr>(attr)) {
-        SmallVector<Attribute> values;
-        for (Attribute value : array)
-          values.push_back(substitute(value));
-        return Attribute(ArrayAttr::get(op->getContext(), values));
-      }
-      return attr;
-    };
     if (map)
-      // Every role-valued attribute an application can rename, including a
-      // selected region's per-result role sets.
-      for (StringRef key :
-           {"roles", "carried_roles", "output_roles", "receivers", "holder",
-            "sender", "receiver", "owner", "role"})
-        if (auto attr = result.get(key))
-          result.set(key, substitute(attr));
+      // Every declared role use an application renames, and nothing else.
+      protocol_ir::renameRoleUses(op->getName(), result, [&](StringAttr role) {
+        auto found = roles.find(role.str());
+        return found == roles.end()
+                   ? role
+                   : StringAttr::get(op->getContext(), found->second);
+      });
     return result.getDictionary(op->getContext());
   };
   return attributes(source.operation, true) ==

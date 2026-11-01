@@ -4,6 +4,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InherentAttributes.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringSet.h"
@@ -34,13 +35,10 @@ class Reader {
     metadata -= amount;
     return true;
   }
+  // Inherent attributes come from the operation's ODS definition; this
+  // reader names no discardable attribute or call metadata.
   static bool bare(mlir::Operation *op) {
-    return op && op->getDiscardableAttrDictionary().empty();
-  }
-  static bool attributes(mlir::Operation *op, ArrayRef<StringRef> allowed) {
-    return op && all_of(op->getAttrs(), [&](mlir::NamedAttribute attr) {
-             return is_contained(allowed, attr.getName().getValue());
-           });
+    return op && hasOnlyInherentAttributes(op);
   }
   Expected<json::Value> schema(data::LayoutAttr layout, unsigned depth = 0) {
     if (!layout || depth > limits.typeDepth || !charge())
@@ -219,7 +217,7 @@ class Reader {
       if (++operations > limits.operations)
         return fail("Host operation inventory exceeds limits");
       if (auto stop = mlir::dyn_cast<exec::StopOp>(raw)) {
-        if (!attributes(stop, {"reason"}) || !bytes(stop.getReason().size()) ||
+        if (!bare(stop) || !bytes(stop.getReason().size()) ||
             !branch(take(), failure, stop->getResults()) ||
             cursor != current->end())
           return fail("Host stop does not propagate terminal failure");
@@ -309,10 +307,7 @@ class Reader {
         append_range(outputs, next->getArguments());
       } else if (auto match = mlir::dyn_cast<data::MatchOp>(raw)) {
         auto *next = takeBlock();
-        if (!next ||
-            !attributes(match,
-                        {"alternatives", "successor_operand_segments"}) ||
-            match.getArms().empty() ||
+        if (!next || !bare(match) || match.getArms().empty() ||
             match.getForwarded().size() != match.getArms().size() ||
             cursor != current->end())
           return fail("Host match has invalid control metadata");
@@ -377,9 +372,7 @@ class Reader {
           operation["op"] = "drop";
         else
           return fail("Host original contains an unsupported operation");
-        if (!attributes(raw, attribute.empty()
-                                 ? ArrayRef<StringRef>{}
-                                 : ArrayRef<StringRef>{attribute}))
+        if (!bare(raw))
           return fail("Host operation has unexpected metadata");
         if (attribute == "path") {
           auto path = raw->getAttrOfType<mlir::DenseI64ArrayAttr>(attribute);

@@ -13,6 +13,7 @@
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Protocol/Contracts.h"
+#include "zkc/Dialect/Protocol/IR/RoleAttributes.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Protocol/Services.h"
@@ -140,18 +141,30 @@ public:
                                  "mathematical-analysis-limit",
                                  "expanded analysis exceeds 100000 operations");
       if (active) {
-        for (StringRef key : {"roles", "receivers"})
-          if (auto set = op->getAttrOfType<ArrayAttr>(key)) {
-            BitVector required;
-            if (failed(roles(op, set, required)) || !subset(required, *active))
-              return refuse(op, "action adds a nonparticipating role");
-          }
-        for (StringRef key : {"owner", "sender", "receiver", "role", "holder"})
-          if (auto owner = op->getAttrOfType<StringAttr>(key)) {
-            int r = role(owner);
+        // Every declared role use inside selected or repeated control names
+        // only participating roles.
+        for (const auto &use : protocol_ir::getRoleUses(op)) {
+          if (use.shape == protocol_ir::RoleShape::Role) {
+            auto owner = dyn_cast<StringAttr>(use.value);
+            int r = owner ? role(owner) : -1;
             if (r < 0 || !active->test(r))
               return refuse(op, "action owner does not participate in control");
+            continue;
           }
+          SmallVector<Attribute, 1> sets{use.value};
+          if (use.shape == protocol_ir::RoleShape::SlotRoleSets) {
+            auto slots = dyn_cast<ArrayAttr>(use.value);
+            if (!slots)
+              return refuse(op, "role sets must be nonempty");
+            sets.assign(slots.begin(), slots.end());
+          }
+          for (Attribute set : sets) {
+            BitVector required;
+            if (failed(roles(op, dyn_cast<ArrayAttr>(set), required)) ||
+                !subset(required, *active))
+              return refuse(op, "action adds a nonparticipating role");
+          }
+        }
       }
       // A nonrecursive enclosing verification must also check helper-local
       // invariants, without relying on an earlier recursive verification.
@@ -505,9 +518,13 @@ public:
           return refuse(op, "ordered sites must be unique identifiers");
         if (isa<protocol_ir::OracleSequenceAppendOp,
                 protocol_ir::OracleSequenceAtOp>(op)) {
+          auto append = dyn_cast<protocol_ir::OracleSequenceAppendOp>(op);
           BitVector selected;
-          if (failed(
-                  roles(op, op->getAttrOfType<ArrayAttr>("roles"), selected)))
+          if (failed(roles(op,
+                           append ? append.getRolesAttr()
+                                  : cast<protocol_ir::OracleSequenceAtOp>(op)
+                                        .getRolesAttr(),
+                           selected)))
             return failure();
           for (Value input : op->getOperands())
             if (!subset(selected, env.values.lookup(input)))

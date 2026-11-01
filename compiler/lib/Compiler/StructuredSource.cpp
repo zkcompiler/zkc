@@ -22,6 +22,7 @@
 #include "zkc/Dialect/Data/Variant.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/InherentAttributes.h"
 #include "zkc/Dialect/Operations.h"
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
@@ -99,10 +100,13 @@ Expected<runtime::BindingOp> primitiveBinding(Operation *op,
 unsigned siteLimit(StructuredSourceProfile profile) {
   return profile == StructuredSourceProfile::Prepared ? 4096 : 512;
 }
-Error checkAttributes(Operation &op, ArrayRef<StringRef> allowed,
+// The operation's ODS definition owns its inherent attributes; a discardable
+// attribute or call metadata is admitted only when the caller names it. Every
+// admitted attribute is then bounded for the wire.
+Error checkAttributes(Operation &op, ArrayRef<StringRef> named,
                       StructuredSourceProfile profile) {
   for (NamedAttribute attr : op.getAttrs()) {
-    if (!llvm::is_contained(allowed, attr.getName().getValue()))
+    if (!admitsAttribute(&op, attr.getName(), named))
       return error("structured-source-attribute", attr.getName().getValue());
     // Protocol origin has a separate bounded tree validator; only its
     // template path can exceed the ordinary string limit.
@@ -554,8 +558,8 @@ class Exporter {
   uint64_t associationBytes = 0;
   StructuredSourceProfile profile;
 
-  Error attributes(Operation &op, ArrayRef<StringRef> allowed) {
-    return checkAttributes(op, allowed, profile);
+  Error attributes(Operation &op, ArrayRef<StringRef> named = {}) {
+    return checkAttributes(op, named, profile);
   }
 
   Error associate(ArrayRef<unsigned> row, Operation &op,
@@ -780,7 +784,7 @@ class Exporter {
     json::Array encoded;
     for (const SourceExecutionStep &step : found->second) {
       Operation &op = *step.operation;
-      // Formation has checked the allowed attribute names. Apply the wire's
+      // Formation has checked the admitted attribute names. Apply the wire's
       // UTF-8 and size bounds to every actual attribute, including locations
       // represented by runtime.site and private computation references.
       SmallVector<StringRef> checkedAttributes;
@@ -872,17 +876,15 @@ class Exporter {
   }
 
   Expected<json::Value> descriptor(Operation &op, StringRef owner) {
-    // Each branch checks exactly the attributes represented by its descriptor.
-    // Inherent attributes and discardable attributes share this whitelist.
+    // Each branch represents its operation's ODS inherent attributes; no
+    // descriptor admits a discardable attribute or call metadata.
     auto field = [&]() {
       return cast<algebra::FieldType>(op.getOperand(0).getType()).getDomain();
     };
     const auto operationName = op.getName().getStringRef();
     if (operationName == "protocol.branch" || operationName == "data.branch") {
       bool protocol = operationName == "protocol.branch";
-      if (auto e = protocol ? attributes(op, {"site", "roles", "alternatives",
-                                              "output_roles"})
-                            : attributes(op, {"alternatives"}))
+      if (auto e = attributes(op))
         return std::move(e);
       if ((protocol && owner != "protocol") ||
           (!protocol && owner != "math" && owner != "protocol"))
@@ -902,8 +904,7 @@ class Exporter {
     if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op)) {
       // Native formation already checked nested active rosters and state
       // scopes.
-      if (auto e = attributes(
-              op, {"site", "carried", "maximum", "roles", "carried_roles"}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (owner != "protocol")
         return error("structured-source-operation");
@@ -915,7 +916,7 @@ class Exporter {
                          std::move(scopes)};
     }
     if (auto application = dyn_cast<protocol_ir::ApplyOp>(op)) {
-      if (auto e = attributes(op, {"callee", "roles", "site"}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto callee =
           symbols.lookup<protocol_ir::MathematicalOp>(application.getCallee());
@@ -946,8 +947,7 @@ class Exporter {
       bool constant = isa<data::IndexOp>(op);
       if (owner != "protocol" && owner != "math" && owner != "oracle")
         return error("structured-source-operation");
-      if (auto e = attributes(op, constant ? ArrayRef<StringRef>{"value"}
-                                           : ArrayRef<StringRef>{}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (constant)
         return json::Array{"index.constant",
@@ -964,7 +964,7 @@ class Exporter {
     if (auto restrict = dyn_cast<algebra::MultilinearRestrictPrefixOp>(op)) {
       if (owner != "protocol" && owner != "math" && owner != "oracle")
         return error("structured-source-operation");
-      if (auto e = attributes(op, {}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto domain = restrict.getResult().getType().getDomain();
       used.domains.insert(domain);
@@ -975,7 +975,7 @@ class Exporter {
           dim.getAxis() != 0 ||
           !isa<data::FieldVectorType>(dim.getInput().getType()))
         return error("structured-source-operation");
-      if (auto e = attributes(op, {"axis"}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto domain =
           cast<data::FieldVectorType>(dim.getInput().getType()).getDomain();
@@ -983,7 +983,7 @@ class Exporter {
       return json::Array{"vector.length", domain};
     }
     if (auto constant = dyn_cast<algebra::ConstantFieldOp>(op)) {
-      if (auto e = attributes(op, {"value"}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto literal = algebra::encodeFieldLiteral(constant.getValue());
       if (!literal)
@@ -1002,13 +1002,13 @@ class Exporter {
     else if (isa<algebra::FieldEqualOp>(op))
       fieldOpcode = "field.equal";
     if (!fieldOpcode.empty()) {
-      if (auto e = attributes(op, {}))
+      if (auto e = attributes(op))
         return std::move(e);
       return json::Array{fieldOpcode, field()};
     }
     if (isa<algebra::GroupIdentityOp, algebra::GroupAddOp,
             algebra::GroupScaleOp, algebra::GroupEqualOp>(op)) {
-      if (auto e = attributes(op, {}))
+      if (auto e = attributes(op))
         return std::move(e);
       bool identity = isa<algebra::GroupIdentityOp>(op);
       auto group = cast<algebra::GroupType>(
@@ -1032,16 +1032,7 @@ class Exporter {
       bool virtualHandle = isa<protocol_ir::OracleVirtualOp>(op);
       if (owner != "protocol")
         return error("structured-source-operation");
-      SmallVector<StringRef> allowed{send ? "sender" : "holder", "receivers"};
-      if (send)
-        allowed.push_back("site");
-      if (send)
-        allowed.push_back("shape_names");
-      if (send || input)
-        allowed.push_back("shape_bounds");
-      if (virtualHandle)
-        allowed.push_back("callee");
-      if (auto e = attributes(op, allowed))
+      if (auto e = attributes(op))
         return std::move(e);
       auto logicalType =
           components ? op.getOperand(0).getType() : op.getResult(0).getType();
@@ -1081,10 +1072,7 @@ class Exporter {
       bool forget = isa<protocol_ir::OracleForgetShapeOp>(op);
       if (owner != "protocol" && !(owner == "oracle" && query))
         return error("structured-source-operation");
-      if (auto e = attributes(op, query ? ArrayRef<StringRef>{"owner", "site"}
-                                  : contents ? ArrayRef<StringRef>{"owner"}
-                                  : forget ? ArrayRef<StringRef>{}
-                                           : ArrayRef<StringRef>{"dimension"}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto handle =
           cast<protocol_ir::OracleHandleType>(op.getOperand(0).getType());
@@ -1124,9 +1112,7 @@ class Exporter {
       bool at = isa<protocol_ir::OracleSequenceAtOp>(op);
       if (owner != "protocol")
         return error("structured-source-operation");
-      if (auto e =
-              attributes(op, append || at ? ArrayRef<StringRef>{"roles", "site"}
-                                          : ArrayRef<StringRef>{}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto sequence = cast<protocol_ir::OracleSequenceType>(
           empty ? op.getResult(0).getType() : op.getOperand(0).getType());
@@ -1144,23 +1130,23 @@ class Exporter {
       return descriptor;
     }
     if (auto assembly = dyn_cast<protocol_ir::AssembleRolesOp>(op)) {
-      if (auto e = attributes(op, {"roles"}))
+      if (auto e = attributes(op))
         return std::move(e);
       return json::Array{"assemble", names(assembly.getRoles())};
     }
     if (auto restrict = dyn_cast<protocol_ir::RestrictRolesOp>(op)) {
-      if (auto e = attributes(op, {"roles"}))
+      if (auto e = attributes(op))
         return std::move(e);
       return json::Array{"restrict", names(restrict.getRoles())};
     }
     if (auto exchange = dyn_cast<protocol_ir::ExchangeOp>(op)) {
-      if (auto e = attributes(op, {"sender", "receiver", "site"}))
+      if (auto e = attributes(op))
         return std::move(e);
       return json::Array{"exchange", exchange.getSender(),
                          exchange.getReceiver()};
     }
     if (auto query = dyn_cast<protocol_ir::QueryOp>(op)) {
-      if (auto e = attributes(op, {"owner", "method", "site"}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto result = dyn_cast<algebra::FieldType>(op.getResult(0).getType());
       auto service = op.getNumOperands() == 1
@@ -1173,8 +1159,7 @@ class Exporter {
       return json::Array{"draw", query.getOwner(), result.getDomain()};
     }
     if (auto statement = dyn_cast<protocol_ir::StatementOp>(op)) {
-      if (auto e =
-              attributes(op, {"relation", "selectors", "acceptance", "target"}))
+      if (auto e = attributes(op))
         return std::move(e);
       return json::Array{"statement", statement.getRelation(),
                          names(statement.getSelectors()),
@@ -1184,7 +1169,7 @@ class Exporter {
                              : json::Value(nullptr)};
     }
     if (auto constant = dyn_cast<arith::ConstantOp>(op)) {
-      if (auto e = attributes(op, {"value"}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (!constant.getType().isSignlessInteger(1))
         return error("structured-source-operation");
@@ -1199,14 +1184,14 @@ class Exporter {
     else if (isa<arith::XOrIOp>(op))
       boolOpcode = "bool.xor";
     if (!boolOpcode.empty()) {
-      if (auto e = attributes(op, {}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (!op.getResult(0).getType().isSignlessInteger(1))
         return error("structured-source-operation");
       return json::Array{boolOpcode};
     }
     if (auto compare = dyn_cast<arith::CmpIOp>(op)) {
-      if (auto e = attributes(op, {"predicate"}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (!compare.getLhs().getType().isSignlessInteger(1) ||
           (compare.getPredicate() != arith::CmpIPredicate::eq &&
@@ -1217,7 +1202,7 @@ class Exporter {
                              : "bool.not_equal"};
     }
     if (isa<arith::SelectOp>(op)) {
-      if (auto e = attributes(op, {}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto type = sort(op.getResult(0).getType());
       if (!type)
@@ -1225,7 +1210,7 @@ class Exporter {
       return json::Array{"select", std::move(*type)};
     }
     if (auto make = dyn_cast<data::MakeOp>(op)) {
-      if (auto e = attributes(op, {"alternative"}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (owner != "math" && owner != "protocol" && owner != "oracle")
         return error("structured-source-operation");
@@ -1236,14 +1221,14 @@ class Exporter {
                          make.getAlternative()};
     }
     if (auto get = dyn_cast<data::GetOp>(op)) {
-      if (auto e = attributes(op, {"index"}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (owner != "math" && owner != "protocol" && owner != "oracle")
         return error("structured-source-operation");
       return json::Array{"product.get", get.getIndex()};
     }
     if (isa<data::BoundedAtOp>(op)) {
-      if (auto e = attributes(op, {}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto vector = dyn_cast<data::FieldVectorType>(op.getOperand(0).getType());
       if (!vector)
@@ -1253,9 +1238,7 @@ class Exporter {
     if (isa<func::CallOp, protocol_ir::LocalCallOp>(op)) {
       bool math = isa<func::CallOp>(op);
       bool participant = !math;
-      if (auto e = attributes(
-              op, math ? ArrayRef<StringRef>{"callee"}
-                       : ArrayRef<StringRef>{"callee", "site", "role"}))
+      if (auto e = attributes(op))
         return std::move(e);
       if (math && owner != "math" && owner != "protocol" && owner != "oracle")
         return error("structured-source-reference");
@@ -1279,7 +1262,7 @@ class Exporter {
       return json::Array{"call", *callee};
     }
     if (isa<data::FiniteFoldOp>(op)) {
-      if (auto e = attributes(op, {"domain", "step", "predicate"}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto refs = fold(op);
       if (!refs)
@@ -1288,7 +1271,7 @@ class Exporter {
                          std::move((*refs)[2])};
     }
     if (isa<protocol_ir::GuardOp>(op)) {
-      if (auto e = attributes(op, {"site", "owner"}))
+      if (auto e = attributes(op))
         return std::move(e);
       auto guardOwner = op.getAttrOfType<StringAttr>("owner");
       if (owner != "protocol" || !guardOwner || !hasRole(guardOwner.getValue()))
@@ -1342,7 +1325,7 @@ class Exporter {
                                 op.getName().getStringRef() == "data.yield");
         if (!valid || op.getOperandTypes() != outputs)
           return error("structured-source-region");
-        if (auto e = attributes(op, {}))
+        if (auto e = attributes(op))
           return std::move(e);
         if (auto e = associate(child(path, {2}), op))
           return std::move(e);
@@ -1442,8 +1425,7 @@ class Exporter {
   }
 
   Expected<json::Value> domain(data::DomainOp op, ArrayRef<unsigned> path) {
-    if (auto e =
-            attributes(*op, {"sym_name", "sym_visibility", "function_type"}))
+    if (auto e = attributes(*op))
       return std::move(e);
     if (op.getSymVisibility() != "private" ||
         !llvm::hasSingleElement(op.getBody()))
@@ -1649,9 +1631,7 @@ class Exporter {
 
   Expected<json::Value> oracle(protocol_ir::OracleDefinitionOp op,
                                ArrayRef<unsigned> path) {
-    if (auto e = attributes(*op, {"sym_name", "function_type", "kind",
-                                  "admissibility", "shape_arguments",
-                                  "shape_bounds"}))
+    if (auto e = attributes(*op))
       return std::move(e);
     auto inputs = sorts(op.getFunctionType().getInputs());
     if (!inputs)
@@ -1682,21 +1662,18 @@ class Exporter {
     auto scoped = dyn_cast<func::FuncOp>(op);
     if (scoped && !isScopedExecutionFunction(scoped))
       scoped = {};
-    SmallVector<StringRef> allowed{"sym_name", "sym_visibility",
-                                   "function_type"};
+    // Each owner's function operation declares its inherent attributes in
+    // ODS. Only these discardable attributes and call metadata are admitted.
+    SmallVector<StringRef, 3> named;
     if (owner == "math")
-      allowed.push_back("data.preconditions");
-    else if (owner == "local") {
-      llvm::append_range(allowed,
-                         ArrayRef<StringRef>{"runtime.origin", "no_inline",
-                                             "data.preconditions"});
-    } else if (owner == "protocol")
-      llvm::append_range(allowed, ArrayRef<StringRef>{"roles", "input_roles",
-                                                      "output_roles",
-                                                      "contracts", "origin"});
+      named = {"data.preconditions"};
+    else if (owner == "local")
+      named = {"runtime.origin", "no_inline", "data.preconditions"};
+    else if (owner == "protocol")
+      named = {"sym_visibility"};
     else
       return error("structured-source-operation", op.getName().getStringRef());
-    if (auto e = attributes(op, allowed))
+    if (auto e = attributes(op, named))
       return std::move(e);
     auto type = signature(op);
     if (!type)
@@ -1905,7 +1882,7 @@ public:
         view(view), associations(view.associations), profile(profile) {}
 
   Expected<json::Value> run(StringRef bytes) {
-    if (auto e = attributes(*unit, {"profile", "source_declarations"}))
+    if (auto e = attributes(*unit))
       return std::move(e);
     auto admitted = readSourceExecutionClosure(unit);
     if (!admitted)
@@ -1938,9 +1915,7 @@ public:
       } else if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
         if (relations.size() == 128)
           return error("structured-source-limit");
-        if (auto e = attributes(op, {"sym_name", "sym_visibility", "kind",
-                                     "key", "revision", "static_arguments",
-                                     "signature", "purposes", "formula"}))
+        if (auto e = attributes(op))
           return std::move(e);
         auto visible = visibility(op);
         if (!visible)
@@ -1973,8 +1948,7 @@ public:
       } else if (isa<runtime::BindingOp>(op)) {
         if (bindings.size() == 128)
           return error("structured-source-limit");
-        if (auto e = attributes(op, {"sym_name", "contract", "arguments",
-                                     "implementation", "function_type"}))
+        if (auto e = attributes(op))
           return std::move(e);
         auto binding = primitiveBinding(&op, used);
         if (!binding)
@@ -2153,8 +2127,10 @@ Expected<SourceView> readSourceView(
     StructuredSourceProfile profile) {
   if (!original || failed(zkc::admitStage(*original)))
     return error("structured-source-original");
-  if (auto e = checkAttributes(**original, {}, profile))
-    return std::move(e);
+  // The original is one unadorned module.
+  if (!(*original)->getAttrs().empty())
+    return error("structured-source-attribute",
+                 (*original)->getAttrs().front().getName().getValue());
   if (!llvm::hasSingleElement(original->getBody()->getOperations()))
     return error("structured-source-module");
   auto unit =

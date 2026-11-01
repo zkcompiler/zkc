@@ -101,6 +101,19 @@ Use ODS for operation/type/property definitions, symbol interfaces for symbol
 uses, and external interfaces when adding analysis behavior to standard
 operations. Add an interface for a real shared consumer, with semantic
 preconditions; a trait name cannot manufacture totality or erasability.
+
+ODS is the one record of an operation's attributes. Readers admit the
+registered operation's inherent attributes without restating them, refuse
+discardable attributes they do not name, and compare an optional inherent
+attribute wherever its presence changes the compared form. Upstream call
+metadata (argument and result attribute dictionaries and the inlining
+directive) is inherent but, like a discardable attribute, admitted only where a
+reader names it. Protocol operations
+declare each role-valued attribute through a shape constraint (one role, a role
+set, per-slot role sets or a roster declaration). `zkc-tblgen` generates one
+role attribute table from those declarations, and application expansion,
+correspondence, application-map comparison, availability checking, projection
+owners and expansion cost enumerate or rename role uses only through it.
 Mandatory profile admission and reusable actual-body interpretation belong to
 IR. Transformation-specific comparisons may stay beside a transformation with
 separate implementation and checked dependencies on its semantic readers. Producers,

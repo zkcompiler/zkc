@@ -3,6 +3,7 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Dialect/Protocol/IR/RoleAttributes.h"
 #include "zkc/Dialect/SelectedControl.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/Hashing.h"
@@ -343,6 +344,11 @@ ValueCorrespondence::Term ValueCorrespondence::value(Environment env,
     auto *op = current.getDefiningOp();
     if (!op || (!isProtocolValueExpression(op) && !isa<func::CallOp>(op)))
       return 0;
+    // The application roles of this scope; any other role is unchanged.
+    auto rename = [&p, scope = scope](StringAttr role) {
+      auto mapped = p.scopes[scope].roles.lookup(role.getValue());
+      return mapped ? cast<StringAttr>(mapped) : role;
+    };
     if (auto assembly = dyn_cast<protocol_ir::AssembleRolesOp>(op);
         assembly && p.roleComponents) {
       auto owner = p.scopes[scope].component;
@@ -350,12 +356,9 @@ ValueCorrespondence::Term ValueCorrespondence::value(Environment env,
         return 0;
       Value input;
       for (auto [argument, role] :
-           zip(assembly.getInputs(), assembly.getRoles())) {
-        auto mapped =
-            p.scopes[scope].roles.lookup(cast<StringAttr>(role).getValue());
-        if ((mapped ? mapped : role) == owner)
+           zip(assembly.getInputs(), assembly.getRoles()))
+        if (rename(cast<StringAttr>(role)) == owner)
           input = argument;
-      }
       if (!input)
         return 0;
       if (!p.scopes[scope].values.contains(input)) {
@@ -459,53 +462,21 @@ ValueCorrespondence::Term ValueCorrespondence::value(Environment env,
         return 0;
       result = inputs[0];
     } else {
-      auto attributes = op->getAttrDictionary();
-      if (isa<protocol_ir::OracleContentsOp, protocol_ir::OracleComponentsOp>(
-              op)) {
-        NamedAttrList renamed(attributes);
-        for (StringRef key : {"owner", "holder"})
-          if (auto role = op->getAttrOfType<StringAttr>(key))
-            if (auto mapped = p.scopes[scope].roles.lookup(role.getValue()))
-              renamed.set(key, mapped);
-        if (auto receivers = op->getAttrOfType<ArrayAttr>("receivers")) {
-          SmallVector<Attribute> mapped;
-          for (auto receiver : receivers) {
-            auto role = p.scopes[scope].roles.lookup(
-                cast<StringAttr>(receiver).getValue());
-            mapped.push_back(role ? role : receiver);
-          }
-          renamed.set("receivers", ArrayAttr::get(op->getContext(), mapped));
-        }
-        attributes = renamed.getDictionary(op->getContext());
-      }
+      // Expression terms compare role uses under this scope's application
+      // roles; every other attribute is compared as written.
+      NamedAttrList renamed(op->getAttrDictionary());
+      protocol_ir::renameRoleUses(op->getName(), renamed, rename);
       if (finite::isComputation(op)) {
         auto closure = finite::closureKey(op);
         if (failed(closure))
           return 0;
-        NamedAttrList complete(attributes);
-        complete.set("finite.closure", *closure);
-        attributes = complete.getDictionary(op->getContext());
+        renamed.set("finite.closure", *closure);
       }
-      if (auto assembly = dyn_cast<protocol_ir::AssembleRolesOp>(op)) {
-        SmallVector<Attribute> owners;
-        for (auto role : assembly.getRoles()) {
-          auto mapped =
-              p.scopes[scope].roles.lookup(cast<StringAttr>(role).getValue());
-          owners.push_back(mapped ? mapped : role);
-        }
-        NamedAttrList renamed(attributes);
-        renamed.set("roles", p.builder.getArrayAttr(owners));
-        attributes = renamed.getDictionary(op->getContext());
-      }
+      auto attributes = renamed.getDictionary(op->getContext());
       if (auto restriction = dyn_cast<protocol_ir::RestrictRolesOp>(op)) {
-        SmallVector<Attribute> owners;
-        for (auto role : restriction.getRoles()) {
-          auto mapped =
-              p.scopes[scope].roles.lookup(cast<StringAttr>(role).getValue());
-          owners.push_back(mapped ? mapped : role);
-        }
-        result = restrictRoles(inputs[0], current.getType(),
-                               p.builder.getArrayAttr(owners));
+        result = restrictRoles(
+            inputs[0], current.getType(),
+            cast<ArrayAttr>(attributes.get(restriction.getRolesAttrName())));
       } else {
         result = p.expression(
             op->getName().getStringRef(), current.getType(), attributes,

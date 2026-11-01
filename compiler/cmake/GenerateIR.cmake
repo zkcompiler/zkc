@@ -65,6 +65,11 @@ mlir_tablegen(include/zkc/Dialect/Protocol/IR/protocolAttrs.h.inc -gen-attrdef-d
   -attrdefs-dialect=protocol EXTRA_INCLUDES ${zkc_tablegen_includes})
 mlir_tablegen(include/zkc/Dialect/Protocol/IR/protocolAttrs.cpp.inc -gen-attrdef-defs
   -attrdefs-dialect=protocol EXTRA_INCLUDES ${zkc_tablegen_includes})
+# One table of every role-valued attribute that Protocol operations declare in
+# ODS. Only the dialect implementation includes it.
+set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/Protocol/IR/ProtocolOps.td)
+tablegen(ZKC include/zkc/Dialect/Protocol/IR/protocolRoleAttributes.cpp.inc
+  -gen-role-attributes EXTRA_INCLUDES ${zkc_tablegen_includes})
 set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/IR.td)
 set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/Data/IR/DataAttrs.td)
 list(APPEND zkc_generated_headers include/zkc/Dialect/Data/IR/dataAttrs.h.inc)

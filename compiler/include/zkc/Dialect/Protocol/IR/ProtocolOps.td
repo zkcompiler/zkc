@@ -11,13 +11,15 @@ include "zkc/Dialect/Protocol/IR/OracleOps.td"
 
 def AwaitOp : Op<ProtocolDialect, "receive",
     [ParentOneOf<["zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp", "zkc::protocol_ir::ParticipantBranchOp"]>]> {
-  let arguments = (ins StrAttr:$site, StrAttr:$schema, StrAttr:$peer);
+  let arguments = (ins StrAttr:$site, StrAttr:$schema,
+    ProtocolRole<StrAttr>:$peer);
   let results = (outs AnyType:$output);
 }
 
 def EmitOp : Op<ProtocolDialect, "send",
     [ParentOneOf<["zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp", "zkc::protocol_ir::ParticipantBranchOp"]>]> {
-  let arguments = (ins AnyType:$input, StrAttr:$site, StrAttr:$schema, StrAttr:$peer);
+  let arguments = (ins AnyType:$input, StrAttr:$site, StrAttr:$schema,
+    ProtocolRole<StrAttr>:$peer);
 }
 
 def ProtocolEntryOp : Op<ProtocolDialect, "entry", [Symbol, HasParent<"zkc::protocol_ir::ProtocolModuleOp">, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
@@ -44,7 +46,7 @@ def ApplyOp : Op<ProtocolDialect, "apply",
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>,
      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
   let arguments = (ins Variadic<AnyType>:$inputs, FlatSymbolRefAttr:$callee,
-    StrArrayAttr:$roles, StrAttr:$site);
+    ProtocolRoleSet<StrArrayAttr>:$roles, StrAttr:$site);
   let results = (outs Variadic<AnyType>:$outputs);
   let assemblyFormat = "$callee `(` $inputs `)` attr-dict `:` functional-type($inputs, $outputs)";
 }
@@ -57,15 +59,16 @@ def ConstructionStartOp : Op<ProtocolDialect, "construction_start",
     [MemoryEffects<[MemRead, MemWrite]>,
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp",
                   "zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp", "zkc::protocol_ir::ParticipantBranchOp"]>]> {
-  let arguments = (ins Variadic<AnyType>:$inputs, StrArrayAttr:$roles, StrAttr:$site);
+  let arguments = (ins Variadic<AnyType>:$inputs,
+    ProtocolRoleSet<StrArrayAttr>:$roles, StrAttr:$site);
   let assemblyFormat = "`(` $inputs `)` attr-dict `:` type($inputs)";
 }
 
 def ExchangeOp : Op<ProtocolDialect, "exchange",
     [MemoryEffects<[MemRead, MemWrite]>, SameOperandsAndResultType,
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>]> {
-  let arguments = (ins AnyType:$input, StrAttr:$site, StrAttr:$sender,
-    StrAttr:$receiver);
+  let arguments = (ins AnyType:$input, StrAttr:$site,
+    ProtocolRole<StrAttr>:$sender, ProtocolRole<StrAttr>:$receiver);
   let results = (outs AnyType:$output);
   let assemblyFormat = "$input attr-dict `:` type($input)";
 }
@@ -86,14 +89,15 @@ def FinishIfOp : Op<ProtocolDialect, "finish_if",
                                   "zkc::protocol_ir::ParticipantOp",
                                   "zkc::protocol_ir::ProtocolLoopOp", "zkc::protocol_ir::ParticipantBranchOp"]>]> {
   let arguments = (ins AnyType:$condition, Variadic<AnyType>:$values,
-      StrAttr:$site, StrAttr:$owner);
+      StrAttr:$site, ProtocolRole<StrAttr>:$owner);
   let results = (outs Variadic<AnyType>:$continuations);
   let hasVerifier = 1;
 }
 
 def GuardOp : Op<ProtocolDialect, "guard",
     [MemoryEffects<[MemRead, MemWrite]>, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp", "zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp", "zkc::protocol_ir::ParticipantBranchOp"]>]> {
-  let arguments = (ins I1:$condition, StrAttr:$site, StrAttr:$owner);
+  let arguments = (ins I1:$condition, StrAttr:$site,
+    ProtocolRole<StrAttr>:$owner);
   let assemblyFormat = "$condition attr-dict";
 }
 
@@ -101,7 +105,7 @@ def LocalCallOp : Op<ProtocolDialect, "local_call",
     [ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp", "zkc::protocol_ir::ParticipantBranchOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>,
      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
   let arguments = (ins Variadic<AnyType>:$inputs, FlatSymbolRefAttr:$callee,
-    StrAttr:$site, StrAttr:$role);
+    StrAttr:$site, ProtocolRole<StrAttr>:$role);
   let results = (outs Variadic<AnyType>:$outputs);
 }
 
@@ -112,7 +116,8 @@ def BranchOp : Op<ProtocolDialect, "branch", [IsolatedFromAbove,
     ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp",
                  "zkc::protocol_ir::BranchOp"]>]> {
   let arguments = (ins Variadic<AnyType>:$inputs, StrAttr:$site,
-    StrArrayAttr:$roles, ArrayAttr:$output_roles, StrArrayAttr:$alternatives);
+    ProtocolRoleSet<StrArrayAttr>:$roles,
+    ProtocolSlotRoleSets<ArrayAttr>:$output_roles, StrArrayAttr:$alternatives);
   let results = (outs Variadic<AnyType>:$outputs);
   let regions = (region VariadicRegion<AnyRegion>:$arms);
   let hasRegionVerifier = 1;
@@ -136,8 +141,8 @@ def ParticipantBranchOp : Op<ProtocolDialect, "participant_branch",
 def RepeatOp : Op<ProtocolDialect, "repeat", [IsolatedFromAbove, SingleBlock,
     ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>]> {
   let arguments = (ins Variadic<AnyType>:$inputs, StrAttr:$site,
-    I64Attr:$carried, I64Attr:$maximum, ArrayAttr:$roles,
-    ArrayAttr:$carried_roles);
+    I64Attr:$carried, I64Attr:$maximum, ProtocolRoleSet<ArrayAttr>:$roles,
+    ProtocolSlotRoleSets<ArrayAttr>:$carried_roles);
   let results = (outs Variadic<AnyType>:$outputs);
   let regions = (region AnyRegion:$body);
   let hasRegionVerifier = 1;
@@ -161,8 +166,9 @@ def MathematicalReturnOp : Op<ProtocolDialect, "return",
 def MathematicalOp : Op<ProtocolDialect, "func",
     [Symbol, IsolatedFromAbove, SingleBlock, HasParent<"zkc::protocol_ir::ProtocolModuleOp">]> {
   let arguments = (ins SymbolNameAttr:$sym_name,
-    TypeAttrOf<FunctionType>:$function_type, ArrayAttr:$roles,
-    ArrayAttr:$input_roles, ArrayAttr:$output_roles,
+    TypeAttrOf<FunctionType>:$function_type, ProtocolRoster<ArrayAttr>:$roles,
+    ProtocolSlotRoleSets<ArrayAttr>:$input_roles,
+    ProtocolSlotRoleSets<ArrayAttr>:$output_roles,
     OptionalAttr<ArrayAttr>:$contracts, OptionalAttr<ArrayAttr>:$origin);
   let regions = (region AnyRegion:$body);
   let hasRegionVerifier = 1;
@@ -186,7 +192,7 @@ def ProjectionOp : Op<ProtocolDialect, "projection",
 
 def ParticipantOp : Op<ProtocolDialect, "participant", [Symbol, IsolatedFromAbove, SingleBlock]> {
   let arguments = (ins SymbolNameAttr:$sym_name, TypeAttrOf<FunctionType>:$function_type,
-    StrAttr:$instance, StrAttr:$role);
+    StrAttr:$instance, ProtocolRoster<StrAttr>:$role);
   let regions = (region AnyRegion:$body);
   let hasRegionVerifier = 1;
 }
@@ -200,13 +206,13 @@ def ParticipantQueryOp : Op<ProtocolDialect, "service_query",
 def QueryOp : Op<ProtocolDialect, "query",
     [MemoryEffects<[MemRead, MemWrite]>, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>]> {
   let arguments = (ins ServiceReference:$reference, Variadic<AnyType>:$inputs,
-    StrAttr:$method, StrAttr:$owner, StrAttr:$site);
+    StrAttr:$method, ProtocolRole<StrAttr>:$owner, StrAttr:$site);
   let results = (outs Variadic<AnyType>:$outputs);
 }
 
 def RestrictRolesOp : Op<ProtocolDialect, "restrict_roles",
     [Pure, SameOperandsAndResultType, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>]> {
-  let arguments = (ins AnyType:$input, ArrayAttr:$roles);
+  let arguments = (ins AnyType:$input, ProtocolRoleSet<ArrayAttr>:$roles);
   let results = (outs AnyType:$output);
   let assemblyFormat = "$input attr-dict `:` type($input)";
 }
@@ -216,7 +222,8 @@ def RestrictRolesOp : Op<ProtocolDialect, "restrict_roles",
 def AssembleRolesOp : Op<ProtocolDialect, "assemble_roles",
     [Pure, SameOperandsAndResultType,
      ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::BranchOp"]>]> {
-  let arguments = (ins Variadic<AnyType>:$inputs, StrArrayAttr:$roles);
+  let arguments = (ins Variadic<AnyType>:$inputs,
+    ProtocolRoleSet<StrArrayAttr>:$roles);
   let results = (outs AnyType:$output);
   let hasVerifier = 1;
   let extraClassDeclaration = [{

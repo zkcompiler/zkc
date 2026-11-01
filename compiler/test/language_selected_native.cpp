@@ -153,6 +153,39 @@ int main() {
                 original.bytes(), bytes, entry.protocol().symbol, map, context))
           throw std::runtime_error(toString(std::move(error)));
       });
+  cases.run("application expansion renames placed selected results", [&] {
+    // The arms yield values held only at Choose's first role, which the
+    // application maps to Run's second role. Expansion must rename the
+    // selected region's result placement with its roster.
+    auto entry = take(closeSubject(
+        check(
+            R"(protocol Choose roles(A,B)(flag: bool @(A,B), x: bool @(A), y: bool @(A)) -> bool @(A):
+    #[site(choice)]
+    result = if flag:
+        x
+    else:
+        y
+    return result
+pub protocol Run roles(P,V)(flag: bool @(P,V), x: bool @(V), y: bool @(V)) -> bool @(V):
+    result <- Choose(flag, x, y) @(V,P)
+    return result
+)"),
+        "m::Run"));
+    auto original = take(prepareOriginal(entry));
+    auto candidate =
+        mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), &context);
+    require(bool(candidate), "placed original did not parse");
+    auto prepared = mathematical::prepareProtocol(*candidate, false);
+    require(bool(prepared), "placed application preparation failed");
+    std::string bytes;
+    raw_string_ostream stream(bytes);
+    prepared->print(stream);
+    auto map = take(protocol::produceApplicationMap(
+        original.bytes(), bytes, entry.protocol().symbol, context));
+    if (auto error = protocol::checkApplicationMap(
+            original.bytes(), bytes, entry.protocol().symbol, map, context))
+      throw std::runtime_error(toString(std::move(error)));
+  });
   cases.run("actual linear branch successors retain zero-trip loop roots", [&] {
     auto entry = take(closeSubject(check(fixture("resources")), "m::Run"));
     auto original = take(prepareOriginal(entry));
