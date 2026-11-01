@@ -136,9 +136,8 @@ Expected<NativeProofPolicy> proofPolicy(const CheckedOriginal &original) {
     std::string site;
     for (const auto &part : gate.path) {
       auto label = nativeSiteName(part, 0);
-      site = site.empty()
-                 ? label
-                 : mathematical::expandedApplicationSite(site, label);
+      site = site.empty() ? label
+                          : mathematical::expandedApplicationSite(site, label);
     }
     policy.gates.emplace_back(std::move(site), gate.bits);
   }

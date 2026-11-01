@@ -5,6 +5,7 @@
 #include "zkc/Compiler/Passes.h"
 #include "zkc/Compiler/Pipelines.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Language/Names.h"
 #include "zkc/Transforms/EndpointClosure.h"
 #include "zkc/Transforms/Stages.h"
 #include "llvm/Support/raw_ostream.h"
@@ -15,7 +16,20 @@ int main() {
     protocol Send roles(P,V)(x:bool@P)->(accepted:bool@V){
       let received=send P->V(x);return(accepted=received);
     }
-    proof Proof=Send{prover P;verifier V;public{};accept accepted;construction authored;})",
+    proof Proof=Send{prover P;verifier V;public{};accept accepted;construction authored;}
+    domain Q=field("koala-bear.ext4-binomial3");
+    protocol Queries roles(P,V)(coins:Random<Q>@V)->(ok:bool@V){
+      #[site(first)] let first=coins.indices(16,2);
+      let first_received=send V->P(first);
+      #[site(second)] let second=coins.indices(16,2);
+      let second_received=send V->P(second);
+      return true;
+    }
+    proof Gates=Queries{prover P;verifier V;public{};accept ok;
+      construction fiat_shamir("hash-chain.keccak256.koala-bear.ext4-binomial3.rejection31le/0",coins);
+      gate second bits 0;
+      gate first bits 3;
+    })",
                                           "common.zkc"}});
   if (!project) {
     llvm::errs() << llvm::toString(project.takeError());
@@ -107,5 +121,28 @@ int main() {
     llvm::errs() << llvm::toString(std::move(error));
     return 18;
   }
+  auto gatedEntry = zkc::language::closeEntry(*checked, "m::Gates");
+  if (!gatedEntry) {
+    llvm::errs() << llvm::toString(gatedEntry.takeError());
+    return 19;
+  }
+  auto gated = zkc::language::prepareOriginal(*gatedEntry);
+  if (!gated) {
+    llvm::errs() << llvm::toString(gated.takeError());
+    return 20;
+  }
+  auto gates = zkc::language::proofPolicy(*gated);
+  if (!gates) {
+    llvm::errs() << llvm::toString(gates.takeError());
+    return 21;
+  }
+  // Source policy is common compiler data, before either target is linked.
+  // Explicit zero remains a selected request, in source occurrence order.
+  if (!gates->draws.empty() || gates->gates.size() != 2 ||
+      gates->gates[0] !=
+          std::pair(zkc::language::nativeSiteName("first", 0), 3u) ||
+      gates->gates[1] !=
+          std::pair(zkc::language::nativeSiteName("second", 0), 0u))
+    return 22;
   return 0;
 }
