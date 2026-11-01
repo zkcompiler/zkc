@@ -1450,7 +1450,13 @@ public:
         types(declarations, assets, work) {
     (void)!!failure;
   }
+  /// One semantic index may serve several targets; each run starts from an
+  /// empty requirement, call-site, loop and demand state.
   Expected<std::vector<CommonControlRequirement>> run(DeclarationId target) {
+    requirements.clear();
+    callSites.clear();
+    loops.clear();
+    demands.clear();
     if (target.index >= declarations.size() || !declarations[target.index].body)
       return detail::failure("source.common-provenance",
                              "common target has no checked body");
@@ -1501,6 +1507,9 @@ namespace detail {
 Error checkCommonControlRequirements(
     const std::vector<Declaration> &declarations, ArrayRef<Asset> assets,
     Work &work) {
+  // The semantic index is built and charged once for the whole project; each
+  // Protocol then pays only for its own derivation.
+  std::optional<Requirements> derivation;
   for (const auto &decl : declarations) {
     if (decl.kind != Declaration::Kind::Protocol || !decl.body)
       continue;
@@ -1508,7 +1517,12 @@ Error checkCommonControlRequirements(
     // environment. Its required invariants are replayed at closure below.
     if (!decl.domainInputs.empty() || decl.body->parameterizedSummary)
       continue;
-    auto requirements = deriveRequirements(declarations, assets, work, decl.id);
+    if (!derivation) {
+      if (auto e = chargeSemanticIndex(declarations, work))
+        return e;
+      derivation.emplace(declarations, assets, work);
+    }
+    auto requirements = derivation->run(decl.id);
     if (!requirements)
       return requirements.takeError();
   }
