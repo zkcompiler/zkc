@@ -4,7 +4,6 @@ mod attempts;
 mod inputs;
 mod interface;
 mod messages;
-mod selection;
 use crate::execution::InputValue;
 use crate::execution::{Capacity, CpuExecution};
 pub use inputs::ProofInputs;
@@ -376,10 +375,9 @@ impl NativeDeployment {
         if selection != canonical_selection {
             return Err("native-proof-choices".into());
         }
-        selection::check(
-            &requested_selection,
-            text(&descriptor[8]).map_err(|_| "native-proof-oracle-selection")?,
-        )?;
+        requested_selection
+            .check_normalized(text(&descriptor[8]).map_err(|_| "native-proof-oracle-selection")?)
+            .map_err(|_| "native-proof-oracle-selection")?;
         let choices = std::array::from_fn(|i| {
             choices[i]
                 .as_str()

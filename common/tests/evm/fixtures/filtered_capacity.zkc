@@ -1,0 +1,27 @@
+module capacity;
+domain F = field("koala-bear.ext4-binomial3");
+type Vector<E:Field> = builtin("vector", E);
+domain fn range(lower:index,upper:index)->domain<index> = domain("range");
+fn collect_where<I:Type+Copy+Drop,E:Field>(rows:domain<I>,keep:fn(item:I)->bool effects(stop) where item_from(item,rows),body:fn(item:I)->E effects(stop) where item_from(item,rows))->Vector<E> effects(stop) = finite("local.collect.vector_where");
+fn sum<E:Field>(values:Vector<E>)->E = primitive("vector.sum");
+fn less(left:index,right:index)->bool = primitive("index.less");
+fn keep_item(i:index,selected:index,fail_at:index)->bool {
+  return if i==fail_at { kernel<F>("field.inverse",0)==0 } else { less(i,selected) };
+}
+fn make_item(i:index,fail_at:index)->F {
+  return if i==fail_at { kernel<F>("field.inverse",0) } else { 1 };
+}
+fn work(selected:index,body_fail_at:index,predicate_fail_at:index)->F {
+  let values=collect_where(range(0,1025),fn(i)=>keep_item(i,selected,predicate_fail_at),fn(i)=>make_item(i,body_fail_at));
+  return sum(values);
+}
+protocol Check roles(P,V)(later:F@P,selected:index@V,body_fail_at:index@V,predicate_fail_at:index@V,expected:F@V)
+  ->(accepted:bool@V) {
+  let actual@V=work(selected,body_fail_at,predicate_fail_at);
+  let trailing=send P->V(later);
+  return(accepted=actual==expected);
+}
+proof Proof=Check {
+  prover P; verifier V; public{selected,body_fail_at,predicate_fail_at,expected};
+  accept accepted; construction authored;
+}

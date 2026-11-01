@@ -1,0 +1,23 @@
+module values;
+domain F = field("koala-bear.ext4-binomial3");
+type Bytes = builtin("bytes");
+type Indices = builtin("indices");
+type Sequence<T: Type + Copy + Drop> = builtin("sequence", T);
+enum Choice { Empty(), Pair(F,F), Blob(Bytes) }
+struct Payload { pub values: Sequence<Choice>, pub positions: Indices, pub note: Bytes }
+fn check(payload: Payload, expected: F) -> bool {
+  let n = kernel<Choice>("sequence.length", payload.values);
+  let mut sum: F = 0;
+  for i in 0..n {
+    let item = kernel<Choice>("sequence.at", payload.values, i);
+    let value: F = match item { Empty() => { 0 }, Pair(a,b) => { a*b }, Blob(bytes) => { 0 } };
+    sum = sum + value;
+  }
+  return sum == expected;
+}
+protocol Echo roles(P,V)(payload:Payload@(P,V), expected:F@V) -> (extra:Payload@V, accepted:bool@V) {
+  let received = send P->V(payload);
+  let accepted@V = check(received, expected);
+  return(extra=received, accepted=accepted);
+}
+proof Proof=Echo { prover P; verifier V; public{payload,expected}; accept accepted; construction authored; }

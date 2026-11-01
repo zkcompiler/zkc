@@ -43,6 +43,10 @@ public:
 /// All have ordered read/write effects, including transcript transitions whose
 /// final digest is unused. They may revert and are never speculatable. The
 /// exporter outlines their checked implementation into ordinary Yul helpers.
+/// Layout-sensitive operations require an exact logical TypeAttr value_type;
+/// NativeLayouts determines their expanded signature and collection stride.
+/// Field/vector primitives belong to Arithmetic, immutable structural and
+/// canonical wire primitives to Wire, and affine/control primitives to Runtime.
 class CheckedOp final
     : public mlir::Op<CheckedOp, mlir::OpTrait::VariadicOperands,
                       mlir::OpTrait::VariadicResults,

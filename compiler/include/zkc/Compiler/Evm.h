@@ -8,6 +8,11 @@
 #include <memory>
 
 namespace zkc {
+/// Exact external deployment setting; no arbitrary solc version string.
+enum class EvmFork { Cancun, Prague };
+llvm::StringRef evmForkName(EvmFork);
+llvm::Expected<EvmFork> parseEvmFork(llvm::StringRef);
+
 /// Deployment configuration. The compiler accepts only positive ceilings at or
 /// below these defaults. Once compiled, callers cannot supply or raise a
 /// budget.
@@ -26,9 +31,12 @@ struct EvmLimits {
 };
 
 struct EvmOptions {
-  /// Explicit logical proof selection. Empty draws are selected by the common
-  /// construction checker. compileEvmEntry derives this from CheckedOriginal.
+  /// Explicit logical proof selection. Managed empty draws are selected by the
+  /// common checker; the authored empty suite needs no draw selection.
+  /// compileEvmEntry derives this from CheckedOriginal.
   NativeProofPolicy policy;
+  EvmFork fork = EvmFork::Cancun;
+  bool simplify = true;
   MathematicalSelectionPolicy mathematics = {};
   protocol::OracleRealizationPolicy oracleSelection = {};
   EvmLimits limits;
@@ -47,6 +55,8 @@ public:
   const llvm::json::Value &descriptor() const;
   const llvm::json::Value &manifest() const;
   const NativeProofPolicy &policy() const;
+  EvmFork fork() const;
+  const llvm::json::Value &options() const;
   const EvmLimits &limits() const;
   llvm::StringRef sourceSha256() const;
   llvm::StringRef sourceBytes() const;

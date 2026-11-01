@@ -1,0 +1,34 @@
+module traversals;
+domain F = field("koala-bear.ext4-binomial3");
+type Vector<E:Field> = builtin("vector", E);
+domain fn elements<E:Field>(xs:Vector<E>)->domain<E> = domain("elements");
+domain fn indices<E:Field>(xs:Vector<E>)->domain<index> = domain("indices");
+domain fn range(lower:index,upper:index)->domain<index> = domain("range");
+domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(A,B)> = domain("zip");
+domain fn product<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(A,B)> = domain("product");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item,rows))->S effects(stop) = finite("local.fold");
+fn collect<I:Type+Copy+Drop,E:Field>(rows:domain<I>,body:fn(item:I)->E effects(stop) where item_from(item,rows))->Vector<E> effects(stop) = finite("local.collect.vector");
+fn get<E:Field>(xs:Vector<E>,i:index)->E = primitive("vector.get");
+fn work(a:Vector<F>,b:Vector<F>,seed:F,lower:index,upper:index)->(F,F,F,F) {
+  let paired=fold(zip(elements(a),elements(b)),seed,fn(s,(x,y))=>s*10+x*y);
+  let mapped=collect(elements(a),fn(x)=>x*x+seed);
+  let mapped_sum=fold(elements(mapped),seed,fn(s,x)=>s+x);
+  let triangular=fold(indices(a),seed,fn(s,i)=>s+fold(range(0,i),0,fn(t,j)=>t+get(a,j)));
+  let cartesian=fold(product(range(lower,upper),elements(b)),seed,fn(s,(i,x))=>s+x);
+  return(paired,mapped_sum,triangular,cartesian);
+}
+protocol Check roles(P,V)(
+    a:Vector<F>@P,b:Vector<F>@P,seed:F@V,lower:index@V,upper:index@V,
+    first:F@V,second:F@V,third:F@V,fourth:F@V
+)->(extra:(F,F,F,F)@V,accepted:bool@V) {
+  let left=send P->V(a);
+  let right=send P->V(b);
+  let actual@V=work(left,right,seed,lower,upper);
+  let (one,two,three,four)=actual;
+  return(extra=actual,accepted=one==first&&two==second&&three==third&&four==fourth);
+}
+proof Proof=Check {
+  prover P; verifier V;
+  public{seed,lower,upper,first,second,third,fourth};
+  accept accepted; construction authored;
+}

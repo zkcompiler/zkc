@@ -469,8 +469,11 @@ target_link_libraries(ZkcCpuTarget PUBLIC ZkcCompiler)
 add_zkc_component(EvmTarget
   lib/Dialect/Evm/Evm.cpp
   lib/Target/Evm/Compilation.cpp
+  lib/Target/Evm/Layout.cpp
+  lib/Target/Evm/Arithmetic.cpp
   lib/Target/Evm/Lowering.cpp
   lib/Target/Evm/Runtime.cpp
+  lib/Target/Evm/Wire.cpp
   lib/Target/Evm/Yul.cpp
 )
 target_link_libraries(ZkcEvmTarget PUBLIC ZkcCompiler)

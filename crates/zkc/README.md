@@ -337,7 +337,7 @@ runtime or EVM engine dependency. Applications executing those bytes choose thei
 own chain client or engine. Compile from the same checked proof Entry:
 
 ```rust,ignore
-use zkc::{evm::{Invocation, Solc}, project::{Compiler, Project, Selection}};
+use zkc::{evm::{Invocation, Options, Solc}, project::{Compiler, Project, Selection}};
 fn compile_verifier(
     trusted_solc_sha256: &str, public_wires: &[&[u8]], proof: &[u8],
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
@@ -345,7 +345,8 @@ fn compile_verifier(
     let compiler = Compiler::new("/absolute/path/to/zkc-compile")?;
     let solc = Solc::new("/absolute/path/to/solc", trusted_solc_sha256)?;
     let artifact = compiler.build_evm(
-        &project, Selection { name: Some("example::Proof"), kind: None }, &solc, None,
+        &project, Selection { name: Some("example::Proof"), kind: None },
+        &Options::default(), &solc, None,
     )?;
     let manifest_sha256 = artifact.identity(); // Retain independently.
     artifact.publish("build/verifier.evm")?;
@@ -354,6 +355,11 @@ fn compile_verifier(
     })?)
 }
 ```
+
+`Options::default()` selects Cancun and the common compiler defaults. Set
+`fork: evm::EvmFork::Prague` explicitly for Prague; `compile` carries shared
+mathematical/oracle settings. The source response, solc request and authenticated
+artifact retain those effective selections.
 
 On Linux, EVM compilation executes sealed snapshots of the compiler and solc;
 the executable hash describes those exact bytes. Script interpreters and dynamic

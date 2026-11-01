@@ -1,0 +1,12 @@
+module byte_access;
+type Bytes = builtin("bytes");
+fn at(data:Bytes,position:index)->index = primitive("bytes.at");
+protocol Check roles(P,V)(data:Bytes@P,position:index@V,expected:index@V)
+  ->(extra:index@V,accepted:bool@V) {
+  let received=send P->V(data);
+  let actual@V=at(received,position);
+  return(extra=actual,accepted=actual==expected);
+}
+proof Proof=Check {
+  prover P; verifier V; public{position,expected}; accept accepted; construction authored;
+}

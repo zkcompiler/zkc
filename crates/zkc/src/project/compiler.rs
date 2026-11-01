@@ -161,13 +161,14 @@ impl Compiler {
         &self,
         project: &Project,
         selection: Selection<'_>,
+        options: &crate::evm::Options,
     ) -> Result<crate::evm::Source> {
         let executable = compiler_snapshot(&self.path)?;
         let compiler = Self {
             path: self.path.clone(),
             immutable_image: Some(executable),
         };
-        let source = compiler.evm_source_from(project, selection)?;
+        let source = compiler.evm_source_from(project, selection, options)?;
         check_compiler_path(compiler.immutable_image.as_ref().unwrap(), &self.path)?;
         Ok(source)
     }
@@ -176,14 +177,27 @@ impl Compiler {
         &self,
         project: &Project,
         selection: Selection<'_>,
+        options: &crate::evm::Options,
     ) -> Result<crate::evm::Source> {
         if selection.kind == Some(EntryKind::Function) {
             return Err("source-entry-selection".into());
         }
-        let bytes = self.invoke(project, "language-evm", selection, &[])?;
+        if options.compile.release_storage {
+            return Err("evm-option-unsupported".into());
+        }
+        let mut flags = options.compile.flags().map_err(|e| e.to_string())?;
+        flags.push(format!("--evm-version={}", options.fork.as_str()));
+        let flags: Vec<_> = flags.iter().map(String::as_str).collect();
+        let bytes = self.invoke(project, "language-evm", selection, &flags)?;
         let source = crate::evm::Source::capture(&bytes).map_err(|e| Error::from(e.to_string()))?;
         if !selection::matches(selection.name, source.entry()) {
             return Err("source-entry-selection".into());
+        }
+        if source.fork() != options.fork
+            || source.options() != &options.compile
+            || source.metadata()["options"]["numerical_expressions"] != "prefer-native"
+        {
+            return Err("evm-source-options".into());
         }
         Ok(source)
     }
@@ -194,6 +208,7 @@ impl Compiler {
         &self,
         project: &Project,
         selection: Selection<'_>,
+        options: &crate::evm::Options,
         solc: &crate::evm::Solc,
         reuse: Option<&crate::evm::Artifact>,
     ) -> Result<crate::evm::Artifact> {
@@ -203,7 +218,7 @@ impl Compiler {
             immutable_image: Some(executable),
         };
         let executable = compiler.immutable_image.as_ref().unwrap();
-        let source = compiler.evm_source_from(project, selection)?;
+        let source = compiler.evm_source_from(project, selection, options)?;
         check_compiler_path(executable, &self.path)?;
         let artifact = solc
             .compile(crate::evm::Build {
@@ -716,6 +731,121 @@ mod tests {
         }
 
         #[test]
+        fn evm_invocation_passes_and_authenticates_shared_options_and_fork() {
+            let directory = tempfile::tempdir().unwrap();
+            let (compiler, project) = fixture(directory.path(), "example::Proof");
+            let mut options = crate::evm::Options {
+                fork: crate::evm::EvmFork::Prague,
+                ..Default::default()
+            };
+            options.compile.simplify = false;
+            options.compile.finite_bulk = false;
+            options.compile.fuse_vector_reductions = true;
+            options.compile.fuse_collect_fold = true;
+            options.compile.calculation_batching = false;
+            options.compile.oracle_realization.order =
+                crate::entry::OracleQueryOrder::AfterFinalDraw;
+            let mut record =
+                crate::evm::tests::source_record("example::Proof", "invocation control");
+            let mut selected = serde_json::to_value(&options.compile).unwrap();
+            selected["numerical_expressions"] = serde_json::json!("prefer-native");
+            record["options"] = selected.clone();
+            record["manifest"]["options"] = selected;
+            let mut normalized = options.compile.oracle_realization.clone();
+            normalized.roots = crate::entry::OracleRoots::Exact(vec![]);
+            record["descriptor"][8] = serde_json::json!(normalized.canonical_json().unwrap());
+            record["fork"] = serde_json::json!(options.fork);
+            record["manifest"]["fork"] = serde_json::json!(options.fork);
+            let mut checks = String::new();
+            for flag in options
+                .compile
+                .flags()
+                .unwrap()
+                .into_iter()
+                .chain(["--evm-version=prague".to_owned()])
+            {
+                // Flags contain canonical controlled JSON and no shell quotes.
+                assert!(!flag.contains('\''));
+                checks.push_str(&format!("found=; for arg do if [ \"$arg\" = '{flag}' ]; then found=1; fi; done\n[ \"$found\" = 1 ] || exit 8\n"));
+            }
+            script(
+                compiler.path(),
+                &format!("#!/bin/sh\n{checks}printf '%s' '{record}'\n"),
+            );
+            let direct = compiler
+                .evm_source_from(&project, Selection::default(), &options)
+                .unwrap();
+            let captured = compiler
+                .evm_source(&project, Selection::default(), &options)
+                .unwrap();
+            assert_eq!(direct.bytes(), captured.bytes());
+            assert_eq!(captured.fork(), options.fork);
+            assert_eq!(captured.options(), &options.compile);
+
+            // A compiler that ignores any selected setting cannot supply a
+            // superficially valid response for that request.
+            let mut ignored = vec![crate::evm::tests::source_record(
+                "example::Proof",
+                "ignored options",
+            )];
+            let mut wrong_fork = record.clone();
+            wrong_fork["fork"] = serde_json::json!("cancun");
+            wrong_fork["manifest"]["fork"] = serde_json::json!("cancun");
+            ignored.push(wrong_fork);
+            for field in [
+                "simplify",
+                "finite_bulk",
+                "fuse_vector_reductions",
+                "fuse_collect_fold",
+                "calculation_batching",
+            ] {
+                let mut wrong = record.clone();
+                wrong["options"][field] =
+                    serde_json::json!(!wrong["options"][field].as_bool().unwrap());
+                wrong["manifest"]["options"] = wrong["options"].clone();
+                ignored.push(wrong);
+            }
+            let mut wrong_oracle = record.clone();
+            wrong_oracle["options"]["oracle_realization"] =
+                serde_json::to_value(crate::entry::OracleSelection::default()).unwrap();
+            wrong_oracle["manifest"]["options"] = wrong_oracle["options"].clone();
+            let normalized = crate::entry::OracleSelection {
+                roots: crate::entry::OracleRoots::Exact(vec![]),
+                ..Default::default()
+            };
+            wrong_oracle["descriptor"][8] = serde_json::json!(normalized.canonical_json().unwrap());
+            ignored.push(wrong_oracle);
+            for record in ignored {
+                script(
+                    compiler.path(),
+                    &format!("#!/bin/sh\nprintf '%s' '{record}'\n"),
+                );
+                assert_eq!(
+                    compiler
+                        .evm_source(&project, Selection::default(), &options)
+                        .unwrap_err()
+                        .code,
+                    "evm-source-options"
+                );
+                assert_eq!(
+                    compiler
+                        .evm_source_from(&project, Selection::default(), &options)
+                        .unwrap_err()
+                        .code,
+                    "evm-source-options"
+                );
+            }
+            options.compile.release_storage = true;
+            assert_eq!(
+                compiler
+                    .evm_source(&project, Selection::default(), &options)
+                    .unwrap_err()
+                    .code,
+                "evm-option-unsupported"
+            );
+        }
+
+        #[test]
         fn installed_compiler_library_path_preserves_trusted_fallback_without_adding_cwd() {
             use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
 
@@ -754,7 +884,11 @@ mod tests {
                 let (compiler, project) = fixture(&bin, "example::Proof");
                 assert_eq!(
                     compiler
-                        .evm_source(&project, Selection::default())
+                        .evm_source(
+                            &project,
+                            Selection::default(),
+                            &crate::evm::Options::default()
+                        )
                         .unwrap_err()
                         .code,
                     "source-compiler-io"
@@ -870,7 +1004,11 @@ mod tests {
                 crate::io::bytes::hex(&Sha256::digest(&original))
             );
             let direct = compiler
-                .evm_source_from(&project, Selection::default())
+                .evm_source_from(
+                    &project,
+                    Selection::default(),
+                    &crate::evm::Options::default(),
+                )
                 .unwrap();
             // Control: argv0 alone cannot restore the original ELF $ORIGIN.
             let broken = image
@@ -883,7 +1021,13 @@ mod tests {
             let stderr =
                 crate::io::read_regular(broken.stderr.as_ref().unwrap().path(), 65536).unwrap();
             assert!(String::from_utf8_lossy(&stderr).contains(library_name));
-            let sealed = compiler.evm_source(&project, Selection::default()).unwrap();
+            let sealed = compiler
+                .evm_source(
+                    &project,
+                    Selection::default(),
+                    &crate::evm::Options::default(),
+                )
+                .unwrap();
             assert_eq!(sealed.bytes(), direct.bytes());
 
             compiler.immutable_image = Some(image);
@@ -896,7 +1040,11 @@ mod tests {
                     script(compiler.path(), "#!/bin/sh\nexit 9\n");
                 }
                 let sealed = compiler
-                    .evm_source_from(&project, Selection::default())
+                    .evm_source_from(
+                        &project,
+                        Selection::default(),
+                        &crate::evm::Options::default(),
+                    )
                     .unwrap();
                 assert_eq!(sealed.bytes(), direct.bytes());
                 assert_eq!(
@@ -960,7 +1108,8 @@ mod tests {
                             Selection {
                                 name,
                                 kind: Some(EntryKind::Proof)
-                            }
+                            },
+                            &crate::evm::Options::default()
                         )
                         .unwrap()
                         .entry(),
@@ -981,7 +1130,8 @@ mod tests {
                             Selection {
                                 name: Some(name),
                                 kind: None
-                            }
+                            },
+                            &crate::evm::Options::default()
                         )
                         .unwrap_err()
                         .code,
@@ -995,7 +1145,8 @@ mod tests {
                         Selection {
                             name: None,
                             kind: Some(EntryKind::Function)
-                        }
+                        },
+                        &crate::evm::Options::default()
                     )
                     .unwrap_err()
                     .code,
@@ -1019,7 +1170,11 @@ mod tests {
                     script(compiler.path(), replacement);
                 }
                 let source = compiler
-                    .evm_source_from(&project, Selection::default())
+                    .evm_source_from(
+                        &project,
+                        Selection::default(),
+                        &crate::evm::Options::default(),
+                    )
                     .unwrap();
                 assert_eq!(source.entry(), "example::Proof");
                 assert_eq!(
@@ -1056,7 +1211,11 @@ mod tests {
                 .push(format!("--replace={}", compiler.path().display()));
             assert_eq!(
                 compiler
-                    .evm_source(&project, Selection::default())
+                    .evm_source(
+                        &project,
+                        Selection::default(),
+                        &crate::evm::Options::default()
+                    )
                     .unwrap_err()
                     .code,
                 "source-compiler-changed"
@@ -1095,8 +1254,12 @@ mod tests {
             };
             // Compare installed catalog resolution and identities with ordinary
             // pathname execution, then use the public snapshot route end to end.
-            let direct = compiler.evm_source_from(&project, selection).unwrap();
-            let sealed = compiler.evm_source(&project, selection).unwrap();
+            let direct = compiler
+                .evm_source_from(&project, selection, &crate::evm::Options::default())
+                .unwrap();
+            let sealed = compiler
+                .evm_source(&project, selection, &crate::evm::Options::default())
+                .unwrap();
             assert_eq!(direct.bytes(), sealed.bytes());
             // Replay the transport defects against a complete real compiler
             // response, before any solc or artifact operation can consume it.
@@ -1141,12 +1304,24 @@ mod tests {
             )
             .unwrap();
             let artifact = compiler
-                .build_evm(&project, selection, &solc, None)
+                .build_evm(
+                    &project,
+                    selection,
+                    &crate::evm::Options::default(),
+                    &solc,
+                    None,
+                )
                 .unwrap();
             assert_eq!(artifact.manifest().compiler_sha256, expected);
             assert!(!artifact.runtime_bytecode().is_empty());
             let reused = compiler
-                .build_evm(&project, selection, &solc, Some(&artifact))
+                .build_evm(
+                    &project,
+                    selection,
+                    &crate::evm::Options::default(),
+                    &solc,
+                    Some(&artifact),
+                )
                 .unwrap();
             assert_eq!(artifact.identity(), reused.identity());
             let directory = tempfile::tempdir().unwrap();
@@ -1157,6 +1332,92 @@ mod tests {
             )
             .unwrap();
             assert_eq!(captured.runtime_bytecode(), artifact.runtime_bytecode());
+            let mut prague = crate::evm::Options {
+                fork: crate::evm::EvmFork::Prague,
+                ..Default::default()
+            };
+            prague.compile.simplify = false;
+            prague.compile.finite_bulk = false;
+            prague.compile.fuse_vector_reductions = true;
+            prague.compile.fuse_collect_fold = true;
+            prague.compile.calculation_batching = false;
+            let selected = compiler.evm_source(&project, selection, &prague).unwrap();
+            assert_eq!(selected.fork(), crate::evm::EvmFork::Prague);
+            assert_eq!(selected.options(), &prague.compile);
+            assert_eq!(
+                compiler
+                    .build_evm(&project, selection, &prague, &solc, Some(&artifact))
+                    .unwrap_err()
+                    .code,
+                "evm-cache-key"
+            );
+            let artifact_prague = compiler
+                .build_evm(&project, selection, &prague, &solc, None)
+                .unwrap();
+            assert_eq!(
+                artifact_prague.manifest().evm_version,
+                crate::evm::EvmFork::Prague
+            );
+            assert_ne!(artifact_prague.identity(), artifact.identity());
+            assert_eq!(
+                compiler
+                    .build_evm(&project, selection, &prague, &solc, Some(&artifact_prague))
+                    .unwrap()
+                    .identity(),
+                artifact_prague.identity()
+            );
+            artifact_prague
+                .publish(directory.path().join("prague"))
+                .unwrap();
+            let imported_prague = crate::evm::Artifact::capture(
+                directory.path().join("prague"),
+                &artifact_prague.identity(),
+            )
+            .unwrap();
+            assert_eq!(
+                imported_prague.manifest().evm_version,
+                crate::evm::EvmFork::Prague
+            );
+            let authored_path = directory.path().join("authored.zkc");
+            std::fs::write(
+                &authored_path,
+                r#"module authored;
+domain Fr=field("bls12-381.fr");
+protocol Echo roles(P,V)(value:Fr@(P,V))->(accepted:bool@V) {
+  let received=send P->V(value);
+  let accepted=received==value;
+  return(accepted=accepted);
+}
+proof Proof=Echo{prover P;verifier V;public{value};accept accepted;construction authored;}
+"#,
+            )
+            .unwrap();
+            let authored = Project::explicit(
+                BTreeMap::from([("authored".into(), authored_path.to_str().unwrap().into())]),
+                BTreeMap::new(),
+            )
+            .unwrap();
+            let authored_selection = Selection {
+                name: Some("authored::Proof"),
+                kind: Some(EntryKind::Proof),
+            };
+            let options = crate::evm::Options::default();
+            let direct = compiler
+                .evm_source_from(&authored, authored_selection, &options)
+                .unwrap();
+            let captured = compiler
+                .evm_source(&authored, authored_selection, &options)
+                .unwrap();
+            assert_eq!(direct.bytes(), captured.bytes());
+            assert_eq!(captured.metadata()["policy"][5], "");
+            assert_eq!(captured.metadata()["policy"][6], serde_json::json!([]));
+            assert_eq!(captured.metadata()["policy"][8], serde_json::json!([]));
+            assert_eq!(captured.metadata()["policy"][9], "zkc.framed/0");
+            let zero = compiler
+                .build_evm(&authored, authored_selection, &options, &solc, None)
+                .unwrap();
+            assert!(!zero.runtime_bytecode().is_empty());
+            assert_eq!(zero.source().unwrap().bytes(), captured.bytes());
             check_compiler_path(&image, compiler.path()).unwrap();
         }
     }

@@ -45,6 +45,12 @@ test = false
 bench = false
 
 [[bin]]
+name = "evm_fixture"
+path = "src/evm_fixture.rs"
+test = false
+bench = false
+
+[[bin]]
 name = "ring_conformance"
 path = "src/ring_conformance.rs"
 test = false

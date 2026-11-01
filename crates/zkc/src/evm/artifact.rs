@@ -19,7 +19,7 @@ pub struct Manifest {
     pub compiler_sha256: String,
     pub solc_sha256: String,
     pub solc_version: String,
-    pub evm_version: String,
+    pub evm_version: EvmFork,
     pub files: BTreeMap<String, String>,
 }
 #[derive(Clone, Debug)]
@@ -43,7 +43,6 @@ impl Artifact {
         let m = &self.manifest;
         if m.format != FORMAT
             || m.solc_version != SOLC_VERSION
-            || m.evm_version != "cancun"
             || m.files.len() != FILES.len()
             || self.files.len() != FILES.len()
             || [&m.build_key, &m.compiler_sha256, &m.solc_sha256]
@@ -59,6 +58,9 @@ impl Artifact {
             }
         }
         let source = Source::capture(&self.files["source.json"])?;
+        if m.evm_version != source.fork() {
+            return Err("evm-artifact-settings".into());
+        }
         if self.files["verifier.yul"] != source.yul().as_bytes()
             || json(&self.files["abi.json"])? != *source.abi()
         {
