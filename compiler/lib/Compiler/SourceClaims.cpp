@@ -1,63 +1,56 @@
 #include "zkc/Compiler/SourceClaims.h"
 #include "ComponentContracts.h"
 #include "SourceArtifacts.h"
-#include "zkc/Compiler/StructuredSource.h"
-#include "zkc/Dialect/Registry.h"
-#include "zkc/Language/Inspection.h"
-#include "zkc/Support/BoundedStream.h"
+#include "SourceView.h"
+#include "zkc/Language/InspectionData.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 
 using namespace llvm;
 namespace zkc::language {
 namespace {
-Expected<json::Value> componentSnapshot(const CheckedOriginal &original) {
-  mlir::DialectRegistry registry;
-  zkc::registerDialects(registry);
-  mlir::MLIRContext context(registry);
-  context.loadAllAvailableDialects();
-  auto structured = protocol::exportStructuredSource(
-      original.bytes(), original.entry().protocol().symbol, context);
-  if (!structured)
-    return structured.takeError();
-  return json::parse(structured->bytes);
-}
-} // namespace
-Expected<std::string> exportSourceClaims(const CheckedOriginal &original,
-                                         const Limits &limits) {
-  auto claims = inspectSourceClaims(original.entry(), limits);
-  if (!claims)
-    return claims.takeError();
-  auto value = json::parse(*claims);
+struct ClaimData {
+  json::Value value;
+  std::optional<protocol::SourceView> native;
+};
+Expected<ClaimData> claimData(const CheckedOriginal &original,
+                              const Limits &limits) {
+  auto value = sourceClaimsData(original.entry(), limits);
   if (!value)
     return value.takeError();
   auto &root = *value->getAsObject();
-  root["proposals"] = json::Array{};
-  root["seams"] = json::Array{};
-  auto declarations = inspectComponentDeclarations(original.entry(), limits);
+  auto declarations = componentDeclarationsData(original.entry(), limits);
   if (!declarations)
     return declarations.takeError();
-  if (*declarations != "[[],[]]") {
-    auto snapshot = componentSnapshot(original);
+  std::optional<protocol::SourceView> native;
+  const auto &tables = *declarations->getAsArray();
+  if (!tables[0].getAsArray()->empty() || !tables[1].getAsArray()->empty()) {
+    auto snapshot = detail::OriginalAccess::read(original);
     if (!snapshot)
       return snapshot.takeError();
-    auto components = deriveComponentContracts(*snapshot);
+    native.emplace(std::move(*snapshot));
+    auto components = deriveComponentContracts(*native);
     if (!components)
       return components.takeError();
     root["proposals"] = std::move(*components->getArray("proposals"));
     root["seams"] = std::move(*components->getArray("seams"));
   }
   root["admission"] = detail::sourceAdmission(original);
-  std::string bytes;
-  BoundedStream out(bytes, limits.interfaceBytes);
-  out << *value;
-  if (out.overflow())
+  if (!jsonWithinByteLimit(*value, limits.interfaceBytes))
     return error("source.limit", "source claim export byte limit exceeded");
-  return bytes;
+  return ClaimData{std::move(*value), std::move(native)};
+}
+} // namespace
+Expected<std::string> exportSourceClaims(const CheckedOriginal &original,
+                                         const Limits &limits) {
+  auto data = claimData(original, limits);
+  if (!data)
+    return data.takeError();
+  return printJson(data->value);
 }
 Error checkSourceClaims(const CheckedOriginal &original, StringRef bytes,
                         const Limits &limits) {
-  auto expected = exportSourceClaims(original, limits);
+  auto expected = claimData(original, limits);
   if (!expected)
     return expected.takeError();
   auto actual = zkc::parseNaturalJson(bytes, limits.interfaceBytes,
@@ -65,11 +58,9 @@ Error checkSourceClaims(const CheckedOriginal &original, StringRef bytes,
                                       "source.claim.export", "source.limit");
   if (!actual)
     return actual.takeError();
-  auto canonical = json::parse(*expected);
-  if (!canonical)
-    return canonical.takeError();
+  auto &canonical = expected->value;
   auto actualRoot = actual->getAsObject(),
-       canonicalRoot = canonical->getAsObject();
+       canonicalRoot = canonical.getAsObject();
   if (!actualRoot || !actualRoot->getArray("proposals") ||
       !actualRoot->getArray("seams"))
     return error("source.claim.export", "missing component export fields");
@@ -77,19 +68,16 @@ Error checkSourceClaims(const CheckedOriginal &original, StringRef bytes,
        seams = *actualRoot->get("seams");
   (*actualRoot)["proposals"] = *canonicalRoot->get("proposals");
   (*actualRoot)["seams"] = *canonicalRoot->get("seams");
-  if (!zkc::equalNaturalJson(*actual, *canonical))
+  if (!zkc::equalNaturalJson(*actual, canonical))
     return error("source.claim.export",
                  "claims differ from the checked original");
   (*actualRoot)["proposals"] = std::move(proposed);
   (*actualRoot)["seams"] = std::move(seams);
   if (!canonicalRoot->getArray("proposals")->empty() ||
       !canonicalRoot->getArray("seams")->empty()) {
-    auto snapshot = componentSnapshot(original);
-    if (!snapshot)
-      return snapshot.takeError();
-    return checkComponentContracts(*snapshot, *actualRoot);
+    return checkComponentContracts(*expected->native, *actualRoot);
   }
-  if (!zkc::equalNaturalJson(*actual, *canonical))
+  if (!zkc::equalNaturalJson(*actual, canonical))
     return error("source.claim.export",
                  "claims differ from the checked original");
   return Error::success();

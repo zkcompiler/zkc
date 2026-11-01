@@ -1,87 +1,16 @@
 #include "ApplicationMapData.h"
 #include "mlir/IR/OperationSupport.h"
-#include "mlir/Parser/Parser.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Compiler/StructuredSource.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/STLExtras.h"
+#include <functional>
 
 using namespace llvm;
 using namespace mlir;
 namespace zkc::protocol::application_map {
-namespace {
-Expected<std::vector<unsigned>> indices(const json::Value &value) {
-  auto *array = value.getAsArray();
-  if (!array)
-    return error("application-map-carrier");
-  std::vector<unsigned> result;
-  for (const auto &item : *array) {
-    auto number = item.getAsUINT64();
-    if (!number || *number > rowLimit)
-      return error("application-map-carrier");
-    result.push_back(*number);
-  }
-  return result;
-}
-std::vector<json::Value> types(const json::Value &value) {
-  const auto &array = *value.getAsArray();
-  return {array.begin(), array.end()};
-}
-std::vector<std::string> strings(const json::Value &value) {
-  std::vector<std::string> result;
-  for (const auto &item : *value.getAsArray())
-    result.push_back(item.getAsString()->str());
-  return result;
-}
-Expected<Block> readBlock(const json::Value &value,
-                          std::vector<json::Value> inputs,
-                          std::vector<json::Value> outputs, Budget &budget,
-                          unsigned depth = 0) {
-  auto *row = value.getAsArray();
-  if (!row || row->size() != 3 || (*row)[0].getAsString() != "block")
-    return error("application-map-carrier");
-  if (depth > 32 || !budget.charge())
-    return error("application-map-limit");
-  Block result;
-  result.inputs = std::move(inputs);
-  result.outputs = std::move(outputs);
-  for (const auto &item : *(*row)[1].getAsArray()) {
-    const auto &instruction = *item.getAsArray();
-    if (instruction.size() != 5)
-      return error("application-map-carrier");
-    if (!budget.charge())
-      return error("application-map-limit");
-    auto operands = indices(instruction[1]);
-    if (!operands)
-      return operands.takeError();
-    Instruction next;
-    next.descriptor = instruction[0];
-    next.operands = std::move(*operands);
-    next.results = types(instruction[2]);
-    next.site = instruction[4].getAsString()->str();
-    for (const auto &region : *instruction[3].getAsArray()) {
-      const auto &nested = *region.getAsArray();
-      auto body = readBlock(nested[2], types(nested[0]), types(nested[1]),
-                            budget, depth + 1);
-      if (!body)
-        return body.takeError();
-      next.regions.push_back(std::move(*body));
-    }
-    result.instructions.push_back(std::move(next));
-  }
-  result.terminator = (*row)[2];
-  const auto &terminal = *result.terminator.getAsArray();
-  if (terminal[0].getAsString() != "stop") {
-    auto returned = indices(terminal[1]);
-    if (!returned)
-      return returned.takeError();
-    result.returned = std::move(*returned);
-  }
-  return result;
-}
-} // namespace
-
 const Definition *View::find(StringRef name) const {
   auto found = names.find(name.str());
   return found == names.end() ? nullptr : &definitions[found->second];
@@ -137,110 +66,63 @@ Expected<json::Value> parseRecord(StringRef bytes) {
 }
 Expected<View> readView(StringRef bytes, StringRef entry, MLIRContext &context,
                         Budget &budget, StructuredSourceProfile profile) {
-  auto exported = exportStructuredSource(bytes, entry, context, profile);
-  if (!exported)
-    return exported.takeError();
-  // This is exporter-owned JSON, never an untrusted substitute for the input.
-  auto parsed = json::parse(exported->bytes);
-  if (!parsed)
-    return parsed.takeError();
-  if (auto e = chargeTree(*parsed, budget))
-    return std::move(e);
+  auto source = readSourceView(bytes, entry, context, profile);
+  if (!source)
+    return source.takeError();
   View result;
-  result.wire = std::move(*parsed);
-  result.native = parseSourceString<ModuleOp>(bytes, &context);
-  if (!result.native)
-    return error("application-map-carrier");
+  result.native = std::move(source->native);
+  result.identity = std::move(source->identity);
+  result.entry = std::move(source->entry);
+  result.names = std::move(source->names);
   auto unit =
       cast<protocol_ir::ProtocolModuleOp>(result.native->getBody()->front());
   mathematical::NativeTypePolicies policies(unit);
-  SymbolTable symbols(unit);
-  const auto &slots = *result.wire.getAsArray();
-  for (const auto &value : *slots[7].getAsArray()) {
-    const auto &row = *value.getAsArray();
+  for (auto &value : source->definitions) {
+    if (!budget.charge())
+      return error("application-map-limit");
     Definition definition;
-    definition.name = row[1].getAsString()->str();
-    definition.declaration = value;
-    unsigned bodySlot = 0;
-    std::vector<json::Value> inputs, outputs;
-    if (row[0].getAsString() == "function") {
-      definition.kind = row[2].getAsString()->str();
-      inputs = types(row[4]);
-      outputs = types(row[5]);
-      bodySlot = 9;
-      if (definition.kind == "protocol") {
-        const auto &interface = *row[6].getAsArray();
-        definition.roles = strings(interface[1]);
-        for (const auto &scope : *interface[2].getAsArray())
-          definition.inputRoles.push_back(strings(scope));
-        for (const auto &scope : *interface[3].getAsArray())
-          definition.outputRoles.push_back(strings(scope));
-        auto native =
-            cast<protocol_ir::MathematicalOp>(symbols.lookup(definition.name));
-        auto restricts = [&](Type type) -> Expected<bool> {
-          if (isa<protocol_ir::ServiceReferenceType>(type))
-            return false;
-          if (isa<protocol_ir::OracleHandleType,
-                  protocol_ir::OracleSequenceType>(type))
-            return true;
-          auto policy = policies.get(type);
-          if (!policy)
-            return error("application-map-unsupported", "port type policy");
-          return policy->shared;
-        };
-        for (auto type : native.getFunctionType().getInputs()) {
-          auto needed = restricts(type);
-          if (!needed)
-            return needed.takeError();
-          definition.restrictInputs.push_back(*needed);
-        }
-        for (auto type : native.getFunctionType().getResults()) {
-          auto needed = restricts(type);
-          if (!needed)
-            return needed.takeError();
-          definition.restrictOutputs.push_back(*needed);
-        }
+    static_cast<SourceDefinition &>(definition) = std::move(value);
+    if (definition.kind == "protocol") {
+      auto restricts = [&](Type type) -> Expected<bool> {
+        if (isa<protocol_ir::ServiceReferenceType>(type))
+          return false;
+        if (isa<protocol_ir::OracleHandleType, protocol_ir::OracleSequenceType>(
+                type))
+          return true;
+        auto policy = policies.get(type);
+        if (!policy)
+          return error("application-map-unsupported", "port type policy");
+        return policy->shared;
+      };
+      for (Type type : definition.body.inputs) {
+        auto needed = restricts(type);
+        if (!needed)
+          return needed.takeError();
+        definition.restrictInputs.push_back(*needed);
       }
-    } else if (row[0].getAsString() == "oracle") {
-      definition.kind = "oracle";
-      inputs = types(row[2]);
-      bodySlot = 7;
+      for (Type type : definition.body.outputs) {
+        auto needed = restricts(type);
+        if (!needed)
+          return needed.takeError();
+        definition.restrictOutputs.push_back(*needed);
+      }
     }
-    if (bodySlot) {
-      auto block = readBlock(row[bodySlot], std::move(inputs),
-                             std::move(outputs), budget);
-      if (!block)
-        return block.takeError();
-      definition.hasBody = true;
-      definition.body = std::move(*block);
-    }
-    result.names.emplace(definition.name, result.definitions.size());
     result.definitions.push_back(std::move(definition));
   }
   return result;
 }
 Error compareInventory(const View &source, const View &candidate) {
-  const auto &a = *source.wire.getAsArray();
-  const auto &b = *candidate.wire.getAsArray();
-  // Only actual definition bodies can change at this edge. Derived declaration
-  // identities are retained because scoped helpers are retained exactly.
-  for (unsigned slot : {0, 1, 3, 4, 5, 6, 8, 9, 10})
-    if (!equalNaturalJson(a[slot], b[slot]))
-      return error("application-map-correspondence", "declaration inventory");
-  if (source.definitions.size() != candidate.definitions.size())
+  if (source.entry != candidate.entry ||
+      source.native.get()->getAttrDictionary() !=
+          candidate.native.get()->getAttrDictionary() ||
+      source.definitions.size() != candidate.definitions.size())
     return error("application-map-correspondence", "definition inventory");
   for (auto [left, right] : zip(source.definitions, candidate.definitions)) {
-    auto x = *left.declaration.getAsArray();
-    auto y = *right.declaration.getAsArray();
-    if (left.kind != right.kind || left.hasBody != right.hasBody ||
-        x.size() != y.size())
-      return error("application-map-correspondence", "definition kind");
-    if (left.hasBody && right.hasBody) {
-      unsigned slot = left.kind == "oracle" ? 7 : 9;
-      x[slot] = nullptr;
-      y[slot] = nullptr;
-    }
-    if (!equalNaturalJson(json::Value(std::move(x)), json::Value(std::move(y))))
+    if (left.name != right.name || left.kind != right.kind ||
+        left.hasBody != right.hasBody ||
+        left.operation->getName() != right.operation->getName() ||
+        left.operation->getAttrDictionary() !=
+            right.operation->getAttrDictionary())
       return error("application-map-correspondence", "definition interface");
   }
   return Error::success();
@@ -317,9 +199,67 @@ void prependResults(ValueContext &context, StringRef definition,
     context.push_front({definition.str(), region, false, instruction, i - 1});
 }
 StringRef opcode(const Instruction &instruction) {
-  return *(*instruction.descriptor.getAsArray())[0].getAsString();
+  auto *op = instruction.operation;
+  if (isa<protocol_ir::ApplyOp>(op))
+    return "protocol_apply";
+  if (isa<func::CallOp>(op) && !op->hasAttr("runtime.site"))
+    return "call";
+  if (isa<protocol_ir::RestrictRolesOp>(op))
+    return "restrict";
+  return op->getName().getStringRef();
 }
 StringRef callee(const Instruction &instruction) {
-  return *(*instruction.descriptor.getAsArray())[1].getAsString();
+  return instruction.operation->getAttrOfType<FlatSymbolRefAttr>("callee")
+      .getValue();
+}
+ArrayAttr applicationRoles(const Instruction &instruction) {
+  return instruction.operation->getAttrOfType<ArrayAttr>("roles");
+}
+bool sameDescriptor(const Instruction &source, const Instruction &candidate,
+                    const Roles &roles) {
+  if (source.operation->getName() != candidate.operation->getName())
+    return false;
+  auto attributes = [&](Operation *op, bool map) {
+    NamedAttrList result(op->getAttrs());
+    result.erase("site");
+    result.erase("runtime.site");
+    std::function<Attribute(Attribute)> substitute = [&](Attribute attr) {
+      if (auto name = dyn_cast<StringAttr>(attr)) {
+        auto found = roles.find(name.str());
+        if (found != roles.end())
+          return Attribute(StringAttr::get(op->getContext(), found->second));
+      } else if (auto array = dyn_cast<ArrayAttr>(attr)) {
+        SmallVector<Attribute> values;
+        for (Attribute value : array)
+          values.push_back(substitute(value));
+        return Attribute(ArrayAttr::get(op->getContext(), values));
+      }
+      return attr;
+    };
+    if (map)
+      for (StringRef key : {"roles", "carried_roles", "receivers", "holder",
+                            "sender", "receiver", "owner", "role"})
+        if (auto attr = result.get(key))
+          result.set(key, substitute(attr));
+    return result.getDictionary(op->getContext());
+  };
+  return attributes(source.operation, true) ==
+         attributes(candidate.operation, false);
+}
+Error chargeTypes(ArrayRef<Type> types, Budget &budget) {
+  bool bounded = true;
+  for (Type type : types)
+    type.walk([&](Type) { bounded &= budget.charge(); },
+              [&](Attribute) { bounded &= budget.charge(); });
+  return bounded ? Error::success() : error("application-map-limit");
+}
+Error chargeInstruction(const Instruction &instruction, Budget &budget) {
+  bool bounded = true;
+  instruction.operation->getAttrDictionary().walk(
+      [&](Attribute) { bounded &= budget.charge(); },
+      [&](Type) { bounded &= budget.charge(); });
+  if (!bounded)
+    return error("application-map-limit");
+  return chargeTypes(instruction.results, budget);
 }
 } // namespace zkc::protocol::application_map

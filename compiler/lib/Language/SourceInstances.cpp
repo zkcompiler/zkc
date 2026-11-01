@@ -1,8 +1,9 @@
 #include "OracleInspection.h"
 #include "WrittenSourceIndex.h"
 #include "zkc/Language/Inspection.h"
+#include "zkc/Language/InspectionData.h"
 #include "zkc/Language/SourceTerms.h"
-#include "zkc/Support/BoundedStream.h"
+#include "zkc/Support/Json.h"
 using namespace llvm;
 namespace zkc::language {
 namespace {
@@ -284,8 +285,8 @@ public:
   }
 };
 } // namespace
-Expected<std::string> inspectSourceInstances(const ClosedEntry &entry,
-                                             const Limits &limits) {
+Expected<json::Value> sourceInstancesData(const ClosedEntry &entry,
+                                          const Limits &limits) {
   if (auto e = checkLimits(limits))
     return std::move(e);
   const auto &project = entry.project();
@@ -309,12 +310,17 @@ Expected<std::string> inspectSourceInstances(const ClosedEntry &entry,
                    {"capture", project.capture().identity()},
                    {"installation", project.installationIdentity()},
                    {"instances", std::move(*instances)}};
-  std::string bytes;
-  BoundedStream out(bytes, limits.apiInspectionBytes);
-  out << value;
-  if (out.overflow())
+  if (!jsonWithinByteLimit(value, limits.apiInspectionBytes))
     return detail::failure("source.limit",
                            "source instance export byte limit exceeded");
-  return bytes;
+  ownJsonStrings(value);
+  return value;
+}
+Expected<std::string> inspectSourceInstances(const ClosedEntry &entry,
+                                             const Limits &limits) {
+  auto value = sourceInstancesData(entry, limits);
+  if (!value)
+    return value.takeError();
+  return printJson(*value);
 }
 } // namespace zkc::language

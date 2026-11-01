@@ -1,8 +1,10 @@
 #include "../lib/Compiler/ComponentContracts.h"
+#include "../lib/Compiler/SourceView.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/OracleObligations.h"
 #include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Dialect/StructuredData.h"
 #include "llvm/Support/JSON.h"
 #include <fstream>
 #include <set>
@@ -199,7 +201,8 @@ int main(int argc, char **argv) {
                     at(snapshot, {8, 0, 1, 1, 2, 1, 0}) ==
                         J(A{"anchor", "output", 1}),
                 "anchor selector became a role-local data selector");
-        refuses(zkc::language::deriveComponentContracts(snapshot),
+        refuses(zkc::language::deriveComponentContracts(
+                    take(readSourceView(text, "main", context))),
                 "component-seam-oracle");
         for (StringRef replacement :
              {"[\"anchor\",\"input\",0:i64]", "[\"anchor\",\"input\",4:i64]",
@@ -293,7 +296,8 @@ int main(int argc, char **argv) {
   cases.run(
       "oracle data is not silently admitted as a pure component seam", [&] {
         auto snapshot = take(json::parse(take(capture(source())).bytes));
-        auto empty = take(zkc::language::deriveComponentContracts(snapshot));
+        auto view = take(readSourceView(source(), "main", context));
+        auto empty = take(zkc::language::deriveComponentContracts(view));
         require(empty.getArray("seams")->empty() &&
                     empty.getArray("proposals")->empty(),
                 "clause-free source acquired component evidence");
@@ -307,7 +311,11 @@ int main(int argc, char **argv) {
         if (auto error = zkc::language::checkComponentDeclarations(
                 (*snapshot.getAsArray())[10]))
           require(false, toString(std::move(error)));
-        auto seams = zkc::language::deriveComponentContracts(snapshot);
+        view.native.get().getBody()->front().setAttr(
+            "source_declarations",
+            take(zkc::importDeclarationData(&context,
+                                            (*snapshot.getAsArray())[10])));
+        auto seams = zkc::language::deriveComponentContracts(view);
         require(!seams, "oracle route received ordinary pure seam authority");
         require(toString(seams.takeError()).find("component-seam-oracle") !=
                     std::string::npos,

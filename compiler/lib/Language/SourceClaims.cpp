@@ -1,6 +1,7 @@
 #include "Checker.h"
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Inspection.h"
+#include "zkc/Language/InspectionData.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Language/SourceTerms.h"
@@ -169,8 +170,8 @@ json::Object sourceNode(const CheckedProject &project, Span span) {
 }
 } // namespace
 
-Expected<std::string> inspectComponentDeclarations(const ClosedEntry &entry,
-                                                   const Limits &limits) {
+Expected<json::Value> componentDeclarationsData(const ClosedEntry &entry,
+                                                const Limits &limits) {
   if (auto e = checkLimits(limits))
     return std::move(e);
   detail::Work work{limits};
@@ -332,16 +333,22 @@ Expected<std::string> inspectComponentDeclarations(const ClosedEntry &entry,
     protocols.push_back(json::Array{declaration.symbol, std::move(sides[0]),
                                     std::move(sides[1])});
   }
-  std::string bytes;
-  BoundedStream out(bytes, limits.interfaceBytes);
   if (!required) {
     records.clear();
     protocols.clear();
   }
-  out << json::Value(json::Array{std::move(records), std::move(protocols)});
-  if (out.overflow())
+  json::Value value = json::Array{std::move(records), std::move(protocols)};
+  if (!jsonWithinByteLimit(value, limits.interfaceBytes))
     return detail::failure("source.limit", "component declaration bytes");
-  return bytes;
+  ownJsonStrings(value);
+  return value;
+}
+Expected<std::string> inspectComponentDeclarations(const ClosedEntry &entry,
+                                                   const Limits &limits) {
+  auto value = componentDeclarationsData(entry, limits);
+  if (!value)
+    return value.takeError();
+  return printJson(*value);
 }
 
 bool detail::Checker::sourceClaimDomains(const Declaration &scope, E &value) {
@@ -738,8 +745,8 @@ Expected<std::string> inspectSourceClaimInventory(const CheckedProject &project,
   return bytes;
 }
 
-Expected<std::string> inspectSourceClaims(const ClosedEntry &entry,
-                                          const Limits &limits) {
+Expected<json::Value> sourceClaimsData(const ClosedEntry &entry,
+                                       const Limits &limits) {
   if (auto e = checkLimits(limits))
     return std::move(e);
   if (!entry.protocolOrNull())
@@ -907,23 +914,29 @@ Expected<std::string> inspectSourceClaims(const ClosedEntry &entry,
       }
     }
   }
-  std::string bytes;
-  BoundedStream out(bytes, limits.interfaceBytes);
-  out << json::Value(json::Object{{"format", "zkc.source-claims/0"},
-                                  {"registry_resolution", "deferred-to-lean"},
-                                  {"entry", entry.entry().qualifiedName},
-                                  {"claims", std::move(claims)},
-                                  {"proposals", json::Array{}},
-                                  {"seams", json::Array{}}});
-  if (out.overflow())
+  json::Value value = json::Object{{"format", "zkc.source-claims/0"},
+                                   {"registry_resolution", "deferred-to-lean"},
+                                   {"entry", entry.entry().qualifiedName},
+                                   {"claims", std::move(claims)},
+                                   {"proposals", json::Array{}},
+                                   {"seams", json::Array{}}};
+  if (!jsonWithinByteLimit(value, limits.interfaceBytes))
     return detail::failure("source.limit",
                            "source claim export byte limit exceeded");
-  return bytes;
+  ownJsonStrings(value);
+  return value;
+}
+Expected<std::string> inspectSourceClaims(const ClosedEntry &entry,
+                                          const Limits &limits) {
+  auto value = sourceClaimsData(entry, limits);
+  if (!value)
+    return value.takeError();
+  return printJson(*value);
 }
 
 Error checkSourceClaims(const ClosedEntry &entry, StringRef bytes,
                         const Limits &limits) {
-  auto expected = inspectSourceClaims(entry, limits);
+  auto expected = sourceClaimsData(entry, limits);
   if (!expected)
     return expected.takeError();
   auto actual = zkc::parseNaturalJson(bytes, limits.interfaceBytes,
@@ -931,10 +944,7 @@ Error checkSourceClaims(const ClosedEntry &entry, StringRef bytes,
                                       "source.claim.export", "source.limit");
   if (!actual)
     return actual.takeError();
-  auto canonical = json::parse(*expected);
-  if (!canonical)
-    return canonical.takeError();
-  if (!zkc::equalNaturalJson(*actual, *canonical))
+  if (!zkc::equalNaturalJson(*actual, *expected))
     return detail::failure("source.claim.export",
                            "claim export differs from the checked source");
   return Error::success();

@@ -1,10 +1,16 @@
 #include "../lib/Compiler/ComponentContracts.h"
+#include "../lib/Compiler/SourceView.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/MLIRContext.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/SourceClaims.h"
 #include "zkc/Compiler/StructuredSource.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Dialect/StructuredData.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Support/Json.h"
@@ -1132,62 +1138,66 @@ int main() {
     auto symbol = *claims.getAsObject()
                        ->getObject("admission")
                        ->getString("protocol_symbol");
-    mlir::DialectRegistry registry;
-    zkc::registerDialects(registry);
-    mlir::MLIRContext context(registry);
-    auto baseline =
-        take(json::parse(take(zkc::protocol::exportStructuredSource(
-                                  original.bytes(), symbol, context))
-                             .bytes));
+    auto baseline = take(zkc::language::detail::OriginalAccess::read(original));
     auto derived = take(deriveComponentContracts(baseline));
     require(!derived.getArray("seams")->empty(), "missing library residual");
     cantFail(checkComponentContracts(baseline, *claims.getAsObject()));
     using A = json::Array;
     using J = json::Value;
     for (unsigned variant = 0; variant != 8; ++variant) {
-      auto snapshot = baseline;
-      auto &unit = *snapshot.getAsArray();
+      auto snapshot =
+          take(zkc::language::detail::OriginalAccess::read(original));
+      auto &function = snapshot.definitions.at(snapshot.names.at(symbol.str()));
+      auto *operation = function.operation;
+      auto *context = operation->getContext();
+      mlir::Builder builder(context);
       unsigned mutation = variant < 5 ? variant : variant - 5;
-      A *clauses = nullptr;
-      for (auto &value : *unit[8].getAsArray()) {
-        auto &contract = *value.getAsArray();
-        if (contract[0] == J(symbol))
-          clauses = contract[1].getAsArray();
-      }
-      require(clauses, "selected library contract missing");
       if (variant >= 5)
-        *clauses = A{};
+        operation->setAttr("contracts", builder.getArrayAttr({}));
       if (mutation < 2) {
-        for (auto &value : *unit[7].getAsArray()) {
-          auto &function = *value.getAsArray();
-          if (function[0] != J("function") || function[1] != J(symbol))
-            continue;
-          auto &returned =
-              *(*(*function[9].getAsArray())[2].getAsArray())[1].getAsArray();
-          returned[1] = returned[mutation == 0 ? 0 : 2];
-        }
+        auto from = mutation == 0 ? 0 : 2;
+        function.body.returned[1] = function.body.returned[from];
+        function.body.terminal->setOperand(
+            1, function.body.terminal->getOperand(from));
       } else if (mutation == 2) {
-        auto &owners = *(*unit[10].getAsArray())[1].getAsArray();
+        auto *unit = &snapshot.native.get().getBody()->front();
+        auto declarations = take(
+            zkc::exportDeclarationData(unit->getAttr("source_declarations")));
+        auto &owners = *(*declarations.getAsArray())[1].getAsArray();
         for (auto &value : owners) {
           auto &owner = *value.getAsArray();
           if (owner[0] == J(symbol))
             (*(*owner[2].getAsArray())[0].getAsArray())[2] = A{};
         }
+        unit->setAttr("source_declarations",
+                      take(zkc::importDeclarationData(context, declarations)));
       } else {
-        auto &clause = *(*clauses)[0].getAsArray();
-        auto &application = *clause[2].getAsArray();
+        auto clauses = operation->getAttrOfType<mlir::ArrayAttr>("contracts");
+        SmallVector<mlir::Attribute> terms(clauses.begin(), clauses.end());
+        auto clause = mlir::cast<mlir::ArrayAttr>(terms[0]);
+        SmallVector<mlir::Attribute> parts(clause.begin(), clause.end());
+        auto application = mlir::cast<mlir::ArrayAttr>(parts[2]);
+        SmallVector<mlir::Attribute> arguments(application.begin(),
+                                               application.end());
         if (mutation == 3)
-          application[1] = A{A{"input", 0, "role00000000"}};
+          arguments[1] = builder.getArrayAttr({builder.getArrayAttr(
+              {builder.getStringAttr("input"), builder.getI64IntegerAttr(0),
+               builder.getStringAttr("role00000000")})});
         else
-          application[0] = "different-relation";
+          arguments[0] =
+              mlir::FlatSymbolRefAttr::get(context, "different-relation");
+        parts[2] = builder.getArrayAttr(arguments);
+        terms[0] = builder.getArrayAttr(parts);
+        operation->setAttr("contracts", builder.getArrayAttr(terms));
       }
-      // These isolate the deriver after the ordinary source admission gate.
+      // Isolate ownership analysis after admission by mutating actual native
+      // declarations and the corresponding derived SSA coordinates together.
       refuses(deriveComponentContracts(snapshot),
               mutation < 2    ? "component-seam-coverage"
               : mutation == 2 ? "component-claim-role"
                               : "component-claim-relation");
     }
-    auto declarations = (*baseline.getAsArray())[10];
+    auto declarations = (*baseline.publication.getAsArray())[10];
     auto &records = *(*declarations.getAsArray())[0].getAsArray();
     (*records[0].getAsArray())[2] = false;
     auto error = checkComponentDeclarations(declarations);
@@ -1305,66 +1315,61 @@ int main() {
     auto symbol = *claims.getAsObject()
                        ->getObject("admission")
                        ->getString("protocol_symbol");
-    mlir::DialectRegistry registry;
-    zkc::registerDialects(registry);
-    mlir::MLIRContext context(registry);
-    auto baseline =
-        take(json::parse(take(zkc::protocol::exportStructuredSource(
-                                  original.bytes(), symbol, context))
-                             .bytes));
-    using A = json::Array;
-    using J = json::Value;
+    using namespace zkc::protocol;
     for (unsigned maximum : {0, 2}) {
-      auto snapshot = baseline;
-      for (auto &value : *(*snapshot.getAsArray())[7].getAsArray()) {
-        auto &function = *value.getAsArray();
-        if (function[0] != J("function") || function[1] != J(symbol))
-          continue;
-        auto &instructions = *(*function[9].getAsArray())[1].getAsArray();
-        A region{A{A{"index"}}, A{}, A{"block", A{}, A{"yield", A{}}}};
-        instructions.insert(
-            instructions.begin(),
-            A{A{"protocol_repeat", 0, maximum, A{"role00000000"}, A{}}, A{1},
-              A{}, A{std::move(region)}, "empty"});
-      }
-      require(bool(deriveComponentContracts(snapshot)),
-              "empty repeat lost unrelated Pending coverage");
+      auto text = editSource(
+          fixture("components-local-fields"), "let initial@V=pending(value);",
+          ("for _ in 0..n roles(V) max " + std::to_string(maximum) +
+           " {} let initial@V=pending(value);")
+              .c_str());
+      auto emptyRepeat = take(prepareOriginal(
+          take(closeSubject(take(check(text)), "claims::Run"))));
+      take(deriveComponentContracts(
+          take(zkc::language::detail::OriginalAccess::read(emptyRepeat))));
     }
     for (unsigned variant = 0; variant != 7; ++variant) {
-      auto snapshot = baseline;
-      for (auto &value : *(*snapshot.getAsArray())[7].getAsArray()) {
-        auto &function = *value.getAsArray();
-        if (function[0] != J("function") || function[2] != J("protocol"))
+      auto snapshot =
+          take(zkc::language::detail::OriginalAccess::read(original));
+      for (auto &function : snapshot.definitions) {
+        if (function.kind != "protocol")
           continue;
-        auto &body = *function[9].getAsArray();
-        if (function[1] != J(symbol)) {
-          auto &returned = *(*body[2].getAsArray())[1].getAsArray();
-          if (variant == 0)
-            returned[1] = returned[0];
-          if (variant == 1)
-            returned[1] = returned[2];
+        if (function.name != symbol) {
+          if (variant < 2) {
+            unsigned from = variant == 0 ? 0 : 2;
+            function.body.returned[1] = function.body.returned[from];
+            function.body.terminal->setOperand(
+                1, function.body.terminal->getOperand(from));
+          }
           continue;
         }
-        auto &instructions = *body[1].getAsArray();
-        for (auto &value : instructions) {
-          auto &instruction = *value.getAsArray();
-          auto &descriptor = *instruction[0].getAsArray();
-          if (descriptor[0] == J("protocol_repeat")) {
-            if (variant == 2)
-              (*instruction[1].getAsArray())[2] =
-                  (*instruction[1].getAsArray())[1];
+        for (auto &instruction : function.body.instructions) {
+          auto *op = instruction.operation;
+          mlir::Builder builder(op->getContext());
+          if (auto repeat = mlir::dyn_cast<zkc::protocol_ir::RepeatOp>(op)) {
+            if (variant == 2) {
+              instruction.operands[2] = instruction.operands[1];
+              op->setOperand(2, op->getOperand(1));
+            }
             if (variant == 3)
-              descriptor[1] = 1; // The other Pending field becomes a capture.
+              repeat.setCarried(
+                  1); // The other Pending field becomes a capture.
             if (variant == 6)
-              (*(*(*instruction[3].getAsArray())[0].getAsArray())[2]
-                    .getAsArray())[2] = A{"stop", "abort", "stopped callback"};
+              instruction.regions[0].terminator = SourceTerminator::Stop;
           }
-          if (variant == 4 && descriptor[0] == J("local_call"))
-            descriptor[2] = "absent";
+          if (variant == 4 && mlir::isa<zkc::protocol_ir::LocalCallOp>(op))
+            op->setAttr("role", builder.getStringAttr("absent"));
         }
         if (variant == 5) {
-          auto &last = *instructions.back().getAsArray();
-          last[0] = A{"bool.equal"};
+          auto &last = function.body.instructions.back();
+          mlir::OpBuilder builder(last.operation);
+          auto replacement = mlir::arith::CmpIOp::create(
+              builder, last.operation->getLoc(), mlir::arith::CmpIPredicate::eq,
+              last.operation->getOperand(0), last.operation->getOperand(1));
+          last.operation->replaceAllUsesWith(replacement);
+          last.operation->erase();
+          last.operation = replacement;
+          snapshot.descriptors.insert_or_assign(replacement.getOperation(),
+                                                json::Array{"bool.equal"});
         }
       }
       // Scanner controls are intentionally separate from whole-unit admission.
@@ -1408,149 +1413,124 @@ int main() {
   cases.run("Local callback effect inventory inspects every stored path", [] {
     auto original = take(prepareOriginal(
         take(closeSubject(take(check(fixture("components"))), "claims::Run"))));
-    auto claims = take(json::parse(take(exportSourceClaims(original))));
-    auto symbol = *claims.getAsObject()
-                       ->getObject("admission")
-                       ->getString("protocol_symbol");
-    mlir::DialectRegistry registry;
-    zkc::registerDialects(registry);
-    mlir::MLIRContext context(registry);
-    auto baseline =
-        take(json::parse(take(zkc::protocol::exportStructuredSource(
-                                  original.bytes(), symbol, context))
-                             .bytes));
-    using A = json::Array;
-    using J = json::Value;
-    auto mutate = [&](A body) {
-      auto snapshot = baseline;
-      for (auto &value : *(*snapshot.getAsArray())[7].getAsArray()) {
-        auto &function = *value.getAsArray();
-        if (function[0] == J("function") && function[2] == J("local"))
-          function[9] = J(A(body));
-      }
-      return snapshot;
+    using namespace zkc::protocol;
+    // These unit controls deliberately exercise the post-admission effect
+    // inventory, including paths that produce no result. Operations are native
+    // owned objects; synthetic views only isolate that analysis from formation.
+    auto operation = [](SourceView &view, StringRef name,
+                        ArrayRef<mlir::NamedAttribute> attributes = {}) {
+      auto *context = view.native.get().getContext();
+      mlir::OperationState state(mlir::UnknownLoc::get(context), name);
+      state.addAttributes(attributes);
+      auto *op = mlir::Operation::create(state);
+      view.native.get().getBody()->front().getRegion(0).front().push_back(op);
+      return op;
     };
-    auto block = [](A instructions, A end = A{"yield", A{}}) {
-      return A{"block", std::move(instructions), std::move(end)};
+    auto instruction = [](mlir::Operation *op,
+                          std::vector<SourceBlock> regions = {}) {
+      return SourceInstruction{op, {}, {}, std::move(regions), "inventory"};
     };
-    auto region = [](A body) { return A{A{}, A{}, std::move(body)}; };
-    auto instruction = [](A descriptor, A regions = {}) {
-      return A{std::move(descriptor), A{}, A{}, std::move(regions),
-               "inventory"};
+    auto block = [](std::vector<SourceInstruction> instructions,
+                    SourceTerminator end = SourceTerminator::Return) {
+      SourceBlock result;
+      result.instructions = std::move(instructions);
+      result.terminator = end;
+      return result;
     };
-    for (StringRef control : {"if", "for", "for_condition"}) {
-      auto nested =
-          block(A{instruction(A{control},
-                              A{region(block(A{}, A{"stop", "reject", "stop"})),
-                                region(block(A{}, A{"condition", A{}}))})},
-                A{"return", A{}});
-      take(deriveComponentContracts(mutate(nested)));
-      for (const auto &[descriptor, code] :
-           std::vector<std::pair<A, StringRef>>{
-               {A{"draw", "role00000000", "bls12-381.fr"},
-                "component-seam-sampling"},
-               {A{"exchange", "role00000000", "role00000000"},
-                "component-seam-message"},
-               {A{"exec", "oracle.query", "", A{}}, "component-seam-oracle"},
-               {A{"exec", "unknown.effect", "", A{}}, "component-seam-effect"},
-               {A{"exec", "exec.apply", "missing", A{}},
-                "component-seam-effect"},
-               {A{"apply", "missing"}, "component-seam-call"}}) {
+    auto mutate = [](SourceView &view, const SourceBlock &body) {
+      for (auto &function : view.definitions)
+        if (function.kind == "local")
+          function.body = body;
+    };
+    const std::vector<std::pair<StringRef, StringRef>> effects{
+        {"protocol.query", "component-seam-sampling"},
+        {"protocol.exchange", "component-seam-message"},
+        {"protocol.oracle_query", "component-seam-oracle"},
+        {"protocol.apply", "component-seam-effect"},
+        {"exec.compute", "component-seam-call"}};
+    for (StringRef control : {"exec.test", "exec.range"}) {
+      auto view = take(zkc::language::detail::OriginalAccess::read(original));
+      auto *branch = operation(view, control);
+      mutate(view, block({instruction(
+                       branch, {block({}, SourceTerminator::Stop),
+                                block({}, SourceTerminator::Condition)})}));
+      take(deriveComponentContracts(view));
+      for (const auto &[effect, code] : effects)
         for (unsigned arm : {0u, 1u}) {
-          A regions{region(block(A{})), region(block(A{}))};
-          regions[arm] = region(
-              block(A{instruction(descriptor)}, A{"stop", "reject", "stop"}));
-          auto hidden = block(A{instruction(A{control}, std::move(regions))},
-                              A{"return", A{}});
-          refuses(deriveComponentContracts(mutate(hidden)), code);
+          std::vector<SourceBlock> regions{block({}), block({})};
+          regions[arm] = block({instruction(operation(view, effect))},
+                               SourceTerminator::Stop);
+          mutate(view, block({instruction(branch, std::move(regions))}));
+          refuses(deriveComponentContracts(view), code);
         }
-      }
     }
-    // Mutated wire units below test the scanner directly. They do not bypass
-    // whole-unit formation in either public admission API.
-    A callback;
-    for (const auto &value : *(*baseline.getAsArray())[7].getAsArray()) {
-      const auto &function = *value.getAsArray();
-      if (function[0] == J("function") && function[2] == J("local")) {
-        callback = function;
-        break;
+    for (StringRef call : {"func.call", "exec.compute", "exec.fold",
+                           "exec.collect", "data.finite_fold"}) {
+      bool finite = call == "exec.fold" || call == "exec.collect" ||
+                    call == "data.finite_fold";
+      auto callbacks = [&](StringRef effect, bool inPredicate,
+                           bool missingDomain = false) {
+        auto view = take(zkc::language::detail::OriginalAccess::read(original));
+        auto *context = view.native.get().getContext();
+        mlir::Builder builder(context);
+        SmallVector<mlir::NamedAttribute> attributes;
+        auto reference = [&](StringRef key, StringRef target) {
+          attributes.push_back(builder.getNamedAttr(
+              key, mlir::FlatSymbolRefAttr::get(context, target)));
+        };
+        if (finite) {
+          reference("domain", "effect.domain");
+          reference(call == "exec.collect" ? "body" : "step",
+                    "effect.callback");
+          reference("predicate", "effect.predicate");
+        } else
+          reference("callee", "effect.callback");
+        mutate(view, block({instruction(operation(view, call, attributes))}));
+        for (StringRef name : {"effect.callback", "effect.predicate"}) {
+          SourceDefinition helper;
+          helper.name = name.str();
+          helper.kind = "local";
+          helper.hasBody = true;
+          helper.operation = operation(
+              view, "func.func",
+              {builder.getNamedAttr("sym_name", builder.getStringAttr(name))});
+          if (!effect.empty() && ((name == "effect.predicate") == inPredicate))
+            helper.body = block({instruction(
+                operation(view, "exec.test"),
+                {block({}), block({instruction(operation(view, effect))},
+                                  SourceTerminator::Stop)})});
+          view.definitions.push_back(std::move(helper));
+        }
+        if (!missingDomain)
+          operation(view, "data.domain",
+                    {builder.getNamedAttr(
+                        "sym_name", builder.getStringAttr("effect.domain"))});
+        return view;
+      };
+      take(deriveComponentContracts(callbacks({}, false)));
+      for (const auto &[effect, code] : effects) {
+        refuses(deriveComponentContracts(callbacks(effect, false)), code);
+        if (finite)
+          refuses(deriveComponentContracts(callbacks(effect, true)), code);
       }
+      if (finite)
+        refuses(deriveComponentContracts(callbacks({}, false, true)),
+                "component-seam-call");
     }
-    require(!callback.empty(), "missing actual Local helper");
-    auto callbacks = [&](const A &descriptor, const A &effect,
-                         bool inPredicate = false) {
-      auto snapshot =
-          mutate(block(A{instruction(descriptor)}, A{"return", A{}}));
-      auto &definitions = *(*snapshot.getAsArray())[7].getAsArray();
-      for (StringRef name : {"effect.callback", "effect.predicate"}) {
-        A helper = callback;
-        helper[1] = name;
-        helper[9] = block(
-            !effect.empty() && ((name == "effect.predicate") == inPredicate)
-                ? A{instruction(A{"if"},
-                                A{region(block(A{})),
-                                  region(block(A{instruction(effect)},
-                                               A{"stop", "reject", "stop"}))})}
-                : A{},
-            A{"return", A{}});
-        definitions.push_back(std::move(helper));
-      }
-      definitions.push_back(
-          A{"realize", "effect.realize", A{}, A{}, "effect.callback"});
-      definitions.push_back(
-          A{"map", "effect.map", A{}, A{}, "effect.callback", A{}});
-      for (StringRef tag : {"finite", "collect"})
-        definitions.push_back(A{tag, ("effect." + tag).str(), "private", A{},
-                                A{}, "effect.domain", "effect.callback",
-                                "effect.predicate"});
-      (*snapshot.getAsArray())[4].getAsArray()->push_back(
-          A{"domain", "effect.domain", A{}, A{}, 0});
-      return snapshot;
-    };
-    for (const auto &descriptor : std::vector<A>{
-             A{"call", "effect.callback"}, A{"apply", "effect.realize"},
-             A{"apply", "effect.map"}, A{"apply", "effect.finite"},
-             A{"apply", "effect.collect"},
-             A{"fold", "effect.domain", "effect.callback",
-               "effect.predicate"}}) {
-      take(deriveComponentContracts(callbacks(descriptor, A{})));
-      for (const auto &[effect, code] : std::vector<std::pair<A, StringRef>>{
-               {A{"draw", "V", "bls12-381.fr"}, "component-seam-sampling"},
-               {A{"exchange", "P", "V"}, "component-seam-message"},
-               {A{"exec", "oracle.query", "", A{}}, "component-seam-oracle"},
-               {A{"exec", "unknown.effect", "", A{}}, "component-seam-effect"},
-               {A{"exec", "exec.apply", "missing", A{}},
-                "component-seam-effect"},
-               {A{"apply", "missing"}, "component-seam-call"}}) {
-        refuses(deriveComponentContracts(callbacks(descriptor, effect)), code);
-        if (descriptor == A{"apply", "effect.finite"} ||
-            descriptor == A{"apply", "effect.collect"} ||
-            descriptor[0] == J("fold"))
-          refuses(deriveComponentContracts(callbacks(descriptor, effect, true)),
-                  code);
-      }
-      if (descriptor == A{"apply", "effect.finite"} ||
-          descriptor == A{"apply", "effect.collect"} ||
-          descriptor[0] == J("fold")) {
-        auto missing = callbacks(descriptor, A{});
-        (*missing.getAsArray())[4] = A{};
-        refuses(deriveComponentContracts(missing), "component-seam-call");
-      }
-    }
-    auto deep = block(A{}, A{"return", A{}});
+    auto view = take(zkc::language::detail::OriginalAccess::read(original));
+    auto *branch = operation(view, "exec.test");
+    auto deep = block({});
     for (unsigned depth = 0; depth < 64; ++depth)
-      deep = block(A{instruction(A{"if"}, A{region(std::move(deep))})},
-                   A{"return", A{}});
-    take(deriveComponentContracts(mutate(deep)));
-    deep = block(A{instruction(A{"if"}, A{region(std::move(deep))})},
-                 A{"return", A{}});
-    refuses(deriveComponentContracts(mutate(deep)), "component-seam-depth");
-    A large;
-    for (unsigned work = 0; work < 100001; ++work)
-      large.push_back(instruction(A{"bool.constant", true}));
-    refuses(deriveComponentContracts(
-                mutate(block(std::move(large), A{"return", A{}}))),
-            "component-seam-limit");
+      deep = block({instruction(branch, {std::move(deep)})});
+    mutate(view, deep);
+    take(deriveComponentContracts(view));
+    deep = block({instruction(branch, {std::move(deep)})});
+    mutate(view, deep);
+    refuses(deriveComponentContracts(view), "component-seam-depth");
+    auto *constant = operation(view, "exec.boolean");
+    mutate(view, block(std::vector<SourceInstruction>(100001,
+                                                      instruction(constant))));
+    refuses(deriveComponentContracts(view), "component-seam-limit");
   });
   cases.run("bounded parser and exporter", [] {
     auto entry = take(close(fixture("schnorr")));

@@ -1,7 +1,7 @@
 #ifndef ZKC_LIB_COMPILER_APPLICATIONMAPDATA_H
 #define ZKC_LIB_COMPILER_APPLICATIONMAPDATA_H
 
-#include "mlir/IR/BuiltinOps.h"
+#include "SourceView.h"
 #include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Support/Json.h"
 #include <deque>
@@ -21,35 +21,17 @@ struct Budget {
     return true;
   }
 };
-// These records decode the already-admitted structured view. Types and
-// descriptors remain complete structured data; no printed type or SSA spelling
-// participates in matching. This layer contains no expansion or map algorithm.
-struct Block;
-struct Instruction {
-  llvm::json::Value descriptor = nullptr;
-  std::vector<unsigned> operands;
-  std::vector<llvm::json::Value> results;
-  std::vector<Block> regions;
-  std::string site;
-};
-struct Block {
-  std::vector<llvm::json::Value> inputs, outputs;
-  std::vector<Instruction> instructions;
-  llvm::json::Value terminator = nullptr;
-  std::vector<unsigned> returned;
-};
-struct Definition {
-  std::string name, kind;
-  llvm::json::Value declaration = nullptr;
-  std::vector<std::string> roles;
-  std::vector<std::vector<std::string>> inputRoles, outputRoles;
+// Analysis coordinates reference the actual admitted MLIR, never a decoded
+// structured-source program. This layer contains no expansion algorithm.
+using Instruction = SourceInstruction;
+using Block = SourceBlock;
+using Roles = std::map<std::string, std::string>;
+struct Definition : SourceDefinition {
   std::vector<bool> restrictInputs, restrictOutputs;
-  bool hasBody = false;
-  Block body;
 };
 struct View {
-  llvm::json::Value wire = nullptr;
   mlir::OwningOpRef<mlir::ModuleOp> native;
+  std::string identity, entry;
   std::vector<Definition> definitions;
   std::map<std::string, unsigned> names;
   const Definition *find(llvm::StringRef name) const;
@@ -81,6 +63,11 @@ ValueContext arguments(llvm::StringRef definition, const Path &region,
 void prependResults(ValueContext &context, llvm::StringRef definition,
                     const Path &region, unsigned instruction, unsigned count);
 llvm::StringRef opcode(const Instruction &instruction);
+bool sameDescriptor(const Instruction &, const Instruction &,
+                    const Roles &roles = {});
+mlir::ArrayAttr applicationRoles(const Instruction &);
+llvm::Error chargeTypes(llvm::ArrayRef<mlir::Type>, Budget &);
+llvm::Error chargeInstruction(const Instruction &, Budget &);
 llvm::StringRef callee(const Instruction &instruction);
 } // namespace zkc::protocol::application_map
 #endif

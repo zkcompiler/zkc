@@ -6,6 +6,9 @@
 #include <memory>
 
 namespace zkc::language {
+namespace detail {
+struct OriginalAccess;
+}
 class CheckedOriginal;
 llvm::Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &,
                                                 const Limits & = {});
@@ -34,6 +37,7 @@ public:
   const Limits &admissionLimits() const;
 
 private:
+  friend struct detail::OriginalAccess;
   static llvm::Expected<CheckedOriginal> admit(const ClosedEntry &,
                                                llvm::StringRef, llvm::StringRef,
                                                const Limits &,

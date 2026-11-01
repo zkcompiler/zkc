@@ -1,4 +1,5 @@
 #include "../lib/Compiler/ComponentContracts.h"
+#include "../lib/Compiler/SourceView.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/SourceClaims.h"
 #include "zkc/Compiler/SourceCorrespondence.h"
@@ -141,8 +142,9 @@ int main() {
             "component claims acquired a different association");
     require(!claims.getAsObject()->getArray("seams")->empty(),
             "component seams disappeared during integration");
-    cantFail(
-        checkComponentContracts(*root.get("snapshot"), *claims.getAsObject()));
+    cantFail(checkComponentContracts(
+        take(zkc::language::detail::OriginalAccess::read(value)),
+        *claims.getAsObject()));
     const auto &declarations = *(*root.getArray("snapshot"))[10].getAsArray();
     std::set<std::string> expected, actual;
     for (unsigned table : {0, 1})

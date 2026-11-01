@@ -1,15 +1,84 @@
 #include "ComponentContracts.h"
+#include "SourceView.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "zkc/Contracts/SourceTerms.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Relation/IR/Declarations.h"
+#include "zkc/Dialect/Relation/IR/RelationOps.h"
+#include "zkc/Dialect/StructuredData.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
+#include "llvm/ADT/TypeSwitch.h"
 #include <algorithm>
 #include <functional>
 #include <map>
+#include <memory>
 #include <set>
+#include <tuple>
 using namespace llvm;
 namespace zkc::language {
 namespace {
 using J = json::Value;
 using A = json::Array;
+using protocol::SourceBlock;
+using protocol::SourceDefinition;
+using protocol::SourceInstruction;
+using protocol::SourceTerminator;
+using protocol::SourceView;
+StringRef symbol(mlir::Operation *op, StringRef attribute = "callee") {
+  auto value = op->getAttrOfType<mlir::FlatSymbolRefAttr>(attribute);
+  return value ? value.getValue() : StringRef();
+}
+StringRef role(mlir::Operation *op, StringRef attribute = "owner") {
+  auto value = op->getAttrOfType<mlir::StringAttr>(attribute);
+  return value ? value.getValue() : StringRef();
+}
+std::vector<std::string> roleNames(mlir::ArrayAttr values) {
+  std::vector<std::string> result;
+  for (auto value : values)
+    result.push_back(mlir::cast<mlir::StringAttr>(value).str());
+  return result;
+}
+StringRef operationKind(mlir::Operation *op) {
+  if (op->getName().getStringRef().starts_with("protocol.oracle_"))
+    return "oracle_";
+  return TypeSwitch<mlir::Operation *, StringRef>(op)
+      .Case<protocol_ir::ApplyOp>([](auto) { return "protocol_apply"; })
+      .Case<protocol_ir::RepeatOp>([](auto) { return "protocol_repeat"; })
+      .Case<protocol_ir::RestrictRolesOp>([](auto) { return "restrict"; })
+      .Case<protocol_ir::LocalCallOp>([](auto) { return "local_call"; })
+      .Case<protocol_ir::QueryOp>([](auto) { return "draw"; })
+      .Case<protocol_ir::ExchangeOp>([](auto) { return "exchange"; })
+      .Case<protocol_ir::GuardOp>([](auto) { return "guard"; })
+      .Case<protocol_ir::StatementOp>([](auto) { return "statement"; })
+      .Case<data::FiniteFoldOp>([](auto) { return "fold"; })
+      .Case<exec::ApplyOp>([](auto) { return "exec"; })
+      .Case<exec::ComputeOp, exec::FoldOp, exec::CollectOp>(
+          [](auto) { return "apply"; })
+      .Case<exec::TestOp>([](auto) { return "if"; })
+      .Case<exec::RangeOp>([](auto) { return "for"; })
+      .Case<mlir::func::CallOp>([](auto) { return "call"; })
+      .Case<mlir::arith::AndIOp>([](auto) { return "bool.and"; })
+      .Default([&](auto) { return op->getName().getStringRef(); });
+}
+// These are source contract terms, not a serialized executable program. Their
+// neutral data grammar is also owned by the MLIR-free Contracts component.
+J contractTerm(mlir::Attribute attr) {
+  if (mlir::isa<mlir::UnitAttr>(attr))
+    return nullptr;
+  if (auto value = mlir::dyn_cast<mlir::StringAttr>(attr))
+    return value.getValue().str();
+  if (auto value = mlir::dyn_cast<mlir::FlatSymbolRefAttr>(attr))
+    return value.getValue().str();
+  if (auto value = mlir::dyn_cast<mlir::IntegerAttr>(attr))
+    return value.getInt();
+  A result;
+  for (auto value : mlir::cast<mlir::ArrayAttr>(attr))
+    result.push_back(contractTerm(value));
+  return result;
+}
 const A &array(const J &value) { return *value.getAsArray(); }
 StringRef string(const J &value) { return *value.getAsString(); }
 unsigned number(const J &value) { return *value.getAsUINT64(); }
@@ -19,47 +88,152 @@ std::string key(const J &value) {
   out << value;
   return result;
 }
+enum class RouteKind { Input, Result, RepeatInput, RepeatResult, Pure, Action };
+struct Route {
+  RouteKind kind;
+  std::string site, role;
+  unsigned result = 0;
+  mlir::Operation *operation = nullptr;
+  std::vector<unsigned> position, operands;
+};
+// Native provenance is a bounded interned DAG. Pending ownership uses node
+// identities; only publication expands it into the external route grammar.
+// Fixed-point loop analyses share this arena, so transferred facts keep their
+// identities without encoding or reparsing a report.
+class Routes {
+  using Key = std::tuple<RouteKind, std::string, std::string, unsigned,
+                         mlir::Operation *, std::vector<unsigned>,
+                         std::vector<unsigned>>;
+  std::map<Key, unsigned> names;
+  std::vector<Route> nodes{{RouteKind::Input, {}, {}, 0, nullptr, {}, {}}};
+
+public:
+  unsigned intern(Route route) {
+    Key key{route.kind,      route.site,     route.role,    route.result,
+            route.operation, route.position, route.operands};
+    auto [found, inserted] = names.emplace(std::move(key), nodes.size());
+    if (inserted)
+      nodes.push_back(std::move(route));
+    return found->second;
+  }
+  bool direct(unsigned id) const {
+    auto kind = nodes.at(id).kind;
+    return kind != RouteKind::Pure && kind != RouteKind::Action;
+  }
+  J encode(unsigned id, const SourceView &source,
+           bool acceptance = false) const {
+    const auto &route = nodes.at(id);
+    StringRef tag;
+    switch (route.kind) {
+    case RouteKind::Input:
+      return A{"input", route.result, route.role};
+    case RouteKind::Result:
+      tag = "result";
+      break;
+    case RouteKind::RepeatInput:
+      tag = "repeat_input";
+      break;
+    case RouteKind::RepeatResult:
+      tag = "repeat_result";
+      break;
+    case RouteKind::Pure:
+    case RouteKind::Action: {
+      tag = route.kind == RouteKind::Action ? "action" : "pure";
+      bool pure = route.kind == RouteKind::Pure;
+      if (acceptance && pure &&
+          mlir::isa<protocol_ir::LocalCallOp, mlir::func::CallOp>(
+              route.operation))
+        tag = "terminal";
+      A operands, position;
+      for (unsigned child : route.operands)
+        operands.push_back(
+            encode(child, source,
+                   acceptance && pure &&
+                       mlir::isa<mlir::arith::AndIOp>(route.operation)));
+      for (unsigned part : route.position)
+        position.push_back(part);
+      return A{tag,
+               source.descriptors.at(route.operation),
+               std::move(position),
+               route.result,
+               route.role,
+               std::move(operands)};
+    }
+    }
+    return A{tag, route.site, route.result, route.role};
+  }
+};
 struct Flow {
-  J route;
-  std::set<std::string> pending;
+  unsigned route = 0;
+  std::set<unsigned> pending;
   std::string effect;
   bool decision = false;
   unsigned nodes = 1;
   unsigned height = 1;
+  bool acceptance = false;
 };
 using Family = std::map<std::string, Flow>;
 using Environment = std::vector<Family>;
 struct Deriver {
-  const A &snapshot;
-  std::map<std::string, const A *> functions, contracts, sources;
+  const SourceView &program;
+  std::shared_ptr<Routes> routes;
+  std::map<std::string, const SourceDefinition *> functions;
+  std::map<std::string, A> ownedContracts;
+  J declarations = A{A{}, A{}};
+  std::map<std::string, const A *> contracts, sources;
+  std::map<std::string, relation::DeclareOp> relations;
   std::set<std::string> linear;
+  struct Visible {
+    std::string site;
+    std::vector<mlir::Type> types;
+    std::vector<std::set<std::string>> scopes;
+  };
   struct CallContext {
-    const A *caller;
-    const A *callee;
-    A visible;
+    const SourceDefinition *caller;
+    const SourceDefinition *callee;
+    std::vector<Visible> visible;
   };
   std::map<std::pair<std::string, std::string>, CallContext> contexts;
   A rows, proposals;
   unsigned visits = 0;
   Error failure = Error::success();
-  explicit Deriver(const J &value) : Deriver(array(value)) {}
-  explicit Deriver(const A &value) : snapshot(value) {
-    for (const auto &value : array(snapshot[7])) {
-      const auto &definition = array(value);
-      if (string(definition[0]) == "function")
-        functions.emplace(string(definition[1]), &definition);
+  explicit Deriver(const SourceView &value,
+                   std::shared_ptr<Routes> routes = std::make_shared<Routes>())
+      : program(value), routes(std::move(routes)) {
+    for (const auto &definition : value.definitions) {
+      if (definition.kind == "oracle" || !definition.hasBody)
+        continue;
+      functions.emplace(definition.name, &definition);
+      if (auto protocol = mlir::dyn_cast<protocol_ir::MathematicalOp>(
+              definition.operation)) {
+        auto terms = protocol.getContractsAttr()
+                         ? contractTerm(protocol.getContractsAttr())
+                         : J(A{});
+        ownedContracts.emplace(definition.name, std::move(*terms.getAsArray()));
+      }
     }
-    for (const auto &value : array(snapshot[8])) {
-      const auto &contract = array(value);
-      contracts.emplace(string(contract[0]), &array(contract[1]));
+    for (const auto &[name, clauses] : ownedContracts)
+      contracts.emplace(name, &clauses);
+    auto unit = mlir::cast<protocol_ir::ProtocolModuleOp>(
+        value.native.get().getBody()->front());
+    for (auto declaration :
+         unit.getBody().front().getOps<relation::DeclareOp>())
+      relations.emplace(declaration.getSymName().str(), declaration);
+    if (auto attr = unit->getAttr("source_declarations")) {
+      auto data = exportDeclarationData(attr);
+      if (!data) {
+        failure = data.takeError();
+        return;
+      }
+      declarations = std::move(*data);
     }
-    const auto &declarations = array(snapshot[10]);
-    for (const auto &value : array(declarations[0])) {
+    const auto &tables = array(declarations);
+    for (const auto &value : array(tables[0])) {
       const auto &record = array(value);
       if (string(record[1]) == "linear")
         linear.insert(key(record[0]));
     }
-    for (const auto &value : array(declarations[1])) {
+    for (const auto &value : array(tables[1])) {
       const auto &source = array(value);
       sources.emplace(string(source[0]), &source);
     }
@@ -76,10 +250,12 @@ struct Deriver {
     return true;
   }
   bool pendingPort(const A &port) { return linear.count(key(port[1])); }
-  Flow leaf(J route, bool pending = false) {
-    auto keys =
-        pending ? std::set<std::string>{key(route)} : std::set<std::string>{};
-    return {std::move(route), std::move(keys), {}, false};
+  Flow leaf(RouteKind kind, StringRef site, unsigned result, StringRef role,
+            bool pending = false) {
+    unsigned id =
+        routes->intern({kind, site.str(), role.str(), result, nullptr, {}, {}});
+    return {
+        id, pending ? std::set<unsigned>{id} : std::set<unsigned>{}, {}, false};
   }
   bool read(const Environment &environment, unsigned index, StringRef role,
             Flow &flow) {
@@ -107,29 +283,14 @@ struct Deriver {
     return flow.effect.empty() || (method && methodEffect(flow.effect)) ||
            refuse(flow.effect);
   }
-  // The caller supplies a verified structured snapshot. Its execution
-  // primitives have already passed the owning operation/binding admission.
-  // That profile contains deterministic operations only; random services are
-  // represented separately. The contract's spelling is not an operation name.
-  bool purePrimitive(const A &descriptor) {
-    if (descriptor.size() != 4 || descriptor[0] != J("exec") ||
-        descriptor[1] != J("exec.apply"))
-      return false;
-    for (const auto &value : array(snapshot[6])) {
-      const auto &binding = array(value);
-      if (binding[1] == descriptor[2])
-        return true;
-    }
-    return false;
-  }
-  bool consume(const std::vector<Flow> &flows, std::set<std::string> &live,
+  bool consume(const std::vector<Flow> &flows, std::set<unsigned> &live,
                bool method = false) {
-    std::set<std::string> used;
-    std::set<std::string> projections;
+    std::set<unsigned> used;
+    std::set<unsigned> projections;
     for (const auto &flow : flows) {
       if (!pure(flow, method))
         return false;
-      if (!flow.pending.empty() && !projections.insert(key(flow.route)).second)
+      if (!flow.pending.empty() && !projections.insert(flow.route).second)
         return refuse("component-seam-coverage");
       used.insert(flow.pending.begin(), flow.pending.end());
     }
@@ -143,10 +304,9 @@ struct Deriver {
     A routes;
     bool direct = true, method = false;
     for (const auto &flow : flows) {
-      routes.push_back(flow.route);
-      auto tag = string(array(flow.route)[0]);
-      direct &= tag == "input" || tag == "result" || tag == "repeat_input" ||
-                tag == "repeat_result";
+      routes.push_back(
+          this->routes->encode(flow.route, program, flow.acceptance));
+      direct &= this->routes->direct(flow.route);
       method |= !flow.effect.empty();
     }
     rows.push_back(A{caller.str(), std::move(endpoint),
@@ -156,39 +316,14 @@ struct Deriver {
                                           : explicitKind.str(),
                      std::move(routes)});
   }
-  // Classification belongs to the acceptance use, not to a representation
-  // helper's flattened result type. Only conjunction preserves acceptance.
-  J acceptance(const J &route) {
-    const auto &parts = array(route);
-    if (parts[0] != J("pure"))
-      return route;
-    auto tag = string(array(parts[1])[0]);
-    if (tag == "local_call" || tag == "call") {
-      A result(parts);
-      result[0] = "terminal";
-      return result;
-    }
-    if (tag == "bool.and") {
-      A arguments;
-      for (const auto &argument : array(parts[5]))
-        arguments.push_back(acceptance(argument));
-      A result(parts);
-      result[5] = std::move(arguments);
-      return result;
-    }
-    return route;
+  const std::vector<std::string> &roles(const SourceDefinition &function) {
+    return function.roles;
   }
-  std::vector<std::string> roles(const A &function) {
-    std::vector<std::string> result;
-    for (const auto &role : array(array(function[6])[1]))
-      result.push_back(string(role).str());
-    return result;
-  }
-  bool makeInputs(const A &function, Environment &environment,
-                  std::set<std::string> &live) {
-    auto name = string(function[1]);
-    const auto &types = array(function[4]);
-    const auto &scopes = array(array(function[6])[2]);
+  bool makeInputs(const SourceDefinition &function, Environment &environment,
+                  std::set<unsigned> &live) {
+    StringRef name = function.name;
+    const auto &types = function.body.inputs;
+    const auto &scopes = function.inputRoles;
     const A *source =
         sources.count(name.str()) ? sources.at(name.str()) : nullptr;
     for (unsigned i = 0; i < types.size(); ++i) {
@@ -200,49 +335,52 @@ struct Deriver {
             pending = pendingPort(port);
         }
       Family family;
-      for (const auto &role : array(scopes[i])) {
-        auto flow = leaf(A{"input", i, role}, pending);
+      for (const auto &role : scopes[i]) {
+        auto flow = leaf(RouteKind::Input, {}, i, role, pending);
         live.insert(flow.pending.begin(), flow.pending.end());
-        family.emplace(string(role), std::move(flow));
+        family.emplace(role, std::move(flow));
       }
       environment.push_back(std::move(family));
     }
     return true;
   }
-  bool block(const A &function, const A &body, Environment environment,
-             std::set<std::string> live, A path, std::vector<Family> &returned,
-             unsigned depth = 0, A visible = {}) {
+  bool block(const SourceDefinition &function, const SourceBlock &body,
+             Environment environment, std::set<unsigned> live,
+             std::vector<unsigned> path, std::vector<Family> &returned,
+             unsigned depth = 0, std::vector<Visible> visible = {}) {
     if (depth > 64)
       return refuse("component-seam-depth");
-    auto caller = string(function[1]);
+    StringRef caller = function.name;
     auto roster = roles(function);
-    std::set<std::string> guarded;
+    std::set<unsigned> guarded;
     unsigned ordinal = 0;
-    for (const auto &value : array(body[1])) {
+    for (const auto &instruction : body.instructions) {
       if (!charge())
         return false;
-      const auto &instruction = array(value),
-                 &descriptor = array(instruction[0]);
-      auto tag = string(descriptor[0]), site = string(instruction[4]);
-      const auto &args = array(instruction[1]), &types = array(instruction[2]);
-      A position = path;
+      auto *op = instruction.operation;
+      auto tag = operationKind(op);
+      StringRef site = instruction.site;
+      const auto &args = instruction.operands;
+      const auto &types = instruction.results;
+      auto position = path;
       position.push_back(ordinal++);
       std::vector<Family> results(types.size());
       if (tag == "protocol_apply") {
-        auto found = functions.find(string(descriptor[1]).str());
+        auto found = functions.find(symbol(op).str());
         if (found == functions.end())
           return refuse("component-seam-call");
         const auto &callee = *found->second;
         auto childRoles = roles(callee);
-        const auto &actualRoles = array(descriptor[2]);
+        const auto actualRoles =
+            roleNames(op->getAttrOfType<mlir::ArrayAttr>("roles"));
         auto actual = [&](StringRef role) -> StringRef {
           size_t index =
               std::find(childRoles.begin(), childRoles.end(), role.str()) -
               childRoles.begin();
-          return index < actualRoles.size() ? string(actualRoles[index])
+          return index < actualRoles.size() ? StringRef(actualRoles[index])
                                             : StringRef();
         };
-        auto source = sources.find(string(callee[1]).str());
+        auto source = sources.find(callee.name);
         if (source != sources.end()) {
           unsigned portIndex = 0;
           for (const auto &value : array((*source->second)[1])) {
@@ -250,8 +388,8 @@ struct Deriver {
             if (pendingPort(port)) {
               std::vector<Flow> flows;
               for (unsigned i = 0; i < number(port[4]); ++i) {
-                Flow flow{nullptr, {}, {}, false};
-                if (!read(environment, number(args[number(port[3]) + i]),
+                Flow flow;
+                if (!read(environment, args[number(port[3]) + i],
                           actual(string(array(port[2])[0])), flow))
                   return false;
                 flows.push_back(std::move(flow));
@@ -263,7 +401,7 @@ struct Deriver {
             ++portIndex;
           }
         }
-        const auto &outputScopes = array(array(callee[6])[3]);
+        const auto &outputScopes = callee.outputRoles;
         for (unsigned i = 0; i < results.size(); ++i) {
           bool pending = false, decision = false;
           if (source != sources.end())
@@ -272,50 +410,47 @@ struct Deriver {
               if (number(port[3]) <= i && i < number(port[3]) + number(port[4]))
                 pending = pendingPort(port);
             }
-          for (const auto &value : *contracts.at(string(callee[1]).str())) {
+          for (const auto &value : *contracts.at(callee.name)) {
             const auto &clause = array(value);
             if (!clause[4].getAsNull() && number(array(clause[4])[1]) == i)
               decision = true;
           }
-          for (const auto &role : array(outputScopes[i])) {
-            auto flow =
-                leaf(A{"result", site.str(), i, actual(string(role)).str()},
-                     pending);
+          for (const auto &role : outputScopes[i]) {
+            auto flow = leaf(RouteKind::Result, site, i, actual(role), pending);
             flow.decision =
                 decision &&
-                std::any_of(contracts.at(string(callee[1]).str())->begin(),
-                            contracts.at(string(callee[1]).str())->end(),
+                std::any_of(contracts.at(callee.name)->begin(),
+                            contracts.at(callee.name)->end(),
                             [&](const J &value) {
                               const auto &clause = array(value);
                               return !clause[4].getAsNull() &&
                                      number(array(clause[4])[1]) == i &&
-                                     array(clause[4])[2] == role;
+                                     array(clause[4])[2] == J(role);
                             });
             live.insert(flow.pending.begin(), flow.pending.end());
-            results[i].emplace(actual(string(role)), std::move(flow));
+            results[i].emplace(actual(role), std::move(flow));
           }
         }
         // Proposals are per actual call, even when the callee has no logical
         // slots.
         A slots;
-        for (const auto &value : *contracts.at(string(callee[1]).str())) {
+        for (const auto &value : *contracts.at(callee.name)) {
           const auto &clause = array(value);
           for (unsigned side : {2u, 3u}) {
             if (clause[side].getAsNull())
               continue;
             const auto &application = array(clause[side]);
-            const A *relation = nullptr;
-            for (const auto &value : array(snapshot[5]))
-              if (array(value)[1] == application[0])
-                relation = &array(value);
-            if (!relation)
+            auto found = relations.find(string(application[0]).str());
+            if (found == relations.end())
               return refuse("component-instantiation");
-            const auto &selectors = array(application[1]),
-                       &purposes = array((*relation)[9]);
+            const auto &selectors = array(application[1]);
+            auto purposes = found->second.getPurposes();
             for (unsigned i = 0; i < selectors.size(); ++i) {
-              if (string(purposes[i]) == "statement")
+              if (mlir::cast<mlir::StringAttr>(purposes[i]).getValue() ==
+                  "statement")
                 continue;
-              J slot = A{purposes[i], selectors[i], A{"open"}};
+              J slot = A{mlir::cast<mlir::StringAttr>(purposes[i]).getValue(),
+                         selectors[i], A{"open"}};
               if (std::find(slots.begin(), slots.end(), slot) == slots.end()) {
                 if (slots.size() == 512)
                   return refuse("component-instantiation-limit");
@@ -329,27 +464,33 @@ struct Deriver {
                           CallContext{&function, &callee, visible})
                  .second)
           return refuse("component-instantiation");
-        proposals.push_back(A{caller.str(), site.str(), callee[1],
-                              instruction[1], descriptor[2], std::move(slots)});
+        A arguments, mappedRoles;
+        for (unsigned operand : args)
+          arguments.push_back(operand);
+        for (const auto &name : actualRoles)
+          mappedRoles.push_back(name);
+        proposals.push_back(A{caller.str(), site.str(), callee.name,
+                              std::move(arguments), std::move(mappedRoles),
+                              std::move(slots)});
       } else if (tag == "protocol_repeat") {
-        unsigned carried = number(descriptor[1]);
-        if (array(instruction[3]).size() != 1)
+        unsigned carried = mlir::cast<protocol_ir::RepeatOp>(op).getCarried();
+        if (instruction.regions.size() != 1)
           return refuse("component-seam-control");
-        const auto &region = array(array(instruction[3])[0]);
+        const auto &region = instruction.regions[0];
         Environment inner;
-        std::set<std::string> innerLive;
+        std::set<unsigned> innerLive;
         std::vector<bool> marked(args.size(), false);
         std::vector<Flow> initialFlows;
-        if (args.empty() || number(args[0]) >= environment.size())
+        if (args.empty() || args[0] >= environment.size())
           return refuse("component-seam-reference");
-        Flow count{nullptr, {}, {}, false};
-        for (const auto &[role, flow] : environment[number(args[0])])
+        Flow count;
+        for (const auto &[role, flow] : environment[args[0]])
           count.effect = joinEffect(count.effect, flow.effect);
         for (unsigned i = 0; i < args.size(); ++i) {
           Family family;
-          if (number(args[i]) >= environment.size())
+          if (args[i] >= environment.size())
             return refuse("component-seam-reference");
-          for (const auto &[role, flow] : environment[number(args[i])]) {
+          for (const auto &[role, flow] : environment[args[i]]) {
             bool pending = i > 0 && i <= carried && !flow.pending.empty();
             if (i > 0 && i <= carried)
               row(caller, A{"repeat_init", site.str(), i - 1, role}, {flow});
@@ -358,7 +499,7 @@ struct Deriver {
               marked[i] = true;
             } else if (!flow.pending.empty())
               return refuse("component-seam-control");
-            auto input = leaf(A{"repeat_input", site.str(), i, role}, pending);
+            auto input = leaf(RouteKind::RepeatInput, site, i, role, pending);
             input.effect =
                 i == 0 ? flow.effect : joinEffect(flow.effect, count.effect);
             innerLive.insert(input.pending.begin(), input.pending.end());
@@ -371,7 +512,7 @@ struct Deriver {
         if (!consume(initialFlows, live, true))
           return false;
         std::vector<Family> yielded;
-        A nested = position;
+        auto nested = position;
         nested.push_back(0);
         unsigned carriedFlows = 0;
         for (unsigned i = 1; i <= carried; ++i)
@@ -380,12 +521,12 @@ struct Deriver {
         // Reuse the actual traversal, discarding candidate rows until effects
         // close over every carried backedge. All candidate work is charged.
         for (unsigned pass = 0; pass <= 2 * carriedFlows; ++pass) {
-          Deriver candidate(snapshot);
+          Deriver candidate(program, routes);
           candidate.visits = visits;
           candidate.contexts = contexts;
           yielded.clear();
-          if (!candidate.block(function, array(region[2]), inner, innerLive,
-                               nested, yielded, depth + 1, {})) {
+          if (!candidate.block(function, region, inner, innerLive, nested,
+                               yielded, depth + 1, {})) {
             failure = std::move(candidate.failure);
             return false;
           }
@@ -395,7 +536,7 @@ struct Deriver {
           stable = true;
           for (unsigned i = 0; i < carried; ++i)
             for (auto &[role, input] : inner[i + 1]) {
-              Flow output{nullptr, {}, {}, false};
+              Flow output;
               if (!read(yielded, i, role, output))
                 return false;
               auto effect = joinEffect(input.effect, output.effect);
@@ -416,13 +557,13 @@ struct Deriver {
         // These rows associate each fresh boundary leaf with its original
         // source, the count, and (for carried values) its yielded alternative.
         for (unsigned i = 0; i < args.size(); ++i)
-          for (const auto &[role, flow] : environment[number(args[i])]) {
+          for (const auto &[role, flow] : environment[args[i]]) {
             std::vector<Flow> dependencies{flow};
             if (i > 0)
-              for (const auto &[_, control] : environment[number(args[0])])
+              for (const auto &[_, control] : environment[args[0]])
                 dependencies.push_back(control);
             if (i > 0 && i <= carried) {
-              Flow output{nullptr, {}, {}, false};
+              Flow output;
               if (!read(yielded, i - 1, role, output))
                 return false;
               dependencies.push_back(std::move(output));
@@ -430,12 +571,14 @@ struct Deriver {
             row(caller, A{"repeat_input", site.str(), i, role}, dependencies);
           }
         for (unsigned i = 0; i < carried; ++i)
-          for (const auto &role : array(array(descriptor[4])[i])) {
-            auto found = yielded[i].find(string(role).str());
+          for (const auto &role : roleNames(mlir::cast<mlir::ArrayAttr>(
+                   mlir::cast<protocol_ir::RepeatOp>(op)
+                       .getCarriedRoles()[i]))) {
+            auto found = yielded[i].find(role);
             if (found == yielded[i].end())
               return refuse("component-seam-role");
-            Flow initial{nullptr, {}, {}, false};
-            if (!read(environment, number(args[i + 1]), string(role), initial))
+            Flow initial;
+            if (!read(environment, args[i + 1], role, initial))
               return false;
             auto controlled = found->second;
             controlled.effect = joinEffect(controlled.effect, count.effect);
@@ -445,11 +588,11 @@ struct Deriver {
             row(caller, A{"repeat_result", site.str(), i, role},
                 {initial, controlled});
             auto flow =
-                leaf(A{"repeat_result", site.str(), i, role}, marked[i + 1]);
+                leaf(RouteKind::RepeatResult, site, i, role, marked[i + 1]);
             flow.effect = joinEffect(joinEffect(initial.effect, count.effect),
                                      found->second.effect);
             live.insert(flow.pending.begin(), flow.pending.end());
-            results[i].emplace(string(role), std::move(flow));
+            results[i].emplace(role, std::move(flow));
           }
       } else {
         // Logical oracle routes need anchor-aware seams. Do not classify a new
@@ -457,17 +600,16 @@ struct Deriver {
         // outside the old effect cases. Export and seam admission are separate.
         if (tag.starts_with("oracle_"))
           return refuse("component-seam-oracle");
-        if (!array(instruction[3]).empty())
+        if (!instruction.regions.empty())
           return refuse("component-seam-control");
         if (tag == "statement")
           continue;
         if (tag == "guard") {
-          Flow flow{nullptr, {}, {}, false};
-          if (!read(environment, number(args[0]), string(descriptor[1]), flow))
+          Flow flow;
+          if (!read(environment, args[0], role(op), flow))
             return false;
           if (!flow.pending.empty()) {
-            row(caller, A{"guard", site.str(), descriptor[1]}, {flow},
-                "method");
+            row(caller, A{"guard", site.str(), role(op)}, {flow}, "method");
             if (!pure(flow, true))
               return false;
             for (const auto &pending : flow.pending) {
@@ -480,23 +622,24 @@ struct Deriver {
         }
         for (const auto &role : roster) {
           if (tag == "restrict" &&
-              std::none_of(
-                  array(descriptor[1]).begin(), array(descriptor[1]).end(),
-                  [&](const J &value) { return string(value) == role; }))
+              !llvm::is_contained(
+                  roleNames(op->getAttrOfType<mlir::ArrayAttr>("roles")), role))
             continue;
           if ((tag == "local_call" || tag == "draw") &&
-              string(descriptor[tag == "draw" ? 1 : 2]) != role)
+              zkc::language::role(op, tag == "local_call" ? "role" : "owner") !=
+                  role)
             continue;
-          if (tag == "exchange" && string(descriptor[2]) != role)
+          if (tag == "exchange" && zkc::language::role(op, "receiver") != role)
             continue;
           std::vector<Flow> operands;
           bool available = true;
           for (const auto &argument : args) {
-            unsigned index = number(argument);
+            unsigned index = argument;
             if (index >= environment.size())
               return refuse("component-seam-reference");
-            auto sourceRole =
-                tag == "exchange" ? string(descriptor[1]).str() : role;
+            auto sourceRole = tag == "exchange"
+                                  ? zkc::language::role(op, "sender").str()
+                                  : role;
             auto found = environment[index].find(sourceRole);
             if (found == environment[index].end()) {
               available = false;
@@ -514,10 +657,10 @@ struct Deriver {
           }
           if (types.size() > 100000 / nodes || !charge(nodes * types.size()))
             return refuse("component-seam-limit");
-          A routes;
-          Flow aggregate{nullptr, {}, {}, false};
+          std::vector<unsigned> operandRoutes;
+          Flow aggregate;
           for (const auto &operand : operands) {
-            routes.push_back(operand.route);
+            operandRoutes.push_back(operand.route);
             aggregate.nodes += operand.nodes;
             aggregate.height = std::max(aggregate.height, operand.height + 1);
             aggregate.pending.insert(operand.pending.begin(),
@@ -530,17 +673,13 @@ struct Deriver {
             if (aggregate.effect.empty() || methodEffect(aggregate.effect))
               aggregate.effect = tag == "draw" ? "component-seam-sampling"
                                                : "component-seam-message";
-          } else if ((tag == "exec" && !purePrimitive(descriptor)) ||
-                     tag == "apply" || tag == "fold")
-            aggregate.effect =
-                tag == "exec" && string(descriptor[1]).starts_with("oracle.")
-                    ? "component-seam-oracle"
-                    : "component-seam-effect";
+          } else if (tag == "apply" || tag == "fold")
+            aggregate.effect = "component-seam-effect";
           else if (tag == "call" || tag == "local_call") {
-            auto found = functions.find(string(descriptor[1]).str());
+            auto found = functions.find(symbol(op).str());
             if (found == functions.end())
               return refuse("component-seam-call");
-            if (tag == "call" && string((*found->second)[2]) != "math")
+            if (tag == "call" && found->second->kind != "math")
               aggregate.effect = "component-seam-effect";
             if (tag == "local_call" && !deterministic(*found->second, 0))
               return false;
@@ -550,21 +689,28 @@ struct Deriver {
             flow.route =
                 tag == "restrict"
                     ? operands[0].route
-                    : J(A{tag == "draw" || tag == "exchange" ? "action"
-                                                             : "pure",
-                          instruction[0], A(position), i, role, A(routes)});
+                    : routes->intern({tag == "draw" || tag == "exchange"
+                                          ? RouteKind::Action
+                                          : RouteKind::Pure,
+                                      {},
+                                      role,
+                                      i,
+                                      op,
+                                      position,
+                                      operandRoutes});
             if (tag == "local_call" && aggregate.pending.empty() &&
                 aggregate.effect.empty())
-              flow.route = A{"result", site.str(), i, role};
+              flow.route = routes->intern(
+                  {RouteKind::Result, site.str(), role, i, nullptr, {}, {}});
             // Every output projection of a Local representation map must
             // subsequently be covered, even when it shares input ancestry.
             if (tag == "local_call" && !aggregate.pending.empty()) {
-              auto projection = key(flow.route);
+              auto projection = flow.route;
               flow.pending.insert(projection);
               live.insert(std::move(projection));
             }
-            flow.decision = (tag == "local_call" || tag == "call") &&
-                            array(types[i]) == A{"apply", "bool", A{}};
+            flow.decision =
+                (tag == "local_call" || tag == "call") && types[i].isInteger(1);
             if (tag == "bool.and")
               flow.decision =
                   (operands[0].decision || operands[0].pending.empty()) &&
@@ -573,30 +719,29 @@ struct Deriver {
           }
         }
       }
-      A scopes;
+      std::vector<std::set<std::string>> scopes;
       for (const auto &family : results) {
-        A roles;
+        std::set<std::string> roles;
         for (const auto &[role, _] : family)
-          roles.push_back(role);
+          roles.insert(role);
         scopes.push_back(std::move(roles));
       }
-      visible.push_back(A{site.str(), instruction[2], std::move(scopes)});
+      visible.push_back({site.str(), types, std::move(scopes)});
       environment.insert(environment.begin(), results.begin(), results.end());
     }
-    const auto &terminal = array(body[2]);
-    auto tag = string(terminal[0]);
-    if (tag == "stop") {
+    if (body.terminator == SourceTerminator::Stop) {
       returned.clear();
       return true;
     }
-    if (tag != "return" && tag != "yield")
+    if (body.terminator != SourceTerminator::Return &&
+        body.terminator != SourceTerminator::Yield)
       return refuse("component-seam-control");
-    for (const auto &value : array(terminal[1])) {
-      if (number(value) >= environment.size())
+    for (unsigned index : body.returned) {
+      if (index >= environment.size())
         return refuse("component-seam-reference");
-      returned.push_back(environment[number(value)]);
+      returned.push_back(environment[index]);
     }
-    if (tag == "yield") {
+    if (body.terminator == SourceTerminator::Yield) {
       std::vector<Flow> flows;
       for (const auto &family : returned)
         for (const auto &[role, flow] : family)
@@ -613,7 +758,7 @@ struct Deriver {
           if (pendingPort(port)) {
             std::vector<Flow> flows;
             for (unsigned i = 0; i < number(port[4]); ++i) {
-              Flow flow{nullptr, {}, {}, false};
+              Flow flow;
               if (!read(returned, number(port[3]) + i,
                         string(array(port[2])[0]), flow))
                 return false;
@@ -632,7 +777,7 @@ struct Deriver {
         const auto &clause = array(value);
         if (!clause[4].getAsNull()) {
           const auto &decision = array(clause[4]);
-          Flow flow{nullptr, {}, {}, false};
+          Flow flow;
           if (!read(returned, number(decision[1]), string(decision[2]), flow))
             return false;
           if (!flow.pending.empty()) {
@@ -647,7 +792,9 @@ struct Deriver {
                     .second &&
                 !consume({flow}, live))
               return false;
-            flow.route = acceptance(flow.route);
+            // Only conjunction propagates terminal acceptance into child
+            // routes. The native operation kind controls that publication.
+            flow.acceptance = true;
             row(caller, A{"output", number(decision[1]), clauseIndex}, {flow},
                 "terminal");
           }
@@ -660,6 +807,8 @@ struct Deriver {
     return live.empty() || refuse("component-seam-coverage");
   }
   bool run() {
+    if (failure)
+      return false;
     // Anchor contracts require the oracle-store interpretation. Refuse them
     // before any data-only slot traversal; a data ABI cannot resolve an anchor.
     for (const auto &[name, clauses] : contracts)
@@ -719,39 +868,40 @@ struct Deriver {
         }
     }
     for (const auto &[name, function] : functions) {
-      if (string((*function)[2]) != "protocol")
+      if (function->kind != "protocol")
         continue;
       Environment inputs;
-      std::set<std::string> live;
+      std::set<unsigned> live;
       std::vector<Family> returned;
       if (!makeInputs(*function, inputs, live) ||
-          !block(*function, array((*function)[9]), std::move(inputs),
-                 std::move(live), {}, returned))
+          !block(*function, function->body, std::move(inputs), std::move(live),
+                 {}, returned))
         return false;
     }
     return true;
   }
-  bool logicalSlot(const A &owner, StringRef purpose, const J &selector) {
-    for (const auto &value : *contracts.at(string(owner[1]).str())) {
+  bool logicalSlot(const SourceDefinition &owner, StringRef purpose,
+                   const J &selector) {
+    for (const auto &value : *contracts.at(owner.name)) {
       const auto &clause = array(value);
       for (unsigned side : {2u, 3u}) {
         if (clause[side].getAsNull())
           continue;
         const auto &application = array(clause[side]);
-        for (const auto &relation : array(snapshot[5])) {
-          if (array(relation)[1] != application[0])
-            continue;
-          const auto &selectors = array(application[1]),
-                     &purposes = array(array(relation)[9]);
-          for (unsigned i = 0; i < selectors.size(); ++i)
-            if (selectors[i] == selector && string(purposes[i]) == purpose)
-              return true;
-        }
+        auto found = relations.find(string(application[0]).str());
+        if (found == relations.end())
+          continue;
+        const auto &selectors = array(application[1]);
+        auto purposes = found->second.getPurposes();
+        for (unsigned i = 0; i < selectors.size(); ++i)
+          if (selectors[i] == selector &&
+              mlir::cast<mlir::StringAttr>(purposes[i]).getValue() == purpose)
+            return true;
       }
     }
     return false;
   }
-  bool source(const J &value, const J &expected, const CallContext &context,
+  bool source(const J &value, mlir::Type expected, const CallContext &context,
               const A &proposal,
               const std::vector<std::set<std::string>> &allowed,
               unsigned depth = 0) {
@@ -768,7 +918,7 @@ struct Deriver {
                                                return roles.count(role.str());
                                              });
     };
-    auto index = [&](const J &value, const A &types) {
+    auto index = [&](const J &value, llvm::ArrayRef<mlir::Type> types) {
       auto number = value.getAsUINT64();
       return number && *number < types.size() && types[*number] == expected;
     };
@@ -777,11 +927,11 @@ struct Deriver {
              refuse("component-instantiation");
     if (tag == "operand" && items.size() == 3 && items[1].getAsUINT64() &&
         items[2].getAsString()) {
-      const auto &callee = *context.callee, &interface = array(callee[6]);
-      if (!index(items[1], array(callee[4])) || !permit(string(items[2])))
+      const auto &callee = *context.callee;
+      if (!index(items[1], callee.body.inputs) || !permit(string(items[2])))
         return refuse("component-instantiation");
-      for (const auto &role : array(array(interface[2])[number(items[1])])) {
-        const auto &roles = array(interface[1]);
+      for (const auto &role : callee.inputRoles[number(items[1])]) {
+        const auto &roles = callee.roles;
         auto found = std::find(roles.begin(), roles.end(), role);
         if (found != roles.end() &&
             array(proposal[4])[found - roles.begin()] == items[2])
@@ -795,29 +945,26 @@ struct Deriver {
           !(*selected)[1].getAsUINT64() || !(*selected)[2].getAsString())
         return refuse("component-instantiation");
       const auto &owner = *context.caller;
-      if (!index((*selected)[1], array(owner[4])) ||
+      if (!index((*selected)[1], owner.body.inputs) ||
           !permit(string((*selected)[2])) || !logicalSlot(owner, tag, items[1]))
         return refuse("component-instantiation");
-      const auto &scope =
-          array(array(array(owner[6])[2])[number((*selected)[1])]);
-      return std::find(scope.begin(), scope.end(), (*selected)[2]) !=
-                 scope.end() ||
+      const auto &scope = owner.inputRoles[number((*selected)[1])];
+      return llvm::is_contained(scope, string((*selected)[2]).str()) ||
              refuse("component-instantiation");
     }
     if (tag == "result" && items.size() == 4 && items[1].getAsString() &&
         items[2].getAsUINT64() && items[3].getAsString()) {
-      const A *selected = nullptr;
+      const Visible *selected = nullptr;
       for (const auto &value : context.visible)
-        if (array(value)[0] == items[1]) {
+        if (value.site == string(items[1])) {
           if (selected)
             return refuse("component-instantiation");
-          selected = &array(value);
+          selected = &value;
         }
-      if (!selected || !index(items[2], array((*selected)[1])) ||
+      if (!selected || !index(items[2], selected->types) ||
           !permit(string(items[3])))
         return refuse("component-instantiation");
-      const auto &scope = array(array((*selected)[2])[number(items[2])]);
-      return std::find(scope.begin(), scope.end(), items[3]) != scope.end() ||
+      return selected->scopes[number(items[2])].count(string(items[3]).str()) ||
              refuse("component-instantiation");
     }
     if (tag == "math" && items.size() == 4 && items[1].getAsString() &&
@@ -826,12 +973,12 @@ struct Deriver {
       if (found == functions.end())
         return refuse("component-instantiation");
       const auto &helper = *found->second;
-      if (helper[2] != J("math") || !index(items[2], array(helper[5])) ||
-          array(items[3]).size() != array(helper[4]).size())
+      if (helper.kind != "math" || !index(items[2], helper.body.outputs) ||
+          array(items[3]).size() != helper.body.inputs.size())
         return refuse("component-instantiation");
       for (unsigned i = 0; i < array(items[3]).size(); ++i)
-        if (!source(array(items[3])[i], array(helper[4])[i], context, proposal,
-                    allowed, depth + 1))
+        if (!source(array(items[3])[i], helper.body.inputs[i], context,
+                    proposal, allowed, depth + 1))
           return false;
       return true;
     }
@@ -858,7 +1005,6 @@ struct Deriver {
       const auto &context =
           contexts.at({string(canonical[0]).str(), string(canonical[1]).str()});
       const auto &callee = *context.callee;
-      const auto &interface = array(callee[6]);
       for (unsigned j = 0; j < slots->size(); ++j) {
         auto slot = (*slots)[j].getAsArray();
         const auto &expectedSlot = array(array(canonical[5])[j]);
@@ -866,39 +1012,42 @@ struct Deriver {
             (*slot)[1] != expectedSlot[1])
           return refuse("component-instantiation");
         const auto &selector = array((*slot)[1]);
-        const auto &types = array(callee[selector[0] == J("input") ? 4 : 5]);
+        const auto &types = selector[0] == J("input") ? callee.body.inputs
+                                                      : callee.body.outputs;
         std::vector<std::set<std::string>> allowed;
-        for (const auto &value : *contracts.at(string(callee[1]).str())) {
+        for (const auto &value : *contracts.at(callee.name)) {
           const auto &clause = array(value);
           for (unsigned side : {2u, 3u}) {
             if (clause[side].getAsNull())
               continue;
             const auto &application = array(clause[side]);
-            for (const auto &relation : array(snapshot[5])) {
-              if (array(relation)[1] != application[0])
+            auto found = relations.find(string(application[0]).str());
+            if (found == relations.end())
+              continue;
+            const auto &selectors = array(application[1]);
+            auto purposes = found->second.getPurposes();
+            bool relevant = false;
+            for (unsigned k = 0; k < selectors.size(); ++k)
+              relevant |=
+                  selectors[k] == (*slot)[1] &&
+                  mlir::cast<mlir::StringAttr>(purposes[k]).getValue() ==
+                      string((*slot)[0]);
+            if (!relevant)
+              continue;
+            std::set<std::string> roles;
+            for (unsigned k = 0; k < selectors.size(); ++k) {
+              if (mlir::cast<mlir::StringAttr>(purposes[k]).getValue() !=
+                  "statement")
                 continue;
-              const auto &selectors = array(application[1]),
-                         &purposes = array(array(relation)[9]);
-              bool relevant = false;
-              for (unsigned k = 0; k < selectors.size(); ++k)
-                relevant |=
-                    selectors[k] == (*slot)[1] && purposes[k] == (*slot)[0];
-              if (!relevant)
-                continue;
-              std::set<std::string> roles;
-              for (unsigned k = 0; k < selectors.size(); ++k) {
-                if (purposes[k] != J("statement"))
-                  continue;
-                const auto &roster = array(interface[1]);
-                auto formal = std::find(roster.begin(), roster.end(),
-                                        array(selectors[k])[2]);
-                if (formal == roster.end())
-                  return refuse("component-instantiation");
-                roles.insert(
-                    string(array(canonical[4])[formal - roster.begin()]).str());
-              }
-              allowed.push_back(std::move(roles));
+              const auto &roster = callee.roles;
+              auto formal = std::find(roster.begin(), roster.end(),
+                                      string(array(selectors[k])[2]).str());
+              if (formal == roster.end())
+                return refuse("component-instantiation");
+              roles.insert(
+                  string(array(canonical[4])[formal - roster.begin()]).str());
             }
+            allowed.push_back(std::move(roles));
           }
         }
         if (!source((*slot)[2], types[number(selector[1])], context, canonical,
@@ -910,18 +1059,16 @@ struct Deriver {
   }
   // Inspect every stored branch and callback, even when it is unreachable or
   // returns no seam value. This is an effect inventory, not a totality claim.
-  bool deterministicBody(const A &body, unsigned depth) {
+  bool deterministicBody(const SourceBlock &body, unsigned depth) {
     if (depth > 64)
       return refuse("component-seam-depth");
-    for (const auto &value : array(body[1])) {
+    for (const auto &instruction : body.instructions) {
       if (!charge())
         return false;
-      const auto &instruction = array(value),
-                 &descriptor = array(instruction[0]);
-      auto tag = string(descriptor[0]);
-      const auto &regions = array(instruction[3]);
-      if (!regions.empty() && tag != "if" && tag != "for" &&
-          tag != "for_condition")
+      auto *op = instruction.operation;
+      auto tag = operationKind(op);
+      if (!instruction.regions.empty() &&
+          !mlir::isa<exec::TestOp, exec::RangeOp>(op))
         return refuse("component-seam-control");
       if (tag.starts_with("oracle_"))
         return refuse("component-seam-oracle");
@@ -929,79 +1076,65 @@ struct Deriver {
         return refuse("component-seam-sampling");
       if (tag == "exchange")
         return refuse("component-seam-message");
-      if ((tag == "exec" && !purePrimitive(descriptor)) ||
-          tag == "protocol_apply" || tag == "protocol_repeat")
-        return refuse(tag == "exec" &&
-                              string(descriptor[1]).starts_with("oracle.")
-                          ? "component-seam-oracle"
-                          : "component-seam-effect");
-      if (tag == "call" || tag == "local_call" || tag == "apply") {
-        if (!deterministicReference(string(descriptor[1]), depth + 1,
-                                    tag == "apply"))
+      if (tag == "protocol_apply" || tag == "protocol_repeat")
+        return refuse("component-seam-effect");
+      if (tag == "call" || tag == "local_call" ||
+          mlir::isa<exec::ComputeOp>(op)) {
+        if (!deterministicReference(symbol(op), depth + 1))
           return false;
       }
-      if (tag == "fold" &&
-          !deterministicCallbacks(string(descriptor[1]), string(descriptor[2]),
-                                  string(descriptor[3]), depth + 1))
+      if (mlir::isa<data::FiniteFoldOp, exec::FoldOp, exec::CollectOp>(op) &&
+          !deterministicCallbacks(
+              symbol(op, "domain"),
+              symbol(op, mlir::isa<exec::CollectOp>(op) ? "body" : "step"),
+              symbol(op, "predicate"), depth + 1))
         return false;
-      for (const auto &region : regions)
-        if (!deterministicBody(array(array(region)[2]), depth + 1))
+      for (const auto &region : instruction.regions)
+        if (!deterministicBody(region, depth + 1))
           return false;
     }
     return true;
   }
   bool deterministicCallbacks(StringRef domain, StringRef body,
                               StringRef predicate, unsigned depth) {
-    if (std::none_of(
-            array(snapshot[4]).begin(), array(snapshot[4]).end(),
-            [&](const J &value) { return array(value)[1] == J(domain); }))
+    auto unit = mlir::cast<protocol_ir::ProtocolModuleOp>(
+        program.native.get().getBody()->front());
+    if (!mlir::dyn_cast_or_null<data::DomainOp>(
+            mlir::SymbolTable::lookupSymbolIn(unit, domain)))
       return refuse("component-seam-call");
-    return deterministicReference(body, depth, false) &&
-           (predicate.empty() ||
-            deterministicReference(predicate, depth, false));
+    return deterministicReference(body, depth) &&
+           (predicate.empty() || deterministicReference(predicate, depth));
   }
-  bool deterministicReference(StringRef name, unsigned depth,
-                              bool computation) {
+  bool deterministicReference(StringRef name, unsigned depth) {
     if (depth > 64)
       return refuse("component-seam-depth");
     auto found = functions.find(name.str());
-    if (found != functions.end())
-      return deterministic(*found->second, depth);
-    if (computation)
-      for (const auto &value : array(snapshot[7])) {
-        const auto &declaration = array(value);
-        if (declaration[1] != J(name))
-          continue;
-        auto tag = string(declaration[0]);
-        if (tag == "realize" || tag == "map")
-          return deterministicReference(string(declaration[4]), depth, false);
-        if (tag == "finite" || tag == "collect")
-          return deterministicCallbacks(string(declaration[5]),
-                                        string(declaration[6]),
-                                        string(declaration[7]), depth);
-      }
-    return refuse("component-seam-call");
+    return found != functions.end() ? deterministic(*found->second, depth)
+                                    : refuse("component-seam-call");
   }
-  bool deterministic(const A &function, unsigned depth) {
+  bool deterministic(const SourceDefinition &function, unsigned depth) {
     if (depth > 64)
       return refuse("component-seam-depth");
-    if (function[2] == J("math"))
+    if (function.kind == "math")
       return true; // Whole-unit Math admission already excludes effects.
-    if (function[2] != J("local"))
+    if (function.kind != "local")
       return refuse("component-seam-effect");
-    return deterministicBody(array(function[9]), depth);
+    return deterministicBody(function.body, depth);
   }
 };
 } // namespace
-Expected<json::Object> deriveComponentContracts(const J &snapshot) {
-  Deriver derive(snapshot);
+Expected<json::Object> deriveComponentContracts(const SourceView &source) {
+  Deriver derive(source);
   if (!derive.run())
     return std::move(derive.failure);
-  return json::Object{{"proposals", std::move(derive.proposals)},
-                      {"seams", std::move(derive.rows)}};
+  json::Value result = json::Object{{"proposals", std::move(derive.proposals)},
+                                    {"seams", std::move(derive.rows)}};
+  ownJsonStrings(result);
+  return std::move(*result.getAsObject());
 }
-Error checkComponentContracts(const J &snapshot, const json::Object &actual) {
-  Deriver derive(snapshot);
+Error checkComponentContracts(const SourceView &source,
+                              const json::Object &actual) {
+  Deriver derive(source);
   if (!derive.run() || !derive.check(actual))
     return std::move(derive.failure);
   return Error::success();

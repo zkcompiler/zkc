@@ -19,6 +19,10 @@
 #include <variant>
 #include <vector>
 
+namespace llvm::json {
+class Value;
+}
+
 namespace zkc::language {
 using source::Diagnostic;
 using source::SourceBuffer;
@@ -1016,12 +1020,12 @@ private:
   friend llvm::Expected<std::string>
   inspectNotations(const CheckedProject &, const NotationInspectionOptions &,
                    const Limits &);
-  friend llvm::Expected<std::string>
-  inspectWrittenSource(const CheckedProject &, const Limits &);
-  friend llvm::Expected<std::string>
-  inspectSourceBindings(const CheckedProject &, const Limits &);
-  friend llvm::Expected<std::string> inspectSourceInstances(const ClosedEntry &,
-                                                            const Limits &);
+  friend llvm::Expected<llvm::json::Value>
+  writtenSourceData(const CheckedProject &, const Limits &);
+  friend llvm::Expected<llvm::json::Value>
+  sourceBindingsData(const CheckedProject &, const Limits &);
+  friend llvm::Expected<llvm::json::Value>
+  sourceInstancesData(const ClosedEntry &, const Limits &);
   friend llvm::Expected<std::string> inspectPublicAPI(const CheckedProject &,
                                                       const Limits &);
   friend llvm::Expected<EntrySelection> resolveEntry(const CheckedProject &,

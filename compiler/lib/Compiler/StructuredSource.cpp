@@ -1,7 +1,9 @@
 #include "zkc/Compiler/StructuredSource.h"
 #include "ComponentContracts.h"
+#include "SourceView.h"
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/AsmParser/AsmParserState.h"
+#include "mlir/Bytecode/BytecodeReader.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
@@ -525,8 +527,10 @@ class Exporter {
   // admission. Multiple actual compute occurrences can name one declaration.
   std::vector<std::pair<std::string, Operation *>> computationOrigins;
   llvm::DenseMap<Operation *, std::string> computationNames;
-  const AsmParserState &parser;
-  const SourceMgr &sourceManager;
+  const AsmParserState *parser;
+  const SourceMgr *sourceManager;
+  const llvm::DenseMap<Operation *, Operation *> *writtenOperations;
+  SourceView &view;
   std::vector<StructuredSourceAssociation> &associations;
   uint64_t associationBytes = 0;
   StructuredSourceProfile profile;
@@ -548,11 +552,13 @@ class Exporter {
       return error("structured-source-limit");
     associationBytes += size;
     std::optional<StructuredSourceTextRange> original;
-    if (const auto *written = parser.getOpDef(&op)) {
+    auto *sourceOp = writtenOperations ? writtenOperations->lookup(&op) : &op;
+    if (const auto *written =
+            parser && sourceOp ? parser->getOpDef(sourceOp) : nullptr) {
       auto buffer =
-          sourceManager.getMemoryBuffer(sourceManager.getMainFileID());
+          sourceManager->getMemoryBuffer(sourceManager->getMainFileID());
       const char *begin = buffer->getBufferStart();
-      auto [line, column] = sourceManager.getLineAndColumn(written->loc.Start);
+      auto [line, column] = sourceManager->getLineAndColumn(written->loc.Start);
       original = StructuredSourceTextRange{
           unsigned(written->loc.Start.getPointer() - begin),
           unsigned(written->loc.End.getPointer() - begin), line, column};
@@ -801,6 +807,7 @@ class Exporter {
       auto desc = scopedDescriptor(step);
       if (!desc)
         return desc.takeError();
+      view.descriptors.try_emplace(&op, *desc);
       auto occurrence = site(op);
       if (!occurrence)
         return occurrence.takeError();
@@ -1308,6 +1315,7 @@ class Exporter {
       auto desc = descriptor(op, owner);
       if (!desc)
         return desc.takeError();
+      view.descriptors.try_emplace(&op, *desc);
       StringRef occurrence;
       if (op.hasAttr("site") ||
           isa<protocol_ir::ExchangeOp, protocol_ir::QueryOp,
@@ -1804,13 +1812,13 @@ class Exporter {
 
 public:
   Exporter(protocol_ir::ProtocolModuleOp unit,
-           protocol_ir::MathematicalOp selected, const AsmParserState &parser,
-           const SourceMgr &sourceManager,
-           std::vector<StructuredSourceAssociation> &associations,
-           StructuredSourceProfile profile)
+           protocol_ir::MathematicalOp selected, const AsmParserState *parser,
+           const SourceMgr *sourceManager,
+           const llvm::DenseMap<Operation *, Operation *> *writtenOperations,
+           SourceView &view, StructuredSourceProfile profile)
       : unit(unit), selected(selected), symbols(unit), parser(parser),
-        sourceManager(sourceManager), associations(associations),
-        profile(profile) {}
+        sourceManager(sourceManager), writtenOperations(writtenOperations),
+        view(view), associations(view.associations), profile(profile) {}
 
   Expected<json::Value> run(StringRef bytes) {
     if (auto e = attributes(*unit, {"profile", "source_declarations"}))
@@ -1912,6 +1920,13 @@ public:
             declaration ? oracle(declaration, path) : function(op, path);
         if (!encoded)
           return encoded.takeError();
+        auto native = buildSourceDefinition(
+            op, SymbolTable::getSymbolName(&op).getValue(), kind(op),
+            execution);
+        if (!native)
+          return native.takeError();
+        view.names.emplace(native->name, view.definitions.size());
+        view.definitions.push_back(std::move(*native));
         definitions.push_back(std::move(*encoded));
         if (auto protocol = dyn_cast<protocol_ir::MathematicalOp>(op)) {
           if (protocol.getContractsAttr() &&
@@ -1936,6 +1951,16 @@ public:
       auto encoded = computation(name, *origin);
       if (!encoded)
         return encoded.takeError();
+      auto native =
+          buildSourceDefinition(*origin, name,
+                                isa<exec::ComputeOp>(origin)   ? "realize"
+                                : isa<exec::CollectOp>(origin) ? "collect"
+                                                               : "finite",
+                                execution);
+      if (!native)
+        return native.takeError();
+      view.names.emplace(native->name, view.definitions.size());
+      view.definitions.push_back(std::move(*native));
       definitions.push_back(std::move(*encoded));
     }
     if (auto e = closure())
@@ -2006,14 +2031,26 @@ public:
 };
 } // namespace
 
-Expected<StructuredSource>
-exportStructuredSource(StringRef bytes, StringRef name, MLIRContext &context,
-                       StructuredSourceProfile profile) {
-  if (bytes.size() > 16 * 1024 * 1024 || !mlirNestingWithinLimit(bytes))
+Expected<SourceView> readSourceView(StringRef bytes, StringRef name,
+                                    MLIRContext &context,
+                                    StructuredSourceProfile profile) {
+  bool bytecode = isBytecode(MemoryBufferRef(bytes, "original"));
+  if (bytes.size() > 16 * 1024 * 1024 ||
+      (!bytecode && !mlirNestingWithinLimit(bytes)))
     return error("structured-source-limit");
   SourceMgr manager;
   manager.AddNewSourceBuffer(MemoryBuffer::getMemBufferCopy(bytes, "original"),
                              SMLoc());
+  if (bytecode) {
+    // The const SourceMgr overload copies any retained resources into context
+    // ownership. No operation range is invented from bytecode loc attributes.
+    auto original =
+        parseSourceFile<ModuleOp>(manager, ParserConfig(&context, false));
+    if (!original)
+      return error("structured-source-original");
+    return readSourceView(std::move(original), bytes, name, nullptr, nullptr,
+                          nullptr, profile);
+  }
   AsmParserState parser;
   Block parsed;
   if (failed(parseAsmSourceFile(manager, &parsed, ParserConfig(&context, false),
@@ -2022,6 +2059,14 @@ exportStructuredSource(StringRef bytes, StringRef name, MLIRContext &context,
   auto original =
       mlir::detail::constructContainerOpForParserIfNecessary<ModuleOp>(
           &parsed, &context, FileLineColLoc::get(&context, "original", 1, 1));
+  return readSourceView(std::move(original), bytes, name, &parser, &manager,
+                        nullptr, profile);
+}
+Expected<SourceView> readSourceView(
+    OwningOpRef<ModuleOp> original, StringRef bytes, StringRef name,
+    const AsmParserState *parser, const SourceMgr *manager,
+    const llvm::DenseMap<Operation *, Operation *> *writtenOperations,
+    StructuredSourceProfile profile) {
   if (!original || failed(zkc::admitStage(*original)))
     return error("structured-source-original");
   if (auto e = checkAttributes(**original, {}, profile))
@@ -2036,19 +2081,31 @@ exportStructuredSource(StringRef bytes, StringRef name, MLIRContext &context,
   auto selected = symbols.lookup<protocol_ir::MathematicalOp>(name);
   if (!selected)
     return error("structured-source-symbol");
-  StructuredSource result;
-  auto exported =
-      Exporter(unit, selected, parser, manager, result.associations, profile)
-          .run(bytes);
+  SourceView result;
+  result.entry = name.str();
+  result.identity =
+      "sha256:" + toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
+  auto exported = Exporter(unit, selected, parser, manager, writtenOperations,
+                           result, profile)
+                      .run(bytes);
   if (!exported)
     return exported.takeError();
   if (!boundedSourceWire(*exported, profile))
     return error("structured-source-limit");
   // Own framing and its byte budget together: callers emit these exact bytes.
-  auto serialized = printJson(*exported) + '\n';
-  if (serialized.size() > 1024 * 1024)
+  if (!jsonWithinByteLimit(*exported, 1024 * 1024 - 1))
     return error("structured-source-limit");
-  result.bytes = std::move(serialized);
+  result.publication = std::move(*exported);
+  result.native = std::move(original);
   return result;
+}
+Expected<StructuredSource>
+exportStructuredSource(StringRef bytes, StringRef name, MLIRContext &context,
+                       StructuredSourceProfile profile) {
+  auto view = readSourceView(bytes, name, context, profile);
+  if (!view)
+    return view.takeError();
+  return StructuredSource{printJson(view->publication) + '\n',
+                          std::move(view->associations)};
 }
 } // namespace zkc::protocol
