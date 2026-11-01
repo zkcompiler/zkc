@@ -177,7 +177,7 @@ class PhysicalCorrespondence {
       if (decision.binding) {
         if (!application(replacement, plan.bindings[*decision.binding].binding,
                          operands, decision.outputs, old->getAttr("site"),
-                         old->getAttrOfType<ArrayAttr>("parameters")))
+                         decision.physicalParameters))
           return false;
       } else {
         auto name = isa<exec::ReturnOp>(old)
@@ -226,7 +226,7 @@ class PhysicalCorrespondence {
     if (decision.binding) {
       if (!application(actual, plan.bindings[*decision.binding].binding,
                        operands, decision.outputs, source->getAttr("site"),
-                       source->getAttrOfType<ArrayAttr>("parameters")))
+                       decision.physicalParameters))
         return false;
     } else {
       auto name = source->getName().getStringRef();

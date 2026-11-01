@@ -1270,5 +1270,14 @@ mutations of the modulus, ranges, outputs and poison-producing flags refuse.
 Static pointwise tiles now use upstream Linalg vectorization and One-Shot
 Bufferization. An independent reader checks actual accesses, initialization,
 aliases, release, poison isolation and the fresh returned owner, then recovers
-the scalar meaning. The actual execution-plan consumer remains in progress.
-These checked private candidates are not yet default CPU execution support.
+the scalar meaning. The default CPU target now retains that actual expression,
+lane bound and liveness-proposed scratch assignment in a typed Runtime plan.
+Independent C++/Rust readers validate actual symbolic slot contents; the reached
+CPU Call consumes the plan using packed resident kernels with exact-slot aliases
+and scalar tails. Extension/binary domains keep complete identities and select
+opaque providers. Old executable bare Ring parameters are refused.
+
+Focused default-selection, mutation and resource tests and compiled
+field/quotient-ring/group clients pass. Broad native and installed-target
+validation for this development snapshot remains in progress. These native
+readers do not add Lean correspondence or object-code/AOT coverage.

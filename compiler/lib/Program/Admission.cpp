@@ -362,8 +362,9 @@ class Admission {
           consumeError(selected.takeError());
           return fail("binding-contract");
         }
-        if (auto e =
-                checkParameters(binding->second.application, op->attributes))
+        if (auto e = checkParameters(
+                binding->second.application, op->attributes,
+                physical ? ParameterStage::Physical : ParameterStage::Logical))
           return fail(toString(std::move(e)));
         for (const auto &t : selected->inputs)
           expected.push_back({t.spelling()});

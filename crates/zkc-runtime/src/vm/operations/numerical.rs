@@ -1,7 +1,7 @@
 //! Closed compiler-generated numerical expression calls. This owner does not
 //! consult native advertisements or interpret expressions with field arithmetic.
 use super::*;
-use crate::ring::{Expression, Node};
+use crate::numerical::Plan;
 
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     contracts: &[
@@ -78,25 +78,16 @@ pub(crate) fn parameters(binding: &OperationBinding, attributes: &[String]) -> R
     let [body] = attributes else {
         return Err(failure());
     };
-    if body.len() > 4096 {
-        return Err(AdmissionError::new(
-            ErrorCode::Limit,
-            "numerical-expression-bytes",
-        ));
-    }
-    let expression = Expression::parse(body).map_err(|_| failure())?;
-    if expression.canonical() != *body
-        || expression.inputs().len() != mask.len()
-        || expression.outputs().len() != 1
-        || expression.inputs().iter().any(|f| *f != field)
-        || expression.facts().iter().any(|f| f.field != field)
-        || expression
-            .nodes()
-            .iter()
-            .any(|n| matches!(n, Node::Embed(..)))
-    {
-        return Err(failure());
-    }
+    Plan::parse(body, field, mask.as_bytes()).map_err(|e| {
+        AdmissionError::new(
+            if e.0 == "numerical-plan-bytes" {
+                ErrorCode::Limit
+            } else {
+                ErrorCode::Attributes
+            },
+            e.0,
+        )
+    })?;
     Ok(())
 }
 

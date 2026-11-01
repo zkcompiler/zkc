@@ -85,6 +85,14 @@ Unknown tags and wrong record arities refuse independently. See the
 
 ## Carrier size
 
+Ordinary decoded strings are bounded to 4096 UTF-8 bytes. An entry in an
+operation's parameter array is bounded to 16384 bytes; its declared parameter
+contract imposes any smaller semantic bound. This separate parameter ceiling
+admits the complete [physical numerical plan](../runtime/numerical-plans.md),
+whose nested Ring expression remains bounded to 4096 bytes. It does not enlarge
+names, sites, nominal identities, type spellings, message payloads or hook data.
+The version-zero root and operation record shapes are unchanged.
+
 Raw participant JSON and its compact encoding are each bounded to 4 MiB.
 C++ `program::parse` applies this ceiling before array parsing, and
 `program::checkStructure` checks compact size and the 400,000-node ceiling

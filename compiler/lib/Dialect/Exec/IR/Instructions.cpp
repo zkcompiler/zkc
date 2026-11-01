@@ -62,7 +62,9 @@ LogicalResult ApplyOp::verifySymbolUses(SymbolTableCollection &symbols) {
         "invocation differs from its callable executable ABI");
   return verifyInvocationParameters(
       [&] { return emitOpError(); }, declaration.getContract(),
-      declaration.getArgumentsAttr(), getParametersAttr());
+      declaration.getArgumentsAttr(), getParametersAttr(),
+      checked->physical ? protocol::ParameterStage::Physical
+                        : protocol::ParameterStage::Logical);
 }
 LogicalResult ApplyOp::verify() {
   if (getSite().empty() ||

@@ -540,9 +540,9 @@ primitive(Operation &op, SymbolTable *symbols,
                               binding.getArguments().getValue());
   if (!signature || !equal(signature.getInputs(), inputs.getTypes()) ||
       !equal(signature.getResults(), outputs.getTypes()) ||
-      failed(verifyInvocationParameters(silent, binding.getContract(),
-                                        binding.getArgumentsAttr(),
-                                        parameters)))
+      failed(verifyInvocationParameters(
+          silent, binding.getContract(), binding.getArgumentsAttr(), parameters,
+          zkc::protocol::ParameterStage::Logical)))
     return std::nullopt;
   return Primitive{binding.getContract(),
                    SmallVector<Attribute>(parameters.getValue()), binding};

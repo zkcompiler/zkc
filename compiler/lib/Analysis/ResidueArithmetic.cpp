@@ -372,9 +372,10 @@ public:
       : q(modulus.zext(arithmeticWidth)), zero(arithmeticWidth, 0),
         expressions(q), bits(arithmeticWidth) {}
   bool equivalent(func::FuncOp source, func::FuncOp candidate,
-                  OwningOpRef<ModuleOp> *decoded = nullptr) {
+                  OwningOpRef<ModuleOp> *decoded = nullptr,
+                  bool residueCandidate = false) {
     auto expected = read(source, source, true);
-    auto actual = read(candidate, source, false);
+    auto actual = read(candidate, source, residueCandidate);
     if (!expected || !actual || expected->size() != actual->size())
       return false;
     for (auto [a, b] : llvm::zip(*expected, *actual))
@@ -394,7 +395,8 @@ public:
 };
 
 bool correspondence(ModuleOp source, ModuleOp candidate,
-                    OwningOpRef<ModuleOp> *decoded = nullptr) {
+                    OwningOpRef<ModuleOp> *decoded = nullptr,
+                    bool residueCandidate = false) {
   auto original = packet(source, MaximumWordWidth);
   auto actual = packet(candidate, 2 * MaximumWordWidth);
   if (!original || !actual || failed(verify(source)) ||
@@ -424,8 +426,17 @@ bool correspondence(ModuleOp source, ModuleOp candidate,
       return false;
   if (!residue)
     return false;
+  if (residueCandidate) {
+    auto canonicalType = [&](Type type) { return type == residue; };
+    if (!llvm::all_of(original.getArgumentTypes(), canonicalType) ||
+        !llvm::all_of(original.getResultTypes(), canonicalType))
+      return false;
+    for (Operation &op : original.front())
+      if (!llvm::all_of(op.getResultTypes(), canonicalType))
+        return false;
+  }
   auto converted = [&](Type type) -> Type {
-    return isa<ValueType>(type)
+    return !residueCandidate && isa<ValueType>(type)
                ? IntegerType::get(source.getContext(), width(type))
                : type;
   };
@@ -439,16 +450,26 @@ bool correspondence(ModuleOp source, ModuleOp candidate,
     return false;
   for (Operation &op : actual.front())
     for (Type type : op.getResultTypes()) {
-      if (!isa<IntegerType>(type))
+      if (residueCandidate ? !inspect(type) || !isa<ValueType>(type)
+                           : !isa<IntegerType>(type))
         return false;
       widest = std::max(widest, width(type));
     }
   // Enough bits for every intermediate range product, including a malicious
   // candidate's largest words. Range arithmetic itself never silently wraps.
   return Reader(residue.getModulus().getValue(), 2 * widest + 1)
-      .equivalent(original, actual, decoded);
+      .equivalent(original, actual, decoded, residueCandidate);
 }
 } // namespace
+LogicalResult verifyResidue(ModuleOp source, ModuleOp candidate) {
+  if (correspondence(source, candidate, nullptr, true))
+    return success();
+  return candidate
+             ? diagnostics::emit(
+                   candidate.emitError(), "represented-arithmetic",
+                   "residue candidate differs from its mathematical subject")
+             : failure();
+}
 LogicalResult verifyArithmetic(ModuleOp source, ModuleOp candidate) {
   if (correspondence(source, candidate))
     return success();

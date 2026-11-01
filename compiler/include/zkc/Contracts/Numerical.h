@@ -10,6 +10,8 @@ namespace zkc::protocol {
 /// static-term resolution, and is never a Nat or a nominal identity.
 struct NumericalLimits {
   static constexpr size_t slots = 1023, bodyBytes = 4096;
+  static constexpr size_t planBytes = 16384;
+  static constexpr unsigned lanes = 256;
   static constexpr uint64_t rows = 1048576;
 };
 bool numericalContract(llvm::StringRef contract);
@@ -23,5 +25,20 @@ llvm::Expected<ring::Expression> readNumericalExpression(llvm::StringRef body,
                                                          size_t slots);
 llvm::Error checkNumericalParameters(const BindingApplication &binding,
                                      llvm::ArrayRef<std::string> parameters);
+
+/// Physical storage proposal. Admission reads actual symbolic slot contents;
+/// it does not rerun a producer's lifetime/allocation algorithm. This carrier
+/// alone supplies no correspondence with a logical source or installation.
+struct NumericalPlan {
+  ring::Expression expression;
+  unsigned lanes, slots;
+  std::vector<unsigned> locations;
+  llvm::json::Value encode() const;
+};
+llvm::Error checkNumericalPlan(const NumericalPlan &, llvm::StringRef field,
+                               llvm::StringRef mask);
+llvm::Expected<NumericalPlan> readNumericalPlan(llvm::StringRef body,
+                                                llvm::StringRef field,
+                                                llvm::StringRef mask);
 } // namespace zkc::protocol
 #endif

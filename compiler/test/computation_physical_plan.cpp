@@ -16,6 +16,7 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Dialect/Runtime/Parameters.h"
 #include "zkc/Transforms/Computation.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/MathematicalTrace.h"
@@ -1323,6 +1324,60 @@ module @difference attributes {exec.computation} {
                 selection.alternative(second) ==
                     mathematical::NumericalAlternative::Expression,
             "exhausted numerical round received fresh catalog work");
+  });
+
+  cases.run("actual represented parameters are independently checked", [&] {
+    auto module = executable(mappedSource(), context);
+    auto proposal = take(proposePhysical(*module));
+    bool found = false;
+    for (auto &operation : proposal.operations) {
+      if (!operation.physicalParameters || operation.physicalParameters.empty())
+        continue;
+      auto plan =
+          dyn_cast<runtime::NumericalPlanAttr>(operation.physicalParameters[0]);
+      if (!plan)
+        continue;
+      found = true;
+      auto saved = operation.physicalParameters;
+      auto neutral = take(runtime::exportNumericalPlan(plan));
+      neutral.slots = neutral.locations.size();
+      for (unsigned i = 0; i < neutral.locations.size(); ++i)
+        neutral.locations[i] = i;
+      operation.physicalParameters = ArrayAttr::get(
+          &context, {take(runtime::importNumericalPlan(&context, neutral))});
+      take(validatePhysical(*module, proposal));
+      auto inputs = neutral.expression.inputs();
+      auto field = neutral.expression.facts().front().field;
+      neutral.expression = take(ring::Expression::create(
+          std::vector<ring::Input>(inputs.begin(), inputs.end()),
+          {ring::Node::literal(field, "1")}, {0}));
+      neutral.slots = 1;
+      neutral.locations = {0};
+      operation.physicalParameters = ArrayAttr::get(
+          &context, {take(runtime::importNumericalPlan(&context, neutral))});
+      {
+        ScopedDiagnosticHandler quiet(&context,
+                                      [](Diagnostic &) { return success(); });
+        refuses(validatePhysical(*module, proposal), "represented-arithmetic");
+      }
+      operation.physicalParameters = saved;
+      take(validatePhysical(*module, proposal));
+      break;
+    }
+    require(found, "physical selection emitted no represented plan");
+  });
+  cases.run("represented construction exhaustion is terminal", [&] {
+    auto module = executable(mappedSource(), context);
+    FrozenInput frozen(*module);
+    mathematical::RealizationWork work;
+    work.representedConstruction = 0;
+    PhysicalPlanOptions options;
+    options.numericalWork = &work;
+    refuses(proposePhysical(*module, installedCandidates(), {}, options),
+            "represented-construction-limit");
+    require(!work.representedConstruction,
+            "retry replenished represented work");
+    frozen.check(*module);
   });
 
   cases.run("unclassified program-preflight errors are terminal", [&] {

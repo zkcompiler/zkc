@@ -5,6 +5,7 @@
 #include "AggregateLayouts.h"
 #include "ExecutionPorts.h"
 #include "NativePlanTypes.h"
+#include "NumericalPlan.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/RegionKindInterface.h"
 #include "mlir/IR/Verifier.h"
@@ -18,6 +19,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/InvocationParameters.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/TypeFormation.h"
@@ -307,6 +309,7 @@ struct ImplementationCursor {
 class PhysicalSelection {
 public:
   mathematical::NumericalSelection numerical;
+  NumericalPlanProposals represented{numerical.work.representedConstruction};
   CpuTarget cpuTarget;
   SmallVector<ImplementationCursor, 2> implementations;
   using ImplementationKey =
@@ -1448,6 +1451,23 @@ public:
         if (found == names.end())
           return error("binding-reference");
         decision.binding = found->second;
+        auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
+        const auto &application =
+            plan.bindings[found->second].binding.application;
+        decision.physicalParameters = parameters;
+        if (numericalContract(application.contract)) {
+          auto field = algebra::FieldType::get(
+              op->getContext(),
+              cast<StringAttr>(application.arguments[0]).getValue());
+          auto mask = cast<DenseBoolArrayAttr>(application.arguments[1]);
+          auto expression = cast<algebra::RingExpressionAttr>(parameters[0]);
+          auto physical =
+              selection.represented.propose(field, expression, mask);
+          if (!physical)
+            return physical.takeError();
+          decision.physicalParameters =
+              ArrayAttr::get(op->getContext(), {*physical});
+        }
       } else if (flow().get(op).step && !interfaceOperation(op))
         return error("binding-reference");
       plan.operations.push_back(std::move(decision));
@@ -2196,6 +2216,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   auto indices = indexOperations(operations);
   if (plan.operations.size() != operations.size())
     return error("binding-plan-coverage");
+  NumericalPlanChecks representedChecking;
   if (plan.bindings.size() > 4096)
     return error("binding-declaration-limit");
   for (auto [i, decision] : enumerate(plan.operations))
@@ -2342,6 +2363,25 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
         return error("binding-operation");
       if (!sameLogical(binding.binding.application, base.binding.application))
         return error("binding-operation");
+      const auto &application = binding.binding.application;
+      auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
+      if (failed(verifyInvocationParameters(
+              [op = op] { return op->emitOpError(); }, application.contract,
+              ArrayAttr::get(op->getContext(), application.arguments),
+              decision.physicalParameters, ParameterStage::Physical)))
+        return error("binding-operation-parameters");
+      if (numericalContract(application.contract)) {
+        auto field = algebra::FieldType::get(
+            op->getContext(),
+            cast<StringAttr>(application.arguments[0]).getValue());
+        if (auto e = representedChecking.check(
+                field, cast<algebra::RingExpressionAttr>(parameters[0]),
+                cast<DenseBoolArrayAttr>(application.arguments[1]),
+                cast<runtime::NumericalPlanAttr>(
+                    decision.physicalParameters[0])))
+          return e;
+      } else if (decision.physicalParameters != parameters)
+        return error("binding-operation-parameters");
       if (binding.purpose == BindingPurpose::Specialization) {
         auto descriptor = installedImplementations().find(
             binding.binding.application.contract,
@@ -2371,7 +2411,8 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
               checkInstalledPorts(decision.outputs, installed->getResults()))
         return e;
     } else {
-      if (decision.binding || (flow.get(op).step && !interfaceOperation(op)))
+      if (decision.binding || decision.physicalParameters ||
+          (flow.get(op).step && !interfaceOperation(op)))
         return error("binding-plan-coverage");
       if (auto e =
               checkLogicalPorts(flow.inputs(op).getTypes(), decision.inputs))

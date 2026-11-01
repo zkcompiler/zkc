@@ -554,7 +554,8 @@ Expected<LaneRealizationResult> emitNumericalLanes(const LaneFormula &formula,
   if (failed(verifyInvocationParameters(
           silent, contract,
           ArrayAttr::get(field.getContext(), binding.arguments),
-          ArrayAttr::get(field.getContext(), {*body}))))
+          ArrayAttr::get(field.getContext(), {*body}),
+          zkc::protocol::ParameterStage::Logical)))
     return zkc::error("mathematical-lane-realization",
                       "invalid numerical parameters");
   Value value =

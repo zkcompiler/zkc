@@ -175,8 +175,7 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
       };
       if (choice.binding) {
         outputs = invoke(plan.bindings[*choice.binding].binding, choice.outputs,
-                         inputs, site.getValue(),
-                         instruction->getAttrOfType<ArrayAttr>("parameters"));
+                         inputs, site.getValue(), choice.physicalParameters);
       } else if (isa<exec::BooleanOp, exec::VariantOp>(instruction)) {
         outputs =
             native.invoke(instruction->getName().getStringRef(), choice.outputs,

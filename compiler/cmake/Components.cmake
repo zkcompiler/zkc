@@ -52,6 +52,7 @@ add_zkc_component(Contracts
   lib/Contracts/RingExpression.cpp
   lib/Contracts/RingSharing.cpp
   lib/Contracts/Numerical.cpp
+  lib/Contracts/NumericalPlan.cpp
   lib/Contracts/Domains.cpp
   lib/Contracts/OperationShapes.cpp
   lib/Contracts/NativePolicy.cpp
@@ -219,6 +220,7 @@ add_zkc_component(IR
   lib/Dialect/Runtime/IR/RuntimeDialect.cpp
   lib/Dialect/Runtime/IR/Attributes.cpp
   lib/Dialect/Runtime/Parameters.cpp
+  lib/Dialect/Runtime/Numerical.cpp
   lib/Dialect/Runtime/IR/Scopes.cpp
   lib/Dialect/Runtime/Ownership.cpp
   lib/Dialect/Residue/IR/ResidueDialect.cpp
@@ -459,6 +461,7 @@ add_zkc_component(CpuTarget
   lib/Target/ExecutionPorts.cpp
   lib/Target/NativePlanTypes.cpp
   lib/Target/PhysicalPlan.cpp
+  lib/Target/NumericalPlan.cpp
   lib/Target/StorageSchedule.cpp
   lib/Target/Cpu/Stages.cpp
   lib/Target/Cpu/Passes.cpp

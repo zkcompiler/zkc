@@ -85,10 +85,13 @@ fn array(v: &Json) -> Result<&[Json]> {
     Ok(a)
 }
 fn string(v: &Json) -> Result<&str> {
+    string_with_limit(v, Limits::STRING_BYTES)
+}
+fn string_with_limit(v: &Json, limit: usize) -> Result<&str> {
     let s = v
         .as_str()
         .ok_or_else(|| err(ErrorCode::Record, "expected string"))?;
-    if s.len() > Limits::STRING_BYTES {
+    if s.len() > limit {
         return Err(err(ErrorCode::Limit, "string byte ceiling"));
     }
     Ok(s)
@@ -295,7 +298,7 @@ impl Decoder<'_> {
                         })?,
                         attributes: list(&a[3], Limits::OPERATION_ATTRIBUTES)?
                             .iter()
-                            .map(|v| Ok(string(v)?.to_owned()))
+                            .map(|v| Ok(string_with_limit(v, Limits::PARAMETER_BYTES)?.to_owned()))
                             .collect::<Result<_>>()?,
                         inputs: names(&a[4])?,
                         outputs: names(&a[5])?,

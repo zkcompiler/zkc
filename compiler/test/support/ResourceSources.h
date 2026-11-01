@@ -120,7 +120,8 @@ public:
     for (auto parameter : parameters)
       expected.push_back(parameter.str());
     auto native = take(protocol::decodeInvocationParameters(
-        binding.getContract(), binding.getArgumentsAttr(), expected));
+        binding.getContract(), binding.getArgumentsAttr(), expected,
+        zkc::protocol::ParameterStage::Logical));
     return control.invoke("exec.apply", outputs, control.scoped(inputs),
                           {symbol("binding", name), text("site", site),
                            builder.getNamedAttr("parameters", native)});

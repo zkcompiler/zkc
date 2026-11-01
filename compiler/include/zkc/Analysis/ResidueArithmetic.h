@@ -13,6 +13,10 @@ namespace zkc::residue {
 /// attached.
 mlir::LogicalResult verifyArithmetic(mlir::ModuleOp source,
                                      mlir::ModuleOp candidate);
+/// Independently compare two canonical residue expressions using the same
+/// bounded modular algebra, without invoking lowering or optimization.
+mlir::LogicalResult verifyResidue(mlir::ModuleOp source,
+                                  mlir::ModuleOp candidate);
 /// Consume the actual candidate as a closed canonical residue function. This
 /// numerical profile has residue inputs and one residue result. The returned
 /// expression is reconstructed from the word reader, including its normalized

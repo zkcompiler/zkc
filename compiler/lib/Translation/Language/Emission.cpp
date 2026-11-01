@@ -265,7 +265,8 @@ class Emitter {
       found = bindings.emplace(key, std::move(name)).first;
     }
     auto nativeParameters = take(protocol::decodeInvocationParameters(
-        &context, {contract.str(), arguments, {}}, parameters));
+        &context, {contract.str(), arguments, {}}, parameters,
+        zkc::protocol::ParameterStage::Logical));
     if (!nativeParameters)
       return {};
     return scoped->invoke(

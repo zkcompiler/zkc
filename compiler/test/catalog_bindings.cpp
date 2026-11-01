@@ -513,22 +513,26 @@ int main() {
         if (search || gated)
           parameters.push_back("0");
         auto typed = take(protocol::decodeInvocationParameters(
-            contract, arguments, parameters));
-        require(take(protocol::encodeInvocationParameters(contract, arguments,
-                                                          typed)) == parameters,
+            contract, arguments, parameters,
+            zkc::protocol::ParameterStage::Logical));
+        require(take(protocol::encodeInvocationParameters(
+                    contract, arguments, typed,
+                    zkc::protocol::ParameterStage::Logical)) == parameters,
                 "typed block parameter roundtrip differs");
         SmallVector<Attribute> wrong(typed.getValue());
         wrong[1] = builder.getI64IntegerAttr(8);
         codes.clear();
         require(failed(verifyInvocationParameters(
-                    emit, contract, arguments, builder.getArrayAttr(wrong))) &&
+                    emit, contract, arguments, builder.getArrayAttr(wrong),
+                    zkc::protocol::ParameterStage::Logical)) &&
                     llvm::is_contained(codes, "interactive-kernel-parameters"),
                 "signed block natural admitted");
         wrong.assign(typed.begin(), typed.end());
         wrong[0] = builder.getStringAttr(origin);
         codes.clear();
         require(failed(verifyInvocationParameters(
-                    emit, contract, arguments, builder.getArrayAttr(wrong))) &&
+                    emit, contract, arguments, builder.getArrayAttr(wrong),
+                    zkc::protocol::ParameterStage::Logical)) &&
                     llvm::is_contained(codes, "interactive-native-origin"),
                 "unstructured block origin admitted");
       }

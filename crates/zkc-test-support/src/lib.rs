@@ -286,3 +286,17 @@ pub mod json_lines;
 /// Linux task-creation evidence for explicitly selected CPU confinement gates.
 #[cfg(target_os = "linux")]
 pub mod task_trace;
+
+/// Construct a physical numerical fixture with a distinct scratch slot per
+/// expression node. Tests of reuse provide their own explicit slot assignment.
+pub fn numerical_plan(expression: serde_json::Value) -> String {
+    let count = expression[2].as_array().expect("Ring node fixture").len();
+    serde_json::json!([
+        "zkc.numerical-plan/0",
+        expression,
+        256,
+        count,
+        (0..count).collect::<Vec<_>>()
+    ])
+    .to_string()
+}

@@ -24,7 +24,7 @@ llvm::Error checkGenericParameters(llvm::StringRef key,
                                    llvm::ArrayRef<std::string>);
 /// Resolve the declared literal field from a closed operation application.
 llvm::Error checkParameters(const BindingApplication &,
-                            llvm::ArrayRef<std::string>);
+                            llvm::ArrayRef<std::string>, ParameterStage);
 /// Canonical modulus if installed; empty means no admitted constant domain.
 llvm::StringRef fieldModulus(llvm::StringRef identity);
 /// Coordinates over GF(2) of an installed binary field, whose constants also

@@ -26,9 +26,9 @@ const protocol::OperationContracts *semanticRoles(Operation *op) {
     diagnostic.abandon();
     return diagnostic;
   };
-  if (failed(verifyInvocationParameters(silent, binding.getContract(),
-                                        binding.getArgumentsAttr(),
-                                        apply.getParametersAttr())))
+  if (failed(verifyInvocationParameters(
+          silent, binding.getContract(), binding.getArgumentsAttr(),
+          apply.getParametersAttr(), zkc::protocol::ParameterStage::Logical)))
     return {};
   // A selected implementation does not change the logical roles. Resident
   // ports only match when they retain this exact mathematical signature.

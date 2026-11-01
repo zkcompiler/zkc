@@ -31,23 +31,27 @@ int main() {
   auto arguments = builder.getArrayAttr({builder.getStringAttr("koala-bear")});
   auto accepted = [&](StringRef contract, ArrayAttr args,
                       ArrayRef<Attribute> params) {
-    return succeeded(verifyInvocationParameters(emit, contract, args,
-                                                builder.getArrayAttr(params)));
+    return succeeded(verifyInvocationParameters(
+        emit, contract, args, builder.getArrayAttr(params),
+        zkc::protocol::ParameterStage::Logical));
   };
   auto roundtrip = [&](const BindingApplication &binding,
                        ArrayRef<std::string> text) {
-    auto checked = checkParameters(binding, text);
+    auto checked =
+        checkParameters(binding, text, zkc::protocol::ParameterStage::Logical);
     if (checked)
       throw std::runtime_error(toString(std::move(checked)));
     auto args = take(decodeBindingArguments(&context, binding));
-    auto attributes =
-        take(decodeInvocationParameters(binding.contract, args, text));
+    auto attributes = take(decodeInvocationParameters(
+        binding.contract, args, text, zkc::protocol::ParameterStage::Logical));
     require(accepted(binding.contract, args, attributes.getValue()),
             "native parameter formation");
     require(ArrayRef<std::string>(take(encodeInvocationParameters(
-                binding.contract, args, attributes))) == text,
+                binding.contract, args, attributes,
+                zkc::protocol::ParameterStage::Logical))) == text,
             "program parameter bytes changed");
-    require(invocationParametersMatch(binding.contract, args, attributes, text),
+    require(invocationParametersMatch(binding.contract, args, attributes, text,
+                                      zkc::protocol::ParameterStage::Logical),
             "independent parameter comparison");
     return attributes;
   };
@@ -104,11 +108,13 @@ int main() {
             !accepted("vector.at", arguments, {builder.getI64IntegerAttr(0)}),
         "parameter bounds or signedness were erased");
     require(!invocationParametersMatch("field.constant", arguments,
-                                       builder.getArrayAttr({other}), {"1"}),
+                                       builder.getArrayAttr({other}), {"1"},
+                                       zkc::protocol::ParameterStage::Logical),
             "comparison accepted a different field");
     for (StringRef text : {"", "00", "-1", "18446744073709551616"})
       refuses(decodeInvocationParameters(
-                  "index.constant", builder.getArrayAttr({}), {text.str()}),
+                  "index.constant", builder.getArrayAttr({}), {text.str()},
+                  zkc::protocol::ParameterStage::Logical),
               "expected-natural");
   });
   cases.run(

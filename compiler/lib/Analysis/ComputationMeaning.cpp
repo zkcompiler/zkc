@@ -107,7 +107,8 @@ const protocol::ComputationContract *semantics(Operation *op) {
   if (!signature ||
       failed(verifyInvocationParameters(
           silent, contract, ArrayAttr::get(op->getContext(), arguments),
-          ArrayAttr::get(op->getContext(), parameters))))
+          ArrayAttr::get(op->getContext(), parameters),
+          zkc::protocol::ParameterStage::Logical)))
     return nullptr;
   if (auto apply = dyn_cast<exec::ApplyOp>(op)) {
     auto outcome = dyn_cast<exec::OutcomeType>(apply.getResult().getType());

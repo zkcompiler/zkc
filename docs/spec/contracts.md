@@ -99,6 +99,17 @@ ownership, with peak canonical-word storage. Reached execution and resident
 resource-plan integration remain in progress; no serialized
 representation certificate or executable wire type is introduced by the dialect.
 
+### Physical numerical plans
+
+[Physical numerical plans](runtime/numerical-plans.md) define the target-stage
+`zkc.numerical-plan/0` parameter: actual Ring expression, lane bound and scratch
+slot assignment. Logical parameters remain Ring expressions. The replacement
+changes executable parameters, scratch admission and the setup byte term in the
+numerical work score. Compiler materialization, native readers, reached CPU
+consumers and fixtures must migrate together; bare executable Ring parameters
+will not remain an alternative. The specification is published before that
+migration; implementation is in progress and not yet enabled.
+
 ### Participant-loop capture bindings
 
 Participant `loop` captures in `zkc.program/0` are ordered

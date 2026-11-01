@@ -196,7 +196,8 @@ json::Object respond(StringRef line, Resolver resolve, bool attributeDrift,
     // attribute rule or expected outcome is substituted in this driver.
     if (attributeDrift && binding.contract == "field.add")
       attributes.push_back("0");
-    if (auto error = checkParameters(binding, attributes))
+    if (auto error = checkParameters(binding, attributes,
+                                     zkc::protocol::ParameterStage::Logical))
       return json::Object{{"accepted", true},
                           {"admitted", false},
                           {"error", toString(std::move(error))}};

@@ -20,6 +20,7 @@ use zkc_runtime::vm::{
     Backend, BackendError, Frame, FrameExit, Identity, InstalledOperation, Invocation,
     OperationBinding, PreparationLimits, PreparedComputations, Program,
 };
+use zkc_test_support::numerical_plan;
 
 fn binding(domain: domains::NativeDomain, mode: &str, mask: &str) -> OperationBinding {
     OperationBinding {
@@ -31,7 +32,12 @@ fn binding(domain: domains::NativeDomain, mode: &str, mask: &str) -> OperationBi
 }
 
 fn body(field: Identity, inputs: usize, nodes: Json, output: usize) -> String {
-    json!(["zkc.ring/0", vec![field.name(); inputs], nodes, [output]]).to_string()
+    numerical_plan(json!([
+        "zkc.ring/0",
+        vec![field.name(); inputs],
+        nodes,
+        [output]
+    ]))
 }
 
 fn shared_capture_body(field: Identity) -> String {
@@ -72,7 +78,7 @@ fn constant_body_with_bytes(bytes: usize) -> (String, Scalar) {
             });
             expression[2][0][2] = json!(literal);
             return (
-                expression.to_string(),
+                numerical_plan(expression),
                 if count % 2 == 0 { value } else { -value },
             );
         }
@@ -607,50 +613,72 @@ fn invariant_only_empty_calls_still_check_unused_columns_before_resources() {
 fn reached_direct_and_prepared_callers_refuse_body_tampering() {
     let valid = body(Identity::KoalaBear, 1, json!([["input", 0]]), 0);
     let invalid = [
-        vec![],
-        vec![valid.clone(), valid.clone()],
-        vec!["broken".into()],
-        vec![format!(" {valid}")],
-        vec![" ".repeat(4097)],
-        vec![valid.replace("\"input\",0", "\"input\",1")],
-        vec![valid.replace("koala-bear", "bls12-381.fr")],
-        vec![json!(["zkc.ring/0", ["koala-bear"], [["input", 0]], [0, 0]]).to_string()],
-        vec![json!(["zkc.ring/0", [], [["constant", "koala-bear", "1"]], [0]]).to_string()],
-        vec![
-            json!([
+        (vec![], "numerical-expression"),
+        (vec![valid.clone(), valid.clone()], "numerical-expression"),
+        (vec!["broken".into()], "numerical-plan"),
+        (vec![format!(" {valid}")], "numerical-plan-canonical"),
+        (vec![" ".repeat(16385)], "numerical-plan-bytes"),
+        (
+            vec![valid.replace("\"input\",0", "\"input\",1")],
+            "numerical-expression",
+        ),
+        (
+            vec![valid.replace("koala-bear", "bls12-381.fr")],
+            "numerical-body-field",
+        ),
+        (
+            vec![numerical_plan(json!([
+                "zkc.ring/0",
+                ["koala-bear"],
+                [["input", 0]],
+                [0, 0]
+            ]))],
+            "numerical-body-signature",
+        ),
+        (
+            vec![numerical_plan(json!([
+                "zkc.ring/0",
+                [],
+                [["constant", "koala-bear", "1"]],
+                [0]
+            ]))],
+            "numerical-body-signature",
+        ),
+        (
+            vec![numerical_plan(json!([
                 "zkc.ring/0",
                 ["koala-bear"],
                 [["constant", "bls12-381.fr", "1"]],
                 [0]
-            ])
-            .to_string(),
-        ],
-        vec![
-            json!([
+            ]))],
+            "numerical-body-field",
+        ),
+        (
+            vec![numerical_plan(json!([
                 "zkc.ring/0",
                 ["koala-bear"],
                 [["constant", "koala-bear", "01"]],
                 [0]
-            ])
-            .to_string(),
-        ],
-        vec![
-            json!([
+            ]))],
+            "numerical-expression",
+        ),
+        (
+            vec![numerical_plan(json!([
                 "zkc.ring/0",
                 ["koala-bear"],
                 [["input", 0], ["inverse", 0]],
                 [1]
-            ])
-            .to_string(),
-        ],
+            ]))],
+            "numerical-expression",
+        ),
+        (
+            vec![json!(["zkc.ring/0", ["koala-bear"], [["input", 0]], [0]]).to_string()],
+            "numerical-plan",
+        ),
     ];
     for prepared in [false, true] {
-        for parameters in &invalid {
-            let expected = if parameters.first().is_some_and(|p| p.len() > 4096) {
-                "refused:numerical-expression-bytes"
-            } else {
-                "refused:numerical-expression"
-            };
+        for (parameters, code) in &invalid {
+            let expected = format!("refused:{code}");
             let mut caller = Caller::new(Policy::default(), prepared);
             caller.attributes = Some(parameters.clone());
             let (result, caller) = one(
@@ -672,15 +700,12 @@ fn reached_direct_and_prepared_callers_refuse_body_tampering() {
     // cannot relax this consumer's exact extension slot contract.
     let valid = body(Identity::KoalaBearExt4, 1, json!([["input", 0]]), 0);
     let mut caller = Caller::new(Policy::default(), true);
-    caller.attributes = Some(vec![
-        json!([
-            "zkc.ring/0",
-            ["koala-bear"],
-            [["input", 0], ["embed", "koala-bear.ext4-binomial3", 0]],
-            [1]
-        ])
-        .to_string(),
-    ]);
+    caller.attributes = Some(vec![numerical_plan(json!([
+        "zkc.ring/0",
+        ["koala-bear"],
+        [["input", 0], ["embed", "koala-bear.ext4-binomial3", 0]],
+        [1]
+    ]))]);
     assert_eq!(
         one(
             caller,
@@ -690,7 +715,7 @@ fn reached_direct_and_prepared_callers_refuse_body_tampering() {
         )
         .0
         .unwrap_err(),
-        "refused:numerical-expression"
+        "refused:numerical-body-field"
     );
 }
 
@@ -699,9 +724,11 @@ fn reached_direct_and_prepared_callers_enforce_canonical_body_byte_boundary() {
     let (exact, expected) = constant_body_with_bytes(4096);
     let (over, _) = constant_body_with_bytes(4097);
     for (expression, bytes) in [(&exact, 4096), (&over, 4097)] {
-        assert_eq!(expression.len(), bytes);
-        let parsed = zkc_runtime::ring::Expression::parse(expression).unwrap();
-        assert_eq!(parsed.canonical(), *expression);
+        let plan: Json = serde_json::from_str(expression).unwrap();
+        let inner = plan[1].to_string();
+        assert_eq!(inner.len(), bytes);
+        let parsed = zkc_runtime::ring::Expression::parse(&inner).unwrap();
+        assert_eq!(parsed.canonical(), inner);
         assert!(parsed.inputs().is_empty());
         assert_eq!(parsed.outputs().len(), 1);
         assert!(
@@ -725,11 +752,11 @@ fn reached_direct_and_prepared_callers_enforce_canonical_body_byte_boundary() {
                 &[&exact],
                 vec![Value::Index(1)],
             );
-            if expression.len() == 4096 {
+            if expression == &exact {
                 assert_value(&result.unwrap()[0], &Value::Vector(vec![expected].into()));
                 assert_eq!(next.outputs.len(), 1);
             } else {
-                assert_eq!(result.unwrap_err(), "refused:numerical-expression-bytes");
+                assert_eq!(result.unwrap_err(), "refused:numerical-plan-bytes");
                 assert!(next.outputs.is_empty());
             }
             assert_eq!(next.call.is_some(), prepared);
@@ -1318,7 +1345,7 @@ fn prepared_calls_recheck_inputs_static_identity_and_live_policy() {
         &[&expression],
         vec![Value::Index(0), Value::Vector(vec![].into())],
     );
-    assert_eq!(result.unwrap_err(), "refused:numerical-expression");
+    assert_eq!(result.unwrap_err(), "refused:numerical-plan-canonical");
     assert!(caller.outputs.is_empty());
 }
 
@@ -1408,7 +1435,7 @@ fn dormant_numerical_calls_do_not_decode_or_spend_live_capacity() {
                 vec![Value::Index(3), vector.clone(), Value::Bool(reached)],
             );
             if reached {
-                assert_eq!(result.unwrap_err(), "refused:numerical-expression");
+                assert_eq!(result.unwrap_err(), "refused:numerical-plan");
                 assert_eq!(caller.attempts, 1);
             } else {
                 assert_value(&result.unwrap()[0], &vector);

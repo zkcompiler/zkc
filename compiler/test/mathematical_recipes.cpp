@@ -86,7 +86,8 @@ Value apply(OpBuilder &builder, exec::ScopedExecutionBuilder &control,
   for (auto value : parameters)
     expected.push_back(value.str());
   auto values = take(protocol::decodeInvocationParameters(
-      declaration.getContract(), declaration.getArgumentsAttr(), expected));
+      declaration.getContract(), declaration.getArgumentsAttr(), expected,
+      zkc::protocol::ParameterStage::Logical));
   return control
       .invoke(
           "exec.apply", output, control.scoped(inputs),

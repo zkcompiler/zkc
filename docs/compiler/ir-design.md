@@ -24,6 +24,7 @@ conditions, not registered dialects or supported protocol claims.
 | Commitment | Scheme-specific types and attributes with exact setup/domain parameters; installed commitment/opening actions use Exec bindings |
 | Crypto | Cryptographic types and attributes, with installed primitive actions through Exec; a hash invocation is not itself a random-oracle security judgment |
 | Exec | Ordered fallible numerical execution, explicit returned/stopped outcomes, scoped computation invocations and retained finite requests |
+| Residue | Canonical modular representatives with exact modulus, word width, unsigned projection and lifts; distinct from nominal fields and strict byte codecs |
 | Runtime | Logical binding declarations, resource custody and selected installed implementations/representations; Host authorization remains separate |
 
 Computation units are standard modules/functions admitted by
@@ -47,8 +48,8 @@ they do not imply a Local dialect or a second executable route.
 | SCF / CF | Checked structured numerical schedules followed by scoped control flow; explicit outcome values carry stops through nested regions |
 | Arith | Admitted Boolean/index control and arithmetic with its declared widths; nominal field operations stay Algebra until representation is established |
 | Tensor / Linalg | Private rank-one maps and selected exact sums with Algebra payloads, admitted indexing maps and explicit common-extent premises |
-| Vector | Future represented arithmetic with target lane/width/overflow laws and independently checked lowering |
-| MemRef / Bufferization | Future private buffers after aliasing, lifetime, allocation/refusal and scope-ownership contracts are fixed |
+| Vector | Actual pointwise word candidates after exact widening; bounded independent interpretation of lane arithmetic and poison isolation |
+| MemRef / Bufferization | Actual One-Shot private candidates, with independent bounds, initialization, alias, lifetime and fresh-return checks; reached allocation/publication stay in the numerical Call |
 | Transform / PDL | Future transformation selection and matching over admitted payloads; scripts never become evidence that their output is correct |
 
 The current [structured tensor profile](../spec/ir/mathematics.md#structured-tensor-computations)
@@ -87,19 +88,13 @@ ordering resource alongside finer storage effects if a real consumer needs the
 precision. A new effect-token dialect is not required.
 
 Logical collections need a separate ownership decision in represented execution.
-Current generic `data.sequence<T>` and specialized Algebra vectors/arrays have
-related element/shape structure but distinct logical schemas, codecs and installed
-operation contracts. `CollectionTypeInterface` already gives analyses a common
-view; it does not make the values interchangeable. The target assigns ordinary
-collection shape to Data, element domains/arithmetic to Algebra, and storage/lane
-choices to representation lowering. Audit which specialized forms express a
-real mathematical distinction and which merely duplicate a collection with a
-different implementation. Merge the latter with their source, layout, codec,
-formal-reader and runtime consumers in one migration, removing replaced forms.
-Keep polynomial axes, coordinate-point meaning and other nominal mathematical
-contracts explicit. Standard Tensor is a private shaped computation view and
-Vector a represented execution tool, not an automatic replacement for every
-logical collection or its wire schema.
+Data owns both generic `data.sequence<T>` and specialized vectors, matrices and
+arrays. These carry distinct observable admission and layout contracts: a
+mathematical field array is not a private fixed vector, and a matrix retains
+both extents. One collection interface exposes element/shape observations;
+Algebra owns scalar domains and arithmetic on them. Runtime and targets select
+physical storage without erasing mathematical distinctions. Old Algebra
+collection classes, operation owners and parser aliases are removed.
 
 ## Transformation and component contracts
 

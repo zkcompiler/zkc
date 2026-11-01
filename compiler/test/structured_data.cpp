@@ -204,7 +204,8 @@ int main() {
     accepted(checkInvocationParametersData("index.constant", noArguments,
                                            parameters, expected));
     require(take(protocol::encodeInvocationParameters(
-                "index.constant", noArguments, parameters)) ==
+                "index.constant", noArguments, parameters,
+                zkc::protocol::ParameterStage::Logical)) ==
                 std::vector<std::string>{"42"},
             "program/0 parameter bytes changed");
   });

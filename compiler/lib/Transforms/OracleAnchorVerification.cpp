@@ -75,7 +75,8 @@ Error checkOracleAnchorAllocator(const OracleVerificationContext &context,
             binding, {contract.str(), SmallVector<Attribute>(statics), {}}))
       return false;
     return invocationParametersMatch(contract, binding.getArgumentsAttr(),
-                                     op.getParametersAttr(), parameters);
+                                     op.getParametersAttr(), parameters,
+                                     zkc::protocol::ParameterStage::Logical);
   };
   auto pack = [&](unsigned n, Type type, ValueRange inputs, StringRef name) {
     const auto &step = steps[n];
@@ -190,7 +191,8 @@ Error checkOracleAnchorLookup(const OracleVerificationContext &context,
             binding, {contract.str(), SmallVector<Attribute>(arguments), {}}))
       return false;
     return invocationParametersMatch(contract, binding.getArgumentsAttr(),
-                                     op.getParametersAttr(), parameters);
+                                     op.getParametersAttr(), parameters,
+                                     zkc::protocol::ParameterStage::Logical);
   };
   if (!call(0, "index.constant", {}, index, {}, "constructor",
             {std::to_string(constructor)}))

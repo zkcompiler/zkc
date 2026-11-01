@@ -9,6 +9,8 @@ namespace zkc::program {
 inline constexpr size_t artifactByteLimit = 4 * 1024 * 1024;
 inline constexpr size_t artifactNodeLimit = 400000;
 inline constexpr size_t staticInstructionLimit = 65536;
+inline constexpr size_t stringByteLimit = 4096;
+inline constexpr size_t parameterByteLimit = 16384;
 /// Parse under the Program byte ceiling, then decode the current carrier.
 llvm::Expected<Participants> parse(llvm::StringRef);
 /// Read only zkc.program/0 physical programs. Structural decoding does not

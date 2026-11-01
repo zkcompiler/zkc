@@ -106,8 +106,11 @@ int main() {
         consumeError(physical.takeError());
     } else
       consumeError(implementation.takeError());
-    success(checkParameters(binding, {}), "product takes no parameters");
-    auto unexpected = checkParameters(binding, {"0"});
+    success(
+        checkParameters(binding, {}, zkc::protocol::ParameterStage::Logical),
+        "product takes no parameters");
+    auto unexpected =
+        checkParameters(binding, {"0"}, zkc::protocol::ParameterStage::Logical);
     check(bool(unexpected), "product refuses parameters");
     consumeError(std::move(unexpected));
   }
@@ -139,15 +142,15 @@ int main() {
         "captured asset families are declaration-owned");
   success(
       checkParameters(BindingApplication{"field.constant", {"koala-bear"}, ""},
-                      {"2130706432"}),
+                      {"2130706432"}, zkc::protocol::ParameterStage::Logical),
       "literal below KoalaBear modulus");
   refusal(
       checkParameters(BindingApplication{"field.constant", {"koala-bear"}, ""},
-                      {"2130706433"}),
+                      {"2130706433"}, zkc::protocol::ParameterStage::Logical),
       "interactive-constant");
   success(checkParameters(
               BindingApplication{"field.constant", {"bls12-381.fr"}, ""},
-              {"2130706433"}),
+              {"2130706433"}, zkc::protocol::ParameterStage::Logical),
           "same literal has a different domain bound");
   refusal(checkParameters("field.constant", {"1"}), "interactive-constant");
   const auto &univariate = signature("poly.univariate_evaluate");
@@ -227,7 +230,8 @@ int main() {
                                           "1048576"};
       if (!operation.ends_with(".indices"))
         parameters.push_back("64");
-      success(checkParameters(operation, parameters),
+      success(checkParameters(operation, parameters,
+                              zkc::protocol::ParameterStage::Logical),
               "maximum block parameters");
       auto invalid = parameters;
       for (auto [slot, value] : {std::pair{1u, "0"},
@@ -238,25 +242,30 @@ int main() {
                                  {2u, "1048577"}}) {
         invalid = parameters;
         invalid[slot] = value;
-        refusal(checkParameters(operation, invalid),
+        refusal(checkParameters(operation, invalid,
+                                zkc::protocol::ParameterStage::Logical),
                 "interactive-kernel-parameters");
       }
       if (parameters.size() == 4) {
         invalid = parameters;
         invalid[3] = "65";
-        refusal(checkParameters(operation, invalid),
+        refusal(checkParameters(operation, invalid,
+                                zkc::protocol::ParameterStage::Logical),
                 "interactive-kernel-parameters");
         invalid[3] = "0";
-        success(checkParameters(operation, invalid),
+        success(checkParameters(operation, invalid,
+                                zkc::protocol::ParameterStage::Logical),
                 "canonical zero difficulty");
       }
       invalid = parameters;
       invalid.pop_back();
-      refusal(checkParameters(operation, invalid),
+      refusal(checkParameters(operation, invalid,
+                              zkc::protocol::ParameterStage::Logical),
               "interactive-kernel-parameters");
       invalid = parameters;
       invalid.push_back("0");
-      refusal(checkParameters(operation, invalid),
+      refusal(checkParameters(operation, invalid,
+                              zkc::protocol::ParameterStage::Logical),
               "interactive-kernel-parameters");
       auto scalar = encodeNativeOriginTemplate(
           "entry", {},
@@ -265,7 +274,8 @@ int main() {
       if (scalar) {
         invalid = parameters;
         invalid[0] = *scalar;
-        refusal(checkParameters(operation, invalid),
+        refusal(checkParameters(operation, invalid,
+                                zkc::protocol::ParameterStage::Logical),
                 "interactive-native-origin");
       } else
         consumeError(scalar.takeError());

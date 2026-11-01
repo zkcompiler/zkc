@@ -1,6 +1,7 @@
 #ifndef ZKC_DIALECT_RUNTIME_IR_RUNTIMEATTRS_H
 #define ZKC_DIALECT_RUNTIME_IR_RUNTIMEATTRS_H
 #include "mlir/IR/BuiltinAttributes.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraAttrs.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeDialect.h"
 #include "zkc/Dialect/Runtime/IR/runtimeParameterEnums.h.inc"
 namespace zkc::runtime {

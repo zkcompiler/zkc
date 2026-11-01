@@ -1,3 +1,4 @@
+#include "../lib/Target/NumericalPlan.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
@@ -7,6 +8,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Contracts/Numerical.h"
+#include "zkc/Dialect/Algebra/Parameters.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
@@ -84,7 +86,8 @@ OwningOpRef<ModuleOp> capacitySource(MLIRContext &context, StringRef body) {
       function, builder.getStringAttr("numerical"));
   require(bool(binding), "capacity fixture lost its binding");
   auto parameters = take(protocol::decodeInvocationParameters(
-      binding.getContract(), binding.getArgumentsAttr(), {body.str()}));
+      binding.getContract(), binding.getArgumentsAttr(), {body.str()},
+      zkc::protocol::ParameterStage::Logical));
   auto emit = [&](StringRef binding, ValueRange inputs, Type result,
                   StringRef site, ArrayAttr attributes) {
     return control
@@ -122,7 +125,8 @@ void replaceSourceBodies(ModuleOp module, StringRef body, size_t count) {
             op, op.getBindingAttr());
         require(bool(binding), "capacity invocation lost its binding");
         parameters = take(protocol::decodeInvocationParameters(
-            binding.getContract(), binding.getArgumentsAttr(), {body.str()}));
+            binding.getContract(), binding.getArgumentsAttr(), {body.str()},
+            zkc::protocol::ParameterStage::Logical));
       }
       op.setParametersAttr(parameters);
     }
@@ -335,20 +339,20 @@ module { "protocol.module"() ({
     }
   });
   cases.run("production capacity includes escaped bodies and conversions", [&] {
-    auto expression = [&](unsigned negations) {
+    auto expression = [&](unsigned multiplications) {
       std::vector<ring::Node> nodes{ring::Node::slot(0)};
-      for (unsigned i = 0; i != negations; ++i)
-        nodes.push_back(ring::Node::neg(i));
-      auto body =
-          printJson(take(ring::Expression::create(
-                             {{"bls12-381.fr"}}, std::move(nodes), {negations}))
-                        .encode());
+      for (unsigned i = 0; i != multiplications; ++i)
+        nodes.push_back(ring::Node::mul(i, 0));
+      auto body = printJson(
+          take(ring::Expression::create({{"bls12-381.fr"}}, std::move(nodes),
+                                        {multiplications}))
+              .encode());
       require(body.size() <= protocol::NumericalLimits::bodyBytes,
               "capacity control exceeded the per-body limit");
       take(protocol::readNumericalExpression(body, "bls12-381.fr", 1));
       return body;
     };
-    auto small = expression(0), large = expression(320);
+    auto small = expression(0), large = expression(250);
     auto source = capacitySource(context, small);
     auto compact = OwningOpRef<ModuleOp>(cast<ModuleOp>(source->clone()));
     // Use the public production edge, which installs the real complete-program
@@ -387,9 +391,20 @@ module { "protocol.module"() ({
             "production control lost calls or representation crossings");
     auto carrier = take(protocol::exportModule(*compact));
     auto compactBytes = printJson(carrier).size();
-    auto smallEscaped = printJson(llvm::json::Value(small)).size();
-    auto largeEscaped = printJson(llvm::json::Value(large)).size();
-    require(largeEscaped > large.size() + 2 && largeEscaped > smallEscaped &&
+    auto physical = [&](StringRef text) {
+      auto subject = take(algebra::importRingExpression(
+          &context,
+          take(protocol::readNumericalExpression(text, "bls12-381.fr", 1))));
+      auto plan = take(target::proposeNumericalPlan(
+          algebra::FieldType::get(&context, "bls12-381.fr"), subject,
+          DenseBoolArrayAttr::get(&context, {false})));
+      return printJson(take(runtime::exportNumericalPlan(plan)).encode());
+    };
+    auto smallPlan = physical(small), largePlan = physical(large);
+    auto smallEscaped = printJson(llvm::json::Value(smallPlan)).size();
+    auto largeEscaped = printJson(llvm::json::Value(largePlan)).size();
+    require(largeEscaped > largePlan.size() + 2 &&
+                largeEscaped > smallEscaped &&
                 compactBytes < program::artifactByteLimit,
             "capacity controls lost escaping or compact headroom");
     auto growth = largeEscaped - smallEscaped;
@@ -402,9 +417,9 @@ module { "protocol.module"() ({
     // They may be measured above the limit without calling Program::encode on
     // a model that has not passed checkStructure.
     auto belowCarrier = carrier;
-    replaceCarrierBodies(belowCarrier, large, belowCount);
+    replaceCarrierBodies(belowCarrier, largePlan, belowCount);
     auto belowBytes = printJson(belowCarrier).size();
-    replaceCarrierBodies(carrier, large, belowCount + 1);
+    replaceCarrierBodies(carrier, largePlan, belowCount + 1);
     auto aboveBytes = printJson(carrier).size();
     auto nodes = carrierNodes(carrier);
     require(belowBytes == compactBytes + belowCount * growth &&
@@ -414,8 +429,9 @@ module { "protocol.module"() ({
                 nodes < program::artifactNodeLimit,
             "complete witnesses do not isolate the artifact byte ceiling");
     auto escapingBytes =
-        (belowCount + 1) * (largeEscaped - large.size() - 2) +
-        (capacityCalls - belowCount - 1) * (smallEscaped - small.size() - 2);
+        (belowCount + 1) * (largeEscaped - largePlan.size() - 2) +
+        (capacityCalls - belowCount - 1) *
+            (smallEscaped - smallPlan.size() - 2);
     require(aboveBytes - escapingBytes < program::artifactByteLimit,
             "unescaped accounting would already exhaust artifact bytes");
 

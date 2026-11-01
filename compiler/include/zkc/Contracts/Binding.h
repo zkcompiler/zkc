@@ -6,6 +6,8 @@
 #include <vector>
 
 namespace zkc::protocol {
+/// Parameter languages follow the admitted port stage, never a provider name.
+enum class ParameterStage { Logical, Physical };
 /// A closed application of an installed operation contract. Symbol names and
 /// source locations belong to the declaration that contains this value.
 struct BindingApplication {

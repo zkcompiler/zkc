@@ -149,3 +149,6 @@ native execution still owns fallible charged allocation, stop cleanup and
 complete-result publication. Resident provider sizes, alignment and Montgomery
 forms may differ and need their own representation and resource relations.
 The standard IR's storage count is not a resident-memory or equal-refusal claim.
+
+The [ownership rationale](../../rationale/represented-arithmetic.md) explains the
+HEIR comparison, standard MLIR boundary and retained resident execution choice.
